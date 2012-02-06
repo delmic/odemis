@@ -18,14 +18,7 @@ You should have received a copy of the GNU General Public License along with Del
 
 import os
 import wx
-from PIL import Image
-
-#class DAGuiApp(wx.App):
-#    def __init__(self, redirect=False, filename=None):
-#        wx.App.__init__(self, redirect, filename)
-#        self.frame = wx.Frame(None, wx.ID_ANY, title='Delmic Acquisition')
-#
-#        self.panel = wx.Panel(self.frame, wx.ID_ANY)
+from draggablecanvas import DraggableCanvas
 
 OFFICIAL_NAME="Delmic Acquisition"
 
@@ -59,12 +52,13 @@ class DAGuiFrame(wx.Frame):
         self.SetMenuBar(menuBar)
         
         
-        # Last directory visited
+        # Last directory visited (for file open)
         self.dirname = ""
         self.filename = ""
         
         
-        
+        # TODO add legend, toolbar, option pane
+        self.content = DraggableCanvas(self)
         
         # Finish by displaying the window
         self.Show(True)
@@ -91,6 +85,7 @@ class DAGuiFrame(wx.Frame):
 
 if __name__ == '__main__':
     app = wx.App(redirect=False) # Errors go to the console
+    app.SetAppName(OFFICIAL_NAME)
     frame = DAGuiFrame()
     app.MainLoop()
 
