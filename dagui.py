@@ -18,7 +18,7 @@ You should have received a copy of the GNU General Public License along with Del
 
 import os
 import wx
-from draggablecanvas import DraggableCanvas
+from dblmscopecanvas import DblMicroscopeCanvas
 
 OFFICIAL_NAME="Delmic Acquisition"
 
@@ -27,7 +27,7 @@ class DAGuiFrame(wx.Frame):
     Main window for DAGui.
     """
     def __init__(self):
-        wx.Frame.__init__(self, None, title=OFFICIAL_NAME) # TODO almost fullscreen size=(800,600) 
+        wx.Frame.__init__(self, None, size=(1024,768), title=OFFICIAL_NAME) # TODO almost fullscreen 
         self.Bind(wx.EVT_CLOSE, self.OnClose)
         
         # Statusbar
@@ -56,9 +56,8 @@ class DAGuiFrame(wx.Frame):
         self.dirname = ""
         self.filename = ""
         
-        
         # TODO add legend, toolbar, option pane
-        self.content = DraggableCanvas(self)
+        self.content = DblMicroscopeCanvas(self)
         
         # Finish by displaying the window
         self.Show(True)

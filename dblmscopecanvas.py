@@ -1,0 +1,62 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+'''
+Created on 6 Feb 2012
+
+@author: Éric Piel
+
+Copyright © 2012 Éric Piel, Delmic
+
+This file is part of Delmic Acquisition Software.
+
+Delmic Acquisition Software is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 2 of the License, or (at your option) any later version.
+
+Delmic Acquisition Software is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with Delmic Acquisition Software. If not, see http://www.gnu.org/licenses/.
+'''
+
+import wx
+from draggablecanvas import DraggableCanvas
+
+
+class DblMicroscopeCanvas(DraggableCanvas):
+    """
+    A draggable, flicker-free window class adapted to show pictures of two
+    microscope simultaneously.
+
+    """
+    def __init__(self, parent):
+        DraggableCanvas.__init__(self, parent)
+        self.available_im = (wx.Image("02701s.jpg"), wx.Image("03330c.jpg"))
+        self.available_im[0].InitAlpha()
+        self.available_im[1].InitAlpha()
+        
+
+        wx.EVT_MOUSEWHEEL(self, self.OnWheel)
+
+
+      
+      # Add/remove crosshair
+      
+      # Add/remove overlays
+
+     # Change picture one/two
+     
+     
+
+ # Zoom/merge management
+    def OnWheel(self, event):
+        change =  event.GetWheelRotation() / event.GetWheelDelta()
+        if event.ShiftDown():
+            change *= 0.2 # softer
+        
+        if event.CmdDown(): # = Ctrl on Linux/Win or Cmd on Mac
+            self.SetMergeRatio(self.GetMergeRatio() + change * 0.1)
+        else:
+            self.SetZoom(self.GetZoom() + change)
+
+
+### Here come all the classes for drawing overlays
+    
+# vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:

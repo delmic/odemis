@@ -30,7 +30,7 @@ import ctypes
 # Maybe could be replaced by a GLCanvas + magic
 class DraggableCanvas(wx.Panel):
     """
-    A Draggable, buffered window class.
+    A draggable, buffered window class.
 
     To use it, instantiate it and then put what you want to display in the lists:
     * Images: for the two images to display
@@ -169,11 +169,12 @@ class DraggableCanvas(wx.Panel):
         self.SetCursor(wx.STANDARD_CURSOR)
         if self.HasCapture():
             self.ReleaseMouse()
+        self.ReCenterBufferAroundView()
         
         t_now = time.time()
         fps = self.n / float(t_now - self.t_start)
         print "Display speed: " + str(fps) + " fps."
-        self.ReCenterBufferAroundView()
+
     
     def OnMouseMotion(self, event):
         if self.dragging:
@@ -222,11 +223,13 @@ class DraggableCanvas(wx.Panel):
                            self.buffer_size[0], self.buffer_size[1])
             goal_rect = wx.IntersectRect(full_rect, buffer_rect)
             # where is this rect in the original image?
+            # Note that width and length must be "double rounded up" to account
+            # for the round down of the origin
             unscaled_rect = (int((goal_rect[0] - full_rect[0]) / scale), # rounding down
                              int((goal_rect[1] - full_rect[1]) / scale),
-                             math.ceil(goal_rect[2] / scale), # rounding up
-                             math.ceil(goal_rect[3] / scale))
-            # like goal_rect but taking into account rounding 
+                             math.ceil(goal_rect[2] / scale + 0.5), # 2 x rounding up
+                             math.ceil(goal_rect[3] / scale + 0.5)) # XXX could be improved
+            # like goal_rect but taking into account rounding
             final_rect = ((unscaled_rect[0] * scale) + full_rect[0],
                           (unscaled_rect[1] * scale) + full_rect[1],
                           unscaled_rect[2] * scale,
@@ -254,23 +257,18 @@ class DraggableCanvas(wx.Panel):
         ctypes.pythonapi.PyObject_AsCharBuffer(ctypes.py_object(bufferObject), ctypes.pointer(data), ctypes.pointer(size))
         ctypes.memset(data, value, size.value)
 
-    def _DrawMergedImagesOrdered(self, dc, im1, im2, center, ratio = 0.5, scale1 = 1.0, scale2 = 1.0):
-        """
-        Like DrawMergedImages() but im1 _must_ be the same size or bigger than im2
-        """
-        im1scaled = self.RescaleImageOptimized(im1, scale1, center)
-        self.DrawImageCentred(dc, im1scaled, center)
-
-        if ratio >= 1.0:
+    def _DrawImageTransparentRescaled(self, dc, im, center, ratio = 1.0, scale = 1.0):
+        if ratio <= 0.0:
             return
-        
-        im2scaled = self.RescaleImageOptimized(im2, scale2, center)
-#        im2merged = im2scaled.AdjustChannels(1.0,1.0,1.0,ratio)
-        # TODO Check if we could speed up by caching the alphabuffer 
-        abuf = im2scaled.GetAlphaBuffer()
-        self.memsetObject(abuf, int(255 * (1.0 - ratio)))
-        self.DrawImageCentred(dc, im2scaled, center)
-        
+            
+        imscaled = self.RescaleImageOptimized(im, scale, center)
+        if ratio < 1.0:
+            # im2merged = im2scaled.AdjustChannels(1.0,1.0,1.0,ratio)
+            # TODO Check if we could speed up by caching the alphabuffer 
+            abuf = imscaled.GetAlphaBuffer()
+            self.memsetObject(abuf, int(255 * ratio))
+        self.DrawImageCentred(dc, imscaled, center)
+    
     def DrawMergedImages(self, dc, im1, im2, center, ratio = 0.5, scale1 = 1.0, scale2 = 1.0):
         """
         Draw the two images on the DC, centred around drag_shift, with their own scale,
@@ -282,13 +280,22 @@ class DraggableCanvas(wx.Panel):
         scale1, scale2 (0<float): the scaling of each image 
         """
         t_start = time.time()
-        
+
+        # There can be no image or just one image
+        if not im1:
+            if not im2:
+                return
+            self._DrawImageTransparentRescaled(dc, im2, center, scale=scale2)
+        elif not im2:
+            self._DrawImageTransparentRescaled(dc, im1, center, scale=scale1)
         # The biggest picture should be drawn first, so that the outside is not
         # mixed with the black background
-        if (im1.GetWidth() * scale1 >= im2.GetWidth() * scale2):
-            self._DrawMergedImagesOrdered(dc, im1, im2, center, ratio, scale1, scale2)
+        elif (im1.GetWidth() * scale1 >= im2.GetWidth() * scale2):
+            self._DrawImageTransparentRescaled(dc, im1, center, scale=scale1)
+            self._DrawImageTransparentRescaled(dc, im2, center, 1.0 - ratio, scale2)
         else:
-            self._DrawMergedImagesOrdered(dc, im2, im1, center, 1.0 - ratio, scale2, scale1)
+            self._DrawImageTransparentRescaled(dc, im2, center, scale=scale2)
+            self._DrawImageTransparentRescaled(dc, im1, center, ratio, scale1)
         
         t_now = time.time()
         fps = 1.0 / float(t_now - t_start)
@@ -299,7 +306,7 @@ class DraggableCanvas(wx.Panel):
         # 1 => *2 ; -1 => /2; 2 => *4...
         scale = math.pow(2.0, self.zoom)
         self.DrawMergedImages(dc, self.available_im[0], self.available_im[1], (0,0), self.merge_ratio, 1.0, scale)
-        print "New bitmap drawing"
+#        print "New bitmap drawing"
         
         # Each overlay draws itself
         # TODO: pass the scale, or use the scale of the DC?
