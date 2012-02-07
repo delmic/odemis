@@ -28,7 +28,7 @@ import wx
 #  * when dragging the window the surrounding margin is already computed
 #  * You can draw at any coordinate, and it's displayed if the user has dragged the canvas close from the area.
 #  * Built-in optimised zoom/transparency for 2 images
-# Maybe could be replaced by a GLCanvas + magic
+# Maybe could be replaced by a GLCanvas + magic, or a Cairo Canvas
 class DraggableCanvas(wx.Panel):
     """
     A draggable, buffered window class.
@@ -48,12 +48,13 @@ class DraggableCanvas(wx.Panel):
         wx.Panel.__init__(self, parent, style=wx.NO_FULL_REPAINT_ON_RESIZE)
         self.Overlays = [] # on top of the pictures, relative position
         self.StaticOverlays = [] # on top, stays at an absolute position
-        self.available_im = (wx.Image("02701s.jpg"), wx.Image("03330c.jpg"))
+        self.Images = [None, None]
+        #self.available_im = (wx.Image("02701s.jpg"), wx.Image("03330c.jpg"))
         self.merge_ratio = 0.3 # 0<float<1 of how much to see the first picture
         self.zoom = 0 # float, can also be negative
         self.zoom_range = (-10.0, 10.0)
-        self.available_im[0].InitAlpha()
-        self.available_im[1].InitAlpha()
+#        self.available_im[0].InitAlpha()
+#        self.available_im[1].InitAlpha()
         
         self.world_pos = (0,0) # centred
         
@@ -73,8 +74,10 @@ class DraggableCanvas(wx.Panel):
 
         # view = the area displayed
         self.drag_shift = (0,0) # Current (dragging) position = centred
-                
         self.dragging = False
+        
+        # timer to give a delay before redrawing so we wait to see if there are several events waiting
+        self.DrawTimer = wx.PyTimer(self.OnDrawTimer)
         
         wx.EVT_PAINT(self, self.OnPaint)
         wx.EVT_SIZE(self, self.OnSize)
@@ -102,7 +105,7 @@ class DraggableCanvas(wx.Panel):
         val (minzoom<float<maxzoom): the actual size is 2^zoom if outside of the authorised values, it is clamped
         """
         self.zoom = sorted(self.zoom_range + (val,))[1] # clamp
-        self.UpdateDrawing()
+        self.ShouldUpdateDrawing()
     
     def GetMergeRatio(self):
         """
@@ -117,7 +120,7 @@ class DraggableCanvas(wx.Panel):
         val (0<float<1): the merge ratio, if outside of the authorised values, it is clamped
         """
         self.merge_ratio = sorted((0.0, 1.0) + (val,))[1] # clamp
-        self.UpdateDrawing()
+        self.ShouldUpdateDrawing()
 
     def OnChar(self, event):
         key = event.GetKeyCode()
@@ -139,7 +142,7 @@ class DraggableCanvas(wx.Panel):
         pass
 
     def OnRightUp(self, event):
-        self.UpdateDrawing()
+        self.ShouldUpdateDrawing()
     
     def ShiftView(self, shift):
         self.ReCenterBuffer((self.world_pos[0] + shift[0],
@@ -154,7 +157,7 @@ class DraggableCanvas(wx.Panel):
         
     def ReCenterBuffer(self, pos):
         self.world_pos = pos
-        self.UpdateDrawing() # XXX could maybe be more clever and only request redraw for the outside region
+        self.ShouldUpdateDrawing() # XXX could maybe be more clever and only request redraw for the outside region
         
     def OnLeftDown(self, event):
         self.dragging = True
@@ -263,8 +266,10 @@ class DraggableCanvas(wx.Panel):
     def _DrawImageTransparentRescaled(self, dc, im, center, ratio = 1.0, scale = 1.0):
         if ratio <= 0.0:
             return
-            
+        
+        print "scale=", scale
         imscaled = self.RescaleImageOptimized(im, scale, center)
+        print "ratio=", ratio
         if ratio < 1.0:
             # im2merged = im2scaled.AdjustChannels(1.0,1.0,1.0,ratio)
             # TODO Check if we could speed up by caching the alphabuffer 
@@ -272,7 +277,7 @@ class DraggableCanvas(wx.Panel):
             self.memsetObject(abuf, int(255 * ratio))
         self.DrawImageCentred(dc, imscaled, center)
     
-    def DrawMergedImages(self, dc, im1, im2, center, ratio = 0.5, scale1 = 1.0, scale2 = 1.0):
+    def DrawMergedImages(self, dc, im1, im2, center, ratio = 0.5, scale = 1.0):
         """
         Draw the two images on the DC, centred around drag_shift, with their own scale,
         and an opacity of "ratio" for im1. They should be of the same size ratio.
@@ -280,10 +285,15 @@ class DraggableCanvas(wx.Panel):
         im1, im2 (wx.Image): the images
         center (x, y): center position 
         ratio (0<float<1): how much to merge the images
-        scale1, scale2 (0<float): the scaling of each image 
+        scale (0<float): the scaling of the images in addition to their own 
         """
         t_start = time.time()
-
+        
+        if im1:
+            scale1 = im1._dc_scale * scale
+        if im2:
+            scale2 = im2._dc_scale * scale
+            
         # There can be no image or just one image
         if not im1:
             if not im2:
@@ -308,7 +318,8 @@ class DraggableCanvas(wx.Panel):
         dc.Clear()
         # 1 => *2 ; -1 => /2; 2 => *4...
         scale = math.pow(2.0, self.zoom)
-        self.DrawMergedImages(dc, self.available_im[0], self.available_im[1], (0,0), self.merge_ratio, 1.0, scale)
+        self.DrawMergedImages(dc, self.Images[0], self.Images[1], (0,0),
+                              self.merge_ratio, scale)
 #        print "New bitmap drawing"
         
         # Each overlay draws itself
@@ -320,11 +331,6 @@ class DraggableCanvas(wx.Panel):
         dc.SetDeviceOrigin(self.ClientSize[0]/2, self.ClientSize[1]/2)
         for o in self.StaticOverlays:
             o.Draw(dc)
-#        dc.SetPen(wx.GREEN_PEN)
-#        size = 16
-#        pos = (self.ClientSize[0]/2, self.ClientSize[1]/2)
-#        dc.DrawLine(pos[0]-size, pos[1], pos[0]+size, pos[1])
-#        dc.DrawLine(pos[0], pos[1]-size, pos[0], pos[1]+size) 
 
     def OnPaint(self, event):
         self.n += 1 # for fps
@@ -359,6 +365,19 @@ class DraggableCanvas(wx.Panel):
         self._dcBuffer.SelectObject(self._buffer)
         self._dcBuffer.SetBackground(wx.BLACK_BRUSH) # On Linux necessary after every select object
         
+    def ShouldUpdateDrawing(self, period = 0.1):
+        """
+        Schedule the update of the buffer
+        period (second): maximum time to wait before it will be updated
+        """
+        if not self.DrawTimer.IsRunning():
+            self.DrawTimer.Start(period * 1000.0, oneShot=True)
+        else:
+            print self.DrawTimer.GetInterval()
+
+    def OnDrawTimer(self):
+        self.UpdateDrawing()
+    
     def UpdateDrawing(self):
         """
         Redraws everything (that is viewed in the buffer)

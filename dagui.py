@@ -83,14 +83,22 @@ class DAGuiFrame(wx.Frame):
         
     def OnOpen(self, e):
         """ Open a file"""
-        dlg = wx.FileDialog(self, "Choose a file", self.dirname, "", "*.tiff", wx.OPEN)
+        dlg = wx.FileDialog(self, "Choose one or two pictures", self.dirname, "",
+                            "Image file (.tif, .jpg, .png)|*.tif;*.tiff;*.png;*.jpg;*.jpeg|Any file (*.*)|*.*", wx.OPEN | wx.MULTIPLE)
         if dlg.ShowModal() == wx.ID_OK:
-            self.filename = dlg.GetFilename()
+            filenames = dlg.GetFilenames()
             self.dirname = dlg.GetDirectory()
-            f = open(os.path.join(self.dirname, self.filename), 'r')
-            self.control.SetValue(f.read())
-            f.close()
         dlg.Destroy()
+        
+        for i,f in enumerate(filenames):
+            if i > 1: # support maximum 2 images
+                break
+            fullname = os.path.join(self.dirname, f)
+            try:
+                im = wx.Image(fullname)
+                self.content.SetImage(i, im, (0,0), 0.0001)
+            except e:
+                print e
         
     def ToggleCross(self, e):
         self.content.SetCrossHair(e.IsChecked())

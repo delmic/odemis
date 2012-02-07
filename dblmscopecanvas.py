@@ -25,7 +25,11 @@ class DblMicroscopeCanvas(DraggableCanvas):
     """
     A draggable, flicker-free window class adapted to show pictures of two
     microscope simultaneously.
-
+    
+    It knows size and position of what is represented in a picture and display
+    the pictures accordingly.
+    
+    It also provides various typical overlays (ie, drawings) for microscope views.
     """
     def __init__(self, parent):
         DraggableCanvas.__init__(self, parent)
@@ -33,7 +37,8 @@ class DblMicroscopeCanvas(DraggableCanvas):
         self.available_im[0].InitAlpha()
         self.available_im[1].InitAlpha()
         
-
+        # meter per pixel = image density => field of view
+        self.mpp = 0.0001 # 1 px = 0.1mm <~> zoom = 0
         wx.EVT_MOUSEWHEEL(self, self.OnWheel)
         
 
@@ -71,13 +76,64 @@ class DblMicroscopeCanvas(DraggableCanvas):
     
     # Add/remove overlays
 
+    # Change hfw
+    def SetHFW(self, hfw):
+        """
+        Set the horizontal field width of the image
+        hfw (0.0<float): the width
+        """
+        assert(0.0 < hfw)
+        view_width = self.ClientSize[0]
+        if view_width < 1:
+            view_width = 1
+        self.SetMPP(float(hfw) / view_width)
+        
+    def GetHFW(self):
+        return self.GetMPP() * self.ClientSize[0]
+     
+    def SetMPP(self, mpp):
+        """
+        Directly set the meter per pixel value
+        mpp (0.0<float): 
+        See SetHFW()
+        """
+        assert(0.0 < mpp)
+        
+        self.mpp = mpp
+        # update the scaling of the images
+        for i in self.Images:
+            if i:
+                i.scale = i._dmc_mpp / mpp
+        self.SetZoom(0)
+
+    def GetMPP(self):
+        return self.mpp
+    
     # Change picture one/two
-     
-     
+    def SetImage(self, index, im, pos = None, mpp = None):
+        """
+        Set (or update) the image
+        index (int, 0 or 1): index number of the image
+        im (wx.Image): the image, or None to remove the current image
+        pos (2-tuple of float): position of the center of the image (in meters)
+        mpp (0.0<float): meters per pixel, the size of one pixel
+        """
+        assert(0 <= index and index <= 1)
+        
+        if not im:
+            self.Images[index] = None
+            return
+        
+        im._dc_center = pos
+        im._dmc_mpp = mpp # for later updates of the scale
+        im._dc_scale = float(mpp) / self.mpp
+        im.InitAlpha()
+        self.Images[index] = im
+        self.ShouldUpdateDrawing()
 
     # Zoom/merge management
     def OnWheel(self, event):
-        change =  event.GetWheelRotation() / event.GetWheelDelta()
+        change = event.GetWheelRotation() / event.GetWheelDelta()
         if event.ShiftDown():
             change *= 0.2 # softer
         
