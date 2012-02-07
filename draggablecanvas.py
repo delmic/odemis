@@ -15,10 +15,11 @@ Delmic Acquisition Software is distributed in the hope that it will be useful, b
 
 You should have received a copy of the GNU General Public License along with Delmic Acquisition Software. If not, see http://www.gnu.org/licenses/.
 '''
+import ctypes
 import math
+import os
 import time
 import wx
-import ctypes
 
 # A class for smooth, flicker-less display of anything on a window, with drag 
 # and zoom capability a bit like:
@@ -45,8 +46,8 @@ class DraggableCanvas(wx.Panel):
     """
     def __init__(self, parent):
         wx.Panel.__init__(self, parent, style=wx.NO_FULL_REPAINT_ON_RESIZE)
-        self.Overlays = {} # on top of the pictures, relative position
-        self.StaticOverlays = {} # on top, stays at an absolute position
+        self.Overlays = [] # on top of the pictures, relative position
+        self.StaticOverlays = [] # on top, stays at an absolute position
         self.available_im = (wx.Image("02701s.jpg"), wx.Image("03330c.jpg"))
         self.merge_ratio = 0.3 # 0<float<1 of how much to see the first picture
         self.zoom = 0 # float, can also be negative
@@ -58,14 +59,16 @@ class DraggableCanvas(wx.Panel):
         
         # buffer = the whole image to be displayed
         self._dcBuffer =  wx.MemoryDC()
-        self._dcBuffer.SetBackground(wx.BLACK_BRUSH)
+
         self.buffer_size = (1, 1) # very small first, so that for sure it'll be resized with OnSize
         self.ResizeBuffer(self.buffer_size)
         # When resizing, margin to put around the current size
         self.margin = 512
         
-        self.SetBackgroundStyle(wx.BG_STYLE_CUSTOM) # Avoids flickering on windows, but prevents black background on Linux...
-        self.SetBackgroundColour('grey')# black (grey is for debugging)
+        if os.name == "nt":
+            # Avoids flickering on windows, but prevents black background on Linux...
+            self.SetBackgroundStyle(wx.BG_STYLE_CUSTOM)
+        self.SetBackgroundColour('black')# black (grey is for debugging)
 #        parent.SetBackgroundColour('Grey') # black # maybe it's not so clever to do it here    
 
         # view = the area displayed
@@ -314,22 +317,25 @@ class DraggableCanvas(wx.Panel):
             data.Draw(dc)
 
     def DrawStaticOverlays(self, dc):
-        dc.SetPen(wx.GREEN_PEN)
-        size = 16
-        pos = (self.buffer_size[0]/2, self.buffer_size[1]/2)
-        dc.DrawLine(pos[0]-size, pos[1], pos[0]+size, pos[1])
-        dc.DrawLine(pos[0], pos[1]-size, pos[0], pos[1]+size) 
+        dc.SetDeviceOrigin(self.ClientSize[0]/2, self.ClientSize[1]/2)
+        for o in self.StaticOverlays:
+            o.Draw(dc)
+#        dc.SetPen(wx.GREEN_PEN)
+#        size = 16
+#        pos = (self.ClientSize[0]/2, self.ClientSize[1]/2)
+#        dc.DrawLine(pos[0]-size, pos[1], pos[0]+size, pos[1])
+#        dc.DrawLine(pos[0], pos[1]-size, pos[0], pos[1]+size) 
 
     def OnPaint(self, event):
         self.n += 1 # for fps
     
         dc = wx.PaintDC(self)
-        # TODO can blitting only what is visible helps? (I guess not)
-        # set at the margin
-        margin = ((self.ClientSize[0] - self.buffer_size[0])/2,
-                  (self.ClientSize[1] - self.buffer_size[1])/2)
-        dc.SetDeviceOriginPoint(margin)
-        dc.BlitPointSize(self.drag_shift, self.buffer_size, self._dcBuffer, (0,0))
+        margin = ((self.buffer_size[0] - self.ClientSize[0])/2,
+                  (self.buffer_size[1] - self.ClientSize[1])/2)
+
+#        dc.BlitPointSize(self.drag_shift, self.buffer_size, self._dcBuffer, (0,0))
+        dc.BlitPointSize((0,0), self.ClientSize, self._dcBuffer, 
+                         (margin[0] - self.drag_shift[0], margin[1] - self.drag_shift[1]))
         # TODO do this only when drag_shift changes, and record the modified region before and put back after.
         self.DrawStaticOverlays(dc)
 
@@ -343,14 +349,15 @@ class DraggableCanvas(wx.Panel):
             self.ResizeBuffer(new_size)
             self.ReCenterBuffer((new_size[0]/2, new_size[1]/2))
         else:
-            self.Refresh(eraseBackground=False) # because it's centered so everything moves
+            self.Refresh(eraseBackground=False) # because it's centred so everything moves
 
     def ResizeBuffer(self, size):
         # Make new offscreen bitmap: this bitmap will always have the
         # current drawing in it
         self._buffer = wx.EmptyBitmap(*size)
         self.buffer_size = size
-        self._dcBuffer.SelectObject(self._buffer)     
+        self._dcBuffer.SelectObject(self._buffer)
+        self._dcBuffer.SetBackground(wx.BLACK_BRUSH) # On Linux necessary after every select object
         
     def UpdateDrawing(self):
         """

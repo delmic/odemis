@@ -44,6 +44,13 @@ class DAGuiFrame(wx.Frame):
         self.Bind(wx.EVT_MENU, self.OnClose, menuExit)
         menuBar.Append(filemenu,"&File")
         
+        viewmenu = wx.Menu()
+        # Keep a ref to be able to modify it when crosshair is toggled
+        self.menuCross = viewmenu.Append(wx.ID_ANY, "&Crosshair", "Display a cross on the center of the view",
+                                    kind=wx.ITEM_CHECK)
+        self.Bind(wx.EVT_MENU, self.ToggleCross, self.menuCross)
+        menuBar.Append(viewmenu, "&View")
+        
         helpmenu = wx.Menu()
         menuAbout = helpmenu.Append(wx.ID_ABOUT, "&About", "Information about this program")
         self.Bind(wx.EVT_MENU, self.OnAbout, menuAbout)
@@ -58,6 +65,9 @@ class DAGuiFrame(wx.Frame):
         
         # TODO add legend, toolbar, option pane
         self.content = DblMicroscopeCanvas(self)
+        self.content.SetCrossHair(True)
+        self.menuCross.Check(True)
+#        print self.content.HasCrossHair()
         
         # Finish by displaying the window
         self.Show(True)
@@ -81,6 +91,9 @@ class DAGuiFrame(wx.Frame):
             self.control.SetValue(f.read())
             f.close()
         dlg.Destroy()
+        
+    def ToggleCross(self, e):
+        self.content.SetCrossHair(e.IsChecked())
 
 if __name__ == '__main__':
     app = wx.App(redirect=False) # Errors go to the console
