@@ -16,11 +16,12 @@ Delmic Acquisition Software is distributed in the hope that it will be useful, b
 You should have received a copy of the GNU General Public License along with Delmic Acquisition Software. If not, see http://www.gnu.org/licenses/.
 '''
 
+from dblmscopecanvas import DblMicroscopeCanvas
+from dblmscopepanel import DblMicroscopePanel
 import os
 import wx
-from dblmscopecanvas import DblMicroscopeCanvas
 
-OFFICIAL_NAME="Delmic Acquisition"
+OFFICIAL_NAME = "Delmic Acquisition"
 
 class DAGuiFrame(wx.Frame):
     """
@@ -58,16 +59,13 @@ class DAGuiFrame(wx.Frame):
         
         self.SetMenuBar(menuBar)
         
-        
         # Last directory visited (for file open)
         self.dirname = ""
-        self.filename = ""
         
-        # TODO add legend, toolbar, option pane
-        self.content = DblMicroscopeCanvas(self)
-        self.content.SetCrossHair(True)
-        self.menuCross.Check(True)
-#        print self.content.HasCrossHair()
+                        
+        # The main frame
+        self.panel = DblMicroscopePanel(self, wx.ID_ANY)
+        self.menuCross.Check(True) # TODO ensure sync
         
         # Finish by displaying the window
         self.Show(True)
@@ -84,19 +82,20 @@ class DAGuiFrame(wx.Frame):
     def OnOpen(self, e):
         """ Open a file"""
         dlg = wx.FileDialog(self, "Choose one or two pictures", self.dirname, "",
-                            "Image file (.tif, .jpg, .png)|*.tif;*.tiff;*.png;*.jpg;*.jpeg|Any file (*.*)|*.*", wx.OPEN | wx.MULTIPLE)
+                            "Image file (.tif, .jpg, .png)|*.tif;*.tiff;*.png;*.jpg;*.jpeg|Any file (*.*)|*.*",
+                            wx.OPEN | wx.MULTIPLE)
         if dlg.ShowModal() == wx.ID_OK:
             filenames = dlg.GetFilenames()
             self.dirname = dlg.GetDirectory()
         dlg.Destroy()
         
-        for i,f in enumerate(filenames):
+        for i, f in enumerate(filenames):
             if i > 1: # support maximum 2 images
                 break
             fullname = os.path.join(self.dirname, f)
             try:
                 im = wx.Image(fullname)
-                self.content.SetImage(i, im, (0,0), 0.0001)
+                self.panel.SetImage(i, im, (0,0), 0.0001)
             except e:
                 print e
         

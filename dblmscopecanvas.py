@@ -33,16 +33,11 @@ class DblMicroscopeCanvas(DraggableCanvas):
     """
     def __init__(self, parent):
         DraggableCanvas.__init__(self, parent)
-        self.available_im = (wx.Image("02701s.jpg"), wx.Image("03330c.jpg"))
-        self.available_im[0].InitAlpha()
-        self.available_im[1].InitAlpha()
         
         # meter per pixel = image density => field of view
         self.mpp = 0.0001 # 1 px = 0.1mm <~> zoom = 0
         wx.EVT_MOUSEWHEEL(self, self.OnWheel)
         
-
-      
     # Add/remove crosshair
     def SetCrossHair(self, activated):
         """

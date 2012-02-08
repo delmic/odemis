@@ -79,16 +79,16 @@ class DraggableCanvas(wx.Panel):
         # timer to give a delay before redrawing so we wait to see if there are several events waiting
         self.DrawTimer = wx.PyTimer(self.OnDrawTimer)
         
-        wx.EVT_PAINT(self, self.OnPaint)
-        wx.EVT_SIZE(self, self.OnSize)
+        self.Bind(wx.EVT_PAINT, self.OnPaint)
+        self.Bind(wx.EVT_SIZE, self.OnSize)
         
-        wx.EVT_LEFT_DOWN(self, self.OnLeftDown)
-        wx.EVT_LEFT_UP(self, self.OnLeftUp)
-        wx.EVT_MOTION(self, self.OnMouseMotion)
-        wx.EVT_MOUSEWHEEL(self, self.OnWheel)
-        wx.EVT_RIGHT_DOWN(self, self.OnRightDown)
-        wx.EVT_RIGHT_UP(self, self.OnRightUp)
-        wx.EVT_CHAR(self, self.OnChar)
+        self.Bind(wx.EVT_LEFT_DOWN, self.OnLeftDown)
+        self.Bind(wx.EVT_LEFT_UP, self.OnLeftUp)
+        self.Bind(wx.EVT_MOTION, self.OnMouseMotion)
+        self.Bind(wx.EVT_MOUSEWHEEL, self.OnWheel)
+        self.Bind(wx.EVT_RIGHT_DOWN, self.OnRightDown)
+        self.Bind(wx.EVT_RIGHT_UP, self.OnRightUp)
+        self.Bind(wx.EVT_CHAR, self.OnChar)
         
         self.n = 0
         
@@ -372,8 +372,6 @@ class DraggableCanvas(wx.Panel):
         """
         if not self.DrawTimer.IsRunning():
             self.DrawTimer.Start(period * 1000.0, oneShot=True)
-        else:
-            print self.DrawTimer.GetInterval()
 
     def OnDrawTimer(self):
         self.UpdateDrawing()
