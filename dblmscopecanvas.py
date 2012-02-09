@@ -19,7 +19,7 @@ You should have received a copy of the GNU General Public License along with Del
 import wx
 from draggablecanvas import DraggableCanvas
 
-CROSSHAIR_PEN = wx.GREEN_PEN
+CROSSHAIR_COLOR = wx.GREEN
 CROSSHAIR_SIZE = 16
 class DblMicroscopeCanvas(DraggableCanvas):
     """
@@ -36,8 +36,10 @@ class DblMicroscopeCanvas(DraggableCanvas):
         
         # meter per pixel = image density => field of view
         self.mpp = 0.0001 # 1 px = 0.1mm <~> zoom = 0
-        wx.EVT_MOUSEWHEEL(self, self.OnWheel)
+        self.Bind(wx.EVT_MOUSEWHEEL, self.OnWheel)
         
+        self.Overlays.append(CrossHairOverlay("Blue", CROSSHAIR_SIZE)) # debug
+        self.Overlays.append(CrossHairOverlay("Red", CROSSHAIR_SIZE, (10,10))) # debug
     # Add/remove crosshair
     def SetCrossHair(self, activated):
         """
@@ -52,7 +54,7 @@ class DblMicroscopeCanvas(DraggableCanvas):
                 break
         if activated:
             if not ch:
-                ch = CrossHairOverlay(CROSSHAIR_PEN, CROSSHAIR_SIZE)
+                ch = CrossHairOverlay(CROSSHAIR_COLOR, CROSSHAIR_SIZE)
                 self.StaticOverlays.append(ch)
                 self.Refresh(False)
         else:
@@ -140,17 +142,28 @@ class DblMicroscopeCanvas(DraggableCanvas):
 
 ### Here come all the classes for drawing overlays
 class CrossHairOverlay():
-    def __init__(self, pen, size, center = (0,0)):
-        self.pen = pen
+    def __init__(self, color=CROSSHAIR_COLOR, size=CROSSHAIR_SIZE, center=(0,0)):
+        self.pen = wx.Pen(color)
         self.size = size
         self.center = center
         
-    def Draw(self, dc):
+    @staticmethod
+    def _WorldToBufferPoint(world_pos, pos, scale):
+        return (round((pos[0] - world_pos[0]) * scale),
+                round((pos[1] - world_pos[1]) * scale))
+        
+    def Draw(self, dc, shift=(0,0), scale=1.0):
         dc.SetPen(self.pen)
-        # at the centre of the screen
-        dc.DrawLine(self.center[0]-self.size, self.center[1],
-                    self.center[0] + self.size, self.center[1])
-        dc.DrawLine(self.center[0], self.center[1] - self.size,
-                    self.center[0], self.center[1] + self.size) 
+        
+        tl = (self.center[0] - self.size,
+              self.center[1] - self.size)
+        br = (self.center[0] + self.size,
+              self.center[1] + self.size)
+        tl_s = self._WorldToBufferPoint(shift, tl, scale)
+        br_s = self._WorldToBufferPoint(shift, br, scale)
+        center = self._WorldToBufferPoint(shift, self.center, scale)
+        print center, self.center
+        dc.DrawLine(tl_s[0], center[1], br_s[0], center[1])
+        dc.DrawLine(center[0], tl_s[1], center[0], br_s[1]) 
         
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:

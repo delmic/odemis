@@ -62,7 +62,7 @@ class DAGuiFrame(wx.Frame):
         # Last directory visited (for file open)
         self.dirname = ""
         
-                        
+        # TODO add legend, toolbar, option pane 
         # The main frame
         self.panel = DblMicroscopePanel(self, wx.ID_ANY)
         self.menuCross.Check(True) # TODO ensure sync
@@ -100,7 +100,8 @@ class DAGuiFrame(wx.Frame):
                 print e
         
     def ToggleCross(self, e):
-        self.content.SetCrossHair(e.IsChecked())
+        # TODO use pubsub or add method to canvas
+        self.panel.canvas.SetCrossHair(e.IsChecked())
 
 if __name__ == '__main__':
     app = wx.App(redirect=False) # Errors go to the console

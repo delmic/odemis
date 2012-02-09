@@ -29,16 +29,17 @@ class DblMicroscopePanel(wx.Panel):
     """
     def __init__(self, *args, **kwargs):
         wx.Panel.__init__(self, *args, **kwargs)
-
-        # The main frame
-        # TODO move to its own class
-
         
-        # TODO add legend, toolbar, option pane
         self.canvas = DblMicroscopeCanvas(self)
         self.canvas.SetCrossHair(True)
 
-#        print self.content.HasCrossHair()
+        # TODO create a little control that display the scale
+        self.scaleDisplay = wx.StaticText(self, label="Area for the scale 5µm")
+        self.hfwDisplay = wx.StaticText(self, label="HFW: 156µm")
+        
+        text1 = wx.StaticText(self, label="SE Detector")
+        line =  wx.StaticLine(self, style=wx.LI_VERTICAL)
+        text2 = wx.StaticText(self, label="Optical")
         
         self.mergeSlider = wx.Slider(self, wx.ID_ANY, 50, 0, 100, size=(100, 30), style=wx.SL_HORIZONTAL | wx.SL_AUTOTICKS | wx.SL_TICKS)
         self.mergeSlider.SetTick(50) # Only on Windows
@@ -49,10 +50,32 @@ class DblMicroscopePanel(wx.Panel):
         # TODO: make the default size bigger
         # TODO: focus by default on the content, for keyboard
         mainSizer = wx.BoxSizer(wx.VERTICAL)
-        mainSizer.Add(self.canvas, 10, wx.TOP|wx.EXPAND)
-        mainSizer.Add(self.mergeSlider, 0, wx.BOTTOM|wx.ALIGN_CENTER)
+        legendSizer = wx.BoxSizer(wx.HORIZONTAL)
+        scaleSizer = wx.BoxSizer(wx.VERTICAL)
+        scaleSizer.Add(self.scaleDisplay, 0, wx.ALIGN_LEFT|wx.EXPAND)
+        scaleSizer.Add(self.hfwDisplay, 0, wx.ALIGN_RIGHT|wx.EXPAND)
+        
+        imageSizer = wx.BoxSizer(wx.VERTICAL)
+        imageSizerTop = wx.BoxSizer(wx.HORIZONTAL)
+        imageSizerBottom = wx.BoxSizer(wx.HORIZONTAL)
+        imageSizer.Add(imageSizerTop, 0, wx.ALIGN_CENTER)
+        imageSizer.Add(imageSizerBottom, 0, wx.ALIGN_CENTER)
+        
+        imageSizerTop.Add(text1, 1, wx.ADJUST_MINSIZE|wx.LEFT|wx.RIGHT|wx.ALIGN_LEFT|wx.EXPAND, 5)
+        imageSizerTop.Add(self.mergeSlider, 0, wx.ALIGN_CENTER)
+#        legendSizer.AddStretchSpacer()
+        imageSizerTop.Add(text2, 1, wx.ALIGN_RIGHT|wx.EXPAND|wx.ALIGN_CENTER_HORIZONTAL)
+        
+        legendSizer.Add(scaleSizer, 1, wx.ALIGN_CENTER|wx.EXPAND)
+        legendSizer.Add(line, 0, wx.ALIGN_CENTER|wx.EXPAND)
+        legendSizer.Add(imageSizer, 3, wx.ALIGN_CENTER|wx.EXPAND)
+        mainSizer.Add(self.canvas, 10, wx.EXPAND)
+        mainSizer.Add(legendSizer, 0, wx.EXPAND) # 0 = fixed size
+        
+
         
         self.SetSizer(mainSizer)
+        self.SetAutoLayout(True)
         mainSizer.Fit(self)
   
     def OnSlider(self, e):
