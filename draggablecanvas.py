@@ -315,20 +315,23 @@ class DraggableCanvas(wx.Panel):
     # Could also see gdk_pixbuf_composite()
     def RescaleImageOptimized(self, dc, im, scale, center):
         """
-        Rescale an image considering it will be displayed centred at 'center' on the buffer
+        Rescale an image considering it will be displayed on the buffer
         Does not modify the original image
+        scale: the scale of the picture to fit the world
+        center: position of the image in world coordinates
         return a tuple of
            * a copy of the image rescaled, it can be of any size
            * a 2-tuple representing the top-left point on the buffer coordinate
         """
         full_rect = self._GetImageRectOnBuffer(dc, im, scale, center)
-        if scale == 1.0:
+        total_scale = scale * self.scale
+        if total_scale == 1.0:
             ret = im.Copy() # TODO: should see how to avoid (it slows down quite a bit)
             tl = full_rect[0:2]
-        elif scale < 1.0:
+        elif total_scale < 1.0:
             ret = im.Scale(*full_rect[2:4])
             tl = full_rect[0:2]
-        elif scale > 1.0:
+        elif total_scale > 1.0:
             # We could end-up with a lot of the up-scaling useless, so crop it
             orig_size = im.GetSize()
             # where is the buffer in the world?
@@ -341,10 +344,10 @@ class DraggableCanvas(wx.Panel):
                 return (None, None)
 
             # where is this rect in the original image?
-            unscaled_rect = ((goal_rect[0] - full_rect[0]) / scale,
-                             (goal_rect[1] - full_rect[1]) / scale,
-                             goal_rect[2] / scale,
-                             goal_rect[3] / scale)
+            unscaled_rect = ((goal_rect[0] - full_rect[0]) / total_scale,
+                             (goal_rect[1] - full_rect[1]) / total_scale,
+                             goal_rect[2] / total_scale,
+                             goal_rect[3] / total_scale)
             # Note that width and length must be "double rounded" to account
             # for the round down of the origin and round up of the bottom left
             unscaled_rounded_rect = (int(unscaled_rect[0]), # rounding down
@@ -356,30 +359,34 @@ class DraggableCanvas(wx.Panel):
             imcropped = im.GetSubImage(unscaled_rounded_rect)
             
             # like goal_rect but taking into account rounding
-            final_rect = ((unscaled_rounded_rect[0] * scale) + full_rect[0],
-                          (unscaled_rounded_rect[1] * scale) + full_rect[1],
-                          int(unscaled_rounded_rect[2] * scale),
-                          int(unscaled_rounded_rect[3] * scale))
+            final_rect = ((unscaled_rounded_rect[0] * total_scale) + full_rect[0],
+                          (unscaled_rounded_rect[1] * total_scale) + full_rect[1],
+                          int(unscaled_rounded_rect[2] * total_scale),
+                          int(unscaled_rounded_rect[3] * total_scale))
             ret = imcropped.Rescale(*final_rect[2:4])
             # need to save it as the cropped part is not centred anymore
             tl = final_rect[0:2]
         return (ret, tl)
     
-    @staticmethod
-    def _WorldToBufferPoint(world_pos, pos, scale):
-        return (round((pos[0] - world_pos[0]) * scale),
-                round((pos[1] - world_pos[1]) * scale))
-    
+    def WorldToBufferPoint(self, pos):
+        return WorldToBufferPoint(pos, self.world_pos, self.scale)
+
     def _GetImageRectOnBuffer(self, dc, im, scale, center):
         """
         Computes the rectangle containing the image on the buffer coordinates
         return rect (4-tuple of floats)
         """
+        # There are two scales:
+        # * the scale of the image (dependent on the size of what the image represent)
+        # * the scale of the buffer (dependent on how much the user zoomed in)
+        
         size = im.GetSize()
-        tl_unscaled = (center[0] - (size[0] / 2),
-                       center[1] - (size[1] / 2))
-        tl = self._WorldToBufferPoint(self.world_pos, tl_unscaled, scale)
-        final_size = (size[0] * scale, size[1] * scale)
+        actual_size = size[0] * scale, size[1] * scale
+        tl_unscaled = (center[0] - (actual_size[0] / 2),
+                       center[1] - (actual_size[1] / 2))
+        tl = self.WorldToBufferPoint(tl_unscaled)
+        final_size = (actual_size[0] * self.scale,
+                      actual_size[1] * self.scale)
         return tl + final_size
         
     @staticmethod
@@ -420,10 +427,10 @@ class DraggableCanvas(wx.Panel):
         t_start = time.time()
         
         if im1:
-            scale1 = im1._dc_scale * self.scale
+            scale1 = im1._dc_scale
         if im2:
-            scale2 = im2._dc_scale * self.scale
-            
+            scale2 = im2._dc_scale
+        
         # There can be no image or just one image
         if not im1:
             if not im2:
@@ -443,5 +450,15 @@ class DraggableCanvas(wx.Panel):
         t_now = time.time()
         fps = 1.0 / float(t_now - t_start)
         print "Display speed: " + str(fps) + " fps."
+
+def WorldToBufferPoint(pos, world_pos, scale):
+    """
+    Converts a position from world coordinates to buffer coordinates
+    pos (2-tuple floats): the coordinates in the world
+    world_pos: the center of the buffer in world coordinates
+    scale: how much zoomed is the buffer compared to the world
+    """ 
+    return (round((pos[0] - world_pos[0]) * scale),
+            round((pos[1] - world_pos[1]) * scale))
 
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:

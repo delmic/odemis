@@ -17,7 +17,7 @@ You should have received a copy of the GNU General Public License along with Del
 '''
 
 import wx
-from draggablecanvas import DraggableCanvas
+from draggablecanvas import DraggableCanvas, WorldToBufferPoint
 
 CROSSHAIR_COLOR = wx.GREEN
 CROSSHAIR_SIZE = 16
@@ -147,11 +147,6 @@ class CrossHairOverlay():
         self.size = size
         self.center = center
         
-    @staticmethod
-    def _WorldToBufferPoint(world_pos, pos, scale):
-        return (round((pos[0] - world_pos[0]) * scale),
-                round((pos[1] - world_pos[1]) * scale))
-        
     def Draw(self, dc, shift=(0,0), scale=1.0):
         dc.SetPen(self.pen)
         
@@ -159,10 +154,10 @@ class CrossHairOverlay():
               self.center[1] - self.size)
         br = (self.center[0] + self.size,
               self.center[1] + self.size)
-        tl_s = self._WorldToBufferPoint(shift, tl, scale)
-        br_s = self._WorldToBufferPoint(shift, br, scale)
-        center = self._WorldToBufferPoint(shift, self.center, scale)
-        print center, self.center
+        tl_s = WorldToBufferPoint(tl, shift, scale)
+        br_s = WorldToBufferPoint(br, shift, scale)
+        center = WorldToBufferPoint(self.center, shift, scale)
+
         dc.DrawLine(tl_s[0], center[1], br_s[0], center[1])
         dc.DrawLine(center[0], tl_s[1], center[0], br_s[1]) 
         

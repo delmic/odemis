@@ -95,7 +95,7 @@ class DAGuiFrame(wx.Frame):
             fullname = os.path.join(self.dirname, f)
             try:
                 im = wx.Image(fullname)
-                self.panel.SetImage(i, im, (0,0), 0.0001)
+                self.panel.SetImage(i, im, (10,10), 0.0001 + (0.000015 *i))
             except e:
                 print e
         
