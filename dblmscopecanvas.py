@@ -38,8 +38,8 @@ class DblMicroscopeCanvas(DraggableCanvas):
         self.mpp = 0.0001 # 1 px = 0.1mm <~> zoom = 0
         self.Bind(wx.EVT_MOUSEWHEEL, self.OnWheel)
         
-        self.Overlays.append(CrossHairOverlay("Blue", CROSSHAIR_SIZE)) # debug
-        self.Overlays.append(CrossHairOverlay("Red", CROSSHAIR_SIZE, (10,10))) # debug
+#        self.Overlays.append(CrossHairOverlay("Blue", CROSSHAIR_SIZE)) # debug
+#        self.Overlays.append(CrossHairOverlay("Red", CROSSHAIR_SIZE, (10,10))) # debug
     # Add/remove crosshair
     def SetCrossHair(self, activated):
         """
@@ -104,8 +104,11 @@ class DblMicroscopeCanvas(DraggableCanvas):
         self.SetZoom(0)
 
     def GetMPP(self):
+        """
+        return (float): meter per pixel of the canvas at zoom 0
+        """
         return self.mpp
-    
+
     # Change picture one/two
     def SetImage(self, index, im, pos = None, mpp = None):
         """
@@ -148,6 +151,12 @@ class CrossHairOverlay():
         self.center = center
         
     def Draw(self, dc, shift=(0,0), scale=1.0):
+        """
+        Draws the crosshair
+        dc (wx.DC)
+        shift (2-tuple float): shift for the coordinate conversion
+        scale (float): scale for the coordinate conversion
+        """
         dc.SetPen(self.pen)
         
         tl = (self.center[0] - self.size,

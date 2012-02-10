@@ -100,6 +100,9 @@ class DAGuiFrame(wx.Frame):
                 print e
         
     def ToggleCross(self, e):
+        """
+        Callback for view/crosshair menu
+        """
         # TODO use pubsub or add method to canvas
         self.panel.canvas.SetCrossHair(e.IsChecked())
 
