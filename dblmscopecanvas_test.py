@@ -63,13 +63,13 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
         im1 = wx.EmptyImage(11, 11, clear=True)
         im1.SetRGB(5, 5, 255, 0, 0) # Red pixel at center, (5,5)
         im2 = wx.EmptyImage(201, 201, clear=True)
-        im2.SetRGB(100, 100, 0, 0, 255) # Blue pixel at (100,100)
+        im2.SetRGB(100, 100, 0, 0, 255) # Blue pixel at center (100,100)
         self.canvas.SetImage(0, im1, (0,0), ppm * 10)
-        self.canvas.SetImage(1, im2, (20,20), ppm)
-        for i in range(im1.GetWidth()):
+        self.canvas.SetImage(1, im2, (200,200), ppm)
+        for i in range(im2.GetWidth()):
             print i
-            for j in range(im1.GetHeight()):
-                px = GetRGB(im1, i, j)
+            for j in range(im2.GetHeight()):
+                px = GetRGB(im2, i, j)
                 if px != (0,0,0):
                     print px, i, j
                     
@@ -100,8 +100,8 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
 #        
         px1 = GetRGB(resultIm, self.canvas.buffer_size[0]/2, self.canvas.buffer_size[1]/2)
         self.assertEqual(px1, (127, 0, 0))
-        px2 = GetRGB(resultIm, self.canvas.buffer_size[0]/2 + 19, self.canvas.buffer_size[1]/2 + 19)
-        self.assertEqual(px2, (0, 0, 128)) # XXX why not 255?
+        px2 = GetRGB(resultIm, self.canvas.buffer_size[0]/2 + 200, self.canvas.buffer_size[1]/2 + 200)
+        self.assertEqual(px2, (0, 0, 255))
 
         # remove first picture
         self.canvas.SetImage(0, None)
