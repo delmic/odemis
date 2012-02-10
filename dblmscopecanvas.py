@@ -31,8 +31,8 @@ class DblMicroscopeCanvas(DraggableCanvas):
     
     It also provides various typical overlays (ie, drawings) for microscope views.
     """
-    def __init__(self, parent):
-        DraggableCanvas.__init__(self, parent)
+    def __init__(self, *args, **kwargs):
+        DraggableCanvas.__init__(self, *args, **kwargs)
         
         # meter per pixel = image density => field of view
         self.mpp = 0.0001 # 1 px = 0.1mm <~> zoom = 0

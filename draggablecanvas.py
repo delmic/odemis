@@ -85,7 +85,6 @@ class DraggableCanvas(wx.Panel):
         self.Bind(wx.EVT_LEFT_UP, self.OnLeftUp)
         self.Bind(wx.EVT_MOTION, self.OnMouseMotion)
         self.Bind(wx.EVT_LEFT_DCLICK, self.OnDblClick)
-        self.Bind(wx.EVT_MOUSEWHEEL, self.OnWheel)
         self.Bind(wx.EVT_RIGHT_DOWN, self.OnRightDown)
         self.Bind(wx.EVT_RIGHT_UP, self.OnRightUp)
 
@@ -197,17 +196,6 @@ class DraggableCanvas(wx.Panel):
         new_pos = (self.world_pos[0] + (pos[0] - center[0]) / self.scale,
                    self.world_pos[1] + (pos[1] - center[1]) / self.scale)
         self.ReCenterBuffer(new_pos)
-        
-    def OnWheel(self, event):
-        change =  event.GetWheelRotation() / event.GetWheelDelta()
-        if event.ShiftDown():
-            change *= 0.2 # softer
-        
-        if event.CmdDown(): # = Ctrl on Linux/Win or Cmd on Mac
-            self.SetMergeRatio(self.GetMergeRatio() + change * 0.1)
-        else:
-            self.SetZoom(self.GetZoom() + change)
-
 
     def OnPaint(self, event):
         """
