@@ -32,7 +32,7 @@ class DAGuiFrame(wx.Frame):
         self.Bind(wx.EVT_CLOSE, self.OnClose)
         
         # Statusbar
-        self.CreateStatusBar() # XXX needed?
+        #self.CreateStatusBar() # XXX needed?
         
         # Setting up the menu.
         menuBar = wx.MenuBar()

@@ -144,7 +144,7 @@ class DblMicroscopeCanvas(DraggableCanvas):
 
 
 ### Here come all the classes for drawing overlays
-class CrossHairOverlay():
+class CrossHairOverlay(object):
     def __init__(self, color=CROSSHAIR_COLOR, size=CROSSHAIR_SIZE, center=(0,0)):
         self.pen = wx.Pen(color)
         self.size = size
