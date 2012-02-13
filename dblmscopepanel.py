@@ -16,8 +16,9 @@ Delmic Acquisition Software is distributed in the hope that it will be useful, b
 You should have received a copy of the GNU General Public License along with Delmic Acquisition Software. If not, see http://www.gnu.org/licenses/.
 '''
 
-import wx
 from dblmscopecanvas import DblMicroscopeCanvas
+from scalewindow import ScaleWindow
+import wx
 
 CROSSHAIR_PEN = wx.GREEN_PEN
 CROSSHAIR_SIZE = 16
@@ -36,15 +37,12 @@ class DblMicroscopePanel(wx.Panel):
         # Control for the selection before AddView(), which needs them
         self.viewComboLeft = wx.ComboBox(self, style=wx.CB_READONLY, size=(140,-1))
         self.viewComboRight = wx.ComboBox(self, style=wx.CB_READONLY, size=(140,-1))
-        self.views = []
         self.Bind(wx.EVT_COMBOBOX, self.OnComboLeft, self.viewComboLeft)
         self.Bind(wx.EVT_COMBOBOX, self.OnComboRight, self.viewComboRight)
 
-
-
-        
         # TODO create a little control that display the scale
-        self.scaleDisplay = wx.StaticText(self, label="Area for the scale 5µm")
+#        self.scaleDisplay = wx.StaticText(self, label="Area for the scale 5µm")
+        self.scaleDisplay = ScaleWindow(self)
         self.hfwDisplay = wx.StaticText(self, label="HFW: 156µm")
         lineDisplay = wx.StaticLine(self, style=wx.LI_VERTICAL)
         
@@ -52,7 +50,9 @@ class DblMicroscopePanel(wx.Panel):
         self.mergeSlider.SetTick(50) # Only on Windows
 #        wx.EVT_SLIDER(self.mergeSlider, self.OnSlider)
         self.mergeSlider.Bind(wx.EVT_SLIDER, self.OnSlider)
-
+        
+        self.va = self.hfwDisplay.GetDefaultAttributes()
+        colour = self.va.colBg
         
         # TODO: make the default size bigger
         # TODO: focus by default on the content, for keyboard
@@ -76,7 +76,7 @@ class DblMicroscopePanel(wx.Panel):
         
         imageSizerTop.Add(self.viewComboLeft, 0, wx.ALIGN_CENTER)
         imageSizerTop.AddStretchSpacer()
-        imageSizerTop.Add(self.mergeSlider, 1, wx.ALIGN_CENTER|wx.LEFT|wx.RIGHT, 3)
+        imageSizerTop.Add(self.mergeSlider, 2, wx.ALIGN_CENTER|wx.LEFT|wx.RIGHT, 3)
         imageSizerTop.AddStretchSpacer()
         imageSizerTop.Add(self.viewComboRight, 0, wx.ALIGN_CENTER)
         
@@ -92,8 +92,9 @@ class DblMicroscopePanel(wx.Panel):
         # display : left and right view
         self.displays = [(emptyView, self.viewComboLeft, self.imageSizerBLeft),
                          (emptyView, self.viewComboRight, self.imageSizerBRight)]
-        
+
         # can be called only with display ready
+        self.views = []
         self.AddView(emptyView)
         self.AddView(MicroscopeOpticalView(self))
         self.AddView(MicroscopeSEView(self))
@@ -176,6 +177,10 @@ class DblMicroscopePanel(wx.Panel):
             self.mergeSlider.Hide()
         else:
             self.mergeSlider.Show()
+            
+        # TODO: find out if that's the nice behaviour, or should just keep it?
+        if needSwap:
+            self.canvas.SetMergeRatio(1.0 - self.canvas.GetMergeRatio())
 
 
 class MicroscopeView(object):
@@ -199,7 +204,7 @@ class MicroscopeView(object):
     def Show(self, combo, sizer):
         # Put the new controls
         for c in self.legendCtrl:
-            sizer.Add(c, 0, wx.ALIGN_CENTER|wx.LEFT|wx.RIGHT|wx.EXPAND, 3)
+            sizer.Add(c, 1, wx.ALIGN_CENTER|wx.LEFT|wx.RIGHT|wx.EXPAND, 3)
             c.Show()
         
         #Update the combobox
