@@ -16,6 +16,7 @@ Delmic Acquisition Software is distributed in the hope that it will be useful, b
 You should have received a copy of the GNU General Public License along with Delmic Acquisition Software. If not, see http://www.gnu.org/licenses/.
 '''
 
+import math
 import wx
 
 #----------------------------------------------------------------------
@@ -78,7 +79,7 @@ class BufferedWindow(wx.Control):
         # OnSize called to make sure the buffer is initialized.
         # This might result in OnSize getting called twice on some
         # platforms at initialization, but little harm done.
-        self.OnSize(None)
+#        self.OnSize(None) # very annoying as it calls the methods before the init is done
 
 
     def Draw(self, dc):
@@ -102,10 +103,10 @@ class BufferedWindow(wx.Control):
             dc = wx.BufferedPaintDC(self, self._Buffer)
         else:
             dc = wx.PaintDC(self)
-            dc.DrawBitmap(self._Buffer,0,0)
+            dc.DrawBitmap(self._Buffer, 0, 0)
 
 
-    def OnSize(self,event):
+    def OnSize(self, event):
         """
         Handles the ``wx.EVT_SIZE`` event for L{BufferedWindow}.
 
@@ -161,27 +162,122 @@ class ScaleWindow(BufferedWindow):
     """
     def __init__(self, *args, **kwargs):
         BufferedWindow.__init__(self, *args, **kwargs)
-        self.ppm = 0.001
-        self.MinSize = (80, -1) # we want at least a bit of space
-#        self.SetBackgroundColour(wx.GREEN)
-
+        self.mpp = 0.00027 # a not too crazy number (my screen density)
+        self.MinSize = (80, 30) # we want at least a bit of space
+        # This is called before the end of __init__()
+        self.va = self.GetDefaultAttributes()
+        self.nod = 3
+        self.shift = 2
+        self.significant = 1 # significant numbers to keep in the length
         
-    def SetPPM(self, ppm):
-        self.ppm = ppm
+        # OnSize called to make sure the buffer is initialized.
+        self.OnSize(None) # very annoying as it calls the methods before the init is done
+        
+    def SetMPP(self, mpp):
+        if mpp == 0:
+            raise ZeroDivisionError()
+        self.mpp = mpp
         self.UpdateDrawing()
 
+    def GetLineWidth(self, dc):
+        """
+        Returns the size in pixel of the scale line and its actual size. 
+        The pixel size is always less than the width of the window minus margin
+        minus space for 8 characters
+        dc (wx.DC)
+        return 2-tuple (int, float): pixel size, actual size (meter) 
+        """
+        size = self.GetClientSize()
+        maxWidth = size[0] - self.shift - dc.GetTextExtent(" 000mm")[0]
+        maxActualWidth = maxWidth * self.mpp
+        actualWidth = round_down_significant(maxActualWidth, self.significant)
+        width = int(actualWidth / self.mpp)
+        return (width, actualWidth)
+        
     def Draw(self, dc):
+#        return self.DrawGC(dc)
+        nod = self.nod
+        shift = self.shift # to accommodate for the pen width
+        
         dc.SetBackgroundMode(wx.SOLID)
-
-        self.va = self.GetDefaultAttributes()
-        colour = self.va.colBg
-        dc.SetBackground(wx.Brush(colour))
+        dc.SetBackground(wx.Brush(self.va.colBg))
         dc.Clear()
+        dc.SetFont(self.va.font) # before GetLineWidth(), which needs it
+        dc.SetTextForeground(self.va.colFg)
+        dc.SetTextBackground(self.va.colBg)
+        
         vmiddle = self.Height / 2
+        length, actual = self.GetLineWidth(dc)
+
+        charSize = dc.GetTextExtent("M")
+        dc.DrawText(" " + to_string_metric(actual), 
+                    shift + length, vmiddle - charSize[1] / 2)
+
+        pen = wx.Pen(wx.BLACK, 2)
+        pen.Cap = wx.CAP_PROJECTING
+        dc.SetPen(pen)
+        
+        # main line
+        lines = [(shift, vmiddle, shift + length, vmiddle)]
+        # nods at each end
+        lines += [(shift, vmiddle - nod, shift, vmiddle + nod)]
+        lines += [(shift + length, vmiddle - nod, shift + length, vmiddle + nod)]
+        dc.DrawLineList(lines)
+
+    def DrawGC(self, dc):
+        """
+        same as Draw(), but using GraphicsContext, (i.e. HW accelerated and antialiased)
+        Experimental!
+        """
         margin = 5
+        nod = 3
+        vmiddle = self.Height / 2
+        # not sure how to do this with GC
+        dc.SetBackgroundMode(wx.SOLID)
+        dc.SetBackground(wx.Brush(self.va.colBg))
+        dc.Clear()
+#        gc.Clear(self.va.colBg) # doesn't actual exist
+
         
-        dc.SetPen(wx.BLACK_PEN)
-        dc.DrawLine(margin, vmiddle, self.Width - margin, vmiddle)
+#        gr = wx.GraphicsRenderer.GetDefaultRenderer()
+#        gc = gr.CreateContext(dc)
+        gc = wx.GraphicsContext.Create(dc)
+
+        
+        pen = gc.CreatePen(wx.Pen(wx.BLACK, 2))
+        gc.SetPen(pen)
+        
+        gc.DrawLines([(margin, vmiddle), (self.Width - margin, vmiddle)])
+        gc.DrawLines([(margin, vmiddle - nod), (margin, vmiddle + nod)])
+        gc.DrawLines([(self.Width - margin, vmiddle - nod), (self.Width - margin, vmiddle + nod)])
+        # could use strokelines
+        
+def round_significant(x, n):
+    """
+    Round a number to n significant figures
+    """
+    return round(x, int(n - math.ceil(math.log10(abs(x)))))
+
+def round_down_significant(x, n):
+    """
+    Round a number to n significant figures making sure it's smaller
+    """
+    return round(x * (1 - 0.5 * 10 ** -n), int(n - math.ceil(math.log10(abs(x)))))
+
+def to_string_metric(x):
+    """
+    Convert a number to a string with the most appropriate unit appended  
+    ex: 0.0012 -> "1.2 mm"
+    x (float): number in meter
+    return (string)
+    """
+    units = {0: "m", -3: "mm", -6:"µm", -9:"nm", -12:"pm"}
+    most_significant = int(math.floor(math.log10(abs(x))))
+    unit_order = (most_significant / 3) * 3 # rounding
+    # TODO handle out of range of units
+    rounded = "{:g}".format(x / (10 ** unit_order))
+    unit = units[unit_order]
+    return rounded + unit
     
-        
+
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:

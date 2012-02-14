@@ -59,8 +59,8 @@ class DblMicroscopePanel(wx.Panel):
         mainSizer = wx.BoxSizer(wx.VERTICAL)
         legendSizer = wx.BoxSizer(wx.HORIZONTAL)
         scaleSizer = wx.BoxSizer(wx.VERTICAL)
-        scaleSizer.Add(self.scaleDisplay, 1, wx.ALIGN_LEFT|wx.EXPAND)
-        scaleSizer.Add(self.hfwDisplay, 1, wx.ALIGN_RIGHT|wx.EXPAND)
+        scaleSizer.Add(self.scaleDisplay, 1, wx.ALIGN_CENTER|wx.EXPAND)
+        scaleSizer.Add(self.hfwDisplay, 1, wx.ALIGN_CENTER|wx.EXPAND)
         
         imageSizer = wx.BoxSizer(wx.VERTICAL)
         imageSizerTop = wx.BoxSizer(wx.HORIZONTAL)
@@ -81,7 +81,7 @@ class DblMicroscopePanel(wx.Panel):
         imageSizerTop.Add(self.viewComboRight, 0, wx.ALIGN_CENTER)
         
         line = wx.StaticLine(self, style=wx.LI_VERTICAL)
-        legendSizer.Add(scaleSizer, 1, wx.ALIGN_CENTER|wx.EXPAND)
+        legendSizer.Add(scaleSizer, 1, wx.ALIGN_CENTER|wx.LEFT|wx.RIGHT|wx.EXPAND, 3)
         legendSizer.Add(line, 0, wx.ALIGN_CENTER|wx.EXPAND)
         legendSizer.Add(imageSizer, 3, wx.ALIGN_CENTER|wx.EXPAND)
         mainSizer.Add(self.canvas, 10, wx.EXPAND)
@@ -181,7 +181,9 @@ class DblMicroscopePanel(wx.Panel):
         # TODO: find out if that's the nice behaviour, or should just keep it?
         if needSwap:
             self.canvas.SetMergeRatio(1.0 - self.canvas.GetMergeRatio())
-
+        
+        self.scaleDisplay.SetMPP(0.0000025)
+        
 
 class MicroscopeView(object):
     """
@@ -196,15 +198,24 @@ class MicroscopeView(object):
         self.legendCtrl = {} # list of wx.Control to display in the legend
     
     def Hide(self, combo, sizer):
-        # Remove all the previous controls in the sizer
+        # Remove and hide all the previous controls in the sizer
         for c in self.legendCtrl:
             sizer.Detach(c)
             c.Hide()
-    
+        
+        # For spacers: everything else in the sizer
+        for c in sizer.GetChildren():
+            sizer.Remove(0)
+
     def Show(self, combo, sizer):
         # Put the new controls
+        first = True
         for c in self.legendCtrl:
-            sizer.Add(c, 1, wx.ALIGN_CENTER|wx.LEFT|wx.RIGHT|wx.EXPAND, 3)
+            if first:
+                first = False
+            else:
+                sizer.AddStretchSpacer()
+            sizer.Add(c, 0, wx.ALIGN_CENTER|wx.LEFT|wx.RIGHT|wx.EXPAND, 3)
             c.Show()
         
         #Update the combobox

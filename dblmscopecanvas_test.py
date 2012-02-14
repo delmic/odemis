@@ -180,7 +180,9 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
 if __name__ == "__main__":
     unittest.main()
     
+
 def GetRGB(im, x, y):
+    # TODO use DC.GetPixel()
     return (im.GetRed(x,y), im.GetGreen(x,y), im.GetBlue(x,y))
 
 def GetImageFromBuffer(canvas):
