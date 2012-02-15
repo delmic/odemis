@@ -75,12 +75,22 @@ class DblMicroscopePanel(wx.Panel):
         imageSizerTop.Add(self.mergeSlider, 2, wx.ALIGN_CENTER|wx.LEFT|wx.RIGHT, 3)
         imageSizerTop.AddStretchSpacer()
         imageSizerTop.Add(self.viewComboRight, 0, wx.ALIGN_CENTER)
-                
+        
+
         self.imageSizerBLeft = wx.BoxSizer(wx.HORIZONTAL)
         self.imageSizerBRight = wx.BoxSizer(wx.HORIZONTAL)
-        imageSizerBottom.Add(self.imageSizerBLeft, 1, wx.ALIGN_CENTER|wx.EXPAND)
+        # because the statictexts cannot be vertically centered
+        sizervbl = wx.BoxSizer(wx.VERTICAL)
+        sizervbl.AddStretchSpacer()
+        sizervbl.Add(self.imageSizerBLeft, 0, wx.ALIGN_CENTER|wx.EXPAND)
+        sizervbl.AddStretchSpacer()
+        sizervbr = wx.BoxSizer(wx.VERTICAL)
+        sizervbr.AddStretchSpacer()
+        sizervbr.Add(self.imageSizerBRight, 0, wx.ALIGN_CENTER|wx.EXPAND)
+        sizervbr.AddStretchSpacer()
+        imageSizerBottom.Add(sizervbl, 1, wx.ALIGN_CENTER|wx.EXPAND)
         imageSizerBottom.Add(lineDisplay, 0, wx.ALIGN_CENTER|wx.EXPAND)
-        imageSizerBottom.Add(self.imageSizerBRight, 1, wx.ALIGN_CENTER|wx.EXPAND)
+        imageSizerBottom.Add(sizervbr, 1, wx.ALIGN_CENTER|wx.EXPAND)
         
         line = wx.StaticLine(self, style=wx.LI_VERTICAL)
         legendSizer.Add(scaleSizer, 1, wx.ALIGN_CENTER|wx.LEFT|wx.RIGHT|wx.EXPAND, 3)
@@ -220,7 +230,7 @@ class MicroscopeView(object):
                 first = False
             else:
                 sizer.AddStretchSpacer()
-            sizer.Add(c, 0, wx.ALIGN_CENTER|wx.LEFT|wx.RIGHT|wx.EXPAND, 3)
+            sizer.Add(c, 0, wx.ALIGN_CENTER_HORIZONTAL|wx.LEFT|wx.RIGHT|wx.EXPAND, 3)
             c.Show()
         
         #Update the combobox

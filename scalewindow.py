@@ -165,6 +165,7 @@ class ScaleWindow(BufferedWindow):
     def __init__(self, *args, **kwargs):
         BufferedWindow.__init__(self, *args, **kwargs)
         self.mpp = 0.00027 # a not too crazy number (my screen density)
+#        self.mpp = None # unknown
         self.MinSize = (80, 30) # we want at least a bit of space
         # This is called before the end of __init__()
         self.va = self.GetDefaultAttributes()
@@ -176,7 +177,11 @@ class ScaleWindow(BufferedWindow):
         self.OnSize(None) # very annoying as it calls the methods before the init is done
         
     def SetMPP(self, mpp):
-        if mpp == 0:
+        """
+        Set the meters per pixel of the scale.
+        mpp (float > 0): the mpp, or None if unknown (scale is empty)
+        """
+        if mpp <= 0:
             raise ZeroDivisionError()
         self.mpp = mpp
         self.UpdateDrawing()
@@ -200,17 +205,21 @@ class ScaleWindow(BufferedWindow):
 #        return self.DrawGC(dc)
         nod = self.nod
         shift = self.shift # to accommodate for the pen width
+        vmiddle = self.GetClientSize()[1] / 2
         
         dc.SetBackgroundMode(wx.SOLID)
         dc.SetBackground(wx.Brush(self.va.colBg))
         dc.Clear()
+        
+        if not self.mpp: # unknown mpp => blank
+            return
+        
         dc.SetFont(self.va.font) # before GetLineWidth(), which needs it
         dc.SetTextForeground(self.va.colFg)
         dc.SetTextBackground(self.va.colBg)
         
-        vmiddle = self.Height / 2
         length, actual = self.GetLineWidth(dc)
-
+        
         charSize = dc.GetTextExtent("M")
         dc.DrawText(" " + to_string_metric(actual), 
                     shift + length, vmiddle - charSize[1] / 2)
