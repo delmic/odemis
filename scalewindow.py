@@ -51,13 +51,16 @@ class BufferedWindow(wx.Control):
     L{BufferedWindow.UpdateDrawing} method. Since the drawing is stored in a bitmap, you
     can also save the drawing to file by calling the
     `SaveToFile(self, file_name, file_type)` method.
+    
+    This is a wx.Control for the main reason that it gets the right colour
+    and font.
     """
 
     def __init__(self, parent, id=wx.ID_ANY, pos=wx.DefaultPosition, size=wx.DefaultSize,
                  style=wx.NO_FULL_REPAINT_ON_RESIZE, bufferedstyle=SM_BUFFERED_DC):
         """
         Default class constructor.
-
+        
         :param `parent`: parent window. Must not be ``None``;
         :param `id`: window identifier. A value of -1 indicates a default value;
         :param `pos`: the control position. A value of (-1, -1) indicates a default position,
@@ -88,7 +91,6 @@ class BufferedWindow(wx.Control):
 
         :param `dc`: an instance of `wx.DC`.        
         """
-
         pass
 
 

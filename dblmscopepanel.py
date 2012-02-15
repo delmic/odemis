@@ -34,28 +34,30 @@ class DblMicroscopePanel(wx.Panel):
         self.canvas = DblMicroscopeCanvas(self)
         self.canvas.SetCrossHair(True)
         
+        # The legend
         # Control for the selection before AddView(), which needs them
         self.viewComboLeft = wx.ComboBox(self, style=wx.CB_READONLY, size=(140,-1))
         self.viewComboRight = wx.ComboBox(self, style=wx.CB_READONLY, size=(140,-1))
         self.Bind(wx.EVT_COMBOBOX, self.OnComboLeft, self.viewComboLeft)
         self.Bind(wx.EVT_COMBOBOX, self.OnComboRight, self.viewComboRight)
-
-        # TODO create a little control that display the scale
-#        self.scaleDisplay = wx.StaticText(self, label="Area for the scale 5µm")
-        self.scaleDisplay = ScaleWindow(self)
-        self.hfwDisplay = wx.StaticText(self, label="HFW: 156µm")
-        lineDisplay = wx.StaticLine(self, style=wx.LI_VERTICAL)
         
         self.mergeSlider = wx.Slider(self, wx.ID_ANY, 50, 0, 100, size=(100, 30), style=wx.SL_HORIZONTAL | wx.SL_AUTOTICKS | wx.SL_TICKS)
         self.mergeSlider.SetTick(50) # Only on Windows
-#        wx.EVT_SLIDER(self.mergeSlider, self.OnSlider)
         self.mergeSlider.Bind(wx.EVT_SLIDER, self.OnSlider)
         
-        self.va = self.hfwDisplay.GetDefaultAttributes()
-        colour = self.va.colBg
-        
-        # TODO: make the default size bigger
-        # TODO: focus by default on the content, for keyboard
+        self.scaleDisplay = ScaleWindow(self)
+        self.hfwDisplay = wx.StaticText(self, label="HFW: 156µm")
+        lineDisplay = wx.StaticLine(self, style=wx.LI_VERTICAL)
+
+        #                                      mainSizer
+        #                    Canvas
+        # legendSizer\/
+        #|------scaleSizer---|---------------------imageSizer-----|
+        #|                   l      imageSizerTop                 |
+        #|-------------------l------------------------------------|
+        #|                   l     imageSizerBottom               |
+        #|                   l imageSizerBLeft l imageSizerBRight |
+        #|-------------------|------------------------------------|
         mainSizer = wx.BoxSizer(wx.VERTICAL)
         legendSizer = wx.BoxSizer(wx.HORIZONTAL)
         scaleSizer = wx.BoxSizer(wx.VERTICAL)
@@ -65,20 +67,20 @@ class DblMicroscopePanel(wx.Panel):
         imageSizer = wx.BoxSizer(wx.VERTICAL)
         imageSizerTop = wx.BoxSizer(wx.HORIZONTAL)
         imageSizerBottom = wx.BoxSizer(wx.HORIZONTAL)
-        imageSizer.Add(imageSizerTop, 0, wx.ALIGN_CENTER|wx.EXPAND)
-        imageSizer.Add(imageSizerBottom, 0, wx.ALIGN_CENTER|wx.EXPAND)
-        
-        self.imageSizerBLeft = wx.BoxSizer(wx.HORIZONTAL)
-        self.imageSizerBRight = wx.BoxSizer(wx.HORIZONTAL)
-        imageSizerBottom.Add(self.imageSizerBLeft, 1, wx.ALIGN_CENTER|wx.EXPAND)
-        imageSizerBottom.Add(lineDisplay, 0, wx.ALIGN_CENTER|wx.EXPAND)
-        imageSizerBottom.Add(self.imageSizerBRight, 1, wx.ALIGN_CENTER|wx.EXPAND)
-        
+        imageSizer.Add(imageSizerTop, 1, wx.ALIGN_CENTER|wx.EXPAND)
+        imageSizer.Add(imageSizerBottom, 1, wx.ALIGN_CENTER|wx.EXPAND)
+
         imageSizerTop.Add(self.viewComboLeft, 0, wx.ALIGN_CENTER)
         imageSizerTop.AddStretchSpacer()
         imageSizerTop.Add(self.mergeSlider, 2, wx.ALIGN_CENTER|wx.LEFT|wx.RIGHT, 3)
         imageSizerTop.AddStretchSpacer()
         imageSizerTop.Add(self.viewComboRight, 0, wx.ALIGN_CENTER)
+                
+        self.imageSizerBLeft = wx.BoxSizer(wx.HORIZONTAL)
+        self.imageSizerBRight = wx.BoxSizer(wx.HORIZONTAL)
+        imageSizerBottom.Add(self.imageSizerBLeft, 1, wx.ALIGN_CENTER|wx.EXPAND)
+        imageSizerBottom.Add(lineDisplay, 0, wx.ALIGN_CENTER|wx.EXPAND)
+        imageSizerBottom.Add(self.imageSizerBRight, 1, wx.ALIGN_CENTER|wx.EXPAND)
         
         line = wx.StaticLine(self, style=wx.LI_VERTICAL)
         legendSizer.Add(scaleSizer, 1, wx.ALIGN_CENTER|wx.LEFT|wx.RIGHT|wx.EXPAND, 3)
@@ -148,7 +150,8 @@ class DblMicroscopePanel(wx.Panel):
                 view = v
                 break
         if not view:
-            print "Warning: Could not find view " + viewName
+            raise LookupError("Unknown view " + viewName)
+            return
         
         (prevView, combo, sizer) = self.displays[display]
         oppDisplay = 1 - display 
@@ -182,7 +185,9 @@ class DblMicroscopePanel(wx.Panel):
         if needSwap:
             self.canvas.SetMergeRatio(1.0 - self.canvas.GetMergeRatio())
         
-        self.scaleDisplay.SetMPP(0.0000025)
+#        self.scaleDisplay.SetMPP(0.0000025)
+        assert(self.displays[0] != self.displays[1] or 
+               isinstance(self.displays[0], MicroscopeEmptyView))
         
 
 class MicroscopeView(object):
