@@ -16,8 +16,9 @@ Delmic Acquisition Software is distributed in the hope that it will be useful, b
 You should have received a copy of the GNU General Public License along with Delmic Acquisition Software. If not, see http://www.gnu.org/licenses/.
 '''
 
-import wx
 from draggablecanvas import DraggableCanvas, WorldToBufferPoint
+from model import ActiveValue
+import wx
 
 CROSSHAIR_COLOR = wx.GREEN
 CROSSHAIR_SIZE = 16
@@ -35,7 +36,9 @@ class DblMicroscopeCanvas(DraggableCanvas):
         DraggableCanvas.__init__(self, *args, **kwargs)
         
         # meter per pixel = image density => field of view
-        self.mpp = 0.0001 # 1 px = 0.1mm <~> zoom = 0
+#        self.mpp = 0.0001 # 1 px = 0.1mm <~> zoom = 0
+        self.mpp = ActiveValue(0.0001)
+        self.mpp.bind(self.avOnMPP)
         self.Bind(wx.EVT_MOUSEWHEEL, self.OnWheel)
         
 #        self.Overlays.append(CrossHairOverlay("Blue", CROSSHAIR_SIZE)) # debug
@@ -83,10 +86,10 @@ class DblMicroscopeCanvas(DraggableCanvas):
         view_width = self.ClientSize[0]
         if view_width < 1:
             view_width = 1
-        self.SetMPP(float(hfw) / view_width)
+        self.mpp.value = float(hfw) / view_width
         
     def GetHFW(self):
-        return self.GetMPP() * self.ClientSize[0]
+        return self.mpp.value * self.ClientSize[0]
      
     def SetMPP(self, mpp):
         """
@@ -94,20 +97,23 @@ class DblMicroscopeCanvas(DraggableCanvas):
         mpp (0.0<float): 
         See SetHFW()
         """
+        # XXX Should be in the model
         assert(0.0 < mpp)
         
-        self.mpp = mpp
-        # update the scaling of the images
-        for i in self.Images:
-            if i:
-                i.scale = i._dmc_mpp / mpp
-        self.SetZoom(0)
+        self.mpp.value = mpp
 
     def GetMPP(self):
         """
         return (float): meter per pixel of the canvas at zoom 0
         """
-        return self.mpp
+        return self.mpp.value
+    
+    def avOnMPP(self, mpp):
+        # update the scaling of the images
+        for i in self.Images:
+            if i:
+                i.scale = i._dmc_mpp / mpp
+        self.SetZoom(0) # TODO this should not be done
 
     # Change picture one/two
     def SetImage(self, index, im, pos = None, mpp = None):
@@ -126,7 +132,7 @@ class DblMicroscopeCanvas(DraggableCanvas):
         
         im._dc_center = pos
         im._dmc_mpp = mpp # for later updates of the scale
-        im._dc_scale = float(mpp) / self.mpp
+        im._dc_scale = float(mpp) / self.mpp.value
         im.InitAlpha()
         self.Images[index] = im
         self.ShouldUpdateDrawing()
@@ -138,7 +144,7 @@ class DblMicroscopeCanvas(DraggableCanvas):
             change *= 0.2 # softer
         
         if event.CmdDown(): # = Ctrl on Linux/Win or Cmd on Mac
-            self.SetMergeRatio(self.GetMergeRatio() + change * 0.1)
+            self.merge_ratio.value += change * 0.1
         else:
             self.SetZoom(self.GetZoom() + change)
 

@@ -17,6 +17,7 @@ You should have received a copy of the GNU General Public License along with Del
 '''
 
 from dblmscopecanvas import DblMicroscopeCanvas
+from model import ActiveValue
 from scalewindow import ScaleWindow
 import wx
 
@@ -31,6 +32,9 @@ class DblMicroscopePanel(wx.Panel):
     def __init__(self, *args, **kwargs):
         wx.Panel.__init__(self, *args, **kwargs)
         
+        # TODO should be in its own place
+        self.merge_ratio = ActiveValue(0.3)
+        
         self.canvas = DblMicroscopeCanvas(self)
         self.canvas.SetCrossHair(True)
         
@@ -44,6 +48,8 @@ class DblMicroscopePanel(wx.Panel):
         self.mergeSlider = wx.Slider(self, wx.ID_ANY, 50, 0, 100, size=(100, 30), style=wx.SL_HORIZONTAL | wx.SL_AUTOTICKS | wx.SL_TICKS)
         self.mergeSlider.SetTick(50) # Only on Windows
         self.mergeSlider.Bind(wx.EVT_SLIDER, self.OnSlider)
+        self.merge_ratio.bind(self.avOnMergeRatio)
+        self.mergeSlider.SetValue(self.merge_ratio.value * 100)
         
         self.scaleDisplay = ScaleWindow(self)
         self.hfwDisplay = wx.StaticText(self, label="HFW: 156µm")
@@ -124,14 +130,18 @@ class DblMicroscopePanel(wx.Panel):
         
     def OnComboRight(self, event):
         self.ChangeView(1, event.GetString())
-        
+    
     def OnSlider(self, event):
         """
         Merge ratio slider
         """
-#        print self.mergeSlider.GetValue()
-        self.canvas.SetMergeRatio(self.mergeSlider.GetValue()/100.0)
-            
+        self.merge_ratio.value = self.mergeSlider.GetValue() / 100.0
+    
+    def avOnMergeRatio(self, val):
+        # round is important because int can cause unstable value
+        # int(0.58*100) = 57
+        self.mergeSlider.SetValue(round(val * 100))
+        
     # Change picture one/two        
     def SetImage(self, index, im, pos = None, mpp = None):
         self.canvas.SetImage(index, im, pos, mpp)
