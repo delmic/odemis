@@ -16,8 +16,9 @@ Delmic Acquisition Software is distributed in the hope that it will be useful, b
 You should have received a copy of the GNU General Public License along with Delmic Acquisition Software. If not, see http://www.gnu.org/licenses/.
 '''
 
+from dblmscopeviewmodel import DblMscopeViewModel
 from draggablecanvas import DraggableCanvas, WorldToBufferPoint
-from model import ActiveValue
+import math
 import wx
 
 CROSSHAIR_COLOR = wx.GREEN
@@ -35,14 +36,23 @@ class DblMicroscopeCanvas(DraggableCanvas):
     def __init__(self, *args, **kwargs):
         DraggableCanvas.__init__(self, *args, **kwargs)
         
-        # meter per pixel = image density => field of view
-#        self.mpp = 0.0001 # 1 px = 0.1mm <~> zoom = 0
-        self.mpp = ActiveValue(0.0001)
-        self.mpp.bind(self.avOnMPP)
+        parent = args[0]
+        self.viewmodel = parent.viewmodel
+        # meter per "world unit"
+        # for conversion between "world pos" in the canvas and a real unit
+        # mpp == mpwu => 1 world coord == 1 px => scale == 1
+        self.mpwu = self.viewmodel.mpp.value  #m/wu
+        # Should not be changed!
+        
+        self.viewmodel.mpp.bind(self.avOnMPP)
+        self.viewmodel.images[0].bind(self.avOnImage)
+        self.viewmodel.images[1].bind(self.avOnImage, True)
+        self.viewmodel.merge_ratio.bind(self.avOnMergeRatio, True)
+        
         self.Bind(wx.EVT_MOUSEWHEEL, self.OnWheel)
         
-#        self.Overlays.append(CrossHairOverlay("Blue", CROSSHAIR_SIZE)) # debug
-#        self.Overlays.append(CrossHairOverlay("Red", CROSSHAIR_SIZE, (10,10))) # debug
+        self.Overlays.append(CrossHairOverlay("Blue", CROSSHAIR_SIZE)) # debug
+        self.Overlays.append(CrossHairOverlay("Red", CROSSHAIR_SIZE, (10,10))) # debug
     # Add/remove crosshair
     def SetCrossHair(self, activated):
         """
@@ -55,6 +65,7 @@ class DblMicroscopeCanvas(DraggableCanvas):
             if isinstance(o, CrossHairOverlay):
                 ch = o
                 break
+        
         if activated:
             if not ch:
                 ch = CrossHairOverlay(CROSSHAIR_COLOR, CROSSHAIR_SIZE)
@@ -76,66 +87,55 @@ class DblMicroscopeCanvas(DraggableCanvas):
     
     # Add/remove overlays
 
-    # Change hfw
-    def SetHFW(self, hfw):
-        """
-        Set the horizontal field width of the image
-        hfw (0.0<float): the width
-        """
-        assert(0.0 < hfw)
-        view_width = self.ClientSize[0]
-        if view_width < 1:
-            view_width = 1
-        self.mpp.value = float(hfw) / view_width
-        
-    def GetHFW(self):
-        return self.mpp.value * self.ClientSize[0]
+#    # Change hfw
+#    def SetHFW(self, hfw):
+#        """
+#        Set the horizontal field width of the image
+#        hfw (0.0<float): the width
+#        """
+#        assert(0.0 < hfw)
+#        view_width = self.ClientSize[0]
+#        if view_width < 1:
+#            view_width = 1
+#        self.mpp.value = float(hfw) / view_width
+#        
+#    def GetHFW(self):
+#        return self.mpp.value * self.ClientSize[0]
      
-    def SetMPP(self, mpp):
-        """
-        Directly set the meter per pixel value
-        mpp (0.0<float): 
-        See SetHFW()
-        """
-        # XXX Should be in the model
-        assert(0.0 < mpp)
-        
-        self.mpp.value = mpp
 
-    def GetMPP(self):
-        """
-        return (float): meter per pixel of the canvas at zoom 0
-        """
-        return self.mpp.value
-    
-    def avOnMPP(self, mpp):
-        # update the scaling of the images
-        for i in self.Images:
-            if i:
-                i.scale = i._dmc_mpp / mpp
-        self.SetZoom(0) # TODO this should not be done
-
-    # Change picture one/two
-    def SetImage(self, index, im, pos = None, mpp = None):
-        """
-        Set (or update) the image
-        index (int, 0 or 1): index number of the image
-        im (wx.Image): the image, or None to remove the current image
-        pos (2-tuple of float): position of the center of the image (in meters)
-        mpp (0.0<float): meters per pixel, the size of one pixel
-        """
-        assert(0 <= index and index <= 1)
-        
-        if not im:
-            self.Images[index] = None
-            return
-        
-        im._dc_center = pos
-        im._dmc_mpp = mpp # for later updates of the scale
-        im._dc_scale = float(mpp) / self.mpp.value
-        im.InitAlpha()
-        self.Images[index] = im
+    def avOnMergeRatio(self, val):
+        self.merge_ratio = val
         self.ShouldUpdateDrawing()
+     
+    def Zoom(self, inc):
+        """
+        Zoom by the given factor
+        inc (float): scale the current view by 2^inc
+        ex:  # 1 => *2 ; -1 => /2; 2 => *4...
+        """
+        scale = math.pow(2.0, inc)
+        self.viewmodel.mpp.value /= scale
+
+    def avOnMPP(self, mpp):
+        self.scale = self.mpwu / mpp
+        
+#        # update the scaling of the images
+#        for i in range(len(self.Images)):
+#            if self.Images[i]:
+#                impp = self.viewmodel.images[i].value.mpp
+#                self.Images[i]._dc_scale = impp / mpp
+                
+        self.ShouldUpdateDrawing()
+    
+    def avOnImage(self, image):
+        for i in range(len(self.Images)):
+            iim = self.viewmodel.images[i].value
+            if iim.image:
+                scale = float(iim.mpp) / self.mpwu
+                pos = (iim.center[0] * self.mpwu, iim.center[1] * self.mpwu)
+                self.SetImage(i, iim.image, pos, scale)
+            else:
+                self.SetImage(i, None)
 
     # Zoom/merge management
     def OnWheel(self, event):
@@ -144,10 +144,9 @@ class DblMicroscopeCanvas(DraggableCanvas):
             change *= 0.2 # softer
         
         if event.CmdDown(): # = Ctrl on Linux/Win or Cmd on Mac
-            self.merge_ratio.value += change * 0.1
+            self.viewmodel.merge_ratio.value += change * 0.1
         else:
-            self.SetZoom(self.GetZoom() + change)
-
+            self.Zoom(change)
 
 ### Here come all the classes for drawing overlays
 class CrossHairOverlay(object):
@@ -175,5 +174,7 @@ class CrossHairOverlay(object):
 
         dc.DrawLine(tl_s[0], center[1], br_s[0], center[1])
         dc.DrawLine(center[0], tl_s[1], center[0], br_s[1]) 
+        
+
         
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:

@@ -31,7 +31,17 @@ class ActiveValue(object):
         # goes away. See pypubsub weakmethod.py or http://mindtrove.info/python-weak-references/
 #        self._listeners = weakref.WeakSet()
         self._listeners = set()
+        
+        # same as "self.value =  initval", but avoids __setattr__()
         self._set(initval)
+        
+    def __dummy(self):
+        """
+        never call here,
+        just to make the code analysers happy by declaring the member explicitly
+        """
+        assert(False)
+        self.value = None
         
     def bind(self, listener, init=False):
         """

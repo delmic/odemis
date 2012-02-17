@@ -17,6 +17,7 @@ You should have received a copy of the GNU General Public License along with Del
 '''
 
 from dblmscopecanvas import DblMicroscopeCanvas
+from dblmscopeviewmodel import DblMscopeViewModel
 from instrmodel import InstrumentalImage
 from model import ActiveValue
 from scalewindow import ScaleWindow
@@ -33,11 +34,10 @@ class DblMicroscopePanel(wx.Panel):
     def __init__(self, *args, **kwargs):
         wx.Panel.__init__(self, *args, **kwargs)
         
-        # TODO should be in its own place
-        self.merge_ratio = ActiveValue(0.3)
         parent = args[0]
         self.secom_model = parent.secom_model
         
+        self.viewmodel = DblMscopeViewModel()
         self.canvas = DblMicroscopeCanvas(self)
         self.canvas.SetCrossHair(True)
         
@@ -49,9 +49,9 @@ class DblMicroscopePanel(wx.Panel):
         self.Bind(wx.EVT_COMBOBOX, self.OnComboRight, self.viewComboRight)
         
         self.mergeSlider = wx.Slider(self, wx.ID_ANY, 50, 0, 100, size=(100, 30), style=wx.SL_HORIZONTAL | wx.SL_AUTOTICKS | wx.SL_TICKS)
-        self.mergeSlider.SetTick(50) # Only on Windows
+        self.mergeSlider.SetLineSize(50)
         self.mergeSlider.Bind(wx.EVT_SLIDER, self.OnSlider)
-        self.merge_ratio.bind(self.avOnMergeRatio, True)
+        self.viewmodel.merge_ratio.bind(self.avOnMergeRatio, True)
         
         self.scaleDisplay = ScaleWindow(self)
         self.hfwDisplay = wx.StaticText(self, label="HFW: 156µm")
@@ -71,6 +71,7 @@ class DblMicroscopePanel(wx.Panel):
         scaleSizer = wx.BoxSizer(wx.VERTICAL)
         scaleSizer.Add(self.scaleDisplay, 1, wx.ALIGN_CENTER|wx.EXPAND)
         scaleSizer.Add(self.hfwDisplay, 1, wx.ALIGN_CENTER|wx.EXPAND)
+        self.viewmodel.mpp.bind(self.avOnMPP, True)
         
         imageSizer = wx.BoxSizer(wx.VERTICAL)
         imageSizerTop = wx.BoxSizer(wx.HORIZONTAL)
@@ -107,7 +108,6 @@ class DblMicroscopePanel(wx.Panel):
         mainSizer.Add(self.canvas, 10, wx.EXPAND)
         mainSizer.Add(legendSizer, 0, wx.EXPAND) # 0 = fixed minimal size
         
-
         emptyView = MicroscopeEmptyView()
         # display : left and right view
         self.displays = [(emptyView, self.viewComboLeft, self.imageSizerBLeft),
@@ -137,17 +137,23 @@ class DblMicroscopePanel(wx.Panel):
         """
         Merge ratio slider
         """
-        self.merge_ratio.value = self.mergeSlider.GetValue() / 100.0
+        self.viewmodel.merge_ratio.value = self.mergeSlider.GetValue() / 100.0
     
     def avOnMergeRatio(self, val):
         # round is important because int can cause unstable value
         # int(0.58*100) = 57
         self.mergeSlider.SetValue(round(val * 100))
-        
-    # Change picture one/two        
-    def SetImage(self, index, im, pos = None, mpp = None):
-        self.canvas.SetImage(index, im, pos, mpp)
     
+    def avOnMPP(self, mpp):
+        self.scaleDisplay.SetMPP(mpp)
+        
+        label = "HFW: %gm" % (mpp * self.GetClientSize()[0]) 
+        self.hfwDisplay.SetLabel(label)
+        
+#    # Change picture one/two        
+#    def SetImage(self, index, im, pos = None, mpp = None):
+#        self.canvas.SetImage(index, im, pos, mpp)
+#    
     def AddView(self, view):
         self.views.append(view)
         
@@ -173,13 +179,12 @@ class DblMicroscopePanel(wx.Panel):
                 break
         if not view:
             raise LookupError("Unknown view " + viewName)
-            return
         
         (prevView, combo, sizer) = self.displays[display]
         oppDisplay = 1 - display 
         (oppView, oppCombo, oppSizer) = self.displays[oppDisplay]
         
-        needSwap = (oppView == view) and not isinstance(view, MicroscopeEmptyView)
+        needSwap = ((oppView == view) and not isinstance(view, MicroscopeEmptyView))
         
         # Remove old view(s)
         prevView.Hide(combo, sizer)
@@ -188,10 +193,10 @@ class DblMicroscopePanel(wx.Panel):
             oppView = prevView
         
         # Show new view
-        view.Show(combo, sizer, self.canvas, display)
+        view.Show(combo, sizer, self.viewmodel.images[display])
         self.displays[display] = (view, combo, sizer)
         if needSwap:
-            oppView.Show(oppCombo, oppSizer, self.canvas, oppDisplay)
+            oppView.Show(oppCombo, oppSizer, self.viewmodel.images[oppDisplay])
             self.displays[oppDisplay] = (oppView, oppCombo, oppSizer)
         
         # Remove slider if not 2 views
@@ -202,9 +207,8 @@ class DblMicroscopePanel(wx.Panel):
             
         # TODO: find out if that's the nice behaviour, or should just keep it?
         if needSwap:
-            self.merge_ratio.value = (1.0 - self.merge_ratio.value)
+            self.viewmodel.merge_ratio.value = (1.0 -  self.viewmodel.merge_ratio.value)
         
-#        self.scaleDisplay.SetMPP(0.0000025)
         assert(self.displays[0] != self.displays[1] or 
                isinstance(self.displays[0], MicroscopeEmptyView))
         
@@ -222,7 +226,8 @@ class MicroscopeView(object):
         self.legendCtrl = {} # list of wx.Control to display in the legend
         self.canvas = None
         self.canvas_index = None # index (int) # TODO use active value
-        self.iimage = InstrumentalImage(None, None, None) # instrumental image
+        self.outimage = None # ActiveValue of instrumental image
+        self.inimage = InstrumentalImage(None, None, None) # instrumental image
     
     def Hide(self, combo, sizer):
         # Remove and hide all the previous controls in the sizer
@@ -234,12 +239,11 @@ class MicroscopeView(object):
         for c in sizer.GetChildren():
             sizer.Remove(0)
             
-        if self.canvas:
-            self.canvas.SetImage(self.canvas_index, None)
+        if self.outimage:
+            self.outimage.value = self.inimage
 
-    def Show(self, combo, sizer, canvas, cindex):
-        self.canvas = canvas
-        self.canvas_index = cindex
+    def Show(self, combo, sizer, outimage):
+        self.outimage = outimage
         self.UpdateImage()
         
         # Put the new controls
@@ -258,9 +262,8 @@ class MicroscopeView(object):
         sizer.Layout()
         
     def UpdateImage(self):
-        if (self.canvas is not None) and (self.canvas_index is not None):
-            print "setting image to %d with mpp " % self.canvas_index, self.iimage.mpp
-            self.canvas.SetImage(self.canvas_index, self.iimage.image, self.iimage.center, self.iimage.mpp)
+        if self.outimage:
+            self.outimage.value = self.inimage
             
 class MicroscopeEmptyView(MicroscopeView):
     """
@@ -298,7 +301,7 @@ class MicroscopeOpticalView(MicroscopeView):
         self.LegendET.SetLabel(label)
         
     def avImage(self, value):
-        self.iimage = value
+        self.inimage = value
         self.UpdateImage()
 
 class MicroscopeSEView(MicroscopeView):
@@ -333,6 +336,9 @@ class MicroscopeSEView(MicroscopeView):
         self.LegendHV.SetLabel(label)
         
     def avImage(self, value):
-        self.iimage = value
+        self.inimage = value
         self.UpdateImage()
+        
+        
+
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:

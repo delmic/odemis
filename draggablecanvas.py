@@ -49,12 +49,10 @@ class DraggableCanvas(wx.Panel):
         self.Overlays = [] # on top of the pictures, relative position
         self.StaticOverlays = [] # on top, stays at an absolute position
         self.Images = [None, None]
-#        self.merge_ratio = 0.3 # 0<float<1 of how much to see the first picture
-        self.merge_ratio = parent.merge_ratio
-        parent.merge_ratio.bind(self.avOnMergeRatio)
-        self.zoom = 0 # float, can also be negative
+        self.merge_ratio = 0.3
+#        self.zoom = 0 # float, can also be negative
         self.scale = 1.0 # derived from zoom
-        self.zoom_range = (-10.0, 10.0)
+#        self.zoom_range = (-10.0, 10.0)
         
         self.world_pos = (0,0) # position of the centre of the buffer in the world
         
@@ -93,42 +91,6 @@ class DraggableCanvas(wx.Panel):
         self.Bind(wx.EVT_CHAR, self.OnChar)
         
         self.n = 0
-        
-    def GetZoom(self):
-        """
-        return the zoom value (float)
-        Just to be symmetrical with SetZoom
-        """
-        return self.zoom
-    
-    def SetZoom(self, val):
-        """
-        Change the zoom value (targetted) and update the screen
-        val (minzoom<float<maxzoom): the actual size is 2^zoom if outside of the authorised values, it is clamped
-        """
-        self.zoom = sorted(self.zoom_range + (val,))[1] # clamp
-        # 1 => *2 ; -1 => /2; 2 => *4...
-        self.scale = math.pow(2.0, self.zoom) # the value used in computations
-        self.ShouldUpdateDrawing()
-    
-    
-    def GetMergeRatio(self):
-        """
-        return the merge value (float)
-        Just to be symmetrical with SetMergeRatio
-        """
-        return self.merge_ratio.value
-    
-    def SetMergeRatio(self, val):
-        """
-        Change the merge ratio  and update the screen
-        val (0<float<1): the merge ratio, if outside of the authorised values, it is clamped
-        """
-        self.merge_ratio.value = sorted((0.0, 1.0) + (val,))[1] # clamp # TODO to model
-#        self.ShouldUpdateDrawing()
-
-    def avOnMergeRatio(self, val):
-        self.ShouldUpdateDrawing()
         
     def OnChar(self, event):
         key = event.GetKeyCode()
@@ -201,6 +163,29 @@ class DraggableCanvas(wx.Panel):
         new_pos = (self.world_pos[0] + (pos[0] - center[0]) / self.scale,
                    self.world_pos[1] + (pos[1] - center[1]) / self.scale)
         self.ReCenterBuffer(new_pos)
+
+    # Change picture one/two
+    def SetImage(self, index, im, pos = None, scale = None):
+        """
+        Set (or update) the image
+        index (int, 0 or 1): index number of the image
+        im (wx.Image): the image, or None to remove the current image
+        pos (2-tuple of float): position of the center of the image (in world unit)
+        scale (float): scaling of the image
+        """
+        assert(0 <= index and index <= 1)
+        
+        if not im:
+            self.Images[index] = None
+            return
+        
+        im._dc_center = pos
+        im._dc_scale = scale
+        if not im.HasAlpha():
+            im.InitAlpha()
+        self.Images[index] = im
+        self.ShouldUpdateDrawing()
+
 
     def OnPaint(self, event):
         """
@@ -313,7 +298,7 @@ class DraggableCanvas(wx.Panel):
         # to scaling computation twice when the image has a scale != 1. In 
         # addition, as coordinates are int, there is rounding error on zooming.
         
-        self._DrawMergedImages(dc, self.Images[0], self.Images[1], self.merge_ratio.value)
+        self._DrawMergedImages(dc, self.Images[0], self.Images[1], self.merge_ratio)
 
         # Each overlay draws itself
         for o in self.Overlays:

@@ -164,8 +164,8 @@ class ScaleWindow(BufferedWindow):
     """
     def __init__(self, *args, **kwargs):
         BufferedWindow.__init__(self, *args, **kwargs)
-        self.mpp = 0.00027 # a not too crazy number (my screen density)
-#        self.mpp = None # unknown
+        #self.mpp = 0.00027 # a not too crazy number (my screen density)
+        self.mpp = None # unknown
         self.MinSize = (80, 30) # we want at least a bit of space
         # This is called before the end of __init__()
         self.va = self.GetDefaultAttributes()

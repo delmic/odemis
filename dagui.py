@@ -95,14 +95,12 @@ class DAGuiFrame(wx.Frame):
         for i, f in enumerate(filenames):
             try:
                 fullname = os.path.join(self.dirname, f)
-                im = InstrumentalImage(wx.Image(fullname),  0.0001 + (0.000015 *i), (10,10))
+                im = InstrumentalImage(wx.Image(fullname),  0.0001 + (0.000015 *i), (0.00001,0.00001))
 
                 if i == 0:
                     self.secom_model.sem_det_image.value = im
-                    print "mpp0", im.mpp
                 elif i == 1:
                     self.secom_model.optical_det_image.value = im
-                    print "mpp1", im.mpp
             except e:
                 print e
         

@@ -17,7 +17,6 @@ You should have received a copy of the GNU General Public License along with Del
 '''
 
 from model import ActiveValue
-import wx
 
 class SECOMModel(object):
     """
