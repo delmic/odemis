@@ -18,6 +18,7 @@ You should have received a copy of the GNU General Public License along with Del
 
 from dblmscopecanvas import DblMicroscopeCanvas
 from dblmscopepanel import DblMicroscopePanel
+from instrmodel import SECOMModel, InstrumentalImage
 import os
 import wx
 
@@ -33,6 +34,7 @@ class DAGuiFrame(wx.Frame):
         
         # Statusbar
         #self.CreateStatusBar() # XXX needed?
+        self.secom_model = SECOMModel()
         
         # Setting up the menu.
         menuBar = wx.MenuBar()
@@ -84,18 +86,23 @@ class DAGuiFrame(wx.Frame):
         dlg = wx.FileDialog(self, "Choose one or two pictures", self.dirname, "",
                             "Image file (.tif, .jpg, .png)|*.tif;*.tiff;*.png;*.jpg;*.jpeg|Any file (*.*)|*.*",
                             wx.OPEN | wx.MULTIPLE)
+        filenames = []
         if dlg.ShowModal() == wx.ID_OK:
             filenames = dlg.GetFilenames()
             self.dirname = dlg.GetDirectory()
         dlg.Destroy()
         
         for i, f in enumerate(filenames):
-            if i > 1: # support maximum 2 images
-                break
-            fullname = os.path.join(self.dirname, f)
             try:
-                im = wx.Image(fullname)
-                self.panel.SetImage(i, im, (10,10), 0.0001 + (0.000015 *i))
+                fullname = os.path.join(self.dirname, f)
+                im = InstrumentalImage(wx.Image(fullname),  0.0001 + (0.000015 *i), (10,10))
+
+                if i == 0:
+                    self.secom_model.sem_det_image.value = im
+                    print "mpp0", im.mpp
+                elif i == 1:
+                    self.secom_model.optical_det_image.value = im
+                    print "mpp1", im.mpp
             except e:
                 print e
         

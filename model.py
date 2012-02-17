@@ -33,13 +33,19 @@ class ActiveValue(object):
         self._listeners = set()
         self._set(initval)
         
-    def bind(self, listener):
+    def bind(self, listener, init=False):
         """
         Register a callback function to be called when the ActiveValue is 
         listener (function): callback function which takes as argument val the new value
+        init (boolean): if True calls the listener directly, to initialise it
         """
         assert callable(listener)
         self._listeners.add(listener)
+        
+        if init:
+            listener(self.value)
+            
+        # TODO allow to pass custom additional parameters to the callback 
 
     def unbind(self, listener):
         self._listeners.discard(listener)
