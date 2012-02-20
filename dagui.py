@@ -42,6 +42,8 @@ class DAGuiFrame(wx.Frame):
         filemenu = wx.Menu()
         menuOpen = filemenu.Append(wx.ID_OPEN, "&Open...", "Select an image to display")
         self.Bind(wx.EVT_MENU, self.OnOpen, menuOpen)
+        menuLdEx1 = filemenu.Append(wx.ID_ANY, "&Load example 1\tCtrl+L", "Loads the first example of pictures")
+        self.Bind(wx.EVT_MENU, self.OnLoadExample1, menuLdEx1)
         filemenu.AppendSeparator()
         menuExit = filemenu.Append(wx.ID_EXIT, "E&xit", "Terminate the program")
         self.Bind(wx.EVT_MENU, self.OnClose, menuExit)
@@ -103,7 +105,20 @@ class DAGuiFrame(wx.Frame):
                     self.secom_model.optical_det_image.value = im
             except e:
                 print e
-        
+
+    def OnLoadExample1(self, e):
+        """ Open the two files for example """
+        try:
+            name1 = "1-optical-rot7.png"
+            im1 = InstrumentalImage(wx.Image(name1), 7.14286e-7, (0.0,0.0))
+            self.secom_model.optical_det_image.value = im1
+            
+            name2 = "1-sem-bse.png"
+            im2 = InstrumentalImage(wx.Image(name2), 4.54545e-7, (2e-6, -1e-5))
+            self.secom_model.sem_det_image.value = im2
+        except e:
+            print e
+
     def ToggleCross(self, e):
         """
         Callback for view/crosshair menu

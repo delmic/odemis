@@ -51,7 +51,7 @@ class DblMicroscopeCanvas(DraggableCanvas):
         
         self.Bind(wx.EVT_MOUSEWHEEL, self.OnWheel)
         
-        self.Overlays.append(CrossHairOverlay("Blue", CROSSHAIR_SIZE)) # debug
+        self.Overlays.append(CrossHairOverlay("Blue", CROSSHAIR_SIZE, (-10,-10))) # debug
         self.Overlays.append(CrossHairOverlay("Red", CROSSHAIR_SIZE, (10,10))) # debug
     # Add/remove crosshair
     def SetCrossHair(self, activated):
@@ -117,14 +117,7 @@ class DblMicroscopeCanvas(DraggableCanvas):
         self.viewmodel.mpp.value /= scale
 
     def avOnMPP(self, mpp):
-        self.scale = self.mpwu / mpp
-        
-#        # update the scaling of the images
-#        for i in range(len(self.Images)):
-#            if self.Images[i]:
-#                impp = self.viewmodel.images[i].value.mpp
-#                self.Images[i]._dc_scale = impp / mpp
-                
+        self.scale = self.mpwu / mpp               
         self.ShouldUpdateDrawing()
     
     def avOnImage(self, image):
@@ -132,7 +125,7 @@ class DblMicroscopeCanvas(DraggableCanvas):
             iim = self.viewmodel.images[i].value
             if iim.image:
                 scale = float(iim.mpp) / self.mpwu
-                pos = (iim.center[0] * self.mpwu, iim.center[1] * self.mpwu)
+                pos = (iim.center[0] / self.mpwu, iim.center[1] / self.mpwu)
                 self.SetImage(i, iim.image, pos, scale)
             else:
                 self.SetImage(i, None)
