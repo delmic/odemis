@@ -16,7 +16,7 @@ Delmic Acquisition Software is distributed in the hope that it will be useful, b
 You should have received a copy of the GNU General Public License along with Delmic Acquisition Software. If not, see http://www.gnu.org/licenses/.
 '''
 
-import math
+import units 
 import wx
 
 #----------------------------------------------------------------------
@@ -157,7 +157,6 @@ class BufferedWindow(wx.Control):
             wx.ClientDC(self).Blit(0, 0, self.Width, self.Height, dc, 0, 0)
 
 
-
 class ScaleWindow(BufferedWindow):
     """
     Little control that display a horizontal scale for a given screen density  
@@ -196,8 +195,9 @@ class ScaleWindow(BufferedWindow):
         """
         size = self.GetClientSize()
         maxWidth = size[0] - self.shift - dc.GetTextExtent(" 000mm")[0]
+        maxWidth = max(1, maxWidth)
         maxActualWidth = maxWidth * self.mpp
-        actualWidth = round_down_significant(maxActualWidth, self.significant)
+        actualWidth = units.round_down_significant(maxActualWidth, self.significant)
         width = int(actualWidth / self.mpp)
         return (width, actualWidth)
         
@@ -221,7 +221,7 @@ class ScaleWindow(BufferedWindow):
         length, actual = self.GetLineWidth(dc)
         
         charSize = dc.GetTextExtent("M")
-        dc.DrawText(" " + to_string_metric(actual), 
+        dc.DrawText(" " + units.to_string_si_prefix(actual) + "m", 
                     shift + length, vmiddle - charSize[1] / 2)
 
         pen = wx.Pen(wx.BLACK, 2)
@@ -263,32 +263,4 @@ class ScaleWindow(BufferedWindow):
         gc.DrawLines([(self.Width - margin, vmiddle - nod), (self.Width - margin, vmiddle + nod)])
         # could use strokelines
         
-def round_significant(x, n):
-    """
-    Round a number to n significant figures
-    """
-    return round(x, int(n - math.ceil(math.log10(abs(x)))))
-
-def round_down_significant(x, n):
-    """
-    Round a number to n significant figures making sure it's smaller
-    """
-    return round(x * (1 - 0.5 * 10 ** -n), int(n - math.ceil(math.log10(abs(x)))))
-
-def to_string_metric(x):
-    """
-    Convert a number to a string with the most appropriate unit appended  
-    ex: 0.0012 -> "1.2 mm"
-    x (float): number in meter
-    return (string)
-    """
-    units = {0: "m", -3: "mm", -6:"µm", -9:"nm", -12:"pm"}
-    most_significant = int(math.floor(math.log10(abs(x))))
-    unit_order = (most_significant / 3) * 3 # rounding
-    # TODO handle out of range of units
-    rounded = "{:g}".format(x / (10 ** unit_order))
-    unit = units[unit_order]
-    return rounded + unit
-    
-
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:

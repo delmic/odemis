@@ -21,6 +21,7 @@ from dblmscopeviewmodel import DblMscopeViewModel
 from instrmodel import InstrumentalImage
 from model import ActiveValue
 from scalewindow import ScaleWindow
+import units
 import wx
 
 CROSSHAIR_PEN = wx.GREEN_PEN
@@ -147,7 +148,8 @@ class DblMicroscopePanel(wx.Panel):
     def avOnMPP(self, mpp):
         self.scaleDisplay.SetMPP(mpp)
         
-        label = "HFW: %gm" % (mpp * self.GetClientSize()[0]) 
+        hfw = mpp * self.GetClientSize()[0]
+        label = "HFW: %sm" % units.to_string_si_prefix(hfw)
         self.hfwDisplay.SetLabel(label)
         
 #    # Change picture one/two        
@@ -297,7 +299,7 @@ class MicroscopeOpticalView(MicroscopeView):
         self.LegendWl.SetLabel(label)
     
     def avExposureTime(self, value):
-        label = "Exposure: %gs" % value
+        label = "Exposure: %ss" % units.to_string_si_prefix(value)
         self.LegendET.SetLabel(label)
         
     def avImage(self, value):
@@ -324,7 +326,7 @@ class MicroscopeSEView(MicroscopeView):
         
     # TODO need to use the right dimensions for the units
     def avDwellTime(self, value):
-        label = "Dwell: %gs" % value
+        label = "Dwell: %ss" % units.to_string_si_prefix(value)
         self.LegendDwell.SetLabel(label)
         
     def avSpot(self, value):
@@ -332,7 +334,7 @@ class MicroscopeSEView(MicroscopeView):
         self.LegendSpot.SetLabel(label)
         
     def avHV(self, value):
-        label = "HV: %gV" % value
+        label = "HV: %sV" % units.to_string_si_prefix(value)
         self.LegendHV.SetLabel(label)
         
     def avImage(self, value):
