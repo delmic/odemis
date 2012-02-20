@@ -16,7 +16,9 @@ Delmic Acquisition Software is distributed in the hope that it will be useful, b
 You should have received a copy of the GNU General Public License along with Delmic Acquisition Software. If not, see http://www.gnu.org/licenses/.
 '''
 from dblmscopecanvas import DblMicroscopeCanvas
+from dblmscopeviewmodel import DblMscopeViewModel
 from draggablecanvas import WorldToBufferPoint
+from instrmodel import SECOMModel, InstrumentalImage
 import time
 import unittest
 import wx
@@ -37,7 +39,9 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
     def setUp(self):
         self.app = wx.PySimpleApp()
         self.frame = wx.Frame(None)
+        self.frame.viewmodel = DblMscopeViewModel()
         self.canvas = DblMicroscopeCanvas(self.frame)
+        self.model = self.canvas.viewmodel
         self.frame.SetSize((124, 124))
         loop()
         self.frame.Show(True)
@@ -55,9 +59,9 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
         self.assertFalse(self.canvas.HasCrossHair())
         
     def test_BasicDisplay(self):
-        ppm = 0.0001
-        self.canvas.SetMPP(ppm)
-        self.assertEqual(ppm, self.canvas.GetMPP())
+        mpp = 0.0001
+        self.model.mpp.value = mpp
+        self.assertEqual(mpp, self.model.mpp.value)
         
         # add images
         im1 = wx.EmptyImage(11, 11, clear=True)
@@ -66,8 +70,8 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
         im2 = wx.EmptyImage(201, 201, clear=True)
         px2_cent = (100,100)
         im2.SetRGB(px2_cent[0], px2_cent[1], 0, 0, 255) # Blue pixel at center (100,100)
-        self.canvas.SetImage(0, im1, (0,0), ppm * 10)
-        self.canvas.SetImage(1, im2, (200,200), ppm)
+        self.model.images[0].value = InstrumentalImage(im1, mpp * 10, (0,0))
+        self.model.images[1].value = InstrumentalImage(im2, mpp, (200 * mpp,200 * mpp))
 #        for i in range(im2.GetWidth()):
 #            print i
 #            for j in range(im2.GetHeight()):
@@ -77,8 +81,8 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
                     
         # merge the images
         ratio = 0.5
-        self.canvas.SetMergeRatio(ratio)
-        self.assertEqual(ratio, self.canvas.GetMergeRatio())
+        self.model.merge_ratio.value = ratio
+        self.assertEqual(ratio, self.model.merge_ratio.value)
         
         loop()
         # it's supposed to update in less than 1s
@@ -94,7 +98,7 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
         self.assertEqual(px2, (0, 0, 255))
 
         # remove first picture
-        self.canvas.SetImage(0, None)
+        self.model.images[0].value = InstrumentalImage(None, None, None)
         loop()
         time.sleep(1)
         loop()
@@ -104,9 +108,9 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
         self.assertEqual(px2, (0, 0, 255))
 
     def test_BasicMove(self):
-        ppm = 0.0001
-        self.canvas.SetMPP(ppm)
-        self.assertEqual(ppm, self.canvas.GetMPP())
+        mpp = 0.0001
+        self.model.mpp.value = mpp
+        self.assertEqual(mpp, self.model.mpp.value)
         
         # add images
         im1 = wx.EmptyImage(11, 11, clear=True)
@@ -115,16 +119,16 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
         im2 = wx.EmptyImage(201, 201, clear=True)
         px2_cent = (100,100)
         im2.SetRGB(px2_cent[0], px2_cent[1], 0, 0, 255) # Blue pixel at center (100,100)
-        self.canvas.SetImage(0, im1, (0,0), ppm * 10)
-        self.canvas.SetImage(1, im2, (200,200), ppm)
+        self.model.images[0].value = InstrumentalImage(im1, mpp * 10, (0,0))
+        self.model.images[1].value = InstrumentalImage(im2, mpp, (200 * mpp,200 * mpp))
         
         shift = (100,100)
         self.canvas.ShiftView(shift)
         
         # merge the images
         ratio = 0.5
-        self.canvas.SetMergeRatio(ratio)
-        self.assertEqual(ratio, self.canvas.GetMergeRatio())
+        self.model.merge_ratio.value = ratio
+        self.assertEqual(ratio, self.model.merge_ratio.value)
         
         loop()
         # it's supposed to update in less than 1s
@@ -141,15 +145,15 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
         
         
     def test_ZoomMove(self):
-        ppm = 0.0001
-        self.canvas.SetMPP(ppm)
-        self.assertEqual(ppm, self.canvas.GetMPP())
+        mpp = 0.0001
+        self.model.mpp.value = mpp
+        self.assertEqual(mpp, self.model.mpp.value)
         
         # add images
         im1 = wx.EmptyImage(11, 11, clear=True)
         px1_cent = (5,5)
         im1.SetRGB(px1_cent[0], px1_cent[1], 255, 0, 0) # Red pixel at center, (5,5)
-        self.canvas.SetImage(0, im1, (0,0), ppm)
+        self.model.images[0].value = InstrumentalImage(im1, mpp * 10, (0,0))
         
         shift = (10,10)
         self.canvas.ShiftView(shift)
@@ -165,7 +169,8 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
         self.assertEqual(px1, (255, 0, 0))
 
         # zoom in
-        self.canvas.SetZoom(2)
+        self.canvas.Zoom(2)
+        self.assertEqual(mpp / (2 ** 2), self.model.mpp.value)
         loop()
         time.sleep(1)
         loop()

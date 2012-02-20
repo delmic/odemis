@@ -87,22 +87,6 @@ class DblMicroscopeCanvas(DraggableCanvas):
     
     # Add/remove overlays
 
-#    # Change hfw
-#    def SetHFW(self, hfw):
-#        """
-#        Set the horizontal field width of the image
-#        hfw (0.0<float): the width
-#        """
-#        assert(0.0 < hfw)
-#        view_width = self.ClientSize[0]
-#        if view_width < 1:
-#            view_width = 1
-#        self.mpp.value = float(hfw) / view_width
-#        
-#    def GetHFW(self):
-#        return self.mpp.value * self.ClientSize[0]
-     
-
     def avOnMergeRatio(self, val):
         self.merge_ratio = val
         self.ShouldUpdateDrawing()
@@ -113,7 +97,7 @@ class DblMicroscopeCanvas(DraggableCanvas):
         inc (float): scale the current view by 2^inc
         ex:  # 1 => *2 ; -1 => /2; 2 => *4...
         """
-        scale = math.pow(2.0, inc)
+        scale = 2.0 ** inc
         self.viewmodel.mpp.value /= scale
 
     def avOnMPP(self, mpp):
