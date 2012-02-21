@@ -19,7 +19,6 @@ You should have received a copy of the GNU General Public License along with Del
 from dblmscopecanvas import DblMicroscopeCanvas
 from dblmscopeviewmodel import DblMscopeViewModel
 from instrmodel import InstrumentalImage
-from model import ActiveValue
 from scalewindow import ScaleWindow
 import units
 import wx
@@ -352,7 +351,6 @@ class MicroscopeOpticalView(MicroscopeImageView):
         label = "Exposure: %ss" % units.to_string_si_prefix(value)
         self.LegendET.SetLabel(label)
 
-
 class MicroscopeSEView(MicroscopeImageView):
     def __init__(self, parent, datamodel, viewmodel, name="SE Detector"):
         MicroscopeImageView.__init__(self, parent, datamodel.sem_det_image,
@@ -384,5 +382,4 @@ class MicroscopeSEView(MicroscopeImageView):
         label = "HV: %sV" % units.to_string_si_prefix(value)
         self.LegendHV.SetLabel(label)
         
-
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:

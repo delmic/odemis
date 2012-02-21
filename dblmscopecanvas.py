@@ -16,9 +16,7 @@ Delmic Acquisition Software is distributed in the hope that it will be useful, b
 You should have received a copy of the GNU General Public License along with Delmic Acquisition Software. If not, see http://www.gnu.org/licenses/.
 '''
 
-from dblmscopeviewmodel import DblMscopeViewModel
 from draggablecanvas import DraggableCanvas, WorldToBufferPoint
-import math
 import wx
 
 CROSSHAIR_COLOR = wx.GREEN

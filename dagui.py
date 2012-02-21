@@ -75,7 +75,10 @@ class DAGuiFrame(wx.Frame):
         self.Show(True)
 
     def OnAbout(self, e):
-        dlg = wx.MessageDialog(self, "Delmic Acquisition Software for managing microscope.",
+        message = ("Delmic Acquisition Software for managing microscope.\n" +
+                   "Copyright © 2012 Delmic B.V.\n" + 
+                   "Licensed under the GNU General Public License version 2")
+        dlg = wx.MessageDialog(self, message,
                                "About " + OFFICIAL_NAME, wx.OK)
         dlg.ShowModal() # blocking
         dlg.Destroy()

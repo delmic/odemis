@@ -3,7 +3,7 @@ Delmic Acquisition Software Graphical User Interface
 = Requirements = 
 Windows or Linux
 
-Python (v2.7) with wxpython
+Python (v2.7) with wxpython, and ctypes
 
 = Basic usage =
 run by launching:
