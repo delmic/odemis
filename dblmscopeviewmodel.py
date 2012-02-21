@@ -39,6 +39,8 @@ class DblMscopeViewModel(object):
         # center position of the view
         self.center = ActiveValue((0,0)) # (m, m)
         
+        self.crosshair = ActiveValue(True)
+        
 class ActiveMPP(ActiveValue):
     """
     ActiveValue with special validation for MPP (float>0)

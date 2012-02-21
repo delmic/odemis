@@ -23,8 +23,6 @@ from scalewindow import ScaleWindow
 import units
 import wx
 
-CROSSHAIR_PEN = wx.GREEN_PEN
-CROSSHAIR_SIZE = 16
 class DblMicroscopePanel(wx.Panel):
     """
     A draggable, flicker-free window class adapted to show pictures of two
@@ -39,7 +37,6 @@ class DblMicroscopePanel(wx.Panel):
         
         self.viewmodel = DblMscopeViewModel()
         self.canvas = DblMicroscopeCanvas(self)
-        self.canvas.SetCrossHair(True)
         
         # The legend
         # Control for the selection before AddView(), which needs them

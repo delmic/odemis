@@ -66,10 +66,11 @@ class DAGuiFrame(wx.Frame):
         # Last directory visited (for file open)
         self.dirname = ""
         
-        # TODO add legend, toolbar, option pane 
+        # TODO add toolbar, option pane 
         # The main frame
         self.panel = DblMicroscopePanel(self, wx.ID_ANY)
-        self.menuCross.Check(True) # TODO ensure sync
+        self.viewmodel = self.panel.viewmodel
+        self.menuCross.Check(self.viewmodel.crosshair.value) # TODO ensure sync
         
         # Finish by displaying the window
         self.Show(True)
@@ -126,8 +127,8 @@ class DAGuiFrame(wx.Frame):
         """
         Callback for view/crosshair menu
         """
-        # TODO use pubsub or add method to canvas
-        self.panel.canvas.SetCrossHair(e.IsChecked())
+        # TODO update when viewmodel changes
+        self.viewmodel.crosshair.value = e.IsChecked()
 
 if __name__ == '__main__':
     app = wx.App(redirect=False) # Errors go to the console

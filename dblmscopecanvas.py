@@ -46,13 +46,14 @@ class DblMicroscopeCanvas(DraggableCanvas):
         self.viewmodel.images[0].bind(self.avOnImage)
         self.viewmodel.images[1].bind(self.avOnImage, True)
         self.viewmodel.merge_ratio.bind(self.avOnMergeRatio, True)
+        self.viewmodel.crosshair.bind(self.avOnCrossHair, True)
         
         self.Bind(wx.EVT_MOUSEWHEEL, self.OnWheel)
         
         self.Overlays.append(CrossHairOverlay("Blue", CROSSHAIR_SIZE, (-10,-10))) # debug
         self.Overlays.append(CrossHairOverlay("Red", CROSSHAIR_SIZE, (10,10))) # debug
-    # Add/remove crosshair
-    def SetCrossHair(self, activated):
+    
+    def avOnCrossHair(self, activated):
         """
         Activate or disable the display of a cross in the middle of the view
         activated = true if the cross should be displayed
@@ -74,17 +75,6 @@ class DblMicroscopeCanvas(DraggableCanvas):
                 self.StaticOverlays.remove(ch)
                 self.Refresh(False)
                 
-    def HasCrossHair(self):
-        """
-        returns true if the cross is activated, false otherwise
-        """
-        for o in self.StaticOverlays:
-            if isinstance(o, CrossHairOverlay):
-                return True
-        return False
-    
-    # Add/remove overlays
-
     def avOnMergeRatio(self, val):
         self.merge_ratio = val
         self.ShouldUpdateDrawing()
