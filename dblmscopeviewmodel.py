@@ -27,7 +27,7 @@ class DblMscopeViewModel(object):
     def __init__(self):
         # image density => field of view, position...
         # 0<float
-        self.mpp = ActiveMPP(0.0001) # m/px  (0.1mm/px)
+        self.mpp = ActiveMPP(0.000025) # m/px  (0.25mm/px)
         
         # how much one image is displayed on the other one
         # 0<=float<=1

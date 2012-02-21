@@ -90,7 +90,7 @@ class DAGuiFrame(wx.Frame):
     def OnOpen(self, e):
         """ Open a file"""
         dlg = wx.FileDialog(self, "Choose one or two pictures", self.dirname, "",
-                            "Image file (.tif, .jpg, .png)|*.tif;*.tiff;*.png;*.jpg;*.jpeg|Any file (*.*)|*.*",
+                            "Image file (.tif, .jpg, .png)|*.tif;*.tiff;*.png;*.jpg;*.jpeg;*.bmp|Any file (*.*)|*.*",
                             wx.OPEN | wx.MULTIPLE)
         filenames = []
         if dlg.ShowModal() == wx.ID_OK:

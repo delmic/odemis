@@ -51,7 +51,7 @@ class DblMicroscopePanel(wx.Panel):
         self.viewmodel.merge_ratio.bind(self.avOnMergeRatio, True)
         
         self.scaleDisplay = ScaleWindow(self)
-        self.hfwDisplay = wx.StaticText(self, label="HFW: 156µm")
+        self.hfwDisplay = wx.StaticText(self) # Horizontal Full Width
         lineDisplay = wx.StaticLine(self, style=wx.LI_VERTICAL)
 
         #                                      mainSizer
