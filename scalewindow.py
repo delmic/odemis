@@ -173,7 +173,7 @@ class ScaleWindow(BufferedWindow):
         self.significant = 1 # significant numbers to keep in the length
         
         # OnSize called to make sure the buffer is initialized.
-        self.OnSize(None) # very annoying as it calls the methods before the init is done
+        self.OnSize(None)
         
     def SetMPP(self, mpp):
         """

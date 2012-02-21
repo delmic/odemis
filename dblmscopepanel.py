@@ -117,8 +117,8 @@ class DblMicroscopePanel(wx.Panel):
         # can be called only with display ready
         self.views = []
         self.AddView(emptyView)
-        self.AddView(MicroscopeOpticalView(self, self.secom_model))
-        self.AddView(MicroscopeSEView(self, self.secom_model))
+        self.AddView(MicroscopeOpticalView(self, self.secom_model, self.viewmodel))
+        self.AddView(MicroscopeSEView(self, self.secom_model, self.viewmodel))
         
         # Select the default views
         self.ChangeView(0, self.views[1].name)
@@ -127,6 +127,8 @@ class DblMicroscopePanel(wx.Panel):
         self.SetSizer(mainSizer)
         self.SetAutoLayout(True)
         mainSizer.Fit(self)
+        
+        self.Bind(wx.EVT_SIZE, self.OnSize)
   
     def OnComboLeft(self, event):
         self.ChangeView(0, event.GetString())
@@ -145,13 +147,20 @@ class DblMicroscopePanel(wx.Panel):
         # int(0.58*100) = 57
         self.mergeSlider.SetValue(round(val * 100))
     
+    # TODO need to update HFW on OnSize
     def avOnMPP(self, mpp):
         self.scaleDisplay.SetMPP(mpp)
-        
-        hfw = mpp * self.GetClientSize()[0]
+        self.UpdateHFW()
+              
+    def OnSize(self, event):
+        event.Skip() # process also by the parent
+        self.UpdateHFW()
+         
+    def UpdateHFW(self):
+        hfw = self.viewmodel.mpp.value * self.GetClientSize()[0]
         label = "HFW: %sm" % units.to_string_si_prefix(hfw)
         self.hfwDisplay.SetLabel(label)
-        
+
 #    # Change picture one/two        
 #    def SetImage(self, index, im, pos = None, mpp = None):
 #        self.canvas.SetImage(index, im, pos, mpp)
@@ -215,6 +224,8 @@ class DblMicroscopePanel(wx.Panel):
                isinstance(self.displays[0], MicroscopeEmptyView))
         
 
+
+
 class MicroscopeView(object):
     """
     Interface for defining a type of view from the microscope (such as CCD, SE...) with all
@@ -225,11 +236,10 @@ class MicroscopeView(object):
         name (string): user friendly name
         """
         self.name = name # 
-        self.legendCtrl = {} # list of wx.Control to display in the legend
-        self.canvas = None
-        self.canvas_index = None # index (int) # TODO use active value
+        self.legendCtrl = [] # list of wx.Control to display in the legend
         self.outimage = None # ActiveValue of instrumental image
         self.inimage = InstrumentalImage(None, None, None) # instrumental image
+        self.sizer = None
     
     def Hide(self, combo, sizer):
         # Remove and hide all the previous controls in the sizer
@@ -243,10 +253,13 @@ class MicroscopeView(object):
             
         if self.outimage:
             self.outimage.value = self.inimage
+        
+        self.sizer = None
 
     def Show(self, combo, sizer, outimage):
         self.outimage = outimage
         self.UpdateImage()
+        self.sizer = sizer
         
         # Put the new controls
         first = True
@@ -273,23 +286,60 @@ class MicroscopeEmptyView(MicroscopeView):
     """
     def __init__(self, name="None"):
         MicroscopeView.__init__(self, name)
-
-class MicroscopeOpticalView(MicroscopeView):
-    def __init__(self, parent, datamodel, name="Optical"):
+        
+class MicroscopeImageView(MicroscopeView):
+    def __init__(self, parent, iim, viewmodel, name="Image"):
         MicroscopeView.__init__(self, name)
         
-        self.datamodel = datamodel
+        self.viewmodel = viewmodel
+        self.LegendMag = wx.StaticText(parent)
+        self.legendCtrl.append(self.LegendMag)
         
-        self.LegendMag = wx.StaticText(parent, label="Mag: ×680×4")
+        iim.bind(self.avImage)
+        viewmodel.mpp.bind(self.avMPP, True)
+                
+    def avImage(self, value):
+        self.inimage = value
+        self.UpdateImage()
+        self.avMPP(None)
+
+    def avMPP(self, value):
+        # TODO: shall we use the real density of the screen?
+        # We could use real density but how much important is it?
+        mppScreen = 0.00025 # 0.25 mm/px 
+        label = "Mag: "
+        if self.inimage.mpp:
+            magIm = mppScreen / self.inimage.mpp # as if 1 im.px == 1 sc.px
+            if magIm >= 1:
+                label += "×" + str(units.round_significant(magIm, 3))
+            else:
+                label += "/" + str(units.round_significant(1.0/magIm, 3))
+            magDig =  self.inimage.mpp / self.viewmodel.mpp.value
+            if magDig >= 1:
+                label += " ×" + str(units.round_significant(magDig, 3))
+            else:
+                label += " /" + str(units.round_significant(1.0/magDig, 3))
+        self.LegendMag.SetLabel(label)
+        
+        if self.sizer:
+            self.sizer.Layout()
+        
+class MicroscopeOpticalView(MicroscopeImageView):
+    def __init__(self, parent, datamodel, viewmodel, name="Optical"):
+        MicroscopeImageView.__init__(self, parent, datamodel.optical_det_image,
+                                     viewmodel, name)
+        
+        self.datamodel = datamodel
+        self.viewmodel = viewmodel
+        
         self.LegendWl = wx.StaticText(parent)
         self.LegendET = wx.StaticText(parent)
-        self.legendCtrl = [self.LegendMag, self.LegendWl, self.LegendET]
+        self.legendCtrl += [self.LegendWl, self.LegendET]
         
         datamodel.optical_emt_wavelength.bind(self.avWavelength)
         datamodel.optical_det_wavelength.bind(self.avWavelength, True)
         datamodel.optical_det_exposure_time.bind(self.avExposureTime, True)
-        datamodel.optical_det_image.bind(self.avImage)
-        
+
     def avWavelength(self, value):
         # need to know both wavelengthes, so just look into the values
         win = self.datamodel.optical_emt_wavelength.value
@@ -301,28 +351,25 @@ class MicroscopeOpticalView(MicroscopeView):
     def avExposureTime(self, value):
         label = "Exposure: %ss" % units.to_string_si_prefix(value)
         self.LegendET.SetLabel(label)
-        
-    def avImage(self, value):
-        self.inimage = value
-        self.UpdateImage()
 
-class MicroscopeSEView(MicroscopeView):
-    def __init__(self, parent, datamodel, name="SE Detector"):
-        MicroscopeView.__init__(self, name)
+
+class MicroscopeSEView(MicroscopeImageView):
+    def __init__(self, parent, datamodel, viewmodel, name="SE Detector"):
+        MicroscopeImageView.__init__(self, parent, datamodel.sem_det_image,
+                                     viewmodel, name)
         
         self.datamodel = datamodel
+        self.viewmodel = viewmodel
                         
-        self.LegendMag = wx.StaticText(parent, label="Mag: ×2600")
         self.LegendDwell = wx.StaticText(parent)
         self.LegendSpot = wx.StaticText(parent)
         self.LegendHV = wx.StaticText(parent)
-        self.legendCtrl = [self.LegendMag, self.LegendDwell, self.LegendSpot,
+        self.legendCtrl += [ self.LegendDwell, self.LegendSpot,
                            self.LegendHV]
         
         datamodel.sem_emt_dwell_time.bind(self.avDwellTime, True)
         datamodel.sem_emt_spot.bind(self.avSpot, True)
         datamodel.sem_emt_hv.bind(self.avHV, True)
-        datamodel.sem_det_image.bind(self.avImage)
         
     # TODO need to use the right dimensions for the units
     def avDwellTime(self, value):
@@ -336,11 +383,6 @@ class MicroscopeSEView(MicroscopeView):
     def avHV(self, value):
         label = "HV: %sV" % units.to_string_si_prefix(value)
         self.LegendHV.SetLabel(label)
-        
-    def avImage(self, value):
-        self.inimage = value
-        self.UpdateImage()
-        
         
 
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:
