@@ -190,7 +190,7 @@ class PIRedStone(object):
         report = self._sendGetCommand("HE\r")
         return report
     
-    def waitStop(self, time=1):
+    def waitMotorStop(self, time=1):
         """
         Force the controller to wait until a burst is done before reading the 
         next command.
@@ -359,7 +359,17 @@ class PIRedStone(object):
         """
         self.select()
         self.abortMotion()
-      
+          
+    def waitEndMotion(self, axis):
+        """
+        Stop the motion of all the given axis.
+        For the Redstone, both axes are stopped simultaneously
+        """
+        # FIXME: unlikely to work!
+        self.select()
+        self.waitMotorStop()
+        self.tellBoardAddress() # we are not interested by the address, just a report
+        
     def scanNetwork(self, max_add=15):
         """
         Scan the serial network for all the PI C-170 available.
@@ -486,7 +496,7 @@ class Stage(object):
         """
         return "moveAbs" in dir(self.axes[axis][0])
         
-    def moveRel(self, shift):
+    def moveRel(self, shift, sync=False):
         u"""
         Move the stage the defined values in m for each axis given.
         shift dict(string-> float): name of the axis and shift in m
@@ -497,11 +507,21 @@ class Stage(object):
                 raise Exception("Axis unknown: " + str(axis))
             controller, arg = self.axes[axis]
             controller.moveRel(arg, controller.convertMToDevice(distance))
-         
-    def moveAbs(self, pos):
+                 
+        # wait until every motor is finished if requested
+        if not sync:
+            return
+        
+        for axis in shift:
+            controller, arg = self.axes[axis]
+            controller.waitEndMotion(arg)
+            
+    def moveAbs(self, pos, sync=False):
         u"""
         Move the stage to the defined position in m for each axis given.
         pos dict(string-> float): name of the axis and position in m
+        sync (boolean): whether the moves should be done asynchronously or the 
+        method should return only when all the moves are over (sync=True)
         """
         # TODO what's the origin? => need a different conversion?
         # TODO check values are within range
@@ -510,12 +530,32 @@ class Stage(object):
                 raise Exception("Axis unknown: " + str(axis))
             controller, arg = self.axes[axis]
             controller.moveAbs(arg, controller.convertMToDevice(distance))
+        
+        # wait until every motor is finished if requested
+        if not sync:
+            return
+        
+        for axis in pos:
+            controller, arg = self.axes[axis]
+            controller.waitEndMotion(arg)
     
     # TODO need a 'report position' and a 'calibrate' for the absolute axes 
     
     def stopMotion(self, axis = None):
         """
         stops the motion
+        axis (string): name of the axis to stop, or all of them if not indicated 
+        """
+        if not axis:
+            for controller, arg in self.axes.values():
+                controller.stopMotion(arg)
+        else:
+            controller, arg = self.axes[axis]
+            controller.stopMotion(arg)
+        
+    def waitStop(self, axis = None):
+        """
+        wait until the stops the motion
         axis (string): name of the axis to stop, or all of them if not indicated 
         """
         if not axis:
@@ -534,7 +574,7 @@ class StageSECOM(Stage):
         """
         port (string): name of the serial port to connect to the controllers
         """ 
-        Stage.__init__()
+        Stage.__init__(self)
         
         ser = PIRedStone.openSerialPort(port)
         

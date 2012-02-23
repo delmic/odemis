@@ -20,6 +20,29 @@ import sys
 import argparse
 import pi
 
+def run_self_test(port):
+    """
+    Run self test on each detect controller of the network connected to the given
+    serial port.
+    port (string): name of the serial port
+    return (boolean) True if all the tests passed, False otherwise
+    """
+    ser = pi.PIRedStone.openSerialPort(port)
+    bus = pi.PIRedStone(ser)
+    adds = bus.scanNetwork()
+    passed = True
+    for add in adds:
+        cont = pi.PIRedStone(ser, add)
+        if cont.selfTest():
+            print "Controller %d: test passed." % add
+            passed = passed and True
+        else:
+            print "Controller %d: test failed." % add
+            passed = False
+    
+    return passed
+
+
 def main(args):
     """
     Contains the console handling code for the Quanta class
@@ -32,51 +55,47 @@ def main(args):
     #parser = OptionParser(version="%prog 0.1")
 
     parser.add_argument('--version', action='version', version='%(prog)s 0.1')   
-    parser.add_argument("--port", dest="port",
+    parser.add_argument("--port", dest="port", required=True,
                         help="name of the serial port. (ex: '/dev/ttyUSB0' on Linux, 'COM3' on Windows)")
-    cmd_grp = parser.add_argument_group('Microscope commands')
-    cmd_grp.add_argument("--stage-x", "-x", dest="stage_x", type=float, metavar="X",
-                        help=u"move the X axis of the stage to position X (in µm). Default is to not move the stage.") # unicode for µ
-    cmd_grp.add_argument("--stage-y", "-y", dest="stage_y", type=float, metavar="Y",
-                        help=u"move the Y axis of the stage to position Y (in µm). Default is to not move the stage.")
-    cmd_grp.add_argument("--scan-size", "-s", dest="scan_size", type=float,
-                        help=u"Set the scanning field size (in µm). Default is to use the current size.")
-    cmd_grp.add_argument("--output", "-o", dest="output_filename",
-                        help="name of the file where the image should be saved. It is saved in TIFF format.")
-    mode_grp = parser.add_mutually_exclusive_group()
-    mode_grp.add_argument("--test", "-t", dest="test", action="store_true", default=False,
+    cmd_grp = parser.add_argument_group('Stage commands')
+    parser.add_argument("--test", "-t", dest="test", action="store_true", default=False,
                         help="test the connection to the motor controllers.")
-    mode_grp.add_argument("--sync", dest="is_sync", action="store_true", default=False,
+    cmd_grp.add_argument("--stage-x", "-x", dest="stage_x", type=float, metavar="X",
+                        help=u"move the X axis of the stage by X µm. Default is to not move the stage.") # unicode for µ
+    cmd_grp.add_argument("--stage-y", "-y", dest="stage_y", type=float, metavar="Y",
+                        help=u"move the Y axis of the stage by Y µm. Default is to not move the stage.")
+    cmd_grp.add_argument("--sync", dest="is_sync", action="store_true", default=False,
                         help="waits until all the moves are complete before exiting.")
-    options = parser.parse_args(args[1:])
+    cmd_grp.add_argument("--stop", "-s", dest="stop", action="store_true", default=False,
+                        help="Immediately stop the stage in all directions. The other commands are not executed.")
 
-    # we need a port
-    
+    options = parser.parse_args(args[1:])
+  
 
     # Test mode
     if options.test:
-        ser = PIRedStone.openSerialPort(port)
-        if PIC180.self_test():
-            print "test passed."
+        if run_self_test(options.port):
             return 0
         else:
-            print "test failed."
             return 127
-    
 
-    stage = pi.StageSECOM(options.port)
-        except Exception, err:
-            print "Error while connecting to the motor controllers: " + str(err)
-            return 128
+    try:
+        stage = pi.StageSECOM(options.port)
+    except Exception, err:
+        print "Error while connecting to the motor controllers: " + str(err)
+        return 128
     
-    # Aquisition mode (remote or local is the same)
+    if options.stop:
+        stage.stopMotion()
+        return 0
+    
+    # move
     positions = {}
     if options.stage_x:
         positions['x'] = options.stage_x
     if options.stage_y:
         positions['y'] = options.stage_y
-    stage.move_stage(positions, confirm=True) # put confirm = False only if you are really sure
-    
+    stage.moveRel(positions, options.sync)
 
     return 0
         
