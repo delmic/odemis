@@ -18,7 +18,7 @@ You should have received a copy of the GNU General Public License along with Del
 
 import sys
 import argparse
-from pi import PIC180
+import pi
 
 def main(args):
     """
@@ -32,8 +32,8 @@ def main(args):
     #parser = OptionParser(version="%prog 0.1")
 
     parser.add_argument('--version', action='version', version='%(prog)s 0.1')   
-    parser.add_argument("--host", dest="host",
-                        help="IP address of the DCOM FEI control server (emulator = emulator mode; 127.0.0.1 = on the same computer)")
+    parser.add_argument("--port", dest="port",
+                        help="name of the serial port. (ex: '/dev/ttyUSB0' on Linux, 'COM3' on Windows)")
     cmd_grp = parser.add_argument_group('Microscope commands')
     cmd_grp.add_argument("--stage-x", "-x", dest="stage_x", type=float, metavar="X",
                         help=u"move the X axis of the stage to position X (in µm). Default is to not move the stage.") # unicode for µ
@@ -50,8 +50,12 @@ def main(args):
                         help="waits until all the moves are complete before exiting.")
     options = parser.parse_args(args[1:])
 
+    # we need a port
+    
+
     # Test mode
     if options.test:
+        ser = PIRedStone.openSerialPort(port)
         if PIC180.self_test():
             print "test passed."
             return 0
@@ -60,7 +64,7 @@ def main(args):
             return 127
     
 
-    stage = PIStage(options.host)
+    stage = pi.StageSECOM(options.port)
         except Exception, err:
             print "Error while connecting to the motor controllers: " + str(err)
             return 128
