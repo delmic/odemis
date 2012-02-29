@@ -15,8 +15,6 @@ Delmic Acquisition Software is distributed in the hope that it will be useful, b
 
 You should have received a copy of the GNU General Public License along with Delmic Acquisition Software. If not, see http://www.gnu.org/licenses/.
 '''
-import io
-import re
 import serial
 
 # Status:
@@ -38,7 +36,7 @@ STATUS_BOARD_ADDRESSED = 0x000080 #Bit 7: Board addressed
 #Bit 5: Pulse delay in progress (Y)
 STATUS_MOVING_X = 0x004000 #Bit 6: Is moving (X)
 STATUS_MOVING_Y = 0x008000 #Bit 7: Is moving (Y)
-# byte 3
+# byte 3 (always FF in practice)
 #Bit 0: Limit Switch ON
 #Bit 1: Limit switch active state HIGH
 #Bit 2: Find edge operation in progress
@@ -67,7 +65,7 @@ ERROR_COMMAND_NOT_FOUND = 0x01 #01: command not found
 #09: Command buffer overflow
 #0A: macro storage overflow
 
-VERBOSE = True
+VERBOSE = False
 
 class PIRedStone(object):
     '''
@@ -302,6 +300,8 @@ class PIRedStone(object):
     
     # TODO: is there something to do to activate the "CW mode" for high acceleration?
     # CW = continuous wave?
+    # Here is all the commands the controller reports:
+    # EM RM RZ TZ TM MD MC YF YN WE CP XF XN TA WF WN CF CN TC SW SS SR SJ SI PP JN JF IW IS IR GP GN CD CA BR HM DM UD DE SO HE FE LH LL LF LN AB WS TD SC TT TP TL TY SD SA SV GH DH MA MR TS CS EN EF TI TB RP WA RT VE 
     
     # High-level functions
     def select(self):
@@ -350,7 +350,9 @@ class PIRedStone(object):
         
         # we can only ask 65535 repetitions at most
         # Bigger values would be unrealistic, so just clamp
-        if abs(steps) > 65536:
+        if steps > 65536:
+            print ("Warning: Controller %d,%d move requested of %d,"
+                   " will move only by %d" % (self.address, axis, duration, 65536 * 255))
             steps = 65536
             left = 0
         
@@ -367,6 +369,7 @@ class PIRedStone(object):
         # TODO use the same commands
         # Finish with the small left over
         self.moveRelSmall(axis, sign * left)
+        print self.isMoving(1), self.isMoving(2)
     
     def isMoving(self, axis=None):
         """
@@ -375,7 +378,7 @@ class PIRedStone(object):
         return (boolean): True if moving, False otherwise
         """
         self.select()
-        (st, err) = self.tellStatus()
+        st, err = self.tellStatus()
         if axis == 1:
             mask = STATUS_MOVING_X
         elif axis == 2:
@@ -506,7 +509,7 @@ class PIRedStone(object):
             bytesize = serial.EIGHTBITS,
             parity = serial.PARITY_NONE,
             stopbits = serial.STOPBITS_ONE,
-            timeout = 1 #s
+            timeout = 0.3 #s
         )
         
         # Currently selected one is unknown
@@ -524,7 +527,7 @@ class Stage(object):
     def __init__(self):
         """
         Constructor
-        """ 
+        """
         self.axes = {} # dict of axes
         
     def canAbsolute(self, axis):
@@ -546,7 +549,6 @@ class Stage(object):
             if axis not in self.axes:
                 raise Exception("Axis unknown: " + str(axis))
             controller, arg = self.axes[axis]
-            print distance, "=", controller.convertMToDevice(distance)
             controller.moveRel(arg, controller.convertMToDevice(distance))
                  
         # wait until every motor is finished if requested
@@ -605,24 +607,29 @@ class Stage(object):
         else:
             controller, arg = self.axes[axis]
             controller.stopMotion(arg)
-        
-class StageSECOM(Stage):
+
+class StageRedStone(Stage):
     """
-    The SECOM has two Redstone controllers, each controlling one axis of the stage.
+    A stage made entirely of redstone controllers connected on the same serial port
     """
     
-    def __init__(self, port):
+    def __init__(self, port, config):
         """
         port (string): name of the serial port to connect to the controllers
+        config (dict string=> 2-tuple): the configuration of the network.
+         for each axis name the controller address and channel
         """ 
         Stage.__init__(self)
         
         ser = PIRedStone.openSerialPort(port)
         
-        red1 = PIRedStone(ser, 1)
-        red2 = PIRedStone(ser, 2)
-        #     Axis name  (controller, arg)
-        self.axes['x'] = (red1, 1) # add 1/channel 1
-        self.axes['y'] = (red2, 1) # add 2/channel 1
-        
+        controllers = {} # address => PIRedStone
+        for axis, (add, channel) in config.items():
+            if add in controllers:
+                controller = controllers[add]
+            else:
+                controller = PIRedStone(ser, add)
+                controllers[add] = controller
+            self.axes[axis] = (controller, channel) # add 1/channel 1
+
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:

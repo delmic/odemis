@@ -20,6 +20,10 @@ import sys
 import argparse
 import pi
 
+#The SECOM has two Redstone controllers, each controlling one axis of the stage.
+CONFIG_RS_SECOM_1 = {'x': (0, 1), 'y': (0, 2)}
+CONFIG_RS_SECOM_2 = {'x': (1, 1), 'y': (0, 1)}
+
 def run_self_test(port):
     """
     Run self test on each detect controller of the network connected to the given
@@ -29,7 +33,7 @@ def run_self_test(port):
     """
     ser = pi.PIRedStone.openSerialPort(port)
     bus = pi.PIRedStone(ser)
-    adds = bus.scanNetwork(2)
+    adds = bus.scanNetwork()
     if not adds:
         print "No controller found."
         return False
@@ -85,7 +89,7 @@ def main(args):
             return 127
 
     try:
-        stage = pi.StageSECOM(options.port)
+        stage = pi.StageRedStone(options.port, CONFIG_RS_SECOM_2)
     except Exception, err:
         print "Error while connecting to the motor controllers: " + str(err)
         return 128
