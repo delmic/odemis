@@ -15,13 +15,15 @@ Delmic Acquisition Software is distributed in the hope that it will be useful, b
 
 You should have received a copy of the GNU General Public License along with Delmic Acquisition Software. If not, see http://www.gnu.org/licenses/.
 '''
+import io
+import re
 import serial
 
 # Status:
 # byte 1
-STATUS_ECHO_ON = 0x000001 #Bit 0: Echo ON
+STATUS_ECHO_ON = 0x0001 #Bit 0: Echo ON
 #Bit 1: Wait in progress
-#Bit 2: Command error
+STATUS_COMMAND_ERROR = 0x0004 #Bit 2: Command error
 #Bit 3: Leading zero suppression active
 #Bit 4: Macro command called
 #Bit 5: Leading zero suppression disabled
@@ -64,6 +66,8 @@ ERROR_COMMAND_NOT_FOUND = 0x01 #01: command not found
 #08: Continuation character was not a comma
 #09: Command buffer overflow
 #0A: macro storage overflow
+
+VERBOSE = True
 
 class PIRedStone(object):
     '''
@@ -111,9 +115,14 @@ class PIRedStone(object):
         if address is None:
             return
         
-        # TODO OK to use a flag on serial?
-        self.addressSelection(self.address)
-        self.serial._pi_select = self.address
+        # Small check to verify it's responding
+        self.select()
+        try:
+            add = self.tellBoardAddress()
+            if add != address:
+                print "Warning: asked for PI controller %d and was answered by controller %d." % (address, add)
+        except IOError:
+            raise IOError("No answer from PI controller %d" % address)
 
     def _sendSetCommand(self, com):
         """
@@ -121,9 +130,11 @@ class PIRedStone(object):
         com (string): command to send (including the \r if necessary)
         """
         assert(len(com) < 10)
+        if VERBOSE:
+            print com.encode('string_escape')
         self.serial.write(com)
         # TODO allow to check for error via TellStatus afterwards
-        
+    
     def _sendGetCommand(self, com, report_prefix=""):
         """
         Send a command and return its report
@@ -135,11 +146,15 @@ class PIRedStone(object):
         assert(len(com) <= 10)
         assert(len(report_prefix) <= 2)
         self.serial.write(com)
-        report = self.serial.readline()
+        report = self.serial.readline() # get up to "\r\n"
+        # TODO: add more lines until reading "\x03"
+        report += self.serial.read(1) # get "\x03"
+        if VERBOSE:
+            print "%s" % report.encode('string_escape')
         if not report.startswith(report_prefix):
             raise IOError("Report prefix unexpected after '%s': '%s'." % (com, report))
 
-        return report.strip(report_prefix + "\r\n\x03")
+        return report.lstrip(report_prefix).rstrip("\r\n\x03")
     
     # Low-level functions
     def addressSelection(self, address):
@@ -148,9 +163,13 @@ class PIRedStone(object):
         address 0<int<15: the address of the controller as defined by its jumpers 1-4  
         """
         assert((0 <= address) and (address <= 15))
-        self._sendSetCommand("\x01%X" % address) # XXX not sure if there is a \r?
+        self._sendSetCommand("\x01%X" % address)
         
     def selectController(self, address):
+        """
+        Tell the currently selected controller that the given controller is selected
+        Useless but for tests (or in macros)
+        """
         assert((0 <= address) and (address <= 15))
         self._sendSetCommand("SC%d\r" % address)
         
@@ -162,13 +181,13 @@ class PIRedStone(object):
             * error is a number corresponding to the last error (cf ERROR_*)
         """ 
         #bytes_str = self._sendGetCommand("TS\r", "S:")
-        # TODO try short version works
-        bytes_str = self._sendGetCommand("%", "\0x25") # short version
-        # expect report like "S:A1 00 FF 00 00\r\n"
-        bytes_int = [int(b, 16) for b in bytes_str]
-        st = bytes_int[0] + bytes_int[1] << 8 + bytes_int[2] << 16 + bytes_int[3] << 24
-        err = bytes_int[5]
-        return (st, err) 
+        #The documentation claims the report prefix is "%", but it's just "S:"
+        bytes_str = self._sendGetCommand("%", "S:") # short version
+        # expect report like "S:A1 00 FF 00 00\r\n\x03"
+        bytes_int = [int(b, 16) for b in bytes_str.split(" ")]
+        st = bytes_int[0] + (bytes_int[1] << 8) + (bytes_int[2] << 16) + (bytes_int[3] << 24)
+        err = bytes_int[4]
+        return (st, err)
 
     def tellBoardAddress(self):
         """
@@ -176,7 +195,8 @@ class PIRedStone(object):
         Redstone's front panel.
         return (0<=int<=15): device address
         """
-        address = self._sendGetCommand("TB\r", "B:")
+        report = self._sendGetCommand("TB\r", "B:")
+        address = int(report)
         assert((0 <= address) and (address <= 15))
         return address
 
@@ -187,8 +207,11 @@ class PIRedStone(object):
         return version
             
     def help(self):
-        report = self._sendGetCommand("HE\r")
-        return report
+        """
+        Lists all commands available.
+        """
+        # apparently returns a string starting with \0\0... so get rid of it
+        return self._sendGetCommand("HE\r", "\x00\x00")
     
     def waitMotorStop(self, time=1):
         """
@@ -213,7 +236,7 @@ class PIRedStone(object):
         """
         assert((1 <= axis) and (axis <= 2))
         assert((1 <= duration) and (duration <= 255))
-        self._sendSetCommand("%dCA%d" % (axis, duration))
+        self._sendSetCommand("%dCA%d\r" % (axis, duration))
 
     def setDirection(self, axis, direction):
         """
@@ -223,7 +246,7 @@ class PIRedStone(object):
         """
         assert((1 <= axis) and (axis <= 2))
         assert((0 <= direction) and (direction <= 1))
-        self._sendSetCommand("%dCD%d" % (axis, direction))
+        self._sendSetCommand("%dCD%d\r" % (axis, direction))
         
     def goPositive(self, axis):
         """
@@ -232,7 +255,7 @@ class PIRedStone(object):
         axis (int 1 or 2): the output channel
         """
         assert((1 <= axis) and (axis <= 2))
-        self._sendSetCommand("%dGP" % axis)
+        self._sendSetCommand("%dGP\r" % axis)
 
     def goNegative(self, axis):
         """
@@ -241,7 +264,7 @@ class PIRedStone(object):
         axis (int 1 or 2): the output channel
         """
         assert((1 <= axis) and (axis <= 2))
-        self._sendSetCommand("%dGN" % axis)
+        self._sendSetCommand("%dGN\r" % axis)
 
     def setRepeatCounter(self, axis, repetitions):
         """
@@ -250,8 +273,8 @@ class PIRedStone(object):
         repetitions (0<=int<=65535): the amount of repetitions
         """
         assert((1 <= axis) and (axis <= 2))
-        assert((1 <= repetitions) and (repetitions <= 65535))
-        self._sendSetCommand("%dSR%d" % (axis, repetitions))
+        assert((0 <= repetitions) and (repetitions <= 65535))
+        self._sendSetCommand("%dSR%d\r" % (axis, repetitions))
 
     def setStepSize(self, axis, duration):
         """
@@ -261,8 +284,8 @@ class PIRedStone(object):
         duration (0<=int<=255): the length of pulse in μs
         """
         assert((1 <= axis) and (axis <= 2))
-        assert((1 <= duration) and (duration <= 255))
-        self._sendSetCommand("%dSS%d" % (axis, duration))
+        #assert((1 <= duration) and (duration <= 255)) # XXX
+        self._sendSetCommand("%dSS%d\r" % (axis, duration))
 
 
     def setWaitTime(self, axis, duration):
@@ -274,7 +297,7 @@ class PIRedStone(object):
         """
         assert((1 <= axis) and (axis <= 2))
         assert((1 <= duration) and (duration <= 65535))
-        self._sendSetCommand("%dSW%d" % (axis, duration))
+        self._sendSetCommand("%dSW%d\r" % (axis, duration))
 
     
     # TODO: is there something to do to activate the "CW mode" for high acceleration?
@@ -304,15 +327,16 @@ class PIRedStone(object):
         
         self.select()
         if duration > 0:
-            self.setDirection(axis, 1)
+            self.setDirection(axis, 0)
         else:
-            self.setDirection(axis, 2)
-            
-        self.pulseOutput(axis, abs(duration))
+            self.setDirection(axis, 1)
+        
+        self.pulseOutput(axis, round(abs(duration)))
         
     def moveRel(self, axis, duration):
         """
-        Move on a given axis for a given pulse length
+        Move on a given axis for a given pulse length, will repeat the steps if
+        it requires more than one step.
         axis (int 1 or 2): the output channel
         duration (int): the duration of pulse in μs 
         """
@@ -321,19 +345,28 @@ class PIRedStone(object):
             return
 
         self.select()
-        (steps, left) = divmod(duration, 255)
+        steps, left = divmod(abs(duration), 255)
+        sign = cmp(duration, 0)
+        
+        # we can only ask 65535 repetitions at most
+        # Bigger values would be unrealistic, so just clamp
+        if abs(steps) > 65536:
+            steps = 65536
+            left = 0
         
         # Run the main length
-        self.setWaitTime(axis, 1) # as fast as possible
-        self.setStepSize(axis, 255) # big steps
-        self.setRepeatCounter(axis, steps)
-        if duration > 0:
-            self.goPositive(axis)
-        else:
-            self.goNegative(axis)
+        if steps > 0:
+            self.setWaitTime(axis, 1) # as fast as possible
+            self.setStepSize(axis, 255) # big steps
+            self.setRepeatCounter(axis, round(steps - 1))
+            if duration > 0:
+                self.goPositive(axis)
+            else:
+                self.goNegative(axis)
             
+        # TODO use the same commands
         # Finish with the small left over
-        self.moveRelSmall(axis, left)
+        self.moveRelSmall(axis, sign * left)
     
     def isMoving(self, axis=None):
         """
@@ -350,7 +383,7 @@ class PIRedStone(object):
         else:
             mask = STATUS_MOVING_X | STATUS_MOVING_Y
         
-        return bool(st | mask)
+        return bool(st & mask)
     
     def stopMotion(self, axis):
         """
@@ -378,12 +411,15 @@ class PIRedStone(object):
         Note: after the scan the selected device is unspecified
         """
         # TODO see MRC_initNetwork, which takes 400ms per address
-
+        
         # TODO to speed up, we could try to send address selection and TB in burst
         # to all the range and then listen.
+        
+        print "Serial network scanning in progress..."
         present = set([])
-        for i in range(max_add):
+        for i in range(max_add + 1):
             # ask for controller #i
+            print "Querying address " + str(i)
             self.addressSelection(i)
 
             # is it answering?
@@ -412,17 +448,17 @@ class PIRedStone(object):
         if err:
             print("Select Controller returned error " + str(err))
             return False
-        if not (st | STATUS_BOARD_ADDRESSED):
+        if not (st & STATUS_BOARD_ADDRESSED):
             print("Failed to select controller " + str(self.address) + ", status is " + str(st))
             return False
         
         print "Selected controller %d." % self.address
         
         version = self.versionReport()
-        print("Version: '%s'" + str(version))
+        print("Version: '%s'" % version)
         
         commands = self.help()
-        print("Accepted commands: '%s'" + str(commands))
+        print("Accepted commands: '%s'" % commands)
 
         # try to modify the values to see if it would work
         self.setWaitTime(1, 1)
@@ -464,7 +500,7 @@ class PIRedStone(object):
         port (string): the name of the serial port
         return (serial): the opened serial port
         """
-        return serial.Serial(
+        ser = serial.Serial(
             port = port,
             baudrate = 9600, # XXX: might be 19200 if switches are changed
             bytesize = serial.EIGHTBITS,
@@ -472,6 +508,10 @@ class PIRedStone(object):
             stopbits = serial.STOPBITS_ONE,
             timeout = 1 #s
         )
+        
+        # Currently selected one is unknown
+        ser._pi_select = -1
+        return ser
         
     
 # FIXME: Move to more generic place than PI?
@@ -506,6 +546,7 @@ class Stage(object):
             if axis not in self.axes:
                 raise Exception("Axis unknown: " + str(axis))
             controller, arg = self.axes[axis]
+            print distance, "=", controller.convertMToDevice(distance)
             controller.moveRel(arg, controller.convertMToDevice(distance))
                  
         # wait until every motor is finished if requested

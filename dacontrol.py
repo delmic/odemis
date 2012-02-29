@@ -29,7 +29,11 @@ def run_self_test(port):
     """
     ser = pi.PIRedStone.openSerialPort(port)
     bus = pi.PIRedStone(ser)
-    adds = bus.scanNetwork()
+    adds = bus.scanNetwork(2)
+    if not adds:
+        print "No controller found."
+        return False
+    
     passed = True
     for add in adds:
         cont = pi.PIRedStone(ser, add)
@@ -41,7 +45,6 @@ def run_self_test(port):
             passed = False
     
     return passed
-
 
 def main(args):
     """
@@ -64,7 +67,7 @@ def main(args):
                         help=u"move the X axis of the stage by X µm. Default is to not move the stage.") # unicode for µ
     cmd_grp.add_argument("--stage-y", "-y", dest="stage_y", type=float, metavar="Y",
                         help=u"move the Y axis of the stage by Y µm. Default is to not move the stage.")
-    cmd_grp.add_argument("--sync", dest="is_sync", action="store_true", default=False,
+    cmd_grp.add_argument("--sync", dest="sync", action="store_true", default=False,
                         help="waits until all the moves are complete before exiting.")
     cmd_grp.add_argument("--stop", "-s", dest="stop", action="store_true", default=False,
                         help="Immediately stop the stage in all directions. The other commands are not executed.")
@@ -75,8 +78,10 @@ def main(args):
     # Test mode
     if options.test:
         if run_self_test(options.port):
+            print "Test passed."
             return 0
         else:
+            print "Test failed."
             return 127
 
     try:
@@ -92,9 +97,9 @@ def main(args):
     # move
     positions = {}
     if options.stage_x:
-        positions['x'] = options.stage_x
+        positions['x'] = options.stage_x * 1e-6 # µm -> m
     if options.stage_y:
-        positions['y'] = options.stage_y
+        positions['y'] = options.stage_y * 1e-6 # µm -> m
     stage.moveRel(positions, options.sync)
 
     return 0
