@@ -15,7 +15,9 @@ Delmic Acquisition Software is distributed in the hope that it will be useful, b
 
 You should have received a copy of the GNU General Public License along with Delmic Acquisition Software. If not, see http://www.gnu.org/licenses/.
 '''
+import os
 import serial
+import time
 
 # Status:
 # byte 1
@@ -30,10 +32,10 @@ STATUS_BOARD_ADDRESSED = 0x000080 #Bit 7: Board addressed
 # byte 2
 #Bit 0: Joystick X enabled
 #Bit 1: Joystick Y enabled
-#Bit 2: Pulse output on channel 1 (X)
-#Bit 3: Pulse output on channel 2 (Y)
-#Bit 4: Pulse delay in progress (X)
-#Bit 5: Pulse delay in progress (Y)
+STATUS_PULSE_X = 0x000400 #Bit 2: Pulse output on channel 1 (X)
+STATUS_PULSE_Y = 0x000800 #Bit 3: Pulse output on channel 2 (Y)
+STATUS_DELAY_X = 0x001000 #Bit 4: Pulse delay in progress (X)
+STATUS_DELAY_Y = 0x002000 #Bit 5: Pulse delay in progress (Y)
 STATUS_MOVING_X = 0x004000 #Bit 6: Is moving (X)
 STATUS_MOVING_Y = 0x008000 #Bit 7: Is moving (Y)
 # byte 3 (always FF in practice)
@@ -65,24 +67,25 @@ ERROR_COMMAND_NOT_FOUND = 0x01 #01: command not found
 #09: Command buffer overflow
 #0A: macro storage overflow
 
-VERBOSE = False
+VERBOSE = True
 
 class PIRedStone(object):
     '''
     This represents the bare PI C-170 piezo motor controller (Redstone), the 
     information comes from the manual C-170_User_MS133E104.pdf. Note that this
-    controller uses only native commands, which are different from the "PI GCS". 
+    controller uses only native commands, which are different from the "PI GCS",
+    (general command set). 
     
     From the device description:
     The distance and velocity travelled corresponds to the width, frequency and 
-    number of motor-on pulses. By varying the pulse width, the step length and
-    thus the motor velocity can be controlled. As the mechanical environment
+    number of motor-on pulses. By varying the pulse width, the step length [...]
+    the motor velocity can be controlled. As the mechanical environment
     also influences the motion, the size of single steps is not highly
     repeatable. For precise position control, a system with a position feedback
     device is recommended (closed-loop operation).
     Miniature-stages can achieve speeds of 500 mm/s and more with minimum
     incremental motion of 50 nm.
-    
+    :
     The smallest step a piezo motor can make is typically on the order of 
     0.05 μm and corresponds to a 10 μs pulse (shorter pulses have no effect).
 
@@ -91,6 +94,17 @@ class PIRedStone(object):
     moves the axis (of about 500 nm). Note that it's not linear:
     50 µs  => 500nm
     255 µs => 5µm
+    
+    The controller has also many undocumented behaviour (bugs):
+        * when doing a burst move at maximum frequency (wait == 0), it cannot be
+          stopped
+        * if you ask the status when it is waiting (WA, WS) it will fail to
+          report status and enter error mode. Only a set command can recover
+          it (SR? works).
+        * HE returns a string which starts with 2 null characters.
+        
+    Here are all the commands the controller reports:
+    EM RM RZ TZ TM MD MC YF YN WE CP XF XN TA WF WN CF CN TC SW SS SR SJ SI PP JN JF IW IS IR GP GN CD CA BR HM DM UD DE SO HE FE LH LL LF LN AB WS TD SC TT TP TL TY SD SA SV GH DH MA MR TS CS EN EF TI TB RP WA RT VE 
     '''
 
     def __init__(self, ser, address=None):
@@ -100,19 +114,20 @@ class PIRedStone(object):
         address 0<int<15: the address of the controller as defined by its jumpers 1-4
         if no address is given, then no controller is selected
         '''
-        # FIXME: use io.TextIOWrapper(io.BufferedRWPair(ser, ser))?
-        # not sure it handles correctly \r\n\x03
         self.serial = ser
-        #self.serial.timeout = 0.1 # s
         
-        self.min_duration = 30 # µs minimum duration of a step to move
+        self.duration_range = (30, 1e6) # µs min, max duration of a step to move
         self.scale = 2e-8 # m/µs very rough scale (if it was linear)
+        # Warning: waittime == 1 => unabortable!
+        self.waittime = 2 # ms how long to wait between 2 steps => speed (1=max speed) 
         
         self.address = address
         # allow to not initialise the controller (mostly for ScanNetwork())
         if address is None:
+            self.try_recover = False # really raw mode
             return
         
+        self.try_recover = True
         # Small check to verify it's responding
         self.select()
         try:
@@ -127,32 +142,68 @@ class PIRedStone(object):
         Send a command which does not expect any report back
         com (string): command to send (including the \r if necessary)
         """
-        assert(len(com) < 10)
+        for sc in com.split(","):
+            assert(len(sc) < 10)
+            
         if VERBOSE:
-            print com.encode('string_escape')
+            print "Sending:", com.encode('string_escape')
         self.serial.write(com)
         # TODO allow to check for error via TellStatus afterwards
     
-    def _sendGetCommand(self, com, report_prefix=""):
+    def _sendGetCommand(self, com, prefix="", suffix="\r\n\x03"):
         """
         Send a command and return its report
         com (string): the command to send
-        report_prefix (string): the prefix to the report,
+        prefix (string): the prefix to the report,
             it will be removed from the return value
+        suffix (string): the suffix of the report. Read will continue until it 
+            is found or there is a timeout. It is removed from the return value.  
         return (string): the report without prefix nor newline
         """
         assert(len(com) <= 10)
-        assert(len(report_prefix) <= 2)
-        self.serial.write(com)
-        report = self.serial.readline() # get up to "\r\n"
-        # TODO: add more lines until reading "\x03"
-        report += self.serial.read(1) # get "\x03"
+        assert(len(prefix) <= 2)
         if VERBOSE:
-            print "%s" % report.encode('string_escape')
-        if not report.startswith(report_prefix):
+            print "Sending:", com.encode('string_escape')
+        self.serial.write(com)
+        
+        char = self.serial.read() # empty if timeout
+        report = char
+        while char and not report.endswith(suffix):
+            char = self.serial.read()
+            report += char
+            
+        if not char:
+            if not self.try_recover:
+                raise IOError("PI controller %d timeout.")
+                
+            success = self.recoverTimeout()
+            if success:
+                print "Warning, PI controller %d timeout, but recovered." % self.address
+            else:
+                raise IOError("PI controller %d timeout, not recovered." % self.address)
+            
+        if VERBOSE:
+            print "Receive:", report.encode('string_escape')
+        if not report.startswith(prefix):
             raise IOError("Report prefix unexpected after '%s': '%s'." % (com, report))
 
-        return report.lstrip(report_prefix).rstrip("\r\n\x03")
+        return report.lstrip(prefix).rstrip(suffix)
+    
+    def recoverTimeout(self):
+        """
+        Try to recover from error in the controller state
+        return (boolean): True if it recovered
+        """
+        # It appears to make the controller comfortable...
+        self._sendSetCommand("SR?\r%")
+        
+        char = self.serial.read()
+        while char:
+            if char == "\x03":
+                return True
+            char = self.serial.read()
+        # we still timed out
+        return False
     
     # Low-level functions
     def addressSelection(self, address):
@@ -185,6 +236,7 @@ class PIRedStone(object):
         bytes_int = [int(b, 16) for b in bytes_str.split(" ")]
         st = bytes_int[0] + (bytes_int[1] << 8) + (bytes_int[2] << 16) + (bytes_int[3] << 24)
         err = bytes_int[4]
+        assert((0 <= err) and (err <= 255))
         return (st, err)
 
     def tellBoardAddress(self):
@@ -203,28 +255,24 @@ class PIRedStone(object):
         # expects something like:
         #(C)2004 PI GmbH Karlsruhe, Ver. 2.20, 7 Oct, 2004 CR LF ETX 
         return version
-            
+
     def help(self):
         """
         Lists all commands available.
         """
         # apparently returns a string starting with \0\0... so get rid of it
-        return self._sendGetCommand("HE\r", "\x00\x00")
-    
-    def waitMotorStop(self, time=1):
-        """
-        Force the controller to wait until a burst is done before reading the 
-        next command.
-        time (1 <= int <= 65537): additional time to wait after the burst (ms)
-        """
-        assert((1 <= time) and (time <= 65537))
-        self._sendSetCommand("WS%d\r" % time)
+        return self._sendGetCommand("HE\r", "\x00\x00", "\n")
     
     def abortMotion(self):
         """
         Stops the running output pulse sequences started by GP or GN.
         """
-        self._sendSetCommand("AB\r")
+        # Just AB doesn't stop all the time, need to be much more aggressive
+        # SR1 is to stop any "wait" and return into a stable mode
+        # PP0 immediately puts all lines to 00, that helps a bit AB
+        self._sendSetCommand("SR1,PP0,AB\r")
+        while self.isMoving():
+            self._sendSetCommand("AB\r")
 
     def pulseOutput(self, axis, duration):
         """
@@ -246,14 +294,31 @@ class PIRedStone(object):
         assert((0 <= direction) and (direction <= 1))
         self._sendSetCommand("%dCD%d\r" % (axis, direction))
         
-    def goPositive(self, axis):
+    def stringGoPositive(self, axis):
         """
         Used to execute a move in the positive direction as defined by
             the SS, SR and SW values.
         axis (int 1 or 2): the output channel
         """
         assert((1 <= axis) and (axis <= 2))
-        self._sendSetCommand("%dGP\r" % axis)
+        return "%dGP" % axis
+                
+    def goPositive(self, axis):
+        """
+        Used to execute a move in the positive direction as defined by
+            the SS, SR and SW values.
+        axis (int 1 or 2): the output channel
+        """
+        self._sendSetCommand(self.stringGoPositive(axis) + "\r")
+
+    def stringGoNegative(self, axis):
+        """
+        Used to execute a move in the negative direction as defined by
+            the SS, SR and SW values.
+        axis (int 1 or 2): the output channel
+        """
+        assert((1 <= axis) and (axis <= 2))
+        return "%dGN" % axis
 
     def goNegative(self, axis):
         """
@@ -261,18 +326,34 @@ class PIRedStone(object):
             the SS, SR and SW values.
         axis (int 1 or 2): the output channel
         """
+        self._sendSetCommand(self.stringGoNegative(axis) + "\r")
+
+    def stringSetRepeatCounter(self, axis, repetitions):
+        """
+        Set the repeat counter for the given axis (1 = one step)
+        axis (int 1 or 2): the output channel
+        repetitions (1<=int<=65535): the amount of repetitions
+        """
         assert((1 <= axis) and (axis <= 2))
-        self._sendSetCommand("%dGN\r" % axis)
+        assert((1 <= repetitions) and (repetitions <= 65535))
+        return "%dSR%d" % (axis, repetitions)
 
     def setRepeatCounter(self, axis, repetitions):
         """
-        Set the repeat counter for the given axis
+        Set the repeat counter for the given axis (1 = one step)
         axis (int 1 or 2): the output channel
-        repetitions (0<=int<=65535): the amount of repetitions
+        repetitions (1<=int<=65535): the amount of repetitions
         """
-        assert((1 <= axis) and (axis <= 2))
-        assert((0 <= repetitions) and (repetitions <= 65535))
-        self._sendSetCommand("%dSR%d\r" % (axis, repetitions))
+        self._sendSetCommand(self.stringSetRepeatCounter(axis, repetitions) + "\r")
+
+    def stringSetStepSize(self, axis, duration):
+        """
+        Set the step size that corresponds with the length of the output
+            pulse for the given axis
+        axis (int 1 or 2): the output channel
+        duration (0<=int<=255): the length of pulse in μs
+        """
+        return "%dSS%d" % (axis, duration)
 
     def setStepSize(self, axis, duration):
         """
@@ -281,10 +362,18 @@ class PIRedStone(object):
         axis (int 1 or 2): the output channel
         duration (0<=int<=255): the length of pulse in μs
         """
-        assert((1 <= axis) and (axis <= 2))
-        #assert((1 <= duration) and (duration <= 255)) # XXX
-        self._sendSetCommand("%dSS%d\r" % (axis, duration))
+        self._sendSetCommand(self.stringSetStepSize(axis, duration) + "\r")
 
+    def stringSetWaitTime(self, axis, duration):
+        """
+        This command sets the delay time (wait) between the output of pulses when
+            commanding a burst move for the given axis.
+        axis (int 1 or 2): the output channel
+        duration (0<=int<=65535): the wait time (ms), 1 gives the highest output frequency.
+        """
+        assert((1 <= axis) and (axis <= 2))
+        assert((0 <= duration) and (duration <= 65535))
+        return"%dSW%d" % (axis, duration)
 
     def setWaitTime(self, axis, duration):
         """
@@ -293,16 +382,9 @@ class PIRedStone(object):
         axis (int 1 or 2): the output channel
         duration (0<=int<=65535): the wait time (ms), 1 gives the highest output frequency.
         """
-        assert((1 <= axis) and (axis <= 2))
-        assert((1 <= duration) and (duration <= 65535))
-        self._sendSetCommand("%dSW%d\r" % (axis, duration))
+        self._sendSetCommand(self.stringSetWaitTime(axis, duration) + "\r")
 
-    
-    # TODO: is there something to do to activate the "CW mode" for high acceleration?
-    # CW = continuous wave?
-    # Here is all the commands the controller reports:
-    # EM RM RZ TZ TM MD MC YF YN WE CP XF XN TA WF WN CF CN TC SW SS SR SJ SI PP JN JF IW IS IR GP GN CD CA BR HM DM UD DE SO HE FE LH LL LF LN AB WS TD SC TT TP TL TY SD SA SV GH DH MA MR TS CS EN EF TI TB RP WA RT VE 
-    
+
     # High-level functions
     def select(self):
         """
@@ -332,7 +414,7 @@ class PIRedStone(object):
             self.setDirection(axis, 1)
         
         self.pulseOutput(axis, round(abs(duration)))
-        
+    
     def moveRel(self, axis, duration):
         """
         Move on a given axis for a given pulse length, will repeat the steps if
@@ -343,33 +425,42 @@ class PIRedStone(object):
         assert((1 <= axis) and (axis <= 2))
         if duration == 0:
             return
-
+        
         self.select()
-        steps, left = divmod(abs(duration), 255)
+        # Clamp the duration to min,max
+        # Min because it's better to move too much than nothing
+        # Max because we don't want to move too far, and repetition is limited
         sign = cmp(duration, 0)
+        duration = sign * sorted(self.duration_range + (abs(duration),))[1]
+
+        # Tried to use a compound command with several big steps and one small.
+        # eg: 1SW1,1SS255,1SR3,1GN,1WS2,1SS35,1SR1,1GN\r
+        # A problem is that while it's waiting (WS) any new command (ex, TS)
+        # will stop the wait and the rest of the compound.
         
-        # we can only ask 65535 repetitions at most
-        # Bigger values would be unrealistic, so just clamp
-        if steps > 65536:
-            print ("Warning: Controller %d,%d move requested of %d,"
-                   " will move only by %d" % (self.address, axis, duration, 65536 * 255))
-            steps = 65536
-            left = 0
-        
-        # Run the main length
+        steps, left = divmod(abs(duration), 255)
         if steps > 0:
-            self.setWaitTime(axis, 1) # as fast as possible
-            self.setStepSize(axis, 255) # big steps
-            self.setRepeatCounter(axis, round(steps - 1))
+            if left > 0:
+                # do one more step and spread the left over all the steps
+                stepsize = round(255 - ((255 - left) / steps))
+                steps = abs(duration) / stepsize
+            com = self.stringSetWaitTime(axis, self.waittime)
+            com += "," + self.stringSetStepSize(axis, stepsize)
+            com += "," + self.stringSetRepeatCounter(axis, steps)
             if duration > 0:
-                self.goPositive(axis)
+                com += "," + self.stringGoPositive(axis)
             else:
-                self.goNegative(axis)
-            
-        # TODO use the same commands
-        # Finish with the small left over
-        self.moveRelSmall(axis, sign * left)
-        print self.isMoving(1), self.isMoving(2)
+                com += "," + self.stringGoNegative(axis)
+        else:
+            com = self.stringSetWaitTime(axis, self.waittime)
+            com += "," + self.stringSetStepSize(axis, left)
+            com += "," + self.stringSetRepeatCounter(axis, 1)
+            if duration > 0:
+                com += "," + self.stringGoPositive(axis)
+            else:
+                com += "," + self.stringGoNegative(axis)
+
+        self._sendSetCommand(com + "\r")
     
     def isMoving(self, axis=None):
         """
@@ -380,11 +471,12 @@ class PIRedStone(object):
         self.select()
         st, err = self.tellStatus()
         if axis == 1:
-            mask = STATUS_MOVING_X
+            mask = STATUS_MOVING_X | STATUS_PULSE_X | STATUS_DELAY_X
         elif axis == 2:
-            mask = STATUS_MOVING_Y
+            mask = STATUS_MOVING_Y | STATUS_PULSE_Y | STATUS_DELAY_Y
         else:
-            mask = STATUS_MOVING_X | STATUS_MOVING_Y
+            mask = (STATUS_MOVING_X | STATUS_PULSE_X | STATUS_DELAY_X |
+                    STATUS_MOVING_Y | STATUS_PULSE_Y | STATUS_DELAY_Y)
         
         return bool(st & mask)
     
@@ -396,15 +488,16 @@ class PIRedStone(object):
         self.select()
         self.abortMotion()
           
-    def waitEndMotion(self, axis):
+    def waitEndMotion(self, axis=None):
         """
-        Stop the motion of all the given axis.
-        For the Redstone, both axes are stopped simultaneously
+        Wait until the motion of all the given axis is finished.
+        axis (None, 1, or 2): axis to check whether it is moving, or both if None
         """
-        # FIXME: unlikely to work!
-        self.select()
-        self.waitMotorStop()
-        self.tellBoardAddress() # we are not interested by the address, just a report
+        # approximately the time for the longest move
+        timeout = self.duration_range[1] * (1e-6 + self.waittime * 1e-3 / 255)
+        end = time.time() + timeout
+        while self.isMoving(axis) and time.time() <= end:
+            time.sleep(0.001)
         
     def scanNetwork(self, max_add=15):
         """
@@ -419,6 +512,7 @@ class PIRedStone(object):
         # to all the range and then listen.
         
         print "Serial network scanning in progress..."
+        self.try_recover = False # timeouts are expected!
         present = set([])
         for i in range(max_add + 1):
             # ask for controller #i
@@ -435,6 +529,7 @@ class PIRedStone(object):
             except IOError:
                 pass
         
+        self.try_recover = True
         return present
     
     def selfTest(self):
@@ -443,6 +538,7 @@ class PIRedStone(object):
         return (boolean): False if it detects any problem
         """
         self.addressSelection(self.address)
+        self.tellStatus()
         reported_add = self.tellBoardAddress()
         if reported_add != self.address:
             print("Failed to select controller " + str(self.address))
@@ -488,12 +584,7 @@ class PIRedStone(object):
         m (float): meters (can be negative)
         return (float): device units
         """
-        if m == 0: # already handled, but make it more explicit
-            return 0
-        
         duration = m / self.scale
-        if abs(duration) < self.min_duration:
-            duration = cmp(duration, 0) * self.min_duration # cmp == sign
         return duration
         
     @staticmethod
