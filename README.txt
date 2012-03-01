@@ -18,7 +18,5 @@ Basically there are 2 modes:
 = License =
 GPLv2
 
-= Emulation mode selection =
-
 = Testing =
 To test the software, just run pi_test.py.
