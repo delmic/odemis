@@ -19,4 +19,5 @@ Basically there are 2 modes:
 GPLv2
 
 = Testing =
-To test the software, just run pi_test.py.
+To test the software, connect the controller(s) and run pi_test.py. It is not necessary
+to have the motors connected to the controllers, but if they are, they will _move_ (a lot).

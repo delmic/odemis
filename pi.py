@@ -91,7 +91,7 @@ class PIRedStone(object):
     In practice: if you give a too small duration to a step, it will not move 
     at all. In experiments, 50µs for duration of a pulse is the minimum that
     moves the axis (of about 500 nm). Note that it's not linear:
-    50 µs  => 500nm
+    50 µs  => 0.5µm
     255 µs => 5µm
     
     The controller has also many undocumented behaviour (bugs):

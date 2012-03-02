@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 '''
-Created on 26 jan 2012
+Created on 22 feb 2012
 
 @author: Éric Piel
 
