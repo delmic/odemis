@@ -12,7 +12,7 @@ See "./dacontrol.py --help" for information.
 
 Basically there are 2 modes:
 * command mode: move the stage
-* test: tests the connection to the local Quanta client
+* test: tests the connection to the motor controller over the serial line.
 
 
 = License =

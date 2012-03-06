@@ -52,14 +52,13 @@ def run_self_test(port):
 
 def main(args):
     """
-    Contains the console handling code for the Quanta class
+    Contains the console handling code for the PIRedStone class
     args is the list of arguments passed
     return (int): value to return to the OS as program exit code
     """
     #print args
     # arguments handling 
-    parser = argparse.ArgumentParser(description="Delmic Acquisition Software for Quanta SEM")
-    #parser = OptionParser(version="%prog 0.1")
+    parser = argparse.ArgumentParser(description="Delmic Acquisition Software for Physik Instrumente C-170")
 
     parser.add_argument('--version', action='version', version='%(prog)s 0.1')   
     parser.add_argument("--port", dest="port", required=True,
