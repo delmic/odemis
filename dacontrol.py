@@ -69,7 +69,7 @@ def main(args):
                         help="Height of the picture to acquire (in pixel).")
     cmd_grp.add_argument("--exp", "-e",  dest="exposure", type=float,
                         help="Exposure time (in second).")
-    cmd_grp.add_argument("--binning", "-b", dest="binning", type=int,
+    cmd_grp.add_argument("--binning", "-b", dest="binning", type=int, # TODO 1 2 3 4 or 8 only
                         help="Number of pixels to bin together when acquiring the picture. (Defaut is 1)")
     cmd_grp.add_argument("--output", "-o", dest="output_filename",
                         help="name of the file where the image should be saved. It is saved in TIFF format.")

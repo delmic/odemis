@@ -71,8 +71,21 @@ def acquire(device, size, exp):
     atcore.AT_InitialiseLibrary()
 
     hndl = c_int()
-    atcore.AT_Open(0, byref(hndl))
-
+    atcore.AT_Open(device, byref(hndl))
+    
+    # Set size
+    maxsize = (c_uint64(), c_uint64())
+    atcore.AT_GetIntMax(hndl, u"AOIWidth", byref(maxsize[0]))
+    atcore.AT_GetIntMax(hndl, u"AOIHeight", byref(maxsize[1]))
+    print maxsize[0].value, maxsize[1].value
+    
+    implemented = c_int()
+    atcore.AT_IsImplemented(hndl, u"AOIWidth", byref(implemented))
+    print implemented
+    
+    atcore.AT_SetInt(hndl, u"AOIWidth", maxsize[0])
+    atcore.AT_SetInt(hndl, u"AOIHeight", maxsize[1])
+    
     # set exposure time (which is automatically adapted to a working one)
     newExposure = c_double(exp)
     atcore.AT_SetFloat(hndl, u"ExposureTime", newExposure)
@@ -83,22 +96,18 @@ def acquire(device, size, exp):
     # Set up the buffer for containing one image
     ImageSizeBytes = c_uint64()
     atcore.AT_GetInt(hndl, u"ImageSizeBytes", byref(ImageSizeBytes))
-
-#    userbuffer = bytearray(ImageSizeBytes.value)
-#    cbuffer = (c_ubyte * ImageSizeBytes.value).from_buffer(userbuffer)
-    cbuffer = (c_ubyte * ImageSizeBytes.value)()
+    cbuffer = (c_ubyte * ImageSizeBytes.value)() # empty array
     atcore.AT_QueueBuffer(hndl, cbuffer, ImageSizeBytes.value)
 
     # Get one image
     atcore.AT_Command(hndl, u"AcquisitionStart")
-
-    pBuffer = POINTER(c_ubyte)()
+    pBuffer = POINTER(c_ubyte)() # null pointer to ubyte
     BufferSize = c_int()
     timeout = c_uint(int(round((exp + 1) * 1000))) # ms
     atcore.AT_WaitBuffer(hndl, byref(pBuffer), byref(BufferSize), timeout)
     
     print addressof(pBuffer.contents), addressof(cbuffer)
-#    array = (c_ubyte * BufferSize.value).from_adress(pBuffer)
+    im = string_at(pBuffer, BufferSize.value) # seems the only way to get pythonic raw data
     print "buffer", BufferSize.value, "=", pBuffer[0]
     
     atcore.AT_Command(hndl, u"AcquisitionStop")
@@ -107,7 +116,7 @@ def acquire(device, size, exp):
     # Close everything
     atcore.AT_Close(hndl)
     atcore.AT_FinaliseLibrary()
-    return string_at(pBuffer, BufferSize.value)
+    return im
 
 
 def image_from_raw(raw, width, height, bits_per_sample = 8, bit_shift = 0):
@@ -136,7 +145,7 @@ def image_from_raw(raw, width, height, bits_per_sample = 8, bit_shift = 0):
         raise Exception("Pixel format not supported")
 
 list()
-size = (1280,256)
+size = (528,512)
 raw = acquire(0, size, 0.1)
 i = Image.fromstring('L', size, raw, 'raw', 'L', 0, 1)
 i.save("test.tiff", "TIFF")
