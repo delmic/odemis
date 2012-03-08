@@ -30,7 +30,10 @@ class ATDLL(CDLL):
     all the functions automatically.
     It works by setting a default _FuncPtr.errcheck.
     """
-
+    
+    # various defines from atcore.h
+    HANDLE_SYSTEM = 1
+    
     @staticmethod
     def at_errcheck(result, func, args):
         """
@@ -44,29 +47,367 @@ class ATDLL(CDLL):
         return result
 
     def __getitem__(self, name):
-#        func = self._FuncPtr((name, self))
         func = CDLL.__getitem__(self, name)
-#        if not isinstance(name, (int, long)):
         func.__name__ = name
         func.errcheck = self.at_errcheck
         return func
-
-def scan():
-    atcore = ATDLL("libatcore.so.3", RTLD_GLOBAL) # Global so that its sub-libraries can access it
-    atcore.AT_InitialiseLibrary()
-    dc = c_longlong()
-    atcore.AT_GetInt(1, u"Device Count", byref(dc))
-    print "found %d devices." % dc.value
     
-    for i in range(dc.value):
-        hndl = c_int()
-        atcore.AT_Open(i, byref(hndl))
-        model = create_unicode_buffer(128)
-        atcore.AT_GetString(hndl, u"Camera Model", model, len(model))
-        print i, model.value
-        atcore.AT_Close(hndl)
+    # Various wrapper to simplify access to properties
+    def GetString(self, hndl, prop):
+        """
+        Return a unicode string corresponding to the given property
+        hndl
+        """
+        len_str = c_int()
+        self.AT_GetStringMaxLength(hndl, prop, byref(len_str))
+        string = create_unicode_buffer(len_str.value)
+        self.AT_GetString(hndl, prop, string, len_str)
+        return string.value
+    
+    def GetInt(self, hndl, prop):
+        result = c_longlong()
+        self.AT_GetInt(hndl, prop, byref(result))
+        return result.value
+    
+    def GetIntMax(self, hndl, prop):
+        """
+        Return the (min, max) of an integer property.
+        Return (2-tuple int)
+        """
+        result = c_longlong()
+        self.AT_GetIntMax(hndl, prop, byref(result))
+        return result.value
+    
+    def GetIntRanges(self, hndl, prop):
+        """
+        Return the (min, max) of an integer property.
+        Return (2-tuple int)
+        """
+        result = (c_longlong(), c_longlong())
+        self.AT_GetIntMin(hndl, prop, byref(result[0]))
+        self.AT_GetIntMax(hndl, prop, byref(result[1]))
+        return (result[0].value, result[1].value)
+    
+    def GetFloat(self, hndl, prop):
+        result = c_double()
+        self.AT_GetFloat(hndl, prop, byref(result))
+        return result.value
+
+    
+    def GetFloatRanges(self, hndl, prop):
+        """
+        Return the (min, max) of an float property.
+        Return (2-tuple int)
+        """
+        result = (c_double(), c_double())
+        self.AT_GetFloatMin(hndl, prop, byref(result[0]))
+        self.AT_GetFloatMax(hndl, prop, byref(result[1]))
+        return (result[0].value, result[1].value)
+
+    def isImplemented(self, hndl, prop):
+        """
+        return bool
+        """
+        implemented = c_int()
+        self.AT_IsImplemented(hndl, prop, byref(implemented))
+        return (implemented.value != 0)
+
+    def isWritable(self, hndl, prop):
+        """
+        return bool
+        """
+        writable = c_int()
+        self.AT_IsWritable(hndl, prop, byref(writable))
+        return (writable.value != 0)
+    
+    def GetEnumStringAvailable(self, hndl, prop):
+        """
+        Return in a list the strings corresponding of each possible value of an enum
+        """
+        num_values = c_int()
+        self.AT_GetEnumCount(hndl, prop, byref(num_values))
+        result = []
+        for i in range(num_values.value):
+            enum = create_unicode_buffer(128) # no way to know the max size
+            self.AT_GetEnumStringByIndex(hndl, prop, i, enum, len(enum))
+            result.append(enum.value)
+
+        return result
+    
+class AndorCam(object):
+    """
+    Represents one andor camera and provide all the basic interfaces typical of
+    a CCD camera.
+    This implementation is for the SDK v3.
+    """
+    
+    def __init__(self, device):
+        """
+        Initialises the device
+        device (int): number of the device to open, as defined by Andor, cd scan()
+        Raise an exception if the device cannot be opened.
+        """
+        # Global so that its sub-libraries can access it
+        self.atcore = ATDLL("libatcore.so.3", RTLD_GLOBAL) 
+        self.atcore.AT_InitialiseLibrary()
         
-    atcore.AT_FinaliseLibrary()
+        self.handle = c_int()
+        self.atcore.AT_Open(device, byref(self.handle))
+        
+        # Maximum
+        self.setTargetTemperature(-40) # That's the best for Neo
+        self.setFanSpeed(1.0)
+    
+    def setTargetTemperature(self, temp):
+        """
+        Change the targeted temperature of the CCD.
+        The cooler the less dark noise. Not everything is possible, but it will
+        try to accommodate by targeting the closest temperature possible.
+        temp (-400 < float < 100): temperature in C
+        """
+        assert((-400 <= temp) and (temp <= 100))
+        # TODO apparently the Neo also has a "Temperature Control" which might be
+        # better to use
+        range = self.atcore.GetFloatRanges(self.handle, u"TargetSensorTemperature")
+        temp = sorted(range + (temp,))[1]
+        self.atcore.AT_SetFloat(self.handle, u"TargetSensorTemperature", c_double(temp))
+
+        # TODO: a more generic function which set up the fan to the right speed
+        # according to the target temperature?
+
+    def setFanSpeed(self, speed):
+        """
+        Change the fan speed. Will accommodate to whichever speed is possible.
+        speed (0<=float<= 1): ratio of full speed -> 0 is slowest, 1.0 is fastest
+        """
+        assert((0 <= speed) and (speed <= 1))
+        
+        if not self.atcore.isImplemented(self.handle, u"FanSpeed"):
+            return
+
+        # Let's assume it's linearly distributed in speed... at least it's true
+        # for the Neo and the SimCam. Looks like this for Neo:
+        # [u"Off", u"Low", u"On"]
+        values = self.atcore.GetEnumStringAvailable(self.handle, u"FanSpeed")
+        val = values[int(round(speed * (len(values) - 1)))]
+        self.atcore.AT_SetEnumString(self.handle, u"FanSpeed", val)
+        
+        # TODO there is also a "SensorCooling" boolean property, no idea what it does!
+        
+    def setReadoutRate(self, frequency):
+        """
+        frequency (100, 200, 280, 550): the pixel readout rate in MHz
+        """
+        assert((0 <= frequency))
+        # TODO handle the fact SimCam only accepts 550
+        print self.atcore.GetEnumStringAvailable(self.handle, u"PixelReadoutRate")
+        self.atcore.AT_SetEnumString(self.handle, u"PixelReadoutRate", u"%d MHz" % frequency)
+        
+    def setBinning(self, binning):
+        """
+        binning (int 1, 2, 3, 4, or 8): how many pixels horizontally and vertically
+         are combined to create "super pixels"
+        Note: super pixels are always square
+        """
+        values = [1, 2, 3, 4, 8]
+        assert(binning in values)
+        
+        # Nicely the API is different depending on cameras...
+        if self.atcore.isImplemented(self.handle, u"AOIBinning"):
+            # Typically for the Neo
+            binning_str = u"%dx%d" % (binning, binning)
+            self.atcore.AT_SetEnumString(self.handle, u"AOIBinning", binning_str)
+        else:
+            # Typically for the simcam
+            self.atcore.AT_SetInt(self.handle, u"AOIHBin", c_longlong(binning))
+            self.atcore.AT_SetInt(self.handle, u"AOIVBin", c_longlong(binning))
+    
+    def getCameraMetadata(self):
+        """
+        return the metadata corresponding to the camera in general (common to 
+          many pictures)
+        return (dict : string -> string): the metadata
+        """
+        metadata = {}
+        model = self.atcore.GetString(self.handle, u"CameraModel")
+        metadata["Camera Name"] = model
+        # TODO there seems to be a bug in SimCam v3.1: => check v3.3
+#        self.atcore.isImplemented(self.handle, u"SerialNumber") return true
+#        but self.atcore.GetInt(self.handle, u"SerialNumber") fail with error code 2 = AT_ERR_NOTIMPLEMENTED
+        try:
+            serial = self.atcore.GetInt(self.handle, u"SerialNumber")
+            metadata["Camera Serial"] = str(serial)
+        except ATError:
+            pass # unknown value
+        
+        try:
+            firmware = self.atcore.GetString(self.handle, u"FirmwareVersion") 
+            metadata["Camera Version"] = "firmware: '%s', driver:''" % firmware # TODO driver
+        except ATError:
+            pass # unknown value
+        
+        try:
+            psize = (self.atcore.GetFloat(self.handle, u"PixelWidth"),
+                     self.atcore.GetFloat(self.handle, u"PixelHeight"))
+            metadata["Captor Pixel Width"] = str(psize[0] * 1e6) # m
+            metadata["Captor Pixel Height"] = str(psize[1] * 1e6) # m
+        except ATError:
+            pass # unknown value
+        
+        return metadata
+    
+    def setSize(self, size):
+        """
+        Change the acquired image size (and position)
+        size (2-tuple int): Width and height of the image. It will centred
+         on the captor. It depends on the binning, so the same region as a size 
+         twice smaller if the binning is 2 instead of 1. It must be a allowed
+         resolution. TODO how to pass information on what is allowed?
+        """
+        resolution = (self.atcore.GetInt(self.handle, u"SensorWidth"),
+                      self.atcore.GetInt(self.handle, u"SensorHeight"))
+        assert((1 <= size[0]) and (size[0] <= resolution[0]) and
+               (1 <= size[1]) and (size[1] <= resolution[1]))
+        
+        # If the camera doesn't support Area of Interest, then it has to be the
+        # size of the sensor
+        if (not self.atcore.isImplemented(self.handle, u"AOIWidth") or 
+            not self.atcore.isWritable(self.handle, u"AOIWidth")):
+            if size != resolution:
+                raise IOError("AndorCam: Requested image size " + str(size) + 
+                              " does not match sensor resolution " + str(resolution))
+            return
+        
+        # AOI
+#        ranges = (self.atcore.GetIntRanges(self.handle, "AOIWidth"),
+#                  self.atcore.GetIntRanges(self.handle, "AOIHeight"))
+        ranges = ((1,resolution[0]),
+                  (1,resolution[1]))
+                  
+        assert((ranges[0][0] <= size[0]) and (size[0] <= ranges[0][1]) and
+               (ranges[1][0] <= size[1]) and (size[1] <= ranges[1][1]))
+        
+        # TODO check whether ranges[0][1] is 2592 or 2560, if 2592, it should be + 16
+        lt = ((ranges[0][1] - size[0]) / 2 + 1,
+              (ranges[1][1] - size[1]) / 2 + 1)
+
+        # recommended order
+        self.atcore.AT_SetInt(self.handle, u"AOIWidth", c_uint64(size[0]))
+        self.atcore.AT_SetInt(self.handle, u"AOILeft", c_uint64(lt[0]))
+        self.atcore.AT_SetInt(self.handle, u"AOIHeight", c_uint64(size[1]))
+        self.atcore.AT_SetInt(self.handle, u"AOITop", c_uint64(lt[1]))
+        
+    def setExposureTime(self, time):
+        """
+        Set the exposure time. It's automatically adapted to a working one.
+        time (0<float): exposure time in seconds
+        """
+        assert(0.0 < time)
+        self.atcore.AT_SetFloat(self.handle, u"ExposureTime",  c_double(time))
+        
+    def acquire(self, size, exp, binning=1):
+        """
+        Set up the camera and acquire one image at the best quality for the given
+          parameters. 
+        size (2-tuple int): Width and height of the image. It will centred
+         on the captor. It depends on the binning, so the same region as a size 
+         twice smaller if the binning is 2 instead of 1. It must be a allowed
+         resolution. TODO how to pass information on what is allowed?
+        exp (float): exposure time in second
+        binning (int 1, 2, 3, 4, or 8): how many pixels horizontally and vertically
+         are combined to create "super pixels"
+        return numpy.ndarray: an array containing the image
+        # TODO return also metadata
+        """
+        metadata = self.getCameraMetadata()
+        print metadata
+        # we are not in a hurry, so we can set up to the slowest and less noise
+        # parameters:
+        # slow read out
+        # rolling shutter (global avoids tearing but it's unlikely to happen)
+        # 16 bit - Gain 1+4 (maximum)
+        # SpuriousNoiseFilter On (this is actually a software based method)
+        self.setReadoutRate(550)
+        print self.atcore.GetEnumStringAvailable(self.handle, u"ElectronicShutteringMode")
+        self.atcore.AT_SetEnumString(self.handle, u"ElectronicShutteringMode", u"Rolling")
+        #print self.atcore.GetEnumStringAvailable(self.handle, u"PreAmpGainControl")
+        # TODO wrap this into something more "numeric"
+        # self.atcore.AT_SetEnumString(self.handle, u"PreAmpGainControl", u"Gain 1 Gain 4 (16 bit)")
+        self.atcore.AT_SetEnumString(self.handle, u"PreAmpGainChannel", u"Both")
+        # Allowed values depends on Gain
+        #self.atcore.AT_SetEnumString(self.handle, u"PixelEncoding", u"Mono16")
+        #self.atcore.AT_SetBool(self.handle, u"SpuriousNoiseFilter", 1)
+        self.atcore.AT_SetEnumString(self.handle, u"TriggerMode", u"Internal") # Software is much slower (0.05 instead of 0.015 s)
+
+        # Binning affects max size, so change first
+        #self.setBinning(binning)
+        metadata['Binning'] =  "%dx%d" % (binning, binning)
+        self.setSize(size)
+        self.setExposureTime(exp)
+        actual_exp = self.atcore.GetFloat(self.handle, u"ExposureTime")
+        metadata['Exposure Time'] =  str(actual_exp) # s
+        
+        print metadata
+        # actual size of a line in bytes (not pixel)
+        #stride = self.atcore.GetInt(self.handle, u"AOIStride")
+        stride = self.atcore.GetInt(self.handle, u"AOIWidth") * 2 # XXX
+
+        # Set up the buffers for containing each one image
+        image_size_bytes = self.atcore.GetInt(self.handle, u"ImageSizeBytes")
+        # the type of the buffer is important for the conversion to ndarray
+        cbuffer = (c_uint16 * (image_size_bytes / 2))() # empty array
+        self.atcore.AT_QueueBuffer(self.handle, cbuffer, image_size_bytes)
+        assert(addressof(cbuffer) % 8 == 0) # the SDK wants it aligned
+    
+        self.atcore.AT_Command(self.handle, u"AcquisitionStart")
+#       start = time.time()
+
+        pBuffer = POINTER(c_ubyte)() # null pointer to ubyte
+        BufferSize = c_int()
+        timeout = c_uint(int(round((exp + 1) * 1000))) # ms
+        self.atcore.AT_WaitBuffer(self.handle, byref(pBuffer), byref(BufferSize), timeout)
+#       print "Got image in", time.time() - start
+        assert(addressof(pBuffer.contents) == addressof(cbuffer))
+        # as_array() is a no-copy mechanism
+        #array = numpy.ctypeslib.as_array(cbuffer) # what's the type?
+        array = numpy.ctypeslib.as_array(cbuffer) # what's the type?
+        print array.shape, size, size[0] * size[1], (stride/2, size[1])
+        # reshape into an image (doesn't change anything in memory)
+        array.shape = (stride / 2, size[1])
+        # crop the array in case of stride (should not cause copy)
+        array = array[:size[0],:]
+    
+        self.atcore.AT_Command(self.handle, u"AcquisitionStop")
+        self.atcore.AT_Flush(self.handle)
+        return array
+    
+    # TODO del()
+    
+    @staticmethod
+    def scan():
+        """
+        List all the available cameras.
+        Note: it's not recommended to call this method when cameras are being used
+        return (set of 3-tuple: device number (int), name (string), max resolution (2-tuple int))
+        """
+        atcore = ATDLL("libatcore.so.3", RTLD_GLOBAL) # Global so that its sub-libraries can access it
+        # XXX what happens if we call this while it's already loaded?
+        atcore.AT_InitialiseLibrary()
+        dc = atcore.GetInt(ATDLL.HANDLE_SYSTEM, u"Device Count")
+        #print "found %d devices." % dc.value
+        
+        cameras = set()
+        for i in range(dc):
+            hndl = c_int()
+            atcore.AT_Open(i, byref(hndl))
+            model = atcore.GetString(hndl, u"CameraModel")
+            resolution = (atcore.GetInt(hndl, u"SensorWidth"),
+                          atcore.GetInt(hndl, u"SensorHeight"))
+            cameras.add((i, model, resolution))
+            atcore.AT_Close(hndl)
+            
+        atcore.AT_FinaliseLibrary()
+        return cameras
 
 def acquire(device, size, exp, binning=1):
     atcore = ATDLL("libatcore.so.3", RTLD_GLOBAL) # Global so that its sub-libraries can access it
@@ -183,6 +524,7 @@ def acquire(device, size, exp, binning=1):
 
         atcore.AT_SetEnumString(hndl, u"PreAmpGainControl", u"Gain 1 Gain 3 (16 bit)")
 
+    # The possible values for PixelEncoding 
     atcore.AT_IsWritable(hndl, u"PixelEncoding", byref(writable))
     print writable.value
     num_encoding = c_int()
@@ -193,7 +535,6 @@ def acquire(device, size, exp, binning=1):
         print i, encoding.value
 
     atcore.AT_SetEnumString(hndl, u"PixelEncoding", u"Mono16")
-    #atcore.AT_SetEnumIndex(hndl, u"PixelEncoding", 2)
 
 
     # Set up the buffers for containing each one image
@@ -257,7 +598,7 @@ def acquire(device, size, exp, binning=1):
 #    atcore.AT_Command(hndl, u"AcquisitionStop")
 #    print "Got second image", (time.time() - start)/2
 
-    atcore.AT_Flush(hndl)
+#    atcore.AT_Flush(hndl)
 
     # Close everything
     atcore.AT_Close(hndl)
@@ -265,14 +606,14 @@ def acquire(device, size, exp, binning=1):
     return (im, size, stride)
 
 
-scan()
-size = (1280,1080)
-raw, size, stride = acquire(0, size, 0.1, 1)
-print size
-i = Image.fromstring('F', size, raw, 'raw', 'F;16', stride, -1)
-#print list(i.getdata())
-c = i.convert("L")
-c.save("test.tiff", "TIFF")
+#print AndorCam.scan()
+#size = (1280,1080)
+#raw, size, stride = acquire(0, size, 0.1, 1)
+#print size
+#i = Image.fromstring('F', size, raw, 'raw', 'F;16', stride, -1)
+##print list(i.getdata())
+#c = i.convert("L")
+#c.save("test.tiff", "TIFF")
 
 # Neo encodings:
 #0 Mono12

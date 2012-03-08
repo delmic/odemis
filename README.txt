@@ -2,7 +2,7 @@ Delmic Acquisition Software for Andor Neo camera with SDK v3
 
 = Requirements = 
 Linux or Windows
-Andor SDK v3.3
+Andor SDK v3.3 (or later)
 Python (v2.7)
 
 = Basic usage =

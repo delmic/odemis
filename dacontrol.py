@@ -16,34 +16,27 @@ Delmic Acquisition Software is distributed in the hope that it will be useful, b
 You should have received a copy of the GNU General Public License along with Delmic Acquisition Software. If not, see http://www.gnu.org/licenses/.
 '''
 
-import sys
+import andorcam
 import argparse
+import sys
+from PIL import Image
 
-def run_self_test(port):
+def run_self_test(device):
     """
     Run self test on each detect controller of the network connected to the given
     serial port.
     port (string): name of the serial port
     return (boolean) True if all the tests passed, False otherwise
     """
-    ser = pi.PIRedStone.openSerialPort(port)
-    bus = pi.PIRedStone(ser)
-    adds = bus.scanNetwork()
-    if not adds:
-        print "No controller found."
-        return False
     
     passed = True
-    for add in adds:
-        cont = pi.PIRedStone(ser, add)
-        if cont.selfTest():
-            print "Controller %d: test passed." % add
-            passed = passed and True
-        else:
-            print "Controller %d: test failed." % add
-            passed = False
     
     return passed
+
+def scan():
+    cameras = andorcam.AndorCam.scan()
+    for i, name, res in sorted(cameras):
+        print "%d: %s (%dx%d)" % (i, name, res[0], res[1]) 
 
 def main(args):
     """
@@ -69,41 +62,50 @@ def main(args):
                         help="Height of the picture to acquire (in pixel).")
     cmd_grp.add_argument("--exp", "-e",  dest="exposure", type=float,
                         help="Exposure time (in second).")
-    cmd_grp.add_argument("--binning", "-b", dest="binning", type=int, # TODO 1 2 3 4 or 8 only
-                        help="Number of pixels to bin together when acquiring the picture. (Defaut is 1)")
+    cmd_grp.add_argument("--binning", "-b", dest="binning", type=int, default=1, # TODO 1 2 3 4 or 8 only
+                        help="Number of pixels to bin together when acquiring the picture. (Default is 1)")
     cmd_grp.add_argument("--output", "-o", dest="output_filename",
                         help="name of the file where the image should be saved. It is saved in TIFF format.")
 
     options = parser.parse_args(args[1:])
   
-
     # Test mode
     if options.test:
-        if run_self_test(options.port):
+        if run_self_test(options.device):
             print "Test passed."
             return 0
         else:
             print "Test failed."
             return 127
 
-    try:
-        stage = pi.StageRedStone(options.port, CONFIG_RS_SECOM_2)
-    except Exception, err:
-        print "Error while connecting to the motor controllers: " + str(err)
-        return 128
-    
-    if options.stop:
-        stage.stopMotion()
+    # List mode
+    if options.list:
+        scan()
         return 0
     
-    # move
-    positions = {}
-    if options.stage_x:
-        positions['x'] = options.stage_x * 1e-6 # µm -> m
-    if options.stage_y:
-        positions['y'] = options.stage_y * 1e-6 # µm -> m
-    stage.moveRel(positions, options.sync)
-
+    if options.width is None or options.height is None or options.exposure is None:
+        parser.error("you need to specify the width, height and exposure time.")
+    if not options.output_filename:
+        parser.error("name of the output file must be specified")
+    
+#    try:
+    camera = andorcam.AndorCam(options.device)
+#    except Exception, err:
+#        print "Error while connecting to the camera: " + str(err)
+#        return 128
+#    
+    # acquire an image
+    size = (options.width, options.height)
+    im = camera.acquire(size, options.exposure, options.binning)
+    
+    # Two memory copies for one conversion! because of the stride, fromarray() does as bad
+#    im = Image.fromstring('I', size, array.tostring(), 'raw', 'I;16', stride, -1)
+    #im = Image.frombuffer('I', size, cbuffers[curbuf], 'raw', 'I;16', stride, -1)
+    #pil_im = Image.fromarray(im)
+    pil_im = Image.fromstring('I', size, im.tostring(), 'raw', 'I;16', 0, -1)
+    pil_im = pil_im.convert("L") # 16bits TIFF are not well supported!
+    pil_im.save(options.output_filename, "TIFF") 
+    
     return 0
         
 if __name__ == '__main__':
