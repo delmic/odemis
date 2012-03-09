@@ -56,7 +56,6 @@ class ATDLL(CDLL):
     def GetString(self, hndl, prop):
         """
         Return a unicode string corresponding to the given property
-        hndl
         """
         len_str = c_int()
         self.AT_GetStringMaxLength(hndl, prop, byref(len_str))
@@ -67,6 +66,11 @@ class ATDLL(CDLL):
     def GetInt(self, hndl, prop):
         result = c_longlong()
         self.AT_GetInt(hndl, prop, byref(result))
+        return result.value
+    
+    def GetEnumIndex(self, hndl, prop):
+        result = c_longlong()
+        self.AT_GetEnumIndex(hndl, prop, byref(result))
         return result.value
     
     def GetIntMax(self, hndl, prop):
@@ -120,6 +124,14 @@ class ATDLL(CDLL):
         self.AT_IsWritable(hndl, prop, byref(writable))
         return (writable.value != 0)
     
+    def GetEnumStringByIndex(self, hndl, prop, index):
+        """
+        Return a unicode string corresponding to the given property and index
+        """
+        string = create_unicode_buffer(128) # no way to know the max size
+        self.AT_GetEnumStringByIndex(hndl, prop, index, string, len(string))
+        return string.value
+    
     def GetEnumStringAvailable(self, hndl, prop):
         """
         Return in a list the strings corresponding of each possible value of an enum
@@ -128,10 +140,8 @@ class ATDLL(CDLL):
         self.AT_GetEnumCount(hndl, prop, byref(num_values))
         result = []
         for i in range(num_values.value):
-            enum = create_unicode_buffer(128) # no way to know the max size
-            self.AT_GetEnumStringByIndex(hndl, prop, i, enum, len(enum))
-            result.append(enum.value)
-
+            result.append(self.GetEnumStringByIndex(hndl, prop, i))
+            
         return result
     
 class AndorCam(object):
@@ -193,15 +203,22 @@ class AndorCam(object):
         self.atcore.AT_SetEnumString(self.handle, u"FanSpeed", val)
         
         # TODO there is also a "SensorCooling" boolean property, no idea what it does!
-        
+    
+    def find_closest(self, val, l):
+        return min(l, key=lambda x:abs(x - val))
+
     def setReadoutRate(self, frequency):
         """
         frequency (100, 200, 280, 550): the pixel readout rate in MHz
         """
         assert((0 <= frequency))
+        # returns strings like u"550 MHz"
+        rates = self.atcore.GetEnumStringAvailable(self.handle, u"PixelReadoutRate")
+        values = (int(r.rstrip(u" MHz")) for r in rates)
+        closest = self.find_closest(frequency, values)
         # TODO handle the fact SimCam only accepts 550
-        print self.atcore.GetEnumStringAvailable(self.handle, u"PixelReadoutRate")
-        self.atcore.AT_SetEnumString(self.handle, u"PixelReadoutRate", u"%d MHz" % frequency)
+        #print self.atcore.GetEnumStringAvailable(self.handle, u"PixelReadoutRate")
+        self.atcore.AT_SetEnumString(self.handle, u"PixelReadoutRate", u"%d MHz" % closest)
         
     def setBinning(self, binning):
         """
@@ -279,19 +296,17 @@ class AndorCam(object):
             return
         
         # AOI
-#        ranges = (self.atcore.GetIntRanges(self.handle, "AOIWidth"),
-#                  self.atcore.GetIntRanges(self.handle, "AOIHeight"))
-        ranges = ((1,resolution[0]),
-                  (1,resolution[1]))
-                  
+        ranges = (self.atcore.GetIntRanges(self.handle, "AOIWidth"),
+                  self.atcore.GetIntRanges(self.handle, "AOIHeight"))
         assert((ranges[0][0] <= size[0]) and (size[0] <= ranges[0][1]) and
                (ranges[1][0] <= size[1]) and (size[1] <= ranges[1][1]))
         
-        # TODO check whether ranges[0][1] is 2592 or 2560, if 2592, it should be + 16
+        # TODO the Neo docs says "Sub images are all mid-point centered." 
+        # So it might require specific computation for the left/top ?
+        # TODO check whether on Neo ranges[0][1] is 2592 or 2560, if 2592, it should be + 16
         lt = ((ranges[0][1] - size[0]) / 2 + 1,
               (ranges[1][1] - size[1]) / 2 + 1)
 
-        # recommended order
         self.atcore.AT_SetInt(self.handle, u"AOIWidth", c_uint64(size[0]))
         self.atcore.AT_SetInt(self.handle, u"AOILeft", c_uint64(lt[0]))
         self.atcore.AT_SetInt(self.handle, u"AOIHeight", c_uint64(size[1]))
@@ -304,6 +319,61 @@ class AndorCam(object):
         """
         assert(0.0 < time)
         self.atcore.AT_SetFloat(self.handle, u"ExposureTime",  c_double(time))
+    
+    def _setupBestQuality(self):
+        """
+        Select parameters for the camera for the best quality
+        return metadata corresponding to the setup
+        """
+        metadata = {}
+        # we are not in a hurry, so we can set up to the slowest and less noise
+        # parameters:
+        # slow read out
+        # rolling shutter (global avoids tearing but it's unlikely to happen)
+        # 16 bit - Gain 1+4 (maximum)
+        # SpuriousNoiseFilter On (this is actually a software based method)
+        self.setReadoutRate(100)
+        ratei = self.atcore.GetEnumIndex(self.handle, u"PixelReadoutRate")
+        rate = self.atcore.GetEnumStringByIndex(self.handle, u"PixelReadoutRate", ratei) 
+        metadata['Pixel readout rate'] = rate
+        
+#        print self.atcore.GetEnumStringAvailable(self.handle, u"ElectronicShutteringMode")
+        self.atcore.AT_SetEnumString(self.handle, u"ElectronicShutteringMode", u"Rolling")
+        
+        #print self.atcore.GetEnumStringAvailable(self.handle, u"PreAmpGainControl")
+        if self.atcore.isImplemented(self.handle, u"PreAmpGainControl"):
+            # If not, we are on a SimCam so it doesn't matter
+            self.atcore.AT_SetEnumString(self.handle, u"PreAmpGainControl", u"Gain 1 Gain 4 (16 bit)")
+            
+#        self.atcore.AT_SetEnumString(self.handle, u"PreAmpGainSelector", u"Low")
+#        self.atcore.AT_SetEnumString(self.handle, u"PreAmpGain", u"x1")
+#        self.atcore.AT_SetEnumString(self.handle, u"PreAmpGainSelector", u"High")
+#        self.atcore.AT_SetEnumString(self.handle, u"PreAmpGain", u"x30")
+        # if "Both" => Mono12Coded 
+#        self.atcore.AT_SetEnumString(self.handle, u"PreAmpGainChannel", u"Low")
+
+        # Allowed values depends on Gain
+#        print self.atcore.GetEnumStringAvailable(self.handle, u"PixelEncoding")
+#        print self.atcore.GetEnumIndex(self.handle, u"PixelEncoding")
+        try:
+            self.atcore.AT_SetEnumString(self.handle, u"PixelEncoding", u"Mono16")
+            metadata['Bits per pixel'] = 16
+        except ATError:
+            # Fallback to 12 bits (represented on 16 bits)
+            try:
+                self.atcore.AT_SetEnumString(self.handle, u"PixelEncoding", u"Mono12")
+                metadata['Bits per pixel'] = 12
+            except ATError:
+                self.atcore.AT_SetEnumString(self.handle, u"PixelEncoding", u"Mono12Coded")
+                metadata['Bits per pixel'] = 12
+        
+        if self.atcore.isImplemented(self.handle, u"SpuriousNoiseFilter"):
+            self.atcore.AT_SetBool(self.handle, u"SpuriousNoiseFilter", 1)
+            metadata['Filter'] = "Spurious noise filter"
+        # Software is much slower than Internal (0.05 instead of 0.015 s)
+        self.atcore.AT_SetEnumString(self.handle, u"TriggerMode", u"Internal") 
+        
+        return metadata
         
     def acquire(self, size, exp, binning=1):
         """
@@ -320,24 +390,7 @@ class AndorCam(object):
         # TODO return also metadata
         """
         metadata = self.getCameraMetadata()
-        print metadata
-        # we are not in a hurry, so we can set up to the slowest and less noise
-        # parameters:
-        # slow read out
-        # rolling shutter (global avoids tearing but it's unlikely to happen)
-        # 16 bit - Gain 1+4 (maximum)
-        # SpuriousNoiseFilter On (this is actually a software based method)
-        self.setReadoutRate(550)
-        print self.atcore.GetEnumStringAvailable(self.handle, u"ElectronicShutteringMode")
-        self.atcore.AT_SetEnumString(self.handle, u"ElectronicShutteringMode", u"Rolling")
-        #print self.atcore.GetEnumStringAvailable(self.handle, u"PreAmpGainControl")
-        # TODO wrap this into something more "numeric"
-        # self.atcore.AT_SetEnumString(self.handle, u"PreAmpGainControl", u"Gain 1 Gain 4 (16 bit)")
-        self.atcore.AT_SetEnumString(self.handle, u"PreAmpGainChannel", u"Both")
-        # Allowed values depends on Gain
-        #self.atcore.AT_SetEnumString(self.handle, u"PixelEncoding", u"Mono16")
-        #self.atcore.AT_SetBool(self.handle, u"SpuriousNoiseFilter", 1)
-        self.atcore.AT_SetEnumString(self.handle, u"TriggerMode", u"Internal") # Software is much slower (0.05 instead of 0.015 s)
+        metadata.update(self._setupBestQuality())
 
         # Binning affects max size, so change first
         #self.setBinning(binning)
@@ -349,13 +402,23 @@ class AndorCam(object):
         
         print metadata
         # actual size of a line in bytes (not pixel)
-        #stride = self.atcore.GetInt(self.handle, u"AOIStride")
-        stride = self.atcore.GetInt(self.handle, u"AOIWidth") * 2 # XXX
+        try:
+            stride = self.atcore.GetInt(self.handle, u"AOIStride")
+        except ATError:
+            # SimCam doesn't support stride
+            stride = self.atcore.GetInt(self.handle, u"AOIWidth") * 2
 
         # Set up the buffers for containing each one image
         image_size_bytes = self.atcore.GetInt(self.handle, u"ImageSizeBytes")
+        # TODO: it might not always be true if camera appends some metadata
+        # => Need to allocate image_size_bytes and read only the beginning
+        assert(image_size_bytes == size[1] * stride)
+        
         # the type of the buffer is important for the conversion to ndarray
-        cbuffer = (c_uint16 * (image_size_bytes / 2))() # empty array
+        #cbuffer = (c_uint16 * (image_size_bytes / 2))() # empty array
+        ndbuffer = numpy.empty(shape=(size[1], stride / 2), dtype="uint16")
+        cbuffer = numpy.ctypeslib.as_ctypes(ndbuffer)
+        
         self.atcore.AT_QueueBuffer(self.handle, cbuffer, image_size_bytes)
         assert(addressof(cbuffer) % 8 == 0) # the SDK wants it aligned
     
@@ -368,14 +431,15 @@ class AndorCam(object):
         self.atcore.AT_WaitBuffer(self.handle, byref(pBuffer), byref(BufferSize), timeout)
 #       print "Got image in", time.time() - start
         assert(addressof(pBuffer.contents) == addressof(cbuffer))
+        # Generates a warning about PEP 3118 buffer format string, but it should 
+        # not be a problem.
         # as_array() is a no-copy mechanism
         #array = numpy.ctypeslib.as_array(cbuffer) # what's the type?
-        array = numpy.ctypeslib.as_array(cbuffer) # what's the type?
-        print array.shape, size, size[0] * size[1], (stride/2, size[1])
+        #print ndbuffer.shape, size, size[0] * size[1], (stride/2, size[1])
         # reshape into an image (doesn't change anything in memory)
-        array.shape = (stride / 2, size[1])
+        #array.shape = (stride / 2, size[1])
         # crop the array in case of stride (should not cause copy)
-        array = array[:size[0],:]
+        array = ndbuffer[:,:size[0]]
     
         self.atcore.AT_Command(self.handle, u"AcquisitionStop")
         self.atcore.AT_Flush(self.handle)
@@ -409,202 +473,201 @@ class AndorCam(object):
         atcore.AT_FinaliseLibrary()
         return cameras
 
-def acquire(device, size, exp, binning=1):
-    atcore = ATDLL("libatcore.so.3", RTLD_GLOBAL) # Global so that its sub-libraries can access it
-    atcore.AT_InitialiseLibrary()
-
-    hndl = c_int()
-    atcore.AT_Open(device, byref(hndl))
-    
-    
-    # It affect max size, so before everything
-    binning_str = u"%dx%d" % (binning, binning)
-    atcore.AT_SetEnumString(hndl, u"AOIBinning", binning_str)
-
-    # Set size
-    maxsize = (c_uint64(), c_uint64())
-    atcore.AT_GetIntMax(hndl, u"AOIWidth", byref(maxsize[0]))
-    atcore.AT_GetIntMax(hndl, u"AOIHeight", byref(maxsize[1]))
-    print maxsize[0].value, maxsize[1].value
-    minlt = (c_uint64(), c_uint64())
-    atcore.AT_GetIntMax(hndl, u"AOITop", byref(minlt[0]))
-    atcore.AT_GetIntMax(hndl, u"AOILeft", byref(minlt[1]))
-    print minlt[0].value, minlt[1].value
-    
-    cursize = (c_uint64(), c_uint64())
-    atcore.AT_GetInt(hndl, u"AOIWidth", byref(cursize[0]))
-    atcore.AT_GetInt(hndl, u"AOIHeight", byref(cursize[1]))
-    print cursize[0].value, cursize[1].value
-
-    implemented = c_int()
-    atcore.AT_IsImplemented(hndl, u"AOIWidth", byref(implemented))
-    print implemented.value
-    writable = c_int()
-    atcore.AT_IsWritable(hndl, u"AOIWidth", byref(writable))
-    print writable.value
-
-    if writable.value != 0:
-        lt = ((maxsize[0].value - size[0]) / 2 + 1, (maxsize[1].value - size[1]) / 2 + 1)
-        print lt
-
-        # recommended order
-        atcore.AT_SetInt(hndl, u"AOIWidth", c_uint64(size[0]))
-        atcore.AT_SetInt(hndl, u"AOILeft", c_uint64(lt[0]))
-        atcore.AT_SetInt(hndl, u"AOIHeight", c_uint64(size[1]))
-        atcore.AT_SetInt(hndl, u"AOITop", c_uint64(lt[1]))
-    else:
-        size = (cursize[0].value, cursize[1].value)
-    
-    cstride = c_uint64()    
-    atcore.AT_GetInt(hndl, u"AOIStride", byref(cstride)) # = size of a line in bytes (not pixel)
-    stride = cstride.value
-    #size = (12,5)
-
-    # set exposure time (which is automatically adapted to a working one)
-    newExposure = c_double(exp)
-    atcore.AT_SetFloat(hndl, u"ExposureTime", newExposure)
-    actualExposure =  c_double()
-    atcore.AT_GetFloat(hndl, u"ExposureTime", byref(actualExposure))
-    print "exposure time:", actualExposure.value
-    
-    # Stop making too much noise
-
-    atcore.AT_SetFloat(hndl, u"TargetSensorTemperature", c_double(-15))
-    atcore.AT_IsImplemented(hndl, u"FanSpeed", byref(implemented))
-    if implemented.value != 0:
-        atcore.AT_IsWritable(hndl, u"FanSpeed", byref(writable))
-        print writable.value
-        num_gain = c_int()
-        atcore.AT_GetEnumCount(hndl, u"FanSpeed", byref(num_gain))
-        for i in range(num_gain.value):
-            gain = create_unicode_buffer(128)
-            atcore.AT_GetEnumStringByIndex(hndl, u"FanSpeed", i, gain, len(gain))
-            print i, gain.value
-
-        atcore.AT_SetEnumString(hndl, u"FanSpeed", u"Low")
-
-    # Set up the triggermode
-    atcore.AT_IsImplemented(hndl, u"TriggerMode", byref(implemented))
-    if implemented.value != 0:
-        atcore.AT_IsWritable(hndl, u"TriggerMode", byref(writable))
-        print writable.value
-        num_gain = c_int()
-        atcore.AT_GetEnumCount(hndl, u"TriggerMode", byref(num_gain))
-        for i in range(num_gain.value):
-            gain = create_unicode_buffer(128)
-            atcore.AT_GetEnumStringByIndex(hndl, u"TriggerMode", i, gain, len(gain))
-            print i, gain.value
-
-        atcore.AT_SetEnumString(hndl, u"TriggerMode", u"Internal") # Software is much slower (0.05 instead of 0.015 s)
-    
-    atcore.AT_IsImplemented(hndl, u"CycleMode", byref(implemented))
-    if implemented.value != 0:
-        atcore.AT_IsWritable(hndl, u"CycleMode", byref(writable))
-        print writable.value
-        num_gain = c_int()
-        atcore.AT_GetEnumCount(hndl, u"CycleMode", byref(num_gain))
-        for i in range(num_gain.value):
-            gain = create_unicode_buffer(128)
-            atcore.AT_GetEnumStringByIndex(hndl, u"CycleMode", i, gain, len(gain))
-            print i, gain.value
-
-        atcore.AT_SetEnumString(hndl, u"CycleMode", u"Continuous")
-
-    # Set up the encoding
-    atcore.AT_IsImplemented(hndl, u"PreAmpGainControl", byref(implemented))
-    if implemented.value != 0:
-        atcore.AT_IsWritable(hndl, u"PreAmpGainControl", byref(writable))
-        print writable.value
-        num_gain = c_int()
-        atcore.AT_GetEnumCount(hndl, u"PreAmpGainControl", byref(num_gain))
-        for i in range(num_gain.value):
-            gain = create_unicode_buffer(128)
-            atcore.AT_GetEnumStringByIndex(hndl, u"PreAmpGainControl", i, gain, len(gain))
-            print i, gain.value
-
-        atcore.AT_SetEnumString(hndl, u"PreAmpGainControl", u"Gain 1 Gain 3 (16 bit)")
-
-    # The possible values for PixelEncoding 
-    atcore.AT_IsWritable(hndl, u"PixelEncoding", byref(writable))
-    print writable.value
-    num_encoding = c_int()
-    atcore.AT_GetEnumCount(hndl, u"PixelEncoding", byref(num_encoding))
-    for i in range(num_encoding.value):
-        encoding = create_unicode_buffer(128)
-        atcore.AT_GetEnumStringByIndex(hndl, u"PixelEncoding", i, encoding, len(encoding))
-        print i, encoding.value
-
-    atcore.AT_SetEnumString(hndl, u"PixelEncoding", u"Mono16")
-
-
-    # Set up the buffers for containing each one image
-    ImageSizeBytes = c_uint64()
-    atcore.AT_GetInt(hndl, u"ImageSizeBytes", byref(ImageSizeBytes))
-    cbuffers = []
-    numbuff = 3
-    for i in range(numbuff):
-        cbuffer = (c_uint16 * (ImageSizeBytes.value / 2))() # empty array
-        atcore.AT_QueueBuffer(hndl, cbuffer, ImageSizeBytes.value)
-        print addressof(cbuffer)
-        assert(addressof(cbuffer) % 8 == 0) # check alignment
-        cbuffers.append(cbuffer)
-
-    print "Starting acquisition"
-    pBuffer = POINTER(c_uint16)() # null pointer to ubyte
-    BufferSize = c_int()
-    timeout = c_uint(int(round((exp + 1) * 1000))) # ms
-    atcore.AT_Command(hndl, u"AcquisitionStart")
-    #atcore.AT_Command(hndl, u"SoftwareTrigger")
-    curbuf = 0
-    for i in range(5):
-        # Get one image
-        start = time.time()
-
-        atcore.AT_WaitBuffer(hndl, byref(pBuffer), byref(BufferSize), timeout)
-        print "Got image in", time.time() - start
-        #atcore.AT_Command(hndl, u"SoftwareTrigger")
-        print addressof(pBuffer.contents), addressof(cbuffers[curbuf])
-        #im = string_at(pBuffer, BufferSize.value) # seems to copy the data :-(
-        # as_array() is a no-copy mechanism
-        array = numpy.ctypeslib.as_array(cbuffers[curbuf]) # what's the type?
-        print array.shape, size, size[0] * size[1]
-        #array.shape = (stride/2, size[1])
-        #print array[136]
-        #im = Image.fromarray(array)
-        # Two memory copies for one conversion! because of the stride, fromarray() does as bad
-        im = Image.fromstring('I', size, array.tostring(), 'raw', 'I;16', stride, -1)
-        #im = Image.frombuffer('I', size, cbuffers[curbuf], 'raw', 'I;16', stride, -1)
-        im.convert("L").save("test%d.tiff" % i, "TIFF") # 16bits TIFF are not well supported!
-        #print "buffer", BufferSize.value, "=", pBuffer[0]
-        print "Record image in", time.time() - start
-        # Be sure not to queue the buffer before we absolutely don't need the data
-        atcore.AT_QueueBuffer(hndl, cbuffers[curbuf], ImageSizeBytes.value)
-        curbuf = (curbuf + 1) % len(cbuffers)
-
-        print "Process image in", time.time() - start
-
-    atcore.AT_Command(hndl, u"AcquisitionStop")
-    atcore.AT_Flush(hndl)
-
-    # Get another image
-#    atcore.AT_QueueBuffer(hndl, cbuffer, ImageSizeBytes.value)
+#def acquire(device, size, exp, binning=1):
+#    atcore = ATDLL("libatcore.so.3", RTLD_GLOBAL) # Global so that its sub-libraries can access it
+#    atcore.AT_InitialiseLibrary()
+#
+#    hndl = c_int()
+#    atcore.AT_Open(device, byref(hndl))
+#    
+#    
+#    # It affect max size, so before everything
+#    binning_str = u"%dx%d" % (binning, binning)
+#    atcore.AT_SetEnumString(hndl, u"AOIBinning", binning_str)
+#
+#    # Set size
+#    maxsize = (c_uint64(), c_uint64())
+#    atcore.AT_GetIntMax(hndl, u"AOIWidth", byref(maxsize[0]))
+#    atcore.AT_GetIntMax(hndl, u"AOIHeight", byref(maxsize[1]))
+#    print maxsize[0].value, maxsize[1].value
+#    minlt = (c_uint64(), c_uint64())
+#    atcore.AT_GetIntMax(hndl, u"AOITop", byref(minlt[0]))
+#    atcore.AT_GetIntMax(hndl, u"AOILeft", byref(minlt[1]))
+#    print minlt[0].value, minlt[1].value
+#    
+#    cursize = (c_uint64(), c_uint64())
+#    atcore.AT_GetInt(hndl, u"AOIWidth", byref(cursize[0]))
+#    atcore.AT_GetInt(hndl, u"AOIHeight", byref(cursize[1]))
+#    print cursize[0].value, cursize[1].value
+#
+#    implemented = c_int()
+#    atcore.AT_IsImplemented(hndl, u"AOIWidth", byref(implemented))
+#    print implemented.value
+#    writable = c_int()
+#    atcore.AT_IsWritable(hndl, u"AOIWidth", byref(writable))
+#    print writable.value
+#
+#    if writable.value != 0:
+#        lt = ((maxsize[0].value - size[0]) / 2 + 1, (maxsize[1].value - size[1]) / 2 + 1)
+#        print lt
+#
+#        # recommended order
+#        atcore.AT_SetInt(hndl, u"AOIWidth", c_uint64(size[0]))
+#        atcore.AT_SetInt(hndl, u"AOILeft", c_uint64(lt[0]))
+#        atcore.AT_SetInt(hndl, u"AOIHeight", c_uint64(size[1]))
+#        atcore.AT_SetInt(hndl, u"AOITop", c_uint64(lt[1]))
+#    else:
+#        size = (cursize[0].value, cursize[1].value)
+#    
+#    cstride = c_uint64()    
+#    atcore.AT_GetInt(hndl, u"AOIStride", byref(cstride)) # = size of a line in bytes (not pixel)
+#    stride = cstride.value
+#    #size = (12,5)
+#
+#    # set exposure time (which is automatically adapted to a working one)
+#    newExposure = c_double(exp)
+#    atcore.AT_SetFloat(hndl, u"ExposureTime", newExposure)
+#    actualExposure =  c_double()
+#    atcore.AT_GetFloat(hndl, u"ExposureTime", byref(actualExposure))
+#    print "exposure time:", actualExposure.value
+#    
+#    # Stop making too much noise
+#
+#    atcore.AT_SetFloat(hndl, u"TargetSensorTemperature", c_double(-15))
+#    atcore.AT_IsImplemented(hndl, u"FanSpeed", byref(implemented))
+#    if implemented.value != 0:
+#        atcore.AT_IsWritable(hndl, u"FanSpeed", byref(writable))
+#        print writable.value
+#        num_gain = c_int()
+#        atcore.AT_GetEnumCount(hndl, u"FanSpeed", byref(num_gain))
+#        for i in range(num_gain.value):
+#            gain = create_unicode_buffer(128)
+#            atcore.AT_GetEnumStringByIndex(hndl, u"FanSpeed", i, gain, len(gain))
+#            print i, gain.value
+#
+#        atcore.AT_SetEnumString(hndl, u"FanSpeed", u"Low")
+#
+#    # Set up the triggermode
+#    atcore.AT_IsImplemented(hndl, u"TriggerMode", byref(implemented))
+#    if implemented.value != 0:
+#        atcore.AT_IsWritable(hndl, u"TriggerMode", byref(writable))
+#        print writable.value
+#        num_gain = c_int()
+#        atcore.AT_GetEnumCount(hndl, u"TriggerMode", byref(num_gain))
+#        for i in range(num_gain.value):
+#            gain = create_unicode_buffer(128)
+#            atcore.AT_GetEnumStringByIndex(hndl, u"TriggerMode", i, gain, len(gain))
+#            print i, gain.value
+#
+#        atcore.AT_SetEnumString(hndl, u"TriggerMode", u"Internal") # Software is much slower (0.05 instead of 0.015 s)
+#    
+#    atcore.AT_IsImplemented(hndl, u"CycleMode", byref(implemented))
+#    if implemented.value != 0:
+#        atcore.AT_IsWritable(hndl, u"CycleMode", byref(writable))
+#        print writable.value
+#        num_gain = c_int()
+#        atcore.AT_GetEnumCount(hndl, u"CycleMode", byref(num_gain))
+#        for i in range(num_gain.value):
+#            gain = create_unicode_buffer(128)
+#            atcore.AT_GetEnumStringByIndex(hndl, u"CycleMode", i, gain, len(gain))
+#            print i, gain.value
+#
+#        atcore.AT_SetEnumString(hndl, u"CycleMode", u"Continuous")
+#
+#    # Set up the encoding
+#    atcore.AT_IsImplemented(hndl, u"PreAmpGainControl", byref(implemented))
+#    if implemented.value != 0:
+#        atcore.AT_IsWritable(hndl, u"PreAmpGainControl", byref(writable))
+#        print writable.value
+#        num_gain = c_int()
+#        atcore.AT_GetEnumCount(hndl, u"PreAmpGainControl", byref(num_gain))
+#        for i in range(num_gain.value):
+#            gain = create_unicode_buffer(128)
+#            atcore.AT_GetEnumStringByIndex(hndl, u"PreAmpGainControl", i, gain, len(gain))
+#            print i, gain.value
+#
+#        atcore.AT_SetEnumString(hndl, u"PreAmpGainControl", u"Gain 1 Gain 3 (16 bit)")
+#
+#    # The possible values for PixelEncoding 
+#    atcore.AT_IsWritable(hndl, u"PixelEncoding", byref(writable))
+#    print writable.value
+#    num_encoding = c_int()
+#    atcore.AT_GetEnumCount(hndl, u"PixelEncoding", byref(num_encoding))
+#    for i in range(num_encoding.value):
+#        encoding = create_unicode_buffer(128)
+#        atcore.AT_GetEnumStringByIndex(hndl, u"PixelEncoding", i, encoding, len(encoding))
+#        print i, encoding.value
+#
+#    atcore.AT_SetEnumString(hndl, u"PixelEncoding", u"Mono16")
+#
+#
+#    # Set up the buffers for containing each one image
+#    ImageSizeBytes = c_uint64()
+#    atcore.AT_GetInt(hndl, u"ImageSizeBytes", byref(ImageSizeBytes))
+#    cbuffers = []
+#    numbuff = 3
+#    for i in range(numbuff):
+#        cbuffer = (c_uint16 * (ImageSizeBytes.value / 2))() # empty array
+#        atcore.AT_QueueBuffer(hndl, cbuffer, ImageSizeBytes.value)
+#        print addressof(cbuffer)
+#        assert(addressof(cbuffer) % 8 == 0) # check alignment
+#        cbuffers.append(cbuffer)
+#
+#    print "Starting acquisition"
+#    pBuffer = POINTER(c_uint16)() # null pointer to ubyte
+#    BufferSize = c_int()
+#    timeout = c_uint(int(round((exp + 1) * 1000))) # ms
 #    atcore.AT_Command(hndl, u"AcquisitionStart")
-#    atcore.AT_WaitBuffer(hndl, byref(pBuffer), byref(BufferSize), timeout)
-    
-#    print addressof(pBuffer.contents), addressof(cbuffer)
-#    im = string_at(pBuffer, BufferSize.value) # seems the only way to get pythonic raw data
-#    print "buffer", BufferSize.value, "=", pBuffer[0]
-    
+#    #atcore.AT_Command(hndl, u"SoftwareTrigger")
+#    curbuf = 0
+#    for i in range(5):
+#        # Get one image
+#        start = time.time()
+#
+#        atcore.AT_WaitBuffer(hndl, byref(pBuffer), byref(BufferSize), timeout)
+#        print "Got image in", time.time() - start
+#        #atcore.AT_Command(hndl, u"SoftwareTrigger")
+#        print addressof(pBuffer.contents), addressof(cbuffers[curbuf])
+#        #im = string_at(pBuffer, BufferSize.value) # seems to copy the data :-(
+#        # as_array() is a no-copy mechanism
+#        array = numpy.ctypeslib.as_array(cbuffers[curbuf]) # what's the type?
+#        print array.shape, size, size[0] * size[1]
+#        #array.shape = (stride/2, size[1])
+#        #print array[136]
+#        #im = Image.fromarray(array)
+#        # Two memory copies for one conversion! because of the stride, fromarray() does as bad
+#        im = Image.fromstring('I', size, array.tostring(), 'raw', 'I;16', stride, -1)
+#        #im = Image.frombuffer('I', size, cbuffers[curbuf], 'raw', 'I;16', stride, -1)
+#        im.convert("L").save("test%d.tiff" % i, "TIFF") # 16bits TIFF are not well supported!
+#        #print "buffer", BufferSize.value, "=", pBuffer[0]
+#        print "Record image in", time.time() - start
+#        # Be sure not to queue the buffer before we absolutely don't need the data
+#        atcore.AT_QueueBuffer(hndl, cbuffers[curbuf], ImageSizeBytes.value)
+#        curbuf = (curbuf + 1) % len(cbuffers)
+#
+#        print "Process image in", time.time() - start
+#
 #    atcore.AT_Command(hndl, u"AcquisitionStop")
-#    print "Got second image", (time.time() - start)/2
-
 #    atcore.AT_Flush(hndl)
-
-    # Close everything
-    atcore.AT_Close(hndl)
-    atcore.AT_FinaliseLibrary()
-    return (im, size, stride)
-
+#
+#    # Get another image
+##    atcore.AT_QueueBuffer(hndl, cbuffer, ImageSizeBytes.value)
+##    atcore.AT_Command(hndl, u"AcquisitionStart")
+##    atcore.AT_WaitBuffer(hndl, byref(pBuffer), byref(BufferSize), timeout)
+#    
+##    print addressof(pBuffer.contents), addressof(cbuffer)
+##    im = string_at(pBuffer, BufferSize.value) # seems the only way to get pythonic raw data
+##    print "buffer", BufferSize.value, "=", pBuffer[0]
+#    
+##    atcore.AT_Command(hndl, u"AcquisitionStop")
+##    print "Got second image", (time.time() - start)/2
+#
+##    atcore.AT_Flush(hndl)
+#
+#    # Close everything
+#    atcore.AT_Close(hndl)
+#    atcore.AT_FinaliseLibrary()
+#    return (im, size, stride)
 
 #print AndorCam.scan()
 #size = (1280,1080)

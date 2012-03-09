@@ -20,6 +20,7 @@ import andorcam
 import argparse
 import sys
 from PIL import Image
+from osgeo import gdal_array
 
 def run_self_test(device):
     """
@@ -98,14 +99,14 @@ def main(args):
     size = (options.width, options.height)
     im = camera.acquire(size, options.exposure, options.binning)
     
-    # Two memory copies for one conversion! because of the stride, fromarray() does as bad
-#    im = Image.fromstring('I', size, array.tostring(), 'raw', 'I;16', stride, -1)
-    #im = Image.frombuffer('I', size, cbuffers[curbuf], 'raw', 'I;16', stride, -1)
-    #pil_im = Image.fromarray(im)
-    pil_im = Image.fromstring('I', size, im.tostring(), 'raw', 'I;16', 0, -1)
-    pil_im = pil_im.convert("L") # 16bits TIFF are not well supported!
-    pil_im.save(options.output_filename, "TIFF") 
+    ## Two memory copies for one conversion! because of the stride, fromarray() does as bad
+    ##pil_im = Image.fromarray(im)
+    #pil_im = Image.fromstring('I', size, im.tostring(), 'raw', 'I;16', 0, -1)
+    ## 16bits files are converted to 32 bit float TIFF with PIL
+    #pil_im.save(options.output_filename, "TIFF") 
     
+    gdal_array.SaveArray(im, options.output_filename, "GTiff")
+
     return 0
         
 if __name__ == '__main__':

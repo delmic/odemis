@@ -2,7 +2,7 @@ Delmic Acquisition Software for Andor Neo camera with SDK v3
 
 = Requirements = 
 Linux or Windows
-Andor SDK v3.3 (or later)
+Andor SDK v3.3 (or later) -- on Linux, the bitflow driver has to be reinstalled (recompiled) each time the kernel is updated.
 Python (v2.7)
 
 = Basic usage =
