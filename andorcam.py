@@ -17,9 +17,8 @@ You should have received a copy of the GNU General Public License along with Del
 '''
 
 from ctypes import *
-from PIL import Image
-import time
 import numpy
+import os
 
 class ATError(Exception):
     pass
@@ -42,7 +41,11 @@ class ATDLL(CDLL):
         Follows the ctypes.errcheck callback convention
         """
         if result != 0:
-            raise ATError("Call to %s failed with error code %d" %
+            if result in ATDLL.err_code:
+                raise ATError("Call to %s failed with error code %d: %s" %
+                               (str(func.__name__), result, ATDLL.err_code[result]))
+            else:
+                raise ATError("Call to %s failed with unknown error code %d" %
                                (str(func.__name__), result))
         return result
 
@@ -144,6 +147,56 @@ class ATDLL(CDLL):
             
         return result
     
+    err_code = {
+1: """AT_ERR_NONINITIALISED
+ Function called with an uninitialised handle""",
+2: """AT_ERR_NOTIMPLEMENTED
+ Feature has not been implemented for the chosen camera""",
+3: """AT_ERR_READONLY
+ Feature is read only""",
+4: """AT_ERR_NOTREADABLE
+ Feature is currently not readable""",
+5: """AT_ERR_NOTWRITABLE
+ Feature is currently not writable""",
+6: """AT_ERR_OUTOFRANGE
+ Value is outside the maximum and minimum limits""",
+7: """AT_ERR_INDEXNOTAVAILABLE
+ Index is currently not available""",
+8: """AT_ERR_INDEXNOTIMPLEMENTED
+ Index is not implemented for the chosen camera""",
+9: """AT_ERR_#EXCEEDEDMAXSTRINGLENGTH
+ String value provided exceeds the maximum allowed length""",
+10: """AT_ERR_CONNECTION
+ Error connecting to or disconnecting from hardware""",
+11: """AT_ERR_NODATA""",
+12: """AT_ERR_INVALIDHANDLE""",
+13: """AT_ERR_TIMEDOUT
+ The AT_WaitBuffer function timed out while waiting for data arrive in output 
+ queue""",
+14: """AT_ERR_BUFFERFULL
+ The input queue has reached its capacity""",
+15: """AT_ERR_INVALIDSIZE
+ The size of a queued buffer did not match the frame size""",
+16: """AT_ERR_INVALIDALIGNMENT
+ A queued buffer was not aligned on an 8-byte boundary""",
+17: """AT_ERR_COMM
+ An error has occurred while communicating with hardware""",
+18: """AT_ERR_STRINGNOTAVAILABLE
+ Index / String is not available""",
+19: """AT_ERR_STRINGNOTIMPLEMENTED
+ Index / String is not implemented for the chosen camera""",
+20: """AT_ERR_NULL_FEATURE""",
+21: """AT_ERR_NULL_HANDLE
+ Null device handle passed to function""",
+# All kind of null pointer passed
+38: """AT_ERR_DEVICEINUSE
+ Function failed to connect to a device because it is already being used""",
+100: """AT_ERR_HARDWARE_OVERFLOW
+ The software was not able to retrieve data from the card or camera fast enough
+ to avoid the internal hardware buffer bursting.""",
+}
+
+    
 class AndorCam(object):
     """
     Represents one andor camera and provide all the basic interfaces typical of
@@ -157,8 +210,12 @@ class AndorCam(object):
         device (int): number of the device to open, as defined by Andor, cd scan()
         Raise an exception if the device cannot be opened.
         """
-        # Global so that its sub-libraries can access it
-        self.atcore = ATDLL("libatcore.so.3", RTLD_GLOBAL) 
+        if os.name == "nt":
+            self.atcore = windll.LoadLibrary('libatcore.dll') # TODO check it works
+        else:
+            # Global so that its sub-libraries can access it
+            self.atcore = ATDLL("libatcore.so.3", RTLD_GLOBAL)
+             
         self.atcore.AT_InitialiseLibrary()
         
         self.handle = c_int()
@@ -225,6 +282,7 @@ class AndorCam(object):
         binning (int 1, 2, 3, 4, or 8): how many pixels horizontally and vertically
          are combined to create "super pixels"
         Note: super pixels are always square
+        return (tuple): metadata corresponding to the setup
         """
         values = [1, 2, 3, 4, 8]
         assert(binning in values)
@@ -234,10 +292,23 @@ class AndorCam(object):
             # Typically for the Neo
             binning_str = u"%dx%d" % (binning, binning)
             self.atcore.AT_SetEnumString(self.handle, u"AOIBinning", binning_str)
-        else:
-            # Typically for the simcam
-            self.atcore.AT_SetInt(self.handle, u"AOIHBin", c_longlong(binning))
-            self.atcore.AT_SetInt(self.handle, u"AOIVBin", c_longlong(binning))
+        elif self.atcore.isImplemented(self.handle, u"AOIHBin"):
+            if self.atcore.isWritable(self.handle, u"AOIHBin"):
+                self.atcore.AT_SetInt(self.handle, u"AOIHBin", c_longlong(binning))
+                self.atcore.AT_SetInt(self.handle, u"AOIVBin", c_longlong(binning))
+            else:
+                # Typically for the simcam
+                act_binning = (self.atcore.GetInt(self.handle, u"AOIHBin"),
+                               self.atcore.GetInt(self.handle, u"AOIVBin"))
+                if act_binning != (binning, binning):
+                    raise IOError("AndorCam: Requested binning " + 
+                                  str((binning, binning)) + 
+                                  " does not match fixed binning " +
+                                  str(act_binning))
+            
+        metadata = {}
+        metadata['Binning'] =  "%dx%d" % (binning, binning)
+        return metadata
     
     def getCameraMetadata(self):
         """
@@ -247,27 +318,27 @@ class AndorCam(object):
         """
         metadata = {}
         model = self.atcore.GetString(self.handle, u"CameraModel")
-        metadata["Camera Name"] = model
+        metadata["Camera name"] = model
         # TODO there seems to be a bug in SimCam v3.1: => check v3.3
 #        self.atcore.isImplemented(self.handle, u"SerialNumber") return true
 #        but self.atcore.GetInt(self.handle, u"SerialNumber") fail with error code 2 = AT_ERR_NOTIMPLEMENTED
         try:
             serial = self.atcore.GetInt(self.handle, u"SerialNumber")
-            metadata["Camera Serial"] = str(serial)
+            metadata["Camera serial"] = str(serial)
         except ATError:
             pass # unknown value
         
         try:
             firmware = self.atcore.GetString(self.handle, u"FirmwareVersion") 
-            metadata["Camera Version"] = "firmware: '%s', driver:''" % firmware # TODO driver
+            metadata["Camera version"] = "firmware: '%s', driver:''" % firmware # TODO driver
         except ATError:
             pass # unknown value
         
         try:
             psize = (self.atcore.GetFloat(self.handle, u"PixelWidth"),
                      self.atcore.GetFloat(self.handle, u"PixelHeight"))
-            metadata["Captor Pixel Width"] = str(psize[0] * 1e6) # m
-            metadata["Captor Pixel Height"] = str(psize[1] * 1e6) # m
+            metadata["Captor pixel width"] = str(psize[0] * 1e6) # m
+            metadata["Captor pixel height"] = str(psize[1] * 1e6) # m
         except ATError:
             pass # unknown value
         
@@ -316,14 +387,20 @@ class AndorCam(object):
         """
         Set the exposure time. It's automatically adapted to a working one.
         time (0<float): exposure time in seconds
+        return (tuple): metadata corresponding to the setup
         """
         assert(0.0 < time)
         self.atcore.AT_SetFloat(self.handle, u"ExposureTime",  c_double(time))
+        
+        metadata = {}
+        actual_exp = self.atcore.GetFloat(self.handle, u"ExposureTime")
+        metadata["Exposure time"] =  str(actual_exp) # s
+        return metadata
     
     def _setupBestQuality(self):
         """
         Select parameters for the camera for the best quality
-        return metadata corresponding to the setup
+        return (tuple): metadata corresponding to the setup
         """
         metadata = {}
         # we are not in a hurry, so we can set up to the slowest and less noise
@@ -385,22 +462,18 @@ class AndorCam(object):
          resolution. TODO how to pass information on what is allowed?
         exp (float): exposure time in second
         binning (int 1, 2, 3, 4, or 8): how many pixels horizontally and vertically
-         are combined to create "super pixels"
-        return numpy.ndarray: an array containing the image
-        # TODO return also metadata
+          are combined to create "super pixels"
+        return (2-tuple: numpy.ndarray, metadata): an array containing the image,
+          and a dict (string -> base types) containing the metadata
         """
         metadata = self.getCameraMetadata()
         metadata.update(self._setupBestQuality())
 
         # Binning affects max size, so change first
-        #self.setBinning(binning)
-        metadata['Binning'] =  "%dx%d" % (binning, binning)
+        self.setBinning(binning)
         self.setSize(size)
-        self.setExposureTime(exp)
-        actual_exp = self.atcore.GetFloat(self.handle, u"ExposureTime")
-        metadata['Exposure Time'] =  str(actual_exp) # s
-        
-        print metadata
+        metadata.update(self.setExposureTime(exp))
+
         # actual size of a line in bytes (not pixel)
         try:
             stride = self.atcore.GetInt(self.handle, u"AOIStride")
@@ -443,10 +516,41 @@ class AndorCam(object):
     
         self.atcore.AT_Command(self.handle, u"AcquisitionStop")
         self.atcore.AT_Flush(self.handle)
-        return array
+        return array, metadata
     
-    # TODO del()
+    #TODO acquireFlow() with a callback that receives array, metadata 
     
+    def __del__(self):
+        self.atcore.AT_Close(self.handle)
+        self.atcore.AT_FinaliseLibrary()
+    
+    def selfTest(self):
+        """
+        Check whether the connection to the camera works.
+        return (boolean): False if it detects any problem
+        """
+        try:
+            model = self.atcore.GetString(self.handle, u"CameraModel")
+        except Exception, err:
+            print("Failed to read camera model: " + str(err))
+            return False
+    
+        # Try to get an image with the default resolution
+        try:
+            resolution = (self.atcore.GetInt(self.handle, u"SensorWidth"),
+                          self.atcore.GetInt(self.handle, u"SensorHeight"))
+        except Exception, err:
+            print("Failed to read camera resolution: " + str(err))
+            return False
+        
+        try:
+            im, metadata = self.acquire(resolution, 0.01)
+        except Exception, err:
+            print("Failed to acquire an image: " + str(err))
+            return False
+        
+        return True
+        
     @staticmethod
     def scan():
         """

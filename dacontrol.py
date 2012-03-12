@@ -16,11 +16,12 @@ Delmic Acquisition Software is distributed in the hope that it will be useful, b
 You should have received a copy of the GNU General Public License along with Delmic Acquisition Software. If not, see http://www.gnu.org/licenses/.
 '''
 
+from osgeo import gdal, gdal_array
 import andorcam
 import argparse
 import sys
-from PIL import Image
-from osgeo import gdal_array
+import time
+#from PIL import Image
 
 def run_self_test(device):
     """
@@ -29,15 +30,51 @@ def run_self_test(device):
     port (string): name of the serial port
     return (boolean) True if all the tests passed, False otherwise
     """
-    
-    passed = True
-    
-    return passed
+    camera = andorcam.AndorCam(device)
+    cam_metadata = camera.getCameraMetadata()
+    print "Testing device %d: %s" % (device, cam_metadata["Camera name"])
+    return camera.selfTest()
 
 def scan():
     cameras = andorcam.AndorCam.scan()
     for i, name, res in sorted(cameras):
         print "%d: %s (%dx%d)" % (i, name, res[0], res[1]) 
+
+
+
+
+# Conversion from our internal tagname convention to (gdal) TIFF tagname
+# string -> (string, callable)
+DATagToTiffTag = {"Software name": ("TIFFTAG_SOFTWARE", str),
+                  "Camera name": ("TIFFTAG_HOSTCOMPUTER", str),
+                  "Acquisition date": ("TIFFTAG_DATETIME", lambda x: time.strftime("%a, %d %b %Y %H:%M:%S +0000", time.gmtime(x)))
+                  }
+#TIFFTAG_DOCUMENTNAME
+#TIFFTAG_IMAGEDESCRIPTION
+#TIFFTAG_ARTIST
+#TIFFTAG_COPYRIGHT
+#TIFFTAG_XRESOLUTION
+#TIFFTAG_YRESOLUTION
+#TIFFTAG_RESOLUTIONUNIT
+# TODO how to put our own tags?
+
+def saveAsTiff(filename, array, metadata={}):
+    """
+    Saves an array as a TIFF file.
+    filename (string): name of the file to save
+    array (ndarray): 2D array of int or float
+    metadata (dict: string->strable values): metadata to save (only some values
+       are supported) 
+    """
+    # TODO： use tifffile.py instead of gdal?
+    # http://www.lfd.uci.edu/~gohlke/code/tifffile.py.html
+    
+    driver = gdal.GetDriverByName( "GTiff" )
+    ds = gdal_array.OpenArray(array)
+    for key, val in metadata.items():
+        if key in DATagToTiffTag:
+            ds.SetMetadataItem(DATagToTiffTag[key][0], DATagToTiffTag[key][1](val))
+    driver.CreateCopy(filename, ds)
 
 def main(args):
     """
@@ -97,7 +134,9 @@ def main(args):
 #    
     # acquire an image
     size = (options.width, options.height)
-    im = camera.acquire(size, options.exposure, options.binning)
+    im, metadata = camera.acquire(size, options.exposure, options.binning)
+    metadata["Software name"] = "Delmic Acquisition Software"
+    metadata["Acquisition date"] = time.time()
     
     ## Two memory copies for one conversion! because of the stride, fromarray() does as bad
     ##pil_im = Image.fromarray(im)
@@ -105,7 +144,8 @@ def main(args):
     ## 16bits files are converted to 32 bit float TIFF with PIL
     #pil_im.save(options.output_filename, "TIFF") 
     
-    gdal_array.SaveArray(im, options.output_filename, "GTiff")
+    # TODO add metadata to TIFF file 
+    saveAsTiff(options.output_filename, im, metadata)
 
     return 0
         
