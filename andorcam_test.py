@@ -16,13 +16,15 @@ Delmic Acquisition Software is distributed in the hope that it will be useful, b
 
 You should have received a copy of the GNU General Public License along with Delmic Acquisition Software. If not, see http://www.gnu.org/licenses/.
 '''
-import unittest
-import os
-import time
 import PIL.Image as Image
-
+import StringIO
 import andorcam
 import dacontrol
+import os
+import sys
+import time
+import unittest
+
 
 # the device to use to test (0 and 1 are normally always present) 
 DEVICE=0
@@ -64,7 +66,7 @@ class TestDAControl(unittest.TestCase):
         """
         The command should take always longer than the exposure time.
         """
-        exposure = 3 #s
+        exposure = 2 #s
         cmdline = ("dacontrol.py --device=%s --width=2560 --height=2160"
                    " --exp=%f --output=%s" % (DEVICE, exposure, self.picture_name))
         
@@ -83,8 +85,18 @@ class TestDAControl(unittest.TestCase):
         """
         Check --list => should at least return a couple of lines
         """
-        cmdline = ("dacontrol.py --list")
-        ret = dacontrol.main(cmdline.split())
+        # need to observe the stdout 
+        saved_stdout = sys.stdout
+        try:
+            out = StringIO.StringIO()
+            sys.stdout = out
+            cmdline = ("dacontrol.py --list")
+            ret = dacontrol.main(cmdline.split())
+        finally:
+            sys.stdout = saved_stdout
+            
+        self.assertEqual(ret, 0, "Error while trying to run '%s'" % cmdline)
+        assert len(out.getvalue().split("\n")) > 1
         
     def test_error_no_device(self):
         """
@@ -100,7 +112,6 @@ class TestDAControl(unittest.TestCase):
         """
         cmdline = "dacontrol.py --device=%d --height=2160 --exp=0.01 --output=%s" % (DEVICE, self.picture_name) 
         self.assertRaises(SystemExit, dacontrol.main, cmdline.split())       
-        
         
     def test_error_no_output(self):
         """
@@ -125,7 +136,7 @@ class TestAndorCam(unittest.TestCase):
     def test_acquire(self):
         camera = andorcam.AndorCam(DEVICE)
         size = (2560, 2160)
-        im, metadata = camera.acquire(size, 0.1)
+        im, metadata = camera.acquire(size, 0.01)
         self.assertEqual(im.shape, size)
         self.assertIn("Exposure time", metadata)
 
