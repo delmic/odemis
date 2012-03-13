@@ -21,7 +21,7 @@ import andorcam
 import argparse
 import sys
 import time
-#from PIL import Image
+import PIL.Image as Image
 
 def run_self_test(device):
     """
@@ -40,9 +40,19 @@ def scan():
     for i, name, res in sorted(cameras):
         print "%d: %s (%dx%d)" % (i, name, res[0], res[1]) 
 
-
-
-
+def saveAsTiff(filename, array, metadata={}):
+    """
+    Saves an array as a TIFF file.
+    filename (string): name of the file to save
+    array (ndarray): 2D array of int or float
+    metadata (dict: string->values): metadata to save (only some values
+       are supported) 
+    """
+    saveAsTiffGDAL(filename, array, metadata)
+    # TODO： use tifffile.py instead of gdal?
+    # http://www.lfd.uci.edu/~gohlke/code/tifffile.py.html
+    
+    
 # Conversion from our internal tagname convention to (gdal) TIFF tagname
 # string -> (string, callable)
 DATagToTiffTag = {"Software name": ("TIFFTAG_SOFTWARE", str),
@@ -57,24 +67,39 @@ DATagToTiffTag = {"Software name": ("TIFFTAG_SOFTWARE", str),
 #TIFFTAG_YRESOLUTION
 #TIFFTAG_RESOLUTIONUNIT
 # TODO how to put our own tags?
-
-def saveAsTiff(filename, array, metadata={}):
+def saveAsTiffGDAL(filename, array, metadata={}):
     """
     Saves an array as a TIFF file.
     filename (string): name of the file to save
     array (ndarray): 2D array of int or float
-    metadata (dict: string->strable values): metadata to save (only some values
+    metadata (dict: string->values): metadata to save (only some values
        are supported) 
     """
-    # TODO： use tifffile.py instead of gdal?
-    # http://www.lfd.uci.edu/~gohlke/code/tifffile.py.html
-    
+
     driver = gdal.GetDriverByName( "GTiff" )
+    
+    # gdal expects the array to be in 'F' order, but it's in 'C'
+    array.shape = (array.shape[1], array.shape[0])
     ds = gdal_array.OpenArray(array)
+    array.shape = (array.shape[1], array.shape[0])
     for key, val in metadata.items():
         if key in DATagToTiffTag:
             ds.SetMetadataItem(DATagToTiffTag[key][0], DATagToTiffTag[key][1](val))
     driver.CreateCopy(filename, ds)
+
+def saveAsTiffPIL(filename, array, metadata={}):
+    """
+    Saves an array as a TIFF file.
+    filename (string): name of the file to save
+    array (ndarray): 2D array of int or float
+    metadata (dict: string->values): metadata to save (only some values
+       are supported) 
+    """
+    # Two memory copies for one conversion! because of the stride, fromarray() does as bad
+    pil_im = Image.fromarray(array)
+    #pil_im = Image.fromstring('I', size, array.tostring(), 'raw', 'I;16', 0, -1)
+    # 16bits files are converted to 32 bit float TIFF with PIL
+    pil_im.save(filename, "TIFF") 
 
 def main(args):
     """
@@ -89,8 +114,8 @@ def main(args):
     parser.add_argument('--version', action='version', version='%(prog)s 0.1')
     parser.add_argument('--list', '-l', dest="list", action="store_true", default=False,
                         help="list all the available cameras.")
-    parser.add_argument("--device", dest="device",
-                        help="name of the device. (see --list for possible values)")
+    parser.add_argument("--device", dest="device", type=int,
+                        help="number of the device. (see --list for possible values)")
     cmd_grp = parser.add_argument_group('Camera commands')
     parser.add_argument("--test", "-t", dest="test", action="store_true", default=False,
                         help="test the connection to the camera.")
@@ -106,7 +131,15 @@ def main(args):
                         help="name of the file where the image should be saved. It is saved in TIFF format.")
 
     options = parser.parse_args(args[1:])
-  
+    
+    # List mode
+    if options.list:
+        scan()
+        return 0
+    
+    if options.device is None:
+        parser.error("Device number must be specified")
+        
     # Test mode
     if options.test:
         if run_self_test(options.device):
@@ -116,35 +149,24 @@ def main(args):
             print "Test failed."
             return 127
 
-    # List mode
-    if options.list:
-        scan()
-        return 0
     
     if options.width is None or options.height is None or options.exposure is None:
         parser.error("you need to specify the width, height and exposure time.")
     if not options.output_filename:
         parser.error("name of the output file must be specified")
     
-#    try:
-    camera = andorcam.AndorCam(options.device)
-#    except Exception, err:
-#        print "Error while connecting to the camera: " + str(err)
-#        return 128
-#    
+    try:
+        camera = andorcam.AndorCam(options.device)
+    except Exception, err:
+        print "Error while connecting to the camera: " + str(err)
+        return 128
+    
     # acquire an image
     size = (options.width, options.height)
     im, metadata = camera.acquire(size, options.exposure, options.binning)
     metadata["Software name"] = "Delmic Acquisition Software"
     metadata["Acquisition date"] = time.time()
     
-    ## Two memory copies for one conversion! because of the stride, fromarray() does as bad
-    ##pil_im = Image.fromarray(im)
-    #pil_im = Image.fromstring('I', size, im.tostring(), 'raw', 'I;16', 0, -1)
-    ## 16bits files are converted to 32 bit float TIFF with PIL
-    #pil_im.save(options.output_filename, "TIFF") 
-    
-    # TODO add metadata to TIFF file 
     saveAsTiff(options.output_filename, im, metadata)
 
     return 0

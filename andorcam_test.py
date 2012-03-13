@@ -19,7 +19,7 @@ You should have received a copy of the GNU General Public License along with Del
 import unittest
 import os
 import time
-from PIL import Image
+import PIL.Image as Image
 
 import andorcam
 import dacontrol
@@ -48,8 +48,9 @@ class TestDAControl(unittest.TestCase):
             pass
 
     def test_simple(self):
-        cmdline = ("dacontrol.py --device=%s --width=2560 --height=2160"
-                   " --exp=0.01 --output=%s" % (DEVICE, self.picture_name)) 
+        size = (2560, 2160)
+        cmdline = ("dacontrol.py --device=%s --width=%d --height=%d --exp=0.01"
+                   " --output=%s" % (DEVICE, size[0], size[1], self.picture_name)) 
         ret = dacontrol.main(cmdline.split())
         self.assertEqual(ret, 0, "Error while trying to run '%s'" % cmdline)
         
@@ -57,6 +58,7 @@ class TestDAControl(unittest.TestCase):
         self.assertGreater(st.st_size, 0)
         im = Image.open(self.picture_name)
         self.assertEqual(im.format, "TIFF")
+        self.assertEqual(im.size, size)
         
     def test_exposure(self):
         """
@@ -68,14 +70,21 @@ class TestDAControl(unittest.TestCase):
         
         start = time.time() 
         ret = dacontrol.main(cmdline.split())
-        duration = start - time.time()
+        duration = time.time() - start
         self.assertEqual(ret, 0, "Error while trying to run '%s'" % cmdline)
-        self.assertGreaterEqual(duration, exposure, "Error execution took less than exposure time %d." % exposure)
+        self.assertGreaterEqual(duration, exposure, "Error execution took %f s, less than exposure time %d." % (duration, exposure))
         
         st = os.stat(self.picture_name) # this test also that the file is created
         self.assertGreater(st.st_size, 0)
         im = Image.open(self.picture_name)
         self.assertEqual(im.format, "TIFF")
+        
+    def test_list(self):
+        """
+        Check --list => should at least return a couple of lines
+        """
+        cmdline = ("dacontrol.py --list")
+        ret = dacontrol.main(cmdline.split())
         
     def test_error_no_device(self):
         """
@@ -87,10 +96,18 @@ class TestDAControl(unittest.TestCase):
 
     def test_error_command_line(self):
         """
-        It checks handling when no port argument is provided
+        It checks handling when no width argument is provided
         """
-        cmdline = "dacontrol.py --device=%d --weight=2160--output=%s" % (DEVICE, self.picture_name) 
+        cmdline = "dacontrol.py --device=%d --height=2160 --exp=0.01 --output=%s" % (DEVICE, self.picture_name) 
         self.assertRaises(SystemExit, dacontrol.main, cmdline.split())       
+        
+        
+    def test_error_no_output(self):
+        """
+        It checks handling when no width argument is provided
+        """
+        cmdline = "dacontrol.py --device=%d --width=2560 --height=2160 --exp=0.01" % DEVICE 
+        self.assertRaises(SystemExit, dacontrol.main, cmdline.split()) 
 
 class TestAndorCam(unittest.TestCase):
     """
@@ -110,7 +127,7 @@ class TestAndorCam(unittest.TestCase):
         size = (2560, 2160)
         im, metadata = camera.acquire(size, 0.1)
         self.assertEqual(im.shape, size)
-        self.assertIn("Exposure Time", metadata)
+        self.assertIn("Exposure time", metadata)
 
 if __name__ == '__main__':
     unittest.main()

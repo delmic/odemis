@@ -489,7 +489,7 @@ class AndorCam(object):
         
         # the type of the buffer is important for the conversion to ndarray
         #cbuffer = (c_uint16 * (image_size_bytes / 2))() # empty array
-        ndbuffer = numpy.empty(shape=(size[1], stride / 2), dtype="uint16")
+        ndbuffer = numpy.empty(shape=(stride / 2, size[1]), dtype="uint16")
         cbuffer = numpy.ctypeslib.as_ctypes(ndbuffer)
         
         self.atcore.AT_QueueBuffer(self.handle, cbuffer, image_size_bytes)
@@ -512,7 +512,7 @@ class AndorCam(object):
         # reshape into an image (doesn't change anything in memory)
         #array.shape = (stride / 2, size[1])
         # crop the array in case of stride (should not cause copy)
-        array = ndbuffer[:,:size[0]]
+        array = ndbuffer[:size[0],:]
     
         self.atcore.AT_Command(self.handle, u"AcquisitionStop")
         self.atcore.AT_Flush(self.handle)
