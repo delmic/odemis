@@ -19,6 +19,7 @@ You should have received a copy of the GNU General Public License along with Del
 from ctypes import *
 import numpy
 import os
+import time
 
 class ATError(Exception):
     pass
@@ -55,6 +56,7 @@ class ATDLL(CDLL):
         func.errcheck = self.at_errcheck
         return func
     
+    # TODO move all of them to AndorCam, so that hndl is not needed
     # Various wrapper to simplify access to properties
     def GetString(self, hndl, prop):
         """
@@ -78,7 +80,7 @@ class ATDLL(CDLL):
     
     def GetIntMax(self, hndl, prop):
         """
-        Return the (min, max) of an integer property.
+        Return the max of an integer property.
         Return (2-tuple int)
         """
         result = c_longlong()
@@ -99,7 +101,6 @@ class ATDLL(CDLL):
         result = c_double()
         self.AT_GetFloat(hndl, prop, byref(result))
         return result.value
-
     
     def GetFloatRanges(self, hndl, prop):
         """
@@ -110,7 +111,12 @@ class ATDLL(CDLL):
         self.AT_GetFloatMin(hndl, prop, byref(result[0]))
         self.AT_GetFloatMax(hndl, prop, byref(result[1]))
         return (result[0].value, result[1].value)
-
+    
+    def GetBool(self, hndl, prop):
+        result = c_int()
+        self.AT_GetBool(hndl, prop, byref(result))
+        return (result.value != 0)
+    
     def isImplemented(self, hndl, prop):
         """
         return bool
@@ -204,10 +210,11 @@ class AndorCam(object):
     This implementation is for the SDK v3.
     """
     
-    def __init__(self, device):
+    def __init__(self, device=None):
         """
         Initialises the device
-        device (int): number of the device to open, as defined by Andor, cd scan()
+        device (None or int): number of the device to open, as defined by Andor, cd scan()
+          if None, uses the system handle, which allows very limited access to some information
         Raise an exception if the device cannot be opened.
         """
         if os.name == "nt":
@@ -218,12 +225,20 @@ class AndorCam(object):
              
         self.atcore.AT_InitialiseLibrary()
         
-        self.handle = c_int()
-        self.atcore.AT_Open(device, byref(self.handle))
+        if device is None:
+            self.handle = c_int(ATDLL.HANDLE_SYSTEM)
+            # nothing else to initialise
+            return
+        else:
+            self.handle = c_int()
+            self.atcore.AT_Open(device, byref(self.handle))
         
-        # Maximum
+        # Maximum cooling for lowest (image) noise
         self.setTargetTemperature(-40) # That's the best for Neo
         self.setFanSpeed(1.0)
+        
+        self.is_acquiring = False
+        self.acquire_must_stop = False
     
     def setTargetTemperature(self, temp):
         """
@@ -350,8 +365,9 @@ class AndorCam(object):
         size (2-tuple int): Width and height of the image. It will centred
          on the captor. It depends on the binning, so the same region as a size 
          twice smaller if the binning is 2 instead of 1. It must be a allowed
-         resolution. TODO how to pass information on what is allowed?
+         resolution.
         """
+        # TODO how to pass information on what is allowed?
         resolution = (self.atcore.GetInt(self.handle, u"SensorWidth"),
                       self.atcore.GetInt(self.handle, u"SensorHeight"))
         assert((1 <= size[0]) and (size[0] <= resolution[0]) and
@@ -426,12 +442,9 @@ class AndorCam(object):
 #        self.atcore.AT_SetEnumString(self.handle, u"PreAmpGain", u"x1")
 #        self.atcore.AT_SetEnumString(self.handle, u"PreAmpGainSelector", u"High")
 #        self.atcore.AT_SetEnumString(self.handle, u"PreAmpGain", u"x30")
-        # if "Both" => Mono12Coded 
 #        self.atcore.AT_SetEnumString(self.handle, u"PreAmpGainChannel", u"Low")
 
-        # Allowed values depends on Gain
-#        print self.atcore.GetEnumStringAvailable(self.handle, u"PixelEncoding")
-#        print self.atcore.GetEnumIndex(self.handle, u"PixelEncoding")
+        # Allowed values of PixelEncoding depends on Gain: "Both" => Mono12Coded 
         try:
             self.atcore.AT_SetEnumString(self.handle, u"PixelEncoding", u"Mono16")
             metadata['Bits per pixel'] = 16
@@ -452,73 +465,172 @@ class AndorCam(object):
         
         return metadata
         
-    def acquire(self, size, exp, binning=1):
+    def _allocate_buffer(self, size):
         """
-        Set up the camera and acquire one image at the best quality for the given
-          parameters. 
-        size (2-tuple int): Width and height of the image. It will centred
-         on the captor. It depends on the binning, so the same region as a size 
-         twice smaller if the binning is 2 instead of 1. It must be a allowed
-         resolution. TODO how to pass information on what is allowed?
-        exp (float): exposure time in second
-        binning (int 1, 2, 3, 4, or 8): how many pixels horizontally and vertically
-          are combined to create "super pixels"
-        return (2-tuple: numpy.ndarray, metadata): an array containing the image,
-          and a dict (string -> base types) containing the metadata
+        returns a cbuffer of the right size for an image
         """
-        metadata = self.getCameraMetadata()
-        metadata.update(self._setupBestQuality())
-
-        # Binning affects max size, so change first
-        self.setBinning(binning)
-        self.setSize(size)
-        metadata.update(self.setExposureTime(exp))
-
+        # The buffer might be bigger than AOIStride * AOIHeight if there is metadata
+        image_size_bytes = self.atcore.GetInt(self.handle, u"ImageSizeBytes")
+        
+        # allocating directly a numpy array doesn't work if there is metadata:
+        # ndbuffer = numpy.empty(shape=(stride / 2, size[1]), dtype="uint16")
+        # cbuffer = numpy.ctypeslib.as_ctypes(ndbuffer)
+        cbuffer = (c_byte * image_size_bytes)() # empty array
+        assert(addressof(cbuffer) % 8 == 0) # the SDK wants it aligned
+        
+        return cbuffer
+    
+    def _buffer_as_array(self, cbuffer, size):
+        """
+        Converts the buffer allocated for the image as an ndarray. zero-copy
+        return an ndarray
+        """
         # actual size of a line in bytes (not pixel)
         try:
             stride = self.atcore.GetInt(self.handle, u"AOIStride")
         except ATError:
             # SimCam doesn't support stride
             stride = self.atcore.GetInt(self.handle, u"AOIWidth") * 2
-
-        # Set up the buffers for containing each one image
-        image_size_bytes = self.atcore.GetInt(self.handle, u"ImageSizeBytes")
-        # TODO: it might not always be true if camera appends some metadata
-        # => Need to allocate image_size_bytes and read only the beginning
-        assert(image_size_bytes == size[1] * stride)
-        
-        # the type of the buffer is important for the conversion to ndarray
-        #cbuffer = (c_uint16 * (image_size_bytes / 2))() # empty array
-        ndbuffer = numpy.empty(shape=(stride / 2, size[1]), dtype="uint16")
-        cbuffer = numpy.ctypeslib.as_ctypes(ndbuffer)
-        
-        self.atcore.AT_QueueBuffer(self.handle, cbuffer, image_size_bytes)
-        assert(addressof(cbuffer) % 8 == 0) # the SDK wants it aligned
-    
-        self.atcore.AT_Command(self.handle, u"AcquisitionStart")
-#       start = time.time()
-
-        pBuffer = POINTER(c_ubyte)() # null pointer to ubyte
-        BufferSize = c_int()
-        timeout = c_uint(int(round((exp + 1) * 1000))) # ms
-        self.atcore.AT_WaitBuffer(self.handle, byref(pBuffer), byref(BufferSize), timeout)
-#       print "Got image in", time.time() - start
-        assert(addressof(pBuffer.contents) == addressof(cbuffer))
-        # Generates a warning about PEP 3118 buffer format string, but it should 
-        # not be a problem.
-        # as_array() is a no-copy mechanism
-        #array = numpy.ctypeslib.as_array(cbuffer) # what's the type?
-        #print ndbuffer.shape, size, size[0] * size[1], (stride/2, size[1])
-        # reshape into an image (doesn't change anything in memory)
-        #array.shape = (stride / 2, size[1])
+            
+        p = cast(cbuffer, POINTER(c_uint16))
+        ndbuffer = numpy.ctypeslib.as_array(p, (stride / 2, size[1]))
         # crop the array in case of stride (should not cause copy)
-        array = ndbuffer[:size[0],:]
+        return ndbuffer[:size[0],:]
+        
+    def acquire(self, size, exp, binning=1):
+        """
+        Set up the camera and acquire one image at the best quality for the given
+          parameters.
+        size (2-tuple int): Width and height of the image. It will be centred
+         on the captor. It depends on the binning, so the same region has a size 
+         twice smaller if the binning is 2 instead of 1. It must be a allowed
+         resolution. 
+        exp (float): exposure time in second
+        binning (int 1, 2, 3, 4, or 8): how many pixels horizontally and vertically
+          are combined to create "super pixels"
+        return (2-tuple: numpy.ndarray, metadata): an array containing the image,
+          and a dict (string -> base types) containing the metadata
+        """
+        assert not self.is_acquiring
+
+        metadata = self.getCameraMetadata()
+        metadata.update(self._setupBestQuality())
+
+        # Binning affects max size, so change first
+        metadata.update(self.setBinning(binning))
+        self.setSize(size)
+        metadata.update(self.setExposureTime(exp))
+       
+        cbuffer = self._allocate_buffer(size)
+        self.atcore.AT_QueueBuffer(self.handle, cbuffer, sizeof(cbuffer))
+        
+        # Acquire the image
+        self.atcore.AT_Command(self.handle, u"AcquisitionStart")
+        pbuffer = POINTER(c_byte)() # null pointer to c_bytes
+        buffersize = c_int()
+        timeout = c_uint(int(round((exp + 1) * 1000))) # ms
+        self.atcore.AT_WaitBuffer(self.handle, byref(pbuffer), byref(buffersize), timeout)
+        metadata["Acquisition date"] = time.time() - exp # time at the beginning
+        
+        # Cannot directly use pbuffer because we'd lose the reference to the 
+        # memory allocation... and it'd get free'd at the end of the method
+        # So rely on the assumption cbuffer is used as is
+        assert(addressof(pbuffer.contents) == addressof(cbuffer))
+        array = self._buffer_as_array(cbuffer, size)
     
         self.atcore.AT_Command(self.handle, u"AcquisitionStop")
         self.atcore.AT_Flush(self.handle)
         return array, metadata
     
     #TODO acquireFlow() with a callback that receives array, metadata 
+    
+    def acquireFlow(self, callback, size, exp, binning=1, num=None):
+        """
+        Set up the camera and acquire a flow of images at the best quality for the given
+          parameters. Should not be called if already a flow is being acquired.
+        callback (callable (numpy.ndarray, dict (string -> base types)) no return):
+         function called for each image acquired
+        size (2-tuple int): Width and height of the image. It will be centred
+         on the captor. It depends on the binning, so the same region as a size 
+         twice smaller if the binning is 2 instead of 1. It must be a allowed
+         resolution. TODO how to pass information on what is allowed?
+        exp (float): exposure time in second
+        binning (int 1, 2, 3, 4, or 8): how many pixels horizontally and vertically
+          are combined to create "super pixels"
+        num (None or int): number of images to acquire, or infinite if None
+        returns immediately. To stop acquisition, call stopAcquireFlow()
+        """
+        assert not self.is_acquiring and not self.atcore.GetBool()
+        self.is_acquiring = True
+        
+        metadata = self.getCameraMetadata()
+        metadata.update(self._setupBestQuality())
+
+        # Binning affects max size, so change first
+        metadata.update(self.setBinning(binning))
+        self.setSize(size)
+        metadata.update(self.setExposureTime(exp))
+        
+        # XXX set up thread
+        self._acquire_thread(callback, size, exp, metadata, num)
+        
+        return
+
+    def _acquire_thread(self, callback, size, exp, metadata, num=None):
+        """
+        The core of the acquisition thread. Runs until it has acquired enough
+        images or acquire_must_stop is True.
+        """
+        assert (self.atcore.IsImplemented(self.handle, u"CycleMode") and
+                self.atcore.IsWritable(self.handle, u"CycleMode"))
+        
+        self.atcore.AT_SetEnumString(self.handle, u"CycleMode", u"Continuous")
+        
+        # Don't use the framecount feature as it's not always present, and easy in software
+        
+        # Allocates two buffers, so that when we are processing one buffer,
+        # it can already acquire the next image.
+        buffers = []
+        nbuffers = 2
+        for i in range(nbuffers):
+            cbuffer = self._allocate_buffer(size)
+            self.atcore.AT_QueueBuffer(self.handle, cbuffer, sizeof(cbuffer))
+            buffers.append(cbuffer)
+            
+        # Acquire the images
+        pbuffer = POINTER(c_byte)() # null pointer to c_bytes
+        buffersize = c_int()
+        timeout = c_uint(int(round((exp + 1) * 1000))) # ms
+        self.atcore.AT_Command(self.handle, u"AcquisitionStart")
+
+        self.atcore.AT_WaitBuffer(self.handle, byref(pbuffer), byref(buffersize), timeout)
+        metadata["Acquisition date"] = time.time() - exp # time at the beginning
+        
+        # Cannot directly use pbuffer because we'd lose the reference to the 
+        # memory allocation... and it'd get free'd at the end of the method
+        # So rely on the assumption cbuffer is used as is
+        assert(addressof(pbuffer.contents) == addressof(cbuffer))
+        array = self._buffer_as_array(cbuffer, size)
+    
+        self.atcore.AT_Command(self.handle, u"AcquisitionStop")
+        self.atcore.AT_Flush(self.handle)
+        self.is_acquiring = False
+        
+        return array, metadata
+    
+    def stopAcquireFlow(self, sync=False):
+        """
+        Stop the acquisition of an image.
+        sync (boolean): if True, wait that the acquisition is finished before returning.
+         Calling with this flag activated from the acquisition callback will dead-lock.
+        """
+        self.acquire_must_stop = True
+        if not sync:
+            return
+        
+        while self.is_acquiring:
+            # XXX yield
+            pass
     
     def __del__(self):
         self.atcore.AT_Close(self.handle)

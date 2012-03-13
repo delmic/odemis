@@ -76,7 +76,7 @@ def saveAsTiffGDAL(filename, array, metadata={}):
        are supported) 
     """
 
-    driver = gdal.GetDriverByName( "GTiff" )
+    driver = gdal.GetDriverByName("GTiff")
     
     # gdal expects the array to be in 'F' order, but it's in 'C'
     array.shape = (array.shape[1], array.shape[0])
@@ -85,7 +85,7 @@ def saveAsTiffGDAL(filename, array, metadata={}):
     for key, val in metadata.items():
         if key in DATagToTiffTag:
             ds.SetMetadataItem(DATagToTiffTag[key][0], DATagToTiffTag[key][1](val))
-    driver.CreateCopy(filename, ds)
+    driver.CreateCopy(filename, ds) # options=["COMPRESS=LZW"]
 
 def saveAsTiffPIL(filename, array, metadata={}):
     """
@@ -165,7 +165,6 @@ def main(args):
     size = (options.width, options.height)
     im, metadata = camera.acquire(size, options.exposure, options.binning)
     metadata["Software name"] = "Delmic Acquisition Software"
-    metadata["Acquisition date"] = time.time()
     
     saveAsTiff(options.output_filename, im, metadata)
 
