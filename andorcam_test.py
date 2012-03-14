@@ -136,10 +136,32 @@ class TestAndorCam(unittest.TestCase):
     def test_acquire(self):
         camera = andorcam.AndorCam(DEVICE)
         size = (2560, 2160)
-        im, metadata = camera.acquire(size, 0.01)
-        self.assertEqual(im.shape, size)
-        self.assertIn("Exposure time", metadata)
+        exposure = 0.1
+        start = time.time()
+        im, metadata = camera.acquire(size, exposure)
+        duration = time.time() - start
 
+        self.assertEqual(im.shape, size)
+        self.assertGreaterEqual(duration, exposure, "Error execution took %f s, less than exposure time %d." % (duration, exposure))
+        self.assertIn("Exposure time", metadata)
+        
+    def test_acquire_flow(self):
+        camera = andorcam.AndorCam(DEVICE)
+        self.size = (2560, 2160)
+        number = 5
+        self.received = 0
+        camera.acquireFlow(self.receive_image, self.size, 0.01, num=number)
+        camera.waitAcquireFlow()
+        self.assertEqual(self.received, number)
+
+    def receive_image(self, camera, image, metadata):
+        """
+        callback for acquireFlow of test_acquire_flow()
+        """
+        self.assertEqual(image.shape, self.size)
+        self.assertIn("Exposure time", metadata)
+        self.received += 1
+        
 if __name__ == '__main__':
     unittest.main()
 

@@ -34,6 +34,7 @@ class ATDLL(CDLL):
     
     # various defines from atcore.h
     HANDLE_SYSTEM = 1
+    INFINITE = 0xFFFFFFFF # "infinite" time
     
     @staticmethod
     def at_errcheck(result, func, args):
@@ -57,102 +58,7 @@ class ATDLL(CDLL):
         func.errcheck = self.at_errcheck
         return func
     
-    # TODO move all of them to AndorCam, so that hndl is not needed
-    # Various wrapper to simplify access to properties
-    def GetString(self, hndl, prop):
-        """
-        Return a unicode string corresponding to the given property
-        """
-        len_str = c_int()
-        self.AT_GetStringMaxLength(hndl, prop, byref(len_str))
-        string = create_unicode_buffer(len_str.value)
-        self.AT_GetString(hndl, prop, string, len_str)
-        return string.value
-    
-    def GetInt(self, hndl, prop):
-        result = c_longlong()
-        self.AT_GetInt(hndl, prop, byref(result))
-        return result.value
-    
-    def GetEnumIndex(self, hndl, prop):
-        result = c_longlong()
-        self.AT_GetEnumIndex(hndl, prop, byref(result))
-        return result.value
-    
-    def GetIntMax(self, hndl, prop):
-        """
-        Return the max of an integer property.
-        Return (2-tuple int)
-        """
-        result = c_longlong()
-        self.AT_GetIntMax(hndl, prop, byref(result))
-        return result.value
-    
-    def GetIntRanges(self, hndl, prop):
-        """
-        Return the (min, max) of an integer property.
-        Return (2-tuple int)
-        """
-        result = (c_longlong(), c_longlong())
-        self.AT_GetIntMin(hndl, prop, byref(result[0]))
-        self.AT_GetIntMax(hndl, prop, byref(result[1]))
-        return (result[0].value, result[1].value)
-    
-    def GetFloat(self, hndl, prop):
-        result = c_double()
-        self.AT_GetFloat(hndl, prop, byref(result))
-        return result.value
-    
-    def GetFloatRanges(self, hndl, prop):
-        """
-        Return the (min, max) of an float property.
-        Return (2-tuple int)
-        """
-        result = (c_double(), c_double())
-        self.AT_GetFloatMin(hndl, prop, byref(result[0]))
-        self.AT_GetFloatMax(hndl, prop, byref(result[1]))
-        return (result[0].value, result[1].value)
-    
-    def GetBool(self, hndl, prop):
-        result = c_int()
-        self.AT_GetBool(hndl, prop, byref(result))
-        return (result.value != 0)
-    
-    def isImplemented(self, hndl, prop):
-        """
-        return bool
-        """
-        implemented = c_int()
-        self.AT_IsImplemented(hndl, prop, byref(implemented))
-        return (implemented.value != 0)
 
-    def isWritable(self, hndl, prop):
-        """
-        return bool
-        """
-        writable = c_int()
-        self.AT_IsWritable(hndl, prop, byref(writable))
-        return (writable.value != 0)
-    
-    def GetEnumStringByIndex(self, hndl, prop, index):
-        """
-        Return a unicode string corresponding to the given property and index
-        """
-        string = create_unicode_buffer(128) # no way to know the max size
-        self.AT_GetEnumStringByIndex(hndl, prop, index, string, len(string))
-        return string.value
-    
-    def GetEnumStringAvailable(self, hndl, prop):
-        """
-        Return in a list the strings corresponding of each possible value of an enum
-        """
-        num_values = c_int()
-        self.AT_GetEnumCount(hndl, prop, byref(num_values))
-        result = []
-        for i in range(num_values.value):
-            result.append(self.GetEnumStringByIndex(hndl, prop, i))
-            
-        return result
     
     err_code = {
 1: """AT_ERR_NONINITIALISED
@@ -225,20 +131,18 @@ class AndorCam(object):
         Raise an exception if the device cannot be opened.
         """
         if os.name == "nt":
+            # That's not gonna fly... need to put this into ATDLL
             self.atcore = windll.LoadLibrary('libatcore.dll') # TODO check it works
         else:
             # Global so that its sub-libraries can access it
             self.atcore = ATDLL("libatcore.so.3", RTLD_GLOBAL)
              
-        self.atcore.AT_InitialiseLibrary()
+        self.InitialiseLibrary()
         
+        self.handle = self.Open(device)
         if device is None:
-            self.handle = c_int(ATDLL.HANDLE_SYSTEM)
             # nothing else to initialise
             return
-        else:
-            self.handle = c_int()
-            self.atcore.AT_Open(device, byref(self.handle))
         
         # Maximum cooling for lowest (image) noise
         self.setTargetTemperature(-40) # That's the best for Neo
@@ -248,6 +152,173 @@ class AndorCam(object):
         self.acquire_must_stop = False
         self.acquire_thread = None
     
+    # low level methods, wrapper to the actual SDK functions
+    def InitialiseLibrary(self):
+        self.atcore.AT_InitialiseLibrary()
+        
+    def FinaliseLibrary(self):
+        self.atcore.AT_FinaliseLibrary()
+    
+    def Open(self, device):
+        """
+        device (None or int): number of the device to open, as defined by Andor, cd scan()
+          if None, uses the system handle, which allows very limited access to some information
+        return a c_int, the handle
+        """
+        if device is None:
+            return c_int(ATDLL.HANDLE_SYSTEM)
+        
+        handle = c_int()
+        self.atcore.AT_Open(device, byref(handle))
+        return handle
+    
+    def Close(self):
+        self.atcore.AT_Close(self.handle)
+        
+    def Command(self, command):
+        self.atcore.AT_Command(self.handle, command)
+
+    def QueueBuffer(self, cbuffer):
+        """
+        cbuffer (ctypes.array): the buffer to queue
+        """
+        self.atcore.AT_QueueBuffer(self.handle, cbuffer, sizeof(cbuffer))
+    
+    def WaitBuffer(self, timeout=None):
+        """
+        timeout (float or None): maximum time to wait in second (None for infinite)
+        return (ctypes.POINTER(c_byte), int): pointer to buffer, size of buffer
+        """
+        pbuffer = POINTER(c_byte)() # null pointer to c_bytes
+        buffersize = c_int()
+        if timeout is None:
+            timeout_ms = ATDLL.INFINITE
+        else:
+            timeout_ms = c_uint(int(round(timeout * 1e3))) # ms
+             
+        self.atcore.AT_WaitBuffer(self.handle, byref(pbuffer),
+                                  byref(buffersize), timeout_ms)
+        return pbuffer, buffersize.value
+        
+    def Flush(self):        
+        self.atcore.AT_Flush(self.handle)
+    
+    def GetString(self, prop):
+        """
+        Return a unicode string corresponding to the given property
+        """
+        len_str = c_int()
+        self.atcore.AT_GetStringMaxLength(self.handle, prop, byref(len_str))
+        string = create_unicode_buffer(len_str.value)
+        self.atcore.AT_GetString(self.handle, prop, string, len_str)
+        return string.value
+    
+    def SetInt(self, prop, value):
+        self.atcore.AT_SetInt(self.handle, prop, c_longlong(value))
+        
+    def GetInt(self, prop):
+        result = c_longlong()
+        self.atcore.AT_GetInt(self.handle, prop, byref(result))
+        return result.value
+    
+    def GetEnumIndex(self, prop):
+        result = c_longlong()
+        self.atcore.AT_GetEnumIndex(self.handle, prop, byref(result))
+        return result.value
+    
+    def GetIntMax(self, prop):
+        """
+        Return the max of an integer property.
+        Return (2-tuple int)
+        """
+        result = c_longlong()
+        self.atcore.AT_GetIntMax(self.handle, prop, byref(result))
+        return result.value
+    
+    def GetIntRanges(self, prop):
+        """
+        Return the (min, max) of an integer property.
+        Return (2-tuple int)
+        """
+        result = (c_longlong(), c_longlong())
+        self.atcore.AT_GetIntMin(self.handle, prop, byref(result[0]))
+        self.atcore.AT_GetIntMax(self.handle, prop, byref(result[1]))
+        return (result[0].value, result[1].value)
+    
+    def SetFloat(self, prop, value):
+        self.atcore.AT_SetFloat(self.handle, prop, c_double(value))
+    
+    def GetFloat(self, prop):
+        result = c_double()
+        self.atcore.AT_GetFloat(self.handle, prop, byref(result))
+        return result.value
+    
+    def GetFloatRanges(self, prop):
+        """
+        Return the (min, max) of an float property.
+        Return (2-tuple int)
+        """
+        result = (c_double(), c_double())
+        self.atcore.AT_GetFloatMin(self.handle, prop, byref(result[0]))
+        self.atcore.AT_GetFloatMax(self.handle, prop, byref(result[1]))
+        return (result[0].value, result[1].value)
+    
+    def SetBool(self, prop, value):
+        if value:
+            int_val = c_int(1)
+        else:
+            int_val = c_int(0)
+#        self.atcore.AT_SetBool(self.handle, prop, int_val)
+        self.atcore.AT_SetBool(self.handle, prop, value) # XXX?
+    
+    def GetBool(self, prop):
+        result = c_int()
+        self.atcore.AT_GetBool(self.handle, prop, byref(result))
+        return (result.value != 0)
+    
+    def isImplemented(self, prop):
+        """
+        return bool
+        """
+        implemented = c_int()
+        self.atcore.AT_IsImplemented(self.handle, prop, byref(implemented))
+        return (implemented.value != 0)
+
+    def isWritable(self, prop):
+        """
+        return bool
+        """
+        writable = c_int()
+        self.atcore.AT_IsWritable(self.handle, prop, byref(writable))
+        return (writable.value != 0)
+    
+    def SetEnumString(self, prop, value):
+        """
+        Set a unicode string corresponding for the given property
+        """
+        self.atcore.AT_SetEnumString(self.handle, prop, value)
+    
+    def GetEnumStringByIndex(self, prop, index):
+        """
+        Return a unicode string corresponding to the given property and index
+        """
+        string = create_unicode_buffer(128) # no way to know the max size
+        self.atcore.AT_GetEnumStringByIndex(self.handle, prop, index, string, len(string))
+        return string.value
+    
+    def GetEnumStringAvailable(self, prop):
+        """
+        Return in a list the strings corresponding of each possible value of an enum
+        """
+        num_values = c_int()
+        self.atcore.AT_GetEnumCount(self.handle, prop, byref(num_values))
+        result = []
+        for i in range(num_values.value):
+            result.append(self.GetEnumStringByIndex(prop, i))
+            
+        return result
+    
+    # High level methods
     def setTargetTemperature(self, temp):
         """
         Change the targeted temperature of the CCD.
@@ -258,9 +329,9 @@ class AndorCam(object):
         assert((-400 <= temp) and (temp <= 100))
         # TODO apparently the Neo also has a "Temperature Control" which might be
         # better to use
-        range = self.atcore.GetFloatRanges(self.handle, u"TargetSensorTemperature")
-        temp = sorted(range + (temp,))[1]
-        self.atcore.AT_SetFloat(self.handle, u"TargetSensorTemperature", c_double(temp))
+        ranges = self.GetFloatRanges(u"TargetSensorTemperature")
+        temp = sorted(ranges + (temp,))[1]
+        self.SetFloat(u"TargetSensorTemperature", temp)
 
         # TODO: a more generic function which set up the fan to the right speed
         # according to the target temperature?
@@ -272,15 +343,15 @@ class AndorCam(object):
         """
         assert((0 <= speed) and (speed <= 1))
         
-        if not self.atcore.isImplemented(self.handle, u"FanSpeed"):
+        if not self.isImplemented(u"FanSpeed"):
             return
 
         # Let's assume it's linearly distributed in speed... at least it's true
         # for the Neo and the SimCam. Looks like this for Neo:
         # [u"Off", u"Low", u"On"]
-        values = self.atcore.GetEnumStringAvailable(self.handle, u"FanSpeed")
+        values = self.GetEnumStringAvailable(u"FanSpeed")
         val = values[int(round(speed * (len(values) - 1)))]
-        self.atcore.AT_SetEnumString(self.handle, u"FanSpeed", val)
+        self.SetEnumString(u"FanSpeed", val)
         
         # TODO there is also a "SensorCooling" boolean property, no idea what it does!
     
@@ -293,12 +364,12 @@ class AndorCam(object):
         """
         assert((0 <= frequency))
         # returns strings like u"550 MHz"
-        rates = self.atcore.GetEnumStringAvailable(self.handle, u"PixelReadoutRate")
+        rates = self.GetEnumStringAvailable(u"PixelReadoutRate")
         values = (int(r.rstrip(u" MHz")) for r in rates)
         closest = self.find_closest(frequency, values)
         # TODO handle the fact SimCam only accepts 550
         #print self.atcore.GetEnumStringAvailable(self.handle, u"PixelReadoutRate")
-        self.atcore.AT_SetEnumString(self.handle, u"PixelReadoutRate", u"%d MHz" % closest)
+        self.SetEnumString(u"PixelReadoutRate", u"%d MHz" % closest)
         
     def setBinning(self, binning):
         """
@@ -311,18 +382,17 @@ class AndorCam(object):
         assert(binning in values)
         
         # Nicely the API is different depending on cameras...
-        if self.atcore.isImplemented(self.handle, u"AOIBinning"):
+        if self.isImplemented(u"AOIBinning"):
             # Typically for the Neo
             binning_str = u"%dx%d" % (binning, binning)
-            self.atcore.AT_SetEnumString(self.handle, u"AOIBinning", binning_str)
-        elif self.atcore.isImplemented(self.handle, u"AOIHBin"):
-            if self.atcore.isWritable(self.handle, u"AOIHBin"):
-                self.atcore.AT_SetInt(self.handle, u"AOIHBin", c_longlong(binning))
-                self.atcore.AT_SetInt(self.handle, u"AOIVBin", c_longlong(binning))
+            self.SetEnumString(u"AOIBinning", binning_str)
+        elif self.isImplemented(u"AOIHBin"):
+            if self.isWritable(u"AOIHBin"):
+                self.SetInt(u"AOIHBin", binning)
+                self.SetInt(u"AOIVBin", binning)
             else:
                 # Typically for the simcam
-                act_binning = (self.atcore.GetInt(self.handle, u"AOIHBin"),
-                               self.atcore.GetInt(self.handle, u"AOIVBin"))
+                act_binning = (self.GetInt(u"AOIHBin"), self.GetInt(u"AOIVBin"))
                 if act_binning != (binning, binning):
                     raise IOError("AndorCam: Requested binning " + 
                                   str((binning, binning)) + 
@@ -330,7 +400,7 @@ class AndorCam(object):
                                   str(act_binning))
             
         metadata = {}
-        metadata['Binning'] =  "%dx%d" % (binning, binning)
+        metadata["Camera binning"] =  "%dx%d" % (binning, binning)
         return metadata
     
     def getCameraMetadata(self):
@@ -340,26 +410,26 @@ class AndorCam(object):
         return (dict : string -> string): the metadata
         """
         metadata = {}
-        model = self.atcore.GetString(self.handle, u"CameraModel")
+        model = self.GetString(u"CameraModel")
         metadata["Camera name"] = model
         # TODO there seems to be a bug in SimCam v3.1: => check v3.3
 #        self.atcore.isImplemented(self.handle, u"SerialNumber") return true
 #        but self.atcore.GetInt(self.handle, u"SerialNumber") fail with error code 2 = AT_ERR_NOTIMPLEMENTED
         try:
-            serial = self.atcore.GetInt(self.handle, u"SerialNumber")
+            serial = self.GetInt(u"SerialNumber")
             metadata["Camera serial"] = str(serial)
         except ATError:
             pass # unknown value
         
         try:
-            firmware = self.atcore.GetString(self.handle, u"FirmwareVersion") 
+            firmware = self.GetString(u"FirmwareVersion") 
             metadata["Camera version"] = "firmware: '%s', driver:''" % firmware # TODO driver
         except ATError:
             pass # unknown value
         
         try:
-            psize = (self.atcore.GetFloat(self.handle, u"PixelWidth"),
-                     self.atcore.GetFloat(self.handle, u"PixelHeight"))
+            psize = (self.GetFloat(u"PixelWidth"),
+                     self.GetFloat(u"PixelHeight"))
             metadata["Captor pixel width"] = str(psize[0] * 1e6) # m
             metadata["Captor pixel height"] = str(psize[1] * 1e6) # m
         except ATError:
@@ -376,23 +446,23 @@ class AndorCam(object):
          resolution.
         """
         # TODO how to pass information on what is allowed?
-        resolution = (self.atcore.GetInt(self.handle, u"SensorWidth"),
-                      self.atcore.GetInt(self.handle, u"SensorHeight"))
+        resolution = (self.GetInt(u"SensorWidth"),
+                      self.GetInt(u"SensorHeight"))
         assert((1 <= size[0]) and (size[0] <= resolution[0]) and
                (1 <= size[1]) and (size[1] <= resolution[1]))
         
         # If the camera doesn't support Area of Interest, then it has to be the
         # size of the sensor
-        if (not self.atcore.isImplemented(self.handle, u"AOIWidth") or 
-            not self.atcore.isWritable(self.handle, u"AOIWidth")):
+        if (not self.isImplemented(u"AOIWidth") or 
+            not self.isWritable(u"AOIWidth")):
             if size != resolution:
                 raise IOError("AndorCam: Requested image size " + str(size) + 
                               " does not match sensor resolution " + str(resolution))
             return
         
         # AOI
-        ranges = (self.atcore.GetIntRanges(self.handle, "AOIWidth"),
-                  self.atcore.GetIntRanges(self.handle, "AOIHeight"))
+        ranges = (self.GetIntRanges("AOIWidth"),
+                  self.GetIntRanges("AOIHeight"))
         assert((ranges[0][0] <= size[0]) and (size[0] <= ranges[0][1]) and
                (ranges[1][0] <= size[1]) and (size[1] <= ranges[1][1]))
         
@@ -402,10 +472,10 @@ class AndorCam(object):
         lt = ((ranges[0][1] - size[0]) / 2 + 1,
               (ranges[1][1] - size[1]) / 2 + 1)
 
-        self.atcore.AT_SetInt(self.handle, u"AOIWidth", c_uint64(size[0]))
-        self.atcore.AT_SetInt(self.handle, u"AOILeft", c_uint64(lt[0]))
-        self.atcore.AT_SetInt(self.handle, u"AOIHeight", c_uint64(size[1]))
-        self.atcore.AT_SetInt(self.handle, u"AOITop", c_uint64(lt[1]))
+        self.SetInt(u"AOIWidth", c_uint64(size[0]))
+        self.SetInt(u"AOILeft", c_uint64(lt[0]))
+        self.SetInt(u"AOIHeight", c_uint64(size[1]))
+        self.SetInt(u"AOITop", c_uint64(lt[1]))
         
     def setExposureTime(self, exp):
         """
@@ -414,10 +484,10 @@ class AndorCam(object):
         return (tuple): metadata corresponding to the setup
         """
         assert(0.0 < exp)
-        self.atcore.AT_SetFloat(self.handle, u"ExposureTime",  c_double(exp))
+        self.SetFloat(u"ExposureTime",  exp)
         
         metadata = {}
-        actual_exp = self.atcore.GetFloat(self.handle, u"ExposureTime")
+        actual_exp = self.GetFloat(u"ExposureTime")
         metadata["Exposure time"] =  str(actual_exp) # s
         return metadata
     
@@ -434,42 +504,42 @@ class AndorCam(object):
         # 16 bit - Gain 1+4 (maximum)
         # SpuriousNoiseFilter On (this is actually a software based method)
         self.setReadoutRate(100)
-        ratei = self.atcore.GetEnumIndex(self.handle, u"PixelReadoutRate")
-        rate = self.atcore.GetEnumStringByIndex(self.handle, u"PixelReadoutRate", ratei) 
+        ratei = self.GetEnumIndex(u"PixelReadoutRate")
+        rate = self.GetEnumStringByIndex(u"PixelReadoutRate", ratei) 
         metadata['Pixel readout rate'] = rate
         
 #        print self.atcore.GetEnumStringAvailable(self.handle, u"ElectronicShutteringMode")
-        self.atcore.AT_SetEnumString(self.handle, u"ElectronicShutteringMode", u"Rolling")
+        self.SetEnumString(u"ElectronicShutteringMode", u"Rolling")
         
         #print self.atcore.GetEnumStringAvailable(self.handle, u"PreAmpGainControl")
-        if self.atcore.isImplemented(self.handle, u"PreAmpGainControl"):
+        if self.isImplemented(u"PreAmpGainControl"):
             # If not, we are on a SimCam so it doesn't matter
-            self.atcore.AT_SetEnumString(self.handle, u"PreAmpGainControl", u"Gain 1 Gain 4 (16 bit)")
+            self.SetEnumString(u"PreAmpGainControl", u"Gain 1 Gain 4 (16 bit)")
             
-#        self.atcore.AT_SetEnumString(self.handle, u"PreAmpGainSelector", u"Low")
-#        self.atcore.AT_SetEnumString(self.handle, u"PreAmpGain", u"x1")
-#        self.atcore.AT_SetEnumString(self.handle, u"PreAmpGainSelector", u"High")
-#        self.atcore.AT_SetEnumString(self.handle, u"PreAmpGain", u"x30")
-#        self.atcore.AT_SetEnumString(self.handle, u"PreAmpGainChannel", u"Low")
+#        self.SetEnumString(u"PreAmpGainSelector", u"Low")
+#        self.SetEnumString(u"PreAmpGain", u"x1")
+#        self.SetEnumString(u"PreAmpGainSelector", u"High")
+#        self.SetEnumString(u"PreAmpGain", u"x30")
+#        self.SetEnumString(u"PreAmpGainChannel", u"Low")
 
         # Allowed values of PixelEncoding depends on Gain: "Both" => Mono12Coded 
         try:
-            self.atcore.AT_SetEnumString(self.handle, u"PixelEncoding", u"Mono16")
+            self.SetEnumString(u"PixelEncoding", u"Mono16")
             metadata['Bits per pixel'] = 16
         except ATError:
             # Fallback to 12 bits (represented on 16 bits)
             try:
-                self.atcore.AT_SetEnumString(self.handle, u"PixelEncoding", u"Mono12")
+                self.SetEnumString(u"PixelEncoding", u"Mono12")
                 metadata['Bits per pixel'] = 12
             except ATError:
-                self.atcore.AT_SetEnumString(self.handle, u"PixelEncoding", u"Mono12Coded")
+                self.SetEnumString(u"PixelEncoding", u"Mono12Coded")
                 metadata['Bits per pixel'] = 12
         
-        if self.atcore.isImplemented(self.handle, u"SpuriousNoiseFilter"):
-            self.atcore.AT_SetBool(self.handle, u"SpuriousNoiseFilter", 1)
+        if self.isImplemented(u"SpuriousNoiseFilter"):
+            self.SetBool(u"SpuriousNoiseFilter", True)
             metadata['Filter'] = "Spurious noise filter"
         # Software is much slower than Internal (0.05 instead of 0.015 s)
-        self.atcore.AT_SetEnumString(self.handle, u"TriggerMode", u"Internal") 
+        self.SetEnumString(u"TriggerMode", u"Internal") 
         
         return metadata
         
@@ -477,7 +547,7 @@ class AndorCam(object):
         """
         returns a cbuffer of the right size for an image
         """
-        image_size_bytes = self.atcore.GetInt(self.handle, u"ImageSizeBytes")
+        image_size_bytes = self.GetInt(u"ImageSizeBytes")
         # The buffer might be bigger than AOIStride * AOIHeight if there is metadata
         assert image_size_bytes >= (size[0] * size[1] * 2)
         
@@ -496,10 +566,10 @@ class AndorCam(object):
         """
         # actual size of a line in bytes (not pixel)
         try:
-            stride = self.atcore.GetInt(self.handle, u"AOIStride")
+            stride = self.GetInt( u"AOIStride")
         except ATError:
             # SimCam doesn't support stride
-            stride = self.atcore.GetInt(self.handle, u"AOIWidth") * 2
+            stride = self.GetInt( u"AOIWidth") * 2
             
         p = cast(cbuffer, POINTER(c_uint16))
         ndbuffer = numpy.ctypeslib.as_array(p, (stride / 2, size[1]))
@@ -521,7 +591,7 @@ class AndorCam(object):
           and a dict (string -> base types) containing the metadata
         """
         assert not self.is_acquiring
-        assert not self.atcore.GetBool(self.handle, u"CameraAcquiring")
+        assert not self.GetBool(u"CameraAcquiring")
         self.is_acquiring = True
         
         metadata = self.getCameraMetadata()
@@ -533,14 +603,11 @@ class AndorCam(object):
         metadata.update(self.setExposureTime(exp))
        
         cbuffer = self._allocate_buffer(size)
-        self.atcore.AT_QueueBuffer(self.handle, cbuffer, sizeof(cbuffer))
+        self.QueueBuffer(cbuffer)
         
         # Acquire the image
-        self.atcore.AT_Command(self.handle, u"AcquisitionStart")
-        pbuffer = POINTER(c_byte)() # null pointer to c_bytes
-        buffersize = c_int()
-        timeout = c_uint(int(round((exp + 1) * 1000))) # ms
-        self.atcore.AT_WaitBuffer(self.handle, byref(pbuffer), byref(buffersize), timeout)
+        self.Command(u"AcquisitionStart")
+        pbuffer, buffersize = self.WaitBuffer(exp + 1)
         metadata["Acquisition date"] = time.time() - exp # time at the beginning
         
         # Cannot directly use pbuffer because we'd lose the reference to the 
@@ -549,8 +616,8 @@ class AndorCam(object):
         assert(addressof(pbuffer.contents) == addressof(cbuffer))
         array = self._buffer_as_array(cbuffer, size)
     
-        self.atcore.AT_Command(self.handle, u"AcquisitionStop")
-        self.atcore.AT_Flush(self.handle)
+        self.Command(u"AcquisitionStop")
+        self.Flush()
         self.is_acquiring = False
         return array, metadata
     
@@ -571,7 +638,7 @@ class AndorCam(object):
         returns immediately. To stop acquisition, call stopAcquireFlow()
         """
         assert not self.is_acquiring
-        assert not self.atcore.GetBool(self.handle, u"CameraAcquiring")
+        assert not self.GetBool(u"CameraAcquiring")
         self.is_acquiring = True
         
         metadata = self.getCameraMetadata()
@@ -593,10 +660,10 @@ class AndorCam(object):
         The core of the acquisition thread. Runs until it has acquired enough
         images or acquire_must_stop is True.
         """
-        assert (self.atcore.isImplemented(self.handle, u"CycleMode") and
-                self.atcore.isWritable(self.handle, u"CycleMode"))
+        assert (self.isImplemented(u"CycleMode") and
+                self.isWritable(u"CycleMode"))
         
-        self.atcore.AT_SetEnumString(self.handle, u"CycleMode", u"Continuous")
+        self.SetEnumString(u"CycleMode", u"Continuous")
         
         # Don't use the framecount feature as it's not always present, and easy in software
         
@@ -606,17 +673,17 @@ class AndorCam(object):
         nbuffers = 2
         for i in range(nbuffers):
             cbuffer = self._allocate_buffer(size)
-            self.atcore.AT_QueueBuffer(self.handle, cbuffer, sizeof(cbuffer))
+            self.QueueBuffer(cbuffer)
             buffers.append(cbuffer)
             
         # Acquire the images
         pbuffer = POINTER(c_byte)() # null pointer to c_bytes
         buffersize = c_int()
         timeout = c_uint(int(round((exp + 1) * 1000))) # ms
-        self.atcore.AT_Command(self.handle, u"AcquisitionStart")
+        self.Command(u"AcquisitionStart")
 
         while (not self.acquire_must_stop and (num is None or num > 0)):
-            self.atcore.AT_WaitBuffer(self.handle, byref(pbuffer), byref(buffersize), timeout)
+            pbuffer, buffersize = self.WaitBuffer(exp + 1)
             metadata["Acquisition date"] = time.time() - exp # time at the beginning
             
             # Cannot directly use pbuffer because we'd lose the reference to the 
@@ -627,15 +694,15 @@ class AndorCam(object):
             array = self._buffer_as_array(cbuffer, size)
             # next buffer
             cbuffer = self._allocate_buffer(size)
-            self.atcore.AT_QueueBuffer(self.handle, cbuffer, sizeof(cbuffer))
+            self.QueueBuffer(cbuffer)
             buffers.append(cbuffer)
             
             callback(self, array, metadata)
             if num is not None:
                 num -= 1
     
-        self.atcore.AT_Command(self.handle, u"AcquisitionStop")
-        self.atcore.AT_Flush(self.handle)
+        self.Command(u"AcquisitionStop")
+        self.Flush()
         self.is_acquiring = False
     
     def stopAcquireFlow(self, sync=False):
@@ -661,8 +728,8 @@ class AndorCam(object):
             self.acquire_thread.join() # XXX timeout for safety? 
     
     def __del__(self):
-        self.atcore.AT_Close(self.handle)
-        self.atcore.AT_FinaliseLibrary()
+        self.Close()
+        self.FinaliseLibrary()
     
     def selfTest(self):
         """
@@ -670,15 +737,15 @@ class AndorCam(object):
         return (boolean): False if it detects any problem
         """
         try:
-            model = self.atcore.GetString(self.handle, u"CameraModel")
+            model = self.GetString(u"CameraModel")
         except Exception, err:
             print("Failed to read camera model: " + str(err))
             return False
     
         # Try to get an image with the default resolution
         try:
-            resolution = (self.atcore.GetInt(self.handle, u"SensorWidth"),
-                          self.atcore.GetInt(self.handle, u"SensorHeight"))
+            resolution = (self.GetInt(u"SensorWidth"),
+                          self.GetInt(u"SensorHeight"))
         except Exception, err:
             print("Failed to read camera resolution: " + str(err))
             return False
@@ -698,23 +765,24 @@ class AndorCam(object):
         Note: it's not recommended to call this method when cameras are being used
         return (set of 3-tuple: device number (int), name (string), max resolution (2-tuple int))
         """
-        atcore = ATDLL("libatcore.so.3", RTLD_GLOBAL) # Global so that its sub-libraries can access it
-        # XXX what happens if we call this while it's already loaded?
-        atcore.AT_InitialiseLibrary()
-        dc = atcore.GetInt(ATDLL.HANDLE_SYSTEM, u"Device Count")
+        camera = AndorCam() # system
+        dc = camera.GetInt(u"Device Count")
         #print "found %d devices." % dc.value
+        
+        # we reuse the same object to avoid init/del all the time
+        system_handle = camera.handle
         
         cameras = set()
         for i in range(dc):
-            hndl = c_int()
-            atcore.AT_Open(i, byref(hndl))
-            model = atcore.GetString(hndl, u"CameraModel")
-            resolution = (atcore.GetInt(hndl, u"SensorWidth"),
-                          atcore.GetInt(hndl, u"SensorHeight"))
+
+            camera.handle = camera.Open(i) 
+            model = camera.GetString(u"CameraModel")
+            resolution = (camera.GetInt(u"SensorWidth"),
+                          camera.GetInt(u"SensorHeight"))
             cameras.add((i, model, resolution))
-            atcore.AT_Close(hndl)
+            camera.Close()
             
-        atcore.AT_FinaliseLibrary()
+        camera.handle = system_handle # for the del() to work fine
         return cameras
 
 #def acquire(device, size, exp, binning=1):
