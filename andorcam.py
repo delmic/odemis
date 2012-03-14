@@ -22,6 +22,18 @@ import os
 import threading
 import time
 
+# Neo encodings (selectable depending on gain selection):
+#0 Mono12
+#1 Mono12Packed
+#2 Mono16
+#3 RGB8Packed
+#4 Mono12Coded
+#5 Mono12CodedPacked
+#6 Mono22Parallel
+#7 Mono22PackedParallel
+#8 Mono8 -> error code 19
+#9 Mono32
+
 class ATError(Exception):
     pass
 
@@ -57,8 +69,6 @@ class ATDLL(CDLL):
         func.__name__ = name
         func.errcheck = self.at_errcheck
         return func
-    
-
     
     err_code = {
 1: """AT_ERR_NONINITIALISED
@@ -135,7 +145,7 @@ class AndorCam(object):
             self.atcore = windll.LoadLibrary('libatcore.dll') # TODO check it works
         else:
             # Global so that its sub-libraries can access it
-            self.atcore = ATDLL("libatcore.so.3", RTLD_GLOBAL)
+            self.atcore = ATDLL("libatcore.so", RTLD_GLOBAL) # libatcore.so.3
              
         self.InitialiseLibrary()
         
@@ -153,6 +163,7 @@ class AndorCam(object):
         self.acquire_thread = None
     
     # low level methods, wrapper to the actual SDK functions
+    # TODO: not _everything_ is implemented, just what we need
     def InitialiseLibrary(self):
         self.atcore.AT_InitialiseLibrary()
         
@@ -268,8 +279,7 @@ class AndorCam(object):
             int_val = c_int(1)
         else:
             int_val = c_int(0)
-#        self.atcore.AT_SetBool(self.handle, prop, int_val)
-        self.atcore.AT_SetBool(self.handle, prop, value) # XXX?
+        self.atcore.AT_SetBool(self.handle, prop, int_val)
     
     def GetBool(self, prop):
         result = c_int()
@@ -422,8 +432,9 @@ class AndorCam(object):
             pass # unknown value
         
         try:
+            sdk = self.GetString(u"SoftwareVersion")
             firmware = self.GetString(u"FirmwareVersion") 
-            metadata["Camera version"] = "firmware: '%s', driver:''" % firmware # TODO driver
+            metadata["Camera version"] = "firmware: '%s', driver:'%s'" % (firmware, sdk) # TODO driver
         except ATError:
             pass # unknown value
         
@@ -630,7 +641,7 @@ class AndorCam(object):
         size (2-tuple int): Width and height of the image. It will be centred
          on the captor. It depends on the binning, so the same region as a size 
          twice smaller if the binning is 2 instead of 1. It must be a allowed
-         resolution. TODO how to pass information on what is allowed?
+         resolution.
         exp (float): exposure time in second
         binning (int 1, 2, 3, 4, or 8): how many pixels horizontally and vertically
           are combined to create "super pixels"
@@ -662,10 +673,9 @@ class AndorCam(object):
         """
         assert (self.isImplemented(u"CycleMode") and
                 self.isWritable(u"CycleMode"))
-        
         self.SetEnumString(u"CycleMode", u"Continuous")
-        
-        # Don't use the framecount feature as it's not always present, and easy in software
+        # We don't use the framecount feature as it's not always present, and
+        # easy to do in software.
         
         # Allocates a pipeline of two buffers in a pipe, so that when we are
         # processing one buffer, the driver can already acquire the next image.
@@ -677,11 +687,7 @@ class AndorCam(object):
             buffers.append(cbuffer)
             
         # Acquire the images
-        pbuffer = POINTER(c_byte)() # null pointer to c_bytes
-        buffersize = c_int()
-        timeout = c_uint(int(round((exp + 1) * 1000))) # ms
         self.Command(u"AcquisitionStart")
-
         while (not self.acquire_must_stop and (num is None or num > 0)):
             pbuffer, buffersize = self.WaitBuffer(exp + 1)
             metadata["Acquisition date"] = time.time() - exp # time at the beginning
@@ -767,6 +773,7 @@ class AndorCam(object):
         """
         camera = AndorCam() # system
         dc = camera.GetInt(u"Device Count")
+        sdk = camera.GetString(u"SoftwareVersion")
         #print "found %d devices." % dc.value
         
         # we reuse the same object to avoid init/del all the time
@@ -784,223 +791,6 @@ class AndorCam(object):
             
         camera.handle = system_handle # for the del() to work fine
         return cameras
-
-#def acquire(device, size, exp, binning=1):
-#    atcore = ATDLL("libatcore.so.3", RTLD_GLOBAL) # Global so that its sub-libraries can access it
-#    atcore.AT_InitialiseLibrary()
-#
-#    hndl = c_int()
-#    atcore.AT_Open(device, byref(hndl))
-#    
-#    
-#    # It affect max size, so before everything
-#    binning_str = u"%dx%d" % (binning, binning)
-#    atcore.AT_SetEnumString(hndl, u"AOIBinning", binning_str)
-#
-#    # Set size
-#    maxsize = (c_uint64(), c_uint64())
-#    atcore.AT_GetIntMax(hndl, u"AOIWidth", byref(maxsize[0]))
-#    atcore.AT_GetIntMax(hndl, u"AOIHeight", byref(maxsize[1]))
-#    print maxsize[0].value, maxsize[1].value
-#    minlt = (c_uint64(), c_uint64())
-#    atcore.AT_GetIntMax(hndl, u"AOITop", byref(minlt[0]))
-#    atcore.AT_GetIntMax(hndl, u"AOILeft", byref(minlt[1]))
-#    print minlt[0].value, minlt[1].value
-#    
-#    cursize = (c_uint64(), c_uint64())
-#    atcore.AT_GetInt(hndl, u"AOIWidth", byref(cursize[0]))
-#    atcore.AT_GetInt(hndl, u"AOIHeight", byref(cursize[1]))
-#    print cursize[0].value, cursize[1].value
-#
-#    implemented = c_int()
-#    atcore.AT_IsImplemented(hndl, u"AOIWidth", byref(implemented))
-#    print implemented.value
-#    writable = c_int()
-#    atcore.AT_IsWritable(hndl, u"AOIWidth", byref(writable))
-#    print writable.value
-#
-#    if writable.value != 0:
-#        lt = ((maxsize[0].value - size[0]) / 2 + 1, (maxsize[1].value - size[1]) / 2 + 1)
-#        print lt
-#
-#        # recommended order
-#        atcore.AT_SetInt(hndl, u"AOIWidth", c_uint64(size[0]))
-#        atcore.AT_SetInt(hndl, u"AOILeft", c_uint64(lt[0]))
-#        atcore.AT_SetInt(hndl, u"AOIHeight", c_uint64(size[1]))
-#        atcore.AT_SetInt(hndl, u"AOITop", c_uint64(lt[1]))
-#    else:
-#        size = (cursize[0].value, cursize[1].value)
-#    
-#    cstride = c_uint64()    
-#    atcore.AT_GetInt(hndl, u"AOIStride", byref(cstride)) # = size of a line in bytes (not pixel)
-#    stride = cstride.value
-#    #size = (12,5)
-#
-#    # set exposure time (which is automatically adapted to a working one)
-#    newExposure = c_double(exp)
-#    atcore.AT_SetFloat(hndl, u"ExposureTime", newExposure)
-#    actualExposure =  c_double()
-#    atcore.AT_GetFloat(hndl, u"ExposureTime", byref(actualExposure))
-#    print "exposure time:", actualExposure.value
-#    
-#    # Stop making too much noise
-#
-#    atcore.AT_SetFloat(hndl, u"TargetSensorTemperature", c_double(-15))
-#    atcore.AT_IsImplemented(hndl, u"FanSpeed", byref(implemented))
-#    if implemented.value != 0:
-#        atcore.AT_IsWritable(hndl, u"FanSpeed", byref(writable))
-#        print writable.value
-#        num_gain = c_int()
-#        atcore.AT_GetEnumCount(hndl, u"FanSpeed", byref(num_gain))
-#        for i in range(num_gain.value):
-#            gain = create_unicode_buffer(128)
-#            atcore.AT_GetEnumStringByIndex(hndl, u"FanSpeed", i, gain, len(gain))
-#            print i, gain.value
-#
-#        atcore.AT_SetEnumString(hndl, u"FanSpeed", u"Low")
-#
-#    # Set up the triggermode
-#    atcore.AT_IsImplemented(hndl, u"TriggerMode", byref(implemented))
-#    if implemented.value != 0:
-#        atcore.AT_IsWritable(hndl, u"TriggerMode", byref(writable))
-#        print writable.value
-#        num_gain = c_int()
-#        atcore.AT_GetEnumCount(hndl, u"TriggerMode", byref(num_gain))
-#        for i in range(num_gain.value):
-#            gain = create_unicode_buffer(128)
-#            atcore.AT_GetEnumStringByIndex(hndl, u"TriggerMode", i, gain, len(gain))
-#            print i, gain.value
-#
-#        atcore.AT_SetEnumString(hndl, u"TriggerMode", u"Internal") # Software is much slower (0.05 instead of 0.015 s)
-#    
-#    atcore.AT_IsImplemented(hndl, u"CycleMode", byref(implemented))
-#    if implemented.value != 0:
-#        atcore.AT_IsWritable(hndl, u"CycleMode", byref(writable))
-#        print writable.value
-#        num_gain = c_int()
-#        atcore.AT_GetEnumCount(hndl, u"CycleMode", byref(num_gain))
-#        for i in range(num_gain.value):
-#            gain = create_unicode_buffer(128)
-#            atcore.AT_GetEnumStringByIndex(hndl, u"CycleMode", i, gain, len(gain))
-#            print i, gain.value
-#
-#        atcore.AT_SetEnumString(hndl, u"CycleMode", u"Continuous")
-#
-#    # Set up the encoding
-#    atcore.AT_IsImplemented(hndl, u"PreAmpGainControl", byref(implemented))
-#    if implemented.value != 0:
-#        atcore.AT_IsWritable(hndl, u"PreAmpGainControl", byref(writable))
-#        print writable.value
-#        num_gain = c_int()
-#        atcore.AT_GetEnumCount(hndl, u"PreAmpGainControl", byref(num_gain))
-#        for i in range(num_gain.value):
-#            gain = create_unicode_buffer(128)
-#            atcore.AT_GetEnumStringByIndex(hndl, u"PreAmpGainControl", i, gain, len(gain))
-#            print i, gain.value
-#
-#        atcore.AT_SetEnumString(hndl, u"PreAmpGainControl", u"Gain 1 Gain 3 (16 bit)")
-#
-#    # The possible values for PixelEncoding 
-#    atcore.AT_IsWritable(hndl, u"PixelEncoding", byref(writable))
-#    print writable.value
-#    num_encoding = c_int()
-#    atcore.AT_GetEnumCount(hndl, u"PixelEncoding", byref(num_encoding))
-#    for i in range(num_encoding.value):
-#        encoding = create_unicode_buffer(128)
-#        atcore.AT_GetEnumStringByIndex(hndl, u"PixelEncoding", i, encoding, len(encoding))
-#        print i, encoding.value
-#
-#    atcore.AT_SetEnumString(hndl, u"PixelEncoding", u"Mono16")
-#
-#
-#    # Set up the buffers for containing each one image
-#    ImageSizeBytes = c_uint64()
-#    atcore.AT_GetInt(hndl, u"ImageSizeBytes", byref(ImageSizeBytes))
-#    cbuffers = []
-#    numbuff = 3
-#    for i in range(numbuff):
-#        cbuffer = (c_uint16 * (ImageSizeBytes.value / 2))() # empty array
-#        atcore.AT_QueueBuffer(hndl, cbuffer, ImageSizeBytes.value)
-#        print addressof(cbuffer)
-#        assert(addressof(cbuffer) % 8 == 0) # check alignment
-#        cbuffers.append(cbuffer)
-#
-#    print "Starting acquisition"
-#    pBuffer = POINTER(c_uint16)() # null pointer to ubyte
-#    BufferSize = c_int()
-#    timeout = c_uint(int(round((exp + 1) * 1000))) # ms
-#    atcore.AT_Command(hndl, u"AcquisitionStart")
-#    #atcore.AT_Command(hndl, u"SoftwareTrigger")
-#    curbuf = 0
-#    for i in range(5):
-#        # Get one image
-#        start = time.time()
-#
-#        atcore.AT_WaitBuffer(hndl, byref(pBuffer), byref(BufferSize), timeout)
-#        print "Got image in", time.time() - start
-#        #atcore.AT_Command(hndl, u"SoftwareTrigger")
-#        print addressof(pBuffer.contents), addressof(cbuffers[curbuf])
-#        #im = string_at(pBuffer, BufferSize.value) # seems to copy the data :-(
-#        # as_array() is a no-copy mechanism
-#        array = numpy.ctypeslib.as_array(cbuffers[curbuf]) # what's the type?
-#        print array.shape, size, size[0] * size[1]
-#        #array.shape = (stride/2, size[1])
-#        #print array[136]
-#        #im = Image.fromarray(array)
-#        # Two memory copies for one conversion! because of the stride, fromarray() does as bad
-#        im = Image.fromstring('I', size, array.tostring(), 'raw', 'I;16', stride, -1)
-#        #im = Image.frombuffer('I', size, cbuffers[curbuf], 'raw', 'I;16', stride, -1)
-#        im.convert("L").save("test%d.tiff" % i, "TIFF") # 16bits TIFF are not well supported!
-#        #print "buffer", BufferSize.value, "=", pBuffer[0]
-#        print "Record image in", time.time() - start
-#        # Be sure not to queue the buffer before we absolutely don't need the data
-#        atcore.AT_QueueBuffer(hndl, cbuffers[curbuf], ImageSizeBytes.value)
-#        curbuf = (curbuf + 1) % len(cbuffers)
-#
-#        print "Process image in", time.time() - start
-#
-#    atcore.AT_Command(hndl, u"AcquisitionStop")
-#    atcore.AT_Flush(hndl)
-#
-#    # Get another image
-##    atcore.AT_QueueBuffer(hndl, cbuffer, ImageSizeBytes.value)
-##    atcore.AT_Command(hndl, u"AcquisitionStart")
-##    atcore.AT_WaitBuffer(hndl, byref(pBuffer), byref(BufferSize), timeout)
-#    
-##    print addressof(pBuffer.contents), addressof(cbuffer)
-##    im = string_at(pBuffer, BufferSize.value) # seems the only way to get pythonic raw data
-##    print "buffer", BufferSize.value, "=", pBuffer[0]
-#    
-##    atcore.AT_Command(hndl, u"AcquisitionStop")
-##    print "Got second image", (time.time() - start)/2
-#
-##    atcore.AT_Flush(hndl)
-#
-#    # Close everything
-#    atcore.AT_Close(hndl)
-#    atcore.AT_FinaliseLibrary()
-#    return (im, size, stride)
-
-#print AndorCam.scan()
-#size = (1280,1080)
-#raw, size, stride = acquire(0, size, 0.1, 1)
-#print size
-#i = Image.fromstring('F', size, raw, 'raw', 'F;16', stride, -1)
-##print list(i.getdata())
-#c = i.convert("L")
-#c.save("test.tiff", "TIFF")
-
-# Neo encodings:
-#0 Mono12
-#1 Mono12Packed
-#2 Mono16 ->18
-#3 RGB8Packed
-#4 Mono12Coded
-#5 Mono12CodedPacked
-#6 Mono22Parallel
-#7 Mono22PackedParallel
-#8 Mono8 -> 19
-#9 Mono32
 
 
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:

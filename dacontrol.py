@@ -21,8 +21,30 @@ import PIL.Image as Image
 import andorcam
 import argparse
 import math
+import os
+import subprocess
 import sys
 import time
+
+def get_version():
+    if not os.path.isdir(".git"):
+        # TODO should fallback to a VERSION file
+        return "unknown"
+    
+    try:
+        p = subprocess.Popen(["git", "describe",
+                              "--tags", "--dirty", "--always"],
+                             stdout=subprocess.PIPE)
+    except EnvironmentError:
+        print "unable to run git"
+        return "unknown"
+    stdout = p.communicate()[0]
+    if p.returncode != 0:
+        print "unable to run git"
+        return "unknown"
+
+    ver = stdout.strip()
+    return ver
 
 def run_self_test(device):
     """
@@ -170,7 +192,7 @@ def main(args):
         # acquire an image
         size = (options.width, options.height)
         im, metadata = camera.acquire(size, options.exposure, options.binning)
-        metadata["Software name"] = "Delmic Acquisition Software"
+        metadata["Software name"] = "Delmic Acquisition Software %s" % get_version()
         
         saveAsTiff(options.output_filename, im, metadata)
     else:

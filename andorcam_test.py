@@ -25,7 +25,6 @@ import sys
 import time
 import unittest
 
-
 # the device to use to test (0 and 1 are normally always present) 
 DEVICE=0
 
