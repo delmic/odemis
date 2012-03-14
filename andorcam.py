@@ -19,6 +19,7 @@ You should have received a copy of the GNU General Public License along with Del
 from ctypes import *
 import numpy
 import os
+import threading
 import time
 
 class ATError(Exception):
@@ -239,6 +240,7 @@ class AndorCam(object):
         
         self.is_acquiring = False
         self.acquire_must_stop = False
+        self.acquire_thread = None
     
     def setTargetTemperature(self, temp):
         """
@@ -512,7 +514,9 @@ class AndorCam(object):
           and a dict (string -> base types) containing the metadata
         """
         assert not self.is_acquiring
-
+        assert not self.atcore.GetBool(self.handle, u"CameraAcquiring")
+        self.is_acquiring = True
+        
         metadata = self.getCameraMetadata()
         metadata.update(self._setupBestQuality())
 
@@ -540,9 +544,8 @@ class AndorCam(object):
     
         self.atcore.AT_Command(self.handle, u"AcquisitionStop")
         self.atcore.AT_Flush(self.handle)
+        self.is_acquiring = False
         return array, metadata
-    
-    #TODO acquireFlow() with a callback that receives array, metadata 
     
     def acquireFlow(self, callback, size, exp, binning=1, num=None):
         """
@@ -560,7 +563,8 @@ class AndorCam(object):
         num (None or int): number of images to acquire, or infinite if None
         returns immediately. To stop acquisition, call stopAcquireFlow()
         """
-        assert not self.is_acquiring and not self.atcore.GetBool()
+        assert not self.is_acquiring
+        assert not self.atcore.GetBool(self.handle, u"CameraAcquiring")
         self.is_acquiring = True
         
         metadata = self.getCameraMetadata()
@@ -571,25 +575,26 @@ class AndorCam(object):
         self.setSize(size)
         metadata.update(self.setExposureTime(exp))
         
-        # XXX set up thread
-        self._acquire_thread(callback, size, exp, metadata, num)
+        # Set up thread
+        self.acquire_thread = threading.Thread(target=self._acquire_thread_run,
+                                               name="andorcam acquire flow thread",
+                                               args=(callback, size, exp, metadata, num))
+        self.acquire_thread.start()
         
-        return
-
-    def _acquire_thread(self, callback, size, exp, metadata, num=None):
+    def _acquire_thread_run(self, callback, size, exp, metadata, num=None):
         """
         The core of the acquisition thread. Runs until it has acquired enough
         images or acquire_must_stop is True.
         """
-        assert (self.atcore.IsImplemented(self.handle, u"CycleMode") and
-                self.atcore.IsWritable(self.handle, u"CycleMode"))
+        assert (self.atcore.isImplemented(self.handle, u"CycleMode") and
+                self.atcore.isWritable(self.handle, u"CycleMode"))
         
         self.atcore.AT_SetEnumString(self.handle, u"CycleMode", u"Continuous")
         
         # Don't use the framecount feature as it's not always present, and easy in software
         
-        # Allocates two buffers, so that when we are processing one buffer,
-        # it can already acquire the next image.
+        # Allocates a pipeline of two buffers in a pipe, so that when we are
+        # processing one buffer, the driver can already acquire the next image.
         buffers = []
         nbuffers = 2
         for i in range(nbuffers):
@@ -603,20 +608,28 @@ class AndorCam(object):
         timeout = c_uint(int(round((exp + 1) * 1000))) # ms
         self.atcore.AT_Command(self.handle, u"AcquisitionStart")
 
-        self.atcore.AT_WaitBuffer(self.handle, byref(pbuffer), byref(buffersize), timeout)
-        metadata["Acquisition date"] = time.time() - exp # time at the beginning
-        
-        # Cannot directly use pbuffer because we'd lose the reference to the 
-        # memory allocation... and it'd get free'd at the end of the method
-        # So rely on the assumption cbuffer is used as is
-        assert(addressof(pbuffer.contents) == addressof(cbuffer))
-        array = self._buffer_as_array(cbuffer, size)
+        while (not self.acquire_must_stop and (num is None or num > 0)):
+            self.atcore.AT_WaitBuffer(self.handle, byref(pbuffer), byref(buffersize), timeout)
+            metadata["Acquisition date"] = time.time() - exp # time at the beginning
+            
+            # Cannot directly use pbuffer because we'd lose the reference to the 
+            # memory allocation... and it'd get free'd at the end of the method
+            # So rely on the assumption cbuffer is used as is
+            cbuffer = buffers.pop(0)
+            assert(addressof(pbuffer.contents) == addressof(cbuffer))
+            array = self._buffer_as_array(cbuffer, size)
+            # next buffer
+            cbuffer = self._allocate_buffer(size)
+            self.atcore.AT_QueueBuffer(self.handle, cbuffer, sizeof(cbuffer))
+            buffers.append(cbuffer)
+            
+            callback(array, metadata)
+            if num is not None:
+                num -= 1
     
         self.atcore.AT_Command(self.handle, u"AcquisitionStop")
         self.atcore.AT_Flush(self.handle)
         self.is_acquiring = False
-        
-        return array, metadata
     
     def stopAcquireFlow(self, sync=False):
         """
@@ -629,8 +642,7 @@ class AndorCam(object):
             return
         
         while self.is_acquiring:
-            # XXX yield
-            pass
+            self.acquire_thread.join() # XXX timeout for safety? 
     
     def __del__(self):
         self.atcore.AT_Close(self.handle)

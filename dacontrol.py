@@ -17,11 +17,12 @@ You should have received a copy of the GNU General Public License along with Del
 '''
 
 from osgeo import gdal, gdal_array
+import PIL.Image as Image
 import andorcam
 import argparse
+import math
 import sys
 import time
-import PIL.Image as Image
 
 def run_self_test(device):
     """
@@ -101,6 +102,8 @@ def saveAsTiffPIL(filename, array, metadata={}):
     # 16bits files are converted to 32 bit float TIFF with PIL
     pil_im.save(filename, "TIFF") 
 
+
+
 def main(args):
     """
     Contains the console handling code for the AndorCam3 class
@@ -129,6 +132,8 @@ def main(args):
                         help="Number of pixels to bin together when acquiring the picture. (Default is 1)")
     cmd_grp.add_argument("--output", "-o", dest="output_filename",
                         help="name of the file where the image should be saved. It is saved in TIFF format.")
+    cmd_grp.add_argument("--multi", "-m", dest="multi", type=int,
+                        help="Records several images in a row, number of images or 0 to record forever.")
 
     options = parser.parse_args(args[1:])
     
@@ -161,15 +166,38 @@ def main(args):
         print "Error while connecting to the camera: " + str(err)
         return 128
     
-    # acquire an image
-    size = (options.width, options.height)
-    im, metadata = camera.acquire(size, options.exposure, options.binning)
-    metadata["Software name"] = "Delmic Acquisition Software"
-    
-    saveAsTiff(options.output_filename, im, metadata)
+    if options.multi is None:
+        # acquire an image
+        size = (options.width, options.height)
+        im, metadata = camera.acquire(size, options.exposure, options.binning)
+        metadata["Software name"] = "Delmic Acquisition Software"
+        
+        saveAsTiff(options.output_filename, im, metadata)
+    else:
+        if options.multi == 0:
+            parser.error("Not implemented")
+            
+        # record server images
+        size = (options.width, options.height)
+        camera.acquireFlow(record_image, size, options.exposure, options.binning,
+                           options.multi)
+        time.sleep(0.3)
+        camera.stopAcquireFlow(sync=True)
 
     return 0
-        
+
+def record_image(im, metadata):
+    """
+    Records an image to the current directory with the filename from its date.
+    """
+    time_subsec, time_sec = math.modf(metadata["Acquisition date"])
+    # there is no way to put subseconds in strftime directly
+    str_msec = "%0.3d" % int(round(time_subsec * 1e3))
+    filename = time.strftime("%Y%m%d-%H:%M:%S." + str_msec + ".tiff",
+                             time.localtime(time_sec))
+    print "Saving %s" % filename 
+    saveAsTiff(filename, im, metadata)
+
 if __name__ == '__main__':
     exit(main(sys.argv))
 
