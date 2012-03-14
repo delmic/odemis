@@ -206,9 +206,15 @@ class ATDLL(CDLL):
     
 class AndorCam(object):
     """
-    Represents one andor camera and provide all the basic interfaces typical of
-    a CCD camera.
-    This implementation is for the SDK v3.
+    Represents one Andor camera and provides all the basic interfaces typical of
+    a CCD/CMOS camera.
+    This implementation is for the Andor SDK v3.
+    
+    It offers mostly two main high level methods: acquire() and acquireFlow(),
+    which respectively offer the possibility to get one and several images from
+    the camera.
+    
+    It also provide low-level methods corresponding to the SDK functions.
     """
     
     def __init__(self, device=None):
@@ -401,14 +407,14 @@ class AndorCam(object):
         self.atcore.AT_SetInt(self.handle, u"AOIHeight", c_uint64(size[1]))
         self.atcore.AT_SetInt(self.handle, u"AOITop", c_uint64(lt[1]))
         
-    def setExposureTime(self, time):
+    def setExposureTime(self, exp):
         """
         Set the exposure time. It's automatically adapted to a working one.
-        time (0<float): exposure time in seconds
+        exp (0<float): exposure time in seconds
         return (tuple): metadata corresponding to the setup
         """
-        assert(0.0 < time)
-        self.atcore.AT_SetFloat(self.handle, u"ExposureTime",  c_double(time))
+        assert(0.0 < exp)
+        self.atcore.AT_SetFloat(self.handle, u"ExposureTime",  c_double(exp))
         
         metadata = {}
         actual_exp = self.atcore.GetFloat(self.handle, u"ExposureTime")
@@ -471,8 +477,9 @@ class AndorCam(object):
         """
         returns a cbuffer of the right size for an image
         """
-        # The buffer might be bigger than AOIStride * AOIHeight if there is metadata
         image_size_bytes = self.atcore.GetInt(self.handle, u"ImageSizeBytes")
+        # The buffer might be bigger than AOIStride * AOIHeight if there is metadata
+        assert image_size_bytes >= (size[0] * size[1] * 2)
         
         # allocating directly a numpy array doesn't work if there is metadata:
         # ndbuffer = numpy.empty(shape=(stride / 2, size[1]), dtype="uint16")
@@ -551,7 +558,7 @@ class AndorCam(object):
         """
         Set up the camera and acquire a flow of images at the best quality for the given
           parameters. Should not be called if already a flow is being acquired.
-        callback (callable (numpy.ndarray, dict (string -> base types)) no return):
+        callback (callable (camera, numpy.ndarray, dict (string -> base types)) no return):
          function called for each image acquired
         size (2-tuple int): Width and height of the image. It will be centred
          on the captor. It depends on the binning, so the same region as a size 
@@ -623,7 +630,7 @@ class AndorCam(object):
             self.atcore.AT_QueueBuffer(self.handle, cbuffer, sizeof(cbuffer))
             buffers.append(cbuffer)
             
-            callback(array, metadata)
+            callback(self, array, metadata)
             if num is not None:
                 num -= 1
     
@@ -633,15 +640,24 @@ class AndorCam(object):
     
     def stopAcquireFlow(self, sync=False):
         """
-        Stop the acquisition of an image.
+        Stop the acquisition of a flow of images.
         sync (boolean): if True, wait that the acquisition is finished before returning.
-         Calling with this flag activated from the acquisition callback will dead-lock.
+         Calling with this flag activated from the acquisition callback is not 
+         permitted (it would cause a dead-lock).
         """
         self.acquire_must_stop = True
-        if not sync:
-            return
+        if sync:
+            self.waitAcquireFlow()
         
+    def waitAcquireFlow(self):
+        """
+        Waits until the end acquisition of a flow of images. Calling from the
+         acquisition callback is not permitted (it would cause a dead-lock).
+        """
+        # "while" is mostly to not wait if it's already finished 
         while self.is_acquiring:
+            # join() already checks that we are not the current_thread()
+            #assert threading.current_thread() != self.acquire_thread
             self.acquire_thread.join() # XXX timeout for safety? 
     
     def __del__(self):

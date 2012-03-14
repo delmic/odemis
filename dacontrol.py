@@ -133,7 +133,7 @@ def main(args):
     cmd_grp.add_argument("--output", "-o", dest="output_filename",
                         help="name of the file where the image should be saved. It is saved in TIFF format.")
     cmd_grp.add_argument("--multi", "-m", dest="multi", type=int,
-                        help="Records several images in a row, number of images or 0 to record forever.")
+                        help="Records several images in a row, number of images or 0 to record forever. Images files are named by time")
 
     options = parser.parse_args(args[1:])
     
@@ -174,19 +174,22 @@ def main(args):
         
         saveAsTiff(options.output_filename, im, metadata)
     else:
-        if options.multi == 0:
-            parser.error("Not implemented")
-            
-        # record server images
+        # record serveral images
         size = (options.width, options.height)
-        camera.acquireFlow(record_image, size, options.exposure, options.binning,
-                           options.multi)
-        time.sleep(0.3)
-        camera.stopAcquireFlow(sync=True)
-
+        
+        if options.multi == 0:
+            camera.acquireFlow(record_image, size, options.exposure, 
+                               options.binning)
+            raw_input("Press Enter to stop recording...")
+            camera.stopAcquireFlow(sync=True)
+        else:
+            camera.acquireFlow(record_image, size, options.exposure, 
+                               options.binning, options.multi)
+            camera.waitAcquireFlow()
+            
     return 0
 
-def record_image(im, metadata):
+def record_image(camera, im, metadata):
     """
     Records an image to the current directory with the filename from its date.
     """
@@ -197,6 +200,7 @@ def record_image(im, metadata):
                              time.localtime(time_sec))
     print "Saving %s" % filename 
     saveAsTiff(filename, im, metadata)
+    
 
 if __name__ == '__main__':
     exit(main(sys.argv))
