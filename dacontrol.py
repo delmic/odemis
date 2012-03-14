@@ -29,22 +29,16 @@ import time
 def get_version():
     if not os.path.isdir(".git"):
         # TODO should fallback to a VERSION file
-        return "unknown"
+        return "version unknown"
     
     try:
         p = subprocess.Popen(["git", "describe",
                               "--tags", "--dirty", "--always"],
                              stdout=subprocess.PIPE)
+        return p.stdout.read().strip()
     except EnvironmentError:
         print "unable to run git"
-        return "unknown"
-    stdout = p.communicate()[0]
-    if p.returncode != 0:
-        print "unable to run git"
-        return "unknown"
-
-    ver = stdout.strip()
-    return ver
+        return "version unknown"
 
 def run_self_test(device):
     """
@@ -136,7 +130,7 @@ def main(args):
     # arguments handling 
     parser = argparse.ArgumentParser(description="Delmic Acquisition Software for Andor Cameras")
 
-    parser.add_argument('--version', action='version', version='%(prog)s 0.1')
+    parser.add_argument('--version', action='version', version="%(prog)s " + get_version())
     parser.add_argument('--list', '-l', dest="list", action="store_true", default=False,
                         help="list all the available cameras.")
     parser.add_argument("--device", dest="device", type=int,
@@ -155,7 +149,7 @@ def main(args):
     cmd_grp.add_argument("--output", "-o", dest="output_filename",
                         help="name of the file where the image should be saved. It is saved in TIFF format.")
     cmd_grp.add_argument("--multi", "-m", dest="multi", type=int,
-                        help="Records several images in a row, number of images or 0 to record forever. Images files are named by time")
+                        help="Records several images in a row, number of images or 0 to record forever. Images files are named by time. To be used instead of --output.")
 
     options = parser.parse_args(args[1:])
     
@@ -179,8 +173,7 @@ def main(args):
     
     if options.width is None or options.height is None or options.exposure is None:
         parser.error("you need to specify the width, height and exposure time.")
-    if not options.output_filename:
-        parser.error("name of the output file must be specified")
+
     
     try:
         camera = andorcam.AndorCam(options.device)
@@ -189,6 +182,9 @@ def main(args):
         return 128
     
     if options.multi is None:
+        if not options.output_filename:
+            parser.error("name of the output file must be specified")
+            
         # acquire an image
         size = (options.width, options.height)
         im, metadata = camera.acquire(size, options.exposure, options.binning)
@@ -196,6 +192,9 @@ def main(args):
         
         saveAsTiff(options.output_filename, im, metadata)
     else:
+        if options.output_filename:
+            parser.error("--output conflicts with --multi: name of the output files is automatic.")
+            
         # record serveral images
         size = (options.width, options.height)
         
