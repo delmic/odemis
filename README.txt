@@ -23,3 +23,10 @@ GPLv2
 = Testing =
 To test the software, run andorcam_test.py. It is not necessary
 to have the camera connected and turned on if you have the simulation library installed.
+
+
+= Note about SDK v2 =
+Linux:
+For the USB support, you need to install libusb-dev (so that whereis reports libusb.so)
+Check the permissions of all the files: everything is installed by default as root only,
+so nothing can work from the normal user account. 

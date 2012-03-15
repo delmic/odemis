@@ -432,10 +432,12 @@ class AndorCam(object):
             pass # unknown value
         
         try:
+            # TODO SoftwareVersion might probably work only with handle = SYSTEM
             sdk = self.GetString(u"SoftwareVersion")
             firmware = self.GetString(u"FirmwareVersion") 
-            metadata["Camera version"] = "firmware: '%s', driver:'%s'" % (firmware, sdk) # TODO driver
+            metadata["Camera version"] = "firmware: '%s', driver:'%s'" % (firmware, sdk)
         except ATError:
+            print "Warning: Failed to obtain software and firmware versions."
             pass # unknown value
         
         try:
@@ -773,7 +775,6 @@ class AndorCam(object):
         """
         camera = AndorCam() # system
         dc = camera.GetInt(u"Device Count")
-        sdk = camera.GetString(u"SoftwareVersion")
         #print "found %d devices." % dc.value
         
         # we reuse the same object to avoid init/del all the time
@@ -781,7 +782,6 @@ class AndorCam(object):
         
         cameras = set()
         for i in range(dc):
-
             camera.handle = camera.Open(i) 
             model = camera.GetString(u"CameraModel")
             resolution = (camera.GetInt(u"SensorWidth"),
