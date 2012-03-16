@@ -155,7 +155,7 @@ class AndorCam3(object):
             return
         
         # Maximum cooling for lowest (image) noise
-        self.setTargetTemperature(-40) # That's the best for Neo
+        self.setTargetTemperature(-100) # very low (automatically adjusted)
         self.setFanSpeed(1.0)
         
         self.is_acquiring = False

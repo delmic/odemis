@@ -320,7 +320,7 @@ class AndorCam2(object):
         
         # Maximum cooling for lowest (image) noise
         self.setTargetTemperature(-100) # very low (automatically adjusted)
-        self.setFanSpeed(0.0)
+        self.setFanSpeed(1.0)
         
         self.is_acquiring = False
         self.acquire_must_stop = False
@@ -444,7 +444,7 @@ class AndorCam2(object):
             temp = sorted(ranges + (temp,))[1]
             
         self.atcore.SetTemperature(temp)
-        self.atcore.CoolerON()
+
 
         # TODO: a more generic function which set up the fan to the right speed
         # according to the target temperature?
@@ -469,24 +469,10 @@ class AndorCam2(object):
             values = [2, 0]
         val = values[int(round(speed * (len(values) - 1)))]
         self.atcore.SetFanMode(val)
-        
-        # TODO there is also a "SensorCooling" boolean property, no idea what it does!
-    
-    def find_closest(self, val, l):
-        return min(l, key=lambda x:abs(x - val))
-
-    def setReadoutRate(self, frequency):
-        """
-        frequency (100, 200, 280, 550): the pixel readout rate in MHz
-        """
-        assert((0 <= frequency))
-        # returns strings like u"550 MHz"
-        rates = self.GetEnumStringAvailable(u"PixelReadoutRate")
-        values = (int(r.rstrip(u" MHz")) for r in rates)
-        closest = self.find_closest(frequency, values)
-        # TODO handle the fact SimCam only accepts 550
-        #print self.atcore.GetEnumStringAvailable(self.handle, u"PixelReadoutRate")
-        self.SetEnumString(u"PixelReadoutRate", u"%d MHz" % closest)
+        if speed > 0:
+            self.atcore.CoolerON()
+        else:
+            self.atcore.CoolerOFF()
         
     def getCameraMetadata(self):
         """
@@ -497,7 +483,10 @@ class AndorCam2(object):
         metadata = {}
         caps = self.GetCapabilities()
         model = AndorCapabilities.CameraTypes.get(caps.CameraType, "unknown")
-        metadata["Camera name"] = "Andor " + model
+        headmodel = create_string_buffer(260) # MAX_PATH
+        self.atcore.GetHeadModel(headmodel)
+        metadata["Camera name"] = "Andor " + model + (headmodel.value)
+
         try:
             serial = c_int32()
             self.atcore.GetCameraSerialNumber(byref(serial))
@@ -506,23 +495,33 @@ class AndorCam2(object):
             pass # unknown value
         
         try:
+            driver, sdk = self.GetVersionInfo()
+            
             eprom, coffile = c_uint(), c_uint()
-            vxdrev, vxdver = c_uint(), c_uint()
-            dllrev, dllver = c_uint(), c_uint() 
+            vxdrev, vxdver = c_uint(), c_uint() # same as driver
+            dllrev, dllver = c_uint(), c_uint() # same as sdk
             self.atcore.GetSoftwareVersion(byref(eprom), byref(coffile),
                 byref(vxdrev), byref(vxdver), byref(dllrev), byref(dllver))
 
-            driver, sdk = self.GetVersionInfo()
+            PCB, Decode = c_uint(), c_uint()
+            dummy1, dummy2 = c_uint(), c_uint()
+            CameraFirmwareVersion, CameraFirmwareBuild = c_uint(), c_uint()
+            self.atcore.GetHardwareVersion(byref(PCB), byref(Decode), 
+                byref(dummy1), byref(dummy2), byref(CameraFirmwareVersion), byref(CameraFirmwareVersion))
 
-            metadata["Camera version"] = ("firmware: %d/%d, driver: '%s', SDK:'%s'" %
-                (eprom.value, coffile.value, driver, sdk))
+
+            metadata["Camera version"] = ("PCB: %d/%d, firmware: %d.%d, "
+                "eprom: %d/%d, driver: '%s', SDK:'%s'" %
+                (PCB.value, Decode.value, CameraFirmwareVersion.value,
+                 CameraFirmwareBuild.value, eprom.value, coffile.value,
+                 driver, sdk))
         except AndorV2Error:
             pass # unknown value
         
         try:
             psize = self.GetPixelSize()
-            metadata["Captor pixel width"] = psize[0] * 1e-6 # m
-            metadata["Captor pixel height"] = psize[1] * 1e-6 # m
+            metadata["Sensor pixel width"] = psize[0] * 1e-6 # m
+            metadata["Sensor pixel height"] = psize[1] * 1e-6 # m
         except AndorV2Error:
             pass # unknown value
         
@@ -601,45 +600,62 @@ class AndorCam2(object):
         return (tuple): metadata corresponding to the setup
         """
         metadata = {}
-#        # we are not in a hurry, so we can set up to the slowest and less noise
-#        # parameters:
-#        # slow read out
-#        # rolling shutter (global avoids tearing but it's unlikely to happen)
-#        # 16 bit - Gain 1+4 (maximum)
-#        # SpuriousNoiseFilter On (this is actually a software based method)
-#        self.setReadoutRate(100)
-#        ratei = self.GetEnumIndex(u"PixelReadoutRate")
-#        rate = self.GetEnumStringByIndex(u"PixelReadoutRate", ratei) 
-#        metadata['Pixel readout rate'] = rate
-#        
-##        print self.atcore.GetEnumStringAvailable(self.handle, u"ElectronicShutteringMode")
-#        self.SetEnumString(u"ElectronicShutteringMode", u"Rolling")
-#        
 #        #print self.atcore.GetEnumStringAvailable(self.handle, u"PreAmpGainControl")
 #        if self.isImplemented(u"PreAmpGainControl"):
 #            # If not, we are on a SimCam so it doesn't matter
 #            self.SetEnumString(u"PreAmpGainControl", u"Gain 1 Gain 4 (16 bit)")
-#            
-#        # Allowed values of PixelEncoding depends on Gain: "Both" => Mono12Coded 
-#        try:
-#            self.SetEnumString(u"PixelEncoding", u"Mono16")
-#            metadata['Bits per pixel'] = 16
-#        except AndorV2Error:
-#            # Fallback to 12 bits (represented on 16 bits)
-#            try:
-#                self.SetEnumString(u"PixelEncoding", u"Mono12")
-#                metadata['Bits per pixel'] = 12
-#            except AndorV2Error:
-#                self.SetEnumString(u"PixelEncoding", u"Mono12Coded")
-#                metadata['Bits per pixel'] = 12
 #        
-#        if self.isImplemented(u"SpuriousNoiseFilter"):
-#            self.SetBool(u"SpuriousNoiseFilter", True)
-#            metadata['Filter'] = "Spurious noise filter"
+    
+
+        
+        # EMCCDGAIN, DDGTIMES, DDGIO, EMADVANCED => lots of gain settings
+        # None supported on the Clara?
+        #GetNumberPreAmpGains()/SetPreAmpGain()
+        nb_gains = c_int() 
+        self.atcore.GetNumberPreAmpGains(byref(nb_gains))
+        for i in range(nb_gains.value):
+            gain = c_float()
+            self.atcore.GetPreAmpGain(i, byref(gain))
+            print gain
+
+
+        # For the Clara: 0 = conventional, 1 = Extended Near Infra-Red
+        oa = 0
+        try: 
+            self.atcore.SetOutputAmplifier(oa) # TODO use NIR?
+        except AndorV2Error:
+            pass # unsupported
+        
+        # Slower read out => less noise
+        # Each channel has different horizontal shift speeds possible
+        # find the channel whith the lowest speed
+        nb_channels = c_int()
+        self.atcore.GetNumberADChannels(byref(nb_channels))
+        hsspeeds = set()
+        for channel in range(nb_channels.value):
+            nb_hsspeeds = c_int()
+            self.atcore.GetNumberHSSpeeds(channel, oa, byref(nb_hsspeeds))
+            for i in range(nb_hsspeeds.value):
+                hsspeed = c_float()
+                self.atcore.GetHSSpeed(channel, oa, i, byref(hsspeed))
+                hsspeeds.add((channel, i, hsspeed.value))
+                
+        channel, idx, hsspeed = min(hsspeeds, key=lambda x: x[2])
+#        self.atcore.SetADChannel(channel) # TODO breaks everything?!
+        self.atcore.SetHSSpeed(oa, idx)
+        metadata['Pixel readout rate'] = hsspeed # Mhz
+        
+        speed_idx, vsspeed = c_int(), c_float() # ms
+        self.atcore.GetFastestRecommendedVSSpeed(byref(speed_idx), byref(vsspeed))
+        self.atcore.SetVSSpeed(speed_idx)
+
+        # Doesn't seem to work for the clara (or single scan mode?)
+#        self.atcore.SetFilterMode(2) # 2 = on
+#        metadata['Filter'] = "Cosmic Ray filter"
 
         # TODO: according to doc: if AC_FEATURES_SHUTTEREX you MUST use SetShutterEx()
-        # TODO: 50, 50 ms for open/closing times matter in auto? Should be 0?  
-        self.atcore.SetShutter(1, 0, 50, 50) # mode 0 = auto 
+        # TODO: 20, 20 ms for open/closing times matter in auto? Should be 0, more?   
+        self.atcore.SetShutter(1, 0, 20, 20) # mode 0 = auto 
         self.atcore.SetTriggerMode(0) # 0 = internal
 
         return metadata
@@ -806,8 +822,8 @@ class AndorCam2(object):
             self.acquire_thread.join() # XXX timeout for safety? 
     
     def __del__(self):
+        #self.atcore.CoolerOFF()
         self.Shutdown()
-        pass
     
     def selfTest(self):
         """
