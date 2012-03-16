@@ -19,6 +19,7 @@ You should have received a copy of the GNU General Public License along with Del
 from osgeo import gdal, gdal_array
 import PIL.Image as Image
 import andorcam
+import andorcam2
 import argparse
 import math
 import os
@@ -40,23 +41,26 @@ def get_version():
         print "unable to run git"
         return "version unknown"
 
-def run_self_test(device):
+def run_self_test(camera):
     """
-    Run self test on each detect controller of the network connected to the given
-    serial port.
-    port (string): name of the serial port
+    Run self test for the given camera
+    camera (andorcam2 or andorcam3): device
     return (boolean) True if all the tests passed, False otherwise
     """
-    camera = andorcam.AndorCam(device)
     cam_metadata = camera.getCameraMetadata()
-    print "Testing device %d: %s" % (device, cam_metadata["Camera name"])
+    print "Testing device: %s" % cam_metadata["Camera name"]
     return camera.selfTest()
 
 def scan():
-    cameras = andorcam.AndorCam.scan()
+    cameras = andorcam.AndorCam3.scan()
     for i, name, res in sorted(cameras):
-        print "%d: %s (%dx%d)" % (i, name, res[0], res[1]) 
-
+        print "%d: %s (%dx%d)" % (i + 30, name, res[0], res[1])
+    
+    # It tends to crash more if called before andorcam3
+    cameras = andorcam2.AndorCam2.scan()
+    for i, name, res in sorted(cameras):
+        print "%d: %s (%dx%d)" % (i + 20, name, res[0], res[1])
+            
 def saveAsTiff(filename, array, metadata={}):
     """
     Saves an array as a TIFF file.
@@ -161,26 +165,29 @@ def main(args):
     if options.device is None:
         parser.error("Device number must be specified")
         
+    try:
+        if (20 <= options.device and options.device <= 29):
+            camera = andorcam2.AndorCam2(options.device - 20)
+        elif (30 <= options.device and options.device <= 39):
+            camera = andorcam.AndorCam3(options.device - 30)
+        else:
+            parser.error("Device %d unknown." % options.device)
+    except Exception, err:
+        print "Error while connecting to the camera: " + str(err)
+        return 128
+    
     # Test mode
     if options.test:
-        if run_self_test(options.device):
+        if run_self_test(camera):
             print "Test passed."
             return 0
         else:
             print "Test failed."
             return 127
 
-    
     if options.width is None or options.height is None or options.exposure is None:
         parser.error("you need to specify the width, height and exposure time.")
 
-    
-    try:
-        camera = andorcam.AndorCam(options.device)
-    except Exception, err:
-        print "Error while connecting to the camera: " + str(err)
-        return 128
-    
     if options.multi is None:
         if not options.output_filename:
             parser.error("name of the output file must be specified")

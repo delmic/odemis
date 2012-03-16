@@ -120,7 +120,7 @@ class ATDLL(CDLL):
 }
 
     
-class AndorCam(object):
+class AndorCam3(object):
     """
     Represents one Andor camera and provides all the basic interfaces typical of
     a CCD/CMOS camera.
@@ -404,7 +404,7 @@ class AndorCam(object):
                 # Typically for the simcam
                 act_binning = (self.GetInt(u"AOIHBin"), self.GetInt(u"AOIVBin"))
                 if act_binning != (binning, binning):
-                    raise IOError("AndorCam: Requested binning " + 
+                    raise IOError("AndorCam3: Requested binning " + 
                                   str((binning, binning)) + 
                                   " does not match fixed binning " +
                                   str(act_binning))
@@ -420,7 +420,7 @@ class AndorCam(object):
         return (dict : string -> string): the metadata
         """
         metadata = {}
-        model = self.GetString(u"CameraModel")
+        model = "Andor " + self.GetString(u"CameraModel")
         metadata["Camera name"] = model
         # TODO there seems to be a bug in SimCam v3.1: => check v3.3
 #        self.atcore.isImplemented(self.handle, u"SerialNumber") return true
@@ -443,8 +443,8 @@ class AndorCam(object):
         try:
             psize = (self.GetFloat(u"PixelWidth"),
                      self.GetFloat(u"PixelHeight"))
-            metadata["Captor pixel width"] = str(psize[0] * 1e6) # m
-            metadata["Captor pixel height"] = str(psize[1] * 1e6) # m
+            metadata["Captor pixel width"] = psize[0] * 1e-6 # m
+            metadata["Captor pixel height"] = psize[1] * 1e-6 # m
         except ATError:
             pass # unknown value
         
@@ -469,7 +469,7 @@ class AndorCam(object):
         if (not self.isImplemented(u"AOIWidth") or 
             not self.isWritable(u"AOIWidth")):
             if size != resolution:
-                raise IOError("AndorCam: Requested image size " + str(size) + 
+                raise IOError("AndorCam3: Requested image size " + str(size) + 
                               " does not match sensor resolution " + str(resolution))
             return
         
@@ -622,6 +622,7 @@ class AndorCam(object):
         self.Command(u"AcquisitionStart")
         pbuffer, buffersize = self.WaitBuffer(exp + 1)
         metadata["Acquisition date"] = time.time() - exp # time at the beginning
+        metadata["Camera temperature"] = self.GetFloat(u"SensorTemperature")
         
         # Cannot directly use pbuffer because we'd lose the reference to the 
         # memory allocation... and it'd get free'd at the end of the method
@@ -773,17 +774,17 @@ class AndorCam(object):
         Note: it's not recommended to call this method when cameras are being used
         return (set of 3-tuple: device number (int), name (string), max resolution (2-tuple int))
         """
-        camera = AndorCam() # system
+        camera = AndorCam3() # system
         dc = camera.GetInt(u"Device Count")
-        #print "found %d devices." % dc.value
+#        print "found %d devices." % dc
         
         # we reuse the same object to avoid init/del all the time
         system_handle = camera.handle
         
         cameras = set()
         for i in range(dc):
-            camera.handle = camera.Open(i) 
-            model = camera.GetString(u"CameraModel")
+            camera.handle = camera.Open(i)
+            model = "Andor " + camera.GetString(u"CameraModel")
             resolution = (camera.GetInt(u"SensorWidth"),
                           camera.GetInt(u"SensorHeight"))
             cameras.add((i, model, resolution))

@@ -121,7 +121,7 @@ class TestDAControl(unittest.TestCase):
 
 class TestAndorCam(unittest.TestCase):
     """
-    Test directly the AndorCam class.
+    Test directly the AndorCam3 class.
     """
 
     def test_scan(self):
@@ -129,11 +129,11 @@ class TestAndorCam(unittest.TestCase):
         Check that we can do a scan network. It can pass only if we are
         connected to at least one controller.
         """
-        cameras = andorcam.AndorCam.scan()
+        cameras = andorcam.AndorCam3.scan()
         self.assertGreater(len(cameras), 0)
 
     def test_acquire(self):
-        camera = andorcam.AndorCam(DEVICE)
+        camera = andorcam.AndorCam3(DEVICE)
         size = (2560, 2160)
         exposure = 0.1
         start = time.time()
@@ -145,7 +145,7 @@ class TestAndorCam(unittest.TestCase):
         self.assertIn("Exposure time", metadata)
         
     def test_acquire_flow(self):
-        camera = andorcam.AndorCam(DEVICE)
+        camera = andorcam.AndorCam3(DEVICE)
         self.size = (2560, 2160)
         number = 5
         self.received = 0

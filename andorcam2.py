@@ -39,7 +39,44 @@ class AndorCapabilities(Structure):
                 ("PCICard", c_uint32),
                 ("EMGainCapability", c_uint32),
                 ("FTReadModes", c_uint32)]
+    
+    # for the Features field
+    FEATURES_FANCONTROL = 128
+    FEATURES_MIDFANCONTROL = 256
+    
+    # for the GetFunctions field
+    GETFUNCTION_TEMPERATURE = 0x01
+    GETFUNCTION_TARGETTEMPERATURE = 0x02
+    GETFUNCTION_TEMPERATURERANGE = 0x04
+    GETFUNCTION_DETECTORSIZE = 0x08
+    GETFUNCTION_MCPGAIN = 0x10
+    GETFUNCTION_EMCCDGAIN = 0x20
         
+    # for the SetFunctions field
+    SETFUNCTION_VREADOUT = 0x01
+    SETFUNCTION_HREADOUT = 0x02
+    SETFUNCTION_TEMPERATURE = 0x04
+    SETFUNCTION_MCPGAIN = 0x08
+    SETFUNCTION_EMCCDGAIN = 0x10
+    SETFUNCTION_BASELINECLAMP = 0x20
+    SETFUNCTION_VSAMPLITUDE = 0x40
+    SETFUNCTION_HIGHCAPACITY = 0x80
+    SETFUNCTION_BASELINEOFFSET = 0x0100
+    SETFUNCTION_PREAMPGAIN = 0x0200
+    
+    # ReadModes field
+    READMODE_FULLIMAGE = 1
+    READMODE_SUBIMAGE = 2
+    READMODE_SINGLETRACK = 4
+    READMODE_FVB = 8
+    READMODE_MULTITRACK = 16
+    READMODE_RANDOMTRACK = 32
+    READMODE_MULTITRACKSCAN = 64
+    
+    CameraTypes = {
+17: "Clara",       
+}
+    
 class AndorV2DLL(CDLL):
     """
     Subclass of CDLL specific to andor library, which handles error codes for
@@ -47,8 +84,23 @@ class AndorV2DLL(CDLL):
     It works by setting a default _FuncPtr.errcheck.
     """
 
+    # For GetVersionInfo()
+    AT_SDKVersion = 0x40000000
+    AT_DeviceDriverVersion = 0x40000001
     
+    # For GetStatus()
+    DRV_ACQUIRING = 20072
+    DRV_IDLE = 20073
+    DRV_TEMPCYCLE = 20074
+        
     DRV_SUCCESS = 20002
+    DRV_TEMPERATURE_OFF = 20034
+    DRV_TEMPERATURE_NOT_STABILIZED = 20035
+    DRV_TEMPERATURE_STABILIZED = 20036
+    DRV_TEMPERATURE_NOT_REACHED = 20037
+    DRV_TEMPERATURE_DRIFT = 20040
+    
+    
     @staticmethod
     def at_errcheck(result, func, args):
         """
@@ -56,8 +108,7 @@ class AndorV2DLL(CDLL):
         error.
         Follows the ctypes.errcheck callback convention
         """
-        print "receive value", result
-        if result != AndorV2DLL.DRV_SUCCESS:
+        if not result in AndorV2DLL.ok_code:
             if result in AndorV2DLL.err_code:
                 raise AndorV2Error("Call to %s failed with error code %d: %s" %
                                (str(func.__name__), result, AndorV2DLL.err_code[result]))
@@ -72,6 +123,17 @@ class AndorV2DLL(CDLL):
         func.errcheck = self.at_errcheck
         return func
     
+    ok_code = {
+20002: "DRV_SUCCESS",
+# Used by GetTemperature()
+20034: "DRV_TEMPERATURE_OFF",
+20035: "DRV_TEMPERATURE_NOT_STABILIZED",
+20036: "DRV_TEMPERATURE_STABILIZED",
+20037: "DRV_TEMPERATURE_NOT_REACHED",
+20040: "DRV_TEMPERATURE_DRIFT",      
+}
+    
+    # Not all of them are actual error code, but having them is not a problem
     err_code = {
 20003: "DRV_VXDNOTINSTALLED",
 20004: "DRV_ERROR_SCAN",
@@ -194,9 +256,8 @@ class AndorV2DLL(CDLL):
 20195: "DRV_OA_FAILED_TO_GET_MODE",
 20211: "DRV_PROCESSING_FAILED",
 }
-    CameraTypes = {
-17: "Clara",       
-}
+
+
 #AC_CAMERATYPE_PDA 0
 #AC_CAMERATYPE_IXON 1
 #AC_CAMERATYPE_ICCD 2
@@ -258,8 +319,8 @@ class AndorCam2(object):
         self.Initialize()
         
         # Maximum cooling for lowest (image) noise
-        self.setTargetTemperature(-40) #  XXX What's the best for Clara?
-        self.setFanSpeed(1.0)
+        self.setTargetTemperature(-100) # very low (automatically adjusted)
+        self.setFanSpeed(0.0)
         
         self.is_acquiring = False
         self.acquire_must_stop = False
@@ -269,6 +330,7 @@ class AndorCam2(object):
     # they do not ensure the actual camera is selected, you have to call select()
     # TODO: not _everything_ is implemented, just what we need
     def Initialize(self):
+        # It can take a loooong time (Clara: ~10s)
         if os.name == "nt":
             self.atcore.Initialize("")
         else:
@@ -294,7 +356,64 @@ class AndorCam2(object):
         width, height = c_int32(), c_int32()
         self.atcore.GetDetector(byref(width), byref(height))
         return width.value, height.value
+                
+    def GetPixelSize(self):
+        """
+        return 2-tuple float, float: width, height of one pixel in um
+        """
+        width, height = c_float(), c_float()
+        self.atcore.GetPixelSize(byref(width), byref(height))
+        return width.value, height.value
+    
+    def GetTemperatureRange(self):
+        mint, maxt = c_int(), c_int()
+        self.atcore.GetTemperatureRange(byref(mint), byref(maxt))
+        return mint.value, maxt.value
+    
+    def GetMaximumBinning(self, readmode):
+        """
+        readmode (0<= int <= 4): cf SetReadMode
+        return the maximum binning allowable in horizontal and vertical
+         dimension for a particular readout mode.
+        """
+        assert(readmode in range(5))
+        maxh, maxv = c_int(), c_int()
+        self.atcore.GetMaximumBinning(readmode, 0, byref(maxh))
+        self.atcore.GetMaximumBinning(readmode, 1, byref(maxv))
+        return maxh.value, maxv.value
+    
+    def GetTemperature(self):
+        """
+        returns (int) the current temperature of the captor in C
+        """
+        temp = c_int()
+        # It return the status of the temperature via error code
+        status = self.atcore.GetTemperature(byref(temp))
+        return temp.value
         
+    def GetVersionInfo(self):
+        """
+        return (2-tuple string, string): the driver and sdk info 
+        """
+        sdk_str = create_string_buffer(80) # that should always fit!
+        self.atcore.GetVersionInfo(AndorV2DLL.AT_SDKVersion, sdk_str,
+                                   c_uint32(sizeof(sdk_str)))
+        driver_str = create_string_buffer(80)
+        self.atcore.GetVersionInfo(AndorV2DLL.AT_DeviceDriverVersion, driver_str,
+                                   c_uint32(sizeof(driver_str)))
+
+        return driver_str.value, sdk_str.value
+    
+    def WaitForAcquisition(self, timeout=None):
+        """
+        timeout (float or None): maximum time to wait in second (None for infinite)
+        """
+        if timeout is None:
+            self.atcore.WaitForAcquisition()
+        else:
+            timeout_ms = c_uint(int(round(timeout * 1e3))) # ms
+            self.atcore.WaitForAcquisitionTimeOut(timeout_ms)
+             
     # High level methods
     def select(self):
         """
@@ -314,11 +433,18 @@ class AndorCam2(object):
         temp (-400 < float < 100): temperature in C
         """
         assert((-400 <= temp) and (temp <= 100))
-        # TODO apparently the Neo also has a "Temperature Control" which might be
-        # better to use
-        ranges = self.GetFloatRanges(u"TargetSensorTemperature")
-        temp = sorted(ranges + (temp,))[1]
-        self.SetFloat(u"TargetSensorTemperature", temp)
+        
+        self.select()
+        caps = self.GetCapabilities()
+        if not (caps.SetFunctions | AndorCapabilities.SETFUNCTION_TEMPERATURE):
+            return
+        
+        if (caps.GetFunctions | AndorCapabilities.GETFUNCTION_TEMPERATURERANGE):
+            ranges = self.GetTemperatureRange()
+            temp = sorted(ranges + (temp,))[1]
+            
+        self.atcore.SetTemperature(temp)
+        self.atcore.CoolerON()
 
         # TODO: a more generic function which set up the fan to the right speed
         # according to the target temperature?
@@ -330,15 +456,19 @@ class AndorCam2(object):
         """
         assert((0 <= speed) and (speed <= 1))
         
-        if not self.isImplemented(u"FanSpeed"):
+        self.select()
+        caps = self.GetCapabilities()
+        if not (caps.Features | AndorCapabilities.FEATURES_FANCONTROL):
             return
 
-        # Let's assume it's linearly distributed in speed... at least it's true
-        # for the Neo and the SimCam. Looks like this for Neo:
-        # [u"Off", u"Low", u"On"]
-        values = self.GetEnumStringAvailable(u"FanSpeed")
+        # It's more or less linearly distributed in speed... 
+        # 0 = full, 1 = low, 2 = off
+        if caps.Features | AndorCapabilities.FEATURES_MIDFANCONTROL:
+            values = [2, 1, 0]
+        else:
+            values = [2, 0]
         val = values[int(round(speed * (len(values) - 1)))]
-        self.SetEnumString(u"FanSpeed", val)
+        self.atcore.SetFanMode(val)
         
         # TODO there is also a "SensorCooling" boolean property, no idea what it does!
     
@@ -358,38 +488,6 @@ class AndorCam2(object):
         #print self.atcore.GetEnumStringAvailable(self.handle, u"PixelReadoutRate")
         self.SetEnumString(u"PixelReadoutRate", u"%d MHz" % closest)
         
-    def setBinning(self, binning):
-        """
-        binning (int 1, 2, 3, 4, or 8): how many pixels horizontally and vertically
-         are combined to create "super pixels"
-        Note: super pixels are always square
-        return (tuple): metadata corresponding to the setup
-        """
-        values = [1, 2, 3, 4, 8]
-        assert(binning in values)
-        
-        # Nicely the API is different depending on cameras...
-        if self.isImplemented(u"AOIBinning"):
-            # Typically for the Neo
-            binning_str = u"%dx%d" % (binning, binning)
-            self.SetEnumString(u"AOIBinning", binning_str)
-        elif self.isImplemented(u"AOIHBin"):
-            if self.isWritable(u"AOIHBin"):
-                self.SetInt(u"AOIHBin", binning)
-                self.SetInt(u"AOIVBin", binning)
-            else:
-                # Typically for the simcam
-                act_binning = (self.GetInt(u"AOIHBin"), self.GetInt(u"AOIVBin"))
-                if act_binning != (binning, binning):
-                    raise IOError("AndorCam: Requested binning " + 
-                                  str((binning, binning)) + 
-                                  " does not match fixed binning " +
-                                  str(act_binning))
-            
-        metadata = {}
-        metadata["Camera binning"] =  "%dx%d" % (binning, binning)
-        return metadata
-    
     def getCameraMetadata(self):
         """
         return the metadata corresponding to the camera in general (common to 
@@ -397,88 +495,104 @@ class AndorCam2(object):
         return (dict : string -> string): the metadata
         """
         metadata = {}
-        model = self.GetString(u"CameraModel")
-        metadata["Camera name"] = model
-        # TODO there seems to be a bug in SimCam v3.1: => check v3.3
-#        self.atcore.isImplemented(self.handle, u"SerialNumber") return true
-#        but self.atcore.GetInt(self.handle, u"SerialNumber") fail with error code 2 = AT_ERR_NOTIMPLEMENTED
+        caps = self.GetCapabilities()
+        model = AndorCapabilities.CameraTypes.get(caps.CameraType, "unknown")
+        metadata["Camera name"] = "Andor " + model
         try:
             serial = c_int32()
             self.atcore.GetCameraSerialNumber(byref(serial))
-
             metadata["Camera serial"] = str(serial.value)
         except AndorV2Error:
             pass # unknown value
         
         try:
-            sdk = self.GetString(u"SoftwareVersion")
-            firmware = self.GetString(u"FirmwareVersion") 
-            metadata["Camera version"] = "firmware: '%s', driver:'%s'" % (firmware, sdk) # TODO driver
+            eprom, coffile = c_uint(), c_uint()
+            vxdrev, vxdver = c_uint(), c_uint()
+            dllrev, dllver = c_uint(), c_uint() 
+            self.atcore.GetSoftwareVersion(byref(eprom), byref(coffile),
+                byref(vxdrev), byref(vxdver), byref(dllrev), byref(dllver))
+
+            driver, sdk = self.GetVersionInfo()
+
+            metadata["Camera version"] = ("firmware: %d/%d, driver: '%s', SDK:'%s'" %
+                (eprom.value, coffile.value, driver, sdk))
         except AndorV2Error:
             pass # unknown value
         
         try:
-            psize = (self.GetFloat(u"PixelWidth"),
-                     self.GetFloat(u"PixelHeight"))
-            metadata["Captor pixel width"] = str(psize[0] * 1e6) # m
-            metadata["Captor pixel height"] = str(psize[1] * 1e6) # m
+            psize = self.GetPixelSize()
+            metadata["Captor pixel width"] = psize[0] * 1e-6 # m
+            metadata["Captor pixel height"] = psize[1] * 1e-6 # m
         except AndorV2Error:
             pass # unknown value
         
         return metadata
-    
-    def setSize(self, size):
+
+    def setSizeBinning(self, size, binning):
         """
         Change the acquired image size (and position)
         size (2-tuple int): Width and height of the image. It will centred
          on the captor. It depends on the binning, so the same region as a size 
          twice smaller if the binning is 2 instead of 1. It must be a allowed
          resolution.
+        binning (2-tuple int): how many pixels horizontally and vertically are
+         combined to create "super pixels"
+        return (tuple): metadata corresponding to the setup
         """
+        readmode = 4# 4 = Image
+        # TODO support "Full Vertical Binning" if binning[1] == size[1]
+
+        maxbinning = self.GetMaximumBinning(readmode)
+        assert((1 <= binning[0]) and (binning[0] <= maxbinning[0]) and
+               (1 <= binning[1]) and (binning[1] <= maxbinning[1]))
         # TODO how to pass information on what is allowed?
-        resolution = (self.GetInt(u"SensorWidth"),
-                      self.GetInt(u"SensorHeight"))
+        full_res = self.GetDetector()
+        resolution = full_res[0] / binning[0], full_res[1] / binning[1] 
         assert((1 <= size[0]) and (size[0] <= resolution[0]) and
                (1 <= size[1]) and (size[1] <= resolution[1]))
         
+        self.atcore.SetReadMode(readmode) 
         # If the camera doesn't support Area of Interest, then it has to be the
         # size of the sensor
-        if (not self.isImplemented(u"AOIWidth") or 
-            not self.isWritable(u"AOIWidth")):
+        caps = self.GetCapabilities()
+        if (not caps.ReadModes | AndorCapabilities.READMODE_SUBIMAGE):
             if size != resolution:
                 raise IOError("AndorCam: Requested image size " + str(size) + 
                               " does not match sensor resolution " + str(resolution))
             return
         
-        # AOI
-        ranges = (self.GetIntRanges("AOIWidth"),
-                  self.GetIntRanges("AOIHeight"))
-        assert((ranges[0][0] <= size[0]) and (size[0] <= ranges[0][1]) and
-               (ranges[1][0] <= size[1]) and (size[1] <= ranges[1][1]))
+        # Region of interest
+        # check also GetMinimumImageLength()?
+        # center the image
+        lt = ((resolution[0] - size[0]) / 2 + 1,
+              (resolution[1] - size[1]) / 2 + 1)
         
-        # TODO the Neo docs says "Sub images are all mid-point centered." 
-        # So it might require specific computation for the left/top ?
-        # TODO check whether on Neo ranges[0][1] is 2592 or 2560, if 2592, it should be + 16
-        lt = ((ranges[0][1] - size[0]) / 2 + 1,
-              (ranges[1][1] - size[1]) / 2 + 1)
+        self.atcore.SetImage(binning[0], binning[1],
+                             lt[0], lt[0] + size[0] - 1, lt[1], lt[1] + size[1] - 1)
 
-        self.SetInt(u"AOIWidth", c_uint64(size[0]))
-        self.SetInt(u"AOILeft", c_uint64(lt[0]))
-        self.SetInt(u"AOIHeight", c_uint64(size[1]))
-        self.SetInt(u"AOITop", c_uint64(lt[1]))
-        
+        metadata = {}
+        metadata["Camera binning"] =  "%dx%d" % (binning[0], binning[1])
+        return metadata
+    
     def setExposureTime(self, exp):
         """
         Set the exposure time. It's automatically adapted to a working one.
         exp (0<float): exposure time in seconds
         return (tuple): metadata corresponding to the setup
         """
-        assert(0.0 < exp)
-        self.SetFloat(u"ExposureTime",  exp)
+        maxexp = c_float()
+        self.atcore.GetMaximumExposure(byref(maxexp))
+        assert((0.0 < exp) and (exp <= maxexp.value))
         
+        self.atcore.SetExposureTime(c_float(exp))
+        
+        # Read actual value
         metadata = {}
-        actual_exp = self.GetFloat(u"ExposureTime")
-        metadata["Exposure time"] =  str(actual_exp) # s
+        exposure = c_float()
+        accumulate = c_float()
+        kinetic = c_float()
+        self.atcore.GetAcquisitionTimings(byref(exposure), byref(accumulate), byref(kinetic))
+        metadata["Exposure time"] =  str(exposure.value) # s
         return metadata
     
     def _setupBestQuality(self):
@@ -487,66 +601,54 @@ class AndorCam2(object):
         return (tuple): metadata corresponding to the setup
         """
         metadata = {}
-        # we are not in a hurry, so we can set up to the slowest and less noise
-        # parameters:
-        # slow read out
-        # rolling shutter (global avoids tearing but it's unlikely to happen)
-        # 16 bit - Gain 1+4 (maximum)
-        # SpuriousNoiseFilter On (this is actually a software based method)
-        self.setReadoutRate(100)
-        ratei = self.GetEnumIndex(u"PixelReadoutRate")
-        rate = self.GetEnumStringByIndex(u"PixelReadoutRate", ratei) 
-        metadata['Pixel readout rate'] = rate
-        
-#        print self.atcore.GetEnumStringAvailable(self.handle, u"ElectronicShutteringMode")
-        self.SetEnumString(u"ElectronicShutteringMode", u"Rolling")
-        
-        #print self.atcore.GetEnumStringAvailable(self.handle, u"PreAmpGainControl")
-        if self.isImplemented(u"PreAmpGainControl"):
-            # If not, we are on a SimCam so it doesn't matter
-            self.SetEnumString(u"PreAmpGainControl", u"Gain 1 Gain 4 (16 bit)")
-            
-#        self.SetEnumString(u"PreAmpGainSelector", u"Low")
-#        self.SetEnumString(u"PreAmpGain", u"x1")
-#        self.SetEnumString(u"PreAmpGainSelector", u"High")
-#        self.SetEnumString(u"PreAmpGain", u"x30")
-#        self.SetEnumString(u"PreAmpGainChannel", u"Low")
+#        # we are not in a hurry, so we can set up to the slowest and less noise
+#        # parameters:
+#        # slow read out
+#        # rolling shutter (global avoids tearing but it's unlikely to happen)
+#        # 16 bit - Gain 1+4 (maximum)
+#        # SpuriousNoiseFilter On (this is actually a software based method)
+#        self.setReadoutRate(100)
+#        ratei = self.GetEnumIndex(u"PixelReadoutRate")
+#        rate = self.GetEnumStringByIndex(u"PixelReadoutRate", ratei) 
+#        metadata['Pixel readout rate'] = rate
+#        
+##        print self.atcore.GetEnumStringAvailable(self.handle, u"ElectronicShutteringMode")
+#        self.SetEnumString(u"ElectronicShutteringMode", u"Rolling")
+#        
+#        #print self.atcore.GetEnumStringAvailable(self.handle, u"PreAmpGainControl")
+#        if self.isImplemented(u"PreAmpGainControl"):
+#            # If not, we are on a SimCam so it doesn't matter
+#            self.SetEnumString(u"PreAmpGainControl", u"Gain 1 Gain 4 (16 bit)")
+#            
+#        # Allowed values of PixelEncoding depends on Gain: "Both" => Mono12Coded 
+#        try:
+#            self.SetEnumString(u"PixelEncoding", u"Mono16")
+#            metadata['Bits per pixel'] = 16
+#        except AndorV2Error:
+#            # Fallback to 12 bits (represented on 16 bits)
+#            try:
+#                self.SetEnumString(u"PixelEncoding", u"Mono12")
+#                metadata['Bits per pixel'] = 12
+#            except AndorV2Error:
+#                self.SetEnumString(u"PixelEncoding", u"Mono12Coded")
+#                metadata['Bits per pixel'] = 12
+#        
+#        if self.isImplemented(u"SpuriousNoiseFilter"):
+#            self.SetBool(u"SpuriousNoiseFilter", True)
+#            metadata['Filter'] = "Spurious noise filter"
 
-        # Allowed values of PixelEncoding depends on Gain: "Both" => Mono12Coded 
-        try:
-            self.SetEnumString(u"PixelEncoding", u"Mono16")
-            metadata['Bits per pixel'] = 16
-        except AndorV2Error:
-            # Fallback to 12 bits (represented on 16 bits)
-            try:
-                self.SetEnumString(u"PixelEncoding", u"Mono12")
-                metadata['Bits per pixel'] = 12
-            except AndorV2Error:
-                self.SetEnumString(u"PixelEncoding", u"Mono12Coded")
-                metadata['Bits per pixel'] = 12
-        
-        if self.isImplemented(u"SpuriousNoiseFilter"):
-            self.SetBool(u"SpuriousNoiseFilter", True)
-            metadata['Filter'] = "Spurious noise filter"
-        # Software is much slower than Internal (0.05 instead of 0.015 s)
-        self.SetEnumString(u"TriggerMode", u"Internal") 
-        
+        # TODO: according to doc: if AC_FEATURES_SHUTTEREX you MUST use SetShutterEx()
+        # TODO: 50, 50 ms for open/closing times matter in auto? Should be 0?  
+        self.atcore.SetShutter(1, 0, 50, 50) # mode 0 = auto 
+        self.atcore.SetTriggerMode(0) # 0 = internal
+
         return metadata
         
     def _allocate_buffer(self, size):
         """
         returns a cbuffer of the right size for an image
         """
-        image_size_bytes = self.GetInt(u"ImageSizeBytes")
-        # The buffer might be bigger than AOIStride * AOIHeight if there is metadata
-        assert image_size_bytes >= (size[0] * size[1] * 2)
-        
-        # allocating directly a numpy array doesn't work if there is metadata:
-        # ndbuffer = numpy.empty(shape=(stride / 2, size[1]), dtype="uint16")
-        # cbuffer = numpy.ctypeslib.as_ctypes(ndbuffer)
-        cbuffer = (c_byte * image_size_bytes)() # empty array
-        assert(addressof(cbuffer) % 8 == 0) # the SDK wants it aligned
-        
+        cbuffer = (c_uint16 * (size[0] * size[1]))() # empty array
         return cbuffer
     
     def _buffer_as_array(self, cbuffer, size):
@@ -554,17 +656,9 @@ class AndorCam2(object):
         Converts the buffer allocated for the image as an ndarray. zero-copy
         return an ndarray
         """
-        # actual size of a line in bytes (not pixel)
-        try:
-            stride = self.GetInt( u"AOIStride")
-        except AndorV2Error:
-            # SimCam doesn't support stride
-            stride = self.GetInt( u"AOIWidth") * 2
-            
         p = cast(cbuffer, POINTER(c_uint16))
-        ndbuffer = numpy.ctypeslib.as_array(p, (stride / 2, size[1]))
-        # crop the array in case of stride (should not cause copy)
-        return ndbuffer[:size[0],:]
+        ndbuffer = numpy.ctypeslib.as_array(p, size)
+        return ndbuffer
         
     def acquire(self, size, exp, binning=1):
         """
@@ -581,33 +675,32 @@ class AndorCam2(object):
           and a dict (string -> base types) containing the metadata
         """
         assert not self.is_acquiring
-        assert not self.GetBool(u"CameraAcquiring")
+        self.select()
+        status = c_int()
+        self.atcore.GetStatus(byref(status))
+        assert status.value == AndorV2DLL.DRV_IDLE
+        
         self.is_acquiring = True
         
         metadata = self.getCameraMetadata()
         metadata.update(self._setupBestQuality())
-
-        # Binning affects max size, so change first
-        metadata.update(self.setBinning(binning))
-        self.setSize(size)
+        metadata.update(self.setSizeBinning(size, (binning, binning)))
         metadata.update(self.setExposureTime(exp))
-       
-        cbuffer = self._allocate_buffer(size)
-        self.QueueBuffer(cbuffer)
+        
+        self.atcore.SetAcquisitionMode(1) # 1 = Single scan
         
         # Acquire the image
-        self.Command(u"AcquisitionStart")
-        pbuffer, buffersize = self.WaitBuffer(exp + 1)
-        metadata["Acquisition date"] = time.time() - exp # time at the beginning
+        self.atcore.StartAcquisition()
+        cbuffer = self._allocate_buffer(size)
         
-        # Cannot directly use pbuffer because we'd lose the reference to the 
-        # memory allocation... and it'd get free'd at the end of the method
-        # So rely on the assumption cbuffer is used as is
-        assert(addressof(pbuffer.contents) == addressof(cbuffer))
+        self.WaitForAcquisition(exp + 1)
+        metadata["Acquisition date"] = time.time() - exp # time at the beginning
+        metadata["Camera temperature"] = self.GetTemperature()
+        self.atcore.GetMostRecentImage16(cbuffer, size[0] * size[1])
         array = self._buffer_as_array(cbuffer, size)
     
-        self.Command(u"AcquisitionStop")
-        self.Flush()
+        #self.atcore.AbortAcquisition()
+        self.atcore.FreeInternalMemory() # TODO not sure it's needed
         self.is_acquiring = False
         return array, metadata
     
@@ -714,6 +807,7 @@ class AndorCam2(object):
     
     def __del__(self):
         self.Shutdown()
+        pass
     
     def selfTest(self):
         """
@@ -753,23 +847,24 @@ class AndorCam2(object):
         camera = AndorCam2() # system
         dc = c_uint32()
         camera.atcore.GetAvailableCameras(byref(dc))
-        print "found %d devices." % dc.value
+#        print "found %d devices." % dc.value
         
         cameras = set()
         for i in range(dc.value):
             camera.atcore.GetCameraHandle(c_int32(i), byref(camera.handle))
             camera.select()
-            print camera.Initialize()
+            camera.Initialize()
             
             caps = camera.GetCapabilities()
-            model = AndorV2DLL.CameraTypes.get(caps.CameraType, "unknown")
-            resolution = camera.atcore.GetDetector()
+            model = "Andor " + AndorCapabilities.CameraTypes.get(caps.CameraType, "unknown")
+            resolution = camera.GetDetector()
             cameras.add((i, model, resolution))
-            camera.Shutdown()
+            # seems to cause problem is the camera is to be reopened...
+            # or if we try to use andorcam3 after.
+#            camera.Shutdown()
             
         camera.handle = None # so that there is no shutdown
         return cameras
 
-#print AndorCam2.scan()
 
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:
