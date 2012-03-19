@@ -366,20 +366,23 @@ class AndorCam3(object):
         # TODO there is also a "SensorCooling" boolean property, no idea what it does!
     
     def find_closest(self, val, l):
+        """
+        finds in a list the closest existing value from a given value
+        """ 
         return min(l, key=lambda x:abs(x - val))
 
     def setReadoutRate(self, frequency):
         """
-        frequency (100, 200, 280, 550): the pixel readout rate in MHz
+        frequency (100*1e6, 200*1e6, 280*1e6, 550*1e6): the pixel readout rate in Hz
+        return (int): actual readout rate in Hz
         """
         assert((0 <= frequency))
         # returns strings like u"550 MHz"
         rates = self.GetEnumStringAvailable(u"PixelReadoutRate")
         values = (int(r.rstrip(u" MHz")) for r in rates)
-        closest = self.find_closest(frequency, values)
-        # TODO handle the fact SimCam only accepts 550
-        #print self.atcore.GetEnumStringAvailable(self.handle, u"PixelReadoutRate")
+        closest = self.find_closest(frequency / 1e6, values)
         self.SetEnumString(u"PixelReadoutRate", u"%d MHz" % closest)
+        return closest * 1e6
         
     def setBinning(self, binning):
         """
@@ -516,10 +519,8 @@ class AndorCam3(object):
         # rolling shutter (global avoids tearing but it's unlikely to happen)
         # 16 bit - Gain 1+4 (maximum)
         # SpuriousNoiseFilter On (this is actually a software based method)
-        self.setReadoutRate(100)
-        ratei = self.GetEnumIndex(u"PixelReadoutRate")
-        rate = self.GetEnumStringByIndex(u"PixelReadoutRate", ratei) 
-        metadata['Pixel readout rate'] = rate
+        rate = self.setReadoutRate(100)
+        metadata["Pixel readout rate"] = rate # Hz
         
 #        print self.atcore.GetEnumStringAvailable(self.handle, u"ElectronicShutteringMode")
         self.SetEnumString(u"ElectronicShutteringMode", u"Rolling")
@@ -620,8 +621,9 @@ class AndorCam3(object):
         
         # Acquire the image
         self.Command(u"AcquisitionStart")
-        pbuffer, buffersize = self.WaitBuffer(exp + 1)
-        metadata["Acquisition date"] = time.time() - exp # time at the beginning
+        readout_time = size[0] * size[1] / metadata["Pixel readout rate"] # s
+        metadata["Acquisition date"] = time.time() # time at the beginning
+        pbuffer, buffersize = self.WaitBuffer(exp + readout_time + 1)
         metadata["Camera temperature"] = self.GetFloat(u"SensorTemperature")
         
         # Cannot directly use pbuffer because we'd lose the reference to the 
@@ -689,12 +691,15 @@ class AndorCam3(object):
             self.QueueBuffer(cbuffer)
             buffers.append(cbuffer)
             
+        readout_time = size[0] * size[1] / metadata["Pixel readout rate"] # s
+        
         # Acquire the images
         self.Command(u"AcquisitionStart")
+
         while (not self.acquire_must_stop and (num is None or num > 0)):
-            pbuffer, buffersize = self.WaitBuffer(exp + 1)
-            metadata["Acquisition date"] = time.time() - exp # time at the beginning
-            
+            metadata["Acquisition date"] = time.time() # time at the beginning
+            pbuffer, buffersize = self.WaitBuffer(exp + readout_time + 1)
+
             # Cannot directly use pbuffer because we'd lose the reference to the 
             # memory allocation... and it'd get free'd at the end of the method
             # So rely on the assumption cbuffer is used as is

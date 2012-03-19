@@ -413,7 +413,39 @@ class AndorCam2(object):
         else:
             timeout_ms = c_uint(int(round(timeout * 1e3))) # ms
             self.atcore.WaitForAcquisitionTimeOut(timeout_ms)
-             
+    
+    
+    # TODO provide high level version for changing this value for the user
+    # (for now it's reset at each acquire() call)
+    def SetPreAmpGain(self, gain):
+        """
+        set the pre-amp-gain 
+        gain (float): wished gain (multiplication, no unit), if not available, 
+          the closest possible will be picked
+        return (float): the actual gain set
+        """
+        assert((0 <= gain))
+        gains = self.GetPreAmpGainsAvailable()
+        closest = self.find_closest(gain, gains)
+        self.atcore.SetPreAmpGain(gains.index(gain))
+        return closest
+    
+    def GetPreAmpGainsAvailable(self):
+        """
+        return (list of float): gain (multiplication, no unit) ordered by index
+        """
+        # depends on the current settings of the readout rates, so they should
+        # already be fixed.
+        gains = []
+        nb_gains = c_int() 
+        self.atcore.GetNumberPreAmpGains(byref(nb_gains))
+        for i in range(nb_gains.value):
+            gain = c_float()
+            self.atcore.GetPreAmpGain(i, byref(gain))
+            gains.append(gain.value)
+        return gains
+    
+    
     # High level methods
     def select(self):
         """
@@ -444,7 +476,10 @@ class AndorCam2(object):
             temp = sorted(ranges + (temp,))[1]
             
         self.atcore.SetTemperature(temp)
-
+        if temp > 20:
+            self.atcore.CoolerOFF()
+        else:
+            self.atcore.CoolerON()
 
         # TODO: a more generic function which set up the fan to the right speed
         # according to the target temperature?
@@ -469,10 +504,7 @@ class AndorCam2(object):
             values = [2, 0]
         val = values[int(round(speed * (len(values) - 1)))]
         self.atcore.SetFanMode(val)
-        if speed > 0:
-            self.atcore.CoolerON()
-        else:
-            self.atcore.CoolerOFF()
+
         
     def getCameraMetadata(self):
         """
@@ -594,41 +626,26 @@ class AndorCam2(object):
         metadata["Exposure time"] =  str(exposure.value) # s
         return metadata
     
+    def find_closest(self, val, l):
+        """
+        finds in a list the closest existing value from a given value
+        """ 
+        return min(l, key=lambda x:abs(x - val))
+    
     def _setupBestQuality(self):
         """
         Select parameters for the camera for the best quality
         return (tuple): metadata corresponding to the setup
         """
         metadata = {}
-#        #print self.atcore.GetEnumStringAvailable(self.handle, u"PreAmpGainControl")
-#        if self.isImplemented(u"PreAmpGainControl"):
-#            # If not, we are on a SimCam so it doesn't matter
-#            self.SetEnumString(u"PreAmpGainControl", u"Gain 1 Gain 4 (16 bit)")
-#        
-    
-
-        
-        # EMCCDGAIN, DDGTIMES, DDGIO, EMADVANCED => lots of gain settings
-        # None supported on the Clara?
-        #GetNumberPreAmpGains()/SetPreAmpGain()
-        nb_gains = c_int() 
-        self.atcore.GetNumberPreAmpGains(byref(nb_gains))
-        for i in range(nb_gains.value):
-            gain = c_float()
-            self.atcore.GetPreAmpGain(i, byref(gain))
-            print gain
-
 
         # For the Clara: 0 = conventional, 1 = Extended Near Infra-Red
-        oa = 0
-        try: 
-            self.atcore.SetOutputAmplifier(oa) # TODO use NIR?
-        except AndorV2Error:
-            pass # unsupported
+        oa = 1 # let's go simple
         
         # Slower read out => less noise
+        
         # Each channel has different horizontal shift speeds possible
-        # find the channel whith the lowest speed
+        # find the channel with the lowest speed
         nb_channels = c_int()
         self.atcore.GetNumberADChannels(byref(nb_channels))
         hsspeeds = set()
@@ -639,23 +656,47 @@ class AndorCam2(object):
                 hsspeed = c_float()
                 self.atcore.GetHSSpeed(channel, oa, i, byref(hsspeed))
                 hsspeeds.add((channel, i, hsspeed.value))
-                
+
         channel, idx, hsspeed = min(hsspeeds, key=lambda x: x[2])
-#        self.atcore.SetADChannel(channel) # TODO breaks everything?!
+        channel = 1 # XXX
+        self.atcore.SetADChannel(channel)
+
+        try:
+            self.atcore.SetOutputAmplifier(oa)
+        except AndorV2Error:
+            pass # unsupported
+
         self.atcore.SetHSSpeed(oa, idx)
-        metadata['Pixel readout rate'] = hsspeed # Mhz
-        
+        hsspeed = c_float()
+        self.atcore.GetHSSpeed(channel, oa, idx, byref(hsspeed))
+        metadata["Pixel readout rate"] = hsspeed.value * 1e6 # Hz
+
+        nb_vsspeeds = c_int()
+        self.atcore.GetNumberVSSpeeds(byref(nb_vsspeeds))
         speed_idx, vsspeed = c_int(), c_float() # ms
         self.atcore.GetFastestRecommendedVSSpeed(byref(speed_idx), byref(vsspeed))
         self.atcore.SetVSSpeed(speed_idx)
+
+        # bits per pixel depends just on the AD channel
+        bpp = c_int()
+        self.atcore.GetBitDepth(channel, byref(bpp))
+        metadata["Bits per pixel"] = bpp.value
+
+        # EMCCDGAIN, DDGTIMES, DDGIO, EMADVANCED => lots of gain settings
+        # None supported on the Clara?
+        gains = self.GetPreAmpGainsAvailable()
+        # TODO let the user decide (as every value can be useful)
+        self.SetPreAmpGain(min(gains)) # for now we pick the minimum
 
         # Doesn't seem to work for the clara (or single scan mode?)
 #        self.atcore.SetFilterMode(2) # 2 = on
 #        metadata['Filter'] = "Cosmic Ray filter"
 
         # TODO: according to doc: if AC_FEATURES_SHUTTEREX you MUST use SetShutterEx()
-        # TODO: 20, 20 ms for open/closing times matter in auto? Should be 0, more?   
-        self.atcore.SetShutter(1, 0, 20, 20) # mode 0 = auto 
+        # TODO: 20, 20 ms for open/closing times matter in auto? Should be 0, more?
+        # Clara : 20, 20 gives horrible results. Default for Andor Solis: 10, 0
+        # Apparently, if there is no shutter, it should be 0, 0
+        self.atcore.SetShutter(1, 0, 0, 0) # mode 0 = auto
         self.atcore.SetTriggerMode(0) # 0 = internal
 
         return metadata
@@ -709,8 +750,9 @@ class AndorCam2(object):
         self.atcore.StartAcquisition()
         cbuffer = self._allocate_buffer(size)
         
-        self.WaitForAcquisition(exp + 1)
-        metadata["Acquisition date"] = time.time() - exp # time at the beginning
+        readout_time = size[0] * size[1] / metadata["Pixel readout rate"] # s
+        metadata["Acquisition date"] = time.time() # time at the beginning
+        self.WaitForAcquisition(exp + readout_time + 1)
         metadata["Camera temperature"] = self.GetTemperature()
         self.atcore.GetMostRecentImage16(cbuffer, size[0] * size[1])
         array = self._buffer_as_array(cbuffer, size)
