@@ -19,20 +19,25 @@ You should have received a copy of the GNU General Public License along with Del
 import PIL.Image as Image
 import StringIO
 import andorcam
+import andorcam2
 import dacontrol
 import os
 import sys
 import time
 import unittest
 
-# the device to use to test (0 and 1 are normally always present) 
-DEVICE=0
+# the device to use to test 
+#Andor SDK v3: 30 and 31 are normally always present
+#Andor SDK v2: 20 
+DEVICE=20
 
 class TestDAControl(unittest.TestCase):
     """
     This contains test cases for the dacontrol command-line level.
     """
     picture_name = "test_andor.tiff"
+    #size = (2560, 2160)
+    size = (1392, 1040)
     
     def setUp(self):
         # clean up, just in case it was still there
@@ -49,9 +54,8 @@ class TestDAControl(unittest.TestCase):
             pass
 
     def test_simple(self):
-        size = (2560, 2160)
         cmdline = ("dacontrol.py --device=%s --width=%d --height=%d --exp=0.01"
-                   " --output=%s" % (DEVICE, size[0], size[1], self.picture_name)) 
+                   " --output=%s" % (DEVICE, self.size[0], self.size[1], self.picture_name)) 
         ret = dacontrol.main(cmdline.split())
         self.assertEqual(ret, 0, "Error while trying to run '%s'" % cmdline)
         
@@ -59,15 +63,16 @@ class TestDAControl(unittest.TestCase):
         self.assertGreater(st.st_size, 0)
         im = Image.open(self.picture_name)
         self.assertEqual(im.format, "TIFF")
-        self.assertEqual(im.size, size)
+        self.assertEqual(im.size, self.size)
         
     def test_exposure(self):
         """
         The command should take always longer than the exposure time.
         """
         exposure = 2 #s
-        cmdline = ("dacontrol.py --device=%s --width=2560 --height=2160"
-                   " --exp=%f --output=%s" % (DEVICE, exposure, self.picture_name))
+        cmdline = ("dacontrol.py --device=%s --width=%d --height=%d"
+                   " --exp=%f --output=%s" % (DEVICE, self.size[0], self.size[1],
+                                              exposure, self.picture_name))
         
         start = time.time() 
         ret = dacontrol.main(cmdline.split())
@@ -119,34 +124,39 @@ class TestDAControl(unittest.TestCase):
         cmdline = "dacontrol.py --device=%d --width=2560 --height=2160 --exp=0.01" % DEVICE 
         self.assertRaises(SystemExit, dacontrol.main, cmdline.split()) 
 
-class TestAndorCam(unittest.TestCase):
+
+class VirtualTestAndorCam(object):
     """
-    Test directly the AndorCam3 class.
+    Virtual class for all the (andor) cameras
     """
 
+    # needs:
+    # camera_type : class of the camera
+    # camera_args : tuple of arguments to create a camera
+        
     def test_scan(self):
         """
         Check that we can do a scan network. It can pass only if we are
         connected to at least one controller.
         """
-        cameras = andorcam.AndorCam3.scan()
+        cameras = self.camera_type.scan()
         self.assertGreater(len(cameras), 0)
 
     def test_acquire(self):
-        camera = andorcam.AndorCam3(DEVICE)
-        size = (2560, 2160)
+        camera = self.camera_type(*self.camera_args)
+        self.size = camera.getSensorResolution()
         exposure = 0.1
         start = time.time()
-        im, metadata = camera.acquire(size, exposure)
+        im, metadata = camera.acquire(self.size, exposure)
         duration = time.time() - start
 
-        self.assertEqual(im.shape, size)
+        self.assertEqual(im.shape, self.size)
         self.assertGreaterEqual(duration, exposure, "Error execution took %f s, less than exposure time %d." % (duration, exposure))
         self.assertIn("Exposure time", metadata)
         
     def test_acquire_flow(self):
-        camera = andorcam.AndorCam3(DEVICE)
-        self.size = (2560, 2160)
+        camera = self.camera_type(*self.camera_args)
+        self.size = camera.getSensorResolution()
         number = 5
         self.received = 0
         camera.acquireFlow(self.receive_image, self.size, 0.01, num=number)
@@ -160,7 +170,22 @@ class TestAndorCam(unittest.TestCase):
         self.assertEqual(image.shape, self.size)
         self.assertIn("Exposure time", metadata)
         self.received += 1
+
+#
+#class TestAndorCam3(unittest.TestCase, VirtualTestAndorCam):
+#    """
+#    Test directly the AndorCam3 class.
+#    """
+#    camera_type = andorcam.AndorCam3
+#    camera_args = (0,) # device
         
+class TestAndorCam2(unittest.TestCase, VirtualTestAndorCam):
+    """
+    Test directly the AndorCam2 class.
+    """
+    camera_type = andorcam2.AndorCam2
+    camera_args = (0,) # device
+     
 if __name__ == '__main__':
     unittest.main()
 

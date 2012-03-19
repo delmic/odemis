@@ -456,6 +456,12 @@ class AndorCam2(object):
         self.atcore.GetCurrentCamera(byref(current_handle))
         if current_handle != self.handle:
             self.atcore.SetCurrentCamera(self.handle)
+
+    def getSensorResolution(self):
+        """
+        return (2-tuple int): size of the sensor (width, height) in pixel
+        """
+        return self.GetDetector()
     
     def setTargetTemperature(self, temp):
         """
@@ -512,6 +518,7 @@ class AndorCam2(object):
           many pictures)
         return (dict : string -> string): the metadata
         """
+        self.select()
         metadata = {}
         caps = self.GetCapabilities()
         model = AndorCapabilities.CameraTypes.get(caps.CameraType, "unknown")
@@ -559,7 +566,7 @@ class AndorCam2(object):
         
         return metadata
 
-    def setSizeBinning(self, size, binning):
+    def _setSizeBinning(self, size, binning):
         """
         Change the acquired image size (and position)
         size (2-tuple int): Width and height of the image. It will centred
@@ -605,7 +612,7 @@ class AndorCam2(object):
         metadata["Camera binning"] =  "%dx%d" % (binning[0], binning[1])
         return metadata
     
-    def setExposureTime(self, exp):
+    def _setExposureTime(self, exp):
         """
         Set the exposure time. It's automatically adapted to a working one.
         exp (0<float): exposure time in seconds
@@ -626,7 +633,8 @@ class AndorCam2(object):
         metadata["Exposure time"] =  exposure.value # s
         return metadata
     
-    def find_closest(self, val, l):
+    @staticmethod
+    def find_closest(val, l):
         """
         finds in a list the closest existing value from a given value
         """ 
@@ -740,9 +748,9 @@ class AndorCam2(object):
         
         metadata = self.getCameraMetadata()
         metadata.update(self._setupBestQuality())
-        metadata.update(self.setSizeBinning(size, (binning, binning)))
+        metadata.update(self._setSizeBinning(size, (binning, binning)))
         # depends on readout time, shutter speed et al.
-        metadata.update(self.setExposureTime(exp))
+        metadata.update(self._setExposureTime(exp))
         
         self.atcore.SetAcquisitionMode(1) # 1 = Single scan
         
@@ -793,8 +801,8 @@ class AndorCam2(object):
         # TODO: best quality comes with an image ~ 0.7 FPS.
         # Shall we ask for a faster readout so that we get ~ 5 FPS? 
         metadata.update(self._setupBestQuality())
-        metadata.update(self.setSizeBinning(size, (binning, binning)))
-        metadata.update(self.setExposureTime(exp))
+        metadata.update(self._setSizeBinning(size, (binning, binning)))
+        metadata.update(self._setExposureTime(exp))
         exposure_time = metadata["Exposure time"]
         
         # Set up thread
@@ -813,12 +821,6 @@ class AndorCam2(object):
         # We don't use the kinetic mode as it might go faster than we can
         # process them, and it's easy to do in software.
         readout_time = size[0] * size[1] / metadata["Pixel readout rate"] # s
-        exposure = c_float()
-        accumulate = c_float()
-        kinetic = c_float()
-        self.atcore.GetAcquisitionTimings(byref(exposure), byref(accumulate), byref(kinetic))
-        
-        print "min time between frames = %f" % kinetic.value
         
         # Acquire the images
         self.atcore.StartAcquisition()

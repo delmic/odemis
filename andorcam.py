@@ -329,6 +329,12 @@ class AndorCam3(object):
         return result
     
     # High level methods
+    def getSensorResolution(self):
+        """
+        return (2-tuple int): size of the sensor (width, height) in pixel
+        """
+        return (self.GetInt(u"SensorWidth"), self.GetInt(u"SensorHeight"))
+    
     def setTargetTemperature(self, temp):
         """
         Change the targeted temperature of the CCD.
@@ -342,6 +348,11 @@ class AndorCam3(object):
         ranges = self.GetFloatRanges(u"TargetSensorTemperature")
         temp = sorted(ranges + (temp,))[1]
         self.SetFloat(u"TargetSensorTemperature", temp)
+        
+        if temp > 20:
+            self.SetBool(u"SensorCooling", False)
+        else:
+            self.SetBool(u"SensorCooling", True)
 
         # TODO: a more generic function which set up the fan to the right speed
         # according to the target temperature?
@@ -363,9 +374,8 @@ class AndorCam3(object):
         val = values[int(round(speed * (len(values) - 1)))]
         self.SetEnumString(u"FanSpeed", val)
         
-        # TODO there is also a "SensorCooling" boolean property, no idea what it does!
-    
-    def find_closest(self, val, l):
+    @staticmethod
+    def find_closest(val, l):
         """
         finds in a list the closest existing value from a given value
         """ 
@@ -384,7 +394,7 @@ class AndorCam3(object):
         self.SetEnumString(u"PixelReadoutRate", u"%d MHz" % closest)
         return closest * 1e6
         
-    def setBinning(self, binning):
+    def _setBinning(self, binning):
         """
         binning (int 1, 2, 3, 4, or 8): how many pixels horizontally and vertically
          are combined to create "super pixels"
@@ -435,14 +445,19 @@ class AndorCam3(object):
             pass # unknown value
         
         try:
-            # TODO SoftwareVersion might probably work only with handle = SYSTEM
-            sdk = self.GetString(u"SoftwareVersion")
-            firmware = self.GetString(u"FirmwareVersion") 
-            metadata["Camera version"] = "firmware: '%s', driver:'%s'" % (firmware, sdk)
+            # Doesn't work on the normal camera, need to access the "System"
+            system = AndorCam3()
+            sdk = system.GetString(u"SoftwareVersion")
         except ATError:
-            print "Warning: Failed to obtain software and firmware versions."
-            pass # unknown value
-        
+            sdk = "unknown"
+            
+        try:
+            firmware = self.GetString(u"FirmwareVersion") 
+        except ATError:
+            firmware = "unknown" # Simcam has no firmware
+            
+        metadata["Camera version"] = "firmware: '%s', driver:'%s'" % (firmware, sdk)
+
         try:
             psize = (self.GetFloat(u"PixelWidth"),
                      self.GetFloat(u"PixelHeight"))
@@ -453,7 +468,7 @@ class AndorCam3(object):
         
         return metadata
     
-    def setSize(self, size):
+    def _setSize(self, size):
         """
         Change the acquired image size (and position)
         size (2-tuple int): Width and height of the image. It will centred
@@ -493,7 +508,7 @@ class AndorCam3(object):
         self.SetInt(u"AOIHeight", c_uint64(size[1]))
         self.SetInt(u"AOITop", c_uint64(lt[1]))
         
-    def setExposureTime(self, exp):
+    def _setExposureTime(self, exp):
         """
         Set the exposure time. It's automatically adapted to a working one.
         exp (0<float): exposure time in seconds
@@ -504,7 +519,7 @@ class AndorCam3(object):
         
         metadata = {}
         actual_exp = self.GetFloat(u"ExposureTime")
-        metadata["Exposure time"] =  str(actual_exp) # s
+        metadata["Exposure time"] = actual_exp # s
         return metadata
     
     def _setupBestQuality(self):
@@ -612,9 +627,9 @@ class AndorCam3(object):
         metadata.update(self._setupBestQuality())
 
         # Binning affects max size, so change first
-        metadata.update(self.setBinning(binning))
-        self.setSize(size)
-        metadata.update(self.setExposureTime(exp))
+        metadata.update(self._setBinning(binning))
+        self._setSize(size)
+        metadata.update(self._setExposureTime(exp))
        
         cbuffer = self._allocate_buffer(size)
         self.QueueBuffer(cbuffer)
@@ -662,9 +677,9 @@ class AndorCam3(object):
         metadata.update(self._setupBestQuality())
 
         # Binning affects max size, so change first
-        metadata.update(self.setBinning(binning))
-        self.setSize(size)
-        metadata.update(self.setExposureTime(exp))
+        metadata.update(self._setBinning(binning))
+        self._setSize(size)
+        metadata.update(self._setExposureTime(exp))
         exposure_time = metadata["Exposure time"]
         
         # Set up thread
