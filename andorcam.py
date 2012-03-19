@@ -621,9 +621,10 @@ class AndorCam3(object):
         
         # Acquire the image
         self.Command(u"AcquisitionStart")
+        exposure_time = metadata["Exposure time"]
         readout_time = size[0] * size[1] / metadata["Pixel readout rate"] # s
         metadata["Acquisition date"] = time.time() # time at the beginning
-        pbuffer, buffersize = self.WaitBuffer(exp + readout_time + 1)
+        pbuffer, buffersize = self.WaitBuffer(exposure_time + readout_time + 1)
         metadata["Camera temperature"] = self.GetFloat(u"SensorTemperature")
         
         # Cannot directly use pbuffer because we'd lose the reference to the 
@@ -664,11 +665,12 @@ class AndorCam3(object):
         metadata.update(self.setBinning(binning))
         self.setSize(size)
         metadata.update(self.setExposureTime(exp))
+        exposure_time = metadata["Exposure time"]
         
         # Set up thread
         self.acquire_thread = threading.Thread(target=self._acquire_thread_run,
-                                               name="andorcam acquire flow thread",
-                                               args=(callback, size, exp, metadata, num))
+               name="andorcam acquire flow thread",
+               args=(callback, size, exposure_time, metadata, num))
         self.acquire_thread.start()
         
     def _acquire_thread_run(self, callback, size, exp, metadata, num=None):

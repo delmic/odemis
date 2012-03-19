@@ -539,7 +539,7 @@ class AndorCam2(object):
             dummy1, dummy2 = c_uint(), c_uint()
             CameraFirmwareVersion, CameraFirmwareBuild = c_uint(), c_uint()
             self.atcore.GetHardwareVersion(byref(PCB), byref(Decode), 
-                byref(dummy1), byref(dummy2), byref(CameraFirmwareVersion), byref(CameraFirmwareVersion))
+                byref(dummy1), byref(dummy2), byref(CameraFirmwareVersion), byref(CameraFirmwareBuild))
 
 
             metadata["Camera version"] = ("PCB: %d/%d, firmware: %d.%d, "
@@ -623,7 +623,7 @@ class AndorCam2(object):
         accumulate = c_float()
         kinetic = c_float()
         self.atcore.GetAcquisitionTimings(byref(exposure), byref(accumulate), byref(kinetic))
-        metadata["Exposure time"] =  str(exposure.value) # s
+        metadata["Exposure time"] =  exposure.value # s
         return metadata
     
     def find_closest(self, val, l):
@@ -640,7 +640,7 @@ class AndorCam2(object):
         metadata = {}
 
         # For the Clara: 0 = conventional, 1 = Extended Near Infra-Red
-        oa = 1 # let's go simple
+        oa = 1 # as much as we can
         
         # Slower read out => less noise
         
@@ -658,7 +658,6 @@ class AndorCam2(object):
                 hsspeeds.add((channel, i, hsspeed.value))
 
         channel, idx, hsspeed = min(hsspeeds, key=lambda x: x[2])
-        channel = 1 # XXX
         self.atcore.SetADChannel(channel)
 
         try:
@@ -726,7 +725,7 @@ class AndorCam2(object):
          twice smaller if the binning is 2 instead of 1. It must be a allowed
          resolution. 
         exp (float): exposure time in second
-        binning (int 1, 2, 3, 4, or 8): how many pixels horizontally and vertically
+        binning (int): how many pixels horizontally and vertically
           are combined to create "super pixels"
         return (2-tuple: numpy.ndarray, metadata): an array containing the image,
           and a dict (string -> base types) containing the metadata
@@ -742,6 +741,7 @@ class AndorCam2(object):
         metadata = self.getCameraMetadata()
         metadata.update(self._setupBestQuality())
         metadata.update(self.setSizeBinning(size, (binning, binning)))
+        # depends on readout time, shutter speed et al.
         metadata.update(self.setExposureTime(exp))
         
         self.atcore.SetAcquisitionMode(1) # 1 = Single scan
@@ -750,14 +750,17 @@ class AndorCam2(object):
         self.atcore.StartAcquisition()
         cbuffer = self._allocate_buffer(size)
         
+        # "kinetic" of GetAcquisitionTimings() should give the about same time as
+        # exposure_time + readout_time
+        exposure_time = metadata["Exposure time"]
         readout_time = size[0] * size[1] / metadata["Pixel readout rate"] # s
         metadata["Acquisition date"] = time.time() # time at the beginning
-        self.WaitForAcquisition(exp + readout_time + 1)
+        self.WaitForAcquisition(exposure_time + readout_time + 1)
         metadata["Camera temperature"] = self.GetTemperature()
+        
         self.atcore.GetMostRecentImage16(cbuffer, size[0] * size[1])
         array = self._buffer_as_array(cbuffer, size)
     
-        #self.atcore.AbortAcquisition()
         self.atcore.FreeInternalMemory() # TODO not sure it's needed
         self.is_acquiring = False
         return array, metadata
@@ -779,21 +782,25 @@ class AndorCam2(object):
         returns immediately. To stop acquisition, call stopAcquireFlow()
         """
         assert not self.is_acquiring
-        assert not self.GetBool(u"CameraAcquiring")
+        self.select()
+        status = c_int()
+        self.atcore.GetStatus(byref(status))
+        assert status.value == AndorV2DLL.DRV_IDLE
+        
         self.is_acquiring = True
         
         metadata = self.getCameraMetadata()
+        # TODO: best quality comes with an image ~ 0.7 FPS.
+        # Shall we ask for a faster readout so that we get ~ 5 FPS? 
         metadata.update(self._setupBestQuality())
-
-        # Binning affects max size, so change first
-        metadata.update(self.setBinning(binning))
-        self.setSize(size)
+        metadata.update(self.setSizeBinning(size, (binning, binning)))
         metadata.update(self.setExposureTime(exp))
+        exposure_time = metadata["Exposure time"]
         
         # Set up thread
         self.acquire_thread = threading.Thread(target=self._acquire_thread_run,
-                                               name="andorcam acquire flow thread",
-                                               args=(callback, size, exp, metadata, num))
+                name="andorcam acquire flow thread",
+                args=(callback, size, exposure_time, metadata, num))
         self.acquire_thread.start()
         
     def _acquire_thread_run(self, callback, size, exp, metadata, num=None):
@@ -801,44 +808,38 @@ class AndorCam2(object):
         The core of the acquisition thread. Runs until it has acquired enough
         images or acquire_must_stop is True.
         """
-        assert (self.isImplemented(u"CycleMode") and
-                self.isWritable(u"CycleMode"))
-        self.SetEnumString(u"CycleMode", u"Continuous")
-        # We don't use the framecount feature as it's not always present, and
-        # easy to do in software.
+        self.atcore.SetAcquisitionMode(5) # 5 = Run till abort 
+        self.atcore.SetKineticCycleTime(0) # don't wait between acquisitions
+        # We don't use the kinetic mode as it might go faster than we can
+        # process them, and it's easy to do in software.
+        readout_time = size[0] * size[1] / metadata["Pixel readout rate"] # s
+        exposure = c_float()
+        accumulate = c_float()
+        kinetic = c_float()
+        self.atcore.GetAcquisitionTimings(byref(exposure), byref(accumulate), byref(kinetic))
         
-        # Allocates a pipeline of two buffers in a pipe, so that when we are
-        # processing one buffer, the driver can already acquire the next image.
-        buffers = []
-        nbuffers = 2
-        for i in range(nbuffers):
-            cbuffer = self._allocate_buffer(size)
-            self.QueueBuffer(cbuffer)
-            buffers.append(cbuffer)
-            
+        print "min time between frames = %f" % kinetic.value
+        
         # Acquire the images
-        self.Command(u"AcquisitionStart")
+        self.atcore.StartAcquisition()
         while (not self.acquire_must_stop and (num is None or num > 0)):
-            pbuffer, buffersize = self.WaitBuffer(exp + 1)
-            metadata["Acquisition date"] = time.time() - exp # time at the beginning
-            
-            # Cannot directly use pbuffer because we'd lose the reference to the 
-            # memory allocation... and it'd get free'd at the end of the method
-            # So rely on the assumption cbuffer is used as is
-            cbuffer = buffers.pop(0)
-            assert(addressof(pbuffer.contents) == addressof(cbuffer))
-            array = self._buffer_as_array(cbuffer, size)
-            # next buffer
             cbuffer = self._allocate_buffer(size)
-            self.QueueBuffer(cbuffer)
-            buffers.append(cbuffer)
+    
+            metadata["Acquisition date"] = time.time() # time at the beginning
+            self.WaitForAcquisition(exp + readout_time + 1)
+            metadata["Camera temperature"] = self.GetTemperature()
+            
+            # it might have acquire _several_ images in the time to process
+            # one image. In this case we discard all but the last one.
+            self.atcore.GetMostRecentImage16(cbuffer, size[0] * size[1])
+            array = self._buffer_as_array(cbuffer, size)
             
             callback(self, array, metadata)
             if num is not None:
                 num -= 1
     
-        self.Command(u"AcquisitionStop")
-        self.Flush()
+        self.atcore.AbortAcquisition()
+        self.atcore.FreeInternalMemory() # TODO not sure it's needed
         self.is_acquiring = False
     
     def stopAcquireFlow(self, sync=False):
@@ -873,16 +874,18 @@ class AndorCam2(object):
         return (boolean): False if it detects any problem
         """
         try:
-            #GetSoftwareVersion(unsigned int * eprom, unsigned int * coffile, unsigned int * vxdrev, unsigned int * vxdver, unsigned int * dllrev, unsigned int * dllver);
-            model = self.GetString(u"CameraModel")
+            PCB, Decode = c_uint(), c_uint()
+            dummy1, dummy2 = c_uint(), c_uint()
+            CameraFirmwareVersion, CameraFirmwareBuild = c_uint(), c_uint()
+            self.atcore.GetHardwareVersion(byref(PCB), byref(Decode), 
+                byref(dummy1), byref(dummy2), byref(CameraFirmwareVersion), byref(CameraFirmwareBuild))
         except Exception, err:
             print("Failed to read camera model: " + str(err))
             return False
     
         # Try to get an image with the default resolution
         try:
-            resolution = (self.GetInt(u"SensorWidth"),
-                          self.GetInt(u"SensorHeight"))
+            resolution = self.GetDetector()
         except Exception, err:
             print("Failed to read camera resolution: " + str(err))
             return False
