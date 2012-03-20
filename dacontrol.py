@@ -52,6 +52,8 @@ def run_self_test(camera):
     return camera.selfTest()
 
 def scan():
+    # Warning: apparently it's pretty impossible to have both sdk v2 and v3 open
+    # in the same process.
     cameras = andorcam.AndorCam3.scan()
     for i, name, res in sorted(cameras):
         print "%d: %s (%dx%d)" % (i + 30, name, res[0], res[1])

@@ -26,8 +26,6 @@ import sys
 import time
 import unittest
 
-
-
 class TestDAControl(unittest.TestCase):
     """
     This contains test cases for the dacontrol command-line level.
@@ -36,7 +34,7 @@ class TestDAControl(unittest.TestCase):
     # the device to use to test 
     #Andor SDK v3: 30 and 31 are normally always present
     #Andor SDK v2: 20 
-    device = 20
+    device = 30
     
     if 20 <= device and device <= 29:
         # Clara
@@ -197,13 +195,13 @@ class VirtualTestAndorCam(object):
         self.assertIn("Exposure time", metadata)
         self.received += 1
 
-
-#class TestAndorCam3(unittest.TestCase, VirtualTestAndorCam):
-#    """
-#    Test directly the AndorCam3 class.
-#    """
-#    camera_type = andorcam.AndorCam3
-#    camera_args = (0,) # device
+# You have to pick only one of them to get it not crash
+class TestAndorCam3(unittest.TestCase, VirtualTestAndorCam):
+    """
+    Test directly the AndorCam3 class.
+    """
+    camera_type = andorcam.AndorCam3
+    camera_args = (0,) # device
         
 class TestAndorCam2(unittest.TestCase, VirtualTestAndorCam):
     """
