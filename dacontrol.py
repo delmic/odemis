@@ -18,7 +18,7 @@ You should have received a copy of the GNU General Public License along with Del
 
 from osgeo import gdal, gdal_array
 import PIL.Image as Image
-import andorcam
+import andorcam3
 import andorcam2
 import argparse
 import math
@@ -54,7 +54,7 @@ def run_self_test(camera):
 def scan():
     # Warning: apparently it's pretty impossible to have both sdk v2 and v3 open
     # in the same process.
-    cameras = andorcam.AndorCam3.scan()
+    cameras = andorcam3.AndorCam3.scan()
     for i, name, res in sorted(cameras):
         print "%d: %s (%dx%d)" % (i + 30, name, res[0], res[1])
     
@@ -171,7 +171,7 @@ def main(args):
         if (20 <= options.device and options.device <= 29):
             camera = andorcam2.AndorCam2(options.device - 20)
         elif (30 <= options.device and options.device <= 39):
-            camera = andorcam.AndorCam3(options.device - 30)
+            camera = andorcam3.AndorCam3(options.device - 30)
         else:
             parser.error("Device %d unknown." % options.device)
     except Exception, err:

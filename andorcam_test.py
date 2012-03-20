@@ -18,7 +18,7 @@ You should have received a copy of the GNU General Public License along with Del
 '''
 import PIL.Image as Image
 import StringIO
-import andorcam
+import andorcam3
 import andorcam2
 import dacontrol
 import os
@@ -200,7 +200,7 @@ class TestAndorCam3(unittest.TestCase, VirtualTestAndorCam):
     """
     Test directly the AndorCam3 class.
     """
-    camera_type = andorcam.AndorCam3
+    camera_type = andorcam3.AndorCam3
     camera_args = (0,) # device
         
 class TestAndorCam2(unittest.TestCase, VirtualTestAndorCam):
@@ -209,7 +209,8 @@ class TestAndorCam2(unittest.TestCase, VirtualTestAndorCam):
     """
     camera_type = andorcam2.AndorCam2
     camera_args = (0,) # device
-     
+    
+    # The SimCam of SDKv3 doesn't support binning, so let's just try on v2
     def test_binning(self):
         camera = self.camera_type(*self.camera_args)
         self.size = camera.getSensorResolution()
