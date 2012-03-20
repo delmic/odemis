@@ -210,6 +210,18 @@ class TestAndorCam2(unittest.TestCase, VirtualTestAndorCam):
     camera_type = andorcam2.AndorCam2
     camera_args = (0,) # device
      
+    def test_binning(self):
+        camera = self.camera_type(*self.camera_args)
+        self.size = camera.getSensorResolution()
+        exposure = 0.1
+        start = time.time()
+        im, metadata = camera.acquire((self.size[0]/2, self.size[1]/2), exposure, 2)
+        duration = time.time() - start
+    
+        self.assertEqual(im.shape, (self.size[0]/2, self.size[1]/2))
+        self.assertGreaterEqual(duration, exposure, "Error execution took %f s, less than exposure time %d." % (duration, exposure))
+        self.assertIn("Exposure time", metadata)
+     
 if __name__ == '__main__':
     unittest.main()
 
