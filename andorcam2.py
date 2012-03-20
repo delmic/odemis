@@ -392,7 +392,8 @@ class AndorCam2(object):
         returns (int) the current temperature of the captor in C
         """
         temp = c_int()
-        # It return the status of the temperature via error code
+        # It returns the status of the temperature via error code (stable, 
+        # not yet reached...) but we don't care
         status = self.atcore.GetTemperature(byref(temp))
         return temp.value
         
@@ -609,11 +610,13 @@ class AndorCam2(object):
         # Region of interest
         # check also GetMinimumImageLength()?
         # center the image
-        lt = ((resolution[0] - size[0]) / 2 + 1,
-              (resolution[1] - size[1]) / 2 + 1)
+        lt = ((resolution[0] - size[0]) / 2,
+              (resolution[1] - size[1]) / 2)
         
+        # the rectangle is defined in normal pixels (not super-pixels)
         self.atcore.SetImage(binning[0], binning[1],
-                             lt[0], lt[0] + size[0] - 1, lt[1], lt[1] + size[1] - 1)
+            lt[0] * binning[0] + 1, (lt[0] + size[0]) * binning[0],
+            lt[1] * binning[1] + 1, (lt[1] + size[1]) * binning[1])
 
         metadata = {}
         metadata["Camera binning"] =  "%dx%d" % (binning[0], binning[1])
@@ -738,7 +741,7 @@ class AndorCam2(object):
         size (2-tuple int): Width and height of the image. It will be centred
          on the captor. It depends on the binning, so the same region has a size 
          twice smaller if the binning is 2 instead of 1. It must be a allowed
-         resolution. 
+         resolution by the camera. 
         exp (float): exposure time in second
         binning (int): how many pixels horizontally and vertically
           are combined to create "super pixels"
@@ -787,9 +790,9 @@ class AndorCam2(object):
         callback (callable (camera, numpy.ndarray, dict (string -> base types)) no return):
          function called for each image acquired
         size (2-tuple int): Width and height of the image. It will be centred
-         on the captor. It depends on the binning, so the same region as a size 
+         on the captor. It depends on the binning, so the same region has a size 
          twice smaller if the binning is 2 instead of 1. It must be a allowed
-         resolution.
+         resolution by the camera.
         exp (float): exposure time in second
         binning (int 1, 2, 3, 4, or 8): how many pixels horizontally and vertically
           are combined to create "super pixels"
