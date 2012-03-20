@@ -26,18 +26,24 @@ import sys
 import time
 import unittest
 
-# the device to use to test 
-#Andor SDK v3: 30 and 31 are normally always present
-#Andor SDK v2: 20 
-DEVICE=20
+
 
 class TestDAControl(unittest.TestCase):
     """
     This contains test cases for the dacontrol command-line level.
     """
     picture_name = "test_andor.tiff"
-    #size = (2560, 2160)
-    size = (1392, 1040)
+    # the device to use to test 
+    #Andor SDK v3: 30 and 31 are normally always present
+    #Andor SDK v2: 20 
+    device = 20
+    
+    if 20 <= device and device <= 29:
+        # Clara
+        size = (1392, 1040)
+    else:
+        # Neo / Simcam
+        size = (2560, 2160)
     
     def setUp(self):
         # clean up, just in case it was still there
@@ -55,7 +61,7 @@ class TestDAControl(unittest.TestCase):
 
     def test_simple(self):
         cmdline = ("dacontrol.py --device=%s --width=%d --height=%d --exp=0.01"
-                   " --output=%s" % (DEVICE, self.size[0], self.size[1], self.picture_name)) 
+                   " --output=%s" % (self.device, self.size[0], self.size[1], self.picture_name)) 
         ret = dacontrol.main(cmdline.split())
         self.assertEqual(ret, 0, "Error while trying to run '%s'" % cmdline)
         
@@ -71,7 +77,7 @@ class TestDAControl(unittest.TestCase):
         """
         exposure = 2 #s
         cmdline = ("dacontrol.py --device=%s --width=%d --height=%d"
-                   " --exp=%f --output=%s" % (DEVICE, self.size[0], self.size[1],
+                   " --exp=%f --output=%s" % (self.device, self.size[0], self.size[1],
                                               exposure, self.picture_name))
         
         start = time.time() 
@@ -114,14 +120,14 @@ class TestDAControl(unittest.TestCase):
         """
         It checks handling when no width argument is provided
         """
-        cmdline = "dacontrol.py --device=%d --height=2160 --exp=0.01 --output=%s" % (DEVICE, self.picture_name) 
+        cmdline = "dacontrol.py --device=%d --height=2160 --exp=0.01 --output=%s" % (self.device, self.picture_name) 
         self.assertRaises(SystemExit, dacontrol.main, cmdline.split())       
         
     def test_error_no_output(self):
         """
         It checks handling when no width argument is provided
         """
-        cmdline = "dacontrol.py --device=%d --width=2560 --height=2160 --exp=0.01" % DEVICE 
+        cmdline = "dacontrol.py --device=%d --width=2560 --height=2160 --exp=0.01" % self.device 
         self.assertRaises(SystemExit, dacontrol.main, cmdline.split()) 
 
 
@@ -136,8 +142,8 @@ class VirtualTestAndorCam(object):
         
     def test_scan(self):
         """
-        Check that we can do a scan network. It can pass only if we are
-        connected to at least one controller.
+        Check that we can do a scan. It can pass only if we are
+        connected to at least one camera.
         """
         cameras = self.camera_type.scan()
         self.assertGreater(len(cameras), 0)
@@ -146,6 +152,26 @@ class VirtualTestAndorCam(object):
         camera = self.camera_type(*self.camera_args)
         self.size = camera.getSensorResolution()
         exposure = 0.1
+        start = time.time()
+        im, metadata = camera.acquire(self.size, exposure)
+        duration = time.time() - start
+
+        self.assertEqual(im.shape, self.size)
+        self.assertGreaterEqual(duration, exposure, "Error execution took %f s, less than exposure time %d." % (duration, exposure))
+        self.assertIn("Exposure time", metadata)
+        
+    def test_two_acquire(self):
+        camera = self.camera_type(*self.camera_args)
+        self.size = camera.getSensorResolution()
+        exposure = 0.1
+        start = time.time()
+        im, metadata = camera.acquire(self.size, exposure)
+        duration = time.time() - start
+
+        self.assertEqual(im.shape, self.size)
+        self.assertGreaterEqual(duration, exposure, "Error execution took %f s, less than exposure time %d." % (duration, exposure))
+        self.assertIn("Exposure time", metadata)
+        
         start = time.time()
         im, metadata = camera.acquire(self.size, exposure)
         duration = time.time() - start
@@ -171,7 +197,7 @@ class VirtualTestAndorCam(object):
         self.assertIn("Exposure time", metadata)
         self.received += 1
 
-#
+
 #class TestAndorCam3(unittest.TestCase, VirtualTestAndorCam):
 #    """
 #    Test directly the AndorCam3 class.

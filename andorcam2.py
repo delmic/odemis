@@ -309,12 +309,18 @@ class AndorCam2(object):
             # Global so that its sub-libraries can access it
             self.atcore = AndorV2DLL("libandor.so.2", RTLD_GLOBAL)
 
-        self.handle = c_int32()
         if device is None:
             # nothing else to initialise
+            self.handle = None
             return
         
-        self.atcore.GetCameraHandle(c_int32(device), byref(self.handle))
+        try:
+            self.handle = c_int32()
+            self.atcore.GetCameraHandle(c_int32(device), byref(self.handle))
+        except AndorV2Error, err:
+            # so that it's really not possible to use this object after
+            self.handle = None
+            raise err
         self.select()
         self.Initialize()
         
@@ -337,8 +343,7 @@ class AndorCam2(object):
             self.atcore.Initialize("/usr/local/etc/andor")
         
     def Shutdown(self):
-        if self.handle is not None:
-            self.atcore.ShutDown()
+        self.atcore.ShutDown()
     
     def GetCapabilities(self):
         """
@@ -451,6 +456,8 @@ class AndorCam2(object):
         """
         ensure the camera is selected to be managed
         """
+        assert self.handle is not None
+        
         # Do not select it if it's already selected
         current_handle = c_int32()
         self.atcore.GetCurrentCamera(byref(current_handle))
@@ -868,7 +875,8 @@ class AndorCam2(object):
     
     def __del__(self):
         #self.atcore.CoolerOFF()
-        self.Shutdown()
+        if self.handle is not None:
+            self.Shutdown()
     
     def selfTest(self):
         """
@@ -914,6 +922,7 @@ class AndorCam2(object):
         
         cameras = set()
         for i in range(dc.value):
+            camera.handle = c_int32()
             camera.atcore.GetCameraHandle(c_int32(i), byref(camera.handle))
             camera.select()
             camera.Initialize()
