@@ -53,6 +53,19 @@ def get_instantiation_model(inst_file):
         raise OdemisSyntaxError("Syntax error in microscope instantiation file.")
     return data
     
+def instantiate_comp(name, attr, dry_run=False):
+    if not "class" in attr:
+        raise OdemisSyntaxError("Semantic error in microscope instantiation "
+            "file: component %s has no class specified." % name)
+    class_name = attr["class"]
+    try:
+        class_comp = load(class_name) # TODO
+    except Exception, exc:
+        raise OdemisSyntaxError("Semantic error in microscope instantiation "
+            "file: component %s has no class specified." % name)
+    # load class (with special case for two types of components?)
+    # instance class with args
+    
 def instantiate_model(inst_model, dry_run=False):
     """
     Generates the real microscope model from the microscope instantiation model
@@ -89,15 +102,16 @@ def instantiate_model(inst_model, dry_run=False):
                 inst_model[childname]["parent"] = name
     
     # for each component which is not child
-        # load class (with special case for two types of components?)
-        # instance class with args
+
         # add it to the list of comps
         # if it has children, add the children to the list 
     for name, attr in inst_model.items():
         print name
         if "parent" in attr: # children are created by their parents
             continue
-        comp = instantiate_comp(name, attr)
+        comp = instantiate_comp(name, attr, dry_run)
+        comps.add(comp)
+        
         
     # look for the microscope component (check there is only one)
         
