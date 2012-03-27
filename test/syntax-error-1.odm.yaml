@@ -1,0 +1,7 @@
+Optical: {
+    class: Microscope,
+    role: epifluorescent # missing comma
+    emitters: [Light],
+    detectors: ["Andor Clara"],
+    actuators: ["Redstone Stage"],
+}

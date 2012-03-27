@@ -15,11 +15,13 @@ Delmic Acquisition Software is distributed in the hope that it will be useful, b
 You should have received a copy of the GNU General Public License along with Delmic Acquisition Software. If not, see http://www.gnu.org/licenses/.
 '''
 
-# Load the package namespace with the core classes and such
-from odemis.model._properties import *
-from odemis.model._components import *
-#del model
+# Load the package namespace here so that it's possible to just do "import model"
+from ._properties import *
+from ._components import *
 
+#__all__ = []
+#import model._properties
 #__all__ += [name for name in dir(model._properties) if not name.startswith('_')]
+
 
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:

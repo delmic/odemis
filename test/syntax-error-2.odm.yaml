@@ -1,0 +1,7 @@
+Optical: {
+    class: Microscope,
+    role: epifluorescent,
+    detectors: ["Andor Clara"],
+    !!python/module:yaml , # bad object
+    actuators: ["Redstone Stage"],
+}
