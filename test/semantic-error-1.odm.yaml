@@ -1,0 +1,27 @@
+Optical: {
+    class: Microscope,
+    role: epifluorescent,
+    emitters: [Light],
+    detectors: ["Andor Clara"],
+    actuators: ["Redstone Stage", "Non existing component"], # referencing non existing component
+}
+Light: {
+    class: example.Led,
+    role: brightlight,
+    affects: ["Andor Clara"]
+}
+"Andor Clara": {
+    class: andorcam2.AndorCam2,
+    role: ccd,
+    init: {device: 0} # the only Andor camera connected so always 0
+}
+"Redstone Stage": {
+    class: pi.StageRedStone,
+    role: stage,
+    init: {port: /dev/ttyUSB0, 'x': [1, 1], 'y': [0, 1]}, # addresses of the controllers on the serial bus
+    affects: ["Andor Clara"],
+    properties: {
+        speed: 1 #m/s
+    }
+}
+
