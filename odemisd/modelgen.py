@@ -72,26 +72,27 @@ def get_class(name):
         
     # It comes from the user, so check carefully there is no strange characters
     if not re.match("(\w|\.)+\.(\w)+\Z", name):
-        raise ParseError("Semantic error in microscope instantiation "
+        raise ParseError("Syntax error in microscope instantiation "
             "file: class name '%s' is malformed." % name)
 
     names = name.rsplit(".", 1)
     if len(names) < 2:
-        raise ParseError("Semantic error in microscope instantiation "
+        raise ParseError("Syntax error in microscope instantiation "
             "file: class name '%s' is not in the form 'module.method'." % name)
     module_name = names[0]
     class_name = names[1]
     try:
         mod = __import__(module_name, fromlist=[class_name]) 
     except ImportError, exc:
-        # TODO: raise error
-        print exc, "class = " + class_name
+        # FIXME: once we have all the device drivers writter, we can uncomment this
+#        raise SemanticError("Semantic error in microscope instantiation "
+#            "file: no module '%s' exists." % module_name)
         return None # DEBUG
     
     try:
         the_class = getattr(mod, class_name)
     except AttributeError, exc:
-        raise ParseError("Semantic error in microscope instantiation "
+        raise SemanticError("Semantic error in microscope instantiation "
             "file: module '%s' has no class '%s'." % (module_name, class_name))
     
     return the_class 
@@ -199,7 +200,6 @@ def instantiate_model(inst_model, dry_run=False):
         Exception (dependent on the driver): in case initialisation of a driver fails
     """
     comps = set()
-    mic = None
     
     # mark the children by adding a "parent" attribute
     for name, attr in inst_model.items():
@@ -219,11 +219,9 @@ def instantiate_model(inst_model, dry_run=False):
                 inst_model[child_name]["parent"] = name
     
     # for each component which is not child
-
-        # add it to the list of comps
-        # if it has children, add the children to the list 
+    # add it to the list of comps
+    # if it has children, add the children to the list 
     for name, attr in inst_model.items():
-        print name
         if "parent" in attr: # children are created by their parents
             continue
         comp = instantiate_comp(name, attr, inst_model, dry_run)
@@ -235,9 +233,9 @@ def instantiate_model(inst_model, dry_run=False):
     if len(microscopes) == 1:
         mic = microscopes[0]
     elif len(microscopes) > 1:
-        raise ParseError("Semantic error in microscope "
-                        "instantiation file: there are several Microscopes "
-                        "(%s)." % ", ".join([m.name for m in microscopes]))
+        raise ParseError("Semantic error in microscope instantiation file: "
+                "there are several Microscopes (%s)." % 
+                ", ".join([m.name for m in microscopes]))
     else:
         raise ParseError("Semantic error in microscope instantiation "
                 "file: no Microscope component found.")

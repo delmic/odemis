@@ -89,7 +89,7 @@ class MockComponent(HwComponent):
     It's used for validation of the instantiation model. 
     Do not use or inherit when writing a device driver!
     """
-    # TODO: we could try to even mock more by accepting any properties or attributes
+    # TODO: we could try to mock further by accepting any properties or attributes
     def __init__(self, name, role, children=None, **kwargs):
         HwComponent.__init__(self, name, role)
         # not all type of HwComponent can affects but we cannot make the difference

@@ -77,7 +77,7 @@ def main(args):
     
     try:
         comps, mic = modelgen.instantiate_model(inst_model, options.validate)
-        print comps, mic
+        print comps, mic.name
     except modelgen.SemanticError:
         # the error message is already logged
         return 127
