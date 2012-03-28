@@ -18,12 +18,14 @@ You should have received a copy of the GNU General Public License along with Del
 
 class HwComponent(object):
     """
-
+    A generic class which represents a physical component of the microscope
+    This is an abstract class that should be inherited.
     """
     
     def __init__(self, name, role):
         self.name = name
         self.role = role
+        self.parent = None
 
 
 class Microscope(HwComponent):
@@ -39,10 +41,48 @@ class Microscope(HwComponent):
         if kwargs:
             raise Exception("Microscope component cannot have initialisation arguments.")
 
+        # TODO: validate that each set contains only components from the specific type
         self.detectors = set()
         self.actuators = set()
         self.emitters = set()
 
+
+class Detector(HwComponent):
+    """
+    A component which represents a detector. 
+    This is an abstract class that should be inherited. 
+    """
+    def __init__(self, name, role, children=None, **kwargs):
+        HwComponent.__init__(self, name, role)
+        if children:
+            raise Exception("Detector components cannot have children.")
+        
+        # normally a detector doesn't affect anything
+        
+class Actuator(HwComponent):
+    """
+    A component which represents an actuator (motorised part). 
+    This is an abstract class that should be inherited. 
+    """
+    def __init__(self, name, role, children=None, **kwargs):
+        HwComponent.__init__(self, name, role)
+        if children:
+            raise Exception("Actuator components cannot have children.")
+        
+        self.affects = set()
+        
+class Emitter(HwComponent):
+    """
+    A component which represents an emitter. 
+    This is an abstract class that should be inherited. 
+    """
+    def __init__(self, name, role, children=None, **kwargs):
+        HwComponent.__init__(self, name, role)
+        if children:
+            raise Exception("Emitter components cannot have children.")
+        
+        self.affects = set()
+        
 class MockComponent(HwComponent):
     """
     A very special component which does nothing but can pretend to be any component
@@ -52,12 +92,17 @@ class MockComponent(HwComponent):
     # TODO: we could try to even mock more by accepting any properties or attributes
     def __init__(self, name, role, children=None, **kwargs):
         HwComponent.__init__(self, name, role)
+        # not all type of HwComponent can affects but we cannot make the difference
+        self.affects = set()
         
         if not children:
             return
         self.children = set()
         for child_name, child_args in children.items():
             # we don't care of child_name as it's only for internal use in the real component
-            self.children.add(MockComponent(**child_args))
+            child = MockComponent(**child_args)
+            self.children.add(child)
+            child.parent = self
+        
 
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:

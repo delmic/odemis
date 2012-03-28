@@ -19,7 +19,6 @@ You should have received a copy of the GNU General Public License along with Del
 
 import __version__
 import argparse
-import model
 import sys
 from odemisd import modelgen
 
@@ -72,13 +71,14 @@ def main(args):
     
     try:
         inst_model = modelgen.get_instantiation_model(options.model[0])
-    except modelgen.OdemisSyntaxError:
+    except modelgen.ParseError:
         # the error message is already logged
         return 127
     
     try:
         comps, mic = modelgen.instantiate_model(inst_model, options.validate)
-    except modelgen.OdemisSemanticError:
+        print comps, mic
+    except modelgen.SemanticError:
         # the error message is already logged
         return 127
 
