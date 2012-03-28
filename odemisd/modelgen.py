@@ -18,6 +18,7 @@ You should have received a copy of the GNU General Public License along with Del
 
 import itertools
 import model
+import re
 import yaml
 
 class OdemisSyntaxError(Exception):
@@ -52,19 +53,118 @@ def get_instantiation_model(inst_file):
             print " " * mark.column + "^"
         raise OdemisSyntaxError("Syntax error in microscope instantiation file.")
     return data
+
+# the classes that we provide in addition to the device drivers 
+# Nice name => actual class name
+internal_classes = {"Microscope": "model.Microscope", 
+                    "CombinedActuator": "model.CombinedActuator",
+                    }
+def get_class(name):
+    """
+    name (str): class name given as "package.module.class" or "module.class" or
+      one of the internal classes name 
+    returns the class object
+    Raises:
+         OdemisSemanticError in case an error is detected.
+    """
+    if name in internal_classes:
+        name = internal_classes[name]
+        
+    # It comes from the user, so check carefully there is no strange characters
+    if not re.match("(\w|\.)+\.(\w)+\Z", name):
+        raise OdemisSyntaxError("Semantic error in microscope instantiation "
+            "file: class name '%s' is malformed." % name)
+
+    names = name.rsplit(".", 1)
+    if len(names) < 2:
+        raise OdemisSyntaxError("Semantic error in microscope instantiation "
+            "file: class name '%s' is not in the form 'module.method'." % name)
+    module_name = names[0]
+    class_name = names[1]
+    try:
+        mod = __import__(module_name, fromlist=[class_name]) 
+    except ImportError, exc:
+        # TODO: raise error
+        print exc, "class = " + class_name
+        return None # DEBUG
     
-def instantiate_comp(name, attr, dry_run=False):
+    try:
+        the_class = getattr(mod, class_name)
+    except AttributeError, exc:
+        raise OdemisSyntaxError("Semantic error in microscope instantiation "
+            "file: module '%s' has no class '%s'." % (module_name, class_name))
+    
+    return the_class 
+
+def make_args(name, attr, inst_comps):
+    """
+    Create init arguments for a component instance and its children
+    name (str): name that will be given to the component instance
+    attr (dict (str -> value)): attributes of the component
+    inst_comps (dict (str -> dict)): all the components of the instantiation model
+    returns (dict (str -> value)): init argument for the component instance
+    """
+    # it's not an error if there is not init attribute, just not specific arguments
+    if "init" in attr:
+        init = dict(attr["init"]) # copy
+    else:
+        init = {}
+    
+    # it's an error to specify "name" and "role" in the init
+    if "name" in init:
+        raise OdemisSyntaxError("Semantic error in microscope instantiation "
+            "file: component '%s' should not have a 'name' entry in the init." % name)
+    init["name"] = name
+    if "role" in init:
+        raise OdemisSyntaxError("Semantic error in microscope instantiation "
+            "file: component '%s' should not have a 'role' entry in the init." % name)
+    if not "role" in attr:
+        raise OdemisSyntaxError("Semantic error in microscope instantiation "
+            "file: component '%s' has no role specified." % name)
+    init["role"] = attr["role"]
+    
+    # create recursively the children
+    if "children" in init:
+        raise OdemisSyntaxError("Semantic error in microscope instantiation "
+            "file: component '%s' should not have a 'children' entry in the init." % name)
+    if "children" in attr:
+        init["children"] = {}
+        children_names = attr["children"]
+        for internal_name, child_name in children_names.items():
+            child_attr = inst_comps[child_name]
+            init["children"][internal_name] = make_args(child_name, child_attr, inst_comps)
+    
+    return init
+        
+    
+def instantiate_comp(name, attr, inst_comps, dry_run=False):
+    """
+    Instantiate a component
+    name (str): name that will be given to the component instance
+    attr (dict (str -> value)): attributes of the component
+    inst_comps (dict (str -> dict)): all the components in the instantiation model
+    returns (HwComponent): an instance of the component
+    Raises:
+        OdemisSemanticError in case an error in the model is detected. 
+    """
     if not "class" in attr:
         raise OdemisSyntaxError("Semantic error in microscope instantiation "
             "file: component %s has no class specified." % name)
     class_name = attr["class"]
-    try:
-        class_comp = load(class_name) # TODO
-    except Exception, exc:
-        raise OdemisSyntaxError("Semantic error in microscope instantiation "
-            "file: component %s has no class specified." % name)
-    # load class (with special case for two types of components?)
-    # instance class with args
+    class_comp = get_class(class_name)
+    
+    # create the arguments:
+    # name (str)
+    # role (str)
+    # children (dict str -> dict): same thing for each child as a dict of internal name -> init arguments
+    # anything else is passed as is
+    args = make_args(name, attr, inst_comps)
+   
+    if dry_run:
+        comp = model.MockComponent(**args)
+    else:
+        comp = class_comp(**args)
+    return comp
     
 def instantiate_model(inst_model, dry_run=False):
     """
@@ -77,7 +177,7 @@ def instantiate_model(inst_model, dry_run=False):
       
     Raises:
         OdemisSemanticError in case an error in the model is detected. Note that
-        (obviously) not every 
+        (obviously) not every error can be detected.
         Exception (dependent on the driver): in case initialisation of a driver fails
     """
     comps = set()
@@ -87,19 +187,19 @@ def instantiate_model(inst_model, dry_run=False):
     for name, attr in inst_model.items():
         print name
         if "children" in attr:
-            for childname in attr["children"]:
+            for child_name in attr["children"].values():
                 # detect direct loop
-                if childname == name:
+                if child_name == name:
                     raise OdemisSyntaxError("Semantic error in "
                             "microscope instantiation file: component %s "
                             "has itself as children." % name)
                 # detect child with multiple parents
-                if "parent" in inst_model[childname]:
+                if "parent" in inst_model[child_name]:
                     raise OdemisSyntaxError("Semantic error in "
                             "microscope instantiation file: component %s "
                             "is child of both %s and %s." 
-                            % (childname, name, inst_model[childname]["parent"]))
-                inst_model[childname]["parent"] = name
+                            % (child_name, name, inst_model[child_name]["parent"]))
+                inst_model[child_name]["parent"] = name
     
     # for each component which is not child
 
@@ -109,7 +209,7 @@ def instantiate_model(inst_model, dry_run=False):
         print name
         if "parent" in attr: # children are created by their parents
             continue
-        comp = instantiate_comp(name, attr, dry_run)
+        comp = instantiate_comp(name, attr, inst_model, dry_run)
         comps.add(comp)
         
         
