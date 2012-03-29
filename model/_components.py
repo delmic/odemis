@@ -15,6 +15,8 @@ Delmic Acquisition Software is distributed in the hope that it will be useful, b
 You should have received a copy of the GNU General Public License along with Delmic Acquisition Software. If not, see http://www.gnu.org/licenses/.
 '''
 
+class ArgumentError(Exception):
+    pass
 
 class HwComponent(object):
     """
@@ -36,10 +38,10 @@ class Microscope(HwComponent):
     def __init__(self, name, role, children=None, **kwargs):
         HwComponent.__init__(self, name, role)
         if children:
-            raise Exception("Microscope component cannot have children.")
+            raise ArgumentError("Microscope component cannot have children.")
         
         if kwargs:
-            raise Exception("Microscope component cannot have initialisation arguments.")
+            raise ArgumentError("Microscope component cannot have initialisation arguments.")
 
         # TODO: validate that each set contains only components from the specific type
         self.detectors = set()
@@ -55,7 +57,7 @@ class Detector(HwComponent):
     def __init__(self, name, role, children=None, **kwargs):
         HwComponent.__init__(self, name, role)
         if children:
-            raise Exception("Detector components cannot have children.")
+            raise ArgumentError("Detector components cannot have children.")
         
         # normally a detector doesn't affect anything
         
@@ -67,7 +69,7 @@ class Actuator(HwComponent):
     def __init__(self, name, role, children=None, **kwargs):
         HwComponent.__init__(self, name, role)
         if children:
-            raise Exception("Actuator components cannot have children.")
+            raise ArgumentError("Actuator components cannot have children.")
         
         self.affects = set()
         
@@ -79,9 +81,10 @@ class Emitter(HwComponent):
     def __init__(self, name, role, children=None, **kwargs):
         HwComponent.__init__(self, name, role)
         if children:
-            raise Exception("Emitter components cannot have children.")
+            raise ArgumentError("Emitter components cannot have children.")
         
         self.affects = set()
+        self.shape = None # must be initialised by the sub-class
         
 class MockComponent(HwComponent):
     """

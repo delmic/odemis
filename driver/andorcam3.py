@@ -20,6 +20,7 @@ import numpy
 import os
 import threading
 import time
+import model
 
 # Neo encodings (selectable depending on gain selection):
 #0 Mono12
@@ -119,7 +120,7 @@ class ATDLL(CDLL):
 }
 
     
-class AndorCam3(object):
+class AndorCam3(model.Detector):
     """
     Represents one Andor camera and provides all the basic interfaces typical of
     a CCD/CMOS camera.
@@ -132,13 +133,16 @@ class AndorCam3(object):
     It also provide low-level methods corresponding to the SDK functions.
     """
     
-    def __init__(self, device=None):
+    def __init__(self, name, role, children, device=None):
         """
         Initialises the device
         device (None or int): number of the device to open, as defined by Andor, cd scan()
           if None, uses the system handle, which allows very limited access to some information
-        Raise an exception if the device cannot be opened.
+        Raises:
+          ATError if the device cannot be opened.
         """
+        model.Detector.__init__(self, name, role, children)
+        
         if os.name == "nt":
             # That's not gonna fly... need to put this into ATDLL
             self.atcore = windll.LoadLibrary('libatcore.dll') # TODO check it works
@@ -160,6 +164,8 @@ class AndorCam3(object):
         self.is_acquiring = False
         self.acquire_must_stop = False
         self.acquire_thread = None
+        
+        #TODO convert to properties and data-flow
     
     # low level methods, wrapper to the actual SDK functions
     # TODO: not _everything_ is implemented, just what we need

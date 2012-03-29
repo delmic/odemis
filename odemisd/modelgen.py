@@ -52,6 +52,10 @@ def get_instantiation_model(inst_file):
             # display the column
             print " " * mark.column + "^"
         raise ParseError("Syntax error in microscope instantiation file.")
+    
+    # TODO detect duplicate keys (e.g., two components with the same name)
+    # Currently Pyyaml fail to detect that error: http://pyyaml.org/ticket/128 (contains patch) 
+    
     return data
 
 # the classes that we provide in addition to the device drivers 
