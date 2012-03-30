@@ -58,6 +58,16 @@ class PropertiesTest(unittest.TestCase):
         assert(prop.value == 0)
         assert(self.called == 3)
     
+    def test_readonly(self):
+        prop = model.FloatProperty(2.0, readonly=True)
+        try:
+            prop.value = 6.0
+            self.fail("Modifying a readonly property should not be allowed.")
+        except model.NotSettableError:
+            pass # as it should be
+        
+        assert(prop.value == 2)
+        
     def test_list(self):
         prop = model.ListProperty([2.0, 5, 4])
         self.called = 0
@@ -79,7 +89,7 @@ class PropertiesTest(unittest.TestCase):
         assert(self.called == 3)
         
     def test_continuous(self):
-        prop = FloatContinuous(2.0, [-1, 3.4])
+        prop = model.FloatContinuous(2.0, [-1, 3.4])
         assert(prop.value == 2)
         assert(prop.range == (-1, 3.4))
         
@@ -112,7 +122,7 @@ class PropertiesTest(unittest.TestCase):
         assert(self.called == 1)
 
     def test_enumerated(self):
-        prop = StringEnumerated("a", set(["a", "c", "bfds"]))
+        prop = model.StringEnumerated("a", set(["a", "c", "bfds"]))
         assert(prop.value == "a")
         assert(prop.choices == set(["a", "c", "bfds"]))
         
@@ -143,7 +153,7 @@ class PropertiesTest(unittest.TestCase):
             pass # as it should be
         
         try:
-            prop.choices = ("a", "b")
+            prop.choices = 5
             self.fail("Choices should be allowed only if it's a set.")
         except model.InvalidTypeError:
             pass # as it should be
@@ -151,33 +161,6 @@ class PropertiesTest(unittest.TestCase):
         prop.unsubscribe(self.callback_test_notify)
         
         assert(self.called == 1)
-
-
-class FloatContinuous(model.FloatProperty, model.Continuous):
-    """
-    A simple class which is both floating and continuous
-    """
-    def __init__(self, value=0.0, vrange=[]):
-        model.Continuous.__init__(self, vrange)
-        model.FloatProperty.__init__(self, value)
-
-    def _set(self, value):
-        # order is important
-        model.Continuous._set(self, value)
-        model.FloatProperty._set(self, value)
-
-class StringEnumerated(model.StringProperty, model.Enumerated):
-    """
-    A simple class which is both string and Enumerated
-    """
-    def __init__(self, value, choices):
-        model.Enumerated.__init__(self, choices)
-        model.StringProperty.__init__(self, value)
-
-    def _set(self, value):
-        # order is important
-        model.Enumerated._set(self, value)
-        model.StringProperty._set(self, value)
 
 
 if __name__ == "__main__":

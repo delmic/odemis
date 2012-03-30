@@ -15,12 +15,14 @@ Delmic Acquisition Software is distributed in the hope that it will be useful, b
 You should have received a copy of the GNU General Public License along with Delmic Acquisition Software. If not, see http://www.gnu.org/licenses/.
 '''
 
+
 from ctypes import *
+import __version__
+import model
 import numpy
 import os
 import threading
 import time
-import model
 
 # Neo encodings (selectable depending on gain selection):
 #0 Mono12
@@ -157,15 +159,38 @@ class AndorCam3(model.Detector):
             # nothing else to initialise
             return
         
+        # Describe the camera
+        resolution = (self.GetInt(u"SensorWidth"), self.GetInt(u"SensorHeight"))
+        # TODO 12 bits for simcam
+        self.shape = resolution + (2**16,) # intensity on 16 bits
+        
+        psize = (self.GetFloat(u"PixelWidth") * 1e-6,
+                 self.GetFloat(u"PixelHeight") * 1e-6)
+        self.pixelSize = model.FloatProperty(psize, unit="m", readonly=True)
+        
+        self.swVersion = __version__.version # same as the rest of odemis
+        self.hwVersion = self.getVersion()
+        
         # Maximum cooling for lowest (image) noise
-        self.setTargetTemperature(-100) # very low (automatically adjusted)
-        self.setFanSpeed(1.0)
+        self.targetTemperature = model.FloatContinuous(-100, [-275, 100], "C")
+        self.targetTemperature.subscribe(self.onTargetTemperature, init=True)
+        
+        if self.isImplemented(u"FanSpeed"):
+            # max speed
+            self.fanSpeed = model.FloatContinuous(1.0, [0.0, 1.0]) # ratio to max speed
+            self.fanSpeed.subscribe(self.onFanSpeed, init=True)
+
+        # TODO more properties to directly represent what is available from the SDK?
+        # At least we need a temperature, exposuretime, binning, size
+        
+        #TODO add data-flow
+        # self.data XXX
         
         self.is_acquiring = False
         self.acquire_must_stop = False
         self.acquire_thread = None
         
-        #TODO convert to properties and data-flow
+
     
     # low level methods, wrapper to the actual SDK functions
     # TODO: not _everything_ is implemented, just what we need
@@ -340,14 +365,14 @@ class AndorCam3(model.Detector):
         """
         return (self.GetInt(u"SensorWidth"), self.GetInt(u"SensorHeight"))
     
-    def setTargetTemperature(self, temp):
+    def onTargetTemperature(self, temp):
         """
         Change the targeted temperature of the CCD.
         The cooler the less dark noise. Not everything is possible, but it will
         try to accommodate by targeting the closest temperature possible.
-        temp (-400 < float < 100): temperature in C
+        temp (-300 < float < 100): temperature in C
         """
-        assert((-400 <= temp) and (temp <= 100))
+        assert((-300 <= temp) and (temp <= 100))
         # TODO apparently the Neo also has a "Temperature Control" which might be
         # better to use
         ranges = self.GetFloatRanges(u"TargetSensorTemperature")
@@ -362,7 +387,7 @@ class AndorCam3(model.Detector):
         # TODO: a more generic function which set up the fan to the right speed
         # according to the target temperature?
 
-    def setFanSpeed(self, speed):
+    def onFanSpeed(self, speed):
         """
         Change the fan speed. Will accommodate to whichever speed is possible.
         speed (0<=float<= 1): ratio of full speed -> 0 is slowest, 1.0 is fastest
@@ -431,6 +456,37 @@ class AndorCam3(model.Detector):
         metadata["Camera binning"] =  "%dx%d" % (binning, binning)
         return metadata
     
+    def getVersion(self):
+        """
+        returns a simplified version information
+        """
+        model = "Andor " + self.GetString(u"CameraModel")
+        # TODO there seems to be a bug in SimCam v3.1: => check v3.3
+#        self.atcore.isImplemented(self.handle, u"SerialNumber") return true
+#        but self.atcore.GetInt(self.handle, u"SerialNumber") fail with error code 2 = AT_ERR_NOTIMPLEMENTED
+        try:
+            serial = self.GetInt(u"SerialNumber")
+            serial_str = " (s/n: %d)" % serial
+        except ATError:
+            serial_str = ""
+        
+
+        try:
+            firmware = self.GetString(u"FirmwareVersion") 
+            firmware_str = "firmware: '%s'" % firmware
+        except ATError:
+            firmware_str = "" # Simcam has no firmware
+            
+        try:
+            # Doesn't work on the normal camera, need to access the "System"
+            system = AndorCam3()
+            sdk = system.GetString(u"SoftwareVersion")
+        except ATError:
+            sdk = "unknown"
+            
+        version = "%s%s: %s, driver:'%s'" % (model, serial_str, firmware_str, sdk)
+        return version
+        
     def getCameraMetadata(self):
         """
         return the metadata corresponding to the camera in general (common to 

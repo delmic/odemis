@@ -21,6 +21,9 @@ class InvalidTypeError(Exception):
 class OutOfBoundError(Exception):
     pass
 
+class NotSettableError(Exception):
+    pass
+
 class Property(object):
     '''
     A property represents a value (an object) with:
@@ -28,11 +31,13 @@ class Property(object):
      * observable behaviour (any one can ask to be notified when the value changes) 
     '''
 
-    def __init__(self, initval, unit=""):
+    def __init__(self, initval, unit="", readonly=False):
         """
         Creates a property with a given initial value
         initval : any type
         unit (str): a SI unit in which the property is expressed
+        readonly (bool): if True, value setter will raise an exception. It's still
+            possible to change the value by calling _set() and then notify()
         """
         # TODO make it a weakref to automatically update the set when a listener
         # goes away. See pypubsub weakmethod.py or http://mindtrove.info/python-weak-references/
@@ -41,6 +46,7 @@ class Property(object):
         
         self._set(initval)
         self.unit = unit
+        self.readonly = readonly
         
     @property
     def value(self):
@@ -55,6 +61,8 @@ class Property(object):
 
     @value.setter
     def value(self, value):
+        if self.readonly:
+            raise NotSettableError("Value is readonly")
         prev_value = self._value
         self._set(value)
         if prev_value != self._value:
@@ -91,8 +99,8 @@ class StringProperty(Property):
     A property which contains a string
     """
     
-    def __init__(self, value=""):
-        Property.__init__(self, value)
+    def __init__(self, value="", unit="", readonly=False):
+        Property.__init__(self, value, unit, readonly)
         
     def _set(self, value):
         if not isinstance(value, basestring):
@@ -104,8 +112,8 @@ class FloatProperty(Property):
     A property which contains a float
     """
     
-    def __init__(self, value=0.0):
-        Property.__init__(self, value)
+    def __init__(self, value=0.0, unit="", readonly=False):
+        Property.__init__(self, value, unit, readonly)
         
     def _set(self, value):
         try:
@@ -119,8 +127,8 @@ class IntProperty(Property):
     A property which contains a float
     """
     
-    def __init__(self, value=0):
-        Property.__init__(self, value)
+    def __init__(self, value=0, unit="", readonly=False):
+        Property.__init__(self, value, unit, readonly)
         
     def _set(self, value):
         # we really accept only int, to avoid hiding lose of precision
@@ -133,8 +141,8 @@ class ListProperty(Property):
     A property which contains a list of values
     """
     
-    def __init__(self, value=[]):
-        Property.__init__(self, value)
+    def __init__(self, value=[], unit="", readonly=False):
+        Property.__init__(self, value, unit, readonly)
         
     def _set(self, value):
         if not isinstance(value, list):
@@ -143,6 +151,8 @@ class ListProperty(Property):
         
         Property._set(self, value)
 
+# TODO maybe should provide a factory that can take a Property class and return it
+# either Continuous or Enumerated
 
 class Continuous(object):
     """
@@ -192,7 +202,6 @@ class Continuous(object):
         Raises:
             OutOfBoundError if the value is not within the authorised range
         """
-        # we consider that the subclass has member .value
         if value < self._range[0] or value > self._range[1]:
             raise OutOfBoundError("Trying to assign value '%s' outside of the range %s-%s." % 
                         (str(value), str(self._range[0]), str(self._range[1])))
@@ -215,9 +224,11 @@ class Enumerated(object):
             raise OutOfBoundError("Value '%s' is not part of possible choices: %s." % 
                         (str(value), ", ".join(map(str, self._choices))))
     
-    def _set_choices(self, new_choices):
-        if not isinstance(new_choices, set):
-            raise InvalidTypeError("choices attribute '%s' is not a set." %  str(new_choices))
+    def _set_choices(self, new_choices_raw):
+        try:
+            new_choices = frozenset(new_choices_raw)
+        except TypeError:
+            raise InvalidTypeError("Choices '%s' is not a set." % str(new_choices_raw))
         if hasattr(self, "value"):
             if not self.value in new_choices:
                 raise OutOfBoundError("Current value '%s' is not part of possible choices: %s." % 
@@ -235,5 +246,50 @@ class Enumerated(object):
     @choices.deleter
     def choices(self):
         del self._choices
+    
+    
+    
+    
+    
+
+class FloatContinuous(FloatProperty, Continuous):
+    """
+    A simple class which is both floating and continuous
+    """
+    def __init__(self, value=0.0, vrange=[], unit=""):
+        Continuous.__init__(self, vrange)
+        FloatProperty.__init__(self, value, unit)
+
+    def _set(self, value):
+        # order is important
+        Continuous._set(self, value)
+        FloatProperty._set(self, value)
+
+class StringEnumerated(StringProperty, Enumerated):
+    """
+    A simple class which is both string and Enumerated
+    """
+    def __init__(self, value, choices, unit=""):
+        Enumerated.__init__(self, choices)
+        StringProperty.__init__(self, value, unit)
+
+    def _set(self, value):
+        # order is important
+        Enumerated._set(self, value)
+        StringProperty._set(self, value)
+
+class FloatEnumerated(FloatProperty, Enumerated):
+    """
+    A simple class which is both floating and enumerated
+    """
+    def __init__(self, value=0.0, choices=[], unit=""):
+        Enumerated.__init__(self, choices)
+        FloatProperty.__init__(self, value, unit)
+
+    def _set(self, value):
+        # order is important
+        Enumerated._set(self, value)
+        FloatProperty._set(self, value)
+
     
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:
