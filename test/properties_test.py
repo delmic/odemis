@@ -57,7 +57,26 @@ class PropertiesTest(unittest.TestCase):
         
         assert(prop.value == 0)
         assert(self.called == 3)
-
+    
+    def test_list(self):
+        prop = model.ListProperty([2.0, 5, 4])
+        self.called = 0
+        # now count
+        prop.subscribe(self.callback_test_notify, init=True) # +1
+        prop.value = [3.0, 5] # +1
+        prop.value = list((0,)) # +1
+        prop.value = list([0.0]) # nothing because same value
+        try:
+            prop.value = "coucou"
+            self.fail("Assigning string to a list should not be allowed.")
+        except model.InvalidTypeError:
+            pass # as it should be
+        prop.unsubscribe(self.callback_test_notify)
+        
+        prop.value = ["b"] # no more counting
+        
+        assert(prop.value == ["b"])
+        assert(self.called == 3)
         
     def test_continuous(self):
         prop = FloatContinuous(2.0, [-1, 3.4])
@@ -109,12 +128,18 @@ class PropertiesTest(unittest.TestCase):
         except model.OutOfBoundError:
             pass # as it should be
         
-        prop.choices = set(["a", "c", "b"])
+        prop.choices = set(["a", "c", "b", 5])
         assert(prop.value == "c")
         try:
             prop.choices = set(["a", "b"])
             self.fail("Assigning choices not containing current value should not be allowed.")
         except model.OutOfBoundError:
+            pass # as it should be
+        
+        try:
+            prop.value = 5
+            self.fail("Assigning an int to a string should not be allowed.")
+        except model.InvalidTypeError:
             pass # as it should be
         
         try:

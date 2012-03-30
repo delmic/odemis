@@ -95,7 +95,7 @@ class StringProperty(Property):
         Property.__init__(self, value)
         
     def _set(self, value):
-        if not isinstance(value, str):
+        if not isinstance(value, basestring):
             raise InvalidTypeError("Value '%s' is not a string." % str(value))
         Property._set(self, value)
 
