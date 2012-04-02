@@ -45,7 +45,6 @@ class Light(model.Emitter):
             print "Light is off" 
 
 
-
 class Stage2D(model.Actuator):
     """
     Simulated stage component. Just pretends to be able to move all around.
@@ -54,10 +53,9 @@ class Stage2D(model.Actuator):
         model.Actuator.__init__(self, name, role, children)
         
         self.axes = frozenset(["x", "y"])
-        # can move 10cm
+        # can move 10cm on both axis
         self.ranges = {"x": frozenset([0, 0.1]), "y": frozenset([0, 0.1])}
-        
-        self._position = {"x": 0.05, "y": 0.05}
+        self._position = {"x": 0.05, "y": 0.05} # starts in the middle
         self.speed = MultiSpeedProperty({"x": 10, "y": 10}, [0, 10], "m/s")
         
     def moveRel(self, pos):

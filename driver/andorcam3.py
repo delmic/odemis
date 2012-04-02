@@ -183,14 +183,17 @@ class AndorCam3(model.Detector):
         # TODO more properties to directly represent what is available from the SDK?
         # At least we need a temperature, exposuretime, binning, size
         
-        #TODO add data-flow
-        # self.data XXX
+        # TODO some methods (with futures)
+        
+
         
         self.is_acquiring = False
         self.acquire_must_stop = False
         self.acquire_thread = None
         
-
+        #TODO add data-flow
+        self.data = AndorCam3DataFlow()
+        
     
     # low level methods, wrapper to the actual SDK functions
     # TODO: not _everything_ is implemented, just what we need
@@ -652,7 +655,7 @@ class AndorCam3(model.Detector):
     def _buffer_as_array(self, cbuffer, size):
         """
         Converts the buffer allocated for the image as an ndarray. zero-copy
-        return an ndarray
+        return a DataArray (metadata not initialised)
         """
         # actual size of a line in bytes (not pixel)
         try:
@@ -663,8 +666,9 @@ class AndorCam3(model.Detector):
             
         p = cast(cbuffer, POINTER(c_uint16))
         ndbuffer = numpy.ctypeslib.as_array(p, (stride / 2, size[1]))
+        dataarray = model.DataArray(ndbuffer)
         # crop the array in case of stride (should not cause copy)
-        return ndbuffer[:size[0],:]
+        return dataarray[:size[0],:]
         
     def acquire(self, size, exp, binning=1):
         """
@@ -877,4 +881,35 @@ class AndorCam3(model.Detector):
         return cameras
 
 
+class AndorCam3DataFlow(model.DataFlow):
+    def __init__(self, camera):
+        model.DataFlow.__init__(self)
+        self.camera = camera
+        
+    def get(self):
+        model.DataFlow.get(self)
+        # TODO if camera is already acquiring, wait for the coming picture
+        data = self.camera.acquire()
+        # If some subscribers arrived during the acquire()
+        if self._listeners:
+            self.notify(data)
+            self.camera.acquireFlow(self.notify)
+        return data
+    
+    def subscribe(self, listener):
+        model.DataFlow.subscribe(self, listener)
+        # TODO nicer way to check whether the camera is already sending us data?
+        if not self.camera.acquire_thread:
+            # is it in acquire()? If so, it will be done in .get()
+            if not self.camera.is_acquiring:
+                self.camera.acquireFlow(self.notify)
+    
+    def unsubscribe(self, listener):
+        model.DataFlow.unsubscribe(self, listener)
+        if not self._listeners:
+            self.camera.stopAcquireFlow()
+            
+    def notify(self, data):
+        model.DataFlow.notify(self, data)
+    
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:

@@ -18,6 +18,7 @@ You should have received a copy of the GNU General Public License along with Del
 # Load the package namespace here so that it's possible to just do "import model"
 from ._properties import *
 from ._components import *
+from ._dataflow import *
 
 #__all__ = []
 #import model._properties
