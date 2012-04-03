@@ -291,5 +291,17 @@ class FloatEnumerated(FloatProperty, Enumerated):
         Enumerated._set(self, value)
         FloatProperty._set(self, value)
 
+class IntEnumerated(IntProperty, Enumerated):
+    """
+    A simple class which is both int and enumerated
+    """
+    def __init__(self, value=0.0, choices=[], unit=""):
+        Enumerated.__init__(self, choices)
+        IntProperty.__init__(self, value, unit)
+
+    def _set(self, value):
+        # order is important
+        Enumerated._set(self, value)
+        IntProperty._set(self, value)
     
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:

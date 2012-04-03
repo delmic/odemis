@@ -22,26 +22,46 @@ updated. Typically it is used to transmit video (sequence of images). It does it
 losslessly and with metadata attached.
 """
 
+# This list of constants are used as key for the metadata
+MD_EXP_TIME = "Exposure time" # s
+MD_ACQ_DATE = "Acquisition date" # s since epoch
+MD_PIXEL_SIZE = "Pixel size" # m, m
+MD_BINNING = "Binning" # px
+MD_HW_VERSION = "Hardware version" # str
+MD_SW_VERSION = "Software version" # str
+MD_HW_NAME = "Hardware name" # str, product name of the hardware component (and s/n)
+MD_GAIN = "Gain" # no unit (ratio)
+MD_BPP = "Bits per pixel" # bit
+MD_READOUT_TIME = "Pixel readout time" # s, time to read one pixel
+MD_SENSOR_SIZE = "Sensor size" # px, px
+MD_SENSOR_TEMP = "Sensor temperaure" # C
+
+
 class DataArray(numpy.ndarray):
     """
     Array of data (a numpy nd.array) + metadata.
     It is the main object returned by a dataflow.
+    It can be created either explicitly:
+     DataArray([2,3,1,0], metadata={"key": 2})
+    or via a view:
+     x = numpy.array([2,3,1,0])
+     x.view(DataArray)
     """
     
     # see http://docs.scipy.org/doc/numpy/user/basics.subclassing.html
-    def __new__(cls, shape, dtype=float, buffer=None, offset=0,
-          strides=None, order=None, metadata=None):
+    def __new__(cls, input_array, metadata={}):
         """
+        input_array: array from which to initialise the data
         metadata (dict str-> value): a dict of (standard) names to their values
         """
-        obj = numpy.ndarray.__new__(cls, shape, dtype, buffer, offset, strides, order)
+        obj = numpy.asarray(input_array).view(cls)
         obj.metadata = metadata
         return obj
 
     def __array_finalize__(self, obj):
         if obj is None:
             return
-        self.metadata = getattr(obj, 'metadata', None)
+        self.metadata = getattr(obj, 'metadata', {})
 
 class DataFlow(object):
     """
