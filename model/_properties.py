@@ -249,9 +249,6 @@ class Enumerated(object):
     
     
     
-    
-    
-
 class FloatContinuous(FloatProperty, Continuous):
     """
     A simple class which is both floating and continuous

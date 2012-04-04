@@ -85,7 +85,8 @@ class DataFlow(object):
     def subscribe(self, listener):
         """
         Register a callback function to be called when the ActiveValue is 
-        listener (function): callback function which takes as argument data the new data
+        listener (function): callback function which takes as arguments 
+           dataflow (this object) and data (the new data array)
         """
         # TODO update rate argument to indicate how often we need an update?
         assert callable(listener)
@@ -99,7 +100,7 @@ class DataFlow(object):
         data (DataArray): the data to be sent to listeners
         """
         assert(isinstance(data, DataArray))
-        for l in self._listeners:
-            l(data)
+        for l in self._listeners.copy(): # to allow modify the set while calling
+            l(self, data)
             
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:

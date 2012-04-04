@@ -16,11 +16,13 @@ Delmic Acquisition Software is distributed in the hope that it will be useful, b
 
 You should have received a copy of the GNU General Public License along with Delmic Acquisition Software. If not, see http://www.gnu.org/licenses/.
 '''
-import andorcam2
-import andorcam3
+#import andorcam2
+import driver.andorcam3 as andorcam3
+import model
 import time
 import unittest
 
+# It doesn't inherit from TestCase because it should not be run by itself
 class VirtualTestAndorCam(object):
     """
     Virtual class for all the (andor) cameras
@@ -40,73 +42,92 @@ class VirtualTestAndorCam(object):
 
     def test_acquire(self):
         camera = self.camera_type(*self.camera_args)
-        self.size = camera.getSensorResolution()
+        self.size = camera.shape[0:2]
         exposure = 0.1
+
+        camera.resolution.value = self.size
+        camera.exposureTime.value = exposure
+        
         start = time.time()
-        im, metadata = camera.acquire(self.size, exposure)
+        im = camera.data.get()
         duration = time.time() - start
 
         self.assertEqual(im.shape, self.size)
         self.assertGreaterEqual(duration, exposure, "Error execution took %f s, less than exposure time %d." % (duration, exposure))
-        self.assertIn("Exposure time", metadata)
+        self.assertIn(model.MD_EXP_TIME, im.metadata)
+        del camera
         
     def test_two_acquire(self):
         camera = self.camera_type(*self.camera_args)
-        self.size = camera.getSensorResolution()
+        self.size = camera.shape[0:2]
         exposure = 0.1
-        start = time.time()
-        im, metadata = camera.acquire(self.size, exposure)
-        duration = time.time() - start
-
-        self.assertEqual(im.shape, self.size)
-        self.assertGreaterEqual(duration, exposure, "Error execution took %f s, less than exposure time %d." % (duration, exposure))
-        self.assertIn("Exposure time", metadata)
+        camera.binning.value = 1 # just to check it works
+        camera.resolution.value = self.size
+        camera.exposureTime.value = exposure
         
         start = time.time()
-        im, metadata = camera.acquire(self.size, exposure)
+        im = camera.data.get()
         duration = time.time() - start
 
         self.assertEqual(im.shape, self.size)
         self.assertGreaterEqual(duration, exposure, "Error execution took %f s, less than exposure time %d." % (duration, exposure))
-        self.assertIn("Exposure time", metadata)
+        self.assertIn(model.MD_EXP_TIME, im.metadata)
+        
+        camera.binning.value = 1 # just to check it still works
+        start = time.time()
+        im = camera.data.get()
+        duration = time.time() - start
+
+        self.assertEqual(im.shape, self.size)
+        self.assertGreaterEqual(duration, exposure, "Error execution took %f s, less than exposure time %d." % (duration, exposure))
+        self.assertIn(model.MD_EXP_TIME, im.metadata)
+        del camera
         
     def test_acquire_flow(self):
-        camera = self.camera_type(*self.camera_args)
-        self.size = camera.getSensorResolution()
+        self.camera = self.camera_type(*self.camera_args)
+        self.size = self.camera.shape[0:2]
+        exposure = 0.1
+        self.camera.resolution.value = self.size
+        self.camera.exposureTime.value = exposure
+        
         number = 5
-        self.received = 0
-        camera.acquireFlow(self.receive_image, self.size, 0.01, num=number)
-        camera.waitAcquireFlow()
-        self.assertEqual(self.received, number)
+        self.left = number
+        self.camera.data.subscribe(self.receive_image)
+        time.sleep(number * 2) # 2s per image should be more than enough in any case
+        
+        self.assertEqual(self.left, 0)
+        del self.camera
 
-    def receive_image(self, camera, image, metadata):
+    def receive_image(self, dataflow, image):
         """
         callback for acquireFlow of test_acquire_flow()
         """
         self.assertEqual(image.shape, self.size)
-        self.assertIn("Exposure time", metadata)
-        self.received += 1
-
-# You have to pick only one of them to get it not crash
-class TestAndorCam3(unittest.TestCase, VirtualTestAndorCam):
-    """
-    Test directly the AndorCam3 class.
-    """
-    camera_type = andorcam3.AndorCam3
-    camera_args = (0,) # device
+        self.assertIn(model.MD_EXP_TIME, image.metadata)
+        print "Received an image"
+        self.left -= 1
+        if self.left <= 0:
+            dataflow.unsubscribe(self.receive_image)
         
-class TestAndorCam2(unittest.TestCase, VirtualTestAndorCam):
-    """
-    Test directly the AndorCam2 class.
-    """
-    camera_type = andorcam2.AndorCam2
-    camera_args = (0,) # device
-    
-    # The SimCam of SDKv3 doesn't support binning, so let's just try on v2
+
     def test_binning(self):
         camera = self.camera_type(*self.camera_args)
-        self.size = camera.getSensorResolution()
+        
+        binnings = camera.binning.choices
+        self.assertIn(1, binnings)
+        # The SimCam of SDKv3 doesn't support binning, so let's just try on v2
+        if not 2 in binnings:
+            # TODO how to skip a test in the middle?
+            print "Camera doesn't support binning, skipping test"
+            del camera
+            return
+        
+        camera.binning.value = 2
+        self.size = (camera.shape[0] / 2, camera.shape[1] / 2)
+        camera.resolution.value = self.size
         exposure = 0.1
+        camera.exposureTime.value = exposure
+        
         start = time.time()
         im, metadata = camera.acquire((self.size[0]/2, self.size[1]/2), exposure, 2)
         duration = time.time() - start
@@ -114,6 +135,25 @@ class TestAndorCam2(unittest.TestCase, VirtualTestAndorCam):
         self.assertEqual(im.shape, (self.size[0]/2, self.size[1]/2))
         self.assertGreaterEqual(duration, exposure, "Error execution took %f s, less than exposure time %d." % (duration, exposure))
         self.assertIn("Exposure time", metadata)
+        del camera
+
+# You have to pick only one of them to get it not crash
+class TestAndorCam3(unittest.TestCase, VirtualTestAndorCam):
+    """
+    Test directly the AndorCam3 class.
+    """
+    camera_type = andorcam3.AndorCam3
+    # name, role, children (must be None), device number
+    camera_args = ("camera", "test", None, 0)
+
+#class TestAndorCam2(unittest.TestCase, VirtualTestAndorCam):
+#    """
+#    Test directly the AndorCam2 class.
+#    """
+#    camera_type = andorcam2.AndorCam2
+#    camera_args = (0,) # device
+#    
+
      
 if __name__ == '__main__':
     unittest.main()

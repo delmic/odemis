@@ -172,7 +172,7 @@ class AndorCam3(model.Detector):
         
         psize = (self.GetFloat(u"PixelWidth") * 1e-6,
                  self.GetFloat(u"PixelHeight") * 1e-6)
-        self.pixelSize = model.FloatProperty(psize, unit="m", readonly=True)
+        self.pixelSize = model.Property(psize, unit="m", readonly=True)
         self._metadata[model.MD_PIXEL_SIZE] = self.pixelSize.value
         
         # odemis + sdk
@@ -190,14 +190,14 @@ class AndorCam3(model.Detector):
             self.fanSpeed = model.FloatContinuous(1.0, [0.0, 1.0]) # ratio to max speed
             self.fanSpeed.subscribe(self.onFanSpeed, init=True)
 
-        self._binning = 1 # no change in binning
-        self.binning = model.IntEnumerated(self._binning, self._getAvailableBinnings, "px")
-        self.binning.subscribe(self.onBinning, init=True)
-        
-        # need to be after binning,         
+        self._binning = 1 # used by resolutionFitter()
+        # need to be before binning, as it is modified when changing binning         
         self.resolution = ResolutionProperty(resolution, [(1, 1), resolution], 
                                              fitter=self.resolutionFitter)
         self.resolution.subscribe(self.onResolution, init=True)
+        
+        self.binning = model.IntEnumerated(self._binning, self._getAvailableBinnings(), "px")
+        self.binning.subscribe(self.onBinning, init=True)
         
         range_exp = self.GetFloatRanges(u"ExposureTime")
         if range_exp[0] <= 0.0:
@@ -209,6 +209,8 @@ class AndorCam3(model.Detector):
         self.temperature = model.FloatProperty(current_temp, unit="C", readonly=True)
         # it will reschedule itself afterwards
         self.temp_timer = threading.Timer(10, self.updateTemperatureProperty)
+        self.temp_timer.name="AndorCam3 temperature update"
+        self.temp_timer.deamon = True # don't wait for it to finish
         self.temp_timer.start()
         
         # TODO some methods (with futures)
@@ -218,7 +220,6 @@ class AndorCam3(model.Detector):
         self.acquire_thread = None
         
         self.data = AndorCam3DataFlow(self)
-        
     
     # low level methods, wrapper to the actual SDK functions
     # TODO: not _everything_ is implemented, just what we need
@@ -420,8 +421,10 @@ class AndorCam3(model.Detector):
         to be called at regular interval to update the temperature
         """
         temp = self.GetFloat(u"SensorTemperature")
-        self.temperature.value = temp
         self._metadata[model.MD_SENSOR_TEMP] = temp
+        # it's read-only, so we change it only via special _set()
+        self.temperature._set(temp)
+        self.temperature.notify()
         # reschedule
         self.temp_timer = threading.Timer(10, self.updateTemperatureProperty)
         self.temp_timer.start()
@@ -543,7 +546,7 @@ class AndorCam3(model.Detector):
     def getSDKVersion(self):
         try:
             # Doesn't work on the normal camera, need to access the "System"
-            system = AndorCam3()
+            system = AndorCam3("System", "bus", None)
             return system.GetString(u"SoftwareVersion")
         except ATError:
             return "unknown"
@@ -763,7 +766,7 @@ class AndorCam3(model.Detector):
         self.is_acquiring = False
         return array
     
-    def acquireFlow(self, callback, size, exp, binning=1, num=None):
+    def acquireFlow(self, callback, num=None):
         """
         Set up the camera and acquire a flow of images at the best quality for the given
           parameters. Should not be called if already a flow is being acquired.
@@ -826,7 +829,7 @@ class AndorCam3(model.Detector):
             self.QueueBuffer(cbuffer)
             buffers.append(cbuffer)
             
-            callback(self, array)
+            callback(array)
             if num is not None:
                 num -= 1
     
@@ -875,6 +878,8 @@ class AndorCam3(model.Detector):
     
         # Try to get an image with the default resolution
         try:
+            # TODO if we managed to initialise, this should already work
+            # => detect error in init() or do selfTest() without init()?
             resolution = self.getSensorResolution()
         except Exception, err:
             print("Failed to read camera resolution: " + str(err))
@@ -895,22 +900,20 @@ class AndorCam3(model.Detector):
         """
         List all the available cameras.
         Note: it's not recommended to call this method when cameras are being used
-        return (set of 3-tuple: device number (int), name (string), max resolution (2-tuple int))
+        return (set of 2-tuple): name (str), dict for initialisation (device number)
         """
-        camera = AndorCam3() # system
+        camera = AndorCam3("System", "bus", None)
         dc = camera.GetInt(u"Device Count")
 #        print "found %d devices." % dc
         
         # we reuse the same object to avoid init/del all the time
         system_handle = camera.handle
         
-        cameras = set()
+        cameras = []
         for i in range(dc):
             camera.handle = camera.Open(i)
-            model = "Andor " + camera.GetString(u"CameraModel")
-            resolution = (camera.GetInt(u"SensorWidth"),
-                          camera.GetInt(u"SensorHeight"))
-            cameras.add((i, model, resolution))
+            name = camera.getModelName()
+            cameras.append((name, {"device": i}))
             camera.Close()
             
         camera.handle = system_handle # for the del() to work fine
@@ -987,30 +990,30 @@ class AndorCam3DataFlow(model.DataFlow):
         camera: andorcam instance ready to acquire images
         """
         model.DataFlow.__init__(self)
-        self.camera = camera
+        self.component = camera
         
     def get(self):
         model.DataFlow.get(self)
         # TODO if camera is already acquiring, wait for the coming picture
-        data = self.camera.acquire()
+        data = self.component.acquire()
         # If some subscribers arrived during the acquire()
         if self._listeners:
             self.notify(data)
-            self.camera.acquireFlow(self.notify)
+            self.component.acquireFlow(self.notify)
         return data
     
     def subscribe(self, listener):
         model.DataFlow.subscribe(self, listener)
         # TODO nicer way to check whether the camera is already sending us data?
-        if not self.camera.acquire_thread:
+        if not self.component.acquire_thread:
             # is it in acquire()? If so, it will be done in .get()
-            if not self.camera.is_acquiring:
-                self.camera.acquireFlow(self.notify)
+            if not self.component.is_acquiring:
+                self.component.acquireFlow(self.notify)
     
     def unsubscribe(self, listener):
         model.DataFlow.unsubscribe(self, listener)
         if not self._listeners:
-            self.camera.stopAcquireFlow()
+            self.component.stopAcquireFlow()
             
     def notify(self, data):
         model.DataFlow.notify(self, data)
