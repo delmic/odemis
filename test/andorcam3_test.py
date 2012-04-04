@@ -108,7 +108,6 @@ class VirtualTestAndorCam(object):
         self.left -= 1
         if self.left <= 0:
             dataflow.unsubscribe(self.receive_image)
-        
 
     def test_binning(self):
         camera = self.camera_type(*self.camera_args)

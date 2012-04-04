@@ -24,6 +24,7 @@ import os
 import re
 import threading
 import time
+import weakref
 
 # Neo encodings (selectable depending on gain selection):
 #0 Mono12
@@ -207,11 +208,8 @@ class AndorCam3(model.Detector):
         
         current_temp = self.GetFloat(u"SensorTemperature")
         self.temperature = model.FloatProperty(current_temp, unit="C", readonly=True)
-        # it will reschedule itself afterwards
-        self.temp_timer = threading.Timer(10, self.updateTemperatureProperty)
-        self.temp_timer.name="AndorCam3 temperature update"
-        self.temp_timer.deamon = True # don't wait for it to finish
-        self.temp_timer.start()
+        self.temp_timer = RepeatingTimer(10, self.updateTemperatureProperty,
+                                         "AndorCam3 temperature update")
         
         # TODO some methods (with futures)
         
@@ -425,9 +423,7 @@ class AndorCam3(model.Detector):
         # it's read-only, so we change it only via special _set()
         self.temperature._set(temp)
         self.temperature.notify()
-        # reschedule
-        self.temp_timer = threading.Timer(10, self.updateTemperatureProperty)
-        self.temp_timer.start()
+        print "temp is", temp
 
     def onFanSpeed(self, speed):
         """
@@ -644,8 +640,7 @@ class AndorCam3(model.Detector):
         """
         assert(0.0 < exp)
         self.SetFloat(u"ExposureTime",  exp)
-        self.exposureTime.value = exp
-
+        self.exposureTime.value = self.GetFloat(u"ExposureTime")
     
     def onExposureTime(self, value):
         # TODO make sure we are in a state it's possible to change exposure time
@@ -815,7 +810,13 @@ class AndorCam3(model.Detector):
         while (not self.acquire_must_stop and (num is None or num > 0)):
             metadata = dict(self._metadata) # duplicate
             metadata[model.MD_ACQ_DATE] = time.time() # time at the beginning
-            pbuffer, buffersize = self.WaitBuffer(exposure_time + readout_time + 1)
+            try:
+                pbuffer, buffersize = self.WaitBuffer(exposure_time + readout_time + 1)
+            except ATError(), exc:
+                # sometimes there is timeout, don't completely give up
+                # TODO maximum failures in a row?
+                print "Warning, trying again to acquire image after error:", exc
+                continue # try again
 
             # Cannot directly use pbuffer because we'd lose the reference to the 
             # memory allocation... and it'd get free'd at the end of the method
@@ -860,8 +861,6 @@ class AndorCam3(model.Detector):
             self.acquire_thread.join() # XXX timeout for safety? 
     
     def __del__(self):
-        if hasattr(self, "temp_timer"):
-            self.temp_timer.cancel()
         self.Close()
         self.FinaliseLibrary()
     
@@ -934,7 +933,10 @@ class ResolutionProperty(model.Property):
           the given resolution to whatever is allowed. If None, it will not be adapted.
         """  
         self._set_range(rrange)
-        self._fitter = fitter
+        if fitter:
+            self._fitter = model.WeakMethod(fitter)
+        else:
+            self._fitter = None
         model.Property.__init__(self, value, unit, readonly)
 
     @property
@@ -980,7 +982,12 @@ class ResolutionProperty(model.Property):
                         (str(value), str(self._range[0]), str(self._range[1])))
         
         if self._fitter:
-            value = self._fitter(value)
+            try:
+                value = self._fitter(value)
+            except model.WeakRefLostError:
+                # Normally fitter is owned by the same instance of camera so no
+                # fitter would also mean that this property has no sense anymore
+                raise model.OutOfBoundError("Fitting method has disappeared, cannot validate value.")
         
         model.Property._set(self, value)
 
@@ -990,7 +997,7 @@ class AndorCam3DataFlow(model.DataFlow):
         camera: andorcam instance ready to acquire images
         """
         model.DataFlow.__init__(self)
-        self.component = camera
+        self.component = weakref.proxy(camera)
         
     def get(self):
         model.DataFlow.get(self)
@@ -1017,5 +1024,41 @@ class AndorCam3DataFlow(model.DataFlow):
             
     def notify(self, data):
         model.DataFlow.notify(self, data)
+
+   
+class RepeatingTimer(object):
+    """
+    An almost endless timer thread. 
+    It stops when calling cancel() or the callback disappears.
+    """
+    def __init__(self, period, callback, name="TimerThread"):
+        """
+        period (float): time in second between two calls
+        callback (callable): function to call
+        name (str): fancy name to give to the thread
+        """
+        self.callback = model.WeakMethod(callback)
+        self.period = period
+        self.timer = None
+        self.name = name
+        self._schedule()
     
+    def _schedule(self):
+        self.timer = threading.Timer(self.period, self.timeup)
+        self.timer.name = self.name
+        self.timer.deamon = True # don't wait for it to finish
+        self.timer.start()
+        
+    def timeup(self):
+        try:
+            self.callback()
+        except model.WeakRefLostError:
+            # it's gone, it's over
+            return
+        
+        self._schedule()
+       
+    def cancel(self):
+        self.timer.cancel()     
+
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:

@@ -1,0 +1,14 @@
+# same name
+Optical: {
+    class: simulated.Light,
+    role: light,
+}
+
+Optical: {
+    class: Microscope,
+    role: epifluorescent,
+    emitters: [Light],
+    detectors: ["Andor Clara"],
+    actuators: ["Redstone Stage"],
+}
+

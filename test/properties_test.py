@@ -3,8 +3,9 @@ Created on 29 Mar 2012
 
 @author: piel
 '''
-import unittest
 import model
+import unittest
+import weakref
 
 class PropertiesTest(unittest.TestCase):
 
@@ -53,9 +54,9 @@ class PropertiesTest(unittest.TestCase):
             pass # as it should be
         prop.unsubscribe(self.callback_test_notify)
         
-        prop.value = 0.0 # no more counting
+        prop.value = 12 # no more counting
         
-        assert(prop.value == 0)
+        assert(prop.value == 12)
         assert(self.called == 3)
     
     def test_readonly(self):
@@ -75,10 +76,10 @@ class PropertiesTest(unittest.TestCase):
         prop.subscribe(self.callback_test_notify, init=True) # +1
         prop.value = [3.0, 5] # +1
         prop.value = list((0,)) # +1
-        prop.value = list([0.0]) # nothing because same value
+        prop.value = [0] # nothing because same value
         try:
-            prop.value = "coucou"
-            self.fail("Assigning string to a list should not be allowed.")
+            prop.value = 45
+            self.fail("Assigning int to a list should not be allowed.")
         except model.InvalidTypeError:
             pass # as it should be
         prop.unsubscribe(self.callback_test_notify)
@@ -162,7 +163,34 @@ class PropertiesTest(unittest.TestCase):
         
         assert(self.called == 1)
 
-
+    def test_weakref(self):
+        """
+        checks that even if an object has a method subscribed to a property,
+          it will be garbage-collected when not used anymore and its
+          subscription dropped.
+        """
+        prop = model.FloatProperty(2.0)
+        o = LittleObject()
+        wo = weakref.ref(o)
+        assert(wo() is not None)
+        
+        prop.subscribe(o.callback)
+        prop.value = 6.0 # +1
+        assert(o.called == 1)
+        
+        del o
+        assert(wo() is None)
+        
+        prop.value = 1
+        assert(prop.value == 1)
+           
+class LittleObject(object):
+    def __init__(self):
+        self.called = 0
+        
+    def callback(self, value):
+        self.called += 1
+        
 if __name__ == "__main__":
     #import sys;sys.argv = ['', 'Test.testName']
     unittest.main()
