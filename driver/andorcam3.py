@@ -181,7 +181,7 @@ class AndorCam3(model.Detector):
         self.hwVersion = self.getHwVersion()
         self._metadata[model.MD_HW_VERSION] = self.hwVersion
         
-        # Maximum cooling for lowest (image) noise
+        # Strong cooling for low (image) noise
         self.targetTemperature = model.FloatContinuous(-100, [-275, 100], "C")
         self.targetTemperature.subscribe(self.onTargetTemperature, init=True)
         
@@ -190,10 +190,6 @@ class AndorCam3(model.Detector):
             self.fanSpeed = model.FloatContinuous(1.0, [0.0, 1.0]) # ratio to max speed
             self.fanSpeed.subscribe(self.onFanSpeed, init=True)
 
-        # TODO more properties to directly represent what is available from the SDK?
-
-
-        
         self._binning = 1 # no change in binning
         self.binning = model.IntEnumerated(self._binning, self._getAvailableBinnings, "px")
         self.binning.subscribe(self.onBinning, init=True)
@@ -221,8 +217,7 @@ class AndorCam3(model.Detector):
         self.acquire_must_stop = False
         self.acquire_thread = None
         
-        #TODO add data-flow
-        self.data = AndorCam3DataFlow()
+        self.data = AndorCam3DataFlow(self)
         
     
     # low level methods, wrapper to the actual SDK functions
@@ -575,13 +570,16 @@ class AndorCam3(model.Detector):
         resolution = self.getSensorResolution()
         assert((1 <= size[0]) and (size[0] <= resolution[0]) and
                (1 <= size[1]) and (size[1] <= resolution[1]))
-        
+
         # If the camera doesn't support Area of Interest, then it has to be the
         # size of the sensor
         if (not self.isImplemented(u"AOIWidth") or 
             not self.isWritable(u"AOIWidth")):
-            # TODO handle binning (but it's actually not that important because SimCam has only binning = 1)
-            size = resolution
+            max_size = (int(resolution[0] / self._binning), 
+                        int(resolution[1] / self._binning))
+            if size != max_size:
+                print ("Warning: Andorcam3, requested size %s different from only"
+                       " size available %s." % (size, max_size))
             return
         
         # AOI
@@ -590,7 +588,7 @@ class AndorCam3(model.Detector):
         assert((ranges[0][0] <= size[0]) and (size[0] <= ranges[0][1]) and
                (ranges[1][0] <= size[1]) and (size[1] <= ranges[1][1]))
         
-        # TODO the Neo docs says "Sub images are all mid-point centered." 
+        # TODO the Neo docs says "Sub images are all mid-point centred." 
         # So it might require specific computation for the left/top ?
         # TODO check whether on Neo ranges[0][1] is 2592 or 2560, if 2592, it should be + 16
         lt = ((ranges[0][1] - size[0]) / 2 + 1,
@@ -601,6 +599,11 @@ class AndorCam3(model.Detector):
         self.SetInt(u"AOIHeight", c_uint64(size[1]))
         self.SetInt(u"AOITop", c_uint64(lt[1]))
     
+    def onResolution(self, value):
+        # TODO wait until we are done with image acquisition
+        # The fitter has made all the job to make sure it's allowed resolution
+        self._setSize(value)
+    
     def resolutionFitter(self, size_req):
         """
         Finds a resolution allowed by the camera which fits best the requested
@@ -609,8 +612,27 @@ class AndorCam3(model.Detector):
         returns (2-tuple of int): resolution which fits the camera. It is equal
          or bigger than the requested resolution
         """
-        #TODO
-        return size_req
+        #
+        resolution = self.getSensorResolution()
+        max_size = (int(resolution[0] / self._binning), 
+                    int(resolution[1] / self._binning))
+
+        if (not self.isImplemented(u"AOIWidth") or 
+            not self.isWritable(u"AOIWidth")):
+            return max_size
+        
+        # smaller than the whole sensor
+        size = (min(size_req[0], max_size[0]), min(size_req[1], max_size[1]))
+        # TODO check that binning is taken into account here already
+        ranges = (self.GetIntRanges("AOIWidth"),
+                  self.GetIntRanges("AOIHeight"))
+        size = (max(ranges[0][0], size[0]), max(ranges[1][0], size[1]))
+        
+        # TODO the documentation of Neo mentions a few fixed possible resolutions
+        # But in practice it seems everything is possible. Maybe still requires
+        # to be a multiple of some 2^x?
+        
+        return size
 
     def _setExposureTime(self, exp):
         """
@@ -638,7 +660,7 @@ class AndorCam3(model.Detector):
         # 16 bit - Gain 1+4 (maximum)
         # SpuriousNoiseFilter On (this is actually a software based method)
         rate = self.setReadoutRate(100)
-        self._metadata[model.MD_READOUT_TIME] = 1.0/rate # s
+        self._metadata[model.MD_READOUT_TIME] = 1.0 / rate # s
         
 #        print self.atcore.GetEnumStringAvailable(self.handle, u"ElectronicShutteringMode")
         self.SetEnumString(u"ElectronicShutteringMode", u"Rolling")
@@ -717,15 +739,15 @@ class AndorCam3(model.Detector):
         self.is_acquiring = True
         
         metadata = dict(self._metadata) # duplicate
-        
         size = self.resolution.value
+        
         cbuffer = self._allocate_buffer(size)
         self.QueueBuffer(cbuffer)
         
         # Acquire the image
         self.Command(u"AcquisitionStart")
         exposure_time = self.exposureTime.value
-        readout_time = size[0] * size[1] * self._metadata[model.MD_READOUT_TIME] # s
+        readout_time = size[0] * size[1] * metadata[model.MD_READOUT_TIME] # s
         metadata[model.MD_ACQ_DATE] = time.time() # time at the beginning
         pbuffer, buffersize = self.WaitBuffer(exposure_time + readout_time + 1)
         
@@ -747,13 +769,6 @@ class AndorCam3(model.Detector):
           parameters. Should not be called if already a flow is being acquired.
         callback (callable (camera, numpy.ndarray, dict (string -> base types)) no return):
          function called for each image acquired
-        size (2-tuple int): Width and height of the image. It will be centred
-         on the captor. It depends on the binning, so the same region as a size 
-         twice smaller if the binning is 2 instead of 1. It must be a allowed
-         resolution.
-        exp (float): exposure time in second
-        binning (int 1, 2, 3, 4, or 8): how many pixels horizontally and vertically
-          are combined to create "super pixels"
         num (None or int): number of images to acquire, or infinite if None
         returns immediately. To stop acquisition, call stopAcquireFlow()
         """
@@ -761,22 +776,13 @@ class AndorCam3(model.Detector):
         assert not self.GetBool(u"CameraAcquiring")
         self.is_acquiring = True
         
-        metadata = self.getCameraMetadata()
-        metadata.update(self._setupBestQuality())
-
-        # Binning affects max size, so change first
-        metadata.update(self._setBinning(binning))
-        self._setSize(size)
-        metadata.update(self._setExposureTime(exp))
-        exposure_time = metadata["Exposure time"]
-        
         # Set up thread
         self.acquire_thread = threading.Thread(target=self._acquire_thread_run,
                name="andorcam acquire flow thread",
-               args=(callback, size, exposure_time, metadata, num))
+               args=(callback, num))
         self.acquire_thread.start()
         
-    def _acquire_thread_run(self, callback, size, exp, metadata, num=None):
+    def _acquire_thread_run(self, callback, num=None):
         """
         The core of the acquisition thread. Runs until it has acquired enough
         images or acquire_must_stop is True.
@@ -786,6 +792,10 @@ class AndorCam3(model.Detector):
         self.SetEnumString(u"CycleMode", u"Continuous")
         # We don't use the framecount feature as it's not always present, and
         # easy to do in software.
+
+
+        size = self.resolution.value
+        exposure_time = self.exposureTime.value
         
         # Allocates a pipeline of two buffers in a pipe, so that when we are
         # processing one buffer, the driver can already acquire the next image.
@@ -796,14 +806,13 @@ class AndorCam3(model.Detector):
             self.QueueBuffer(cbuffer)
             buffers.append(cbuffer)
             
-        readout_time = size[0] * size[1] / metadata["Pixel readout rate"] # s
-        
         # Acquire the images
         self.Command(u"AcquisitionStart")
-
+        readout_time = size[0] * size[1] * self._metadata[model.MD_READOUT_TIME] # s
         while (not self.acquire_must_stop and (num is None or num > 0)):
-            metadata["Acquisition date"] = time.time() # time at the beginning
-            pbuffer, buffersize = self.WaitBuffer(exp + readout_time + 1)
+            metadata = dict(self._metadata) # duplicate
+            metadata[model.MD_ACQ_DATE] = time.time() # time at the beginning
+            pbuffer, buffersize = self.WaitBuffer(exposure_time + readout_time + 1)
 
             # Cannot directly use pbuffer because we'd lose the reference to the 
             # memory allocation... and it'd get free'd at the end of the method
@@ -974,6 +983,9 @@ class ResolutionProperty(model.Property):
 
 class AndorCam3DataFlow(model.DataFlow):
     def __init__(self, camera):
+        """
+        camera: andorcam instance ready to acquire images
+        """
         model.DataFlow.__init__(self)
         self.camera = camera
         

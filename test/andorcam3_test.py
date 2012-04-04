@@ -4,7 +4,7 @@
 Created on 12 Mar 2012
 
 @author: Éric Piel
-Testing class for pi.py and dacontrol.py .
+Testing class for driver.andorcam3 .
 
 Copyright © 2012 Éric Piel, Delmic
 
