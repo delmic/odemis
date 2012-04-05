@@ -17,10 +17,11 @@ You should have received a copy of the GNU General Public License along with Del
 '''
 
 
+from odemisd import modelgen
 import __version__
 import argparse
+import logging
 import sys
-from odemisd import modelgen
 
 # This is the cli interface of odemisd, which allows to start the back-end
 # It parses the command line and accordingly reads the microscope instantiation
@@ -45,18 +46,39 @@ def main(args):
     dm_grp.add_argument("--check", dest="check", action="store_true", default=False,
                         help="Check for a running daemon (only returns exit code)")
     opt_grp = parser.add_argument_group('Options')
-    opt_grp.add_argument("--daemonize", "-D", dest="daemon", action="store_true", default=True,
-                        help="Daemonize after startup")
+    opt_grp.add_argument("--daemonize", "-D", dest="daemon", type=bool,
+                         default=True, help="Daemonize after startup")
     opt_grp.add_argument('--validate', dest="validate", action="store_true", default=False,
                         help="Validate the microscope description file and exit")
     opt_grp.add_argument("--log-level", dest="loglev", metavar="LEVEL", type=int,
-                        default=0, help="Set verbosity level (default = 0)")
+                        default=0, help="Set verbosity level (0-2, default = 0)")
     opt_grp.add_argument("--log-target", dest="logtarget", metavar="{auto,stderr,filename}",
-                        help="Specify the log target (auto, stderr, filename)")
+                default="auto", help="Specify the log target (auto, stderr, filename)")
     parser.add_argument("model", metavar="file.odm.yaml", nargs=1, type=open, 
                         help="Microscope model instantiation file (*.odm.yaml)")
 
     options = parser.parse_args(args[1:])
+    
+    # Set up logging before everything else
+    if options.loglev < 0:
+        parser.error("log-level must be positive.")
+    loglev_names = [logging.WARNING, logging.INFO, logging.DEBUG]
+    loglev = loglev_names[min(len(loglev_names) - 1, options.loglev)]
+    
+    # auto = {odemis.log if daemon, stderr otherwise} 
+    if options.logtarget == "auto":
+        # default to SysLogHandler ?
+        if options.daemon:
+            handler = logging.FileHandler("odemis.log")
+        else:
+            handler = logging.StreamHandler()
+    elif options.logtarget == "stderr":
+        handler = logging.StreamHandler()
+    else:
+        handler = logging.FileHandler(options.logtarget)
+    logging.getLogger().setLevel(loglev)
+    handler.setFormatter(logging.Formatter('%(asctime)s %(levelname)s: %(message)s'))
+    logging.getLogger().addHandler(handler)
     
     # TODO see python-daemon for creating daemon
     
@@ -71,17 +93,21 @@ def main(args):
     
     try:
         inst_model = modelgen.get_instantiation_model(options.model[0])
+        logging.info("model has been read successfully")
     except modelgen.ParseError:
         # the error message is already logged
         return 127
     
     try:
         comps, mic = modelgen.instantiate_model(inst_model, options.validate)
-        print comps, mic.name
+        logging.info("model has been instantiated successfully")
+        logging.debug("model microscope is %s", mic.name) 
+        logging.debug("model components are %s", ", ".join([c.name for c in comps])) 
     except modelgen.SemanticError:
         # the error message is already logged
         return 127
-
+    
+    logging.warning("nothing else to do")
 #    a = model.StringProperty()
 #    c = model.HwComponent({'name': "component"})
 #    print a, c
