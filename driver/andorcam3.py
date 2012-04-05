@@ -6,7 +6,7 @@ Created on 6 Mar 2012
 
 Copyright © 2012 Éric Piel, Delmic
 
-This file is part of Delmic Acquisition Software.
+This file is part of Open Delmic Microscope Software.
 
 Delmic Acquisition Software is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 2 of the License, or (at your option) any later version.
 
