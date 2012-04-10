@@ -77,7 +77,7 @@ def main(args):
     else:
         handler = logging.FileHandler(options.logtarget)
     logging.getLogger().setLevel(loglev)
-    handler.setFormatter(logging.Formatter('%(asctime)s %(levelname)s: %(message)s'))
+    handler.setFormatter(logging.Formatter('%(asctime)s (%(module)s) %(levelname)s: %(message)s'))
     logging.getLogger().addHandler(handler)
     
     # TODO see python-daemon for creating daemon

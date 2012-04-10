@@ -18,6 +18,7 @@ You should have received a copy of the GNU General Public License along with Del
 
 from ctypes import *
 import __version__
+import logging
 import model
 import numpy
 import os
@@ -161,9 +162,11 @@ class AndorCam3(model.Detector):
             # nothing else to initialise
             return
         
+        logging.info("opened device %d successfully", device)
+        
         # Describe the camera
         # up-to-date metadata to be included in dataflow
-        self._metadata = {model.MD_HW_NAME: self.getModelName()} 
+        self._metadata = {model.MD_HW_NAME: self.getModelName()}
         resolution = self.getSensorResolution()
         self._metadata[model.MD_SENSOR_SIZE] = resolution
 
@@ -423,7 +426,7 @@ class AndorCam3(model.Detector):
         # it's read-only, so we change it only via special _set()
         self.temperature._set(temp)
         self.temperature.notify()
-        print "temp is", temp
+        logging.debug("temp is %d", temp)
 
     def onFanSpeed(self, speed):
         """
@@ -485,7 +488,7 @@ class AndorCam3(model.Detector):
                 # Typically for the simcam
                 act_binning = (self.GetInt(u"AOIHBin"), self.GetInt(u"AOIVBin"))
                 if act_binning != (binning, binning):
-                    raise IOError("AndorCam3: Requested binning " + 
+                    raise IOError("Requested binning " + 
                                   str((binning, binning)) + 
                                   " does not match fixed binning " +
                                   str(act_binning))
@@ -577,8 +580,8 @@ class AndorCam3(model.Detector):
             max_size = (int(resolution[0] / self._binning), 
                         int(resolution[1] / self._binning))
             if size != max_size:
-                print ("Warning: Andorcam3, requested size %s different from only"
-                       " size available %s." % (size, max_size))
+                logging.warning("requested size %s different from the only"
+                       " size available %s.", size, max_size)
             return
         
         # AOI
@@ -641,6 +644,8 @@ class AndorCam3(model.Detector):
         assert(0.0 < exp)
         self.SetFloat(u"ExposureTime",  exp)
         self.exposureTime.value = self.GetFloat(u"ExposureTime")
+        if self.exposureTime.value != exp:
+            logging.debug("adapted exposure time from %f to %f", exp, self.exposureTime.value)
     
     def onExposureTime(self, value):
         # TODO make sure we are in a state it's possible to change exposure time
@@ -743,6 +748,7 @@ class AndorCam3(model.Detector):
         self.QueueBuffer(cbuffer)
         
         # Acquire the image
+        logging.info("acquiring one image of %d bytes", sizeof(cbuffer))
         self.Command(u"AcquisitionStart")
         exposure_time = self.exposureTime.value
         readout_time = size[0] * size[1] * metadata[model.MD_READOUT_TIME] # s
@@ -805,6 +811,7 @@ class AndorCam3(model.Detector):
             buffers.append(cbuffer)
             
         # Acquire the images
+        logging.info("acquiring a series of images of %d bytes", sizeof(cbuffer))
         self.Command(u"AcquisitionStart")
         readout_time = size[0] * size[1] * self._metadata[model.MD_READOUT_TIME] # s
         while (not self.acquire_must_stop and (num is None or num > 0)):
@@ -815,7 +822,7 @@ class AndorCam3(model.Detector):
             except ATError(), exc:
                 # sometimes there is timeout, don't completely give up
                 # TODO maximum failures in a row?
-                print "Warning, trying again to acquire image after error:", exc
+                logging.warning("trying again to acquire image after error:", exc)
                 continue # try again
 
             # Cannot directly use pbuffer because we'd lose the reference to the 
@@ -872,7 +879,7 @@ class AndorCam3(model.Detector):
         try:
             model = self.GetString(u"CameraModel")
         except Exception, err:
-            print("Failed to read camera model: " + str(err))
+            logging.warning("Failed to read camera model: %s", str(err))
             return False
     
         # Try to get an image with the default resolution
@@ -881,7 +888,7 @@ class AndorCam3(model.Detector):
             # => detect error in init() or do selfTest() without init()?
             resolution = self.getSensorResolution()
         except Exception, err:
-            print("Failed to read camera resolution: " + str(err))
+            logging.warning("Failed to read camera resolution: " + str(err))
             return False
         
         try:
@@ -889,7 +896,7 @@ class AndorCam3(model.Detector):
             self.exposureTime.value = 0.01
             im = self.acquire()
         except Exception, err:
-            print("Failed to acquire an image: " + str(err))
+            logging.warning("Failed to acquire an image: " + str(err))
             return False
         
         return True
@@ -903,7 +910,7 @@ class AndorCam3(model.Detector):
         """
         camera = AndorCam3("System", "bus")
         dc = camera.GetInt(u"Device Count")
-#        print "found %d devices." % dc
+        logging.debug("Found %d devices.", dc)
         
         # we reuse the same object to avoid init/del all the time
         system_handle = camera.handle

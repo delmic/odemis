@@ -14,6 +14,7 @@ Delmic Acquisition Software is distributed in the hope that it will be useful, b
 
 You should have received a copy of the GNU General Public License along with Delmic Acquisition Software. If not, see http://www.gnu.org/licenses/.
 '''
+import logging
 import model
 import time
 
@@ -40,9 +41,9 @@ class Light(model.Emitter):
     
     def on_power(self, value):
         if value == 100:
-            print "Light is on"
+            logging.info("Light is on")
         else:
-            print "Light is off" 
+            logging.info("Light is off") 
 
 
 class Stage2D(model.Actuator):
@@ -65,8 +66,9 @@ class Stage2D(model.Actuator):
             if not axis in pos:
                 raise ValueError("Axis '%s' doesn't exist." % str(axis))
             self._position[axis] += change
+            logging.info("moving axis %s to %f", axis, self._position[axis])
             maxmove = max(maxmove, abs(change))
-         
+        
         time_end = time_start + maxmove / self.speed.value
         # TODO queue the move and pretend the position is changed only after the given time
         # TODO return a future 
@@ -79,6 +81,7 @@ class Stage2D(model.Actuator):
                 raise ValueError("Axis '%s' doesn't exist." % str(axis))
             change = self._position[axis] - new_pos
             self._position[axis] = new_pos
+            logging.info("moving axis %s to %f", axis, self._position[axis])
             maxmove = max(maxmove, abs(change))
          
         # TODO stop add this move
