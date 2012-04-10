@@ -48,7 +48,7 @@ class DblMicroscopePanel(wx.Panel):
         self.mergeSlider = wx.Slider(self, wx.ID_ANY, 50, 0, 100, size=(100, 30), style=wx.SL_HORIZONTAL | wx.SL_AUTOTICKS | wx.SL_TICKS)
         self.mergeSlider.SetLineSize(50)
         self.mergeSlider.Bind(wx.EVT_SLIDER, self.OnSlider)
-        self.viewmodel.merge_ratio.bind(self.avOnMergeRatio, True)
+        self.viewmodel.merge_ratio.subscribe(self.avOnMergeRatio, True)
         
         self.scaleDisplay = ScaleWindow(self)
         self.hfwDisplay = wx.StaticText(self) # Horizontal Full Width
@@ -68,7 +68,7 @@ class DblMicroscopePanel(wx.Panel):
         scaleSizer = wx.BoxSizer(wx.VERTICAL)
         scaleSizer.Add(self.scaleDisplay, 1, wx.ALIGN_CENTER|wx.EXPAND)
         scaleSizer.Add(self.hfwDisplay, 1, wx.ALIGN_CENTER|wx.EXPAND)
-        self.viewmodel.mpp.bind(self.avOnMPP, True)
+        self.viewmodel.mpp.subscribe(self.avOnMPP, True)
         
         imageSizer = wx.BoxSizer(wx.VERTICAL)
         imageSizerTop = wx.BoxSizer(wx.HORIZONTAL)
@@ -291,8 +291,8 @@ class MicroscopeImageView(MicroscopeView):
         self.LegendMag = wx.StaticText(parent)
         self.legendCtrl.append(self.LegendMag)
         
-        iim.bind(self.avImage)
-        viewmodel.mpp.bind(self.avMPP, True)
+        iim.subscribe(self.avImage)
+        viewmodel.mpp.subscribe(self.avMPP, True)
                 
     def avImage(self, value):
         self.inimage = value
@@ -332,9 +332,9 @@ class MicroscopeOpticalView(MicroscopeImageView):
         self.LegendET = wx.StaticText(parent)
         self.legendCtrl += [self.LegendWl, self.LegendET]
         
-        datamodel.optical_emt_wavelength.bind(self.avWavelength)
-        datamodel.optical_det_wavelength.bind(self.avWavelength, True)
-        datamodel.optical_det_exposure_time.bind(self.avExposureTime, True)
+        datamodel.optical_emt_wavelength.subscribe(self.avWavelength)
+        datamodel.optical_det_wavelength.subscribe(self.avWavelength, True)
+        datamodel.optical_det_exposure_time.subscribe(self.avExposureTime, True)
 
     def avWavelength(self, value):
         # need to know both wavelengthes, so just look into the values
@@ -362,9 +362,9 @@ class MicroscopeSEView(MicroscopeImageView):
         self.legendCtrl += [ self.LegendDwell, self.LegendSpot,
                            self.LegendHV]
         
-        datamodel.sem_emt_dwell_time.bind(self.avDwellTime, True)
-        datamodel.sem_emt_spot.bind(self.avSpot, True)
-        datamodel.sem_emt_hv.bind(self.avHV, True)
+        datamodel.sem_emt_dwell_time.subscribe(self.avDwellTime, True)
+        datamodel.sem_emt_spot.subscribe(self.avSpot, True)
+        datamodel.sem_emt_hv.subscribe(self.avHV, True)
         
     # TODO need to use the right dimensions for the units
     def avDwellTime(self, value):

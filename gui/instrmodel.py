@@ -16,7 +16,7 @@ Delmic Acquisition Software is distributed in the hope that it will be useful, b
 You should have received a copy of the GNU General Public License along with Delmic Acquisition Software. If not, see http://www.gnu.org/licenses/.
 '''
 
-from model import ActiveValue
+from av import ActiveValue
 
 class SECOMModel(object):
     """
@@ -26,7 +26,7 @@ class SECOMModel(object):
     
     def __init__(self):
         self.stage_pos = ActiveValue((0,0)) # m,m
-        self.stage_pos.bind(self.avOnStagePos)
+        self.stage_pos.subscribe(self.avOnStagePos)
         
         # FIXME: maybe could go into (sub)classes like OpticalEmitter, SEDetector... 
         self.optical_emt_wavelength = ActiveValue(450) # nm XXX a range?

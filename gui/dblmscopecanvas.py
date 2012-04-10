@@ -42,11 +42,11 @@ class DblMicroscopeCanvas(DraggableCanvas):
         self.mpwu = self.viewmodel.mpp.value  #m/wu
         # Should not be changed!
         
-        self.viewmodel.mpp.bind(self.avOnMPP)
-        self.viewmodel.images[0].bind(self.avOnImage)
-        self.viewmodel.images[1].bind(self.avOnImage, True)
-        self.viewmodel.merge_ratio.bind(self.avOnMergeRatio, True)
-        self.viewmodel.crosshair.bind(self.avOnCrossHair, True)
+        self.viewmodel.mpp.subscribe(self.avOnMPP)
+        self.viewmodel.images[0].subscribe(self.avOnImage)
+        self.viewmodel.images[1].subscribe(self.avOnImage, True)
+        self.viewmodel.merge_ratio.subscribe(self.avOnMergeRatio, True)
+        self.viewmodel.crosshair.subscribe(self.avOnCrossHair, True)
         
         self.Bind(wx.EVT_MOUSEWHEEL, self.OnWheel)
         
@@ -69,11 +69,11 @@ class DblMicroscopeCanvas(DraggableCanvas):
             if not ch:
                 ch = CrossHairOverlay(CROSSHAIR_COLOR, CROSSHAIR_SIZE)
                 self.StaticOverlays.append(ch)
-                self.Refresh(False)
+                self.Refresh(eraseBackground=False)
         else:
             if ch:
                 self.StaticOverlays.remove(ch)
-                self.Refresh(False)
+                self.Refresh(eraseBackground=False)
                 
     def avOnMergeRatio(self, val):
         self.merge_ratio = val

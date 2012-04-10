@@ -53,10 +53,13 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
 
     def test_CrosHair(self):
         # crosshair
-        self.canvas.SetCrossHair(True)
-        self.assertTrue(self.canvas.HasCrossHair())
-        self.canvas.SetCrossHair(False)
-        self.assertFalse(self.canvas.HasCrossHair())
+        crosshair = self.frame.viewmodel.crosshair
+        crosshair.value = True
+        self.assertTrue(len(self.canvas.StaticOverlays) == 1)
+        crosshair.value = True
+        self.assertTrue(len(self.canvas.StaticOverlays) == 1)
+        crosshair.value = False
+        self.assertTrue(len(self.canvas.StaticOverlays) == 0)
         
     def test_BasicDisplay(self):
         mpp = 0.0001
