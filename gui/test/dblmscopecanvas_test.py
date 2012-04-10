@@ -15,10 +15,10 @@ Delmic Acquisition Software is distributed in the hope that it will be useful, b
 
 You should have received a copy of the GNU General Public License along with Delmic Acquisition Software. If not, see http://www.gnu.org/licenses/.
 '''
-from dblmscopecanvas import DblMicroscopeCanvas
-from dblmscopeviewmodel import DblMscopeViewModel
-from draggablecanvas import WorldToBufferPoint
-from instrmodel import SECOMModel, InstrumentalImage
+from gui.dblmscopecanvas import DblMicroscopeCanvas
+from gui.dblmscopeviewmodel import DblMscopeViewModel
+from gui.draggablecanvas import WorldToBufferPoint
+from gui.instrmodel import SECOMModel, InstrumentalImage
 import time
 import unittest
 import wx
