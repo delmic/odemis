@@ -137,7 +137,7 @@ class AndorCam3(model.Detector):
     It also provide low-level methods corresponding to the SDK functions.
     """
     
-    def __init__(self, name, role, children, device=None):
+    def __init__(self, name, role, children=None, device=None):
         """
         Initialises the device
         device (None or int): number of the device to open, as defined by Andor, cd scan()
@@ -542,7 +542,7 @@ class AndorCam3(model.Detector):
     def getSDKVersion(self):
         try:
             # Doesn't work on the normal camera, need to access the "System"
-            system = AndorCam3("System", "bus", None)
+            system = AndorCam3("System", "bus")
             return system.GetString(u"SoftwareVersion")
         except ATError:
             return "unknown"
@@ -901,7 +901,7 @@ class AndorCam3(model.Detector):
         Note: it's not recommended to call this method when cameras are being used
         return (set of 2-tuple): name (str), dict for initialisation (device number)
         """
-        camera = AndorCam3("System", "bus", None)
+        camera = AndorCam3("System", "bus")
         dc = camera.GetInt(u"Device Count")
 #        print "found %d devices." % dc
         

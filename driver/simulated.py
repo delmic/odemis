@@ -28,7 +28,7 @@ class Light(model.Emitter):
     Simulated bright light component. Just pretends to be always on with wide
     spectrum emitted (white).
     """
-    def __init__(self, name, role, children):
+    def __init__(self, name, role, children=None):
         model.Emitter.__init__(self, name, role, children)
         
         self.shape = (1)
@@ -49,7 +49,7 @@ class Stage2D(model.Actuator):
     """
     Simulated stage component. Just pretends to be able to move all around.
     """
-    def __init__(self, name, role, children):
+    def __init__(self, name, role, children=None):
         model.Actuator.__init__(self, name, role, children)
         
         self.axes = frozenset(["x", "y"])

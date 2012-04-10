@@ -24,7 +24,7 @@ Light: {
     role: stage,
     affects: ["Andor SimCam"],
     properties: {
-        speed: [1, 1] #m/s
+        speed: {'x':1, 'y':1} #m/s
     }
 }
 

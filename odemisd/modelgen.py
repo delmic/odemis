@@ -177,7 +177,11 @@ def instantiate_comp(name, attr, inst_comps, dry_run=False):
         else:
             comp = model.MockComponent(**args)
     else:
-        comp = class_comp(**args)
+        try:
+            comp = class_comp(**args)
+        except Exception, exc:
+            logging.error("Error while instantiating component %s.", name)
+            raise exc
     return comp
     
 def get_component_by_name(comps, name):

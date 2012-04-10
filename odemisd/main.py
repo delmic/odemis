@@ -105,7 +105,7 @@ def main(args):
         logging.debug("model microscope is %s", mic.name) 
         logging.debug("model components are %s", ", ".join([c.name for c in comps])) 
     except:
-        logging.exception("Error while instantiating file %s", options.model[0].name)
+        logging.exception("When instantiating file %s", options.model[0].name)
         return 127
     
     logging.warning("nothing else to do")
