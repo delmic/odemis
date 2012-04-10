@@ -8,6 +8,7 @@ SimOptical: {
 Light: {
     class: simulated.Light,
     role: brightlight,
+#    init: ,
     affects: ["Andor SimCam"],
     properties: {
         power: 100 # W

@@ -7,8 +7,8 @@ Optical: {
 Optical: {
     class: Microscope,
     role: epifluorescent,
-    emitters: [Light],
-    detectors: ["Andor Clara"],
-    actuators: ["Redstone Stage"],
+    emitters: [],
+    detectors: [],
+    actuators: [],
 }
 

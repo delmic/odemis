@@ -1,23 +1,23 @@
-SimOptical: {
+Optical: {
     class: Microscope,
-    role: brightfield,
+    role: epifluorescent,
     emitters: [Light],
     detectors: ["Andor SimCam"],
-    actuators: ["Stage"],
+    actuators: ["Stage", "Non existing component"], # referencing non existing component
 }
+
 Light: {
     class: simulated.Light,
     role: brightlight,
-    affects: ["Andor SimCam"],
-    properties: {
-        power: 100 # W
-    }
+    affects: ["Andor SimCam"]
 }
+
 "Andor SimCam": {
     class: andorcam3.AndorCam3,
     role: ccd,
     init: {device: 1} # 1 is almost always SimCam
 }
+
 "Stage": {
     class: simulated.Stage2D,
     role: stage,
@@ -26,4 +26,3 @@ Light: {
         speed: {'x':1, 'y':1} #m/s
     }
 }
-

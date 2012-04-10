@@ -109,9 +109,7 @@ def main(args):
         return 127
     
     logging.warning("nothing else to do")
-#    a = model.StringProperty()
-#    c = model.HwComponent({'name': "component"})
-#    print a, c
+    return 0
 
 if __name__ == '__main__':
     exit(main(sys.argv))
