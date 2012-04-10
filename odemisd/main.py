@@ -46,8 +46,8 @@ def main(args):
     dm_grp.add_argument("--check", dest="check", action="store_true", default=False,
                         help="Check for a running daemon (only returns exit code)")
     opt_grp = parser.add_argument_group('Options')
-    opt_grp.add_argument("--daemonize", "-D", dest="daemon", type=bool,
-                         default=True, help="Daemonize after startup")
+    opt_grp.add_argument("--daemonize", "-D", action="store_true", dest="daemon",
+                         default=False, help="Daemonize after startup")
     opt_grp.add_argument('--validate', dest="validate", action="store_true", default=False,
                         help="Validate the microscope description file and exit")
     opt_grp.add_argument("--log-level", dest="loglev", metavar="LEVEL", type=int,
@@ -92,10 +92,11 @@ def main(args):
         return 0
     
     try:
+        logging.debug("model instantiation file is: %s", options.model[0].name)
         inst_model = modelgen.get_instantiation_model(options.model[0])
         logging.info("model has been read successfully")
     except modelgen.ParseError:
-        # the error message is already logged
+        logging.exception("Error while parsing file %s", options.model[0].name)
         return 127
     
     try:
@@ -103,8 +104,8 @@ def main(args):
         logging.info("model has been instantiated successfully")
         logging.debug("model microscope is %s", mic.name) 
         logging.debug("model components are %s", ", ".join([c.name for c in comps])) 
-    except modelgen.SemanticError:
-        # the error message is already logged
+    except:
+        logging.exception("Error while instantiating file %s", options.model[0].name)
         return 127
     
     logging.warning("nothing else to do")

@@ -14,6 +14,8 @@ Delmic Acquisition Software is distributed in the hope that it will be useful, b
 
 You should have received a copy of the GNU General Public License along with Delmic Acquisition Software. If not, see http://www.gnu.org/licenses/.
 '''
+import _properties as properties
+import logging
 
 class ArgumentError(Exception):
     pass
@@ -92,7 +94,6 @@ class MockComponent(HwComponent):
     It's used for validation of the instantiation model. 
     Do not use or inherit when writing a device driver!
     """
-    # TODO: we could try to mock further by accepting any properties or attributes
     def __init__(self, name, role, children=None, **kwargs):
         HwComponent.__init__(self, name, role)
         # not all type of HwComponent can affects but we cannot make the difference
@@ -107,5 +108,15 @@ class MockComponent(HwComponent):
             self.children.add(child)
             child.parent = self
         
-
+    # For everything that is not standard we return a mock property
+    def __getattr__(self, attrName):
+        if not self.__dict__.has_key(attrName):
+            if attrName == "children": # special value
+                raise AttributeError(attrName)
+            
+            prop = properties.Property(None)
+            logging.debug("Component %s creating property %s", self.name, attrName)
+            self.__dict__[attrName] = prop
+        return self.__dict__[attrName]
+    
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:

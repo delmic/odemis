@@ -35,7 +35,7 @@ class Light(model.Emitter):
         
         self.wavelength = model.FloatProperty(560e-9, unit = "m", readonly=True) # average of white
         self.spectrumWidth = model.FloatProperty(360, unit = "m", readonly=True) # visible light
-        self.power = model.FloatEnumerated(100, (1,100), unit = "W")
+        self.power = model.FloatEnumerated(100, (0,100), unit = "W")
         self.power.subscribe(self.on_power, init=True)
     
     def on_power(self, value):

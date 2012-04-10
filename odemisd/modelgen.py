@@ -17,6 +17,7 @@ You should have received a copy of the GNU General Public License along with Del
 # various functions to instantiate a model from a yaml description
 
 import itertools
+import logging
 import model
 import re
 import yaml
@@ -43,16 +44,18 @@ def get_instantiation_model(inst_file):
         # yaml.load() is dangerous as it can create any python object
         data = yaml.safe_load(inst_file)
     except yaml.YAMLError, exc:
-        print "Syntax error in microscope instantiation file:", exc
+        logging.error("Syntax error in microscope instantiation file: %s", exc)
         if hasattr(exc, 'problem_mark'):
             mark = exc.problem_mark
             # display the line
             inst_file.seek(0)
-            print list(itertools.islice(inst_file, mark.line, mark.line + 1))[0],
+            line = list(itertools.islice(inst_file, mark.line, mark.line + 1))[0]
+            logging.error("%s", line)
             # display the column
-            print " " * mark.column + "^"
+            logging.error(" " * mark.column + "^")
         raise ParseError("Syntax error in microscope instantiation file.")
     
+    logging.debug("YAML file read like this: " + str(data))
     # TODO detect duplicate keys (e.g., two components with the same name)
     # Currently Pyyaml fail to detect that error: http://pyyaml.org/ticket/128 (contains patch) 
     
@@ -70,33 +73,35 @@ def get_class(name):
     returns the class object
     Raises:
          SemanticError in case an error is detected.
+         ParseError in case names are not possible module names
     """
     if name in internal_classes:
-        name = internal_classes[name]
+        module_name, class_name = internal_classes[name].rsplit(".", 1)
+    else:
+        # It comes from the user, so check carefully there is no strange characters
+        if not re.match("(\w|\.)+\.(\w)+\Z", name):
+            raise ParseError("Syntax error in microscope instantiation "
+                "file: class name '%s' is malformed." % name)
+    
+        names = name.rsplit(".", 1)
+        if len(names) < 2:
+            raise ParseError("Syntax error in microscope instantiation file: "
+                "class name '%s' is not in the form 'module.method'." % name)
+        module_name = "driver." + names[0] # always look in drivers directory
+        class_name = names[1]
         
-    # It comes from the user, so check carefully there is no strange characters
-    if not re.match("(\w|\.)+\.(\w)+\Z", name):
-        raise ParseError("Syntax error in microscope instantiation "
-            "file: class name '%s' is malformed." % name)
-
-    names = name.rsplit(".", 1)
-    if len(names) < 2:
-        raise ParseError("Syntax error in microscope instantiation "
-            "file: class name '%s' is not in the form 'module.method'." % name)
-    module_name = names[0]
-    class_name = names[1]
     try:
         mod = __import__(module_name, fromlist=[class_name]) 
     except ImportError, exc:
-        # FIXME: once we have all the device drivers writter, we can uncomment this
-#        raise SemanticError("Semantic error in microscope instantiation "
-#            "file: no module '%s' exists." % module_name)
-        return None # DEBUG
+        # FIXME: once we have all the device drivers written, we can uncomment this
+        raise SemanticError("Error in microscope instantiation file: "
+            "no module '%s' exists (class '%s')." % (module_name, class_name))
+#        return None # DEBUG
     
     try:
         the_class = getattr(mod, class_name)
     except AttributeError, exc:
-        raise SemanticError("Semantic error in microscope instantiation "
+        raise SemanticError("Error in microscope instantiation "
             "file: module '%s' has no class '%s'." % (module_name, class_name))
     
     return the_class 
@@ -117,20 +122,20 @@ def make_args(name, attr, inst_comps):
     
     # it's an error to specify "name" and "role" in the init
     if "name" in init:
-        raise ParseError("Semantic error in microscope instantiation "
+        raise SemanticError("Error in microscope instantiation "
             "file: component '%s' should not have a 'name' entry in the init." % name)
     init["name"] = name
     if "role" in init:
-        raise ParseError("Semantic error in microscope instantiation "
+        raise SemanticError("Error in microscope instantiation "
             "file: component '%s' should not have a 'role' entry in the init." % name)
     if not "role" in attr:
-        raise ParseError("Semantic error in microscope instantiation "
+        raise SemanticError("Error in microscope instantiation "
             "file: component '%s' has no role specified." % name)
     init["role"] = attr["role"]
     
     # create recursively the children
     if "children" in init:
-        raise ParseError("Semantic error in microscope instantiation "
+        raise SemanticError("Error in microscope instantiation "
             "file: component '%s' should not have a 'children' entry in the init." % name)
     if "children" in attr:
         init["children"] = {}
@@ -153,7 +158,7 @@ def instantiate_comp(name, attr, inst_comps, dry_run=False):
         SemanticError in case an error in the model is detected. 
     """
     if not "class" in attr:
-        raise ParseError("Semantic error in microscope instantiation "
+        raise SemanticError("Error in microscope instantiation "
             "file: component %s has no class specified." % name)
     class_name = attr["class"]
     class_comp = get_class(class_name)
@@ -201,6 +206,8 @@ def instantiate_model(inst_model, dry_run=False):
     Raises:
         SemanticError in case an error in the model is detected. Note that
         (obviously) not every error can be detected.
+        LookupError 
+        ParseError
         Exception (dependent on the driver): in case initialisation of a driver fails
     """
     comps = set()
@@ -211,12 +218,12 @@ def instantiate_model(inst_model, dry_run=False):
             for child_name in attr["children"].values():
                 # detect direct loop
                 if child_name == name:
-                    raise ParseError("Semantic error in "
+                    raise SemanticError("Error in "
                             "microscope instantiation file: component %s "
                             "has itself as children." % name)
                 # detect child with multiple parents
                 if "parent" in inst_model[child_name]:
-                    raise ParseError("Semantic error in "
+                    raise SemanticError("Error in "
                             "microscope instantiation file: component %s "
                             "is child of both %s and %s." 
                             % (child_name, name, inst_model[child_name]["parent"]))
@@ -237,11 +244,11 @@ def instantiate_model(inst_model, dry_run=False):
     if len(microscopes) == 1:
         mic = microscopes[0]
     elif len(microscopes) > 1:
-        raise ParseError("Semantic error in microscope instantiation file: "
+        raise SemanticError("Error in microscope instantiation file: "
                 "there are several Microscopes (%s)." % 
                 ", ".join([m.name for m in microscopes]))
     else:
-        raise ParseError("Semantic error in microscope instantiation "
+        raise SemanticError("Error in microscope instantiation "
                 "file: no Microscope component found.")
     
     # Connect all the sub-components of microscope: detectors, emitters, actuators
@@ -249,13 +256,13 @@ def instantiate_model(inst_model, dry_run=False):
     detectors = [get_component_by_name(comps, name) for name in detector_names]
     mic.detectors = set(detectors)
     if not detectors:
-        print "Warning: Microscope contains no detectors."
+        logging.warning("Microscope contains no detectors.")
     
     emitter_names = inst_model[mic.name].get("emitters", []) # none is weird but ok
     emitters = [get_component_by_name(comps, name) for name in emitter_names]
     mic.emitters = set(emitters)
     if not emitters:
-        print "Warning: Microscope contains no emitters."
+        logging.warning("Microscope contains no emitters.")
     
     actuator_names = inst_model[mic.name].get("actuators", [])
     actuators = [get_component_by_name(comps, name) for name in actuator_names]
@@ -265,9 +272,9 @@ def instantiate_model(inst_model, dry_run=False):
     # should be parents
     left_over = comps - (set([mic]) | mic.detectors | mic.emitters | mic.actuators)
     for c in left_over:
-        # TODO CombinedActuaor as well are ok?
+        # TODO CombinedActuator as well are ok?
         if not getattr(c, "children", set()):
-            print "Warning: Component '%s' is never used." % c.name
+            logging.warning("Component '%s' is never used.", c.name)
     
     # for each component, set the affect
     for name, attr in inst_model.items():
@@ -278,7 +285,7 @@ def instantiate_model(inst_model, dry_run=False):
                 try:
                     comp.affects.add(affected)
                 except AttributeError:
-                    raise ParseError("Semantic error in microscope instantiation "
+                    raise SemanticError("Error in microscope instantiation "
                             "file: Component '%s' does not support 'affects'." % name)
 
     # for each component set the properties
@@ -287,10 +294,9 @@ def instantiate_model(inst_model, dry_run=False):
             comp = get_component_by_name(comps, name)
             for prop_name, value in attr["properties"].items():
                 try:
-                    if not dry_run:
-                        getattr(comp, prop_name).value = value
+                    getattr(comp, prop_name).value = value
                 except AttributeError:
-                    raise ParseError("Semantic error in microscope instantiation "
+                    raise SemanticError("Error in microscope instantiation "
                             "file: Component '%s' has no property '%s'." % (name, prop_name))
                
     return comps, mic
