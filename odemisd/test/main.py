@@ -16,9 +16,11 @@ Delmic Acquisition Software is distributed in the hope that it will be useful, b
 
 You should have received a copy of the GNU General Public License along with Delmic Acquisition Software. If not, see http://www.gnu.org/licenses/.
 '''
+from odemisd import main
+import logging
+import os
 import unittest
 
-from odemisd import main
 
 SIM_CONFIG = "optical-sim.odm.yaml"
 
@@ -26,6 +28,11 @@ class TestCommandLine(unittest.TestCase):
     """
     This contains test cases for the command-line level of odemisd.
     """
+    
+    def setUp(self):
+        # reset the logging (because otherwise it accumulates)
+        if logging.root:
+            del logging.root.handlers[:]
     
     def test_simple(self):
         cmdline = "odemisd --validate %s" % SIM_CONFIG
@@ -41,7 +48,8 @@ class TestCommandLine(unittest.TestCase):
                    "semantic-error-1.odm.yaml",
                    ]
 
-        for config in configs:        
+        for config in configs:
+            self.setUp()
             cmdline = "odemisd --validate %s" % config
             ret = main.main(cmdline.split())
             self.assertNotEqual(ret, 0, "no error detected in erroneous config "
@@ -51,9 +59,34 @@ class TestCommandLine(unittest.TestCase):
         """
         It checks handling when no config file is provided
         """
-        cmdline = "odemisd --validate"
-        self.assertRaises(SystemExit, main.main, cmdline.split())    
-
+        try:
+            cmdline = "odemisd --validate"
+            ret = main.main(cmdline.split())
+        except SystemExit, exc: # because it's handled by argparse
+            ret = exc.code
+        self.assertNotEqual(ret, 0, "trying to run erroneous '%s'" % cmdline) 
+        
+    def test_log(self):
+        cmdline = "odemisd --log-level=2 --log-target=test.log --validate %s" % SIM_CONFIG
+        ret = main.main(cmdline.split())
+        self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
+        
+        # a log file?
+        st = os.stat("test.log") # this test also that the file is created
+        self.assertGreater(st.st_size, 0)
+        os.remove("test.log")
+        
+    def test_help(self):
+        """
+        It checks handling help option
+        """
+        try:
+            cmdline = "odemisd --help"
+            ret = main.main(cmdline.split())
+        except SystemExit, exc:
+            ret = exc.code
+        self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
+        
 if __name__ == '__main__':
     unittest.main()
 

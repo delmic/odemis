@@ -112,6 +112,8 @@ def main(args):
     return 0
 
 if __name__ == '__main__':
-    exit(main(sys.argv))
+    ret = main(sys.argv)
+    logging.shutdown() 
+    exit(ret)
     
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:
