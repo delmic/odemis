@@ -17,6 +17,36 @@ You should have received a copy of the GNU General Public License along with Del
 import _properties as properties
 import logging
 
+_microscope = None
+def getMicroscope():
+    """
+    return the microscope component managed by the backend
+    """
+    return _microscope
+
+_hwcomponents = []
+def getComponents():
+    """
+    return all the components managed by the backend
+    """
+    return _hwcomponents
+
+def updateMetadata(metadata, parent):
+    """
+    Update/fill the metadata with all the metadata from all the components affecting the given component
+    metadata (dict str -> value): metadata
+    parent (HwComponent): the component which created the data to which the metadata refers to. 
+      Note that the metadata from this very component are not added.
+    """
+    # find every component which affects the parent
+    for comp in _hwcomponents:
+        try:
+            if parent in comp.affects:
+                metadata.update(comp.getMetadata())
+        except AttributeError:
+            # no affects == empty set
+            pass
+
 class ArgumentError(Exception):
     pass
 
@@ -31,6 +61,9 @@ class HwComponent(object):
         self.role = role
         self.parent = None
 
+    # to be overridden by any component which actually can provide metadata
+    def getMetadata(self):
+        return {}
 
 class Microscope(HwComponent):
     """
@@ -50,7 +83,6 @@ class Microscope(HwComponent):
         self.actuators = set()
         self.emitters = set()
 
-
 class Detector(HwComponent):
     """
     A component which represents a detector. 
@@ -60,9 +92,27 @@ class Detector(HwComponent):
         HwComponent.__init__(self, name, role)
         if children:
             raise ArgumentError("Detector components cannot have children.")
-        
+
+        # To be overridden
+        self.shape = (0) # maximum value of each dimension of the detector. A CCD camera 2560x1920 with 12 bits intensity has a 3D shape (2560,1920,2048).
+        self.pixelSize = None # property representing the size of a pixel (in meters). More precisely it should be the average distance between the centres of two pixels.
+        self.data = None # Data-flow coming from this detector. 
         # normally a detector doesn't affect anything
         
+class DigitalCamera(Detector):
+    """
+    A component which represent a digital camera (i.e., CCD or CMOS)
+    It's basically a detector with a few more compulsory properties
+    """
+    def __init__(self, name, role, children=None, **kwargs):
+        Detector.__init__(self, name, role, children, **kwargs)
+        
+        # To be overridden
+        self.binning = None # how many CCD pixels are merged (in each dimension) to form one pixel on the image.
+        self.resolution = None # (2-tuple of int): number of pixels in the image generated for each dimension. If it's smaller than the full resolution of the captor, it's centred.
+        self.exposureTime = None # (float): time in second for the exposure for one image.
+        
+
 class Actuator(HwComponent):
     """
     A component which represents an actuator (motorised part). 

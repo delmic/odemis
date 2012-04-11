@@ -14,6 +14,7 @@ Delmic Acquisition Software is distributed in the hope that it will be useful, b
 
 You should have received a copy of the GNU General Public License along with Delmic Acquisition Software. If not, see http://www.gnu.org/licenses/.
 '''
+import model
 import numpy
 
 """
@@ -35,7 +36,10 @@ MD_BPP = "Bits per pixel" # bit
 MD_READOUT_TIME = "Pixel readout time" # s, time to read one pixel
 MD_SENSOR_SIZE = "Sensor size" # px, px
 MD_SENSOR_TEMP = "Sensor temperaure" # C
-
+MD_POS = "Centre position" # (m, m), location of the picture centre relative to top-left of the sample)
+MD_IN_WL = "Input wavelength range" # (m, m), lower and upper range of the wavelenth input
+MD_OUT_WL = "Output wavelength range"  # (m, m), lower and upper range of the filtered wavelenth before the camera
+MD_LIGHT_POWER = "Light power" # W, power of the emitting light
 
 class DataArray(numpy.ndarray):
     """
@@ -71,12 +75,11 @@ class DataFlow(object):
             Each time a new data is available it should call notify(dataarray)
     extend: get() to synchronously return the next dataarray available
     """
-    
     def __init__(self):
-        # TODO make it a weakref to automatically update the set when a listener
-        # goes away. See pypubsub weakmethod.py or http://mindtrove.info/python-weak-references/
-#        self._listeners = weakref.WeakSet()
         self._listeners = set()
+        
+        # to be overridden
+        self.parent = None
         
     def get(self):
         # TODO timeout argument?
@@ -90,17 +93,25 @@ class DataFlow(object):
         """
         # TODO update rate argument to indicate how often we need an update?
         assert callable(listener)
-        self._listeners.add(listener)
+        self._listeners.add(model.WeakMethod(listener))
         
     def unsubscribe(self, listener):
-        self._listeners.discard(listener)
+        self._listeners.discard(model.WeakMethod(listener))
 
     def notify(self, data):
         """
         data (DataArray): the data to be sent to listeners
         """
         assert(isinstance(data, DataArray))
+        
+        # TODO this might have to be moved to the backend whenever sending new
+        # data to clients
+        model.updateMetadata(data.metadata, self.parent)
+        
         for l in self._listeners.copy(): # to allow modify the set while calling
-            l(self, data)
+            try:
+                l(self, data)
+            except model.WeakRefLostError:
+                self.unsubscribe(l)
             
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:

@@ -20,7 +20,9 @@ You should have received a copy of the GNU General Public License along with Del
 from odemisd import modelgen
 import __version__
 import argparse
+from gui import dagui 
 import logging
+import model
 import sys
 
 # This is the cli interface of odemisd, which allows to start the back-end
@@ -101,6 +103,9 @@ def main(args):
     
     try:
         comps, mic = modelgen.instantiate_model(inst_model, options.validate)
+        # update the model
+        model._hwcomponents = comps
+        model._microscope = mic
         logging.info("model has been instantiated successfully")
         logging.debug("model microscope is %s", mic.name) 
         logging.debug("model components are %s", ", ".join([c.name for c in comps])) 
@@ -108,6 +113,7 @@ def main(args):
         logging.exception("When instantiating file %s", options.model[0].name)
         return 127
     
+    dagui.main(mic)
     logging.warning("nothing else to do")
     return 0
 

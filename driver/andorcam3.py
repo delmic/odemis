@@ -125,7 +125,7 @@ class ATDLL(CDLL):
 }
 
     
-class AndorCam3(model.Detector):
+class AndorCam3(model.DigitalCamera):
     """
     Represents one Andor camera and provides all the basic interfaces typical of
     a CCD/CMOS camera.
@@ -146,7 +146,7 @@ class AndorCam3(model.Detector):
         Raises:
           ATError if the device cannot be opened.
         """
-        model.Detector.__init__(self, name, role, children)
+        model.DigitalCamera.__init__(self, name, role, children)
         
         if os.name == "nt":
             # That's not gonna fly... need to put this into ATDLL
@@ -221,6 +221,9 @@ class AndorCam3(model.Detector):
         self.acquire_thread = None
         
         self.data = AndorCam3DataFlow(self)
+    
+    def getMetadata(self):
+        return self._metadata
     
     # low level methods, wrapper to the actual SDK functions
     # TODO: not _everything_ is implemented, just what we need

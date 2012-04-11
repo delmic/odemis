@@ -16,9 +16,8 @@ Delmic Acquisition Software is distributed in the hope that it will be useful, b
 You should have received a copy of the GNU General Public License along with Delmic Acquisition Software. If not, see http://www.gnu.org/licenses/.
 '''
 
-from dblmscopecanvas import DblMicroscopeCanvas
 from dblmscopepanel import DblMicroscopePanel
-from instrmodel import SECOMModel, InstrumentalImage
+from instrmodel import SECOMModel, InstrumentalImage, OpticalBackendConnected
 import os
 import wx
 
@@ -28,13 +27,19 @@ class DAGuiFrame(wx.Frame):
     """
     Main window for DAGui.
     """
-    def __init__(self):
+    def __init__(self, microscope):
+        """
+        microscope (model.Microscope): a microscope component on which the interface
+         will be based.
+        """
         wx.Frame.__init__(self, None, size=(1024,768), title=OFFICIAL_NAME) # TODO almost fullscreen 
         self.Bind(wx.EVT_CLOSE, self.OnClose)
         
         # Statusbar
         #self.CreateStatusBar() # XXX needed?
-        self.secom_model = SECOMModel()
+        
+#        self.secom_model = SECOMModel()
+        self.secom_model = OpticalBackendConnected(microscope)
         
         # Setting up the menu.
         menuBar = wx.MenuBar()
@@ -101,7 +106,7 @@ class DAGuiFrame(wx.Frame):
         for i, f in enumerate(filenames):
             try:
                 fullname = os.path.join(self.dirname, f)
-                im = InstrumentalImage(wx.Image(fullname),  0.0001 + (0.000015 *i), (0.00001,0.00001))
+                im = InstrumentalImage(wx.Image(fullname), 0.0001 + (0.000015 *i), (0.00001,0.00001))
 
                 if i == 0:
                     self.secom_model.sem_det_image.value = im
@@ -130,10 +135,18 @@ class DAGuiFrame(wx.Frame):
         # TODO update when viewmodel changes
         self.viewmodel.crosshair.value = e.IsChecked()
 
-if __name__ == '__main__':
+def main(microscope):
+    """
+    Create the GUI
+    microscope (model.Microscope): a microscope component on which the interface
+       will be based.
+    """
     app = wx.App(redirect=False) # Errors go to the console
     app.SetAppName(OFFICIAL_NAME)
-    frame = DAGuiFrame()
+    frame = DAGuiFrame(microscope)
     app.MainLoop()
+
+if __name__ == '__main__':
+    main(None)
 
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:

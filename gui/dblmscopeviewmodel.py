@@ -17,7 +17,7 @@ You should have received a copy of the GNU General Public License along with Del
 '''
 
 from instrmodel import InstrumentalImage
-from av import ActiveValue
+from model import Property
 
 class DblMscopeViewModel(object):
     """
@@ -33,28 +33,28 @@ class DblMscopeViewModel(object):
         # 0<=float<=1
         self.merge_ratio = ActiveMergeRatio(0.3) # no unit
         
-        self.images = [ActiveValue(InstrumentalImage(None, None, None)),
-                       ActiveValue(InstrumentalImage(None, None, None))]
+        self.images = [Property(InstrumentalImage(None, None, None)),
+                       Property(InstrumentalImage(None, None, None))]
         
         # center position of the view
-        self.center = ActiveValue((0,0)) # (m, m)
+        self.center = Property((0,0)) # (m, m)
         
-        self.crosshair = ActiveValue(True)
+        self.crosshair = Property(True)
         
-class ActiveMPP(ActiveValue):
+class ActiveMPP(Property):
     """
-    ActiveValue with special validation for MPP (float>0)
+    Property with special validation for MPP (float>0)
     """
     def _set(self, value):
         assert(0.0 < value)
-        ActiveValue._set(self, value)
+        Property._set(self, value)
         
-class ActiveMergeRatio(ActiveValue):
+class ActiveMergeRatio(Property):
     """
-    ActiveValue with special validation for merge ratio
+    Property with special validation for merge ratio
     # 0<=float<=1
     """
     def _set(self, value):
         # don't raise an error, just clamp the values
         final_val = sorted((0.0, 1.0) + (value,))[1] # clamp
-        ActiveValue._set(self, final_val)
+        Property._set(self, final_val)

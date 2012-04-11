@@ -35,9 +35,16 @@ class Light(model.Emitter):
         self.shape = (1)
         
         self.wavelength = model.FloatProperty(560e-9, unit = "m", readonly=True) # average of white
-        self.spectrumWidth = model.FloatProperty(360, unit = "m", readonly=True) # visible light
+        self.spectrumWidth = model.FloatProperty(360e-9, unit = "m", readonly=True) # visible light
         self.power = model.FloatEnumerated(100, (0,100), unit = "W")
         self.power.subscribe(self.on_power, init=True)
+    
+    def getMetadata(self):
+        metadata = {}
+        metadata[model.MD_IN_WL] = (380e-9, 740e-9)
+        metadata[model.MD_OUT_WL] = (380e-9, 740e-9) 
+        metadata[model.MD_LIGHT_POWER] = self.power.value
+        return metadata
     
     def on_power(self, value):
         if value == 100:
@@ -58,6 +65,11 @@ class Stage2D(model.Actuator):
         self.ranges = {"x": frozenset([0, 0.1]), "y": frozenset([0, 0.1])}
         self._position = {"x": 0.05, "y": 0.05} # starts in the middle
         self.speed = MultiSpeedProperty({"x": 10, "y": 10}, [0, 10], "m/s")
+        
+    def getMetadata(self):
+        metadata = {}
+        metadata[model.MD_POS] = (self._position["x"], self._position["y"])
+        return metadata
         
     def moveRel(self, pos):
         time_start = time.time()
