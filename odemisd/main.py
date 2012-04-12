@@ -104,7 +104,7 @@ def main(args):
     try:
         comps, mic = modelgen.instantiate_model(inst_model, options.validate)
         # update the model
-        model._hwcomponents = comps
+        model.setComponents(comps) # TODO seems not shared between threads
         model._microscope = mic
         logging.info("model has been instantiated successfully")
         logging.debug("model microscope is %s", mic.name) 

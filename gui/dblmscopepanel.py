@@ -296,10 +296,12 @@ class MicroscopeImageView(MicroscopeView):
                 
     def avImage(self, value):
         self.inimage = value
-        self.UpdateImage()
-        self.avMPP(None)
+        # This method might be called from any thread
+        # GUI can be updated only from the GUI thread, so just send an event
+        wx.CallAfter(self.UpdateImage)
+        wx.CallAfter(self.avMPP, None)
 
-    def avMPP(self, value):
+    def avMPP(self, unused):
         # TODO: shall we use the real density of the screen?
         # We could use real density but how much important is it?
         mppScreen = 0.00025 # 0.25 mm/px 

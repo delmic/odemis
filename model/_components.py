@@ -31,9 +31,13 @@ def getComponents():
     """
     return _hwcomponents
 
+def setComponents(comps):
+    _hwcomponents = comps
+
 def updateMetadata(metadata, parent):
     """
-    Update/fill the metadata with all the metadata from all the components affecting the given component
+    Update/fill the metadata with all the metadata from all the components
+      affecting the given component
     metadata (dict str -> value): metadata
     parent (HwComponent): the component which created the data to which the metadata refers to. 
       Note that the metadata from this very component are not added.

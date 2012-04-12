@@ -21,6 +21,7 @@ import logging
 import model
 import numpy
 import wx
+from guppy import hpy
 
 class SECOMModel(object):
     """
@@ -88,7 +89,7 @@ class OpticalBackendConnected(SECOMModel):
         # empty
         self.sem_det_image = Property(InstrumentalImage(None, None, None))
         
-    def onNewCameraImage(self, data):
+    def onNewCameraImage(self, dataflow, data):
         size = data.shape[0:2]
         # TODO make only one copy for conversion 16bits -> 3x8
         # TODO insert brightness and contrast computation instead of copy
@@ -104,7 +105,9 @@ class OpticalBackendConnected(SECOMModel):
             logging.warning("position of image unknown")
             # TODO put the last position requested
             pos = self.prev_pos # at least it shouldn't be too wrong
-                                
+        
+        h = hpy() # memory profiler
+        print h.heap() 
         self.optical_det_image.value = InstrumentalImage(im, 
                data.metadata[model.MD_PIXEL_SIZE][0], # TODO should accept tuple as well
                pos) # TODO should be initialised by backend
