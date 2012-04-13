@@ -15,6 +15,8 @@ Delmic Acquisition Software is distributed in the hope that it will be useful, b
 
 You should have received a copy of the GNU General Public License along with Delmic Acquisition Software. If not, see http://www.gnu.org/licenses/.
 '''
+from model._components import Actuator
+import model
 import serial
 import time
 
@@ -136,6 +138,25 @@ class PIRedStone(object):
         except IOError:
             raise IOError("No answer from PI controller %d" % address)
 
+    def setSpeed(self, speed):
+        """
+        Changes the move speed of the motor (for the next move). It's very 
+        approximate.
+        speed (0<float<5): speed in m/s. 
+        """
+        assert(speed > 0)
+        
+        # 5 m/s is the max speed according to specification
+        # => 1 ms waiting time = 5 m/s
+        # approximate by formula:
+        # speed = k * 1/waittime
+        # knowing that 5 = k * 1 / 0.001 
+        k = 5e-3
+        waittime = k/speed # s
+        waittime_ms = round(waittime * 1e3)
+        self.waittime = min(max(1, waittime_ms), 65535)
+        
+        
     def _sendSetCommand(self, com):
         """
         Send a command which does not expect any report back
@@ -700,7 +721,7 @@ class Stage(object):
             controller, arg = self.axes[axis]
             controller.stopMotion(arg)
 
-class StageRedStone(Stage):
+class StageRedStoneOld(Stage):
     """
     A stage made entirely of redstone controllers connected on the same serial port
     """
@@ -724,4 +745,59 @@ class StageRedStone(Stage):
                 controllers[add] = controller
             self.axes[axis] = (controller, channel) # add 1/channel 1
 
+class StageRedStone(Actuator):
+    """
+    An actuator made entirely of redstone controllers connected on the same serial port
+    Can have an arbitrary number of axes
+    """
+    def __init__(self, name, role, children=None, port, axes):
+        """
+        port (string): name of the serial port to connect to the controllers
+        axes (dict string=> 2-tuple): the configuration of the network.
+         for each axis name the controller address and channel
+        """ 
+        Actuator.__init__(self, name, role, children)
+        
+        ser = PIRedStone.openSerialPort(port)
+        
+        # the axis names as required by Actuator
+        self.axes = frozenset(axes.keys())      
+        
+        self._axes = {} # axis name => (PIRedStone, channel)
+        self.ranges = {}
+        self._position = {}
+        speed = {}
+        controllers = {} # address => PIRedStone
+        for axis, (add, channel) in axes.items():
+            if not add in controllers:
+                controllers[add] = PIRedStone(ser, add)
+            controller = controllers[add]
+            self._axes[axis] = (controller, channel)
+            
+            # TODO request also the ranges from the arguments?
+            # For now we put very large one
+            self.ranges[axis] = frozenset([0, 1]) # m
+            
+            # TODO move to a known position (0,0)?
+            # for now we have no idea where we are => in the middle so that we can always move
+            self._position[axis] = 0.5 # m
+            
+            # Just to make sure it doesn't go too fast
+            speed[axis] = 1 # m/s 
+            
+        # TODO
+        # min/max speed is from using the opposite conversion formula with 256/1 
+        self.speed = model.MultiSpeedProperty(speed, [7.6e-5, 5], "m/s")
+        self.speed.subscribe(self.onSpeed, init=True)
+        
+    def getMetadata(self):
+        # TODO
+        metadata = {}
+        metadata[model.MD_POS] = (self._position["x"], self._position["y"])
+        return metadata
+    
+    def onSpeed(self, value):
+        for axis, v in value.items():
+            self._axes[axis].setSpeed(v)
+    
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:

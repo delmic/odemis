@@ -64,7 +64,7 @@ class Stage2D(model.Actuator):
         # can move 10cm on both axis
         self.ranges = {"x": frozenset([0, 0.1]), "y": frozenset([0, 0.1])}
         self._position = {"x": 0.05, "y": 0.05} # starts in the middle
-        self.speed = MultiSpeedProperty({"x": 10, "y": 10}, [0, 10], "m/s")
+        self.speed = model.MultiSpeedProperty({"x": 10, "y": 10}, [0, 10], "m/s")
         
     def getMetadata(self):
         metadata = {}
@@ -109,25 +109,5 @@ class Stage2D(model.Actuator):
         # TODO should depend on the time and the current queue of moves
         return self._position
         
-class MultiSpeedProperty(model.Property, model.Continuous):
-    """
-    A class to define speed (m/s) for several axis
-    """
-    def __init__(self, value=0.0, vrange=[], unit=""):
-        model.Continuous.__init__(self, vrange)
-        assert(vrange[0] >= 0)
-        model.Property.__init__(self, value, unit)
-        
-
-    def _set(self, value):
-        # a dict
-        if not isinstance(value, dict):
-            raise model.InvalidTypeError("Value '%s' is not a dict." % str(value))
-        for axis, v in value.items():
-            # It has to be within the range, but also > 0
-            if v <= 0 or v < self._range[0] or v > self._range[1]:
-                raise model.OutOfBoundError("Trying to assign axis '%s' value '%s' outside of the range %s-%s." % 
-                            (str(axis), str(value), str(self._range[0]), str(self._range[1])))
-        model.Property._set(self, value)
         
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:

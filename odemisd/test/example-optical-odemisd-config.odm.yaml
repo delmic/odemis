@@ -19,7 +19,7 @@ Light: {
 "Redstone Stage": {
     class: pi.StageRedStone,
     role: stage,
-    init: {port: /dev/ttyUSB0, 'x': [1, 1], 'y': [0, 1]}, # addresses of the controllers on the serial bus
+    init: {port: /dev/ttyUSB0, axes:{'x': [1, 1], 'y': [0, 1]}}, # address/channel of each controller on the serial bus
     affects: ["Andor Clara"],
     properties: {
         speed: 1 #m/s
