@@ -497,39 +497,6 @@ class PIRedStone(object):
         end = time.time() + timeout
         while self.isMoving(axis) and time.time() <= end:
             time.sleep(0.001)
-        
-    def scanNetwork(self, max_add=15):
-        """
-        Scan the serial network for all the PI C-170 available.
-        max_add (0<=int<=15): maximum address to scan
-        return (set of (0<=int<=15)): set of addresses of available controllers
-        Note: after the scan the selected device is unspecified
-        """
-        # TODO see MRC_initNetwork, which takes 400ms per address
-        
-        # TODO to speed up, we could try to send address selection and TB in burst
-        # to all the range and then listen.
-        
-        print "Serial network scanning in progress..."
-        self.try_recover = False # timeouts are expected!
-        present = set([])
-        for i in range(max_add + 1):
-            # ask for controller #i
-            print "Querying address " + str(i)
-            self.addressSelection(i)
-
-            # is it answering?
-            try:
-                add = self.tellBoardAddress()
-                if add == i:
-                    present.add(add)
-                else:
-                    print "Warning: asked for controller %d and was answered by controller %d." % (i, add)
-            except IOError:
-                pass
-        
-        self.try_recover = True
-        return present
     
     def selfTest(self):
         """
@@ -585,6 +552,41 @@ class PIRedStone(object):
         """
         duration = m / self.scale
         return duration
+                
+    @staticmethod
+    def scan(port, max_add=15):
+        """
+        Scan the serial network for all the PI C-170 available.
+        port (string): name of the serial port
+        max_add (0<=int<=15): maximum address to scan
+        return (set of (0<=int<=15)): set of addresses of available controllers
+        Note: after the scan the selected device is unspecified
+        """
+        # TODO to speed up, we could try to send address selection and TB in burst
+        # to all the range and then listen.
+        ser = PIRedStone.openSerialPort(port)
+        pi = PIRedStone(ser)
+        
+        print "Serial network scanning in progress..."
+        pi.try_recover = False # timeouts are expected!
+        present = set([])
+        for i in range(max_add + 1):
+            # ask for controller #i
+            print "Querying address " + str(i)
+            pi.addressSelection(i)
+
+            # is it answering?
+            try:
+                add = pi.tellBoardAddress()
+                if add == i:
+                    present.add(add)
+                else:
+                    print "Warning: asked for controller %d and was answered by controller %d." % (i, add)
+            except IOError:
+                pass
+        
+        pi.try_recover = True
+        return present
         
     @staticmethod
     def openSerialPort(port):

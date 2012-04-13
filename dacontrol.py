@@ -31,13 +31,12 @@ def run_self_test(port):
     port (string): name of the serial port
     return (boolean) True if all the tests passed, False otherwise
     """
-    ser = pi.PIRedStone.openSerialPort(port)
-    bus = pi.PIRedStone(ser)
-    adds = bus.scanNetwork()
+    adds = pi.PIRedStone.scan(port)
     if not adds:
         print "No controller found."
         return False
     
+    ser = pi.PIRedStone.openSerialPort(port)    
     passed = True
     for add in adds:
         cont = pi.PIRedStone(ser, add)
