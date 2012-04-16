@@ -27,7 +27,6 @@ if os.name == "nt":
     PORT = "COM1"
 else:
     PORT = "/dev/ttyUSB0"
-            
 
 CONFIG_RS_SECOM_1 = {'x': (0, 1), 'y': (0, 2)}
 CONFIG_RS_SECOM_2 = {'x': (1, 1), 'y': (0, 1)}
@@ -35,7 +34,7 @@ class TestPIRedStone(unittest.TestCase):
     """
     Test directly the PIRedStone class.
     """
-    def test_scan(self):
+    def test_scan_low_level(self):
         """
         Check that we can do a scan network. It can pass only if we are
         connected to at least one controller.
@@ -47,9 +46,22 @@ class TestPIRedStone(unittest.TestCase):
         for add in adds:
             cont = pi.PIRedStone(ser, add)
             self.assertTrue(cont.selfTest(), "Controller self test failed.")
-
+            
+    def test_scan(self):
+        """
+        Check that we can do a scan network. It can pass only if we are
+        connected to at least one controller.
+        """
+        devices = pi.StageRedStone.scan()
+        self.assertGreater(len(devices), 0)
+        
+        for name, kwargs in devices:
+            print "opening "
+            stage = pi.StageRedStone(name, "stage", None, **kwargs)
+            self.assertTrue(stage.selfTest(), "Controller self test failed.")
+            
     def test_simple(self):
-        stage = pi.StageRedStone(PORT, CONFIG_RS_SECOM_2)
+        stage = pi.StageRedStone("test", "stage", None, PORT, CONFIG_RS_SECOM_2)
         move = {'x':0.01e-6, 'y':0.01e-6}
         stage.moveRel(move)
         
@@ -57,30 +69,33 @@ class TestPIRedStone(unittest.TestCase):
         # For moves big enough, sync should always take more time than async
         delta = 0.0001 # s
         
-        stage = pi.StageRedStone(PORT, CONFIG_RS_SECOM_2)
+        stage = pi.StageRedStone("test", "stage", None, PORT, CONFIG_RS_SECOM_2)
         move = {'x':100e-6, 'y':100e-6}
+        
         start = time.time()
         stage.moveRel(move)
         dur_async = time.time() - start
         stage.waitStop()
         
+        move = {'x':-100e-6, 'y':-100e-6}
         start = time.time()
-        stage.moveRel(move, sync=True)
+        stage.moveRel(move)
+        stage.waitStop()
         dur_sync = time.time() - start
         
         self.assertGreater(dur_sync, dur_async - delta, "Sync should take more time than async.")
 
     def test_stop(self):
-        stage = pi.StageRedStone(PORT, CONFIG_RS_SECOM_2)
-        stage.stopMotion()
-        stage.stopMotion("x")
+        stage = pi.StageRedStone("test", "stage", None, PORT, CONFIG_RS_SECOM_2)
+        stage.stop()
+        stage.stop("x")
         
         move = {'x':100e-6, 'y':100e-6}
         stage.moveRel(move)
-        stage.stopMotion()
+        stage.stop()
         
     def test_move_circle(self):
-        stage = pi.StageRedStone(PORT, CONFIG_RS_SECOM_2)
+        stage = pi.StageRedStone("test", "stage", None, PORT, CONFIG_RS_SECOM_2)
         radius = 100 * 1e-6 # m
         # each step has to be big enough so that each move is above imprecision
         steps = 100
@@ -92,7 +107,7 @@ class TestPIRedStone(unittest.TestCase):
             move['x'] = next_pos[0] - cur_pos[0]
             move['y'] = next_pos[1] - cur_pos[1]
             print next_pos, move
-            stage.moveRel(move, sync=True)
+            stage.moveRel(move)
             cur_pos = next_pos
 
 if __name__ == '__main__':

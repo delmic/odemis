@@ -157,31 +157,6 @@ class ListProperty(Property):
         
         Property._set(self, converted)
 
-
-class MultiSpeedProperty(Property, Continuous):
-    """
-    A class to define speed (m/s) for several axes
-    It's especially made for Actuator.speed: the value is a dict name => float
-    Also the speed must be >0
-    """
-    def __init__(self, value={}, vrange=[], unit="m/s"):
-        Continuous.__init__(self, vrange)
-        assert(vrange[0] >= 0)
-        Property.__init__(self, value, unit)
-        
-    # TODO detect whenever a value of the dict is changed 
-    def _set(self, value):
-        # a dict
-        if not isinstance(value, dict):
-            raise InvalidTypeError("Value '%s' is not a dict." % str(value))
-        for axis, v in value.items():
-            # It has to be within the range, but also > 0
-            if v <= 0 or v < self._range[0] or v > self._range[1]:
-                raise OutOfBoundError("Trying to assign axis '%s' value '%s' outside of the range %s-%s." % 
-                            (str(axis), str(value), str(self._range[0]), str(self._range[1])))
-        Property._set(self, value)
-
-
 # TODO maybe should provide a factory that can take a Property class and return it
 # either Continuous or Enumerated
 
@@ -277,9 +252,8 @@ class Enumerated(object):
     @choices.deleter
     def choices(self):
         del self._choices
-    
-    
-    
+
+
 class FloatContinuous(FloatProperty, Continuous):
     """
     A simple class which is both floating and continuous
@@ -332,6 +306,29 @@ class IntEnumerated(IntProperty, Enumerated):
         Enumerated._set(self, value)
         IntProperty._set(self, value)
 
+
+class MultiSpeedProperty(Property, Continuous):
+    """
+    A class to define speed (m/s) for several axes
+    It's especially made for Actuator.speed: the value is a dict name => float
+    Also the speed must be >0
+    """
+    def __init__(self, value={}, vrange=[], unit="m/s"):
+        Continuous.__init__(self, vrange)
+        assert(vrange[0] >= 0)
+        Property.__init__(self, value, unit)
+        
+    # TODO detect whenever a value of the dict is changed 
+    def _set(self, value):
+        # a dict
+        if not isinstance(value, dict):
+            raise InvalidTypeError("Value '%s' is not a dict." % str(value))
+        for axis, v in value.items():
+            # It has to be within the range, but also > 0
+            if v <= 0 or v < self._range[0] or v > self._range[1]:
+                raise OutOfBoundError("Trying to assign axis '%s' value '%s' outside of the range %s-%s." % 
+                            (str(axis), str(value), str(self._range[0]), str(self._range[1])))
+        Property._set(self, value)
 
             
 class WeakMethodBound(object):

@@ -142,6 +142,108 @@ class Emitter(HwComponent):
         self.affects = set()
         self.shape = None # must be initialised by the sub-class
         
+        
+class CombinedActuator(Actuator):
+    """
+    An object representing an actuator made of several (real actuators)=
+     = a set of axes that can be moved and optionally report their position.
+      
+    """
+
+    # TODO: this is not finished, just a copy paste from a RedStone which could 
+    # be extended to a really combined actuator
+    def __init__(self, name, role, children, axes_map):
+        """
+        name (string) 
+        role (string)
+        children (dict str -> actuator): axis name -> actuator to be used for this axis
+        axes_map (dict str -> str): axis name in this actuator -> axis name in the child actuator
+        """
+        Actuator.__init__(self, name, role, None)
+        
+        if not children:
+            raise Exception("Combined Actuator needs children")
+        
+        self.children = set()
+        self.ranges = {}
+        self._axes = {} # axis name => (Actuator, axis name)
+        for axis, child in children.items():
+            if not isinstance(child, Actuator):
+                raise Exception("Child %s is not an actuator." % str(child))
+            self._axes[axis] = (child, axes_map[axis])
+            self.ranges[axis] = child.ranges[axes_map[axis]]
+            self.children.add(child)
+            child.parent = self
+
+        self.axes = frozenset(self._axes.keys())
+        
+        # check if can do absolute positioning: all the axes have moveAbs()
+        canAbs = True
+        for controller in self._axes:
+            canAbs &= hasattr(controller, "moveAbs")
+        if canAbs:
+            self.moveAbs = self._moveAbs
+            
+        # TODO speed
+        # TODO position
+        
+    def moveRel(self, shift, sync=False):
+        u"""
+        Move the stage the defined values in m for each axis given.
+        shift dict(string-> float): name of the axis and shift in m
+        """
+        # TODO check values are within range
+        for axis, distance in shift.items():
+            if axis not in self._axes:
+                raise Exception("Axis unknown: " + str(axis))
+            child, child_axis = self._axes[axis]
+            child[child_axis].moveRel(distance)
+        
+        #TODO return future
+    
+    # duplicated as moveAbs() iff all the axes have moveAbs()
+    def _moveAbs(self, pos, sync=False):
+        u"""
+        Move the stage to the defined position in m for each axis given.
+        pos dict(string-> float): name of the axis and position in m
+        sync (boolean): whether the moves should be done asynchronously or the 
+        method should return only when all the moves are over (sync=True)
+        """
+        # TODO what's the origin? => need a different conversion?
+        # TODO check values are within range
+        for axis, distance in pos.items():
+            if axis not in self._axes:
+                raise Exception("Axis unknown: " + str(axis))
+            self._axes[axis].moveAbs(distance)
+        
+    
+    # TODO need a 'calibrate' for the absolute axes 
+    
+    def stop(self, axis=None):
+        """
+        stops the motion
+        axis (string): name of the axis to stop, or all of them if not indicated 
+        """
+        if not axis:
+            for controller in self._axes:
+                controller.stop()
+        else:
+            controller = self._axes[axis]
+            controller.stop()
+        
+    def waitStop(self, axis=None):
+        """
+        wait until the stops the motion
+        axis (string): name of the axis to stop, or all of them if not indicated 
+        """
+        if not axis:
+            for controller in self._axes:
+                controller.waitStop()
+        else:
+            controller = self._axes[axis]
+            controller.waitStop()
+        
+        
 class MockComponent(HwComponent):
     """
     A very special component which does nothing but can pretend to be any component
@@ -158,7 +260,12 @@ class MockComponent(HwComponent):
         self.children = set()
         for child_name, child_args in children.items():
             # we don't care of child_name as it's only for internal use in the real component
-            child = MockComponent(**child_args)
+            
+            if isinstance(child_args, dict): # delegation
+                child = MockComponent(**child_args)
+            else: # explicit creation (already done)
+                child = child_args
+                
             self.children.add(child)
             child.parent = self
         

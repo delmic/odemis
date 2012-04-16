@@ -16,7 +16,10 @@ Delmic Acquisition Software is distributed in the hope that it will be useful, b
 You should have received a copy of the GNU General Public License along with Delmic Acquisition Software. If not, see http://www.gnu.org/licenses/.
 '''
 from model._components import Actuator
+import glob
+import logging
 import model
+import os
 import serial
 import time
 
@@ -528,39 +531,39 @@ class PIRedStone(object):
         self.tellStatus()
         reported_add = self.tellBoardAddress()
         if reported_add != self.address:
-            print("Failed to select controller " + str(self.address))
+            logging.error("Failed to select controller " + str(self.address))
             return False
         st, err = self.tellStatus()
         if err:
-            print("Select Controller returned error " + str(err))
+            logging.error("Select Controller returned error " + str(err))
             return False
         if not (st & STATUS_BOARD_ADDRESSED):
-            print("Failed to select controller " + str(self.address) + ", status is " + str(st))
+            logging.error("Failed to select controller " + str(self.address) + ", status is " + str(st))
             return False
         
         print "Selected controller %d." % self.address
         
         version = self.versionReport()
-        print("Version: '%s'" % version)
+        logging.info("Version: '%s'" % version)
         
         commands = self.help()
-        print("Accepted commands: '%s'" % commands)
+        logging.info("Accepted commands: '%s'" % commands)
 
         # try to modify the values to see if it would work
         self.setWaitTime(1, 1)
         st, err = self.tellStatus()
         if err:
-            print("SetWaitTime returned error " + str(err))
+            logging.error("SetWaitTime returned error " + str(err))
             return False
         self.setStepSize(2, 255)
         st, err = self.tellStatus()
         if err:
-            print("SetStepSize returned error " + str(err))
+            logging.error("SetStepSize returned error " + str(err))
             return False
         self.setRepeatCounter(1, 10)
         st, err = self.tellStatus()
         if err:
-            print("SetRepeatCounter returned error " + str(err))
+            logging.error("SetRepeatCounter returned error " + str(err))
             return False
         
         return True
@@ -637,132 +640,27 @@ class Stage(object):
     optionally report their position. 
     """
 
-    def __init__(self):
-        """
-        Constructor
-        """
-        self.axes = {} # dict of axes
-        
-    def canAbsolute(self, axis):
-        """
-        report whether an axis can do absolute positioning (and report position)
-        or only relative.
-        axis (string): the axis name
-        return (boolean): True if the controller supports absolute positioning
-        """
-        return "moveAbs" in dir(self.axes[axis][0])
-        
-    def moveRel(self, shift, sync=False):
-        u"""
-        Move the stage the defined values in m for each axis given.
-        shift dict(string-> float): name of the axis and shift in m
-        """
-        # TODO check values are within range
-        for axis, distance in shift.items():
-            if axis not in self.axes:
-                raise Exception("Axis unknown: " + str(axis))
-            controller, arg = self.axes[axis]
-            controller.moveRel(arg, controller.convertMToDevice(distance))
-                 
-        # wait until every motor is finished if requested
-        if not sync:
-            return
-        
-        for axis in shift:
-            controller, arg = self.axes[axis]
-            controller.waitEndMotion(arg)
-            
-    def moveAbs(self, pos, sync=False):
-        u"""
-        Move the stage to the defined position in m for each axis given.
-        pos dict(string-> float): name of the axis and position in m
-        sync (boolean): whether the moves should be done asynchronously or the 
-        method should return only when all the moves are over (sync=True)
-        """
-        # TODO what's the origin? => need a different conversion?
-        # TODO check values are within range
-        for axis, distance in pos.items():
-            if axis not in self.axes:
-                raise Exception("Axis unknown: " + str(axis))
-            controller, arg = self.axes[axis]
-            controller.moveAbs(arg, controller.convertMToDevice(distance))
-        
-        # wait until every motor is finished if requested
-        if not sync:
-            return
-        
-        for axis in pos:
-            controller, arg = self.axes[axis]
-            controller.waitEndMotion(arg)
-    
-    # TODO need a 'report position' and a 'calibrate' for the absolute axes 
-    
-    def stopMotion(self, axis = None):
-        """
-        stops the motion
-        axis (string): name of the axis to stop, or all of them if not indicated 
-        """
-        if not axis:
-            for controller, arg in self.axes.values():
-                controller.stopMotion(arg)
-        else:
-            controller, arg = self.axes[axis]
-            controller.stopMotion(arg)
-        
-    def waitStop(self, axis = None):
-        """
-        wait until the stops the motion
-        axis (string): name of the axis to stop, or all of them if not indicated 
-        """
-        if not axis:
-            for controller, arg in self.axes.values():
-                controller.stopMotion(arg)
-        else:
-            controller, arg = self.axes[axis]
-            controller.stopMotion(arg)
-
-class StageRedStoneOld(Stage):
-    """
-    A stage made entirely of redstone controllers connected on the same serial port
-    """
-    
-    def __init__(self, port, config):
-        """
-        port (string): name of the serial port to connect to the controllers
-        config (dict string=> 2-tuple): the configuration of the network.
-         for each axis name the controller address and channel
-        """ 
-        Stage.__init__(self)
-        
-        ser = PIRedStone.openSerialPort(port)
-        
-        controllers = {} # address => PIRedStone
-        for axis, (add, channel) in config.items():
-            if add in controllers:
-                controller = controllers[add]
-            else:
-                controller = PIRedStone(ser, add)
-                controllers[add] = controller
-            self.axes[axis] = (controller, channel) # add 1/channel 1
-
 class StageRedStone(Actuator):
     """
     An actuator made entirely of redstone controllers connected on the same serial port
-    Can have an arbitrary number of axes
+    Can have an arbitrary number of axes (up to 32 in theory)
     """
-    def __init__(self, name, role, children=None, port, axes):
+    def __init__(self, name, role, children, port, axes):
         """
         port (string): name of the serial port to connect to the controllers
         axes (dict string=> 2-tuple): the configuration of the network.
          for each axis name the controller address and channel
+         Note that even if it's made of several controllers, each controller is 
+         _not_ seen as a child from the odemis model point of view.
         """ 
         Actuator.__init__(self, name, role, children)
         
         ser = PIRedStone.openSerialPort(port)
         
         # the axis names as required by Actuator
-        self.axes = frozenset(axes.keys())      
+        self.axes = frozenset(axes.keys())
         
+        # Not to be mistaken with axes which is a simple public view
         self._axes = {} # axis name => (PIRedStone, channel)
         self.ranges = {}
         self._position = {}
@@ -778,14 +676,13 @@ class StageRedStone(Actuator):
             # For now we put very large one
             self.ranges[axis] = frozenset([0, 1]) # m
             
-            # TODO move to a known position (0,0)?
+            # TODO move to a known position (0,0) at init?
             # for now we have no idea where we are => in the middle so that we can always move
             self._position[axis] = 0.5 # m
             
             # Just to make sure it doesn't go too fast
             speed[axis] = 1 # m/s 
             
-        # TODO
         # min/max speed is from using the opposite conversion formula with 256/1 
         self.speed = model.MultiSpeedProperty(speed, [7.6e-5, 5], "m/s")
         self.speed.subscribe(self.onSpeed, init=True)
@@ -799,5 +696,95 @@ class StageRedStone(Actuator):
     def onSpeed(self, value):
         for axis, v in value.items():
             self._axes[axis].setSpeed(v)
+            
+    # to make it read-only
+    @property
+    def position(self):
+        # TODO: position is optional, or is it really needed to simplify?
+        return self._position
+    
+    def moveRel(self, shift):
+        u"""
+        Move the stage the defined values in m for each axis given.
+        shift dict(string-> float): name of the axis and shift in m
+        """
+        # TODO check values are within range
+        for axis, distance in shift.items():
+            if axis not in self.axes:
+                raise Exception("Axis unknown: " + str(axis))
+            if abs(distance) > self.ranges[axis][1]:
+                raise Exception("Trying to move axis %s by %f m> %f m." % 
+                                (axis, distance, self.ranges[axis][1]))
+            # TODO: wait for the previous move
+            controller, arg = self.axes[axis]
+            controller.moveRel(arg, controller.convertMToDevice(distance))
+        
+        # TODO future
+    
+    def stop(self, axis=None):
+        """
+        stops the motion
+        axis (string): name of the axis to stop, or all of them if not indicated 
+        """
+        if not axis:
+            for controller, arg in self._axes.values():
+                controller.stopMotion(arg)
+        else:
+            controller, arg = self._axes[axis]
+            controller.stopMotion(arg)
+        
+    def waitStop(self, axis=None):
+        """
+        wait until the stops the motion
+        axis (string): name of the axis to stop, or all of them if not indicated 
+        """
+        if not axis:
+            for controller, arg in self._axes.values():
+                controller.waitEndMotion(arg)
+        else:
+            controller, arg = self._axes[axis]
+            controller.waitEndMotion(arg)
+            
+    def selfTest(self):
+        passed = True
+        controllers = set([c for c, a in self._axes.values()])
+        for controller in controllers:
+            logging.info("Testing controller %d", controller.address)
+            passed &= controller.selfTest()
+        
+        return passed
+    
+    @staticmethod
+    def scan(port=None, max_add=15):
+        """
+        port (string): name of the serial port. If None, all the serial ports are tried
+        max_add (0<=int<15): maximum address to be tried on each port. By default try everything possible.
+        returns: a possible way to initialise the stage by using each controller as two axes
+        Note: it is not possible to detect whether a controller has one or two axes (channel).
+        """ 
+        if port:
+            ports = [port]
+        else:
+            if os.name == "nt":
+                ports = ["COM" + str(n) for n in range (0,8)]
+            else:
+                ports = glob.glob('/dev/ttyS?*') +  glob.glob('/dev/ttyUSB?*')
+                
+        found = []  # tuple of (name, dict (port=>port, axes =>list of addresses)
+        for p in ports:
+            try:
+                addresses = PIRedStone.scan(p, max_add)
+            except serial.SerialException:
+                # not possible to use this port? next one!
+                continue
+            
+            if addresses:
+                arg = {}
+                for add in addresses:
+                    arg["axis" + str(add)] = (add, 0) # channel 0
+                    arg["axis" + str(add)] = (add, 1) # channel 1
+                found.append(("Actuator " + p, {"port": p, "axes": arg}))
+        
+        return found
     
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:

@@ -140,6 +140,7 @@ def make_args(name, attr, inst_comps):
     if "children" in attr:
         init["children"] = {}
         children_names = attr["children"]
+        # TODO have two types of children creation: delegation/explicit
         for internal_name, child_name in children_names.items():
             child_attr = inst_comps[child_name]
             init["children"][internal_name] = make_args(child_name, child_attr, inst_comps)
@@ -224,7 +225,7 @@ def instantiate_model(inst_model, dry_run=False):
                 if child_name == name:
                     raise SemanticError("Error in "
                             "microscope instantiation file: component %s "
-                            "has itself as children." % name)
+                            "is child of itself." % name)
                 # detect child with multiple parents
                 if "parent" in inst_model[child_name]:
                     raise SemanticError("Error in "
@@ -233,9 +234,16 @@ def instantiate_model(inst_model, dry_run=False):
                             % (child_name, name, inst_model[child_name]["parent"]))
                 inst_model[child_name]["parent"] = name
     
+    # TODO change creation by creating every component which has a class
+    # components without class must be a child of some component
+    # components with a parent and a class must always be created before their parent
+    
+    # It might get complex if a component has a child which is a component 
+    # created by delegation to another component  
+    
     # for each component which is not child
     # add it to the list of comps
-    # if it has children, add the children to the list 
+    # if it creates it own children, add the children to the list
     for name, attr in inst_model.items():
         if "parent" in attr: # children are created by their parents
             continue

@@ -6,10 +6,13 @@ Optical: {
     actuators: ["Redstone Stage"],
 }
 Light: {
-    class: example.Led,
+    class: simulated.Light,
     role: brightlight,
-    init: {device: /dev/led0},
-    affects: ["Andor Clara"]
+#    init: ,
+    affects: ["Andor SimCam"],
+    properties: {
+        power: 100 # W
+    }
 }
 "Andor Clara": {
     class: andorcam2.AndorCam2,
@@ -19,10 +22,13 @@ Light: {
 "Redstone Stage": {
     class: pi.StageRedStone,
     role: stage,
-    init: {port: /dev/ttyUSB0, axes:{'x': [1, 1], 'y': [0, 1]}}, # address/channel of each controller on the serial bus
+    init: {
+        port: /dev/ttyUSB0,
+        axes: {'x': [1, 1], 'y': [0, 1]} # address/channel of each controller on the serial bus
+    }, 
     affects: ["Andor Clara"],
     properties: {
-        speed: 1 #m/s
+        speed: {'x':1, 'y':1} #m/s
     }
 }
 

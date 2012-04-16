@@ -1,0 +1,52 @@
+Optical: {
+    class: Microscope,
+    role: epifluorescent,
+    emitters: [Light],
+    detectors: ["Andor SimCam"],
+    actuators: ["Complete Stage"],
+}
+
+Light: {
+    class: simulated.Light,
+    role: brightlight,
+    affects: ["Andor SimCam"],
+    properties: {
+        power: 100 # W
+    }
+}
+
+"Andor SimCam": {
+    class: andorcam3.AndorCam3,
+    role: ccd,
+    init: {device: 1} # 1 is almost always SimCam
+}
+
+"Complete Stage": {
+    class: CombinedActuator,
+    role: stage,
+    affects: ["Andor SimCam"],
+    children: {"x": "Redstone Stage", "y": "Redstone Stage", "z": "Fake Stage Z"}
+    init: {axes_map: {"x": "x", "y": "y", "z": "x"}}
+}
+
+"Fake Stage Z": {
+    # we only use the first axis
+    class: simulated.Stage2D,
+    role: stagez,
+    properties: {
+        speed: {'x':1, 'y':1} #m/s
+    }
+}
+
+"Redstone Stage": {
+    class: pi.StageRedStone,
+    role: stagexy,
+    init: {
+        port: /dev/ttyUSB0,
+        axes: {'x': [1, 1], 'y': [0, 1]} # address/channel of each controller on the serial bus
+    }, 
+    properties: {
+        speed: {'x':1, 'y':1} #m/s
+    }
+}
+
