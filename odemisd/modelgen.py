@@ -148,12 +148,13 @@ def make_args(name, attr, inst_comps):
     return init
         
     
-def instantiate_comp(name, attr, inst_comps, dry_run=False):
+def instantiate_comp(name, attr, inst_comps, final_comps, dry_run=False):
     """
     Instantiate a component
     name (str): name that will be given to the component instance
     attr (dict (str -> value)): attributes of the component
     inst_comps (dict (str -> dict)): all the components in the instantiation model
+    final_comps (set HwComponent): all the components already instantiated
     returns (HwComponent): an instance of the component
     Raises:
         SemanticError in case an error in the model is detected. 
@@ -170,6 +171,8 @@ def instantiate_comp(name, attr, inst_comps, dry_run=False):
     # children (dict str -> dict): same thing for each child as a dict of internal name -> init arguments
     # anything else is passed as is
     args = make_args(name, attr, inst_comps)
+   
+    # TODO use final_comps to get the children
    
     if dry_run:
         # mock classes for everything... but internal classes (because they are safe)
@@ -198,7 +201,21 @@ def get_component_by_name(comps, name):
         if comp.name == name:
             return comp
     raise LookupError("No component named '%s' found" % name)
-    
+
+def get_or_instantiate_comp(name, attr, inst_comps, final_comps, dry_run=False):
+    """
+    returns a component for the given name, either from the components already
+      instantiated, or a new instantiated one if it does not exist. final_comps 
+      is also updated.
+    """
+    try:
+        return get_component_by_name(final_comps, name)
+    except LookupError:
+        # we need to instantiate it
+        comp = get_or_instantiate_comp(name, attr, inst_comps, final_comps, dry_run)
+        final_comps.add(comp)
+        return comp
+
 def instantiate_model(inst_model, dry_run=False):
     """
     Generates the real microscope model from the microscope instantiation model
@@ -245,11 +262,11 @@ def instantiate_model(inst_model, dry_run=False):
     # add it to the list of comps
     # if it creates it own children, add the children to the list
     for name, attr in inst_model.items():
-        if "parent" in attr: # children are created by their parents
+        if not "class" in attr: # children created by delegation to its parent
             continue
-        comp = instantiate_comp(name, attr, inst_model, dry_run)
-        comps.add(comp)
-        comps |= getattr(comp, "children", set([]))
+
+        # by trying every component, at the end, all of them are created        
+        get_or_instantiate_comp(name, attr, inst_model, comps, dry_run)
         
     # look for the microscope component (check there is only one)
     microscopes = [m for m in comps if isinstance(m, model.Microscope)]
