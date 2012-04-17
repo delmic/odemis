@@ -71,8 +71,6 @@ ERROR_COMMAND_NOT_FOUND = 0x01 #01: command not found
 #09: Command buffer overflow
 #0A: macro storage overflow
 
-VERBOSE = True
-
 class PIRedStone(object):
     '''
     This represents the bare PI C-170 piezo motor controller (Redstone), the 
@@ -137,7 +135,7 @@ class PIRedStone(object):
         try:
             add = self.tellBoardAddress()
             if add != address:
-                print "Warning: asked for PI controller %d and was answered by controller %d." % (address, add)
+                logging.warning("asked for PI controller %d and was answered by controller %d.", address, add)
         except IOError:
             raise IOError("No answer from PI controller %d" % address)
 
@@ -168,8 +166,7 @@ class PIRedStone(object):
         for sc in com.split(","):
             assert(len(sc) < 10)
             
-        if VERBOSE:
-            print "Sending:", com.encode('string_escape')
+        logging.debug("Sending: %s", com.encode('string_escape'))
         self.serial.write(com)
         # TODO allow to check for error via TellStatus afterwards
     
@@ -185,8 +182,7 @@ class PIRedStone(object):
         """
         assert(len(com) <= 10)
         assert(len(prefix) <= 2)
-        if VERBOSE:
-            print "Sending:", com.encode('string_escape')
+        logging.debug("Sending: %s", com.encode('string_escape'))
         self.serial.write(com)
         
         char = self.serial.read() # empty if timeout
@@ -201,12 +197,11 @@ class PIRedStone(object):
                 
             success = self.recoverTimeout()
             if success:
-                print "Warning, PI controller %d timeout, but recovered." % self.address
+                logging.warning("PI controller %d timeout, but recovered.", self.address)
             else:
                 raise IOError("PI controller %d timeout, not recovered." % self.address)
             
-        if VERBOSE:
-            print "Receive:", report.encode('string_escape')
+        logging.debug("Receive: %s", report.encode('string_escape'))
         if not report.startswith(prefix):
             raise IOError("Report prefix unexpected after '%s': '%s'." % (com, report))
 
@@ -541,29 +536,29 @@ class PIRedStone(object):
             logging.error("Failed to select controller " + str(self.address) + ", status is " + str(st))
             return False
         
-        print "Selected controller %d." % self.address
+        logging.info("Selected controller %d.", self.address)
         
         version = self.versionReport()
-        logging.info("Version: '%s'" % version)
+        logging.info("Version: '%s'", version)
         
         commands = self.help()
-        logging.info("Accepted commands: '%s'" % commands)
+        logging.info("Accepted commands: '%s'", commands)
 
         # try to modify the values to see if it would work
         self.setWaitTime(1, 1)
         st, err = self.tellStatus()
         if err:
-            logging.error("SetWaitTime returned error " + str(err))
+            logging.error("SetWaitTime returned error %x", err)
             return False
         self.setStepSize(2, 255)
         st, err = self.tellStatus()
         if err:
-            logging.error("SetStepSize returned error " + str(err))
+            logging.error("SetStepSize returned error %x", err)
             return False
         self.setRepeatCounter(1, 10)
         st, err = self.tellStatus()
         if err:
-            logging.error("SetRepeatCounter returned error " + str(err))
+            logging.error("SetRepeatCounter returned error %x", err)
             return False
         
         return True
@@ -591,12 +586,12 @@ class PIRedStone(object):
         ser = PIRedStone.openSerialPort(port)
         pi = PIRedStone(ser)
         
-        print "Serial network scanning in progress..."
+        logging.info("Serial network scanning in progress...")
         pi.try_recover = False # timeouts are expected!
         present = set([])
         for i in range(max_add + 1):
             # ask for controller #i
-            print "Querying address " + str(i)
+            logging.info("Querying address %d", i)
             pi.addressSelection(i)
 
             # is it answering?
@@ -605,7 +600,7 @@ class PIRedStone(object):
                 if add == i:
                     present.add(add)
                 else:
-                    print "Warning: asked for controller %d and was answered by controller %d." % (i, add)
+                    logging.warning("asked for controller %d and was answered by controller %d.", i, add)
             except IOError:
                 pass
         
@@ -632,14 +627,6 @@ class PIRedStone(object):
         ser._pi_select = -1
         return ser
         
-    
-# FIXME: Move to more generic place than PI?
-class Stage(object):
-    """
-    An object representing a stage = a set of axes that can be moved and
-    optionally report their position. 
-    """
-
 class StageRedStone(Actuator):
     """
     An actuator made entirely of redstone controllers connected on the same serial port
