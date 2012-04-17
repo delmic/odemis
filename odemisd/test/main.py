@@ -34,10 +34,20 @@ class TestCommandLine(unittest.TestCase):
         if logging.root:
             del logging.root.handlers[:]
     
-    def test_simple(self):
-        cmdline = "odemisd --validate %s" % SIM_CONFIG
-        ret = main.main(cmdline.split())
-        self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
+    def test_config_validate(self):
+        # each of this file should pass the validation
+        configs = ["optical-sim.odm.yaml",
+                   "example-optical-odemisd-config.odm.yaml",
+                   "example-combined-actuator.odm.yaml",
+                   #"example-secom-odemisd-config.odm.yaml", # not all components exist yet
+                   ]
+
+        for config in configs:
+            self.setUp()
+            cmdline = "odemisd --validate %s" % config
+            ret = main.main(cmdline.split())
+            self.assertEqual(ret, 0, "error detected in correct config "
+                                "file '%s'" % config)
         
     def test_config_error(self):
         # each of this file has one or more error

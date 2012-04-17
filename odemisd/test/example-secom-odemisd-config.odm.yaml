@@ -5,31 +5,40 @@ SECOM: {
     detectors: ["Andor Clara", "Quanta SED"],
     actuators: ["Redstone Stage", "Dual-view alignment"],
 }
+
 Light: {
-    class: example.Led,
+    class: simulated.Light,
     role: brightlight,
-    init: {device: /dev/led0},
-    affects: ["Andor Clara"]
+#    init: ,
+    affects: ["Andor Clara"],
+    properties: {
+        power: 100 # W
+    }
 }
+
 "Andor Clara": {
     class: andorcam2.AndorCam2,
     role: ccd,
     init: {device: 0} # the only Andor camera connected so always 0
 }
+
+"Quanta SED": {
+    role: se-detector
+}
+
 Quanta: {
     class: quanta.QuantaCOM,
     role: sem,
     init: {host: 192.168.0.10}, # depends on the IP address of the quanta PC
     children: {beam: "Quanta e-beam", sed: "Quanta SED"} # provides also a stage child but not used here
 }
+
 "Quanta e-beam": {
     #class not necessary as it's a child
     role: e-beam,
     affects: ["Quanta SED", "Andor Clara"] # affects the CCD in case of cathodoluminescence
 }
-"Quanta SED": {
-    role: se-detector
-}
+
 "Redstone Stage": {
     class: pi.StageRedStone,
     role: stage,
@@ -39,6 +48,7 @@ Quanta: {
         speed: 1 #m/s
     }
 }
+
 "Dual-view alignment": {
     class: pi.StageRedStone,
     role: lenseshift, # specific role to secom

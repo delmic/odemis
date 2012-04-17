@@ -25,8 +25,10 @@ Light: {
     class: CombinedActuator,
     role: stage,
     affects: ["Andor SimCam"],
-    children: {"x": "Redstone Stage", "y": "Redstone Stage", "z": "Fake Stage Z"}
-    init: {axes_map: {"x": "x", "y": "y", "z": "x"}}
+    children: {"x": "Redstone Stage", "y": "Redstone Stage", "z": "Fake Stage Z"},
+    init: {
+        axes_map: {"x": "x", "y": "y", "z": "x"}
+    }
 }
 
 "Fake Stage Z": {

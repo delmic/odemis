@@ -16,6 +16,7 @@ You should have received a copy of the GNU General Public License along with Del
 '''
 import _properties as properties
 import logging
+import model
 
 _microscope = None
 def getMicroscope():
@@ -168,12 +169,17 @@ class CombinedActuator(Actuator):
         self.ranges = {}
         self._axes = {} # axis name => (Actuator, axis name)
         for axis, child in children.items():
-            if not isinstance(child, Actuator):
-                raise Exception("Child %s is not an actuator." % str(child))
-            self._axes[axis] = (child, axes_map[axis])
-            self.ranges[axis] = child.ranges[axes_map[axis]]
             self.children.add(child)
             child.parent = self
+            self._axes[axis] = (child, axes_map[axis])
+            
+            # special treatment needed if this is just a test :-(
+            # TODO get MockComponent derive from Actuator if the class also derives from Actuator
+            if isinstance(child, MockComponent):
+                continue
+            if not isinstance(child, Actuator):
+                    raise Exception("Child %s is not an actuator." % str(child))
+            self.ranges[axis] = child.ranges[axes_map[axis]]
 
         self.axes = frozenset(self._axes.keys())
         

@@ -113,7 +113,7 @@ def main(args):
         logging.exception("When instantiating file %s", options.model[0].name)
         return 127
     
-    dagui.main(mic)
+#    dagui.main(mic)
     logging.warning("nothing else to do")
     return 0
 

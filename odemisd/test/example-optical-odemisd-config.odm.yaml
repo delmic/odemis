@@ -5,20 +5,23 @@ Optical: {
     detectors: ["Andor Clara"],
     actuators: ["Redstone Stage"],
 }
+
 Light: {
     class: simulated.Light,
     role: brightlight,
 #    init: ,
-    affects: ["Andor SimCam"],
+    affects: ["Andor Clara"],
     properties: {
         power: 100 # W
     }
 }
+
 "Andor Clara": {
     class: andorcam2.AndorCam2,
     role: ccd,
     init: {device: 0} # the only Andor camera connected so always 0
 }
+
 "Redstone Stage": {
     class: pi.StageRedStone,
     role: stage,
