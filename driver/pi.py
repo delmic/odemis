@@ -122,7 +122,7 @@ class PIRedStone(object):
         self.duration_range = (30, 1e6) # µs min, max duration of a step to move
         self.scale = 2e-8 # m/µs very rough scale (if it was linear)
         # Warning: waittime == 1 => unabortable!
-        self.waittime = [0, 2, 2] # ms for each axis how long to wait between 2 steps => speed (1=max speed) 
+        self.waittime = [2, 2] # ms for each axis how long to wait between 2 steps => speed (1=max speed) 
         
         self.address = address
         # allow to not initialise the controller (mostly for ScanNetwork())
@@ -145,18 +145,26 @@ class PIRedStone(object):
         Changes the move speed of the motor (for the next move). It's very 
         approximate.
         speed (0<float<5): speed in m/s.
-        axis (int 1 or 2): axis to pic  
+        axis (int 0 or 1): axis to pic  
         """
         assert(speed > 0)
-        assert((1 <= axis) and (axis <= 2))
+        assert((0 <= axis) and (axis <= 1))
         
         # 5 m/s is the max speed according to specification
         # => 1 ms waiting time = 5 m/s
+
         # approximate by formula:
         # speed = k * 1/waittime
         # knowing that 5 = k * 1 / 0.001 
         k = 5e-3
-        # TODO use the smallest speed by considering that move is instantaneous
+        
+        # In smallest speed, move is almost instantaneous
+        # => one step = 255 * scale takes 65535 ms
+        # speed = k * 1/waittime
+        # distance/waittime = k/waittime
+        # k = distance 
+        # k = 255 * 2e-8 = 5.1e-6  (<<  5e-3!)
+        
         waittime = k/speed # s
         waittime_ms = round(waittime * 1e3)
         # warning: waittime == 1 => faster but unabordable during move 
@@ -299,37 +307,37 @@ class PIRedStone(object):
     def pulseOutput(self, axis, duration):
         """
         Outputs pulses of length duration on channel axis
-        axis (int 1 or 2): the output channel
+        axis (int 0 or 1): the output channel
         duration (1<=int<=255): the duration of the pulse
         """
-        assert((1 <= axis) and (axis <= 2))
+        assert((0 <= axis) and (axis <= 1))
         assert((1 <= duration) and (duration <= 255))
-        self._sendSetCommand("%dCA%d\r" % (axis, duration))
+        self._sendSetCommand("%dCA%d\r" % (axis + 1, duration))
 
     def setDirection(self, axis, direction):
         """
         Applies a static direction flag (positive or negative) to the axis. 
-        axis (int 1 or 2): the output channel
+        axis (int 0 or 1): the output channel
         direction (int 0 or 1): 0=low(positive) and 1=high(negative)
         """
-        assert((1 <= axis) and (axis <= 2))
+        assert((0 <= axis) and (axis <= 1))
         assert((0 <= direction) and (direction <= 1))
-        self._sendSetCommand("%dCD%d\r" % (axis, direction))
+        self._sendSetCommand("%dCD%d\r" % (axis + 1, direction))
         
     def stringGoPositive(self, axis):
         """
         Used to execute a move in the positive direction as defined by
             the SS, SR and SW values.
-        axis (int 1 or 2): the output channel
+        axis (int 0 or 1): the output channel
         """
-        assert((1 <= axis) and (axis <= 2))
-        return "%dGP" % axis
+        assert((0 <= axis) and (axis <= 1))
+        return "%dGP" % axis + 1
                 
     def goPositive(self, axis):
         """
         Used to execute a move in the positive direction as defined by
             the SS, SR and SW values.
-        axis (int 1 or 2): the output channel
+        axis (int 0 or 1): the output channel
         """
         self._sendSetCommand(self.stringGoPositive(axis) + "\r")
 
@@ -337,16 +345,16 @@ class PIRedStone(object):
         """
         Used to execute a move in the negative direction as defined by
             the SS, SR and SW values.
-        axis (int 1 or 2): the output channel
+        axis (int 0 or 1): the output channel
         """
-        assert((1 <= axis) and (axis <= 2))
-        return "%dGN" % axis
+        assert((0 <= axis) and (axis <= 1))
+        return "%dGN" % axis + 1
 
     def goNegative(self, axis):
         """
         Used to execute a move in the negative direction as defined by
             the SS, SR and SW values.
-        axis (int 1 or 2): the output channel
+        axis (int 0 or 1): the output channel
         """
         self._sendSetCommand(self.stringGoNegative(axis) + "\r")
 
@@ -363,7 +371,7 @@ class PIRedStone(object):
     def setRepeatCounter(self, axis, repetitions):
         """
         Set the repeat counter for the given axis (1 = one step)
-        axis (int 1 or 2): the output channel
+        axis (int 0 or 1): the output channel
         repetitions (1<=int<=65535): the amount of repetitions
         """
         self._sendSetCommand(self.stringSetRepeatCounter(axis, repetitions) + "\r")
@@ -372,16 +380,16 @@ class PIRedStone(object):
         """
         Set the step size that corresponds with the length of the output
             pulse for the given axis
-        axis (int 1 or 2): the output channel
+        axis (int 0 or 1): the output channel
         duration (0<=int<=255): the length of pulse in μs
         """
-        return "%dSS%d" % (axis, duration)
+        return "%dSS%d" % (axis + 1, duration)
 
     def setStepSize(self, axis, duration):
         """
         Set the step size that corresponds with the length of the output
             pulse for the given axis
-        axis (int 1 or 2): the output channel
+        axis (int 0 or 1): the output channel
         duration (0<=int<=255): the length of pulse in μs
         """
         self._sendSetCommand(self.stringSetStepSize(axis, duration) + "\r")
@@ -390,18 +398,18 @@ class PIRedStone(object):
         """
         This command sets the delay time (wait) between the output of pulses when
             commanding a burst move for the given axis.
-        axis (int 1 or 2): the output channel
+        axis (int 0 or 1): the output channel
         duration (1<=int<=65535): the wait time (ms), 1 gives the highest output frequency.
         """
-        assert((1 <= axis) and (axis <= 2))
+        assert((0 <= axis) and (axis <= 1))
         assert((1 <= duration) and (duration <= 65535))
-        return"%dSW%d" % (axis, duration)
+        return"%dSW%d" % (axis + 1, duration)
 
     def setWaitTime(self, axis, duration):
         """
         This command sets the delay time (wait) between the output of pulses when
             commanding a burst move for the given axis.
-        axis (int 1 or 2): the output channel
+        axis (int 0 or 1): the output channel
         duration (0<=int<=65535): the wait time (ms), 1 gives the highest output frequency.
         """
         self._sendSetCommand(self.stringSetWaitTime(axis, duration) + "\r")
@@ -420,11 +428,11 @@ class PIRedStone(object):
     def moveRelSmall(self, axis, duration):
         """
         Move on a given axis for a given pulse length
-        axis (int 1 or 2): the output channel
+        axis (int 0 or 1): the output channel
         duration (-255<=int<=255): the duration of pulse in μs,
                                    negative to go negative direction
         """
-        assert((1 <= axis) and (axis <= 2))
+        assert((0 <= axis) and (axis <= 1))
         assert((-255 <= duration) and (duration <= 255))
         if duration == 0:
             return
@@ -441,12 +449,13 @@ class PIRedStone(object):
         """
         Move on a given axis for a given pulse length, will repeat the steps if
         it requires more than one step.
-        axis (int 1 or 2): the output channel
-        duration (int): the duration of pulse in μs 
+        axis (int 0 or 1): the output channel
+        duration (int): the duration of pulse in μs
+        returns (float): approximate distance actually moved
         """
-        assert((1 <= axis) and (axis <= 2))
+        assert((0 <= axis) and (axis <= 1))
         if duration == 0:
-            return
+            return 0.0
         
         self.select()
         # Clamp the duration to min,max
@@ -460,6 +469,8 @@ class PIRedStone(object):
         # A problem is that while it's waiting (WS) any new command (ex, TS)
         # will stop the wait and the rest of the compound.
         
+        # TODO we could compute the waittime here, depending on the speed and stepsize
+        
         if distance > 255:
             # We need several steps to do the move. The restriction is that 
             # every step should be the same size. So we try to make steps
@@ -467,6 +478,7 @@ class PIRedStone(object):
             # the requested distance. 
             steps = math.ceil(distance / 255.0)
             stepsize = round(distance / steps)
+            distance = steps * stepsize # what we actually expect to move
             com = self.stringSetWaitTime(axis, self.waittime[axis])
             com += "," + self.stringSetStepSize(axis, stepsize)
             com += "," + self.stringSetRepeatCounter(axis, steps)
@@ -484,9 +496,9 @@ class PIRedStone(object):
             else:
                 com += "," + self.stringGoNegative(axis)
 
-        #TODO return how much we actually have asked the controller to move?
         print duration, com
         self._sendSetCommand(com + "\r")
+        return sign * distance
     
     def isMoving(self, axis=None):
         """
@@ -557,17 +569,17 @@ class PIRedStone(object):
         logging.info("Accepted commands: '%s'", commands)
 
         # try to modify the values to see if it would work
-        self.setWaitTime(1, 1)
+        self.setWaitTime(0, 1)
         st, err = self.tellStatus()
         if err:
             logging.error("SetWaitTime returned error %x", err)
             return False
-        self.setStepSize(2, 255)
+        self.setStepSize(1, 255)
         st, err = self.tellStatus()
         if err:
             logging.error("SetStepSize returned error %x", err)
             return False
-        self.setRepeatCounter(1, 10)
+        self.setRepeatCounter(0, 10)
         st, err = self.tellStatus()
         if err:
             logging.error("SetRepeatCounter returned error %x", err)
@@ -783,8 +795,8 @@ class StageRedStone(Actuator):
             if addresses:
                 arg = {}
                 for add in addresses:
-                    arg["axis" + str(add)] = (add, 1) # channel 0
-                    arg["axis" + str(add)] = (add, 2) # channel 1
+                    arg["axis" + str(add)] = (add, 0) # channel 0
+                    arg["axis" + str(add)] = (add, 1) # channel 1
                 found.append(("Actuator " + p, {"port": p, "axes": arg}))
         
         return found

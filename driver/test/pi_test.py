@@ -28,8 +28,8 @@ if os.name == "nt":
 else:
     PORT = "/dev/ttyUSB0"
 
-CONFIG_RS_SECOM_1 = {'x': (0, 1), 'y': (0, 2)}
-CONFIG_RS_SECOM_2 = {'x': (1, 1), 'y': (0, 1)}
+CONFIG_RS_SECOM_1 = {'x': (0, 0), 'y': (0, 1)}
+CONFIG_RS_SECOM_2 = {'x': (1, 0), 'y': (0, 0)}
 class TestPIRedStone(unittest.TestCase):
     """
     Test directly the PIRedStone class.

@@ -45,7 +45,7 @@ Light: {
     role: stagexy,
     init: {
         port: /dev/ttyUSB0,
-        axes: {'x': [1, 1], 'y': [0, 1]} # address/channel of each controller on the serial bus
+        axes: {'x': [1, 0], 'y': [0, 0]} # address/channel of each controller on the serial bus
     }, 
     properties: {
         speed: {'x':1, 'y':1} #m/s
