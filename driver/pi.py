@@ -18,6 +18,7 @@ You should have received a copy of the GNU General Public License along with Del
 from model._components import Actuator
 import glob
 import logging
+import math
 import model
 import os
 import serial
@@ -121,7 +122,7 @@ class PIRedStone(object):
         self.duration_range = (30, 1e6) # µs min, max duration of a step to move
         self.scale = 2e-8 # m/µs very rough scale (if it was linear)
         # Warning: waittime == 1 => unabortable!
-        self.waittime = 2 # ms how long to wait between 2 steps => speed (1=max speed) 
+        self.waittime = [0, 2, 2] # ms for each axis how long to wait between 2 steps => speed (1=max speed) 
         
         self.address = address
         # allow to not initialise the controller (mostly for ScanNetwork())
@@ -139,13 +140,15 @@ class PIRedStone(object):
         except IOError:
             raise IOError("No answer from PI controller %d" % address)
 
-    def setSpeed(self, speed):
+    def setSpeed(self, speed, axis):
         """
         Changes the move speed of the motor (for the next move). It's very 
         approximate.
-        speed (0<float<5): speed in m/s. 
+        speed (0<float<5): speed in m/s.
+        axis (int 1 or 2): axis to pic  
         """
         assert(speed > 0)
+        assert((1 <= axis) and (axis <= 2))
         
         # 5 m/s is the max speed according to specification
         # => 1 ms waiting time = 5 m/s
@@ -153,10 +156,11 @@ class PIRedStone(object):
         # speed = k * 1/waittime
         # knowing that 5 = k * 1 / 0.001 
         k = 5e-3
+        # TODO use the smallest speed by considering that move is instantaneous
         waittime = k/speed # s
         waittime_ms = round(waittime * 1e3)
-        self.waittime = min(max(1, waittime_ms), 65535)
-        
+        # warning: waittime == 1 => faster but unabordable during move 
+        self.waittime[axis] = min(max(2, waittime_ms), 65535)
         
     def _sendSetCommand(self, com):
         """
@@ -387,10 +391,10 @@ class PIRedStone(object):
         This command sets the delay time (wait) between the output of pulses when
             commanding a burst move for the given axis.
         axis (int 1 or 2): the output channel
-        duration (0<=int<=65535): the wait time (ms), 1 gives the highest output frequency.
+        duration (1<=int<=65535): the wait time (ms), 1 gives the highest output frequency.
         """
         assert((1 <= axis) and (axis <= 2))
-        assert((0 <= duration) and (duration <= 65535))
+        assert((1 <= duration) and (duration <= 65535))
         return"%dSW%d" % (axis, duration)
 
     def setWaitTime(self, axis, duration):
@@ -446,38 +450,42 @@ class PIRedStone(object):
         
         self.select()
         # Clamp the duration to min,max
-        # Min because it's better to move too much than nothing
+        # Min because it's better to move too much than nothing XXX (maybe not, or only if at least half to what we can do min)
         # Max because we don't want to move too far, and repetition is limited
         sign = cmp(duration, 0)
-        duration = sign * sorted(self.duration_range + (abs(duration),))[1]
+        distance = sorted(self.duration_range + (abs(duration),))[1]
 
         # Tried to use a compound command with several big steps and one small.
         # eg: 1SW1,1SS255,1SR3,1GN,1WS2,1SS35,1SR1,1GN\r
         # A problem is that while it's waiting (WS) any new command (ex, TS)
         # will stop the wait and the rest of the compound.
         
-        steps, left = divmod(abs(duration), 255)
-        if steps > 0:
-            if left > 0:
-                # do one more step and spread the left over all the steps
-                stepsize = round(255 - ((255 - left) / steps))
-                steps = abs(duration) / stepsize
-            com = self.stringSetWaitTime(axis, self.waittime)
+        if distance > 255:
+            # We need several steps to do the move. The restriction is that 
+            # every step should be the same size. So we try to make steps
+            # as big as possible, which in total come as close as possible to
+            # the requested distance. 
+            steps = math.ceil(distance / 255.0)
+            stepsize = round(distance / steps)
+            com = self.stringSetWaitTime(axis, self.waittime[axis])
             com += "," + self.stringSetStepSize(axis, stepsize)
             com += "," + self.stringSetRepeatCounter(axis, steps)
-            if duration > 0:
+            if sign > 0:
                 com += "," + self.stringGoPositive(axis)
             else:
                 com += "," + self.stringGoNegative(axis)
         else:
-            com = self.stringSetWaitTime(axis, self.waittime)
-            com += "," + self.stringSetStepSize(axis, left)
+            # we can do the move in one small step
+            com = self.stringSetWaitTime(axis, self.waittime[axis])
+            com += "," + self.stringSetStepSize(axis, distance)
             com += "," + self.stringSetRepeatCounter(axis, 1)
-            if duration > 0:
+            if sign > 0:
                 com += "," + self.stringGoPositive(axis)
             else:
                 com += "," + self.stringGoNegative(axis)
 
+        #TODO return how much we actually have asked the controller to move?
+        print duration, com
         self._sendSetCommand(com + "\r")
     
     def isMoving(self, axis=None):
@@ -512,7 +520,11 @@ class PIRedStone(object):
         axis (None, 1, or 2): axis to check whether it is moving, or both if None
         """
         # approximately the time for the longest move
-        timeout = self.duration_range[1] * (1e-6 + self.waittime * 1e-3 / 255)
+        if axis:
+            waittime = self.waittime[axis]
+        else:
+            waittime = max(self.waittime)
+        timeout = self.duration_range[1] * (1e-6 + waittime * 1e-3 / 255)
         end = time.time() + timeout
         while self.isMoving(axis) and time.time() <= end:
             time.sleep(0.001)
@@ -627,6 +639,7 @@ class PIRedStone(object):
         ser._pi_select = -1
         return ser
         
+#TODO axis (channel) should be 0 or 1
 class StageRedStone(Actuator):
     """
     An actuator made entirely of redstone controllers connected on the same serial port
@@ -650,6 +663,7 @@ class StageRedStone(Actuator):
         # Not to be mistaken with axes which is a simple public view
         self._axes = {} # axis name => (PIRedStone, channel)
         self.ranges = {}
+        # TODO also a rangesRel : min and max of a step 
         self._position = {}
         speed = {}
         controllers = {} # address => PIRedStone
@@ -661,7 +675,7 @@ class StageRedStone(Actuator):
             
             # TODO request also the ranges from the arguments?
             # For now we put very large one
-            self.ranges[axis] = frozenset([0, 1]) # m
+            self.ranges[axis] = [0, 1] # m
             
             # TODO move to a known position (0,0) at init?
             # for now we have no idea where we are => in the middle so that we can always move
@@ -670,8 +684,8 @@ class StageRedStone(Actuator):
             # Just to make sure it doesn't go too fast
             speed[axis] = 1 # m/s 
             
-        # min/max speed is from using the opposite conversion formula with 256/1 
-        self.speed = model.MultiSpeedProperty(speed, [7.6e-5, 5], "m/s")
+        # min/max speed is from using the opposite conversion formula with 256/2 
+        self.speed = model.MultiSpeedProperty(speed, [7.6e-5, 3], "m/s")
         self.speed.subscribe(self.onSpeed, init=True)
         
     def getMetadata(self):
@@ -682,7 +696,8 @@ class StageRedStone(Actuator):
     
     def onSpeed(self, value):
         for axis, v in value.items():
-            self._axes[axis].setSpeed(v)
+            controller, channel = self._axes[axis]
+            controller.setSpeed(v, channel)
             
     # to make it read-only
     @property
@@ -703,8 +718,8 @@ class StageRedStone(Actuator):
                 raise Exception("Trying to move axis %s by %f m> %f m." % 
                                 (axis, distance, self.ranges[axis][1]))
             # TODO: wait for the previous move
-            controller, arg = self.axes[axis]
-            controller.moveRel(arg, controller.convertMToDevice(distance))
+            controller, channel = self._axes[axis]
+            controller.moveRel(channel, controller.convertMToDevice(distance))
         
         # TODO future
     
@@ -714,11 +729,11 @@ class StageRedStone(Actuator):
         axis (string): name of the axis to stop, or all of them if not indicated 
         """
         if not axis:
-            for controller, arg in self._axes.values():
-                controller.stopMotion(arg)
+            for controller, channel in self._axes.values():
+                controller.stopMotion(channel)
         else:
-            controller, arg = self._axes[axis]
-            controller.stopMotion(arg)
+            controller, channel = self._axes[axis]
+            controller.stopMotion(channel)
         
     def waitStop(self, axis=None):
         """
@@ -726,11 +741,11 @@ class StageRedStone(Actuator):
         axis (string): name of the axis to stop, or all of them if not indicated 
         """
         if not axis:
-            for controller, arg in self._axes.values():
-                controller.waitEndMotion(arg)
+            for controller, channel in self._axes.values():
+                controller.waitEndMotion(channel)
         else:
-            controller, arg = self._axes[axis]
-            controller.waitEndMotion(arg)
+            controller, channel = self._axes[axis]
+            controller.waitEndMotion(channel)
             
     def selfTest(self):
         passed = True
@@ -768,8 +783,8 @@ class StageRedStone(Actuator):
             if addresses:
                 arg = {}
                 for add in addresses:
-                    arg["axis" + str(add)] = (add, 0) # channel 0
-                    arg["axis" + str(add)] = (add, 1) # channel 1
+                    arg["axis" + str(add)] = (add, 1) # channel 0
+                    arg["axis" + str(add)] = (add, 2) # channel 1
                 found.append(("Actuator " + p, {"port": p, "axes": arg}))
         
         return found

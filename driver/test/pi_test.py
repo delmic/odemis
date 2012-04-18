@@ -34,6 +34,8 @@ class TestPIRedStone(unittest.TestCase):
     """
     Test directly the PIRedStone class.
     """
+    config = CONFIG_RS_SECOM_1
+    
     def test_scan_low_level(self):
         """
         Check that we can do a scan network. It can pass only if we are
@@ -56,12 +58,12 @@ class TestPIRedStone(unittest.TestCase):
         self.assertGreater(len(devices), 0)
         
         for name, kwargs in devices:
-            print "opening "
+            print "opening ", name
             stage = pi.StageRedStone(name, "stage", None, **kwargs)
             self.assertTrue(stage.selfTest(), "Controller self test failed.")
             
     def test_simple(self):
-        stage = pi.StageRedStone("test", "stage", None, PORT, CONFIG_RS_SECOM_2)
+        stage = pi.StageRedStone("test", "stage", None, PORT, self.config)
         move = {'x':0.01e-6, 'y':0.01e-6}
         stage.moveRel(move)
         
@@ -69,7 +71,7 @@ class TestPIRedStone(unittest.TestCase):
         # For moves big enough, sync should always take more time than async
         delta = 0.0001 # s
         
-        stage = pi.StageRedStone("test", "stage", None, PORT, CONFIG_RS_SECOM_2)
+        stage = pi.StageRedStone("test", "stage", None, PORT, self.config)
         move = {'x':100e-6, 'y':100e-6}
         
         start = time.time()
@@ -85,8 +87,36 @@ class TestPIRedStone(unittest.TestCase):
         
         self.assertGreater(dur_sync, dur_async - delta, "Sync should take more time than async.")
 
+    def test_speed(self):
+        # For moves big enough, a 1m/s move should take approximately 100 times less time
+        # than a 0.01m/s move 
+        expected_ratio = 100
+        delta_ratio = 2 # no unit 
+        
+        # fast move
+        stage = pi.StageRedStone("test", "stage", None, PORT, self.config)
+        stage.speed.value = {"x":1, "y":1}
+        move = {'x':100e-6, 'y':100e-6}
+        start = time.time()
+        stage.moveRel(move)
+        stage.waitStop()
+        dur_fast = time.time() - start
+        
+        stage.speed.value = {"x":1.0/expected_ratio, "y":1.0/expected_ratio}
+        move = {'x':-100e-6, 'y':-100e-6}
+        start = time.time()
+        stage.moveRel(move)
+        stage.waitStop()
+        dur_slow = time.time() - start
+        
+        ratio = dur_slow / dur_fast
+        print "ratio of", ratio 
+        if ratio < expected_ratio / 2 or ratio > expected_ratio * 2:
+            self.fail("Speed not consistent: ratio of " + str(ratio) + 
+                         "instead of " + str(expected_ratio) + ".")
+
     def test_stop(self):
-        stage = pi.StageRedStone("test", "stage", None, PORT, CONFIG_RS_SECOM_2)
+        stage = pi.StageRedStone("test", "stage", None, PORT, self.config)
         stage.stop()
         stage.stop("x")
         
@@ -95,8 +125,9 @@ class TestPIRedStone(unittest.TestCase):
         stage.stop()
         
     def test_move_circle(self):
-        stage = pi.StageRedStone("test", "stage", None, PORT, CONFIG_RS_SECOM_2)
-        radius = 100 * 1e-6 # m
+        stage = pi.StageRedStone("test", "stage", None, PORT, self.config)
+        stage.speed.value = {"x":0.1, "y":0.1}
+        radius = 100e-6 # m
         # each step has to be big enough so that each move is above imprecision
         steps = 100
         cur_pos = (0, 0)
@@ -108,6 +139,7 @@ class TestPIRedStone(unittest.TestCase):
             move['y'] = next_pos[1] - cur_pos[1]
             print next_pos, move
             stage.moveRel(move)
+            stage.waitStop()
             cur_pos = next_pos
 
 if __name__ == '__main__':
