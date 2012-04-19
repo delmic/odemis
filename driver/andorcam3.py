@@ -40,7 +40,12 @@ import weakref
 #9 Mono32
 
 class ATError(Exception):
-    pass
+    def __init__(self, errno, strerror):
+        self.errno = errno
+        self.strerror = strerror
+        
+    def __str__(self):
+        return self.strerror
 
 class ATDLL(CDLL):
     """
@@ -62,10 +67,10 @@ class ATDLL(CDLL):
         """
         if result != 0:
             if result in ATDLL.err_code:
-                raise ATError("Call to %s failed with error code %d: %s" %
+                raise ATError(result, "Call to %s failed with error code %d: %s" %
                                (str(func.__name__), result, ATDLL.err_code[result]))
             else:
-                raise ATError("Call to %s failed with unknown error code %d" %
+                raise ATError(result, "Call to %s failed with unknown error code %d" %
                                (str(func.__name__), result))
         return result
 
@@ -177,7 +182,7 @@ class AndorCam3(model.DigitalCamera):
         psize = (self.GetFloat(u"PixelWidth") * 1e-6,
                  self.GetFloat(u"PixelHeight") * 1e-6)
         self.pixelSize = model.Property(psize, unit="m", readonly=True)
-        self._metadata[model.MD_PIXEL_SIZE] = self.pixelSize.value
+        self._metadata[model.MD_SENSOR_PIXEL_SIZE] = self.pixelSize.value
         
         # odemis + sdk
         self.swVersion = __version__.version + "(driver " + self.getSDKVersion() + ")" 
@@ -822,11 +827,15 @@ class AndorCam3(model.DigitalCamera):
             metadata[model.MD_ACQ_DATE] = time.time() # time at the beginning
             try:
                 pbuffer, buffersize = self.WaitBuffer(exposure_time + readout_time + 1)
-            except ATError(), exc:
+            except ATError as (errno, strerr):
                 # sometimes there is timeout, don't completely give up
                 # TODO maximum failures in a row?
-                logging.warning("trying again to acquire image after error:", exc)
-                continue # try again
+                if errno == 13: # AT_ERR_TIMEDOUT
+                    logging.warning("trying again to acquire image after error %s:", strerr)
+                    self.Command(u"AcquisitionStop")
+                    self.Command(u"AcquisitionStart")
+                    continue
+                raise
 
             # Cannot directly use pbuffer because we'd lose the reference to the 
             # memory allocation... and it'd get free'd at the end of the method
@@ -881,7 +890,7 @@ class AndorCam3(model.DigitalCamera):
         """
         try:
             model = self.GetString(u"CameraModel")
-        except Exception, err:
+        except Exception as err:
             logging.warning("Failed to read camera model: %s", str(err))
             return False
     
@@ -890,7 +899,7 @@ class AndorCam3(model.DigitalCamera):
             # TODO if we managed to initialise, this should already work
             # => detect error in init() or do selfTest() without init()?
             resolution = self.getSensorResolution()
-        except Exception, err:
+        except Exception as err:
             logging.warning("Failed to read camera resolution: " + str(err))
             return False
         
@@ -898,7 +907,7 @@ class AndorCam3(model.DigitalCamera):
             self.resolution.value = resolution
             self.exposureTime.value = 0.01
             im = self.acquire()
-        except Exception, err:
+        except Exception as err:
             logging.warning("Failed to acquire an image: " + str(err))
             return False
         

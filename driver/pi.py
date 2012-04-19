@@ -72,6 +72,12 @@ ERROR_COMMAND_NOT_FOUND = 0x01 #01: command not found
 #09: Command buffer overflow
 #0A: macro storage overflow
 
+
+# TODO: refactorise so that there is a more clear bus/controller objects distinction
+# Currently each controller is in charge of selecting itself on the bus by using
+# the serial port object as a global container. This should be moved to the bus 
+# object. The bus object should be the only one directly accessible.  
+
 class PIRedStone(object):
     '''
     This represents the bare PI C-170 piezo motor controller (Redstone), the 
@@ -715,6 +721,7 @@ class StageRedStone(Actuator):
     @property
     def position(self):
         # TODO: position is optional, or is it really needed to simplify?
+        # Used for the metadata of the picture
         return self._position
     
     def moveRel(self, shift):
@@ -801,4 +808,23 @@ class StageRedStone(Actuator):
         
         return found
     
+    
+    # Doer Thread:
+    # Share a queue of actions with the interface
+    # For each action in the queue: performs and wait until the action is finished
+    # At the end of the action, call all the callbacks
+    
+    # Future:
+    # Provides the interface for the clients to manipulate an (asynchronous) action 
+    # they requested.
+    # It follows http://docs.python.org/dev/library/concurrent.futures.html
+    # Internally, it has a reference to the action in the action queue and to the
+    # doer thread. 
+    # cancel => if action still in the queue, remove it, Return True
+    #           if action being under process. synchronously ask the doer thread to stop the move, return True
+    #           if action is over, return False
+    # cancelled => 
+    # running() => 
+    # done() => if action not in the queue or under process, return True
+    #           otherwise return False
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:

@@ -26,7 +26,9 @@ losslessly and with metadata attached.
 # This list of constants are used as key for the metadata
 MD_EXP_TIME = "Exposure time" # s
 MD_ACQ_DATE = "Acquisition date" # s since epoch
-MD_PIXEL_SIZE = "Pixel size" # m, m
+# distance between two points on the sample that are seen at the centre of two
+# adjacent pixels considering that these two points are in focus 
+MD_PIXEL_SIZE = "Pixel size" # (m, m)  
 MD_BINNING = "Binning" # px
 MD_HW_VERSION = "Hardware version" # str
 MD_SW_VERSION = "Software version" # str
@@ -34,6 +36,7 @@ MD_HW_NAME = "Hardware name" # str, product name of the hardware component (and 
 MD_GAIN = "Gain" # no unit (ratio)
 MD_BPP = "Bits per pixel" # bit
 MD_READOUT_TIME = "Pixel readout time" # s, time to read one pixel
+MD_SENSOR_PIXEL_SIZE = "Sensor pixel size" # (m, m), distance between the center of 2 pixels on the detector sensor
 MD_SENSOR_SIZE = "Sensor size" # px, px
 MD_SENSOR_TEMP = "Sensor temperaure" # C
 MD_POS = "Centre position" # (m, m), location of the picture centre relative to top-left of the sample)

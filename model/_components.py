@@ -33,6 +33,7 @@ def getComponents():
     return _hwcomponents
 
 def setComponents(comps):
+    global _hwcomponents
     _hwcomponents = comps
 
 def updateMetadata(metadata, parent):
