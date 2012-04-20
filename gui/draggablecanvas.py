@@ -240,9 +240,6 @@ class DraggableCanvas(wx.Panel):
             return
         self.world_pos = pos
         
-        print "should move stage to pos:", self.world_pos
-        
-        
         # TODO now that we delay the drawing, it should have different worldpos between requested and actual
         self.ShouldUpdateDrawing() # XXX could maybe be more clever and only request redraw for the outside region
         
@@ -419,7 +416,7 @@ class DraggableCanvas(wx.Panel):
     def _DrawMergedImages(self, dc, im1, im2, ratio = 0.5):
         """
         Draw the two images on the DC, centred around their _dc_center, with their own scale,
-        and an opacity of "ratio" for im1. They should be of the same size ratio.
+        and an opacity of "ratio" for im1.
         Both _dc_center's should be close in order to have the parts with only
         one picture drawn without transparency
         dc: wx.DC

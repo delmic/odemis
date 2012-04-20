@@ -41,11 +41,10 @@ import weakref
 
 class ATError(Exception):
     def __init__(self, errno, strerror):
-        self.errno = errno
-        self.strerror = strerror
+        self.args = (errno, strerror)
         
     def __str__(self):
-        return self.strerror
+        return self.args[1]
 
 class ATDLL(CDLL):
     """
@@ -829,10 +828,15 @@ class AndorCam3(model.DigitalCamera):
                 pbuffer, buffersize = self.WaitBuffer(exposure_time + readout_time + 1)
             except ATError as (errno, strerr):
                 # sometimes there is timeout, don't completely give up
+                # Note: seems to happen when time between two waitbuffer() is too long
                 # TODO maximum failures in a row?
                 if errno == 13: # AT_ERR_TIMEDOUT
                     logging.warning("trying again to acquire image after error %s:", strerr)
-                    self.Command(u"AcquisitionStop")
+                    try:
+                        self.Command(u"AcquisitionStop")
+                    except ATError as (errno, strerr):
+                        logging.warning("AcquisitionStop failed with error %s:", strerr)
+                        pass
                     self.Command(u"AcquisitionStart")
                     continue
                 raise

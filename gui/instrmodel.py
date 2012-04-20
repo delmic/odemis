@@ -77,15 +77,19 @@ class OpticalBackendConnected(SECOMModel):
         if not self.stage:
             raise Exception("no stage found in the microscope")
         
+
+        try:
+            self.prev_pos = (self.stage.position["x"], self.stage.position["y"])
+        except (KeyError, AttributeError):
+            self.prev_pos = (0,0)
+        # override
+        self.stage_pos = Property(self.prev_pos) # (m,m) => (X,Y) 
+        self.stage_pos.subscribe(self.avOnStagePos)
+        
         # direct linking
         self.optical_det_exposure_time = self.camera.exposureTime
         self.camera.data.subscribe(self.onNewCameraImage)
-        
-        # override
-        self.stage_pos = Property((0,0)) # m,m
-        self.stage_pos.subscribe(self.avOnStagePos)
-        self.prev_pos = self.stage_pos.value
-        
+
         # empty
         self.sem_det_image = Property(InstrumentalImage(None, None, None))
         
@@ -99,18 +103,22 @@ class OpticalBackendConnected(SECOMModel):
         im.InitAlpha() # it's a different buffer so useless to do it in numpy
         
         try:
+            # TODO should be initialised by backend
             pos = data.metadata[model.MD_POS]
         except KeyError:
-            # that means 
             logging.warning("position of image unknown")
-            # TODO put the last position requested
             pos = self.prev_pos # at least it shouldn't be too wrong
         
-        h = hpy() # memory profiler
-        print h.heap() 
-        self.optical_det_image.value = InstrumentalImage(im, 
-               data.metadata[model.MD_PIXEL_SIZE][0], # TODO should accept tuple as well
-               pos) # TODO should be initialised by backend
+        try:
+            mpp = data.metadata[model.MD_PIXEL_SIZE][0]
+        except KeyError:
+            logging.warning("pixel density of image unknown")
+            # Hopefully it'll be within the same magnitude
+            mpp = data.metadata[model.MD_SENSOR_PIXEL_SIZE][0] / 60 # XXX
+        
+#        h = hpy() # memory profiler
+#        print h.heap() 
+        self.optical_det_image.value = InstrumentalImage(im, mpp, pos) 
 
     def avOnStagePos(self, val):
         move = {}
@@ -121,7 +129,7 @@ class OpticalBackendConnected(SECOMModel):
         else:
             # relative
             move = {"x": val[0] - self.prev_pos[0], "y": val[1] - self.prev_pos[1]}
-            self.stage.moveAbs(move)
+            self.stage.moveRel(move)
         self.prev_pos = val
     
     
@@ -144,6 +152,7 @@ class InstrumentalImage(object):
         center (2-tuple float)
         """
         self.image = im
+        # TODO should be a tuple (x/y)
         self.mpp = mpp
         self.center = center
         

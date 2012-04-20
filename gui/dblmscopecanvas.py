@@ -43,6 +43,8 @@ class DblMicroscopeCanvas(DraggableCanvas):
         # Should not be changed!
         
         self.viewmodel.mpp.subscribe(self.avOnMPP)
+        self.viewmodel.center.subscribe(self.onViewCenter, True)
+        # not necessary to call at init: other image will do it as well anyway
         self.viewmodel.images[0].subscribe(self.avOnImage)
         self.viewmodel.images[1].subscribe(self.avOnImage, True)
         self.viewmodel.merge_ratio.subscribe(self.avOnMergeRatio, True)
@@ -52,6 +54,24 @@ class DblMicroscopeCanvas(DraggableCanvas):
         
         self.Overlays.append(CrossHairOverlay("Blue", CROSSHAIR_SIZE, (-10,-10))) # debug
         self.Overlays.append(CrossHairOverlay("Red", CROSSHAIR_SIZE, (10,10))) # debug
+    
+    
+    def onViewCenter(self, value):
+        """
+        An external component asks us to move the view
+        """
+        self.ReCenterBuffer(value)
+        
+    def ReCenterBuffer(self, pos):
+        """
+        Update the position of the buffer on the world
+        pos (2-tuple float): the world coordinates of the center of the buffer
+        """
+        DraggableCanvas.ReCenterBuffer(self, pos)
+        
+        print "expects to move stage to pos:", self.world_pos
+        self.viewmodel.center.value = self.world_pos
+    
     
     def avOnCrossHair(self, activated):
         """
@@ -97,7 +117,8 @@ class DblMicroscopeCanvas(DraggableCanvas):
             iim = self.viewmodel.images[i].value
             if iim.image:
                 scale = float(iim.mpp) / self.mpwu
-                pos = (iim.center[0] / self.mpwu, iim.center[1] / self.mpwu)
+                #pos = (iim.center[0] / self.mpwu, iim.center[1] / self.mpwu)
+                pos = iim.center
                 self.SetImage(i, iim.image, pos, scale)
             else:
                 self.SetImage(i, None)

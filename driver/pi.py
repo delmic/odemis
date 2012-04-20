@@ -725,7 +725,7 @@ class StageRedStone(Actuator):
         return self._position
     
     def moveRel(self, shift):
-        u"""
+        """
         Move the stage the defined values in m for each axis given.
         shift dict(string-> float): name of the axis and shift in m
         """

@@ -120,6 +120,10 @@ class DblMicroscopePanel(wx.Panel):
         self.ChangeView(0, self.views[1].name)
         self.ChangeView(1, self.views[2].name)
     
+        # sync microscope stage with the view
+        self.viewmodel.center.value = self.secom_model.stage_pos.value
+        self.viewmodel.center.subscribe(self.onViewCenter)
+        
         self.SetSizer(mainSizer)
         self.SetAutoLayout(True)
         mainSizer.Fit(self)
@@ -143,7 +147,14 @@ class DblMicroscopePanel(wx.Panel):
         # int(0.58*100) = 57
         self.mergeSlider.SetValue(round(val * 100))
     
-    # TODO need to update HFW on OnSize
+    
+    # We link only one way the position: 
+    #  * if the user moves the view => moves the stage to the same position
+    #  * if the stage moves by itself, keep the view at the same place
+    #    (and the acquired images will not be centred anymore)
+    def onViewCenter(self, pos):
+        self.secom_model.stage_pos.value = pos
+    
     def avOnMPP(self, mpp):
         self.scaleDisplay.SetMPP(mpp)
         self.UpdateHFW()

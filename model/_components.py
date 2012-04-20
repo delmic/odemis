@@ -70,7 +70,23 @@ class HwComponent(object):
     # to be overridden by any component which actually can provide metadata
     def getMetadata(self):
         return {}
-
+    
+    # to be overridden by components which can do self test
+    def selfTest(self):
+        """
+        Self testing method.
+        returns (bool): True if the component appears to behave correctly,
+                        False otherwise
+        Throws: any type of exception might happen (and they mean the test failed)
+        """
+        # by default it works
+        return True
+    
+    # components which can detect hardware should provide this static method scan()
+#    @staticmethod
+#    def scan(self):
+#        pass
+        
 class Microscope(HwComponent):
     """
     A component which represent the whole microscope. 
@@ -130,7 +146,18 @@ class Actuator(HwComponent):
             raise ArgumentError("Actuator components cannot have children.")
         
         self.affects = set()
+    
+    # to be overridden
+    def moveRel(self, shift):
+        """
+        Move the stage the defined values in m for each axis given. This is an
+        asynchronous method.
+        shift dict(string-> float): name of the axis and shift in m
+        returns (Future): object to control the move request
+        """
+        raise NotImplementedError()
         
+    
 class Emitter(HwComponent):
     """
     A component which represents an emitter. 
