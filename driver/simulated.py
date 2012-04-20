@@ -62,7 +62,7 @@ class Stage2D(model.Actuator):
         
         self.axes = frozenset(["x", "y"])
         # can move 10cm on both axis
-        self.ranges = {"x": frozenset([0, 0.1]), "y": frozenset([0, 0.1])}
+        self.ranges = {"x": [0, 0.1], "y": [0, 0.1]}
         self._position = {"x": 0.05, "y": 0.05} # starts in the middle
         self.speed = model.MultiSpeedProperty({"x": 10, "y": 10}, [0, 10], "m/s")
         
@@ -73,32 +73,32 @@ class Stage2D(model.Actuator):
         
     def moveRel(self, pos):
         time_start = time.time()
-        maxmove = 0
+        maxtime = 0
         for axis, change in pos.items():
             if not axis in pos:
                 raise ValueError("Axis '%s' doesn't exist." % str(axis))
             self._position[axis] += change
             logging.info("moving axis %s to %f", axis, self._position[axis])
-            maxmove = max(maxmove, abs(change))
+            maxtime = max(maxtime, abs(change) / self.speed.value[axis])
         
-        time_end = time_start + maxmove / self.speed.value
+        time_end = time_start + maxtime
         # TODO queue the move and pretend the position is changed only after the given time
-        # TODO return a future 
+        return InstantaneousFuture()
         
     def moveAbs(self, pos):
         time_start = time.time()
-        maxmove = 0
+        maxtime = 0
         for axis, new_pos in pos.items():
             if not axis in pos:
                 raise ValueError("Axis '%s' doesn't exist." % str(axis))
             change = self._position[axis] - new_pos
             self._position[axis] = new_pos
             logging.info("moving axis %s to %f", axis, self._position[axis])
-            maxmove = max(maxmove, abs(change))
+            maxtime = max(maxtime, abs(change) / self.speed.value[axis])
          
         # TODO stop add this move
-        time_end = time_start + maxmove / self.speed.value
-        # TODO return a future
+        time_end = time_start + maxtime
+        return InstantaneousFuture()
     
     def stop(self, axes=None):
         # TODO empty the queue for the given axes
@@ -109,5 +109,35 @@ class Stage2D(model.Actuator):
         # TODO should depend on the time and the current queue of moves
         return self._position
         
-        
+
+class InstantaneousFuture():
+    """
+    This is a simple class which follow the Future interface and represent a 
+    call already finished successfully when returning.
+    """
+    def __init__(self, result=None, exception=None):
+        self._result = result
+        self._exception = exception
+    
+    def cancel(self):
+        return False
+
+    def cancelled(self):
+        return False
+
+    def running(self):
+        return False
+
+    def done(self):
+        return True
+
+    def result(self, timeout=None):
+        return self._result
+
+    def exception(self, timeout=None):
+        return self._exception
+
+    def add_done_callback(self, fn):
+        fn(self)
+
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:
