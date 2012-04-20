@@ -57,7 +57,7 @@ class DraggableCanvas(wx.Panel):
         self.world_pos = (0,0) # position of the centre of the buffer in the world
         
         # buffer = the whole image to be displayed
-        self._dcBuffer =  wx.MemoryDC()
+        self._dcBuffer = wx.MemoryDC()
 
         self.buffer_size = (1, 1) # very small first, so that for sure it'll be resized with OnSize
         self.ResizeBuffer(self.buffer_size)
@@ -89,8 +89,6 @@ class DraggableCanvas(wx.Panel):
         self.Bind(wx.EVT_RIGHT_UP, self.OnRightUp)
 
         self.Bind(wx.EVT_CHAR, self.OnChar)
-        
-        self.n = 0
         
     def OnChar(self, event):
         key = event.GetKeyCode()
@@ -134,9 +132,6 @@ class DraggableCanvas(wx.Panel):
         # Get the focus back when receiving a click
         self.SetFocus()
         
-#        self.t_start = time.time()
-#        self.n = 0
-        
     def OnLeftUp(self, event):
         self.dragging = False
         self.SetCursor(wx.STANDARD_CURSOR)
@@ -144,10 +139,6 @@ class DraggableCanvas(wx.Panel):
             self.ReleaseMouse()
         self.ReCenterBufferAroundView()
         
-#        t_now = time.time()
-#        fps = self.n / float(t_now - self.t_start)
-#        print "Display speed: " + str(fps) + " fps."
-    
     def OnMouseMotion(self, event):
         if self.dragging:
             pos = event.GetPositionTuple()
@@ -202,8 +193,6 @@ class DraggableCanvas(wx.Panel):
         # TODO do this only when drag_shift changes, and record the modified region before and put back after.
         self.DrawStaticOverlays(dc)
         
-#        self.n += 1 # for fps
-
     def OnSize(self, event):
         """
         Ensures that the buffer still fits in the view and recenter the view
@@ -252,6 +241,7 @@ class DraggableCanvas(wx.Panel):
         self.world_pos = pos
         
         print "should move stage to pos:", self.world_pos
+        
         
         # TODO now that we delay the drawing, it should have different worldpos between requested and actual
         self.ShouldUpdateDrawing() # XXX could maybe be more clever and only request redraw for the outside region
