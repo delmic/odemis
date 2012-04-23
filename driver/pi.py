@@ -126,7 +126,14 @@ class PIRedStone(object):
         self.serial = ser
         
         self.duration_range = (30, 1e6) # µs min, max duration of a step to move
-        self.scale = 2e-8 # m/µs very rough scale (if it was linear)
+        #self.scale = 2e-8 # m/µs very rough scale (if it was linear)
+        # TODO use values passed in parameter
+        # found by second degree regression with measurement of 50, 100, 150, 200, 250 steps
+        # actual distance can vary by 300% depending on the motor! 
+        self.move_calibration = (8.6E-11, 5.7E-9, 6.2E-7)
+        
+        print self.convertMToDevice(10e-6)
+
         # Warning: waittime == 1 => unabortable!
         self.waittime = [2, 2] # ms for each axis how long to wait between 2 steps => speed (1=max speed) 
         
@@ -337,7 +344,7 @@ class PIRedStone(object):
         axis (int 0 or 1): the output channel
         """
         assert((0 <= axis) and (axis <= 1))
-        return "%dGP" % axis + 1
+        return "%dGP" % (axis + 1)
                 
     def goPositive(self, axis):
         """
@@ -354,7 +361,7 @@ class PIRedStone(object):
         axis (int 0 or 1): the output channel
         """
         assert((0 <= axis) and (axis <= 1))
-        return "%dGN" % axis + 1
+        return "%dGN" % (axis + 1)
 
     def goNegative(self, axis):
         """
@@ -367,12 +374,12 @@ class PIRedStone(object):
     def stringSetRepeatCounter(self, axis, repetitions):
         """
         Set the repeat counter for the given axis (1 = one step)
-        axis (int 1 or 2): the output channel
+        axis (int 0 or 1): the output channel
         repetitions (1<=int<=65535): the amount of repetitions
         """
-        assert((1 <= axis) and (axis <= 2))
+        assert((0 <= axis) and (axis <= 1))
         assert((1 <= repetitions) and (repetitions <= 65535))
-        return "%dSR%d" % (axis, repetitions)
+        return "%dSR%d" % (axis + 1, repetitions)
 
     def setRepeatCounter(self, axis, repetitions):
         """
@@ -438,6 +445,7 @@ class PIRedStone(object):
         duration (-255<=int<=255): the duration of pulse in μs,
                                    negative to go negative direction
         """
+        # NOTE: Never used
         assert((0 <= axis) and (axis <= 1))
         assert((-255 <= duration) and (duration <= 255))
         if duration == 0:
@@ -451,72 +459,60 @@ class PIRedStone(object):
         
         self.pulseOutput(axis, round(abs(duration)))
     
-    def moveRel(self, axis, duration):
+    
+    def moveRel(self, axis, distance):
         """
         Move on a given axis for a given pulse length, will repeat the steps if
         it requires more than one step.
         axis (int 0 or 1): the output channel
-        duration (int): the duration of pulse in μs
+        distance (float): the distance of move in m (can be negative)
         returns (float): approximate distance actually moved
         """
         assert((0 <= axis) and (axis <= 1))
-        if duration == 0:
+
+        steps, stepsize = self.convertMToDevice(distance)
+        if abs(stepsize) < 1 or steps < 1:
             return 0.0
         
         self.select()
-        # Clamp the duration to min,max
-        # Min because it's better to move too much than nothing XXX (maybe not, or only if at least half to what we can do min)
-        # Max because we don't want to move too far, and repetition is limited
-        sign = cmp(duration, 0)
-        distance = sorted(self.duration_range + (abs(duration),))[1]
+        sign = cmp(stepsize, 0)
 
         # Tried to use a compound command with several big steps and one small.
         # eg: 1SW1,1SS255,1SR3,1GN,1WS2,1SS35,1SR1,1GN\r
         # A problem is that while it's waiting (WS) any new command (ex, TS)
         # will stop the wait and the rest of the compound.
         
-        # TODO we could compute the waittime here, depending on the speed and stepsize
-        
-        if distance > 255:
-            # We need several steps to do the move. The restriction is that 
-            # every step should be the same size. So we try to make steps
-            # as big as possible, which in total come as close as possible to
-            # the requested distance. 
-            steps = math.ceil(distance / 255.0)
-            stepsize = round(distance / steps)
-            distance = steps * stepsize # what we actually expect to move
-            com = self.stringSetWaitTime(axis, self.waittime[axis])
-            com += "," + self.stringSetStepSize(axis, stepsize)
-            com += "," + self.stringSetRepeatCounter(axis, steps)
-            if sign > 0:
-                com += "," + self.stringGoPositive(axis)
-            else:
-                com += "," + self.stringGoNegative(axis)
+        if steps == 1:
+            # waittime is not used
+            com = self.stringSetWaitTime(axis, 1)
         else:
-            # we can do the move in one small step
+            # TODO computes the waittime needed depending on the speed, distance and the number of steps
             com = self.stringSetWaitTime(axis, self.waittime[axis])
-            com += "," + self.stringSetStepSize(axis, distance)
-            com += "," + self.stringSetRepeatCounter(axis, 1)
-            if sign > 0:
-                com += "," + self.stringGoPositive(axis)
-            else:
-                com += "," + self.stringGoNegative(axis)
-
-        print duration, com
+        com += "," + self.stringSetStepSize(axis, abs(stepsize))
+        com += "," + self.stringSetRepeatCounter(axis, steps)
+        if sign > 0:
+            com += "," + self.stringGoPositive(axis)
+        else:
+            com += "," + self.stringGoNegative(axis)
+    
+        print distance, com
         self._sendSetCommand(com + "\r")
-        return sign * distance
+        
+        a, b, c = self.move_calibration
+        distance_actual = steps * (a*abs(stepsize)**2 + b*abs(stepsize) + c)
+        return sign * distance_actual
     
     def isMoving(self, axis=None):
         """
         Indicate whether the motors are moving. 
-        axis (None, 1, or 2): axis to check whether it is moving, or both if None
+        axis (None, 0, or 1): axis to check whether it is moving, or both if None
         return (boolean): True if moving, False otherwise
         """
         self.select()
         st, err = self.tellStatus()
-        if axis == 1:
+        if axis == 0:
             mask = STATUS_MOVING_X | STATUS_PULSE_X | STATUS_DELAY_X
-        elif axis == 2:
+        elif axis == 1:
             mask = STATUS_MOVING_Y | STATUS_PULSE_Y | STATUS_DELAY_Y
         else:
             mask = (STATUS_MOVING_X | STATUS_PULSE_X | STATUS_DELAY_X |
@@ -535,17 +531,19 @@ class PIRedStone(object):
     def waitEndMotion(self, axis=None):
         """
         Wait until the motion of all the given axis is finished.
-        axis (None, 1, or 2): axis to check whether it is moving, or both if None
+        axis (None, 0, or 1): axis to check whether it is moving, or both if None
         """
         # approximately the time for the longest move
         if axis:
             waittime = self.waittime[axis]
         else:
             waittime = max(self.waittime)
+        #TODO use constants provided by user
         timeout = self.duration_range[1] * (1e-6 + waittime * 1e-3 / 255)
         end = time.time() + timeout
         while self.isMoving(axis) and time.time() <= end:
-            time.sleep(0.001)
+            time.sleep(0.005)
+        # TODO raise exception if timeout
     
     def selfTest(self):
         """
@@ -593,14 +591,48 @@ class PIRedStone(object):
         
         return True
         
+    def convertSmallMToDevice(self, m):
+        """
+        converts meters to the unit for this device (pulse duration).
+        m (float): meters (can be negative)
+        return (float): device units (us), 0 if it's so small that it cannot be done
+        """
+        # Actual distance approximately dependent on the pulse duration (x):
+        # dis = a*x² + b*x + c 
+        # so x: impossible if dis < c => return 0
+        #       normal solution (with x >0) : x = (-b + sqrt(b**2 - 4*a*(c-y)))/(2 * a) 
+#        duration = m / self.scale
+        sign = cmp(m, 0)
+        distance = abs(m)
+        a, b, c = self.move_calibration
+        if distance < (c*1.01): # 1% margin
+            return 0
+        duration = round((-b + math.sqrt(b**2 - 4*a*(c-distance)))/(2 * a))
+        
+        return sign * duration
+                
     def convertMToDevice(self, m):
         """
-        converts meters to the unit for this device (step duration).
+        converts meters to the unit for this device (pulse duration).
         m (float): meters (can be negative)
-        return (float): device units
+        return (2 tuple of (int, int)): number of steps,
+                device units (us), 0 if it's so small that it cannot be done
+                    < 0 if going negative
+                                    
         """
-        duration = m / self.scale
-        return duration
+        # if less than 255 for pulse => one step => use convertSmallMToDevice
+        a, b, c = self.move_calibration
+        distance_step = a*255**2 + b*255 + c
+        sign = cmp(m, 0)
+        distance = abs(m)
+        if distance < distance_step:
+            return (1, self.convertSmallMToDevice(m))
+        
+        # linear => several times steps of at much 255 (can be smaller to accommodate)
+        steps = math.ceil(distance / distance_step)
+        stepsize = self.convertSmallMToDevice(distance / steps)
+        assert(stepsize > 0) # could happen if c is very bad (but normally it's never so bad)
+        return (steps, sign * stepsize)
                 
     @staticmethod
     def scan(port, max_add=15):
@@ -738,7 +770,7 @@ class StageRedStone(Actuator):
                                 (axis, distance, self.ranges[axis][1]))
             # TODO: wait for the previous move
             controller, channel = self._axes[axis]
-            controller.moveRel(channel, controller.convertMToDevice(distance))
+            controller.moveRel(channel, distance)
         
         # TODO future
     
