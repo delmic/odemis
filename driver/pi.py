@@ -99,10 +99,10 @@ class PIRedStone(object):
     0.05 μm and corresponds to a 10 μs pulse (shorter pulses have no effect).
 
     In practice: if you give a too small duration to a step, it will not move 
-    at all. In experiments, 50µs for duration of a pulse is the minimum that
-    moves the axis (of about 500 nm). Note that it's not linear:
-    50 µs  => 0.5µm
-    255 µs => 5µm
+    at all. In experiments, 40~50µs for duration of a pulse is the minimum that
+    moves the axis (of about 1µm). Note that it's not linear:
+    50 µs  => 1µm
+    255 µs => 8µm
     
     The controller has also many undocumented behaviour (bugs):
         * when doing a burst move at maximum frequency (wait == 0), it cannot be
@@ -125,17 +125,16 @@ class PIRedStone(object):
         '''
         self.serial = ser
         
-        self.duration_range = (30, 1e6) # µs min, max duration of a step to move
-        #self.scale = 2e-8 # m/µs very rough scale (if it was linear)
         # TODO use values passed in parameter
         # found by second degree regression with measurement of 50, 100, 150, 200, 250 steps
         # actual distance can vary by 300% depending on the motor! 
         self.move_calibration = (8.6E-11, 5.7E-9, 6.2E-7)
+        self.min_stepsize = 40 # µs, under this, no move at all
         
         print self.convertMToDevice(10e-6)
 
-        # Warning: waittime == 1 => unabortable!
-        self.waittime = [2, 2] # ms for each axis how long to wait between 2 steps => speed (1=max speed) 
+        self.speed = [0.1, 0.1] # m/s for each axis 
+        self.speed_max = 0.5 # m/s, from the documentation (= no waittime)
         
         self.address = address
         # allow to not initialise the controller (mostly for ScanNetwork())
@@ -153,36 +152,6 @@ class PIRedStone(object):
         except IOError:
             raise IOError("No answer from PI controller %d" % address)
 
-    def setSpeed(self, speed, axis):
-        """
-        Changes the move speed of the motor (for the next move). It's very 
-        approximate.
-        speed (0<float<5): speed in m/s.
-        axis (int 0 or 1): axis to pic  
-        """
-        assert(speed > 0)
-        assert((0 <= axis) and (axis <= 1))
-        
-        # 5 m/s is the max speed according to specification
-        # => 1 ms waiting time = 5 m/s
-
-        # approximate by formula:
-        # speed = k * 1/waittime
-        # knowing that 5 = k * 1 / 0.001 
-        k = 5e-3
-        
-        # In smallest speed, move is almost instantaneous
-        # => one step = 255 * scale takes 65535 ms
-        # speed = k * 1/waittime
-        # distance/waittime = k/waittime
-        # k = distance 
-        # k = 255 * 2e-8 = 5.1e-6  (<<  5e-3!)
-        
-        waittime = k/speed # s
-        waittime_ms = round(waittime * 1e3)
-        # warning: waittime == 1 => faster but unabordable during move 
-        self.waittime[axis] = min(max(2, waittime_ms), 65535)
-        
     def _sendSetCommand(self, com):
         """
         Send a command which does not expect any report back
@@ -412,11 +381,15 @@ class PIRedStone(object):
         This command sets the delay time (wait) between the output of pulses when
             commanding a burst move for the given axis.
         axis (int 0 or 1): the output channel
-        duration (1<=int<=65535): the wait time (ms), 1 gives the highest output frequency.
+        duration (0<=int<=65535): the wait time (ms), 1 gives the highest output frequency.
+                 warning: duration == 0 => fastest but unabordable during move 
         """
         assert((0 <= axis) and (axis <= 1))
-        assert((1 <= duration) and (duration <= 65535))
-        return"%dSW%d" % (axis + 1, duration)
+        assert((0 <= duration) and (duration <= 65535))
+        # doc says it's in ms, but from experiments, it's number of ms - 1 
+        # waittime == 1 => speed >> waittime == 2
+        # 0 is 65536
+        return"%dSW%d" % (axis + 1, duration + 1)
 
     def setWaitTime(self, axis, duration):
         """
@@ -437,6 +410,7 @@ class PIRedStone(object):
         if self.serial._pi_select != self.address:
             self.addressSelection(self.address)
         self.serial._pi_select = self.address
+
     
     def moveRelSmall(self, axis, duration):
         """
@@ -471,7 +445,7 @@ class PIRedStone(object):
         assert((0 <= axis) and (axis <= 1))
 
         steps, stepsize = self.convertMToDevice(distance)
-        if abs(stepsize) < 1 or steps < 1:
+        if abs(stepsize) < 1 or steps < 1: # ==0 ?
             return 0.0
         
         self.select()
@@ -486,8 +460,8 @@ class PIRedStone(object):
             # waittime is not used
             com = self.stringSetWaitTime(axis, 1)
         else:
-            # TODO computes the waittime needed depending on the speed, distance and the number of steps
-            com = self.stringSetWaitTime(axis, self.waittime[axis])
+            waittime = self.speedToWaittime(self.speed[axis], (steps, stepsize))
+            com = self.stringSetWaitTime(axis, waittime)
         com += "," + self.stringSetStepSize(axis, abs(stepsize))
         com += "," + self.stringSetRepeatCounter(axis, steps)
         if sign > 0:
@@ -498,9 +472,7 @@ class PIRedStone(object):
         print distance, com
         self._sendSetCommand(com + "\r")
         
-        a, b, c = self.move_calibration
-        distance_actual = steps * (a*abs(stepsize)**2 + b*abs(stepsize) + c)
-        return sign * distance_actual
+        return self.convertDeviceToM((steps, stepsize))
     
     def isMoving(self, axis=None):
         """
@@ -533,13 +505,9 @@ class PIRedStone(object):
         Wait until the motion of all the given axis is finished.
         axis (None, 0, or 1): axis to check whether it is moving, or both if None
         """
+        #TODO use the time, distance, and speed of last move to evaluate the timeout
         # approximately the time for the longest move
-        if axis:
-            waittime = self.waittime[axis]
-        else:
-            waittime = max(self.waittime)
-        #TODO use constants provided by user
-        timeout = self.duration_range[1] * (1e-6 + waittime * 1e-3 / 255)
+        timeout = 5 #s
         end = time.time() + timeout
         while self.isMoving(axis) and time.time() <= end:
             time.sleep(0.005)
@@ -605,7 +573,8 @@ class PIRedStone(object):
         sign = cmp(m, 0)
         distance = abs(m)
         a, b, c = self.move_calibration
-        if distance < (c*1.01): # 1% margin
+        if (distance < (c*1.01) or # 1% margin
+            distance < self.convertDeviceToM((1, self.min_stepsize))): 
             return 0
         duration = round((-b + math.sqrt(b**2 - 4*a*(c-distance)))/(2 * a))
         
@@ -633,6 +602,57 @@ class PIRedStone(object):
         stepsize = self.convertSmallMToDevice(distance / steps)
         assert(stepsize > 0) # could happen if c is very bad (but normally it's never so bad)
         return (steps, sign * stepsize)
+           
+    def convertDeviceToM(self, units):
+        """
+        Converts from device units (step, stepsize) to meters
+        units 2-tuple float: (step, stepsize) can be negative
+        returns (float) distance: can be negative
+        """
+        steps, stepsize = units
+        sign = cmp(stepsize, 0)
+        if abs(stepsize) < self.min_stepsize:
+            return 0
+        a, b, c = self.move_calibration
+        return sign * steps * (a*abs(stepsize)**2 + b*abs(stepsize) + c)
+               
+               
+    def setSpeed(self, speed, axis):
+        """
+        Changes the move speed of the motor (for the next move). It's very 
+        approximate.
+        speed (0<float<5): speed in m/s.
+        axis (int 0 or 1): axis to pic  
+        """
+        assert((0 < speed) and (speed < self.speed_max))
+        assert((0 <= axis) and (axis <= 1))
+        
+        self.speed[axis] = speed
+
+        
+    def speedToWaittime(self, speed, move):
+        """
+        Converts the speed to a waittime for a given move.
+        speed (float>0): speed in m/s 
+        move (2-tuple float (steps, stepsize)): steps and stepsize of the move
+        returns (1<=int<=65535): waittime in ms (never 0, because it'd be unabordable)
+        """
+        # Decomposed in two speeds: 5 m/s for the actual move
+        # A wait of x ms between each step of 255 units
+        # => define this waittime so that the average speed for the given distance is correct
+        # Actual time = (actual distance / speed_step) + waittime * (steps - 1)
+        # actual speed = actual distance/ Actual time
+        # waittime = ((1/as - 1/speed_step) * ad)/ (steps - 1)
+        steps, stepsize = move
+        if steps <= 1: # we cannot slow anything
+            return 1
+        actual_distance = abs(self.convertDeviceToM(move))
+        assert (actual_distance > 0)
+        
+        waittime = ((1/speed - 1/self.speed_max) * actual_distance) / (steps - 1)
+        waittime_ms = round(waittime * 1e3)
+        # warning: waittime == 0 => faster but unabordable during move 
+        return min(max(1, waittime_ms), 65535)
                 
     @staticmethod
     def scan(port, max_add=15):
@@ -689,7 +709,6 @@ class PIRedStone(object):
         ser._pi_select = -1
         return ser
         
-#TODO axis (channel) should be 0 or 1
 class StageRedStone(Actuator):
     """
     An actuator made entirely of redstone controllers connected on the same serial port
@@ -732,14 +751,13 @@ class StageRedStone(Actuator):
             self._position[axis] = 0.5 # m
             
             # Just to make sure it doesn't go too fast
-            speed[axis] = 1 # m/s 
+            speed[axis] = 0.1 # m/s 
             
-        # min/max speed is from using the opposite conversion formula with 256/2 
-        self.speed = model.MultiSpeedProperty(speed, [7.6e-5, 3], "m/s")
+        # min speed = don't be crazy slow. max speed from hardware spec
+        self.speed = model.MultiSpeedProperty(speed, [10e-6, 0.5], "m/s")
         self.speed.subscribe(self.onSpeed, init=True)
         
     def getMetadata(self):
-        # TODO
         metadata = {}
         metadata[model.MD_POS] = (self._position["x"], self._position["y"])
         return metadata
@@ -845,6 +863,8 @@ class StageRedStone(Actuator):
     # Share a queue of actions with the interface
     # For each action in the queue: performs and wait until the action is finished
     # At the end of the action, call all the callbacks
+    # action = (method, *args, {(callback, arg), ...})
+     
     
     # Future:
     # Provides the interface for the clients to manipulate an (asynchronous) action 
@@ -852,11 +872,20 @@ class StageRedStone(Actuator):
     # It follows http://docs.python.org/dev/library/concurrent.futures.html
     # Internally, it has a reference to the action in the action queue and to the
     # doer thread. 
-    # cancel => if action still in the queue, remove it, Return True
-    #           if action being under process. synchronously ask the doer thread to stop the move, return True
+    #
+    # __init__() => cancel flag is False
+    # cancel() => if action still in the queue, remove it, set cancel flag to True, Return True
+    #           if action being under process. synchronously ask the doer thread to stop the move, set cancel flag to True, return True
     #           if action is over, return False
-    # cancelled => 
+    # cancelled() => return cancel flag
     # running() => 
     # done() => if action not in the queue or under process, return True
     #           otherwise return False
+    # result(timeout=None) => while action in queue, wait on the current action
+    #                         if current action is the action, wait on the current action
+    #                         return None (or any way to obtain the actual distance moved?)
+    # exception(timeout=None) => do result(), return None or raise the same as result
+    # add_done_callback(fn) => if done(): call fn(self) return
+    #                          otherwise add the fn as a weakmethod to the action in the queue/current action (and the doer will call it)
+                               
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:
