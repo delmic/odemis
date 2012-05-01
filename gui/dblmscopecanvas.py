@@ -52,8 +52,8 @@ class DblMicroscopeCanvas(DraggableCanvas):
         
         self.Bind(wx.EVT_MOUSEWHEEL, self.OnWheel)
         
-        self.Overlays.append(CrossHairOverlay("Blue", CROSSHAIR_SIZE, (-10,-10))) # debug
-        self.Overlays.append(CrossHairOverlay("Red", CROSSHAIR_SIZE, (10,10))) # debug
+        self.WorldOverlays.append(CrossHairOverlay("Blue", CROSSHAIR_SIZE, (-10,-10))) # debug
+        self.WorldOverlays.append(CrossHairOverlay("Red", CROSSHAIR_SIZE, (10,10))) # debug
     
     
     def onViewCenter(self, value):
@@ -69,8 +69,8 @@ class DblMicroscopeCanvas(DraggableCanvas):
         """
         DraggableCanvas.ReCenterBuffer(self, pos)
         
-        print "expects to move stage to pos:", self.world_pos
-        self.viewmodel.center.value = self.world_pos
+        print "expects to move stage to pos:", self.world_pos_requested
+        self.viewmodel.center.value = self.world_pos_requested
     
     
     def avOnCrossHair(self, activated):
@@ -80,7 +80,7 @@ class DblMicroscopeCanvas(DraggableCanvas):
         """ 
         # We don't specifically know about the crosshair, so look for it in the static overlays
         ch = None
-        for o in self.StaticOverlays:
+        for o in self.ViewOverlays:
             if isinstance(o, CrossHairOverlay):
                 ch = o
                 break
@@ -88,11 +88,11 @@ class DblMicroscopeCanvas(DraggableCanvas):
         if activated:
             if not ch:
                 ch = CrossHairOverlay(CROSSHAIR_COLOR, CROSSHAIR_SIZE)
-                self.StaticOverlays.append(ch)
+                self.ViewOverlays.append(ch)
                 self.Refresh(eraseBackground=False)
         else:
             if ch:
-                self.StaticOverlays.remove(ch)
+                self.ViewOverlays.remove(ch)
                 self.Refresh(eraseBackground=False)
                 
     def avOnMergeRatio(self, val):
@@ -120,6 +120,7 @@ class DblMicroscopeCanvas(DraggableCanvas):
                 #pos = (iim.center[0] / self.mpwu, iim.center[1] / self.mpwu)
                 pos = iim.center
                 self.SetImage(i, iim.image, pos, scale)
+                #self.ReCenterBuffer(pos)
             else:
                 self.SetImage(i, None)
 

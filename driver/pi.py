@@ -386,7 +386,7 @@ class PIRedStone(object):
         """
         assert((0 <= axis) and (axis <= 1))
         assert((0 <= duration) and (duration <= 65535))
-        # doc says it's in ms, but from experiments, it's number of ms - 1 
+        # doc says it's number of ms, but from experiments, it's number of ms - 1 
         # waittime == 1 => speed >> waittime == 2
         # 0 is 65536
         return"%dSW%d" % (axis + 1, duration + 1)
@@ -569,7 +569,6 @@ class PIRedStone(object):
         # dis = a*x² + b*x + c 
         # so x: impossible if dis < c => return 0
         #       normal solution (with x >0) : x = (-b + sqrt(b**2 - 4*a*(c-y)))/(2 * a) 
-#        duration = m / self.scale
         sign = cmp(m, 0)
         distance = abs(m)
         a, b, c = self.move_calibration

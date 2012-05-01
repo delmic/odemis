@@ -88,7 +88,7 @@ class OpticalBackendConnected(SECOMModel):
         
         # direct linking
         self.optical_det_exposure_time = self.camera.exposureTime
-        self.camera.data.subscribe(self.onNewCameraImage)
+        self.camera.data.subscribe(self.onNewCameraImage) 
 
         # empty
         self.sem_det_image = Property(InstrumentalImage(None, None, None))
@@ -118,7 +118,7 @@ class OpticalBackendConnected(SECOMModel):
         
 #        h = hpy() # memory profiler
 #        print h.heap() 
-        self.optical_det_image.value = InstrumentalImage(im, mpp, pos) 
+        self.optical_det_image.value = InstrumentalImage(im, mpp, pos)
 
     def avOnStagePos(self, val):
         move = {}

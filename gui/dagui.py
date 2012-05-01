@@ -118,11 +118,11 @@ class DAGuiFrame(wx.Frame):
     def OnLoadExample1(self, e):
         """ Open the two files for example """
         try:
-            name1 = "1-optical-rot7.png"
+            name1 = "gui/1-optical-rot7.png"
             im1 = InstrumentalImage(wx.Image(name1), 7.14286e-7, (0.0,0.0))
             self.secom_model.optical_det_image.value = im1
             
-            name2 = "1-sem-bse.png"
+            name2 = "gui/1-sem-bse.png"
             im2 = InstrumentalImage(wx.Image(name2), 4.54545e-7, (2e-6, -1e-5))
             self.secom_model.sem_det_image.value = im2
         except e:
