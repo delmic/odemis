@@ -1,0 +1,14 @@
+How to install Odemis
+
+= Installing the dependencies = 
+You need Ubuntu 12.04 (x86 - 32 bits).
+sudo apt-get python-wxgtk2.8 python-imaging python-yaml python-gdal python-serial 
+
+= Installing Odemis =
+
+git clone git@github.com:pieleric/odemis.git
+
+= Configuring the instantiation file =
+This file describes the available hardware for Odemis. Basically, it list for each
+hardware, which driver to use and the parameters required. See the backend
+specification for precise syntax and example files.

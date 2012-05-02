@@ -10,6 +10,8 @@ Andor SDK v3.3+ -- on Linux, the bitflow driver has to be reinstalled (recompile
 For Andor Clara camera support:
 Andor SDK v2.97 -- on Linux/Ubuntu you need to install libusb-dev (so that whereis reports libusb.so). Also the the permissions of all the files must be allowed for normal user: everything is installed by default as root only, so nothing can work from the normal user account. 
 
+= Installation =
+See the doc/INSTALL.txt document for the complete installation procedure.
 
 = Basic usage =
 odemisd is the command line interface to start and manage the Odemis backend. It
@@ -20,9 +22,13 @@ See "odemisd --help" for information.
 
 
 = License =
-GPLv2
+GPLv2, see the LICENSE.txt file for the complete license.
+
+= Extending =
+For information on how to extend the software, see the doc/DEVELOP.txt document.
 
 = Testing =
 To test the software, there are several unit-test classes in each directory (in 
 their test/ sub-directory). There are also a few example microscope 
 configuration file in the odemisd/test.
+

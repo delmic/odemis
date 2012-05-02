@@ -1,0 +1,92 @@
+How to extend Odemis
+
+
+Depending on how you want to extend Odemis, there are different ways to modify it.
+First have a look at the first three sections, and then read the additional sections
+depending on the goal you have.
+
+Please note that almost the entire software is under the GPLv2 license. This
+means in very broad terms that any modification or extension you make to it will
+have to either be kept internal or also be freely available to anyone. See 
+LICENSE.txt for the complete and official text of the license.
+
+Moreover, if you have a microscope from Delmic, the maintenance contract only
+supports the original version of the Odemis software. Modified versions of the
+software are not covered by the maintenance contract unless explicitly stated.
+If you share your extension with Delmic and we decide to integrate them into a
+later version of Odemis, then the contract will also cover the extension.
+
+= Recommended development environment =
+Ubuntu 12.04 (32 bits)
+Eclipse + PyDev plugin + Pylint
+
+= Downloading the source code =
+
+git clone git@github.com:pieleric/odemis.git
+
+
+
+= Overview of Odemis architecture =
+Odemis is decomposed in three different layers:
+ * The drivers: many independent modules which are each an adapter between a 
+   hardware component and the rest of Odemis following a specific programming
+   interface (which depends on the type of the hardware).
+   The code is found in the drivers/ directory.
+ * The backend: it is the core of Odemis and is in charge of connecting the various
+   drivers together according to a configuration file. It provides a uniform view
+   of the microscope (independently of the actual hardware components) to the next
+   layer.
+   The code is found in the odemisd/ directory.
+ * The user interface layer: it allows the user to manipulate the microscope and
+   displays the acquired data. The usual user interface is the Graphical User
+   Interface (GUI) but there could be other user interface, such as simple command
+   line version.
+   The code is found in the directory corresponding to the interface. For the 
+   GUI, the code is in the gui/ directory.
+   
+Additionally, every directory contains a test/ directory which contains various
+python test classes used to validate the behaviour of the program.
+
+= Supporting a new hardware = 
+Add a module to the drivers/ directory following the interface for the specific type
+of component (see backend specification). 
+
+Add a test class to the test directory which instantiates the component and at
+least detects whether the component is connected or not (scan() and selfTest()
+methods) and does basic tasks (e.g., acquiring an image, moving a little bit an
+actuator). 
+
+Update the configuration file for instantiating the microscope with the parameters
+for your new driver.
+
+Commit your code using "git add ..." and "git commit -a".
+
+
+Optionally, send your extension to Delmic in form of a patch or a git fork. 
+
+= Automating the acquisition of data =
+Write a new user interface (in python) which does the tasks you want.
+
+Alternatively you may want to add the automated task as one option to the GUI.
+See later section about extending the GUI.
+
+
+= Fixing a bug =
+As virtually every complex software, Odemis contains bugs, even though we do our
+best to minimize the amount. In the event you are facing a bug, we advise you first
+to report it to us (info@delmic.com). We might have already solved it, or be able
+to fix it for you. In the case none of the two things happened, you can try to fix
+it by yourself. Please include a description of what is happening vs. what you expect,
+the logfiles, and screenshots if relevant.
+
+Locate the bug. Have a look in the log files. You can add "--log-level=2" to
+the start of odemisd to increase the verbosity. It's also possible to run either
+odemisd (and the drivers) or the GUI from Eclipse. You can then run in debug mode,
+place breakpoints, observe the value of variables, and modify the code.
+
+Once the bug fixed, commit your code using "git add ..." and "git commit -a", and 
+send us the patch for inclusion in the next version of Odemis.
+
+
+= Adding a feature to the Graphical User Interface =
+
