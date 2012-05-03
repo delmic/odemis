@@ -16,12 +16,14 @@ Delmic Acquisition Software is distributed in the hope that it will be useful, b
 You should have received a copy of the GNU General Public License along with Delmic Acquisition Software. If not, see http://www.gnu.org/licenses/.
 '''
 from model._components import Actuator
+import collections
 import glob
 import logging
 import math
 import model
 import os
 import serial
+import threading
 import time
 
 # Status:
@@ -492,7 +494,7 @@ class PIRedStone(object):
         
         return bool(st & mask)
     
-    def stopMotion(self, axis):
+    def stopMotion(self):
         """
         Stop the motion of all the given axis.
         For the Redstone, both axes are stopped simultaneously
@@ -778,6 +780,7 @@ class StageRedStone(Actuator):
         Move the stage the defined values in m for each axis given.
         shift dict(string-> float): name of the axis and shift in m
         """
+        action_axes = {}
         # TODO check values are within range
         for axis, distance in shift.items():
             if axis not in self.axes:
@@ -785,37 +788,55 @@ class StageRedStone(Actuator):
             if abs(distance) > self.ranges[axis][1]:
                 raise Exception("Trying to move axis %s by %f m> %f m." % 
                                 (axis, distance, self.ranges[axis][1]))
-            # TODO: wait for the previous move
             controller, channel = self._axes[axis]
-            controller.moveRel(channel, distance)
+            if not controller in action_axes:
+                action_axes[controller] = []
+            action_axes[controller].append((channel, distance))
         
-        # TODO future
+        return self.create_future(Action("moveRel", action_axes))
+        
+    def create_future(self, action):
+        """
+        creates a future (control object for an asynchronous action) for a given
+            PIRedstone action
+        action (Action): Action controlled by this future 
+        """
+        self.append_action(action)
+        # TODO create future
+        
+    def append_action(self, action):
+        """
+        appends an action in the doer's queue
+        action (Action)
+        """
+        self.action_queue_cv.acquire()
+        self.action_queue.append(action)
+        self.action_queue_cv.notify()
+        self.action_queue_cv.release()
     
-    def stop(self, axis=None):
+    def stop(self):
         """
         stops the motion
-        axis (string): name of the axis to stop, or all of them if not indicated 
         """
-        if not axis:
-            for controller, channel in self._axes.values():
-                controller.stopMotion(channel)
-        else:
-            controller, channel = self._axes[axis]
-            controller.stopMotion(channel)
+        # TODO clear the queue, and stop the doer
+        for controller, channel in self._axes.values():
+            controller.stopMotion()
         
     def waitStop(self, axis=None):
         """
-        wait until the stops the motion
+        wait until the motion is over
         axis (string): name of the axis to stop, or all of them if not indicated 
         """
+        # TODO doesn't make sense with futures: just .result() on the latest future obtained
         if not axis:
             for controller, channel in self._axes.values():
-                controller.waitEndMotion(channel)
+                controller.waitEndMotion()
         else:
             controller, channel = self._axes[axis]
             controller.waitEndMotion(channel)
-            
+
     def selfTest(self):
+        # TODO wait until the doer thread has no queue (or at least fail)
         passed = True
         controllers = set([c for c, a in self._axes.values()])
         for controller in controllers:
@@ -862,8 +883,145 @@ class StageRedStone(Actuator):
     # Share a queue of actions with the interface
     # For each action in the queue: performs and wait until the action is finished
     # At the end of the action, call all the callbacks
-    # action = (method, *args, {(callback, arg), ...})
-     
+    # action = ("action name", **args, {(callback, arg), ...})
+    # action name is either "moveRel", or "moveAbs"
+    # args is a dict of the arguments for the action
+    # args and name should not be modified after insertion. Callback can.
+    # Need a lock on the queue to add, remove, modify any action
+    # .current_action => same thing but cannot be changed/removed
+    # .thread_lock => to be acquired/released whenever touching the queue or the current action
+    # .action_queue : list . 
+    #  .put() to add an action (contained in a future, which also has a ref to the queue)
+    #  .get() to get an action
+    # Need condition to wait/notify when doing a get/put
+    # .request_stop_current event when waiting on a command: .wait(small timeout) instead of sleeping
+    #  + look if .request_stop_current is True => go out and stop move synchronously and reset request_stop_current
+    #  + to stop move: set .request_stop_current event, and wait ??? until  .request_stop_current is false
+    # stop all => acquire lock on queue (with small timeout) => remove everything from queue if lock acquired
+    #            + release lock
+    #            + stop_current()
+    
+    def create_doer(self):
+        self.doer_lock = threading.Lock()
+        self.action_queue_cv = threading.Condition(self.doer_lock)
+        self.action_queue = collections.deque
+        self.current_action = None
+        self.request_stop_current = threading.Event()
+        
+        self.doer_thread = threading.Thread(target=self.doer_main, 
+                                            name="PI Redstone doer Thread")
+        self.doer_thread.daemon = True # If the backend is gone, just die
+        self.doer_thread.start()
+    
+    def doer_main(self):
+        while True:
+            # Pick the next action
+            self.action_queue_cv.acquire()
+            while not self.action_queue:
+                self.action_queue_cv.wait()
+            self.current_action = self.action_queue.popleft()
+            self.action_queue_cv.release()
+            
+            # Do the action
+            # current_action[0] and current_action[1] are fixed, so no need for lock
+            action_name, args = self.current_action[0], self.current_action[1]
+            if action_name == "moveRel":
+                self.doer_moveRel(args)
+#            elif action_name == "moveAbs":
+#                self.doer_moveAbs(args)
+            else:
+                raise Exception("Unknown action %s" % action_name)
+            
+            # create a dict of controllers => channels
+            axes = {}
+            for axis in args:
+                controller, channel = self._axes[axis]
+                if not controller in axes:
+                    axes[controller] = []
+                axes[controller].append(channel)
+            
+            # Wait for the action to complete
+            timeout = 5 #s
+            end = time.time() + timeout
+            # it's over when either all axes are finished moving, it's too late, or
+            # the move has to be imediately stopped 
+            while (not self.request_stop_current.is_set() and time.time() <= end
+                   and self.doer_is_moving(axes)):
+                self.request_stop_current.wait(0.005)
+            
+            # stop immediatly if requested
+            if self.request_stop_current.is_set():
+                self.doer_stop(axes)
+                self.request_stop_current.clear()
+                # it's up to the caller to have cleared the action queue if no other move should be performed
+            
+            # Call the callbacks at the end of the action
+            self.doer_lock.acquire()
+            callbacks = self.current_action[2]
+            self.current_action = None
+            # release before we call external functions to avoid potential deadlocks
+            self.doer_lock.release() 
+            for cb, args in callbacks.items():
+                cb(*args)
+        
+    def doer_is_moving(self, axes):
+        """
+        axes (dict: PIRedStone -> list (int)): controller to channel which must be check for move
+        """
+        moving = False
+        for controller, channels in axes.items():
+            if len(channels) == 0:
+                logging.warning("Asked to check move on a controller without any axis")
+            if len(channels) == 1:
+                moving |= controller.isMoving(channels[0])
+            else:
+                # In theory this should always be fine because the other axes
+                # should be stopped anyway
+                moving |= controller.isMoving() # all
+        return moving
+    
+    def doer_stop(self, axes):
+        """
+        axes (dict: PIRedStone -> list (int)): controller to channel which must be stopped
+        """
+        for controller in axes:
+            # it can only stop all axes (that's the point anyway)
+            controller.stopMotion()
+    
+    def doer_moveRel(self, axes):
+        """
+        axes (dict: PIRedStone -> list (tuple(int, double)): 
+            controller to list of channel/distance to move (m)
+        """
+        for controller, channels in axes.items():
+            for channel, distance in channels:
+                controller.moveRel(channel, distance)
+        
+#        def doer_moveAbs(self, move):
+#            pass
+        
+        
+        
+    # .stop_current() => will stop the current action: 
+    
+    
+class Action(object):
+    """
+    A container class representing an action for a RedStone controller
+    """
+    MOVE_REL = "moveRel"
+    possible_types = [MOVE_REL]
+    def __init__(self, action_type, args, callbacks=set()):
+        """
+        type (str): name of the action (only supported so far is "moveRel"
+        args (tuple): arguments to pass to the action
+        callbacks (set of 2-tuples): set of methods to call when the action is over 
+           (weakref to method, tuple arg to method) 
+        """
+        assert(type in self.possible_types)
+        self.type = action_type
+        self.args = args
+        self.callbacks = callbacks
     
     # Future:
     # Provides the interface for the clients to manipulate an (asynchronous) action 
@@ -877,7 +1035,7 @@ class StageRedStone(Actuator):
     #           if action being under process. synchronously ask the doer thread to stop the move, set cancel flag to True, return True
     #           if action is over, return False
     # cancelled() => return cancel flag
-    # running() => 
+    # running() => return not done()
     # done() => if action not in the queue or under process, return True
     #           otherwise return False
     # result(timeout=None) => while action in queue, wait on the current action
