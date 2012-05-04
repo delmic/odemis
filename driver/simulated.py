@@ -110,7 +110,7 @@ class Stage2D(model.Actuator):
         return self._position
         
 
-class InstantaneousFuture():
+class InstantaneousFuture(object):
     """
     This is a simple class which follow the Future interface and represent a 
     call already finished successfully when returning.
@@ -132,6 +132,8 @@ class InstantaneousFuture():
         return True
 
     def result(self, timeout=None):
+        if self._exception:
+            raise self._exception
         return self._result
 
     def exception(self, timeout=None):

@@ -75,38 +75,40 @@ class TestPIRedStone(unittest.TestCase):
         move = {'x':100e-6, 'y':100e-6}
         
         start = time.time()
-        stage.moveRel(move)
+        f = stage.moveRel(move)
         dur_async = time.time() - start
-        stage.waitStop()
+        f.result() # wait
+        self.assertTrue(f.done())
         
         move = {'x':-100e-6, 'y':-100e-6}
         start = time.time()
-        stage.moveRel(move)
-        stage.waitStop()
+        f = stage.moveRel(move)
+        f.result() # wait
         dur_sync = time.time() - start
+        self.assertTrue(f.done())
         
         self.assertGreater(dur_sync, dur_async - delta, "Sync should take more time than async.")
 
     def test_speed(self):
-        # For moves big enough, a 1m/s move should take approximately 100 times less time
-        # than a 0.01m/s move 
+        # For moves big enough, a 0.1m/s move should take approximately 100 times less time
+        # than a 0.001m/s move 
         expected_ratio = 100
         delta_ratio = 2 # no unit 
         
         # fast move
         stage = pi.StageRedStone("test", "stage", None, PORT, self.config)
-        stage.speed.value = {"x":1, "y":1}
+        stage.speed.value = {"x":0.1, "y":0.1}
         move = {'x':100e-6, 'y':100e-6}
         start = time.time()
-        stage.moveRel(move)
-        stage.waitStop()
+        f = stage.moveRel(move)
+        f.result()
         dur_fast = time.time() - start
         
-        stage.speed.value = {"x":1.0/expected_ratio, "y":1.0/expected_ratio}
+        stage.speed.value = {"x":0.1/expected_ratio, "y":0.1/expected_ratio}
         move = {'x':-100e-6, 'y':-100e-6}
         start = time.time()
-        stage.moveRel(move)
-        stage.waitStop()
+        f = stage.moveRel(move)
+        f.result()
         dur_slow = time.time() - start
         
         ratio = dur_slow / dur_fast
@@ -118,11 +120,18 @@ class TestPIRedStone(unittest.TestCase):
     def test_stop(self):
         stage = pi.StageRedStone("test", "stage", None, PORT, self.config)
         stage.stop()
-        stage.stop("x")
         
         move = {'x':100e-6, 'y':100e-6}
         stage.moveRel(move)
         stage.stop()
+        
+    def test_cancel(self):
+        stage = pi.StageRedStone("test", "stage", None, PORT, self.config)
+        move = {'x':100e-6, 'y':100e-6}
+        f = stage.moveRel(move)
+        f.cancel()
+        self.assertTrue(f.cancelled())
+        self.assertTrue(f.done())
         
     def test_move_circle(self):
         stage = pi.StageRedStone("test", "stage", None, PORT, self.config)
@@ -138,8 +147,8 @@ class TestPIRedStone(unittest.TestCase):
             move['x'] = next_pos[0] - cur_pos[0]
             move['y'] = next_pos[1] - cur_pos[1]
             print next_pos, move
-            stage.moveRel(move)
-            stage.waitStop()
+            f = stage.moveRel(move)
+            f.result() # wait
             cur_pos = next_pos
 
 if __name__ == '__main__':
