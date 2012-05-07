@@ -32,6 +32,7 @@ nosetests.xml
 
 # Dev environment
 .odemis.sublime-project
+.odemis.sublime-workspace
 
 #Translations
 *.mo
