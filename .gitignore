@@ -30,5 +30,8 @@ pip-log.txt
 .tox
 nosetests.xml
 
+# Dev environment
+.odemis.sublime-project
+
 #Translations
 *.mo
