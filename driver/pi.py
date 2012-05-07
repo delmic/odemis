@@ -133,7 +133,7 @@ class PIRedStone(object):
         self.move_calibration = (8.6E-11, 5.7E-9, 6.2E-7)
         self.min_stepsize = 40 # µs, under this, no move at all
         
-        print self.convertMToDevice(10e-6)
+        #print self.convertMToDevice(10e-6)
 
         self.speed = [0.1, 0.1] # m/s for each axis 
         self.speed_max = 0.5 # m/s, from the documentation (= no waittime)
@@ -471,7 +471,7 @@ class PIRedStone(object):
         else:
             com += "," + self.stringGoNegative(axis)
     
-        print distance, com
+#        print distance, com
         self._sendSetCommand(com + "\r")
         
         return self.convertDeviceToM((steps, stepsize))
@@ -709,6 +709,62 @@ class PIRedStone(object):
         # Currently selected one is unknown
         ser._pi_select = -1
         return ser
+
+
+# Special classes for testing purpose when there is no real controller available
+class FakeSerial(object):
+    def __init__(self, name):
+        self.file = open(name, "w+")
+    
+    def read(self):
+        return self.file.read()
+    
+    def write(self, arg):
+        return self.file.write(arg)
+     
+class FakePIRedStone(PIRedStone):
+    """
+    Fake version of the PIRedstone which pretent do be a motor, while just
+    writing the commands to a file. For test purpose only
+    """
+    
+    def _sendGetCommand(self, com, prefix="", suffix="\r\n\x03"):
+        # Should normally never be called
+        assert(len(com) <= 10)
+        assert(len(prefix) <= 2)
+        logging.debug("Sending: %s", com.encode('string_escape'))
+        self.serial.write(com)
+        
+        return ""
+    
+    def tellStatus(self):
+        status = STATUS_BOARD_ADDRESSED
+        err = 0
+        return (status, err)
+    
+    def tellBoardAddress(self):
+        return self.address
+    
+    def versionReport(self):
+        return "Fake Redstone Ver. 1.0"
+
+    def help(self):
+        return "HE"
+    
+    def selfTest(self):
+        return True
+    
+    @staticmethod
+    def scan(port, max_add=15):
+        present = set([1])
+        return present
+    
+    @staticmethod
+    def openSerialPort(port):
+        ser = FakeSerial("piredstone-commands.txt")
+        ser._pi_select = -1
+        return ser
+        
         
 class StageRedStone(Actuator):
     """
@@ -757,6 +813,7 @@ class StageRedStone(Actuator):
         # min speed = don't be crazy slow. max speed from hardware spec
         self.speed = model.MultiSpeedProperty(speed, [10e-6, 0.5], "m/s")
         self.speed.subscribe(self.onSpeed, init=True)
+        self.create_doer()
         
     def getMetadata(self):
         metadata = {}
@@ -893,7 +950,7 @@ class StageRedStone(Actuator):
     def create_doer(self):
         self.doer_lock = threading.Lock()
         self.action_queue_cv = threading.Condition(self.doer_lock)
-        self.action_queue = collections.deque
+        self.action_queue = collections.deque()
         self.current_action = None
         self.request_stop_current = threading.Event()
         
@@ -950,7 +1007,7 @@ class StageRedStone(Actuator):
             
             # say we are done
             self.request_stop_current.clear()
-            for cb, args in callbacks.items():
+            for cb, args in callbacks:
                 cb(*args)
         
     def doer_is_moving(self, axes):
@@ -1002,7 +1059,7 @@ class Action(object):
         callbacks (set of 2-tuples): set of methods to call when the action is over 
            (weakref to method, tuple arg to method) 
         """
-        assert(type in self.possible_types)
+        assert(action_type in self.possible_types)
         self.type = action_type
         self.args = args
         self.callbacks = callbacks
@@ -1057,7 +1114,7 @@ class RedStoneFuture(object):
         """
         Call all the callbacks. Should be done only once per future!
         """
-        for fn, args in self._action.callbacks.items():
+        for fn, args in self._action.callbacks:
             fn(args)
         
     def cancelled(self):

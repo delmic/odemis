@@ -112,10 +112,10 @@ class TestPIRedStone(unittest.TestCase):
         dur_slow = time.time() - start
         
         ratio = dur_slow / dur_fast
-        print "ratio of", ratio 
+        print "ratio of ", ratio 
         if ratio < expected_ratio / 2 or ratio > expected_ratio * 2:
             self.fail("Speed not consistent: ratio of " + str(ratio) + 
-                         "instead of " + str(expected_ratio) + ".")
+                         " instead of " + str(expected_ratio) + ".")
 
     def test_stop(self):
         stage = pi.StageRedStone("test", "stage", None, PORT, self.config)
@@ -124,6 +124,23 @@ class TestPIRedStone(unittest.TestCase):
         move = {'x':100e-6, 'y':100e-6}
         stage.moveRel(move)
         stage.stop()
+        
+    def test_queue(self):
+        """
+        Ask for several long moves in a row, and checks that nothing breaks
+        """
+        stage = pi.StageRedStone("test", "stage", None, PORT, self.config)
+        move_forth = {'x':1e-3, 'y':1e-3}
+        move_back = {'x':-1e-3, 'y':-1e-3}
+        stage.speed.value = {"x":0.001, "y":0.001} # => 1s per move
+        f0 = stage.moveRel(move_forth)
+        f1 = stage.moveRel(move_back)
+        f2 = stage.moveRel(move_forth)
+        f3 = stage.moveRel(move_back)
+        f0.result()
+        f1.result()
+        f2.result()
+        f3.result()
         
     def test_cancel(self):
         stage = pi.StageRedStone("test", "stage", None, PORT, self.config)
