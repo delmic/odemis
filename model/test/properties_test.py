@@ -36,8 +36,8 @@ class PropertiesTest(unittest.TestCase):
             pass # as it should be
         prop.unsubscribe(self.callback_test_notify)
         
-        assert(prop.value == 0)
-        assert(self.called == 2)
+        self.assertTrue(prop.value == 0)
+        self.assertTrue(self.called == 2)
     
     def test_notify_init(self):
         prop = model.FloatProperty(2.0)
@@ -56,8 +56,8 @@ class PropertiesTest(unittest.TestCase):
         
         prop.value = 12 # no more counting
         
-        assert(prop.value == 12)
-        assert(self.called == 3)
+        self.assertTrue(prop.value == 12)
+        self.assertTrue(self.called == 3)
     
     def test_readonly(self):
         prop = model.FloatProperty(2.0, readonly=True)
@@ -67,7 +67,7 @@ class PropertiesTest(unittest.TestCase):
         except model.NotSettableError:
             pass # as it should be
         
-        assert(prop.value == 2)
+        self.assertTrue(prop.value == 2)
         
     def test_list(self):
         prop = model.ListProperty([2.0, 5, 4])
@@ -86,19 +86,19 @@ class PropertiesTest(unittest.TestCase):
         
         prop.value = ["b"] # no more counting
         
-        assert(prop.value == ["b"])
-        assert(self.called == 3)
+        self.assertTrue(prop.value == ["b"])
+        self.assertTrue(self.called == 3)
         
     def test_continuous(self):
         prop = model.FloatContinuous(2.0, [-1, 3.4])
-        assert(prop.value == 2)
-        assert(prop.range == (-1, 3.4))
+        self.assertTrue(prop.value == 2)
+        self.assertTrue(prop.range == (-1, 3.4))
         
         self.called = 0
         prop.subscribe(self.callback_test_notify)
         # now count
         prop.value = 3.0 # +1
-        assert(prop.value == 3)
+        self.assertTrue(prop.value == 3)
         
         try:
             prop.value = 4.0
@@ -120,7 +120,7 @@ class PropertiesTest(unittest.TestCase):
         
         prop.unsubscribe(self.callback_test_notify)
         
-        assert(self.called == 1)
+        self.assertTrue(self.called == 1)
 
     def test_enumerated(self):
         prop = model.StringEnumerated("a", set(["a", "c", "bfds"]))
@@ -161,7 +161,7 @@ class PropertiesTest(unittest.TestCase):
         
         prop.unsubscribe(self.callback_test_notify)
         
-        assert(self.called == 1)
+        self.assertTrue(self.called == 1)
 
     def test_weakref(self):
         """
