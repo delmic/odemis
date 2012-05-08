@@ -23,6 +23,7 @@ import math
 import model
 import os
 import serial
+import sys
 import threading
 import time
 
@@ -727,6 +728,9 @@ class FakePIRedStone(PIRedStone):
     Fake version of the PIRedstone which pretent do be a motor, while just
     writing the commands to a file. For test purpose only
     """
+    def __init__(self, *args):
+        PIRedStone.__init__(self, *args)
+        self.last_move_end = [0, 0] #s since epoch
     
     def _sendGetCommand(self, com, prefix="", suffix="\r\n\x03"):
         # Should normally never be called
@@ -753,6 +757,26 @@ class FakePIRedStone(PIRedStone):
     
     def selfTest(self):
         return True
+    
+    def moveRel(self, axis, distance):
+        ret = PIRedStone.moveRel(self, axis, distance)
+        # fake the time it takes to move
+        duration = abs(distance) / self.speed[axis]
+        self.last_move_end[axis] = time.time() + duration
+        return ret
+    
+    def isMoving(self, axis=None):
+        now = time.time()
+        if axis:
+            if self.last_move_end[axis] > now:
+#                print "Still %g s to wait" % (self.last_move_end[axis] - now)
+                return True
+        else:
+            if max(self.last_move_end) > now:
+#                print "Still %g s to wait" % (max(self.last_move_end) - now)
+                return True
+        return False
+        
     
     @staticmethod
     def scan(port, max_add=15):
@@ -781,7 +805,7 @@ class StageRedStone(Actuator):
         """ 
         Actuator.__init__(self, name, role, children)
         
-        ser = PIRedStone.openSerialPort(port)
+        ser = PIRedStone.openSerialPort(port) # use FakePIRedStone for testing
         
         # the axis names as required by Actuator
         self.axes = frozenset(axes.keys())
@@ -795,7 +819,7 @@ class StageRedStone(Actuator):
         controllers = {} # address => PIRedStone
         for axis, (add, channel) in axes.items():
             if not add in controllers:
-                controllers[add] = PIRedStone(ser, add)
+                controllers[add] = PIRedStone(ser, add) # use FakePIRedStone for testing
             controller = controllers[add]
             self._axes[axis] = (controller, channel)
             
@@ -849,7 +873,7 @@ class StageRedStone(Actuator):
                 action_axes[controller] = []
             action_axes[controller].append((channel, distance))
         
-        action = Action("moveRel", action_axes)
+        action = Action(Action.MOVE_REL, action_axes)
         self.append_action(action)
         return RedStoneFuture(action, self)
         
@@ -875,7 +899,7 @@ class StageRedStone(Actuator):
         
         # wait until stopped
         if ca:
-            ca.wait()
+            ca.is_done.wait()
         
     def selfTest(self):
         """
@@ -1052,16 +1076,18 @@ class Action(object):
     """
     MOVE_REL = "moveRel"
     possible_types = [MOVE_REL]
-    def __init__(self, action_type, args, callbacks=set()):
+    def __init__(self, action_type, args, callbacks=None):
         """
         type (str): name of the action (only supported so far is "moveRel"
         args (tuple): arguments to pass to the action
         callbacks (set of 2-tuples): set of methods to call when the action is over 
-           (weakref to method, tuple arg to method) 
+           (weakref to method, tuple arg to method)
         """
         assert(action_type in self.possible_types)
         self.type = action_type
         self.args = args
+        if callbacks is None:
+            callbacks = set() # need to use None to avoid always the same set()
         self.callbacks = callbacks
         self.is_done = threading.Event() # True to signal action has finished
 
@@ -1098,11 +1124,11 @@ class RedStoneFuture(object):
         
         # Being processed => cancel in the middle
         if self._action == self._doer.current_action:
-            self._doer.current_action.remove(self._action)
             self._doer.request_stop_current.set()
             self._doer.doer_lock.release()
+            if not self._action.is_done.wait(1): # wait max 1s for the action to be cancelled
+                logging.warning("doer thread blocked on cancelling action")
             self._cancelled = True
-            # TODO wait for it
             self._notify_all()
             return True
         self._doer.doer_lock.release()
@@ -1128,6 +1154,12 @@ class RedStoneFuture(object):
         with self._doer.doer_lock:
             if (self._action in self._doer.action_queue 
                 or self._action == self._doer.current_action):
+#                if self._action in self._doer.action_queue:
+#                    print "action is still in queue:", self._doer.action_queue
+#                elif self._action == self._doer.current_action:
+#                    print "action being executed"
+#                else: 
+#                    print "no idea why not done"
                 return False
             else:
                 return True
@@ -1159,10 +1191,11 @@ class RedStoneFuture(object):
 
     def add_done_callback(self, fn):
         with self._doer.doer_lock:
-            # like done()
+            # like done() but holding the lock
             if (self._action in self._doer.action_queue 
-                or self._action != self._doer.current_action):
+                or self._action == self._doer.current_action):
                 self._action.callbacks.add((model.WeakMethod(fn), (self,)))
+                assert(not self._action.is_done.is_set())
                 return
         fn(self)
 
