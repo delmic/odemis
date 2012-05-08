@@ -76,7 +76,6 @@ class TestPIRedStone(unittest.TestCase):
         stage = pi.StageRedStone("test", "stage", None, PORT, self.config)
         stage.speed.value = {"x":0.001, "y":0.001}
         move = {'x':100e-6, 'y':100e-6}
-        
         start = time.time()
         f = stage.moveRel(move)
         dur_async = time.time() - start
@@ -91,6 +90,12 @@ class TestPIRedStone(unittest.TestCase):
         self.assertTrue(f.done())
         
         self.assertGreater(dur_sync, dur_async - delta, "Sync should take more time than async.")
+        
+        move = {'x':100e-6, 'y':100e-6}
+        f = stage.moveRel(move)
+        # 0.001s should be too short
+        self.assertRaises(OSError, f.result, 0.001)
+        
 
     def test_speed(self):
         # For moves big enough, a 0.1m/s move should take approximately 100 times less time

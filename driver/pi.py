@@ -837,7 +837,8 @@ class StageRedStone(Actuator):
         # min speed = don't be crazy slow. max speed from hardware spec
         self.speed = model.MultiSpeedProperty(speed, [10e-6, 0.5], "m/s")
         self.speed.subscribe(self.onSpeed, init=True)
-        self.create_doer()
+        self.doer_thread = ActionDoer(name="PI Redstone doer Thread")
+        self.doer_thread.start()
         
     def getMetadata(self):
         metadata = {}
@@ -875,27 +876,27 @@ class StageRedStone(Actuator):
         
         action = Action(Action.MOVE_REL, action_axes)
         self.append_action(action)
-        return RedStoneFuture(action, self)
+        return RedStoneFuture(action, self.doer_thread)
         
     def append_action(self, action):
         """
         appends an action in the doer's queue
         action (Action)
         """
-        self.action_queue_cv.acquire()
-        self.action_queue.append(action)
-        self.action_queue_cv.notify()
-        self.action_queue_cv.release()
+        self.doer_thread.action_queue_cv.acquire()
+        self.doer_thread.action_queue.append(action)
+        self.doer_thread.action_queue_cv.notify()
+        self.doer_thread.action_queue_cv.release()
     
     def stop(self):
         """
         stops the motion
         """
-        self.doer_lock.acquire()
-        ca = self.current_action
-        self.action_queue.clear()
-        self.request_stop_current.set()
-        self.doer_lock.release()
+        self.doer_thread.lock.acquire()
+        ca = self.doer_thread.current_action
+        self.doer_thread.action_queue.clear()
+        self.doer_thread.request_stop_current.set()
+        self.doer_thread.lock.release()
         
         # wait until stopped
         if ca:
@@ -905,7 +906,8 @@ class StageRedStone(Actuator):
         """
         No move should be going one while doing a self-test
         """
-        assert(len(self.action_queue) == 0 and self.current_action == None)
+        assert(len(self.doer_thread.action_queue) == 0 
+               and self.doer_thread.current_action == None)
         passed = True
         controllers = set([c for c, a in self._axes.values()])
         for controller in controllers:
@@ -948,42 +950,23 @@ class StageRedStone(Actuator):
         
         return found
     
-    
-    # Doer Thread:
-    # Share a queue of actions with the interface
-    # For each action in the queue: performs and wait until the action is finished
-    # At the end of the action, call all the callbacks
-    # action = ("action name", **args, {(callback, arg), ...})
-    # action name is either "moveRel", or "moveAbs"
-    # args is a dict of the arguments for the action
-    # args and name should not be modified after insertion. Callback can.
-    # Need a lock on the queue to add, remove, modify any action
-    # .current_action => same thing but cannot be changed/removed
-    # .thread_lock => to be acquired/released whenever touching the queue or the current action
-    # .action_queue : list . 
-    #  .put() to add an action (contained in a future, which also has a ref to the queue)
-    #  .get() to get an action
-    # Need condition to wait/notify when doing a get/put
-    # .request_stop_current event when waiting on a command: .wait(small timeout) instead of sleeping
-    #  + look if .request_stop_current is True => go out and stop move synchronously and reset request_stop_current
-    #  + to stop move: set .request_stop_current event, and wait ??? until  .request_stop_current is false
-    # stop all => acquire lock on queue (with small timeout) => remove everything from queue if lock acquired
-    #            + release lock
-    #            + stop_current()
-    
-    def create_doer(self):
-        self.doer_lock = threading.Lock()
-        self.action_queue_cv = threading.Condition(self.doer_lock)
+class ActionDoer(threading.Thread):
+    """
+    Thread running the requested actions (=moves)
+    Provides a queue (deque) of actions (action_queue)
+    For each action in the queue: performs and wait until the action is finished
+    At the end of the action, call all the callbacks
+    """
+    def __init__(self, **kwargs):
+        threading.Thread.__init__(self, **kwargs)
+        self.lock = threading.Lock()
+        self.action_queue_cv = threading.Condition(self.lock)
         self.action_queue = collections.deque()
         self.current_action = None
         self.request_stop_current = threading.Event()
-        
-        self.doer_thread = threading.Thread(target=self.doer_main, 
-                                            name="PI Redstone doer Thread")
-        self.doer_thread.daemon = True # If the backend is gone, just die
-        self.doer_thread.start()
+        self.daemon = True # If the backend is gone, just die
     
-    def doer_main(self):
+    def run(self):
         while True:
             # Pick the next action
             self.action_queue_cv.acquire()
@@ -993,9 +976,9 @@ class StageRedStone(Actuator):
             self.action_queue_cv.release()
             
             # Do the action
-            # current_action[0] and current_action[1] are fixed, so no need for lock
+            # current_action.type and current_action.args are fixed, so no need for lock
             if self.current_action.type == Action.MOVE_REL:
-                self.doer_moveRel(self.current_action.args)
+                self.moveRel(self.current_action.args)
 #            elif action_name == "moveAbs":
 #                self.doer_moveAbs(args)
             else:
@@ -1013,28 +996,28 @@ class StageRedStone(Actuator):
             # it's over when either all axes are finished moving, it's too late, or
             # the move has to be imediately stopped 
             while (not self.request_stop_current.is_set() and time.time() <= end
-                   and self.doer_is_moving(controllers)):
+                   and self.is_moving(controllers)):
                 self.request_stop_current.wait(0.005)
             
             # stop immediatly if requested
             if self.request_stop_current.is_set():
-                self.doer_stop(controllers)
+                self.stop_move(controllers)
                 # it's up to the caller to have cleared the action queue if no other move should be performed
             
             # Call the callbacks at the end of the action
-            self.doer_lock.acquire()
+            self.lock.acquire()
             callbacks = self.current_action.callbacks
             self.current_action.is_done.set()
             self.current_action = None
             # release before we call external functions to avoid potential deadlocks
-            self.doer_lock.release() 
+            self.lock.release() 
             
             # say we are done
             self.request_stop_current.clear()
             for cb, args in callbacks:
                 cb(*args)
         
-    def doer_is_moving(self, axes):
+    def is_moving(self, axes):
         """
         axes (dict: PIRedStone -> list (int)): controller to channel which must be check for move
         """
@@ -1050,7 +1033,7 @@ class StageRedStone(Actuator):
                 moving |= controller.isMoving() # all
         return moving
     
-    def doer_stop(self, axes):
+    def stop_move(self, axes):
         """
         axes (dict: PIRedStone -> list (int)): controller to channel which must be stopped
         """
@@ -1058,7 +1041,7 @@ class StageRedStone(Actuator):
             # it can only stop all axes (that's the point anyway)
             controller.stopMotion()
     
-    def doer_moveRel(self, axes):
+    def moveRel(self, axes):
         """
         axes (dict: PIRedStone -> list (tuple(int, double)): 
             controller to list of channel/distance to move (m)
@@ -1114,10 +1097,10 @@ class RedStoneFuture(object):
             return True
         
         # In the queue => remove it
-        self._doer.doer_lock.acquire()
+        self._doer.lock.acquire()
         if self._action in self._doer.action_queue:
             self._doer.action_queue.remove(self._action)
-            self._doer.doer_lock.release()
+            self._doer.lock.release()
             self._cancelled = True
             self._notify_all()
             return True
@@ -1125,13 +1108,13 @@ class RedStoneFuture(object):
         # Being processed => cancel in the middle
         if self._action == self._doer.current_action:
             self._doer.request_stop_current.set()
-            self._doer.doer_lock.release()
+            self._doer.lock.release()
             if not self._action.is_done.wait(1): # wait max 1s for the action to be cancelled
                 logging.warning("doer thread blocked on cancelling action")
             self._cancelled = True
             self._notify_all()
             return True
-        self._doer.doer_lock.release()
+        self._doer.lock.release()
 
         # It has already been executed => no hope
         return False
@@ -1151,7 +1134,7 @@ class RedStoneFuture(object):
 
     def done(self):
         # if action not in the queue or under process => it's done
-        with self._doer.doer_lock:
+        with self._doer.lock:
             if (self._action in self._doer.action_queue 
                 or self._action == self._doer.current_action):
 #                if self._action in self._doer.action_queue:
@@ -1190,7 +1173,7 @@ class RedStoneFuture(object):
         return None
 
     def add_done_callback(self, fn):
-        with self._doer.doer_lock:
+        with self._doer.lock:
             # like done() but holding the lock
             if (self._action in self._doer.action_queue 
                 or self._action == self._doer.current_action):
