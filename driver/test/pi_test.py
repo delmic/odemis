@@ -36,6 +36,7 @@ class TestPIRedStone(unittest.TestCase):
     """
     config = CONFIG_RS_SECOM_1
     
+#    @unittest.skip("don't have the hardware")
     def test_scan_low_level(self):
         """
         Check that we can do a scan network. It can pass only if we are
@@ -48,7 +49,8 @@ class TestPIRedStone(unittest.TestCase):
         for add in adds:
             cont = pi.PIRedStone(ser, add)
             self.assertTrue(cont.selfTest(), "Controller self test failed.")
-            
+          
+#    @unittest.skip("don't have the hardware")  
     def test_scan(self):
         """
         Check that we can do a scan network. It can pass only if we are
@@ -72,12 +74,12 @@ class TestPIRedStone(unittest.TestCase):
         delta = 0.0001 # s
         
         stage = pi.StageRedStone("test", "stage", None, PORT, self.config)
+        stage.speed.value = {"x":0.001, "y":0.001}
         move = {'x':100e-6, 'y':100e-6}
-        
         start = time.time()
         f = stage.moveRel(move)
         dur_async = time.time() - start
-        f.result() # wait
+        f.result()
         self.assertTrue(f.done())
         
         move = {'x':-100e-6, 'y':-100e-6}
@@ -88,6 +90,12 @@ class TestPIRedStone(unittest.TestCase):
         self.assertTrue(f.done())
         
         self.assertGreater(dur_sync, dur_async - delta, "Sync should take more time than async.")
+        
+        move = {'x':100e-6, 'y':100e-6}
+        f = stage.moveRel(move)
+        # 0.001s should be too short
+        self.assertRaises(OSError, f.result, 0.001)
+        
 
     def test_speed(self):
         # For moves big enough, a 0.1m/s move should take approximately 100 times less time
@@ -98,24 +106,24 @@ class TestPIRedStone(unittest.TestCase):
         # fast move
         stage = pi.StageRedStone("test", "stage", None, PORT, self.config)
         stage.speed.value = {"x":0.1, "y":0.1}
-        move = {'x':100e-6, 'y':100e-6}
+        move = {'x':1e-3, 'y':1e-3}
         start = time.time()
         f = stage.moveRel(move)
         f.result()
         dur_fast = time.time() - start
         
         stage.speed.value = {"x":0.1/expected_ratio, "y":0.1/expected_ratio}
-        move = {'x':-100e-6, 'y':-100e-6}
+        move = {'x':-1e-3, 'y':-1e-3}
         start = time.time()
         f = stage.moveRel(move)
         f.result()
         dur_slow = time.time() - start
         
         ratio = dur_slow / dur_fast
-        print "ratio of", ratio 
+        print "ratio of %f while expected %f" % (ratio, expected_ratio)
         if ratio < expected_ratio / 2 or ratio > expected_ratio * 2:
             self.fail("Speed not consistent: ratio of " + str(ratio) + 
-                         "instead of " + str(expected_ratio) + ".")
+                         " instead of " + str(expected_ratio) + ".")
 
     def test_stop(self):
         stage = pi.StageRedStone("test", "stage", None, PORT, self.config)
@@ -125,12 +133,76 @@ class TestPIRedStone(unittest.TestCase):
         stage.moveRel(move)
         stage.stop()
         
+    def test_queue(self):
+        """
+        Ask for several long moves in a row, and checks that nothing breaks
+        """
+        stage = pi.StageRedStone("test", "stage", None, PORT, self.config)
+        move_forth = {'x':1e-3, 'y':1e-3}
+        move_back = {'x':-1e-3, 'y':-1e-3}
+        stage.speed.value = {"x":0.001, "y":0.001} # => 1s per move
+        start = time.time()
+        expected_time = 4 * move_forth["x"] / stage.speed.value["x"]
+        f0 = stage.moveRel(move_forth)
+        f1 = stage.moveRel(move_back)
+        f2 = stage.moveRel(move_forth)
+        f3 = stage.moveRel(move_back)
+#        f0.result()
+        f1.result()
+#        f2.result()
+        f3.result()
+        
+        dur = time.time() - start
+        self.assertGreaterEqual(dur, expected_time)
+        
     def test_cancel(self):
         stage = pi.StageRedStone("test", "stage", None, PORT, self.config)
+        stage.speed.value = {"x":0.001, "y":0.001} # => 0.1s per move
+        # test cancel during action
         move = {'x':100e-6, 'y':100e-6}
         f = stage.moveRel(move)
+        time.sleep(0.01) # to make sure the action is being handled
         f.cancel()
         self.assertTrue(f.cancelled())
+        self.assertTrue(f.done())
+        
+        # test cancel in queue
+        move1 = {'x':-100e-6, 'y':-100e-6}
+        f1 = stage.moveRel(move1)
+        move2 = {'x':100e-6, 'y':100e-6}
+        f2 = stage.moveRel(move2)
+        f2.cancel()
+        self.assertFalse(f1.done())
+        self.assertTrue(f2.cancelled())
+        self.assertTrue(f2.done())
+        
+        # test cancel after already cancelled
+        f.cancel()
+        self.assertTrue(f.cancelled())
+        self.assertTrue(f.done())
+        
+        # test cancel after done => not cancelled
+        stage.speed.value = {"x":0.1, "y":0.1}
+        move = {'x':100e-6, 'y':100e-6}
+        f = stage.moveRel(move)
+        time.sleep(1)
+        f.cancel()
+        self.assertFalse(f.cancelled())
+        self.assertTrue(f.done())
+        
+        # test cancel after result()
+        move = {'x':-100e-6, 'y':-100e-6}
+        f = stage.moveRel(move)
+        f.result()
+        f.cancel()
+        self.assertFalse(f.cancelled())
+        self.assertTrue(f.done())
+        
+        # test not cancelled
+        move = {'x':-100e-6, 'y':-100e-6}
+        f = stage.moveRel(move)
+        f.result()
+        self.assertFalse(f.cancelled())
         self.assertTrue(f.done())
         
     def test_move_circle(self):
@@ -151,6 +223,45 @@ class TestPIRedStone(unittest.TestCase):
             f.result() # wait
             cur_pos = next_pos
 
+    def test_future_callback(self):
+        stage = pi.StageRedStone("test", "stage", None, PORT, self.config)
+        stage.speed.value = {"x":0.001, "y":0.001} # => long enough
+        # test callback while being executed
+        move = {'x':100e-6, 'y':100e-6}
+        f = stage.moveRel(move)
+        self.called = 0
+        time.sleep(0.01)
+        f.add_done_callback(self.callback_test_notify)
+        f.result()
+        time.sleep(0.01) # make sure the callback had time to be called
+        self.assertEquals(self.called, 1)
+        self.assertTrue(f.done())
+
+        # test callback while in the queue
+        move1 = {'x':-100e-6, 'y':-100e-6}
+        f1 = stage.moveRel(move1)
+        move2 = {'x':100e-6, 'y':100e-6}
+        f2 = stage.moveRel(move2)
+        f2.add_done_callback(self.callback_test_notify)
+        self.assertFalse(f1.done())
+        f2.result()
+        self.assertTrue(f1.done())
+        time.sleep(0.01) # make sure the callback had time to be called
+        self.assertEquals(self.called, 2)
+        self.assertTrue(f2.done())
+
+        # It should work even if the action is fully done
+        f2.add_done_callback(self.callback_test_notify2)
+        self.assertEquals(self.called, 3)
+        
+    def callback_test_notify(self, future):
+        self.assertTrue(future.done())
+        self.called += 1
+        
+    def callback_test_notify2(self, future):
+        self.assertTrue(future.done())
+        self.called += 1
+        
 if __name__ == '__main__':
     unittest.main()
 
