@@ -1,5 +1,7 @@
 # --------------------------------------------------------------------------- #
 #
+# DELMIC
+#
 # This module is an addaptation from the module found within wxPython 2.8.12.1
 # and has custom changes made to suit Delmic and Odemis' special needs.
 #
@@ -172,15 +174,26 @@ import wx
 #----------------------------------------------------------------------
 from wx.lib.embeddedimage import PyEmbeddedImage
 
+# The default images have been replaced by Delmic's own base64 encoded png icons
 CollapsedIcon = PyEmbeddedImage(
-    "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAABHNCSVQICAgIfAhkiAAAADdJ"
-    "REFUOI1jZGRiZqAEMFGke/Ab8P/f3/8D5wKY7YRcQRsXoNuKzxXUdwEu23CJU+wCxtG8wAAA"
-    "mvUb+vltJD8AAAAASUVORK5CYII=")
+    "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAAZiS0dEAP8A"
+    "/wD/oL2nkwAAAAlwSFlzAAALEwAACxMBAJqcGAAAAAd0SU1FB9wFDwcnFhL1+GMAAAAZdEVYdENv"
+    "bW1lbnQAQ3JlYXRlZCB3aXRoIEdJTVBXgQ4XAAAA4UlEQVQ4y53TSU7EMBCF4S/pNIhJSAwn4Q4s"
+    "2MLCR/SRYMkOBL2IGCQaSLMppBC5kwhLlmPZ76+q58rC31GhxiK+J0c93KeUvrGPPSwLd7YCqogs"
+    "pdTiBAdTkCIgIPc4x+EYpC54oAe5w9kYpJ4yKaV0Owap5zgdkNPwpOlnOgvQK+cYO33dbEDO+RK7"
+    "/8og53yNd3zgC5vZgJzzDVZ4Qos1ut/zZkbkFR5ifRtm0IyIr0LwiGe84rMfvQTYhPgiurKNyEXx"
+    "sPOqaJSjmB1ewryiWOGXXcQ7L0Owjpq7baX+AJ1bPwluOX7uAAAAAElFTkSuQmCC")
 
 ExpandedIcon = PyEmbeddedImage(
-    "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAABHNCSVQICAgIfAhkiAAAAEJJ"
-    "REFUOI1jZGRiZqAEMFGke1AYwIIu8P/f3/+4FDMyMTNS3QUYBmCzBZ84bQIR3TZcttPOBci2"
-    "4rOdKi5gHM0LDACevARXGc9htQAAAABJRU5ErkJggg==")
+    "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAAZiS0dEAP8A"
+    "/wD/oL2nkwAAAAlwSFlzAAALEwAACxMBAJqcGAAAAAd0SU1FB9wFDwclGbB8h3AAAAAZdEVYdENv"
+    "bW1lbnQAQ3JlYXRlZCB3aXRoIEdJTVBXgQ4XAAABKUlEQVQ4y+2SzUrDQBSFv8nUICoo7tzppktB"
+    "t4JbV90UEnDvW0g3voFufYQGQZxCwKULQdyHPkLBn2DilNA0cXNTQtpaH8ADh4Fh7jn3zL3wD7Xk"
+    "/A1l/VSAA2ihWiFSCqfCUvm+f+s4zsVfW87zPAyC4BwYAxMFbHie96y1PlxVnKbpvTHmEvgEYiBz"
+    "gLLf759Za4MVxS/GmBuJXFRxdPVgOBw+tdvtU631XrM4SZLXwWBwJc7vwBeQAYUWpQKYRlH00BSx"
+    "1kbGmB7wBoyk9fHsE2vjawGbwG632w1c1z2K4/gxDMNrcR0BH4AF8to4Z3AAF9gBDjqdzh1wAhwD"
+    "+8A2sNYcs1og0gLWgS0RzIBvaXvOWS3ZTi1uWrJOqszLVnnRfcWyxjn8AFRBaucT7N0fAAAAAElF"
+    "TkSuQmCC")
 
 #----------------------------------------------------------------------
 # FOLDPANELBAR Starts Here
@@ -244,7 +257,6 @@ FPB_DEFAULT_SPACING = 8
 
 FPB_DEFAULT_LEFTLINESPACING = 10
 FPB_DEFAULT_RIGHTLINESPACING = 2
-
 
 # ------------------------------------------------------------------------------ #
 # class CaptionBarStyle
@@ -491,16 +503,26 @@ class CaptionBarStyle(object):
 
         return self._barHeightUsed
 
+# Delmic's default caption bar style
+FPB_STYLE = CaptionBarStyle()
+FPB_STYLE.SetFirstColour(wx.Colour(230, 230, 230))
+FPB_STYLE.SetSecondColour(wx.Colour(200, 200, 200))
+FPB_STYLE.SetCaptionFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, 1, wx.FONTWEIGHT_NORMAL))
+FPB_STYLE.SetCaptionColour("#444444")
+FPB_STYLE.SetBarHeight(40)
+
+
 #-----------------------------------#
 #        CaptionBarEvent
 #-----------------------------------#
 wxEVT_CAPTIONBAR = wx.NewEventType()
 EVT_CAPTIONBAR = wx.PyEventBinder(wxEVT_CAPTIONBAR, 0)
-""" The user has pressed the caption bar: `FoldPanelBar` will either expand or""" \
-""" collapse the underlying panel. """
+# The user has pressed the caption bar: `FoldPanelBar` will either expand or
+# collapse the underlying panel.
 
 # Define Empty CaptionBar Style
-EmptyCaptionBarStyle = CaptionBarStyle()
+#EmptyCaptionBarStyle = CaptionBarStyle()
+EmptyCaptionBarStyle = FPB_STYLE
 
 # ---------------------------------------------------------------------------- #
 # class CaptionBarEvent
