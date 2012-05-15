@@ -1,4 +1,8 @@
 # --------------------------------------------------------------------------- #
+#
+# This module is an addaptation from the module found within wxPython 2.8.12.1
+# and has custom changes made to suit Delmic and Odemis' special needs.
+#
 # FOLDPANELBAR wxPython IMPLEMENTATION
 # Ported From Jorgen Bodde & Julian Smart (Extended Demo) C++ Code By:
 #
@@ -201,7 +205,8 @@ FPB_EXTRA_X = 10
 FPB_EXTRA_Y = 4
 
 # pixels of the bmp to be aligned from the right filled with space
-FPB_BMP_RIGHTSPACE = 2
+# Delmic: This value is used to steer the icons clear of the scrollbar
+FPB_BMP_RIGHTSPACE = 20
 
 # Now supported! Single fold forces
 # other panels to close when they are open, and only opens the current panel.
@@ -237,7 +242,7 @@ FPB_DEFAULT_LEFTSPACING = 5
 FPB_DEFAULT_RIGHTSPACING = 10
 FPB_DEFAULT_SPACING = 8
 
-FPB_DEFAULT_LEFTLINESPACING = 2
+FPB_DEFAULT_LEFTLINESPACING = 10
 FPB_DEFAULT_RIGHTLINESPACING = 2
 
 
@@ -272,8 +277,8 @@ class CaptionBarStyle(object):
         self._textColourUsed = False
         self._captionFontUsed = False
         self._captionStyleUsed = False
+        self._barHeightUsed = False
         self._captionStyle = CAPTIONBAR_GRADIENT_V
-
 
     # ------- CaptionBar Font -------
 
@@ -323,6 +328,7 @@ class CaptionBarStyle(object):
         """
 
         self._firstColour = colour
+        self._firstHoverColour = self._HoverColour(colour)
         self._firstColourUsed = True
 
 
@@ -344,6 +350,8 @@ class CaptionBarStyle(object):
 
         return self._firstColour
 
+    def GetFirstHoverColour(self):
+        return self._firstHoverColour
 
     # ------- Second Colour -------
 
@@ -358,6 +366,7 @@ class CaptionBarStyle(object):
         """
 
         self._secondColour = colour
+        self._secondHoverColour = self._HoverColour(colour)
         self._secondColourUsed = True
 
 
@@ -366,6 +375,11 @@ class CaptionBarStyle(object):
 
         return self._secondColourUsed
 
+    def _HoverColour(self, colour):
+        return wx.Colour(
+            int(colour.Red()) - 20,
+            int(colour.Green()) - 20,
+            int(colour.Blue()) - 20)
 
     def GetSecondColour(self):
         """
@@ -379,6 +393,8 @@ class CaptionBarStyle(object):
 
         return self._secondColour
 
+    def GetSecondHoverColour(self):
+        return self._secondHoverColour
 
     # ------- Caption Text Colour -------
 
@@ -459,6 +475,21 @@ class CaptionBarStyle(object):
 
         return self._captionStyle
 
+    # Delmic tweak
+    def SetBarHeight(self, height):
+        """ Set the caption bar height in pixels """
+        self._barheight = height
+        self._barHeightUsed = True
+
+    # Delmic tweak
+    def GetBarHeight(self):
+        """ Get the caption bar height in pixels """
+        return self._barheight
+
+    def BarHeightUsed(self):
+        """ Checks if the bar height is set. """
+
+        return self._barHeightUsed
 
 #-----------------------------------#
 #        CaptionBarEvent
@@ -577,8 +608,13 @@ class CaptionBar(wx.Window):
          ``False`` otherwise.
         """
 
+        # Delmic
+        bar_size = (20, 20)
+        if cbstyle and cbstyle.BarHeightUsed():
+            bar_size = (20, cbstyle.GetBarHeight())
+
         wx.Window.__init__(self, parent, wx.ID_ANY, pos=pos,
-                           size=(20,20), style=wx.NO_BORDER)
+                           size=bar_size, style=wx.NO_BORDER)
 
         self._controlCreated = False
         self._collapsed = collapsed
@@ -603,9 +639,11 @@ class CaptionBar(wx.Window):
         self._rightIndent = rightIndent
         self._iconWidth = iconWidth
         self._iconHeight = iconHeight
-        self._oldSize = wx.Size(20,20)
+        self._oldSize = wx.Size(20, 20)
 
         self._controlCreated = True
+
+        self._mouse_is_over = False
 
         self.Bind(wx.EVT_PAINT, self.OnPaint)
         self.Bind(wx.EVT_SIZE, self.OnSize)
@@ -652,6 +690,9 @@ class CaptionBar(wx.Window):
             # apply caption style
             if not newstyle.CaptionStyleUsed():
                 newstyle.SetCaptionStyle(CAPTIONBAR_GRADIENT_V)
+
+            if not newstyle.BarHeightUsed():
+                newstyle.SetBarHeight(50)
 
         self._style = newstyle
 
@@ -777,11 +818,14 @@ class CaptionBar(wx.Window):
         # the caption. This way a flickering arrow during resize is not visible
 
         self.FillCaptionBackground(dc)
-        dc.SetFont(self._style.GetCaptionFont())
+        caption_font = self._style.GetCaptionFont()
+        dc.SetFont(caption_font)
         dc.SetTextForeground(self._style.GetCaptionColour())
 
         if vertical:
-            dc.DrawText(self._caption, 4, FPB_EXTRA_Y/2)
+            # Text is vertically aligned in the middle
+            dc.DrawText(self._caption, 10,
+                (wndRect.GetHeight() - caption_font.GetPixelSize().GetHeight())/2)
         else:
             dc.DrawRotatedText(self._caption, FPB_EXTRA_Y/2,
                                wndRect.GetBottom() - 4, 90)
@@ -848,46 +892,22 @@ class CaptionBar(wx.Window):
         """
 
         send_event = False
-        vertical = self.IsVertical()
 
-        if event.LeftDown() and self._foldIcons:
-
-            pt = event.GetPosition()
-            rect = self.GetRect()
-
-            drw = (rect.GetWidth() - self._iconWidth - self._rightIndent)
-            if vertical and pt.x > drw or not vertical and \
-               pt.y < (self._iconHeight + self._rightIndent):
-                send_event = True
-
-        elif event.LeftDClick():
-            self.SetCursor(wx.StockCursor(wx.CURSOR_ARROW))
+        if event.LeftDown():
+            # Treat all left-clicks on the caption bar as a toggle event
             send_event = True
 
-        elif event.Entering() and self._foldIcons:
-            pt = event.GetPosition()
-            rect = self.GetRect()
+        elif event.LeftDClick():
+            send_event = True
 
-            drw = (rect.GetWidth() - self._iconWidth - self._rightIndent)
-            if vertical and pt.x > drw or not vertical and \
-               pt.y < (self._iconHeight + self._rightIndent):
-                self.SetCursor(wx.StockCursor(wx.CURSOR_HAND))
-            else:
-                self.SetCursor(wx.StockCursor(wx.CURSOR_ARROW))
+        elif event.Entering():
+            # calculate gradient coefficients
+            self._mouse_is_over = True
+            self.OnPaint(event)
 
         elif event.Leaving():
-            self.SetCursor(wx.StockCursor(wx.CURSOR_ARROW))
-
-        elif event.Moving():
-            pt = event.GetPosition()
-            rect = self.GetRect()
-
-            drw = (rect.GetWidth() - self._iconWidth - self._rightIndent)
-            if vertical and pt.x > drw or not vertical and \
-               pt.y < (self._iconHeight + self._rightIndent):
-                self.SetCursor(wx.StockCursor(wx.CURSOR_HAND))
-            else:
-                self.SetCursor(wx.StockCursor(wx.CURSOR_ARROW))
+            self._mouse_is_over = False
+            self.OnPaint(event)
 
         # send the collapse, expand event to the parent
 
@@ -948,8 +968,13 @@ class CaptionBar(wx.Window):
         dc.SetPen(wx.TRANSPARENT_PEN)
 
         # calculate gradient coefficients
-        col2 = self._style.GetSecondColour()
-        col1 = self._style.GetFirstColour()
+
+        if self._mouse_is_over:
+            col2 = self._style.GetSecondHoverColour()
+            col1 = self._style.GetFirstHoverColour()
+        else:
+            col2 = self._style.GetSecondColour()
+            col1 = self._style.GetFirstColour()
 
         r1, g1, b1 = int(col1.Red()), int(col1.Green()), int(col1.Blue())
         r2, g2, b2 = int(col2.Red()), int(col2.Green()), int(col2.Blue())
