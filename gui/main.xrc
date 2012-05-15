@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<resource class="">
+  <object class="wxFrame" name="fr_main">
+    <object class="wxMenuBar">
+      <object class="wxMenu">
+        <label>File</label>
+        <object class="wxMenuItem">
+          <label>Hello</label>
+        </object>
+      </object>
+    </object>
+    <object class="wxFlexGridSizer">
+      <object class="sizeritem">
+        <object class="wxGridSizer">
+          <cols>2</cols>
+          <rows>2</rows>
+          <object class="sizeritem">
+            <object class="wxPanel">
+              <bg>#D9B0BF</bg>
+            </object>
+            <flag>wxEXPAND</flag>
+          </object>
+          <object class="sizeritem">
+            <object class="wxPanel">
+              <bg>#E5C19C</bg>
+            </object>
+            <flag>wxEXPAND</flag>
+          </object>
+          <object class="sizeritem">
+            <object class="wxPanel">
+              <bg>#ACA8EC</bg>
+            </object>
+            <flag>wxEXPAND</flag>
+          </object>
+          <object class="sizeritem">
+            <object class="wxPanel">
+              <bg>#A8E876</bg>
+            </object>
+            <flag>wxEXPAND</flag>
+          </object>
+        </object>
+        <option>1</option>
+        <flag>wxEXPAND</flag>
+        <ratio>1</ratio>
+      </object>
+      <cols>2</cols>
+      <rows>1</rows>
+      <growablecols>0</growablecols>
+      <growablerows>0</growablerows>
+      <object class="sizeritem">
+        <object class="wxBoxSizer">
+          <object class="sizeritem">
+            <object class="wxScrolledWindow" name="scr_win">
+              <object class="wxBoxSizer">
+                <orient>wxVERTICAL</orient>
+                <object class="sizeritem">
+                  <object class="odemis.gui.comp.foldpanelbar.FoldPanelBar" name="fpb_settings">
+                    <XRCED>
+                      <assign_var>1</assign_var>
+                    </XRCED>
+                  </object>
+                  <flag>wxEXPAND</flag>
+                </object>
+              </object>
+              <size>300,-1</size>
+              <style>wxVSCROLL</style>
+              <XRCED>
+                <assign_var>1</assign_var>
+              </XRCED>
+            </object>
+            <option>1</option>
+            <flag>wxEXPAND</flag>
+          </object>
+          <object class="sizeritem">
+            <object class="wxButton">
+              <label>Self Destruct</label>
+            </object>
+            <flag>wxALL|wxEXPAND</flag>
+            <border>10</border>
+          </object>
+          <orient>wxVERTICAL</orient>
+        </object>
+        <flag>wxEXPAND</flag>
+      </object>
+    </object>
+    <size>1200, 800</size>
+    <title>Odemis</title>
+    <centered>1</centered>
+  </object>
+</resource>

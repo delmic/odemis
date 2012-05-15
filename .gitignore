@@ -31,8 +31,8 @@ pip-log.txt
 nosetests.xml
 
 # Dev environment
-.odemis.sublime-project
-.odemis.sublime-workspace
+odemis.sublime-project
+odemis.sublime-workspace
 
 #Translations
 *.mo
