@@ -219,33 +219,33 @@ FPB_EXTRA_Y = 4
 
 # pixels of the bmp to be aligned from the right filled with space
 # Delmic: This value is used to steer the icons clear of the scrollbar
-FPB_BMP_RIGHTSPACE = 20
+FPB_BMP_RIGHTSPACE = 15
 
 # Now supported! Single fold forces
 # other panels to close when they are open, and only opens the current panel.
 # This will allow the open panel to gain the full size left in the client area
 FPB_SINGLE_FOLD = 0x0001
-""" Single fold forces other panels to close when they are open, and only opens""" \
-""" the current panel. This will allow the open panel to gain the full size left""" \
-""" in the client area. This is an extra style. """
+# Single fold forces other panels to close when they are open, and only opens
+# the current panel. This will allow the open panel to gain the full size left
+# in the client area. This is an extra style. """
 
 # All panels are stacked to the bottom. When they are expanded again they
 # show up at the top
 FPB_COLLAPSE_TO_BOTTOM = 0x0002
-""" All panels are stacked to the bottom. When they are expanded again they show""" \
-""" up at the top. This is an extra style. """
+# All panels are stacked to the bottom. When they are expanded again they show
+# up at the top. This is an extra style.
 
 # Now supported! Single fold plus panels
 # will be stacked at the bottom
 FPB_EXCLUSIVE_FOLD = 0x0004
-""" ``FPB_SINGLE_FOLD`` style plus the panels will be stacked at the bottom. """ \
-""" This is an extra style. """
+# ``FPB_SINGLE_FOLD`` style plus the panels will be stacked at the bottom.
+# This is an extra style.
 
 # Orientation Flag
 FPB_HORIZONTAL = 0x0008
-""" `FoldPanelBar` will be horizontal. """
+# `FoldPanelBar` will be horizontal.
 FPB_VERTICAL = 0x0010
-""" `FoldPanelBar` will be vertical. """
+# `FoldPanelBar` will be vertical.
 
 # FoldPanelItem default settings
 FPB_ALIGN_LEFT = 0
@@ -256,7 +256,7 @@ FPB_DEFAULT_RIGHTSPACING = 10
 FPB_DEFAULT_SPACING = 8
 
 FPB_DEFAULT_LEFTLINESPACING = 10
-FPB_DEFAULT_RIGHTLINESPACING = 2
+FPB_DEFAULT_RIGHTLINESPACING = FPB_BMP_RIGHTSPACE + 6
 
 # ------------------------------------------------------------------------------ #
 # class CaptionBarStyle
@@ -939,6 +939,8 @@ class CaptionBar(wx.Window):
             event.SetEventObject(self)
             event.SetBar(self)
             self.GetEventHandler().ProcessEvent(event)
+        else:
+            event.Skip()
 
 
     def OnChar(self, event):
@@ -1441,6 +1443,7 @@ class FoldPanelBar(wx.Panel):
         else:
             self.Expand(event.GetTag())
 
+        wx.CallAfter(self.FitBar)
 
 
     def RefreshPanelsFrom(self, item):
@@ -1482,6 +1485,19 @@ class FoldPanelBar(wx.Panel):
                 pos = pos + self._panels[j].Reposition(pos)
 
         self.Thaw()
+
+    def FitBar(self):
+        """ Make the FoldPanelBar as high as it's children """
+        height = 0
+
+        for i in self.GetChildren():
+            height += sum([w.GetSize().GetHeight() for w in i.GetChildren()])
+
+        self.SetSize((-1, height))
+
+        parent = self.GetParent()
+        if parent.__class__ == wx.ScrolledWindow:
+            parent.FitInside()
 
 
     def RedisplayFoldPanelItems(self):

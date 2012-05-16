@@ -49,53 +49,45 @@ class OdemisGUIApp(wx.App):
 
         import odemis.gui.comp.foldpanelbar as fpb
 
-        styleh = fpb.CaptionBarStyle()
-        styleh.SetFirstColour(wx.Colour(230, 230, 230))
-        styleh.SetSecondColour(wx.Colour(200, 200, 200))
-        styleh.SetCaptionFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, 1, wx.FONTWEIGHT_NORMAL))
-        styleh.SetCaptionColour("#444444")
-        styleh.SetBarHeight(40)
-
-        Images = wx.ImageList(16,16)
-        Images.AddIcon(wx.Icon("gui/img/arr_down.png", wx.BITMAP_TYPE_PNG))
-        Images.AddIcon(wx.Icon("gui/img/arr_right.png", wx.BITMAP_TYPE_PNG))
-
-        item = self.fr_main.fpb_settings.AddFoldPanel("Caption 1",
-                                                      collapsed=False,
-                                                      cbstyle=styleh,
-                                                      foldIcons=Images)
-
-        self.fr_main.fpb_settings.AddFoldPanelWindow(item, wx.StaticText(item, -1, "*Bleep*"))
-
-        self.fr_main.fpb_settings.AddFoldPanelWindow(item, wx.Panel(item, -1, size=(280, 500)))
-
-        self.fr_main.fpb_settings.AddFoldPanelWindow(item, wx.StaticText(item, -1, "*Bleep*"))
-
-        item = self.fr_main.fpb_settings.AddFoldPanel("Caption 2",
-                                                      collapsed=False,
-                                                      cbstyle=styleh,
-                                                      foldIcons=Images)
-
-        self.fr_main.fpb_settings.AddFoldPanelWindow(item, wx.StaticText(item, -1, "*Bleep*"))
-
-        self.fr_main.fpb_settings.AddFoldPanelWindow(item, wx.StaticText(item, -1, "*Bleep*"))
-
-        self.fr_main.fpb_settings.AddFoldPanelWindow(item, wx.StaticText(item, -1, "*Bleep*"))
-
-        self.fr_main.fpb_settings.AddFoldPanelWindow(item, wx.StaticText(item, -1, "*Bleep*"))
-
-        self.fr_main.fpb_settings.AddFoldPanelWindow(item, wx.StaticText(item, -1, "One more bleep coming"))
-
-        self.fr_main.fpb_settings.AddFoldPanelWindow(item, wx.Panel(item, -1, size=(280, 200)))
-
-        self.fr_main.fpb_settings.AddFoldPanelWindow(item, wx.StaticText(item, -1, "*Last Bleep*"))
 
 
-        self.fr_main.fpb_settings.Bind(fpb.EVT_CAPTIONBAR, self.height_test)
+
+
+        # item = self.fr_main.fpb_settings.AddFoldPanel("Caption 1",
+        #                                               collapsed=False)
+
+        # self.fr_main.fpb_settings.AddFoldPanelWindow(item, wx.StaticText(item, -1, "*Bleep*"))
+
+        # self.fr_main.fpb_settings.AddFoldPanelWindow(item, wx.Panel(item, -1, size=(280, 500)))
+
+        # self.fr_main.fpb_settings.AddFoldPanelWindow(item, wx.StaticText(item, -1, "*Bleep*"))
+
+        # item = self.fr_main.fpb_settings.AddFoldPanel("Caption 2",
+        #                                               collapsed=False)
+
+        # self.fr_main.fpb_settings.AddFoldPanelWindow(item, wx.StaticText(item, -1, "*Bleep*"))
+
+        # self.fr_main.fpb_settings.AddFoldPanelWindow(item, wx.StaticText(item, -1, "*Bleep*"))
+
+        # self.fr_main.fpb_settings.AddFoldPanelWindow(item, wx.StaticText(item, -1, "*Bleep*"))
+
+        # self.fr_main.fpb_settings.AddFoldPanelWindow(item, wx.StaticText(item, -1, "*Bleep*"))
+
+        # self.fr_main.fpb_settings.AddFoldPanelWindow(item, wx.StaticText(item, -1, "One more bleep coming"))
+
+        # self.fr_main.fpb_settings.AddFoldPanelWindow(item, wx.Panel(item, -1, size=(280, 200)))
+
+        # self.fr_main.fpb_settings.AddFoldPanelWindow(item, wx.StaticText(item, -1, "*Last Bleep*"))
+
+
+        # self.fr_main.fpb_settings.Bind(fpb.EVT_CAPTIONBAR, self.height_test)
+
         self.fr_main.scr_win.EnableScrolling(False, True)
         self.fr_main.scr_win.SetScrollbars(-1, 10, 1, 1)
 
-        self.height_test()
+        #self.height_test()
+
+        #self.dump(self.fr_main.fpb_settings)
 
 
 
@@ -123,33 +115,6 @@ class OdemisGUIApp(wx.App):
 
         # Application successfully launched
         return True
-
-    def height_test(self, evt=None):
-
-        #self.dump(self.fr_main.fpb_settings)
-        if evt:
-            evt.Skip()
-
-        wx.CallAfter(self.grrr)
-
-
-
-    def grrr(self):
-        height = 0
-        #print "PanelBar height", self.fr_main.fpb_settings.GetSize().GetHeight()
-        for i in self.fr_main.fpb_settings.GetChildren():
-            height += sum([w.GetSize().GetHeight() for w in i.GetChildren()])
-            #print i, "Height", height
-
-        # Cheat
-        scrw_height = self.fr_main.scr_win.GetSize().GetHeight()
-        if height < scrw_height:
-            pass#self.fr_main.fpb_settings.SetBorder(0)
-            #height = scrw_height + 1
-
-        self.fr_main.fpb_settings.SetSize((-1, height))
-        self.fr_main.scr_win.FitInside()
-
 
     def dump(self, item, indent=0):
         for c in item.GetChildren():

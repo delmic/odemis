@@ -14,15 +14,24 @@ TRACE('*** creating xh_delmic components')
 
 # wx.lib.foldpanelbar.FoldPanelBar
 
-c = component.SmartContainer('odemis.gui.comp.foldpanelbar.FoldPanelBar', ['book', 'window', 'control'],
-                   ['pos', 'size'],
-                   implicit_klass='foldpanel',
-                   implicit_page='FoldPanel',
-                   implicit_attributes=['label', 'collapsed'],
-                   implicit_params={'collapsed': params.ParamBool})
-c.addStyles('FPB_SINGLE_FOLD', 'FPB_COLLAPSE_TO_BOTTOM',
-            'FPB_EXCLUSIVE_FOLD', 'FPB_HORIZONTAL', 'FPB_VERTICAL')
+c = component.Container('odemis.gui.comp.foldpanelbar.FoldPanelBar',
+    ['window', 'top_level', 'control'],
+    ['pos', 'size'])
+c.addStyles('FPB_SINGLE_FOLD',
+    'FPB_COLLAPSE_TO_BOTTOM',
+    'FPB_EXCLUSIVE_FOLD',
+    'FPB_HORIZONTAL',
+    'FPB_VERTICAL')
 component.Manager.register(c)
 component.Manager.addXmlHandler(xh_delmic.FoldPanelBarXmlHandler)
-component.Manager.setMenu(c, 'bar', 'Delmic fold panel bar', 'FoldPanelBar', 1000)
+component.Manager.setMenu(c, 'bar', 'Delmic fold panel bar', 'FoldPanelBar', 10)
 
+c = component.Container('odemis.gui.comp.foldpanelbar.FoldPanelItem',
+    ['window', 'top_level', 'control'],
+    ['pos', 'size', 'label', 'collapsed'],
+    params={'label': params.ParamText, 'collapsed': params.ParamBool})
+#c.addStyles('FPB_SINGLE_FOLD', 'FPB_COLLAPSE_TO_BOTTOM',
+#            'FPB_EXCLUSIVE_FOLD', 'FPB_HORIZONTAL', 'FPB_VERTICAL')
+component.Manager.register(c)
+component.Manager.addXmlHandler(xh_delmic.FoldPanelXmlHandler)
+component.Manager.setMenu(c, 'container', 'Delmic fold panel', 'FoldPanel', 10)
