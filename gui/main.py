@@ -82,8 +82,8 @@ class OdemisGUIApp(wx.App):
 
         # self.fr_main.fpb_settings.Bind(fpb.EVT_CAPTIONBAR, self.height_test)
 
-        self.fr_main.scr_win.EnableScrolling(False, True)
-        self.fr_main.scr_win.SetScrollbars(-1, 10, 1, 1)
+        #self.fr_main.scr_win.EnableScrolling(False, True)
+        #self.fr_main.scr_win.SetScrollbars(-1, 10, 1, 1)
 
         #self.height_test()
 

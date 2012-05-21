@@ -48,14 +48,18 @@ class FoldPanelBarXmlHandler(xrc.XmlResourceHandler):
             self.CreateChildren(w, True)
             self._isInside = old_ins
 
-            self._w.GetParent().EnableScrolling(False, True)
-            self._w.GetParent().SetScrollbars(-1, 10, 1, 1)
+            parent = self._w.GetParent()
+            if parent.__class__ == wx.ScrolledWindow:
+                parent.EnableScrolling(False, True)
+                parent.SetScrollbars(-1, 10, 1, 1)
 
             return w
         elif self.GetClass() == 'odemis.gui.comp.foldpanelbar.FoldPanelItem':
-            #print "Creating FoldPanel", self.GetText('label')
+            #if self.GetName() != -1:
+            #    print self.GetParamNode('XRCED').GetProperties()
             item = self._w.AddFoldPanel(self.GetText('label'),
-                                        collapsed=self.GetBool('collapsed'))
+                                        collapsed=self.GetBool('collapsed'),
+                                        id=self.GetID())
             self.current_fbp = item
 
             n = self.GetParamNode("object")

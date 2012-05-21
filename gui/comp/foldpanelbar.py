@@ -1252,7 +1252,7 @@ class FoldPanelBar(wx.Panel):
         self.Bind(wx.EVT_SIZE, self.OnSizePanel)
 
 
-    def AddFoldPanel(self, caption="", collapsed=False, foldIcons=None, cbstyle=None):
+    def AddFoldPanel(self, caption="", id=wx.ID_ANY, collapsed=False, foldIcons=None, cbstyle=None):
         """
         Adds a fold panel to the list of panels.
 
@@ -1285,7 +1285,7 @@ class FoldPanelBar(wx.Panel):
             bmp = CollapsedIcon.GetBitmap()
             foldIcons.Add(bmp)
 
-        item = FoldPanelItem(self._foldPanel, -1, caption=caption,
+        item = FoldPanelItem(self._foldPanel, id, caption=caption,
                              foldIcons=foldIcons,
                              collapsed=collapsed, cbstyle=cbstyle)
 
@@ -1295,9 +1295,16 @@ class FoldPanelBar(wx.Panel):
 
         item.Reposition(pos)
         self._panels.append(item)
+        item.GetParent().Fit()
+        wx.CallAfter(self.FitBar)
 
         return item
 
+    # Delmic
+    def RemoveFoldPanel(self, fold_panel):
+        self._panels.remove(fold_panel)
+        fold_panel.Destroy()
+        wx.CallAfter(self.FitBar)
 
     def AddFoldPanelWindow(self, panel, window, flags=FPB_ALIGN_WIDTH,
                            spacing=FPB_DEFAULT_SPACING,
@@ -1440,6 +1447,9 @@ class FoldPanelBar(wx.Panel):
 
         if event.GetFoldStatus():
             self.Collapse(event.GetTag())
+            #parent = self.GetParent()
+            #if parent.__class__ == wx.ScrolledWindow:
+            #    parent.FitInside()
         else:
             self.Expand(event.GetTag())
 
@@ -1490,8 +1500,15 @@ class FoldPanelBar(wx.Panel):
         """ Make the FoldPanelBar as high as it's children """
         height = 0
 
-        for i in self.GetChildren():
-            height += sum([w.GetSize().GetHeight() for w in i.GetChildren()])
+        for panel in self.GetChildren():
+            if len(panel.GetChildren()) == 4:
+                c = panel.GetChildren()
+                print c[3].GetChildren()[0].GetSize().GetHeight()
+                print [w.GetSize().GetHeight() for w in panel.GetChildren()]
+            height += sum([w.GetSize().GetHeight() for w in panel.GetChildren()])
+            #for foldpanelitem in panel.GetChildren():
+                #print foldpanelitem.__class__
+                #height += sum([w.GetSize().GetHeight() for w in foldpanelitem.GetChildren()])
 
         self.SetSize((-1, height))
 
@@ -1830,6 +1847,10 @@ class FoldPanelItem(wx.Panel):
         self._LastInsertPos = self._LastInsertPos + wi.GetWindowLength(vertical)
         self.ResizePanel()
 
+
+    #Delmic
+    def GetCaptionBar(self):
+        return self._captionBar
 
     def AddSeparator(self, colour=wx.BLACK, spacing=FPB_DEFAULT_SPACING,
                      leftSpacing=FPB_DEFAULT_LEFTSPACING,
