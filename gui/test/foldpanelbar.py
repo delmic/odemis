@@ -274,21 +274,21 @@ class FoldPanelBarTestCase(unittest.TestCase):
 
         wx.MilliSleep(SLEEP_TIME)
 
-        fpb = self.app.test_frame.scrwin.GetChildren()[0]
+        fpb = self.app.test_frame.fpb
         fpb_height = fpb.GetSize().GetHeight()
 
-        new_panel = self.app.test_frame.fpb.AddFoldPanel("Test panel 4",
+        new_panel = fpb.AddFoldPanel("Test panel 4",
                                                           collapsed=False)
         loop()
         loop()
 
         # The height of the parent should be 40 pixels higher
         self.assertEqual(fpb_height + 40, fpb.GetSize().GetHeight())
-        self.assertEqual(len(self.app.test_frame.fpb.GetChildren()[0].GetChildren()), 4)
+        self.assertEqual(len(fpb.GetChildren()[0].GetChildren()), 4)
         wx.MilliSleep(SLEEP_TIME)
 
 
-        self.app.test_frame.fpb.AddFoldPanelWindow(new_panel,wx.StaticText("?????"))
+        fpb.AddFoldPanelWindow(new_panel,wx.StaticText("?????"))
 
         self.app.test_frame.fpb.RemoveFoldPanel(new_panel)
         loop()

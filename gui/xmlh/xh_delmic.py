@@ -21,7 +21,7 @@ class FoldPanelBarXmlHandler(xrc.XmlResourceHandler):
         self.AddStyle('FPB_HORIZONTAL', fpb.FPB_HORIZONTAL)
         self.AddStyle('FPB_VERTICAL', fpb.FPB_VERTICAL)
         self._isInside = False
-        self.current_fbp = None
+        self.current_foldpanelitem = None
 
     def CanHandle(self, node):
         # return not self._isInside and self.IsOfClass(node, 'wx.lib.foldpanelbar.FoldPanelBar') or \
@@ -60,7 +60,7 @@ class FoldPanelBarXmlHandler(xrc.XmlResourceHandler):
             item = self._w.AddFoldPanel(self.GetText('label'),
                                         collapsed=self.GetBool('collapsed'),
                                         id=self.GetID())
-            self.current_fbp = item
+            self.current_foldpanelitem = item
 
             n = self.GetParamNode("object")
             wnd = None
@@ -70,9 +70,9 @@ class FoldPanelBarXmlHandler(xrc.XmlResourceHandler):
                 if n.Name != 'object':
                     n = n.Next
                     continue
-                wnd = self.CreateResFromNode(n, self.current_fbp, None)
+                wnd = self.CreateResFromNode(n, self.current_foldpanelitem, None)
                 if wnd:
-                    self._w.AddFoldPanelWindow(self.current_fbp, wnd)
+                    self._w.AddFoldPanelWindow(self.current_foldpanelitem, wnd)
                 n = n.Next
 
             # If the last one, was a window ctrl...
