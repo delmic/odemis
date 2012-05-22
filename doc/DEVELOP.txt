@@ -11,7 +11,7 @@ See LICENSE.txt for the complete and official text of the license.
 
 Moreover, if you have a microscope from Delmic, the maintenance contract only
 supports the original version of the Odemis software. Modified versions of the
-software are not covered by the maintenance contract unless explicitly stated.
+software are not covered by the maintenance contract (unless explicitly stated).
 If you share your extension with Delmic and we decide to integrate them into a
 later version of Odemis, then the contract will also cover the extension.
 
@@ -77,18 +77,23 @@ See later section about extending the GUI.
 
 = Fixing a bug =
 
-Like every complex piece of software, Odemis contains bugs, even though we do 
-our best to minimize their amount. In the event you are facing a bug, we advise 
-you first to report it to us (info@delmic.com). We might have already solved it 
-or might be able to fix it for you. If neither of these two options work out, 
-you can try and fix it yourself. Please include a description of what is 
-happening compared to what you expect to happen, the log files and screen shots 
-if relevant.
+Like every complex piece of software, Odemis contains bugs, even though we do
+our best to minimize their amount. In the event you are facing a bug, we advise
+you first to report it to us (info@delmic.com). We might have already solved it
+or might be able to fix it for you. If neither of these two options work out,
+you can try and fix it yourself. When reporting a bug, please include a
+description of what is happening compared to what you expect to happen, the log
+files and screen shots if relevant.
 
-Locate the bug. Have a look at the log files. You can add "--log-level=2" as a 
-start-up parameter to increase the verbosity. It's also possible to run either
-odemisd (and the drivers) or the GUI from Eclipse. You can then run in debug 
-mode, place breakpoints, observe the value of variables and modify the code.
+If you try to solve a bug by yourself, the first step is to download the latest
+version of Odemis via git.  For this you can do in a terminal: git clone
+git@github.com:pieleric/odemis.git
+
+The next step is to locate the bug.  Have a look at the log files. You can add
+"--log-level=2" as a start-up parameter to increase the verbosity. It's also
+possible to run either odemisd (and the drivers) or the GUI from Eclipse. You
+can then run in debug mode, place breakpoints, observe the value of variables
+and modify the code.
 
 Once the bug fixed, commit your code using "git add ..." and "git commit -a", 
 and send us the patch for inclusion in the next version of Odemis.
