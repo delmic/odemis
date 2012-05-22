@@ -8,7 +8,7 @@ import unittest
 import wx
 import odemis.gui.test.test_gui
 
-SLEEP_TIME = 1000 # Sleep timer in milliseconds
+SLEEP_TIME = 200 # Sleep timer in milliseconds
 MANUAL = False # If manual is set to True, the window will be kept open at the end
 
 def odemis_get_resources():
@@ -268,23 +268,33 @@ class FoldPanelBarTestCase(unittest.TestCase):
 
     def test_foldpanel_manipulation(self):
         self.app.test_frame.SetTitle("Testing Fold panel manipulation")
+
+        #import wx.lib.inspection
+        #wx.lib.inspection.InspectionTool().Show()
+
         wx.MilliSleep(SLEEP_TIME)
+
+        fpb = self.app.test_frame.scrwin.GetChildren()[0]
+        fpb_height = fpb.GetSize().GetHeight()
 
         new_panel = self.app.test_frame.fpb.AddFoldPanel("Test panel 4",
                                                           collapsed=False)
         loop()
         loop()
 
+        # The height of the parent should be 40 pixels higher
+        self.assertEqual(fpb_height + 40, fpb.GetSize().GetHeight())
         self.assertEqual(len(self.app.test_frame.fpb.GetChildren()[0].GetChildren()), 4)
         wx.MilliSleep(SLEEP_TIME)
 
-        self.app.test_frame.fpb.RemoveFoldPanel(new_panel)
 
+        self.app.test_frame.fpb.AddFoldPanelWindow(new_panel,wx.StaticText("?????"))
+
+        self.app.test_frame.fpb.RemoveFoldPanel(new_panel)
         loop()
         loop()
 
         self.assertEqual(len(self.app.test_frame.fpb.GetChildren()[0].GetChildren()), 3)
-
         wx.MilliSleep(SLEEP_TIME)
 
 

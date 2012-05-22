@@ -1295,7 +1295,7 @@ class FoldPanelBar(wx.Panel):
 
         item.Reposition(pos)
         self._panels.append(item)
-        item.GetParent().Fit()
+        
         wx.CallAfter(self.FitBar)
 
         return item
@@ -1501,14 +1501,14 @@ class FoldPanelBar(wx.Panel):
         height = 0
 
         for panel in self.GetChildren():
-            if len(panel.GetChildren()) == 4:
-                c = panel.GetChildren()
-                print c[3].GetChildren()[0].GetSize().GetHeight()
-                print [w.GetSize().GetHeight() for w in panel.GetChildren()]
-            height += sum([w.GetSize().GetHeight() for w in panel.GetChildren()])
-            #for foldpanelitem in panel.GetChildren():
-                #print foldpanelitem.__class__
-                #height += sum([w.GetSize().GetHeight() for w in foldpanelitem.GetChildren()])
+            # The use of 'max' is a dirty hack, needed because the height
+            # of the parent foldpanelitem was detected as being 20 pixels
+            # even thought the child caption bar has a height of 40.
+            #
+            # FIXME: To fix this, a method is needed to force the parent to be at least
+            # as big as it's children.        
+            heights = [max(w.GetSize().GetHeight(), 40) for w in panel.GetChildren()]
+            height += sum(heights)
 
         self.SetSize((-1, height))
 
