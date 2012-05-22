@@ -56,7 +56,6 @@ def __init_resources():
 
     test_gui_xrc = '''\
 <?xml version="1.0" ?><resource class="">
-  
   <object class="wxFrame" name="fpb_frame">
     <object class="wxBoxSizer">
       <object class="sizeritem">
@@ -74,6 +73,15 @@ def __init_resources():
                   </object>
                   <label>Test Panel 1</label>
                   <bg>#1E90FF</bg>
+                  <font>
+                    <size>13</size>
+                    <style>normal</style>
+                    <weight>normal</weight>
+                    <underlined>0</underlined>
+                    <family>default</family>
+                    <face>Ubuntu</face>
+                    <encoding>UTF-8</encoding>
+                  </font>
                   <XRCED>
                     <assign_var>1</assign_var>
                   </XRCED>
@@ -158,6 +166,7 @@ def __init_resources():
       </object>
       <orient>wxVERTICAL</orient>
     </object>
+    <size>400,400</size>
     <title>Fold Panel Bar Test Frame</title>
   </object>
 </resource>'''
