@@ -1295,7 +1295,7 @@ class FoldPanelBar(wx.Panel):
 
         item.Reposition(pos)
         self._panels.append(item)
-        
+
         wx.CallAfter(self.FitBar)
 
         return item
@@ -1359,15 +1359,30 @@ class FoldPanelBar(wx.Panel):
         """
 
         try:
+            # The index of the panel to which we are adding a window 
             item = self._panels.index(panel)
         except:
             raise Exception("ERROR: Invalid Panel Passed To AddFoldPanelWindow: " + repr(panel))
 
+        # Delmic
+        # 
+        # The next piece of code covers functionality that was lacking in the 2.8.11 wxPython
+        # version of this module: If widgets were added anywhere else but the last fold panel,
+        # then the lower widgets would not move down to create space for that new widget.
+        
+        old_size =  panel.GetSize()
         panel.AddWindow(window, flags, spacing, leftSpacing, rightSpacing)
+        new_size = panel.GetSize()        
+        
+        # If the height has increased
+        if old_size.GetHeight() < new_size.GetHeight():
+            difference = new_size.GetHeight() - old_size.GetHeight()
+            # Move all following fold panels to a lower position
+            for p in self._panels[item + 1:]:
+                pos = p.GetPosition()
+                p.SetPosition((pos[0], pos[1] + difference))
 
-        # TODO: Take old and new height, and if difference, reposition all the lower
-        # panels this is because the user can add new wxWindow controls somewhere in
-        # between when other panels are already present.
+        wx.CallAfter(self.FitBar)
 
         return 0
 
@@ -1506,7 +1521,7 @@ class FoldPanelBar(wx.Panel):
             # even thought the child caption bar has a height of 40.
             #
             # FIXME: To fix this, a method is needed to force the parent to be at least
-            # as big as it's children.        
+            # as big as it's children.
             heights = [max(w.GetSize().GetHeight(), 40) for w in panel.GetChildren()]
             height += sum(heights)
 
