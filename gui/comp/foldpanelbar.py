@@ -1394,6 +1394,36 @@ class FoldPanelBar(wx.Panel):
         return window
 
     # Delmic
+    def InsertFoldPanelWindow(self, panel, window, position, flags=FPB_ALIGN_WIDTH,
+                           spacing=FPB_DEFAULT_SPACING,
+                           leftSpacing=FPB_DEFAULT_LEFTLINESPACING,
+                           rightSpacing=FPB_DEFAULT_RIGHTLINESPACING):
+        
+        try:
+            # The index of the panel to which we are adding a window
+            item = self._panels.index(panel)
+        except:
+            raise Exception("ERROR: Invalid Panel Passed To AddFoldPanelWindow: " + repr(panel))
+        
+        old_size =  panel.GetSize()
+        panel.InsertWindow(window, position, flags, spacing, leftSpacing, rightSpacing)
+        new_size = panel.GetSize()
+
+        # If the height has increased
+        if old_size.GetHeight() < new_size.GetHeight():
+            difference = new_size.GetHeight() - old_size.GetHeight()
+            # Move all following fold panels to a lower position
+            for p in self._panels[item + 1:]:
+                pos = p.GetPosition()
+                p.SetPosition((pos[0], pos[1] + difference))
+
+        wx.CallAfter(self.FitBar)
+
+        # Delmic
+        # Little tweak: return the window instead of '0'
+        return window
+    
+    # Delmic
     def RemoveFoldPanelWindow(self, panel, window):
         try:
             # The index of the panel to which we are adding a window
@@ -1905,12 +1935,51 @@ class FoldPanelItem(wx.Panel):
 
         xpos = (vertical and [leftSpacing] or [self._LastInsertPos + spacing])[0]
         ypos = (vertical and [self._LastInsertPos + spacing] or [leftSpacing])[0]
-
+        
         window.SetDimensions(xpos, ypos, -1, -1, wx.SIZE_USE_EXISTING)
 
         self._LastInsertPos = self._LastInsertPos + wi.GetWindowLength(vertical)
         self.ResizePanel()
 
+    # Delmic    
+    def InsertWindow(self, window, position, flags=FPB_ALIGN_WIDTH, spacing=FPB_DEFAULT_SPACING,
+                  leftSpacing=FPB_DEFAULT_LEFTLINESPACING,
+                  rightSpacing=FPB_DEFAULT_RIGHTLINESPACING):
+        """ Insert a window into the panel at the given position.
+        
+            The top or left-most window occupies position 0
+        """
+        wi = FoldWindowItem(self, window, Type="WINDOW", flags=flags, spacing=spacing,
+                            leftSpacing=leftSpacing, rightSpacing=rightSpacing)
+        
+        vertical = self.IsVertical()
+                
+        self._items.insert(position, wi)
+               
+        self._spacing = spacing
+        self._leftSpacing = leftSpacing
+        self._rightSpacing = rightSpacing
+        
+        # TODO: Find out why we needed to add a hard-coded 16 instead of the
+        # expected 40 (caption bar height)
+        space_before = 16 + sum([wi.GetWindowLength(vertical) for wi in self._items[:position]])
+        
+        xpos = (vertical and [leftSpacing] or [space_before + spacing])[0]
+        ypos = (vertical and [space_before + spacing] or [leftSpacing])[0]
+
+        window.SetDimensions(xpos, ypos, -1, -1, wx.SIZE_USE_EXISTING)
+        
+        # Move other windows down
+        self._LastInsertPos = self._LastInsertPos + wi.GetWindowLength(vertical)
+        
+        offset = wi.GetWindowLength(vertical)
+        for wnd in self._items[position:]:
+            xypos = wnd._wnd.GetPosition()
+            wnd._wnd.SetPosition((xypos[0], xypos[1] + offset))
+                    
+        self.ResizePanel()
+
+        
     # Delmic
     def RemoveWindow(self, window):
         """ Remove the given window from the FoldPanelItem """
