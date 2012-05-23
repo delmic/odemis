@@ -9,7 +9,7 @@ import wx
 import odemis.gui.test.test_gui
 
 SLEEP_TIME = 200 # Sleep timer in milliseconds
-MANUAL = False # If manual is set to True, the window will be kept open at the end
+MANUAL = True # If manual is set to True, the window will be kept open at the end
 
 def odemis_get_resources():
     """ This function provides access to the XML handlers needed for
@@ -69,6 +69,9 @@ class FoldPanelBarTestCase(unittest.TestCase):
     def dump_win_tree(cls, window, indent=0):
         if not indent:
             print ""
+
+        if not window.GetChildren():
+            print dir(window)
 
         for child in window.GetChildren():
             print "."*indent, child.__class__.__name__
@@ -144,6 +147,14 @@ class FoldPanelBarTestCase(unittest.TestCase):
         self.assertEqual(self.has_vertical_scrollbar(self.app.test_frame.scrwin), False)
         self.assertEqual(self.has_horizontal_scrollbar(self.app.test_frame.scrwin), False)
 
+        bottom_panel_2 = self.app.test_frame.panel_2.GetPosition()[1] + \
+                         self.app.test_frame.panel_2.GetSize().GetHeight()
+        top_panel_3 = self.app.test_frame.panel_3.GetPosition()[1]
+
+        # The top of panel 3 should allign with the bottom of panel 2
+        self.assertEqual(bottom_panel_2, top_panel_3)
+
+        # Expand the 2nd panel
         event = self.build_caption_event(self.app.test_frame.panel_2)
         wx.PostEvent(self.app.test_frame.panel_2, event)
         loop()
@@ -155,9 +166,20 @@ class FoldPanelBarTestCase(unittest.TestCase):
 
         wx.MilliSleep(SLEEP_TIME)
 
+        # Collapse the 2nd panel
         wx.PostEvent(self.app.test_frame.panel_2, event)
         loop()
         loop()
+
+        new_bottom_panel_2 = self.app.test_frame.panel_2.GetPosition()[1] + \
+                         self.app.test_frame.panel_2.GetSize().GetHeight()
+        new_top_panel_3 = self.app.test_frame.panel_3.GetPosition()[1]
+
+        # Top and bottom values should be the same...
+        self.assertEqual(bottom_panel_2, new_bottom_panel_2)
+        self.assertEqual(top_panel_3, new_top_panel_3)
+        # ...and alligned
+        self.assertEqual(new_bottom_panel_2, new_top_panel_3)
 
         # Scrollbar should be hidden again
         self.assertEqual(self.has_vertical_scrollbar(self.app.test_frame.scrwin), False)
@@ -369,8 +391,9 @@ class FoldPanelBarTestCase(unittest.TestCase):
         # Count children of the top fold panel: 1 caption bar
         self.assertEqual(len(top_panel.GetChildren()), 1)
 
-        fpb.InsertFoldPanelWindow(top_panel, wx.StaticText(top_panel, top_panel.GetId(), "LABEL First"), 0)
-        fpb.InsertFoldPanelWindow(top_panel, wx.StaticText(top_panel, top_panel.GetId(), "LABEL Second"), 0)
+        fpb.InsertFoldPanelWindow(top_panel, wx.StaticText(top_panel, top_panel.GetId(), "LABEL 1"), 0)
+        fpb.InsertFoldPanelWindow(top_panel, wx.StaticText(top_panel, top_panel.GetId(), "LABEL 2"), 0)
+        fpb.InsertFoldPanelWindow(top_panel, wx.StaticText(top_panel, top_panel.GetId(), "LABEL 3"), 1)
 
         loop()
         loop()
@@ -378,6 +401,7 @@ class FoldPanelBarTestCase(unittest.TestCase):
         #import wx.lib.inspection
         #wx.lib.inspection.InspectionTool().Show()
 
+        self.dump_win_tree(self.app.test_frame)
         wx.MilliSleep(SLEEP_TIME)
 
 
