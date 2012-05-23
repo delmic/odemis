@@ -84,7 +84,6 @@ class FoldPanelBarXmlHandler(xrc.XmlResourceHandler):
                     continue
                 wnd = self.CreateResFromNode(n, self.current_foldpanelitem, None)
                 if wnd:
-                    print self.left_spacing
                     self._w.AddFoldPanelWindow(self.current_foldpanelitem,
                                                wnd,
                                                spacing=self.spacing,
