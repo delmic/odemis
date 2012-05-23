@@ -22,6 +22,7 @@ class FoldPanelBarXmlHandler(xrc.XmlResourceHandler):
         self.AddStyle('FPB_VERTICAL', fpb.FPB_VERTICAL)
         self._isInside = False
         self.current_foldpanelitem = None
+        self.spacing = None
 
     def CanHandle(self, node):
         # return not self._isInside and self.IsOfClass(node, 'wx.lib.foldpanelbar.FoldPanelBar') or \
@@ -33,18 +34,23 @@ class FoldPanelBarXmlHandler(xrc.XmlResourceHandler):
     # Process XML parameters and create the object
     def DoCreateResource(self):
         TRACE('DoCreateResource: %s', self.GetClass())
+
         if self.GetClass() == 'odemis.gui.comp.foldpanelbar.FoldPanelBar':
-            #print "Creating FoldPanelBar"
             w = fpb.FoldPanelBar(self.GetParentAsWindow(),
                                  self.GetID(),
                                  self.GetPosition(),
                                  self.GetSize(),
                                  self.GetStyle(),
                                  self.GetStyle('exstyle'))
+
+            if self.HasParam('spacing'):
+                self.spacing = self.GetLong('spacing')
+
             self.SetupWindow(w)
             self._w = w
             old_ins = self._isInside
             self._isInside = True
+            # Note: CreateChildren will call this method again
             self.CreateChildren(w, True)
             self._isInside = old_ins
 
@@ -55,8 +61,6 @@ class FoldPanelBarXmlHandler(xrc.XmlResourceHandler):
 
             return w
         elif self.GetClass() == 'odemis.gui.comp.foldpanelbar.FoldPanelItem':
-            #if self.GetName() != -1:
-            #    print self.GetParamNode('XRCED').GetProperties()
             item = self._w.AddFoldPanel(self.GetText('label'),
                                         collapsed=self.GetBool('collapsed'),
                                         id=self.GetID())
@@ -72,7 +76,10 @@ class FoldPanelBarXmlHandler(xrc.XmlResourceHandler):
                     continue
                 wnd = self.CreateResFromNode(n, self.current_foldpanelitem, None)
                 if wnd:
-                    self._w.AddFoldPanelWindow(self.current_foldpanelitem, wnd)
+                    if self.spacing is not None:
+                        self._w.AddFoldPanelWindow(self.current_foldpanelitem, wnd, spacing=self.spacing)
+                    else:
+                        self._w.AddFoldPanelWindow(self.current_foldpanelitem, wnd)
                 n = n.Next
 
             # If the last one, was a window ctrl...

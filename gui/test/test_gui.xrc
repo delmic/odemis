@@ -93,6 +93,7 @@
                     <assign_var>1</assign_var>
                   </XRCED>
                 </object>
+                <spacing>0</spacing>
                 <XRCED>
                   <assign_var>1</assign_var>
                 </XRCED>
@@ -107,10 +108,59 @@
         </object>
         <option>1</option>
         <flag>wxEXPAND</flag>
+        <minsize>100,100</minsize>
+      </object>
+      <orient>wxVERTICAL</orient>
+    </object>
+    <title>Fold Panel Bar Test Frame</title>
+  </object>
+  <object class="wxFrame" name="stream_frame">
+    <object class="wxBoxSizer">
+      <object class="sizeritem">
+        <object class="wxScrolledWindow" name="scrwin">
+          <object class="wxBoxSizer">
+            <orient>wxVERTICAL</orient>
+            <object class="sizeritem">
+              <object class="odemis.gui.comp.foldpanelbar.FoldPanelBar" name="fpb">
+                <object class="odemis.gui.comp.foldpanelbar.FoldPanelItem" name="panel_1">
+                  <object class="wxCollapsiblePane">
+                    <label>SEM Backscatter</label>
+                  </object>
+                  <label>Streams</label>
+                  <bg>#1E90FF</bg>
+                  <font>
+                    <size>13</size>
+                    <style>normal</style>
+                    <weight>normal</weight>
+                    <underlined>0</underlined>
+                    <family>default</family>
+                    <face>Ubuntu</face>
+                    <encoding>UTF-8</encoding>
+                  </font>
+                  <XRCED>
+                    <assign_var>1</assign_var>
+                  </XRCED>
+                </object>
+                <spacing>0</spacing>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxEXPAND</flag>
+            </object>
+          </object>
+          <bg>#A52A2A</bg>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
+        <option>1</option>
+        <flag>wxEXPAND</flag>
+        <minsize>400,400</minsize>
       </object>
       <orient>wxVERTICAL</orient>
     </object>
     <size>400,400</size>
-    <title>Fold Panel Bar Test Frame</title>
+    <title>Stream panel test frame</title>
   </object>
 </resource>

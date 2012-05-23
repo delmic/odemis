@@ -158,6 +158,14 @@ def __init_resources():
                     </object>
                     <object class="odemis.gui.comp.foldpanelbar.FoldPanelItem">
                       <label>Streams</label>
+                      <object class="wxCollapsiblePane">
+                        <label>Wababa</label>
+                        <object class="panewindow">
+                          <object class="wxButton">
+                            <label>klick meh!</label>
+                          </object>
+                        </object>
+                      </object>
                     </object>
                     <XRCED>
                       <assign_var>1</assign_var>
