@@ -20,12 +20,12 @@ class xrcfpb_frame(wx.Frame):
 #!XRCED:begin-block:xrcfpb_frame.PreCreate
     def PreCreate(self, pre):
         """ This function is called during the class's initialization.
-
+        
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
         pass
-
+        
 #!XRCED:end-block:xrcfpb_frame.PreCreate
 
     def __init__(self, parent):

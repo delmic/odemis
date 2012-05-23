@@ -16,13 +16,15 @@ TRACE('*** creating xh_delmic components')
 
 c = component.Container('odemis.gui.comp.foldpanelbar.FoldPanelBar',
     ['window', 'top_level', 'control'],
-    ['pos', 'size', 'spacing'])
+    ['pos', 'size', 'spacing', 'leftspacing', 'rightspacing'])
 c.addStyles('FPB_SINGLE_FOLD',
     'FPB_COLLAPSE_TO_BOTTOM',
     'FPB_EXCLUSIVE_FOLD',
     'FPB_HORIZONTAL',
     'FPB_VERTICAL')
 c.setParamClass('spacing', params.ParamIntNN)
+c.setParamClass('leftspacing', params.ParamIntNN)
+c.setParamClass('rightspacing', params.ParamIntNN)
 component.Manager.register(c)
 component.Manager.addXmlHandler(xh_delmic.FoldPanelBarXmlHandler)
 component.Manager.setMenu(c, 'bar', 'Delmic fold panel bar', 'FoldPanelBar', 10)

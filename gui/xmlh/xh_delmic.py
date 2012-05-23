@@ -22,7 +22,9 @@ class FoldPanelBarXmlHandler(xrc.XmlResourceHandler):
         self.AddStyle('FPB_VERTICAL', fpb.FPB_VERTICAL)
         self._isInside = False
         self.current_foldpanelitem = None
-        self.spacing = None
+        self.spacing = fpb.FPB_DEFAULT_SPACING
+        self.left_spacing = fpb.FPB_DEFAULT_LEFTSPACING
+        self.right_spacing = fpb.FPB_DEFAULT_RIGHTSPACING
 
     def CanHandle(self, node):
         # return not self._isInside and self.IsOfClass(node, 'wx.lib.foldpanelbar.FoldPanelBar') or \
@@ -45,6 +47,12 @@ class FoldPanelBarXmlHandler(xrc.XmlResourceHandler):
 
             if self.HasParam('spacing'):
                 self.spacing = self.GetLong('spacing')
+
+            if self.HasParam('leftspacing'):
+                self.left_spacing = self.GetLong('leftspacing')
+
+            if self.HasParam('rightspacing'):
+                self.right_spacing = self.GetLong('rightspacing')
 
             self.SetupWindow(w)
             self._w = w
@@ -76,10 +84,12 @@ class FoldPanelBarXmlHandler(xrc.XmlResourceHandler):
                     continue
                 wnd = self.CreateResFromNode(n, self.current_foldpanelitem, None)
                 if wnd:
-                    if self.spacing is not None:
-                        self._w.AddFoldPanelWindow(self.current_foldpanelitem, wnd, spacing=self.spacing)
-                    else:
-                        self._w.AddFoldPanelWindow(self.current_foldpanelitem, wnd)
+                    print self.left_spacing
+                    self._w.AddFoldPanelWindow(self.current_foldpanelitem,
+                                               wnd,
+                                               spacing=self.spacing,
+                                               leftSpacing=self.left_spacing,
+                                               rightSpacing=self.right_spacing)
                 n = n.Next
 
             # If the last one, was a window ctrl...
