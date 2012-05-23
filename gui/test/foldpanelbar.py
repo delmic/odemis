@@ -56,6 +56,10 @@ class FoldPanelBarTestCase(unittest.TestCase):
                               cls.app.test_frame.panel_2,
                               cls.app.test_frame.panel_3]
 
+        # FIXME: Sometimes the tests start running before the test frame
+        # is completely and correctly drawn. Find out a way to delay test
+        # execution until the frame is correctly displayed!
+
     @classmethod
     def tearDownClass(cls):
         if not MANUAL:
