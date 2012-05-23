@@ -8,8 +8,8 @@ import unittest
 import wx
 import odemis.gui.test.test_gui
 
-SLEEP_TIME = 200 # Sleep timer in milliseconds
-MANUAL = True # If manual is set to True, the window will be kept open at the end
+SLEEP_TIME = 100 # Sleep timer in milliseconds
+MANUAL = False # If manual is set to True, the window will be kept open at the end
 
 def odemis_get_resources():
     """ This function provides access to the XML handlers needed for
@@ -52,8 +52,6 @@ class FoldPanelBarTestCase(unittest.TestCase):
     def setUpClass(cls):
         cls.app = TestApp()
         loop()
-        loop()
-
         cls.foldpanelitems = [cls.app.test_frame.panel_1,
                               cls.app.test_frame.panel_2,
                               cls.app.test_frame.panel_3]
@@ -69,9 +67,6 @@ class FoldPanelBarTestCase(unittest.TestCase):
     def dump_win_tree(cls, window, indent=0):
         if not indent:
             print ""
-
-        if not window.GetChildren():
-            print dir(window)
 
         for child in window.GetChildren():
             print "."*indent, child.__class__.__name__
@@ -372,11 +367,11 @@ class FoldPanelBarTestCase(unittest.TestCase):
         # Count children of the top fold panel: 1 caption bar, 2 labels and 4 added labels: 7 total
         self.assertEqual(len(top_panel.GetChildren()), 7)
 
+        new_labels.reverse()
         for label in new_labels:
             fpb.RemoveFoldPanelWindow(top_panel, label)
-
-        loop()
-        loop()
+            loop()
+            loop()
 
         wx.MilliSleep(SLEEP_TIME)
 
@@ -392,7 +387,13 @@ class FoldPanelBarTestCase(unittest.TestCase):
         self.assertEqual(len(top_panel.GetChildren()), 1)
 
         fpb.InsertFoldPanelWindow(top_panel, wx.StaticText(top_panel, top_panel.GetId(), "LABEL 1"), 0)
+        loop()
+        loop()
+        wx.MilliSleep(SLEEP_TIME)
         fpb.InsertFoldPanelWindow(top_panel, wx.StaticText(top_panel, top_panel.GetId(), "LABEL 2"), 0)
+        loop()
+        loop()
+        wx.MilliSleep(SLEEP_TIME)
         fpb.InsertFoldPanelWindow(top_panel, wx.StaticText(top_panel, top_panel.GetId(), "LABEL 3"), 1)
 
         loop()
@@ -401,7 +402,6 @@ class FoldPanelBarTestCase(unittest.TestCase):
         #import wx.lib.inspection
         #wx.lib.inspection.InspectionTool().Show()
 
-        self.dump_win_tree(self.app.test_frame)
         wx.MilliSleep(SLEEP_TIME)
 
 

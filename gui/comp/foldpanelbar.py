@@ -883,9 +883,7 @@ class CaptionBar(wx.Window):
         # based on the state of the bar. If we have any bmp's
 
         if self._foldIcons:
-
             index = self._collapsed
-
             if vertical:
                 drw = wndRect.GetRight() - self._iconWidth - self._rightIndent
                 self._foldIcons.Draw(index, dc, drw,
@@ -1199,6 +1197,8 @@ class CaptionBar(wx.Window):
             rect.SetWidth(self._iconWidth + self._rightIndent)
             self.RefreshRect(rect)
 
+    def GetHeight(self):
+        return self.GetSize().GetHeight()
 
 # ---------------------------------------------------------------------------------- #
 # class FoldPanelBar
@@ -1407,7 +1407,7 @@ class FoldPanelBar(wx.Panel):
             # Move all following fold panels to a lower position
             for p in self._panels[item + 1:]:
                 pos = p.GetPosition()
-                p.SetPosition((pos[0], pos[1] + difference))
+                p.Reposition(pos[1] + difference)
 
         wx.CallAfter(self.FitBar)
 
@@ -1437,7 +1437,7 @@ class FoldPanelBar(wx.Panel):
             # Move all following fold panels to a lower position
             for p in self._panels[item + 1:]:
                 pos = p.GetPosition()
-                p.SetPosition((pos[0], pos[1] + difference))
+                p.Reposition(pos[1] + difference)
 
         wx.CallAfter(self.FitBar)
 
@@ -1463,7 +1463,7 @@ class FoldPanelBar(wx.Panel):
             difference = old_size.GetHeight() - new_size.GetHeight()
             for p in self._panels[item + 1:]:
                 pos = p.GetPosition()
-                p.SetPosition((pos[0], pos[1] - difference))
+                p.Reposition(pos[1] - difference)
             wx.CallAfter(self.FitBar)
 
     # Delmic
@@ -1485,7 +1485,7 @@ class FoldPanelBar(wx.Panel):
             difference = old_size.GetHeight() - new_size.GetHeight()
             for p in self._panels[item + 1:]:
                 pos = p.GetPosition()
-                p.SetPosition((pos[0], pos[1] - difference))
+                p.Reposition(pos[1] - difference)
             wx.CallAfter(self.FitBar)
 
     def AddFoldPanelSeparator(self, panel, colour=wx.BLACK,
@@ -1563,9 +1563,6 @@ class FoldPanelBar(wx.Panel):
 
         if event.GetFoldStatus():
             self.Collapse(event.GetTag())
-            #parent = self.GetParent()
-            #if parent.__class__ == wx.ScrolledWindow:
-            #    parent.FitInside()
         else:
             self.Expand(event.GetTag())
 
@@ -1605,7 +1602,6 @@ class FoldPanelBar(wx.Panel):
             self.RepositionCollapsedToBottom()
 
         else:
-
             pos = self._panels[i].GetItemPos() + self._panels[i].GetPanelLength()
             for j in range(i+1, len(self._panels)):
                 pos = pos + self._panels[j].Reposition(pos)
@@ -1918,6 +1914,8 @@ class FoldPanelItem(wx.Panel):
         self._LastInsertPos = self._PanelSize
         self._items = []
 
+        self.count = 0
+
         self.Bind(EVT_CAPTIONBAR, self.OnPressCaption)
         self.Bind(wx.EVT_PAINT, self.OnPaint)
 
@@ -1982,9 +1980,8 @@ class FoldPanelItem(wx.Panel):
         self._leftSpacing = leftSpacing
         self._rightSpacing = rightSpacing
 
-        # TODO: Find out why we needed to add a hard-coded 16 instead of the
-        # expected 40 (caption bar height)
-        space_before = 16 + sum([wi.GetWindowLength(vertical) for wi in self._items[:position]])
+        space_before = self._captionBar.GetHeight() + \
+                       sum([wi.GetWindowLength(vertical) for wi in self._items[:position]])
 
         xpos = (vertical and [leftSpacing] or [space_before + spacing])[0]
         ypos = (vertical and [space_before + spacing] or [leftSpacing])[0]
@@ -1992,14 +1989,17 @@ class FoldPanelItem(wx.Panel):
         window.SetDimensions(xpos, ypos, -1, -1, wx.SIZE_USE_EXISTING)
 
         # Move other windows down
-        self._LastInsertPos = self._LastInsertPos + wi.GetWindowLength(vertical)
+        size_increase = wi.GetWindowLength(vertical)
+        self._LastInsertPos = self._LastInsertPos + size_increase
 
         offset = wi.GetWindowLength(vertical)
-        for wnd in self._items[position:]:
+        for wnd in self._items[position + 1:]:
             xypos = wnd._wnd.GetPosition()
             wnd._wnd.SetPosition((xypos[0], xypos[1] + offset))
 
         self.ResizePanel()
+
+        return size_increase
 
 
     # Delmic
