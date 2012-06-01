@@ -2,9 +2,34 @@
 #
 # DELMIC
 #
-# This module is an addaptation from the module found within wxPython 2.8.12.1
+# This module is an adaptation from the module found within wxPython 2.8.12.1
 # and has custom changes made to suit Delmic and Odemis' special needs.
 #
+# Note: The version of this module present in wxPython 2.9.3.x does not
+# contain any changes compared to the version you're looking at.
+#
+# The FoldPanelBar has the following overall structure:
+#
+# + FoldPanelBAr
+# |--+ wx.Panel
+#    |--+ FoldPanelItem
+#    |  |--- CaptionBar
+#    |  |--- wx.Window subclass
+#    .  .
+#    .  .
+#    |  |--- wx.Window subclass
+#    |
+#    |--+ FoldPanelItem
+#       |--- CaptionBar
+#       |--- wx.Window subclass
+#       .
+#       .
+#       |--- wx.Window subclass
+#
+# The wx.Window subclasses are wrapped in the FoldWindowItem class, instances
+# of which stored within the FoldPanelItem objects.
+#
+#-----------------------------------------------------------------------------#
 # FOLDPANELBAR wxPython IMPLEMENTATION
 # Ported From Jorgen Bodde & Julian Smart (Extended Demo) C++ Code By:
 #
@@ -174,7 +199,8 @@ import wx
 #----------------------------------------------------------------------
 from wx.lib.embeddedimage import PyEmbeddedImage
 
-# The default images have been replaced by Delmic's own base64 encoded png icons
+# Delmic
+# The default fold icons have been replaced with custom base64 encoded png icons
 CollapsedIcon = PyEmbeddedImage(
     "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAAZiS0dEAP8A"
     "/wD/oL2nkwAAAAlwSFlzAAALEwAACxMBAJqcGAAAAAd0SU1FB9wFDwcnFhL1+GMAAAAZdEVYdENv"
@@ -487,13 +513,13 @@ class CaptionBarStyle(object):
 
         return self._captionStyle
 
-    # Delmic tweak
+    # Delmic
     def SetBarHeight(self, height):
         """ Set the caption bar height in pixels """
         self._barheight = height
         self._barHeightUsed = True
 
-    # Delmic tweak
+    # Delmic
     def GetBarHeight(self):
         """ Get the caption bar height in pixels """
         return self._barheight
@@ -522,6 +548,7 @@ EVT_CAPTIONBAR = wx.PyEventBinder(wxEVT_CAPTIONBAR, 0)
 
 # Define Empty CaptionBar Style
 #EmptyCaptionBarStyle = CaptionBarStyle()
+# Use the Delmic style as the default
 EmptyCaptionBarStyle = FPB_STYLE
 
 # ---------------------------------------------------------------------------- #
@@ -714,7 +741,7 @@ class CaptionBar(wx.Window):
                 newstyle.SetCaptionStyle(CAPTIONBAR_GRADIENT_V)
 
             if not newstyle.BarHeightUsed():
-                newstyle.SetBarHeight(50)
+                newstyle.SetBarHeight(20)
 
         self._style = newstyle
 
@@ -856,9 +883,7 @@ class CaptionBar(wx.Window):
         # based on the state of the bar. If we have any bmp's
 
         if self._foldIcons:
-
             index = self._collapsed
-
             if vertical:
                 drw = wndRect.GetRight() - self._iconWidth - self._rightIndent
                 self._foldIcons.Draw(index, dc, drw,
@@ -1172,6 +1197,8 @@ class CaptionBar(wx.Window):
             rect.SetWidth(self._iconWidth + self._rightIndent)
             self.RefreshRect(rect)
 
+    def GetHeight(self):
+        return self.GetSize().GetHeight()
 
 # ---------------------------------------------------------------------------------- #
 # class FoldPanelBar
@@ -1295,7 +1322,7 @@ class FoldPanelBar(wx.Panel):
 
         item.Reposition(pos)
         self._panels.append(item)
-        item.GetParent().Fit()
+
         wx.CallAfter(self.FitBar)
 
         return item
@@ -1359,18 +1386,107 @@ class FoldPanelBar(wx.Panel):
         """
 
         try:
+            # The index of the panel to which we are adding a window
             item = self._panels.index(panel)
         except:
             raise Exception("ERROR: Invalid Panel Passed To AddFoldPanelWindow: " + repr(panel))
 
+        # Delmic
+        #
+        # The next piece of code covers functionality that was lacking in the 2.8.11 wxPython
+        # version of this module: If widgets were added anywhere else but the last fold panel,
+        # then the lower widgets would not move down to create space for that new widget.
+
+        old_size =  panel.GetSize()
         panel.AddWindow(window, flags, spacing, leftSpacing, rightSpacing)
+        new_size = panel.GetSize()
 
-        # TODO: Take old and new height, and if difference, reposition all the lower
-        # panels this is because the user can add new wxWindow controls somewhere in
-        # between when other panels are already present.
+        # If the height has increased
+        if old_size.GetHeight() < new_size.GetHeight():
+            difference = new_size.GetHeight() - old_size.GetHeight()
+            # Move all following fold panels to a lower position
+            for p in self._panels[item + 1:]:
+                pos = p.GetPosition()
+                p.Reposition(pos[1] + difference)
 
-        return 0
+        wx.CallAfter(self.FitBar)
 
+        # Delmic
+        # Little tweak: return the window instead of '0'
+        return window
+
+    # Delmic
+    def InsertFoldPanelWindow(self, panel, window, position, flags=FPB_ALIGN_WIDTH,
+                           spacing=FPB_DEFAULT_SPACING,
+                           leftSpacing=FPB_DEFAULT_LEFTLINESPACING,
+                           rightSpacing=FPB_DEFAULT_RIGHTLINESPACING):
+
+        try:
+            # The index of the panel to which we are adding a window
+            item = self._panels.index(panel)
+        except:
+            raise Exception("ERROR: Invalid Panel Passed To AddFoldPanelWindow: " + repr(panel))
+
+        old_size =  panel.GetSize()
+        panel.InsertWindow(window, position, flags, spacing, leftSpacing, rightSpacing)
+        new_size = panel.GetSize()
+
+        # If the height has increased
+        if old_size.GetHeight() < new_size.GetHeight():
+            difference = new_size.GetHeight() - old_size.GetHeight()
+            # Move all following fold panels to a lower position
+            for p in self._panels[item + 1:]:
+                pos = p.GetPosition()
+                p.Reposition(pos[1] + difference)
+
+        wx.CallAfter(self.FitBar)
+
+        # Delmic
+        # Little tweak: return the window instead of '0'
+        return window
+
+    # Delmic
+    def RemoveFoldPanelWindow(self, panel, window):
+        try:
+            # The index of the panel to which we are adding a window
+            item = self._panels.index(panel)
+        except:
+            raise Exception("ERROR: Invalid Panel Passed To AddFoldPanelWindow: " + repr(panel))
+
+        old_size =  panel.GetSize()
+        panel.RemoveWindow(window)
+        window.Destroy()
+        panel.Fit()
+        new_size = panel.GetSize()
+
+        if old_size.GetHeight() > new_size.GetHeight():
+            difference = old_size.GetHeight() - new_size.GetHeight()
+            for p in self._panels[item + 1:]:
+                pos = p.GetPosition()
+                p.Reposition(pos[1] - difference)
+            wx.CallAfter(self.FitBar)
+
+    # Delmic
+    def RemoveAllFoldPanelWindows(self, panel):
+        try:
+            # The index of the panel to which we are adding a window
+            item = self._panels.index(panel)
+        except:
+            raise Exception("ERROR: Invalid Panel Passed To AddFoldPanelWindow: " + repr(panel))
+
+        old_size =  panel.GetSize()
+        removed_wins = panel.RemoveAllWindows()
+        for window in removed_wins:
+            window.Destroy()
+        panel.Fit()
+        new_size = panel.GetSize()
+
+        if old_size.GetHeight() > new_size.GetHeight():
+            difference = old_size.GetHeight() - new_size.GetHeight()
+            for p in self._panels[item + 1:]:
+                pos = p.GetPosition()
+                p.Reposition(pos[1] - difference)
+            wx.CallAfter(self.FitBar)
 
     def AddFoldPanelSeparator(self, panel, colour=wx.BLACK,
                               spacing=FPB_DEFAULT_SPACING,
@@ -1447,9 +1563,6 @@ class FoldPanelBar(wx.Panel):
 
         if event.GetFoldStatus():
             self.Collapse(event.GetTag())
-            #parent = self.GetParent()
-            #if parent.__class__ == wx.ScrolledWindow:
-            #    parent.FitInside()
         else:
             self.Expand(event.GetTag())
 
@@ -1489,7 +1602,6 @@ class FoldPanelBar(wx.Panel):
             self.RepositionCollapsedToBottom()
 
         else:
-
             pos = self._panels[i].GetItemPos() + self._panels[i].GetPanelLength()
             for j in range(i+1, len(self._panels)):
                 pos = pos + self._panels[j].Reposition(pos)
@@ -1501,14 +1613,14 @@ class FoldPanelBar(wx.Panel):
         height = 0
 
         for panel in self.GetChildren():
-            if len(panel.GetChildren()) == 4:
-                c = panel.GetChildren()
-                print c[3].GetChildren()[0].GetSize().GetHeight()
-                print [w.GetSize().GetHeight() for w in panel.GetChildren()]
-            height += sum([w.GetSize().GetHeight() for w in panel.GetChildren()])
-            #for foldpanelitem in panel.GetChildren():
-                #print foldpanelitem.__class__
-                #height += sum([w.GetSize().GetHeight() for w in foldpanelitem.GetChildren()])
+            # The use of 'max' is a dirty hack, needed because the height
+            # of the parent foldpanelitem was detected as being 20 pixels
+            # even thought the child caption bar has a height of 40.
+            #
+            # FIXME: To fix this, a method is needed to force the parent to be at least
+            # as big as it's children.
+            heights = [max(w.GetSize().GetHeight(), 40) for w in panel.GetChildren()]
+            height += sum(heights)
 
         self.SetSize((-1, height))
 
@@ -1802,6 +1914,8 @@ class FoldPanelItem(wx.Panel):
         self._LastInsertPos = self._PanelSize
         self._items = []
 
+        self.count = 0
+
         self.Bind(EVT_CAPTIONBAR, self.OnPressCaption)
         self.Bind(wx.EVT_PAINT, self.OnPaint)
 
@@ -1847,6 +1961,75 @@ class FoldPanelItem(wx.Panel):
         self._LastInsertPos = self._LastInsertPos + wi.GetWindowLength(vertical)
         self.ResizePanel()
 
+    # Delmic
+    def InsertWindow(self, window, position, flags=FPB_ALIGN_WIDTH, spacing=FPB_DEFAULT_SPACING,
+                  leftSpacing=FPB_DEFAULT_LEFTLINESPACING,
+                  rightSpacing=FPB_DEFAULT_RIGHTLINESPACING):
+        """ Insert a window into the panel at the given position.
+
+            The top or left-most window occupies position 0
+        """
+        wi = FoldWindowItem(self, window, Type="WINDOW", flags=flags, spacing=spacing,
+                            leftSpacing=leftSpacing, rightSpacing=rightSpacing)
+
+        vertical = self.IsVertical()
+
+        self._items.insert(position, wi)
+
+        self._spacing = spacing
+        self._leftSpacing = leftSpacing
+        self._rightSpacing = rightSpacing
+
+        space_before = self._captionBar.GetHeight() + \
+                       sum([wi.GetWindowLength(vertical) for wi in self._items[:position]])
+
+        xpos = (vertical and [leftSpacing] or [space_before + spacing])[0]
+        ypos = (vertical and [space_before + spacing] or [leftSpacing])[0]
+
+        window.SetDimensions(xpos, ypos, -1, -1, wx.SIZE_USE_EXISTING)
+
+        # Move other windows down
+        size_increase = wi.GetWindowLength(vertical)
+        self._LastInsertPos = self._LastInsertPos + size_increase
+
+        offset = wi.GetWindowLength(vertical)
+        for wnd in self._items[position + 1:]:
+            xypos = wnd._wnd.GetPosition()
+            wnd._wnd.SetPosition((xypos[0], xypos[1] + offset))
+
+        self.ResizePanel()
+
+        return size_increase
+
+
+    # Delmic
+    def RemoveWindow(self, window):
+        """ Remove the given window from the FoldPanelItem """
+        vertical = self.IsVertical()
+
+        found = [m for m in self._items if m._wnd is window]
+
+        for match in found:
+            self._LastInsertPos -= match.GetWindowLength(vertical)
+            self._items.remove(match)
+
+        self.ResizePanel()
+
+    # Delmic
+    def RemoveAllWindows(self):
+        """ Remove all windows from the FoldPanelItem
+
+            Note: The caption bar will be left.
+        """
+        vertical = self.IsVertical()
+        removed_wins = [w._wnd for w in self._items]
+
+        for wnd in self._items:
+            self._LastInsertPos -= wnd.GetWindowLength(vertical)
+
+        self._items = []
+        self.ResizePanel()
+        return removed_wins
 
     #Delmic
     def GetCaptionBar(self):

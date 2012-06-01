@@ -20,12 +20,12 @@ class xrcfpb_frame(wx.Frame):
 #!XRCED:begin-block:xrcfpb_frame.PreCreate
     def PreCreate(self, pre):
         """ This function is called during the class's initialization.
-
+        
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
         pass
-
+        
 #!XRCED:end-block:xrcfpb_frame.PreCreate
 
     def __init__(self, parent):
@@ -44,6 +44,32 @@ class xrcfpb_frame(wx.Frame):
 
 
 
+class xrcstream_frame(wx.Frame):
+#!XRCED:begin-block:xrcstream_frame.PreCreate
+    def PreCreate(self, pre):
+        """ This function is called during the class's initialization.
+        
+        Override it for custom setup before the window is created usually to
+        set additional window styles using SetWindowStyle() and SetExtraStyle().
+        """
+        pass
+        
+#!XRCED:end-block:xrcstream_frame.PreCreate
+
+    def __init__(self, parent):
+        # Two stage creation (see http://wiki.wxpython.org/index.cgi/TwoStageCreation)
+        pre = wx.PreFrame()
+        self.PreCreate(pre)
+        get_resources().LoadOnFrame(pre, parent, "stream_frame")
+        self.PostCreate(pre)
+
+        # Define variables for the controls, bind event handlers
+        self.scrwin = xrc.XRCCTRL(self, "scrwin")
+        self.fpb = xrc.XRCCTRL(self, "fpb")
+        self.panel_1 = xrc.XRCCTRL(self, "panel_1")
+
+
+
 
 
 # ------------------------ Resource data ----------------------
@@ -56,7 +82,6 @@ def __init_resources():
 
     test_gui_xrc = '''\
 <?xml version="1.0" ?><resource class="">
-  
   <object class="wxFrame" name="fpb_frame">
     <object class="wxBoxSizer">
       <object class="sizeritem">
@@ -74,6 +99,15 @@ def __init_resources():
                   </object>
                   <label>Test Panel 1</label>
                   <bg>#1E90FF</bg>
+                  <font>
+                    <size>13</size>
+                    <style>normal</style>
+                    <weight>normal</weight>
+                    <underlined>0</underlined>
+                    <family>default</family>
+                    <face>Ubuntu</face>
+                    <encoding>UTF-8</encoding>
+                  </font>
                   <XRCED>
                     <assign_var>1</assign_var>
                   </XRCED>
@@ -141,6 +175,7 @@ def __init_resources():
                     <assign_var>1</assign_var>
                   </XRCED>
                 </object>
+                <spacing>0</spacing>
                 <XRCED>
                   <assign_var>1</assign_var>
                 </XRCED>
@@ -155,10 +190,60 @@ def __init_resources():
         </object>
         <option>1</option>
         <flag>wxEXPAND</flag>
+        <minsize>100,100</minsize>
       </object>
       <orient>wxVERTICAL</orient>
     </object>
     <title>Fold Panel Bar Test Frame</title>
+  </object>
+  <object class="wxFrame" name="stream_frame">
+    <object class="wxBoxSizer">
+      <object class="sizeritem">
+        <object class="wxScrolledWindow" name="scrwin">
+          <object class="wxBoxSizer">
+            <orient>wxVERTICAL</orient>
+            <object class="sizeritem">
+              <object class="odemis.gui.comp.foldpanelbar.FoldPanelBar" name="fpb">
+                <object class="odemis.gui.comp.foldpanelbar.FoldPanelItem" name="panel_1">
+                  <object class="wxCollapsiblePane">
+                    <label>SEM Backscatter</label>
+                  </object>
+                  <label>Streams</label>
+                  <bg>#1E90FF</bg>
+                  <font>
+                    <size>13</size>
+                    <style>normal</style>
+                    <weight>normal</weight>
+                    <underlined>0</underlined>
+                    <family>default</family>
+                    <face>Ubuntu</face>
+                    <encoding>UTF-8</encoding>
+                  </font>
+                  <XRCED>
+                    <assign_var>1</assign_var>
+                  </XRCED>
+                </object>
+                <spacing>0</spacing>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxEXPAND</flag>
+            </object>
+          </object>
+          <bg>#A52A2A</bg>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
+        <option>1</option>
+        <flag>wxEXPAND</flag>
+        <minsize>400,400</minsize>
+      </object>
+      <orient>wxVERTICAL</orient>
+    </object>
+    <size>400,400</size>
+    <title>Stream panel test frame</title>
   </object>
 </resource>'''
 
