@@ -29,6 +29,10 @@
 # The wx.Window subclasses are wrapped in the FoldWindowItem class, instances
 # of which stored within the FoldPanelItem objects.
 #
+# Note: the expand/collapse icon doesn't move when the window is narrowed
+# only when it's widened. This is not an issue as long as the FoldPanelBar
+# has a fixed width.
+#
 #-----------------------------------------------------------------------------#
 # FOLDPANELBAR wxPython IMPLEMENTATION
 # Ported From Jorgen Bodde & Julian Smart (Extended Demo) C++ Code By:
@@ -659,12 +663,12 @@ class CaptionBar(wx.Window):
 
         # Delmic
         bar_size = (20, 20)
-        if cbstyle and cbstyle.BarHeightUsed():
+        if cbstyle and cbstyle.BarHeightUsed():            
             bar_size = (20, cbstyle.GetBarHeight())
 
         wx.Window.__init__(self, parent, wx.ID_ANY, pos=pos,
                            size=bar_size, style=wx.NO_BORDER)
-
+        
         self._controlCreated = False
         self._collapsed = collapsed
         self.ApplyCaptionStyle(cbstyle, True)
@@ -1277,6 +1281,7 @@ class FoldPanelBar(wx.Panel):
 
         self.Bind(EVT_CAPTIONBAR, self.OnPressCaption)
         self.Bind(wx.EVT_SIZE, self.OnSizePanel)
+        #self.Bind(wx.EVT_COLLAPSIBLEPANE_CHANGED, self.FitBar)
 
 
     def AddFoldPanel(self, caption="", id=wx.ID_ANY, collapsed=False, foldIcons=None, cbstyle=None):
@@ -1323,7 +1328,7 @@ class FoldPanelBar(wx.Panel):
         item.Reposition(pos)
         self._panels.append(item)
 
-        wx.CallAfter(self.FitBar)
+        self.FitBar() #Delmic
 
         return item
 
@@ -1331,7 +1336,7 @@ class FoldPanelBar(wx.Panel):
     def RemoveFoldPanel(self, fold_panel):
         self._panels.remove(fold_panel)
         fold_panel.Destroy()
-        wx.CallAfter(self.FitBar)
+        self.FitBar() #Delmic
 
     def AddFoldPanelWindow(self, panel, window, flags=FPB_ALIGN_WIDTH,
                            spacing=FPB_DEFAULT_SPACING,
@@ -1409,7 +1414,7 @@ class FoldPanelBar(wx.Panel):
                 pos = p.GetPosition()
                 p.Reposition(pos[1] + difference)
 
-        wx.CallAfter(self.FitBar)
+        self.FitBar() #Delmic
 
         # Delmic
         # Little tweak: return the window instead of '0'
@@ -1439,7 +1444,7 @@ class FoldPanelBar(wx.Panel):
                 pos = p.GetPosition()
                 p.Reposition(pos[1] + difference)
 
-        wx.CallAfter(self.FitBar)
+        self.FitBar() #Delmic
 
         # Delmic
         # Little tweak: return the window instead of '0'
@@ -1464,7 +1469,7 @@ class FoldPanelBar(wx.Panel):
             for p in self._panels[item + 1:]:
                 pos = p.GetPosition()
                 p.Reposition(pos[1] - difference)
-            wx.CallAfter(self.FitBar)
+            self.FitBar() #Delmic
 
     # Delmic
     def RemoveAllFoldPanelWindows(self, panel):
@@ -1486,7 +1491,7 @@ class FoldPanelBar(wx.Panel):
             for p in self._panels[item + 1:]:
                 pos = p.GetPosition()
                 p.Reposition(pos[1] - difference)
-            wx.CallAfter(self.FitBar)
+            self.FitBar() #Delmic
 
     def AddFoldPanelSeparator(self, panel, colour=wx.BLACK,
                               spacing=FPB_DEFAULT_SPACING,
@@ -1498,6 +1503,9 @@ class FoldPanelBar(wx.Panel):
         The separator is a simple line which is drawn and is no real
         component. It can be used to separate groups of controls
         which belong to each other.
+
+
+
 
         :param `colour`: the separator colour, an instance of `wx.Colour`;
         :param `spacing`: the separator to be added can be slightly indented from
@@ -1550,7 +1558,6 @@ class FoldPanelBar(wx.Panel):
 
         self.RedisplayFoldPanelItems()
 
-
     def OnPressCaption(self, event):
         """
         Handles the ``wx.EVT_CAPTIONBAR`` event for L{CaptionBar}.
@@ -1566,7 +1573,7 @@ class FoldPanelBar(wx.Panel):
         else:
             self.Expand(event.GetTag())
 
-        wx.CallAfter(self.FitBar)
+        self.FitBar() #Delmic
 
 
     def RefreshPanelsFrom(self, item):
@@ -1608,26 +1615,16 @@ class FoldPanelBar(wx.Panel):
 
         self.Thaw()
 
-    def FitBar(self):
+    def FitBar(self, event=None):
         """ Make the FoldPanelBar as high as it's children """
-        height = 0
-
-        for panel in self.GetChildren():
-            # The use of 'max' is a dirty hack, needed because the height
-            # of the parent foldpanelitem was detected as being 20 pixels
-            # even thought the child caption bar has a height of 40.
-            #
-            # FIXME: To fix this, a method is needed to force the parent to be at least
-            # as big as it's children.
-            heights = [max(w.GetSize().GetHeight(), 40) for w in panel.GetChildren()]
-            height += sum(heights)
-
-        self.SetSize((-1, height))
-
+        
+        self.Fit()
+        self._foldPanel.Fit()
+        
         parent = self.GetParent()
         if parent.__class__ == wx.ScrolledWindow:
             parent.FitInside()
-
+  
 
     def RedisplayFoldPanelItems(self):
         """ Resizes the fold panels so they match the width. """

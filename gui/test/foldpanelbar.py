@@ -7,9 +7,10 @@
 import unittest
 import wx
 import odemis.gui.test.test_gui
+#import odemis.gui.comp.foldpanelbar
 
 SLEEP_TIME = 100 # Sleep timer in milliseconds
-MANUAL = False # If manual is set to True, the window will be kept open at the end
+MANUAL = True # If manual is set to True, the window will be kept open at the end
 
 FPB_SPACING = 0
 
@@ -61,6 +62,9 @@ class FoldPanelBarTestCase(unittest.TestCase):
         # FIXME: Sometimes the tests start running before the test frame
         # is completely and correctly drawn. Find out a way to delay test
         # execution until the frame is correctly displayed!
+
+        #import wx.lib.inspection
+        #wx.lib.inspection.InspectionTool().Show()
 
     @classmethod
     def tearDownClass(cls):
@@ -289,6 +293,10 @@ class FoldPanelBarTestCase(unittest.TestCase):
 
         wx.MilliSleep(SLEEP_TIME)
 
+    def test_icon_position(self):
+        """ Test the position of the fold/collapse icon """
+        pass
+
     def test_foldpanel_manipulation(self):
         self.app.test_frame.SetTitle("Testing Fold panel manipulation")
 
@@ -301,10 +309,15 @@ class FoldPanelBarTestCase(unittest.TestCase):
         new_panel = fpb.AddFoldPanel("Test panel 4", collapsed=False)
         loop()
         loop()
+        
+        #fpb._foldPanel.Fit()
+        print fpb._foldPanel.GetSize()
+        print [w.GetSize() for w in fpb._foldPanel.GetChildren()]
 
         # The height of the parent should be 40 pixels higher
-        self.assertEqual(fpb_height + 40, fpb.GetSize().GetHeight())
-        self.assertEqual(len(fpb.GetChildren()[0].GetChildren()), 4)
+        self.assertEqual(fpb_height + 40, fpb._foldPanel.GetSize().GetHeight())
+        self.assertEqual(len(fpb.GetChildren()[0].GetChildren()), 4)        
+        
         wx.MilliSleep(SLEEP_TIME)
 
 
