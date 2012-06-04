@@ -663,12 +663,12 @@ class CaptionBar(wx.Window):
 
         # Delmic
         bar_size = (20, 20)
-        if cbstyle and cbstyle.BarHeightUsed():            
+        if cbstyle and cbstyle.BarHeightUsed():
             bar_size = (20, cbstyle.GetBarHeight())
 
         wx.Window.__init__(self, parent, wx.ID_ANY, pos=pos,
                            size=bar_size, style=wx.NO_BORDER)
-        
+
         self._controlCreated = False
         self._collapsed = collapsed
         self.ApplyCaptionStyle(cbstyle, True)
@@ -1281,7 +1281,7 @@ class FoldPanelBar(wx.Panel):
 
         self.Bind(EVT_CAPTIONBAR, self.OnPressCaption)
         self.Bind(wx.EVT_SIZE, self.OnSizePanel)
-        #self.Bind(wx.EVT_COLLAPSIBLEPANE_CHANGED, self.FitBar)
+        self.Bind(wx.EVT_COLLAPSIBLEPANE_CHANGED, self.FitBar)
 
 
     def AddFoldPanel(self, caption="", id=wx.ID_ANY, collapsed=False, foldIcons=None, cbstyle=None):
@@ -1617,14 +1617,14 @@ class FoldPanelBar(wx.Panel):
 
     def FitBar(self, event=None):
         """ Make the FoldPanelBar as high as it's children """
-        
+
         self.Fit()
         self._foldPanel.Fit()
-        
+
         parent = self.GetParent()
         if parent.__class__ == wx.ScrolledWindow:
             parent.FitInside()
-  
+
 
     def RedisplayFoldPanelItems(self):
         """ Resizes the fold panels so they match the width. """
@@ -1915,7 +1915,17 @@ class FoldPanelItem(wx.Panel):
 
         self.Bind(EVT_CAPTIONBAR, self.OnPressCaption)
         self.Bind(wx.EVT_PAINT, self.OnPaint)
+        self.Bind(wx.EVT_COLLAPSIBLEPANE_CHANGED, self.FitItem)
 
+
+    def FitItem(self, evt):
+        """ When a child fires a size change event, such as an
+        EVT_COLLAPSIBLEPANE_CHANGED we must fit the FoldPanelItem
+        container.
+        """
+        to_fit = evt.GetEventObject().GetParent()
+        to_fit.Fit()
+        evt.Skip()
 
     def AddWindow(self, window, flags=FPB_ALIGN_WIDTH, spacing=FPB_DEFAULT_SPACING,
                   leftSpacing=FPB_DEFAULT_LEFTLINESPACING,

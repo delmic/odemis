@@ -12,7 +12,28 @@ from wx.tools.XRCed.globals import TRACE
 
 TRACE('*** creating xh_delmic components')
 
-# wx.lib.foldpanelbar.FoldPanelBar
+### odemis.gui.comp.stream.StreamPanel
+
+c = component.Container('odemis.gui.comp.stream.FixedStreamPanel',
+    ['book', 'window', 'control'],
+    ['pos', 'size', 'label', 'collapsed'])
+c.setParamClass('collapsed', params.ParamBool)
+c.addEvents('EVT_COMMAND_COLLPANE_CHANGED')
+component.Manager.register(c)
+component.Manager.addXmlHandler(xh_delmic.FixedStreamPanelXmlHandler)
+component.Manager.setMenu(c, 'container', 'Delmic fixed stream panel', 'FixedStreamPanel', 10)
+
+c = component.Container('odemis.gui.comp.stream.CustomStreamPanel',
+    ['book', 'window', 'control'],
+    ['pos', 'size', 'label', 'collapsed'])
+c.setParamClass('collapsed', params.ParamBool)
+c.addEvents('EVT_COMMAND_COLLPANE_CHANGED')
+component.Manager.register(c)
+component.Manager.addXmlHandler(xh_delmic.FixedStreamPanelXmlHandler)
+component.Manager.setMenu(c, 'container', 'Delmic custom stream panel', 'CustomStreamPanel', 11)
+
+
+##### odemis.gui.comp.foldpanelbar.FoldPanelBar #####
 
 c = component.Container('odemis.gui.comp.foldpanelbar.FoldPanelBar',
     ['window', 'top_level', 'control'],

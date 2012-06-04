@@ -6,8 +6,86 @@
 
 import wx
 import wx.xrc as xrc
-import odemis.gui.comp.foldpanelbar as fpb
 from wx.tools.XRCed.globals import TRACE
+#from wx.lib.agw.pycollapsiblepane import CP_GTK_EXPANDER, CP_DEFAULT_STYLE, \
+#    CP_NO_TLW_RESIZE
+
+import odemis.gui.comp.foldpanelbar as fpb
+import odemis.gui.comp.stream as strm
+
+class FixedStreamPanelXmlHandler(xrc.XmlResourceHandler):
+    def __init__(self):
+        xrc.XmlResourceHandler.__init__(self)
+        # Specify the styles recognized by objects of this type
+        self.AddStyle("wxTAB_TRAVERSAL", wx.TAB_TRAVERSAL)
+        #self.AddStyle("CP_GTK_EXPANDER", CP_GTK_EXPANDER)
+        #self.AddStyle("CP_DEFAULT_STYLE", CP_DEFAULT_STYLE)
+        #self.AddStyle("CP_NO_TLW_RESIZE", CP_NO_TLW_RESIZE)
+        self.AddWindowStyles()
+
+    # This method and the next one are required for XmlResourceHandlers
+    def CanHandle(self, node):
+        return self.IsOfClass(node, "odemis.gui.comp.stream.FixedStreamPanel")
+
+    def DoCreateResource(self):
+        assert self.GetInstance() is None
+
+        # Now create the object
+        panel = strm.FixedStreamPanel(self.GetParentAsWindow(),
+                                      self.GetID(),
+                                      self.GetText('label'),
+                                      self.GetPosition(),
+                                      self.GetSize(),
+                                      self.GetStyle("style", wx.TAB_TRAVERSAL),
+                                      #self.GetStyle('exstyle'),
+                                      name=self.GetName(),
+                                      collapsed=self.GetBool('collapsed')
+                                      )
+
+        # These two things should be done in either case:
+        # Set standard window attributes
+        self.SetupWindow(panel)
+        # Create any child windows of this node
+        self.CreateChildren(panel.GetPane())
+
+        return panel
+
+class CustomStreamPanelXmlHandler(xrc.XmlResourceHandler):
+    def __init__(self):
+        xrc.XmlResourceHandler.__init__(self)
+        # Specify the styles recognized by objects of this type
+        self.AddStyle("wxTAB_TRAVERSAL", wx.TAB_TRAVERSAL)
+        #self.AddStyle("CP_GTK_EXPANDER", CP_GTK_EXPANDER)
+        #self.AddStyle("CP_DEFAULT_STYLE", CP_DEFAULT_STYLE)
+        #self.AddStyle("CP_NO_TLW_RESIZE", CP_NO_TLW_RESIZE)
+        self.AddWindowStyles()
+
+    # This method and the next one are required for XmlResourceHandlers
+    def CanHandle(self, node):
+        return self.IsOfClass(node, "odemis.gui.comp.stream.CustomStreamPanel")
+
+    def DoCreateResource(self):
+        assert self.GetInstance() is None
+
+        # Now create the object
+        panel = strm.CustomStreamPanel(self.GetParentAsWindow(),
+                                      self.GetID(),
+                                      self.GetText('label'),
+                                      self.GetPosition(),
+                                      self.GetSize(),
+                                      self.GetStyle("style", wx.TAB_TRAVERSAL),
+                                      #self.GetStyle('exstyle'),
+                                      name=self.GetName(),
+                                      collapsed=self.GetBool('collapsed')
+                                      )
+
+        # These two things should be done in either case:
+        # Set standard window attributes
+        self.SetupWindow(panel)
+        # Create any child windows of this node
+        self.CreateChildren(panel.GetPane())
+
+        return panel
 
 class FoldPanelBarXmlHandler(xrc.XmlResourceHandler):
     def __init__(self):
@@ -96,7 +174,7 @@ class FoldPanelBarXmlHandler(xrc.XmlResourceHandler):
                 pass
 
 
-        wx.CallAfter(self._w.FitBar)
+        #wx.CallAfter(self._w.FitBar)
 
 class FoldPanelXmlHandler(xrc.XmlResourceHandler):
     def __init__(self):
