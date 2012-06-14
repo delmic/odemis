@@ -5,8 +5,15 @@
 #===============================================================================
 
 import unittest
+import os
+
+if os.getcwd().endswith('test'):
+    os.chdir('../..')
+    print "Working directory changed to", os.getcwd()
+
 import wx
 import odemis.gui.test.test_gui
+
 
 SLEEP_TIME = 100 # Sleep timer in milliseconds
 MANUAL = True # If manual is set to True, the window will be kept open at the end
@@ -55,8 +62,8 @@ class FoldPanelBarTestCase(unittest.TestCase):
     def setUpClass(cls):
         cls.app = TestApp()
         loop()
-        import wx.lib.inspection
-        wx.lib.inspection.InspectionTool().Show()
+        # import wx.lib.inspection
+        # wx.lib.inspection.InspectionTool().Show()
 
     @classmethod
     def tearDownClass(cls):
@@ -76,7 +83,7 @@ class FoldPanelBarTestCase(unittest.TestCase):
 
     @classmethod
     def has_vertical_scrollbar(cls, window):
-        """ Checks if the vertical scrollbar is present by comparing client and
+        """ Checks if the vertical scroll bar is present by comparing client and
             widget width
         """
         return window.GetClientSize().GetWidth() < window.GetSize().GetWidth()

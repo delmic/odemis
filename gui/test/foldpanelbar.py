@@ -309,15 +309,11 @@ class FoldPanelBarTestCase(unittest.TestCase):
         new_panel = fpb.AddFoldPanel("Test panel 4", collapsed=False)
         loop()
         loop()
-        
-        #fpb._foldPanel.Fit()
-        print fpb._foldPanel.GetSize()
-        print [w.GetSize() for w in fpb._foldPanel.GetChildren()]
 
         # The height of the parent should be 40 pixels higher
         self.assertEqual(fpb_height + 40, fpb._foldPanel.GetSize().GetHeight())
-        self.assertEqual(len(fpb.GetChildren()[0].GetChildren()), 4)        
-        
+        self.assertEqual(len(fpb.GetChildren()[0].GetChildren()), 4)
+
         wx.MilliSleep(SLEEP_TIME)
 
 

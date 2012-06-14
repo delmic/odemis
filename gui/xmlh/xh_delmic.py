@@ -45,8 +45,10 @@ class FixedStreamPanelXmlHandler(xrc.XmlResourceHandler):
         # These two things should be done in either case:
         # Set standard window attributes
         self.SetupWindow(panel)
+        panel.finalize()
         # Create any child windows of this node
-        self.CreateChildren(panel.GetPane())
+        # deprecated: all children are hard-coded
+        #self.CreateChildren(panel.get_panel())
 
         return panel
 
@@ -82,8 +84,11 @@ class CustomStreamPanelXmlHandler(xrc.XmlResourceHandler):
         # These two things should be done in either case:
         # Set standard window attributes
         self.SetupWindow(panel)
+        panel.finalize()
+
         # Create any child windows of this node
-        self.CreateChildren(panel.GetPane())
+        # deprecated: all children are hard-coded
+        #self.CreateChildren(panel.get_panel())
 
         return panel
 
