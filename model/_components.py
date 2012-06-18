@@ -14,10 +14,11 @@ Delmic Acquisition Software is distributed in the hope that it will be useful, b
 
 You should have received a copy of the GNU General Public License along with Delmic Acquisition Software. If not, see http://www.gnu.org/licenses/.
 '''
-import _properties as properties
 from _core import roattribute
+from model import _dataflow
 import Pyro4
 import _core
+import _properties as properties
 import logging
 import model
 
@@ -65,10 +66,14 @@ class Component(object):
     Component to be shared remotely
     '''
     def __init__(self, name, daemon=None):
+        """
+        name (string): unique name used to identify the component
+        daemon (Pyro4.daemon): daemon via which the object will be registered. 
+            default=None => not registered
+        """
         self._name = name
         if daemon:
             daemon.register(self, name)
-        self._odemicDataFlows = set()
         
     @roattribute
     def name(self):
@@ -88,7 +93,7 @@ class ComponentProxy(Pyro4.Proxy):
         """
         Pyro4.Proxy.__init__(self, uri, oneways, asyncs)
         _core.load_roattributes(self, roattributes)
-        _dataflows.load_dataflows(self, dataflows)
+        _dataflow.load_dataflows(self, dataflows)
 
         # TODO override __getstate__ and __setstate__ too? When is it used? 
 
@@ -101,7 +106,7 @@ def odemicComponentSerializer(self):
         # only return a proxy if the object is a registered pyro object
         return ComponentProxy, (daemon.uriFor(self),
                                 _core.dump_roattributes(self),
-                                _dataflows.dump_dataflows(self),
+                                _dataflow.dump_dataflows(self),
                                 Pyro4.core.get_oneways(self),
                                 Pyro4.core.get_asyncs(self))
     else:
