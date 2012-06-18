@@ -6,14 +6,35 @@
 #    .
 #    .
 #    |--- wx.Window subclass
+#
+# TODO:
+#
+#  **A workaround has been found for the following problem and was implemented
+#    using  a custom Slider class **
+
+# - When scrolling the main ScrolledWindow with a mouse wheel, we run into
+#   trouble when the cursor hits a wx.Slider, since it will start capturing
+#   the mouse wheel event, which has two unwanted side effects:
+#       1 - The wx.Slider value will change unintentionally
+#       2 - The scrolling will stop.
+#
+#   A posisble workaround needs to be investigated, but it might be tricky
+#   since there are big differences between various windowing systems.
+#
 
 import wx
-from wx.lib.imageutils import stepColour
+import wx.combo
+#from wx.lib.imageutils import stepColour
 
 from wx.lib.buttons import GenBitmapToggleButton, GenBitmapButton, \
     GenBitmapTextToggleButton
 
 from odemis.gui.img.data import catalog
+from odemis.gui.comp.autocomplete import AutocompleteTextCtrl
+
+TEST_STREAM_LST = ["Aap", "noot", "mies", "kees", "vuur", "quantummechnica",
+                   "Repelsteeltje", "", "XXX", "a", "aa", "aaa", "aaaa",
+                   "aaaaa", "aaaaaa", "aaaaaaa"]
 
 EXPANDER_HEIGHT = 32
 
@@ -84,7 +105,6 @@ class IntegerValidator(wx.PyValidator):
     def OnChar(self, event):
         """ This method prevents the entry of illegal characters """
         key = event.GetKeyCode()
-
         # Allow control keys to propagate
         if key < wx.WXK_SPACE or key == wx.WXK_DELETE or key > 255:
             event.Skip()
@@ -360,6 +380,11 @@ class FixedExpander(Expander):
         self._sz.Remove(1)
         self._sz.Insert(1, self._label_ctrl, 1, wx.RIGHT | wx.ALIGN_CENTRE_VERTICAL, 8)
 
+def suggest(val):
+    data = [name for name in TEST_STREAM_LST if name.startswith(val.lower())]
+    data.sort()
+    return ["<b>%s</b>%s" % (d[:len(val)], d[len(val):]) for d in data], data
+
 class CustomExpander(Expander):
 
     DEFAULT_COLOR = "#88BA38"
@@ -377,7 +402,10 @@ class CustomExpander(Expander):
         self._sz.Insert(2, self._btn_color, 0, wx.RIGHT | wx.ALIGN_CENTRE_VERTICAL, 8)
 
 
-        self._label_ctrl = wx.TextCtrl(self, -1, label, style=wx.NO_BORDER)
+        #self._label_ctrl = wx.TextCtrl(self, -1, label, style=wx.NO_BORDER)
+        self._label_ctrl = AutocompleteTextCtrl(self, -1, label,
+                                                style=wx.NO_BORDER,
+                                                completer=suggest)
         self._label_ctrl.SetForegroundColour("#2FA7D4")
         self._label_ctrl.SetBackgroundColour("#4D4D4D")
         self._sz.Remove(1)
@@ -422,6 +450,31 @@ class CustomExpander(Expander):
         if dlg.ShowModal() == wx.ID_OK:
             data = dlg.GetColourData()
             self.set_stream_color(data.GetColour().GetAsString(wx.C2S_HTML_SYNTAX))
+
+class Slider(wx.Slider):
+    """ This custom Slider class was implemented so it would not capture
+    mouse wheel events, which were causing problems when the user wanted
+    to scroll through the main fold panel bar.
+    """
+
+    def __init__(self, *args, **kwargs):
+        wx.Slider.__init__(self, *args, **kwargs)
+        self.Bind(wx.EVT_MOUSEWHEEL, self.pass_to_scollwin)
+
+    def pass_to_scollwin(self, evt):
+        """ This event handler prevents anything from happening to the Slider on
+        MOUSEWHEEL events and passes the event on to any parent ScrolledWindow
+        """
+
+        # Find the parent ScolledWindow
+        win = self.Parent
+        while win and not isinstance(win, wx.ScrolledWindow):
+            win = win.Parent
+
+        # If a ScrolledWindow was found, pass on the event
+        if win:
+            win.GetEventHandler().ProcessEvent(evt)
+
 
 class StreamPanel(wx.PyPanel):
     """ The StreamPanel super class, a special case collapsible pane."""
@@ -530,8 +583,8 @@ class StreamPanel(wx.PyPanel):
                       flag=wx.LEFT | wx.ALIGN_CENTRE_VERTICAL,
                       border=34)
 
-        self._sld_brightness = wx.Slider(
-            self._panel, -1, 128, 0, 255, (30, 60), (250, -1),
+        self._sld_brightness = Slider(
+            self._panel, -1, 128, 0, 255, (30, 60), (-1, 10),
             wx.SL_HORIZONTAL)
 
         self._gbs.Add(self._sld_brightness, (1, 1), flag=wx.EXPAND)
@@ -556,8 +609,8 @@ class StreamPanel(wx.PyPanel):
         self._gbs.Add(lbl_contrast, (2, 0),
                       flag= wx.LEFT | wx.ALIGN_CENTRE_VERTICAL, border=34)
 
-        self._sld_contrast = wx.Slider(
-            self._panel, -1, 128, 0, 255, (30, 60), (250, -1),
+        self._sld_contrast = Slider(
+            self._panel, -1, 128, 0, 255, (30, 60), (-1, 10),
             wx.SL_HORIZONTAL)
 
         self._gbs.Add(self._sld_contrast, (2, 1), flag=wx.EXPAND)
@@ -576,7 +629,6 @@ class StreamPanel(wx.PyPanel):
                       flag= wx.ALIGN_CENTRE_VERTICAL | wx.RIGHT,
                       border=10)
 
-
         # Bind events
 
         self._sld_brightness.Bind(wx.EVT_COMMAND_SCROLL, self.on_brightness_slide)
@@ -587,20 +639,32 @@ class StreamPanel(wx.PyPanel):
         self._txt_contrast.Bind(wx.EVT_TEXT_ENTER, self.on_contrast_entered)
         self._txt_contrast.Bind(wx.EVT_CHAR, self.on_contrast_key)
 
+        self._btn_auto_contrast.Bind(wx.EVT_BUTTON, self.on_toggle_autocontrast)
+
+    def on_toggle_autocontrast(self, evt):
+        enabled = not self._btn_auto_contrast.GetToggle()
+
+        self._sld_brightness.Enable(enabled)
+        self._txt_brightness.Enable(enabled)
+
+        self._sld_contrast.Enable(enabled)
+        self._txt_contrast.Enable(enabled)
 
     def on_brightness_key(self, evt):
         key = evt.GetKeyCode()
-        val = int(self._txt_brightness.GetValue())
 
         if key == wx.WXK_UP:
+            val = int(self._txt_brightness.GetValue() or 0)
             val += 1
         elif key == wx.WXK_DOWN:
+            val = int(self._txt_brightness.GetValue() or 0)
             val -= 1
+        else:
+            evt.Skip()
+            return
 
         self._sld_brightness.SetValue(val)
         self._txt_brightness.SetValue(str(val))
-
-        evt.Skip()
 
     def on_brightness_entered(self, evt):
         self._sld_brightness.SetValue(int(self._txt_brightness.GetValue()))
@@ -763,3 +827,37 @@ class CustomStreamPanel(StreamPanel): #pylint: disable=R0901
 
     def __init__(self, *args, **kwargs):
         StreamPanel.__init__(self, *args, **kwargs)
+
+
+    def finalize(self):
+        StreamPanel.finalize(self)
+
+        lbl_excitation = wx.StaticText(self._panel, -1, "excitation:")
+        self._gbs.Add(lbl_excitation, (3, 0),
+                      flag= wx.LEFT | wx.ALIGN_CENTRE_VERTICAL, border=34)
+
+        self._txt_excitation = IntegerTextCtrl(self._panel, -1, "0",
+                style=wx.NO_BORDER | wx.TE_PROCESS_ENTER,
+                size=(40, -1),
+                validator=IntegerValidator(0, 1000))
+        self._txt_excitation.SetForegroundColour("#2FA7D4")
+        self._txt_excitation.SetBackgroundColour(self.GetBackgroundColour())
+
+        self._gbs.Add(self._txt_excitation, (3, 1),
+                      flag= wx.ALIGN_CENTRE_VERTICAL | wx.RIGHT,
+                      border=10)
+
+        lbl_emission = wx.StaticText(self._panel, -1, "emission:")
+        self._gbs.Add(lbl_emission, (4, 0),
+                      flag= wx.LEFT | wx.ALIGN_CENTRE_VERTICAL, border=34)
+
+        self._txt_emission = IntegerTextCtrl(self._panel, -1, "0",
+                style=wx.NO_BORDER | wx.TE_PROCESS_ENTER,
+                size=(40, -1),
+                validator=IntegerValidator(0, 1000))
+        self._txt_emission.SetForegroundColour("#2FA7D4")
+        self._txt_emission.SetBackgroundColour(self.GetBackgroundColour())
+
+        self._gbs.Add(self._txt_emission, (4, 1),
+                      flag= wx.ALIGN_CENTRE_VERTICAL | wx.RIGHT,
+                      border=10)
