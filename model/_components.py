@@ -20,8 +20,8 @@ import Pyro4
 import _core
 import _properties as properties
 import logging
-import model
 
+# TODO make it remote-aware
 _microscope = None
 def getMicroscope():
     """
@@ -78,6 +78,16 @@ class Component(object):
     @roattribute
     def name(self):
         return self._name
+    
+    def terminate(self):
+        """
+        Stop the Component from executing.
+        The component shouldn't be used afterward.
+        """
+        # make sure we are registered
+        daemon = getattr(self, "_pyroDaemon", None)
+        if daemon:
+            daemon.unregister(self)
 
 # Run on the client (the process which asked for a given remote component)
 class ComponentProxy(Pyro4.Proxy):
