@@ -14,7 +14,8 @@ Delmic Acquisition Software is distributed in the hope that it will be useful, b
 
 You should have received a copy of the GNU General Public License along with Delmic Acquisition Software. If not, see http://www.gnu.org/licenses/.
 '''
-import weakref
+
+from _core import WeakMethod, WeakRefLostError
 
 class InvalidTypeError(Exception):
     pass
@@ -25,8 +26,7 @@ class OutOfBoundError(Exception):
 class NotSettableError(Exception):
     pass
 
-class WeakRefLostError(Exception):
-    pass
+
 
 class Property(object):
     '''
@@ -330,62 +330,6 @@ class MultiSpeedProperty(Property, Continuous):
                             (str(axis), str(value), str(self._range[0]), str(self._range[1])))
         Property._set(self, value)
 
-            
-class WeakMethodBound(object):
-    def __init__(self, f):
-        self.f = f.im_func
-        self.c = weakref.ref(f.im_self)
-        # cache the hash so that it's the same after deref'd
-        self.hash = hash(f.im_func) + hash(f.im_self)
-        
-    def __call__(self, *arg, **kwargs):
-        ins = self.c() 
-        if ins == None:
-            raise WeakRefLostError, 'Method called on dead object'
-        return self.f(ins, *arg, **kwargs)
-        
-    def __hash__(self):
-        return self.hash
-    
-    def __eq__(self, other):
-        try:
-            return (type(self) is type(other) and self.f == other.f
-                    and self.c() == other.c())
-        except:
-            return False
-        
-#    def __ne__(self, other):
-#        return not self == other
 
-class WeakMethodFree(object):
-    def __init__(self, f):
-        self.f = weakref.ref(f)
-        # cache the hash so that it's the same after deref'd
-        self.hash = hash(f)
-        
-    def __call__(self, *arg, **kwargs):
-        fun = self.f()
-        if fun == None:
-            raise WeakRefLostError, 'Function no longer exist'
-        return fun(*arg, **kwargs)
-        
-    def __hash__(self):
-        return self.hash
-    
-    def __eq__(self, other):
-        try:
-            return type(self) is type(other) and self.f() == other.f()
-        except:
-            return False
-        
-#    def __ne__(self, other):
-#        return not self == other
 
-def WeakMethod(f):
-    try:
-        f.im_func
-    except AttributeError:
-        return WeakMethodFree(f)
-    return WeakMethodBound(f)
- 
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:
