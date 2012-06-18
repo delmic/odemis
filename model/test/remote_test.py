@@ -15,7 +15,9 @@ Delmic Acquisition Software is distributed in the hope that it will be useful, b
 
 You should have received a copy of the GNU General Public License along with Delmic Acquisition Software. If not, see http://www.gnu.org/licenses/.
 '''
-from Pyro4.core import oneway
+from concurrent import futures
+from concurrent.futures.thread import ThreadPoolExecutor
+from model import roattribute, oneway, isasync
 from multiprocessing.process import Process
 import Pyro4
 import model
@@ -68,6 +70,47 @@ class RemoteTest(unittest.TestCase):
         comp.stopServer()
         time.sleep(0.1) # give it some time to terminate
 
+    def test_roattributes(self):
+        """
+        check roattributes
+        """
+        rdaemon = Pyro4.Proxy("PYRO:Pyro.Daemon@./u:"+self.container_name)
+        comp = rdaemon.getObject("mycomp")
+        val = comp.my_value
+        self.assertEqual(val, "ro", "Reading attribute failed")
+        comp.stopServer()
+        time.sleep(0.1) # give it some time to terminate
+        
+    def test_async(self):
+        """
+        test futures
+        """
+        rdaemon = Pyro4.Proxy("PYRO:Pyro.Daemon@./u:"+self.container_name)
+        comp = rdaemon.getObject("mycomp")
+
+        ft1 = comp.do_long()
+        ft2 = comp.do_long(4)
+        result_cancel = ft2.cancel()
+        print "Cancel returned ", result_cancel
+        try:
+            print ft2.result()
+        except futures.CancelledError:
+            print "ft2 was cancelled"
+#        assert ft2.result() >= 4
+        ft1.result()
+        assert ft1.done()
+        print "first future lasted", ft1.result()
+
+    def test_subcomponents(self):
+        # via method and via roattributes
+        # need to test cycles
+        pass
+    
+    def test_dataflow(self):
+        pass
+    
+    def test_properties(self):
+        pass
 # a basic server (component container)
 def ServerLoop(socket_name):
     try:
@@ -90,6 +133,12 @@ class MyComponent(model.Component):
     """
     def __init__(self, name, daemon):
         model.Component.__init__(self, name=name, daemon=daemon)
+        self.executor = ThreadPoolExecutor(max_workers=1)
+        
+    
+    @roattribute
+    def my_value(self):
+        return "ro"
     
     def ping(self):
         """
@@ -102,8 +151,31 @@ class MyComponent(model.Component):
         always raise an exception
         """
         raise MyError
-     
-    def get_object(self):
+    
+    @isasync
+    def do_long(self, duration=5):
+        """
+        return a futures.Future
+        """
+        ft = self.executor.submit(self._long_task, duration)
+        ft.add_done_callback(self._on_end_long)
+        return ft
+
+    def _long_task(self, duration):
+        start = time.time()
+        time.sleep(duration)
+        print "done doing something long"
+        return (time.time() - start)
+    
+    def _on_end_long(self, future):
+        if future.cancelled():
+            print "server finished future due to cancellation"
+        else:
+            print "server finished future "+str(future)+" with result="+str(future.result())
+         
+    
+    
+    def get_subcomp(self):
         print "server get_obj"
 #        return self.object
     
