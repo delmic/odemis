@@ -1,0 +1,18 @@
+#!/bin/sh
+# This script exports all PNG files in the current
+# directory into a Python module called data.py
+
+first=1
+
+rm data.py
+
+for file in `ls *.png`
+do
+    if [ $first -eq 1 ]
+    then
+        img2py -c $file data.py
+        first=0
+    else
+        img2py -c -a $file data.py
+    fi
+done

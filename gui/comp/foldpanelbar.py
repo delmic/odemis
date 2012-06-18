@@ -29,6 +29,10 @@
 # The wx.Window subclasses are wrapped in the FoldWindowItem class, instances
 # of which stored within the FoldPanelItem objects.
 #
+# Note: the expand/collapse icon doesn't move when the window is narrowed
+# only when it's widened. This is not an issue as long as the FoldPanelBar
+# has a fixed width.
+#
 #-----------------------------------------------------------------------------#
 # FOLDPANELBAR wxPython IMPLEMENTATION
 # Ported From Jorgen Bodde & Julian Smart (Extended Demo) C++ Code By:
@@ -191,6 +195,8 @@ Version 0.5
 
 """
 
+import base64
+
 import wx
 
 #----------------------------------------------------------------------
@@ -200,26 +206,19 @@ import wx
 from wx.lib.embeddedimage import PyEmbeddedImage
 
 # Delmic
-# The default fold icons have been replaced with custom base64 encoded png icons
-CollapsedIcon = PyEmbeddedImage(
-    "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAAZiS0dEAP8A"
-    "/wD/oL2nkwAAAAlwSFlzAAALEwAACxMBAJqcGAAAAAd0SU1FB9wFDwcnFhL1+GMAAAAZdEVYdENv"
-    "bW1lbnQAQ3JlYXRlZCB3aXRoIEdJTVBXgQ4XAAAA4UlEQVQ4y53TSU7EMBCF4S/pNIhJSAwn4Q4s"
-    "2MLCR/SRYMkOBL2IGCQaSLMppBC5kwhLlmPZ76+q58rC31GhxiK+J0c93KeUvrGPPSwLd7YCqogs"
-    "pdTiBAdTkCIgIPc4x+EYpC54oAe5w9kYpJ4yKaV0Owap5zgdkNPwpOlnOgvQK+cYO33dbEDO+RK7"
-    "/8og53yNd3zgC5vZgJzzDVZ4Qos1ut/zZkbkFR5ifRtm0IyIr0LwiGe84rMfvQTYhPgiurKNyEXx"
-    "sPOqaJSjmB1ewryiWOGXXcQ7L0Owjpq7baX+AJ1bPwluOX7uAAAAAElFTkSuQmCC")
+# Load images from files for convenience. Convert to the old scheme using
+# embedded base64 encoding when ready for release
+with open("/home/rinze/dev/odemis/gui/img/arr_right.png", "rb") as image_file:
+    encoded_img = base64.b64encode(image_file.read())
 
-ExpandedIcon = PyEmbeddedImage(
-    "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAAZiS0dEAP8A"
-    "/wD/oL2nkwAAAAlwSFlzAAALEwAACxMBAJqcGAAAAAd0SU1FB9wFDwclGbB8h3AAAAAZdEVYdENv"
-    "bW1lbnQAQ3JlYXRlZCB3aXRoIEdJTVBXgQ4XAAABKUlEQVQ4y+2SzUrDQBSFv8nUICoo7tzppktB"
-    "t4JbV90UEnDvW0g3voFufYQGQZxCwKULQdyHPkLBn2DilNA0cXNTQtpaH8ADh4Fh7jn3zL3wD7Xk"
-    "/A1l/VSAA2ihWiFSCqfCUvm+f+s4zsVfW87zPAyC4BwYAxMFbHie96y1PlxVnKbpvTHmEvgEYiBz"
-    "gLLf759Za4MVxS/GmBuJXFRxdPVgOBw+tdvtU631XrM4SZLXwWBwJc7vwBeQAYUWpQKYRlH00BSx"
-    "1kbGmB7wBoyk9fHsE2vjawGbwG632w1c1z2K4/gxDMNrcR0BH4AF8to4Z3AAF9gBDjqdzh1wAhwD"
-    "+8A2sNYcs1og0gLWgS0RzIBvaXvOWS3ZTi1uWrJOqszLVnnRfcWyxjn8AFRBaucT7N0fAAAAAElF"
-    "TkSuQmCC")
+# Delmic
+# The default fold icons have been replaced with custom base64 encoded png icons
+CollapsedIcon = PyEmbeddedImage(encoded_img)
+
+with open("/home/rinze/dev/odemis/gui/img/arr_down.png", "rb") as image_file:
+    encoded_img = base64.b64encode(image_file.read())
+
+ExpandedIcon = PyEmbeddedImage(encoded_img)
 
 #----------------------------------------------------------------------
 # FOLDPANELBAR Starts Here
@@ -415,9 +414,9 @@ class CaptionBarStyle(object):
 
     def _HoverColour(self, colour):
         return wx.Colour(
-            int(colour.Red()) - 20,
-            int(colour.Green()) - 20,
-            int(colour.Blue()) - 20)
+            int(colour.Red()) + 10,
+            int(colour.Green()) + 10,
+            int(colour.Blue()) + 10)
 
     def GetSecondColour(self):
         """
@@ -531,10 +530,10 @@ class CaptionBarStyle(object):
 
 # Delmic's default caption bar style
 FPB_STYLE = CaptionBarStyle()
-FPB_STYLE.SetFirstColour(wx.Colour(230, 230, 230))
-FPB_STYLE.SetSecondColour(wx.Colour(200, 200, 200))
-FPB_STYLE.SetCaptionFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, 1, wx.FONTWEIGHT_NORMAL))
-FPB_STYLE.SetCaptionColour("#444444")
+FPB_STYLE.SetFirstColour(wx.Colour(130, 130, 130))
+FPB_STYLE.SetSecondColour(wx.Colour(100, 100, 100))
+FPB_STYLE.SetCaptionFont(wx.Font(10, wx.FONTFAMILY_DEFAULT, 1, wx.FONTWEIGHT_NORMAL))
+FPB_STYLE.SetCaptionColour("#222222")
 FPB_STYLE.SetBarHeight(40)
 
 
@@ -1277,6 +1276,7 @@ class FoldPanelBar(wx.Panel):
 
         self.Bind(EVT_CAPTIONBAR, self.OnPressCaption)
         self.Bind(wx.EVT_SIZE, self.OnSizePanel)
+        self.Bind(wx.EVT_COLLAPSIBLEPANE_CHANGED, self.FitBar)
 
 
     def AddFoldPanel(self, caption="", id=wx.ID_ANY, collapsed=False, foldIcons=None, cbstyle=None):
@@ -1323,7 +1323,7 @@ class FoldPanelBar(wx.Panel):
         item.Reposition(pos)
         self._panels.append(item)
 
-        wx.CallAfter(self.FitBar)
+        self.FitBar() #Delmic
 
         return item
 
@@ -1331,7 +1331,7 @@ class FoldPanelBar(wx.Panel):
     def RemoveFoldPanel(self, fold_panel):
         self._panels.remove(fold_panel)
         fold_panel.Destroy()
-        wx.CallAfter(self.FitBar)
+        self.FitBar() #Delmic
 
     def AddFoldPanelWindow(self, panel, window, flags=FPB_ALIGN_WIDTH,
                            spacing=FPB_DEFAULT_SPACING,
@@ -1409,7 +1409,7 @@ class FoldPanelBar(wx.Panel):
                 pos = p.GetPosition()
                 p.Reposition(pos[1] + difference)
 
-        wx.CallAfter(self.FitBar)
+        self.FitBar() #Delmic
 
         # Delmic
         # Little tweak: return the window instead of '0'
@@ -1439,7 +1439,7 @@ class FoldPanelBar(wx.Panel):
                 pos = p.GetPosition()
                 p.Reposition(pos[1] + difference)
 
-        wx.CallAfter(self.FitBar)
+        self.FitBar() #Delmic
 
         # Delmic
         # Little tweak: return the window instead of '0'
@@ -1464,7 +1464,7 @@ class FoldPanelBar(wx.Panel):
             for p in self._panels[item + 1:]:
                 pos = p.GetPosition()
                 p.Reposition(pos[1] - difference)
-            wx.CallAfter(self.FitBar)
+            self.FitBar() #Delmic
 
     # Delmic
     def RemoveAllFoldPanelWindows(self, panel):
@@ -1486,7 +1486,7 @@ class FoldPanelBar(wx.Panel):
             for p in self._panels[item + 1:]:
                 pos = p.GetPosition()
                 p.Reposition(pos[1] - difference)
-            wx.CallAfter(self.FitBar)
+            self.FitBar() #Delmic
 
     def AddFoldPanelSeparator(self, panel, colour=wx.BLACK,
                               spacing=FPB_DEFAULT_SPACING,
@@ -1498,6 +1498,9 @@ class FoldPanelBar(wx.Panel):
         The separator is a simple line which is drawn and is no real
         component. It can be used to separate groups of controls
         which belong to each other.
+
+
+
 
         :param `colour`: the separator colour, an instance of `wx.Colour`;
         :param `spacing`: the separator to be added can be slightly indented from
@@ -1550,7 +1553,6 @@ class FoldPanelBar(wx.Panel):
 
         self.RedisplayFoldPanelItems()
 
-
     def OnPressCaption(self, event):
         """
         Handles the ``wx.EVT_CAPTIONBAR`` event for L{CaptionBar}.
@@ -1566,7 +1568,7 @@ class FoldPanelBar(wx.Panel):
         else:
             self.Expand(event.GetTag())
 
-        wx.CallAfter(self.FitBar)
+        self.FitBar() #Delmic
 
 
     def RefreshPanelsFrom(self, item):
@@ -1608,21 +1610,11 @@ class FoldPanelBar(wx.Panel):
 
         self.Thaw()
 
-    def FitBar(self):
+    def FitBar(self, event=None):
         """ Make the FoldPanelBar as high as it's children """
-        height = 0
 
-        for panel in self.GetChildren():
-            # The use of 'max' is a dirty hack, needed because the height
-            # of the parent foldpanelitem was detected as being 20 pixels
-            # even thought the child caption bar has a height of 40.
-            #
-            # FIXME: To fix this, a method is needed to force the parent to be at least
-            # as big as it's children.
-            heights = [max(w.GetSize().GetHeight(), 40) for w in panel.GetChildren()]
-            height += sum(heights)
-
-        self.SetSize((-1, height))
+        self.Fit()
+        self._foldPanel.Fit()
 
         parent = self.GetParent()
         if parent.__class__ == wx.ScrolledWindow:
@@ -1918,7 +1910,17 @@ class FoldPanelItem(wx.Panel):
 
         self.Bind(EVT_CAPTIONBAR, self.OnPressCaption)
         self.Bind(wx.EVT_PAINT, self.OnPaint)
+        self.Bind(wx.EVT_COLLAPSIBLEPANE_CHANGED, self.FitItem)
 
+
+    def FitItem(self, evt):
+        """ When a child fires a size change event, such as an
+        EVT_COLLAPSIBLEPANE_CHANGED we must fit the FoldPanelItem
+        container.
+        """
+        to_fit = evt.GetEventObject().GetParent()
+        to_fit.Fit()
+        evt.Skip()
 
     def AddWindow(self, window, flags=FPB_ALIGN_WIDTH, spacing=FPB_DEFAULT_SPACING,
                   leftSpacing=FPB_DEFAULT_LEFTLINESPACING,

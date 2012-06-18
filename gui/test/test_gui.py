@@ -66,7 +66,12 @@ class xrcstream_frame(wx.Frame):
         # Define variables for the controls, bind event handlers
         self.scrwin = xrc.XRCCTRL(self, "scrwin")
         self.fpb = xrc.XRCCTRL(self, "fpb")
-        self.panel_1 = xrc.XRCCTRL(self, "panel_1")
+        self.fsp_1 = xrc.XRCCTRL(self, "fsp_1")
+        self.fsp_1 = xrc.XRCCTRL(self, "fsp_1")
+        self.fsp_1 = xrc.XRCCTRL(self, "fsp_1")
+        self.csp_1 = xrc.XRCCTRL(self, "csp_1")
+        self.csp_1 = xrc.XRCCTRL(self, "csp_1")
+        self.csp_1 = xrc.XRCCTRL(self, "csp_1")
 
 
 
@@ -176,6 +181,7 @@ def __init_resources():
                   </XRCED>
                 </object>
                 <spacing>0</spacing>
+                <bg>#4D4D4D</bg>
                 <XRCED>
                   <assign_var>1</assign_var>
                 </XRCED>
@@ -198,32 +204,161 @@ def __init_resources():
   </object>
   <object class="wxFrame" name="stream_frame">
     <object class="wxBoxSizer">
+      <orient>wxVERTICAL</orient>
       <object class="sizeritem">
         <object class="wxScrolledWindow" name="scrwin">
           <object class="wxBoxSizer">
             <orient>wxVERTICAL</orient>
             <object class="sizeritem">
               <object class="odemis.gui.comp.foldpanelbar.FoldPanelBar" name="fpb">
-                <object class="odemis.gui.comp.foldpanelbar.FoldPanelItem" name="panel_1">
-                  <object class="wxCollapsiblePane">
-                    <label>SEM Backscatter</label>
+                <object class="odemis.gui.comp.foldpanelbar.FoldPanelItem">
+                  <object class="wxPanel" name="test_panel">
+                    <object class="wxBoxSizer">
+                      <orient>wxVERTICAL</orient>
+                      <object class="sizeritem">
+                        <object class="odemis.gui.comp.stream.FixedStreamPanel" name="fsp_1">
+                          <label>Fixed Stream panel</label>
+                          <collapsed>1</collapsed>
+                          <fg>#FFFFFF</fg>
+                          <bg>#4D4D4D</bg>
+                          <font>
+                            <size>9</size>
+                            <style>normal</style>
+                            <weight>normal</weight>
+                            <underlined>0</underlined>
+                            <family>default</family>
+                            <face>Ubuntu</face>
+                            <encoding>UTF-8</encoding>
+                          </font>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <flag>wxBOTTOM|wxEXPAND</flag>
+                        <border>1</border>
+                      </object>
+                      
+                      <object class="sizeritem">
+                        <object class="odemis.gui.comp.stream.FixedStreamPanel" name="fsp_1">
+                          <label>Fixed Stream panel</label>
+                          <fg>#FFFFFF</fg>
+                          <bg>#4D4D4D</bg>
+                          <font>
+                            <size>9</size>
+                            <style>normal</style>
+                            <weight>normal</weight>
+                            <underlined>0</underlined>
+                            <family>default</family>
+                            <face>Ubuntu</face>
+                            <encoding>UTF-8</encoding>
+                          </font>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <flag>wxBOTTOM|wxEXPAND</flag>
+                        <border>1</border>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="odemis.gui.comp.stream.FixedStreamPanel" name="fsp_1">
+                          <label>Fixed Stream panel</label>
+                          <collapsed>1</collapsed>
+                          <fg>#FFFFFF</fg>
+                          <bg>#4D4D4D</bg>
+                          <font>
+                            <size>9</size>
+                            <style>normal</style>
+                            <weight>normal</weight>
+                            <underlined>0</underlined>
+                            <family>default</family>
+                            <face>Ubuntu</face>
+                            <encoding>UTF-8</encoding>
+                          </font>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <flag>wxBOTTOM|wxEXPAND</flag>
+                        <border>1</border>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="odemis.gui.comp.stream.CustomStreamPanel" name="csp_1">
+                          <label>Custom Stream panel</label>
+                          <collapsed>1</collapsed>
+                          <fg>#FFFFFF</fg>
+                          <bg>#4D4D4D</bg>
+                          <font>
+                            <size>9</size>
+                            <style>normal</style>
+                            <weight>normal</weight>
+                            <underlined>0</underlined>
+                            <family>default</family>
+                            <face>Ubuntu</face>
+                            <encoding>UTF-8</encoding>
+                          </font>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <flag>wxBOTTOM|wxEXPAND</flag>
+                        <border>1</border>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="odemis.gui.comp.stream.CustomStreamPanel" name="csp_1">
+                          <label>Custom Stream panel</label>
+                          <collapsed>1</collapsed>
+                          <fg>#FFFFFF</fg>
+                          <bg>#4D4D4D</bg>
+                          <font>
+                            <size>9</size>
+                            <style>normal</style>
+                            <weight>normal</weight>
+                            <underlined>0</underlined>
+                            <family>default</family>
+                            <face>Ubuntu</face>
+                            <encoding>UTF-8</encoding>
+                          </font>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <flag>wxBOTTOM|wxEXPAND</flag>
+                        <border>1</border>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="odemis.gui.comp.stream.CustomStreamPanel" name="csp_1">
+                          <label>Custom Stream panel</label>
+                          <collapsed>1</collapsed>
+                          <fg>#FFFFFF</fg>
+                          <bg>#4D4D4D</bg>
+                          <font>
+                            <size>9</size>
+                            <style>normal</style>
+                            <weight>normal</weight>
+                            <underlined>0</underlined>
+                            <family>default</family>
+                            <face>Ubuntu</face>
+                            <encoding>UTF-8</encoding>
+                          </font>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <flag>wxBOTTOM|wxEXPAND</flag>
+                        <border>1</border>
+                      </object>
+                    </object>
+                    <bg>#333333</bg>
                   </object>
-                  <label>Streams</label>
-                  <bg>#1E90FF</bg>
-                  <font>
-                    <size>13</size>
-                    <style>normal</style>
-                    <weight>normal</weight>
-                    <underlined>0</underlined>
-                    <family>default</family>
-                    <face>Ubuntu</face>
-                    <encoding>UTF-8</encoding>
-                  </font>
+                  <label>STREAMS</label>
                   <XRCED>
                     <assign_var>1</assign_var>
                   </XRCED>
                 </object>
                 <spacing>0</spacing>
+                <leftspacing>0</leftspacing>
+                <rightspacing>0</rightspacing>
+                <bg>#4D4D4D</bg>
                 <XRCED>
                   <assign_var>1</assign_var>
                 </XRCED>
@@ -240,7 +375,6 @@ def __init_resources():
         <flag>wxEXPAND</flag>
         <minsize>400,400</minsize>
       </object>
-      <orient>wxVERTICAL</orient>
     </object>
     <size>400,400</size>
     <title>Stream panel test frame</title>
