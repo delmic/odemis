@@ -94,36 +94,50 @@ class ComponentProxy(Pyro4.Proxy):
     """
     Representation of the Component in remote containers
     """
-    def __init__(self, uri, roattributes=dict(), dataflows=dict(), oneways=set(), asyncs=set()):
+    def __init__(self, uri, oneways=set(), asyncs=set()):
         """
-        roattributes (dict string -> value)
-        dataflows (dict string -> dataflow)
         oneways (list string)
         asyncs (list string)
         """
         Pyro4.Proxy.__init__(self, uri, oneways, asyncs)
+        # TODO implement clever .parent and .children which call ._get_parent() and ._get_children()
+        # and cached
+        # so that sending one component doesn't mean sending the whole tree
+        # and also .parent is automatically set on the children when calling ._get_children()
+
+    # TODO find out what   __getstate__ and __setstate__  are used for in Proxy
+    # and whether it's ok to override them with less
+
+    def __getstate__(self):
+        return (_core.dump_roattributes(self), _dataflow.dump_dataflows(self))
+        
+    def __setstate__(self, state):
+        """
+        roattributes (dict string -> value)
+        dataflows (dict string -> dataflow)
+        """
+        roattributes, dataflows = state
         _core.load_roattributes(self, roattributes)
         _dataflow.load_dataflows(self, dataflows)
 
-        # TODO override __getstate__ and __setstate__ too? When is it used? 
-
 # Converter from Component to ComponentProxy
+already_serialized = set()
 def odemicComponentSerializer(self):
-    """reduce function that automatically replaces Pyro objects by a Proxy"""
+    """reduce function that automatically replaces Component objects by a Proxy"""
     daemon=getattr(self,"_pyroDaemon",None)
     if daemon: # TODO might not be even necessary: They should be registering themselves in the init
         self._odemicShared = True
+        
         # only return a proxy if the object is a registered pyro object
-        return ComponentProxy, (daemon.uriFor(self),
-                                _core.dump_roattributes(self),
-                                _dataflow.dump_dataflows(self),
-                                Pyro4.core.get_oneways(self),
-                                Pyro4.core.get_asyncs(self))
+        return (ComponentProxy,
+                # URI as a string is more compact
+                (str(daemon.uriFor(self)), Pyro4.core.get_oneways(self), Pyro4.core.get_asyncs(self)),
+                # in the state goes everything that might be recursive
+                (_core.dump_roattributes(self), _dataflow.dump_dataflows(self))
+                )
     else:
         return self.__reduce__()
 Pyro4.Daemon.serializers[Component] = odemicComponentSerializer
-
-
 
 
 # TODO need update in the attributes

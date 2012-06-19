@@ -17,6 +17,7 @@ You should have received a copy of the GNU General Public License along with Del
 from Pyro4.core import oneway
 from _core import WeakMethod, WeakRefLostError
 import Pyro4
+import _core
 import inspect
 import logging
 import numpy
@@ -84,11 +85,9 @@ class DataFlow(object):
             Each time a new data is available it should call notify(dataarray)
     extend: get() to synchronously return the next dataarray available
     """
-    def __init__(self):
+    def __init__(self, parent=None):
         self._listeners = set()
-        
-        # to be overridden
-        self.parent = None
+        self.parent = parent
     
     # to be overridden
     # not defined at all so that the proxy version automatically does a remote call 
@@ -152,7 +151,7 @@ class DataFlow(object):
 # DataFlowObject to create on the server (in an Odemic component)
 class DataFlowRemotable(DataFlow):
     # TODO max_discard, to be passed to the proxy as well.
-    def __init__(self, parent=None, daemon=None, max_discard=0):
+    def __init__(self, parent=None, daemon=None, max_discard=100):
         """
         parent (string): Component containing this object (see DataFlow)
         daemon (Pyro4.Daemon): daemon used to share this object
@@ -180,6 +179,8 @@ class DataFlowRemotable(DataFlow):
         
         if daemon:
             self._register(daemon)
+        else:
+            logging.warning("DataFlowRemotable was not registered at initialisation")
     
     @property
     def max_discard(self):
@@ -254,7 +255,7 @@ class DataFlowRemotable(DataFlow):
 class DataFlowProxy(DataFlow, Pyro4.Proxy):
     # init is as light as possible to reduce creation overhead in case the
     # object is actually never used
-    def __init__(self, uri, oneways=set(), asyncs=set(), max_discards=0):
+    def __init__(self, uri, oneways=set(), asyncs=set(), max_discards=100):
         """
         uri, oneways, asyncs: see Proxy
         max_discards (int): amount of messages that can be discarded in a row if
@@ -265,7 +266,7 @@ class DataFlowProxy(DataFlow, Pyro4.Proxy):
         Pyro4.Proxy.__init__(self, uri, oneways, asyncs)
         self._parent = None
         self._global_name = None #unknown until parent is defined
-        DataFlow.__init__(self, parent=None)
+        DataFlow.__init__(self)
         self.max_discard = max_discards
         
         # It should be no problem to have one context per dataflow,
@@ -273,6 +274,17 @@ class DataFlowProxy(DataFlow, Pyro4.Proxy):
         self.ctx = zmq.Context(1)
         self._thread = None
         self._must_unsubscribe = False
+        
+    def __getstate__(self):
+        return (self.parent, _core.dump_roattributes(self),)
+        
+    def __setstate__(self, state):
+        """
+        parent (Component)
+        roattributes (dict string -> value)
+        """
+        self.parent, roattributes, = state
+        _core.load_roattributes(self, roattributes)
     
     # allow late parent update
     @property
@@ -293,7 +305,8 @@ class DataFlowProxy(DataFlow, Pyro4.Proxy):
         if self._parent is None:
             self._global_name = None
         else:
-            self._global_name = self._parent.name + "." + self._pyroUri.object
+            # _parent._pyroUri.object == _parent.name but initialised before
+            self._global_name = self._parent._pyroUri.object + "." + self._pyroUri.object
 
     # .get() is a direct remote call
     
@@ -421,7 +434,7 @@ def load_dataflows(self, dataflows):
     """
     for name, df in dataflows.items():
         setattr(self, name, df)
-        df.parent = self
+#        df.parent = self
 
 def odemicDataFlowSerializer(self):
     """reduce function that automatically replaces Pyro objects by a Proxy"""
@@ -429,12 +442,14 @@ def odemicDataFlowSerializer(self):
     if daemon: # TODO might not be even necessary: They should be registering themselves in the init
         self._odemicShared = True
         # only return a proxy if the object is a registered pyro object
-        return DataFlowProxy, (daemon.uriFor(self),
-                                Pyro4.core.get_oneways(self),
-                                Pyro4.core.get_asyncs(self),
-                                self.max_discard
-                                # self.parent # not possible due to recursion
-                                )
+        return (DataFlowProxy, 
+                (daemon.uriFor(self),
+                 Pyro4.core.get_oneways(self),
+                 Pyro4.core.get_asyncs(self),
+                 self.max_discard), 
+                # in the state goes everything that might be recursive
+                (self.parent, _core.dump_roattributes(self))
+                )
     else:
         return self.__reduce__()
     
