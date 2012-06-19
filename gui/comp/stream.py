@@ -381,9 +381,9 @@ class FixedExpander(Expander):
         self._sz.Insert(1, self._label_ctrl, 1, wx.RIGHT | wx.ALIGN_CENTRE_VERTICAL, 8)
 
 def suggest(val):
-    data = [name for name in TEST_STREAM_LST if name.startswith(val.lower())]
-    data.sort()
-    return ["<b>%s</b>%s" % (d[:len(val)], d[len(val):]) for d in data], data
+    val = str(val.lower())
+    data = [name for name in TEST_STREAM_LST if name.lower().startswith(val)]
+    return ['<font size="2"><b>%s</b>%s</font>' % (d[:len(val)], d[len(val):]) for d in data], data
 
 class CustomExpander(Expander):
 
