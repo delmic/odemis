@@ -894,7 +894,7 @@ class StageRedStone(Actuator):
         """
         self.doer_thread.lock.acquire()
         ca = self.doer_thread.current_action
-        self.doer_thread.action_queue.clear()
+        self.doer_thread.action_queue.clear() # FIXME should mark the future as cancelled
         self.doer_thread.request_stop_current.set()
         self.doer_thread.lock.release()
         
@@ -1141,7 +1141,7 @@ class RedStoneFuture(object):
 #                    print "action is still in queue:", self._doer.action_queue
 #                elif self._action == self._doer.current_action:
 #                    print "action being executed"
-#                else: 
+#                else:
 #                    print "no idea why not done"
                 return False
             else:

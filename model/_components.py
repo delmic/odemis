@@ -14,10 +14,14 @@ Delmic Acquisition Software is distributed in the hope that it will be useful, b
 
 You should have received a copy of the GNU General Public License along with Delmic Acquisition Software. If not, see http://www.gnu.org/licenses/.
 '''
+from _core import roattribute
+from model import _dataflow
+import Pyro4
+import _core
 import _properties as properties
 import logging
-import model
 
+# TODO make it remote-aware
 _microscope = None
 def getMicroscope():
     """
@@ -56,16 +60,91 @@ def updateMetadata(metadata, parent):
 class ArgumentError(Exception):
     pass
 
-class HwComponent(object):
+
+class Component(object):
+    '''
+    Component to be shared remotely
+    '''
+    def __init__(self, name, daemon=None):
+        """
+        name (string): unique name used to identify the component
+        daemon (Pyro4.daemon): daemon via which the object will be registered. 
+            default=None => not registered
+        """
+        self._name = name
+        if daemon:
+            daemon.register(self, name)
+        
+    @roattribute
+    def name(self):
+        return self._name
+    
+    def terminate(self):
+        """
+        Stop the Component from executing.
+        The component shouldn't be used afterward.
+        """
+        # make sure we are registered
+        daemon = getattr(self, "_pyroDaemon", None)
+        if daemon:
+            daemon.unregister(self)
+
+# Run on the client (the process which asked for a given remote component)
+class ComponentProxy(Pyro4.Proxy):
+    """
+    Representation of the Component in remote containers
+    """
+    def __init__(self, uri, roattributes=dict(), dataflows=dict(), oneways=set(), asyncs=set()):
+        """
+        roattributes (dict string -> value)
+        dataflows (dict string -> dataflow)
+        oneways (list string)
+        asyncs (list string)
+        """
+        Pyro4.Proxy.__init__(self, uri, oneways, asyncs)
+        _core.load_roattributes(self, roattributes)
+        _dataflow.load_dataflows(self, dataflows)
+
+        # TODO override __getstate__ and __setstate__ too? When is it used? 
+
+# Converter from Component to ComponentProxy
+def odemicComponentSerializer(self):
+    """reduce function that automatically replaces Pyro objects by a Proxy"""
+    daemon=getattr(self,"_pyroDaemon",None)
+    if daemon: # TODO might not be even necessary: They should be registering themselves in the init
+        self._odemicShared = True
+        # only return a proxy if the object is a registered pyro object
+        return ComponentProxy, (daemon.uriFor(self),
+                                _core.dump_roattributes(self),
+                                _dataflow.dump_dataflows(self),
+                                Pyro4.core.get_oneways(self),
+                                Pyro4.core.get_asyncs(self))
+    else:
+        return self.__reduce__()
+Pyro4.Daemon.serializers[Component] = odemicComponentSerializer
+
+
+
+
+# TODO need update in the attributes
+class HwComponent(Component):
     """
     A generic class which represents a physical component of the microscope
     This is an abstract class that should be inherited.
     """
     
-    def __init__(self, name, role):
-        self.name = name
-        self.role = role
-        self.parent = None
+    def __init__(self, name, role, daemon=None):
+        Component.__init__(self, name, daemon)
+        self._role = role
+        self._parent = None
+    
+    @roattribute
+    def role(self):
+        return self._role
+    
+    @roattribute
+    def parent(self):
+        return self._parent
 
     # to be overridden by any component which actually can provide metadata
     def getMetadata(self):
