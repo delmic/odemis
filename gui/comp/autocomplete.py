@@ -33,6 +33,9 @@ __url__  = "http://bitbucket.org/raz/wxautocompletectrl"
 
 import wx
 
+# Delmic: This setting will make the popup also appear when the value is an
+# empty string.
+POPUP_ON_EMPTY = True
 
 class SuggestionsPopup(wx.Frame):
     def __init__(self, parent, font=None):
@@ -160,7 +163,7 @@ class AutocompleteTextCtrl(wx.TextCtrl):
 
     def AutoComplete(self):
         self.queued_popup = False
-        if self.Value != "":
+        if self.Value != "" or POPUP_ON_EMPTY:
             formated, unformated = self.completer(self.Value)
             if len(formated) > 0:
                 self.popup.SetSuggestions(formated, unformated)

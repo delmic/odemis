@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 
 # + PyCollapsiblePane (PyPanel)
 # |-- GTKExpander
@@ -32,7 +33,13 @@ from wx.lib.buttons import GenBitmapToggleButton, GenBitmapButton, \
 from odemis.gui.img.data import catalog
 from odemis.gui.comp.autocomplete import AutocompleteTextCtrl
 
-TEST_STREAM_LST = ["Aap", "noot", "mies", "kees", "vuur", "quantummechnica",
+# Needed for multi-lingual string sorting
+import locale
+# this reads the environment and inits the right locale
+locale.setlocale(locale.LC_ALL, "")
+
+
+TEST_STREAM_LST = ["Aap", "nöot", "noot", "mies", "kees", "vuur", "quantummechnica",
                    "Repelsteeltje", "", "XXX", "a", "aa", "aaa", "aaaa",
                    "aaaaa", "aaaaaa", "aaaaaaa"]
 
@@ -383,6 +390,7 @@ class FixedExpander(Expander):
 def suggest(val):
     val = str(val.lower())
     data = [name for name in TEST_STREAM_LST if name.lower().startswith(val)]
+    data.sort(cmp=locale.strcoll)
     return ['<font size="2"><b>%s</b>%s</font>' % (d[:len(val)], d[len(val):]) for d in data], data
 
 class CustomExpander(Expander):
