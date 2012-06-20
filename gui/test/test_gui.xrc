@@ -150,7 +150,6 @@
                         <flag>wxBOTTOM|wxEXPAND</flag>
                         <border>1</border>
                       </object>
-                      
                       <object class="sizeritem">
                         <object class="odemis.gui.comp.stream.FixedStreamPanel" name="fsp_1">
                           <label>Fixed Stream panel</label>
@@ -259,6 +258,17 @@
                         </object>
                         <flag>wxBOTTOM|wxEXPAND</flag>
                         <border>1</border>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="wx.lib.buttons.GenBitmapButton">
+                          <bitmap>../img/stream_add.png</bitmap>
+                          <selected>../img/stream_add_sel.png</selected>
+                          <focus>../img/stream_add_sel.png</focus>
+                          <disabled>../img/ico_rem_str_h.png</disabled>
+                          <hover>../img/stream_add_h.png</hover>
+                          <enabled>0</enabled>
+                          <style>wxBORDER_NONE</style>
+                        </object>
                       </object>
                     </object>
                     <bg>#333333</bg>

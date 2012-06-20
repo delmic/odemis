@@ -5,10 +5,9 @@
 # This module is used both by Odemis' GUI and XRCED.
 
 import wx
+import wx.lib.buttons
 import wx.xrc as xrc
 from wx.tools.XRCed.globals import TRACE
-#from wx.lib.agw.pycollapsiblepane import CP_GTK_EXPANDER, CP_DEFAULT_STYLE, \
-#    CP_NO_TLW_RESIZE
 
 import odemis.gui.comp.foldpanelbar as fpb
 import odemis.gui.comp.stream as strm
@@ -198,3 +197,35 @@ class FoldPanelXmlHandler(xrc.XmlResourceHandler):
     # Process XML parameters and create the object
     def DoCreateResource(self):
         pass
+
+class GenBitmapButtonlHandler(xrc.XmlResourceHandler):
+    def __init__(self):
+        xrc.XmlResourceHandler.__init__(self)
+        # Standard styles
+        self.AddWindowStyles()
+        # Custom styles
+
+    def CanHandle(self, node):
+        return self.IsOfClass(node, 'wx.lib.buttons.GenBitmapButton')
+
+    # Process XML parameters and create the object
+    def DoCreateResource(self):
+        assert self.GetInstance() is None
+
+        bmp = wx.NullBitmap
+        if self.GetParamNode("bitmap"):
+            bmp = self.GetBitmap("bitmap")
+
+        w = wx.lib.buttons.GenBitmapButton(self.GetParentAsWindow(),
+                                    self.GetID(),
+                                    bmp,
+                                    self.GetPosition(),
+                                    self.GetSize(),
+                                    self.GetStyle())
+        if self.GetParamNode("disabled"):
+            bmp = self.GetBitmap("disabled")
+        w.SetBitmapDisabled(bmp)
+
+        #w.SetValue(self.GetText('value'))
+        self.SetupWindow(w)
+        return w

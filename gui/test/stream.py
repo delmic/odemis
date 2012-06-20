@@ -24,11 +24,12 @@ def odemis_get_resources():
     """
     if odemis.gui.test.test_gui.__res == None:    #pylint: disable=W0212
         from odemis.gui.xmlh.xh_delmic import FoldPanelBarXmlHandler, \
-            FixedStreamPanelXmlHandler, CustomStreamPanelXmlHandler
+            FixedStreamPanelXmlHandler, CustomStreamPanelXmlHandler, GenBitmapButtonlHandler
         odemis.gui.test.test_gui.__init_resources() #pylint: disable=W0212
         odemis.gui.test.test_gui.__res.InsertHandler(FoldPanelBarXmlHandler()) #pylint: disable=W0212
         odemis.gui.test.test_gui.__res.InsertHandler(FixedStreamPanelXmlHandler()) #pylint: disable=W0212
         odemis.gui.test.test_gui.__res.InsertHandler(CustomStreamPanelXmlHandler()) #pylint: disable=W0212
+        odemis.gui.test.test_gui.__res.InsertHandler(GenBitmapButtonlHandler()) #pylint: disable=W0212
     return odemis.gui.test.test_gui.__res #pylint: disable=W0212
 
 def loop():

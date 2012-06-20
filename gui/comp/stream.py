@@ -11,7 +11,7 @@
 # TODO:
 #
 #  **A workaround has been found for the following problem and was implemented
-#    using  a custom Slider class **
+#    using a custom Slider class **
 
 # - When scrolling the main ScrolledWindow with a mouse wheel, we run into
 #   trouble when the cursor hits a wx.Slider, since it will start capturing
