@@ -132,27 +132,14 @@ class PropertyRemotable(Property):
         self.ctx = zmq.Context(1)
         self.pipe = self.ctx.socket(zmq.PUB)
         self.pipe.linger = 1 # don't keep messages more than 1s after close
+        # self.pipe.hwm has to be 0 (default), otherwise it drops _new_ values  
         
-        self._max_discard = 0
-        self.max_discard = max_discard # needs self.pipe 
+        self.max_discard = max_discard
         
         if daemon:
             self._register(daemon)
         else:
             logging.warning("PropertyRemotable was not registered at initialisation")
-    
-    @property
-    def max_discard(self):
-        return self._max_discard
-    
-    @max_discard.setter
-    def max_discard(self, value):
-        self._max_discard = value
-        if self._max_discard == 0:
-            # High-water mark   
-            self.pipe.hwm = 0
-        else:
-            self.pipe.hwm = 0 # 1 XXX DEBUG
     
     def _register(self, daemon):
         daemon.register(self)
@@ -301,7 +288,6 @@ class PropertyProxy(Property, Pyro4.Proxy):
         # create a zmq subscription to receive the data
         data = ctx.socket(zmq.SUB)
         data.connect("ipc://" + self._global_name + ".ipc")
-        data.hwm = 1 # probably does nothing
         
         # Process messages for commands and data
         poller = zmq.Poller()
