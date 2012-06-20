@@ -199,26 +199,28 @@ import base64
 
 import wx
 
+from odemis.gui.img.data import catalog
+
 #----------------------------------------------------------------------
 # Collapsed And Expanded Bitmap Images
 # Created With img2py.py
 #----------------------------------------------------------------------
-from wx.lib.embeddedimage import PyEmbeddedImage
+#from wx.lib.embeddedimage import PyEmbeddedImage
 
 # Delmic
 # Load images from files for convenience. Convert to the old scheme using
 # embedded base64 encoding when ready for release
-with open("/home/rinze/dev/odemis/gui/img/arr_right.png", "rb") as image_file:
-    encoded_img = base64.b64encode(image_file.read())
+#with open("/home/rinze/dev/odemis/gui/img/arr_right.png", "rb") as image_file:
+#encoded_img = base64.b64encode(image_file.read())
 
 # Delmic
 # The default fold icons have been replaced with custom base64 encoded png icons
-CollapsedIcon = PyEmbeddedImage(encoded_img)
+CollapsedIcon = catalog['arr_right']
 
-with open("/home/rinze/dev/odemis/gui/img/arr_down.png", "rb") as image_file:
-    encoded_img = base64.b64encode(image_file.read())
+#with open("/home/rinze/dev/odemis/gui/img/arr_down.png", "rb") as image_file:
+#    encoded_img = base64.b64encode(image_file.read())
 
-ExpandedIcon = PyEmbeddedImage(encoded_img)
+ExpandedIcon = catalog['arr_down']
 
 #----------------------------------------------------------------------
 # FOLDPANELBAR Starts Here
@@ -232,12 +234,12 @@ ExpandedIcon = PyEmbeddedImage(encoded_img)
 #- CAPTIONBAR_RECTANGLE: Draws a single colour with a rectangle around the caption
 #- CAPTIONBAR_FILLED_RECTANGLE: Draws a filled rectangle and a border around it
 
-CAPTIONBAR_NOSTYLE            = 0
-CAPTIONBAR_GRADIENT_V         = 1
-CAPTIONBAR_GRADIENT_H         = 2
-CAPTIONBAR_SINGLE             = 3
-CAPTIONBAR_RECTANGLE          = 4
-CAPTIONBAR_FILLED_RECTANGLE   = 5
+CAPTIONBAR_NOSTYLE = 0
+CAPTIONBAR_GRADIENT_V = 1
+CAPTIONBAR_GRADIENT_H = 2
+CAPTIONBAR_SINGLE = 3
+CAPTIONBAR_RECTANGLE = 4
+CAPTIONBAR_FILLED_RECTANGLE = 5
 
 FPB_EXTRA_X = 10
 FPB_EXTRA_Y = 4
@@ -532,7 +534,7 @@ class CaptionBarStyle(object):
 FPB_STYLE = CaptionBarStyle()
 FPB_STYLE.SetFirstColour(wx.Colour(130, 130, 130))
 FPB_STYLE.SetSecondColour(wx.Colour(100, 100, 100))
-FPB_STYLE.SetCaptionFont(wx.Font(10, wx.FONTFAMILY_DEFAULT, 1, wx.FONTWEIGHT_NORMAL))
+FPB_STYLE.SetCaptionFont(wx.Font(10, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
 FPB_STYLE.SetCaptionColour("#222222")
 FPB_STYLE.SetBarHeight(40)
 
@@ -871,11 +873,13 @@ class CaptionBar(wx.Window):
         dc.SetTextForeground(self._style.GetCaptionColour())
 
         if vertical:
-            # Text is vertically aligned in the middle
+            # Text is vertically aligned in the middle        
+            # Note: abs() was added, because in MS Window GetPixelSize returned a negative
+            # pixel height. (???) 
             dc.DrawText(self._caption, 10,
-                (wndRect.GetHeight() - caption_font.GetPixelSize().GetHeight())/2)
+                (wndRect.GetHeight() - abs(caption_font.GetPixelSize().GetHeight())) / 2)
         else:
-            dc.DrawRotatedText(self._caption, FPB_EXTRA_Y/2,
+            dc.DrawRotatedText(self._caption, FPB_EXTRA_Y / 2,
                                wndRect.GetBottom() - 4, 90)
 
         # draw small icon, either collapsed or expanded
@@ -886,14 +890,12 @@ class CaptionBar(wx.Window):
             if vertical:
                 drw = wndRect.GetRight() - self._iconWidth - self._rightIndent
                 self._foldIcons.Draw(index, dc, drw,
-                                     (wndRect.GetHeight() - self._iconHeight)/2,
+                                     (wndRect.GetHeight() - self._iconHeight) / 2,
                                      wx.IMAGELIST_DRAW_TRANSPARENT)
             else:
                 self._foldIcons.Draw(index, dc,
-                                     (wndRect.GetWidth() - self._iconWidth)/2,
+                                     (wndRect.GetWidth() - self._iconWidth) / 2,
                                      self._rightIndent, wx.IMAGELIST_DRAW_TRANSPARENT)
-
-##        event.Skip()
 
 
     def FillCaptionBackground(self, dc):
@@ -949,11 +951,11 @@ class CaptionBar(wx.Window):
         elif event.Entering():
             # calculate gradient coefficients
             self._mouse_is_over = True
-            self.OnPaint(event)
+            self.Refresh()
 
         elif event.Leaving():
             self._mouse_is_over = False
-            self.OnPaint(event)
+            self.Refresh()
 
         # send the collapse, expand event to the parent
 
@@ -1222,8 +1224,8 @@ class FoldPanelBar(wx.Panel):
     will indicate the collapsed or expanded state.
     """
 
-    def __init__(self, parent, id=-1, pos=wx.DefaultPosition, size=wx.DefaultSize,
-                 style=wx.TAB_TRAVERSAL|wx.NO_BORDER, agwStyle=0):
+    def __init__(self, parent, id= -1, pos=wx.DefaultPosition, size=wx.DefaultSize,
+                 style=wx.TAB_TRAVERSAL | wx.NO_BORDER, agwStyle=0):
         """
         Default class constructor.
 
@@ -1397,7 +1399,7 @@ class FoldPanelBar(wx.Panel):
         # version of this module: If widgets were added anywhere else but the last fold panel,
         # then the lower widgets would not move down to create space for that new widget.
 
-        old_size =  panel.GetSize()
+        old_size = panel.GetSize()
         panel.AddWindow(window, flags, spacing, leftSpacing, rightSpacing)
         new_size = panel.GetSize()
 
@@ -1427,7 +1429,7 @@ class FoldPanelBar(wx.Panel):
         except:
             raise Exception("ERROR: Invalid Panel Passed To AddFoldPanelWindow: " + repr(panel))
 
-        old_size =  panel.GetSize()
+        old_size = panel.GetSize()
         panel.InsertWindow(window, position, flags, spacing, leftSpacing, rightSpacing)
         new_size = panel.GetSize()
 
@@ -1453,7 +1455,7 @@ class FoldPanelBar(wx.Panel):
         except:
             raise Exception("ERROR: Invalid Panel Passed To AddFoldPanelWindow: " + repr(panel))
 
-        old_size =  panel.GetSize()
+        old_size = panel.GetSize()
         panel.RemoveWindow(window)
         window.Destroy()
         panel.Fit()
@@ -1474,7 +1476,7 @@ class FoldPanelBar(wx.Panel):
         except:
             raise Exception("ERROR: Invalid Panel Passed To AddFoldPanelWindow: " + repr(panel))
 
-        old_size =  panel.GetSize()
+        old_size = panel.GetSize()
         removed_wins = panel.RemoveAllWindows()
         for window in removed_wins:
             window.Destroy()
@@ -1605,7 +1607,7 @@ class FoldPanelBar(wx.Panel):
 
         else:
             pos = self._panels[i].GetItemPos() + self._panels[i].GetPanelLength()
-            for j in range(i+1, len(self._panels)):
+            for j in range(i + 1, len(self._panels)):
                 pos = pos + self._panels[j].Reposition(pos)
 
         self.Thaw()
@@ -1638,7 +1640,7 @@ class FoldPanelBar(wx.Panel):
         the visible panels.
         """
 
-        value = wx.Rect(0,0,0,0)
+        value = wx.Rect(0, 0, 0, 0)
         vertical = self.IsVertical()
 
         # determine wether the number of panels left
@@ -1864,7 +1866,7 @@ class FoldPanelItem(wx.Panel):
          L{CaptionBarStyle}.
         """
 
-        wx.Panel.__init__(self, parent, id, wx.Point(0,0), style=wx.CLIP_CHILDREN)
+        wx.Panel.__init__(self, parent, id, wx.Point(0, 0), style=wx.CLIP_CHILDREN)
         self._controlCreated = False
         self._UserSize = 0
         self._PanelSize = 0
@@ -1886,7 +1888,7 @@ class FoldPanelItem(wx.Panel):
 
         # create the caption bar, in collapsed or expanded state
 
-        self._captionBar = CaptionBar(self, wx.ID_ANY, wx.Point(0,0),
+        self._captionBar = CaptionBar(self, wx.ID_ANY, wx.Point(0, 0),
                                       size=wx.DefaultSize, caption=caption,
                                       foldIcons=foldIcons, cbstyle=cbstyle)
 
