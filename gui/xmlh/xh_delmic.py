@@ -5,13 +5,13 @@
 # This module is used both by Odemis' GUI and XRCED.
 
 import wx
+import wx.lib.buttons
 import wx.xrc as xrc
 from wx.tools.XRCed.globals import TRACE
-#from wx.lib.agw.pycollapsiblepane import CP_GTK_EXPANDER, CP_DEFAULT_STYLE, \
-#    CP_NO_TLW_RESIZE
 
 import odemis.gui.comp.foldpanelbar as fpb
 import odemis.gui.comp.stream as strm
+import odemis.gui.comp.buttons as btns
 
 class FixedStreamPanelXmlHandler(xrc.XmlResourceHandler):
     def __init__(self):
@@ -198,3 +198,142 @@ class FoldPanelXmlHandler(xrc.XmlResourceHandler):
     # Process XML parameters and create the object
     def DoCreateResource(self):
         pass
+
+class GenBitmapButtonHandler(xrc.XmlResourceHandler):
+    def __init__(self):
+        xrc.XmlResourceHandler.__init__(self)
+        # Standard styles
+        self.AddWindowStyles()
+        # Custom styles
+
+    def CanHandle(self, node):
+        return self.IsOfClass(node, 'wx.lib.buttons.GenBitmapButton')
+
+    # Process XML parameters and create the object
+    def DoCreateResource(self):
+        assert self.GetInstance() is None
+
+        bmp = wx.NullBitmap
+        if self.GetParamNode("bitmap"):
+            bmp = self.GetBitmap("bitmap")
+
+        w = wx.lib.buttons.GenBitmapButton(self.GetParentAsWindow(),
+                                    self.GetID(),
+                                    bmp,
+                                    self.GetPosition(),
+                                    self.GetSize(),
+                                    self.GetStyle())
+
+        if self.GetParamNode("selected"):
+            bmp = self.GetBitmap("selected")
+            w.SetBitmapSelected(bmp)
+
+        if self.GetParamNode("focus"):
+            bmp = self.GetBitmap("focus")
+            w.SetBitmapFocus(bmp)
+
+        if self.GetParamNode("disabled"):
+            bmp = self.GetBitmap("disabled")
+            w.SetBitmapDisabled(bmp)
+
+        self.SetupWindow(w)
+        return w
+
+class ImageButtonHandler(xrc.XmlResourceHandler):
+
+    def __init__(self):
+        xrc.XmlResourceHandler.__init__(self)
+        # Standard styles
+        self.AddWindowStyles()
+        # Custom styles
+
+    def CanHandle(self, node):
+        return self.IsOfClass(node, 'odemis.gui.comp.buttons.ImageButton')
+
+    # Process XML parameters and create the object
+    def DoCreateResource(self):
+        assert self.GetInstance() is None
+
+        bmp = wx.NullBitmap
+        if self.GetParamNode("bitmap"):
+            bmp = self.GetBitmap("bitmap")
+
+        w = btns.ImageButton(self.GetParentAsWindow(),
+                            self.GetID(),
+                            bmp,
+                            pos=self.GetPosition(),
+                            size=self.GetSize(),
+                            style=self.GetStyle())
+
+        if self.GetParamNode("selected"):
+            bmp = self.GetBitmap("selected")
+            w.SetBitmapSelected(bmp)
+
+        if self.GetParamNode("hover"):
+            bmp = self.GetBitmap("hover")
+            w.SetBitmapHover(bmp)
+
+        if self.GetParamNode("focus"):
+            bmp = self.GetBitmap("focus")
+            w.SetBitmapFocus(bmp)
+
+
+        if self.GetParamNode("disabled"):
+            bmp = self.GetBitmap("disabled")
+            w.SetBitmapDisabled(bmp)
+
+        self.SetupWindow(w)
+        return w
+
+class PopupImageButtonHandler(xrc.XmlResourceHandler):
+
+    def __init__(self):
+        xrc.XmlResourceHandler.__init__(self)
+        # Standard styles
+        self.AddWindowStyles()
+        # Custom styles
+
+    def CanHandle(self, node):
+        return self.IsOfClass(node, 'odemis.gui.comp.buttons.PopupImageButton')
+
+    # Process XML parameters and create the object
+    def DoCreateResource(self):
+        assert self.GetInstance() is None
+
+        bmp = wx.NullBitmap
+        if self.GetParamNode("bitmap"):
+            bmp = self.GetBitmap("bitmap")
+
+        w = btns.ImageButton(self.GetParentAsWindow(),
+                            self.GetID(),
+                            bmp,
+                            pos=self.GetPosition(),
+                            size=self.GetSize(),
+                            style=self.GetStyle())
+
+        if self.GetParamNode("selected"):
+            bmp = self.GetBitmap("selected")
+            w.SetBitmapSelected(bmp)
+
+        if self.GetParamNode("hover"):
+            bmp = self.GetBitmap("hover")
+            w.SetBitmapHover(bmp)
+
+        if self.GetParamNode("focus"):
+            bmp = self.GetBitmap("focus")
+            w.SetBitmapFocus(bmp)
+
+
+        if self.GetParamNode("disabled"):
+            bmp = self.GetBitmap("disabled")
+            w.SetBitmapDisabled(bmp)
+
+        self.SetupWindow(w)
+        return w
+
+HANDLER_CLASS_LIST = [FixedStreamPanelXmlHandler,
+                      CustomStreamPanelXmlHandler,
+                      FoldPanelBarXmlHandler,
+                      GenBitmapButtonHandler,
+                      ImageButtonHandler,
+                      PopupImageButtonHandler]
