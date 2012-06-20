@@ -260,14 +260,9 @@
                         <border>1</border>
                       </object>
                       <object class="sizeritem">
-                        <object class="wx.lib.buttons.GenBitmapButton">
+                        <object class="odemis.gui.comp.buttons.ImageButton">
                           <bitmap>../img/stream_add.png</bitmap>
-                          <selected>../img/stream_add_sel.png</selected>
-                          <focus>../img/stream_add_sel.png</focus>
-                          <disabled>../img/ico_rem_str_h.png</disabled>
-                          <hover>../img/stream_add_h.png</hover>
-                          <enabled>0</enabled>
-                          <style>wxBORDER_NONE</style>
+                          <hover>../img/arr_down.png</hover>
                         </object>
                       </object>
                     </object>

@@ -64,13 +64,12 @@ component.Manager.setMenu(c, 'TOP_LEVEL', 'Delmic fold panel', 'FoldPanel', 2)
 component.Manager.setMenu(c, 'ROOT', 'Delmic fold panel', 'FoldPanel', 2)
 #component.Manager.setMenu(c, 'container', 'Delmic fold panel', 'FoldPanel', 10)
 
-# wx.lib.buttons GenButtons
 
 ### wx.lib.buttons.GenBitmapButton
 
 c = component.Component('wx.lib.buttons.GenBitmapButton', ['control', 'tool'],
               ['pos', 'size', 'default',
-               'bitmap', 'selected', 'focus', 'disabled', 'hover'],
+               'bitmap', 'selected', 'focus', 'disabled'],
               image=images.TreeBitmapButton.GetImage())
 #c.addStyles()
 c.setParamClass('default', params.ParamBool)
@@ -85,12 +84,39 @@ c.setParamClass('focus', params.ParamBitmap)
 c.setSpecial('disabled',  attribute.BitmapAttribute)
 c.setParamClass('disabled', params.ParamBitmap)
 
+
+c.addEvents('EVT_BUTTON')
+component.Manager.register(c)
+component.Manager.addXmlHandler(xh_delmic.GenBitmapButtonHandler)
+component.Manager.setMenu(c, 'button', 'generic bitmap button', 'wx.lib.buttons.GenBitmapButton', 20)
+component.Manager.setTool(c, 'Controls', pos=(1, 1))
+
+
+### odemis.gui.comp.buttons.ImageButton
+
+c = component.Component('odemis.gui.comp.buttons.ImageButton', ['control', 'tool'],
+              ['pos', 'size', 'default',
+               'bitmap', 'hover', 'selected', 'focus', 'disabled'],
+              image=images.TreeBitmapButton.GetImage())
+#c.addStyles()
+c.setParamClass('default', params.ParamBool)
+c.setSpecial('bitmap',  attribute.BitmapAttribute)
+
 c.setSpecial('hover',  attribute.BitmapAttribute)
 c.setParamClass('hover', params.ParamBitmap)
+
+c.setSpecial('selected',  attribute.BitmapAttribute)
+c.setParamClass('selected', params.ParamBitmap)
+
+c.setSpecial('focus',  attribute.BitmapAttribute)
+c.setParamClass('focus', params.ParamBitmap)
+
+c.setSpecial('disabled',  attribute.BitmapAttribute)
+c.setParamClass('disabled', params.ParamBitmap)
 
 
 c.addEvents('EVT_BUTTON')
 component.Manager.register(c)
-component.Manager.addXmlHandler(xh_delmic.GenBitmapButtonlHandler)
-component.Manager.setMenu(c, 'button', 'generic bitmap button', 'wx.lib.buttons.GenBitmapButton', 20)
+component.Manager.addXmlHandler(xh_delmic.ImageButtonHandler)
+component.Manager.setMenu(c, 'button', 'Delmic hover bitmap button', 'odemis.gui.comp.buttons.ImageButton', 20)
 component.Manager.setTool(c, 'Controls', pos=(1, 1))
