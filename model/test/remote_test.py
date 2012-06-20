@@ -179,22 +179,113 @@ class RemoteTest(unittest.TestCase):
         comp.stopServer()
         time.sleep(0.1) # give it some time to terminate
     
-    def test_dataflow(self):
+    def test_dataflow_subscribe(self):
         rdaemon = Pyro4.Proxy("PYRO:Pyro.Daemon@./u:"+self.container_name)
         comp = rdaemon.getObject("mycomp")
         self.assertEqual(comp.data.parent, comp, "Component and parent of data is different")
 
+        self.count = 0
+        self.data_arrays_sent = 0
+        comp.data.reset()
+        
+        comp.data.subscribe(self.receive_data)
+        time.sleep(0.5)
+        comp.data.unsubscribe(self.receive_data)
+        count_end = self.count
+        print "received %d arrays over %d" % (self.count, self.data_arrays_sent)
+        
+        time.sleep(0.1)
+        self.assertEqual(count_end, self.count)
+
+        comp.stopServer()
+        time.sleep(0.1) # give it some time to terminate
+    
+    def receive_data(self, dataflow, data):
+        self.count += 1
+        self.assertEqual(data.shape, (2048, 2048))
+        self.data_arrays_sent = data[0][0]
+        self.assertGreaterEqual(self.data_arrays_sent, self.count)
+    
+    def test_dataflow_unsubscribe_from_callback(self):
+        rdaemon = Pyro4.Proxy("PYRO:Pyro.Daemon@./u:"+self.container_name)
+        comp = rdaemon.getObject("mycomp")
+        self.assertEqual(comp.data.parent, comp, "Component and parent of data is different")
+
+        self.count = 0
+        self.data_arrays_sent = 0
+        comp.data.reset()
+        
+        comp.data.subscribe(self.receive_data_and_unsubscribe)
+        time.sleep(0.3)
+        self.assertEqual(self.count, 1)
+        self.assertEqual(self.data_arrays_sent, 1)
+#        print "received %d arrays over %d" % (self.count, self.data_arrays_sent)
+        
+        comp.stopServer()
+        time.sleep(0.1) # give it some time to terminate
+    
+    def receive_data_and_unsubscribe(self, dataflow, data):
+        self.count += 1
+        self.assertEqual(data.shape, (2048, 2048))
+        self.data_arrays_sent = data[0][0]
+        self.assertGreaterEqual(self.data_arrays_sent, self.count)
+        dataflow.unsubscribe(self.receive_data_and_unsubscribe)
+    
+    def test_dataflow_get(self):
+        rdaemon = Pyro4.Proxy("PYRO:Pyro.Daemon@./u:"+self.container_name)
+        comp = rdaemon.getObject("mycomp")
+        self.assertEqual(comp.data.parent, comp, "Component and parent of data is different")
+
+        comp.data.reset()
+        array = comp.data.get()
+        self.assertEqual(array.shape, (2048, 2048))
+        self.assertEqual(array[0][0], 0)
+        
+        array = comp.data.get()
+        self.assertEqual(array.shape, (2048, 2048))
+        self.assertEqual(array[0][0], 0)
+        
         comp.stopServer()
         time.sleep(0.1) # give it some time to terminate
     
     def test_properties(self):
         rdaemon = Pyro4.Proxy("PYRO:Pyro.Daemon@./u:"+self.container_name)
         comp = rdaemon.getObject("mycomp")
+
+        prop = comp.prop
+        self.assertEqual(prop.value, 42)
+        prop.value += 1
+        self.assertEqual(prop.value, 43)
         
-                
+        self.called = 0
+        self.last_value = None
+        prop.subscribe(self.receive_property_update)
+        # now count
+        prop.value = 3 # +1
+        prop.value = 0 # +1
+        prop.value = 0 # nothing because same value
+        time.sleep(0.1) # give time to receive notifications
+        prop.unsubscribe(self.receive_property_update)
+        
+        self.assertEqual(prop.value, 0)
+        self.assertEqual(self.last_value, 0)
+        # called once or twice depending if the brief 3 was seen
+        self.assertTrue(1 <= self.called and self.called <= 2)
+        
+        # check we are not called anymore
+        prop.value = 3 # +1
+        self.assertEqual(self.called, 2)
+        
+        # TODO check setting a string
+        
         comp.stopServer()
         time.sleep(0.1) # give it some time to terminate
-        
+    
+    def receive_property_update(self, value):
+        self.called += 1
+        self.last_value = value
+        self.assertIsInstance(value, (int, float))
+    
 # a basic server (component container)
 def ServerLoop(socket_name):
     try:
@@ -223,6 +314,8 @@ class MyComponent(model.Component):
         self.executor = ThreadPoolExecutor(max_workers=1)
         self.number_futures = 0
         self.data = FakeDataFlow(parent=self, daemon=daemon)
+        # TODO automatically register the property when serializing the Component
+        self.prop = model.IntProperty(42, parent=self, daemon=daemon)
     
     @roattribute
     def my_value(self):
@@ -328,7 +421,9 @@ class FakeDataFlow(model.DataFlowRemotable):
             self.bpp = bpp
         
     def get(self):
-        return self._create_one(self.shape, self.bpp, 0)
+        array = self._create_one(self.shape, self.bpp, 0)
+        array[0][0] = 0
+        return array
             
     def start_generate(self):
         self.count = 0 # reset
@@ -350,16 +445,11 @@ class FakeDataFlow(model.DataFlowRemotable):
     # method for thread
     def generate(self):
         while not self._stop.isSet():
+            self.count += 1
             array = self._create_one(self.shape, self.bpp, self.count)
-#            array[0][0] = self.count
+            array[0][0] = self.count
 #            print "generating array %d" % self.count
             self.notify(array)
-            self.count += 1
-            # NOTE: it tends to generate too fast, and so it generates too many 
-            # arrays, which slows down the reception.
-            time.sleep(0.5)
-            if self.count > 2000:
-                time.sleep(1)
 
     def __del__(self):
         print "fakedataflow being deleted"

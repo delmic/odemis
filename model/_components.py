@@ -15,10 +15,9 @@ Delmic Acquisition Software is distributed in the hope that it will be useful, b
 You should have received a copy of the GNU General Public License along with Delmic Acquisition Software. If not, see http://www.gnu.org/licenses/.
 '''
 from _core import roattribute
-from model import _dataflow
+import _dataflow, _properties
 import Pyro4
 import _core
-import _properties as properties
 import logging
 
 # TODO make it remote-aware
@@ -105,20 +104,24 @@ class ComponentProxy(Pyro4.Proxy):
         # so that sending one component doesn't mean sending the whole tree
         # and also .parent is automatically set on the children when calling ._get_children()
 
-    # TODO find out what   __getstate__ and __setstate__  are used for in Proxy
-    # and whether it's ok to override them with less
-
+    # The goal of __getstate__ is to allow pickling a proxy and getting a similar
+    # proxy talking directly to the server (it reset the connection and the lock).
+    # TODO check if we need to return more (probably yes) -> but it has to be 
+    # compatible with the proxy creation
     def __getstate__(self):
-        return (_core.dump_roattributes(self), _dataflow.dump_dataflows(self))
+        return (_core.dump_roattributes(self), _dataflow.dump_dataflows(self),
+                _properties.dump_properties(self))
         
     def __setstate__(self, state):
         """
         roattributes (dict string -> value)
         dataflows (dict string -> dataflow)
+        properties (dict string -> properties)
         """
-        roattributes, dataflows = state
+        roattributes, dataflows, properties = state
         _core.load_roattributes(self, roattributes)
         _dataflow.load_dataflows(self, dataflows)
+        _properties.load_properties(self, properties)
 
 # Converter from Component to ComponentProxy
 already_serialized = set()
@@ -133,7 +136,7 @@ def odemicComponentSerializer(self):
                 # URI as a string is more compact
                 (str(daemon.uriFor(self)), Pyro4.core.get_oneways(self), Pyro4.core.get_asyncs(self)),
                 # in the state goes everything that might be recursive
-                (_core.dump_roattributes(self), _dataflow.dump_dataflows(self))
+                (_core.dump_roattributes(self), _dataflow.dump_dataflows(self), _properties.dump_properties(self))
                 )
     else:
         return self.__reduce__()
