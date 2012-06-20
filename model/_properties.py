@@ -65,7 +65,7 @@ class Property(object):
         """
         self._value = value
 
-    @oneway
+    # cannot be oneway because we need the exception in case of error
     def _set_value(self, value):
         if self.readonly:
             raise NotSettableError("Value is readonly")
@@ -152,7 +152,7 @@ class PropertyRemotable(Property):
             # High-water mark   
             self.pipe.hwm = 0
         else:
-            self.pipe.hwm = 1
+            self.pipe.hwm = 0 # 1 XXX DEBUG
     
     def _register(self, daemon):
         daemon.register(self)

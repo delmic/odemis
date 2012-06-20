@@ -276,7 +276,11 @@ class RemoteTest(unittest.TestCase):
         prop.value = 3 # +1
         self.assertEqual(self.called, 2)
         
-        # TODO check setting a string
+        try:
+            prop.value = 7.5
+            self.fail("Assigning float to a int should not be allowed.")
+        except model.InvalidTypeError:
+            pass # as it should be
         
         comp.stopServer()
         time.sleep(0.1) # give it some time to terminate
