@@ -84,7 +84,7 @@ class IntegerValidator(wx.PyValidator):
 
     def Clone(self):    #pylint: disable=W0221
         """ Required method """
-        return IntegerValidator(self.min_val, self.max_val )
+        return IntegerValidator(self.min_val, self.max_val)
 
     def is_valid(self, val):
         try:
@@ -224,7 +224,7 @@ class ImageToggleButton(GenBitmapToggleButton):  #pylint: disable=R0901
         if not self.up:
             dx = dy = self.labelDelta
         hasMask = bmp.GetMask() != None
-        dc.DrawBitmap(bmp, (width-bw)/2+dx, (height-bh)/2+dy, hasMask)
+        dc.DrawBitmap(bmp, (width - bw) / 2 + dx, (height - bh) / 2 + dy, hasMask)
 
 class ImageButton(GenBitmapButton):
     labelDelta = 0
@@ -285,7 +285,7 @@ class ImageButton(GenBitmapButton):
         if not self.up:
             dx = dy = self.labelDelta
         hasMask = bmp.GetMask() != None
-        dc.DrawBitmap(bmp, (width-bw)/2+dx, (height-bh)/2+dy, hasMask)
+        dc.DrawBitmap(bmp, (width - bw) / 2 + dx, (height - bh) / 2 + dy, hasMask)
 
 
 class Expander(wx.PyControl):
@@ -297,6 +297,9 @@ class Expander(wx.PyControl):
     def __init__(self, parent, label="", wid=wx.ID_ANY, pos=wx.DefaultPosition,
                  size=wx.DefaultSize, style=wx.NO_BORDER):
         wx.PyControl.__init__(self, parent, wid, pos, size, style)
+
+        # This style *needs* to be set on in MS Windows 
+        self.SetBackgroundStyle(wx.BG_STYLE_CUSTOM)
 
         self._parent = parent
         self._label = label
@@ -401,7 +404,7 @@ class CustomExpander(Expander):
         Expander.__init__(self, parent, label, wid)
 
         self.stream_color = None
-        self._btn_color = ImageButton(self, -1)
+        self._btn_color = ImageButton(self, -1, bitmap=catalog['arr_down'].GetBitmap())
         self.set_stream_color()
         self._btn_color.SetToolTipString("Select colour")
         self._btn_color.Bind(wx.EVT_BUTTON, self.on_color_click)
@@ -499,10 +502,10 @@ class StreamPanel(wx.PyPanel):
 
         self._label = label
         self._collapsed = True
-        self._agwStyle = agwStyle|wx.CP_NO_TLW_RESIZE #|wx.CP_GTK_EXPANDER
+        self._agwStyle = agwStyle | wx.CP_NO_TLW_RESIZE #|wx.CP_GTK_EXPANDER
 
 
-        self._panel = wx.Panel(self, style=wx.TAB_TRAVERSAL|wx.NO_BORDER)
+        self._panel = wx.Panel(self, style=wx.TAB_TRAVERSAL | wx.NO_BORDER)
         self._panel.Hide()
 
         self._gbs = wx.GridBagSizer(3, 5)
@@ -581,7 +584,7 @@ class StreamPanel(wx.PyPanel):
                                     catalog['ico_contrast'].GetBitmap(), "Auto",
                                     size=(60, 24))
         self._btn_auto_contrast.SetForegroundColour("#000000")
-        self._gbs.Add(self._btn_auto_contrast, (0, 0), flag= wx.LEFT, border=34)
+        self._gbs.Add(self._btn_auto_contrast, (0, 0), flag=wx.LEFT, border=34)
 
 
         # ====== Second row, brightness label, slider and value
@@ -608,14 +611,14 @@ class StreamPanel(wx.PyPanel):
         self._txt_brightness.SetBackgroundColour(self.GetBackgroundColour())
 
         self._gbs.Add(self._txt_brightness, (1, 2),
-                      flag= wx.ALIGN_CENTRE_VERTICAL | wx.RIGHT,
+                      flag=wx.ALIGN_CENTRE_VERTICAL | wx.RIGHT,
                       border=10)
 
         # ====== Third row, brightness label, slider and value
 
         lbl_contrast = wx.StaticText(self._panel, -1, "contrast:")
         self._gbs.Add(lbl_contrast, (2, 0),
-                      flag= wx.LEFT | wx.ALIGN_CENTRE_VERTICAL, border=34)
+                      flag=wx.LEFT | wx.ALIGN_CENTRE_VERTICAL, border=34)
 
         self._sld_contrast = Slider(
             self._panel, -1, 128, 0, 255, (30, 60), (-1, 10),
@@ -634,7 +637,7 @@ class StreamPanel(wx.PyPanel):
         self._txt_contrast.SetBackgroundColour(self.GetBackgroundColour())
 
         self._gbs.Add(self._txt_contrast, (2, 2),
-                      flag= wx.ALIGN_CENTRE_VERTICAL | wx.RIGHT,
+                      flag=wx.ALIGN_CENTRE_VERTICAL | wx.RIGHT,
                       border=10)
 
         # Bind events
@@ -842,7 +845,7 @@ class CustomStreamPanel(StreamPanel): #pylint: disable=R0901
 
         lbl_excitation = wx.StaticText(self._panel, -1, "excitation:")
         self._gbs.Add(lbl_excitation, (3, 0),
-                      flag= wx.LEFT | wx.ALIGN_CENTRE_VERTICAL, border=34)
+                      flag=wx.LEFT | wx.ALIGN_CENTRE_VERTICAL, border=34)
 
         self._txt_excitation = IntegerTextCtrl(self._panel, -1, "0",
                 style=wx.NO_BORDER | wx.TE_PROCESS_ENTER,
@@ -852,12 +855,12 @@ class CustomStreamPanel(StreamPanel): #pylint: disable=R0901
         self._txt_excitation.SetBackgroundColour(self.GetBackgroundColour())
 
         self._gbs.Add(self._txt_excitation, (3, 1),
-                      flag= wx.ALIGN_CENTRE_VERTICAL | wx.RIGHT,
+                      flag=wx.ALIGN_CENTRE_VERTICAL | wx.RIGHT,
                       border=10)
 
         lbl_emission = wx.StaticText(self._panel, -1, "emission:")
         self._gbs.Add(lbl_emission, (4, 0),
-                      flag= wx.LEFT | wx.ALIGN_CENTRE_VERTICAL, border=34)
+                      flag=wx.LEFT | wx.ALIGN_CENTRE_VERTICAL, border=34)
 
         self._txt_emission = IntegerTextCtrl(self._panel, -1, "0",
                 style=wx.NO_BORDER | wx.TE_PROCESS_ENTER,
@@ -867,5 +870,5 @@ class CustomStreamPanel(StreamPanel): #pylint: disable=R0901
         self._txt_emission.SetBackgroundColour(self.GetBackgroundColour())
 
         self._gbs.Add(self._txt_emission, (4, 1),
-                      flag= wx.ALIGN_CENTRE_VERTICAL | wx.RIGHT,
+                      flag=wx.ALIGN_CENTRE_VERTICAL | wx.RIGHT,
                       border=10)
