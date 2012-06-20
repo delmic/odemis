@@ -22,17 +22,14 @@ def odemis_get_resources():
     """ This function provides access to the XML handlers needed for
         non-standard controls defined in the XRC file.
     """
-    if odemis.gui.test.test_gui.__res == None:    #pylint: disable=W0212
-        from odemis.gui.xmlh.xh_delmic import FoldPanelBarXmlHandler, \
-            FixedStreamPanelXmlHandler, CustomStreamPanelXmlHandler, \
-            GenBitmapButtonHandler, ImageButtonHandler
-        odemis.gui.test.test_gui.__init_resources() #pylint: disable=W0212
-        odemis.gui.test.test_gui.__res.InsertHandler(FoldPanelBarXmlHandler()) #pylint: disable=W0212
-        odemis.gui.test.test_gui.__res.InsertHandler(FixedStreamPanelXmlHandler()) #pylint: disable=W0212
-        odemis.gui.test.test_gui.__res.InsertHandler(CustomStreamPanelXmlHandler()) #pylint: disable=W0212
-        odemis.gui.test.test_gui.__res.InsertHandler(GenBitmapButtonHandler()) #pylint: disable=W0212
-        odemis.gui.test.test_gui.__res.InsertHandler(ImageButtonHandler()) #pylint: disable=W0212
-    return odemis.gui.test.test_gui.__res #pylint: disable=W0212
+    if odemis.gui.test.test_gui.__res == None:
+        from odemis.gui.xmlh.xh_delmic import HANDLER_CLASS_LIST
+
+        odemis.gui.test.test_gui.__init_resources()
+        for handler_klass in HANDLER_CLASS_LIST:
+            odemis.gui.test.test_gui.__res.InsertHandler(handler_klass())
+
+    return odemis.gui.test.test_gui.__res
 
 def loop():
     app = wx.GetApp()
@@ -57,6 +54,7 @@ class TestApp(wx.App):
         self.test_frame.Center()
         self.test_frame.Layout()
         self.test_frame.Show()
+
         return True
 
 class FoldPanelBarTestCase(unittest.TestCase):

@@ -144,3 +144,9 @@ class ImageToggleButton(GenBitmapToggleButton):  #pylint: disable=R0901
             dx = dy = self.labelDelta
         hasMask = bmp.GetMask() != None
         dc.DrawBitmap(bmp, (width - bw) / 2 + dx, (height - bh) / 2 + dy, hasMask)
+
+
+class PopupImageButton(ImageButton):
+
+    def __init__(self, *args, **kwargs):
+        ImageButton.__init__(self, *args, **kwargs)

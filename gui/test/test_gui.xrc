@@ -151,7 +151,7 @@
                         <border>1</border>
                       </object>
                       <object class="sizeritem">
-                        <object class="odemis.gui.comp.stream.FixedStreamPanel" name="fsp_1">
+                        <object class="odemis.gui.comp.stream.FixedStreamPanel" name="fsp_2">
                           <label>Fixed Stream panel</label>
                           <fg>#FFFFFF</fg>
                           <bg>#4D4D4D</bg>
@@ -172,7 +172,7 @@
                         <border>1</border>
                       </object>
                       <object class="sizeritem">
-                        <object class="odemis.gui.comp.stream.FixedStreamPanel" name="fsp_1">
+                        <object class="odemis.gui.comp.stream.FixedStreamPanel" name="fsp_3">
                           <label>Fixed Stream panel</label>
                           <collapsed>1</collapsed>
                           <fg>#FFFFFF</fg>
@@ -216,7 +216,7 @@
                         <border>1</border>
                       </object>
                       <object class="sizeritem">
-                        <object class="odemis.gui.comp.stream.CustomStreamPanel" name="csp_1">
+                        <object class="odemis.gui.comp.stream.CustomStreamPanel" name="csp_2">
                           <label>Custom Stream panel</label>
                           <collapsed>1</collapsed>
                           <fg>#FFFFFF</fg>
@@ -238,7 +238,7 @@
                         <border>1</border>
                       </object>
                       <object class="sizeritem">
-                        <object class="odemis.gui.comp.stream.CustomStreamPanel" name="csp_1">
+                        <object class="odemis.gui.comp.stream.CustomStreamPanel" name="csp_3">
                           <label>Custom Stream panel</label>
                           <collapsed>1</collapsed>
                           <fg>#FFFFFF</fg>
@@ -260,9 +260,10 @@
                         <border>1</border>
                       </object>
                       <object class="sizeritem">
-                        <object class="odemis.gui.comp.buttons.ImageButton">
+                        <object class="odemis.gui.comp.buttons.PopupImageButton" name="">
                           <bitmap>../img/stream_add.png</bitmap>
-                          <hover>../img/arr_down.png</hover>
+                          <hover>../img/stream_add_h.png</hover>
+                          <bitmap>../img/stream_add.png</bitmap>
                         </object>
                       </object>
                     </object>
