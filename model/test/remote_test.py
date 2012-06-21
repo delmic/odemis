@@ -182,7 +182,6 @@ class RemoteTest(unittest.TestCase):
     def test_dataflow_subscribe(self):
         rdaemon = Pyro4.Proxy("PYRO:Pyro.Daemon@./u:"+self.container_name)
         comp = rdaemon.getObject("mycomp")
-        self.assertEqual(comp.data.parent, comp, "Component and parent of data is different")
 
         self.count = 0
         self.data_arrays_sent = 0
@@ -209,7 +208,6 @@ class RemoteTest(unittest.TestCase):
     def test_dataflow_unsubscribe_from_callback(self):
         rdaemon = Pyro4.Proxy("PYRO:Pyro.Daemon@./u:"+self.container_name)
         comp = rdaemon.getObject("mycomp")
-        self.assertEqual(comp.data.parent, comp, "Component and parent of data is different")
 
         self.count = 0
         self.data_arrays_sent = 0
@@ -234,7 +232,6 @@ class RemoteTest(unittest.TestCase):
     def test_dataflow_get(self):
         rdaemon = Pyro4.Proxy("PYRO:Pyro.Daemon@./u:"+self.container_name)
         comp = rdaemon.getObject("mycomp")
-        self.assertEqual(comp.data.parent, comp, "Component and parent of data is different")
 
         comp.data.reset()
         array = comp.data.get()
@@ -317,9 +314,9 @@ class MyComponent(model.Component):
         model.Component.__init__(self, name=name, daemon=daemon)
         self.executor = ThreadPoolExecutor(max_workers=1)
         self.number_futures = 0
-        self.data = FakeDataFlow(parent=self, daemon=daemon)
+        self.data = FakeDataFlow(daemon=daemon)
         # TODO automatically register the property when serializing the Component
-        self.prop = model.IntProperty(42, parent=self, daemon=daemon)
+        self.prop = model.IntProperty(42, daemon=daemon)
     
     @roattribute
     def my_value(self):

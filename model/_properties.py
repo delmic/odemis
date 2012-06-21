@@ -106,12 +106,11 @@ class Property(object):
 
 class PropertyRemotable(Property):
 
-    def __init__(self, initval, parent=None, daemon=None, max_discard=100, *args, **kwargs):
+    def __init__(self, initval, daemon=None, max_discard=100, *args, **kwargs):
         """
         unit (str): a SI unit in which the property is expressed
         readonly (bool): if True, value setter will raise an exception. It's still
             possible to change the value by calling _set() and then notify()
-        parent (string): Component containing this object (see DataFlow)
         daemon (Pyro4.Daemon): daemon used to share this object
         max_discard (int): mount of updates that can be discarded in a row if
                             a new one is already available. 0 to keep (notify) 
@@ -119,7 +118,6 @@ class PropertyRemotable(Property):
                             than the generator).
         """
         Property.__init__(self, initval, *args, **kwargs)
-        self.parent = parent
         self._global_name = None # to be filled when registered
         
         # different from ._listeners for notify() to do different things
@@ -143,10 +141,10 @@ class PropertyRemotable(Property):
     
     def _register(self, daemon):
         daemon.register(self)
-        self._global_name = self.parent.name + "." + self._pyroId
-        uri = "ipc://" + self._global_name + ".ipc"
-        logging.debug("property server is registered to send to " + uri)
-        self.pipe.bind(uri)
+        uri = daemon.uriFor(self)
+        self._global_name = uri.object + "@" + uri.sockname + ".ipc"
+        logging.debug("property server is registered to send to " + "ipc://" + self._global_name)
+        self.pipe.bind("ipc://" + self._global_name)
         
     def _count_listeners(self):
         return len(self._listeners) + len(self._remote_listeners)
@@ -201,15 +199,13 @@ class PropertyProxy(Property, Pyro4.Proxy):
                             than the generator).
         """ 
         Pyro4.Proxy.__init__(self, uri, oneways, asyncs)
-        self._global_name = None #unknown until state is received
-        Property.__init__(self, None, unit=unit, readonly=readonly)
+        self._global_name = uri.object + "@" + uri.sockname + ".ipc"
+        Property.__init__(self, None, unit=unit, readonly=readonly) # TODO setting None might not always be valid
         self.max_discard = max_discards
         
-        # It should be no problem to have one context per dataflow,
-        # maybe more efficient to have one global for the whole process? see Context.instance()
-        self.ctx = zmq.Context(1)
+        self.ctx = None
+        self.commands = None
         self._thread = None
-        self._must_unsubscribe = False
         
     @property
     def value(self):
@@ -222,17 +218,17 @@ class PropertyProxy(Property, Pyro4.Proxy):
     # no delete remotely
         
     def __getstate__(self):
-        return (self._global_name, _core.dump_roattributes(self))
+        return (_core.dump_roattributes(self),)
         
     def __setstate__(self, state):
         """
-        parent (Component)
         roattributes (dict string -> value)
         """
-        self._global_name, roattributes, = state
+        roattributes, = state
         _core.load_roattributes(self, roattributes)
         
     def _create_thread(self):
+        self.ctx = zmq.Context(1) # apparently 0MQ reuse contexts
         self.commands = self.ctx.socket(zmq.PAIR)
         self.commands.bind("inproc://" + self._global_name)
         self._thread = threading.Thread(name="zmq for prop " + self._global_name, 
@@ -287,7 +283,7 @@ class PropertyProxy(Property, Pyro4.Proxy):
         
         # create a zmq subscription to receive the data
         data = ctx.socket(zmq.SUB)
-        data.connect("ipc://" + self._global_name + ".ipc")
+        data.connect("ipc://" + self._global_name)
         
         # Process messages for commands and data
         poller = zmq.Poller()
@@ -330,7 +326,7 @@ class PropertyProxy(Property, Pyro4.Proxy):
         if self._thread:
             self.commands.send("STOP")
             self.commands.recv()
-        self.commands.close()
+            self.commands.close()
 
 
 def dump_properties(self):
@@ -364,7 +360,7 @@ def odemicPropertySerializer(self):
                  Pyro4.core.get_asyncs(self),
                  self.max_discard, self.unit, self.readonly), 
                 # in the state goes everything that might be recursive
-                (self._global_name, _core.dump_roattributes(self))
+                (_core.dump_roattributes(self),)
                 )
     else:
         return self.__reduce__()
