@@ -106,22 +106,31 @@ class Property(object):
 
 class PropertyRemotable(Property):
 
-    def __init__(self, initval, daemon=None, max_discard=100, *args, **kwargs):
+    def __init__(self, initval, max_discard=100, *args, **kwargs):
         """
-        unit (str): a SI unit in which the property is expressed
-        readonly (bool): if True, value setter will raise an exception. It's still
-            possible to change the value by calling _set() and then notify()
-        daemon (Pyro4.Daemon): daemon used to share this object
         max_discard (int): mount of updates that can be discarded in a row if
                             a new one is already available. 0 to keep (notify) 
                             all the messages (dangerous if callback is slower
                             than the generator).
         """
         Property.__init__(self, initval, *args, **kwargs)
-        self._global_name = None # to be filled when registered
-        
         # different from ._listeners for notify() to do different things
         self._remote_listeners = set() # any unique string works
+        
+        self._global_name = None # to be filled when registered
+        self.ctx = None
+        self.pipe = None
+        self.max_discard = max_discard
+        
+    def _register(self, daemon):
+        """
+        Get the Property ready to be shared. It gets registered to the Pyro 
+        daemon and over 0MQ. It should be called only once. Note that you have
+        to call this method to register a property, a simple daemon.register(p)
+        is not enough.
+        daemon (Pyro4.Daemon): daemon used to share this object
+        """
+        daemon.register(self)
         
         # create a zmq pipe to publish the data
         # Warning: notify() will most likely run in a separate thread, which is
@@ -132,15 +141,6 @@ class PropertyRemotable(Property):
         self.pipe.linger = 1 # don't keep messages more than 1s after close
         # self.pipe.hwm has to be 0 (default), otherwise it drops _new_ values  
         
-        self.max_discard = max_discard
-        
-        if daemon:
-            self._register(daemon)
-        else:
-            logging.warning("PropertyRemotable was not registered at initialisation")
-    
-    def _register(self, daemon):
-        daemon.register(self)
         uri = daemon.uriFor(self)
         self._global_name = uri.object + "@" + uri.sockname + ".ipc"
         logging.debug("property server is registered to send to " + "ipc://" + self._global_name)
@@ -184,8 +184,9 @@ class PropertyRemotable(Property):
         Property.notify(self, v)
     
     def __del__(self):
-        self.pipe.close()
-        self.ctx.term()
+        if self.ctx:
+            self.pipe.close()
+            self.ctx.term()
 
 class PropertyProxy(Property, Pyro4.Proxy):
     # init is as light as possible to reduce creation overhead in case the
@@ -331,12 +332,17 @@ class PropertyProxy(Property, Pyro4.Proxy):
 
 def dump_properties(self):
     """
-    return the names and value of all the DataFlows added to an object (component)
-    self: the object (instance of a class)
-    return (dict string -> value)
+    return the names and value of all the properties added to an object (component)
+    If a property is not registered yet, it is registered.
+    self (Component): the object (instance of a class).  It must already be
+                      registered to a Pyro daemon.
+    return (dict string -> value): attribute name -> Property
     """
     properties = dict()
+    daemon = self._pyroDaemon
     for name, value in inspect.getmembers(self, lambda x: isinstance(x, PropertyRemotable)):
+        if not hasattr(value, "_pyroDaemon"):
+            value._register(daemon)
         properties[name] = value
     return properties
 
@@ -368,33 +374,33 @@ def odemicPropertySerializer(self):
 Pyro4.Daemon.serializers[PropertyRemotable] = odemicPropertySerializer
 
      
-class StringProperty(Property):
+class StringProperty(PropertyRemotable):
     """
     A property which contains a string
     """
     
-    def __init__(self, value="", unit="", readonly=False):
-        Property.__init__(self, value, unit, readonly)
+    def __init__(self, value="", *args, **kwargs):
+        PropertyRemotable.__init__(self, value, *args, **kwargs)
         
     def _set(self, value):
         if not isinstance(value, basestring):
             raise InvalidTypeError("Value '%s' is not a string." % str(value))
-        Property._set(self, value)
+        PropertyRemotable._set(self, value)
 
-class FloatProperty(Property):
+class FloatProperty(PropertyRemotable):
     """
     A property which contains a float
     """
     
-    def __init__(self, value=0.0, unit="", readonly=False):
-        Property.__init__(self, value, unit, readonly)
+    def __init__(self, value=0.0, *args, **kwargs):
+        PropertyRemotable.__init__(self, value, *args, **kwargs)
         
     def _set(self, value):
         try:
             converted = float(value)
         except ValueError:
             raise InvalidTypeError("Value '%s' is not a float." % str(value))
-        Property._set(self, converted)
+        PropertyRemotable._set(self, converted)
 
 class IntProperty(PropertyRemotable):
     """

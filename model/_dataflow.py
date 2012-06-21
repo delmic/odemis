@@ -151,32 +151,23 @@ class DataFlow(object):
 
 # DataFlowObject to create on the server (in an Odemic component)
 class DataFlowRemotable(DataFlow):
-    # TODO max_discard, to be passed to the proxy as well.
-    def __init__(self, daemon=None, max_discard=100):
+    def __init__(self, max_discard=100):
         """
-        daemon (Pyro4.Daemon): daemon used to share this object
         max_discard (int): mount of messages that can be discarded in a row if
                             a new one is already available. 0 to keep (notify) 
                             all the messages (dangerous if callback is slower
                             than the generator).
         """
         DataFlow.__init__(self)       
-        self._global_name = None # to be filled when registered
-        
         # different from ._listeners for notify() to do different things
         self._remote_listeners = set() # any unique string works
         
+        self._global_name = None # to be filled when registered
         self.ctx = None
         self.pipe = None
-        
         self._max_discard = max_discard
         self._update_pipe_hwm()
         
-        if daemon:
-            self._register(daemon)
-        else:
-            logging.warning("DataFlowRemotable was not registered at initialisation")
-
     def __getstate__(self):
         return (_core.dump_roattributes(self), )
     
@@ -204,7 +195,9 @@ class DataFlowRemotable(DataFlow):
     def _register(self, daemon):
         """
         Get the dataflow ready to be shared. It gets registered to the Pyro 
-        daemon and over 0MQ.
+        daemon and over 0MQ. It should be called only once. Note that you have
+        to call this method to register a dataflow, a simple daemon.register(df)
+        is not enough.
         daemon (Pyro4.Daemon): daemon used to share this object
         """
         daemon.register(self)
@@ -404,12 +397,17 @@ class DataFlowProxy(DataFlow, Pyro4.Proxy):
 
 def dump_dataflows(self):
     """
-    return the names and value of all the DataFlows added to an object (component)
-    self: the object (instance of a class)
-    return (dict string -> value)
+    return the names and value of all the DataFlows added to an object 
+    (component). If a dataflow is not registered yet, it is registered.
+    self (Component): the object (instance of a class). It must already be
+                      registered to a Pyro daemon.
+    return (dict string -> value): attribute name -> dataflow
     """
     dataflows = dict()
+    daemon = self._pyroDaemon
     for name, value in inspect.getmembers(self, lambda x: isinstance(x, DataFlowRemotable)):
+        if not hasattr(value, "_pyroDaemon"):
+            value._register(daemon)
         dataflows[name] = value
     return dataflows
 

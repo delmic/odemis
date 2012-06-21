@@ -314,9 +314,9 @@ class MyComponent(model.Component):
         model.Component.__init__(self, name=name, daemon=daemon)
         self.executor = ThreadPoolExecutor(max_workers=1)
         self.number_futures = 0
-        self.data = FakeDataFlow(daemon=daemon)
+        self.data = FakeDataFlow()
         # TODO automatically register the property when serializing the Component
-        self.prop = model.IntProperty(42, daemon=daemon)
+        self.prop = model.IntProperty(42)
     
     @roattribute
     def my_value(self):
