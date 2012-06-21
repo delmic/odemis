@@ -184,6 +184,7 @@ class PropertyRemotable(Property):
         Property.notify(self, v)
     
     def __del__(self):
+        print "del propertyremotable"
         if self.ctx:
             self.pipe.close()
             self.ctx.term()
@@ -323,6 +324,7 @@ class PropertyProxy(Property, Pyro4.Proxy):
                 self.notify(value)
                 
     def __del__(self):
+        print "del property proxy"
         # end the thread
         if self._thread:
             self.commands.send("STOP")
@@ -330,6 +332,11 @@ class PropertyProxy(Property, Pyro4.Proxy):
             self.commands.close()
 
 
+def unregister_properties(self, daemon):
+    for name, value in inspect.getmembers(self, lambda x: isinstance(x, PropertyRemotable)):
+        if hasattr(value, "_pyroId"):
+            daemon.unregister(value)
+    
 def dump_properties(self):
     """
     return the names and value of all the properties added to an object (component)

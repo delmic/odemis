@@ -83,10 +83,21 @@ class Component(object):
         Stop the Component from executing.
         The component shouldn't be used afterward.
         """
+        print "terminating comp"
         # make sure we are registered
         daemon = getattr(self, "_pyroDaemon", None)
         if daemon:
+            # unregister also all the automatically registered properties and
+            # dataflows (because they hold ref to daemon, so hard to get deleted
+            _dataflow.unregister_dataflows(self, daemon)
+            _properties.unregister_properties(self, daemon)
             daemon.unregister(self)
+    
+        
+    def __del__(self):
+        print "del comp"
+        self.terminate()
+        
 
 # Run on the client (the process which asked for a given remote component)
 class ComponentProxy(Pyro4.Proxy):
@@ -122,6 +133,9 @@ class ComponentProxy(Pyro4.Proxy):
         _core.load_roattributes(self, roattributes)
         _dataflow.load_dataflows(self, dataflows)
         _properties.load_properties(self, properties)
+    
+    def __del__(self):
+        print "del comp proxy"
 
 # Converter from Component to ComponentProxy
 already_serialized = set()

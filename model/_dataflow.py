@@ -262,6 +262,7 @@ class DataFlowRemotable(DataFlow):
         DataFlow.notify(self, data)
     
     def __del__(self):
+        print "del dataflowremotable"
         if self.ctx:
             self.pipe.close()
             self.ctx.term()
@@ -389,11 +390,18 @@ class DataFlowProxy(DataFlow, Pyro4.Proxy):
                 self.notify(array)
 
     def __del__(self):
+        print "del dataflow proxy"
         # end the thread
         if self._thread:
             self.commands.send("STOP")
             self.commands.recv()
             self.commands.close()
+
+
+def unregister_dataflows(self, daemon):
+    for name, value in inspect.getmembers(self, lambda x: isinstance(x, DataFlowRemotable)):
+        if hasattr(value, "_pyroId"):
+            daemon.unregister(value)
 
 def dump_dataflows(self):
     """
