@@ -22,6 +22,7 @@ import inspect
 import logging
 import numpy
 import threading
+import weakref
 import zmq
 
 """
@@ -216,6 +217,18 @@ class DataFlowRemotable(DataFlow):
         logging.debug("server is registered to send to " + "ipc://" + self._global_name)
         self.pipe.bind("ipc://" + self._global_name)
     
+    def _unregister(self):
+        """
+        unregister the dataflow from the daemon and clean up the 0MQ bindings
+        """
+        daemon = getattr(self, "_pyroDaemon", None)
+        if daemon:
+            daemon.unregister(self)
+        if self.ctx:
+            self.pipe.close()
+            self.ctx.term()
+            self.ctx = None
+    
     def _count_listeners(self):
         return len(self._listeners) + len(self._remote_listeners)
     
@@ -262,20 +275,17 @@ class DataFlowRemotable(DataFlow):
         DataFlow.notify(self, data)
     
     def __del__(self):
-        print "del dataflowremotable"
-        if self.ctx:
-            self.pipe.close()
-            self.ctx.term()
-    
+        print "del dataflow"
+        self._unregister()
 
 # DataFlow object automatically created on the client (in an Odemic component)
 class DataFlowProxy(DataFlow, Pyro4.Proxy):
     # init is as light as possible to reduce creation overhead in case the
     # object is actually never used
-    def __init__(self, uri, oneways=set(), asyncs=set(), max_discards=100):
+    def __init__(self, uri, oneways=set(), asyncs=set(), max_discard=100):
         """
         uri, oneways, asyncs: see Proxy
-        max_discards (int): amount of messages that can be discarded in a row if
+        max_discard (int): amount of messages that can be discarded in a row if
                             a new one is already available. 0 to keep (notify) 
                             all the messages (dangerous if callback is slower
                             than the generator).
@@ -283,7 +293,7 @@ class DataFlowProxy(DataFlow, Pyro4.Proxy):
         Pyro4.Proxy.__init__(self, uri, oneways, asyncs)
         self._global_name = uri.object + "@" + uri.sockname + ".ipc"
         DataFlow.__init__(self)
-        self.max_discard = max_discards
+        self.max_discard = max_discard
         
         self.ctx = None
         self.commands = None
@@ -311,9 +321,10 @@ class DataFlowProxy(DataFlow, Pyro4.Proxy):
         self.ctx = zmq.Context(1) # apparently 0MQ reuse contexts
         self.commands = self.ctx.socket(zmq.PAIR)
         self.commands.bind("inproc://" + self._global_name)
-        self._thread = threading.Thread(name="zmq for dataflow " + self._global_name, 
-                              target=self._listenForData, args=(self.ctx,))
-        self._thread.deamon = True
+#        self._thread = threading.Thread(name="zmq for dataflow " + self._global_name, 
+#                              target=self._listenForData, args=(self.ctx, self._global_name))
+#        self._thread.deamon = True
+        self._thread = SubscribeProxyThread(self.notify, self._global_name, self.max_discard, self.ctx)
         self._thread.start()
         
     def start_generate(self):
@@ -332,52 +343,73 @@ class DataFlowProxy(DataFlow, Pyro4.Proxy):
         Pyro4.Proxy.__getattr__(self, "unsubscribe")(self._global_name)
         self.commands.send("UNSUB") # asynchronous (necessary to not deadlock)
 
-    # to be executed in a separate thread
-    def _listenForData(self, ctx):
+    def __del__(self):
+        print "del dataflow proxy"
+        # end the thread (but it will stop as soon as it notices we are gone anyway)
+        if self._thread:
+            self.commands.send("STOP")
+            self.commands.recv()
+            self.commands.close()
+
+
+class SubscribeProxyThread(threading.Thread):
+    def __init__(self, notifier, uri, max_discard, zmq_ctx):
         """
-        ctx (zmq context): global zmq context
+        notifier (callable): method to call when a new array arrives
+        uri (string): unique string to identify the connection
+        max_discard (int)
+        zmq_ctx (0MQ context): available 0MQ context to use
         """
-        assert self._global_name is not None
+        threading.Thread.__init__(self, name="zmq for dataflow " + uri)
+        self.daemon = True
+        self.uri = uri
+        self.max_discard = max_discard
+        self.ctx = zmq_ctx
+        # don't keep strong reference to notifier so that it can be garbage 
+        # collected normally and it will let us know then that we can stop
+        self.w_notifier = WeakMethod(notifier)
         
         # create a zmq synchronised channel to receive commands
-        commands = ctx.socket(zmq.PAIR)
-        commands.connect("inproc://" + self._global_name)
+        self.commands = zmq_ctx.socket(zmq.PAIR)
+        self.commands.connect("inproc://" + uri)
         
         # create a zmq subscription to receive the data
-        data = ctx.socket(zmq.SUB)
-        data.connect("ipc://" + self._global_name)
+        self.data = zmq_ctx.socket(zmq.SUB)
+        self.data.connect("ipc://" + uri)
         # TODO find out if it does something and if it does, depend on max_discard
-        data.hwm = 1 # probably does nothing 
+        self.data.hwm = 1 # probably does nothing 
         
+    def run(self):
         # Process messages for commands and data
         poller = zmq.Poller()
-        poller.register(commands, zmq.POLLIN)
-        poller.register(data, zmq.POLLIN)
+        poller.register(self.commands, zmq.POLLIN)
+        poller.register(self.data, zmq.POLLIN)
         discarded = 0
         while True:
             socks = dict(poller.poll())
 
             # process commands
-            if socks.get(commands) == zmq.POLLIN:
-                message = commands.recv()
+            if socks.get(self.commands) == zmq.POLLIN:
+                message = self.commands.recv()
                 if message == "SUB":
-                    data.setsockopt(zmq.SUBSCRIBE, '')
-                    commands.send("SUBD")
+                    self.data.setsockopt(zmq.SUBSCRIBE, '')
+                    self.commands.send("SUBD")
                 elif message == "UNSUB":
-                    data.setsockopt(zmq.UNSUBSCRIBE, '')
+                    self.data.setsockopt(zmq.UNSUBSCRIBE, '')
                     # no confirmation (async)
                 elif message == "STOP":
-                    commands.close()
-                    data.close()
-                    commands.send("STOPPED")
+                    print "stopping thread df"
+                    self.commands.send("STOPPED")
+                    self.commands.close()
+                    self.data.close()
                     return
             
             # receive data
-            if socks.get(data) == zmq.POLLIN:
-                md = data.recv_pyobj()
-                array_buf = data.recv(copy=False)
+            if socks.get(self.data) == zmq.POLLIN:
+                md = self.data.recv_pyobj()
+                array_buf = self.data.recv(copy=False)
                 # more fresh data already?
-                if (data.getsockopt(zmq.EVENTS) & zmq.POLLIN and
+                if (self.data.getsockopt(zmq.EVENTS) & zmq.POLLIN and
                     discarded < self.max_discard):
                     discarded += 1
                     continue
@@ -387,21 +419,18 @@ class DataFlowProxy(DataFlow, Pyro4.Proxy):
                 # TODO: any need to use zmq.utils.rebuffer.array_from_buffer()?
                 array = numpy.frombuffer(array_buf, dtype=md["dtype"])
                 array.shape = md["shape"]
-                self.notify(array)
-
-    def __del__(self):
-        print "del dataflow proxy"
-        # end the thread
-        if self._thread:
-            self.commands.send("STOP")
-            self.commands.recv()
-            self.commands.close()
-
-
-def unregister_dataflows(self, daemon):
+    
+                try:
+                    self.w_notifier(array)
+                except WeakRefLostError:
+                    print "stopping thread weakref"
+                    self.commands.close()
+                    self.data.close()
+                    return
+        
+def unregister_dataflows(self):
     for name, value in inspect.getmembers(self, lambda x: isinstance(x, DataFlowRemotable)):
-        if hasattr(value, "_pyroId"):
-            daemon.unregister(value)
+        value._unregister()
 
 def dump_dataflows(self):
     """

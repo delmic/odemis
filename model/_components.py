@@ -15,9 +15,11 @@ Delmic Acquisition Software is distributed in the hope that it will be useful, b
 You should have received a copy of the GNU General Public License along with Delmic Acquisition Software. If not, see http://www.gnu.org/licenses/.
 '''
 from _core import roattribute
-import _dataflow, _properties
 import Pyro4
 import _core
+import _dataflow
+import _properties
+import gc
 import logging
 
 # TODO make it remote-aware
@@ -84,19 +86,19 @@ class Component(object):
         The component shouldn't be used afterward.
         """
         print "terminating comp"
-        # make sure we are registered
+        # in case we are registered
         daemon = getattr(self, "_pyroDaemon", None)
         if daemon:
             # unregister also all the automatically registered properties and
             # dataflows (because they hold ref to daemon, so hard to get deleted
-            _dataflow.unregister_dataflows(self, daemon)
-            _properties.unregister_properties(self, daemon)
+            _dataflow.unregister_dataflows(self)
+            _properties.unregister_properties(self)
             daemon.unregister(self)
-    
         
     def __del__(self):
         print "del comp"
         self.terminate()
+        gc.collect()
         
 
 # Run on the client (the process which asked for a given remote component)
@@ -419,7 +421,7 @@ class MockComponent(HwComponent):
             if attrName == "children": # special value
                 raise AttributeError(attrName)
             
-            prop = properties.Property(None)
+            prop = _properties.Property(None)
             logging.debug("Component %s creating property %s", self.name, attrName)
             self.__dict__[attrName] = prop
         return self.__dict__[attrName]

@@ -145,7 +145,19 @@ class PropertyRemotable(Property):
         self._global_name = uri.object + "@" + uri.sockname + ".ipc"
         logging.debug("property server is registered to send to " + "ipc://" + self._global_name)
         self.pipe.bind("ipc://" + self._global_name)
-        
+    
+    def _unregister(self):
+        """
+        unregister the property from the daemon and clean up the 0MQ bindings
+        """
+        daemon = getattr(self, "_pyroDaemon", None)
+        if daemon:
+            daemon.unregister(self)
+        if self.ctx:
+            self.pipe.close()
+            self.ctx.term()
+            self.ctx = None
+            
     def _count_listeners(self):
         return len(self._listeners) + len(self._remote_listeners)
 
@@ -184,18 +196,17 @@ class PropertyRemotable(Property):
         Property.notify(self, v)
     
     def __del__(self):
-        print "del propertyremotable"
-        if self.ctx:
-            self.pipe.close()
-            self.ctx.term()
+        print "unregister prop"
+        self._unregister()
+
 
 class PropertyProxy(Property, Pyro4.Proxy):
     # init is as light as possible to reduce creation overhead in case the
     # object is actually never used
-    def __init__(self, uri, oneways=set(), asyncs=set(), max_discards=100, unit="", readonly=False):
+    def __init__(self, uri, oneways=set(), asyncs=set(), max_discard=100, unit="", readonly=False):
         """
         uri, oneways, asyncs: see Proxy
-        max_discards (int): amount of messages that can be discarded in a row if
+        max_discard (int): amount of messages that can be discarded in a row if
                             a new one is already available. 0 to keep (notify) 
                             all the messages (dangerous if callback is slower
                             than the generator).
@@ -203,7 +214,7 @@ class PropertyProxy(Property, Pyro4.Proxy):
         Pyro4.Proxy.__init__(self, uri, oneways, asyncs)
         self._global_name = uri.object + "@" + uri.sockname + ".ipc"
         Property.__init__(self, None, unit=unit, readonly=readonly) # TODO setting None might not always be valid
-        self.max_discard = max_discards
+        self.max_discard = max_discard
         
         self.ctx = None
         self.commands = None
@@ -233,9 +244,7 @@ class PropertyProxy(Property, Pyro4.Proxy):
         self.ctx = zmq.Context(1) # apparently 0MQ reuse contexts
         self.commands = self.ctx.socket(zmq.PAIR)
         self.commands.bind("inproc://" + self._global_name)
-        self._thread = threading.Thread(name="zmq for prop " + self._global_name, 
-                              target=self._listenForData, args=(self.ctx,))
-        self._thread.deamon = True
+        self._thread = SubscribeProxyThread(self.notify, self._global_name, self.max_discard, self.ctx)
         self._thread.start()
         
     def subscribe(self, listener, init=False):
@@ -271,71 +280,90 @@ class PropertyProxy(Property, Pyro4.Proxy):
         """
         Pyro4.Proxy.__getattr__(self, "unsubscribe")(self._global_name)
         self.commands.send("UNSUB")
-    
-    # to be executed in a separate thread
-    def _listenForData(self, ctx):
-        """
-        ctx (zmq context): global zmq context
-        """
-        assert self._global_name is not None
-        
-        # create a zmq synchronised channel to receive commands
-        commands = ctx.socket(zmq.PAIR)
-        commands.connect("inproc://" + self._global_name)
-        
-        # create a zmq subscription to receive the data
-        data = ctx.socket(zmq.SUB)
-        data.connect("ipc://" + self._global_name)
-        
-        # Process messages for commands and data
-        poller = zmq.Poller()
-        poller.register(commands, zmq.POLLIN)
-        poller.register(data, zmq.POLLIN)
-        discarded = 0
-        while True:
-            socks = dict(poller.poll())
-
-            # process commands
-            if socks.get(commands) == zmq.POLLIN:
-                message = commands.recv()
-                if message == "SUB":
-                    data.setsockopt(zmq.SUBSCRIBE, '')
-                    commands.send("SUBD")
-                elif message == "UNSUB":
-                    data.setsockopt(zmq.UNSUBSCRIBE, '')
-                    # no confirmation (async)
-                elif message == "STOP":
-                    commands.close()
-                    data.close()
-                    commands.send("STOPPED")
-                    return
-            
-            # receive data
-            if socks.get(data) == zmq.POLLIN:
-                value = data.recv_pyobj()
-                # more fresh data already?
-                if (data.getsockopt(zmq.EVENTS) & zmq.POLLIN and
-                    discarded < self.max_discard):
-                    discarded += 1
-                    continue
-                if discarded:
-                    logging.debug("had discarded %d values", discarded)
-                discarded = 0
-                self.notify(value)
                 
     def __del__(self):
         print "del property proxy"
-        # end the thread
+        # end the thread (but it will stop as soon as it notices we are gone anyway)
         if self._thread:
             self.commands.send("STOP")
             self.commands.recv()
             self.commands.close()
 
 
-def unregister_properties(self, daemon):
+class SubscribeProxyThread(threading.Thread):
+    def __init__(self, notifier, uri, max_discard, zmq_ctx):
+        """
+        notifier (callable): method to call when a new value arrives
+        uri (string): unique string to identify the connection
+        max_discard (int)
+        zmq_ctx (0MQ context): available 0MQ context to use
+        """
+        threading.Thread.__init__(self, name="zmq for prop " + uri)
+        self.daemon = True
+        self.uri = uri
+        self.max_discard = max_discard
+        self.ctx = zmq_ctx
+        # don't keep strong reference to notifier so that it can be garbage 
+        # collected normally and it will let us know then that we can stop
+        self.w_notifier = WeakMethod(notifier)
+        
+        # create a zmq synchronised channel to receive commands
+        self.commands = zmq_ctx.socket(zmq.PAIR)
+        self.commands.connect("inproc://" + uri)
+        
+        # create a zmq subscription to receive the data
+        self.data = zmq_ctx.socket(zmq.SUB)
+        self.data.connect("ipc://" + uri)
+        
+    def run(self):
+        # Process messages for commands and data
+        poller = zmq.Poller()
+        poller.register(self.commands, zmq.POLLIN)
+        poller.register(self.data, zmq.POLLIN)
+        discarded = 0
+        while True:
+            socks = dict(poller.poll())
+
+            # process commands
+            if socks.get(self.commands) == zmq.POLLIN:
+                message = self.commands.recv()
+                if message == "SUB":
+                    self.data.setsockopt(zmq.SUBSCRIBE, '')
+                    self.commands.send("SUBD")
+                elif message == "UNSUB":
+                    self.data.setsockopt(zmq.UNSUBSCRIBE, '')
+                    # no confirmation (async)
+                elif message == "STOP":
+                    print "stopping thread prop"
+                    self.commands.send("STOPPED")
+                    self.commands.close()
+                    self.data.close()
+                    return
+            
+            # receive data
+            if socks.get(self.data) == zmq.POLLIN:
+                value = self.data.recv_pyobj()
+                # more fresh data already?
+                if (self.data.getsockopt(zmq.EVENTS) & zmq.POLLIN and
+                    discarded < self.max_discard):
+                    discarded += 1
+                    continue
+                if discarded:
+                    logging.debug("had discarded %d values", discarded)
+                discarded = 0
+    
+                try:
+                    self.w_notifier(value)
+                except WeakRefLostError:
+                    print "stopping thread weakref prop"
+                    self.commands.close()
+                    self.data.close()
+                    return
+
+
+def unregister_properties(self):
     for name, value in inspect.getmembers(self, lambda x: isinstance(x, PropertyRemotable)):
-        if hasattr(value, "_pyroId"):
-            daemon.unregister(value)
+        value._unregister()
     
 def dump_properties(self):
     """

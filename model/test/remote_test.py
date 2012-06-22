@@ -19,7 +19,9 @@ from concurrent import futures
 from concurrent.futures.thread import ThreadPoolExecutor
 from model import roattribute, oneway, isasync
 from multiprocessing.process import Process
+from threading import Thread
 import Pyro4
+import gc
 import model
 import numpy
 import os
@@ -28,8 +30,11 @@ import threading
 import time
 import unittest
 
+gc.set_debug(gc.DEBUG_LEAK | gc.DEBUG_STATS)
 
+# TODO test sharing a shared component from the client (probably broken for now)
 
+#@unittest.skip("simple")
 class SerializerTest(unittest.TestCase):
     
     def test_recursive(self):
@@ -49,18 +54,18 @@ class SerializerTest(unittest.TestCase):
         parentc_unpickled = pickle.loads(dump)
         self.assertEqual(parentc_unpickled.value, 42)
         
-"""
-Test the Component, DataFlow, and Properties when shared remotely.
-The test cases are run as "clients" and at start a server is started.
-"""
 #@unittest.skip("doesn't work")
 class RemoteTest(unittest.TestCase):
+    """
+    Test the Component, DataFlow, and Properties when shared remotely.
+    The test cases are run as "clients" and at start a server is started.
+    """
     container_name = "test"
     
     def setUp(self):
         # Use Thread for debug:
-#        self.server = Thread(target=ServerLoop, args=(self.container_name,))
-        self.server = Process(target=ServerLoop, args=(self.container_name,))
+        self.server = Thread(target=ServerLoop, args=(self.container_name,))
+#        self.server = Process(target=ServerLoop, args=(self.container_name,))
         self.server.start()
         time.sleep(0.1) # give it some time to start
 
@@ -68,6 +73,7 @@ class RemoteTest(unittest.TestCase):
         if self.server.is_alive():
             print "Warning: killing server still alive"
             self.server.terminate()
+            
 
     def test_simple(self):
         """
@@ -80,6 +86,7 @@ class RemoteTest(unittest.TestCase):
         comp.stopServer()
         time.sleep(0.1) # give it some time to terminate
     
+
     def test_exception(self):
         rdaemon = Pyro4.Proxy("PYRO:Pyro.Daemon@./u:"+self.container_name)
         comp = rdaemon.getObject("mycomp")
@@ -106,7 +113,7 @@ class RemoteTest(unittest.TestCase):
         self.assertEqual(val, "ro", "Reading attribute failed")
         comp.stopServer()
         time.sleep(0.1) # give it some time to terminate
-        
+
     def test_async(self):
         """
         test futures
@@ -133,7 +140,7 @@ class RemoteTest(unittest.TestCase):
         
         comp.stopServer()
         time.sleep(0.1) # give it some time to terminate
-              
+
     def test_async_cancel(self):
         """
         test futures
@@ -178,7 +185,7 @@ class RemoteTest(unittest.TestCase):
                 
         comp.stopServer()
         time.sleep(0.1) # give it some time to terminate
-    
+
     def test_dataflow_subscribe(self):
         rdaemon = Pyro4.Proxy("PYRO:Pyro.Daemon@./u:"+self.container_name)
         comp = rdaemon.getObject("mycomp")
@@ -204,7 +211,7 @@ class RemoteTest(unittest.TestCase):
         self.assertEqual(data.shape, (2048, 2048))
         self.data_arrays_sent = data[0][0]
         self.assertGreaterEqual(self.data_arrays_sent, self.count)
-    
+
     def test_dataflow_unsubscribe_from_callback(self):
         rdaemon = Pyro4.Proxy("PYRO:Pyro.Daemon@./u:"+self.container_name)
         comp = rdaemon.getObject("mycomp")
@@ -216,11 +223,16 @@ class RemoteTest(unittest.TestCase):
         comp.data.subscribe(self.receive_data_and_unsubscribe)
         time.sleep(0.3)
         self.assertEqual(self.count, 1)
-        self.assertEqual(self.data_arrays_sent, 1)
+        self.assertEqual(self.data_arrays_sent, 1) # TODO if generate very fast, it will have generated several before reading the first one => it should be considered ok
 #        print "received %d arrays over %d" % (self.count, self.data_arrays_sent)
         
         comp.stopServer()
         time.sleep(0.1) # give it some time to terminate
+#        data = comp.data
+#        del comp
+#        print gc.get_referrers(data)
+#        gc.collect()
+#        print gc.get_referrers(data)
     
     def receive_data_and_unsubscribe(self, dataflow, data):
         self.count += 1
@@ -228,7 +240,7 @@ class RemoteTest(unittest.TestCase):
         self.data_arrays_sent = data[0][0]
         self.assertGreaterEqual(self.data_arrays_sent, self.count)
         dataflow.unsubscribe(self.receive_data_and_unsubscribe)
-    
+
     def test_dataflow_get(self):
         rdaemon = Pyro4.Proxy("PYRO:Pyro.Daemon@./u:"+self.container_name)
         comp = rdaemon.getObject("mycomp")
@@ -244,7 +256,7 @@ class RemoteTest(unittest.TestCase):
         
         comp.stopServer()
         time.sleep(0.1) # give it some time to terminate
-    
+
     def test_properties(self):
         rdaemon = Pyro4.Proxy("PYRO:Pyro.Daemon@./u:"+self.container_name)
         comp = rdaemon.getObject("mycomp")
@@ -268,10 +280,11 @@ class RemoteTest(unittest.TestCase):
         self.assertEqual(self.last_value, 0)
         # called once or twice depending if the brief 3 was seen
         self.assertTrue(1 <= self.called and self.called <= 2)
+        called_before = self.called
         
         # check we are not called anymore
         prop.value = 3 # +1
-        self.assertEqual(self.called, 2)
+        self.assertEqual(self.called, called_before)
         
         try:
             prop.value = 7.5
@@ -451,9 +464,6 @@ class FakeDataFlow(model.DataFlowRemotable):
             array[0][0] = self.count
 #            print "generating array %d" % self.count
             self.notify(array)
-
-    def __del__(self):
-        print "fakedataflow being deleted"
 
 if __name__ == "__main__":
     #import sys;sys.argv = ['', 'Test.testName']
