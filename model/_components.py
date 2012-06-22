@@ -21,6 +21,7 @@ import _dataflow
 import _properties
 import gc
 import logging
+import weakref
 
 # TODO make it remote-aware
 _microscope = None
@@ -66,9 +67,12 @@ class Component(object):
     '''
     Component to be shared remotely
     '''
-    def __init__(self, name, daemon=None):
+    def __init__(self, name, parent=None, children=set(), daemon=None):
         """
         name (string): unique name used to identify the component
+        parent (Component): the parent of this component, that will be in .parent
+        children (set of Component): the children of this component, that will
+            be in .children
         daemon (Pyro4.daemon): daemon via which the object will be registered. 
             default=None => not registered
         """
@@ -76,6 +80,30 @@ class Component(object):
         if daemon:
             daemon.register(self, name)
         
+        self._parent = None
+        self._children = set(children)
+        # TODO update .parent of children?
+    
+    # .parent is a weakref so that there is no cycle. 
+    # Too complicated to be a roattribute
+    @property
+    def parent(self):
+        if self._parent:
+            return self._parent()
+        else:
+            return None
+    @parent.setter
+    def parent(self, p):
+        if p:
+            assert isinstance(p, Component)
+            self._parent = weakref.ref(p)
+        else:
+            self._parent = None
+    
+    @roattribute
+    def children(self):
+        return self._children
+    
     @roattribute
     def name(self):
         return self._name
@@ -85,7 +113,9 @@ class Component(object):
         Stop the Component from executing.
         The component shouldn't be used afterward.
         """
-        print "terminating comp"
+        for c in self.children:
+            c.terminate()
+            
         # in case we are registered
         daemon = getattr(self, "_pyroDaemon", None)
         if daemon:
@@ -96,11 +126,8 @@ class Component(object):
             daemon.unregister(self)
         
     def __del__(self):
-        print "del comp"
         self.terminate()
-        gc.collect()
         
-
 # Run on the client (the process which asked for a given remote component)
 class ComponentProxy(Pyro4.Proxy):
     """
@@ -116,29 +143,43 @@ class ComponentProxy(Pyro4.Proxy):
         # and cached
         # so that sending one component doesn't mean sending the whole tree
         # and also .parent is automatically set on the children when calling ._get_children()
+        self._parent = None
+    
+    # .parent is a weakref so that there is no cycle. 
+    # Too complicated to be a roattribute
+    @property
+    def parent(self):
+        if self._parent:
+            return self._parent()
+        else:
+            return None
+    @parent.setter
+    def parent(self, p):
+        if p:
+            self._parent = weakref.ref(p)
+        else:
+            self._parent = None
 
     # The goal of __getstate__ is to allow pickling a proxy and getting a similar
     # proxy talking directly to the server (it reset the connection and the lock).
     # TODO check if we need to return more (probably yes) -> but it has to be 
     # compatible with the proxy creation
     def __getstate__(self):
-        return (_core.dump_roattributes(self), _dataflow.dump_dataflows(self),
+        return (self.parent, _core.dump_roattributes(self), _dataflow.dump_dataflows(self),
                 _properties.dump_properties(self))
         
     def __setstate__(self, state):
         """
+        .parent (Component)
         roattributes (dict string -> value)
         dataflows (dict string -> dataflow)
         properties (dict string -> properties)
         """
-        roattributes, dataflows, properties = state
+        self.parent, roattributes, dataflows, properties = state
         _core.load_roattributes(self, roattributes)
         _dataflow.load_dataflows(self, dataflows)
         _properties.load_properties(self, properties)
     
-    def __del__(self):
-        print "del comp proxy"
-
 # Converter from Component to ComponentProxy
 already_serialized = set()
 def odemicComponentSerializer(self):
@@ -152,7 +193,7 @@ def odemicComponentSerializer(self):
                 # URI as a string is more compact
                 (str(daemon.uriFor(self)), Pyro4.core.get_oneways(self), Pyro4.core.get_asyncs(self)),
                 # in the state goes everything that might be recursive
-                (_core.dump_roattributes(self), _dataflow.dump_dataflows(self), _properties.dump_properties(self))
+                (self.parent, _core.dump_roattributes(self), _dataflow.dump_dataflows(self), _properties.dump_properties(self))
                 )
     else:
         return self.__reduce__()
