@@ -1,11 +1,12 @@
 # -*- coding: utf-8 -*-
 
 #===============================================================================
-# Test module for Odemis' custom FoldPanelBar in odemis.gui.comp
+# Test module for Odemis' gui.comp.text module
 #===============================================================================
 
 import unittest
 import os
+import locale
 
 if os.getcwd().endswith('test'):
     os.chdir('../..')
@@ -17,8 +18,11 @@ import odemis.gui.test.test_gui
 
 SLEEP_TIME = 100 # Sleep timer in milliseconds
 MANUAL = True # If manual is set to True, the window will be kept open at the end
+INSPECT = False
 
-TEST_STREAMS = ["aap", "noot", "mies", "etc"]
+TEST_LST = ["Aap", "nöot", "noot", "mies", "kees", "vuur", "quantummechnica",
+            "Repelsteeltje", "", "XXX", "a", "aa", "aaa", "aaaa",
+            "aaaaa", "aaaaaa", "aaaaaaa"]
 
 def odemis_get_resources():
     """ This function provides access to the XML handlers needed for
@@ -51,7 +55,7 @@ class TestApp(wx.App):
         wx.App.__init__(self, redirect=False)
 
     def OnInit(self):
-        self.test_frame = odemis.gui.test.test_gui.xrcstream_frame(None)
+        self.test_frame = odemis.gui.test.test_gui.xrctext_frame(None)
         self.test_frame.SetSize((400, 400))
         self.test_frame.Center()
         self.test_frame.Layout()
@@ -59,14 +63,22 @@ class TestApp(wx.App):
 
         return True
 
-class FoldPanelBarTestCase(unittest.TestCase):
+def suggest(val):
+    val = str(val.lower())
+    data = [name for name in TEST_LST if name.lower().startswith(val)]
+    data.sort(cmp=locale.strcoll)
+    #return ['<font size="2"><b>%s</b>%s</font>' % (d[:len(val)], d[len(val):]) for d in data], data
+    return data
+
+class SuggestTestCase(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
         cls.app = TestApp()
         loop()
-        # import wx.lib.inspection
-        # wx.lib.inspection.InspectionTool().Show()
+        if INSPECT:
+            import wx.lib.inspection
+            wx.lib.inspection.InspectionTool().Show()
 
     @classmethod
     def tearDownClass(cls):
@@ -99,7 +111,8 @@ class FoldPanelBarTestCase(unittest.TestCase):
         return window.GetClientSize().GetHeight() < window.GetSize().GetHeight()
 
     def test_structure(self):
-        self.app.test_frame.btn_stream_add.set_choices(TEST_STREAMS)
+        #self.app.test_frame.txt_suggest.set_suggest_func(suggest)
+        pass
 
 
 

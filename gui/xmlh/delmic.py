@@ -121,7 +121,7 @@ component.Manager.addXmlHandler(xh_delmic.ImageButtonHandler)
 component.Manager.setMenu(c, 'button', 'Delmic hover bitmap button', 'odemis.gui.comp.buttons.ImageButton', 20)
 component.Manager.setTool(c, 'Controls', pos=(1, 1))
 
-### odemis.gui.comp.buttons.ImageButton
+### odemis.gui.comp.buttons.PopupImageButton
 
 c = component.Component('odemis.gui.comp.buttons.PopupImageButton', ['control', 'tool'],
               ['pos', 'size', 'default',
@@ -151,3 +151,32 @@ component.Manager.setMenu(c, 'button', 'Delmic Popup bitmap button', 'odemis.gui
 component.Manager.setTool(c, 'Controls', pos=(1, 1))
 
 
+### odemis.gui.comp.text.SuggestTextCtrl
+
+c = component.Component('odemis.gui.comp.text.SuggestTextCtrl', ['control','tool'],
+              ['pos', 'size', 'value', 'maxlength'],
+              image=images.TreeTextCtrl.GetImage())
+c.addStyles('wxTE_NO_VSCROLL',
+            'wxTE_AUTO_SCROLL',
+            'wxTE_PROCESS_ENTER',
+            'wxTE_PROCESS_TAB',
+            'wxTE_MULTILINE',
+            'wxTE_PASSWORD',
+            'wxTE_READONLY',
+            'wxHSCROLL',
+            'wxTE_RICH',
+            'wxTE_RICH2',
+            'wxTE_AUTO_URL',
+            'wxTE_NOHIDESEL',
+            'wxTE_LEFT',
+            'wxTE_CENTRE',
+            'wxTE_RIGHT',
+            'wxTE_DONTWRAP',
+            'wxTE_LINEWRAP',
+            'wxTE_CHARWRAP',
+            'wxTE_WORDWRAP')
+c.setParamClass('value', params.ParamMultilineText)
+c.addEvents('EVT_TEXT', 'EVT_TEXT_ENTER', 'EVT_TEXT_URL', 'EVT_TEXT_MAXLEN')
+component.Manager.register(c)
+component.Manager.setMenu(c, 'control', 'Delmic suggest text ctrl', 'odemis.gui.comp.text.SuggestTextCtrl', 1)
+component.Manager.setTool(c, 'Controls', pos=(0,2))

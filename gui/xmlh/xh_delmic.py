@@ -12,6 +12,7 @@ from wx.tools.XRCed.globals import TRACE
 import odemis.gui.comp.foldpanelbar as fpb
 import odemis.gui.comp.stream as strm
 import odemis.gui.comp.buttons as btns
+import odemis.gui.comp.text as txt
 
 class FixedStreamPanelXmlHandler(xrc.XmlResourceHandler):
     def __init__(self):
@@ -304,12 +305,12 @@ class PopupImageButtonHandler(xrc.XmlResourceHandler):
         if self.GetParamNode("bitmap"):
             bmp = self.GetBitmap("bitmap")
 
-        w = btns.ImageButton(self.GetParentAsWindow(),
-                            self.GetID(),
-                            bmp,
-                            pos=self.GetPosition(),
-                            size=self.GetSize(),
-                            style=self.GetStyle())
+        w = btns.PopupImageButton(self.GetParentAsWindow(),
+                                self.GetID(),
+                                bmp,
+                                pos=self.GetPosition(),
+                                size=self.GetSize(),
+                                style=self.GetStyle())
 
         if self.GetParamNode("selected"):
             bmp = self.GetBitmap("selected")
@@ -331,9 +332,36 @@ class PopupImageButtonHandler(xrc.XmlResourceHandler):
         self.SetupWindow(w)
         return w
 
+class SuggestTextCtrlHandler(xrc.XmlResourceHandler):
+
+    def __init__(self):
+        xrc.XmlResourceHandler.__init__(self)
+        # Standard styles
+        self.AddWindowStyles()
+        # Custom styles
+
+    def CanHandle(self, node):
+        return self.IsOfClass(node, 'odemis.gui.comp.text.SuggestTextCtrl')
+
+    # Process XML parameters and create the object
+    def DoCreateResource(self):
+        assert self.GetInstance() is None
+
+        w = txt.SuggestTextCtrl(self.GetParentAsWindow(),
+                                id=self.GetID(),
+                                value=self.GetText('value'),
+                                pos=self.GetPosition(),
+                                size=self.GetSize(),
+                                style=self.GetStyle(),
+                                choices=[str(i) for i in range(2)])
+        #self.SetupWindow(w)
+        return w
+
+
 HANDLER_CLASS_LIST = [FixedStreamPanelXmlHandler,
                       CustomStreamPanelXmlHandler,
                       FoldPanelBarXmlHandler,
                       GenBitmapButtonHandler,
                       ImageButtonHandler,
-                      PopupImageButtonHandler]
+                      PopupImageButtonHandler,
+                      SuggestTextCtrlHandler]
