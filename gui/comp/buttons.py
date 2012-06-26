@@ -3,7 +3,7 @@ import wx
 from wx.lib.buttons import GenBitmapButton, GenBitmapToggleButton
 
 class ImageButton(GenBitmapButton):
-    labelDelta = 0
+    labelDelta = 1
 
     def __init__(self, *args, **kwargs):
 
@@ -150,3 +150,61 @@ class PopupImageButton(ImageButton):
 
     def __init__(self, *args, **kwargs):
         ImageButton.__init__(self, *args, **kwargs)
+
+        self.choices = None
+        self.Bind(wx.EVT_BUTTON, self.show_menu)
+
+
+    def set_choices(self, choices):
+        self.choices = choices
+
+    def show_menu(self, evt):
+
+        if not self.choices:
+            return
+
+        class MenuPopup(wx.PopupTransientWindow):
+            def __init__(self, parent, style):
+                wx.PopupTransientWindow.__init__(self, parent, style)
+                self.lb = wx.ListBox(self, -1)
+
+                sz = self.lb.GetBestSize()
+
+                width = parent.GetSize().GetWidth()
+                height = sz.height + 10
+
+                #sz.width -= wx.SystemSettings_GetMetric(wx.SYS_VSCROLL_X)
+                self.lb.SetBackgroundColour("#DDDDDD")
+                self.lb.SetSize((width, height))
+                self.SetSize((width, height - 2))
+
+                self.Bind(wx.EVT_LISTBOX, self.on_select)
+
+            def on_select(self, evt):
+                print self.lb.GetStringSelection()
+                self.Dismiss()
+                self.OnDismiss()
+
+            def ProcessLeftDown(self, evt):
+                return False
+
+            def OnDismiss(self):
+                self.GetParent().hovering = False
+                self.GetParent().Refresh()
+
+            def SetChoices(self, choices):
+                self.lb.Set(choices)
+
+        win = MenuPopup(self, wx.SIMPLE_BORDER)
+        win.SetChoices(self.choices)
+
+        # Show the popup right below or above the button
+        # depending on available screen space...
+        btn = evt.GetEventObject()
+        pos = btn.ClientToScreen((20, -5))
+        sz =  btn.GetSize()
+        win.Position(pos, (0, sz[1]))
+
+        win.Popup()
+
+
