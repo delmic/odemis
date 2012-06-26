@@ -17,10 +17,12 @@ You should have received a copy of the GNU General Public License along with Del
 from Pyro4.core import oneway
 from _core import WeakMethod, WeakRefLostError
 import Pyro4
+import _core
 import inspect
 import logging
 import numpy
 import threading
+import weakref
 import zmq
 
 """
@@ -86,9 +88,6 @@ class DataFlow(object):
     """
     def __init__(self):
         self._listeners = set()
-        
-        # to be overridden
-        self.parent = None
     
     # to be overridden
     # not defined at all so that the proxy version automatically does a remote call 
@@ -116,6 +115,8 @@ class DataFlow(object):
         count_after = len(self._listeners)
         if count_after == 0:
             self.stop_generate()
+    
+    # TODO should default to open a thread that continuously call get()
         
     # The following methods are only to be used by the object which own
     # the dataflow, they are not part of the external API
@@ -151,35 +152,25 @@ class DataFlow(object):
 
 # DataFlowObject to create on the server (in an Odemic component)
 class DataFlowRemotable(DataFlow):
-    # TODO max_discard, to be passed to the proxy as well.
-    def __init__(self, parent=None, daemon=None, max_discard=0):
+    def __init__(self, max_discard=100):
         """
-        parent (string): Component containing this object (see DataFlow)
-        daemon (Pyro4.Daemon): daemon used to share this object
         max_discard (int): mount of messages that can be discarded in a row if
                             a new one is already available. 0 to keep (notify) 
                             all the messages (dangerous if callback is slower
                             than the generator).
         """
-        DataFlow.__init__(self, parent)       
-        self._global_name = None # to be filled when registered
-        
+        DataFlow.__init__(self)       
         # different from ._listeners for notify() to do different things
         self._remote_listeners = set() # any unique string works
         
-        # create a zmq pipe to publish the data
-        # Warning: notify() will most likely run in a separate thread, which is
-        # not recommanded by 0MQ. At least, we should never access it from this
-        # thread anymore. To be safe, it might need a pub-sub forwarder proxy inproc
-        self.ctx = zmq.Context(1)
-        self.pipe = self.ctx.socket(zmq.PUB)
-        self.pipe.linger = 1 # don't keep messages more than 1s after close
+        self._global_name = None # to be filled when registered
+        self.ctx = None
+        self.pipe = None
+        self._max_discard = max_discard
+        self._update_pipe_hwm()
         
-        self._max_discard = 0
-        self.max_discard = max_discard # needs self.pipe 
-        
-        if daemon:
-            self._register(daemon)
+    def __getstate__(self):
+        return (_core.dump_roattributes(self), )
     
     @property
     def max_discard(self):
@@ -188,17 +179,55 @@ class DataFlowRemotable(DataFlow):
     @max_discard.setter
     def max_discard(self, value):
         self._max_discard = value
+        self._update_pipe_hwm()
+    
+    def _update_pipe_hwm(self):
+        """
+        updates the high water mark option of OMQ pipe according to max_discard
+        """
+        if self.pipe is None:
+            return
         if self._max_discard == 0:
             # High-water mark   
             self.pipe.hwm = 0
         else:
             self.pipe.hwm = 1
-    
+            
     def _register(self, daemon):
+        """
+        Get the dataflow ready to be shared. It gets registered to the Pyro 
+        daemon and over 0MQ. It should be called only once. Note that you have
+        to call this method to register a dataflow, a simple daemon.register(df)
+        is not enough.
+        daemon (Pyro4.Daemon): daemon used to share this object
+        """
         daemon.register(self)
-        self._global_name = self.parent.name + "." + self._pyroId
-        print "server is registered to send to " + "ipc://" + self._global_name + ".ipc"
-        self.pipe.bind("ipc://" + self._global_name + ".ipc")
+        
+        # create a zmq pipe to publish the data
+        # Warning: notify() will most likely run in a separate thread, which is
+        # not recommended by 0MQ. At least, we should never access it from this
+        # thread anymore. To be safe, it might need a pub-sub forwarder proxy inproc
+        self.ctx = zmq.Context(1)
+        self.pipe = self.ctx.socket(zmq.PUB)
+        self.pipe.linger = 1 # don't keep messages more than 1s after close
+        self._update_pipe_hwm()
+        
+        uri = daemon.uriFor(self)
+        self._global_name = uri.object + "@" + uri.sockname + ".ipc"
+        logging.debug("server is registered to send to " + "ipc://" + self._global_name)
+        self.pipe.bind("ipc://" + self._global_name)
+    
+    def _unregister(self):
+        """
+        unregister the dataflow from the daemon and clean up the 0MQ bindings
+        """
+        daemon = getattr(self, "_pyroDaemon", None)
+        if daemon:
+            daemon.unregister(self)
+        if self.ctx:
+            self.pipe.close()
+            self.ctx.term()
+            self.ctx = None
     
     def _count_listeners(self):
         return len(self._listeners) + len(self._remote_listeners)
@@ -237,7 +266,7 @@ class DataFlowRemotable(DataFlow):
         
     def notify(self, data):
         # publish the data remotely
-        if len(self._remote_listeners) > 0:
+        if self.pipe and len(self._remote_listeners) > 0:
             md = {"dtype": str(data.dtype), "shape": data.shape}
             self.pipe.send_pyobj(md, zmq.SNDMORE)
             self.pipe.send(numpy.getbuffer(data), copy=False)
@@ -246,55 +275,41 @@ class DataFlowRemotable(DataFlow):
         DataFlow.notify(self, data)
     
     def __del__(self):
-        self.pipe.close()
-        self.ctx.term()
-    
+        print "del dataflow"
+        self._unregister()
 
 # DataFlow object automatically created on the client (in an Odemic component)
 class DataFlowProxy(DataFlow, Pyro4.Proxy):
     # init is as light as possible to reduce creation overhead in case the
     # object is actually never used
-    def __init__(self, uri, oneways=set(), asyncs=set(), max_discards=0):
+    def __init__(self, uri, oneways=set(), asyncs=set(), max_discard=100):
         """
         uri, oneways, asyncs: see Proxy
-        max_discards (int): amount of messages that can be discarded in a row if
+        max_discard (int): amount of messages that can be discarded in a row if
                             a new one is already available. 0 to keep (notify) 
                             all the messages (dangerous if callback is slower
                             than the generator).
         """ 
         Pyro4.Proxy.__init__(self, uri, oneways, asyncs)
-        self._parent = None
-        self._global_name = None #unknown until parent is defined
-        DataFlow.__init__(self, parent=None)
-        self.max_discard = max_discards
+        self._global_name = uri.object + "@" + uri.sockname + ".ipc"
+        DataFlow.__init__(self)
+        self.max_discard = max_discard
         
-        # It should be no problem to have one context per dataflow,
-        # maybe more efficient to have one global for the whole process? see Context.instance()
-        self.ctx = zmq.Context(1)
+        self.ctx = None
+        self.commands = None
         self._thread = None
-        self._must_unsubscribe = False
-    
-    # allow late parent update
-    @property
-    def parent(self):
-        return self._parent
-    
-    @parent.setter
-    def parent(self, value):
-        # Should be done only once with a real parent!
-        if self._parent == value:
-            return
-        elif self._parent is not None:
-            logging.error("Changing parent of dataflow is not allowed (from %s to %s)",
-                          self._parent, value)
-        self._parent = value
         
-        # update global name
-        if self._parent is None:
-            self._global_name = None
-        else:
-            self._global_name = self._parent.name + "." + self._pyroUri.object
-
+    def __getstate__(self):
+        return (_core.dump_roattributes(self), )
+        
+    def __setstate__(self, state):
+        """
+        parent (Component)
+        roattributes (dict string -> value)
+        """
+        roattributes, = state
+        _core.load_roattributes(self, roattributes)
+    
     # .get() is a direct remote call
     
     # next three methods are directly from DataFlow
@@ -303,11 +318,13 @@ class DataFlowProxy(DataFlow, Pyro4.Proxy):
     #.notify()
     
     def _create_thread(self):
+        self.ctx = zmq.Context(1) # apparently 0MQ reuse contexts
         self.commands = self.ctx.socket(zmq.PAIR)
         self.commands.bind("inproc://" + self._global_name)
-        self._thread = threading.Thread(name="zmq" + self._global_name, 
-                              target=self._listenForData, args=(self.ctx,))
-        self._thread.deamon = True
+#        self._thread = threading.Thread(name="zmq for dataflow " + self._global_name, 
+#                              target=self._listenForData, args=(self.ctx, self._global_name))
+#        self._thread.deamon = True
+        self._thread = SubscribeProxyThread(self.notify, self._global_name, self.max_discard, self.ctx)
         self._thread.start()
         
     def start_generate(self):
@@ -324,93 +341,110 @@ class DataFlowProxy(DataFlow, Pyro4.Proxy):
     def stop_generate(self):
         # stop the remote subscription
         Pyro4.Proxy.__getattr__(self, "unsubscribe")(self._global_name)
-        
-        # TODO check if this kludge is still necessary now that we removed the synchronisation
-        # Kludge to avoid dead-lock when called from inside the callback
-        if threading.current_thread() == self._thread:
-            self._must_unsubscribe = True
-        else:
-            self.commands.send("UNSUB")
-        
+        self.commands.send("UNSUB") # asynchronous (necessary to not deadlock)
 
-    # to be executed in a separate thread
-    def _listenForData(self, ctx):
+    def __del__(self):
+        print "del dataflow proxy"
+        # end the thread (but it will stop as soon as it notices we are gone anyway)
+        if self._thread:
+            self.commands.send("STOP")
+            self.commands.recv()
+            self.commands.close()
+
+
+class SubscribeProxyThread(threading.Thread):
+    def __init__(self, notifier, uri, max_discard, zmq_ctx):
         """
-        ctx (zmq context): global zmq context
+        notifier (callable): method to call when a new array arrives
+        uri (string): unique string to identify the connection
+        max_discard (int)
+        zmq_ctx (0MQ context): available 0MQ context to use
         """
-        assert self._global_name is not None
+        threading.Thread.__init__(self, name="zmq for dataflow " + uri)
+        self.daemon = True
+        self.uri = uri
+        self.max_discard = max_discard
+        self.ctx = zmq_ctx
+        # don't keep strong reference to notifier so that it can be garbage 
+        # collected normally and it will let us know then that we can stop
+        self.w_notifier = WeakMethod(notifier)
         
         # create a zmq synchronised channel to receive commands
-        commands = ctx.socket(zmq.PAIR)
-        commands.connect("inproc://" + self._global_name)
+        self.commands = zmq_ctx.socket(zmq.PAIR)
+        self.commands.connect("inproc://" + uri)
         
         # create a zmq subscription to receive the data
-        data = ctx.socket(zmq.SUB)
-        data.connect("ipc://" + self._global_name + ".ipc")
-        data.hwm = 1 # probably does nothing
+        self.data = zmq_ctx.socket(zmq.SUB)
+        self.data.connect("ipc://" + uri)
+        # TODO find out if it does something and if it does, depend on max_discard
+        self.data.hwm = 1 # probably does nothing 
         
+    def run(self):
         # Process messages for commands and data
         poller = zmq.Poller()
-        poller.register(commands, zmq.POLLIN)
-        poller.register(data, zmq.POLLIN)
+        poller.register(self.commands, zmq.POLLIN)
+        poller.register(self.data, zmq.POLLIN)
         discarded = 0
         while True:
             socks = dict(poller.poll())
 
             # process commands
-            if socks.get(commands) == zmq.POLLIN:
-                message = commands.recv()
+            if socks.get(self.commands) == zmq.POLLIN:
+                message = self.commands.recv()
                 if message == "SUB":
-                    data.setsockopt(zmq.SUBSCRIBE, '')
-                    commands.send("SUBD")
+                    self.data.setsockopt(zmq.SUBSCRIBE, '')
+                    self.commands.send("SUBD")
                 elif message == "UNSUB":
-                    data.setsockopt(zmq.UNSUBSCRIBE, '')
-                    print "unsubscribe"
+                    self.data.setsockopt(zmq.UNSUBSCRIBE, '')
                     # no confirmation (async)
                 elif message == "STOP":
-                    commands.close()
-                    data.close()
-                    commands.send("STOPPED")
+                    print "stopping thread df"
+                    self.commands.send("STOPPED")
+                    self.commands.close()
+                    self.data.close()
                     return
             
             # receive data
-            if socks.get(data) == zmq.POLLIN:
-                md = data.recv_pyobj()
-                array_buf = data.recv(copy=False)
+            if socks.get(self.data) == zmq.POLLIN:
+                md = self.data.recv_pyobj()
+                array_buf = self.data.recv(copy=False)
                 # more fresh data already?
-                if (data.getsockopt(zmq.EVENTS) & zmq.POLLIN and
+                if (self.data.getsockopt(zmq.EVENTS) & zmq.POLLIN and
                     discarded < self.max_discard):
-#                    print "skipping one data array"
                     discarded += 1
                     continue
                 if discarded:
-                    print "had discarded %d arrays" % discarded
+                    logging.debug("had discarded %d arrays", discarded)
                 discarded = 0
                 # TODO: any need to use zmq.utils.rebuffer.array_from_buffer()?
                 array = numpy.frombuffer(array_buf, dtype=md["dtype"])
                 array.shape = md["shape"]
-                self.notify(array)
-                # Handle subscription closure from the callbacks
-                if self._must_unsubscribe:
-                    data.setsockopt(zmq.UNSUBSCRIBE, '')
-                    print "unsubscribe"
-                    self._must_unsubscribe = False
-
-    def __del__(self):
-        # end the thread
-        if self._thread:
-            self.commands.send("STOP")
-            self.commands.recv()
-        self.commands.close()
+    
+                try:
+                    self.w_notifier(array)
+                except WeakRefLostError:
+                    print "stopping thread weakref"
+                    self.commands.close()
+                    self.data.close()
+                    return
+        
+def unregister_dataflows(self):
+    for name, value in inspect.getmembers(self, lambda x: isinstance(x, DataFlowRemotable)):
+        value._unregister()
 
 def dump_dataflows(self):
     """
-    return the names and value of all the DataFlows added to an object (component)
-    self: the object (instance of a class)
-    return (dict string -> value)
+    return the names and value of all the DataFlows added to an object 
+    (component). If a dataflow is not registered yet, it is registered.
+    self (Component): the object (instance of a class). It must already be
+                      registered to a Pyro daemon.
+    return (dict string -> value): attribute name -> dataflow
     """
     dataflows = dict()
+    daemon = self._pyroDaemon
     for name, value in inspect.getmembers(self, lambda x: isinstance(x, DataFlowRemotable)):
+        if not hasattr(value, "_pyroDaemon"):
+            value._register(daemon)
         dataflows[name] = value
     return dataflows
 
@@ -421,7 +455,6 @@ def load_dataflows(self, dataflows):
     """
     for name, df in dataflows.items():
         setattr(self, name, df)
-        df.parent = self
 
 def odemicDataFlowSerializer(self):
     """reduce function that automatically replaces Pyro objects by a Proxy"""
@@ -429,12 +462,14 @@ def odemicDataFlowSerializer(self):
     if daemon: # TODO might not be even necessary: They should be registering themselves in the init
         self._odemicShared = True
         # only return a proxy if the object is a registered pyro object
-        return DataFlowProxy, (daemon.uriFor(self),
-                                Pyro4.core.get_oneways(self),
-                                Pyro4.core.get_asyncs(self),
-                                self.max_discard
-                                # self.parent # not possible due to recursion
-                                )
+        return (DataFlowProxy, 
+                (daemon.uriFor(self),
+                 Pyro4.core.get_oneways(self),
+                 Pyro4.core.get_asyncs(self),
+                 self.max_discard), 
+                # in the state goes everything that might be recursive
+                DataFlowRemotable.__getstate__(self)
+                )
     else:
         return self.__reduce__()
     

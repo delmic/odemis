@@ -14,11 +14,16 @@ Delmic Acquisition Software is distributed in the hope that it will be useful, b
 
 You should have received a copy of the GNU General Public License along with Delmic Acquisition Software. If not, see http://www.gnu.org/licenses/.
 '''
-
 # Load the package namespace here so that it's possible to just do "import model"
+
+# to hide the lower layer
+from Pyro4.core import oneway, isasync
+
 from ._properties import *
 from ._components import *
 from ._dataflow import *
+from ._core import roattribute, WeakMethod, WeakRefLostError
+
 
 #__all__ = []
 #import model._properties
