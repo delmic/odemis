@@ -3,7 +3,7 @@ import wx
 from wx.lib.buttons import GenBitmapButton, GenBitmapToggleButton
 
 class ImageButton(GenBitmapButton):
-    labelDelta = 0
+    labelDelta = 1
 
     def __init__(self, *args, **kwargs):
 

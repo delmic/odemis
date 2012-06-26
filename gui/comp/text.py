@@ -17,9 +17,11 @@ locale.setlocale(locale.LC_ALL, "")
 # Copyright 2006 (c) CDF Inc. ( http://www.cdf-imaging.com )
 # Contributed to the wxPython project under the wxPython project's license.
 # http://wiki.wxpython.org/index.cgi/TextCtrlAutoComplete
+#
+# Adaptation for Delmic by R. de Laat
+#
 
-
-class myListCtrl(wx.ListCtrl, listmix.ListCtrlAutoWidthMixin):
+class ChoiceListCtrl(wx.ListCtrl, listmix.ListCtrlAutoWidthMixin):
     def __init__(self, parent, ID=-1, pos=wx.DefaultPosition,
                  size=wx.DefaultSize, style=0):
         wx.ListCtrl.__init__(self, parent, ID, pos, size, style)
@@ -67,8 +69,9 @@ class SuggestTextCtrl (wx.TextCtrl, listmix.ColumnSorterMixin ):
         flags = wx.LC_REPORT | wx.LC_SINGLE_SEL | wx.LC_SORT_ASCENDING
         flags = flags | wx.LC_NO_HEADER
 
+
         #Create the list and bind the events
-        self.dropdownlistbox = myListCtrl( self.dropdown, style=flags,
+        self.dropdownlistbox = ChoiceListCtrl( self.dropdown, style=flags,
                                  pos=wx.Point( 0, 0) )
 
         ln = 1
@@ -324,3 +327,12 @@ class SuggestTextCtrl (wx.TextCtrl, listmix.ColumnSorterMixin ):
         self.popupsize = wx.Size( charwidth*longest, charheight*itemcount )
         self.dropdownlistbox.SetSize ( self.popupsize )
         self.dropdown.SetClientSize( self.popupsize )
+
+
+class UnitNumberCtrl(wx.TextCtrl):
+    """ This class represents a text control which is capable of formatting
+    it's content according to the unit it set to.
+    """
+
+    def __init__(self, *args, **kwargs):
+        pass
