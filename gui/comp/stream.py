@@ -30,7 +30,7 @@ import wx.combo
 from wx.lib.buttons import GenBitmapTextToggleButton
 
 from odemis.gui.img.data import catalog
-from odemis.gui.comp.buttons import ImageButton, ImageToggleButton
+from odemis.gui.comp.buttons import ImageButton, ImageToggleButton, ImageTextToggleButton
 from odemis.gui.comp.text import SuggestTextCtrl
 
 
@@ -265,7 +265,7 @@ class CustomExpander(Expander):
         self._sz.Insert(2, self._btn_color, 0, wx.RIGHT | wx.ALIGN_CENTRE_VERTICAL, 8)
 
         #self._label_ctrl = wx.TextCtrl(self, -1, label, style=wx.NO_BORDER)
-        self._label_ctrl = SuggestTextCtrl(self, id=-1, value=label)
+        self._label_ctrl = SuggestTextCtrl(self, id= -1, value=label)
         self._label_ctrl.SetChoices(TEST_STREAM_LST)
         self._label_ctrl.SetBackgroundColour(self.Parent.GetBackgroundColour())
         self._label_ctrl.SetForegroundColour("#2FA7D4")
@@ -435,9 +435,10 @@ class StreamPanel(wx.PyPanel):
 
         # ====== Top row, auto contrast toggle button
 
-        self._btn_auto_contrast = GenBitmapTextToggleButton(self._panel, -1,
-                                    catalog['ico_contrast'].GetBitmap(), "Auto",
-                                    size=(60, 24))
+        self._btn_auto_contrast = ImageTextToggleButton(self._panel, -1,
+                                    catalog['btn_contrast'].GetBitmap(), label="Auto",
+                                    size=(68, 26))
+        self._btn_auto_contrast.SetBitmaps(bmp_sel=catalog['btn_contrast_a'].GetBitmap())
         self._btn_auto_contrast.SetForegroundColour("#000000")
         self._gbs.Add(self._btn_auto_contrast, (0, 0), flag=wx.LEFT, border=34)
 
