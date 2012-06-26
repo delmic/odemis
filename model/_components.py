@@ -19,7 +19,6 @@ import Pyro4
 import _core
 import _dataflow
 import _properties
-import gc
 import logging
 import weakref
 
