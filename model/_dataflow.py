@@ -345,9 +345,11 @@ class DataFlowProxy(DataFlow, Pyro4.Proxy):
     def __del__(self):
         # end the thread (but it will stop as soon as it notices we are gone anyway)
         if self._thread:
-            self.commands.send("STOP")
-            self.commands.recv()
+            if self._thread.is_alive():
+                self.commands.send("STOP")
+                self._thread.join()
             self.commands.close()
+            self.ctx.term()
 
 
 class SubscribeProxyThread(threading.Thread):
@@ -396,7 +398,6 @@ class SubscribeProxyThread(threading.Thread):
                     self.data.setsockopt(zmq.UNSUBSCRIBE, '')
                     # no confirmation (async)
                 elif message == "STOP":
-                    self.commands.send("STOPPED")
                     self.commands.close()
                     self.data.close()
                     return

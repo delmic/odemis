@@ -218,7 +218,7 @@ class RemoteTest(unittest.TestCase):
                 
         comp.stopServer()
         time.sleep(0.1) # give it some time to terminate
-
+    
     def test_dataflow_subscribe(self):
         rdaemon = Pyro4.Proxy("PYRO:Pyro.Daemon@./u:"+self.container_name)
         comp = rdaemon.getObject("mycomp")
