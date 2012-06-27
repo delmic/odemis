@@ -4,7 +4,7 @@ from wx.lib.buttons import GenBitmapButton, GenBitmapToggleButton, \
     GenBitmapTextToggleButton
 
 class ImageButton(GenBitmapButton):
-    labelDelta = 1
+    labelDelta = 0
 
     def __init__(self, *args, **kwargs):
 
@@ -56,6 +56,8 @@ class ImageButton(GenBitmapButton):
         bw, bh = bmp.GetWidth(), bmp.GetHeight()
         if not self.up:
             dx = dy = self.labelDelta
+
+        print self.faceDnClr
         hasMask = bmp.GetMask() != None
         dc.DrawBitmap(bmp, (width - bw) / 2 + dx, (height - bh) / 2 + dy, hasMask)
 
@@ -63,7 +65,7 @@ class ImageButton(GenBitmapButton):
         """ Prevent the background colour from changing by overriding this
         method
         """
-        self.faceDnClr = self.Parent.GetBackgroundColour()
+        self.faceDnClr = self.Parent.Parent.GetBackgroundColour()
         return GenBitmapButton.GetBackgroundBrush(self, dc)
 
 class ImageToggleButton(GenBitmapToggleButton):  #pylint: disable=R0901

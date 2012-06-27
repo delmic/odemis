@@ -8,10 +8,10 @@ index = []
 
 arr_down = PyEmbeddedImage(
     "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAAZiS0dE"
-    "AP8A/wD/oL2nkwAAAAlwSFlzAAALEwAACxMBAJqcGAAAAAd0SU1FB9wGBA0ZOvze9/oAAAAZ"
-    "dEVYdENvbW1lbnQAQ3JlYXRlZCB3aXRoIEdJTVBXgQ4XAAAAOUlEQVQ4y2NgGAXDCKQxMDD8"
-    "JwOnYTOEGIChGd0QRnI0E+MSgprRDWEmRzM2l5CsGd2QNEqjmHYAABHkHedSYhkyAAAAAElF"
-    "TkSuQmCC")
+    "AAAAAAAA+UO7fwAAAAlwSFlzAAALEwAACxMBAJqcGAAAAAd0SU1FB9wGGw8HLjm7j/8AAAAZ"
+    "dEVYdENvbW1lbnQAQ3JlYXRlZCB3aXRoIEdJTVBXgQ4XAAAARUlEQVQ4y2NgGAWDD9QzMDD8"
+    "JwI34DNkJgHNMwm5wpiAAcbEeKWRgYHhGRbN9aSEx0xSnU7IK8bkxEoDOU5HB/8Hd8oDAPjj"
+    "KfLgv5/sAAAAAElFTkSuQmCC")
 index.append('arr_down')
 catalog['arr_down'] = arr_down
 getarr_downData = arr_down.GetData
@@ -21,10 +21,11 @@ getarr_downBitmap = arr_down.GetBitmap
 #----------------------------------------------------------------------
 arr_right = PyEmbeddedImage(
     "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAAZiS0dE"
-    "AP8A/wD/oL2nkwAAAAlwSFlzAAALEwAACxMBAJqcGAAAAAd0SU1FB9wGBA0aAv/xHKcAAAAZ"
-    "dEVYdENvbW1lbnQAQ3JlYXRlZCB3aXRoIEdJTVBXgQ4XAAAAQUlEQVQ4y63TuQ0AIBADQdMs"
-    "/XdgcgIQGlzA6s5PctYMqgqpQqqXVN+perIDxiukmk412q8eUArUA24ibYHXeNUCucUd5GAZ"
-    "baUAAAAASUVORK5CYII=")
+    "AAAAAAAA+UO7fwAAAAlwSFlzAAALEwAACxMBAJqcGAAAAAd0SU1FB9wGGw8EG0QlGB8AAAAZ"
+    "dEVYdENvbW1lbnQAQ3JlYXRlZCB3aXRoIEdJTVBXgQ4XAAAAh0lEQVQ4y83SsQ3CQAyF4Q8I"
+    "EQ07sAFUDIdEk4IBqBCjsA+wAxCO5oroiksuNLHkxrZ+PT+bKcfsX0CDum9okendsMETjzEK"
+    "XggxG8xLAe8OIOCCXQmgTQBthB6GOh0y9S8qmb1y+56w7pNfJfLvuGI/1My6I/WDY+kFVhFw"
+    "xnbMDyxTt6cbP8q+H+83uqphAAAAAElFTkSuQmCC")
 index.append('arr_right')
 catalog['arr_right'] = arr_right
 getarr_rightData = arr_right.GetData
