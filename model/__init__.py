@@ -19,7 +19,7 @@ You should have received a copy of the GNU General Public License along with Del
 # to hide the lower layer
 from Pyro4.core import oneway, isasync
 
-from ._properties import *
+from ._vattributes import *
 from ._components import *
 from ._dataflow import *
 from ._core import *

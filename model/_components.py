@@ -18,7 +18,7 @@ from _core import roattribute
 import Pyro4
 import _core
 import _dataflow
-import _properties
+import _vattributes
 import logging
 import weakref
 
@@ -117,10 +117,10 @@ class Component(object):
         # in case we are registered
         daemon = getattr(self, "_pyroDaemon", None)
         if daemon:
-            # unregister also all the automatically registered properties and
+            # unregister also all the automatically registered VAs and
             # dataflows (because they hold ref to daemon, so hard to get deleted
             _dataflow.unregister_dataflows(self)
-            _properties.unregister_properties(self)
+            _vattributes.unregister_vigilant_attributes(self)
             daemon.unregister(self)
         
     def __del__(self):
@@ -164,19 +164,19 @@ class ComponentProxy(Pyro4.Proxy):
     # compatible with the proxy creation
     def __getstate__(self):
         return (self.parent, _core.dump_roattributes(self), _dataflow.dump_dataflows(self),
-                _properties.dump_properties(self))
+                _vattributes.dump_vigilant_attributes(self))
         
     def __setstate__(self, state):
         """
         .parent (Component)
         roattributes (dict string -> value)
         dataflows (dict string -> dataflow)
-        properties (dict string -> properties)
+        vas (dict string -> VA)
         """
-        self.parent, roattributes, dataflows, properties = state
+        self.parent, roattributes, dataflows, vas = state
         _core.load_roattributes(self, roattributes)
         _dataflow.load_dataflows(self, dataflows)
-        _properties.load_properties(self, properties)
+        _vattributes.load_vigilant_attributes(self, vas)
     
 # Converter from Component to ComponentProxy
 already_serialized = set()
@@ -191,7 +191,7 @@ def odemicComponentSerializer(self):
                 # URI as a string is more compact
                 (str(daemon.uriFor(self)), Pyro4.core.get_oneways(self), Pyro4.core.get_asyncs(self)),
                 # in the state goes everything that might be recursive
-                (self.parent, _core.dump_roattributes(self), _dataflow.dump_dataflows(self), _properties.dump_properties(self))
+                (self.parent, _core.dump_roattributes(self), _dataflow.dump_dataflows(self), _vattributes.dump_vigilant_attributes(self))
                 )
     else:
         return self.__reduce__()
@@ -272,16 +272,17 @@ class Detector(HwComponent):
         if children:
             raise ArgumentError("Detector components cannot have children.")
 
+        # TODO to be remotable
         # To be overridden
         self.shape = (0) # maximum value of each dimension of the detector. A CCD camera 2560x1920 with 12 bits intensity has a 3D shape (2560,1920,2048).
-        self.pixelSize = None # property representing the size of a pixel (in meters). More precisely it should be the average distance between the centres of two pixels.
+        self.pixelSize = None # VA representing the size of a pixel (in meters). More precisely it should be the average distance between the centres of two pixels.
         self.data = None # Data-flow coming from this detector. 
         # normally a detector doesn't affect anything
         
 class DigitalCamera(Detector):
     """
     A component which represent a digital camera (i.e., CCD or CMOS)
-    It's basically a detector with a few more compulsory properties
+    It's basically a detector with a few more compulsory VAs
     """
     def __init__(self, name, role, children=None, **kwargs):
         Detector.__init__(self, name, role, children, **kwargs)
@@ -461,14 +462,14 @@ class MockComponent(HwComponent):
             self.children.add(child)
             child.parent = self
         
-    # For everything that is not standard we return a mock property
+    # For everything that is not standard we return a mock VigilantAttribute
     def __getattr__(self, attrName):
         if not self.__dict__.has_key(attrName):
             if attrName == "children": # special value
                 raise AttributeError(attrName)
             
-            prop = _properties.Property(None)
-            logging.debug("Component %s creating property %s", self.name, attrName)
+            prop = _vattributes.VigilantAttribute(None)
+            logging.debug("Component %s creating vigilant attribute %s", self.name, attrName)
             self.__dict__[attrName] = prop
         return self.__dict__[attrName]
     

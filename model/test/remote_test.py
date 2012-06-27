@@ -92,15 +92,15 @@ class SerializerTest(unittest.TestCase):
 #@unittest.skip("simple")
 class RemoteTest(unittest.TestCase):
     """
-    Test the Component, DataFlow, and Properties when shared remotely.
+    Test the Component, DataFlow, and VAs when shared remotely.
     The test cases are run as "clients" and at start a server is started.
     """
     container_name = "test"
     
     def setUp(self):
         # Use Thread for debug:
-        self.server = Thread(target=ServerLoop, args=(self.container_name,))
-#        self.server = Process(target=ServerLoop, args=(self.container_name,))
+#        self.server = Thread(target=ServerLoop, args=(self.container_name,))
+        self.server = Process(target=ServerLoop, args=(self.container_name,))
         self.server.start()
         time.sleep(0.1) # give it some time to start
 
@@ -291,7 +291,7 @@ class RemoteTest(unittest.TestCase):
         comp.stopServer()
         time.sleep(0.1) # give it some time to terminate
 
-    def test_property_update(self):
+    def test_va_update(self):
         rdaemon = Pyro4.Proxy("PYRO:Pyro.Daemon@./u:"+self.container_name)
         comp = rdaemon.getObject("mycomp")
 
@@ -302,13 +302,13 @@ class RemoteTest(unittest.TestCase):
         
         self.called = 0
         self.last_value = None
-        prop.subscribe(self.receive_property_update)
+        prop.subscribe(self.receive_va_update)
         # now count
         prop.value = 3 # +1
         prop.value = 0 # +1
         prop.value = 0 # nothing because same value
         time.sleep(0.1) # give time to receive notifications
-        prop.unsubscribe(self.receive_property_update)
+        prop.unsubscribe(self.receive_va_update)
         
         self.assertEqual(prop.value, 0)
         self.assertEqual(self.last_value, 0)
@@ -329,12 +329,12 @@ class RemoteTest(unittest.TestCase):
         comp.stopServer()
         time.sleep(0.1) # give it some time to terminate
     
-    def receive_property_update(self, value):
+    def receive_va_update(self, value):
         self.called += 1
         self.last_value = value
         self.assertIsInstance(value, (int, float))
     
-    def test_complex_properties(self):
+    def test_complex_va(self):
         rdaemon = Pyro4.Proxy("PYRO:Pyro.Daemon@./u:"+self.container_name)
         comp = rdaemon.getObject("mycomp")
 
@@ -396,7 +396,7 @@ class MyComponent(model.Component):
         self.number_futures = 0
         self.data = FakeDataFlow()
         # TODO automatically register the property when serializing the Component
-        self.prop = model.IntProperty(42)
+        self.prop = model.IntVA(42)
         self.cont = model.FloatContinuous(2.0, [-1, 3.4])
         self.enum = model.StringEnumerated("a", set(["a", "c", "bfds"]))
         

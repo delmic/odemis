@@ -34,8 +34,8 @@ class Light(model.Emitter):
         
         self.shape = (1)
         
-        self.wavelength = model.FloatProperty(560e-9, unit = "m", readonly=True) # average of white
-        self.spectrumWidth = model.FloatProperty(360e-9, unit = "m", readonly=True) # visible light
+        self.wavelength = model.FloatVA(560e-9, unit = "m", readonly=True) # average of white
+        self.spectrumWidth = model.FloatVA(360e-9, unit = "m", readonly=True) # visible light
         self.power = model.FloatEnumerated(100, (0,100), unit = "W")
         self.power.subscribe(self.on_power, init=True)
     
@@ -64,7 +64,7 @@ class Stage2D(model.Actuator):
         # can move 10cm on both axis
         self.ranges = {"x": [0, 0.1], "y": [0, 0.1]}
         self._position = {"x": 0.05, "y": 0.05} # starts in the middle
-        self.speed = model.MultiSpeedProperty({"x": 10, "y": 10}, [0, 10], "m/s")
+        self.speed = model.MultiSpeedVA({"x": 10, "y": 10}, [0, 10], "m/s")
         
     def getMetadata(self):
         metadata = {}
