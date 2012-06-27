@@ -17,6 +17,7 @@ import odemis.gui.test.test_gui
 
 SLEEP_TIME = 100 # Sleep timer in milliseconds
 MANUAL = True # If manual is set to True, the window will be kept open at the end
+INSPECT = False
 
 TEST_STREAMS = ["aap", "noot", "mies", "etc"]
 
@@ -65,8 +66,9 @@ class FoldPanelBarTestCase(unittest.TestCase):
     def setUpClass(cls):
         cls.app = TestApp()
         loop()
-        # import wx.lib.inspection
-        # wx.lib.inspection.InspectionTool().Show()
+        if INSPECT:
+            import wx.lib.inspection
+            wx.lib.inspection.InspectionTool().Show()
 
     @classmethod
     def tearDownClass(cls):
