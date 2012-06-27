@@ -22,7 +22,7 @@ from Pyro4.core import oneway, isasync
 from ._properties import *
 from ._components import *
 from ._dataflow import *
-from ._core import roattribute, WeakMethod, WeakRefLostError
+from ._core import *
 
 
 #__all__ = []

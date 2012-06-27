@@ -32,9 +32,29 @@ import unittest
 
 #gc.set_debug(gc.DEBUG_LEAK | gc.DEBUG_STATS)
 
-# TODO test sharing a shared component from the client (probably broken for now)
 
-#@unittest.skip("simple")
+class ContainerTest(unittest.TestCase):
+    
+    def test_empty_container(self):
+        container = model.createContainer("testempty")
+        container.ping()
+        container.terminate()
+    
+    def test_instantiate_component(self):
+        comp = model.createInNewContainer("testcont", MyComponent, {"name":"MyComp"})
+        self.assertEqual(comp.name, "MyComp")
+        val = comp.my_value
+        self.assertEqual(val, "ro", "Reading attribute failed")
+        
+        comp_prime = model.getObject("testcont", "MyComp")
+        self.assertEqual(comp_prime.name, "MyComp")
+        
+        container = model.getContainer("testcont")
+        container.ping()
+        comp.terminate()
+        container.terminate()
+
+@unittest.skip("simple")
 class SerializerTest(unittest.TestCase):
     
     def test_recursive(self):
@@ -53,7 +73,8 @@ class SerializerTest(unittest.TestCase):
         parentc_unpickled = pickle.loads(dump)
         self.assertEqual(parentc_unpickled.value, 42)
         
-#@unittest.skip("doesn't work")
+# TODO test sharing a shared component from the client (probably broken for now)
+@unittest.skip("simple")
 class RemoteTest(unittest.TestCase):
     """
     Test the Component, DataFlow, and Properties when shared remotely.
