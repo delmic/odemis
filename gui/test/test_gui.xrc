@@ -260,10 +260,12 @@
                         <border>1</border>
                       </object>
                       <object class="sizeritem">
-                        <object class="odemis.gui.comp.buttons.PopupImageButton" name="">
+                        <object class="odemis.gui.comp.buttons.PopupImageButton" name="btn_stream_add">
                           <bitmap>../img/stream_add.png</bitmap>
                           <hover>../img/stream_add_h.png</hover>
-                          <bitmap>../img/stream_add.png</bitmap>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
                         </object>
                       </object>
                     </object>
@@ -297,5 +299,27 @@
     </object>
     <size>400,400</size>
     <title>Stream panel test frame</title>
+  </object>
+  <object class="wxFrame" name="text_frame">
+    <object class="wxPanel">
+      <object class="wxBoxSizer">
+        <orient>wxVERTICAL</orient>
+        <object class="sizeritem">
+          <object class="odemis.gui.comp.text.SuggestTextCtrl" name="txt_suggest">
+            <size>200,-1</size>
+            <value>text field</value>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <option>0</option>
+          <flag>wxALIGN_CENTRE</flag>
+          <border>0</border>
+        </object>
+      </object>
+      <fg>#E6E6FA</fg>
+      <bg>#A52A2A</bg>
+    </object>
+    <size>400,400</size>
   </object>
 </resource>

@@ -30,16 +30,11 @@ import wx.combo
 from wx.lib.buttons import GenBitmapTextToggleButton
 
 from odemis.gui.img.data import catalog
-from odemis.gui.comp.autocomplete import AutocompleteTextCtrl
-from odemis.gui.comp.buttons import ImageButton, ImageToggleButton
-
-# Needed for multi-lingual string sorting
-import locale
-# this reads the environment and inits the right locale
-locale.setlocale(locale.LC_ALL, "")
+from odemis.gui.comp.buttons import ImageButton, ImageToggleButton, ImageTextToggleButton
+from odemis.gui.comp.text import SuggestTextCtrl
 
 
-TEST_STREAM_LST = ["Aap", "nöot", "noot", "mies", "kees", "vuur", "quantummechnica",
+TEST_STREAM_LST = ["Aap", u"nöot", "noot", "mies", "kees", "vuur", "quantummechnica",
                    "Repelsteeltje", "", "XXX", "a", "aa", "aaa", "aaaa",
                    "aaaaa", "aaaaaa", "aaaaaaa"]
 
@@ -206,6 +201,13 @@ class Expander(wx.PyControl):
         self._sz.Fit(self)
         self.Layout()
 
+        # ==== Bind events
+
+        self._btn_rem.Bind(wx.EVT_BUTTON, self.on_remove)
+
+
+    def on_remove(self, evt):
+        self._parent.Destroy()
 
     def DoGetBestSize(self, *args, **kwargs):
         """ Return the best size, which is the width of the parent and the
@@ -247,12 +249,6 @@ class FixedExpander(Expander):
         self._sz.Remove(1)
         self._sz.Insert(1, self._label_ctrl, 1, wx.RIGHT | wx.ALIGN_CENTRE_VERTICAL, 8)
 
-def suggest(val):
-    val = str(val.lower())
-    data = [name for name in TEST_STREAM_LST if name.lower().startswith(val)]
-    data.sort(cmp=locale.strcoll)
-    return ['<font size="2"><b>%s</b>%s</font>' % (d[:len(val)], d[len(val):]) for d in data], data
-
 class CustomExpander(Expander):
 
     DEFAULT_COLOR = "#88BA38"
@@ -266,16 +262,14 @@ class CustomExpander(Expander):
         self._btn_color.SetToolTipString("Select colour")
         self._btn_color.Bind(wx.EVT_BUTTON, self.on_color_click)
 
-
         self._sz.Insert(2, self._btn_color, 0, wx.RIGHT | wx.ALIGN_CENTRE_VERTICAL, 8)
 
-
         #self._label_ctrl = wx.TextCtrl(self, -1, label, style=wx.NO_BORDER)
-        self._label_ctrl = AutocompleteTextCtrl(self, -1, label,
-                                                style=wx.NO_BORDER,
-                                                completer=suggest)
+        self._label_ctrl = SuggestTextCtrl(self, id= -1, value=label)
+        self._label_ctrl.SetChoices(TEST_STREAM_LST)
+        self._label_ctrl.SetBackgroundColour(self.Parent.GetBackgroundColour())
         self._label_ctrl.SetForegroundColour("#2FA7D4")
-        self._label_ctrl.SetBackgroundColour("#4D4D4D")
+
         self._sz.Remove(1)
         self._sz.Insert(1, self._label_ctrl, 1, wx.RIGHT | wx.ALIGN_CENTRE_VERTICAL, 8)
 
@@ -318,6 +312,10 @@ class CustomExpander(Expander):
         if dlg.ShowModal() == wx.ID_OK:
             data = dlg.GetColourData()
             self.set_stream_color(data.GetColour().GetAsString(wx.C2S_HTML_SYNTAX))
+
+    def on_remove(self, evt):
+        self._label_ctrl.Destroy()
+        Expander.on_remove(self, evt)
 
 class Slider(wx.Slider):
     """ This custom Slider class was implemented so it would not capture
@@ -437,9 +435,10 @@ class StreamPanel(wx.PyPanel):
 
         # ====== Top row, auto contrast toggle button
 
-        self._btn_auto_contrast = GenBitmapTextToggleButton(self._panel, -1,
-                                    catalog['ico_contrast'].GetBitmap(), "Auto",
-                                    size=(60, 24))
+        self._btn_auto_contrast = ImageTextToggleButton(self._panel, -1,
+                                    catalog['btn_contrast'].GetBitmap(), label="Auto",
+                                    size=(68, 26))
+        self._btn_auto_contrast.SetBitmaps(bmp_sel=catalog['btn_contrast_a'].GetBitmap())
         self._btn_auto_contrast.SetForegroundColour("#000000")
         self._gbs.Add(self._btn_auto_contrast, (0, 0), flag=wx.LEFT, border=34)
 
