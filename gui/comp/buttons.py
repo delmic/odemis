@@ -148,7 +148,7 @@ class ImageToggleButton(GenBitmapToggleButton):  #pylint: disable=R0901
 
 class ImageTextToggleButton(GenBitmapTextToggleButton):  #pylint: disable=R0901
     # The displacement of the button content when it is pressed down, in pixels
-    labelDelta = 0
+    labelDelta = 1
 
     def __init__(self, *args, **kwargs):
 
@@ -207,22 +207,42 @@ class ImageTextToggleButton(GenBitmapTextToggleButton):  #pylint: disable=R0901
 
     def DrawLabel(self, dc, width, height, dx=0, dy=0):
         bmp = self.bmpLabel
-        if self.hovering and self.bmpHover:
-            bmp = self.bmpHover
-        if self.bmpDisabled and not self.IsEnabled():
-            bmp = self.bmpDisabled
-        if self.bmpFocus and self.hasFocus:
-            bmp = self.bmpFocus
-        if self.bmpSelected and not self.up:
-            if self.hovering:
-                bmp = self.bmpSelectedHover
-            else:
+        if bmp is not None:     # if the bitmap is used
+            if self.hovering and self.bmpHover:
+                bmp = self.bmpHover
+            if self.bmpDisabled and not self.IsEnabled():
+                bmp = self.bmpDisabled
+            if self.bmpFocus and self.hasFocus:
+                bmp = self.bmpFocus
+            if self.bmpSelected and not self.up:
                 bmp = self.bmpSelected
-        bw, bh = bmp.GetWidth(), bmp.GetHeight()
+            bw, bh = bmp.GetWidth(), bmp.GetHeight()
+            if not self.up:
+                dx = dy = self.labelDelta
+            hasMask = bmp.GetMask() is not None
+        else:
+            bw = bh = 0     # no bitmap -> size is zero
+
+        dc.SetFont(self.GetFont())
+        if self.IsEnabled():
+            dc.SetTextForeground(self.GetForegroundColour())
+        else:
+            dc.SetTextForeground(wx.SystemSettings.GetColour(wx.SYS_COLOUR_GRAYTEXT))
+
+        label = self.GetLabel()
+        tw, th = dc.GetTextExtent(label) # size of text
         if not self.up:
             dx = dy = self.labelDelta
-        hasMask = bmp.GetMask() != None
-        dc.DrawBitmap(bmp, (width - bw) / 2 + dx, (height - bh) / 2 + dy, hasMask)
+
+        pos_x = (width - bw) / 2 + dx
+        if bmp is not None:
+            #dc.DrawBitmap(bmp, (width - bw) / 2 + dx, (height - bh) / 2 + dy, hasMask)
+            dc.DrawBitmap(bmp, (width - bw) / 2, (height - bh) / 2, hasMask)
+
+        # The text is right aligned for now
+
+        pos_x = pos_x + bw - tw - 8 # 5 is padding
+        dc.DrawText(label, pos_x, (height - th) / 2 + dy + 1)      # draw the text
 
 class PopupImageButton(ImageButton):
 
@@ -279,7 +299,7 @@ class PopupImageButton(ImageButton):
         # Show the popup right below or above the button
         # depending on available screen space...
         btn = evt.GetEventObject()
-        pos = btn.ClientToScreen((20, -5))
+        pos = btn.ClientToScreen((10, -5))
         sz = btn.GetSize()
         win.Position(pos, (0, sz[1]))
 
