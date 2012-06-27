@@ -16,7 +16,7 @@ You should have received a copy of the GNU General Public License along with Del
 '''
 
 from Pyro4.core import oneway
-from _core import roattribute, WeakMethod, WeakRefLostError
+from _core import WeakMethod, WeakRefLostError
 import Pyro4
 import _core
 import inspect
@@ -196,7 +196,6 @@ class PropertyRemotable(Property):
         Property.notify(self, v)
     
     def __del__(self):
-        print "unregister prop"
         self._unregister()
 
 
@@ -227,11 +226,20 @@ class PropertyProxy(Property, Pyro4.Proxy):
     @value.setter
     def value(self, v):
         return Pyro4.Proxy.__getattr__(self, "_set_value")(v)
-    
     # no delete remotely
-        
+    
+    # for enumerated Properties
+    @property
+    def choices(self):
+        return Pyro4.Proxy.__getattr__(self, "_get_choices")()
+    
+    # for continuous Properties
+    @property
+    def range(self):
+        return Pyro4.Proxy.__getattr__(self, "_get_range")()
+    
     def __getstate__(self):
-        return (_core.dump_roattributes(self),)
+        return (_core.dump_roattributes(self), )
         
     def __setstate__(self, state):
         """
@@ -282,7 +290,6 @@ class PropertyProxy(Property, Pyro4.Proxy):
         self.commands.send("UNSUB")
                 
     def __del__(self):
-        print "del property proxy"
         # end the thread (but it will stop as soon as it notices we are gone anyway)
         if self._thread:
             self.commands.send("STOP")
@@ -334,7 +341,6 @@ class SubscribeProxyThread(threading.Thread):
                     self.data.setsockopt(zmq.UNSUBSCRIBE, '')
                     # no confirmation (async)
                 elif message == "STOP":
-                    print "stopping thread prop"
                     self.commands.send("STOPPED")
                     self.commands.close()
                     self.data.close()
@@ -355,7 +361,6 @@ class SubscribeProxyThread(threading.Thread):
                 try:
                     self.w_notifier(value)
                 except WeakRefLostError:
-                    print "stopping thread weakref prop"
                     self.commands.close()
                     self.data.close()
                     return
@@ -401,7 +406,7 @@ def odemicPropertySerializer(self):
                  Pyro4.core.get_asyncs(self),
                  self.max_discard, self.unit, self.readonly), 
                 # in the state goes everything that might be recursive
-                (_core.dump_roattributes(self),)
+                (_core.dump_roattributes(self), )
                 )
     else:
         return self.__reduce__()
@@ -451,13 +456,13 @@ class IntProperty(PropertyRemotable):
             raise InvalidTypeError("Value '%s' is not a int." % str(value))
         PropertyRemotable._set(self, value)
 
-class ListProperty(Property):
+class ListProperty(PropertyRemotable):
     """
     A property which contains a list of values
     """
     
-    def __init__(self, value=[], unit="", readonly=False):
-        Property.__init__(self, value, unit, readonly)
+    def __init__(self, value=[], *args, **kwargs):
+        PropertyRemotable.__init__(self, value, *args, **kwargs)
         
     def _set(self, value):
         try:
@@ -466,7 +471,7 @@ class ListProperty(Property):
             raise InvalidTypeError("Value '%s' is not a list." % str(value))
         # TODO we need to also detect whenever this list is modified
         
-        Property._set(self, converted)
+        PropertyRemotable._set(self, converted)
 
 # TODO maybe should provide a factory that can take a Property class and return it
 # either Continuous or Enumerated
@@ -478,16 +483,19 @@ class Continuous(object):
     It checks that any value set is min <= val <= max
     """
     
-    def __init__(self, vrange):
+    def __init__(self, range):
         """
         range (2-tuple)
         """
-        self._set_range(vrange)
+        self._set_range(range)
+    
+    def _get_range(self):
+        return self._range
     
     @property
     def range(self):
         """The range within which the value of the property can be"""
-        return self._range
+        return self._get_range()
     
     def _set_range(self, new_range):
         """
@@ -504,6 +512,7 @@ class Continuous(object):
                             (str(self.value), str(new_range[0]), str(new_range[1])))
         self._range = tuple(new_range)
 
+    # To be called only by the owner of the object
     @range.setter
     def range(self, value):
         self._set_range(value)
@@ -541,6 +550,13 @@ class Enumerated(object):
             raise OutOfBoundError("Value '%s' is not part of possible choices: %s." % 
                         (str(value), ", ".join(map(str, self._choices))))
     
+    def _get_choices(self):
+        return self._choices
+        
+    @property
+    def choices(self):
+        return self._get_choices()
+    
     def _set_choices(self, new_choices_raw):
         try:
             new_choices = frozenset(new_choices_raw)
@@ -551,10 +567,6 @@ class Enumerated(object):
                 raise OutOfBoundError("Current value '%s' is not part of possible choices: %s." % 
                             (str(self.value), ", ".join(map(str, new_choices))))
         self._choices = new_choices    
-    
-    @property
-    def choices(self):
-        return self._choices
     
     @choices.setter
     def choices(self, value):
@@ -569,8 +581,8 @@ class FloatContinuous(FloatProperty, Continuous):
     """
     A simple class which is both floating and continuous
     """
-    def __init__(self, value=0.0, vrange=[], unit=""):
-        Continuous.__init__(self, vrange)
+    def __init__(self, value=0.0, range=[], unit=""):
+        Continuous.__init__(self, range)
         FloatProperty.__init__(self, value, unit)
 
     def _set(self, value):
@@ -618,16 +630,16 @@ class IntEnumerated(IntProperty, Enumerated):
         IntProperty._set(self, value)
 
 
-class MultiSpeedProperty(Property, Continuous):
+class MultiSpeedProperty(PropertyRemotable, Continuous):
     """
     A class to define speed (m/s) for several axes
     It's especially made for Actuator.speed: the value is a dict name => float
     Also the speed must be >0
     """
-    def __init__(self, value={}, vrange=[], unit="m/s"):
-        Continuous.__init__(self, vrange)
-        assert(vrange[0] >= 0)
-        Property.__init__(self, value, unit)
+    def __init__(self, value={}, range=[], unit="m/s", *args, **kwargs):
+        Continuous.__init__(self, range)
+        assert(range[0] >= 0)
+        PropertyRemotable.__init__(self, value, unit, *args, **kwargs)
         
     # TODO detect whenever a value of the dict is changed 
     def _set(self, value):

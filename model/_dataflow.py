@@ -275,7 +275,6 @@ class DataFlowRemotable(DataFlow):
         DataFlow.notify(self, data)
     
     def __del__(self):
-        print "del dataflow"
         self._unregister()
 
 # DataFlow object automatically created on the client (in an Odemic component)
@@ -344,7 +343,6 @@ class DataFlowProxy(DataFlow, Pyro4.Proxy):
         self.commands.send("UNSUB") # asynchronous (necessary to not deadlock)
 
     def __del__(self):
-        print "del dataflow proxy"
         # end the thread (but it will stop as soon as it notices we are gone anyway)
         if self._thread:
             self.commands.send("STOP")
@@ -398,7 +396,6 @@ class SubscribeProxyThread(threading.Thread):
                     self.data.setsockopt(zmq.UNSUBSCRIBE, '')
                     # no confirmation (async)
                 elif message == "STOP":
-                    print "stopping thread df"
                     self.commands.send("STOPPED")
                     self.commands.close()
                     self.data.close()
@@ -423,7 +420,6 @@ class SubscribeProxyThread(threading.Thread):
                 try:
                     self.w_notifier(array)
                 except WeakRefLostError:
-                    print "stopping thread weakref"
                     self.commands.close()
                     self.data.close()
                     return

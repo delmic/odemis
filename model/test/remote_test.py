@@ -30,11 +30,31 @@ import threading
 import time
 import unittest
 
-gc.set_debug(gc.DEBUG_LEAK | gc.DEBUG_STATS)
+#gc.set_debug(gc.DEBUG_LEAK | gc.DEBUG_STATS)
 
-# TODO test sharing a shared component from the client (probably broken for now)
 
-#@unittest.skip("simple")
+class ContainerTest(unittest.TestCase):
+    
+    def test_empty_container(self):
+        container = model.createContainer("testempty")
+        container.ping()
+        container.terminate()
+    
+    def test_instantiate_component(self):
+        comp = model.createInNewContainer("testcont", MyComponent, {"name":"MyComp"})
+        self.assertEqual(comp.name, "MyComp")
+        val = comp.my_value
+        self.assertEqual(val, "ro", "Reading attribute failed")
+        
+        comp_prime = model.getObject("testcont", "MyComp")
+        self.assertEqual(comp_prime.name, "MyComp")
+        
+        container = model.getContainer("testcont")
+        container.ping()
+        comp.terminate()
+        container.terminate()
+
+@unittest.skip("simple")
 class SerializerTest(unittest.TestCase):
     
     def test_recursive(self):
@@ -53,7 +73,8 @@ class SerializerTest(unittest.TestCase):
         parentc_unpickled = pickle.loads(dump)
         self.assertEqual(parentc_unpickled.value, 42)
         
-#@unittest.skip("doesn't work")
+# TODO test sharing a shared component from the client (probably broken for now)
+@unittest.skip("simple")
 class RemoteTest(unittest.TestCase):
     """
     Test the Component, DataFlow, and Properties when shared remotely.
@@ -72,7 +93,7 @@ class RemoteTest(unittest.TestCase):
         if self.server.is_alive():
             print "Warning: killing server still alive"
             self.server.terminate()
-            
+
     def test_simple(self):
         """
         start a component, ping, and stop it
@@ -83,7 +104,7 @@ class RemoteTest(unittest.TestCase):
         self.assertEqual(ret, "pong", "Ping failed")
         comp.stopServer()
         time.sleep(0.1) # give it some time to terminate
-    
+
     def test_exception(self):
         rdaemon = Pyro4.Proxy("PYRO:Pyro.Daemon@./u:"+self.container_name)
         comp = rdaemon.getObject("mycomp")
@@ -255,7 +276,7 @@ class RemoteTest(unittest.TestCase):
         comp.stopServer()
         time.sleep(0.1) # give it some time to terminate
 
-    def test_properties(self):
+    def test_property_update(self):
         rdaemon = Pyro4.Proxy("PYRO:Pyro.Daemon@./u:"+self.container_name)
         comp = rdaemon.getObject("mycomp")
 
@@ -298,6 +319,38 @@ class RemoteTest(unittest.TestCase):
         self.last_value = value
         self.assertIsInstance(value, (int, float))
     
+    def test_complex_properties(self):
+        rdaemon = Pyro4.Proxy("PYRO:Pyro.Daemon@./u:"+self.container_name)
+        comp = rdaemon.getObject("mycomp")
+
+        # enumerated
+        self.assertEqual(comp.enum.value, "a")
+        self.assertEqual(comp.enum.choices, set(["a", "c", "bfds"]))
+        comp.enum.value = "c"
+        self.assertEqual(comp.enum.value, "c")
+                
+        try:
+            comp.enum.value = "wfds"
+            self.fail("Assigning out of bound should not be allowed.")
+        except model.OutOfBoundError:
+            pass # as it should be
+        
+        # continuous
+        self.assertEqual(comp.cont.value, 2)
+        self.assertEqual(comp.cont.range, (-1, 3.4))
+        
+        comp.cont.value = 3.0
+        self.assertEqual(comp.cont.value, 3)
+        
+        try:
+            comp.cont.value = 4.0
+            self.fail("Assigning out of bound should not be allowed.")
+        except model.OutOfBoundError:
+            pass # as it should be
+        
+        comp.stopServer()
+        time.sleep(0.1) # give it some time to terminate
+    
 # a basic server (component container)
 def ServerLoop(socket_name):
     try:
@@ -329,6 +382,9 @@ class MyComponent(model.Component):
         self.data = FakeDataFlow()
         # TODO automatically register the property when serializing the Component
         self.prop = model.IntProperty(42)
+        self.cont = model.FloatContinuous(2.0, [-1, 3.4])
+        self.enum = model.StringEnumerated("a", set(["a", "c", "bfds"]))
+        
     
     @roattribute
     def my_value(self):

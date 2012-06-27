@@ -93,14 +93,14 @@ class PropertiesTest(unittest.TestCase):
         
     def test_continuous(self):
         prop = model.FloatContinuous(2.0, [-1, 3.4])
-        self.assertTrue(prop.value == 2)
-        self.assertTrue(prop.range == (-1, 3.4))
+        self.assertEqual(prop.value, 2)
+        self.assertEqual(prop.range, (-1, 3.4))
         
         self.called = 0
         prop.subscribe(self.callback_test_notify)
         # now count
         prop.value = 3.0 # +1
-        self.assertTrue(prop.value == 3)
+        self.assertEqual(prop.value, 3)
         
         try:
             prop.value = 4.0
@@ -126,8 +126,8 @@ class PropertiesTest(unittest.TestCase):
 
     def test_enumerated(self):
         prop = model.StringEnumerated("a", set(["a", "c", "bfds"]))
-        assert(prop.value == "a")
-        assert(prop.choices == set(["a", "c", "bfds"]))
+        self.assertEqual(prop.value, "a")
+        self.assertEqual(prop.choices, set(["a", "c", "bfds"]))
         
         self.called = 0
         prop.subscribe(self.callback_test_notify)
