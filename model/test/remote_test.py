@@ -53,8 +53,23 @@ class ContainerTest(unittest.TestCase):
         container.ping()
         comp.terminate()
         container.terminate()
+        
+    def test_multi_components(self):
+        comp = model.createInNewContainer("testmulti", FatherComponent, {"name":"Father", "children_num":3})
+        self.assertEqual(comp.name, "Father")
+        self.assertEqual(len(comp.children), 3, "Component should have 3 children")
+        
+        for child in comp.children:
+            self.assertLess(child.value, 3)
+            comp_direct = model.getObject("testmulti", child.name)
+            self.assertEqual(comp_direct.name, child.name)
+#            child.terminate()
+        
+        comp.terminate()
+        # we are not terminating the children, but this should be caught by the container
+        model.getContainer("testmulti").terminate()
 
-@unittest.skip("simple")
+#@unittest.skip("simple")
 class SerializerTest(unittest.TestCase):
     
     def test_recursive(self):
@@ -74,7 +89,7 @@ class SerializerTest(unittest.TestCase):
         self.assertEqual(parentc_unpickled.value, 42)
         
 # TODO test sharing a shared component from the client (probably broken for now)
-@unittest.skip("simple")
+#@unittest.skip("simple")
 class RemoteTest(unittest.TestCase):
     """
     Test the Component, DataFlow, and Properties when shared remotely.
@@ -417,7 +432,6 @@ class MyComponent(model.Component):
         """
         start = time.time()
         time.sleep(duration)
-#        print "done doing something long"
         return (time.time() - start)
     
     def get_number_futures(self):
@@ -428,14 +442,6 @@ class MyComponent(model.Component):
     
     def _on_end_long(self, future):
         self.number_futures += 1
-#        if future.cancelled():
-#            print "server finished future due to cancellation"
-#        else:
-#            print "server finished future "+str(future)+" with result="+str(future.result())
-         
-    def get_subcomp(self):
-        print "server get_obj"
-#        return self.object
     
     # it'll never be able to answer back if everything goes fine
     @oneway
@@ -456,6 +462,27 @@ class FamilyValueComponent(model.Component):
         return self._value
     
 
+class FatherComponent(model.Component):
+    """
+    Simple component creating children components at init
+    """
+    def __init__(self, name, value=0, children_num=0, *args, **kwargs):
+        """
+        children_num (int): number of children to create
+        """
+        model.Component.__init__(self, name, *args, **kwargs)
+        self._value = value
+        
+        daemon=kwargs.get("daemon", None)
+        for i in range(children_num):
+            child = FamilyValueComponent("child%d" % i, i, parent=self, daemon=daemon)
+            self.children.add(child)
+    
+    @roattribute
+    def value(self):
+        return self._value
+    
+    
 class FakeDataFlow(model.DataFlowRemotable):
     def __init__(self, *args, **kwargs):
         super(FakeDataFlow, self).__init__(*args, **kwargs)
