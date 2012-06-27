@@ -873,9 +873,9 @@ class CaptionBar(wx.Window):
         dc.SetTextForeground(self._style.GetCaptionColour())
 
         if vertical:
-            # Text is vertically aligned in the middle        
+            # Text is vertically aligned in the middle
             # Note: abs() was added, because in MS Window GetPixelSize returned a negative
-            # pixel height. (???) 
+            # pixel height. (???)
             dc.DrawText(self._caption, 10,
                 (wndRect.GetHeight() - abs(caption_font.GetPixelSize().GetHeight())) / 2)
         else:

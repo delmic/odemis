@@ -27,11 +27,11 @@ import wx
 import wx.combo
 #from wx.lib.imageutils import stepColour
 
-from wx.lib.buttons import GenBitmapTextToggleButton
-
 from odemis.gui.img.data import catalog
-from odemis.gui.comp.buttons import ImageButton, ImageToggleButton, ImageTextToggleButton
-from odemis.gui.comp.text import SuggestTextCtrl
+from odemis.gui.comp.buttons import ImageButton, ImageToggleButton, \
+    ImageTextToggleButton
+from odemis.gui.comp.text import SuggestTextCtrl, IntegerTextCtrl, \
+    UnitIntegerCtrl
 
 
 TEST_STREAM_LST = ["Aap", u"nöot", "noot", "mies", "kees", "vuur", "quantummechnica",
@@ -61,84 +61,6 @@ BMP_PAUSE_H = catalog['ico_pause_h'].GetBitmap()
 BMP_PLAY = catalog['ico_play'].GetBitmap()
 BMP_PLAY_H = catalog['ico_play_h'].GetBitmap()
 
-
-class IntegerValidator(wx.PyValidator):
-    """ Validator class used for integer input checking and value validation.
-    """
-
-    def __init__(self, min_val, max_val):
-        """ Constructor """
-        wx.PyValidator.__init__(self)
-        self.Bind(wx.EVT_CHAR, self.OnChar)
-
-        self.min_val = min_val
-        self.max_val = max_val
-
-        # All legal characters
-        self.legal = "0123456789"
-
-    def Clone(self):    #pylint: disable=W0221
-        """ Required method """
-        return IntegerValidator(self.min_val, self.max_val)
-
-    def is_valid(self, val):
-        try:
-            val = int(val)
-            return val >= self.min_val and val <= self.max_val
-        except ValueError:
-            return False
-
-    def Validate(self):#pylint: disable=W0221,W0613
-
-        fld = self.GetWindow()
-        val = fld.GetValue()
-
-        try:
-            val = int(val)
-            if val < self.min_val or val > self.max_val:
-                return False
-            #fld.SetValue(str(val))
-        except ValueError:
-            fld.Focus()
-            return False
-
-        return True
-
-    def OnChar(self, event):
-        """ This method prevents the entry of illegal characters """
-        key = event.GetKeyCode()
-        # Allow control keys to propagate
-        if key < wx.WXK_SPACE or key == wx.WXK_DELETE or key > 255:
-            event.Skip()
-            return
-
-        # Allow legal characters to reach the text control
-        if chr(key) in self.legal:
-            fld = self.GetWindow()
-            val = fld.GetValue()
-            pos = self.GetWindow().GetInsertionPoint()
-            val = val[:pos] + chr(key) + val[pos:]
-
-            if len(val) < 2 or (len(val) > 1 and val[0] != "0"):
-                try:
-                    val = int(val)
-                    if val < self.min_val or val > self.max_val:
-                        return
-                    event.Skip()
-                except ValueError:
-                    return
-        # 'Eat' the event by not Skipping it, thus preventing it.
-        # from reaching the text control
-        return
-
-class IntegerTextCtrl(wx.TextCtrl):
-
-    def __init__(self, *args, **kwargs):
-        wx.TextCtrl.__init__(self, *args, **kwargs)
-
-    def SetValue(self, value):
-        if self.GetValidator().is_valid(value):
-            wx.TextCtrl.SetValue(self, value)
 
 class Expander(wx.PyControl):
     """ An Expander is a header/button control at the top of a StreamPanel.
@@ -207,7 +129,10 @@ class Expander(wx.PyControl):
 
 
     def on_remove(self, evt):
-        self._parent.Destroy()
+        stream_panel = self._parent
+        fpb_item = stream_panel.Parent
+        stream_panel.Destroy()
+        fpb_item.Layout()
 
     def DoGetBestSize(self, *args, **kwargs):
         """ Return the best size, which is the width of the parent and the
@@ -461,8 +386,8 @@ class StreamPanel(wx.PyPanel):
                 str(self._sld_brightness.GetValue()),
                 style=wx.NO_BORDER | wx.TE_PROCESS_ENTER,
                 size=(30, -1),
-                validator=IntegerValidator(self._sld_brightness.GetMin(),
-                                           self._sld_brightness.GetMax()))
+                min_val=self._sld_brightness.GetMin(),
+                max_val=self._sld_brightness.GetMax())
         self._txt_brightness.SetForegroundColour("#2FA7D4")
         self._txt_brightness.SetBackgroundColour(self.GetBackgroundColour())
 
@@ -487,8 +412,8 @@ class StreamPanel(wx.PyPanel):
                 str(self._sld_contrast.GetValue()),
                 style=wx.NO_BORDER | wx.TE_PROCESS_ENTER,
                 size=(30, -1),
-                validator=IntegerValidator(self._sld_contrast.GetMin(),
-                                           self._sld_contrast.GetMax()))
+                min_val=self._sld_contrast.GetMin(),
+                max_val=self._sld_contrast.GetMax())
         self._txt_contrast.SetForegroundColour("#2FA7D4")
         self._txt_contrast.SetBackgroundColour(self.GetBackgroundColour())
 
@@ -703,10 +628,9 @@ class CustomStreamPanel(StreamPanel): #pylint: disable=R0901
         self._gbs.Add(lbl_excitation, (3, 0),
                       flag=wx.LEFT | wx.ALIGN_CENTRE_VERTICAL, border=34)
 
-        self._txt_excitation = IntegerTextCtrl(self._panel, -1, "0",
+        self._txt_excitation = UnitIntegerCtrl(self._panel, -1, "200",
                 style=wx.NO_BORDER | wx.TE_PROCESS_ENTER,
-                size=(40, -1),
-                validator=IntegerValidator(0, 1000))
+                size=(50, -1), min_val=200, max_val=1000, unit='nm')
         self._txt_excitation.SetForegroundColour("#2FA7D4")
         self._txt_excitation.SetBackgroundColour(self.GetBackgroundColour())
 
@@ -718,10 +642,9 @@ class CustomStreamPanel(StreamPanel): #pylint: disable=R0901
         self._gbs.Add(lbl_emission, (4, 0),
                       flag=wx.LEFT | wx.ALIGN_CENTRE_VERTICAL, border=34)
 
-        self._txt_emission = IntegerTextCtrl(self._panel, -1, "0",
+        self._txt_emission = UnitIntegerCtrl(self._panel, -1, "200",
                 style=wx.NO_BORDER | wx.TE_PROCESS_ENTER,
-                size=(40, -1),
-                validator=IntegerValidator(0, 1000))
+                size=(50, -1), min_val=200, max_val=1000, unit='nm')
         self._txt_emission.SetForegroundColour("#2FA7D4")
         self._txt_emission.SetBackgroundColour(self.GetBackgroundColour())
 
