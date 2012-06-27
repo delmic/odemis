@@ -36,7 +36,7 @@ import unittest
 class ContainerTest(unittest.TestCase):
     
     def test_empty_container(self):
-        container = model.createContainer("testempty")
+        container = model.createNewContainer("testempty")
         container.ping()
         container.terminate()
     

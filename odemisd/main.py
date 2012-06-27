@@ -24,6 +24,25 @@ import logging
 import model
 import sys
 
+_hwcomponents = set()
+def updateMetadata(metadata, parent):
+    """
+    Update/fill the metadata with all the metadata from all the components
+      affecting the given component
+    metadata (dict str -> value): metadata
+    parent (HwComponent): the component which created the data to which the metadata refers to. 
+      Note that the metadata from this very component are not added.
+    """
+    # find every component which affects the parent
+    for comp in _hwcomponents:
+        try:
+            if parent in comp.affects:
+                metadata.update(comp.getMetadata())
+        except AttributeError:
+            # no affects == empty set
+            pass
+
+
 # This is the cli interface of odemisd, which allows to start the back-end
 # It parses the command line and accordingly reads the microscope instantiation
 # file, generates a model out of it, and then provides it to the front-end 
@@ -92,6 +111,7 @@ def main(args):
         raise NotImplementedError() # TODO
         return 0
     
+    # let's become the backend for real
     try:
         logging.debug("model instantiation file is: %s", options.model[0].name)
         inst_model = modelgen.get_instantiation_model(options.model[0])
@@ -100,10 +120,12 @@ def main(args):
         logging.exception("Error while parsing file %s", options.model[0].name)
         return 127
     
+    container = model.Container(model.BACKEND_NAME)
+    
     try:
-        comps, mic = modelgen.instantiate_model(inst_model, options.validate)
+        comps, mic = modelgen.instantiate_model(inst_model, options.validate, container)
         # update the model
-        model.setComponents(comps) # TODO seems not shared between threads
+        _hwcomponents = comps
         model._microscope = mic
         logging.info("model has been instantiated successfully")
         logging.debug("model microscope is %s", mic.name) 
@@ -112,8 +134,21 @@ def main(args):
         logging.exception("When instantiating file %s", options.model[0].name)
         return 127
     
-    dagui.main(mic)
-    logging.warning("nothing else to do")
+    try:
+        logging.info("Microscope is now available in container '%s'", model.BACKEND_NAME)
+        container.run()
+    except:
+        logging.exception("When running backend container")
+        return 127
+    
+    try:
+        container.close()
+    except:
+        logging.exception("Failed to end the backend container cleanly")
+        return 127
+    
+#    dagui.main(mic)
+#    logging.warning("nothing else to do")
     return 0
 
 if __name__ == '__main__':
