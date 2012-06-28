@@ -42,7 +42,22 @@ def updateMetadata(metadata, parent):
             # no affects == empty set
             pass
 
-
+class BackendContainer(model.Container):
+    """
+    A normal container which also terminates all the other containers when it
+    terminates.
+    """
+    def __init__(self, name=model.BACKEND_NAME):
+        model.Container.__init__(self, name)
+        self.sub_containers = set() # to be updated later on
+    
+    def terminate(self, *args, **kwargs):  
+        for container in self.sub_containers:
+            container.terminate()
+    
+        model.Container.terminate(self, *args, **kwargs)
+        
+        
 # This is the cli interface of odemisd, which allows to start the back-end
 # It parses the command line and accordingly reads the microscope instantiation
 # file, generates a model out of it, and then provides it to the front-end 
@@ -120,13 +135,17 @@ def main(args):
         logging.exception("Error while parsing file %s", options.model[0].name)
         return 127
     
-    container = model.Container(model.BACKEND_NAME)
+    container = BackendContainer()
     
     try:
-        comps, mic = modelgen.instantiate_model(inst_model, options.validate, container)
+        mic, comps, sub_containers = modelgen.instantiate_model(
+                                        inst_model, container, 
+                                        create_sub_containers=False, # TODO make it possible
+                                        dry_run=options.validate)
         # update the model
         _hwcomponents = comps
         model._microscope = mic
+        container.sub_containers |= sub_containers
         logging.info("model has been instantiated successfully")
         logging.debug("model microscope is %s", mic.name) 
         logging.debug("model components are %s", ", ".join([c.name for c in comps])) 

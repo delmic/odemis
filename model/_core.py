@@ -175,7 +175,7 @@ def getObject(container_name, object_name):
 
 def createNewContainer(name):
     """
-    creates a new container in an independent process
+    creates a new container in an independent and isolated process
     returns the (proxy to the) new container
     """
     # create a container separately

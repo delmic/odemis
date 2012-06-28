@@ -106,7 +106,9 @@ def get_class(name):
     
     return the_class 
 
-def make_args(name, inst_comps, final_comps, dry_run):
+# TODO put all these in an object, to avoid too many parameter 
+def make_args(name, inst_comps, final_comps, container=None,
+              create_sub_containers=False, dry_run=False):
     """
     Create init arguments for a component instance and its children
     name (str): name that will be given to the component instance
@@ -116,10 +118,7 @@ def make_args(name, inst_comps, final_comps, dry_run):
     """
     attr = inst_comps[name]
     # it's not an error if there is not init attribute, just not specific arguments
-    if "init" in attr:
-        init = dict(attr["init"]) # copy
-    else:
-        init = {}
+    init = dict(attr.get("init", {})) # copy
     
     # it's an error to specify "name" and "role" in the init
     if "name" in init:
@@ -147,20 +146,37 @@ def make_args(name, inst_comps, final_comps, dry_run):
             if "class" in child_attr:
                 # the child has a class => we explicitly create/reuse it
                 init["children"][internal_name] = get_or_instantiate_comp(
-                    child_name, inst_comps, final_comps, dry_run)
+                    child_name, inst_comps, final_comps, container, create_sub_containers, dry_run)
             else:
                 # the child has no class => it'll be created by the component,
                 # we just pass the init arguments
                 init["children"][internal_name] = make_args(
-                    child_name, inst_comps, final_comps, dry_run)
+                    child_name, inst_comps, final_comps, container, create_sub_containers, dry_run)
     
     return init
 
-def instantiate_comp(name, inst_comps, final_comps, dry_run=False):
+def is_leaf(name, inst_comps):
+    """
+    says whether a component is a leaf or not. A "leaf" is a component which
+    has no children separately instantiated.
+    name (str): name of the component instance
+    inst_comps (dict (str -> dict)): all the components of the instantiation model
+    """
+    attr = inst_comps[name]
+    children_names = attr.get("children", [])
+    for child_name in children_names.values():
+        child_attr = inst_comps[child_name]
+        if "class" in child_attr:
+            # the child has a class => it will be instantiated separately
+            return False
+    
+    return True
+    
+def instantiate_comp(name, inst_comps, final_comps, container=None,
+                            create_sub_containers=False, dry_run=False):
     """
     Instantiate a component
     name (str): name that will be given to the component instance
-    attr (dict (str -> value)): attributes of the component
     inst_comps (dict (str -> dict)): all the components in the instantiation model
     final_comps (set HwComponent): all the components already instantiated
     returns (HwComponent): an instance of the component
@@ -180,18 +196,21 @@ def instantiate_comp(name, inst_comps, final_comps, dry_run=False):
     # anything else is passed as is
     args = make_args(name, inst_comps, final_comps, dry_run)
 
-    if dry_run:
-        # mock classes for everything... but internal classes (because they are safe)
-        if class_name in internal_classes:
-            comp = class_comp(**args)
+    if dry_run and not class_name in internal_classes:
+        # mock class for everything but internal classes (because they are safe)
+        class_comp = model.MockComponent
+        
+    try:
+        if create_sub_containers and is_leaf(name, inst_comps):
+            # new container has the same name as the component
+            comp = model.createInNewContainer(name, class_comp, args)
+        elif container:
+            comp = container.instantiate(class_comp, args)
         else:
-            comp = model.MockComponent(**args)
-    else:
-        try:
             comp = class_comp(**args)
-        except Exception, exc:
-            logging.error("Error while instantiating component %s.", name)
-            raise exc
+    except Exception, exc:
+        logging.error("Error while instantiating component %s.", name)
+        raise exc
     
     # Add all the children to our list of components. Useful only if child 
     # created by delegation, but can't hurt to add them all.
@@ -213,7 +232,8 @@ def get_component_by_name(comps, name):
             return comp
     raise LookupError("No component named '%s' found" % name)
 
-def get_or_instantiate_comp(name, inst_comps, final_comps, dry_run=False):
+def get_or_instantiate_comp(name, inst_comps, final_comps, container=None,
+                            create_sub_containers=False, dry_run=False):
     """
     returns a component for the given name, either from the components already
       instantiated, or a new instantiated one if it does not exist. final_comps 
@@ -225,7 +245,7 @@ def get_or_instantiate_comp(name, inst_comps, final_comps, dry_run=False):
         # we need to instantiate it
         attr = inst_comps[name]
         if "class" in attr:
-            comp = instantiate_comp(name, inst_comps, final_comps, dry_run)
+            comp = instantiate_comp(name, inst_comps, final_comps, container, create_sub_containers, dry_run)
             final_comps.add(comp)
             return comp
         else:
@@ -236,7 +256,7 @@ def get_or_instantiate_comp(name, inst_comps, final_comps, dry_run=False):
                 raise SemanticError("Error in microscope instantiation file: "
                                     "component %s has no class specified and "
                                     "is not a child." % name)
-            parent_comp = instantiate_comp(parent, inst_comps, final_comps, dry_run)
+            parent_comp = instantiate_comp(parent, inst_comps, final_comps, container, create_sub_containers, dry_run)
             final_comps.add(parent_comp)
             # now the child ought to be created
             return get_component_by_name(final_comps, name)
@@ -259,23 +279,30 @@ def add_children(comps):
     
     return ret
 
-def instantiate_model(inst_model, dry_run=False):
+def instantiate_model(inst_model, container=None, create_sub_containers=False,
+                      dry_run=False):
     """
     Generates the real microscope model from the microscope instantiation model
     inst_model (dict str -> dict): python representation of the yaml instantiation file
+    container (Container): container in which to instantiate the components
+    create_sub_containers (bool): whether the leave components (components which
+       have no children created separately) are running in isolated containers
     dry_run (bool): if True, it will check the semantic and try to instantiate the 
       model without actually any driver contacting the hardware.
-    returns 2-tuple (set (HwComponents), Microscope): the set of all the 
-      HwComponents in the model, and specifically the Microscope component
+    returns 3-tuple (Microscope, set (HwComponents), set(Containers)): 
+        * the Microscope component
+        * the set of all the HwComponents in the model (or proxy to them)
+        * the sub_containers created (if create_sub_containers is True)
       
     Raises:
-        SemanticError in case an error in the model is detected. Note that
+        SemanticError: an error in the model is detected. Note that
         (obviously) not every error can be detected.
         LookupError 
         ParseError
         Exception (dependent on the driver): in case initialisation of a driver fails
     """
     comps = set()
+    sub_cont = set()
     
     # mark the children by adding a "parent" attribute
     for name, attr in inst_model.items():
@@ -297,7 +324,7 @@ def instantiate_model(inst_model, dry_run=False):
     
     # try to get every component, at the end, we have all of them 
     for name, attr in inst_model.items():
-        get_or_instantiate_comp(name, inst_model, comps, dry_run)
+        get_or_instantiate_comp(name, inst_model, comps, container, create_sub_containers, dry_run)
         
     # look for the microscope component (check there is only one)
     microscopes = [m for m in comps if isinstance(m, model.Microscope)]
@@ -336,6 +363,7 @@ def instantiate_model(inst_model, dry_run=False):
             logging.warning("Component '%s' is never used.", c.name)
     
     # for each component, set the affect
+    # TODO unlikely to work well with sub_containers (setting a proxy on a proxy for readonly data ?!)
     for name, attr in inst_model.items():
         if "affects" in attr:
             comp = get_component_by_name(comps, name)
@@ -358,4 +386,6 @@ def instantiate_model(inst_model, dry_run=False):
                     raise SemanticError("Error in microscope instantiation "
                             "file: Component '%s' has no property '%s'." % (name, prop_name))
                
-    return comps, mic
+    return mic, comps, sub_cont
+
+# vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:
