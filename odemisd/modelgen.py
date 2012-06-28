@@ -62,6 +62,7 @@ def get_instantiation_model(inst_file):
     
     return data
 
+
 # the classes that we provide in addition to the device drivers 
 # Nice name => actual class name
 internal_classes = {"Microscope": "model.Microscope", 
@@ -106,179 +107,286 @@ def get_class(name):
     
     return the_class 
 
-# TODO put all these in an object, to avoid too many parameter 
-def make_args(name, inst_comps, final_comps, container=None,
-              create_sub_containers=False, dry_run=False):
+class Instantiator(object):
     """
-    Create init arguments for a component instance and its children
-    name (str): name that will be given to the component instance
-    inst_comps (dict (str -> dict)): all the components of the instantiation model
-    final_comps (set HwComponent): all the components already instantiated
-    returns (dict (str -> value)): init argument for the component instance
+    manages the instantiation of a whole model
     """
-    attr = inst_comps[name]
-    # it's not an error if there is not init attribute, just not specific arguments
-    init = dict(attr.get("init", {})) # copy
-    
-    # it's an error to specify "name" and "role" in the init
-    if "name" in init:
-        raise SemanticError("Error in microscope instantiation "
-            "file: component '%s' should not have a 'name' entry in the init." % name)
-    init["name"] = name
-    if "role" in init:
-        raise SemanticError("Error in microscope instantiation "
-            "file: component '%s' should not have a 'role' entry in the init." % name)
-    if not "role" in attr:
-        raise SemanticError("Error in microscope instantiation "
-            "file: component '%s' has no role specified." % name)
-    init["role"] = attr["role"]
-    
-    # create recursively the children
-    if "children" in init:
-        raise SemanticError("Error in microscope instantiation "
-            "file: component '%s' should not have a 'children' entry in the init." % name)
-    if "children" in attr:
-        init["children"] = {}
-        children_names = attr["children"]
-        for internal_name, child_name in children_names.items():
-            child_attr = inst_comps[child_name]
-            # Two types of children creation:
-            if "class" in child_attr:
-                # the child has a class => we explicitly create/reuse it
-                init["children"][internal_name] = get_or_instantiate_comp(
-                    child_name, inst_comps, final_comps, container, create_sub_containers, dry_run)
-            else:
-                # the child has no class => it'll be created by the component,
-                # we just pass the init arguments
-                init["children"][internal_name] = make_args(
-                    child_name, inst_comps, final_comps, container, create_sub_containers, dry_run)
-    
-    return init
-
-def is_leaf(name, inst_comps):
-    """
-    says whether a component is a leaf or not. A "leaf" is a component which
-    has no children separately instantiated.
-    name (str): name of the component instance
-    inst_comps (dict (str -> dict)): all the components of the instantiation model
-    """
-    attr = inst_comps[name]
-    children_names = attr.get("children", [])
-    for child_name in children_names.values():
-        child_attr = inst_comps[child_name]
-        if "class" in child_attr:
-            # the child has a class => it will be instantiated separately
-            return False
-    
-    return True
-    
-def instantiate_comp(name, inst_comps, final_comps, container=None,
-                            create_sub_containers=False, dry_run=False):
-    """
-    Instantiate a component
-    name (str): name that will be given to the component instance
-    inst_comps (dict (str -> dict)): all the components in the instantiation model
-    final_comps (set HwComponent): all the components already instantiated
-    returns (HwComponent): an instance of the component
-    Raises:
-        SemanticError in case an error in the model is detected. 
-    """
-    attr = inst_comps[name]
-    class_name = attr["class"]
-    class_comp = get_class(class_name)
-    
-    # create the arguments:
-    # name (str)
-    # role (str)
-    # children:
-    #  * explicit creation: (dict str -> HwComponent) internal name -> comp
-    #  * delegation: (dict str -> dict) internal name -> init arguments
-    # anything else is passed as is
-    args = make_args(name, inst_comps, final_comps, dry_run)
-
-    if dry_run and not class_name in internal_classes:
-        # mock class for everything but internal classes (because they are safe)
-        class_comp = model.MockComponent
+    def __init__(self, model_ast, container=None, create_sub_containers=False,
+                      dry_run=False):
+        """
+        model_ast (dict str -> dict): python representation of the yaml instantiation file
+        container (Container): container in which to instantiate the components
+        create_sub_containers (bool): whether the leave components (components which
+           have no children created separately) are running in isolated containers
+        dry_run (bool): if True, it will check the semantic and try to instantiate the 
+          model without actually any driver contacting the hardware.
+        """
+        self.ast = model_ast # AST of the model to instantiate
+        self.root_container = container # the container for non-leaf components
         
-    try:
-        if create_sub_containers and is_leaf(name, inst_comps):
-            # new container has the same name as the component
-            comp = model.createInNewContainer(name, class_comp, args)
-        elif container:
-            comp = container.instantiate(class_comp, args)
+        self.microscope = None # the root of the model (Microscope)
+        self.components = set() # all the components created
+        self.sub_containers = set() # all the sub-containers created for the components
+        self.create_sub_containers = create_sub_containers # flag for creating sub-containers
+        self.dry_run = dry_run # flag for instantiating mock version of the components
+        
+
+    def make_args(self, name):
+        """
+        Create init arguments for a component instance and its children
+        name (str): name that will be given to the component instance
+        returns (dict (str -> value)): init argument for the component instance
+        """
+        attr = self.ast[name]
+        # it's not an error if there is not init attribute, just not specific arguments
+        init = dict(attr.get("init", {})) # copy
+        
+        # it's an error to specify "name" and "role" in the init
+        if "name" in init:
+            raise SemanticError("Error in microscope instantiation "
+                "file: component '%s' should not have a 'name' entry in the init." % name)
+        init["name"] = name
+        if "role" in init:
+            raise SemanticError("Error in microscope instantiation "
+                "file: component '%s' should not have a 'role' entry in the init." % name)
+        if not "role" in attr:
+            raise SemanticError("Error in microscope instantiation "
+                "file: component '%s' has no role specified." % name)
+        init["role"] = attr["role"]
+        
+        # create recursively the children
+        if "children" in init:
+            raise SemanticError("Error in microscope instantiation "
+                "file: component '%s' should not have a 'children' entry in the init." % name)
+        if "children" in attr:
+            init["children"] = {}
+            children_names = attr["children"]
+            for internal_name, child_name in children_names.items():
+                child_attr = self.ast[child_name]
+                # Two types of children creation:
+                if "class" in child_attr:
+                    # the child has a class => we explicitly create/reuse it
+                    init["children"][internal_name] = self.get_or_instantiate_comp(child_name)
+                else:
+                    # the child has no class => it'll be created by the component,
+                    # we just pass the init arguments
+                    init["children"][internal_name] = self.make_args(child_name)
+        
+        return init
+    
+    def is_leaf(self, name):
+        """
+        says whether a component is a leaf or not. A "leaf" is a component which
+        has no children separately instantiated.
+        name (str): name of the component instance
+        """
+        attr = self.ast[name]
+        children_names = attr.get("children", [])
+        for child_name in children_names.values():
+            child_attr = self.ast[child_name]
+            if "class" in child_attr:
+                # the child has a class => it will be instantiated separately
+                return False
+        
+        return True
+        
+    def instantiate_comp(self, name):
+        """
+        Instantiate a component
+        name (str): name that will be given to the component instance
+        returns (HwComponent): an instance of the component
+        Raises:
+            SemanticError in case an error in the model is detected. 
+        """
+        attr = self.ast[name]
+        class_name = attr["class"]
+        class_comp = get_class(class_name)
+        
+        # create the arguments:
+        # name (str)
+        # role (str)
+        # children:
+        #  * explicit creation: (dict str -> HwComponent) internal name -> comp
+        #  * delegation: (dict str -> dict) internal name -> init arguments
+        # anything else is passed as is
+        args = self.make_args(name)
+    
+        if self.dry_run and not class_name in internal_classes:
+            # mock class for everything but internal classes (because they are safe)
+            class_comp = model.MockComponent
+            
+        try:
+            if self.create_sub_containers and self.is_leaf(name):
+                # new container has the same name as the component
+                comp = model.createInNewContainer(name, class_comp, args)
+                self.sub_containers.add(model.getContainer(name))
+            elif self.root_container:
+                comp = self.root_container.instantiate(class_comp, args)
+            else:
+                comp = class_comp(**args)
+        except Exception, exc:
+            logging.error("Error while instantiating component %s.", name)
+            raise exc
+        
+        # Add all the children to our list of components. Useful only if child 
+        # created by delegation, but can't hurt to add them all.
+        self.components |= getattr(comp, "children", set())
+        
+        return comp
+        
+    def get_component_by_name(self, name):
+        """
+        Find a component by its name in the set of instantiated components
+        name (str): name of the component
+        return HwComponent
+        Raises:
+             LookupError: if no component is found
+        """
+        for comp in self.components:
+            if comp.name == name:
+                return comp
+        raise LookupError("No component named '%s' found" % name)
+    
+    def get_or_instantiate_comp(self, name):
+        """
+        returns a component for the given name, either from the components already
+          instantiated, or a new instantiated one if it does not exist. final_comps 
+          is also updated. 
+        """
+        try:
+            return self.get_component_by_name(name)
+        except LookupError:
+            # we need to instantiate it
+            attr = self.ast[name]
+            if "class" in attr:
+                comp = self.instantiate_comp(name)
+                self.components.add(comp)
+                return comp
+            else:
+                # created by delegation => we instantiate the parent 
+                try:
+                    parent = attr["parent"]
+                except KeyError:
+                    raise SemanticError("Error in microscope instantiation file: "
+                                        "component %s has no class specified and "
+                                        "is not a child." % name)
+                parent_comp = self.instantiate_comp(parent)
+                self.components.add(parent_comp)
+                # now the child ought to be created
+                return self.get_component_by_name(name)
+    
+    def add_children(self, comps):
+        """
+        Adds to the first set of components all the components which are referenced 
+         (children, emitters, detectors, actuators...)
+        comps (set of HwComponents): set of components to extend
+        returns:
+            a set equal or bigger than comps
+        """
+        ret = set()
+        for comp in comps:
+            ret.add(comp)
+            for child in getattr(comp, "children", set()):
+                ret |= self.add_children(set([child]))
+            if isinstance(comp, Microscope):
+                ret |= self.add_children(comp.detectors | comp.emitters | comp.actuators)
+        
+        return ret
+    
+    def instantiate_model(self):
+        """
+        Generates the real microscope model from the microscope instantiation model
+
+        Raises:
+            SemanticError: an error in the model is detected. Note that
+            (obviously) not every error can be detected.
+            LookupError 
+            ParseError
+            Exception (dependent on the driver): in case initialisation of a driver fails
+        """
+        # mark the children by adding a "parent" attribute
+        for name, attr in self.ast.items():
+            if "children" in attr:
+                for child_name in attr["children"].values():
+                    # detect direct loop
+                    if child_name == name:
+                        raise SemanticError("Error in "
+                                "microscope instantiation file: component %s "
+                                "is child of itself." % name)
+                    # detect child with multiple parents
+                    if ("parent" in self.ast[child_name] and
+                        self.ast[child_name]["parent"] != name):
+                        raise SemanticError("Error in "
+                                "microscope instantiation file: component %s "
+                                "is child of both %s and %s." 
+                                % (child_name, name, self.ast[child_name]["parent"]))
+                    self.ast[child_name]["parent"] = name
+        
+        # try to get every component, at the end, we have all of them 
+        for name in self.ast:
+            self.get_or_instantiate_comp(name)
+            
+        # look for the microscope component (check there is only one)
+        microscopes = [m for m in self.components if isinstance(m, model.Microscope)]
+        if len(microscopes) == 1:
+            self.microscope = microscopes[0]
+        elif len(microscopes) > 1:
+            raise SemanticError("Error in microscope instantiation file: "
+                    "there are several Microscopes (%s)." % 
+                    ", ".join([m.name for m in microscopes]))
         else:
-            comp = class_comp(**args)
-    except Exception, exc:
-        logging.error("Error while instantiating component %s.", name)
-        raise exc
+            raise SemanticError("Error in microscope instantiation "
+                    "file: no Microscope component found.")
+        
+        # TODO move to "update_microscope()"
+        # Connect all the sub-components of microscope: detectors, emitters, actuators
+        detector_names = self.ast[self.microscope.name].get("detectors", []) # none is weird but ok
+        detectors = [self.get_component_by_name(name) for name in detector_names]
+        self.microscope.detectors = set(detectors)
+        if not detectors:
+            logging.warning("Microscope contains no detectors.")
+        
+        emitter_names = self.ast[self.microscope.name].get("emitters", []) # none is weird but ok
+        emitters = [self.get_component_by_name(name) for name in emitter_names]
+        self.microscope.emitters = set(emitters)
+        if not emitters:
+            logging.warning("Microscope contains no emitters.")
+        
+        actuator_names = self.ast[self.microscope.name].get("actuators", [])
+        actuators = [self.get_component_by_name(name) for name in actuator_names]
+        self.microscope.actuators = set(actuators)
+        
+        # The only components which are not either Microscope or referenced by it 
+        # should be parents
+        left_over = self.components - self.add_children(set([self.microscope]))
+        for c in left_over:
+            if not hasattr(c, "children"):
+                logging.warning("Component '%s' is never used.", c.name)
+        
+        # for each component, set the affect
+        # TODO unlikely to work well with sub_containers (setting a proxy on a proxy for readonly data ?!)
+        for name, attr in self.ast.items():
+            if "affects" in attr:
+                comp = self.get_component_by_name(name)
+                for affected_name in attr["affects"]:
+                    affected = self.get_component_by_name(affected_name)
+                    try:
+                        comp.affects.add(affected)
+                    except AttributeError:
+                        raise SemanticError("Error in microscope instantiation "
+                                "file: Component '%s' does not support 'affects'." % name)
     
-    # Add all the children to our list of components. Useful only if child 
-    # created by delegation, but can't hurt to add them all.
-    final_comps |= getattr(comp, "children", set())
+        # for each component set the properties
+        for name, attr in self.ast.items():
+            if "properties" in attr:
+                comp = self.get_component_by_name(name)
+                for prop_name, value in attr["properties"].items():
+                    try:
+                        getattr(comp, prop_name).value = value
+                    except AttributeError:
+                        raise SemanticError("Error in microscope instantiation "
+                                "file: Component '%s' has no property '%s'." % (name, prop_name))
     
-    return comp
-    
-def get_component_by_name(comps, name):
-    """
-    Find a component by its name
-    comps (set of HwComponent): all the components
-    name (str): name of the component
-    return HwComponent
-    Raises:
-         LookupError: if no component is found
-    """
-    for comp in comps:
-        if comp.name == name:
-            return comp
-    raise LookupError("No component named '%s' found" % name)
-
-def get_or_instantiate_comp(name, inst_comps, final_comps, container=None,
-                            create_sub_containers=False, dry_run=False):
-    """
-    returns a component for the given name, either from the components already
-      instantiated, or a new instantiated one if it does not exist. final_comps 
-      is also updated. 
-    """
-    try:
-        return get_component_by_name(final_comps, name)
-    except LookupError:
-        # we need to instantiate it
-        attr = inst_comps[name]
-        if "class" in attr:
-            comp = instantiate_comp(name, inst_comps, final_comps, container, create_sub_containers, dry_run)
-            final_comps.add(comp)
-            return comp
-        else:
-            # created by delegation => we instantiate the parent 
-            try:
-                parent = attr["parent"]
-            except KeyError:
-                raise SemanticError("Error in microscope instantiation file: "
-                                    "component %s has no class specified and "
-                                    "is not a child." % name)
-            parent_comp = instantiate_comp(parent, inst_comps, final_comps, container, create_sub_containers, dry_run)
-            final_comps.add(parent_comp)
-            # now the child ought to be created
-            return get_component_by_name(final_comps, name)
-
-def add_children(comps):
-    """
-    Adds to the first set of components all the components which are referenced 
-     (children, emitters, detectors, actuators...)
-    comps (set of HwComponents): set of components to extend
-    returns:
-        a set equal or bigger than comps
-    """
-    ret = set()
-    for comp in comps:
-        ret.add(comp)
-        for child in getattr(comp, "children", set()):
-            ret |= add_children(set([child]))
-        if isinstance(comp, Microscope):
-            ret |= add_children(comp.detectors | comp.emitters | comp.actuators)
-    
-    return ret
-
 def instantiate_model(inst_model, container=None, create_sub_containers=False,
                       dry_run=False):
     """
@@ -301,91 +409,8 @@ def instantiate_model(inst_model, container=None, create_sub_containers=False,
         ParseError
         Exception (dependent on the driver): in case initialisation of a driver fails
     """
-    comps = set()
-    sub_cont = set()
-    
-    # mark the children by adding a "parent" attribute
-    for name, attr in inst_model.items():
-        if "children" in attr:
-            for child_name in attr["children"].values():
-                # detect direct loop
-                if child_name == name:
-                    raise SemanticError("Error in "
-                            "microscope instantiation file: component %s "
-                            "is child of itself." % name)
-                # detect child with multiple parents
-                if ("parent" in inst_model[child_name] and
-                    inst_model[child_name]["parent"] != name):
-                    raise SemanticError("Error in "
-                            "microscope instantiation file: component %s "
-                            "is child of both %s and %s." 
-                            % (child_name, name, inst_model[child_name]["parent"]))
-                inst_model[child_name]["parent"] = name
-    
-    # try to get every component, at the end, we have all of them 
-    for name, attr in inst_model.items():
-        get_or_instantiate_comp(name, inst_model, comps, container, create_sub_containers, dry_run)
-        
-    # look for the microscope component (check there is only one)
-    microscopes = [m for m in comps if isinstance(m, model.Microscope)]
-    if len(microscopes) == 1:
-        mic = microscopes[0]
-    elif len(microscopes) > 1:
-        raise SemanticError("Error in microscope instantiation file: "
-                "there are several Microscopes (%s)." % 
-                ", ".join([m.name for m in microscopes]))
-    else:
-        raise SemanticError("Error in microscope instantiation "
-                "file: no Microscope component found.")
-    
-    # Connect all the sub-components of microscope: detectors, emitters, actuators
-    detector_names = inst_model[mic.name].get("detectors", []) # none is weird but ok
-    detectors = [get_component_by_name(comps, name) for name in detector_names]
-    mic.detectors = set(detectors)
-    if not detectors:
-        logging.warning("Microscope contains no detectors.")
-    
-    emitter_names = inst_model[mic.name].get("emitters", []) # none is weird but ok
-    emitters = [get_component_by_name(comps, name) for name in emitter_names]
-    mic.emitters = set(emitters)
-    if not emitters:
-        logging.warning("Microscope contains no emitters.")
-    
-    actuator_names = inst_model[mic.name].get("actuators", [])
-    actuators = [get_component_by_name(comps, name) for name in actuator_names]
-    mic.actuators = set(actuators)
-    
-    # The only components which are not either Microscope or referenced by it 
-    # should be parents
-    left_over = comps - add_children(set([mic]))
-    for c in left_over:
-        if not hasattr(c, "children"):
-            logging.warning("Component '%s' is never used.", c.name)
-    
-    # for each component, set the affect
-    # TODO unlikely to work well with sub_containers (setting a proxy on a proxy for readonly data ?!)
-    for name, attr in inst_model.items():
-        if "affects" in attr:
-            comp = get_component_by_name(comps, name)
-            for affected_name in attr["affects"]:
-                affected = get_component_by_name(comps, affected_name)
-                try:
-                    comp.affects.add(affected)
-                except AttributeError:
-                    raise SemanticError("Error in microscope instantiation "
-                            "file: Component '%s' does not support 'affects'." % name)
-
-    # for each component set the properties
-    for name, attr in inst_model.items():
-        if "properties" in attr:
-            comp = get_component_by_name(comps, name)
-            for prop_name, value in attr["properties"].items():
-                try:
-                    getattr(comp, prop_name).value = value
-                except AttributeError:
-                    raise SemanticError("Error in microscope instantiation "
-                            "file: Component '%s' has no property '%s'." % (name, prop_name))
-               
-    return mic, comps, sub_cont
+    instantiator = Instantiator(inst_model, container, create_sub_containers, dry_run)
+    instantiator.instantiate_model()
+    return instantiator.microscope, instantiator.components, instantiator.sub_containers 
 
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:
