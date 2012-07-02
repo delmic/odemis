@@ -1,9 +1,18 @@
+# This module contains various custom button classes used throughout the odemis
+# project.
+#
+# All these classes are supported within XRCED as long as the xmlh/delmic.py
+# and xmlh/xh_delmic.py modules are available (e.g. through a symbolic link)
+# in XRCED's plugin directory.
 
 import wx
 from wx.lib.buttons import GenBitmapButton, GenBitmapToggleButton, \
     GenBitmapTextToggleButton
 
 class ImageButton(GenBitmapButton):
+    """ Graphical button with hover effect.
+    The background colour is set to it's parent's
+    """
     labelDelta = 0
 
     def __init__(self, *args, **kwargs):
@@ -57,9 +66,17 @@ class ImageButton(GenBitmapButton):
         if not self.up:
             dx = dy = self.labelDelta
 
-        print self.faceDnClr
         hasMask = bmp.GetMask() != None
         dc.DrawBitmap(bmp, (width - bw) / 2 + dx, (height - bh) / 2 + dy, hasMask)
+
+    def InitColours(self):
+        """ Override this method to prevent colous changes """
+        face_clr = self.GetParent().GetParent().GetBackgroundColour()
+        self.faceDnClr = face_clr
+        self.shadowPenClr = face_clr
+        self.highlightPenClr = face_clr
+        self.focusClr = face_clr
+
 
     def GetBackgroundBrush(self, dc):
         """ Prevent the background colour from changing by overriding this
@@ -250,7 +267,6 @@ class PopupImageButton(ImageButton):
 
     def __init__(self, *args, **kwargs):
         ImageButton.__init__(self, *args, **kwargs)
-
         self.choices = None
         self.Bind(wx.EVT_BUTTON, self.show_menu)
 
@@ -281,7 +297,7 @@ class PopupImageButton(ImageButton):
                 self.Bind(wx.EVT_LISTBOX, self.on_select)
 
             def on_select(self, evt):
-                print self.lb.GetStringSelection()
+                #print self.lb.GetStringSelection()
                 self.Dismiss()
                 self.OnDismiss()
 

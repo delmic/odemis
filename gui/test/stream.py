@@ -19,7 +19,7 @@ SLEEP_TIME = 100
 # If manual is set to True, the window will be kept open at the end
 MANUAL = True
 # Open an inspection window after running the tests if MANUAL is set
-INSPECT = True
+INSPECT = False
 
 TEST_STREAMS = ["aap", "noot", "mies", "etc"]
 

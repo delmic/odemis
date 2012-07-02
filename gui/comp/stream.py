@@ -1,27 +1,31 @@
 # -*- coding: utf-8 -*-
 
-# + PyCollapsiblePane (PyPanel)
-# |-- GTKExpander
-# |-- wx.Panel
-#    |--- wx.Window subclass
-#    .
-#    .
-#    |--- wx.Window subclass
-#
-# TODO:
-#
-#  **A workaround has been found for the following problem and was implemented
-#    using a custom Slider class **
+""" This module contains classes needed to construct stream panels.
 
-# - When scrolling the main ScrolledWindow with a mouse wheel, we run into
-#   trouble when the cursor hits a wx.Slider, since it will start capturing
-#   the mouse wheel event, which has two unwanted side effects:
-#       1 - The wx.Slider value will change unintentionally
-#       2 - The scrolling will stop.
-#
-#   A posisble workaround needs to be investigated, but it might be tricky
-#   since there are big differences between various windowing systems.
-#
+Stream panels are custom, specialized controls that allow the user to view and
+manipulate various data streams coming from the microscope.
+
+
+@author: Rinze de Laat
+
+Copyright © 2012 Rinze de Laat, Delmic
+
+This file is part of Open Delmic Microscope Software.
+
+Delmic Acquisition Software is free software: you can redistribute it and/or
+modify it under the terms of the GNU General Public License as published by the
+Free Software Foundation, either version 2 of the License, or (at your option)
+any later version.
+
+Delmic Acquisition Software is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
+details.
+
+You should have received a copy of the GNU General Public License along with
+Delmic Acquisition Software. If not, see http://www.gnu.org/licenses/.
+
+"""
 
 import wx
 import wx.combo
@@ -33,17 +37,11 @@ from odemis.gui.comp.buttons import ImageButton, ImageToggleButton, \
 from odemis.gui.comp.text import SuggestTextCtrl, IntegerTextCtrl, \
     UnitIntegerCtrl
 
+TEST_STREAM_LST = ["Aap", u"nöot", "noot", "mies", "kees", "vuur",
+                   "quantummechnica", "Repelsteeltje", "", "XXX", "a", "aa",
+                   "aaa", "aaaa", "aaaaa", "aaaaaa", "aaaaaaa"]
 
-TEST_STREAM_LST = ["Aap", u"nöot", "noot", "mies", "kees", "vuur", "quantummechnica",
-                   "Repelsteeltje", "", "XXX", "a", "aa", "aaa", "aaaa",
-                   "aaaaa", "aaaaaa", "aaaaaaa"]
-
-EXPANDER_HEIGHT = 32
-
-# StreamPanel events
-EVT_COLLAPSIBLEPANE_CHANGED = wx.EVT_COLLAPSIBLEPANE_CHANGED
-
-# Button Icons
+# Short-cuts to button icons
 
 BMP_ARR_DOWN = catalog['arr_down'].GetBitmap()
 BMP_ARR_IRGHT = catalog['arr_right'].GetBitmap()
@@ -60,6 +58,35 @@ BMP_PAUSE = catalog['ico_pause'].GetBitmap()
 BMP_PAUSE_H = catalog['ico_pause_h'].GetBitmap()
 BMP_PLAY = catalog['ico_play'].GetBitmap()
 BMP_PLAY_H = catalog['ico_play_h'].GetBitmap()
+
+BMP_CONTRAST_A = catalog['btn_contrast_a'].GetBitmap()
+
+BMP_EMPTY = catalog['empty'].GetBitmap()
+BMP_EMPTY_H = catalog['empty_h'].GetBitmap()
+
+class Slider(wx.Slider):
+    """ This custom Slider class was implemented so it would not capture
+    mouse wheel events, which were causing problems when the user wanted
+    to scroll through the main fold panel bar.
+    """
+
+    def __init__(self, *args, **kwargs):
+        wx.Slider.__init__(self, *args, **kwargs)
+        self.Bind(wx.EVT_MOUSEWHEEL, self.pass_to_scollwin)
+
+    def pass_to_scollwin(self, evt):
+        """ This event handler prevents anything from happening to the Slider on
+        MOUSEWHEEL events and passes the event on to any parent ScrolledWindow
+        """
+
+        # Find the parent ScolledWindow
+        win = self.Parent
+        while win and not isinstance(win, wx.ScrolledWindow):
+            win = win.Parent
+
+        # If a ScrolledWindow was found, pass on the event
+        if win:
+            win.GetEventHandler().ProcessEvent(evt)
 
 
 class Expander(wx.PyControl):
@@ -127,7 +154,6 @@ class Expander(wx.PyControl):
 
         self._btn_rem.Bind(wx.EVT_BUTTON, self.on_remove)
 
-
     def on_remove(self, evt):
         stream_panel = self._parent
         fpb_item = stream_panel.Parent
@@ -138,7 +164,6 @@ class Expander(wx.PyControl):
         """ Return the best size, which is the width of the parent and the
         height or the content (determined through the sizer).
         """
-
         width, dummy = self._parent.GetSize()
         dummy, height = self._sz.GetSize()
 
@@ -166,28 +191,34 @@ class Expander(wx.PyControl):
 
 
 class FixedExpander(Expander):
+    """ Expander for FixedStreamPanels """
 
     def __init__(self, parent, label, wid=wx.ID_ANY):
         Expander.__init__(self, parent, label, wid)
 
         self._label_ctrl = wx.StaticText(self, -1, label)
         self._sz.Remove(1)
-        self._sz.Insert(1, self._label_ctrl, 1, wx.RIGHT | wx.ALIGN_CENTRE_VERTICAL, 8)
+        self._sz.Insert(1, self._label_ctrl, 1,
+                        wx.RIGHT | wx.ALIGN_CENTRE_VERTICAL, 8)
 
 class CustomExpander(Expander):
+    """ Expander for CustomStreamPanels """
 
+    # The default color for the color button
     DEFAULT_COLOR = "#88BA38"
 
     def __init__(self, parent, label, wid=wx.ID_ANY):
         Expander.__init__(self, parent, label, wid)
 
         self.stream_color = None
-        self._btn_color = ImageButton(self, -1, bitmap=catalog['arr_down'].GetBitmap())
+        self._btn_color = ImageButton(self, -1,
+                                      bitmap=catalog['arr_down'].GetBitmap())
         self.set_stream_color()
         self._btn_color.SetToolTipString("Select colour")
         self._btn_color.Bind(wx.EVT_BUTTON, self.on_color_click)
 
-        self._sz.Insert(2, self._btn_color, 0, wx.RIGHT | wx.ALIGN_CENTRE_VERTICAL, 8)
+        self._sz.Insert(2, self._btn_color, 0,
+                        wx.RIGHT | wx.ALIGN_CENTRE_VERTICAL, 8)
 
         #self._label_ctrl = wx.TextCtrl(self, -1, label, style=wx.NO_BORDER)
         self._label_ctrl = SuggestTextCtrl(self, id= -1, value=label)
@@ -196,15 +227,16 @@ class CustomExpander(Expander):
         self._label_ctrl.SetForegroundColour("#2FA7D4")
 
         self._sz.Remove(1)
-        self._sz.Insert(1, self._label_ctrl, 1, wx.RIGHT | wx.ALIGN_CENTRE_VERTICAL, 8)
+        self._sz.Insert(1, self._label_ctrl, 1,
+                        wx.RIGHT | wx.ALIGN_CENTRE_VERTICAL, 8)
 
     def set_stream_color(self, color=None):
-
+        """ Update the color button to reflect the provided color """
         self.stream_color = color or self.DEFAULT_COLOR
         brush = wx.Brush(self.stream_color)
         pen = wx.Pen(self.stream_color)
 
-        bmp = catalog['empty'].GetBitmap()
+        bmp = BMP_EMPTY
         mdc = wx.MemoryDC()
         mdc.SelectObject(bmp)
         mdc.SetBrush(brush)
@@ -214,7 +246,7 @@ class CustomExpander(Expander):
 
         self._btn_color.SetBitmapLabel(bmp)
 
-        bmp = catalog['empty_h'].GetBitmap()
+        bmp = BMP_EMPTY_H
         mdc = wx.MemoryDC()
         mdc.SelectObject(bmp)
         mdc.SetBrush(brush)
@@ -236,39 +268,37 @@ class CustomExpander(Expander):
 
         if dlg.ShowModal() == wx.ID_OK:
             data = dlg.GetColourData()
-            self.set_stream_color(data.GetColour().GetAsString(wx.C2S_HTML_SYNTAX))
+            color_str = data.GetColour().GetAsString(wx.C2S_HTML_SYNTAX)
+            self.set_stream_color(color_str)
 
     def on_remove(self, evt):
         self._label_ctrl.Destroy()
         Expander.on_remove(self, evt)
 
-class Slider(wx.Slider):
-    """ This custom Slider class was implemented so it would not capture
-    mouse wheel events, which were causing problems when the user wanted
-    to scroll through the main fold panel bar.
-    """
-
-    def __init__(self, *args, **kwargs):
-        wx.Slider.__init__(self, *args, **kwargs)
-        self.Bind(wx.EVT_MOUSEWHEEL, self.pass_to_scollwin)
-
-    def pass_to_scollwin(self, evt):
-        """ This event handler prevents anything from happening to the Slider on
-        MOUSEWHEEL events and passes the event on to any parent ScrolledWindow
-        """
-
-        # Find the parent ScolledWindow
-        win = self.Parent
-        while win and not isinstance(win, wx.ScrolledWindow):
-            win = win.Parent
-
-        # If a ScrolledWindow was found, pass on the event
-        if win:
-            win.GetEventHandler().ProcessEvent(evt)
-
 
 class StreamPanel(wx.PyPanel):
-    """ The StreamPanel super class, a special case collapsible pane."""
+    """ The StreamPanel super class, a special case collapsible pane.
+
+    The StreamPanel consists of the following widgets:
+
+        + StreamPanel
+        |--- FixedExpander
+        |--+ Panel
+           |-- ImageTextToggleButton
+           |-- StaticText
+           |-- Slider
+           |-- IntegerTextCtrl
+           |-- StaticText
+           |-- Slider
+           |-- IntegerTextCtrl
+
+    The expander_class class attribute contains the Expander subclass to be
+    used when constructing an object.
+
+    Most of the component's construction is done in the finalize() method, so
+    we can allow for a delay. This is necessary when construction the component
+    through an XML handler.
+    """
 
     expander_class = FixedExpander
 
@@ -324,16 +354,6 @@ class StreamPanel(wx.PyPanel):
 
         #self.on_status_change(self.GetBestSize())
 
-
-    # def on_status_change(self, sz):
-    #     """ Handles the status changes (collapsing/expanding).
-    #     :param `sz`: an instance of `wx.Size`.
-    #     """
-    #     # minimal size has priority over the best size so set here our min size
-    #     self.SetMinSize(sz)
-    #     self.SetSize(sz)
-
-
     def finalize(self):
         """ This method builds all the child controls
         A delay was needed in order for all the settings to be loaded from the
@@ -363,7 +383,7 @@ class StreamPanel(wx.PyPanel):
         self._btn_auto_contrast = ImageTextToggleButton(self._panel, -1,
                                     catalog['btn_contrast'].GetBitmap(), label="Auto",
                                     size=(68, 26))
-        self._btn_auto_contrast.SetBitmaps(bmp_sel=catalog['btn_contrast_a'].GetBitmap())
+        self._btn_auto_contrast.SetBitmaps(bmp_sel=BMP_CONTRAST_A)
         self._btn_auto_contrast.SetForegroundColour("#000000")
         self._gbs.Add(self._btn_auto_contrast, (0, 0), flag=wx.LEFT, border=34)
 
@@ -613,7 +633,7 @@ class FixedStreamPanel(StreamPanel): #pylint: disable=R0901
         StreamPanel.finalize(self)
 
 class CustomStreamPanel(StreamPanel): #pylint: disable=R0901
-    """ A custom made stream panel """
+    """ A stream panel which can be altered by the user """
 
     expander_class = CustomExpander
 

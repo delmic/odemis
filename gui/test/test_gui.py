@@ -265,6 +265,7 @@ def __init_resources():
                       <object class="sizeritem">
                         <object class="odemis.gui.comp.stream.FixedStreamPanel" name="fsp_2">
                           <label>Fixed Stream panel</label>
+                          <collapsed>1</collapsed>
                           <fg>#E5E5E5</fg>
                           <bg>#4D4D4D</bg>
                           <font>
@@ -286,7 +287,6 @@ def __init_resources():
                       <object class="sizeritem">
                         <object class="odemis.gui.comp.stream.FixedStreamPanel" name="fsp_3">
                           <label>Fixed Stream panel</label>
-                          <collapsed>1</collapsed>
                           <fg>#E5E5E5</fg>
                           <bg>#4D4D4D</bg>
                           <font>
