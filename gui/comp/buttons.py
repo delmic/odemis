@@ -11,8 +11,10 @@ from wx.lib.buttons import GenBitmapButton, GenBitmapToggleButton, \
 
 class ImageButton(GenBitmapButton):
     """ Graphical button with hover effect.
+
     The background colour is set to it's parent's
     """
+
     labelDelta = 0
 
     def __init__(self, *args, **kwargs):
@@ -22,9 +24,17 @@ class ImageButton(GenBitmapButton):
         else:
             kwargs['style'] = wx.NO_BORDER
 
+        self.background_parent = None
+        if kwargs.has_key('background_parent'):
+            self.background_parent = kwargs['background_parent']
+            del kwargs['background_parent']
+
         GenBitmapButton.__init__(self, *args, **kwargs)
-        self._grandparent = self.GetParent().GetParent()
-        self.SetBackgroundColour(self._grandparent.GetBackgroundColour())
+
+        if self.background_parent:
+            self.SetBackgroundColour(self.background_parent.GetBackgroundColour())
+        else:
+            self.SetBackgroundColour(self.GetParent().GetBackgroundColour())
 
         self.bmpHover = None
         self.hovering = False
@@ -70,20 +80,11 @@ class ImageButton(GenBitmapButton):
         dc.DrawBitmap(bmp, (width - bw) / 2 + dx, (height - bh) / 2 + dy, hasMask)
 
     def InitColours(self):
-        """ Override this method to prevent colous changes """
-        face_clr = self.GetParent().GetParent().GetBackgroundColour()
-        self.faceDnClr = face_clr
-        self.shadowPenClr = face_clr
-        self.highlightPenClr = face_clr
-        self.focusClr = face_clr
-
-
-    def GetBackgroundBrush(self, dc):
-        """ Prevent the background colour from changing by overriding this
-        method
-        """
-        self.faceDnClr = self.Parent.Parent.GetBackgroundColour()
-        return GenBitmapButton.GetBackgroundBrush(self, dc)
+        GenBitmapButton.InitColours(self)
+        if self.background_parent:
+            self.faceDnClr = self.background_parent.GetBackgroundColour()
+        else:
+            self.faceDnClr = self.GetParent().GetBackgroundColour()
 
 class ImageToggleButton(GenBitmapToggleButton):  #pylint: disable=R0901
     """ This class describes an image toggle button with hover effects """
@@ -95,9 +96,18 @@ class ImageToggleButton(GenBitmapToggleButton):  #pylint: disable=R0901
 
         kwargs['style'] = wx.NO_BORDER
 
+        self.background_parent = None
+        if kwargs.has_key('background_parent'):
+            self.background_parent = kwargs['background_parent']
+            del kwargs['background_parent']
+
         GenBitmapToggleButton.__init__(self, *args, **kwargs)
-        self._grandparent = self.GetParent().GetParent()
-        self.SetBackgroundColour(self._grandparent.GetBackgroundColour())
+
+        if self.background_parent:
+            self.SetBackgroundColour(self.background_parent.GetBackgroundColour())
+        else:
+            self.SetBackgroundColour(self.GetParent().GetBackgroundColour())
+
         self.bmpHover = None
         self.bmpSelectedHover = None
         self.hovering = False
@@ -136,15 +146,6 @@ class ImageToggleButton(GenBitmapToggleButton):  #pylint: disable=R0901
         if self.bmpHover:
             self.hovering = False
             self.Refresh()
-
-    def InitColours(self):
-        """ Override this method to prevent colous changes """
-        face_clr = self.GetBackgroundColour()
-        self.faceDnClr = face_clr
-        self.shadowPenClr = face_clr
-        self.highlightPenClr = face_clr
-        self.focusClr = face_clr
-
 
     def DrawLabel(self, dc, width, height, dx=0, dy=0):
         bmp = self.bmpLabel
@@ -165,6 +166,13 @@ class ImageToggleButton(GenBitmapToggleButton):  #pylint: disable=R0901
         hasMask = bmp.GetMask() != None
         dc.DrawBitmap(bmp, (width - bw) / 2 + dx, (height - bh) / 2 + dy, hasMask)
 
+    def InitColours(self):
+        GenBitmapButton.InitColours(self)
+        if self.background_parent:
+            self.faceDnClr = self.background_parent.GetBackgroundColour()
+        else:
+            self.faceDnClr = self.GetParent().GetBackgroundColour()
+
 class ImageTextToggleButton(GenBitmapTextToggleButton):  #pylint: disable=R0901
     # The displacement of the button content when it is pressed down, in pixels
     labelDelta = 1
@@ -173,9 +181,13 @@ class ImageTextToggleButton(GenBitmapTextToggleButton):  #pylint: disable=R0901
 
         kwargs['style'] = wx.NO_BORDER
 
+        self.background_parent = None
+        if kwargs.has_key('background_parent'):
+            self.background_parent = kwargs['background_parent']
+            del kwargs['background_parent']
+
         GenBitmapTextToggleButton.__init__(self, *args, **kwargs)
-        self._grandparent = self.GetParent().GetParent()
-        self.SetBackgroundColour(self._grandparent.GetBackgroundColour())
+
         self.bmpHover = None
         self.bmpSelectedHover = None
         self.hovering = False
@@ -216,13 +228,9 @@ class ImageTextToggleButton(GenBitmapTextToggleButton):  #pylint: disable=R0901
             self.Refresh()
 
     def InitColours(self):
-        """ Override this method to prevent colous changes """
-        face_clr = self.GetBackgroundColour()
-        self.faceDnClr = face_clr
-        self.shadowPenClr = face_clr
-        self.highlightPenClr = face_clr
-        self.focusClr = face_clr
-
+        GenBitmapButton.InitColours(self)
+        if self.background_parent:
+            self.faceDnClr = self.background_parent.GetBackgroundColour()
 
     def DrawLabel(self, dc, width, height, dx=0, dy=0):
         bmp = self.bmpLabel
@@ -262,6 +270,13 @@ class ImageTextToggleButton(GenBitmapTextToggleButton):  #pylint: disable=R0901
 
         pos_x = pos_x + bw - tw - 8 # 5 is padding
         dc.DrawText(label, pos_x, (height - th) / 2 + dy + 1)      # draw the text
+
+    def InitColours(self):
+        GenBitmapButton.InitColours(self)
+        if self.background_parent:
+            self.faceDnClr = self.background_parent.GetBackgroundColour()
+        else:
+            self.faceDnClr = self.GetParent().GetBackgroundColour()
 
 class PopupImageButton(ImageButton):
 

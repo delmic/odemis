@@ -195,9 +195,9 @@ getempty_hBitmap = empty_h.GetBitmap
 #----------------------------------------------------------------------
 empty = PyEmbeddedImage(
     "iVBORw0KGgoAAAANSUhEUgAAABIAAAASCAYAAABWzo5XAAAAAXNSR0IArs4c6QAAAAZiS0dE"
-    "AP8A/wD/oL2nkwAAAAlwSFlzAAALEwAACxMBAJqcGAAAAAd0SU1FB9wGDQkJGBl9QxkAAAAZ"
-    "dEVYdENvbW1lbnQAQ3JlYXRlZCB3aXRoIEdJTVBXgQ4XAAAAKElEQVQ4y2NgGLaAEZlz6NCh"
-    "/6RotrOzg+tnopaLRg0aNWh4GjSMAQABzgQYFogwjQAAAABJRU5ErkJggg==")
+    "AP8A/wD/oL2nkwAAAAlwSFlzAAALEwAACxMBAJqcGAAAAAd0SU1FB9wHAg0yHECo+QIAAAAZ"
+    "dEVYdENvbW1lbnQAQ3JlYXRlZCB3aXRoIEdJTVBXgQ4XAAAAKElEQVQ4y2NgGLaAEZlz9+7d"
+    "/6RoVlZWhutnopaLRg0aNWh4GjSMAQAQ/gQYyj3eAQAAAABJRU5ErkJggg==")
 index.append('empty')
 catalog['empty'] = empty
 getemptyData = empty.GetData
