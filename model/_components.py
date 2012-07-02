@@ -18,45 +18,44 @@ from _core import roattribute
 import Pyro4
 import _core
 import _dataflow
-import _properties
+import _vattributes
 import logging
 import weakref
 
-# TODO make it remote-aware
-_microscope = None
+# TODO detect when it's the same thread and avoid proxy?
+#_microscope = None
+#def getMicroscope():
+#    """
+#    return the microscope component managed by the backend
+#    """
+#    return _microscope
+#
+#_hwcomponents = []
+#def getComponents():
+#    """
+#    return all the components managed by the backend
+#    """
+#    return _hwcomponents
+
+BACKEND_NAME = "backend" # the official name for the backend container
+MICROSCOPE_NAME = "microscope" # the official name for the microscope component
 def getMicroscope():
     """
     return the microscope component managed by the backend
     """
-    return _microscope
+    return _core.getObject(BACKEND_NAME, MICROSCOPE_NAME)
 
-_hwcomponents = []
+#_hwcomponents = []
 def getComponents():
     """
-    return all the components managed by the backend
+    return all the HwComponents managed by the backend
     """
-    return _hwcomponents
+#    return _hwcomponents
+    microscope = getMicroscope()
+    # TODO look into children? Or delete this method?
+    comps = set(microscope.detectors | microscope.actuators | microscope.emitters)
+    return comps
 
-def setComponents(comps):
-    global _hwcomponents
-    _hwcomponents = comps
-
-def updateMetadata(metadata, parent):
-    """
-    Update/fill the metadata with all the metadata from all the components
-      affecting the given component
-    metadata (dict str -> value): metadata
-    parent (HwComponent): the component which created the data to which the metadata refers to. 
-      Note that the metadata from this very component are not added.
-    """
-    # find every component which affects the parent
-    for comp in _hwcomponents:
-        try:
-            if parent in comp.affects:
-                metadata.update(comp.getMetadata())
-        except AttributeError:
-            # no affects == empty set
-            pass
 
 class ArgumentError(Exception):
     pass
@@ -118,10 +117,10 @@ class Component(object):
         # in case we are registered
         daemon = getattr(self, "_pyroDaemon", None)
         if daemon:
-            # unregister also all the automatically registered properties and
+            # unregister also all the automatically registered VAs and
             # dataflows (because they hold ref to daemon, so hard to get deleted
             _dataflow.unregister_dataflows(self)
-            _properties.unregister_properties(self)
+            _vattributes.unregister_vigilant_attributes(self)
             daemon.unregister(self)
         
     def __del__(self):
@@ -165,19 +164,19 @@ class ComponentProxy(Pyro4.Proxy):
     # compatible with the proxy creation
     def __getstate__(self):
         return (self.parent, _core.dump_roattributes(self), _dataflow.dump_dataflows(self),
-                _properties.dump_properties(self))
+                _vattributes.dump_vigilant_attributes(self))
         
     def __setstate__(self, state):
         """
         .parent (Component)
         roattributes (dict string -> value)
         dataflows (dict string -> dataflow)
-        properties (dict string -> properties)
+        vas (dict string -> VA)
         """
-        self.parent, roattributes, dataflows, properties = state
+        self.parent, roattributes, dataflows, vas = state
         _core.load_roattributes(self, roattributes)
         _dataflow.load_dataflows(self, dataflows)
-        _properties.load_properties(self, properties)
+        _vattributes.load_vigilant_attributes(self, vas)
     
 # Converter from Component to ComponentProxy
 already_serialized = set()
@@ -192,7 +191,7 @@ def odemicComponentSerializer(self):
                 # URI as a string is more compact
                 (str(daemon.uriFor(self)), Pyro4.core.get_oneways(self), Pyro4.core.get_asyncs(self)),
                 # in the state goes everything that might be recursive
-                (self.parent, _core.dump_roattributes(self), _dataflow.dump_dataflows(self), _properties.dump_properties(self))
+                (self.parent, _core.dump_roattributes(self), _dataflow.dump_dataflows(self), _vattributes.dump_vigilant_attributes(self))
                 )
     else:
         return self.__reduce__()
@@ -206,19 +205,14 @@ class HwComponent(Component):
     This is an abstract class that should be inherited.
     """
     
-    def __init__(self, name, role, daemon=None):
-        Component.__init__(self, name, daemon)
+    def __init__(self, name, role, *args, **kwargs):
+        Component.__init__(self, name, *args, **kwargs)
         self._role = role
-        self._parent = None
     
     @roattribute
     def role(self):
         return self._role
     
-    @roattribute
-    def parent(self):
-        return self._parent
-
     # to be overridden by any component which actually can provide metadata
     def getMetadata(self):
         return {}
@@ -245,7 +239,8 @@ class Microscope(HwComponent):
     It does nothing by itself, just contains other components. 
     """
     def __init__(self, name, role, children=None, **kwargs):
-        HwComponent.__init__(self, name, role)
+        daemon=kwargs.get("daemon", None)
+        HwComponent.__init__(self, name, role, daemon=daemon)
         if children:
             raise ArgumentError("Microscope component cannot have children.")
         
@@ -253,9 +248,19 @@ class Microscope(HwComponent):
             raise ArgumentError("Microscope component cannot have initialisation arguments.")
 
         # TODO: validate that each set contains only components from the specific type
-        self.detectors = set()
-        self.actuators = set()
-        self.emitters = set()
+        self._detectors = set()
+        self._actuators = set()
+        self._emitters = set()
+        
+    @roattribute
+    def detectors(self):
+        return self._detectors
+    @roattribute
+    def actuators(self):
+        return self._actuators
+    @roattribute
+    def emitters(self):
+        return self._emitters
 
 class Detector(HwComponent):
     """
@@ -263,20 +268,21 @@ class Detector(HwComponent):
     This is an abstract class that should be inherited. 
     """
     def __init__(self, name, role, children=None, **kwargs):
-        HwComponent.__init__(self, name, role)
+        HwComponent.__init__(self, name, role, **kwargs)
         if children:
             raise ArgumentError("Detector components cannot have children.")
 
+        # TODO to be remotable
         # To be overridden
         self.shape = (0) # maximum value of each dimension of the detector. A CCD camera 2560x1920 with 12 bits intensity has a 3D shape (2560,1920,2048).
-        self.pixelSize = None # property representing the size of a pixel (in meters). More precisely it should be the average distance between the centres of two pixels.
+        self.pixelSize = None # VA representing the size of a pixel (in meters). More precisely it should be the average distance between the centres of two pixels.
         self.data = None # Data-flow coming from this detector. 
         # normally a detector doesn't affect anything
         
 class DigitalCamera(Detector):
     """
     A component which represent a digital camera (i.e., CCD or CMOS)
-    It's basically a detector with a few more compulsory properties
+    It's basically a detector with a few more compulsory VAs
     """
     def __init__(self, name, role, children=None, **kwargs):
         Detector.__init__(self, name, role, children, **kwargs)
@@ -293,7 +299,7 @@ class Actuator(HwComponent):
     This is an abstract class that should be inherited. 
     """
     def __init__(self, name, role, children=None, **kwargs):
-        HwComponent.__init__(self, name, role)
+        HwComponent.__init__(self, name, role, **kwargs)
         if children:
             raise ArgumentError("Actuator components cannot have children.")
         
@@ -316,7 +322,7 @@ class Emitter(HwComponent):
     This is an abstract class that should be inherited. 
     """
     def __init__(self, name, role, children=None, **kwargs):
-        HwComponent.__init__(self, name, role)
+        HwComponent.__init__(self, name, role, **kwargs)
         if children:
             raise ArgumentError("Emitter components cannot have children.")
         
@@ -333,14 +339,14 @@ class CombinedActuator(Actuator):
 
     # TODO: this is not finished, just a copy paste from a RedStone which could 
     # be extended to a really combined actuator
-    def __init__(self, name, role, children, axes_map):
+    def __init__(self, name, role, children, axes_map, **kwargs):
         """
         name (string) 
         role (string)
         children (dict str -> actuator): axis name -> actuator to be used for this axis
         axes_map (dict str -> str): axis name in this actuator -> axis name in the child actuator
         """
-        Actuator.__init__(self, name, role, None)
+        Actuator.__init__(self, name, role, **kwargs)
         
         if not children:
             raise Exception("Combined Actuator needs children")
@@ -437,12 +443,13 @@ class MockComponent(HwComponent):
     Do not use or inherit when writing a device driver!
     """
     def __init__(self, name, role, children=None, **kwargs):
-        HwComponent.__init__(self, name, role)
+        HwComponent.__init__(self, name, role, **kwargs)
         # not all type of HwComponent can affects but we cannot make the difference
         self.affects = set()
         
         if not children:
             return
+        
         self.children = set()
         for child_name, child_args in children.items():
             # we don't care of child_name as it's only for internal use in the real component
@@ -455,14 +462,14 @@ class MockComponent(HwComponent):
             self.children.add(child)
             child.parent = self
         
-    # For everything that is not standard we return a mock property
+    # For everything that is not standard we return a mock VigilantAttribute
     def __getattr__(self, attrName):
         if not self.__dict__.has_key(attrName):
             if attrName == "children": # special value
                 raise AttributeError(attrName)
             
-            prop = _properties.Property(None)
-            logging.debug("Component %s creating property %s", self.name, attrName)
+            prop = _vattributes.VigilantAttribute(None)
+            logging.debug("Component %s creating vigilant attribute %s", self.name, attrName)
             self.__dict__[attrName] = prop
         return self.__dict__[attrName]
     

@@ -9,7 +9,7 @@ import model
 import unittest
 import weakref
 
-class PropertiesTest(unittest.TestCase):
+class VigilantAttributeTest(unittest.TestCase):
 
 
     def setUp(self):
@@ -24,7 +24,7 @@ class PropertiesTest(unittest.TestCase):
         self.called += 1
         
     def test_notify_noinit(self):
-        prop = model.IntProperty(2)
+        prop = model.IntVA(2)
         self.called = 0
         prop.subscribe(self.callback_test_notify)
         # now count
@@ -42,7 +42,7 @@ class PropertiesTest(unittest.TestCase):
         self.assertTrue(self.called == 2)
     
     def test_notify_init(self):
-        prop = model.FloatProperty(2.0)
+        prop = model.FloatVA(2.0)
         self.called = 0
         # now count
         prop.subscribe(self.callback_test_notify, init=True) # +1
@@ -62,7 +62,7 @@ class PropertiesTest(unittest.TestCase):
         self.assertTrue(self.called == 3)
     
     def test_readonly(self):
-        prop = model.FloatProperty(2.0, readonly=True)
+        prop = model.FloatVA(2.0, readonly=True)
         try:
             prop.value = 6.0
             self.fail("Modifying a readonly property should not be allowed.")
@@ -72,7 +72,7 @@ class PropertiesTest(unittest.TestCase):
         self.assertTrue(prop.value == 2)
         
     def test_list(self):
-        prop = model.ListProperty([2.0, 5, 4])
+        prop = model.ListVA([2.0, 5, 4])
         self.called = 0
         # now count
         prop.subscribe(self.callback_test_notify, init=True) # +1
@@ -171,7 +171,7 @@ class PropertiesTest(unittest.TestCase):
           it will be garbage-collected when not used anymore and its
           subscription dropped.
         """
-        prop = model.FloatProperty(2.0)
+        prop = model.FloatVA(2.0)
         o = LittleObject()
         wo = weakref.ref(o)
         assert(wo() is not None)

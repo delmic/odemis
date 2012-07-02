@@ -24,6 +24,40 @@ import logging
 import model
 import sys
 
+_hwcomponents = set()
+def updateMetadata(metadata, parent):
+    """
+    Update/fill the metadata with all the metadata from all the components
+      affecting the given component
+    metadata (dict str -> value): metadata
+    parent (HwComponent): the component which created the data to which the metadata refers to. 
+      Note that the metadata from this very component are not added.
+    """
+    # find every component which affects the parent
+    for comp in _hwcomponents:
+        try:
+            if parent in comp.affects:
+                metadata.update(comp.getMetadata())
+        except AttributeError:
+            # no affects == empty set
+            pass
+
+class BackendContainer(model.Container):
+    """
+    A normal container which also terminates all the other containers when it
+    terminates.
+    """
+    def __init__(self, name=model.BACKEND_NAME):
+        model.Container.__init__(self, name)
+        self.sub_containers = set() # to be updated later on
+    
+    def terminate(self, *args, **kwargs):  
+        for container in self.sub_containers:
+            container.terminate()
+    
+        model.Container.terminate(self, *args, **kwargs)
+        
+        
 # This is the cli interface of odemisd, which allows to start the back-end
 # It parses the command line and accordingly reads the microscope instantiation
 # file, generates a model out of it, and then provides it to the front-end 
@@ -92,6 +126,7 @@ def main(args):
         raise NotImplementedError() # TODO
         return 0
     
+    # let's become the backend for real
     try:
         logging.debug("model instantiation file is: %s", options.model[0].name)
         inst_model = modelgen.get_instantiation_model(options.model[0])
@@ -100,11 +135,17 @@ def main(args):
         logging.exception("Error while parsing file %s", options.model[0].name)
         return 127
     
+    container = BackendContainer()
+    
     try:
-        comps, mic = modelgen.instantiate_model(inst_model, options.validate)
+        mic, comps, sub_containers = modelgen.instantiate_model(
+                                        inst_model, container, 
+                                        create_sub_containers=False, # TODO make it possible
+                                        dry_run=options.validate)
         # update the model
-        model.setComponents(comps) # TODO seems not shared between threads
+        _hwcomponents = comps
         model._microscope = mic
+        container.sub_containers |= sub_containers
         logging.info("model has been instantiated successfully")
         logging.debug("model microscope is %s", mic.name) 
         logging.debug("model components are %s", ", ".join([c.name for c in comps])) 
@@ -112,8 +153,21 @@ def main(args):
         logging.exception("When instantiating file %s", options.model[0].name)
         return 127
     
-    dagui.main(mic)
-    logging.warning("nothing else to do")
+    try:
+        logging.info("Microscope is now available in container '%s'", model.BACKEND_NAME)
+        container.run()
+    except:
+        logging.exception("When running backend container")
+        return 127
+    
+    try:
+        container.close()
+    except:
+        logging.exception("Failed to end the backend container cleanly")
+        return 127
+    
+#    dagui.main(mic)
+#    logging.warning("nothing else to do")
     return 0
 
 if __name__ == '__main__':

@@ -34,18 +34,18 @@ class NotSettableError(Exception):
     pass
 
 
-class Property(object):
+class VigilantAttribute(object):
     '''
-    A property represents a value (an object) with:
+    A VigilantAttribute represents a value (an object) with:
      * meta-information (min, max, unit, read-only...)
      * observable behaviour (any one can ask to be notified when the value changes) 
     '''
 
     def __init__(self, initval=None, unit="", readonly=False):
         """
-        Creates a property with a given initial value
+        Creates a VigilantAttribute with a given initial value
         initval : any type
-        unit (str): a SI unit in which the property is expressed
+        unit (str): a SI unit in which the VA is expressed
         readonly (bool): if True, value setter will raise an exception. It's still
             possible to change the value by calling _set() and then notify()
         """
@@ -56,7 +56,7 @@ class Property(object):
         self.readonly = readonly
 
     def _get_value(self):
-        """The value of this property"""
+        """The value of this VA"""
         return self._value
     
     def _set(self, value):
@@ -81,7 +81,7 @@ class Property(object):
         
     def subscribe(self, listener, init=False):
         """
-        Register a callback function to be called when the ActiveValue is 
+        Register a callback function to be called when the VigilantAttribute is changed
         listener (function): callback function which takes as argument val the new value
         init (boolean): if True calls the listener directly, to initialise it
         """
@@ -104,7 +104,7 @@ class Property(object):
                 self.unsubscribe(l)
 
 
-class PropertyRemotable(Property):
+class RemotableVigilantAttribute(VigilantAttribute):
 
     def __init__(self, initval, max_discard=100, *args, **kwargs):
         """
@@ -113,7 +113,7 @@ class PropertyRemotable(Property):
                             all the messages (dangerous if callback is slower
                             than the generator).
         """
-        Property.__init__(self, initval, *args, **kwargs)
+        VigilantAttribute.__init__(self, initval, *args, **kwargs)
         # different from ._listeners for notify() to do different things
         self._remote_listeners = set() # any unique string works
         
@@ -124,7 +124,7 @@ class PropertyRemotable(Property):
         
     def _register(self, daemon):
         """
-        Get the Property ready to be shared. It gets registered to the Pyro 
+        Get the VigilantAttribute ready to be shared. It gets registered to the Pyro 
         daemon and over 0MQ. It should be called only once. Note that you have
         to call this method to register a property, a simple daemon.register(p)
         is not enough.
@@ -173,7 +173,7 @@ class PropertyRemotable(Property):
             if init:
                 self.pipe.send_pyobj(self.value)
         else:
-            Property.subscribe(self, listener, init)
+            VigilantAttribute.subscribe(self, listener, init)
 
     @oneway
     def unsubscribe(self, listener):
@@ -185,7 +185,7 @@ class PropertyRemotable(Property):
             # remove string from listeners  
             self._remote_listeners.discard(listener)
         else:
-            Property.unsubscribe(self, listener)
+            VigilantAttribute.unsubscribe(self, listener)
         
     def notify(self, v):
         # publish the data remotely
@@ -193,13 +193,13 @@ class PropertyRemotable(Property):
             self.pipe.send_pyobj(v)
         
         # publish locally
-        Property.notify(self, v)
+        VigilantAttribute.notify(self, v)
     
     def __del__(self):
         self._unregister()
 
 
-class PropertyProxy(Property, Pyro4.Proxy):
+class VigilantAttributeProxy(VigilantAttribute, Pyro4.Proxy):
     # init is as light as possible to reduce creation overhead in case the
     # object is actually never used
     def __init__(self, uri, oneways=set(), asyncs=set(), max_discard=100, unit="", readonly=False):
@@ -212,7 +212,7 @@ class PropertyProxy(Property, Pyro4.Proxy):
         """ 
         Pyro4.Proxy.__init__(self, uri, oneways, asyncs)
         self._global_name = uri.object + "@" + uri.sockname + ".ipc"
-        Property.__init__(self, None, unit=unit, readonly=readonly) # TODO setting None might not always be valid
+        VigilantAttribute.__init__(self, None, unit=unit, readonly=readonly) # TODO setting None might not always be valid
         self.max_discard = max_discard
         
         self.ctx = None
@@ -259,7 +259,7 @@ class PropertyProxy(Property, Pyro4.Proxy):
         count_before = len(self._listeners)
         
         # TODO when init=True, if already listening, reuse last received value 
-        Property.subscribe(self, listener, init)
+        VigilantAttribute.subscribe(self, listener, init)
         
         if count_before == 0:
             self._start_listening()
@@ -278,7 +278,7 @@ class PropertyProxy(Property, Pyro4.Proxy):
         Pyro4.Proxy.__getattr__(self, "subscribe")(self._global_name)
 
     def unsubscribe(self, listener):
-        Property.unsubscribe(self, listener)
+        VigilantAttribute.unsubscribe(self, listener)
         if len(self._listeners) == 0:
             self._stop_listening()
             
@@ -292,9 +292,11 @@ class PropertyProxy(Property, Pyro4.Proxy):
     def __del__(self):
         # end the thread (but it will stop as soon as it notices we are gone anyway)
         if self._thread:
-            self.commands.send("STOP")
-            self.commands.recv()
+            if self._thread.is_alive():
+                self.commands.send("STOP")
+                self._thread.join()
             self.commands.close()
+            self.ctx.term()
 
 
 class SubscribeProxyThread(threading.Thread):
@@ -305,7 +307,7 @@ class SubscribeProxyThread(threading.Thread):
         max_discard (int)
         zmq_ctx (0MQ context): available 0MQ context to use
         """
-        threading.Thread.__init__(self, name="zmq for prop " + uri)
+        threading.Thread.__init__(self, name="zmq for VA " + uri)
         self.daemon = True
         self.uri = uri
         self.max_discard = max_discard
@@ -341,7 +343,6 @@ class SubscribeProxyThread(threading.Thread):
                     self.data.setsockopt(zmq.UNSUBSCRIBE, '')
                     # no confirmation (async)
                 elif message == "STOP":
-                    self.commands.send("STOPPED")
                     self.commands.close()
                     self.data.close()
                     return
@@ -366,32 +367,32 @@ class SubscribeProxyThread(threading.Thread):
                     return
 
 
-def unregister_properties(self):
-    for name, value in inspect.getmembers(self, lambda x: isinstance(x, PropertyRemotable)):
+def unregister_vigilant_attributes(self):
+    for name, value in inspect.getmembers(self, lambda x: isinstance(x, RemotableVigilantAttribute)):
         value._unregister()
     
-def dump_properties(self):
+def dump_vigilant_attributes(self):
     """
-    return the names and value of all the properties added to an object (component)
-    If a property is not registered yet, it is registered.
+    return the names and value of all the VAs added to an object (component)
+    If a VA is not registered yet, it is registered.
     self (Component): the object (instance of a class).  It must already be
                       registered to a Pyro daemon.
-    return (dict string -> value): attribute name -> Property
+    return (dict string -> value): attribute name -> VigilantAttribute
     """
-    properties = dict()
+    vas = dict()
     daemon = self._pyroDaemon
-    for name, value in inspect.getmembers(self, lambda x: isinstance(x, PropertyRemotable)):
+    for name, value in inspect.getmembers(self, lambda x: isinstance(x, RemotableVigilantAttribute)):
         if not hasattr(value, "_pyroDaemon"):
             value._register(daemon)
-        properties[name] = value
-    return properties
+        vas[name] = value
+    return vas
 
-def load_properties(self, properties):
+def load_vigilant_attributes(self, vas):
     """
-    duplicate the given property into the instance.
+    duplicate the given VAs into the instance.
     useful only for a proxy class
     """
-    for name, df in properties.items():
+    for name, df in vas.items():
         setattr(self, name, df)
 
 def odemicPropertySerializer(self):
@@ -400,7 +401,7 @@ def odemicPropertySerializer(self):
     if daemon: # TODO might not be even necessary: They should be registering themselves in the init
         self._odemicShared = True
         # only return a proxy if the object is a registered pyro object
-        return (PropertyProxy, 
+        return (VigilantAttributeProxy, 
                 (daemon.uriFor(self),
                  Pyro4.core.get_oneways(self),
                  Pyro4.core.get_asyncs(self),
@@ -411,58 +412,58 @@ def odemicPropertySerializer(self):
     else:
         return self.__reduce__()
     
-Pyro4.Daemon.serializers[PropertyRemotable] = odemicPropertySerializer
+Pyro4.Daemon.serializers[RemotableVigilantAttribute] = odemicPropertySerializer
 
      
-class StringProperty(PropertyRemotable):
+class StringVA(RemotableVigilantAttribute):
     """
     A property which contains a string
     """
     
     def __init__(self, value="", *args, **kwargs):
-        PropertyRemotable.__init__(self, value, *args, **kwargs)
+        RemotableVigilantAttribute.__init__(self, value, *args, **kwargs)
         
     def _set(self, value):
         if not isinstance(value, basestring):
             raise InvalidTypeError("Value '%s' is not a string." % str(value))
-        PropertyRemotable._set(self, value)
+        RemotableVigilantAttribute._set(self, value)
 
-class FloatProperty(PropertyRemotable):
+class FloatVA(RemotableVigilantAttribute):
     """
-    A property which contains a float
+    A VA which contains a float
     """
     
     def __init__(self, value=0.0, *args, **kwargs):
-        PropertyRemotable.__init__(self, value, *args, **kwargs)
+        RemotableVigilantAttribute.__init__(self, value, *args, **kwargs)
         
     def _set(self, value):
         try:
             converted = float(value)
         except ValueError:
             raise InvalidTypeError("Value '%s' is not a float." % str(value))
-        PropertyRemotable._set(self, converted)
+        RemotableVigilantAttribute._set(self, converted)
 
-class IntProperty(PropertyRemotable):
+class IntVA(RemotableVigilantAttribute):
     """
-    A property which contains a float
+    A VA which contains a float
     """
     
     def __init__(self, value=0, *args, **kwargs):
-        PropertyRemotable.__init__(self, value, *args, **kwargs)
+        RemotableVigilantAttribute.__init__(self, value, *args, **kwargs)
         
     def _set(self, value):
         # we really accept only int, to avoid hiding lose of precision
         if not isinstance(value, int):
             raise InvalidTypeError("Value '%s' is not a int." % str(value))
-        PropertyRemotable._set(self, value)
+        RemotableVigilantAttribute._set(self, value)
 
-class ListProperty(PropertyRemotable):
+class ListVA(RemotableVigilantAttribute):
     """
-    A property which contains a list of values
+    A VA which contains a list of values
     """
     
     def __init__(self, value=[], *args, **kwargs):
-        PropertyRemotable.__init__(self, value, *args, **kwargs)
+        RemotableVigilantAttribute.__init__(self, value, *args, **kwargs)
         
     def _set(self, value):
         try:
@@ -471,14 +472,14 @@ class ListProperty(PropertyRemotable):
             raise InvalidTypeError("Value '%s' is not a list." % str(value))
         # TODO we need to also detect whenever this list is modified
         
-        PropertyRemotable._set(self, converted)
+        RemotableVigilantAttribute._set(self, converted)
 
-# TODO maybe should provide a factory that can take a Property class and return it
+# TODO maybe should provide a factory that can take a VigilantAttribute class and return it
 # either Continuous or Enumerated
 
 class Continuous(object):
     """
-    Adds the ability to a property to specify a min and max.
+    Adds the ability to a VA to specify a min and max.
     It has an attribute range (2-tuple) min, max
     It checks that any value set is min <= val <= max
     """
@@ -494,7 +495,7 @@ class Continuous(object):
     
     @property
     def range(self):
-        """The range within which the value of the property can be"""
+        """The range within which the value of the VA can be"""
         return self._get_range()
     
     def _set_range(self, new_range):
@@ -523,7 +524,7 @@ class Continuous(object):
 
     def _set(self, value):
         """
-        Should be called _in addition_ to the ._set() of Property
+        Should be called _in addition_ to the ._set() of VigilantAttribute
         returns nothing
         Raises:
             OutOfBoundError if the value is not within the authorised range
@@ -534,7 +535,7 @@ class Continuous(object):
 
 class Enumerated(object):
     """
-    Adds the ability to a property to specify a set of authorised values.
+    Adds the ability to a VA to specify a set of authorised values.
     It has an attribute choices which is of type set
     It checks that any value set is among choice
     """
@@ -577,60 +578,60 @@ class Enumerated(object):
         del self._choices
 
 
-class FloatContinuous(FloatProperty, Continuous):
+class FloatContinuous(FloatVA, Continuous):
     """
     A simple class which is both floating and continuous
     """
     def __init__(self, value=0.0, range=[], unit=""):
         Continuous.__init__(self, range)
-        FloatProperty.__init__(self, value, unit)
+        FloatVA.__init__(self, value, unit)
 
     def _set(self, value):
         # order is important
         Continuous._set(self, value)
-        FloatProperty._set(self, value)
+        FloatVA._set(self, value)
 
-class StringEnumerated(StringProperty, Enumerated):
+class StringEnumerated(StringVA, Enumerated):
     """
     A simple class which is both string and Enumerated
     """
     def __init__(self, value, choices, unit=""):
         Enumerated.__init__(self, choices)
-        StringProperty.__init__(self, value, unit)
+        StringVA.__init__(self, value, unit)
 
     def _set(self, value):
         # order is important
         Enumerated._set(self, value)
-        StringProperty._set(self, value)
+        StringVA._set(self, value)
 
-class FloatEnumerated(FloatProperty, Enumerated):
+class FloatEnumerated(FloatVA, Enumerated):
     """
     A simple class which is both floating and enumerated
     """
     def __init__(self, value=0.0, choices=[], unit=""):
         Enumerated.__init__(self, choices)
-        FloatProperty.__init__(self, value, unit)
+        FloatVA.__init__(self, value, unit)
 
     def _set(self, value):
         # order is important
         Enumerated._set(self, value)
-        FloatProperty._set(self, value)
+        FloatVA._set(self, value)
 
-class IntEnumerated(IntProperty, Enumerated):
+class IntEnumerated(IntVA, Enumerated):
     """
     A simple class which is both int and enumerated
     """
     def __init__(self, value=0.0, choices=[], unit=""):
         Enumerated.__init__(self, choices)
-        IntProperty.__init__(self, value, unit)
+        IntVA.__init__(self, value, unit)
 
     def _set(self, value):
         # order is important
         Enumerated._set(self, value)
-        IntProperty._set(self, value)
+        IntVA._set(self, value)
 
 
-class MultiSpeedProperty(PropertyRemotable, Continuous):
+class MultiSpeedVA(RemotableVigilantAttribute, Continuous):
     """
     A class to define speed (m/s) for several axes
     It's especially made for Actuator.speed: the value is a dict name => float
@@ -639,7 +640,7 @@ class MultiSpeedProperty(PropertyRemotable, Continuous):
     def __init__(self, value={}, range=[], unit="m/s", *args, **kwargs):
         Continuous.__init__(self, range)
         assert(range[0] >= 0)
-        PropertyRemotable.__init__(self, value, unit, *args, **kwargs)
+        RemotableVigilantAttribute.__init__(self, value, unit, *args, **kwargs)
         
     # TODO detect whenever a value of the dict is changed 
     def _set(self, value):
@@ -651,7 +652,7 @@ class MultiSpeedProperty(PropertyRemotable, Continuous):
             if v <= 0 or v < self._range[0] or v > self._range[1]:
                 raise OutOfBoundError("Trying to assign axis '%s' value '%s' outside of the range %s-%s." % 
                             (str(axis), str(value), str(self._range[0]), str(self._range[1])))
-        Property._set(self, value)
+        VigilantAttribute._set(self, value)
 
 
 

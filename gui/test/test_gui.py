@@ -260,7 +260,7 @@ def __init_resources():
                           </XRCED>
                         </object>
                         <flag>wxBOTTOM|wxEXPAND</flag>
-                        <border>1</border>
+                        <border>2</border>
                       </object>
                       <object class="sizeritem">
                         <object class="odemis.gui.comp.stream.FixedStreamPanel" name="fsp_2">
@@ -281,7 +281,7 @@ def __init_resources():
                           </XRCED>
                         </object>
                         <flag>wxBOTTOM|wxEXPAND</flag>
-                        <border>1</border>
+                        <border>2</border>
                       </object>
                       <object class="sizeritem">
                         <object class="odemis.gui.comp.stream.FixedStreamPanel" name="fsp_3">
@@ -303,7 +303,7 @@ def __init_resources():
                           </XRCED>
                         </object>
                         <flag>wxBOTTOM|wxEXPAND</flag>
-                        <border>1</border>
+                        <border>2</border>
                       </object>
                       <object class="sizeritem">
                         <object class="odemis.gui.comp.stream.CustomStreamPanel" name="csp_1">
@@ -325,7 +325,7 @@ def __init_resources():
                           </XRCED>
                         </object>
                         <flag>wxBOTTOM|wxEXPAND</flag>
-                        <border>1</border>
+                        <border>2</border>
                       </object>
                       <object class="sizeritem">
                         <object class="odemis.gui.comp.stream.CustomStreamPanel" name="csp_2">
@@ -347,7 +347,7 @@ def __init_resources():
                           </XRCED>
                         </object>
                         <flag>wxBOTTOM|wxEXPAND</flag>
-                        <border>1</border>
+                        <border>2</border>
                       </object>
                       <object class="sizeritem">
                         <object class="odemis.gui.comp.stream.CustomStreamPanel" name="csp_3">
@@ -369,7 +369,7 @@ def __init_resources():
                           </XRCED>
                         </object>
                         <flag>wxBOTTOM|wxEXPAND</flag>
-                        <border>1</border>
+                        <border>2</border>
                       </object>
                       <object class="sizeritem">
                         <object class="odemis.gui.comp.buttons.PopupImageButton" name="btn_stream_add">

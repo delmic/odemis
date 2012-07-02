@@ -470,4 +470,3 @@ catalog['stream_add_sel'] = stream_add_sel
 getstream_add_selData = stream_add_sel.GetData
 getstream_add_selImage = stream_add_sel.GetImage
 getstream_add_selBitmap = stream_add_sel.GetBitmap
-

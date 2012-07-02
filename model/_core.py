@@ -173,9 +173,9 @@ def getObject(container_name, object_name):
     container = getContainer(container_name)
     return container.getObject(object_name)
 
-def createContainer(name):
+def createNewContainer(name):
     """
-    creates a new container in an independent process
+    creates a new container in an independent and isolated process
     returns the (proxy to the) new container
     """
     # create a container separately
@@ -197,7 +197,7 @@ def createInNewContainer(container_name, klass, kwargs):
     kwargs (dict (str -> value)): arguments for the __init__() of the component
     returns the (proxy to the) new component
     """
-    container = createContainer(container_name)
+    container = createNewContainer(container_name)
     return container.instantiate(klass, kwargs)
  
 def _manageContainer(name, isready=None):
