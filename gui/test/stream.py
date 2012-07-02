@@ -14,10 +14,12 @@ if os.getcwd().endswith('test'):
 import wx
 import odemis.gui.test.test_gui
 
-
-SLEEP_TIME = 100 # Sleep timer in milliseconds
-MANUAL = True # If manual is set to True, the window will be kept open at the end
-INSPECT = False
+# Sleep timer in milliseconds
+SLEEP_TIME = 100
+# If manual is set to True, the window will be kept open at the end
+MANUAL = True
+# Open an inspection window after running the tests if MANUAL is set
+INSPECT = True
 
 TEST_STREAMS = ["aap", "noot", "mies", "etc"]
 
@@ -66,7 +68,7 @@ class FoldPanelBarTestCase(unittest.TestCase):
     def setUpClass(cls):
         cls.app = TestApp()
         loop()
-        if INSPECT:
+        if INSPECT and MANUAL:
             import wx.lib.inspection
             wx.lib.inspection.InspectionTool().Show()
 
