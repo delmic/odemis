@@ -227,11 +227,6 @@ class ImageTextToggleButton(GenBitmapTextToggleButton):  #pylint: disable=R0901
             self.hovering = False
             self.Refresh()
 
-    def InitColours(self):
-        GenBitmapButton.InitColours(self)
-        if self.background_parent:
-            self.faceDnClr = self.background_parent.GetBackgroundColour()
-
     def DrawLabel(self, dc, width, height, dx=0, dy=0):
         bmp = self.bmpLabel
         if bmp is not None:     # if the bitmap is used
@@ -301,7 +296,7 @@ class PopupImageButton(ImageButton):
 
                 sz = self.lb.GetBestSize()
 
-                width = parent.GetSize().GetWidth()
+                width = parent.GetSize().GetWidth() - 20
                 height = sz.height + 10
 
                 #sz.width -= wx.SystemSettings_GetMetric(wx.SYS_VSCROLL_X)
