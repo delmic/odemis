@@ -7,11 +7,12 @@ catalog = {}
 index = []
 
 arr_down = PyEmbeddedImage(
-    "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAAZiS0dE"
-    "AAAAAAAA+UO7fwAAAAlwSFlzAAALEwAACxMBAJqcGAAAAAd0SU1FB9wGGw8HLjm7j/8AAAAZ"
-    "dEVYdENvbW1lbnQAQ3JlYXRlZCB3aXRoIEdJTVBXgQ4XAAAARUlEQVQ4y2NgGAWDD9QzMDD8"
-    "JwI34DNkJgHNMwm5wpiAAcbEeKWRgYHhGRbN9aSEx0xSnU7IK8bkxEoDOU5HB/8Hd8oDAPjj"
-    "KfLgv5/sAAAAAElFTkSuQmCC")
+    "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAGXRFWHRTb2Z0d2FyZQBBZG9i"
+    "ZSBJbWFnZVJlYWR5ccllPAAAAMtJREFUeNpi/P//PwMlgHHADWAYVAawAfEWkBAB/AuIdUHe"
+    "RzeAB4h9gfg3AQOWAbEkEDOjG8ABxNoEXPEBiL2BWBibCxihEt5QhdgMmATEykDMiisQWaEK"
+    "JmHR/BCILYCYD247FgMYoQpACu+gGVAJxDJwv+OJRmaownwg/gvVfAKIjYCYi9h0wAnE+kB8"
+    "BIh/AHE0EIsDMROxBoAUigFxGBDPAmINIGbHmRcYGRmxyYE0iEKj9w0Qf4R6h+ikzAiNFZAB"
+    "LLgUAQQYANzNZsqvm8moAAAAAElFTkSuQmCC")
 index.append('arr_down')
 catalog['arr_down'] = arr_down
 getarr_downData = arr_down.GetData
@@ -20,12 +21,12 @@ getarr_downBitmap = arr_down.GetBitmap
 
 #----------------------------------------------------------------------
 arr_right = PyEmbeddedImage(
-    "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAAZiS0dE"
-    "AAAAAAAA+UO7fwAAAAlwSFlzAAALEwAACxMBAJqcGAAAAAd0SU1FB9wGGw8EG0QlGB8AAAAZ"
-    "dEVYdENvbW1lbnQAQ3JlYXRlZCB3aXRoIEdJTVBXgQ4XAAAAh0lEQVQ4y83SsQ3CQAyF4Q8I"
-    "EQ07sAFUDIdEk4IBqBCjsA+wAxCO5oroiksuNLHkxrZ+PT+bKcfsX0CDum9okendsMETjzEK"
-    "XggxG8xLAe8OIOCCXQmgTQBthB6GOh0y9S8qmb1y+56w7pNfJfLvuGI/1My6I/WDY+kFVhFw"
-    "xnbMDyxTt6cbP8q+H+83uqphAAAAAElFTkSuQmCC")
+    "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAGXRFWHRTb2Z0d2FyZQBBZG9i"
+    "ZSBJbWFnZVJlYWR5ccllPAAAANlJREFUeNqs008LAUEYx/Edf8PJzV3egZsXoLwAuShXLvKK"
+    "HJzkKHkBDnJWDkoKF0WSKML6To0aW5g1pj617e78ep59ZoXruo7NCjiWyzrA+WcL8jqHIoK/"
+    "VBBBWd7CEFmjFrWAGGoqQLqhiRSESQvypbDnWQVTNBD9VkEcda0CLxlU8LblZ4wZdFHSP7Kf"
+    "gAmqGOj7QgYbt+ighzkOuJsEXNBHGzOssMPZJGCEFsZYYoOTGu3LEnIKQojnOcgjrTYusFYl"
+    "X9+VqQfIM5BEAkfsVRsff5aHAAMAKrxD0QPtM2sAAAAASUVORK5CYII=")
 index.append('arr_right')
 catalog['arr_right'] = arr_right
 getarr_rightData = arr_right.GetData
