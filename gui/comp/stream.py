@@ -27,11 +27,13 @@ Delmic Acquisition Software. If not, see http://www.gnu.org/licenses/.
 
 """
 
+import logging as log
+
 import wx
 import wx.combo
 #from wx.lib.imageutils import stepColour
 
-from odemis.gui.img.data import catalog
+import odemis.gui.img.data as img
 from odemis.gui.comp.buttons import ImageButton, ImageToggleButton, \
     ImageTextToggleButton
 from odemis.gui.comp.text import SuggestTextCtrl, IntegerTextCtrl, \
@@ -43,26 +45,27 @@ TEST_STREAM_LST = ["Aap", u"nöot", "noot", "mies", "kees", "vuur",
 
 # Short-cuts to button icons
 
-BMP_ARR_DOWN = catalog['arr_down'].GetBitmap()
-BMP_ARR_IRGHT = catalog['arr_right'].GetBitmap()
+BMP_ARR_DOWN = img.getarr_downBitmap()
+BMP_ARR_IRGHT = img.getarr_rightBitmap()
 
-BMP_REM = catalog['ico_rem_str'].GetBitmap()
-BMP_REM_H = catalog['ico_rem_str_h'].GetBitmap()
+BMP_REM = img.getico_rem_strBitmap()
+BMP_REM_H = img.getico_rem_str_hBitmap()
 
-BMP_EYE_CLOSED = catalog['ico_eye_closed'].GetBitmap()
-BMP_EYE_CLOSED_H = catalog['ico_eye_closed_h'].GetBitmap()
-BMP_EYE_OPEN = catalog['ico_eye_open'].GetBitmap()
-BMP_EYE_OPEN_H = catalog['ico_eye_open_h'].GetBitmap()
+BMP_EYE_CLOSED = img.getico_eye_closedBitmap()
+BMP_EYE_CLOSED_H = img.getico_eye_closed_hBitmap()
+BMP_EYE_OPEN = img.getico_eye_openBitmap()
+BMP_EYE_OPEN_H = img.getico_eye_open_hBitmap()
 
-BMP_PAUSE = catalog['ico_pause'].GetBitmap()
-BMP_PAUSE_H = catalog['ico_pause_h'].GetBitmap()
-BMP_PLAY = catalog['ico_play'].GetBitmap()
-BMP_PLAY_H = catalog['ico_play_h'].GetBitmap()
+BMP_PAUSE = img.getico_pauseBitmap()
+BMP_PAUSE_H = img.getico_pause_hBitmap()
+BMP_PLAY = img.getico_playBitmap()
+BMP_PLAY_H = img.getico_play_hBitmap()
 
-BMP_CONTRAST_A = catalog['btn_contrast_a'].GetBitmap()
+BMP_CONTRAST = img.getbtn_contrastBitmap()
+BMP_CONTRAST_A = img.getbtn_contrast_aBitmap()
 
-BMP_EMPTY = catalog['empty'].GetBitmap()
-BMP_EMPTY_H = catalog['empty_h'].GetBitmap()
+BMP_EMPTY = img.getemptyBitmap()
+BMP_EMPTY_H = img.getempty_hBitmap()
 
 class Slider(wx.Slider):
     """ This custom Slider class was implemented so it would not capture
@@ -150,15 +153,6 @@ class Expander(wx.PyControl):
         self._sz.Fit(self)
         self.Layout()
 
-        # ==== Bind events
-
-        self._btn_rem.Bind(wx.EVT_BUTTON, self.on_remove)
-
-    def on_remove(self, evt):
-        stream_panel = self._parent
-        fpb_item = stream_panel.Parent
-        stream_panel.Destroy()
-        fpb_item.Layout()
 
     def DoGetBestSize(self, *args, **kwargs):
         """ Return the best size, which is the width of the parent and the
@@ -189,6 +183,8 @@ class Expander(wx.PyControl):
                              (wndRect.GetHeight() - 16) / 2,
                              wx.IMAGELIST_DRAW_TRANSPARENT)
 
+    def get_label(self):
+        return self._label
 
 class FixedExpander(Expander):
     """ Expander for FixedStreamPanels """
@@ -212,7 +208,7 @@ class CustomExpander(Expander):
 
         self.stream_color = None
         self._btn_color = ImageButton(self, -1,
-                                      bitmap=catalog['arr_down'].GetBitmap())
+                                      bitmap=BMP_ARR_DOWN)
         self.set_stream_color()
         self._btn_color.SetToolTipString("Select colour")
         self._btn_color.Bind(wx.EVT_BUTTON, self.on_color_click)
@@ -220,7 +216,6 @@ class CustomExpander(Expander):
         self._sz.Insert(2, self._btn_color, 0,
                         wx.RIGHT | wx.ALIGN_CENTRE_VERTICAL, 8)
 
-        #self._label_ctrl = wx.TextCtrl(self, -1, label, style=wx.NO_BORDER)
         self._label_ctrl = SuggestTextCtrl(self, id= -1, value=label)
         self._label_ctrl.SetChoices(TEST_STREAM_LST)
         self._label_ctrl.SetBackgroundColour(self.Parent.GetBackgroundColour())
@@ -270,10 +265,6 @@ class CustomExpander(Expander):
             data = dlg.GetColourData()
             color_str = data.GetColour().GetAsString(wx.C2S_HTML_SYNTAX)
             self.set_stream_color(color_str)
-
-    def on_remove(self, evt):
-        self._label_ctrl.Destroy()
-        Expander.on_remove(self, evt)
 
 
 class StreamPanel(wx.PyPanel):
@@ -326,13 +317,31 @@ class StreamPanel(wx.PyPanel):
 
         self._sz = wx.BoxSizer(wx.HORIZONTAL)
 
-
         self.Bind(wx.EVT_SIZE, self.OnSize)
 
         # Process our custom 'collapsed' parameter.
         if not collapsed:
             self.collapse(collapsed)
 
+    # ==== Event Handlers
+
+    def on_remove(self, evt):
+        print "Removing stream panel '%s'" % self._expander.get_label()
+        fpb_item = self.Parent
+        self.Destroy()
+        fpb_item.Layout()
+
+    def on_visibility(self, evt):
+        if self._expander._btn_vis.up:
+            print "Hide stream"
+        else:
+            print "Show stream"
+
+    def on_play(self, evt):
+        if self._expander._btn_play.up:
+            print "Pause stream"
+        else:
+            print "Update stream"
 
     def collapse(self, collapse=True):
         """ Collapses or expands the pane window.
@@ -381,8 +390,8 @@ class StreamPanel(wx.PyPanel):
         # ====== Top row, auto contrast toggle button
 
         self._btn_auto_contrast = ImageTextToggleButton(self._panel, -1,
-                                    catalog['btn_contrast'].GetBitmap(), label="Auto",
-                                    size=(68, 26))
+                                                BMP_CONTRAST, label="Auto",
+                                                size=(68, 26))
         self._btn_auto_contrast.SetBitmaps(bmp_sel=BMP_CONTRAST_A)
         self._btn_auto_contrast.SetForegroundColour("#000000")
         self._gbs.Add(self._btn_auto_contrast, (0, 0), flag=wx.LEFT, border=34)
@@ -441,7 +450,15 @@ class StreamPanel(wx.PyPanel):
                       flag=wx.ALIGN_CENTRE_VERTICAL | wx.RIGHT,
                       border=10)
 
-        # Bind events
+        # ==== Bind events
+
+        # Expander
+
+        self._expander._btn_rem.Bind(wx.EVT_BUTTON, self.on_remove)
+        self._expander._btn_vis.Bind(wx.EVT_BUTTON, self.on_visibility)
+        self._expander._btn_play.Bind(wx.EVT_BUTTON, self.on_play)
+
+        # Panel controls
 
         self._sld_brightness.Bind(wx.EVT_COMMAND_SCROLL, self.on_brightness_slide)
         self._txt_brightness.Bind(wx.EVT_TEXT_ENTER, self.on_brightness_entered)
@@ -452,6 +469,8 @@ class StreamPanel(wx.PyPanel):
         self._txt_contrast.Bind(wx.EVT_CHAR, self.on_contrast_key)
 
         self._btn_auto_contrast.Bind(wx.EVT_BUTTON, self.on_toggle_autocontrast)
+
+
 
     def on_toggle_autocontrast(self, evt):
         enabled = not self._btn_auto_contrast.GetToggle()
@@ -640,8 +659,26 @@ class CustomStreamPanel(StreamPanel): #pylint: disable=R0901
     def __init__(self, *args, **kwargs):
         StreamPanel.__init__(self, *args, **kwargs)
 
+    def on_remove(self, evt):
+        self._expander._label_ctrl.Destroy()
+        StreamPanel.on_remove(self, evt)
 
     def finalize(self):
+        """ The CustomStreamPanel has a few extra controls in addition to the
+        ones defined in the StreamPanel class:
+
+        + CustomStreamPanel
+        |--- CustomExpander
+        |--+ Panel
+           |-- .
+           |-- .
+           |-- .
+           |-- StaticText
+           |-- UnitIntegerCtrl
+           |-- StaticText
+           |-- UnitIntegerCtrl
+
+        """
         StreamPanel.finalize(self)
 
         lbl_excitation = wx.StaticText(self._panel, -1, "excitation:")
