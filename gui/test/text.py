@@ -20,7 +20,7 @@ SLEEP_TIME = 100 # Sleep timer in milliseconds
 MANUAL = True # If manual is set to True, the window will be kept open at the end
 INSPECT = False
 
-TEST_LST = ["Aap", "nöot", "noot", "mies", "kees", "vuur", "quantummechnica",
+TEST_LST = ["Aap", u"nöot", "noot", "mies", "kees", "vuur", "quantummechnica",
             "Repelsteeltje", "", "XXX", "a", "aa", "aaa", "aaaa",
             "aaaaa", "aaaaaa", "aaaaaaa"]
 
@@ -76,9 +76,9 @@ class SuggestTestCase(unittest.TestCase):
     def setUpClass(cls):
         cls.app = TestApp()
         loop()
-        if INSPECT:
-            import wx.lib.inspection
-            wx.lib.inspection.InspectionTool().Show()
+        if INSPECT and MANUAL:
+            from wx.lib import inspection
+            inspection.InspectionTool().Show()
 
     @classmethod
     def tearDownClass(cls):
@@ -110,10 +110,16 @@ class SuggestTestCase(unittest.TestCase):
         """
         return window.GetClientSize().GetHeight() < window.GetSize().GetHeight()
 
-    def test_structure(self):
-        #self.app.test_frame.txt_suggest.set_suggest_func(suggest)
+    def test_suggest_text(self):
+        # Not sure how to create a sensible test case with user input simulation
+        # wxPython 2.9.4 has a new UIActionSimulator class that should
+        # facilitate this, but getting 2.9 to work on Ubuntu is not a trivial
+        # task at this point in time (July 2012), involving compiling the
+        # enite package ourselves.
         pass
 
+    def test_unit_integer_text(self):
+        pass
 
 
 if __name__ == "__main__":

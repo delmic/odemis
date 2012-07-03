@@ -419,14 +419,34 @@ def __init_resources():
         <object class="sizeritem">
           <object class="odemis.gui.comp.text.SuggestTextCtrl" name="txt_suggest">
             <size>200,-1</size>
-            <value>text field</value>
+            <value>suggest text field</value>
             <XRCED>
               <assign_var>1</assign_var>
             </XRCED>
           </object>
           <option>0</option>
-          <flag>wxALIGN_CENTRE</flag>
-          <border>0</border>
+          <flag>wxALL|wxALIGN_CENTRE</flag>
+          <border>10</border>
+        </object>
+        <object class="sizeritem">
+          <object class="odemis.gui.comp.text.UnitIntegerCtrl">
+            <size>200,-1</size>
+            <min>-10</min>
+            <max>10</max>
+            <unit>cm</unit>
+          </object>
+          <flag>wxALL|wxALIGN_CENTRE</flag>
+          <border>10</border>
+        </object>
+        <object class="sizeritem">
+          <object class="odemis.gui.comp.text.UnitIntegerCtrl">
+            <size>200,-1</size>
+            <min>-10</min>
+            <max>10</max>
+            <unit>μm</unit>
+          </object>
+          <flag>wxALL|wxALIGN_CENTRE</flag>
+          <border>10</border>
         </object>
       </object>
       <fg>#E6E6FA</fg>

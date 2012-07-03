@@ -99,10 +99,10 @@ class Expander(wx.PyControl):
     Structure:
 
         + Expander
-        |-- ImageButton
-        |-- StaticText / SuggestTextCtrl
-        |-- ImageToggleButton
-        |-- ImageToggleButton
+        |-- ImageButton     (remove stream button)
+        |-- StaticText / SuggestTextCtrl (stream label)
+        |-- ImageToggleButton (show/hide button)
+        |-- ImageToggleButton (capture/pause button)
 
     The triangular fold icons are drawn in a separate routine.
 
