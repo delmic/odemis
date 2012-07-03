@@ -1418,10 +1418,11 @@ class FoldPanelBar(wx.Panel):
         return window
 
     # Delmic
-    def InsertFoldPanelWindow(self, panel, window, position, flags=FPB_ALIGN_WIDTH,
-                           spacing=FPB_DEFAULT_SPACING,
-                           leftSpacing=FPB_DEFAULT_LEFTLINESPACING,
-                           rightSpacing=FPB_DEFAULT_RIGHTLINESPACING):
+    def InsertFoldPanelWindow(self, panel, window, position,
+                              flags=FPB_ALIGN_WIDTH,
+                              spacing=FPB_DEFAULT_SPACING,
+                              leftSpacing=FPB_DEFAULT_LEFTLINESPACING,
+                              rightSpacing=FPB_DEFAULT_RIGHTLINESPACING):
 
         try:
             # The index of the panel to which we are adding a window
@@ -1513,7 +1514,7 @@ class FoldPanelBar(wx.Panel):
         """
 
         try:
-            item = self._panels.index(panel)
+            dummy = self._panels.index(panel)
         except:
             raise Exception("ERROR: Invalid Panel Passed To AddFoldPanelSeparator: " + repr(panel))
 
