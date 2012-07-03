@@ -431,6 +431,7 @@ def __init_resources():
         <object class="sizeritem">
           <object class="odemis.gui.comp.text.UnitIntegerCtrl">
             <size>200,-1</size>
+            <value>0</value>
             <min>-10</min>
             <max>10</max>
             <unit>cm</unit>

@@ -273,6 +273,12 @@ class ImageTextToggleButton(GenBitmapTextToggleButton):  #pylint: disable=R0901
         else:
             self.faceDnClr = self.GetParent().GetBackgroundColour()
 
+class ColourButton(ImageButton):
+    """ This class describes an ImageButton that uses single-color bitmap that
+    can be dynamically generated, allowing it to change colour.
+    """
+    pass
+
 class PopupImageButton(ImageButton):
 
     def __init__(self, *args, **kwargs):
