@@ -384,9 +384,9 @@ class IntegerValidator(wx.PyValidator):
         fld = self.GetWindow()
         val = fld.GetValue()
 
-        return self._validate_value(val)
+        return self.validate_value(val)
 
-    def _validate_value(self, val):
+    def validate_value(self, val):
         msg = "Value {} out of range [{}, {}]"
 
         if self.min_val is not None and val < self.min_val:
@@ -429,17 +429,15 @@ class IntegerTextCtrl(wx.TextCtrl):
     The 'min_val' and 'max_val' keyword arguments may be used to set limits on
     the value contained within the control.
 
+    If the object is created with an invalid integer value a ValueError
+    exception will be raised.
+
     """
     def __init__(self, *args, **kwargs):
 
-        min_val = max_val = None
-
-        if 'min_val' in kwargs:
-            min_val = kwargs['min_val']
-            del kwargs['min_val']
-        if 'max_val' in kwargs:
-            max_val = kwargs['max_val']
-            del kwargs['max_val']
+        min_val = kwargs.pop('min_val', None)
+        max_val = kwargs.pop('max_val', None)
+        key_inc = kwargs.pop('key_inc', True)
 
         kwargs['validator'] = IntegerValidator(min_val, max_val)
         wx.TextCtrl.__init__(self, *args, **kwargs)
@@ -449,6 +447,26 @@ class IntegerTextCtrl(wx.TextCtrl):
             raise ValueError(msg.format(self.GetValue(),
                                         min_val or "?",
                                         max_val or "?"))
+
+        if key_inc:
+            self.Bind(wx.EVT_CHAR, self.on_char)
+
+    def on_char(self, evt):
+
+        key = evt.GetKeyCode()
+        val = self.GetValue()
+
+        if key == wx.WXK_UP:
+            val += 1
+        elif key == wx.WXK_DOWN:
+            val -= 1
+        else:
+            evt.Skip()
+            return
+
+        if self.GetValidator().validate_value(val):
+            self.SetValue(val)
+
 
     def SetValue(self, val): #pylint: disable=W0221
         """ Set the value of the control or raise and exception when the value
@@ -493,7 +511,7 @@ class UnitIntegerCtrl(IntegerTextCtrl):
         val = args[2] if len(args) > 2 else kwargs.get('value', 0)
 
         self.num_val = None
-        self.SetValue(val)
+        self.SetValueStr(val)
 
         # Event binding
         self.Bind(wx.EVT_SET_FOCUS, self.on_focus)
@@ -514,7 +532,7 @@ class UnitIntegerCtrl(IntegerTextCtrl):
         lost .
         """
         if self.GetValidator().Validate():
-            self.SetValue(self.GetValue())
+            self.SetValueStr(self.GetValue())
         else:
             self.SetValue(self.num_val)
 
@@ -529,6 +547,9 @@ class UnitIntegerCtrl(IntegerTextCtrl):
         """
         IntegerTextCtrl.SetValue(self, val)
         self.num_val = val
+
+    def SetValueStr(self, val):
+        self.SetValue(val)
         wx.TextCtrl.SetValue(self, "%s %s" % (IntegerTextCtrl.GetValue(self),
                                               self.unit))
 

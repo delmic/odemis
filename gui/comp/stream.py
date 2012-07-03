@@ -490,18 +490,12 @@ class StreamPanel(wx.PyPanel):
     def on_brightness_key(self, evt):
         key = evt.GetKeyCode()
 
-        if key == wx.WXK_UP:
-            val = int(self._txt_brightness.GetValue() or 0)
-            val += 1
-        elif key == wx.WXK_DOWN:
-            val = int(self._txt_brightness.GetValue() or 0)
-            val -= 1
-        else:
-            evt.Skip()
-            return
+        if key in (wx.WXK_UP, wx.WXK_DOWN):
+            self._sld_brightness.SetValue(self._txt_brightness.GetValue())
 
-        self._sld_brightness.SetValue(val)
-        self._txt_brightness.SetValue(str(val))
+        evt.Skip()
+
+
 
     def on_brightness_entered(self, evt):
         self._sld_brightness.SetValue(int(self._txt_brightness.GetValue()))
@@ -517,15 +511,9 @@ class StreamPanel(wx.PyPanel):
 
     def on_contrast_key(self, evt):
         key = evt.GetKeyCode()
-        val = int(self._txt_contrast.GetValue())
 
-        if key == wx.WXK_UP:
-            val += 1
-        elif key == wx.WXK_DOWN:
-            val -= 1
-
-        self._sld_contrast.SetValue(val)
-        self._txt_contrast.SetValue(str(val))
+        if key in (wx.WXK_UP, wx.WXK_DOWN):
+            self._sld_contrast.SetValue(self._txt_contrast.GetValue())
 
         evt.Skip()
 
