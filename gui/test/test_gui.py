@@ -20,12 +20,12 @@ class xrcfpb_frame(wx.Frame):
 #!XRCED:begin-block:xrcfpb_frame.PreCreate
     def PreCreate(self, pre):
         """ This function is called during the class's initialization.
-        
+
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
         pass
-        
+
 #!XRCED:end-block:xrcfpb_frame.PreCreate
 
     def __init__(self, parent):
@@ -48,12 +48,12 @@ class xrcstream_frame(wx.Frame):
 #!XRCED:begin-block:xrcstream_frame.PreCreate
     def PreCreate(self, pre):
         """ This function is called during the class's initialization.
-        
+
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
         pass
-        
+
 #!XRCED:end-block:xrcstream_frame.PreCreate
 
     def __init__(self, parent):
@@ -80,12 +80,12 @@ class xrctext_frame(wx.Frame):
 #!XRCED:begin-block:xrctext_frame.PreCreate
     def PreCreate(self, pre):
         """ This function is called during the class's initialization.
-        
+
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
         pass
-        
+
 #!XRCED:end-block:xrctext_frame.PreCreate
 
     def __init__(self, parent):
@@ -431,7 +431,7 @@ def __init_resources():
         <object class="sizeritem">
           <object class="odemis.gui.comp.text.UnitIntegerCtrl">
             <size>200,-1</size>
-            <value>0</value>
+            <value>9</value>
             <min>-10</min>
             <max>10</max>
             <unit>cm</unit>

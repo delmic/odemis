@@ -25,10 +25,12 @@ Delmic Acquisition Software. If not, see http://www.gnu.org/licenses/.
 """
 
 import locale
-import  sys
+import sys
 
 import wx
 import wx.lib.mixins.listctrl as listmix
+
+from odemis.gui.log import log
 
 # Locale is needed for correct string sorting
 locale.setlocale(locale.LC_ALL, "")
@@ -358,7 +360,9 @@ class SuggestTextCtrl (wx.TextCtrl, listmix.ColumnSorterMixin):
 
 
 class IntegerValidator(wx.PyValidator):
-    """ This validator makes sure that only valid integers are entered.
+    """ This validator can be used to make sure only valid characters are
+    entered into a control (digits and a minus symbol).
+    It can also validate if the value that is present is a valid integer.
     """
 
     def __init__(self, min_val=None, max_val=None):
@@ -387,6 +391,9 @@ class IntegerValidator(wx.PyValidator):
         val = fld.GetValue()
 
         validated, _ = self.validate_value(val)
+
+        log.debug("Value {} is {}valid".format(val, "" if validated else "not"))
+
         return validated
 
     def validate_value(self, val):
@@ -401,12 +408,13 @@ class IntegerValidator(wx.PyValidator):
 
         msg = "Value {} out of range [{}, {}]"
 
-        if self.min_val is not None and val < self.min_val:
-            print msg.format(val, self.min_val or "?", self.max_val or "?")
-            return False, self.min_val
-        if self.max_val is not None and val > self.max_val:
-            print msg.format(val, self.min_val or "?", self.max_val or "?")
-            return False, self.max_val
+        if val is not None and val != "-":
+            if self.min_val is not None and val < self.min_val:
+                log.debug(msg.format(val, self.min_val, self.max_val))
+                return False, self.min_val
+            if self.max_val is not None and val > self.max_val:
+                log.debug(msg.format(val, self.min_val, self.max_val))
+                return False, self.max_val
         return True, val
 
     def OnChar(self, event):
@@ -420,17 +428,30 @@ class IntegerValidator(wx.PyValidator):
 
         # Allow legal characters to reach the text control
         if chr(key) in self.legal:
-            fld = self.GetWindow()
-            val = fld.GetValueStr()
+            log.debug("Processing key '%s'", key)
 
-            pos = self.GetWindow().GetInsertionPoint()
-            val = val[:pos] + chr(key) + val[pos:]
+            fld = self.GetWindow()
+            val = fld.GetValue()
+
+            if val is None:
+                event.Skip()
+                return
+            else:
+                val = unicode(val)
+
+            #pos = self.GetWindow().GetInsertionPoint()
+            start, end = fld.GetSelection()
+            val = val[:start] + chr(key) + val[end:]
+
+            log.debug("Checking against %s", val)
 
             try:
-                if val != u"-":
+                if val != "-":
                     val = int(val)
+                log.debug("Key accepted")
                 event.Skip()
             except ValueError:
+                log.debug("Key rejected")
                 return
 
         # 'Eat' the event by not Skipping it, thus preventing it.
@@ -442,6 +463,9 @@ class IntegerTextCtrl(wx.TextCtrl):
 
     The 'min_val' and 'max_val' keyword arguments may be used to set limits on
     the value contained within the control.
+
+    When the 'key_inc' argument is set, the value can be altered by the up and
+    down cursor keys.
 
     If the object is created with an invalid integer value a ValueError
     exception will be raised.
@@ -457,14 +481,68 @@ class IntegerTextCtrl(wx.TextCtrl):
 
         wx.TextCtrl.__init__(self, *args, **kwargs)
 
-        if not self.GetValidator().Validate():
-            msg = "Value {} out of range [{}, {}]"
-            raise ValueError(msg.format(self.GetValue(),
-                                        min_val or "?",
-                                        max_val or "?"))
+        val = args[2] if len(args) > 2 else kwargs.get('value', None)
+
+        # Set the value so it will be validated to be a valid integer
+        if val:
+            self.SetValue(val)
 
         if key_inc:
             self.Bind(wx.EVT_CHAR, self.on_char)
+
+        self.Bind(wx.EVT_KILL_FOCUS, self.on_kill_focus)
+        self.Bind(wx.EVT_SET_FOCUS, self.on_focus)
+
+        # TODO: For the wx.EVT_TEXT_ENTER event to work, the TE_PROCESS_ENTER
+        # style needs to be set, but setting it in XRC throws an error
+        # A possible workaround is to include the style by hand
+        # (' | TE_PROCESS_ENTER') in the XML handler or here, in the constructor
+        #self.Bind(wx.EVT_TEXT_ENTER, self.on_text_enter)
+
+    def GetValue(self): #pylint: disable=W0221
+        """ Return the value as an integer, or None if no (valid) value is
+        present.
+        """
+        val = wx.TextCtrl.GetValue(self)
+
+        return self._check_value(val)
+
+
+    def _check_value(self, val):
+        try:
+            return int(val)
+        except ValueError:
+            if val is None or len(val) == 0:
+                return None
+            else:
+                log.error("Illegal %s value %s",
+                              self.__class__.__name__, val)
+                wx.CallAfter(self.SetFocus)
+                return None
+        return None
+
+    def GetValueStr(self):
+        """ Return the value of the control as a string """
+        return wx.TextCtrl.GetValue(self)
+
+    def SetValue(self, val): #pylint: disable=W0221
+        """ Set the value of the control or raise and exception when the value
+        is not a valid integer.
+        """
+        try:
+            log.debug("Setting value %s for %s object",
+                      val, self.__class__.__name__)
+            if val:
+                val = int(val)
+            wx.TextCtrl.SetValue(self, unicode(val))
+        except ValueError:
+            raise ValueError("Value '%s' is not a valid integer." % val)
+
+    SetValueStr = SetValue
+
+    def reset(self):
+        """ Set the content of the text control to just the numerical value """
+        self.SetValue(unicode(self.GetValue() or ""))
 
     def on_char(self, evt):
         """ This event handler increases or decreases the integer value when
@@ -487,29 +565,25 @@ class IntegerTextCtrl(wx.TextCtrl):
         if validated:
             self.SetValue(val)
 
-    def GetValue(self): #pylint: disable=W0221
-        """ Return the value as an integer, or None if no (valid) value is
-        present.
+    def on_focus(self, evt):
+        """ Remove the units from the displayed value on focus """
+        self.reset()
+        wx.CallAfter(self.SetSelection, -1, -1)
+
+    def on_kill_focus(self, evt):
+        """ Display the current value with the units added when focus is
+        lost .
         """
-        try:
-            int(wx.TextCtrl.GetValue(self))
-        except ValueError:
-            return None
 
-    def GetValueStr(self):
-        """ Return the value of the control as a string """
-        return wx.TextCtrl.GetValue(self)
+        val = self.GetValue()
+        wx.CallAfter(self.SetSelection, 0, 0)
 
-    def SetValue(self, val): #pylint: disable=W0221
-        """ Set the value of the control or raise and exception when the value
-        is not a valid integer.
-        """
-        try:
-            val = int(val)
-            wx.TextCtrl.SetValue(self, unicode(val))
-        except ValueError:
-            raise ValueError("Value '%s' is not a valid integer." % val)
-
+        if val:
+            validated, new_val = self.GetValidator().validate_value(val)
+            if validated:
+                self.SetValueStr(val)
+            else:
+                self.SetValueStr(new_val)
 
 
 class UnitIntegerCtrl(IntegerTextCtrl):
@@ -530,51 +604,47 @@ class UnitIntegerCtrl(IntegerTextCtrl):
 
         IntegerTextCtrl.__init__(self, *args, **kwargs)
 
-        val = args[2] if len(args) > 2 else kwargs.get('value', 0)
+        val = args[2] if len(args) > 2 else kwargs.get('value', None)
+        if val:
+            self.SetValueStr(val)
 
+    # def on_focus(self, evt):
+    #     """ Remove the units from the displayed value on focus """
+    #     self.reset()
+    #     wx.CallAfter(self.SetSelection, -1, -1)
 
-        self.num_val = None
-        self.SetValueStr(val)
+    # def on_kill_focus(self, evt):
+    #     """ Display the current value with the units added when focus is
+    #     lost .
+    #     """
 
-        # Event binding
-        self.Bind(wx.EVT_SET_FOCUS, self.on_focus)
-        self.Bind(wx.EVT_KILL_FOCUS, self.on_kill_focus)
-        self.Bind(wx.EVT_TEXT_ENTER, self.on_text_enter)
+    #     val = self.GetValue()
+    #     wx.CallAfter(self.SetSelection, 0, 0)
 
-    def on_text_enter(self, evt):
-        if not self.GetValidator().Validate():
-            self.reset()
+    #     if val:
+    #         validated, new_val = self.GetValidator().validate_value(val)
+    #         if validated:
+    #             self.SetValueStr(val)
+    #         else:
+    #             self.SetValueStr(new_val)
 
-    def on_focus(self, evt):
-        """ Remove the units from the displayed value on focus """
-        self.reset()
-        wx.CallAfter(self.SetSelection, -1, -1)
-
-    def on_kill_focus(self, evt):
-        """ Display the current value with the units added when focus is
-        lost .
-        """
-        if self.GetValidator().Validate():
-            self.SetValueStr(self.GetValue())
-        else:
-            self.SetValue(self.num_val)
-
-    def reset(self):
-        """ Set the content of the text control to just the numrical value """
-        IntegerTextCtrl.SetValue(self, "%s" % self.num_val)
-
-    def SetValue(self, val): #pylint: disable=W0221
-        """ Internally store the integer value 'val' and display it with
-        the units added.
-        The IntegerTextCtrl base class is used to validate the provided value.
-        """
-        IntegerTextCtrl.SetValue(self, val)
-        self.num_val = val
 
     def SetValueStr(self, val):
         self.SetValue(val)
-        wx.TextCtrl.SetValue(self, "%s %s" % (IntegerTextCtrl.GetValue(self),
-                                              self.unit))
+        wx.TextCtrl.SetValue(self, "%s %s" % (val, self.unit))
+
+    def GetValue(self):
+        """ Return the value as an integer
+        If the field is empty, None will be returned. If and illegal value is
+        present, an exception will be raised.
+        """
+        val = wx.TextCtrl.GetValue(self)
+
+        # Strip the unit symbols
+        if val.endswith(self.unit):
+            val = val[:-len(self.unit)]
+
+        return self._check_value(val)
 
     def GetValueStr(self):
         return "%s %s" % (IntegerTextCtrl.GetValueStr(self), self.unit)
