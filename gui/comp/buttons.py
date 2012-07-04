@@ -6,8 +6,11 @@
 # in XRCED's plugin directory.
 
 import wx
+
 from wx.lib.buttons import GenBitmapButton, GenBitmapToggleButton, \
     GenBitmapTextToggleButton
+
+import odemis.gui.img.data as img
 
 class ImageButton(GenBitmapButton):
     """ Graphical button with hover effect.
@@ -274,10 +277,55 @@ class ImageTextToggleButton(GenBitmapTextToggleButton):  #pylint: disable=R0901
             self.faceDnClr = self.GetParent().GetBackgroundColour()
 
 class ColourButton(ImageButton):
-    """ This class describes an ImageButton that uses single-color bitmap that
+    """ This class describes an ImageButton that uses single-colour bitmap that
     can be dynamically generated, allowing it to change colour.
     """
-    pass
+
+    # The default colour for the colour button
+    DEFAULT_COLOR = "#88BA38"
+
+    def __init__(self, *args, **kwargs):
+
+        colour = kwargs.pop('colour', None)
+        ImageButton.__init__(self, *args, **kwargs)
+        self.set_colour(colour)
+
+    def set_colour(self, colour=None):
+        """ Update the colour button to reflect the provided colour """
+
+        self.colour = colour or self.DEFAULT_COLOR
+
+        BMP_EMPTY = img.getemptyBitmap()
+        BMP_EMPTY_H = img.getempty_hBitmap()
+
+        brush = wx.Brush(self.colour)
+        pen = wx.Pen(self.colour)
+        bmp = BMP_EMPTY.GetSubBitmap(
+                    wx.Rect(0, 0, BMP_EMPTY.GetWidth(), BMP_EMPTY.GetHeight()))
+        mdc = wx.MemoryDC()
+        mdc.SelectObject(bmp)
+        mdc.SetBrush(brush)
+        mdc.SetPen(pen)
+        mdc.DrawRectangle(4, 4, 10, 10)
+        mdc.SelectObject(wx.NullBitmap)
+
+        self.SetBitmapLabel(bmp)
+
+        bmp = BMP_EMPTY_H.GetSubBitmap(
+                    wx.Rect(0, 0, BMP_EMPTY.GetWidth(), BMP_EMPTY.GetHeight()))
+        mdc = wx.MemoryDC()
+        mdc.SelectObject(bmp)
+        mdc.SetBrush(brush)
+        mdc.SetPen(pen)
+        mdc.DrawRectangle(4, 4, 10, 10)
+        mdc.SelectObject(wx.NullBitmap)
+
+        self.SetBitmaps(bmp)
+
+        self.Refresh()
+
+    def get_colour(self):
+        return self.colour
 
 class PopupImageButton(ImageButton):
 

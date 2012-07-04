@@ -33,10 +33,13 @@ import wx
 import wx.combo
 
 import odemis.gui.img.data as img
+
+from odemis.gui.log import log
 from odemis.gui.comp.buttons import ImageButton, ImageToggleButton, \
-    ImageTextToggleButton
+    ImageTextToggleButton, ColourButton
 from odemis.gui.comp.text import SuggestTextCtrl, IntegerTextCtrl, \
     UnitIntegerCtrl
+from odemis.gui.util.conversion import wave2hex
 
 TEST_STREAM_LST = ["Aap", u"nöot", "noot", "mies", "kees", "vuur",
                    "quantummechnica", "Repelsteeltje", "", "XXX", "a", "aa",
@@ -63,8 +66,6 @@ BMP_PLAY_H = img.getico_play_hBitmap()
 BMP_CONTRAST = img.getbtn_contrastBitmap()
 BMP_CONTRAST_A = img.getbtn_contrast_aBitmap()
 
-BMP_EMPTY = img.getemptyBitmap()
-BMP_EMPTY_H = img.getempty_hBitmap()
 
 class Slider(wx.Slider):
     """ This custom Slider class was implemented so it would not capture
@@ -211,18 +212,15 @@ class FixedExpander(Expander):
 class CustomExpander(Expander):
     """ Expander for CustomStreamPanels """
 
-    # The default color for the color button
-    DEFAULT_COLOR = "#88BA38"
-
     def __init__(self, parent, label, wid=wx.ID_ANY):
         Expander.__init__(self, parent, label, wid)
 
         self.stream_color = None
-        self._btn_color = ImageButton(self, -1,
+        self._btn_color = ColourButton(self, -1,
                                 size=(18,18),
-                                bitmap=BMP_EMPTY,
+                                colour=self.stream_color,
                                 background_parent=parent)
-        self.set_stream_color()
+
         self._btn_color.SetToolTipString("Select colour")
 
         self._sz.Insert(2, self._btn_color, 0,
@@ -239,31 +237,10 @@ class CustomExpander(Expander):
 
     def set_stream_color(self, color=None):
         """ Update the color button to reflect the provided color """
-        self.stream_color = color or self.DEFAULT_COLOR
-        brush = wx.Brush(self.stream_color)
-        pen = wx.Pen(self.stream_color)
-        bmp = BMP_EMPTY
-        mdc = wx.MemoryDC()
-        mdc.SelectObject(bmp)
-        mdc.SetBrush(brush)
-        mdc.SetPen(pen)
-        mdc.DrawRectangle(4, 4, 10, 10)
-        mdc.SelectObject(wx.NullBitmap)
-
-        self._btn_color.SetBitmapLabel(bmp)
-
-        bmp = BMP_EMPTY_H
-        mdc = wx.MemoryDC()
-        mdc.SelectObject(bmp)
-        mdc.SetBrush(brush)
-        mdc.SetPen(pen)
-        mdc.DrawRectangle(4, 4, 10, 10)
-        mdc.SelectObject(wx.NullBitmap)
-
-        self._btn_color.SetBitmaps(bmp)
+        self._btn_color.set_color(color)
 
     def get_stream_color(self):
-        return self.stream_color
+        return self._btn_color.get_color()
 
 class StreamPanel(wx.PyPanel):
     """ The StreamPanel super class, a special case collapsible pane.
@@ -324,22 +301,22 @@ class StreamPanel(wx.PyPanel):
     # ==== Event Handlers
 
     def on_remove(self, evt):
-        print "Removing stream panel '%s'" % self._expander.get_label()
+        log.debug("Removing stream panel '%s'" % self._expander.get_label())
         fpb_item = self.Parent
         self.Destroy()
         fpb_item.Layout()
 
     def on_visibility(self, evt):
         if self._expander._btn_vis.up:
-            print "Hide stream"
+            log.debug("Hide stream")
         else:
-            print "Show stream"
+            log.debug("Show stream")
 
     def on_play(self, evt):
         if self._expander._btn_play.up:
-            print "Pause stream"
+            log.debug("Pause stream")
         else:
-            print "Update stream"
+            log.debug("Update stream")
 
     # END ==== Event Handlers
 
@@ -419,7 +396,7 @@ class StreamPanel(wx.PyPanel):
 
         self._txt_brightness = IntegerTextCtrl(self._panel, -1,
                 str(self._sld_brightness.GetValue()),
-                style=wx.NO_BORDER | wx.TE_PROCESS_ENTER,
+                style=wx.NO_BORDER,
                 size=(30, -1),
                 min_val=self._sld_brightness.GetMin(),
                 max_val=self._sld_brightness.GetMax())
@@ -445,7 +422,7 @@ class StreamPanel(wx.PyPanel):
 
         self._txt_contrast = IntegerTextCtrl(self._panel, -1,
                 str(self._sld_contrast.GetValue()),
-                style=wx.NO_BORDER | wx.TE_PROCESS_ENTER,
+                style=wx.NO_BORDER,
                 size=(30, -1),
                 min_val=self._sld_contrast.GetMin(),
                 max_val=self._sld_contrast.GetMax())
@@ -496,15 +473,16 @@ class StreamPanel(wx.PyPanel):
         evt.Skip()
 
 
-
     def on_brightness_entered(self, evt):
         self._sld_brightness.SetValue(int(self._txt_brightness.GetValue()))
+        evt.Skip()
 
     def on_brightness_slide(self, evt):
         self._txt_brightness.SetValue(str(self._sld_brightness.GetValue()))
 
     def on_contrast_entered(self, evt):
         self._sld_contrast.SetValue(int(self._txt_contrast.GetValue()))
+        evt.Skip()
 
     def on_contrast_slide(self, evt):
         self._txt_contrast.SetValue(str(self._sld_contrast.GetValue()))
@@ -660,6 +638,9 @@ class CustomStreamPanel(StreamPanel): #pylint: disable=R0901
     def __init__(self, *args, **kwargs):
         StreamPanel.__init__(self, *args, **kwargs)
 
+        self._excitation = "200"
+        self._emission = "200"
+
     def on_remove(self, evt):
         self._expander._label_ctrl.Destroy()
         StreamPanel.on_remove(self, evt)
@@ -673,7 +654,7 @@ class CustomStreamPanel(StreamPanel): #pylint: disable=R0901
         if dlg.ShowModal() == wx.ID_OK:
             data = dlg.GetColourData()
             color_str = data.GetColour().GetAsString(wx.C2S_HTML_SYNTAX)
-            print "Colour %s selected" % color_str
+            log.debug("Colour %s selected", color_str)
             self._expander.set_stream_color(color_str)
 
     def finalize(self):
@@ -698,28 +679,73 @@ class CustomStreamPanel(StreamPanel): #pylint: disable=R0901
         self._gbs.Add(lbl_excitation, (3, 0),
                       flag=wx.LEFT | wx.ALIGN_CENTRE_VERTICAL, border=34)
 
-        self._txt_excitation = UnitIntegerCtrl(self._panel, -1, "200",
-                style=wx.NO_BORDER | wx.TE_PROCESS_ENTER,
+        self._txt_excitation = UnitIntegerCtrl(self._panel, -1, self._excitation,
+                style=wx.NO_BORDER,
                 size=(50, -1), min_val=200, max_val=1000, unit='nm')
         self._txt_excitation.SetForegroundColour("#2FA7D4")
         self._txt_excitation.SetBackgroundColour(self.GetBackgroundColour())
+
+        self._txt_excitation.Bind(wx.EVT_TEXT, self.on_excitation_text)
+
 
         self._gbs.Add(self._txt_excitation, (3, 1),
                       flag=wx.ALIGN_CENTRE_VERTICAL | wx.RIGHT,
                       border=10)
 
+
+        self._btn_excitation = ColourButton(self._panel, -1,
+                                     size=(18,18),
+                                     colour=wave2hex(self._excitation),
+                                     background_parent=self._panel)
+        self._btn_excitation.SetToolTipString("Excitation button")
+
+        self._gbs.Add(self._btn_excitation, (3, 2),
+                      flag=wx.ALIGN_CENTRE_VERTICAL | wx.RIGHT,
+                      border=10)
+
+
+
         lbl_emission = wx.StaticText(self._panel, -1, "emission:")
         self._gbs.Add(lbl_emission, (4, 0),
                       flag=wx.LEFT | wx.ALIGN_CENTRE_VERTICAL, border=34)
 
-        self._txt_emission = UnitIntegerCtrl(self._panel, -1, "200",
-                style=wx.NO_BORDER | wx.TE_PROCESS_ENTER,
+        self._txt_emission = UnitIntegerCtrl(self._panel, -1, self._emission,
+                style=wx.NO_BORDER,
                 size=(50, -1), min_val=200, max_val=1000, unit='nm')
         self._txt_emission.SetForegroundColour("#2FA7D4")
         self._txt_emission.SetBackgroundColour(self.GetBackgroundColour())
+
+        self._txt_emission.Bind(wx.EVT_TEXT, self.on_emission_text)
 
         self._gbs.Add(self._txt_emission, (4, 1),
                       flag=wx.ALIGN_CENTRE_VERTICAL | wx.RIGHT,
                       border=10)
 
+        self._btn_emission = ColourButton(self._panel, -1,
+                                     size=(18,18),
+                                     colour=wave2hex(self._emission),
+                                     background_parent=self._panel)
+        self._btn_emission.SetToolTipString("Emission button")
+
+        self._gbs.Add(self._btn_emission, (4, 2),
+                      flag=wx.ALIGN_CENTRE_VERTICAL | wx.RIGHT,
+                      border=10)
+
+
+
         self._expander._btn_color.Bind(wx.EVT_BUTTON, self.on_color_click)
+
+    def on_excitation_text(self, evt):
+        log.debug("Excitation changed")
+        obj = evt.GetEventObject()
+        colour = wave2hex(obj.GetValue())
+        log.debug("Changing color to %s", colour)
+        self._btn_excitation.set_colour(colour)
+
+
+    def on_emission_text(self, evt):
+        log.debug("Emission changed")
+        obj = evt.GetEventObject()
+        colour = wave2hex(obj.GetValue())
+        log.debug("Changing color to %s", colour)
+        self._btn_emission.set_colour(colour)

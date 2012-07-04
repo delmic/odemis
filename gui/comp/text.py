@@ -477,6 +477,10 @@ class IntegerTextCtrl(wx.TextCtrl):
         max_val = kwargs.pop('max_val', None)
         key_inc = kwargs.pop('key_inc', True)
 
+        # For the wx.EVT_TEXT_ENTER event to work, the TE_PROCESS_ENTER
+        # style needs to be set, but setting it in XRC throws an error
+        # A possible workaround is to include the style by hand
+        kwargs['style'] = kwargs.get('style', 0) | wx.TE_PROCESS_ENTER
         kwargs['validator'] = IntegerValidator(min_val, max_val)
 
         wx.TextCtrl.__init__(self, *args, **kwargs)
@@ -493,11 +497,7 @@ class IntegerTextCtrl(wx.TextCtrl):
         self.Bind(wx.EVT_KILL_FOCUS, self.on_kill_focus)
         self.Bind(wx.EVT_SET_FOCUS, self.on_focus)
 
-        # TODO: For the wx.EVT_TEXT_ENTER event to work, the TE_PROCESS_ENTER
-        # style needs to be set, but setting it in XRC throws an error
-        # A possible workaround is to include the style by hand
-        # (' | TE_PROCESS_ENTER') in the XML handler or here, in the constructor
-        #self.Bind(wx.EVT_TEXT_ENTER, self.on_text_enter)
+        self.Bind(wx.EVT_TEXT_ENTER, self.on_text_enter)
 
     def GetValue(self): #pylint: disable=W0221
         """ Return the value as an integer, or None if no (valid) value is
@@ -543,6 +543,18 @@ class IntegerTextCtrl(wx.TextCtrl):
     def reset(self):
         """ Set the content of the text control to just the numerical value """
         self.SetValue(unicode(self.GetValue() or ""))
+
+    def on_text_enter(self, evt):
+        val = self.GetValue()
+        wx.CallAfter(self.SetSelection, 0, 0)
+        if val:
+            validated, new_val = self.GetValidator().validate_value(val)
+            if validated:
+                self.SetValue(val)
+            else:
+                self.SetValue(new_val)
+
+        evt.Skip()
 
     def on_char(self, evt):
         """ This event handler increases or decreases the integer value when
