@@ -21,16 +21,16 @@ class ImageButton(GenBitmapButton):
     labelDelta = 0
 
     def __init__(self, *args, **kwargs):
-
+        """ If the background_parent keyword argument is provided, it will be
+        used to determine the background colour of the button. Otherwise, the
+        direct parent will be used.
+        """
         if kwargs.has_key('style'):
             kwargs['style'] |= wx.NO_BORDER
         else:
             kwargs['style'] = wx.NO_BORDER
 
-        self.background_parent = None
-        if kwargs.has_key('background_parent'):
-            self.background_parent = kwargs['background_parent']
-            del kwargs['background_parent']
+        self.background_parent = kwargs.pop('background_parent', None)
 
         GenBitmapButton.__init__(self, *args, **kwargs)
 

@@ -12,10 +12,14 @@ if os.getcwd().endswith('test'):
     print "Working directory changed to", os.getcwd()
 
 import wx
+from wx.lib.inspection import InspectionTool
+
 import odemis.gui.test.test_gui
 
+from odemis.gui.comp.stream import FixedStreamPanelEntry, CustomStreamPanelEntry
+
 # Sleep timer in milliseconds
-SLEEP_TIME = 100
+SLEEP_TIME = 300
 # If manual is set to True, the window will be kept open at the end
 MANUAL = True
 # Open an inspection window after running the tests if MANUAL is set
@@ -67,10 +71,11 @@ class FoldPanelBarTestCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.app = TestApp()
+        cls.frm = cls.app.test_frame
         loop()
+        wx.MilliSleep(SLEEP_TIME)
         if INSPECT and MANUAL:
-            import wx.lib.inspection
-            wx.lib.inspection.InspectionTool().Show()
+            InspectionTool().Show()
 
     @classmethod
     def tearDownClass(cls):
@@ -102,8 +107,51 @@ class FoldPanelBarTestCase(unittest.TestCase):
         """
         return window.GetClientSize().GetHeight() < window.GetSize().GetHeight()
 
-    def test_structure(self):
-        self.app.test_frame.btn_stream_add.set_choices(TEST_STREAMS)
+    def test_stream_addition(self):
+
+        wx.MilliSleep(SLEEP_TIME)
+
+        # Show initially hidden Stream add button
+        self.assertEqual(self.frm.stream_panel.btn_add_stream.IsShown(), False)
+        self.frm.stream_panel.show_add_button()
+        loop()
+        self.assertEqual(self.frm.stream_panel.btn_add_stream.IsShown(), True)
+
+        loop()
+        wx.MilliSleep(SLEEP_TIME)
+        test_entry = FixedStreamPanelEntry(self.frm.stream_panel,
+                                           label="First Fixed Stream")
+        self.frm.stream_panel.add_stream(test_entry)
+
+        loop()
+        wx.MilliSleep(SLEEP_TIME)
+        test_entry = FixedStreamPanelEntry(self.frm.stream_panel,
+                                           label="Second Fixed Stream")
+        self.frm.stream_panel.add_stream(test_entry)
+
+        loop()
+        wx.MilliSleep(SLEEP_TIME)
+        test_entry = CustomStreamPanelEntry(self.frm.stream_panel,
+                                            label="First Custom Stream")
+        self.frm.stream_panel.add_stream(test_entry)
+
+        loop()
+        wx.MilliSleep(SLEEP_TIME)
+        test_entry = CustomStreamPanelEntry(self.frm.stream_panel,
+                                            label="Second Custom Stream")
+        self.frm.stream_panel.add_stream(test_entry)
+
+        loop()
+        wx.MilliSleep(SLEEP_TIME)
+        test_entry = FixedStreamPanelEntry(self.frm.stream_panel,
+                                           label="Third Fixed Stream")
+        self.frm.stream_panel.add_stream(test_entry)
+
+        loop()
+        wx.MilliSleep(SLEEP_TIME)
+        test_entry = CustomStreamPanelEntry(self.frm.stream_panel,
+                                            label="Third Custom Stream")
+        self.frm.stream_panel.add_stream(test_entry)
 
 
 

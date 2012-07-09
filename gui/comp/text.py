@@ -530,7 +530,7 @@ class IntegerTextCtrl(wx.TextCtrl):
         is not a valid integer.
         """
         try:
-            log.debug("Setting value %s for %s object",
+            log.debug("Setting value to '%s' for %s",
                       val, self.__class__.__name__)
             if val:
                 val = int(val)

@@ -295,7 +295,7 @@ class PopupImageButtonHandler(xrc.XmlResourceHandler):
         # Custom styles
 
     def CanHandle(self, node):
-        return self.IsOfClass(node, 'odemis.gui.comp.buttons.PopupImageButton')
+        return self.IsOfClass(node, 'odemis.gui.comp.buttons.PopupImageButtonFitItem')
 
     # Process XML parameters and create the object
     def DoCreateResource(self):

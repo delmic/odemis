@@ -36,36 +36,15 @@ import odemis.gui.img.data as img
 
 from odemis.gui.log import log
 from odemis.gui.comp.buttons import ImageButton, ImageToggleButton, \
-    ImageTextToggleButton, ColourButton
+    ImageTextToggleButton, ColourButton, PopupImageButton
 from odemis.gui.comp.text import SuggestTextCtrl, IntegerTextCtrl, \
     UnitIntegerCtrl
+from odemis.gui.comp.foldpanelbar import FoldPanelBar
 from odemis.gui.util.conversion import wave2hex
 
 TEST_STREAM_LST = ["Aap", u"nöot", "noot", "mies", "kees", "vuur",
                    "quantummechnica", "Repelsteeltje", "", "XXX", "a", "aa",
                    "aaa", "aaaa", "aaaaa", "aaaaaa", "aaaaaaa"]
-
-# Short-cuts to button icons
-
-BMP_ARR_DOWN = img.getarr_downBitmap()
-BMP_ARR_IRGHT = img.getarr_rightBitmap()
-
-BMP_REM = img.getico_rem_strBitmap()
-BMP_REM_H = img.getico_rem_str_hBitmap()
-
-BMP_EYE_CLOSED = img.getico_eye_closedBitmap()
-BMP_EYE_CLOSED_H = img.getico_eye_closed_hBitmap()
-BMP_EYE_OPEN = img.getico_eye_openBitmap()
-BMP_EYE_OPEN_H = img.getico_eye_open_hBitmap()
-
-BMP_PAUSE = img.getico_pauseBitmap()
-BMP_PAUSE_H = img.getico_pause_hBitmap()
-BMP_PLAY = img.getico_playBitmap()
-BMP_PLAY_H = img.getico_play_hBitmap()
-
-BMP_CONTRAST = img.getbtn_contrastBitmap()
-BMP_CONTRAST_A = img.getbtn_contrast_aBitmap()
-
 
 class Slider(wx.Slider):
     """ This custom Slider class was implemented so it would not capture
@@ -127,28 +106,28 @@ class Expander(wx.PyControl):
         # ===== Fold icons
 
         self._foldIcons = wx.ImageList(16, 16)
-        self._foldIcons.Add(BMP_ARR_DOWN)
-        self._foldIcons.Add(BMP_ARR_IRGHT)
+        self._foldIcons.Add(img.getarr_downBitmap())
+        self._foldIcons.Add(img.getarr_rightBitmap())
 
         # ===== Remove button
 
-        self._btn_rem = ImageButton(self, -1, BMP_REM, (10, 8), (18, 18),
+        self._btn_rem = ImageButton(self, -1, img.getico_rem_strBitmap(), (10, 8), (18, 18),
                                     background_parent=parent)
-        self._btn_rem.SetBitmaps(BMP_REM_H)
+        self._btn_rem.SetBitmaps(img.getico_rem_str_hBitmap())
         self._btn_rem.SetToolTipString("Remove stream")
 
         # ===== Visibility button
 
-        self._btn_vis = ImageToggleButton(self, -1, BMP_EYE_CLOSED, (10, 8),
+        self._btn_vis = ImageToggleButton(self, -1, img.getico_eye_closedBitmap(), (10, 8),
                                           (18, 18), background_parent=parent)
-        self._btn_vis.SetBitmaps(BMP_EYE_CLOSED_H, BMP_EYE_OPEN, BMP_EYE_OPEN_H)
+        self._btn_vis.SetBitmaps(img.getico_eye_closed_hBitmap(), img.getico_eye_openBitmap(), img.getico_eye_open_hBitmap())
         self._btn_vis.SetToolTipString("Show/hide stream")
 
         # ===== Play button
 
-        self._btn_play = ImageToggleButton(self, -1, BMP_PAUSE, (10, 8),
+        self._btn_play = ImageToggleButton(self, -1, img.getico_pauseBitmap(), (10, 8),
                                            (18, 18), background_parent=parent)
-        self._btn_play.SetBitmaps(BMP_PAUSE_H, BMP_PLAY, BMP_PLAY_H)
+        self._btn_play.SetBitmaps(img.getico_pause_hBitmap(), img.getico_playBitmap(), img.getico_play_hBitmap())
         self._btn_play.SetToolTipString("Capture stream")
 
 
@@ -199,7 +178,7 @@ class Expander(wx.PyControl):
         return self._label
 
 class FixedExpander(Expander):
-    """ Expander for FixedStreamPanelEntrys """
+    """ Expander for FixedStreamPanelEntries """
 
     def __init__(self, parent, label, wid=wx.ID_ANY):
         Expander.__init__(self, parent, label, wid)
@@ -210,7 +189,7 @@ class FixedExpander(Expander):
                         wx.RIGHT | wx.ALIGN_CENTRE_VERTICAL, 8)
 
 class CustomExpander(Expander):
-    """ Expander for CustomStreamPanelEntrys """
+    """ Expander for CustomStreamPanelEntries """
 
     def __init__(self, parent, label, wid=wx.ID_ANY):
         Expander.__init__(self, parent, label, wid)
@@ -277,6 +256,9 @@ class StreamPanelEntry(wx.PyPanel):
 
         wx.PyPanel.__init__(self, parent, wid, pos, size, style, name)
 
+        self.SetBackgroundColour("#4D4D4D")
+        self.SetForegroundColour("#DDDDDD")
+
         self._label = label
         self._collapsed = True
         self._agwStyle = agwStyle | wx.CP_NO_TLW_RESIZE #|wx.CP_GTK_EXPANDER
@@ -302,22 +284,22 @@ class StreamPanelEntry(wx.PyPanel):
     # ==== Event Handlers
 
     def on_remove(self, evt):
-        log.debug("Removing stream panel '%s'" % self._expander.get_label())
+        log.debug("Removing stream panel '%s'", self._expander.get_label())
         fpb_item = self.Parent
         self.Destroy()
         fpb_item.Layout()
 
     def on_visibility(self, evt):
         if self._expander._btn_vis.up:
-            log.debug("Hide stream")
+            log.debug("Hiding stream '%s'", self._expander.get_label())
         else:
-            log.debug("Show stream")
+            log.debug("Showing stream '%s'", self._expander.get_label())
 
     def on_play(self, evt):
         if self._expander._btn_play.up:
-            log.debug("Pause stream")
+            log.debug("Pausing stream '%s'", self._expander.get_label())
         else:
-            log.debug("Update stream")
+            log.debug("Activating stream '%s'", self._expander.get_label())
 
     # END ==== Event Handlers
 
@@ -374,9 +356,9 @@ class StreamPanelEntry(wx.PyPanel):
         # ====== Top row, auto contrast toggle button
 
         self._btn_auto_contrast = ImageTextToggleButton(self._panel, -1,
-                                                BMP_CONTRAST, label="Auto",
+                                                img.getbtn_contrastBitmap(), label="Auto",
                                                 size=(68, 26))
-        self._btn_auto_contrast.SetBitmaps(bmp_sel=BMP_CONTRAST_A)
+        self._btn_auto_contrast.SetBitmaps(bmp_sel=img.getbtn_contrast_aBitmap())
         self._btn_auto_contrast.SetForegroundColour("#000000")
         self._gbs.Add(self._btn_auto_contrast, (0, 0), flag=wx.LEFT, border=34)
 
@@ -754,13 +736,93 @@ class CustomStreamPanelEntry(StreamPanelEntry): #pylint: disable=R0901
 class StreamPanel(wx.Panel):
     """docstring for StreamPanelEntry"""
 
-    def __init__(self):
+    DEFAULT_BORDER = 2
+    DEFAULT_STYLE = wx.BOTTOM | wx.EXPAND
 
+    def __init__(self):
         pre = wx.PrePanel()
+
+        self._sz = None
+        self.txt_no_stream = None
+        self.btn_add_stream = None
+
+        self.entries = []
+
         # the Create step is done later by XRC.
         self.PostCreate(pre)
         self.Bind(wx.EVT_WINDOW_CREATE, self.OnCreate)
 
-    def OnCreate(self, event):
+    def OnCreate(self, evt):
         self.Unbind(wx.EVT_WINDOW_CREATE)
-        # Do all extra initialization here
+        log.debug("Creating StreamPanel")
+
+        self._sz = wx.BoxSizer(wx.VERTICAL)
+        self.SetSizer(self._sz)
+
+        msg = "No stream available as both SEM and optical paths are off."
+        self.txt_no_stream = wx.StaticText(self, -1, msg)
+        self._sz.Add(self.txt_no_stream, 0, wx.ALL | wx.ALIGN_CENTER, 10)
+
+        self.btn_add_stream = PopupImageButton(self, bitmap=img.getstream_addBitmap())
+        self.btn_add_stream.SetBitmaps(img.getstream_add_hBitmap())
+        self.btn_add_stream.Hide()
+        self._sz.Add(self.btn_add_stream, 0)
+
+        self.FitStreams()
+
+    def FitStreams(self):
+        h = self._sz.GetMinSize().GetHeight()
+        log.debug("Setting StreamPanel height to %s", h)
+        self.SetSize((-1, h))
+
+        p = self.GetParent()
+
+        while not isinstance(p, FoldPanelBar):
+            p = p.GetParent()
+
+        p.FitBar()
+
+
+    def show_add_button(self):
+        self.btn_add_stream.Show()
+        self.FitStreams()
+
+    def hide_add_button(self):
+        self.btn_add_stream.Hide()
+        self.FitStreams()
+
+    def is_empty(self):
+        return len(self.entries) == 0
+
+    def add_stream(self, stream_panel_entry):
+        """ This method adds a stream entry to the panel, after the appropriate
+        position has been determined.
+        """
+
+        if isinstance(stream_panel_entry, FixedStreamPanelEntry):
+            fe = [e for e in self.entries
+                    if isinstance(e, FixedStreamPanelEntry)]
+            ins_pos = len(fe)
+        elif isinstance(stream_panel_entry, CustomStreamPanelEntry):
+            ins_pos = len(self.entries)
+        else:
+            raise ValueError("Wrong stream panel entry type")
+
+        log.debug("Inserting %s at position %s",
+                  stream_panel_entry.__class__.__name__,
+                  ins_pos)
+
+        self.txt_no_stream.Hide()
+
+        stream_panel_entry.finalize()
+
+        self.entries.insert(ins_pos, stream_panel_entry)
+
+        self._sz.InsertWindow(ins_pos, stream_panel_entry,
+                              flag=self.DEFAULT_STYLE,
+                              border=self.DEFAULT_BORDER)
+
+        stream_panel_entry.Layout()
+
+        self.Refresh()
+        self.FitStreams()
