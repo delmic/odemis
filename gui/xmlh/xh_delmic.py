@@ -32,7 +32,7 @@ class FixedStreamPanelXmlHandler(xrc.XmlResourceHandler):
         assert self.GetInstance() is None
 
         # Now create the object
-        panel = strm.FixedStreamPanel(self.GetParentAsWindow(),
+        panel = strm.FixedStreamPanelEntry(self.GetParentAsWindow(),
                                       self.GetID(),
                                       self.GetText('label'),
                                       self.GetPosition(),
@@ -71,7 +71,7 @@ class CustomStreamPanelXmlHandler(xrc.XmlResourceHandler):
         assert self.GetInstance() is None
 
         # Now create the object
-        panel = strm.CustomStreamPanel(self.GetParentAsWindow(),
+        panel = strm.CustomStreamPanelEntry(self.GetParentAsWindow(),
                                       self.GetID(),
                                       self.GetText('label'),
                                       self.GetPosition(),

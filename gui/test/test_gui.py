@@ -237,7 +237,7 @@ def __init_resources():
             <object class="sizeritem">
               <object class="odemis.gui.comp.foldpanelbar.FoldPanelBar" name="fpb">
                 <object class="odemis.gui.comp.foldpanelbar.FoldPanelItem">
-                  <object class="wxPanel" name="test_panel">
+                  <object class="wxPanel" name="stream_panel">
                     <object class="wxBoxSizer">
                       <orient>wxVERTICAL</orient>
                       <object class="sizeritem">

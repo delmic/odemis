@@ -93,8 +93,8 @@ class Slider(wx.Slider):
 
 
 class Expander(wx.PyControl):
-    """ An Expander is a header/button control at the top of a StreamPanel.
-    It provides a means to expand or collapse the StreamPanel, as wel as a label
+    """ An Expander is a header/button control at the top of a StreamPanelEntry.
+    It provides a means to expand or collapse the StreamPanelEntry, as wel as a label
     and various buttons offering easy access to much used functionality.
 
     Structure:
@@ -199,7 +199,7 @@ class Expander(wx.PyControl):
         return self._label
 
 class FixedExpander(Expander):
-    """ Expander for FixedStreamPanels """
+    """ Expander for FixedStreamPanelEntrys """
 
     def __init__(self, parent, label, wid=wx.ID_ANY):
         Expander.__init__(self, parent, label, wid)
@@ -210,7 +210,7 @@ class FixedExpander(Expander):
                         wx.RIGHT | wx.ALIGN_CENTRE_VERTICAL, 8)
 
 class CustomExpander(Expander):
-    """ Expander for CustomStreamPanels """
+    """ Expander for CustomStreamPanelEntrys """
 
     def __init__(self, parent, label, wid=wx.ID_ANY):
         Expander.__init__(self, parent, label, wid)
@@ -219,7 +219,8 @@ class CustomExpander(Expander):
         self._btn_color = ColourButton(self, -1,
                                 size=(18,18),
                                 colour=self.stream_color,
-                                background_parent=parent)
+                                background_parent=parent,
+                                use_hover=True)
 
         self._btn_color.SetToolTipString("Select colour")
 
@@ -242,12 +243,12 @@ class CustomExpander(Expander):
     def get_stream_color(self):
         return self._btn_color.get_color()
 
-class StreamPanel(wx.PyPanel):
-    """ The StreamPanel super class, a special case collapsible pane.
+class StreamPanelEntry(wx.PyPanel):
+    """ The StreamPanelEntry super class, a special case collapsible pane.
 
-    The StreamPanel consists of the following widgets:
+    The StreamPanelEntry consists of the following widgets:
 
-        + StreamPanel
+        + StreamPanelEntry
         |--- FixedExpander
         |--+ Panel
            |-- ImageTextToggleButton
@@ -496,7 +497,7 @@ class StreamPanel(wx.PyPanel):
         evt.Skip()
 
     def OnToggle(self, evt):
-        """ Toggle the StreamPanel
+        """ Toggle the StreamPanelEntry
 
         Only toggle the view when the click was within the right 15% of the
         Expander, otherwise ignore it.
@@ -511,12 +512,12 @@ class StreamPanel(wx.PyPanel):
         evt.Skip()
 
     def OnSize(self, event):
-        """ Handles the wx.EVT_SIZE event for StreamPanel
+        """ Handles the wx.EVT_SIZE event for StreamPanelEntry
         """
         self.Layout()
 
     def on_button(self, event):
-        """ Handles the wx.EVT_BUTTON event for StreamPanel
+        """ Handles the wx.EVT_BUTTON event for StreamPanelEntry
         """
 
         if event.GetEventObject() != self._expander:
@@ -557,7 +558,7 @@ class StreamPanel(wx.PyPanel):
 
 
     def get_button(self):
-        """ Returns the button associated with StreamPanel. """
+        """ Returns the button associated with StreamPanelEntry. """
         return self._expander
 
     def on_draw_expander(self, event):
@@ -572,7 +573,7 @@ class StreamPanel(wx.PyPanel):
         self._expander.OnDrawExpander(dc)
 
     def Layout(self, *args, **kwargs):
-        """ Layout the StreamPanel. """
+        """ Layout the StreamPanelEntry. """
 
         if not self._expander or not self._panel or not self._sz:
             return False     # we need to complete the creation first!
@@ -619,31 +620,31 @@ class StreamPanel(wx.PyPanel):
     #     #self._panel.SetBackgroundColour(self.GetBackgroundColour())
 
 
-class FixedStreamPanel(StreamPanel): #pylint: disable=R0901
+class FixedStreamPanelEntry(StreamPanelEntry): #pylint: disable=R0901
     """ A pre-defined stream panel """
 
     expander_class = FixedExpander
 
     def __init__(self, *args, **kwargs):
-        StreamPanel.__init__(self, *args, **kwargs)
+        StreamPanelEntry.__init__(self, *args, **kwargs)
 
     def finalize(self):
-        StreamPanel.finalize(self)
+        StreamPanelEntry.finalize(self)
 
-class CustomStreamPanel(StreamPanel): #pylint: disable=R0901
+class CustomStreamPanelEntry(StreamPanelEntry): #pylint: disable=R0901
     """ A stream panel which can be altered by the user """
 
     expander_class = CustomExpander
 
     def __init__(self, *args, **kwargs):
-        StreamPanel.__init__(self, *args, **kwargs)
+        StreamPanelEntry.__init__(self, *args, **kwargs)
 
         self._excitation = "200"
         self._emission = "200"
 
     def on_remove(self, evt):
         self._expander._label_ctrl.Destroy()
-        StreamPanel.on_remove(self, evt)
+        StreamPanelEntry.on_remove(self, evt)
 
     def on_color_click(self, evt):
         # Remove the hover effect
@@ -658,10 +659,10 @@ class CustomStreamPanel(StreamPanel): #pylint: disable=R0901
             self._expander.set_stream_color(color_str)
 
     def finalize(self):
-        """ The CustomStreamPanel has a few extra controls in addition to the
-        ones defined in the StreamPanel class:
+        """ The CustomStreamPanelEntry has a few extra controls in addition to the
+        ones defined in the StreamPanelEntry class:
 
-        + CustomStreamPanel
+        + CustomStreamPanelEntry
         |--- CustomExpander
         |--+ Panel
            |-- .
@@ -673,7 +674,7 @@ class CustomStreamPanel(StreamPanel): #pylint: disable=R0901
            |-- UnitIntegerCtrl
 
         """
-        StreamPanel.finalize(self)
+        StreamPanelEntry.finalize(self)
 
         lbl_excitation = wx.StaticText(self._panel, -1, "excitation:")
         self._gbs.Add(lbl_excitation, (3, 0),
@@ -697,7 +698,7 @@ class CustomStreamPanel(StreamPanel): #pylint: disable=R0901
                                      size=(18,18),
                                      colour=wave2hex(self._excitation),
                                      background_parent=self._panel)
-        self._btn_excitation.SetToolTipString("Excitation button")
+        self._btn_excitation.SetToolTipString("Wavelength colour")
 
         self._gbs.Add(self._btn_excitation, (3, 2),
                       flag=wx.ALIGN_CENTRE_VERTICAL | wx.RIGHT,
@@ -725,7 +726,7 @@ class CustomStreamPanel(StreamPanel): #pylint: disable=R0901
                                      size=(18,18),
                                      colour=wave2hex(self._emission),
                                      background_parent=self._panel)
-        self._btn_emission.SetToolTipString("Emission button")
+        self._btn_emission.SetToolTipString("Wavelength colour")
 
         self._gbs.Add(self._btn_emission, (4, 2),
                       flag=wx.ALIGN_CENTRE_VERTICAL | wx.RIGHT,
@@ -749,3 +750,17 @@ class CustomStreamPanel(StreamPanel): #pylint: disable=R0901
         colour = wave2hex(obj.GetValue())
         log.debug("Changing color to %s", colour)
         self._btn_emission.set_colour(colour)
+
+class StreamPanel(wx.Panel):
+    """docstring for StreamPanelEntry"""
+
+    def __init__(self):
+
+        pre = wx.PrePanel()
+        # the Create step is done later by XRC.
+        self.PostCreate(pre)
+        self.Bind(wx.EVT_WINDOW_CREATE, self.OnCreate)
+
+    def OnCreate(self, event):
+        self.Unbind(wx.EVT_WINDOW_CREATE)
+        # Do all extra initialization here
