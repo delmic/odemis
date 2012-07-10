@@ -363,7 +363,7 @@ class PopupImageButton(ImageButton):
                 self.Bind(wx.EVT_LISTBOX, self.on_select)
 
             def on_select(self, evt):
-                #print self.lb.GetStringSelection()
+                evt.Skip()
                 self.Dismiss()
                 self.OnDismiss()
 

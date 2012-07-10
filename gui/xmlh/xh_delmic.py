@@ -306,11 +306,11 @@ class PopupImageButtonHandler(xrc.XmlResourceHandler):
             bmp = self.GetBitmap("bitmap")
 
         w = btns.PopupImageButton(self.GetParentAsWindow(),
-                                self.GetID(),
-                                bmp,
-                                pos=self.GetPosition(),
-                                size=self.GetSize(),
-                                style=self.GetStyle())
+                                  self.GetID(),
+                                  bmp,
+                                  pos=self.GetPosition(),
+                                  size=self.GetSize(),
+                                  style=self.GetStyle())
 
         if self.GetParamNode("selected"):
             bmp = self.GetBitmap("selected")

@@ -27,10 +27,12 @@ Delmic Acquisition Software. If not, see http://www.gnu.org/licenses/.
 
 """
 
-# import logging as log
+import locale
+import collections
 
 import wx
 import wx.combo
+import wx.lib.newevent
 
 import odemis.gui.img.data as img
 
@@ -43,8 +45,10 @@ from odemis.gui.comp.foldpanelbar import FoldPanelBar
 from odemis.gui.util.conversion import wave2hex
 
 TEST_STREAM_LST = ["Aap", u"nöot", "noot", "mies", "kees", "vuur",
-                   "quantummechnica", "Repelsteeltje", "", "XXX", "a", "aa",
-                   "aaa", "aaaa", "aaaaa", "aaaaaa", "aaaaaaa"]
+                  "quantummechnica", "Repelsteeltje", "", "XXX", "a", "aa",
+                  "aaa", "aaaa", "aaaaa", "aaaaaa", "aaaaaaa"]
+
+stream_remove_event, EVT_STREAM_REMOVE = wx.lib.newevent.NewEvent()
 
 class Slider(wx.Slider):
     """ This custom Slider class was implemented so it would not capture
@@ -92,7 +96,7 @@ class Expander(wx.PyControl):
                  size=wx.DefaultSize, style=wx.NO_BORDER):
         wx.PyControl.__init__(self, parent, wid, pos, size, style)
 
-        # This style *needs* to be set on in MS Windows
+        # This style *needs* to be set on MS Windows
         self.SetBackgroundStyle(wx.BG_STYLE_CUSTOM)
 
         self._parent = parent
@@ -285,9 +289,12 @@ class StreamPanelEntry(wx.PyPanel):
 
     def on_remove(self, evt):
         log.debug("Removing stream panel '%s'", self._expander.get_label())
-        fpb_item = self.Parent
-        self.Destroy()
-        fpb_item.Layout()
+        #fpb_item = self.Parent
+        #self.Destroy()
+        #fpb_item.Layout()
+        new_evt = stream_remove_event()
+        new_evt.SetEventObject(self)
+        wx.PostEvent(self, new_evt)
 
     def on_visibility(self, evt):
         if self._expander._btn_vis.up:
@@ -597,6 +604,11 @@ class StreamPanelEntry(wx.PyPanel):
 
         return sz
 
+    def Destroy(self, *args, **kwargs):
+        fpb_item = self.Parent
+        wx.PyPanel.Destroy(self, *args, **kwargs)
+        fpb_item.FitStreams()
+
     # def Layout(self):
     #     pcp.PyCollapsiblePane.Layout(self)
     #     #self._panel.SetBackgroundColour(self.GetBackgroundColour())
@@ -624,9 +636,9 @@ class CustomStreamPanelEntry(StreamPanelEntry): #pylint: disable=R0901
         self._excitation = "200"
         self._emission = "200"
 
-    def on_remove(self, evt):
-        self._expander._label_ctrl.Destroy()
-        StreamPanelEntry.on_remove(self, evt)
+    #def on_remove(self, evt):
+    #    self._expander._label_ctrl.Destroy()
+    #    StreamPanelEntry.on_remove(self, evt)
 
     def on_color_click(self, evt):
         # Remove the hover effect
@@ -641,8 +653,8 @@ class CustomStreamPanelEntry(StreamPanelEntry): #pylint: disable=R0901
             self._expander.set_stream_color(color_str)
 
     def finalize(self):
-        """ The CustomStreamPanelEntry has a few extra controls in addition to the
-        ones defined in the StreamPanelEntry class:
+        """ The CustomStreamPanelEntry has a few extra controls in addition to
+        the ones defined in the StreamPanelEntry class:
 
         + CustomStreamPanelEntry
         |--- CustomExpander
@@ -733,6 +745,8 @@ class CustomStreamPanelEntry(StreamPanelEntry): #pylint: disable=R0901
         log.debug("Changing color to %s", colour)
         self._btn_emission.set_colour(colour)
 
+
+
 class StreamPanel(wx.Panel):
     """docstring for StreamPanelEntry"""
 
@@ -747,6 +761,7 @@ class StreamPanel(wx.Panel):
         self.btn_add_stream = None
 
         self.entries = []
+        self.menu_actions = collections.OrderedDict()
 
         # the Create step is done later by XRC.
         self.PostCreate(pre)
@@ -768,7 +783,24 @@ class StreamPanel(wx.Panel):
         self.btn_add_stream.Hide()
         self._sz.Add(self.btn_add_stream, 0)
 
+        self.btn_add_stream.Bind(wx.EVT_LISTBOX, self.on_add_stream)
+
         self.FitStreams()
+
+    # === Event Handlers
+
+    def on_add_stream(self, evt):
+        evt_obj = evt.GetEventObject()
+        stream_name = evt_obj.GetStringSelection()
+
+        if self.menu_actions.has_key(stream_name):
+            self.menu_actions[stream_name]()
+        else:
+            raise KeyError("Stream named '%s' not found!", evt.data)
+
+    def on_stream_remove(self, evt):
+        eo = evt.GetEventObject()
+        wx.CallAfter(eo.Destroy)
 
     def FitStreams(self):
         h = self._sz.GetMinSize().GetHeight()
@@ -794,17 +826,20 @@ class StreamPanel(wx.Panel):
     def is_empty(self):
         return len(self.entries) == 0
 
+    def get_size(self):
+        return len(self.entries)
+
     def add_stream(self, stream_panel_entry):
         """ This method adds a stream entry to the panel, after the appropriate
         position has been determined.
         """
 
         if isinstance(stream_panel_entry, FixedStreamPanelEntry):
+            ins_pos = 0
+        elif isinstance(stream_panel_entry, CustomStreamPanelEntry):
             fe = [e for e in self.entries
                     if isinstance(e, FixedStreamPanelEntry)]
             ins_pos = len(fe)
-        elif isinstance(stream_panel_entry, CustomStreamPanelEntry):
-            ins_pos = len(self.entries)
         else:
             raise ValueError("Wrong stream panel entry type")
 
@@ -822,7 +857,57 @@ class StreamPanel(wx.Panel):
                               flag=self.DEFAULT_STYLE,
                               border=self.DEFAULT_BORDER)
 
+        stream_panel_entry.Bind(EVT_STREAM_REMOVE, self.on_stream_remove)
+
         stream_panel_entry.Layout()
 
         self.Refresh()
         self.FitStreams()
+
+    def hide_stream(self, stream_pos):
+        self.entries[stream_pos].Hide()
+        self.Refresh()
+        self.FitStreams()
+
+    def remove_stream(self, stream_pos):
+        stream_obj = self.entries.pop(stream_pos)
+        wx.CallAfter(stream_obj.Destroy)
+
+    def clear(self):
+        for dummy in range(len(self.entries)):
+            self.remove_stream(0)
+        self.txt_no_stream.Show()
+
+    def get_stream_position(self, stream_obj):
+        """ Return the position of the given stream entry, with the top position
+        being 0.
+        """
+        for i, stream in enumerate(self.entries):
+            if stream == stream_obj:
+                return i
+
+        return None
+
+    def set_actions(self, actions):
+        self.menu_actions = collections.OrderedDict(
+                                                sorted(actions.items(),
+                                                key=lambda t: t[0]))
+        self.btn_add_stream.set_choices(self.menu_actions.keys())
+
+    def get_actions(self):
+        return self.menu_actions
+
+    def add_actions(self, actions):
+        """ Add one or more actions """
+        self.menu_actions = dict(self.menu_actions.items() + actions.items())
+        self.menu_actions = collections.OrderedDict(
+                                            sorted(self.menu_actions.items(),
+                                            key=lambda t: t[0]))
+        self.btn_add_stream.set_choices(self.menu_actions.keys())
+
+    def remove_action(self, action):
+
+        if self.menu_actions.has_key(action):
+            del self.menu_actions[action]
+            self.btn_add_stream.set_choices(self.menu_actions.keys())
+
