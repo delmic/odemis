@@ -92,8 +92,9 @@
               <object class="odemis.gui.comp.buttons.ImageTextButton">
                 <label>AQUIRE IMAGE</label>
                 <delta>1</delta>
-                <bitmap>img/btn_aquire.png</bitmap>
-                <hover>img/btn_aquire_h.png</hover>
+                <bitmap>img/btn_aquire_image.png</bitmap>
+                <hover>img/btn_aquire_image_h.png</hover>
+                <selected>img/btn_aquire_image_a.png</selected>
                 <fg>#E5E5E5</fg>
                 <font>
                   <size>14</size>

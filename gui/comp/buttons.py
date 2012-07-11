@@ -150,6 +150,8 @@ class ImageTextButton(GenBitmapTextButton):  #pylint: disable=R0901
                 bmp = self.bmpDisabled
             if self.bmpFocus and self.hasFocus:
                 bmp = self.bmpFocus
+            if self.bmpSelected and not self.up:
+                bmp = self.bmpSelected
             bw, bh = bmp.GetWidth(), bmp.GetHeight()
             if not self.up:
                 dx = dy = self.labelDelta
@@ -290,10 +292,12 @@ class ImageToggleButton(GenBitmapToggleButton):  #pylint: disable=R0901
 class ImageTextToggleButton(GenBitmapTextToggleButton):  #pylint: disable=R0901
     # The displacement of the button content when it is pressed down, in pixels
     labelDelta = 1
+    padding_x = 8
+    padding_y = 1
 
     def __init__(self, *args, **kwargs):
 
-        kwargs['style'] = wx.NO_BORDER
+        kwargs['style'] = kwargs.get('style', 0) | wx.NO_BORDER
 
         self.background_parent = kwargs.pop('background_parent', None)
 
@@ -372,9 +376,13 @@ class ImageTextToggleButton(GenBitmapTextToggleButton):  #pylint: disable=R0901
             #dc.DrawBitmap(bmp, (width - bw) / 2 + dx, (height - bh) / 2 + dy, hasMask)
             dc.DrawBitmap(bmp, (width - bw) / 2, (height - bh) / 2, hasMask)
 
-        # The text is right aligned for now
+        if self.HasFlag(wx.ALIGN_CENTER):
+            pos_x = pos_x + (bw - tw) / 2
+        elif self.HasFlag(wx.ALIGN_RIGHT):
+            pos_x = pos_x + bw - tw - self.padding_x
+        else:
+            pos_x = pos_x + self.padding_x
 
-        pos_x = pos_x + bw - tw - 8 # 5 is padding
         dc.DrawText(label, pos_x, (height - th) / 2 + dy + 1)      # draw the text
 
     def InitColours(self):

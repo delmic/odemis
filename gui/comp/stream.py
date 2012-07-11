@@ -364,8 +364,10 @@ class StreamPanelEntry(wx.PyPanel):
         self._btn_auto_contrast = ImageTextToggleButton(self._panel, -1,
                                                 img.getbtn_contrastBitmap(),
                                                 label="Auto",
-                                                size=(68, 26))
+                                                size=(68, 26),
+                                                style=wx.ALIGN_RIGHT)
         self._btn_auto_contrast.SetBitmaps(
+                                        bmp_h=img.getbtn_contrast_hBitmap(),
                                         bmp_sel=img.getbtn_contrast_aBitmap())
         self._btn_auto_contrast.SetForegroundColour("#000000")
         self._gbs.Add(self._btn_auto_contrast, (0, 0), flag=wx.LEFT, border=34)
