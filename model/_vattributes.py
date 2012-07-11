@@ -126,7 +126,7 @@ class RemotableVigilantAttribute(VigilantAttribute):
         """
         Get the VigilantAttribute ready to be shared. It gets registered to the Pyro 
         daemon and over 0MQ. It should be called only once. Note that you have
-        to call this method to register a property, a simple daemon.register(p)
+        to call this method to register a VA, a simple daemon.register(p)
         is not enough.
         daemon (Pyro4.Daemon): daemon used to share this object
         """
@@ -143,12 +143,12 @@ class RemotableVigilantAttribute(VigilantAttribute):
         
         uri = daemon.uriFor(self)
         self._global_name = uri.object + "@" + uri.sockname + ".ipc"
-        logging.debug("property server is registered to send to " + "ipc://" + self._global_name)
+        logging.debug("VA server is registered to send to " + "ipc://" + self._global_name)
         self.pipe.bind("ipc://" + self._global_name)
     
     def _unregister(self):
         """
-        unregister the property from the daemon and clean up the 0MQ bindings
+        unregister the VA from the daemon and clean up the 0MQ bindings
         """
         daemon = getattr(self, "_pyroDaemon", None)
         if daemon:
@@ -228,12 +228,12 @@ class VigilantAttributeProxy(VigilantAttribute, Pyro4.Proxy):
         return Pyro4.Proxy.__getattr__(self, "_set_value")(v)
     # no delete remotely
     
-    # for enumerated Properties
+    # for enumerated VA
     @property
     def choices(self):
         return Pyro4.Proxy.__getattr__(self, "_get_choices")()
     
-    # for continuous Properties
+    # for continuous VA
     @property
     def range(self):
         return Pyro4.Proxy.__getattr__(self, "_get_range")()
@@ -273,7 +273,7 @@ class VigilantAttributeProxy(VigilantAttribute, Pyro4.Proxy):
         self.commands.send("SUB")
         self.commands.recv() # synchronise
     
-        # send subscription to the actual property
+        # send subscription to the actual VA
         # a bit tricky because the underlying method gets created on the fly
         Pyro4.Proxy.__getattr__(self, "subscribe")(self._global_name)
 
@@ -417,7 +417,7 @@ Pyro4.Daemon.serializers[RemotableVigilantAttribute] = odemicVASerializer
      
 class StringVA(RemotableVigilantAttribute):
     """
-    A property which contains a string
+    A VA which contains a string
     """
     
     def __init__(self, value="", *args, **kwargs):

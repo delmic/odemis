@@ -82,11 +82,7 @@ class OpticalBackendConnected(SECOMModel):
         except (KeyError, AttributeError):
             self.prev_pos = (0,0)
         # override
-<<<<<<< HEAD
-        self.stage_pos = Property(self.prev_pos) # (m,m) => (X,Y)
-=======
         self.stage_pos = VigilantAttribute(self.prev_pos) # (m,m) => (X,Y) 
->>>>>>> 8ad7f73ce09837064015c5f23007d3042e82f72d
         self.stage_pos.subscribe(self.avOnStagePos)
 
         # direct linking
@@ -94,13 +90,7 @@ class OpticalBackendConnected(SECOMModel):
         self.camera.data.subscribe(self.onNewCameraImage)
 
         # empty
-<<<<<<< HEAD
-        self.sem_det_image = Property(InstrumentalImage(None, None, None))
-
-=======
         self.sem_det_image = VigilantAttribute(InstrumentalImage(None, None, None))
-        
->>>>>>> 8ad7f73ce09837064015c5f23007d3042e82f72d
     def onNewCameraImage(self, dataflow, data):
         size = data.shape[0:2]
         # TODO make only one copy for conversion 16bits -> 3x8
