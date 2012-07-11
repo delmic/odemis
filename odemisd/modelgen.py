@@ -217,6 +217,7 @@ class Instantiator(object):
         if self.dry_run and not class_name in internal_classes:
             # mock class for everything but internal classes (because they are safe)
             class_comp = model.MockComponent
+            args["mock_vas"] = attr.get("properties", {}).keys()
             
         try:
             if self.create_sub_containers and self.is_leaf(name):

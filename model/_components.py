@@ -482,15 +482,20 @@ class MockComponent(HwComponent):
     It's used for validation of the instantiation model. 
     Do not use or inherit when writing a device driver!
     """
-    def __init__(self, name, role, children=None, **kwargs):
-        HwComponent.__init__(self, name, role, **kwargs)
-        # not all type of HwComponent can affects but we cannot make the difference
-        self.affects = set()
+    def __init__(self, name, role, children=None, mock_vas=[], daemon=None, **kwargs):
+        """
+        mock_vas (list of string): a list of mock vigilant attributes to create
+        """
+        HwComponent.__init__(self, name, role, daemon=daemon)
+        if len(kwargs) > 0:
+            logging.debug("Component '%s' got init arguments '%r'", name, kwargs)
+        
+        for va in mock_vas:
+            self.__dict__[va] = _vattributes.VigilantAttribute(None)
         
         if not children:
             return
         
-        self.children = set()
         for child_name, child_args in children.items():
             # we don't care of child_name as it's only for internal use in the real component
             
@@ -499,20 +504,21 @@ class MockComponent(HwComponent):
             else: # explicit creation (already done)
                 child = child_args
                 
-            self.children.add(child)
+            self._children.add(child)
             child.parent = self
         
-    # For everything that is not standard we return a mock VigilantAttribute
-    def __getattr__(self, attrName):
-        if not attrName in self.__dict__:
-            if "__" in attrName:
-                print attrName
-            if attrName == "children": # special value
-                raise AttributeError(attrName)
-            
-            prop = _vattributes.VigilantAttribute(None)
-            logging.debug("Component %s creating vigilant attribute %s", self.name, attrName)
-            self.__dict__[attrName] = prop
-        return self.__dict__[attrName]
+#    # For everything that is not standard we return a mock VigilantAttribute
+#    def __getattr__(self, attrName):
+#        if not attrName in self.__dict__:
+#            if attrName.startswith("_"): # hidden values are never properties
+#                logging.debug("Component %s deny having attribute %s", self.name, attrName)
+#                raise AttributeError(attrName)
+#            elif attrName == "children": # special value
+#                raise AttributeError(attrName)
+#            
+#            prop = _vattributes.VigilantAttribute(None)
+#            logging.debug("Component %s creating vigilant attribute %s", self.name, attrName)
+#            self.__dict__[attrName] = prop
+#        return self.__dict__[attrName]
     
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:
