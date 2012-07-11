@@ -137,7 +137,7 @@ class ActuatorTest(object):
 #            self.fail("Speed not consistent: ratio of " + str(ratio) + 
 #                         "instead of " + str(expected_ratio) + ".")
         
-class Stage2DTest(ActuatorTest, unittest.TestCase):
+class Stage2DTest(unittest.TestCase, ActuatorTest):
     
     actuator_type = simulated.Stage2D
     # name, role, children (must be None)

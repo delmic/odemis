@@ -432,7 +432,7 @@ class AndorCam3(model.DigitalCamera):
         self._metadata[model.MD_SENSOR_TEMP] = temp
         # it's read-only, so we change it only via special _set()
         self.temperature._set(temp)
-        self.temperature.notify()
+        self.temperature.notify(self.temperature.value)
         logging.debug("temp is %d", temp)
 
     def onFanSpeed(self, speed):
@@ -521,7 +521,7 @@ class AndorCam3(model.DigitalCamera):
 
     def onBinning(self, value):
         """
-        Called when "binning" property is modified. It actually modifies the camera binning.
+        Called when "binning" VA is modified. It actually modifies the camera binning.
         """
         previous_binning = self._binning
         #TODO queue this for after acquisition.
@@ -997,7 +997,7 @@ class ResolutionVA(model.RemotableVigilantAttribute, model.Continuous):
                 value = self._fitter(value)
             except model.WeakRefLostError:
                 # Normally fitter is owned by the same instance of camera so no
-                # fitter would also mean that this property has no sense anymore
+                # fitter would also mean that this VA has no sense anymore
                 raise model.OutOfBoundError("Fitting method has disappeared, cannot validate value.")
         
         model.RemotableVigilantAttribute._set(self, value)
