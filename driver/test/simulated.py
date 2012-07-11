@@ -57,7 +57,7 @@ class ActuatorTest(object):
         dev = self.actuator_type(*self.actuator_args)
         self.assertGreaterEqual(len(dev.axes), 1, "Actuator has no axis")
         self.assertIsInstance(dev.ranges, dict, "range is not a dict")
-        self.assertIsInstance(dev.speed, model.Property, "range is not a Property")
+        self.assertIsInstance(dev.speed, model.VigilantAttribute, "range is not a VigilantAttribute")
         self.assertIsInstance(dev.speed.value, dict, "speed value is not a dict")
         
     def test_moveAbs(self):

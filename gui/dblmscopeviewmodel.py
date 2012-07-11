@@ -17,7 +17,7 @@ You should have received a copy of the GNU General Public License along with Del
 '''
 
 from instrmodel import InstrumentalImage
-from model import Property
+from model import VigilantAttribute
 
 class DblMscopeViewModel(object):
     """
@@ -27,34 +27,34 @@ class DblMscopeViewModel(object):
     def __init__(self):
         # image density => field of view, position...
         # 0<float
-        self.mpp = ActiveMPP(0.000025) # m/px  (0.25mm/px)
+        self.mpp = VigilantMPP(0.000025) # m/px  (0.25mm/px)
         
         # how much one image is displayed on the other one
         # 0<=float<=1
-        self.merge_ratio = ActiveMergeRatio(0.3) # no unit
+        self.merge_ratio = VigilantMergeRatio(0.3) # no unit
         
-        self.images = [Property(InstrumentalImage(None, None, None)),
-                       Property(InstrumentalImage(None, None, None))]
+        self.images = [VigilantAttribute(InstrumentalImage(None, None, None)),
+                       VigilantAttribute(InstrumentalImage(None, None, None))]
         
         # center position of the view
-        self.center = Property((0,0)) # (m, m)
+        self.center = VigilantAttribute((0,0)) # (m, m)
         
-        self.crosshair = Property(True)
+        self.crosshair = VigilantAttribute(True)
         
-class ActiveMPP(Property):
+class VigilantMPP(VigilantAttribute):
     """
-    Property with special validation for MPP (float>0)
+    VigilantAttribute with special validation for MPP (float>0)
     """
     def _set(self, value):
         assert(0.0 < value)
-        Property._set(self, value)
+        VigilantAttribute._set(self, value)
         
-class ActiveMergeRatio(Property):
+class VigilantMergeRatio(VigilantAttribute):
     """
-    Property with special validation for merge ratio
+    VigilantAttribute with special validation for merge ratio
     # 0<=float<=1
     """
     def _set(self, value):
         # don't raise an error, just clamp the values
         final_val = sorted((0.0, 1.0) + (value,))[1] # clamp
-        Property._set(self, final_val)
+        VigilantAttribute._set(self, final_val)

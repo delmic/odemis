@@ -11,7 +11,7 @@
 # The FoldPanelBar has the following overall structure:
 #
 # + FoldPanelBAr
-# |--+ wx.Panel
+# |--+ wx.Panel (self._foldPanel)
 #    |--+ FoldPanelItem
 #    |  |--- CaptionBar
 #    |  |--- wx.Window subclass
@@ -200,6 +200,7 @@ import base64
 import wx
 
 from odemis.gui.img.data import catalog
+from odemis.gui.log import log
 
 #----------------------------------------------------------------------
 # Collapsed And Expanded Bitmap Images
@@ -532,12 +533,6 @@ class CaptionBarStyle(object):
 
 # Delmic's default caption bar style
 FPB_STYLE = CaptionBarStyle()
-FPB_STYLE.SetFirstColour(wx.Colour(130, 130, 130))
-FPB_STYLE.SetSecondColour(wx.Colour(100, 100, 100))
-FPB_STYLE.SetCaptionFont(wx.Font(10, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
-FPB_STYLE.SetCaptionColour("#222222")
-FPB_STYLE.SetBarHeight(40)
-
 
 #-----------------------------------#
 #        CaptionBarEvent
@@ -1273,6 +1268,12 @@ class FoldPanelBar(wx.Panel):
         self._foldPanel = wx.Panel(self, wx.ID_ANY, pos, size,
                                    wx.NO_BORDER | wx.TAB_TRAVERSAL)
 
+        FPB_STYLE.SetFirstColour(wx.Colour(130, 130, 130))
+        FPB_STYLE.SetSecondColour(wx.Colour(100, 100, 100))
+        FPB_STYLE.SetCaptionFont(wx.Font(10, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+        FPB_STYLE.SetCaptionColour("#222222")
+        FPB_STYLE.SetBarHeight(40)
+
         self._controlCreated = True
         self._panels = []
 
@@ -1616,6 +1617,7 @@ class FoldPanelBar(wx.Panel):
     def FitBar(self, event=None):
         """ Make the FoldPanelBar as high as it's children """
 
+        log.debug("Fitting FoldPabelBar")
         self.Fit()
         self._foldPanel.Fit()
 

@@ -66,13 +66,7 @@ class xrcstream_frame(wx.Frame):
         # Define variables for the controls, bind event handlers
         self.scrwin = xrc.XRCCTRL(self, "scrwin")
         self.fpb = xrc.XRCCTRL(self, "fpb")
-        self.fsp_1 = xrc.XRCCTRL(self, "fsp_1")
-        self.fsp_2 = xrc.XRCCTRL(self, "fsp_2")
-        self.fsp_3 = xrc.XRCCTRL(self, "fsp_3")
-        self.csp_1 = xrc.XRCCTRL(self, "csp_1")
-        self.csp_2 = xrc.XRCCTRL(self, "csp_2")
-        self.csp_3 = xrc.XRCCTRL(self, "csp_3")
-        self.btn_stream_add = xrc.XRCCTRL(self, "btn_stream_add")
+        self.stream_panel = xrc.XRCCTRL(self, "stream_panel")
 
 
 
@@ -237,151 +231,21 @@ def __init_resources():
             <object class="sizeritem">
               <object class="odemis.gui.comp.foldpanelbar.FoldPanelBar" name="fpb">
                 <object class="odemis.gui.comp.foldpanelbar.FoldPanelItem">
-                  <object class="wxPanel" name="test_panel">
-                    <object class="wxBoxSizer">
-                      <orient>wxVERTICAL</orient>
-                      <object class="sizeritem">
-                        <object class="odemis.gui.comp.stream.FixedStreamPanel" name="fsp_1">
-                          <label>Fixed Stream panel</label>
-                          <collapsed>1</collapsed>
-                          <fg>#E5E5E5</fg>
-                          <bg>#4D4D4D</bg>
-                          <font>
-                            <size>9</size>
-                            <style>normal</style>
-                            <weight>normal</weight>
-                            <underlined>0</underlined>
-                            <family>default</family>
-                            <face>Ubuntu</face>
-                            <encoding>UTF-8</encoding>
-                          </font>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <flag>wxBOTTOM|wxEXPAND</flag>
-                        <border>2</border>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="odemis.gui.comp.stream.FixedStreamPanel" name="fsp_2">
-                          <label>Fixed Stream panel</label>
-                          <collapsed>1</collapsed>
-                          <fg>#E5E5E5</fg>
-                          <bg>#4D4D4D</bg>
-                          <font>
-                            <size>9</size>
-                            <style>normal</style>
-                            <weight>normal</weight>
-                            <underlined>0</underlined>
-                            <family>default</family>
-                            <face>Ubuntu</face>
-                            <encoding>UTF-8</encoding>
-                          </font>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <flag>wxBOTTOM|wxEXPAND</flag>
-                        <border>2</border>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="odemis.gui.comp.stream.FixedStreamPanel" name="fsp_3">
-                          <label>Fixed Stream panel</label>
-                          <fg>#E5E5E5</fg>
-                          <bg>#4D4D4D</bg>
-                          <font>
-                            <size>9</size>
-                            <style>normal</style>
-                            <weight>normal</weight>
-                            <underlined>0</underlined>
-                            <family>default</family>
-                            <face>Ubuntu</face>
-                            <encoding>UTF-8</encoding>
-                          </font>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <flag>wxBOTTOM|wxEXPAND</flag>
-                        <border>2</border>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="odemis.gui.comp.stream.CustomStreamPanel" name="csp_1">
-                          <label>Custom Stream panel</label>
-                          <collapsed>1</collapsed>
-                          <fg>#FFFFFF</fg>
-                          <bg>#4D4D4D</bg>
-                          <font>
-                            <size>9</size>
-                            <style>normal</style>
-                            <weight>normal</weight>
-                            <underlined>0</underlined>
-                            <family>default</family>
-                            <face>Ubuntu</face>
-                            <encoding>UTF-8</encoding>
-                          </font>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <flag>wxBOTTOM|wxEXPAND</flag>
-                        <border>2</border>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="odemis.gui.comp.stream.CustomStreamPanel" name="csp_2">
-                          <label>Custom Stream panel</label>
-                          <collapsed>1</collapsed>
-                          <fg>#FFFFFF</fg>
-                          <bg>#4D4D4D</bg>
-                          <font>
-                            <size>9</size>
-                            <style>normal</style>
-                            <weight>normal</weight>
-                            <underlined>0</underlined>
-                            <family>default</family>
-                            <face>Ubuntu</face>
-                            <encoding>UTF-8</encoding>
-                          </font>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <flag>wxBOTTOM|wxEXPAND</flag>
-                        <border>2</border>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="odemis.gui.comp.stream.CustomStreamPanel" name="csp_3">
-                          <label>Custom Stream panel</label>
-                          <collapsed>1</collapsed>
-                          <fg>#FFFFFF</fg>
-                          <bg>#4D4D4D</bg>
-                          <font>
-                            <size>9</size>
-                            <style>normal</style>
-                            <weight>normal</weight>
-                            <underlined>0</underlined>
-                            <family>default</family>
-                            <face>Ubuntu</face>
-                            <encoding>UTF-8</encoding>
-                          </font>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <flag>wxBOTTOM|wxEXPAND</flag>
-                        <border>2</border>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="odemis.gui.comp.buttons.PopupImageButton" name="btn_stream_add">
-                          <bitmap>___img_stream_add_png</bitmap>
-                          <hover>___img_stream_add_h_png</hover>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                      </object>
-                    </object>
+                  <object class="wxPanel" name="stream_panel" subclass="odemis.gui.comp.stream.StreamPanel">
+                    <fg>#7F7F7F</fg>
                     <bg>#333333</bg>
+                    <font>
+                      <size>9</size>
+                      <style>normal</style>
+                      <weight>normal</weight>
+                      <underlined>0</underlined>
+                      <family>default</family>
+                      <face>Ubuntu</face>
+                      <encoding>UTF-8</encoding>
+                    </font>
+                    <XRCED>
+                      <assign_var>1</assign_var>
+                    </XRCED>
                   </object>
                   <label>STREAMS</label>
                   <XRCED>
@@ -457,97 +321,6 @@ def __init_resources():
   </object>
 </resource>'''
 
-    ___img_stream_add_png = '''\
-\x89PNG\x0d
-\x1a
-\x00\x00\x00\x0dIHDR\x00\x00\x00v\x00\x00\x00\x1d\x08\x06\x00\x00\x00\
-\x94\x98\x88\x00\x00\x00\x01sRGB\x00\xae\xce\x1c\xe9\x00\x00\x00\x06bKG\
-D\x00\x00\x00\x00\x00\x00\xf9C\xbb\x00\x00\x00\x09pHYs\x00\x00\x0b\x13\
-\x00\x00\x0b\x13\x01\x00\x9a\x9c\x18\x00\x00\x00\x07tIME\x07\xdc\x07\x02\
-\x0e(\x06\x0f\xa1D\xfa\x00\x00\x02bIDATh\xde\xed\x98\xcdK\x95A\x14\x87\x9f\
-\x1b\x06aA`E\xfd $\xa4\xa0u\xab (\x17\xeeDAZ\xf4\xb1\xe9\x93 \xfa \x88\
-2\x17%\x89\x14\x89\xdb\x04\x0d\xc2 \x10\xcbM\xbb\x1b\x14H\xb4\x0c\x8bN\x81\
-\x94p]D\x10}+\xb7\xcd\\\x19^\xde\xabs\xb5\x8f\x8b\x9c\x07\x06\xde\xf7\x9c\
-\x99y\xe7\x9cs\xe77\xc3\x05\xc7q\x1c\xc7q\x1c\xc7q\x1c\xc7q\x1c\xc7\xf9\
-\x1b\x14R;NMM\x95+\xcf\xcd\xcd\xcd\x05O]}\xd3\x90\xdaqvv\xd6\xb3\xb5\x1a\
-\x0b\xfb\xa70\xb3\xfd\xc0\x04\xd0&i<\xb2W\x14\xe1\x07\xf0\x0e\x18\x06z%\
-\xcd\xa7\xf83\xdf\xd8\x03\xdc\x00\xb6\x03\xd3@7p7\xdbOR!3\xf7/\xe0-p^\xd2\
-X\xc6\x977n\xb1X:$\x8dF\xb63@_e\xec-l,\xbf\xf1\x8e]\xa1,\x1f\x07\x1e\x00\
-\xc7\x80\xf1l\xc2\xcc\xac\x11\xd8\x09\x0c\x00\xf3@o\xaa?b\x04\xb8\x00\x8c\
-\x02M@w\\\xc4\xbc\xe4\x86\xb9\x1b\x80\xbd\xc0\x100\x96-d-\xb1\x00\xa7\xcc\
-\xec\xbe\xa4\xb2\x99\xad\x05\x0e\xfc\xcb\x0d\xb4f)\xf9\xad\xb4\x14{\xc2\
-n\xdd\x02l\x02:\x80&3\xdb\x9a\x93\xe0\xaf\x92\x9e\x01\x87\x81\x83\xb5\xfa\
-\x03\x9f\x81\x0d\xc0.`FRW\xe2\x12cUXi,/\x80\xb6\xf0\xdc\x15vv}\x14\xb6T\
-*-\xb4\x14{\x02G\x81\x1eIs\xc0\xd5\xf0^\x8d\xd7!q\xcb\xf1\xb7\x02\x1b\x81\
-\x9b\xc0\x073\xebL(T\x19\x98\x03\xae\x01\xfb\xb2\xbe\xb8%\xc6r\x0b\xb8h\
-f\x05\xe040X7gl{{\xfb\x82\x04\x15\x8b\xc5r\x9e\xbd\x86\xdd\xba\x0e8\x04\
-\x9c5\xb3\x8a\xf9\xa3\x99]\x92\xf4=g\xc8\xb6p>V\xa3\xaa_\x92\x01\x27\xc2\
-w[\x80\xc7\xc0\xbd\xc5\xd6\x17\xa4x=p=\xc8\xf7\xcbjR\x9c\x12\x8b$3\xb3\x99\
-pd\xbc\x92\xf4>\xea\xbb\xaa.O\x9d\xc0\xa4\xa4\xd6(A\x13\xc1>\x14\xd9\x1a\
-\x81\x1d\xc0m\xe0N\xce\x0fdQ\xe83\x12.L\xd3@\xcbR\xca\x14\x15\xf0\x8b\x99\
-\x9d\x03\x9e\x9a\xd9\xa4\xa4O+\x89\x05\xe8\x07\x8a\xc0\xee\xba\xbd\x15/\
-Cv\xf3.\x1a\x973\xb6\x01\xe0J%\x19A\xe6~\x86\x9b\xe90\xd0\x97#\x97U\xfd\
-\x11\x8f\x80\x87\xc0f\xe0\x0dp$u\x91\x92\xbe\x99\xd9 \xd0\x03\x9c\xacr3\
-~\xbeT,a\xae\x27\xb5\xfcW\xe08\x8e\xe38\x8e\xe38\x8e\xe38\x8e\xe38\xf5\xcf\
-o6+Bm=\xb3\xcf\x88\x00\x00\x00\x00IEND\xaeB`\x82'''
-
-    ___img_stream_add_h_png = '''\
-\x89PNG\x0d
-\x1a
-\x00\x00\x00\x0dIHDR\x00\x00\x00v\x00\x00\x00\x1d\x08\x06\x00\x00\x00\
-\x94\x98\x88\x00\x00\x00\x01sRGB\x00\xae\xce\x1c\xe9\x00\x00\x00\x06bKG\
-D\x00\x00\x00\x00\x00\x00\xf9C\xbb\x00\x00\x00\x09pHYs\x00\x00\x0b\x13\
-\x00\x00\x0b\x13\x01\x00\x9a\x9c\x18\x00\x00\x00\x07tIME\x07\xdc\x07\x02\
-\x0e\x2757\xe99#\x00\x00\x04[IDATh\xde\xed\x9b_H\xdbW\x14\xc7\xbf\xf9Y\x1d\
-H\xcc\xe2\xdf\xd5\x8dMj|\xd8\xc3\x9cDf6\xffQuV\xc8\xa2\x0bu\xab\x08Z\x03\
-\x0d\xa8A\x8d\xff\xf2\x10D\x9fDt\x04\x95e\x09\xc3\x8d\x85X\xc4\x05\xa1\x04\
-\xa5>\xcc\xad\x19\x8d\xb6(\x9a\x8d\xad\x82\xc2\xcc\x8a+vQc\xe6\x92\x0c4\
-1a\x0f&\xe3\xd7LM\x9c\xdd\xa6?\xee\x07.$\xf7\xdc\xdf\xe5\x9es8\xe7\xde\xf3\
-\xe3\xfeX\xf8;\xd1\x00\xd2\x00d\x00\xb8\x0c \x06\x84\xf3\x88\x07\x80\x0d\
-\xc0\x1a\x80u\x00^\xba\x90\x1528\x03@\x09\xb1\xd9\x85\xc4\x14p2\x00 \x8a\
-&x\x0b@\x1e\xb1\xcf\x85\xe5J P\x9f\xd2\x1d\x9bA\x9c\xca\x08R\x01\xfc\x0e\
-\xc0A\x05\xf6T\x92~\x99C\x09\x80h*pP"0\x8b4*\x90\x86\x09\xcc"\x83
-\x944\x04fq\x99"u*#\x89\xa1\x88\x0d\x98\xc9\xa5\x88G>\xc1\xc8_\xbf_E\x03\
-1\x1dS\x1c\xbbA\x8c\xc5L\xc7>\x27\xe4r\xf9\x1b\xad\xad\xad-Z\xadV;44\xf4\
-c\xb0\xdfj\xb5\x8e\x00\x80\xcf\xe7;p\xb9\\v\x8b\xc52\xdf\xdc\xdc\xfc\x95\
-\xc7\xe3\xf1G"\xa7S__\xff\xbaT*\xfd >>>\xd5\xedv;&\x27\x27\xef\xd6\xd5\xd5\
-IC\xc7\xf1x\xbc\x06\xfa\xdc~\xbf\xdf\xe7t:\xed\x06\x83\xe1\x8eJ\xa5\xfa\
-\x81.;\xea\xb9\x93t\xd1\xe9t\x9f\xf7\xf5\xf5-\x05\xfb4\x1a\xcd5\xa1P\xf8\
-a\xf0\xd9\x1b*l\xfa\x0d\xb6H\xfa#@,\x16\x17\xad\xad\xad}_^^^t\x94\xc1\xf2\
-\xf2\xf2\xda\x87\x87\x87G\xb3\xb2\xb2\xb2\xd5j\xf5\xb5\xd3\xc8\x83\xb4\xb4\
-\xb4\xdc\x9a\x99\x99\xb9\x27\x10\x08\xda;::4\x02\x81 \x93\xc7\xe35\x04\x8d\
-J\xffM\x9f;33\xb3ytttB"\x91\xdc\x0c\x95\xd1[$\xba\x08\x85\xc2\x12\x8a\xa2\
-X\x00\x10\x1b\x1b\x1b%\x10\x08\xde\xf9/\x03\x88
-\x9b~7\x8eH\xc3\xc7\xf5\x87!???\x89\xc3\xe1$\x88\xc5\xe2\xcf\xe2\xe2\xe2\
-\xe2\x0b\x0b\x0b\x93B\xc7\xd8\xedv\xcf\xd8\xd8\xd8\xcf\xfd\xfd\xfd\xb7s\
-rr\xf2O+\x07\x00\xaf\xd7\xbb\x97\x9c\x9c\xfcbEE\xc5k\xcb\xcb\xcb\xbb"\x91\
-\xe8\x8bH\xd6\xe7\xf7\x1f\x06\xbf\xcf\xe7;8\xab.\x1b\x1b\x1b\xbftvv\xbe\
-\x09\x00]]]o\xaf\xae\xae>:?\x8e}Bk\x91\xf4\x87A&\x93]5\x1a\x8d\xd3{{{~\xa3\
-\xd1xW&\x93]=n\xec\xdc\xdc\xdc&\x9b\xcdN\xf8\x27\xf2\xb6\xb6\xb6O\x12\x13\
-\x13\x13\x9a\x9a\x9a\xaafgg?\xea\xe9\xe9\xc9\x09\xb76\xab\xd5:\xb2\xb2\xb2\
-\xf2imm\xedu\xa5R\xf9q\xa8\x8c\xde"\xd1E\xab\xd5\xde\xab\xac\xac|\x8f\xa2\
-(VYY\xd9\xbbj\xb5\xfa\xfe\xf9\xd9co\xd0N\xbf\xf3\xb4\xb4{\xe3\xf4\xa7b.\
-\x97\x1b\xcd\xe7\xf3\xf3sss\xcb\xa4\xd2\xc3\xedn\xff\x0f.\x97;\xb5\xbb\
-\xbb\xeb\x0d\x1d_PP\xf0\x92\xdb\xedv\x1c7\xdfIr\xb3\xd9\xbcm6\x9b\xbf\x04\
-\x00\x91H\xf4\xf2\xc0\xc0@{oo\xef\xe2I\xeb\xe3\xf1x\x0d)))/h4\x9a\xeb\xe9\
-\xe9\xe9\xf1\x00~\x0d\xddSO\xa3\x8b\xd9l\xdev\xb9\\\xbb\x13\x13\x13\xd5\
-;;;\xb6\xa5\xa5\xa5\xdf\xceO\xc4>G\x14
-E\xce\xe6\xe6\xe6c\xfa^e\xb3\xd9\x1e+\x14\x8ag\xa2))))\xa6\xa6\xa6&]\xa9\
-T\xde\\\\\\|\x10:O89\x00LOO\xdf*..N\xe1p8\x97\xb2\xb3\xb3_a\xb1X\xacH\xd6\
-\xb8\xb5\xb5\xb5\xdf\xd8\xd8xG"\x91T\xa6\xa5\xa5\xc5\x9eU\x97\xf1\xf1\xf1\
-o\xf8|~\x91\xc1`0\x9d\xe7:\xf6L\x94\x96\x96\x16\x19\x0c\x86)z\xdf\xd4\xd4\
-\xd4\xb7\xd5\xd5\xd5\x15\xdd\xdd\xdd\x0f\x83)\xcf\xef\xf7\x1f8\x9dN\xbb\
-\xc5b\x99\x97\xcb\xe5_\x87\xa6\xc4\x93\xe4A\x16\x16\x16\x1e\x0d\x0e\x0e\
-6\xb3\xd9\xecD\xa7\xd3\xb9\xa5\xd3\xe9nG\xbaN\x87\xc3\xe15\x99L\xf7U*\xd5\
-\xfbUUU\x86\xa3N\xc6\xdb\xdb\xdb\xeb\xe1t\x01\x00\xbd^\xff\x93^\xaf\xff\
-_j~\x16\x80zR\xf51\x0f\xf2J\x91\xc1\x8e\xf5\x1030\x0e\x0f\x85\xc3\x9bn\x04\
-fa\xa3@\xbb\xd9F`\x0ck\x14\x0e\xef\xa4\x12\x98\xc5z\x14\x00?\x0eo\xb6]!\
-\xf6`\x04&\x00\xf6\xe0\xf5SG\xa0\xf4I%v\xb9\xd0|\x07`\x19x\xf6\xc2\xf8S\
-\x12\xb9\x17>R\x97\x83\x8ez\xd5F\xbe\xdd\xb9 %\x0dN\xf8v\xe7O\x91B\x1b\
-p\xe6Ln,\x00\x00\x00\x00IEND\xaeB`\x82'''
-
     wx.MemoryFSHandler.AddFile('XRC/test_gui/test_gui_xrc', test_gui_xrc)
-    wx.MemoryFSHandler.AddFile('XRC/test_gui/___img_stream_add_png', ___img_stream_add_png)
-    wx.MemoryFSHandler.AddFile('XRC/test_gui/___img_stream_add_h_png', ___img_stream_add_h_png)
     __res.Load('memory:XRC/test_gui/test_gui_xrc')
 

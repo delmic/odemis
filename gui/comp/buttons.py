@@ -21,16 +21,16 @@ class ImageButton(GenBitmapButton):
     labelDelta = 0
 
     def __init__(self, *args, **kwargs):
-
+        """ If the background_parent keyword argument is provided, it will be
+        used to determine the background colour of the button. Otherwise, the
+        direct parent will be used.
+        """
         if kwargs.has_key('style'):
             kwargs['style'] |= wx.NO_BORDER
         else:
             kwargs['style'] = wx.NO_BORDER
 
-        self.background_parent = None
-        if kwargs.has_key('background_parent'):
-            self.background_parent = kwargs['background_parent']
-            del kwargs['background_parent']
+        self.background_parent = kwargs.pop('background_parent', None)
 
         GenBitmapButton.__init__(self, *args, **kwargs)
 
@@ -287,7 +287,7 @@ class ColourButton(ImageButton):
     def __init__(self, *args, **kwargs):
 
         colour = kwargs.pop('colour', None)
-        #kwargs['bitmap'] = img.getemptyBitmap()
+        self.use_hover = kwargs.pop('use_hover', False)
         ImageButton.__init__(self, *args, **kwargs)
         self.set_colour(colour)
 
@@ -297,7 +297,6 @@ class ColourButton(ImageButton):
         self.colour = colour or self.DEFAULT_COLOR
 
         BMP_EMPTY = img.getemptyBitmap()
-        BMP_EMPTY_H = img.getempty_hBitmap()
 
         brush = wx.Brush(self.colour)
         pen = wx.Pen(self.colour)
@@ -312,16 +311,18 @@ class ColourButton(ImageButton):
 
         self.SetBitmapLabel(bmp)
 
-        bmp = BMP_EMPTY_H.GetSubBitmap(
-                    wx.Rect(0, 0, BMP_EMPTY.GetWidth(), BMP_EMPTY.GetHeight()))
-        mdc = wx.MemoryDC()
-        mdc.SelectObject(bmp)
-        mdc.SetBrush(brush)
-        mdc.SetPen(pen)
-        mdc.DrawRectangle(4, 4, 10, 10)
-        mdc.SelectObject(wx.NullBitmap)
+        if self.use_hover:
+            BMP_EMPTY_H = img.getempty_hBitmap()
+            bmp = BMP_EMPTY_H.GetSubBitmap(
+                        wx.Rect(0, 0, BMP_EMPTY.GetWidth(), BMP_EMPTY.GetHeight()))
+            mdc = wx.MemoryDC()
+            mdc.SelectObject(bmp)
+            mdc.SetBrush(brush)
+            mdc.SetPen(pen)
+            mdc.DrawRectangle(4, 4, 10, 10)
+            mdc.SelectObject(wx.NullBitmap)
 
-        self.SetBitmaps(bmp)
+            self.SetBitmaps(bmp)
 
         self.Refresh()
 
@@ -362,7 +363,7 @@ class PopupImageButton(ImageButton):
                 self.Bind(wx.EVT_LISTBOX, self.on_select)
 
             def on_select(self, evt):
-                #print self.lb.GetStringSelection()
+                evt.Skip()
                 self.Dismiss()
                 self.OnDismiss()
 

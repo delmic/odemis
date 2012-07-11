@@ -32,7 +32,7 @@ class FixedStreamPanelXmlHandler(xrc.XmlResourceHandler):
         assert self.GetInstance() is None
 
         # Now create the object
-        panel = strm.FixedStreamPanel(self.GetParentAsWindow(),
+        panel = strm.FixedStreamPanelEntry(self.GetParentAsWindow(),
                                       self.GetID(),
                                       self.GetText('label'),
                                       self.GetPosition(),
@@ -71,7 +71,7 @@ class CustomStreamPanelXmlHandler(xrc.XmlResourceHandler):
         assert self.GetInstance() is None
 
         # Now create the object
-        panel = strm.CustomStreamPanel(self.GetParentAsWindow(),
+        panel = strm.CustomStreamPanelEntry(self.GetParentAsWindow(),
                                       self.GetID(),
                                       self.GetText('label'),
                                       self.GetPosition(),
@@ -295,7 +295,7 @@ class PopupImageButtonHandler(xrc.XmlResourceHandler):
         # Custom styles
 
     def CanHandle(self, node):
-        return self.IsOfClass(node, 'odemis.gui.comp.buttons.PopupImageButton')
+        return self.IsOfClass(node, 'odemis.gui.comp.buttons.PopupImageButtonFitItem')
 
     # Process XML parameters and create the object
     def DoCreateResource(self):
@@ -306,11 +306,11 @@ class PopupImageButtonHandler(xrc.XmlResourceHandler):
             bmp = self.GetBitmap("bitmap")
 
         w = btns.PopupImageButton(self.GetParentAsWindow(),
-                                self.GetID(),
-                                bmp,
-                                pos=self.GetPosition(),
-                                size=self.GetSize(),
-                                style=self.GetStyle())
+                                  self.GetID(),
+                                  bmp,
+                                  pos=self.GetPosition(),
+                                  size=self.GetSize(),
+                                  style=self.GetStyle())
 
         if self.GetParamNode("selected"):
             bmp = self.GetBitmap("selected")

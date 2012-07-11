@@ -36,8 +36,9 @@ class xrcfr_main(wx.Frame):
         self.PostCreate(pre)
 
         # Define variables for the controls, bind event handlers
-        self.scr_win = xrc.XRCCTRL(self, "scr_win")
+        self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
         self.fpb_settings = xrc.XRCCTRL(self, "fpb_settings")
+        self.pnl_stream = xrc.XRCCTRL(self, "pnl_stream")
 
 
 
@@ -62,11 +63,7 @@ def __init_resources():
         </object>
       </object>
     </object>
-    <object class="wxFlexGridSizer">
-      <cols>2</cols>
-      <rows>1</rows>
-      <growablecols>0</growablecols>
-      <growablerows>0</growablerows>
+    <object class="wxBoxSizer">
       <object class="sizeritem">
         <object class="wxGridSizer">
           <object class="sizeritem">
@@ -102,82 +99,40 @@ def __init_resources():
         </object>
         <option>1</option>
         <flag>wxEXPAND</flag>
-        <ratio>1</ratio>
       </object>
       <object class="sizeritem">
         <object class="wxBoxSizer">
           <object class="sizeritem">
-            <object class="wxScrolledWindow" name="scr_win">
+            <object class="wxScrolledWindow" name="scr_win_right">
               <object class="wxBoxSizer">
                 <orient>wxVERTICAL</orient>
                 <object class="sizeritem">
                   <object class="odemis.gui.comp.foldpanelbar.FoldPanelBar" name="fpb_settings">
-                    <object class="odemis.gui.comp.foldpanelbar.FoldPanelItem">
-                      <label>Optical Settings</label>
-                      <object class="wxPanel">
-                        <object class="wxBoxSizer">
-                          <orient>wxVERTICAL</orient>
-                          <object class="sizeritem">
-                            <object class="wxFlexGridSizer">
-                              <object class="sizeritem">
-                                <object class="wxStaticText">
-                                  <label>Slider</label>
-                                </object>
-                                <flag>wxTOP</flag>
-                                <border>3</border>
-                              </object>
-                              <object class="sizeritem">
-                                <object class="wxSlider"/>
-                                <flag>wxEXPAND</flag>
-                              </object>
-                              <object class="sizeritem">
-                                <object class="wxStaticText">
-                                  <label>Value</label>
-                                </object>
-                                <flag>wxTOP</flag>
-                                <border>3</border>
-                              </object>
-                              <object class="sizeritem">
-                                <object class="wxTextCtrl"/>
-                                <flag>wxEXPAND</flag>
-                              </object>
-                              <cols>2</cols>
-                              <rows>1</rows>
-                              <vgap>5</vgap>
-                              <hgap>10</hgap>
-                              <growablecols>1</growablecols>
-                            </object>
-                            <flag>wxBOTTOM|wxEXPAND</flag>
-                            <border>5</border>
-                          </object>
-                        </object>
-                      </object>
-                    </object>
-                    <object class="odemis.gui.comp.foldpanelbar.FoldPanelItem">
-                      <label>SEM Settings</label>
-                    </object>
+                    
+                    
                     <object class="odemis.gui.comp.foldpanelbar.FoldPanelItem">
                       <label>Streams</label>
-                      <object class="wxCollapsiblePane">
-                        <label>Wababa</label>
-                        <object class="panewindow">
-                          <object class="wxButton">
-                            <label>klick meh!</label>
-                          </object>
-                        </object>
+                      <object class="wxPanel" name="pnl_stream" subclass="odemis.gui.comp.stream.StreamPanel">
+                        <fg>#7F7F7F</fg>
+                        <bg>#333333</bg>
+                        <XRCED>
+                          <assign_var>1</assign_var>
+                        </XRCED>
                       </object>
                     </object>
+                    
+                    <spacing>0</spacing>
+                    <leftspacing>0</leftspacing>
+                    <rightspacing>0</rightspacing>
+                    <bg>#4D4D4D</bg>
                     <XRCED>
                       <assign_var>1</assign_var>
                     </XRCED>
-                    <object class="odemis.gui.comp.foldpanelbar.FoldPanelItem">
-                      <label>Overlay</label>
-                    </object>
                   </object>
                   <flag>wxEXPAND</flag>
                 </object>
               </object>
-              <size>300,-1</size>
+              <size>400,-1</size>
               <style>wxVSCROLL</style>
               <XRCED>
                 <assign_var>1</assign_var>
@@ -185,7 +140,7 @@ def __init_resources():
             </object>
             <option>1</option>
             <flag>wxEXPAND</flag>
-            <minsize>300,-1</minsize>
+            <minsize>400,400</minsize>
           </object>
           <object class="sizeritem">
             <object class="wxButton">

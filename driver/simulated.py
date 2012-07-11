@@ -14,6 +14,7 @@ Delmic Acquisition Software is distributed in the hope that it will be useful, b
 
 You should have received a copy of the GNU General Public License along with Delmic Acquisition Software. If not, see http://www.gnu.org/licenses/.
 '''
+from model import roattribute
 import logging
 import model
 import time
@@ -50,7 +51,7 @@ class Light(model.Emitter):
         if value == 100:
             logging.info("Light is on")
         else:
-            logging.info("Light is off") 
+            logging.info("Light is off")
 
 
 class Stage2D(model.Actuator):
@@ -58,13 +59,17 @@ class Stage2D(model.Actuator):
     Simulated stage component. Just pretends to be able to move all around.
     """
     def __init__(self, name, role, children=None):
-        model.Actuator.__init__(self, name, role, children)
-        
-        self.axes = frozenset(["x", "y"])
+        model.Actuator.__init__(self, name, role, children=children,
+                                axes=["x", "y"], 
+                                ranges={"x": [0, 0.1], "y": [0, 0.1]})
         # can move 10cm on both axis
-        self.ranges = {"x": [0, 0.1], "y": [0, 0.1]}
         self._position = {"x": 0.05, "y": 0.05} # starts in the middle
         self.speed = model.MultiSpeedVA({"x": 10, "y": 10}, [0, 10], "m/s")
+        
+    @roattribute
+    def position(self):
+        # TODO should depend on the time and the current queue of moves
+        return self._position
         
     def getMetadata(self):
         metadata = {}
@@ -103,11 +108,6 @@ class Stage2D(model.Actuator):
     def stop(self, axes=None):
         # TODO empty the queue for the given axes
         return
-        
-    @property
-    def position(self):
-        # TODO should depend on the time and the current queue of moves
-        return self._position
         
 
 class InstantaneousFuture(object):

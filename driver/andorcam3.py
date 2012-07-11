@@ -180,7 +180,7 @@ class AndorCam3(model.DigitalCamera):
         
         psize = (self.GetFloat(u"PixelWidth") * 1e-6,
                  self.GetFloat(u"PixelHeight") * 1e-6)
-        self.pixelSize = model.Property(psize, unit="m", readonly=True)
+        self.pixelSize = model.RemotableVigilantAttribute(psize, unit="m", readonly=True)
         self._metadata[model.MD_SENSOR_PIXEL_SIZE] = self.pixelSize.value
         
         # odemis + sdk
@@ -200,7 +200,7 @@ class AndorCam3(model.DigitalCamera):
 
         self._binning = 1 # used by resolutionFitter()
         # need to be before binning, as it is modified when changing binning         
-        self.resolution = ResolutionProperty(resolution, [(1, 1), resolution], 
+        self.resolution = ResolutionVA(resolution, [(1, 1), resolution], 
                                              fitter=self.resolutionFitter)
         self.resolution.subscribe(self.onResolution, init=True)
         
@@ -214,8 +214,8 @@ class AndorCam3(model.DigitalCamera):
         self.exposureTime.subscribe(self.onExposureTime, init=True)
         
         current_temp = self.GetFloat(u"SensorTemperature")
-        self.temperature = model.FloatProperty(current_temp, unit="C", readonly=True)
-        self.temp_timer = RepeatingTimer(10, self.updateTemperatureProperty,
+        self.temperature = model.FloatVA(current_temp, unit="C", readonly=True)
+        self.temp_timer = RepeatingTimer(10, self.updateTemperatureVA,
                                          "AndorCam3 temperature update")
         
         # TODO some methods (with futures)
@@ -424,7 +424,7 @@ class AndorCam3(model.DigitalCamera):
         # TODO: a more generic function which set up the fan to the right speed
         # according to the target temperature?
 
-    def updateTemperatureProperty(self):
+    def updateTemperatureVA(self):
         """
         to be called at regular interval to update the temperature
         """
@@ -942,30 +942,25 @@ class AndorCam3(model.DigitalCamera):
         return cameras
 
 
-class ResolutionProperty(model.Property):
+class ResolutionVA(model.RemotableVigilantAttribute, model.Continuous):
     """
-    Property which represents a resolution : 2-tuple of int
+    VigilantAttribute which represents a resolution : 2-tuple of int
     It can only be set a min and max, but might also have additional constraints
     It's allowed to request any resolution within min and max, but it will
     be automatically adapted to a bigger one allowed.
     """
     
-    def __init__(self, value="", rrange=[], unit="", readonly=False, fitter=None):
+    def __init__(self, value="", range=[], unit="", readonly=False, fitter=None):
         """
         fitter callable (2-tuple of int) -> (2-tuple of int): function which fits
           the given resolution to whatever is allowed. If None, it will not be adapted.
         """  
-        self._set_range(rrange)
+        model.Continuous.__init__(self, range)
         if fitter:
             self._fitter = model.WeakMethod(fitter)
         else:
             self._fitter = None
-        model.Property.__init__(self, value, unit, readonly)
-
-    @property
-    def range(self):
-        """The range within which the value of the property can be"""
-        return self._range
+        model.RemotableVigilantAttribute.__init__(self, value, unit, readonly)
     
     def _set_range(self, new_range):
         """
@@ -983,13 +978,6 @@ class ResolutionProperty(model.Property):
                             (str(self.value), str(new_range[0]), str(new_range[1])))
         self._range = tuple(new_range)
 
-    @range.setter
-    def range(self, value):
-        self._set_range(value)
-    
-    @range.deleter
-    def range(self):
-        del self._range
 
     def _set(self, value):
         """
@@ -1012,7 +1000,7 @@ class ResolutionProperty(model.Property):
                 # fitter would also mean that this property has no sense anymore
                 raise model.OutOfBoundError("Fitting method has disappeared, cannot validate value.")
         
-        model.Property._set(self, value)
+        model.RemotableVigilantAttribute._set(self, value)
 
 class AndorCam3DataFlow(model.DataFlow):
     def __init__(self, camera):
@@ -1023,15 +1011,16 @@ class AndorCam3DataFlow(model.DataFlow):
         self.component = weakref.proxy(camera)
         
     def get(self):
-        model.DataFlow.get(self)
         # TODO if camera is already acquiring, wait for the coming picture
         data = self.component.acquire()
+        # TODO we should avoid this: get() and acquire() simultaneously should be handled by the framework
         # If some subscribers arrived during the acquire()
         if self._listeners:
             self.notify(data)
             self.component.acquireFlow(self.notify)
         return data
     
+    # TODO use new methods from dataflow start_acquire
     def subscribe(self, listener):
         model.DataFlow.subscribe(self, listener)
         # TODO nicer way to check whether the camera is already sending us data?
