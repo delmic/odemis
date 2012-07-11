@@ -30,8 +30,8 @@ class Light(model.Emitter):
     Simulated bright light component. Just pretends to be always on with wide
     spectrum emitted (white).
     """
-    def __init__(self, name, role, children=None):
-        model.Emitter.__init__(self, name, role, children)
+    def __init__(self, name, role, children=None, **kwargs):
+        model.Emitter.__init__(self, name, role, children, **kwargs)
         
         self.shape = (1)
         
@@ -58,10 +58,12 @@ class Stage2D(model.Actuator):
     """
     Simulated stage component. Just pretends to be able to move all around.
     """
-    def __init__(self, name, role, children=None):
+    def __init__(self, name, role, children=None, **kwargs):
+        assert ("axes" not in kwargs) and ("ranges" not in kwargs)
         model.Actuator.__init__(self, name, role, children=children,
                                 axes=["x", "y"], 
-                                ranges={"x": [0, 0.1], "y": [0, 0.1]})
+                                ranges={"x": [0, 0.1], "y": [0, 0.1]},
+                                **kwargs)
         # can move 10cm on both axis
         self._position = {"x": 0.05, "y": 0.05} # starts in the middle
         self.speed = model.MultiSpeedVA({"x": 10, "y": 10}, [0, 10], "m/s")

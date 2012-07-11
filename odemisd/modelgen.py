@@ -181,6 +181,9 @@ class Instantiator(object):
         name (str): name of the component instance
         """
         attr = self.ast[name]
+        if attr.get("class", "") == "Microscope":
+            return False
+        
         children_names = attr.get("children", [])
         for child_name in children_names.values():
             child_attr = self.ast[child_name]
@@ -293,6 +296,25 @@ class Instantiator(object):
         
         return ret
     
+    def update_microscope(self):
+        assert(not isinstance(self.microscope, model.ComponentProxy))
+        # Connect all the sub-components of microscope: detectors, emitters, actuators
+        detector_names = self.ast[self.microscope.name].get("detectors", []) # none is weird but ok
+        detectors = [self.get_component_by_name(name) for name in detector_names]
+        self.microscope._detectors = set(detectors)
+        if not detectors:
+            logging.warning("Microscope contains no detectors.")
+        
+        emitter_names = self.ast[self.microscope.name].get("emitters", []) # none is weird but ok
+        emitters = [self.get_component_by_name(name) for name in emitter_names]
+        self.microscope._emitters = set(emitters)
+        if not emitters:
+            logging.warning("Microscope contains no emitters.")
+        
+        actuator_names = self.ast[self.microscope.name].get("actuators", [])
+        actuators = [self.get_component_by_name(name) for name in actuator_names]
+        self.microscope._actuators = set(actuators)
+        
     def instantiate_model(self):
         """
         Generates the real microscope model from the microscope instantiation model
@@ -325,7 +347,7 @@ class Instantiator(object):
         # try to get every component, at the end, we have all of them 
         for name in self.ast:
             self.get_or_instantiate_comp(name)
-            
+        
         # look for the microscope component (check there is only one)
         microscopes = [m for m in self.components if isinstance(m, model.Microscope)]
         if len(microscopes) == 1:
@@ -338,24 +360,9 @@ class Instantiator(object):
             raise SemanticError("Error in microscope instantiation "
                     "file: no Microscope component found.")
         
-        # TODO move to "update_microscope()"
-        # Connect all the sub-components of microscope: detectors, emitters, actuators
-        detector_names = self.ast[self.microscope.name].get("detectors", []) # none is weird but ok
-        detectors = [self.get_component_by_name(name) for name in detector_names]
-        self.microscope.detectors = set(detectors)
-        if not detectors:
-            logging.warning("Microscope contains no detectors.")
+        self.update_microscope()
         
-        emitter_names = self.ast[self.microscope.name].get("emitters", []) # none is weird but ok
-        emitters = [self.get_component_by_name(name) for name in emitter_names]
-        self.microscope.emitters = set(emitters)
-        if not emitters:
-            logging.warning("Microscope contains no emitters.")
-        
-        actuator_names = self.ast[self.microscope.name].get("actuators", [])
-        actuators = [self.get_component_by_name(name) for name in actuator_names]
-        self.microscope.actuators = set(actuators)
-        
+        # Some validation:
         # The only components which are not either Microscope or referenced by it 
         # should be parents
         left_over = self.components - self.add_children(set([self.microscope]))
@@ -377,7 +384,8 @@ class Instantiator(object):
                 for affected_name in attr["affects"]:
                     affected = self.get_component_by_name(affected_name)
                     try:
-                        comp.affects.add(affected)
+                        # TODO: use _set_affects_by_string
+                        comp._affects.add(affected)
                     except AttributeError:
                         raise SemanticError("Error in microscope instantiation "
                                 "file: Component '%s' does not support 'affects'." % name)
@@ -416,7 +424,22 @@ def instantiate_model(inst_model, container=None, create_sub_containers=False,
         Exception (dependent on the driver): in case initialisation of a driver fails
     """
     instantiator = Instantiator(inst_model, container, create_sub_containers, dry_run)
-    instantiator.instantiate_model()
+    try:
+        instantiator.instantiate_model()
+    except:
+        # clean up by stopping everything which we had started
+        for comp in instantiator.components:
+            try:
+                comp.terminate()
+            except:
+                pass
+        for container in instantiator.sub_containers:
+            try:
+                container.terminate()
+            except:
+                pass
+        raise
+    
     return instantiator.microscope, instantiator.components, instantiator.sub_containers 
 
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:

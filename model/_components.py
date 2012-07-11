@@ -20,6 +20,7 @@ import _core
 import _dataflow
 import _vattributes
 import logging
+import urllib
 import weakref
 
 # TODO detect when it's the same thread and avoid proxy?
@@ -76,7 +77,7 @@ class Component(object):
         """
         self._name = name
         if daemon:
-            daemon.register(self, name)
+            daemon.register(self, urllib.quote(name)) # registered under its name
         
         self._parent = None
         self._children = set(children)
@@ -137,14 +138,9 @@ class ComponentProxy(Pyro4.Proxy):
         asyncs (list string)
         """
         Pyro4.Proxy.__init__(self, uri, oneways, asyncs)
-        # TODO implement clever .parent and .children which call ._get_parent() and ._get_children()
-        # and cached
-        # so that sending one component doesn't mean sending the whole tree
-        # and also .parent is automatically set on the children when calling ._get_children()
         self._parent = None
     
-    # .parent is a weakref so that there is no cycle. 
-    # Too complicated to be a roattribute
+    # same as in Component, but set via __setstate__
     @property
     def parent(self):
         if self._parent:
@@ -177,7 +173,9 @@ class ComponentProxy(Pyro4.Proxy):
         _core.load_roattributes(self, roattributes)
         _dataflow.load_dataflows(self, dataflows)
         _vattributes.load_vigilant_attributes(self, vas)
-    
+
+# Note: this could be directly __reduce__ of Component, but is a separate function
+# to look more like the normal Proxy of Pyro
 # Converter from Component to ComponentProxy
 already_serialized = set()
 def odemicComponentSerializer(self):
@@ -207,7 +205,7 @@ class HwComponent(Component):
     def __init__(self, name, role, *args, **kwargs):
         Component.__init__(self, name, *args, **kwargs)
         self._role = role
-        self._affects = set()
+        self._affects = set() # will be set later via _set_affects_by_string
     
     @roattribute
     def role(self):
@@ -227,7 +225,7 @@ class HwComponent(Component):
     def _set_affects_by_string(self, names):
         """
         names (list of 2-tuples (string, string)): list of the affected components 
-        by container name and name
+        by container name and component name
         """
         # this is to be used only internally for initialisation!
         # TODO: make it work to pass just a component (= pass a proxy of a proxy and still returns a proxy)
@@ -262,8 +260,7 @@ class Microscope(HwComponent):
     A component which represent the whole microscope. 
     It does nothing by itself, just contains other components. 
     """
-    def __init__(self, name, role, children=None, **kwargs):
-        daemon=kwargs.get("daemon", None)
+    def __init__(self, name, role, children=None, daemon=None, **kwargs):
         HwComponent.__init__(self, name, role, daemon=daemon)
         if children:
             raise ArgumentError("Microscope component cannot have children.")
@@ -507,7 +504,9 @@ class MockComponent(HwComponent):
         
     # For everything that is not standard we return a mock VigilantAttribute
     def __getattr__(self, attrName):
-        if not self.__dict__.has_key(attrName):
+        if not attrName in self.__dict__:
+            if "__" in attrName:
+                print attrName
             if attrName == "children": # special value
                 raise AttributeError(attrName)
             

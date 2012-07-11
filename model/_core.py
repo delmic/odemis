@@ -21,6 +21,7 @@ import logging
 import multiprocessing
 import os
 import time
+import urllib
 import weakref
 
 # The special read-only attribute which are duplicated on proxy objects 
@@ -97,7 +98,7 @@ class Container(Pyro4.core.Daemon):
         """
         assert not "/" in name
         # TODO put all the sockets in some specified directory on the fs /var/odemis/?
-        self.ipc_name = name + ".ipc"
+        self.ipc_name = urllib.quote(name) + ".ipc"
         
         if os.path.exists(self.ipc_name):
             try:
@@ -116,12 +117,12 @@ class Container(Pyro4.core.Daemon):
         # wrapper to requestLoop() just because the name is strange
         self.requestLoop(*args, **kwargs)
 
-    def terminate(self, *args, **kwargs):
+    def terminate(self):
         """
         stops the server
         """
         # wrapper to shutdown(), in order to be more consistent with the vocabulary
-        self.shutdown(*args, **kwargs)
+        self.shutdown()
         # All the cleaning is done in the original thread, after the run()
     
     def close(self):
@@ -160,7 +161,8 @@ def getContainer(name):
     raises an exception if no such container exist
     """
     # the container is the default pyro daemon at the address named by the container
-    container = Pyro4.Proxy("PYRO:Pyro.Daemon@./u:"+name+".ipc", oneways=["terminate"])
+    container = Pyro4.Proxy("PYRO:Pyro.Daemon@./u:"+urllib.quote(name)+".ipc",
+                            oneways=["terminate"])
     # A proxy doesn't connect until the first remote call, check the connection
     container.ping() # raise an exception if connection fails
     return container
@@ -171,7 +173,7 @@ def getObject(container_name, object_name):
     raises an exception if no such object or container exist
     """
     container = getContainer(container_name)
-    return container.getObject(object_name)
+    return container.getObject(urllib.quote(object_name))
 
 def createNewContainer(name):
     """

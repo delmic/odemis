@@ -51,13 +51,29 @@ class BackendContainer(model.Container):
         model.Container.__init__(self, name)
         self.sub_containers = set() # to be updated later on
     
-    def terminate(self, *args, **kwargs):  
+    def terminate(self):  
         for container in self.sub_containers:
-            container.terminate()
+            try:
+                container.terminate()
+            except:
+                logging.warning("Failed to terminate container %r", container)
+                pass
     
-        model.Container.terminate(self, *args, **kwargs)
+        model.Container.terminate(self)
         
-        
+
+def terminate_all_components(components):
+    """
+    try to terminate all the components given as much as possible
+    components (set of Components): set of components to stop
+    """
+    for comp in components:
+        try:
+            comp.terminate()
+        except:
+            logging.warning("Failed to terminate component '%s'", comp.name)
+            pass
+
 # This is the cli interface of odemisd, which allows to start the back-end
 # It parses the command line and accordingly reads the microscope instantiation
 # file, generates a model out of it, and then provides it to the front-end 
@@ -151,16 +167,21 @@ def main(args):
         logging.debug("model components are %s", ", ".join([c.name for c in comps])) 
     except:
         logging.exception("When instantiating file %s", options.model[0].name)
+        container.terminate()
         return 127
     
     try:
         logging.info("Microscope is now available in container '%s'", model.BACKEND_NAME)
         container.run()
     except:
+        # This is coming here in case of signal received when the daemon is running
         logging.exception("When running backend container")
+        terminate_all_components(_hwcomponents)
+        container.terminate()
         return 127
     
     try:
+        terminate_all_components(_hwcomponents)
         container.close()
     except:
         logging.exception("Failed to end the backend container cleanly")
