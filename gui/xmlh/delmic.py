@@ -14,24 +14,24 @@ TRACE('*** creating xh_delmic components')
 
 ### odemis.gui.comp.stream.StreamPanel
 
-c = component.Container('odemis.gui.comp.stream.FixedStreamPanel',
+c = component.Container('odemis.gui.comp.stream.FixedStreamPanelEntry',
     ['window', 'top_level', 'control'],
     ['pos', 'size', 'label', 'collapsed'])
 c.setParamClass('collapsed', params.ParamBool)
 c.addEvents('EVT_COMMAND_COLLPANE_CHANGED')
 component.Manager.register(c)
-component.Manager.addXmlHandler(xh_delmic.FixedStreamPanelXmlHandler)
-component.Manager.setMenu(c, 'TOP_LEVEL', 'Delmic fixed stream panel', 'FixedStreamPanel', 3)
+component.Manager.addXmlHandler(xh_delmic.FixedStreamPanelEntryXmlHandler)
+component.Manager.setMenu(c, 'TOP_LEVEL', 'Delmic fixed stream entry', 'FixedStreamPanelEntry', 3)
 component.Manager.setMenu(c, 'ROOT', 'Delmic fixed stream panel', 'FixedStreamPanel', 3)
 
-c = component.Container('odemis.gui.comp.stream.CustomStreamPanel',
+c = component.Container('odemis.gui.comp.stream.CustomStreamPanelEntry',
     ['window', 'top_level', 'control'],
     ['pos', 'size', 'label', 'collapsed'])
 c.setParamClass('collapsed', params.ParamBool)
 c.addEvents('EVT_COMMAND_COLLPANE_CHANGED')
 component.Manager.register(c)
-component.Manager.addXmlHandler(xh_delmic.CustomStreamPanelXmlHandler)
-component.Manager.setMenu(c, 'TOP_LEVEL', 'Delmic custom stream panel', 'CustomStreamPanel', 4)
+component.Manager.addXmlHandler(xh_delmic.CustomStreamPanelEntryXmlHandler)
+component.Manager.setMenu(c, 'TOP_LEVEL', 'Delmic custom stream entry', 'CustomStreamPanelEntry', 4)
 component.Manager.setMenu(c, 'ROOT', 'Delmic custom stream panel', 'CustomStreamPanel', 4)
 
 
@@ -95,10 +95,12 @@ component.Manager.setTool(c, 'Controls', pos=(1, 1))
 ### odemis.gui.comp.buttons.ImageButton
 
 c = component.Component('odemis.gui.comp.buttons.ImageButton', ['control', 'tool'],
-              ['pos', 'size', 'default',
+              ['pos', 'size', 'default', 'delta',
                'bitmap', 'hover', 'selected', 'focus', 'disabled'],
               image=images.TreeBitmapButton.GetImage())
 #c.addStyles()
+c.setParamClass('delta', params.ParamInt)
+
 c.setParamClass('default', params.ParamBool)
 c.setSpecial('bitmap',  attribute.BitmapAttribute)
 
@@ -119,6 +121,39 @@ c.addEvents('EVT_BUTTON')
 component.Manager.register(c)
 component.Manager.addXmlHandler(xh_delmic.ImageButtonHandler)
 component.Manager.setMenu(c, 'button', 'Delmic hover bitmap button', 'odemis.gui.comp.buttons.ImageButton', 20)
+component.Manager.setTool(c, 'Controls', pos=(1, 1))
+
+
+### odemis.gui.comp.buttons.ImageTextButton
+
+c = component.Component('odemis.gui.comp.buttons.ImageTextButton', ['control', 'tool'],
+              ['pos', 'size', 'default', 'label', 'delta',
+               'bitmap', 'hover', 'selected', 'focus', 'disabled'],
+              image=images.TreeBitmapButton.GetImage())
+c.addStyles('wxALIGN_LEFT', 'wxALIGN_RIGHT', 'wxALIGN_CENTRE')
+
+c.setParamClass('delta', params.ParamInt)
+
+c.setParamClass('default', params.ParamBool)
+c.setSpecial('bitmap',  attribute.BitmapAttribute)
+
+c.setSpecial('hover',  attribute.BitmapAttribute)
+c.setParamClass('hover', params.ParamBitmap)
+
+c.setSpecial('selected',  attribute.BitmapAttribute)
+c.setParamClass('selected', params.ParamBitmap)
+
+c.setSpecial('focus',  attribute.BitmapAttribute)
+c.setParamClass('focus', params.ParamBitmap)
+
+c.setSpecial('disabled',  attribute.BitmapAttribute)
+c.setParamClass('disabled', params.ParamBitmap)
+
+
+c.addEvents('EVT_BUTTON')
+component.Manager.register(c)
+component.Manager.addXmlHandler(xh_delmic.ImageButtonHandler)
+component.Manager.setMenu(c, 'button', 'Delmic hover bitmap text button', 'odemis.gui.comp.buttons.ImageTextButton', 20)
 component.Manager.setTool(c, 'Controls', pos=(1, 1))
 
 ### odemis.gui.comp.buttons.PopupImageButton

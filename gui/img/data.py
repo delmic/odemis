@@ -59,6 +59,25 @@ getarr_s_rightImage = arr_s_right.GetImage
 getarr_s_rightBitmap = arr_s_right.GetBitmap
 
 #----------------------------------------------------------------------
+btn_aquire = PyEmbeddedImage(
+    "iVBORw0KGgoAAAANSUhEUgAAAXwAAAAtCAYAAACtQtAsAAAABmJLR0QA/wD/AP+gvaeTAAAA"
+    "CXBIWXMAAAsTAAALEwEAmpwYAAAAB3RJTUUH3AcLCioF3p+QlAAAAatJREFUeNrt3LFqk1EU"
+    "wPHzpdekCJJaig5t5RMEBX0A3foYHfsI2XwNH8DFN8jexbGLiyAUMeBgCS5tsS6J8bsO+hD2"
+    "nt8PQvYz/DmchNu9Pl1MXx7cfRMRfUT03d9vAG65GvE1/n3Ovl3Myou98fztx+9Hl6shrtZD"
+    "XK6rKQE0YHfc9ffHo353Morjpw92ulfvPtTFz98mA9Cw59MSZfHjl0kANO7T1TpK1MEkABIQ"
+    "fIAswa/Vj7QAOTb8wYYPkCP4TjoAgg9AS8Ef3PABUgS/2vABkmz4gg+QJfhOOgA5gu9vmQBZ"
+    "NnzBBxB8ANoJvqcVALJs+G74AEmC76QDIPgAtBR8TysA5Ai+pxUAsmz4gg8g+AC0FHw3fAAb"
+    "PgCCD8BtC3510gGw4QMg+AAIPgD/Z/C9lgmQI/jewwfIsuE76QAkCb6TDkCWDd9JByBJ8G34"
+    "AIIPQDvB97QCQJLgT7YiVhtbPkDLJmUU5XC7u/5yM+wYB0C7Dre3rktZns/3Hz47ubhZmQhA"
+    "g/bvTaIsz+dlM92b3fl81j/u4shYANpTl/F+8+jJzCQAkvgDnwOKso4CrW0AAAAASUVORK5C"
+    "YII=")
+index.append('btn_aquire')
+catalog['btn_aquire'] = btn_aquire
+getbtn_aquireData = btn_aquire.GetData
+getbtn_aquireImage = btn_aquire.GetImage
+getbtn_aquireBitmap = btn_aquire.GetBitmap
+
+#----------------------------------------------------------------------
 btn_big_a = PyEmbeddedImage(
     "iVBORw0KGgoAAAANSUhEUgAAAFAAAAAsCAYAAADy8T8XAAAAGXRFWHRTb2Z0d2FyZQBBZG9i"
     "ZSBJbWFnZVJlYWR5ccllPAAAAvZJREFUeNrsm8uKGkEUhkstr3hjFF1koYLuA4E8gLjLNpBF"
