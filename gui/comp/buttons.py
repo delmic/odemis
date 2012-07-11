@@ -287,6 +287,7 @@ class ColourButton(ImageButton):
     def __init__(self, *args, **kwargs):
 
         colour = kwargs.pop('colour', None)
+        #kwargs['bitmap'] = img.getemptyBitmap()
         ImageButton.__init__(self, *args, **kwargs)
         self.set_colour(colour)
 
