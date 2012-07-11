@@ -48,3 +48,6 @@ def wave2rgb(wavelength):
     sss *= 255
 
     return int(sss*r), int(sss*g), int(sss*b)
+
+def wave2hex(wavelength):
+    return "#%02x%02x%02x" % wave2rgb(wavelength)

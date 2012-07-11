@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 #===============================================================================
-# Test module for Odemis' custom FoldPanelBar in odemis.gui.comp
+# Test module for Odemis' stream module in odemis.gui.comp
 #===============================================================================
 
 import unittest
@@ -12,11 +12,17 @@ if os.getcwd().endswith('test'):
     print "Working directory changed to", os.getcwd()
 
 import wx
+from wx.lib.inspection import InspectionTool
+
 import odemis.gui.test.test_gui
 
+from odemis.gui.comp.stream import FixedStreamPanelEntry, CustomStreamPanelEntry
 
-SLEEP_TIME = 100 # Sleep timer in milliseconds
-MANUAL = True # If manual is set to True, the window will be kept open at the end
+# Sleep timer in milliseconds
+SLEEP_TIME = 300
+# If manual is set to True, the window will be kept open at the end
+MANUAL = True
+# Open an inspection window after running the tests if MANUAL is set
 INSPECT = False
 
 TEST_STREAMS = ["aap", "noot", "mies", "etc"]
@@ -65,16 +71,18 @@ class FoldPanelBarTestCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.app = TestApp()
+        cls.frm = cls.app.test_frame
         loop()
-        if INSPECT:
-            import wx.lib.inspection
-            wx.lib.inspection.InspectionTool().Show()
+        wx.MilliSleep(SLEEP_TIME)
+        if INSPECT and MANUAL:
+            InspectionTool().Show()
 
     @classmethod
     def tearDownClass(cls):
         if not MANUAL:
             wx.CallAfter(cls.app.Exit)
         else:
+            cls.frm.stream_panel.show_add_button()
             cls.app.MainLoop()
 
     @classmethod
@@ -100,10 +108,150 @@ class FoldPanelBarTestCase(unittest.TestCase):
         """
         return window.GetClientSize().GetHeight() < window.GetSize().GetHeight()
 
-    def test_structure(self):
-        self.app.test_frame.btn_stream_add.set_choices(TEST_STREAMS)
+    def test_stream_interface(self):
+
+        loop()
+        wx.MilliSleep(SLEEP_TIME)
+
+        # Show initially hidden Stream add button
+        self.assertEqual(self.frm.stream_panel.btn_add_stream.IsShown(), False)
+        self.frm.stream_panel.show_add_button()
+        loop()
+        self.assertEqual(self.frm.stream_panel.btn_add_stream.IsShown(), True)
+
+        # Add an editable entry
+        wx.MilliSleep(SLEEP_TIME)
+        custom_entry = CustomStreamPanelEntry(self.frm.stream_panel,
+                                            label="First Custom Stream")
+        self.frm.stream_panel.add_stream(custom_entry)
+        loop()
+
+        self.assertEqual(self.frm.stream_panel.get_size(), 1)
+        self.assertEqual(
+            self.frm.stream_panel.get_stream_position(custom_entry),
+            0)
 
 
+        # Add a fixed stream
+        wx.MilliSleep(SLEEP_TIME)
+        fixed_entry = FixedStreamPanelEntry(self.frm.stream_panel,
+                                           label="First Fixed Stream")
+        self.frm.stream_panel.add_stream(fixed_entry)
+        loop()
+
+        self.assertEqual(self.frm.stream_panel.get_size(), 2)
+        self.assertEqual(
+            self.frm.stream_panel.get_stream_position(fixed_entry),
+            0)
+        self.assertEqual(
+            self.frm.stream_panel.get_stream_position(custom_entry),
+            1)
+
+        # Hide the Stream add button
+        self.assertEqual(self.frm.stream_panel.btn_add_stream.IsShown(), True)
+        wx.MilliSleep(SLEEP_TIME)
+        self.frm.stream_panel.hide_add_button()
+        loop()
+        self.assertEqual(self.frm.stream_panel.btn_add_stream.IsShown(), False)
+
+        # Add a fixed stream
+        wx.MilliSleep(SLEEP_TIME)
+        fixed_entry = FixedStreamPanelEntry(self.frm.stream_panel,
+                                           label="Second Fixed Stream")
+        self.frm.stream_panel.add_stream(fixed_entry)
+        loop()
+
+        self.assertEqual(self.frm.stream_panel.get_size(), 3)
+        self.assertEqual(
+            self.frm.stream_panel.get_stream_position(fixed_entry),
+            0)
+        self.assertEqual(
+            self.frm.stream_panel.get_stream_position(custom_entry),
+            2)
+
+        # Hide first stream
+        wx.MilliSleep(SLEEP_TIME)
+        self.frm.stream_panel.hide_stream(0)
+        loop()
+        self.assertEqual(self.frm.stream_panel.get_size(), 3)
+
+        # Delete other fixes stream
+
+        wx.MilliSleep(SLEEP_TIME)
+        self.frm.stream_panel.remove_stream(1)
+        loop()
+
+        self.assertEqual(self.frm.stream_panel.get_size(), 2)
+
+        # Clear remainging streams
+        wx.MilliSleep(SLEEP_TIME)
+        self.frm.stream_panel.clear()
+        loop()
+
+        self.assertEqual(self.frm.stream_panel.get_size(), 0)
+
+    def test_add_stream(self):
+
+        loop()
+        wx.MilliSleep(SLEEP_TIME)
+
+        # Show initially hidden Stream add button
+        self.assertEqual(self.frm.stream_panel.btn_add_stream.IsShown(), False)
+        self.frm.stream_panel.show_add_button()
+        loop()
+        self.assertEqual(self.frm.stream_panel.btn_add_stream.IsShown(), True)
+
+
+        # No actions should be linked to the add stream button
+        self.assertEqual(len(self.frm.stream_panel.get_actions()), 0)
+
+        # Add a callback/name combo to the add button
+        def brightfield_callback():
+            fixed_entry = FixedStreamPanelEntry(self.frm.stream_panel,
+                                           label="Brightfield")
+            self.frm.stream_panel.add_stream(fixed_entry)
+
+        self.frm.stream_panel.add_actions({"Brightfield": brightfield_callback})
+
+        brightfield_callback()
+        loop()
+        wx.MilliSleep(SLEEP_TIME)
+        self.assertEqual(len(self.frm.stream_panel.get_actions()), 1)
+        self.assertEqual(self.frm.stream_panel.get_size(), 1)
+
+        # Add another callback/name combo to the add button
+        def sem_callback():
+            fixed_entry = FixedStreamPanelEntry(self.frm.stream_panel,
+                                           label="SEM:EDT")
+            self.frm.stream_panel.add_stream(fixed_entry)
+
+        self.frm.stream_panel.add_actions({"SEM:EDT": sem_callback})
+
+        sem_callback()
+        loop()
+        wx.MilliSleep(SLEEP_TIME)
+        self.assertEqual(len(self.frm.stream_panel.get_actions()), 2)
+        self.assertEqual(self.frm.stream_panel.get_size(), 2)
+
+
+        # Remove the Brightfield stream
+        self.frm.stream_panel.remove_action("Brightfield")
+        loop()
+        wx.MilliSleep(SLEEP_TIME)
+        self.assertEqual(len(self.frm.stream_panel.get_actions()), 1)
+
+
+        # Hide the Stream add button
+        self.assertEqual(self.frm.stream_panel.btn_add_stream.IsShown(), True)
+        wx.MilliSleep(SLEEP_TIME)
+        self.frm.stream_panel.hide_add_button()
+        loop()
+        self.assertEqual(self.frm.stream_panel.btn_add_stream.IsShown(), False)
+
+        # Clear remainging streams
+        wx.MilliSleep(SLEEP_TIME)
+        self.frm.stream_panel.clear()
+        loop()
 
 if __name__ == "__main__":
     unittest.main()

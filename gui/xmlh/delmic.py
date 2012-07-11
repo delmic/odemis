@@ -178,5 +178,41 @@ c.addStyles('wxTE_NO_VSCROLL',
 c.setParamClass('value', params.ParamMultilineText)
 c.addEvents('EVT_TEXT', 'EVT_TEXT_ENTER', 'EVT_TEXT_URL', 'EVT_TEXT_MAXLEN')
 component.Manager.register(c)
+component.Manager.addXmlHandler(xh_delmic.SuggestTextCtrlHandler)
 component.Manager.setMenu(c, 'control', 'Delmic suggest text ctrl', 'odemis.gui.comp.text.SuggestTextCtrl', 1)
+component.Manager.setTool(c, 'Controls', pos=(0,2))
+
+
+### odemis.gui.comp.text.UnitIntegerCtrl
+
+c = component.Component('odemis.gui.comp.text.UnitIntegerCtrl', ['control','tool'],
+              ['pos', 'size', 'value', 'min', 'max', 'unit'],
+              image=images.TreeTextCtrl.GetImage())
+c.addStyles('wxTE_NO_VSCROLL',
+            'wxTE_AUTO_SCROLL',
+            'wxTE_PROCESS_ENTER',
+            'wxTE_PROCESS_TAB',
+            'wxTE_MULTILINE',
+            'wxTE_PASSWORD',
+            'wxTE_READONLY',
+            'wxHSCROLL',
+            'wxTE_RICH',
+            'wxTE_RICH2',
+            'wxTE_AUTO_URL',
+            'wxTE_NOHIDESEL',
+            'wxTE_LEFT',
+            'wxTE_CENTRE',
+            'wxTE_RIGHT',
+            'wxTE_DONTWRAP',
+            'wxTE_LINEWRAP',
+            'wxTE_CHARWRAP',
+            'wxTE_WORDWRAP')
+c.setParamClass('value', params.ParamMultilineText)
+c.setParamClass('min', params.ParamInt)
+c.setParamClass('max', params.ParamInt)
+c.setParamClass('unit', params.MetaParamText(80))
+c.addEvents('EVT_TEXT', 'EVT_TEXT_ENTER', 'EVT_TEXT_URL', 'EVT_TEXT_MAXLEN')
+component.Manager.register(c)
+component.Manager.addXmlHandler(xh_delmic.UnitIntegerCtrlHandler)
+component.Manager.setMenu(c, 'control', 'Delmic unit integer text ctrl', 'odemis.gui.comp.text.UnitIntegerCtrl', 1)
 component.Manager.setTool(c, 'Controls', pos=(0,2))
