@@ -198,7 +198,6 @@ def odemicComponentSerializer(self):
 Pyro4.Daemon.serializers[Component] = odemicComponentSerializer
 
 
-# TODO need update in the attributes
 class HwComponent(Component):
     """
     A generic class which represents a physical component of the microscope
@@ -208,10 +207,35 @@ class HwComponent(Component):
     def __init__(self, name, role, *args, **kwargs):
         Component.__init__(self, name, *args, **kwargs)
         self._role = role
+        self._affects = set()
     
     @roattribute
     def role(self):
+        """
+        string: The role of this component in the microscope
+        """ 
         return self._role
+
+    @roattribute
+    def affects(self):
+        """
+        set of HwComponents which are affected by this component (i.e. if this 
+        component changes of state, it will be detected by the affected components)
+        """
+        return self._affects
+
+    def _set_affects_by_string(self, names):
+        """
+        names (list of 2-tuples (string, string)): list of the affected components 
+        by container name and name
+        """
+        # this is to be used only internally for initialisation!
+        # TODO: make it work to pass just a component (= pass a proxy of a proxy and still returns a proxy)
+        affects = set()
+        for cont_name, comp_name in names:
+            affects = _core.getObject(cont_name, comp_name)
+        
+        self._affects = affects
     
     # to be overridden by any component which actually can provide metadata
     def getMetadata(self):
@@ -303,8 +327,6 @@ class Actuator(HwComponent):
         if children:
             raise ArgumentError("Actuator components cannot have children.")
         
-        self.affects = set()
-    
     # to be overridden
     def moveRel(self, shift):
         """
@@ -314,8 +336,11 @@ class Actuator(HwComponent):
         returns (Future): object to control the move request
         """
         raise NotImplementedError()
-        
     
+    # TODO this doesn't work over the network, because the proxy will always
+    # say that the method exists.
+    # moveAbs(self, pos): should be implemented if and only if supported
+        
 class Emitter(HwComponent):
     """
     A component which represents an emitter. 
@@ -326,7 +351,7 @@ class Emitter(HwComponent):
         if children:
             raise ArgumentError("Emitter components cannot have children.")
         
-        self.affects = set()
+        # TODO remotable
         self.shape = None # must be initialised by the sub-class
         
         

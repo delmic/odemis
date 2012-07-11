@@ -365,6 +365,12 @@ class Instantiator(object):
         
         # for each component, set the affect
         # TODO unlikely to work well with sub_containers (setting a proxy on a proxy for readonly data ?!)
+        # The problem is that it's impossible to set this at creation because there
+        # would be cyclic dependency
+        # So there are two possibilities:
+        # * Make affect a special affect attribute in Component and its proxy
+        #   and ensure that passing a proxy to a proxy works correctly
+        # * have a special method _set_affects() to change the affect based on container/component name strings   
         for name, attr in self.ast.items():
             if "affects" in attr:
                 comp = self.get_component_by_name(name)
