@@ -19,7 +19,7 @@ import odemis.gui.test.test_gui
 from odemis.gui.comp.stream import FixedStreamPanelEntry, CustomStreamPanelEntry
 
 # Sleep timer in milliseconds
-SLEEP_TIME = 300
+SLEEP_TIME = 100
 # If manual is set to True, the window will be kept open at the end
 MANUAL = True
 # Open an inspection window after running the tests if MANUAL is set
@@ -113,8 +113,14 @@ class FoldPanelBarTestCase(unittest.TestCase):
         loop()
         wx.MilliSleep(SLEEP_TIME)
 
-        # Show initially hidden Stream add button
+        # Hide the Stream add button
+        self.assertEqual(self.frm.stream_panel.btn_add_stream.IsShown(), True)
+        wx.MilliSleep(SLEEP_TIME)
+        self.frm.stream_panel.hide_add_button()
+        loop()
         self.assertEqual(self.frm.stream_panel.btn_add_stream.IsShown(), False)
+
+        # Show Stream add button
         self.frm.stream_panel.show_add_button()
         loop()
         self.assertEqual(self.frm.stream_panel.btn_add_stream.IsShown(), True)
@@ -146,13 +152,6 @@ class FoldPanelBarTestCase(unittest.TestCase):
         self.assertEqual(
             self.frm.stream_panel.get_stream_position(custom_entry),
             1)
-
-        # Hide the Stream add button
-        self.assertEqual(self.frm.stream_panel.btn_add_stream.IsShown(), True)
-        wx.MilliSleep(SLEEP_TIME)
-        self.frm.stream_panel.hide_add_button()
-        loop()
-        self.assertEqual(self.frm.stream_panel.btn_add_stream.IsShown(), False)
 
         # Add a fixed stream
         wx.MilliSleep(SLEEP_TIME)
@@ -195,10 +194,6 @@ class FoldPanelBarTestCase(unittest.TestCase):
         loop()
         wx.MilliSleep(SLEEP_TIME)
 
-        # Show initially hidden Stream add button
-        self.assertEqual(self.frm.stream_panel.btn_add_stream.IsShown(), False)
-        self.frm.stream_panel.show_add_button()
-        loop()
         self.assertEqual(self.frm.stream_panel.btn_add_stream.IsShown(), True)
 
 
@@ -240,13 +235,13 @@ class FoldPanelBarTestCase(unittest.TestCase):
         wx.MilliSleep(SLEEP_TIME)
         self.assertEqual(len(self.frm.stream_panel.get_actions()), 1)
 
+        # Add another callback/name combo to the add button
+        def custom_callback():
+            custom_entry = CustomStreamPanelEntry(self.frm.stream_panel,
+                                                 label="Custom")
+            self.frm.stream_panel.add_stream(custom_entry)
 
-        # Hide the Stream add button
-        self.assertEqual(self.frm.stream_panel.btn_add_stream.IsShown(), True)
-        wx.MilliSleep(SLEEP_TIME)
-        self.frm.stream_panel.hide_add_button()
-        loop()
-        self.assertEqual(self.frm.stream_panel.btn_add_stream.IsShown(), False)
+        self.frm.stream_panel.add_actions({"Custom": custom_callback})
 
         # Clear remainging streams
         wx.MilliSleep(SLEEP_TIME)

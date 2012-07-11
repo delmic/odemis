@@ -27,7 +27,7 @@ class SECOMModel(object):
     Represent the data of a SECOM microscope
     This is the main Model, from a Model/View/Controller perspective
     """
-    
+
     def __init__(self):
         self.stage_pos = VigilantAttribute((0,0)) # m,m
         self.stage_pos.subscribe(self.avOnStagePos)
@@ -44,12 +44,12 @@ class SECOMModel(object):
         self.sem_det_image = VigilantAttribute(InstrumentalImage(None, None, None))
     
     def avOnStagePos(self, val):
-        logging.info("requested to move stage to pos: %s", str(val)) 
+        logging.info("requested to move stage to pos: %s", str(val))
 
 class OpticalBackendConnected(SECOMModel):
     """
     A class representing a SECOM microscope based on a model.Microscope instance
-    without any SEM. 
+    without any SEM.
     It's a very simple version which always acquires from the camera.
     """
     def __init__(self, microscope):
@@ -66,7 +66,7 @@ class OpticalBackendConnected(SECOMModel):
                 break
         if not self.camera:
             raise Exception("no camera found in the microscope")
-        
+
         # Find the stage: actuator with role "stage"
         self.stage = None
         for a in microscope.actuators:
@@ -75,23 +75,32 @@ class OpticalBackendConnected(SECOMModel):
                 break
         if not self.stage:
             raise Exception("no stage found in the microscope")
-        
+
 
         try:
             self.prev_pos = (self.stage.position["x"], self.stage.position["y"])
         except (KeyError, AttributeError):
             self.prev_pos = (0,0)
         # override
+<<<<<<< HEAD
+        self.stage_pos = Property(self.prev_pos) # (m,m) => (X,Y)
+=======
         self.stage_pos = VigilantAttribute(self.prev_pos) # (m,m) => (X,Y) 
+>>>>>>> 8ad7f73ce09837064015c5f23007d3042e82f72d
         self.stage_pos.subscribe(self.avOnStagePos)
-        
+
         # direct linking
         self.optical_det_exposure_time = self.camera.exposureTime
-        self.camera.data.subscribe(self.onNewCameraImage) 
+        self.camera.data.subscribe(self.onNewCameraImage)
 
         # empty
+<<<<<<< HEAD
+        self.sem_det_image = Property(InstrumentalImage(None, None, None))
+
+=======
         self.sem_det_image = VigilantAttribute(InstrumentalImage(None, None, None))
         
+>>>>>>> 8ad7f73ce09837064015c5f23007d3042e82f72d
     def onNewCameraImage(self, dataflow, data):
         size = data.shape[0:2]
         # TODO make only one copy for conversion 16bits -> 3x8
@@ -100,23 +109,23 @@ class OpticalBackendConnected(SECOMModel):
         rgb = numpy.dstack((data8, data8, data8)) # 1 copy
         im = wx.ImageFromData(*size, data=rgb.tostring())
         im.InitAlpha() # it's a different buffer so useless to do it in numpy
-        
+
         try:
             # TODO should be initialised by backend
             pos = data.metadata[model.MD_POS]
         except KeyError:
             logging.warning("position of image unknown")
             pos = self.prev_pos # at least it shouldn't be too wrong
-        
+
         try:
             mpp = data.metadata[model.MD_PIXEL_SIZE][0]
         except KeyError:
             logging.warning("pixel density of image unknown")
             # Hopefully it'll be within the same magnitude
             mpp = data.metadata[model.MD_SENSOR_PIXEL_SIZE][0] / 60 # XXX
-        
+
 #        h = hpy() # memory profiler
-#        print h.heap() 
+#        print h.heap()
         self.optical_det_image.value = InstrumentalImage(im, mpp, pos)
 
     def avOnStagePos(self, val):
@@ -130,8 +139,8 @@ class OpticalBackendConnected(SECOMModel):
             move = {"x": val[0] - self.prev_pos[0], "y": val[1] - self.prev_pos[1]}
             self.stage.moveRel(move)
         self.prev_pos = val
-    
-    
+
+
 class SECOMBackendConnected(SECOMModel):
     """
     A class representing a SECOM microscope based on a model.Microscope instance
@@ -143,7 +152,7 @@ class InstrumentalImage(object):
     """
     Contains a bitmap and meta data about it
     """
-    
+
     def __init__(self, im, mpp, center):
         """
         im wx.Image
@@ -154,7 +163,7 @@ class InstrumentalImage(object):
         # TODO should be a tuple (x/y)
         self.mpp = mpp
         self.center = center
-        
+
 
 
 # THE FUTURE：
@@ -165,10 +174,10 @@ class MicroscopeModel(object):
     pass
     # streams:
     #    + list of raw images (ordered by time)
-    #    + coloration + contrast + brightness + name 
+    #    + coloration + contrast + brightness + name
     #    + InstrumentalImage corresponding to the tiling of all the raw images
     # stage : to move the sample
     # microscope: links to the real microscope component provided by the backend
-    # 
+    #
 
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:

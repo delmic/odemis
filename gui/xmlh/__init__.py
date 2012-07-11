@@ -14,8 +14,10 @@ def odemis_get_resources():
     """ This function provides access to the XML handlers needed for
         non-standard controls defined in the XRC file.
     """
-    if odemis.gui.main_xrc.__res == None:    #pylint: disable=W0212
-        from odemis.gui.xmlh.xh_delmic import FoldPanelBarXmlHandler
-        odemis.gui.main_xrc.__init_resources() #pylint: disable=W0212
-        odemis.gui.main_xrc.__res.InsertHandler(FoldPanelBarXmlHandler()) #pylint: disable=W0212
-    return odemis.gui.main_xrc.__res #pylint: disable=W0212
+
+    if odemis.gui.main_xrc.__res == None:
+        from odemis.gui.xmlh.xh_delmic import HANDLER_CLASS_LIST
+        odemis.gui.main_xrc.__init_resources()
+        for handler_klass in HANDLER_CLASS_LIST:
+            odemis.gui.main_xrc.__res.InsertHandler(handler_klass())
+    return odemis.gui.main_xrc.__res

@@ -27,7 +27,6 @@ Delmic Acquisition Software. If not, see http://www.gnu.org/licenses/.
 
 """
 
-import locale
 import collections
 
 import wx
@@ -363,9 +362,11 @@ class StreamPanelEntry(wx.PyPanel):
         # ====== Top row, auto contrast toggle button
 
         self._btn_auto_contrast = ImageTextToggleButton(self._panel, -1,
-                                                img.getbtn_contrastBitmap(), label="Auto",
+                                                img.getbtn_contrastBitmap(),
+                                                label="Auto",
                                                 size=(68, 26))
-        self._btn_auto_contrast.SetBitmaps(bmp_sel=img.getbtn_contrast_aBitmap())
+        self._btn_auto_contrast.SetBitmaps(
+                                        bmp_sel=img.getbtn_contrast_aBitmap())
         self._btn_auto_contrast.SetForegroundColour("#000000")
         self._gbs.Add(self._btn_auto_contrast, (0, 0), flag=wx.LEFT, border=34)
 
@@ -775,12 +776,14 @@ class StreamPanel(wx.Panel):
         self.SetSizer(self._sz)
 
         msg = "No stream available as both SEM and optical paths are off."
+
+        #log.debug("Point size %s" % self.GetFont().GetPointSize())
+
         self.txt_no_stream = wx.StaticText(self, -1, msg)
         self._sz.Add(self.txt_no_stream, 0, wx.ALL | wx.ALIGN_CENTER, 10)
 
         self.btn_add_stream = PopupImageButton(self, bitmap=img.getstream_addBitmap())
         self.btn_add_stream.SetBitmaps(img.getstream_add_hBitmap())
-        self.btn_add_stream.Hide()
         self._sz.Add(self.btn_add_stream, 0)
 
         self.btn_add_stream.Bind(wx.EVT_LISTBOX, self.on_add_stream)

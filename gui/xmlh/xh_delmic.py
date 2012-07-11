@@ -14,7 +14,7 @@ import odemis.gui.comp.stream as strm
 import odemis.gui.comp.buttons as btns
 import odemis.gui.comp.text as txt
 
-class FixedStreamPanelXmlHandler(xrc.XmlResourceHandler):
+class FixedStreamPanelEntryXmlHandler(xrc.XmlResourceHandler):
     def __init__(self):
         xrc.XmlResourceHandler.__init__(self)
         # Specify the styles recognized by objects of this type
@@ -26,7 +26,9 @@ class FixedStreamPanelXmlHandler(xrc.XmlResourceHandler):
 
     # This method and the next one are required for XmlResourceHandlers
     def CanHandle(self, node):
-        return self.IsOfClass(node, "odemis.gui.comp.stream.FixedStreamPanel")
+        capable = self.IsOfClass(node, "odemis.gui.comp.stream.FixedStreamPanelEntry")
+
+        return capable
 
     def DoCreateResource(self):
         assert self.GetInstance() is None
@@ -53,7 +55,7 @@ class FixedStreamPanelXmlHandler(xrc.XmlResourceHandler):
 
         return panel
 
-class CustomStreamPanelXmlHandler(xrc.XmlResourceHandler):
+class CustomStreamPanelEntryXmlHandler(xrc.XmlResourceHandler):
     def __init__(self):
         xrc.XmlResourceHandler.__init__(self)
         # Specify the styles recognized by objects of this type
@@ -65,7 +67,7 @@ class CustomStreamPanelXmlHandler(xrc.XmlResourceHandler):
 
     # This method and the next one are required for XmlResourceHandlers
     def CanHandle(self, node):
-        return self.IsOfClass(node, "odemis.gui.comp.stream.CustomStreamPanel")
+        return self.IsOfClass(node, "odemis.gui.comp.stream.CustomStreamPanelEntry")
 
     def DoCreateResource(self):
         assert self.GetInstance() is None
@@ -264,7 +266,8 @@ class ImageButtonHandler(xrc.XmlResourceHandler):
                             bmp,
                             pos=self.GetPosition(),
                             size=self.GetSize(),
-                            style=self.GetStyle())
+                            style=self.GetStyle(),
+                            label_delta=self.GetLong('delta'))
 
         if self.GetParamNode("selected"):
             bmp = self.GetBitmap("selected")
@@ -278,6 +281,56 @@ class ImageButtonHandler(xrc.XmlResourceHandler):
             bmp = self.GetBitmap("focus")
             w.SetBitmapFocus(bmp)
 
+
+        if self.GetParamNode("disabled"):
+            bmp = self.GetBitmap("disabled")
+            w.SetBitmapDisabled(bmp)
+
+        self.SetupWindow(w)
+        return w
+
+class ImageTextButtonHandler(xrc.XmlResourceHandler):
+
+    def __init__(self):
+        xrc.XmlResourceHandler.__init__(self)
+        # Standard styles
+        self.AddWindowStyles()
+        # Custom styles
+        self.AddStyle('wxALIGN_LEFT', wx.ALIGN_LEFT)
+        self.AddStyle('wxALIGN_RIGHT', wx.ALIGN_RIGHT)
+        self.AddStyle('wxALIGN_CENTRE', wx.ALIGN_CENTRE)
+
+    def CanHandle(self, node):
+        return self.IsOfClass(node, 'odemis.gui.comp.buttons.ImageTextButton')
+
+    # Process XML parameters and create the object
+    def DoCreateResource(self):
+        assert self.GetInstance() is None
+
+        bmp = wx.NullBitmap
+        if self.GetParamNode("bitmap"):
+            bmp = self.GetBitmap("bitmap")
+
+        w = btns.ImageTextButton(self.GetParentAsWindow(),
+                                 self.GetID(),
+                                 bmp,
+                                 pos=self.GetPosition(),
+                                 size=self.GetSize(),
+                                 style=self.GetStyle(),
+                                 label=self.GetText('label'),
+                                 label_delta=self.GetLong('delta'))
+
+        if self.GetParamNode("selected"):
+            bmp = self.GetBitmap("selected")
+            w.SetBitmapSelected(bmp)
+
+        if self.GetParamNode("hover"):
+            bmp = self.GetBitmap("hover")
+            w.SetBitmapHover(bmp)
+
+        if self.GetParamNode("focus"):
+            bmp = self.GetBitmap("focus")
+            w.SetBitmapFocus(bmp)
 
         if self.GetParamNode("disabled"):
             bmp = self.GetBitmap("disabled")
@@ -323,7 +376,6 @@ class PopupImageButtonHandler(xrc.XmlResourceHandler):
         if self.GetParamNode("focus"):
             bmp = self.GetBitmap("focus")
             w.SetBitmapFocus(bmp)
-
 
         if self.GetParamNode("disabled"):
             bmp = self.GetBitmap("disabled")
@@ -385,11 +437,12 @@ class UnitIntegerCtrlHandler(xrc.XmlResourceHandler):
         return w
 
 
-HANDLER_CLASS_LIST = [FixedStreamPanelXmlHandler,
-                      CustomStreamPanelXmlHandler,
+HANDLER_CLASS_LIST = [FixedStreamPanelEntryXmlHandler,
+                      CustomStreamPanelEntryXmlHandler,
                       FoldPanelBarXmlHandler,
                       GenBitmapButtonHandler,
                       ImageButtonHandler,
                       PopupImageButtonHandler,
                       SuggestTextCtrlHandler,
-                      UnitIntegerCtrlHandler]
+                      UnitIntegerCtrlHandler,
+                      ImageTextButtonHandler]
