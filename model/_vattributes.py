@@ -395,7 +395,7 @@ def load_vigilant_attributes(self, vas):
     for name, df in vas.items():
         setattr(self, name, df)
 
-def odemicPropertySerializer(self):
+def odemicVASerializer(self):
     """reduce function that automatically replaces Pyro objects by a Proxy"""
     daemon=getattr(self,"_pyroDaemon",None)
     if daemon: # TODO might not be even necessary: They should be registering themselves in the init
@@ -412,7 +412,7 @@ def odemicPropertySerializer(self):
     else:
         return self.__reduce__()
     
-Pyro4.Daemon.serializers[RemotableVigilantAttribute] = odemicPropertySerializer
+Pyro4.Daemon.serializers[RemotableVigilantAttribute] = odemicVASerializer
 
      
 class StringVA(RemotableVigilantAttribute):
