@@ -12,6 +12,7 @@ import wx
 
 import odemis.gui.main_xrc
 from  odemis.gui.xmlh import odemis_get_resources
+from odemis.gui.log import log
 
 class OdemisGUIApp(wx.App):
     """ This is Odemis' main GUI application class
@@ -157,10 +158,22 @@ class OdemisGUIApp(wx.App):
         # # Hide the loading dialog
 
         # self.dlg_startup.Hide()
-        self.fr_main.SetSize((1280, 960))
-        self.fr_main.Center()
+
+        _, _, w, h = wx.ClientDisplayRect()
+
+        h -= 28
+
+        #print wx.ClientDisplayRect()
+
+        log.debug("Setting frame size to %sx%s", w, h)
+
+        self.fr_main.SetSize((w, h))
+        self.fr_main.SetPosition((0, 0))
         self.fr_main.Show()
         self.fr_main.Raise()
+
+        #from wx.lib.inspection import InspectionTool
+        #InspectionTool().Show()
 
     def init_config(self):
         """ Initialize GUI configuration """
