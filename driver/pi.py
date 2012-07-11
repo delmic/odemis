@@ -15,7 +15,7 @@ Delmic Acquisition Software is distributed in the hope that it will be useful, b
 
 You should have received a copy of the GNU General Public License along with Delmic Acquisition Software. If not, see http://www.gnu.org/licenses/.
 '''
-from model._components import Actuator
+from model import roattribute, Actuator
 import collections
 import glob
 import logging
@@ -23,7 +23,6 @@ import math
 import model
 import os
 import serial
-import sys
 import threading
 import time
 
@@ -811,7 +810,7 @@ class StageRedStone(Actuator):
         self.axes = frozenset(axes.keys())
         
         # Not to be mistaken with axes which is a simple public view
-        self._axes = {} # axis name => (PIRedStone, channel)
+        self._axis_to_child = {} # axis name => (PIRedStone, channel)
         self.ranges = {}
         # TODO also a rangesRel : min and max of a step 
         self._position = {}
@@ -821,7 +820,7 @@ class StageRedStone(Actuator):
             if not add in controllers:
                 controllers[add] = PIRedStone(ser, add) # use FakePIRedStone for testing
             controller = controllers[add]
-            self._axes[axis] = (controller, channel)
+            self._axis_to_child[axis] = (controller, channel)
             
             # TODO request also the ranges from the arguments?
             # For now we put very large one
@@ -835,7 +834,7 @@ class StageRedStone(Actuator):
             speed[axis] = 0.1 # m/s 
             
         # min speed = don't be crazy slow. max speed from hardware spec
-        self.speed = model.MultiSpeedProperty(speed, [10e-6, 0.5], "m/s")
+        self.speed = model.MultiSpeedVA(value=speed, range=[10e-6, 0.5], unit="m/s")
         self.speed.subscribe(self.onSpeed, init=True)
         self.doer_thread = ActionDoer(name="PI Redstone doer Thread")
         self.doer_thread.start()
@@ -847,11 +846,11 @@ class StageRedStone(Actuator):
     
     def onSpeed(self, value):
         for axis, v in value.items():
-            controller, channel = self._axes[axis]
+            controller, channel = self._axis_to_child[axis]
             controller.setSpeed(v, channel)
             
     # to make it read-only
-    @property
+    @roattribute
     def position(self):
         # TODO: position is optional, or is it really needed to simplify?
         # Used for the metadata of the picture
@@ -869,7 +868,7 @@ class StageRedStone(Actuator):
             if abs(distance) > self.ranges[axis][1]:
                 raise Exception("Trying to move axis %s by %f m> %f m." % 
                                 (axis, distance, self.ranges[axis][1]))
-            controller, channel = self._axes[axis]
+            controller, channel = self._axis_to_child[axis]
             if not controller in action_axes:
                 action_axes[controller] = []
             action_axes[controller].append((channel, distance))
@@ -909,7 +908,7 @@ class StageRedStone(Actuator):
         assert(len(self.doer_thread.action_queue) == 0 
                and self.doer_thread.current_action == None)
         passed = True
-        controllers = set([c for c, a in self._axes.values()])
+        controllers = set([c for c, a in self._axis_to_child.values()])
         for controller in controllers:
             logging.info("Testing controller %d", controller.address)
             passed &= controller.selfTest()

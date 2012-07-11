@@ -322,11 +322,26 @@ class Actuator(HwComponent):
     A component which represents an actuator (motorised part). 
     This is an abstract class that should be inherited. 
     """
-    def __init__(self, name, role, children=None, **kwargs):
+    def __init__(self, name, role, axes=[], ranges={}, children=None, **kwargs):
         HwComponent.__init__(self, name, role, **kwargs)
         if children:
             raise ArgumentError("Actuator components cannot have children.")
-        
+        self._axes = frozenset(axes)
+        self._ranges = dict(ranges)
+    
+    @roattribute
+    def axes(self):
+        """ set of string: name of each axis available."""
+        return self._axes
+    
+    @roattribute
+    def ranges(self):
+        """
+        dict string -> 2-tuple (number, number): min, max value of the axis
+        for moving
+        """
+        return self._ranges
+      
     # to be overridden
     def moveRel(self, shift):
         """
@@ -359,7 +374,6 @@ class CombinedActuator(Actuator):
     """
     An object representing an actuator made of several (real actuators)=
      = a set of axes that can be moved and optionally report their position.
-      
     """
 
     # TODO: this is not finished, just a copy paste from a RedStone which could 
@@ -377,12 +391,12 @@ class CombinedActuator(Actuator):
             raise Exception("Combined Actuator needs children")
         
         self.children = set()
-        self.ranges = {}
-        self._axes = {} # axis name => (Actuator, axis name)
+        self._ranges = {}
+        self._axis_to_child = {} # axis name => (Actuator, axis name)
         for axis, child in children.items():
             self.children.add(child)
             child.parent = self
-            self._axes[axis] = (child, axes_map[axis])
+            self._axis_to_child[axis] = (child, axes_map[axis])
             
             # special treatment needed if this is just a test :-(
             # TODO get MockComponent derive from Actuator if the class also derives from Actuator
@@ -390,9 +404,9 @@ class CombinedActuator(Actuator):
                 continue
             if not isinstance(child, Actuator):
                     raise Exception("Child %s is not an actuator." % str(child))
-            self.ranges[axis] = child.ranges[axes_map[axis]]
+            self._ranges[axis] = child.ranges[axes_map[axis]]
 
-        self.axes = frozenset(self._axes.keys())
+        self.axes = frozenset(self._axis_to_child.keys())
         
         # check if can do absolute positioning: all the axes have moveAbs()
         canAbs = True
@@ -404,22 +418,28 @@ class CombinedActuator(Actuator):
         # TODO speed
         # TODO position
         
-    def moveRel(self, shift, sync=False):
+    def moveRel(self, shift):
         u"""
         Move the stage the defined values in m for each axis given.
         shift dict(string-> float): name of the axis and shift in m
         """
         # TODO check values are within range
+        futures = []
         for axis, distance in shift.items():
-            if axis not in self._axes:
+            if axis not in self._axis_to_child:
                 raise Exception("Axis unknown: " + str(axis))
             child, child_axis = self._axes[axis]
-            child[child_axis].moveRel(distance)
+            f = child[child_axis].moveRel(distance)
+            futures.append(f)
         
-        #TODO return future
+        if len(futures) == 1:
+            return futures[0]
+        else:
+            #TODO return future composed of multiple futures
+            return None
     
     # duplicated as moveAbs() iff all the axes have moveAbs()
-    def _moveAbs(self, pos, sync=False):
+    def _moveAbs(self, pos):
         u"""
         Move the stage to the defined position in m for each axis given.
         pos dict(string-> float): name of the axis and position in m
@@ -429,12 +449,10 @@ class CombinedActuator(Actuator):
         # TODO what's the origin? => need a different conversion?
         # TODO check values are within range
         for axis, distance in pos.items():
-            if axis not in self._axes:
+            if axis not in self._axis_to_child:
                 raise Exception("Axis unknown: " + str(axis))
             self._axes[axis].moveAbs(distance)
         
-    
-    # TODO need a 'calibrate' for the absolute axes 
     
     def stop(self, axis=None):
         """
@@ -442,10 +460,10 @@ class CombinedActuator(Actuator):
         axis (string): name of the axis to stop, or all of them if not indicated 
         """
         if not axis:
-            for controller in self._axes:
+            for controller in self._axis_to_child:
                 controller.stop()
         else:
-            controller = self._axes[axis]
+            controller = self._axis_to_child[axis]
             controller.stop()
         
     def waitStop(self, axis=None):
@@ -454,10 +472,10 @@ class CombinedActuator(Actuator):
         axis (string): name of the axis to stop, or all of them if not indicated 
         """
         if not axis:
-            for controller in self._axes:
+            for controller in self._axis_to_child:
                 controller.waitStop()
         else:
-            controller = self._axes[axis]
+            controller = self._axis_to_child[axis]
             controller.waitStop()
         
         
