@@ -17,8 +17,10 @@ Delmic Acquisition Software is distributed in the hope that it will be useful, b
 You should have received a copy of the GNU General Public License along with Delmic Acquisition Software. If not, see http://www.gnu.org/licenses/.
 '''
 from odemisd import main
+import StringIO
 import logging
 import os
+import sys
 import unittest
 
 
@@ -33,6 +35,12 @@ class TestCommandLine(unittest.TestCase):
         # reset the logging (because otherwise it accumulates)
         if logging.root:
             del logging.root.handlers[:]
+        
+        # save the stdout in case it's modified
+        self.saved_stdout = sys.stdout
+
+    def tearDown(self):        
+        sys.stdout = self.saved_stdout
     
     def test_config_validate(self):
         # each of this file should pass the validation
@@ -48,6 +56,7 @@ class TestCommandLine(unittest.TestCase):
             ret = main.main(cmdline.split())
             self.assertEqual(ret, 0, "error detected in correct config "
                                 "file '%s'" % config)
+            self.tearDown()
         
     def test_config_error(self):
         # each of this file has one or more error
@@ -60,10 +69,12 @@ class TestCommandLine(unittest.TestCase):
 
         for config in configs:
             self.setUp()
-            cmdline = "odemisd --validate %s" % config
+            cmdline = "odemisd --log-target=test.log --validate %s" % config
             ret = main.main(cmdline.split())
             self.assertNotEqual(ret, 0, "no error detected in erroneous config "
                                 "file '%s'" % config)
+            os.remove("test.log")
+            self.tearDown()
         
     def test_error_command_line(self):
         """
@@ -91,11 +102,19 @@ class TestCommandLine(unittest.TestCase):
         It checks handling help option
         """
         try:
+            # change the stdout
+            out = StringIO.StringIO()
+            sys.stdout = out
+            
             cmdline = "odemisd --help"
             ret = main.main(cmdline.split())
+            
         except SystemExit, exc:
             ret = exc.code
         self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
+        
+        output = out.getvalue()
+        self.assertTrue("positional arguments" in output)
         
 if __name__ == '__main__':
     unittest.main()

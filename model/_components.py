@@ -387,11 +387,10 @@ class CombinedActuator(Actuator):
         if not children:
             raise Exception("Combined Actuator needs children")
         
-        self.children = set()
         self._ranges = {}
         self._axis_to_child = {} # axis name => (Actuator, axis name)
         for axis, child in children.items():
-            self.children.add(child)
+            self._children.add(child)
             child.parent = self
             self._axis_to_child[axis] = (child, axes_map[axis])
             
@@ -403,7 +402,7 @@ class CombinedActuator(Actuator):
                     raise Exception("Child %s is not an actuator." % str(child))
             self._ranges[axis] = child.ranges[axes_map[axis]]
 
-        self.axes = frozenset(self._axis_to_child.keys())
+        self._axes = frozenset(self._axis_to_child.keys())
         
         # check if can do absolute positioning: all the axes have moveAbs()
         canAbs = True

@@ -807,7 +807,7 @@ class StageRedStone(Actuator):
         ser = PIRedStone.openSerialPort(port) # use FakePIRedStone for testing
         
         # the axis names as required by Actuator
-        self.axes = frozenset(axes.keys())
+        self._axes = frozenset(axes.keys())
         
         # Not to be mistaken with axes which is a simple public view
         self._axis_to_child = {} # axis name => (PIRedStone, channel)
