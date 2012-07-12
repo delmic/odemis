@@ -38,13 +38,15 @@ import weakref
 #    """
 #    return _hwcomponents
 
+BACKEND_FILE = "backend.ipc" # the official ipc file for backend (just to detect status)
 BACKEND_NAME = "backend" # the official name for the backend container
-MICROSCOPE_NAME = "microscope" # the official name for the microscope component
+
 def getMicroscope():
     """
     return the microscope component managed by the backend
     """
-    return _core.getObject(BACKEND_NAME, MICROSCOPE_NAME)
+    backend = _core.getContainer(BACKEND_NAME)
+    return backend.getRoot()
 
 #_hwcomponents = []
 def getComponents():

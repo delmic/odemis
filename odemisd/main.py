@@ -16,12 +16,13 @@ Delmic Acquisition Software is distributed in the hope that it will be useful, b
 You should have received a copy of the GNU General Public License along with Delmic Acquisition Software. If not, see http://www.gnu.org/licenses/.
 '''
 
+from gui import dagui
 from odemisd import modelgen
 import __version__
 import argparse
-from gui import dagui 
 import logging
 import model
+import os
 import sys
 
 _hwcomponents = set()
@@ -60,7 +61,9 @@ class BackendContainer(model.Container):
                 pass
     
         model.Container.terminate(self)
-        
+    
+    def setMicroscope(self, component):
+        self.rootId = component._pyroId
 
 def terminate_all_components(components):
     """
@@ -74,81 +77,36 @@ def terminate_all_components(components):
             logging.warning("Failed to terminate component '%s'", comp.name)
             pass
 
-# This is the cli interface of odemisd, which allows to start the back-end
-# It parses the command line and accordingly reads the microscope instantiation
-# file, generates a model out of it, and then provides it to the front-end 
 
-def main(args):
-    """
-    Contains the console handling code for the daemon
-    args is the list of arguments passed
-    return (int): value to return to the OS as program exit code
-    """
-
-    #print args
-    # arguments handling 
-    parser = argparse.ArgumentParser(description=__version__.name)
-
-    parser.add_argument('--version', action='version', 
-                        version=__version__.name + " " + __version__.version + " – " + __version__.copyright)
-    dm_grp = parser.add_argument_group('Daemon management')
-    dm_grp.add_argument("--kill", "-k", dest="kill", action="store_true", default=False,
-                        help="Kill a running daemon")
-    dm_grp.add_argument("--check", dest="check", action="store_true", default=False,
-                        help="Check for a running daemon (only returns exit code)")
-    opt_grp = parser.add_argument_group('Options')
-    opt_grp.add_argument("--daemonize", "-D", action="store_true", dest="daemon",
-                         default=False, help="Daemonize after startup")
-    opt_grp.add_argument('--validate', dest="validate", action="store_true", default=False,
-                        help="Validate the microscope description file and exit")
-    opt_grp.add_argument("--log-level", dest="loglev", metavar="LEVEL", type=int,
-                        default=0, help="Set verbosity level (0-2, default = 0)")
-    opt_grp.add_argument("--log-target", dest="logtarget", metavar="{auto,stderr,filename}",
-                default="auto", help="Specify the log target (auto, stderr, filename)")
-    parser.add_argument("model", metavar="file.odm.yaml", nargs=1, type=open, 
-                        help="Microscope model instantiation file (*.odm.yaml)")
-
-    options = parser.parse_args(args[1:])
-    
-    # Set up logging before everything else
-    if options.loglev < 0:
-        parser.error("log-level must be positive.")
-    loglev_names = [logging.WARNING, logging.INFO, logging.DEBUG]
-    loglev = loglev_names[min(len(loglev_names) - 1, options.loglev)]
-    
-    # auto = {odemis.log if daemon, stderr otherwise} 
-    if options.logtarget == "auto":
-        # default to SysLogHandler ?
-        if options.daemon:
-            handler = logging.FileHandler("odemis.log")
-        else:
-            handler = logging.StreamHandler()
-    elif options.logtarget == "stderr":
-        handler = logging.StreamHandler()
-    else:
-        handler = logging.FileHandler(options.logtarget)
-    logging.getLogger().setLevel(loglev)
-    handler.setFormatter(logging.Formatter('%(asctime)s (%(module)s) %(levelname)s: %(message)s'))
-    logging.getLogger().addHandler(handler)
-    
-    # TODO see python-daemon for creating daemon
-    
-    # Daemon management
-    if options.kill:
-        raise NotImplementedError() # TODO
-        return 0
-    
-    if options.check:
-        raise NotImplementedError() # TODO
-        return 0
-    
-    # let's become the backend for real
+BACKEND_RUNNING = "RUNNING"
+BACKEND_DEAD = "DEAD"
+BACKEND_STOPPED = "STOPPED"
+def get_backend_status():
     try:
-        logging.debug("model instantiation file is: %s", options.model[0].name)
-        inst_model = modelgen.get_instantiation_model(options.model[0])
+        microscope = model.getMicroscope()
+        if len(microscope.name) > 0:
+            return BACKEND_RUNNING
+    except:
+        if os.path.exists(model.BACKEND_FILE):
+            return BACKEND_DEAD
+        else:
+            return BACKEND_STOPPED
+    return BACKEND_DEAD
+
+status_to_xtcode = {BACKEND_RUNNING: 0,
+                    BACKEND_DEAD: 1,
+                    BACKEND_STOPPED: 2
+                    }
+
+# TODO catch kill signal
+def run_backend(options):
+    model_file = options.model
+    try:
+        logging.debug("model instantiation file is: %s", model_file.name)
+        inst_model = modelgen.get_instantiation_model(model_file)
         logging.info("model has been read successfully")
     except modelgen.ParseError:
-        logging.exception("Error while parsing file %s", options.model[0].name)
+        logging.exception("Error while parsing file %s", model_file.name)
         return 127
     
     container = BackendContainer()
@@ -160,13 +118,13 @@ def main(args):
                                         dry_run=options.validate)
         # update the model
         _hwcomponents = comps
-        model._microscope = mic
+        container.setMicroscope(mic)
         container.sub_containers |= sub_containers
         logging.info("model has been successfully instantiated")
         logging.debug("model microscope is %s", mic.name) 
         logging.debug("model components are %s", ", ".join([c.name for c in comps])) 
     except:
-        logging.exception("When instantiating file %s", options.model[0].name)
+        logging.exception("When instantiating file %s", model_file.name)
         container.terminate()
         return 127
     
@@ -196,6 +154,100 @@ def main(args):
 #    dagui.main(mic)
 #    logging.warning("nothing else to do")
     return 0
+# This is the cli interface of odemisd, which allows to start the back-end
+# It parses the command line and accordingly reads the microscope instantiation
+# file, generates a model out of it, and then provides it to the front-end 
+
+def main(args):
+    """
+    Contains the console handling code for the daemon
+    args is the list of arguments passed
+    return (int): value to return to the OS as program exit code
+    """
+
+    #print args
+    # arguments handling 
+    parser = argparse.ArgumentParser(description=__version__.name)
+
+    parser.add_argument('--version', action='version', 
+                        version=__version__.name + " " + __version__.version + " – " + __version__.copyright)
+    dm_grp = parser.add_argument_group('Daemon management')
+    dm_grpe = dm_grp.add_mutually_exclusive_group()
+    dm_grpe.add_argument("--kill", "-k", dest="kill", action="store_true", default=False,
+                        help="Kill the running back-end")
+    dm_grpe.add_argument("--check", dest="check", action="store_true", default=False,
+                        help="Check for a running back-end (only returns exit code)")
+    dm_grpe.add_argument("--daemonize", "-D", action="store_true", dest="daemon",
+                         default=False, help="Daemonize the back-end after startup")
+    opt_grp = parser.add_argument_group('Options')
+    opt_grp.add_argument('--validate', dest="validate", action="store_true", default=False,
+                        help="Validate the microscope description file and exit")
+    opt_grp.add_argument("--log-level", dest="loglev", metavar="LEVEL", type=int,
+                        default=0, help="Set verbosity level (0-2, default = 0)")
+    opt_grp.add_argument("--log-target", dest="logtarget", metavar="{auto,stderr,filename}",
+                default="auto", help="Specify the log target (auto, stderr, filename)")
+    parser.add_argument("model", metavar="file.odm.yaml", nargs='?', type=open, 
+                        help="Microscope model instantiation file (*.odm.yaml)")
+
+    options = parser.parse_args(args[1:])
+    
+    # Set up logging before everything else
+    if options.loglev < 0:
+        parser.error("log-level must be positive.")
+    loglev_names = [logging.WARNING, logging.INFO, logging.DEBUG]
+    loglev = loglev_names[min(len(loglev_names) - 1, options.loglev)]
+    
+    # auto = {odemis.log if daemon, stderr otherwise} 
+    if options.logtarget == "auto":
+        # default to SysLogHandler ?
+        if options.daemon:
+            handler = logging.FileHandler("odemis.log")
+        else:
+            handler = logging.StreamHandler()
+    elif options.logtarget == "stderr":
+        handler = logging.StreamHandler()
+    else:
+        handler = logging.FileHandler(options.logtarget)
+    logging.getLogger().setLevel(loglev)
+    handler.setFormatter(logging.Formatter('%(asctime)s (%(module)s) %(levelname)s: %(message)s'))
+    logging.getLogger().addHandler(handler)
+    
+    # python-daemon is a fancy library but seems to do too many things for us.
+    # We just need to contact the backend and see what happens
+    
+    # Daemon management
+    status = get_backend_status()
+    if options.kill:
+        if status != BACKEND_RUNNING:
+            logging.error("No running back-end to kill")
+            return 127
+        try:
+            backend = model.getContainer(model.BACKEND_NAME)
+            backend.terminate()
+        except:
+            logging.error("Failed to stop the back-end")
+            return 127
+        return 0
+    elif options.check:
+        logging.info("Status of back-end is %s", status)
+        return status_to_xtcode[status]
+    
+    # check if there is already a backend running
+    if status == BACKEND_RUNNING:
+        logging.error("Back-end already running, cannot start a new one")
+    
+    if options.model is None:
+        logging.error("No microscope model instantiation file provided")
+        return 127
+        
+    if options.daemon:
+        pid = os.fork()
+        if pid:
+            logging.debug("Daemon started with pid %d", pid)
+            return 0
+        
+    # let's become the backend for real
+    return run_backend(options)
 
 if __name__ == '__main__':
     ret = main(sys.argv)

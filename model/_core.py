@@ -89,7 +89,23 @@ class ContainerObject(Pyro4.core.DaemonObject):
         returns the new component instantiated
         """
         return self.daemon.instantiate(klass, kwargs)
-
+    
+    def getObject(self, objectId):
+        """
+        return a registered object from its object id.
+        This is mostly useful to get a proxy with all the information about the
+        object automatically.
+        It will raise an exception if the object is not registered.
+        """
+        assert isinstance(objectId, basestring)
+        return self.daemon.objectsById[objectId]
+    
+    def getRoot(self):
+        """
+        returns the root object, if it has been defined in the container
+        """
+        return self.getObject(self.daemon.rootId)
+    
 # Basically a wrapper around the Pyro Daemon 
 class Container(Pyro4.core.Daemon):
     def __init__(self, name):
@@ -108,6 +124,9 @@ class Container(Pyro4.core.Daemon):
                 logging.error("Impossible to delete file '%s', needed to create container '%s'.", self.ipc_name, name)
 
         Pyro4.Daemon.__init__(self, unixsocket=self.ipc_name, interface=ContainerObject)
+        
+        # To be set by the user of the container 
+        self.rootId = None # objectId of a "Root" component
         
     def run(self, *args, **kwargs):
         """
