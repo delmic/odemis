@@ -20,7 +20,9 @@ from odemisd import main
 import StringIO
 import logging
 import os
+import subprocess
 import sys
+import time
 import unittest
 
 
@@ -97,14 +99,14 @@ class TestCommandLine(unittest.TestCase):
         except SystemExit, exc: # because it's handled by argparse
             ret = exc.code
         self.assertNotEqual(ret, 0, "trying to run erroneous '%s'" % cmdline) 
-        
+    
     def test_log(self):
         cmdline = "odemisd --log-level=2 --log-target=test.log --validate %s" % SIM_CONFIG
         ret = main.main(cmdline.split())
         self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
         
         # a log file?
-        st = os.stat("test.log") # this test also that the file is created
+        st = os.stat("test.log") # this tests also that the file is created
         self.assertGreater(st.st_size, 0)
         os.remove("test.log")
         
@@ -126,11 +128,46 @@ class TestCommandLine(unittest.TestCase):
         
         output = out.getvalue()
         self.assertTrue("positional arguments" in output)
+    
+    def test_daemon(self):
+        # First there should be not backend running
+        cmdline = "odemisd --log-level=2 --log-target=test.log --check"
+        ret = main.main(cmdline.split())
+        self.assertEqual(ret, 2, "Backend is said to be running")
         
+        # run the backend as a daemon
+        # we cannot run it normally as the child would also think he's in a unittest
+        cmdline = "../main.py --log-level=2 --log-target=testdaemon.log --daemonize %s" % SIM_CONFIG
+        ret = subprocess.call(cmdline.split())
+        self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
+        
+        time.sleep(1) # give some time to start
+        
+        # now it should say it's running
+        cmdline = "odemisd --log-level=2 --log-target=test.log --check"
+        ret = main.main(cmdline.split())
+        self.assertEqual(ret, 0, "command '%s' returned %d" % (cmdline, ret))
+        
+        # stop the backend
+        cmdline = "odemisd --log-level=2 --log-target=test.log --kill"
+        ret = main.main(cmdline.split())
+        self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
+        
+        time.sleep(1) # give some time to stop
+        
+        # backend should be stopped by now
+        cmdline = "odemisd --log-level=2 --log-target=test.log --check"
+        ret = main.main(cmdline.split())
+        self.assertEqual(ret, 2, "Back-end not stopped")
+        
+        os.remove("test.log")
+        os.remove("testdaemon.log")
+        
+# extends the class fully at module import
+TestCommandLine.create_tests()
+
 if __name__ == '__main__':
     unittest.main()
 
-# extends the class fully at module import
-TestCommandLine.create_tests()
 
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:

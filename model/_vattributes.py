@@ -142,7 +142,7 @@ class RemotableVigilantAttribute(VigilantAttribute):
         # self.pipe.hwm has to be 0 (default), otherwise it drops _new_ values  
         
         uri = daemon.uriFor(self)
-        self._global_name = uri.object + "@" + uri.sockname + ".ipc"
+        self._global_name = uri.object + "@" + uri.sockname
         logging.debug("VA server is registered to send to " + "ipc://" + self._global_name)
         self.pipe.bind("ipc://" + self._global_name)
     
@@ -211,7 +211,7 @@ class VigilantAttributeProxy(VigilantAttribute, Pyro4.Proxy):
                             than the generator).
         """ 
         Pyro4.Proxy.__init__(self, uri, oneways, asyncs)
-        self._global_name = uri.object + "@" + uri.sockname + ".ipc"
+        self._global_name = uri.object + "@" + uri.sockname
         VigilantAttribute.__init__(self, None, unit=unit, readonly=readonly) # TODO setting None might not always be valid
         self.max_discard = max_discard
         

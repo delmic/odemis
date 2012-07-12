@@ -90,16 +90,6 @@ class ContainerObject(Pyro4.core.DaemonObject):
         """
         return self.daemon.instantiate(klass, kwargs)
     
-    def getObject(self, objectId):
-        """
-        return a registered object from its object id.
-        This is mostly useful to get a proxy with all the information about the
-        object automatically.
-        It will raise an exception if the object is not registered.
-        """
-        assert isinstance(objectId, basestring)
-        return self.daemon.objectsById[objectId]
-    
     def getRoot(self):
         """
         returns the root object, if it has been defined in the container

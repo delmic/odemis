@@ -99,8 +99,8 @@ status_to_xtcode = {BACKEND_RUNNING: 0,
                     }
 
 # TODO catch kill signal
-def run_backend(options):
-    model_file = options.model
+def run_backend(model_file, dry_run=False):
+
     try:
         logging.debug("model instantiation file is: %s", model_file.name)
         inst_model = modelgen.get_instantiation_model(model_file)
@@ -115,7 +115,7 @@ def run_backend(options):
         mic, comps, sub_containers = modelgen.instantiate_model(
                                         inst_model, container, 
                                         create_sub_containers=False, # TODO make it possible
-                                        dry_run=options.validate)
+                                        dry_run=dry_run)
         # update the model
         _hwcomponents = comps
         container.setMicroscope(mic)
@@ -128,7 +128,7 @@ def run_backend(options):
         container.terminate()
         return 127
     
-    if options.validate:
+    if dry_run:
         logging.info("model has been successfully validated, exiting")
         terminate_all_components(_hwcomponents)
         container.terminate()
@@ -212,10 +212,13 @@ def main(args):
     handler.setFormatter(logging.Formatter('%(asctime)s (%(module)s) %(levelname)s: %(message)s'))
     logging.getLogger().addHandler(handler)
     
-    # python-daemon is a fancy library but seems to do too many things for us.
-    # We just need to contact the backend and see what happens
+    if options.validate and (options.kill or options.check or options.daemon):
+        logging.error("Impossible to validate a model and manage the daemon simultaneously")
+        return 127
     
     # Daemon management
+    # python-daemon is a fancy library but seems to do too many things for us.
+    # We just need to contact the backend and see what happens
     status = get_backend_status()
     if options.kill:
         if status != BACKEND_RUNNING:
@@ -247,7 +250,7 @@ def main(args):
             return 0
         
     # let's become the backend for real
-    return run_backend(options)
+    return run_backend(options.model, options.validate)
 
 if __name__ == '__main__':
     ret = main(sys.argv)

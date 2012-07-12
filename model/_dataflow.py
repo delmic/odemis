@@ -213,7 +213,7 @@ class DataFlowRemotable(DataFlow):
         self._update_pipe_hwm()
         
         uri = daemon.uriFor(self)
-        self._global_name = uri.object + "@" + uri.sockname + ".ipc"
+        self._global_name = uri.object + "@" + uri.sockname
         logging.debug("server is registered to send to " + "ipc://" + self._global_name)
         self.pipe.bind("ipc://" + self._global_name)
     
@@ -290,7 +290,7 @@ class DataFlowProxy(DataFlow, Pyro4.Proxy):
                             than the generator).
         """ 
         Pyro4.Proxy.__init__(self, uri, oneways, asyncs)
-        self._global_name = uri.object + "@" + uri.sockname + ".ipc"
+        self._global_name = uri.object + "@" + uri.sockname
         DataFlow.__init__(self)
         self.max_discard = max_discard
         
