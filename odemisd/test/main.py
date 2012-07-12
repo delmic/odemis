@@ -31,51 +31,62 @@ class TestCommandLine(unittest.TestCase):
     This contains test cases for the command-line level of odemisd.
     """
     
-    def setUp(self):
-        # reset the logging (because otherwise it accumulates)
-        if logging.root:
-            del logging.root.handlers[:]
-        
-        # save the stdout in case it's modified
-        self.saved_stdout = sys.stdout
+    @classmethod
+    def create_tests(cls):
+        configs_pass = ["optical-sim.odm.yaml",
+           "example-optical-odemisd-config.odm.yaml",
+           "example-combined-actuator.odm.yaml",
+           #"example-secom-odemisd-config.odm.yaml", # not all components exist yet
+           ]
 
-    def tearDown(self):        
-        sys.stdout = self.saved_stdout
+        i = 0
+        for config in configs_pass:
+            setattr(cls, "test_pass_%d" % i, cls.create_test_validate_pass(config))
+            i += 1
     
-    def test_config_validate(self):
-        # each of this file should pass the validation
-        configs = ["optical-sim.odm.yaml",
-                   "example-optical-odemisd-config.odm.yaml",
-                   "example-combined-actuator.odm.yaml",
-                   #"example-secom-odemisd-config.odm.yaml", # not all components exist yet
-                   ]
-
-        for config in configs:
-            self.setUp()
-            cmdline = "odemisd --validate %s" % config
-            ret = main.main(cmdline.split())
-            self.assertEqual(ret, 0, "error detected in correct config "
-                                "file '%s'" % config)
-            self.tearDown()
-        
-    def test_config_error(self):
-        # each of this file has one or more error
-        configs = ["syntax-error-1.odm.yaml",
+        configs_error = ["syntax-error-1.odm.yaml",
                    "syntax-error-2.odm.yaml",
                    # Skipped: PyYaml is not able to detect this error :  http://pyyaml.org/ticket/128
                    #"syntax-error-3.odm.yaml",
                    "semantic-error-1.odm.yaml",
                    ]
 
-        for config in configs:
-            self.setUp()
-            cmdline = "odemisd --log-target=test.log --validate %s" % config
+        i = 0
+        for config in configs_error:
+            setattr(cls, "test_error_%d" % i, cls.create_test_validate_error(config))
+            i += 1
+    
+    @staticmethod
+    def create_test_validate_pass(filename):
+        def test_validate_pass(self):
+            cmdline = "odemisd --validate %s" % filename
+            ret = main.main(cmdline.split())
+            self.assertEqual(ret, 0, "error detected in correct config "
+                                "file '%s'" % filename)
+        return test_validate_pass
+    
+    @staticmethod
+    def create_test_validate_error(filename):
+        def test_validate_error(self):
+            cmdline = "odemisd --log-target=test.log --validate %s" % filename
             ret = main.main(cmdline.split())
             self.assertNotEqual(ret, 0, "no error detected in erroneous config "
-                                "file '%s'" % config)
+                                "file '%s'" % filename)
             os.remove("test.log")
-            self.tearDown()
+        return test_validate_error
+       
+    def setUp(self):
+        # reset the logging (because otherwise it accumulates)
+        if logging.root:
+            del logging.root.handlers[:]
         
+        # save the stdout in case it's modified
+        # NOTE: it seems unittest does this already, but that's just in case
+        self.saved_stdout = sys.stdout
+
+    def tearDown(self):        
+        sys.stdout = self.saved_stdout
+
     def test_error_command_line(self):
         """
         It checks handling when no config file is provided
@@ -118,5 +129,8 @@ class TestCommandLine(unittest.TestCase):
         
 if __name__ == '__main__':
     unittest.main()
+
+# extends the class fully at module import
+TestCommandLine.create_tests()
 
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:
