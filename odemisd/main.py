@@ -162,13 +162,19 @@ def main(args):
         _hwcomponents = comps
         model._microscope = mic
         container.sub_containers |= sub_containers
-        logging.info("model has been instantiated successfully")
+        logging.info("model has been successfully instantiated")
         logging.debug("model microscope is %s", mic.name) 
         logging.debug("model components are %s", ", ".join([c.name for c in comps])) 
     except:
         logging.exception("When instantiating file %s", options.model[0].name)
         container.terminate()
         return 127
+    
+    if options.validate:
+        logging.info("model has been successfully validated, exiting")
+        terminate_all_components(_hwcomponents)
+        container.terminate()
+        return 0    # everything went fine
     
     try:
         logging.info("Microscope is now available in container '%s'", model.BACKEND_NAME)
