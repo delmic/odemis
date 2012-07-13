@@ -77,7 +77,7 @@ class DataArray(numpy.ndarray):
             return
         self.metadata = getattr(obj, 'metadata', {})
 
-class DataFlow(object):
+class DataFlowBase(object):
     """
     This is an abstract class that must be extended by each detector which
     wants to provide a dataflow.
@@ -149,8 +149,8 @@ class DataFlow(object):
                 self.unsubscribe(l)
 
 
-# DataFlowObject to create on the server (in an Odemic component)
-class DataFlowRemotable(DataFlow):
+# DataFlow object to create on the server (in a component)
+class DataFlow(DataFlowBase):
     def __init__(self, max_discard=100):
         """
         max_discard (int): mount of messages that can be discarded in a row if
@@ -158,7 +158,7 @@ class DataFlowRemotable(DataFlow):
                             all the messages (dangerous if callback is slower
                             than the generator).
         """
-        DataFlow.__init__(self)       
+        DataFlowBase.__init__(self)       
         # different from ._listeners for notify() to do different things
         self._remote_listeners = set() # any unique string works
         
@@ -272,13 +272,13 @@ class DataFlowRemotable(DataFlow):
             self.pipe.send(numpy.getbuffer(data), copy=False)
         
         # publish locally
-        DataFlow.notify(self, data)
+        DataFlowBase.notify(self, data)
     
     def __del__(self):
         self._unregister()
 
-# DataFlow object automatically created on the client (in an Odemic component)
-class DataFlowProxy(DataFlow, Pyro4.Proxy):
+# DataFlowBase object automatically created on the client (in an Odemic component)
+class DataFlowProxy(DataFlowBase, Pyro4.Proxy):
     # init is as light as possible to reduce creation overhead in case the
     # object is actually never used
     def __init__(self, uri, oneways=set(), asyncs=set(), max_discard=100):
@@ -291,7 +291,7 @@ class DataFlowProxy(DataFlow, Pyro4.Proxy):
         """ 
         Pyro4.Proxy.__init__(self, uri, oneways, asyncs)
         self._global_name = uri.sockname + "@" + uri.object
-        DataFlow.__init__(self)
+        DataFlowBase.__init__(self)
         self.max_discard = max_discard
         
         self.ctx = None
@@ -311,7 +311,7 @@ class DataFlowProxy(DataFlow, Pyro4.Proxy):
     
     # .get() is a direct remote call
     
-    # next three methods are directly from DataFlow
+    # next three methods are directly from DataFlowBase
     #.subscribe()
     #.unsubscribe()
     #.notify()
@@ -426,7 +426,7 @@ class SubscribeProxyThread(threading.Thread):
                     return
         
 def unregister_dataflows(self):
-    for name, value in inspect.getmembers(self, lambda x: isinstance(x, DataFlowRemotable)):
+    for name, value in inspect.getmembers(self, lambda x: isinstance(x, DataFlow)):
         value._unregister()
 
 def dump_dataflows(self):
@@ -439,7 +439,7 @@ def dump_dataflows(self):
     """
     dataflows = dict()
     daemon = self._pyroDaemon
-    for name, value in inspect.getmembers(self, lambda x: isinstance(x, DataFlowRemotable)):
+    for name, value in inspect.getmembers(self, lambda x: isinstance(x, DataFlow)):
         if not hasattr(value, "_pyroDaemon"):
             value._register(daemon)
         dataflows[name] = value
@@ -465,11 +465,11 @@ def odemicDataFlowSerializer(self):
                  Pyro4.core.get_asyncs(self),
                  self.max_discard), 
                 # in the state goes everything that might be recursive
-                DataFlowRemotable.__getstate__(self)
+                DataFlow.__getstate__(self)
                 )
     else:
         return self.__reduce__()
     
-Pyro4.Daemon.serializers[DataFlowRemotable] = odemicDataFlowSerializer
+Pyro4.Daemon.serializers[DataFlow] = odemicDataFlowSerializer
 
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:

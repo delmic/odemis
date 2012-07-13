@@ -511,7 +511,7 @@ class MockComponent(HwComponent):
             logging.debug("Component '%s' got init arguments '%r'", name, kwargs)
         
         for va in mock_vas:
-            self.__dict__[va] = _vattributes.VigilantAttribute(None)
+            self.__dict__[va] = _vattributes.VigilantAttributeBase(None)
         
         if not children:
             return
@@ -527,7 +527,7 @@ class MockComponent(HwComponent):
             self._children.add(child)
             child.parent = self
         
-#    # For everything that is not standard we return a mock VigilantAttribute
+#    # For everything that is not standard we return a mock VigilantAttributeBase
 #    def __getattr__(self, attrName):
 #        if not attrName in self.__dict__:
 #            if attrName.startswith("_"): # hidden values are never properties
@@ -536,7 +536,7 @@ class MockComponent(HwComponent):
 #            elif attrName == "children": # special value
 #                raise AttributeError(attrName)
 #            
-#            prop = _vattributes.VigilantAttribute(None)
+#            prop = _vattributes.VigilantAttributeBase(None)
 #            logging.debug("Component %s creating vigilant attribute %s", self.name, attrName)
 #            self.__dict__[attrName] = prop
 #        return self.__dict__[attrName]

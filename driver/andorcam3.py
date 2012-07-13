@@ -180,7 +180,7 @@ class AndorCam3(model.DigitalCamera):
         
         psize = (self.GetFloat(u"PixelWidth") * 1e-6,
                  self.GetFloat(u"PixelHeight") * 1e-6)
-        self.pixelSize = model.RemotableVigilantAttribute(psize, unit="m", readonly=True)
+        self.pixelSize = model.VigilantAttribute(psize, unit="m", readonly=True)
         self._metadata[model.MD_SENSOR_PIXEL_SIZE] = self.pixelSize.value
         
         # odemis + sdk
@@ -942,7 +942,7 @@ class AndorCam3(model.DigitalCamera):
         return cameras
 
 
-class ResolutionVA(model.RemotableVigilantAttribute, model.Continuous):
+class ResolutionVA(model.VigilantAttribute, model.Continuous):
     """
     VigilantAttribute which represents a resolution : 2-tuple of int
     It can only be set a min and max, but might also have additional constraints
@@ -960,7 +960,7 @@ class ResolutionVA(model.RemotableVigilantAttribute, model.Continuous):
             self._fitter = model.WeakMethod(fitter)
         else:
             self._fitter = None
-        model.RemotableVigilantAttribute.__init__(self, value, unit, readonly)
+        model.VigilantAttribute.__init__(self, value, unit, readonly)
     
     def _set_range(self, new_range):
         """
@@ -1000,14 +1000,14 @@ class ResolutionVA(model.RemotableVigilantAttribute, model.Continuous):
                 # fitter would also mean that this VA has no sense anymore
                 raise model.OutOfBoundError("Fitting method has disappeared, cannot validate value.")
         
-        model.RemotableVigilantAttribute._set(self, value)
+        model.VigilantAttribute._set(self, value)
 
-class AndorCam3DataFlow(model.DataFlow):
+class AndorCam3DataFlow(model.DataFlowBase):
     def __init__(self, camera):
         """
         camera: andorcam instance ready to acquire images
         """
-        model.DataFlow.__init__(self)
+        model.DataFlowBase.__init__(self)
         self.component = weakref.proxy(camera)
         
     def get(self):
@@ -1022,7 +1022,7 @@ class AndorCam3DataFlow(model.DataFlow):
     
     # TODO use new methods from dataflow start_acquire
     def subscribe(self, listener):
-        model.DataFlow.subscribe(self, listener)
+        model.DataFlowBase.subscribe(self, listener)
         # TODO nicer way to check whether the camera is already sending us data?
         if not self.component.acquire_thread:
             # is it in acquire()? If so, it will be done in .get()
@@ -1030,12 +1030,12 @@ class AndorCam3DataFlow(model.DataFlow):
                 self.component.acquireFlow(self.notify)
     
     def unsubscribe(self, listener):
-        model.DataFlow.unsubscribe(self, listener)
+        model.DataFlowBase.unsubscribe(self, listener)
         if not self._listeners:
             self.component.stopAcquireFlow()
             
     def notify(self, data):
-        model.DataFlow.notify(self, data)
+        model.DataFlowBase.notify(self, data)
 
    
 class RepeatingTimer(object):

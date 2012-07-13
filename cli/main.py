@@ -116,7 +116,7 @@ def print_roattribute(name, value):
 
 #known_fixed_attributes = ["shape", "axes", "ranges"]
 non_roattributes_classes = (Pyro4.core._RemoteMethod, Pyro4.Proxy, model.Component,
-                            model.DataFlow, model.VigilantAttribute)
+                            model.DataFlowBase, model.VigilantAttributeBase)
 non_roattributes_names = ("name", "role", "parent", "children", "affects", 
                           "actuators", "detectors", "emitters")
 def print_roattributes(component):
@@ -143,7 +143,7 @@ def print_data_flow(name, df):
 
 def print_data_flows(component):
     # find all dataflows
-    for name, value in inspect.getmembers(component, lambda x: isinstance(x, model.DataFlow)):
+    for name, value in inspect.getmembers(component, lambda x: isinstance(x, model.DataFlowBase)):
         print_data_flow(name, value)
 
 def print_vattribute(name, va):
@@ -156,7 +156,7 @@ def print_vattribute(name, va):
 def print_vattributes(component):
     # find all vattributes
     # 
-    for name, value in inspect.getmembers(component, lambda x: isinstance(x, model.VigilantAttribute)):
+    for name, value in inspect.getmembers(component, lambda x: isinstance(x, model.VigilantAttributeBase)):
         print_vattribute(name, value)
     
 def print_attributes(component):

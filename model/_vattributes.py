@@ -34,16 +34,16 @@ class NotSettableError(Exception):
     pass
 
 
-class VigilantAttribute(object):
+class VigilantAttributeBase(object):
     '''
-    A VigilantAttribute represents a value (an object) with:
+    A VigilantAttributeBase represents a value (an object) with:
      * meta-information (min, max, unit, read-only...)
      * observable behaviour (any one can ask to be notified when the value changes) 
     '''
 
     def __init__(self, initval=None, unit="", readonly=False):
         """
-        Creates a VigilantAttribute with a given initial value
+        Creates a VigilantAttributeBase with a given initial value
         initval : any type
         unit (str): a SI unit in which the VA is expressed
         readonly (bool): if True, value setter will raise an exception. It's still
@@ -81,7 +81,7 @@ class VigilantAttribute(object):
         
     def subscribe(self, listener, init=False):
         """
-        Register a callback function to be called when the VigilantAttribute is changed
+        Register a callback function to be called when the VigilantAttributeBase is changed
         listener (function): callback function which takes as argument val the new value
         init (boolean): if True calls the listener directly, to initialise it
         """
@@ -104,7 +104,7 @@ class VigilantAttribute(object):
                 self.unsubscribe(l)
 
 
-class RemotableVigilantAttribute(VigilantAttribute):
+class VigilantAttribute(VigilantAttributeBase):
 
     def __init__(self, initval, max_discard=100, *args, **kwargs):
         """
@@ -113,7 +113,7 @@ class RemotableVigilantAttribute(VigilantAttribute):
                             all the messages (dangerous if callback is slower
                             than the generator).
         """
-        VigilantAttribute.__init__(self, initval, *args, **kwargs)
+        VigilantAttributeBase.__init__(self, initval, *args, **kwargs)
         # different from ._listeners for notify() to do different things
         self._remote_listeners = set() # any unique string works
         
@@ -124,7 +124,7 @@ class RemotableVigilantAttribute(VigilantAttribute):
         
     def _register(self, daemon):
         """
-        Get the VigilantAttribute ready to be shared. It gets registered to the Pyro 
+        Get the VigilantAttributeBase ready to be shared. It gets registered to the Pyro 
         daemon and over 0MQ. It should be called only once. Note that you have
         to call this method to register a VA, a simple daemon.register(p)
         is not enough.
@@ -174,7 +174,7 @@ class RemotableVigilantAttribute(VigilantAttribute):
             if init:
                 self.pipe.send_pyobj(self.value)
         else:
-            VigilantAttribute.subscribe(self, listener, init)
+            VigilantAttributeBase.subscribe(self, listener, init)
 
     @oneway
     def unsubscribe(self, listener):
@@ -186,7 +186,7 @@ class RemotableVigilantAttribute(VigilantAttribute):
             # remove string from listeners  
             self._remote_listeners.discard(listener)
         else:
-            VigilantAttribute.unsubscribe(self, listener)
+            VigilantAttributeBase.unsubscribe(self, listener)
         
     def notify(self, v):
         # publish the data remotely
@@ -194,13 +194,13 @@ class RemotableVigilantAttribute(VigilantAttribute):
             self.pipe.send_pyobj(v)
         
         # publish locally
-        VigilantAttribute.notify(self, v)
+        VigilantAttributeBase.notify(self, v)
     
     def __del__(self):
         self._unregister()
 
 
-class VigilantAttributeProxy(VigilantAttribute, Pyro4.Proxy):
+class VigilantAttributeProxy(VigilantAttributeBase, Pyro4.Proxy):
     # init is as light as possible to reduce creation overhead in case the
     # object is actually never used
     def __init__(self, uri, oneways=set(), asyncs=set(), max_discard=100, unit="", readonly=False):
@@ -213,7 +213,7 @@ class VigilantAttributeProxy(VigilantAttribute, Pyro4.Proxy):
         """ 
         Pyro4.Proxy.__init__(self, uri, oneways, asyncs)
         self._global_name = uri.sockname + "@" + uri.object
-        VigilantAttribute.__init__(self, None, unit=unit, readonly=readonly) # TODO setting None might not always be valid
+        VigilantAttributeBase.__init__(self, None, unit=unit, readonly=readonly) # TODO setting None might not always be valid
         self.max_discard = max_discard
         
         self.ctx = None
@@ -260,7 +260,7 @@ class VigilantAttributeProxy(VigilantAttribute, Pyro4.Proxy):
         count_before = len(self._listeners)
         
         # TODO when init=True, if already listening, reuse last received value 
-        VigilantAttribute.subscribe(self, listener, init)
+        VigilantAttributeBase.subscribe(self, listener, init)
         
         if count_before == 0:
             self._start_listening()
@@ -279,7 +279,7 @@ class VigilantAttributeProxy(VigilantAttribute, Pyro4.Proxy):
         Pyro4.Proxy.__getattr__(self, "subscribe")(self._global_name)
 
     def unsubscribe(self, listener):
-        VigilantAttribute.unsubscribe(self, listener)
+        VigilantAttributeBase.unsubscribe(self, listener)
         if len(self._listeners) == 0:
             self._stop_listening()
             
@@ -369,7 +369,7 @@ class SubscribeProxyThread(threading.Thread):
 
 
 def unregister_vigilant_attributes(self):
-    for name, value in inspect.getmembers(self, lambda x: isinstance(x, RemotableVigilantAttribute)):
+    for name, value in inspect.getmembers(self, lambda x: isinstance(x, VigilantAttribute)):
         value._unregister()
     
 def dump_vigilant_attributes(self):
@@ -378,11 +378,11 @@ def dump_vigilant_attributes(self):
     If a VA is not registered yet, it is registered.
     self (Component): the object (instance of a class).  It must already be
                       registered to a Pyro daemon.
-    return (dict string -> value): attribute name -> VigilantAttribute
+    return (dict string -> value): attribute name -> VigilantAttributeBase
     """
     vas = dict()
     daemon = self._pyroDaemon
-    for name, value in inspect.getmembers(self, lambda x: isinstance(x, RemotableVigilantAttribute)):
+    for name, value in inspect.getmembers(self, lambda x: isinstance(x, VigilantAttribute)):
         if not hasattr(value, "_pyroDaemon"):
             value._register(daemon)
         vas[name] = value
@@ -413,58 +413,58 @@ def odemicVASerializer(self):
     else:
         return self.__reduce__()
     
-Pyro4.Daemon.serializers[RemotableVigilantAttribute] = odemicVASerializer
+Pyro4.Daemon.serializers[VigilantAttribute] = odemicVASerializer
 
      
-class StringVA(RemotableVigilantAttribute):
+class StringVA(VigilantAttribute):
     """
     A VA which contains a string
     """
     
     def __init__(self, value="", *args, **kwargs):
-        RemotableVigilantAttribute.__init__(self, value, *args, **kwargs)
+        VigilantAttribute.__init__(self, value, *args, **kwargs)
         
     def _set(self, value):
         if not isinstance(value, basestring):
             raise InvalidTypeError("Value '%s' is not a string." % str(value))
-        RemotableVigilantAttribute._set(self, value)
+        VigilantAttribute._set(self, value)
 
-class FloatVA(RemotableVigilantAttribute):
+class FloatVA(VigilantAttribute):
     """
     A VA which contains a float
     """
     
     def __init__(self, value=0.0, *args, **kwargs):
-        RemotableVigilantAttribute.__init__(self, value, *args, **kwargs)
+        VigilantAttribute.__init__(self, value, *args, **kwargs)
         
     def _set(self, value):
         try:
             converted = float(value)
         except ValueError:
             raise InvalidTypeError("Value '%s' is not a float." % str(value))
-        RemotableVigilantAttribute._set(self, converted)
+        VigilantAttribute._set(self, converted)
 
-class IntVA(RemotableVigilantAttribute):
+class IntVA(VigilantAttribute):
     """
     A VA which contains a float
     """
     
     def __init__(self, value=0, *args, **kwargs):
-        RemotableVigilantAttribute.__init__(self, value, *args, **kwargs)
+        VigilantAttribute.__init__(self, value, *args, **kwargs)
         
     def _set(self, value):
         # we really accept only int, to avoid hiding lose of precision
         if not isinstance(value, int):
             raise InvalidTypeError("Value '%s' is not a int." % str(value))
-        RemotableVigilantAttribute._set(self, value)
+        VigilantAttribute._set(self, value)
 
-class ListVA(RemotableVigilantAttribute):
+class ListVA(VigilantAttribute):
     """
     A VA which contains a list of values
     """
     
     def __init__(self, value=[], *args, **kwargs):
-        RemotableVigilantAttribute.__init__(self, value, *args, **kwargs)
+        VigilantAttribute.__init__(self, value, *args, **kwargs)
         
     def _set(self, value):
         try:
@@ -473,9 +473,9 @@ class ListVA(RemotableVigilantAttribute):
             raise InvalidTypeError("Value '%s' is not a list." % str(value))
         # TODO we need to also detect whenever this list is modified
         
-        RemotableVigilantAttribute._set(self, converted)
+        VigilantAttribute._set(self, converted)
 
-# TODO maybe should provide a factory that can take a VigilantAttribute class and return it
+# TODO maybe should provide a factory that can take a VigilantAttributeBase class and return it
 # either Continuous or Enumerated
 
 class Continuous(object):
@@ -525,7 +525,7 @@ class Continuous(object):
 
     def _set(self, value):
         """
-        Should be called _in addition_ to the ._set() of VigilantAttribute
+        Should be called _in addition_ to the ._set() of VigilantAttributeBase
         returns nothing
         Raises:
             OutOfBoundError if the value is not within the authorised range
@@ -632,7 +632,7 @@ class IntEnumerated(IntVA, Enumerated):
         IntVA._set(self, value)
 
 
-class MultiSpeedVA(RemotableVigilantAttribute, Continuous):
+class MultiSpeedVA(VigilantAttribute, Continuous):
     """
     A class to define speed (m/s) for several axes
     It's especially made for Actuator.speed: the value is a dict name => float
@@ -641,7 +641,7 @@ class MultiSpeedVA(RemotableVigilantAttribute, Continuous):
     def __init__(self, value={}, range=[], unit="m/s", *args, **kwargs):
         Continuous.__init__(self, range)
         assert(range[0] >= 0)
-        RemotableVigilantAttribute.__init__(self, value, unit, *args, **kwargs)
+        VigilantAttribute.__init__(self, value, unit, *args, **kwargs)
         
     # TODO detect whenever a value of the dict is changed 
     def _set(self, value):
@@ -653,7 +653,7 @@ class MultiSpeedVA(RemotableVigilantAttribute, Continuous):
             if v <= 0 or v < self._range[0] or v > self._range[1]:
                 raise OutOfBoundError("Trying to assign axis '%s' value '%s' outside of the range %s-%s." % 
                             (str(axis), str(value), str(self._range[0]), str(self._range[1])))
-        VigilantAttribute._set(self, value)
+        VigilantAttributeBase._set(self, value)
 
 
 

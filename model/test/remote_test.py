@@ -483,7 +483,7 @@ class FatherComponent(model.Component):
         return self._value
     
     
-class FakeDataFlow(model.DataFlowRemotable):
+class FakeDataFlow(model.DataFlow):
     def __init__(self, *args, **kwargs):
         super(FakeDataFlow, self).__init__(*args, **kwargs)
         self.shape = (2048, 2048)
