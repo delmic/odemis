@@ -16,6 +16,7 @@ You should have received a copy of the GNU General Public License along with Del
 '''
 from _core import roattribute
 import Pyro4
+import __version__
 import _core
 import _dataflow
 import _vattributes
@@ -212,7 +213,9 @@ class HwComponent(Component):
         Component.__init__(self, name, *args, **kwargs)
         self._role = role
         self._affects = set() # will be set later via _set_affects_by_string
-    
+        self._swVersion = "Unknown (Odemis %s)" % __version__.version
+        self._hwVersion = "Unknown"
+        
     @roattribute
     def role(self):
         """
@@ -240,6 +243,14 @@ class HwComponent(Component):
             affects = _core.getObject(cont_name, comp_name)
         
         self._affects = affects
+    
+    @roattribute
+    def swVersion(self):
+        return self._swVersion
+    
+    @roattribute
+    def hwVersion(self):
+        return self._hwVersion
     
     # to be overridden by any component which actually can provide metadata
     def getMetadata(self):
@@ -301,10 +312,14 @@ class Detector(HwComponent):
 
         # TODO to be remotable
         # To be overridden
-        self.shape = (0) # maximum value of each dimension of the detector. A CCD camera 2560x1920 with 12 bits intensity has a 3D shape (2560,1920,2048).
+        self._shape = (0) # maximum value of each dimension of the detector. A CCD camera 2560x1920 with 12 bits intensity has a 3D shape (2560,1920,2048).
         self.pixelSize = None # VA representing the size of a pixel (in meters). More precisely it should be the average distance between the centres of two pixels.
         self.data = None # Data-flow coming from this detector. 
         # normally a detector doesn't affect anything
+    
+    @roattribute
+    def shape(self):
+        return self._shape
         
 class DigitalCamera(Detector):
     """
@@ -314,7 +329,7 @@ class DigitalCamera(Detector):
     def __init__(self, name, role, children=None, **kwargs):
         Detector.__init__(self, name, role, children, **kwargs)
         
-        # To be overridden
+        # To be overridden by a VA
         self.binning = None # how many CCD pixels are merged (in each dimension) to form one pixel on the image.
         self.resolution = None # (2-tuple of int): number of pixels in the image generated for each dimension. If it's smaller than the full resolution of the captor, it's centred.
         self.exposureTime = None # (float): time in second for the exposure for one image.

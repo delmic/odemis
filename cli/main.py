@@ -112,7 +112,7 @@ def list_components():
     return 0
 
 def print_roattribute(name, value):
-    print "\t" + name + " (RO Attribute)\t value:" + str(value)
+    print "\t" + name + " (RO Attribute)\t value: %s" % str(value)
 
 #known_fixed_attributes = ["shape", "axes", "ranges"]
 non_roattributes_classes = (Pyro4.core._RemoteMethod, Pyro4.Proxy, model.Component,

@@ -176,7 +176,7 @@ class AndorCam3(model.DigitalCamera):
 
         # setup everything best (fixed)
         self._setupBestQuality()
-        self.shape = resolution + (2**self._metadata[model.MD_BPP],)
+        self._shape = resolution + (2**self._metadata[model.MD_BPP],)
         
         psize = (self.GetFloat(u"PixelWidth") * 1e-6,
                  self.GetFloat(u"PixelHeight") * 1e-6)
@@ -184,10 +184,10 @@ class AndorCam3(model.DigitalCamera):
         self._metadata[model.MD_SENSOR_PIXEL_SIZE] = self.pixelSize.value
         
         # odemis + sdk
-        self.swVersion = __version__.version + "(driver " + self.getSDKVersion() + ")" 
-        self._metadata[model.MD_SW_VERSION] = self.swVersion
-        self.hwVersion = self.getHwVersion()
-        self._metadata[model.MD_HW_VERSION] = self.hwVersion
+        self._swVersion = "%s (driver %s)" % (__version__.version, self.getSDKVersion()) 
+        self._metadata[model.MD_SW_VERSION] = self._swVersion
+        self._hwVersion = self.getHwVersion()
+        self._metadata[model.MD_HW_VERSION] = self._hwVersion
         
         # Strong cooling for low (image) noise
         self.targetTemperature = model.FloatContinuous(-100, [-275, 100], "C")
