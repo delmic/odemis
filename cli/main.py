@@ -52,6 +52,63 @@ def kill_backend():
         return 127
     return 0
 
+def print_component(comp, level):
+    """
+    Pretty print on one line a component
+    comp (Component): the component to print
+    level (int > 0): hierarchy level (for indentation)
+    """
+    if level == 0:
+        indent = ""
+    else:
+        indent = u" ↳"*level + " "
+    print indent + comp.name + "\trole:" + comp.role
+    # TODO display .affects
+    # TODO would be nice to display which class is the component
+    # TODO:
+    # * if emitter, display .shape
+    # * if detector, display .shape
+    # * if actuator, display .axes
+
+def print_component_tree(root, level=0):
+    """
+    Print all the components starting from the root. 
+    root (Component): the component at the root of the tree
+    level (int > 0): hierarchy level (for pretty printing)
+    """
+    # first print the root component
+    print_component(root, level)
+
+    # display all the children
+    for comp in root.children:
+            print_component_tree(comp, level + 1)
+
+def print_microscope_tree(mic):
+    """
+    Print all the components starting from the microscope. 
+    root (Microscope): a microscope
+    """
+    # first print the microscope
+    print_component(mic, 0)
+    # Microscope is a special case
+    for comp in mic.detectors:
+        print_component_tree(comp, 1)
+    for comp in mic.emitters:
+        print_component_tree(comp, 1)
+    for comp in mic.actuators:
+        print_component_tree(comp, 1)
+    # no children
+
+def list_components():
+    # We actually just browse as a tree the microscope 
+    try:
+        microscope = model.getMicroscope()
+    except:
+        logging.error("Failed to contact the back-end")
+        return 127
+    print_microscope_tree(microscope)
+    return 0
+
 def main(args):
     """
     Handles the command line arguments 
@@ -89,6 +146,11 @@ def main(args):
     handler.setFormatter(logging.Formatter('%(asctime)s (%(module)s) %(levelname)s: %(message)s'))
     logging.getLogger().addHandler(handler)
     
+    # anything to do?
+    if not (options.check or options.kill or options.list):
+        logging.error("No action specified.")
+        return 127
+    
     status = get_backend_status()
     if options.check:
         logging.info("Status of back-end is %s", status)
@@ -106,7 +168,7 @@ def main(args):
         return kill_backend()
 
     if options.list:
-        pass # TODO
+        return list_components()
     
     return 0
 
