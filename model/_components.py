@@ -58,6 +58,7 @@ def getComponents():
     # TODO look into children and parents? Or delete this method? Or how to share 
     # really all the components?
     comps = set(microscope.detectors | microscope.actuators | microscope.emitters)
+    comps.add(microscope)
     return comps
 
 
