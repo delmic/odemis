@@ -20,9 +20,10 @@ import Pyro4
 import logging
 import multiprocessing
 import os
-import time
 import urllib
 import weakref
+
+BASE_DIRECTORY="/var/run/odemisd"
 
 # The special read-only attribute which are duplicated on proxy objects 
 class roattribute(property):
@@ -103,8 +104,8 @@ class Container(Pyro4.core.Daemon):
         name: name of the container (must be unique)
         """
         assert not "/" in name
-        # TODO put all the sockets in some specified directory on the fs /var/odemis/?
-        self.ipc_name = urllib.quote(name) + ".ipc"
+        # all the sockets are in the same directory so it's independent from the PWD
+        self.ipc_name = BASE_DIRECTORY + "/" + urllib.quote(name) + ".ipc"
         
         if os.path.exists(self.ipc_name):
             try:
@@ -170,7 +171,7 @@ def getContainer(name):
     raises an exception if no such container exist
     """
     # the container is the default pyro daemon at the address named by the container
-    container = Pyro4.Proxy("PYRO:Pyro.Daemon@./u:"+urllib.quote(name)+".ipc",
+    container = Pyro4.Proxy("PYRO:Pyro.Daemon@./u:"+BASE_DIRECTORY+"/"+urllib.quote(name)+".ipc",
                             oneways=["terminate"])
     # A proxy doesn't connect until the first remote call, check the connection
     container.ping() # raise an exception if connection fails

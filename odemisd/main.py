@@ -16,7 +16,6 @@ Delmic Acquisition Software is distributed in the hope that it will be useful, b
 You should have received a copy of the GNU General Public License along with Delmic Acquisition Software. If not, see http://www.gnu.org/licenses/.
 '''
 
-from gui import dagui
 from odemisd import modelgen
 import __version__
 import argparse

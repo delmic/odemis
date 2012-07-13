@@ -25,14 +25,12 @@ import sys
 import time
 import unittest
 
-
 SIM_CONFIG = "optical-sim.odm.yaml"
 
 class TestCommandLine(unittest.TestCase):
     """
     This contains test cases for the command-line level of odemisd.
     """
-    
     @classmethod
     def create_tests(cls):
         configs_pass = ["optical-sim.odm.yaml",
@@ -66,7 +64,7 @@ class TestCommandLine(unittest.TestCase):
             self.assertEqual(ret, 0, "error detected in correct config "
                                 "file '%s'" % filename)
         return test_validate_pass
-    
+      
     @staticmethod
     def create_test_validate_error(filename):
         def test_validate_error(self):
@@ -76,7 +74,7 @@ class TestCommandLine(unittest.TestCase):
                                 "file '%s'" % filename)
             os.remove("test.log")
         return test_validate_error
-       
+          
     def setUp(self):
         # reset the logging (because otherwise it accumulates)
         if logging.root:
@@ -98,8 +96,8 @@ class TestCommandLine(unittest.TestCase):
             ret = main.main(cmdline.split())
         except SystemExit, exc: # because it's handled by argparse
             ret = exc.code
-        self.assertNotEqual(ret, 0, "trying to run erroneous '%s'" % cmdline) 
-    
+        self.assertNotEqual(ret, 0, "trying to run erroneous '%s'" % cmdline)
+
     def test_log(self):
         cmdline = "odemisd --log-level=2 --log-target=test.log --validate %s" % SIM_CONFIG
         ret = main.main(cmdline.split())
@@ -163,9 +161,9 @@ class TestCommandLine(unittest.TestCase):
         os.remove("test.log")
         os.remove("testdaemon.log")
         
-# extends the class fully at module import
+# extends the class fully at module 
 TestCommandLine.create_tests()
-
+                            
 if __name__ == '__main__':
     unittest.main()
 

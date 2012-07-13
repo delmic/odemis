@@ -22,7 +22,6 @@ import inspect
 import logging
 import numpy
 import threading
-import weakref
 import zmq
 
 """
@@ -213,7 +212,8 @@ class DataFlowRemotable(DataFlow):
         self._update_pipe_hwm()
         
         uri = daemon.uriFor(self)
-        self._global_name = uri.object + "@" + uri.sockname
+        # uri.sockname is the file name of the pyro daemon (with full path)
+        self._global_name = uri.sockname + "@" + uri.object
         logging.debug("server is registered to send to " + "ipc://" + self._global_name)
         self.pipe.bind("ipc://" + self._global_name)
     
@@ -290,7 +290,7 @@ class DataFlowProxy(DataFlow, Pyro4.Proxy):
                             than the generator).
         """ 
         Pyro4.Proxy.__init__(self, uri, oneways, asyncs)
-        self._global_name = uri.object + "@" + uri.sockname
+        self._global_name = uri.sockname + "@" + uri.object
         DataFlow.__init__(self)
         self.max_discard = max_discard
         

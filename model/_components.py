@@ -55,7 +55,8 @@ def getComponents():
     """
 #    return _hwcomponents
     microscope = getMicroscope()
-    # TODO look into children? Or delete this method?
+    # TODO look into children and parents? Or delete this method? Or how to share 
+    # really all the components?
     comps = set(microscope.detectors | microscope.actuators | microscope.emitters)
     return comps
 
@@ -161,6 +162,8 @@ class ComponentProxy(Pyro4.Proxy):
     # TODO check if we need to return more (probably yes) -> but it has to be 
     # compatible with the proxy creation
     def __getstate__(self):
+        # FIXME dump_roattributes is unlikely to work as load_roattributes() doesn't
+        # create roattributes
         return (self.parent, _core.dump_roattributes(self), _dataflow.dump_dataflows(self),
                 _vattributes.dump_vigilant_attributes(self))
         
