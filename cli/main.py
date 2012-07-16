@@ -203,7 +203,7 @@ def list_properties(comp_name):
         return 127
    
     print_attributes(component)
-    
+    return 0
     
 def boolify(s):
     if s == 'True' or s == 'true':
@@ -339,17 +339,21 @@ def main(args):
         logging.error("Back-end appears to be non-responsive.")
         return 127
     
-    if options.kill:
-        return kill_backend()
-
-    if options.list:
-        return list_components()
+    try:
+        if options.kill:
+            return kill_backend()
     
-    if options.listprop is not None:
-        return list_properties(options.listprop)
-    
-    if options.setattr is not None:
-        return set_attr(*options.setattr)
+        if options.list:
+            return list_components()
+        
+        if options.listprop is not None:
+            return list_properties(options.listprop)
+        
+        if options.setattr is not None:
+            return set_attr(*options.setattr)
+    except:
+        logging.exception("Unexpected error while performing action.")
+        return 127
     
     return 0
 

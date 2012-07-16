@@ -25,6 +25,7 @@ import sys
 import time
 import unittest
 
+ODEMISD_PATH = "../../odemisd/main.py"
 SIM_CONFIG = "optical-sim.odm.yaml"
 
 class TestCommandLine(unittest.TestCase):
@@ -119,7 +120,6 @@ class TestCommandLine(unittest.TestCase):
             
             cmdline = "odemisd --help"
             ret = main.main(cmdline.split())
-            
         except SystemExit, exc:
             ret = exc.code
         self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
@@ -135,7 +135,7 @@ class TestCommandLine(unittest.TestCase):
         
         # run the backend as a daemon
         # we cannot run it normally as the child would also think he's in a unittest
-        cmdline = "../main.py --log-level=2 --log-target=testdaemon.log --daemonize %s" % SIM_CONFIG
+        cmdline = ODEMISD_PATH + " --log-level=2 --log-target=testdaemon.log --daemonize %s" % SIM_CONFIG
         ret = subprocess.call(cmdline.split())
         self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
         
