@@ -19,6 +19,7 @@ You should have received a copy of the GNU General Public License along with Del
 import Pyro4
 import __version__
 import argparse
+import collections
 import inspect
 import logging
 import model
@@ -167,28 +168,115 @@ def print_attributes(component):
     print_vattributes(component)
     print_data_flows(component)
 
+def get_component(comp_name):
+    """
+    return the component with the given name
+    comp_name (string): name of the component to find
+    raises
+        LookupError if the component doesn't exist
+        other exception if there is an error while contacting the backend
+    """
+    components = model.getComponents()
+    component = None
+    for c in components:
+        if c.name == comp_name:
+            component = c
+            break
+   
+    if component is None:
+        raise LookupError("Failed to find component '%s'", comp_name)
+    
+    return component
+    
 def list_properties(comp_name):
     """
     print the data-flows and vattributes of a component
     comp_name (string): name of the component
     """
     try:
-        components = model.getComponents()
-        component = None
-        for c in components:
-            if c.name == comp_name:
-                component = c
-                break
+        component = get_component(comp_name)
+    except LookupError:
+        logging.error("Failed to find component '%s'", comp_name)
+        return 127
     except:
         logging.error("Failed to contact the back-end")
         return 127
    
-    if component is None:
-        logging.error("Failed to find component '%s'", comp_name)
-        return 127
-    
     print_attributes(component)
     
+    
+def boolify(s):
+    if s == 'True' or s == 'true':
+        return True
+    if s == 'False' or s == 'false':
+        return False
+    raise ValueError('Not a boolean value: %s' % s)
+
+def reproduceTypedValue(real_val, str_val):
+    """
+    Tries to convert a string to the type of the given value
+    real_val (object): value with the type that must be converted to
+    str_val (string): string that will be converted
+    return the value contained in the string with the type of the real value
+    raises 
+      ValueError() if not possible to convert
+      TypeError() if type of real value is not supported
+    """
+    if isinstance(real_val, bool):
+        return boolify(str_val)
+    elif isinstance(real_val, int):
+        return int(str_val)
+    elif isinstance(real_val, float):
+        return float(str_val)
+    elif isinstance(real_val, basestring):
+        return str_val
+    elif isinstance(real_val, collections.Iterable):
+        iter_val = [] # the most preserving iterable
+        for sub_str in str_val.split(','):
+            iter_val.append(reproduceTypedValue(real_val[0], sub_str))
+        final_val = type(real_val)(iter_val) # cast to real type
+        return final_val
+    raise TypeError("Type %r is not supported to convert %s" % (type(real_val), str_val))
+
+def set_attr(comp_name, attr_name, str_val):
+    """
+    set the value of vigilant attribute of the given component using the type
+    of the current value of the attribute.
+    """
+    try:
+        component = get_component(comp_name)
+    except LookupError:
+        logging.error("Failed to find component '%s'", comp_name)
+        return 127
+    except:
+        logging.error("Failed to contact the back-end")
+        return 127
+
+    try:
+        attr = getattr(component, attr_name)
+    except:
+        logging.error("Failed to find attribute '%s' on component '%s'", attr_name, comp_name)
+        return 127
+    
+    if not isinstance(attr, model.VigilantAttributeBase):
+        logging.error("'%s' is not a vigilant attribute of component '%s'", attr_name, comp_name)
+        return 127
+    
+    try:
+        new_val = reproduceTypedValue(attr.value, str_val)
+    except TypeError:
+        logging.error("'%s' is of unsupported type %r", attr_name, type(attr.value))
+        return 127
+    except ValueError:
+        logging.error("Impossible to convert '%s' to a %r", str_val, type(attr.value))
+        return 127
+    
+    try:
+        attr.value = new_val
+    except:
+        logging.exception("Failed to set %s.%s = '%s'", comp_name, attr_name, str_val)
+        return 127
+    return 0
 
 def main(args):
     """
@@ -203,7 +291,7 @@ def main(args):
     parser.add_argument('--version', action='version', 
                         version=__version__.name + " " + __version__.version + " – " + __version__.copyright)
     opt_grp = parser.add_argument_group('Options')
-    opt_grp.add_argument("--log-level", dest="loglev", metavar="LEVEL", type=int,
+    opt_grp.add_argument("--log-level", dest="loglev", metavar="<level>", type=int,
                         default=0, help="Set verbosity level (0-2, default = 0)")
     dm_grp = parser.add_argument_group('Back-end management')
     dm_grpe = dm_grp.add_mutually_exclusive_group()
@@ -213,8 +301,11 @@ def main(args):
                         help="Check for a running back-end (only returns exit code)")
     dm_grpe.add_argument("--list", "-l", dest="list", action="store_true", default=False,
                         help="List the components of the microscope")
-    dm_grpe.add_argument("--list-prop", "-L", dest="listprop", metavar="COMPONENT",
+    dm_grpe.add_argument("--list-prop", "-L", dest="listprop", metavar="<component>",
                          help="List the properties of a component")
+    dm_grpe.add_argument("--set-attr", "-s", dest="setattr", nargs=3, 
+                         metavar=("<component>", "<attribute>", "<value>"),
+                         help="Set the attribute of a component (lists are delimited by commas)")
     options = parser.parse_args(args[1:])
     
     # Set up logging before everything else
@@ -230,7 +321,8 @@ def main(args):
     logging.getLogger().addHandler(handler)
     
     # anything to do?
-    if not (options.check or options.kill or options.list) and options.listprop is None:
+    if (not options.check and not options.kill and not options.list 
+        and options.listprop is None and options.setattr is None):
         logging.error("No action specified.")
         return 127
     
@@ -255,6 +347,9 @@ def main(args):
     
     if options.listprop is not None:
         return list_properties(options.listprop)
+    
+    if options.setattr is not None:
+        return set_attr(*options.setattr)
     
     return 0
 
