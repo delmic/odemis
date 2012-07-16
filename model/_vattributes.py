@@ -585,7 +585,7 @@ class FloatContinuous(FloatVA, Continuous):
     """
     def __init__(self, value=0.0, range=[], unit=""):
         Continuous.__init__(self, range)
-        FloatVA.__init__(self, value, unit)
+        FloatVA.__init__(self, value, unit=unit)
 
     def _set(self, value):
         # order is important
@@ -598,7 +598,7 @@ class StringEnumerated(StringVA, Enumerated):
     """
     def __init__(self, value, choices, unit=""):
         Enumerated.__init__(self, choices)
-        StringVA.__init__(self, value, unit)
+        StringVA.__init__(self, value, unit=unit)
 
     def _set(self, value):
         # order is important
@@ -611,7 +611,7 @@ class FloatEnumerated(FloatVA, Enumerated):
     """
     def __init__(self, value=0.0, choices=[], unit=""):
         Enumerated.__init__(self, choices)
-        FloatVA.__init__(self, value, unit)
+        FloatVA.__init__(self, value, unit=unit)
 
     def _set(self, value):
         # order is important
@@ -624,7 +624,7 @@ class IntEnumerated(IntVA, Enumerated):
     """
     def __init__(self, value=0.0, choices=[], unit=""):
         Enumerated.__init__(self, choices)
-        IntVA.__init__(self, value, unit)
+        IntVA.__init__(self, value, unit=unit)
 
     def _set(self, value):
         # order is important
@@ -641,7 +641,7 @@ class MultiSpeedVA(VigilantAttribute, Continuous):
     def __init__(self, value={}, range=[], unit="m/s", *args, **kwargs):
         Continuous.__init__(self, range)
         assert(range[0] >= 0)
-        VigilantAttribute.__init__(self, value, unit, *args, **kwargs)
+        VigilantAttribute.__init__(self, value, unit=unit, *args, **kwargs)
         
     # TODO detect whenever a value of the dict is changed 
     def _set(self, value):

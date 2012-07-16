@@ -195,7 +195,7 @@ class AndorCam3(model.DigitalCamera):
         
         if self.isImplemented(u"FanSpeed"):
             # max speed
-            self.fanSpeed = model.FloatContinuous(1.0, [0.0, 1.0]) # ratio to max speed
+            self.fanSpeed = model.FloatContinuous(1.0, [0.0, 1.0], unit="") # ratio to max speed
             self.fanSpeed.subscribe(self.onFanSpeed, init=True)
 
         self._binning = 1 # used by resolutionFitter()
