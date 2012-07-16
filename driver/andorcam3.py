@@ -1002,12 +1002,12 @@ class ResolutionVA(model.VigilantAttribute, model.Continuous):
         
         model.VigilantAttribute._set(self, value)
 
-class AndorCam3DataFlow(model.DataFlowBase):
+class AndorCam3DataFlow(model.DataFlow):
     def __init__(self, camera):
         """
         camera: andorcam instance ready to acquire images
         """
-        model.DataFlowBase.__init__(self)
+        model.DataFlow.__init__(self)
         self.component = weakref.proxy(camera)
         
     def get(self):
@@ -1022,7 +1022,7 @@ class AndorCam3DataFlow(model.DataFlowBase):
     
     # TODO use new methods from dataflow start_acquire
     def subscribe(self, listener):
-        model.DataFlowBase.subscribe(self, listener)
+        model.DataFlow.subscribe(self, listener)
         # TODO nicer way to check whether the camera is already sending us data?
         if not self.component.acquire_thread:
             # is it in acquire()? If so, it will be done in .get()
@@ -1030,12 +1030,12 @@ class AndorCam3DataFlow(model.DataFlowBase):
                 self.component.acquireFlow(self.notify)
     
     def unsubscribe(self, listener):
-        model.DataFlowBase.unsubscribe(self, listener)
+        model.DataFlow.unsubscribe(self, listener)
         if not self._listeners:
             self.component.stopAcquireFlow()
             
     def notify(self, data):
-        model.DataFlowBase.notify(self, data)
+        model.DataFlow.notify(self, data)
 
    
 class RepeatingTimer(object):

@@ -168,15 +168,15 @@ def print_attributes(component):
     print_vattributes(component)
     print_data_flows(component)
 
-def get_component(comp_name):
+def get_component_from_set(comp_name, components):
     """
-    return the component with the given name
+    return the component with the given name from a set of components
     comp_name (string): name of the component to find
+    components (iterable Components): the set of components to look into
     raises
         LookupError if the component doesn't exist
         other exception if there is an error while contacting the backend
     """
-    components = model.getComponents()
     component = None
     for c in components:
         if c.name == comp_name:
@@ -188,6 +188,17 @@ def get_component(comp_name):
     
     return component
 
+def get_component(comp_name):
+    """
+    return the component with the given name
+    comp_name (string): name of the component to find
+    raises
+        LookupError if the component doesn't exist
+        other exception if there is an error while contacting the backend
+    """
+    return get_component_from_set(comp_name, model.getComponents())
+    
+
 def get_actuator(comp_name):
     """
     return the actuator component with the given name
@@ -198,17 +209,19 @@ def get_actuator(comp_name):
     """
     # isinstance() doesn't work, so we just list every component in microscope.actuators
     microscope = model.getMicroscope()
-    components = microscope.actuators
-    component = None
-    for c in components:
-        if c.name == comp_name:
-            component = c
-            break
-   
-    if component is None:
-        raise LookupError("Failed to find actuator '%s'", comp_name)
-    
-    return component
+    return get_component_from_set(comp_name, microscope.actuators)
+
+def get_detector(comp_name):
+    """
+    return the actuator component with the given name
+    comp_name (string): name of the component to find
+    raises
+        LookupError if the component doesn't exist
+        other exception if there is an error while contacting the backend
+    """
+    # isinstance() doesn't work, so we just list every component in microscope.detectors
+    microscope = model.getMicroscope()
+    return get_component_from_set(comp_name, microscope.detectors)
 
 def list_properties(comp_name):
     """
@@ -384,6 +397,50 @@ def stop_move():
     
     return ret
 
+def acquire(comp_name, dataflow_names, filename):
+    """
+    Acquire an image from one (or more) dataflow
+    comp_name (string): name of the detector to find
+    dataflow_names (list of string): name of each dataflow to access
+    filename (string): name of the output file (will be TIFF with one page per dataflow)
+    """
+    try:
+        component = get_detector(comp_name)
+    except LookupError:
+        logging.error("Failed to find detector '%s'", comp_name)
+        return 127
+    except:
+        logging.error("Failed to contact the back-end")
+        return 127
+    
+    # check the dataflow exists
+    dataflows = []
+    for df_name in dataflow_names:
+        try:
+            df = getattr(component, df_name)
+        except:
+            logging.error("Failed to find data-flow '%s' on component '%s'", df_name, comp_name)
+            return 129
+        
+        if not isinstance(df, model.DataFlowBase):
+            logging.error("'%s' is not a data-flow of component '%s'", df_name, comp_name)
+            return 129
+        dataflows.append(df)
+    
+    # TODO support multiple dataflows with multiple pages in the file
+    images = []
+    for df in dataflows:
+        try:
+            images.append(df.get())
+        except:
+            logging.error("Failed to acquire image from component '%s'", comp_name)
+            return 127
+    
+    # XXX
+    print images[0].shape
+    
+    return 0
+    
 def main(args):
     """
     Handles the command line arguments 
@@ -399,7 +456,7 @@ def main(args):
     opt_grp = parser.add_argument_group('Options')
     opt_grp.add_argument("--log-level", dest="loglev", metavar="<level>", type=int,
                         default=0, help="Set verbosity level (0-2, default = 0)")
-    dm_grp = parser.add_argument_group('Back-end management')
+    dm_grp = parser.add_argument_group('Microscope management')
     dm_grpe = dm_grp.add_mutually_exclusive_group()
     dm_grpe.add_argument("--kill", "-k", dest="kill", action="store_true", default=False,
                          help="Kill the running back-end")
@@ -417,7 +474,11 @@ def main(args):
                          help=u"move the axis by the amount of µm.")
     dm_grpe.add_argument("--stop", "-S", dest="stop", action="store_true", default=False,
                          help="Immediately stop all the actuators in all directions.")
-
+    dm_grpe.add_argument("--acquire", "-a", dest="acquire", nargs="+", 
+                         metavar=("<component>", "data-flow"),
+                         help="Acquire an image (default data-flow is \"data\")")
+    dm_grp.add_argument("--output", "-o", dest="output",
+                        help="name of the file where the image should be saved after acquisition. It is saved in TIFF format.")
 
     options = parser.parse_args(args[1:])
     
@@ -436,8 +497,12 @@ def main(args):
     # anything to do?
     if (not options.check and not options.kill and not options.list 
         and not options.stop and options.move is None
-        and options.listprop is None and options.setattr is None):
-        logging.error("No action specified.")
+        and options.listprop is None and options.setattr is None
+        and options.acquire is None):
+        logging.error("no action specified.")
+        return 127
+    if options.acquire is not None and options.output is None:
+        logging.error("name of the output file must be specified.")
         return 127
     
     status = get_backend_status()
@@ -480,6 +545,15 @@ def main(args):
         
         if options.stop:
             return stop_move()
+        
+        if options.acquire is not None:
+            component = options.acquire[0]
+            if len(options.acquire) == 1:
+                dataflows = ["data"]
+            else:
+                dataflows = options.acquire[1:]
+            acquire(component, dataflows, options.output)
+            
     except:
         logging.exception("Unexpected error while performing action.")
         return 127
