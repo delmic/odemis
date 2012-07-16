@@ -66,7 +66,7 @@ class Stage2D(model.Actuator):
                                 **kwargs)
         # can move 10cm on both axis
         self._position = {"x": 0.05, "y": 0.05} # starts in the middle
-        self.speed = model.MultiSpeedVA({"x": 10, "y": 10}, [0, 10], "m/s")
+        self.speed = model.MultiSpeedVA({"x": 10., "y": 10.}, [0., 10.], "m/s")
         
     @roattribute
     def position(self):

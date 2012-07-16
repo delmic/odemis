@@ -164,5 +164,44 @@ class TestWithBackend(unittest.TestCase):
         power = float(regex.search(output).group(1))
         self.assertEqual(power, 0, "power should be 0")
         
+    def test_set_attr_dict(self):
+        # set a dict, which is a bit complicated structure
+        try:
+            # change the stdout
+            out = StringIO.StringIO()
+            sys.stdout = out
+            
+            cmdline = "cli --set-attr Stage speed x:0.5,y:0.2"
+            ret = main.main(cmdline.split())
+        except SystemExit, exc:
+            ret = exc.code
+        self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
+    
+    def test_move(self):
+        # TODO compare position VA
+        # test move and also multiple move requests
+        try:
+            # change the stdout
+            out = StringIO.StringIO()
+            sys.stdout = out
+            
+            cmdline = "cli --move Stage x 5 --move Stage y -0.2"
+            ret = main.main(cmdline.split())
+        except SystemExit, exc:
+            ret = exc.code
+        self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
+    
+    def test_stop(self):
+        try:
+            # change the stdout
+            out = StringIO.StringIO()
+            sys.stdout = out
+            
+            cmdline = "cli --stop"
+            ret = main.main(cmdline.split())
+        except SystemExit, exc:
+            ret = exc.code
+        self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
+    
 if __name__ == "__main__":
     unittest.main()

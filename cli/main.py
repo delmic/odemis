@@ -187,7 +187,29 @@ def get_component(comp_name):
         raise LookupError("Failed to find component '%s'", comp_name)
     
     return component
+
+def get_actuator(comp_name):
+    """
+    return the actuator component with the given name
+    comp_name (string): name of the component to find
+    raises
+        LookupError if the component doesn't exist
+        other exception if there is an error while contacting the backend
+    """
+    # isinstance() doesn't work, so we just list every component in microscope.actuators
+    microscope = model.getMicroscope()
+    components = microscope.actuators
+    component = None
+    for c in components:
+        if c.name == comp_name:
+            component = c
+            break
+   
+    if component is None:
+        raise LookupError("Failed to find actuator '%s'", comp_name)
     
+    return component
+
 def list_properties(comp_name):
     """
     print the data-flows and vattributes of a component
@@ -230,12 +252,36 @@ def reproduceTypedValue(real_val, str_val):
         return float(str_val)
     elif isinstance(real_val, basestring):
         return str_val
+    elif isinstance(real_val, dict): # must be before iterable
+        if len(real_val) > 0:
+            key_real_val = real_val.keys()[0]
+            value_real_val = real_val[key_real_val]
+        else:
+            logging.warning("Type of attribute is unknown, using string")
+            sub_real_val = ""
+            value_real_val = ""
+            
+        dict_val = {}
+        for sub_str in str_val.split(','):
+            item = sub_str.split(':')
+            assert(len(item) == 2)
+            key =  reproduceTypedValue(key_real_val, item[0]) # TODO Should warn if len(item) != 2
+            value = reproduceTypedValue(value_real_val, item[1])
+            dict_val[key] = value
+        return dict_val
     elif isinstance(real_val, collections.Iterable):
+        if len(real_val) > 0:
+            sub_real_val = real_val[0]
+        else:
+            logging.warning("Type of attribute is unknown, using string")
+            sub_real_val = ""
+
         iter_val = [] # the most preserving iterable
         for sub_str in str_val.split(','):
-            iter_val.append(reproduceTypedValue(real_val[0], sub_str))
+            iter_val.append(reproduceTypedValue(sub_real_val, sub_str))
         final_val = type(real_val)(iter_val) # cast to real type
         return final_val
+    
     raise TypeError("Type %r is not supported to convert %s" % (type(real_val), str_val))
 
 def set_attr(comp_name, attr_name, str_val):
@@ -256,11 +302,11 @@ def set_attr(comp_name, attr_name, str_val):
         attr = getattr(component, attr_name)
     except:
         logging.error("Failed to find attribute '%s' on component '%s'", attr_name, comp_name)
-        return 127
+        return 129
     
     if not isinstance(attr, model.VigilantAttributeBase):
         logging.error("'%s' is not a vigilant attribute of component '%s'", attr_name, comp_name)
-        return 127
+        return 129
     
     try:
         new_val = reproduceTypedValue(attr.value, str_val)
@@ -277,6 +323,66 @@ def set_attr(comp_name, attr_name, str_val):
         logging.exception("Failed to set %s.%s = '%s'", comp_name, attr_name, str_val)
         return 127
     return 0
+
+MAX_DISTANCE = 0.1 #m
+def move(comp_name, axis_name, str_distance):
+    """
+    move (relatively) the axis of the given component by the specified about of µm
+    """
+    # for safety reason, we use µm instead of meters, as it's harder to type a
+    # huge distance
+    try:
+        component = get_actuator(comp_name)
+    except LookupError:
+        logging.error("Failed to find actuator '%s'", comp_name)
+        return 127
+    except:
+        logging.error("Failed to contact the back-end")
+        return 127
+
+    if axis_name not in component.axes:
+        logging.error("Actuator %s has not axis '%s'", comp_name, axis_name)
+        return 129
+    
+    try:
+        distance = float(str_distance) * 1e-6 # µm -> m
+    except ValueError:
+        logging.error("Distance '%s' cannot be converted to a number", str_distance)
+        return 127
+    
+    if abs(distance) > MAX_DISTANCE:
+        logging.error("Distance of %f m is too big (> %f m)", distance, MAX_DISTANCE)
+        return 129
+    
+    try:
+        component.moveRel({axis_name: distance})
+    except:
+        logging.error("Failed to move axis %s of component %s", axis_name, comp_name)
+        return 127
+    
+    return 0
+
+def stop_move():
+    """
+    stop the move of every axis of every actuators
+    """
+    # We actually just browse as a tree the microscope 
+    try:
+        microscope = model.getMicroscope()
+        actuators = microscope.actuators
+    except:
+        logging.error("Failed to contact the back-end")
+        return 127
+    
+    ret = 0
+    for actuator in actuators:
+        try:
+            actuator.stop()
+        except:
+            logging.error("Failed to stop actuator %s", actuator.name)
+            ret = 127
+    
+    return ret
 
 def main(args):
     """
@@ -296,16 +402,23 @@ def main(args):
     dm_grp = parser.add_argument_group('Back-end management')
     dm_grpe = dm_grp.add_mutually_exclusive_group()
     dm_grpe.add_argument("--kill", "-k", dest="kill", action="store_true", default=False,
-                        help="Kill the running back-end")
+                         help="Kill the running back-end")
     dm_grpe.add_argument("--check", dest="check", action="store_true", default=False,
-                        help="Check for a running back-end (only returns exit code)")
+                         help="Check for a running back-end (only returns exit code)")
     dm_grpe.add_argument("--list", "-l", dest="list", action="store_true", default=False,
-                        help="List the components of the microscope")
+                         help="List the components of the microscope")
     dm_grpe.add_argument("--list-prop", "-L", dest="listprop", metavar="<component>",
                          help="List the properties of a component")
-    dm_grpe.add_argument("--set-attr", "-s", dest="setattr", nargs=3, 
+    dm_grpe.add_argument("--set-attr", "-s", dest="setattr", nargs=3, action='append',
                          metavar=("<component>", "<attribute>", "<value>"),
                          help="Set the attribute of a component (lists are delimited by commas)")
+    dm_grpe.add_argument("--move", "-m", dest="move", nargs=3, action='append',
+                         metavar=("<component>", "<axis>", "<distance>"),
+                         help=u"move the axis by the amount of µm.")
+    dm_grpe.add_argument("--stop", "-S", dest="stop", action="store_true", default=False,
+                         help="Immediately stop all the actuators in all directions.")
+
+
     options = parser.parse_args(args[1:])
     
     # Set up logging before everything else
@@ -322,6 +435,7 @@ def main(args):
     
     # anything to do?
     if (not options.check and not options.kill and not options.list 
+        and not options.stop and options.move is None
         and options.listprop is None and options.setattr is None):
         logging.error("No action specified.")
         return 127
@@ -350,7 +464,22 @@ def main(args):
             return list_properties(options.listprop)
         
         if options.setattr is not None:
-            return set_attr(*options.setattr)
+            for c, a, v in options.setattr:
+                ret = set_attr(c, a, v)
+                if ret != 0:
+                    return ret
+            return 0
+        
+        if options.move is not None:
+            for c, a, d in options.move:
+                ret = move(c, a, d)
+                # TODO move commands to the same actuator should be agglomerated
+                if ret != 0:
+                    return ret
+            return 0
+        
+        if options.stop:
+            return stop_move()
     except:
         logging.exception("Unexpected error while performing action.")
         return 127
