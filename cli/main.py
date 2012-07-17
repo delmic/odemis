@@ -16,6 +16,7 @@ Delmic Acquisition Software is distributed in the hope that it will be useful, b
 You should have received a copy of the GNU General Public License along with Delmic Acquisition Software. If not, see http://www.gnu.org/licenses/.
 '''
 # This is a basic command line interface to the odemis back-end
+from dataio import tiff
 import Pyro4
 import __version__
 import argparse
@@ -431,14 +432,14 @@ def acquire(comp_name, dataflow_names, filename):
     images = []
     for df in dataflows:
         try:
-            images.append(df.get())
+            image = df.get()
+            images.append(image)
+            logging.info("Acquired an image of dimension %r.", image.shape)
         except:
             logging.error("Failed to acquire image from component '%s'", comp_name)
             return 127
     
-    # XXX
-    print images[0].shape
-    
+    tiff.ImageExporter.export(images[0], filename)
     return 0
     
 def main(args):
