@@ -95,7 +95,11 @@ class VirtualTestCam(object):
         number = 5
         self.left = number
         self.camera.data.subscribe(self.receive_image)
-        time.sleep(number * 2) # 2s per image should be more than enough in any case
+        for i in range(number):
+            # end early if it's already finished
+            if self.left == 0:
+                break
+            time.sleep(2) # 2s per image should be more than enough in any case
         
         self.assertEqual(self.left, 0)
         del self.camera
