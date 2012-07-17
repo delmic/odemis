@@ -4,7 +4,7 @@
 Created on 12 Mar 2012
 
 @author: Éric Piel
-Testing class for driver.andorcam3 .
+Testing class for driver.andorcam2 .
 
 Copyright © 2012 Éric Piel, Delmic
 
@@ -16,19 +16,18 @@ Delmic Acquisition Software is distributed in the hope that it will be useful, b
 
 You should have received a copy of the GNU General Public License along with Delmic Acquisition Software. If not, see http://www.gnu.org/licenses/.
 '''
-from driver import andorcam3
+#import andorcam2
+from driver import andorcam2
 from abs_cam_test import VirtualTestCam
 import unittest
 
-class TestAndorCam3(unittest.TestCase, VirtualTestCam):
+class TestAndorCam2(unittest.TestCase, VirtualTestCam):
     """
-    Test directly the AndorCam3 class.
+    Test directly the AndorCam2 class.
     """
-    camera_type = andorcam3.AndorCam3
-    # name, role, children (must be None), device number
+    camera_type = andorcam2.AndorCam2
     camera_args = ("camera", "test", None, 0)
-
-     
+    
 if __name__ == '__main__':
     unittest.main()
 
