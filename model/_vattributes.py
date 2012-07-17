@@ -655,6 +655,64 @@ class MultiSpeedVA(VigilantAttribute, Continuous):
                             (str(axis), str(value), str(self._range[0]), str(self._range[1])))
         VigilantAttributeBase._set(self, value)
 
+class ResolutionVA(VigilantAttribute, Continuous):
+    """
+    VigilantAttribute which represents a (camera) resolution : 2-tuple of int
+    It can only be set a min and max, but might also have additional constraints
+    It's allowed to request any resolution within min and max, but it will
+    be automatically adapted to a bigger one allowed.
+    """
+    
+    def __init__(self, value=(1,1), range=[], unit="", fitter=None, **kwargs):
+        """
+        range (2x (2-tuple of int)): minimum and maximum size in each dimension
+        fitter (callable (2-tuple of int) -> (2-tuple of int)): function which fits
+          the given resolution to whatever is allowed. If None, it will accepted as is.
+        """  
+        Continuous.__init__(self, range)
+        if fitter:
+            self._fitter = WeakMethod(fitter)
+        else:
+            self._fitter = None
+        VigilantAttribute.__init__(self, value, unit=unit, **kwargs)
+    
+    def _set_range(self, new_range):
+        """
+        Override to do more checking on the range.
+        """
+        if len(new_range) != 2:
+            raise InvalidTypeError("Range '%s' is not a 2-tuple." % str(new_range))
+        if new_range[0][0] > new_range[1][0] or new_range[0][1] > new_range[1][1]:
+            raise InvalidTypeError("Range min %s should be smaller than max %s." 
+                                   % (str(new_range[0]), str(new_range[1])))
+        if hasattr(self, "value"):
+            if (self.value[0] < new_range[0][0] or self.value[0] > new_range[1][0] or
+                self.value[1] < new_range[0][1] or self.value[1] > new_range[1][1]):
+                raise OutOfBoundError("Current value '%s' is outside of the range %s-%s." % 
+                            (str(self.value), str(new_range[0]), str(new_range[1])))
+        self._range = tuple(new_range)
 
+    def _set(self, value):
+        """
+        Raises:
+            OutOfBoundError if the value is not within the authorised range
+        """
+        if len(value) != 2:
+            raise InvalidTypeError("Value '%s' is not a 2-tuple." % str(value))
+
+        if (value[0] < self._range[0][0] or value[0] > self._range[1][0] or
+            value[1] < self._range[0][1] or value[1] > self._range[1][1]):
+            raise OutOfBoundError("Trying to assign value '%s' outside of the range %s-%s." % 
+                        (str(value), str(self._range[0]), str(self._range[1])))
+        
+        if self._fitter:
+            try:
+                value = self._fitter(value)
+            except WeakRefLostError:
+                # Normally fitter is owned by the same instance of camera so no
+                # fitter would also mean that this VA has no sense anymore
+                raise OutOfBoundError("Fitting method has disappeared, cannot validate value.")
+        
+        VigilantAttribute._set(self, value)
 
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:

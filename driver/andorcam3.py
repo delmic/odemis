@@ -135,9 +135,8 @@ class AndorCam3(model.DigitalCamera):
     a CCD/CMOS camera.
     This implementation is for the Andor SDK v3.
     
-    It offers mostly two main high level methods: acquire() and acquireFlow(),
-    which respectively offer the possibility to get one and several images from
-    the camera.
+    It offers mostly a couple of Attributes to modify the settings, and a 
+    DataFlow to get one or several images from the camera.
     
     It also provide low-level methods corresponding to the SDK functions.
     """
@@ -153,7 +152,7 @@ class AndorCam3(model.DigitalCamera):
         model.DigitalCamera.__init__(self, name, role, children, **kwargs)
         
         if os.name == "nt":
-            # That's not gonna fly... need to put this into ATDLL
+            # FIXME That's not gonna fly... need to put this into ATDLL
             self.atcore = windll.LoadLibrary('libatcore.dll') # TODO check it works
         else:
             # Global so that its sub-libraries can access it
@@ -200,7 +199,7 @@ class AndorCam3(model.DigitalCamera):
 
         self._binning = 1 # used by resolutionFitter()
         # need to be before binning, as it is modified when changing binning         
-        self.resolution = ResolutionVA(resolution, [(1, 1), resolution], 
+        self.resolution = model.ResolutionVA(resolution, [(1, 1), resolution], 
                                              fitter=self.resolutionFitter)
         self.resolution.subscribe(self.onResolution, init=True)
         
@@ -537,7 +536,7 @@ class AndorCam3(model.DigitalCamera):
         self._binning = value
     
     def getModelName(self):
-        model = "Andor " + self.GetString(u"CameraModel")
+        model_name = "Andor " + self.GetString(u"CameraModel")
         # TODO there seems to be a bug in SimCam v3.1: => check v3.3
 #        self.atcore.isImplemented(self.handle, u"SerialNumber") return true
 #        but self.atcore.GetInt(self.handle, u"SerialNumber") fail with error code 2 = AT_ERR_NOTIMPLEMENTED
@@ -547,7 +546,7 @@ class AndorCam3(model.DigitalCamera):
         except ATError:
             serial_str = ""
             
-        return "%s%s" % (model, serial_str)
+        return "%s%s" % (model_name, serial_str)
     
     def getSDKVersion(self):
         try:
@@ -941,66 +940,6 @@ class AndorCam3(model.DigitalCamera):
         camera.handle = system_handle # for the del() to work fine
         return cameras
 
-
-class ResolutionVA(model.VigilantAttribute, model.Continuous):
-    """
-    VigilantAttribute which represents a resolution : 2-tuple of int
-    It can only be set a min and max, but might also have additional constraints
-    It's allowed to request any resolution within min and max, but it will
-    be automatically adapted to a bigger one allowed.
-    """
-    
-    def __init__(self, value="", range=[], unit="", readonly=False, fitter=None):
-        """
-        fitter callable (2-tuple of int) -> (2-tuple of int): function which fits
-          the given resolution to whatever is allowed. If None, it will not be adapted.
-        """  
-        model.Continuous.__init__(self, range)
-        if fitter:
-            self._fitter = model.WeakMethod(fitter)
-        else:
-            self._fitter = None
-        model.VigilantAttribute.__init__(self, value, unit, readonly)
-    
-    def _set_range(self, new_range):
-        """
-        Override to do more checking on the range.
-        """
-        if len(new_range) != 2:
-                raise model.InvalidTypeError("Range '%s' is not a 2-tuple." % str(new_range))
-        if new_range[0][0] > new_range[1][0] or new_range[0][1] > new_range[1][1]:
-            raise model.InvalidTypeError("Range min %s should be smaller than max %s." 
-                                   % (str(new_range[0]), str(new_range[1])))
-        if hasattr(self, "value"):
-            if (self.value[0] < new_range[0][0] or self.value[0] > new_range[1][0] or
-                self.value[1] < new_range[0][1] or self.value[1] > new_range[1][1]):
-                raise model.OutOfBoundError("Current value '%s' is outside of the range %s-%s." % 
-                            (str(self.value), str(new_range[0]), str(new_range[1])))
-        self._range = tuple(new_range)
-
-
-    def _set(self, value):
-        """
-        Raises:
-            OutOfBoundError if the value is not within the authorised range
-        """
-        if len(value) != 2:
-            raise model.InvalidTypeError("Value '%s' is not a 2-tuple." % str(value))
-
-        if (value[0] < self._range[0][0] or value[0] > self._range[1][0] or
-            value[1] < self._range[0][1] or value[1] > self._range[1][1]):
-            raise model.OutOfBoundError("Trying to assign value '%s' outside of the range %s-%s." % 
-                        (str(value), str(self._range[0]), str(self._range[1])))
-        
-        if self._fitter:
-            try:
-                value = self._fitter(value)
-            except model.WeakRefLostError:
-                # Normally fitter is owned by the same instance of camera so no
-                # fitter would also mean that this VA has no sense anymore
-                raise model.OutOfBoundError("Fitting method has disappeared, cannot validate value.")
-        
-        model.VigilantAttribute._set(self, value)
 
 class AndorCam3DataFlow(model.DataFlow):
     def __init__(self, camera):

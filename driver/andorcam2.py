@@ -16,6 +16,9 @@ You should have received a copy of the GNU General Public License along with Del
 '''
 
 from ctypes import *
+import __version__
+import logging
+import model
 import numpy
 import os
 import threading
@@ -73,8 +76,30 @@ class AndorCapabilities(Structure):
     READMODE_MULTITRACKSCAN = 64
     
     CameraTypes = {
-17: "Clara",       
-}
+        17: "Clara",   
+        }
+#AC_CAMERATYPE_PDA 0
+#AC_CAMERATYPE_IXON 1
+#AC_CAMERATYPE_ICCD 2
+#AC_CAMERATYPE_EMCCD 3
+#AC_CAMERATYPE_CCD 4
+#AC_CAMERATYPE_ISTAR 5
+#AC_CAMERATYPE_VIDEO 6
+#AC_CAMERATYPE_IDUS 7
+#AC_CAMERATYPE_NEWTON 8
+#AC_CAMERATYPE_SURCAM 9
+#AC_CAMERATYPE_USBICCD 10
+#AC_CAMERATYPE_LUCA 11
+#AC_CAMERATYPE_RESERVED 12
+#AC_CAMERATYPE_IKON 13
+#AC_CAMERATYPE_INGAAS 14
+#AC_CAMERATYPE_IVAC 15
+#AC_CAMERATYPE_UNPROGRAMMED 16
+#AC_CAMERATYPE_CLARA 17
+#AC_CAMERATYPE_USBISTAR 18
+#AC_CAMERATYPE_SIMCAM 19
+#AC_CAMERATYPE_NEO 20
+#AC_CAMERATYPE_IXONULTRA 21
     
 class AndorV2DLL(CDLL):
     """
@@ -107,6 +132,8 @@ class AndorV2DLL(CDLL):
         error.
         Follows the ctypes.errcheck callback convention
         """
+        # everything returns DRV_SUCCESS on correct usage, _excepted_ GetTemperature()
+        # Clever :-/
         if not result in AndorV2DLL.ok_code:
             if result in AndorV2DLL.err_code:
                 raise AndorV2Error("Call to %s failed with error code %d: %s" %
@@ -256,52 +283,30 @@ class AndorV2DLL(CDLL):
 20211: "DRV_PROCESSING_FAILED",
 }
 
-
-#AC_CAMERATYPE_PDA 0
-#AC_CAMERATYPE_IXON 1
-#AC_CAMERATYPE_ICCD 2
-#AC_CAMERATYPE_EMCCD 3
-#AC_CAMERATYPE_CCD 4
-#AC_CAMERATYPE_ISTAR 5
-#AC_CAMERATYPE_VIDEO 6
-#AC_CAMERATYPE_IDUS 7
-#AC_CAMERATYPE_NEWTON 8
-#AC_CAMERATYPE_SURCAM 9
-#AC_CAMERATYPE_USBICCD 10
-#AC_CAMERATYPE_LUCA 11
-#AC_CAMERATYPE_RESERVED 12
-#AC_CAMERATYPE_IKON 13
-#AC_CAMERATYPE_INGAAS 14
-#AC_CAMERATYPE_IVAC 15
-#AC_CAMERATYPE_UNPROGRAMMED 16
-#AC_CAMERATYPE_CLARA 17
-#AC_CAMERATYPE_USBISTAR 18
-#AC_CAMERATYPE_SIMCAM 19
-#AC_CAMERATYPE_NEO 20
-#AC_CAMERATYPE_IXONULTRA 21
    
-class AndorCam2(object):
+class AndorCam2(model.DigitalCamera):
     """
     Represents one Andor camera and provides all the basic interfaces typical of
     a CCD/CMOS camera.
     This implementation is for the Andor SDK v2.
     
-    It offers mostly two main high level methods: acquire() and acquireFlow(),
-    which respectively offer the possibility to get one and several images from
-    the camera.
+    It offers mostly a couple of VigilantAttributes to modify the settings, and a 
+    DataFlow to get one or several images from the camera.
     
     It also provide low-level methods corresponding to the SDK functions.
     """
     
-    def __init__(self, device=None):
+    def __init__(self, name, role, children=None, device=None, **kwargs):
         """
         Initialises the device
         device (None or int): number of the device to open, as defined by Andor, cd scan()
           if None, uses the system handle, which allows very limited access to some information
         Raise an exception if the device cannot be opened.
         """
+        model.DigitalCamera.__init__(self, name, role, children, **kwargs)
+        
         if os.name == "nt":
-            # That's not gonna fly... need to put this into ATDLL
+            # FIXME That's not gonna fly... need to put this into AndorV2DLL
             self.atcore = windll.LoadLibrary('atmcd32d.dll') # TODO check it works
             # atmcd64d.dll on 64 bits
         else:
@@ -323,13 +328,70 @@ class AndorCam2(object):
         self.select()
         self.Initialize()
         
+        logging.info("opened device %d successfully", device)
+        
         # Maximum cooling for lowest (image) noise
         self.setTargetTemperature(-100) # very low (automatically adjusted)
         self.setFanSpeed(1.0)
         
+        
+        
+        # XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+        
+        # Describe the camera
+        # up-to-date metadata to be included in dataflow
+        self._metadata = {model.MD_HW_NAME: self.getModelName()}
+        resolution = self.getSensorResolution()
+        self._metadata[model.MD_SENSOR_SIZE] = resolution
+
+        # setup everything best (fixed)
+        self._setupBestQuality() #XXX
+        self._shape = resolution + (2**self._metadata[model.MD_BPP],)
+        
+        psize = (self.GetFloat(u"PixelWidth") * 1e-6,
+                 self.GetFloat(u"PixelHeight") * 1e-6)
+        self.pixelSize = model.VigilantAttribute(psize, unit="m", readonly=True)
+        self._metadata[model.MD_SENSOR_PIXEL_SIZE] = self.pixelSize.value
+        
+        # odemis + drivers
+        self._swVersion = "%s (driver %s)" % (__version__.version, self.getSwVersion()) 
+        self._metadata[model.MD_SW_VERSION] = self._swVersion
+        self._hwVersion = self.getHwVersion()
+        self._metadata[model.MD_HW_VERSION] = self._hwVersion
+        
+        # Strong cooling for low (image) noise
+        self.targetTemperature = model.FloatContinuous(-100, [-275, 100], "C")
+        self.targetTemperature.subscribe(self.onTargetTemperature, init=True)
+        
+        if self.isImplemented(u"FanSpeed"):
+            # max speed
+            self.fanSpeed = model.FloatContinuous(1.0, [0.0, 1.0], unit="") # ratio to max speed
+            self.fanSpeed.subscribe(self.onFanSpeed, init=True)
+
+        self._binning = 1 # used by resolutionFitter()
+        # need to be before binning, as it is modified when changing binning         
+        self.resolution = model.ResolutionVA(resolution, [(1, 1), resolution], 
+                                             fitter=self.resolutionFitter)
+        self.resolution.subscribe(self.onResolution, init=True)
+        
+        self.binning = model.IntEnumerated(self._binning, self._getAvailableBinnings(), "px")
+        self.binning.subscribe(self.onBinning, init=True)
+        
+        range_exp = self.GetFloatRanges(u"ExposureTime")
+        if range_exp[0] <= 0.0:
+            range_exp[0] = 1e-6 # s, to make sure != 0 
+        self.exposureTime = model.FloatContinuous(1.0, range_exp, "s")
+        self.exposureTime.subscribe(self.onExposureTime, init=True)
+        
+        
+        
+        # XXXXXXXXXXXXXXXXXXXXXXXXXx
+        
         self.is_acquiring = False
         self.acquire_must_stop = False
         self.acquire_thread = None
+        
+        self.data = AndorCam2DataFlow(self)
         
     # low level methods, wrapper to the actual SDK functions
     # they do not ensure the actual camera is selected, you have to call select()
@@ -518,31 +580,43 @@ class AndorCam2(object):
         val = values[int(round(speed * (len(values) - 1)))]
         self.atcore.SetFanMode(val)
 
-        
-    def getCameraMetadata(self):
-        """
-        return the metadata corresponding to the camera in general (common to 
-          many pictures)
-        return (dict : string -> string): the metadata
-        """
+    
+    def getModelName(self):
         self.select()
-        metadata = {}
         caps = self.GetCapabilities()
-        model = AndorCapabilities.CameraTypes.get(caps.CameraType, "unknown")
+        model_name = "Andor " + AndorCapabilities.CameraTypes.get(caps.CameraType, "unknown")
+        
         headmodel = create_string_buffer(260) # MAX_PATH
         self.atcore.GetHeadModel(headmodel)
-        metadata["Camera name"] = "Andor " + model + (headmodel.value)
-
+    
         try:
             serial = c_int32()
             self.atcore.GetCameraSerialNumber(byref(serial))
-            metadata["Camera serial"] = str(serial.value)
+            serial_str = " (s/n: %d)" % serial.value
         except AndorV2Error:
-            pass # unknown value
+            serial_str = "" # unknown
         
+        return "%s %s%s" % (model_name, headmodel.value, serial_str)
+    
+    def getSwVersion(self):
+        """
+        returns a simplified software version information
+        or None if unknown
+        """
+        self.select()
         try:
             driver, sdk = self.GetVersionInfo()
             
+        except AndorV2Error:
+            return "unknown"
+        return "driver: '%s', SDK:'%s'" % (driver, sdk)
+    
+    def getHwVersion(self):
+        """
+        returns a simplified hardware version information
+        """
+        self.select()
+        try:
             eprom, coffile = c_uint(), c_uint()
             vxdrev, vxdver = c_uint(), c_uint() # same as driver
             dllrev, dllver = c_uint(), c_uint() # same as sdk
@@ -554,15 +628,20 @@ class AndorCam2(object):
             CameraFirmwareVersion, CameraFirmwareBuild = c_uint(), c_uint()
             self.atcore.GetHardwareVersion(byref(PCB), byref(Decode), 
                 byref(dummy1), byref(dummy2), byref(CameraFirmwareVersion), byref(CameraFirmwareBuild))
-
-
-            metadata["Camera version"] = ("PCB: %d/%d, firmware: %d.%d, "
-                "eprom: %d/%d, driver: '%s', SDK:'%s'" %
-                (PCB.value, Decode.value, CameraFirmwareVersion.value,
-                 CameraFirmwareBuild.value, eprom.value, coffile.value,
-                 driver, sdk))
         except AndorV2Error:
-            pass # unknown value
+            return "unknown"
+        
+        return ("PCB: %d/%d, firmware: %d.%d, EPROM: %d/%d" %
+                (PCB.value, Decode.value, CameraFirmwareVersion.value,
+                 CameraFirmwareBuild.value, eprom.value, coffile.value))
+            
+    def getCameraMetadata(self):
+        """
+        return the metadata corresponding to the camera in general (common to 
+          many pictures)
+        return (dict : string -> string): the metadata
+        """
+        
         
         try:
             psize = self.GetPixelSize()
@@ -940,5 +1019,39 @@ class AndorCam2(object):
         camera.handle = None # so that there is no shutdown
         return cameras
 
+class AndorCam2DataFlow(model.DataFlow):
+    def __init__(self, camera):
+        """
+        camera: andorcam instance ready to acquire images
+        """
+        model.DataFlow.__init__(self)
+        self.component = weakref.proxy(camera)
+        
+    def get(self):
+        # TODO if camera is already acquiring, wait for the coming picture
+        data = self.component.acquire()
+        # TODO we should avoid this: get() and acquire() simultaneously should be handled by the framework
+        # If some subscribers arrived during the acquire()
+        if self._listeners:
+            self.notify(data)
+            self.component.acquireFlow(self.notify)
+        return data
+    
+    # TODO use new methods from dataflow start_acquire
+    def subscribe(self, listener):
+        model.DataFlow.subscribe(self, listener)
+        # TODO nicer way to check whether the camera is already sending us data?
+        if not self.component.acquire_thread:
+            # is it in acquire()? If so, it will be done in .get()
+            if not self.component.is_acquiring:
+                self.component.acquireFlow(self.notify)
+    
+    def unsubscribe(self, listener):
+        model.DataFlow.unsubscribe(self, listener)
+        if not self._listeners:
+            self.component.stopAcquireFlow()
+            
+    def notify(self, data):
+        model.DataFlow.notify(self, data)
 
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:
