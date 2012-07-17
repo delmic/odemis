@@ -76,7 +76,20 @@ class DataArray(numpy.ndarray):
         if obj is None:
             return
         self.metadata = getattr(obj, 'metadata', {})
-
+    
+    # Used to send the DataArray over Pyro (over ZMQ, we use an optimised way)
+    def __reduce__(self):
+        # take the normal output (need to convert to list to modify it)
+        ret = list(numpy.ndarray.__reduce__(self))
+        # add to the state our additional state
+        ret[2] = (ret[2], self.metadata)
+        return tuple(ret)
+    
+    def __setstate__(self,state):
+        nd_state, md = state
+        numpy.ndarray.__setstate__(self, nd_state)
+        self.metadata = md
+        
 class DataFlowBase(object):
     """
     This is an abstract class that must be extended by each detector which
@@ -267,8 +280,10 @@ class DataFlow(DataFlowBase):
     def notify(self, data):
         # publish the data remotely
         if self.pipe and len(self._remote_listeners) > 0:
-            md = {"dtype": str(data.dtype), "shape": data.shape}
-            self.pipe.send_pyobj(md, zmq.SNDMORE)
+            dformat = {"dtype": str(data.dtype), "shape": data.shape}
+            self.pipe.send_pyobj(dformat, zmq.SNDMORE)
+            print "sending md" + data.metadata
+            self.pipe.send_pyobj(data.metadata, zmq.SNDMORE)
             self.pipe.send(numpy.getbuffer(data), copy=False)
         
         # publish locally
@@ -404,7 +419,9 @@ class SubscribeProxyThread(threading.Thread):
             
             # receive data
             if socks.get(self.data) == zmq.POLLIN:
-                md = self.data.recv_pyobj()
+                array_format = self.data.recv_pyobj()
+                array_md = self.data.recv_pyobj()
+                print "received md" + array_md
                 array_buf = self.data.recv(copy=False)
                 # more fresh data already?
                 if (self.data.getsockopt(zmq.EVENTS) & zmq.POLLIN and
@@ -415,11 +432,12 @@ class SubscribeProxyThread(threading.Thread):
                     logging.debug("had discarded %d arrays", discarded)
                 discarded = 0
                 # TODO: any need to use zmq.utils.rebuffer.array_from_buffer()?
-                array = numpy.frombuffer(array_buf, dtype=md["dtype"])
-                array.shape = md["shape"]
-    
+                array = numpy.frombuffer(array_buf, dtype=array_format["dtype"])
+                array.shape = array_format["shape"]
+                darray = DataArray(array, metadata=array_md)
+                
                 try:
-                    self.w_notifier(array)
+                    self.w_notifier(darray)
                 except WeakRefLostError:
                     self.commands.close()
                     self.data.close()
