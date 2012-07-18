@@ -135,7 +135,7 @@ class AndorCam3(model.DigitalCamera):
     a CCD/CMOS camera.
     This implementation is for the Andor SDK v3.
     
-    It offers mostly a couple of Attributes to modify the settings, and a 
+    It offers mostly a couple of VigilantAttributes to modify the settings, and a 
     DataFlow to get one or several images from the camera.
     
     It also provide low-level methods corresponding to the SDK functions.
@@ -170,17 +170,6 @@ class AndorCam3(model.DigitalCamera):
         # Describe the camera
         # up-to-date metadata to be included in dataflow
         self._metadata = {model.MD_HW_NAME: self.getModelName()}
-        resolution = self.getSensorResolution()
-        self._metadata[model.MD_SENSOR_SIZE] = resolution
-
-        # setup everything best (fixed)
-        self._setupBestQuality()
-        self._shape = resolution + (2**self._metadata[model.MD_BPP],)
-        
-        psize = (self.GetFloat(u"PixelWidth") * 1e-6,
-                 self.GetFloat(u"PixelHeight") * 1e-6)
-        self.pixelSize = model.VigilantAttribute(psize, unit="m", readonly=True)
-        self._metadata[model.MD_SENSOR_PIXEL_SIZE] = self.pixelSize.value
         
         # odemis + sdk
         self._swVersion = "%s (driver %s)" % (__version__.version, self.getSDKVersion()) 
@@ -188,29 +177,44 @@ class AndorCam3(model.DigitalCamera):
         self._hwVersion = self.getHwVersion()
         self._metadata[model.MD_HW_VERSION] = self._hwVersion
         
+        resolution = self.getSensorResolution()
+        self._metadata[model.MD_SENSOR_SIZE] = resolution
+
+        # setup everything best (fixed)
+        self._setupBestQuality()
+        self._shape = resolution + (2**self._metadata[model.MD_BPP],)
+        
+        # put the detector pixelSize
+        psize = (self.GetFloat(u"PixelWidth") * 1e-6,
+                 self.GetFloat(u"PixelHeight") * 1e-6)
+        self.pixelSize = model.VigilantAttribute(psize, unit="m", readonly=True)
+        self._metadata[model.MD_SENSOR_PIXEL_SIZE] = self.pixelSize.value
+        
         # Strong cooling for low (image) noise
-        self.targetTemperature = model.FloatContinuous(-100, [-275, 100], "C")
-        self.targetTemperature.subscribe(self.onTargetTemperature, init=True)
+        self.targetTemperature = model.FloatContinuous(-100, [-275, 100], "C", 
+                                                       setter=self.setTargetTemperature)
+        self.setTargetTemperature(-100)
         
         if self.isImplemented(u"FanSpeed"):
             # max speed
-            self.fanSpeed = model.FloatContinuous(1.0, [0.0, 1.0], unit="") # ratio to max speed
-            self.fanSpeed.subscribe(self.onFanSpeed, init=True)
+            self.fanSpeed = model.FloatContinuous(1.0, [0.0, 1.0], unit="",
+                                                  setter=self.setFanSpeed) # ratio to max speed
+            self.setFanSpeed(1.0)
 
         self._binning = 1 # used by resolutionFitter()
         # need to be before binning, as it is modified when changing binning         
         self.resolution = model.ResolutionVA(resolution, [(1, 1), resolution], 
-                                             fitter=self.resolutionFitter)
-        self.resolution.subscribe(self.onResolution, init=True)
+                                             setter=self.setResolution)
+        self.setResolution(resolution)
         
-        self.binning = model.IntEnumerated(self._binning, self._getAvailableBinnings(), "px")
-        self.binning.subscribe(self.onBinning, init=True)
+        self.binning = model.IntEnumerated(self._binning, self._getAvailableBinnings(),
+                                           unit="px", setter=self.setBinning)
+        self.setBinning(self._binning)
         
-        range_exp = self.GetFloatRanges(u"ExposureTime")
-        if range_exp[0] <= 0.0:
-            range_exp[0] = 1e-6 # s, to make sure != 0 
-        self.exposureTime = model.FloatContinuous(1.0, range_exp, "s")
-        self.exposureTime.subscribe(self.onExposureTime, init=True)
+        range_exp = list(self.GetFloatRanges(u"ExposureTime"))
+        range_exp[0] = max(range_exp[0], 1e-6) # s, to make sure != 0 
+        self.exposureTime = model.FloatContinuous(1.0, range_exp, unit="s", setter=self.setExposureTime)
+        self.setExposureTime(1.0)
         
         current_temp = self.GetFloat(u"SensorTemperature")
         self.temperature = model.FloatVA(current_temp, unit="C", readonly=True)
@@ -401,12 +405,13 @@ class AndorCam3(model.DigitalCamera):
         """
         return (self.GetInt(u"SensorWidth"), self.GetInt(u"SensorHeight"))
     
-    def onTargetTemperature(self, temp):
+    def setTargetTemperature(self, temp):
         """
         Change the targeted temperature of the CCD.
         The cooler the less dark noise. Not everything is possible, but it will
         try to accommodate by targeting the closest temperature possible.
         temp (-300 < float < 100): temperature in C
+        return actual tempature requested
         """
         assert((-300 <= temp) and (temp <= 100))
         # TODO apparently the Neo also has a "Temperature Control" which might be
@@ -422,6 +427,7 @@ class AndorCam3(model.DigitalCamera):
 
         # TODO: a more generic function which set up the fan to the right speed
         # according to the target temperature?
+        return temp
 
     def updateTemperatureVA(self):
         """
@@ -429,15 +435,16 @@ class AndorCam3(model.DigitalCamera):
         """
         temp = self.GetFloat(u"SensorTemperature")
         self._metadata[model.MD_SENSOR_TEMP] = temp
-        # it's read-only, so we change it only via special _set()
-        self.temperature._set(temp)
+        # it's read-only, so we change it only via special _value)
+        self.temperature._value = temp
         self.temperature.notify(self.temperature.value)
         logging.debug("temp is %d", temp)
 
-    def onFanSpeed(self, speed):
+    def setFanSpeed(self, speed):
         """
         Change the fan speed. Will accommodate to whichever speed is possible.
         speed (0<=float<= 1): ratio of full speed -> 0 is slowest, 1.0 is fastest
+        return actual speed set
         """
         assert((0 <= speed) and (speed <= 1))
         
@@ -448,8 +455,9 @@ class AndorCam3(model.DigitalCamera):
         # for the Neo and the SimCam. Looks like this for Neo:
         # [u"Off", u"Low", u"On"]
         values = self.GetEnumStringAvailable(u"FanSpeed")
-        val = values[int(round(speed * (len(values) - 1)))]
-        self.SetEnumString(u"FanSpeed", val)
+        speed_index = int(round(speed * (len(values) - 1)))
+        self.SetEnumString(u"FanSpeed", values[speed_index])
+        return float(speed_index) / len(values)
         
     @staticmethod
     def find_closest(val, l):
@@ -476,7 +484,6 @@ class AndorCam3(model.DigitalCamera):
         binning (int 1, 2, 3, 4, or 8): how many pixels horizontally and vertically
          are combined to create "super pixels"
         Note: super pixels are always square
-        return (tuple): metadata corresponding to the setup
         """
         values = [1, 2, 3, 4, 8]
         assert(binning in values)
@@ -499,11 +506,11 @@ class AndorCam3(model.DigitalCamera):
                                   " does not match fixed binning " +
                                   str(act_binning))
             
-        self.binning.value = binning
+        return binning
     
     def _getAvailableBinnings(self):
         """
-        returns  list of int with the available binning (same for horizontal
+        returns  list of int with the available binnings (same for horizontal
           and vertical)
         """
         # Nicely the API is different depending on cameras...
@@ -518,14 +525,14 @@ class AndorCam3(model.DigitalCamera):
             else:
                 return set([1])
 
-    def onBinning(self, value):
+    def setBinning(self, value):
         """
         Called when "binning" VA is modified. It actually modifies the camera binning.
         """
         previous_binning = self._binning
         #TODO queue this for after acquisition.
-        self._setBinning(value)
-        self._metadata[model.MD_BINNING] = value
+        self._binning = self._setBinning(value)
+        self._metadata[model.MD_BINNING] = self._binning
         
         # adapt resolution so that the AOI stays the same
         change = float(previous_binning) / value
@@ -533,7 +540,7 @@ class AndorCam3(model.DigitalCamera):
         new_resolution = (round(old_resolution[0] * change),
                           round(old_resolution[1] * change))
         self.resolution.value = new_resolution
-        self._binning = value
+        return self._binning
     
     def getModelName(self):
         model_name = "Andor " + self.GetString(u"CameraModel")
@@ -607,10 +614,11 @@ class AndorCam3(model.DigitalCamera):
         self.SetInt(u"AOIHeight", c_uint64(size[1]))
         self.SetInt(u"AOITop", c_uint64(lt[1]))
     
-    def onResolution(self, value):
+    def setResolution(self, value):
         # TODO wait until we are done with image acquisition
-        # The fitter has made all the job to make sure it's allowed resolution
-        self._setSize(value)
+        new_res = self.resolutionFitter(value)
+        self._setSize(new_res)
+        return new_res
     
     def resolutionFitter(self, size_req):
         """
@@ -649,14 +657,16 @@ class AndorCam3(model.DigitalCamera):
         """
         assert(0.0 < exp)
         self.SetFloat(u"ExposureTime",  exp)
-        self.exposureTime.value = self.GetFloat(u"ExposureTime")
-        if self.exposureTime.value != exp:
-            logging.debug("adapted exposure time from %f to %f", exp, self.exposureTime.value)
+        act_exp = self.GetFloat(u"ExposureTime")
+        if act_exp != exp:
+            logging.debug("adapted exposure time from %f to %f", exp, act_exp)
+        return act_exp
     
-    def onExposureTime(self, value):
+    def setExposureTime(self, value):
         # TODO make sure we are in a state it's possible to change exposure time
-        self._setExposureTime(value)
-        self._metadata[model.MD_EXP_TIME] = value
+        exp = self._setExposureTime(value)
+        self._metadata[model.MD_EXP_TIME] = exp
+        return exp
     
     def _setupBestQuality(self):
         """
@@ -678,7 +688,7 @@ class AndorCam3(model.DigitalCamera):
         if self.isImplemented(u"PreAmpGainControl"):
             # If not, we are on a SimCam so it doesn't matter
             self.SetEnumString(u"PreAmpGainControl", u"Gain 1 Gain 4 (16 bit)")
-            self._metadata[model.MD_GAIN] = 33 # according to doc: 20/0.6
+            self._metadata[model.MD_GAIN] = 33.0 # according to doc: 20/0.6
 #        self.SetEnumString(u"PreAmpGainSelector", u"Low")
 #        self.SetEnumString(u"PreAmpGain", u"x1")
 #        self.SetEnumString(u"PreAmpGainSelector", u"High")
