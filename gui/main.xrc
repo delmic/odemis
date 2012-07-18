@@ -99,11 +99,12 @@
               </object>
               <cols>2</cols>
               <rows>2</rows>
-              <vgap>1</vgap>
-              <hgap>1</hgap>
+              <vgap>2</vgap>
+              <hgap>2</hgap>
             </object>
             <option>1</option>
-            <flag>wxEXPAND</flag>
+            <flag>wxRIGHT|wxEXPAND</flag>
+            <border>2</border>
           </object>
           <object class="sizeritem">
             <object class="wxPanel">
@@ -120,6 +121,7 @@
                           <bitmap>img/btn_press.png</bitmap>
                           <hover>img/btn_press_h.png</hover>
                           <selected>img/btn_press_on_a.png</selected>
+                          <fg>#1A1A1A</fg>
                           <font>
                             <size>11</size>
                             <style>normal</style>
@@ -142,6 +144,7 @@
                           <bitmap>img/btn_opt.png</bitmap>
                           <hover>img/btn_opt_h.png</hover>
                           <selected>img/btn_opt_on_a.png</selected>
+                          <fg>#1A1A1A</fg>
                           <font>
                             <size>11</size>
                             <style>normal</style>
@@ -167,6 +170,7 @@
                           <bitmap>img/btn_sem.png</bitmap>
                           <hover>img/btn_sem_h.png</hover>
                           <selected>img/btn_sem_on_a.png</selected>
+                          <fg>#1A1A1A</fg>
                           <font>
                             <size>11</size>
                             <style>normal</style>
@@ -194,6 +198,7 @@
                           <bitmap>img/btn_pause.png</bitmap>
                           <hover>img/btn_pause_h.png</hover>
                           <selected>img/btn_pause_a.png</selected>
+                          <fg>#1A1A1A</fg>
                         </object>
                         <flag>wxTOP|wxBOTTOM|wxRIGHT</flag>
                         <border>10</border>
@@ -228,17 +233,17 @@
                             <label>STREAMS</label>
                             <bg>#333333</bg>
                           </object>
-                          <spacing>0</spacing>
-                          <leftspacing>0</leftspacing>
-                          <rightspacing>0</rightspacing>
-                          <bg>#4D4D4D</bg>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
                           <object class="odemis.gui.comp.foldpanelbar.FoldPanelItem">
                             <label>ANNOTATIONS</label>
                             <collapsed>1</collapsed>
                           </object>
+                          <spacing>0</spacing>
+                          <leftspacing>0</leftspacing>
+                          <rightspacing>0</rightspacing>
+                          <bg>#333333</bg>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
                         </object>
                         <flag>wxEXPAND</flag>
                       </object>
@@ -255,30 +260,39 @@
                   <minsize>400,400</minsize>
                 </object>
                 <object class="sizeritem">
-                  <object class="odemis.gui.comp.buttons.ImageTextButton" name="btn_aquire">
-                    <size>-1,45</size>
-                    <label>AQUIRE IMAGE</label>
-                    <delta>1</delta>
-                    <bitmap>img/btn_aquire_image.png</bitmap>
-                    <hover>img/btn_aquire_image_h.png</hover>
-                    <selected>img/btn_aquire_image_a.png</selected>
-                    <fg>#E5E5E5</fg>
-                    <font>
-                      <size>14</size>
-                      <style>normal</style>
-                      <weight>normal</weight>
-                      <underlined>0</underlined>
-                      <family>default</family>
-                      <face>Ubuntu</face>
-                      <encoding>UTF-8</encoding>
-                    </font>
-                    <style>wxALIGN_CENTRE</style>
-                    <XRCED>
-                      <assign_var>1</assign_var>
-                    </XRCED>
+                  <object class="wxPanel">
+                    <object class="wxBoxSizer">
+                      <orient>wxVERTICAL</orient>
+                      <object class="sizeritem">
+                        <object class="odemis.gui.comp.buttons.ImageTextButton" name="btn_aquire">
+                          <size>380,-1</size>
+                          <label>AQUIRE IMAGE</label>
+                          <delta>1</delta>
+                          <bitmap>img/btn_aquire_image.png</bitmap>
+                          <hover>img/btn_aquire_image_h.png</hover>
+                          <selected>img/btn_aquire_image_a.png</selected>
+                          <fg>#E5E5E5</fg>
+                          <font>
+                            <size>14</size>
+                            <style>normal</style>
+                            <weight>normal</weight>
+                            <underlined>0</underlined>
+                            <family>default</family>
+                            <face>Ubuntu</face>
+                            <encoding>UTF-8</encoding>
+                          </font>
+                          <style>wxALIGN_CENTRE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <flag>wxALL</flag>
+                        <border>10</border>
+                      </object>
+                    </object>
+                    <bg>#4D4D4D</bg>
                   </object>
-                  <flag>wxALL|wxEXPAND</flag>
-                  <border>10</border>
+                  <flag>wxEXPAND</flag>
                 </object>
                 <orient>wxVERTICAL</orient>
               </object>
@@ -314,13 +328,13 @@
             <assign_var>1</assign_var>
           </XRCED>
         </object>
-        <flag>wxALL|wxEXPAND</flag>
-        <border>5</border>
+        <flag>wxTOP|wxEXPAND</flag>
+        <border>2</border>
       </object>
     </object>
     <title>Odemis</title>
     <centered>1</centered>
-    <bg>#333333</bg>
+    <bg>#000000</bg>
     <font>
       <size>9</size>
       <style>normal</style>

@@ -1,17 +1,28 @@
 
 import logging
-
 import wx
 
 LOG_LINES = 500
 log = None
-_level = logging.DEBUG
 
+CRITICAL = 50
+FATAL = CRITICAL
+ERROR = 40
+WARNING = 30
+WARN = WARNING
+INFO = 20
+DEBUG = 10
+NOTSET = 0
+
+_current_level = DEBUG
+
+def set_level(level=NOTSET):
+    log.setLevel(level)
 
 def get_logger():
     logging.basicConfig(format=" - %(levelname)s \t%(message)s")
     l = logging.getLogger()
-    l.setLevel(_level)
+    l.setLevel(_current_level)
     l.handlers[0].setFormatter(
       logging.Formatter("%(asctime)s [%(levelname)s] %(message)s", "%H:%M:%S"))
 
@@ -75,6 +86,8 @@ class TextFieldHandler(logging.Handler):
         self.textfield.LineUp()
 
 
+def is_debug(self):
+    return True
 
 if log is None:
     log = get_logger()

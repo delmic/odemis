@@ -4,11 +4,14 @@
 # Test module for Odemis' custom FoldPanelBar in odemis.gui.comp
 #===============================================================================
 
+from odemis.gui.log import log, set_level
+set_level(50)
+
 import unittest
 import wx
 
 import odemis.gui.test.test_gui
-#import odemis.gui.comp.foldpanelbar
+
 
 SLEEP_TIME = 100 # Sleep timer in milliseconds
 MANUAL = True # If manual is set to True, the window will be kept open at the end
@@ -312,6 +315,7 @@ class FoldPanelBarTestCase(unittest.TestCase):
         loop()
 
         # The height of the parent should be 40 pixels higher
+        fpb._foldPanel.Fit()
         self.assertEqual(fpb_height + 40, fpb._foldPanel.GetSize().GetHeight())
         self.assertEqual(len(fpb.GetChildren()[0].GetChildren()), 4)
 

@@ -217,6 +217,9 @@ class OdemisGUIApp(wx.App):
             self.fr_main.Show()
             self.fr_main.Raise()
 
+            if log.level == logging.DEBUG:
+                self.goto_debug_mode()
+
 
         except Exception:
             self.excepthook(*sys.exc_info())
@@ -230,7 +233,7 @@ class OdemisGUIApp(wx.App):
     def goto_debug_mode(self):
         """ This method sets the application into debug mode, setting the
         log level and opening the log panel. """
-        #self.fr_main.menu_item_debug.IsChecked()
+        self.fr_main.menu_item_debug.Check()
         self.on_debug()
 
     def on_timer(self, event): #pylint: disable=W0613
