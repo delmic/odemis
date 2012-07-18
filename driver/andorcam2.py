@@ -75,31 +75,33 @@ class AndorCapabilities(Structure):
     READMODE_RANDOMTRACK = 32
     READMODE_MULTITRACKSCAN = 64
     
+    CAMERATYPE_PDA = 0
+    CAMERATYPE_IXON = 1
+    CAMERATYPE_ICCD = 2
+    CAMERATYPE_EMCCD = 3
+    CAMERATYPE_CCD = 4
+    CAMERATYPE_ISTAR = 5
+    CAMERATYPE_VIDEO = 6
+    CAMERATYPE_IDUS = 7
+    CAMERATYPE_NEWTON = 8
+    CAMERATYPE_SURCAM = 9
+    CAMERATYPE_USBICCD = 10
+    CAMERATYPE_LUCA = 11
+    CAMERATYPE_RESERVED = 12
+    CAMERATYPE_IKON = 13
+    CAMERATYPE_INGAAS = 14
+    CAMERATYPE_IVAC = 15
+    CAMERATYPE_UNPROGRAMMED = 16
+    CAMERATYPE_CLARA = 17
+    CAMERATYPE_USBISTAR = 18
+    CAMERATYPE_SIMCAM = 19
+    CAMERATYPE_NEO = 20
+    CAMERATYPE_IXONULTRA = 21
+    CAMERATYPE_VOLMOS = 22
+    
     CameraTypes = {
-        17: "Clara",   
+        CAMERATYPE_CLARA: "Clara",   
         }
-#AC_CAMERATYPE_PDA 0
-#AC_CAMERATYPE_IXON 1
-#AC_CAMERATYPE_ICCD 2
-#AC_CAMERATYPE_EMCCD 3
-#AC_CAMERATYPE_CCD 4
-#AC_CAMERATYPE_ISTAR 5
-#AC_CAMERATYPE_VIDEO 6
-#AC_CAMERATYPE_IDUS 7
-#AC_CAMERATYPE_NEWTON 8
-#AC_CAMERATYPE_SURCAM 9
-#AC_CAMERATYPE_USBICCD 10
-#AC_CAMERATYPE_LUCA 11
-#AC_CAMERATYPE_RESERVED 12
-#AC_CAMERATYPE_IKON 13
-#AC_CAMERATYPE_INGAAS 14
-#AC_CAMERATYPE_IVAC 15
-#AC_CAMERATYPE_UNPROGRAMMED 16
-#AC_CAMERATYPE_CLARA 17
-#AC_CAMERATYPE_USBISTAR 18
-#AC_CAMERATYPE_SIMCAM 19
-#AC_CAMERATYPE_NEO 20
-#AC_CAMERATYPE_IXONULTRA 21
     
 class AndorV2DLL(CDLL):
     """
@@ -124,6 +126,12 @@ class AndorV2DLL(CDLL):
     DRV_TEMPERATURE_NOT_REACHED = 20037
     DRV_TEMPERATURE_DRIFT = 20040
     
+    # For SetReadMode()
+    RM_FULL_VERTICAL_BINNING = 0
+    RM_MULTI_TRACK = 1
+    RM_RANDOM_TRACK = 2
+    RM_SINGLE_TRACK = 3
+    RM_IMAGE = 4
     
     @staticmethod
     def at_errcheck(result, func, args):
@@ -313,6 +321,7 @@ class AndorCam2(model.DigitalCamera):
             # Global so that its sub-libraries can access it
             self.atcore = AndorV2DLL("libandor.so.2", RTLD_GLOBAL)
 
+        self._andor_capabilities = None # cached value of GetCapabilities()
         if device is None:
             # nothing else to initialise
             self.handle = None
@@ -330,69 +339,82 @@ class AndorCam2(model.DigitalCamera):
         
         logging.info("opened device %d successfully", device)
         
-        # Maximum cooling for lowest (image) noise
-        self.setTargetTemperature(-100) # very low (automatically adjusted)
-        self.setFanSpeed(1.0)
-        
-        
-        
-        # XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-        
         # Describe the camera
         # up-to-date metadata to be included in dataflow
         self._metadata = {model.MD_HW_NAME: self.getModelName()}
-        resolution = self.getSensorResolution()
-        self._metadata[model.MD_SENSOR_SIZE] = resolution
+        # TODO test on other hardwares
+        caps = self.GetCapabilities()
+        if caps.CameraType != AndorCapabilities.CAMERATYPE_CLARA:
+            logging.warning("This driver has not been tested for this camera type")
 
-        # setup everything best (fixed)
-        self._setupBestQuality() #XXX
-        self._shape = resolution + (2**self._metadata[model.MD_BPP],)
-        
-        psize = (self.GetFloat(u"PixelWidth") * 1e-6,
-                 self.GetFloat(u"PixelHeight") * 1e-6)
-        self.pixelSize = model.VigilantAttribute(psize, unit="m", readonly=True)
-        self._metadata[model.MD_SENSOR_PIXEL_SIZE] = self.pixelSize.value
-        
         # odemis + drivers
         self._swVersion = "%s (driver %s)" % (__version__.version, self.getSwVersion()) 
         self._metadata[model.MD_SW_VERSION] = self._swVersion
         self._hwVersion = self.getHwVersion()
         self._metadata[model.MD_HW_VERSION] = self._hwVersion
         
-        # Strong cooling for low (image) noise
-        self.targetTemperature = model.FloatContinuous(-100, [-275, 100], "C")
-        self.targetTemperature.subscribe(self.onTargetTemperature, init=True)
+        resolution = self.GetDetector()
+        self._metadata[model.MD_SENSOR_SIZE] = resolution
         
-        if self.isImplemented(u"FanSpeed"):
+        # setup everything best (fixed)
+        self._setupBestQuality() #XXX sets ._metadata[model.MD_BPP]
+        self._shape = resolution + (2**self._metadata[model.MD_BPP],)
+        
+        # put the detector pixelSize
+        try:
+            psize = self.GetPixelSize()
+            psize[0] *= 1e-6 # m
+            psize[1] *= 1e-6 # m
+        except AndorV2Error:
+            logging.warning("Failed to obtain the detector pixel size")
+            # put not totally insane numbers
+            psize[0] = 10e-6 # m
+            psize[1] = 10e-6 # m
+        self.pixelSize = model.VigilantAttribute(psize, unit="m", readonly=True)
+        self._metadata[model.MD_SENSOR_PIXEL_SIZE] = self.pixelSize.value
+        
+        # Strong cooling for low (image) noise
+        if self.hasSetFunction(AndorCapabilities.SETFUNCTION_TEMPERATURE):
+            self.targetTemperature = model.FloatContinuous(-100, [-275, 100], "C",
+                                                            setter=self.setTargetTemperature)
+            self.setTargetTemperature(-100)
+                    
+        if self.hasFeature(AndorCapabilities.FEATURES_FANCONTROL):
             # max speed
-            self.fanSpeed = model.FloatContinuous(1.0, [0.0, 1.0], unit="") # ratio to max speed
-            self.fanSpeed.subscribe(self.onFanSpeed, init=True)
+            self.fanSpeed = model.FloatContinuous(1.0, [0.0, 1.0], unit="",
+                                        setter=self.setFanSpeed) # ratio to max speed
+            self.setFanSpeed(1.0)
 
-        self._binning = 1 # used by resolutionFitter()
+        self._binning = (1,1) # horizontal, vertical (used by resolutionFitter())
+        self._image_rect = (1, resolution[0], 1, resolution[1])
         # need to be before binning, as it is modified when changing binning         
         self.resolution = model.ResolutionVA(resolution, [(1, 1), resolution], 
-                                             fitter=self.resolutionFitter)
-        self.resolution.subscribe(self.onResolution, init=True)
+                                             setter=self.setResolution)
+        self.setResolution(resolution)
         
-        self.binning = model.IntEnumerated(self._binning, self._getAvailableBinnings(), "px")
-        self.binning.subscribe(self.onBinning, init=True)
+        self.binning = model.IntEnumerated(self._binning, self._getAvailableBinnings(),
+                                           unit="px", setter=self.setBinning)
         
-        range_exp = self.GetFloatRanges(u"ExposureTime")
-        if range_exp[0] <= 0.0:
-            range_exp[0] = 1e-6 # s, to make sure != 0 
-        self.exposureTime = model.FloatContinuous(1.0, range_exp, "s")
-        self.exposureTime.subscribe(self.onExposureTime, init=True)
+        maxexp = c_float()
+        self.atcore.GetMaximumExposure(byref(maxexp))
+        range_exp = (1e-6, maxexp) # s
+        self.exposureTime = model.FloatContinuous(1.0, range_exp, unit="s", setter=self.setExposureTime)
+        self.setExposureTime(1.0)
         
-        
-        
-        # XXXXXXXXXXXXXXXXXXXXXXXXXx
+        current_temp = self.GetTemperature()
+        self.temperature = model.FloatVA(current_temp, unit="C", readonly=True)
+        self.temp_timer = RepeatingTimer(10, self.updateTemperatureVA,
+                                         "AndorCam2 temperature update")
         
         self.is_acquiring = False
         self.acquire_must_stop = False
         self.acquire_thread = None
         
         self.data = AndorCam2DataFlow(self)
-        
+    
+    def getMetadata(self):
+        return self._metadata
+    
     # low level methods, wrapper to the actual SDK functions
     # they do not ensure the actual camera is selected, you have to call select()
     # TODO: not _everything_ is implemented, just what we need
@@ -409,15 +431,17 @@ class AndorCam2(model.DigitalCamera):
     def GetCapabilities(self):
         """
         return an instance of AndorCapabilities structure
+        note: this value is cached (as it is static)
         """
-        caps = AndorCapabilities()
-        caps.Size = sizeof(caps)
-        self.atcore.GetCapabilities(byref(caps))
-        return caps
+        if self._andor_capabilities is None:
+            self._andor_capabilities = AndorCapabilities()
+            self._andor_capabilities.Size = sizeof(self._andor_capabilities)
+            self.atcore.GetCapabilities(byref(self._andor_capabilities))
+        return self._andor_capabilities
         
     def GetDetector(self):
         """
-        return 2-tuple int, int: width, height of the detector in pixel
+        return 2-tuple (int, int): width, height of the detector in pixel
         """
         width, height = c_int32(), c_int32()
         self.atcore.GetDetector(byref(width), byref(height))
@@ -481,9 +505,7 @@ class AndorCam2(model.DigitalCamera):
             timeout_ms = c_uint(int(round(timeout * 1e3))) # ms
             self.atcore.WaitForAcquisitionTimeOut(timeout_ms)
     
-    
-    # TODO provide high level version for changing this value for the user
-    # (for now it's reset at each acquire() call)
+    # TODO provide a VA for the user to change this value
     def SetPreAmpGain(self, gain):
         """
         set the pre-amp-gain 
@@ -525,31 +547,55 @@ class AndorCam2(model.DigitalCamera):
         self.atcore.GetCurrentCamera(byref(current_handle))
         if current_handle != self.handle:
             self.atcore.SetCurrentCamera(self.handle)
-
-    def getSensorResolution(self):
+    
+    def hasFeature(self, feature):
         """
-        return (2-tuple int): size of the sensor (width, height) in pixel
+        return whether a feature is supported by the camera
+        Need to be selected
+        feature (int): one of the AndorCapabilities.FEATURE_* constant (can be OR'd)
+        return boolean
         """
-        return self.GetDetector()
+        caps = self.GetCapabilities()
+        return bool(caps.Features & feature)
+    
+    def hasSetFunction(self, function):
+        """
+        return whether a set function is supported by the camera
+        Need to be selected
+        function (int): one of the AndorCapabilities.SETFUNCTION_* constant (can be OR'd)
+        return boolean
+        """
+        caps = self.GetCapabilities()
+        return bool(caps.SetFunctions & function)
+    
+    def hasGetFunction(self, function):
+        """
+        return whether a get function is supported by the camera
+        Need to be selected
+        function (int): one of the AndorCapabilities.GETFUNCTION_* constant (can be OR'd)
+        return boolean
+        """
+        caps = self.GetCapabilities()
+        return bool(caps.GetFunctions & function)
     
     def setTargetTemperature(self, temp):
         """
         Change the targeted temperature of the CCD.
         The cooler the less dark noise. Not everything is possible, but it will
         try to accommodate by targeting the closest temperature possible.
-        temp (-400 < float < 100): temperature in C
+        temp (-300 < float < 100): temperature in C
         """
-        assert((-400 <= temp) and (temp <= 100))
+        assert((-300 <= temp) and (temp <= 100))
         
         self.select()
-        caps = self.GetCapabilities()
-        if not (caps.SetFunctions | AndorCapabilities.SETFUNCTION_TEMPERATURE):
+        if not self.hasSetFunction(AndorCapabilities.SETFUNCTION_TEMPERATURE):
             return
         
-        if (caps.GetFunctions | AndorCapabilities.GETFUNCTION_TEMPERATURERANGE):
+        if self.hasGetFunction(AndorCapabilities.GETFUNCTION_TEMPERATURERANGE):
             ranges = self.GetTemperatureRange()
             temp = sorted(ranges + (temp,))[1]
-            
+        
+        temp = int(round(temp))
         self.atcore.SetTemperature(temp)
         if temp > 20:
             self.atcore.CoolerOFF()
@@ -558,7 +604,19 @@ class AndorCam2(model.DigitalCamera):
 
         # TODO: a more generic function which set up the fan to the right speed
         # according to the target temperature?
-
+        return float(temp)
+        
+    def updateTemperatureVA(self):
+        """
+        to be called at regular interval to update the temperature
+        """
+        temp = self.GetTemperature()
+        self._metadata[model.MD_SENSOR_TEMP] = temp
+        # it's read-only, so we change it only via _value
+        self.temperature._value = temp
+        self.temperature.notify(self.temperature.value)
+        logging.debug("temp is %d", temp)
+        
     def setFanSpeed(self, speed):
         """
         Change the fan speed. Will accommodate to whichever speed is possible.
@@ -567,19 +625,18 @@ class AndorCam2(model.DigitalCamera):
         assert((0 <= speed) and (speed <= 1))
         
         self.select()
-        caps = self.GetCapabilities()
-        if not (caps.Features | AndorCapabilities.FEATURES_FANCONTROL):
+        if not self.hasFeature(AndorCapabilities.FEATURES_FANCONTROL):
             return
 
         # It's more or less linearly distributed in speed... 
         # 0 = full, 1 = low, 2 = off
-        if caps.Features | AndorCapabilities.FEATURES_MIDFANCONTROL:
+        if self.hasFeature(AndorCapabilities.FEATURES_MIDFANCONTROL):
             values = [2, 1, 0]
         else:
             values = [2, 0]
         val = values[int(round(speed * (len(values) - 1)))]
         self.atcore.SetFanMode(val)
-
+        return (float(val) / max(values))
     
     def getModelName(self):
         self.select()
@@ -634,92 +691,149 @@ class AndorCam2(model.DigitalCamera):
         return ("PCB: %d/%d, firmware: %d.%d, EPROM: %d/%d" %
                 (PCB.value, Decode.value, CameraFirmwareVersion.value,
                  CameraFirmwareBuild.value, eprom.value, coffile.value))
-            
-    def getCameraMetadata(self):
+    
+    def _storeBinning(self, binning):
         """
-        return the metadata corresponding to the camera in general (common to 
-          many pictures)
-        return (dict : string -> string): the metadata
+        Check the binning is correct and store it ready for SetImage
+        binning (int): how many pixels horizontally and vertically
+         are combined to create "super pixels"
+        Note: super pixels are always square (although some hw don't require this)
         """
-        
-        
-        try:
-            psize = self.GetPixelSize()
-            metadata["Sensor pixel width"] = psize[0] * 1e-6 # m
-            metadata["Sensor pixel height"] = psize[1] * 1e-6 # m
-        except AndorV2Error:
-            pass # unknown value
-        
-        return metadata
+        # TODO support "Full Vertical Binning" if binning[1] == size[1]
+        maxbinning = self.GetMaximumBinning(AndorV2DLL.RM_IMAGE)
+        assert((1 <= binning) and (binning <= maxbinning[0]) and
+               (1 <= binning) and (binning <= maxbinning[1]))
 
-    def _setSizeBinning(self, size, binning):
+        self._binning = (binning, binning)
+    
+    def _getAvailableBinnings(self):
         """
-        Change the acquired image size (and position)
-        size (2-tuple int): Width and height of the image. It will centred
-         on the captor. It depends on the binning, so the same region as a size 
+        returns  list of int with the available binnings (same for horizontal
+          and vertical)
+        """
+        maxbinning = self.GetMaximumBinning(AndorV2DLL.RM_IMAGE)
+        # be conservative by return the smallest of horizontal and vertical binning
+        return range(1, min(maxbinning)+1)
+        
+    def setBinning(self, value):
+        """
+        Called when "binning" VA is modified. It actually modifies the camera binning.
+        """
+        previous_binning = self._binning
+        self._storeBinning(value)
+        
+        # adapt resolution so that the AOI stays the same
+        change = (float(previous_binning[0]) / value,
+                  float(previous_binning[1]) / value)
+        old_resolution = self.resolution.value
+        new_resolution = (round(old_resolution[0] * change[0]),
+                          round(old_resolution[1] * change[1]))
+        
+        self.resolution.value = new_resolution # will automatically call _storeSize
+        return self._binning[0]
+    
+    def _storeSize(self, size):
+        """
+        Check the size is correct (it should) and store it ready for SetImage
+        size (2-tuple int): Width and height of the image. It will be centred
+         on the captor. It depends on the binning, so the same region has a size 
          twice smaller if the binning is 2 instead of 1. It must be a allowed
          resolution.
-        binning (2-tuple int): how many pixels horizontally and vertically are
-         combined to create "super pixels"
-        return (tuple): metadata corresponding to the setup
         """
-        readmode = 4# 4 = Image
-        # TODO support "Full Vertical Binning" if binning[1] == size[1]
-
-        maxbinning = self.GetMaximumBinning(readmode)
-        assert((1 <= binning[0]) and (binning[0] <= maxbinning[0]) and
-               (1 <= binning[1]) and (binning[1] <= maxbinning[1]))
         # TODO how to pass information on what is allowed?
-        full_res = self.GetDetector()
-        resolution = full_res[0] / binning[0], full_res[1] / binning[1] 
+        full_res = self._shape[:2]
+        resolution = full_res[0] / self._binning[0], full_res[1] / self._binning[1] 
         assert((1 <= size[0]) and (size[0] <= resolution[0]) and
                (1 <= size[1]) and (size[1] <= resolution[1]))
         
-        self.atcore.SetReadMode(readmode) 
+        self.atcore.SetReadMode(AndorV2DLL.RM_IMAGE) 
         # If the camera doesn't support Area of Interest, then it has to be the
         # size of the sensor
         caps = self.GetCapabilities()
-        if (not caps.ReadModes | AndorCapabilities.READMODE_SUBIMAGE):
+        if (not caps.ReadModes & AndorCapabilities.READMODE_SUBIMAGE):
             if size != resolution:
                 raise IOError("AndorCam: Requested image size " + str(size) + 
                               " does not match sensor resolution " + str(resolution))
             return
         
         # Region of interest
-        # check also GetMinimumImageLength()?
         # center the image
         lt = ((resolution[0] - size[0]) / 2,
               (resolution[1] - size[1]) / 2)
         
-        # the rectangle is defined in normal pixels (not super-pixels)
-        self.atcore.SetImage(binning[0], binning[1],
-            lt[0] * binning[0] + 1, (lt[0] + size[0]) * binning[0],
-            lt[1] * binning[1] + 1, (lt[1] + size[1]) * binning[1])
+        # the rectangle is defined in normal pixels (not super-pixels) from (1,1)
+        self._image_rect = (lt[0] * self._binning[0] + 1, (lt[0] + size[0]) * self._binning[0],
+                            lt[1] * self._binning[1] + 1, (lt[1] + size[1]) * self._binning[1])
+            
+    
+    def setResolution(self, value):
+        new_res = self.resolutionFitter(value)
+        self._storeSize(new_res)
+        return new_res
+    
+    def resolutionFitter(self, size_req):
+        """
+        Finds a resolution allowed by the camera which fits best the requested
+          resolution. 
+        size_req (2-tuple of int): resolution requested
+        returns (2-tuple of int): resolution which fits the camera. It is equal
+         or bigger than the requested resolution
+        """
+        #
+        resolution = self._shape[:2]
+        max_size = (int(resolution[0] / self._binning[0]), 
+                    int(resolution[1] / self._binning[1]))
+        
+        self.atcore.SetReadMode(AndorV2DLL.RM_IMAGE) 
+        # If the camera doesn't support Area of Interest, then it has to be the
+        # size of the sensor
+        caps = self.GetCapabilities()
+        if (not caps.ReadModes & AndorCapabilities.READMODE_SUBIMAGE):
+            return max_size
+        
+        # smaller than the whole sensor
+        size = (min(size_req[0], max_size[0]), min(size_req[1], max_size[1]))
+        
+        # bigger than the minimum
+        min_spixels = c_int()
+        self.atcore.GetMinimumImageLength(byref(min_spixels))
+        size = (max(min_spixels.value, size[0]), max(min_spixels.value, size[1]))
+        
+        return size
 
-        metadata = {}
-        metadata["Camera binning"] =  "%dx%d" % (binning[0], binning[1])
-        return metadata
+    def _SetImage(self):
+        """
+        Change the acquired image size (and position) according to the latest
+        requested binning and size
+        Does not call select()
+        """
+        self.atcore.SetImage(*(self._binning + self._image_rect))
+        self._metadata[model.MD_BINNING] = self._binning[0] # H and V should be equal
     
     def _setExposureTime(self, exp):
         """
         Set the exposure time. It's automatically adapted to a working one.
         exp (0<float): exposure time in seconds
-        return (tuple): metadata corresponding to the setup
+        returns the actual new exposure time
         """
+        assert(0.0 < exp)
+        
         maxexp = c_float()
         self.atcore.GetMaximumExposure(byref(maxexp))
-        assert((0.0 < exp) and (exp <= maxexp.value))
-        
+        exp = min(exp, maxexp.value)
         self.atcore.SetExposureTime(c_float(exp))
         
         # Read actual value
-        metadata = {}
         exposure = c_float()
         accumulate = c_float()
         kinetic = c_float()
         self.atcore.GetAcquisitionTimings(byref(exposure), byref(accumulate), byref(kinetic))
-        metadata["Exposure time"] =  exposure.value # s
-        return metadata
+        self._metadata[model.MD_EXP_TIME] = exposure.value
+        return exposure.value
+    
+    def setExposureTime(self, value):
+        # TODO make sure we are in a state it's possible to change exposure time
+        return self._setExposureTime(value)
     
     @staticmethod
     def find_closest(val, l):
@@ -731,10 +845,7 @@ class AndorCam2(model.DigitalCamera):
     def _setupBestQuality(self):
         """
         Select parameters for the camera for the best quality
-        return (tuple): metadata corresponding to the setup
         """
-        metadata = {}
-
         # For the Clara: 0 = conventional, 1 = Extended Near Infra-Red
         oa = 1 # as much as we can
         
@@ -762,9 +873,9 @@ class AndorCam2(model.DigitalCamera):
             pass # unsupported
 
         self.atcore.SetHSSpeed(oa, idx)
-        hsspeed = c_float()
+        hsspeed = c_float() # MHz
         self.atcore.GetHSSpeed(channel, oa, idx, byref(hsspeed))
-        metadata["Pixel readout rate"] = hsspeed.value * 1e6 # Hz
+        self._metadata[model.MD_READOUT_TIME] = 1.0 / (hsspeed.value * 1e6) # s
 
         nb_vsspeeds = c_int()
         self.atcore.GetNumberVSSpeeds(byref(nb_vsspeeds))
@@ -775,13 +886,15 @@ class AndorCam2(model.DigitalCamera):
         # bits per pixel depends just on the AD channel
         bpp = c_int()
         self.atcore.GetBitDepth(channel, byref(bpp))
-        metadata["Bits per pixel"] = bpp.value
+        self._metadata[model.MD_BPP] = bpp.value
 
         # EMCCDGAIN, DDGTIMES, DDGIO, EMADVANCED => lots of gain settings
         # None supported on the Clara?
         gains = self.GetPreAmpGainsAvailable()
         # TODO let the user decide (as every value can be useful)
-        self.SetPreAmpGain(min(gains)) # for now we pick the minimum
+        gain = min(gains) # for now we pick the minimum
+        self.SetPreAmpGain(gain)
+        self._metadata[model.MD_GAIN] = gain
 
         # Doesn't seem to work for the clara (or single scan mode?)
 #        self.atcore.SetFilterMode(2) # 2 = on
@@ -794,7 +907,6 @@ class AndorCam2(model.DigitalCamera):
         self.atcore.SetShutter(1, 0, 0, 0) # mode 0 = auto
         self.atcore.SetTriggerMode(0) # 0 = internal
 
-        return metadata
         
     def _allocate_buffer(self, size):
         """
@@ -1053,5 +1165,42 @@ class AndorCam2DataFlow(model.DataFlow):
             
     def notify(self, data):
         model.DataFlow.notify(self, data)
+
+
+# Copy from AndorCam3
+class RepeatingTimer(object):
+    """
+    An almost endless timer thread. 
+    It stops when calling cancel() or the callback disappears.
+    """
+    def __init__(self, period, callback, name="TimerThread"):
+        """
+        period (float): time in second between two calls
+        callback (callable): function to call
+        name (str): fancy name to give to the thread
+        """
+        self.callback = model.WeakMethod(callback)
+        self.period = period
+        self.timer = None
+        self.name = name
+        self._schedule()
+    
+    def _schedule(self):
+        self.timer = threading.Timer(self.period, self.timeup)
+        self.timer.name = self.name
+        self.timer.deamon = True # don't wait for it to finish
+        self.timer.start()
+        
+    def timeup(self):
+        try:
+            self.callback()
+        except model.WeakRefLostError:
+            # it's gone, it's over
+            return
+        
+        self._schedule()
+       
+    def cancel(self):
+        self.timer.cancel()   
 
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:
