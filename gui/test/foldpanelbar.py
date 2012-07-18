@@ -6,6 +6,7 @@
 
 import unittest
 import wx
+
 import odemis.gui.test.test_gui
 #import odemis.gui.comp.foldpanelbar
 

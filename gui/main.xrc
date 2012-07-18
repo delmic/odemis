@@ -8,116 +8,264 @@
           <label>Hello</label>
         </object>
       </object>
+      <object class="wxMenu">
+        <object class="wxMenuItem">
+          <label>Debug</label>
+          <checkable>1</checkable>
+        </object>
+        <label>Help</label>
+      </object>
     </object>
     <object class="wxBoxSizer">
+      <orient>wxVERTICAL</orient>
       <object class="sizeritem">
-        <object class="wxGridSizer">
+        <object class="wxBoxSizer">
           <object class="sizeritem">
-            <object class="wxPanel">
-              <bg>#D9B0BF</bg>
+            <object class="wxGridSizer">
+              <object class="sizeritem">
+                <object class="wxPanel">
+                  <bg>#D9B0BF</bg>
+                </object>
+                <flag>wxEXPAND</flag>
+                <minsize>300,300</minsize>
+              </object>
+              <object class="sizeritem">
+                <object class="wxPanel">
+                  <bg>#E5C19C</bg>
+                </object>
+                <flag>wxEXPAND</flag>
+                <minsize>300,300</minsize>
+              </object>
+              <object class="sizeritem">
+                <object class="wxPanel">
+                  <bg>#ACA8EC</bg>
+                </object>
+                <flag>wxEXPAND</flag>
+                <minsize>300,300</minsize>
+              </object>
+              <object class="sizeritem">
+                <object class="wxPanel">
+                  <bg>#A8E876</bg>
+                </object>
+                <flag>wxEXPAND</flag>
+                <minsize>300,300</minsize>
+              </object>
+              <cols>2</cols>
+              <rows>2</rows>
             </object>
+            <option>1</option>
             <flag>wxEXPAND</flag>
-            <minsize>300,300</minsize>
           </object>
           <object class="sizeritem">
             <object class="wxPanel">
-              <bg>#E5C19C</bg>
+              <object class="wxBoxSizer">
+                <object class="sizeritem">
+                  <object class="wxPanel" name="main_buttons">
+                    <object class="wxBoxSizer">
+                      <orient>wxHORIZONTAL</orient>
+                      <object class="sizeritem">
+                        <object class="odemis.gui.comp.buttons.ImageTextToggleButton" name="btn_toggle_press">
+                          <size>90,-1</size>
+                          <label>0 kPa</label>
+                          <delta>1</delta>
+                          <bitmap>img/btn_press.png</bitmap>
+                          <hover>img/btn_press_h.png</hover>
+                          <selected>img/btn_press_on_a.png</selected>
+                          <font>
+                            <size>11</size>
+                            <style>normal</style>
+                            <weight>normal</weight>
+                            <underlined>0</underlined>
+                            <family>default</family>
+                            <face>Ubuntu</face>
+                            <encoding>UTF-8</encoding>
+                          </font>
+                          <style>wxALIGN_RIGHT</style>
+                        </object>
+                        <flag>wxALL|wxEXPAND</flag>
+                        <border>10</border>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="odemis.gui.comp.buttons.ImageTextToggleButton" name="btn_toggle_opt">
+                          <size>90,-1</size>
+                          <label>OPTICAL</label>
+                          <delta>1</delta>
+                          <bitmap>img/btn_opt.png</bitmap>
+                          <hover>img/btn_opt_h.png</hover>
+                          <selected>img/btn_opt_on_a.png</selected>
+                          <font>
+                            <size>11</size>
+                            <style>normal</style>
+                            <weight>normal</weight>
+                            <underlined>0</underlined>
+                            <family>default</family>
+                            <face>Ubuntu</face>
+                            <encoding>UTF-8</encoding>
+                          </font>
+                          <style>wxALIGN_RIGHT</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <flag>wxTOP|wxBOTTOM|wxRIGHT</flag>
+                        <border>10</border>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="odemis.gui.comp.buttons.ImageTextToggleButton" name="btn_toggle_sem">
+                          <size>90,-1</size>
+                          <label>SEM     </label>
+                          <delta>1</delta>
+                          <bitmap>img/btn_sem.png</bitmap>
+                          <hover>img/btn_sem_h.png</hover>
+                          <selected>img/btn_sem_on_a.png</selected>
+                          <font>
+                            <size>11</size>
+                            <style>normal</style>
+                            <weight>normal</weight>
+                            <underlined>0</underlined>
+                            <family>default</family>
+                            <face>Ubuntu</face>
+                            <encoding>UTF-8</encoding>
+                          </font>
+                          <style>wxALIGN_RIGHT</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <flag>wxTOP|wxBOTTOM|wxRIGHT</flag>
+                        <border>10</border>
+                      </object>
+                      <object class="spacer">
+                        <option>1</option>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="odemis.gui.comp.buttons.PopupImageButton" name="btn_toggle_pause">
+                          <size>50,-1</size>
+                          <default>1</default>
+                          <bitmap>img/btn_pause.png</bitmap>
+                          <hover>img/btn_pause_h.png</hover>
+                          <selected>img/btn_pause_a.png</selected>
+                        </object>
+                        <flag>wxTOP|wxBOTTOM|wxRIGHT</flag>
+                        <border>10</border>
+                      </object>
+                    </object>
+                    <bg>#4D4D4D</bg>
+                  </object>
+                  <flag>wxEXPAND</flag>
+                </object>
+                <object class="sizeritem">
+                  <object class="wxScrolledWindow" name="scr_win_right">
+                    <object class="wxBoxSizer">
+                      <orient>wxVERTICAL</orient>
+                      <object class="sizeritem">
+                        <object class="odemis.gui.comp.foldpanelbar.FoldPanelBar" name="fpb_settings">
+                          <object class="odemis.gui.comp.foldpanelbar.FoldPanelItem">
+                            <label>OPTICAL SETTINGS</label>
+                            <collapsed>1</collapsed>
+                          </object>
+                          <object class="odemis.gui.comp.foldpanelbar.FoldPanelItem">
+                            <label>SEM SETTINGS</label>
+                            <collapsed>1</collapsed>
+                          </object>
+                          <object class="odemis.gui.comp.foldpanelbar.FoldPanelItem">
+                            <object class="wxPanel" name="pnl_stream" subclass="odemis.gui.comp.stream.StreamPanel">
+                              <fg>#7F7F7F</fg>
+                              <bg>#333333</bg>
+                              <XRCED>
+                                <assign_var>1</assign_var>
+                              </XRCED>
+                            </object>
+                            <label>STREAMS</label>
+                            <bg>#333333</bg>
+                          </object>
+                          <spacing>0</spacing>
+                          <leftspacing>0</leftspacing>
+                          <rightspacing>0</rightspacing>
+                          <bg>#4D4D4D</bg>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                          <object class="odemis.gui.comp.foldpanelbar.FoldPanelItem">
+                            <label>ANNOTATIONS</label>
+                            <collapsed>1</collapsed>
+                          </object>
+                        </object>
+                        <flag>wxEXPAND</flag>
+                      </object>
+                    </object>
+                    <size>400,-1</size>
+                    <bg>#333333</bg>
+                    <style>wxVSCROLL</style>
+                    <XRCED>
+                      <assign_var>1</assign_var>
+                    </XRCED>
+                  </object>
+                  <option>1</option>
+                  <flag>wxEXPAND</flag>
+                  <minsize>400,400</minsize>
+                </object>
+                <object class="sizeritem">
+                  <object class="odemis.gui.comp.buttons.ImageTextButton" name="btn_aquire">
+                    <size>-1,45</size>
+                    <label>AQUIRE IMAGE</label>
+                    <delta>1</delta>
+                    <bitmap>img/btn_aquire_image.png</bitmap>
+                    <hover>img/btn_aquire_image_h.png</hover>
+                    <selected>img/btn_aquire_image_a.png</selected>
+                    <fg>#E5E5E5</fg>
+                    <font>
+                      <size>14</size>
+                      <style>normal</style>
+                      <weight>normal</weight>
+                      <underlined>0</underlined>
+                      <family>default</family>
+                      <face>Ubuntu</face>
+                      <encoding>UTF-8</encoding>
+                    </font>
+                    <style>wxALIGN_CENTRE</style>
+                    <XRCED>
+                      <assign_var>1</assign_var>
+                    </XRCED>
+                  </object>
+                  <flag>wxALL|wxEXPAND</flag>
+                  <border>10</border>
+                </object>
+                <orient>wxVERTICAL</orient>
+              </object>
+              <size>400,-1</size>
+              <bg>#333333</bg>
+              <style>wxBORDER_NONE</style>
             </object>
             <flag>wxEXPAND</flag>
-            <minsize>300,300</minsize>
+            <minsize>400,400</minsize>
           </object>
-          <object class="sizeritem">
-            <object class="wxPanel">
-              <bg>#ACA8EC</bg>
-            </object>
-            <flag>wxEXPAND</flag>
-            <minsize>300,300</minsize>
-          </object>
-          <object class="sizeritem">
-            <object class="wxPanel">
-              <bg>#A8E876</bg>
-            </object>
-            <flag>wxEXPAND</flag>
-            <minsize>300,300</minsize>
-          </object>
-          <cols>2</cols>
-          <rows>2</rows>
+          <orient>wxHORIZONTAL</orient>
         </object>
         <option>1</option>
         <flag>wxEXPAND</flag>
       </object>
       <object class="sizeritem">
-        <object class="wxPanel">
-          <object class="wxBoxSizer">
-            <object class="sizeritem">
-              <object class="wxScrolledWindow" name="scr_win_right">
-                <object class="wxBoxSizer">
-                  <orient>wxVERTICAL</orient>
-                  <object class="sizeritem">
-                    <object class="odemis.gui.comp.foldpanelbar.FoldPanelBar" name="fpb_settings">
-                      <object class="odemis.gui.comp.foldpanelbar.FoldPanelItem">
-                        <object class="wxPanel" name="pnl_stream" subclass="odemis.gui.comp.stream.StreamPanel">
-                          <fg>#7F7F7F</fg>
-                          <bg>#333333</bg>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <label>Streams</label>
-                        <bg>#333333</bg>
-                      </object>
-                      <spacing>0</spacing>
-                      <leftspacing>0</leftspacing>
-                      <rightspacing>0</rightspacing>
-                      <bg>#4D4D4D</bg>
-                      <XRCED>
-                        <assign_var>1</assign_var>
-                      </XRCED>
-                    </object>
-                    <flag>wxEXPAND</flag>
-                  </object>
-                </object>
-                <size>400,-1</size>
-                <bg>#333333</bg>
-                <style>wxVSCROLL</style>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-              <option>1</option>
-              <flag>wxEXPAND</flag>
-              <minsize>400,400</minsize>
-            </object>
-            <object class="sizeritem">
-              <object class="odemis.gui.comp.buttons.ImageTextButton">
-                <label>AQUIRE IMAGE</label>
-                <delta>1</delta>
-                <bitmap>img/btn_aquire_image.png</bitmap>
-                <hover>img/btn_aquire_image_h.png</hover>
-                <selected>img/btn_aquire_image_a.png</selected>
-                <fg>#E5E5E5</fg>
-                <font>
-                  <size>14</size>
-                  <style>normal</style>
-                  <weight>normal</weight>
-                  <underlined>0</underlined>
-                  <family>default</family>
-                  <face>Ubuntu</face>
-                  <encoding>UTF-8</encoding>
-                </font>
-                <style>wxALIGN_CENTRE</style>
-              </object>
-              <flag>wxALL|wxEXPAND</flag>
-              <border>10</border>
-            </object>
-            <orient>wxVERTICAL</orient>
-          </object>
-          <size>400,-1</size>
-          <bg>#333333</bg>
-          <style>wxBORDER_NONE</style>
+        <object class="wxTextCtrl" name="txt_log">
+          <size>-1,200</size>
+          <fg>#4D4D4D</fg>
+          <bg>#BFBFBF</bg>
+          <font>
+            <size>10</size>
+            <style>normal</style>
+            <weight>normal</weight>
+            <underlined>0</underlined>
+            <family>default</family>
+            <face>Courier 10 Pitch</face>
+            <encoding>UTF-8</encoding>
+          </font>
+          <style>wxTE_MULTILINE</style>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
         </object>
-        <flag>wxEXPAND</flag>
-        <minsize>400,400</minsize>
+        <flag>wxALL|wxEXPAND</flag>
+        <border>5</border>
       </object>
     </object>
     <title>Odemis</title>

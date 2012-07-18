@@ -12,7 +12,7 @@ import wx
 
 import odemis.gui.main_xrc
 from  odemis.gui.xmlh import odemis_get_resources
-from odemis.gui.log import log
+from odemis.gui.log import log, create_gui_logger
 
 class OdemisGUIApp(wx.App):
     """ This is Odemis' main GUI application class
@@ -47,11 +47,12 @@ class OdemisGUIApp(wx.App):
 
         # Load the main frame
         self.fr_main = odemis.gui.main_xrc.xrcfr_main(None)
-
-        import odemis.gui.comp.foldpanelbar as fpb
-
+        self.do_init()
 
 
+
+
+        #import odemis.gui.comp.foldpanelbar as fpb
 
 
         # item = self.fr_main.fpb_settings.AddFoldPanel("Caption 1",
@@ -110,7 +111,6 @@ class OdemisGUIApp(wx.App):
 
         # FIXME: Thread not running?
         #threading.Thread(target=self.do_init).start()
-        self.do_init()
 
         # Start the clock (can't be launched from init thread)
 
@@ -126,13 +126,15 @@ class OdemisGUIApp(wx.App):
         """ Odemis main GUI initialization method, run from :py:meth:`OnInit` in a separate thread.
         """
 
+        self.init_logger()
+        self.init_gui()
+
         #self.dlg_startup.label_version.SetLabel("%d.%d.%s" % (elit.constants.MAJOR_VERSION, elit.constants.MINOR_VERSION, elit.constants.REVISION_VERSION))
 
         #self.dlg_startup.gauge_load.SetValue(0)
 
         #self.dlg_startup.gauge_load.SetValue(1)
         #self.dlg_startup.label_dialog.SetLabel("Logsysteem initialiseren")
-        #self.init_logger()
         #time.sleep(0.1)
 
         # self.dlg_startup.gauge_load.SetValue(2)
@@ -152,28 +154,13 @@ class OdemisGUIApp(wx.App):
 
         # self.dlg_startup.gauge_load.SetValue(5)
         # self.dlg_startup.label_dialog.SetLabel("Programma starten")
-        # self.init_gui()
         # time.sleep(0.5)
 
         # # Hide the loading dialog
 
         # self.dlg_startup.Hide()
 
-        _, _, w, h = wx.ClientDisplayRect()
 
-        h -= 28
-
-        #print wx.ClientDisplayRect()
-
-        log.debug("Setting frame size to %sx%s", w, h)
-
-        self.fr_main.SetSize((w, h))
-        self.fr_main.SetPosition((0, 0))
-        self.fr_main.Show()
-        self.fr_main.Raise()
-
-        #from wx.lib.inspection import InspectionTool
-        #InspectionTool().Show()
 
     def init_config(self):
         """ Initialize GUI configuration """
@@ -187,8 +174,33 @@ class OdemisGUIApp(wx.App):
         try:
             # Add frame icon
             ib = wx.IconBundle()
-            ib.AddIconFromFile("img/odemis.ico", wx.BITMAP_TYPE_ANY)
+            ib.AddIconFromFile("gui/img/odemis.ico", wx.BITMAP_TYPE_ANY)
             self.fr_main.SetIcons(ib)
+
+            _, _, w, h = wx.ClientDisplayRect()
+
+            h -= 28
+
+            log.debug("Setting frame size to %sx%s", w, h)
+
+            self.fr_main.SetSize((w, h))
+            self.fr_main.SetPosition((0, 0))
+
+            # Do a final layout of the fold panel bar
+            #wx.CallAfter(self.fr_main.fpb_settings.FitBar)
+
+
+            def dodo(evt):
+                from odemis.gui.comp.stream import FixedStreamPanelEntry
+                fp = FixedStreamPanelEntry(self.fr_main.pnl_stream,
+                                           label="First Fixed Stream")
+                self.fr_main.pnl_stream.add_stream(fp)
+
+            self.fr_main.btn_aquire.Bind(wx.EVT_BUTTON, dodo)
+
+            from wx.lib.inspection import InspectionTool
+            InspectionTool().Show()
+
 
             # Menu event
             # wx.EVT_MENU(self.fr_main, self.fr_main.menu_item_restart.GetId(), self.on_restart)
@@ -198,6 +210,9 @@ class OdemisGUIApp(wx.App):
             # wx.EVT_MENU(self.fr_main, self.fr_main.menu_item_activate.GetId(), self.on_activate)
             # wx.EVT_MENU(self.fr_main, self.fr_main.menu_item_update.GetId(), elit.updater.Updater.check_for_update)
 
+            self.fr_main.Show()
+            self.fr_main.Raise()
+
 
         except Exception:
             self.excepthook(*sys.exc_info())
@@ -205,9 +220,8 @@ class OdemisGUIApp(wx.App):
 
     def init_logger(self):
         """ Initialize logging functionality """
-        # TODO: Create custom logger here
-        # log.create_gui_logger(elit.util.get_log_dir(), logging.DEBUG, self.fr_main.field_log, self.fr_main.status_bar)
-        logging.info("=============  Launching Odemis  =============")
+        create_gui_logger(self.fr_main.txt_log)
+        log.info("Starting Odemis GUI version x.xx")
 
     def goto_debug_mode(self):
         """ This method sets the application into debug mode, setting the
@@ -238,13 +252,8 @@ class OdemisGUIApp(wx.App):
         """ Method to intercept unexpected errors that are not caught
         anywhere else and redirects them to the logger. """
         exc = traceback.format_exception(type, value, trace)
-        # TODO: Add different check for Odemis
-        if logging.root.sql: #@UndefinedVariable pylint: disable=E1101
-            # Note: don't use log.exception here, since that will result in
-            # the exception being written twice.
-            logging.error("".join(exc))
-        else:
-            print "".join(exc)
+
+        log.error("".join(exc))
 
         if not isinstance(value, NotImplementedError):
             # TODO: create custom dialogs for Odemis
@@ -263,8 +272,10 @@ class OdemisGUIApp(wx.App):
             # sys.exit will only terminate the thread it's called from,
             # so on_close_window is called to make sure everything
             # is cleaned up before exiting.
-            self.on_close_window()
-            sys.exit(1)
+
+            #self.on_close_window()
+            #sys.exit(1)
+            pass
 
 class OdemisOutputWindow(object):
     """ Helper class which allows ``wx`` to display uncaught
@@ -308,13 +319,13 @@ def main():
     app = OdemisGUIApp()
     # Change exception hook so unexpected exception
     # get caught by the logger
-    #backup_excepthook, sys.excepthook = sys.excepthook, app.excepthook
+    backup_excepthook, sys.excepthook = sys.excepthook, app.excepthook
 
     # Start the application
     app.MainLoop()
     app.Destroy()
 
-    #sys.excepthook = backup_excepthook
+    sys.excepthook = backup_excepthook
 
 if __name__ == '__main__':
     installThreadExcepthook()
