@@ -17,7 +17,9 @@ Delmic Acquisition Software is distributed in the hope that it will be useful, b
 You should have received a copy of the GNU General Public License along with Delmic Acquisition Software. If not, see http://www.gnu.org/licenses/.
 '''
 from cli import main
+import Image
 import StringIO
+import os
 import re
 import subprocess
 import sys
@@ -202,6 +204,34 @@ class TestWithBackend(unittest.TestCase):
         except SystemExit, exc:
             ret = exc.code
         self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
+    
+    def test_acquire(self):
+        picture_name = "test.tiff"
+        size = (2560, 2160)
+        
+        # change resolution
+        try:
+            # "Andor SimCam" contains a space, so use \t as delimiter
+            cmdline = "cli\t--set-attr\tAndor SimCam\tresolution\t%d,%d" % size
+            ret = main.main(cmdline.split("\t"))
+        except SystemExit, exc:
+            ret = exc.code
+        self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
+        
+        # acquire (simulated) image
+        try:
+            # "Andor SimCam" contains a space, so use \t as delimiter
+            cmdline = "cli\t--acquire\tAndor SimCam\t--output=%s" % picture_name
+            ret = main.main(cmdline.split("\t"))
+        except SystemExit, exc:
+            ret = exc.code
+        self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
+        
+        st = os.stat(picture_name) # this test also that the file is created
+        self.assertGreater(st.st_size, 0)
+        im = Image.open(picture_name)
+        self.assertEqual(im.format, "TIFF")
+        self.assertEqual(im.size, size)
     
 if __name__ == "__main__":
     unittest.main()
