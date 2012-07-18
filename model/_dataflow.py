@@ -282,7 +282,6 @@ class DataFlow(DataFlowBase):
         if self.pipe and len(self._remote_listeners) > 0:
             dformat = {"dtype": str(data.dtype), "shape": data.shape}
             self.pipe.send_pyobj(dformat, zmq.SNDMORE)
-            print "sending md" + data.metadata
             self.pipe.send_pyobj(data.metadata, zmq.SNDMORE)
             self.pipe.send(numpy.getbuffer(data), copy=False)
         
@@ -421,7 +420,6 @@ class SubscribeProxyThread(threading.Thread):
             if socks.get(self.data) == zmq.POLLIN:
                 array_format = self.data.recv_pyobj()
                 array_md = self.data.recv_pyobj()
-                print "received md" + array_md
                 array_buf = self.data.recv(copy=False)
                 # more fresh data already?
                 if (self.data.getsockopt(zmq.EVENTS) & zmq.POLLIN and
