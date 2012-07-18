@@ -202,8 +202,12 @@ class OdemisGUIApp(wx.App):
             InspectionTool().Show()
 
 
-            # Menu event
-            # wx.EVT_MENU(self.fr_main, self.fr_main.menu_item_restart.GetId(), self.on_restart)
+            # Menu events
+
+            wx.EVT_MENU(self.fr_main,
+                        self.fr_main.menu_item_debug.GetId(),
+                        self.on_debug)
+
             # wx.EVT_MENU(self.fr_main, self.fr_main.menu_item_exit.GetId(), self.on_close_window)
             # wx.EVT_MENU(self.fr_main, self.fr_main.menu_item_debug.GetId(), self.on_debug)
             # wx.EVT_MENU(self.fr_main, self.fr_main.menu_item_error.GetId(), self.on_send_report)
@@ -226,8 +230,7 @@ class OdemisGUIApp(wx.App):
     def goto_debug_mode(self):
         """ This method sets the application into debug mode, setting the
         log level and opening the log panel. """
-        logging.getLogger().setLevel(logging.DEBUG)
-        #self.fr_main.menu_item_debug.Check()
+        #self.fr_main.menu_item_debug.IsChecked()
         self.on_debug()
 
     def on_timer(self, event): #pylint: disable=W0613
@@ -236,9 +239,8 @@ class OdemisGUIApp(wx.App):
 
     def on_debug(self, evt=None): #pylint: disable=W0613
         """ Show or hides the log text field according to the debug menu item. """
-        #self.fr_main.panel_debug.Show(self.fr_main.menu_item_debug.IsChecked())
-        #self.fr_main.Layout()
-        pass
+        self.fr_main.txt_log.Show(self.fr_main.menu_item_debug.IsChecked())
+        self.fr_main.Layout()
 
     def on_close_window(self, evt=None): #pylint: disable=W0613
         """ This method cleans up and closes the Odemis GUI. """

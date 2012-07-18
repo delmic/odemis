@@ -36,6 +36,11 @@ class xrcfr_main(wx.Frame):
         self.PostCreate(pre)
 
         # Define variables for the controls, bind event handlers
+        self.menu_item_debug = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_debug"))
+        self.pnl_view_tl = xrc.XRCCTRL(self, "pnl_view_tl")
+        self.pnl_view_tr = xrc.XRCCTRL(self, "pnl_view_tr")
+        self.pnl_view_bl = xrc.XRCCTRL(self, "pnl_view_bl")
+        self.pnl_view_br = xrc.XRCCTRL(self, "pnl_view_br")
         self.btn_toggle_opt = xrc.XRCCTRL(self, "btn_toggle_opt")
         self.btn_toggle_sem = xrc.XRCCTRL(self, "btn_toggle_sem")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
@@ -67,9 +72,12 @@ def __init_resources():
         </object>
       </object>
       <object class="wxMenu">
-        <object class="wxMenuItem">
+        <object class="wxMenuItem" name="menu_item_debug">
           <label>Debug</label>
           <checkable>1</checkable>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
         </object>
         <label>Help</label>
       </object>
@@ -81,35 +89,81 @@ def __init_resources():
           <object class="sizeritem">
             <object class="wxGridSizer">
               <object class="sizeritem">
-                <object class="wxPanel">
+                <object class="wxPanel" name="pnl_view_tl">
                   <bg>#D9B0BF</bg>
+                  <XRCED>
+                    <assign_var>1</assign_var>
+                  </XRCED>
+                  <object class="wxBoxSizer">
+                    <orient>wxVERTICAL</orient>
+                    <object class="sizeritem">
+                      <object class="odemis.gui.comp.canvas.DraggableCanvas"/>
+                      <option>1</option>
+                      <flag>wxEXPAND</flag>
+                    </object>
+                  </object>
                 </object>
                 <flag>wxEXPAND</flag>
                 <minsize>300,300</minsize>
               </object>
               <object class="sizeritem">
-                <object class="wxPanel">
+                <object class="wxPanel" name="pnl_view_tr">
                   <bg>#E5C19C</bg>
+                  <XRCED>
+                    <assign_var>1</assign_var>
+                  </XRCED>
+                  <object class="wxBoxSizer">
+                    <orient>wxVERTICAL</orient>
+                    <object class="sizeritem">
+                      <object class="odemis.gui.comp.canvas.DraggableCanvas"/>
+                      <option>1</option>
+                      <flag>wxEXPAND</flag>
+                    </object>
+                  </object>
                 </object>
                 <flag>wxEXPAND</flag>
                 <minsize>300,300</minsize>
               </object>
               <object class="sizeritem">
-                <object class="wxPanel">
+                <object class="wxPanel" name="pnl_view_bl">
                   <bg>#ACA8EC</bg>
+                  <XRCED>
+                    <assign_var>1</assign_var>
+                  </XRCED>
+                  <object class="wxBoxSizer">
+                    <orient>wxVERTICAL</orient>
+                    <object class="sizeritem">
+                      <object class="odemis.gui.comp.canvas.DraggableCanvas"/>
+                      <option>1</option>
+                      <flag>wxEXPAND</flag>
+                    </object>
+                  </object>
                 </object>
                 <flag>wxEXPAND</flag>
                 <minsize>300,300</minsize>
               </object>
               <object class="sizeritem">
-                <object class="wxPanel">
+                <object class="wxPanel" name="pnl_view_br">
                   <bg>#A8E876</bg>
+                  <XRCED>
+                    <assign_var>1</assign_var>
+                  </XRCED>
+                  <object class="wxBoxSizer">
+                    <orient>wxVERTICAL</orient>
+                    <object class="sizeritem">
+                      <object class="odemis.gui.comp.canvas.DraggableCanvas"/>
+                      <option>1</option>
+                      <flag>wxEXPAND</flag>
+                    </object>
+                  </object>
                 </object>
                 <flag>wxEXPAND</flag>
                 <minsize>300,300</minsize>
               </object>
               <cols>2</cols>
               <rows>2</rows>
+              <vgap>1</vgap>
+              <hgap>1</hgap>
             </object>
             <option>1</option>
             <flag>wxEXPAND</flag>
@@ -317,6 +371,7 @@ def __init_resources():
             <face>Courier 10 Pitch</face>
             <encoding>UTF-8</encoding>
           </font>
+          <hidden>1</hidden>
           <style>wxTE_MULTILINE</style>
           <XRCED>
             <assign_var>1</assign_var>

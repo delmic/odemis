@@ -282,4 +282,15 @@ c.addEvents('EVT_TEXT', 'EVT_TEXT_ENTER', 'EVT_TEXT_URL', 'EVT_TEXT_MAXLEN')
 component.Manager.register(c)
 component.Manager.addXmlHandler(xh_delmic.UnitIntegerCtrlHandler)
 component.Manager.setMenu(c, 'control', 'Delmic unit integer text ctrl', 'odemis.gui.comp.text.UnitIntegerCtrl', 1)
-component.Manager.setTool(c, 'Controls', pos=(0,2))
+component.Manager.setTool(c, 'Controls', pos=(0, 2))
+
+
+### odemis.gui.comp.canvas.DraggableCanvas
+
+c = component.Container('odemis.gui.comp.canvas.DraggableCanvas', ['window', 'top_level', 'control'],
+              ['pos', 'size'],
+              image=images.TreePanel.GetImage())
+c.addStyles('wxTAB_TRAVERSAL')
+component.Manager.register(c)
+component.Manager.addXmlHandler(xh_delmic.DraggableCanvasXmlHandler)
+component.Manager.setMenu(c, 'ROOT', 'Delmic Canvas', 'odemis.gui.comp.canvas.DraggableCanvas', 10)
