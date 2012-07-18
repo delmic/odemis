@@ -41,36 +41,50 @@ class VigilantAttributeBase(object):
      * observable behaviour (any one can ask to be notified when the value changes) 
     '''
 
-    def __init__(self, initval=None, unit="", readonly=False):
+    def __init__(self, initval=None, unit="", readonly=False, setter=None):
         """
         Creates a VigilantAttributeBase with a given initial value
-        initval : any type
+        initval (any type): the initial value
         unit (str): a SI unit in which the VA is expressed
         readonly (bool): if True, value setter will raise an exception. It's still
             possible to change the value by calling _set() and then notify()
+        setter (callable value -> value): function that will be called whenever the value has to
+            be changed and returns the new actual value (which might be different
+            from what was given).
         """
-        # TODO shall we have a assigner callback which is called to set the value and returns the actual value (for hardware)?
         self._listeners = set()
         self._value = initval
         self.unit = unit
+        if setter is None:
+            self._setter = self.__default_setter
+        else:
+            self._setter = setter
         self.readonly = readonly
 
+    # TODO move all the set stuff outside of Base, so that Proxy doesn't inherit them
+
+    def __default_setter(self, value):
+        return value
+    
+    def _check(self, value):
+        """
+        Override to do checking on the value.
+        raises exceptions (only)
+        """
+        pass
+    
     def _get_value(self):
         """The value of this VA"""
         return self._value
-    
-    def _set(self, value):
-        """
-        Override to do checking on the value.
-        """
-        self._value = value
 
     # cannot be oneway because we need the exception in case of error
     def _set_value(self, value):
         if self.readonly:
-            raise NotSettableError("Value is readonly")
+            raise NotSettableError("Value is read-only")
         prev_value = self._value
-        self._set(value)
+        
+        self._check(value) # we allow the setter to even put illegal value, it's the master
+        self._value = self._setter(value)
         if prev_value != self._value:
             self.notify(self._value)
     
@@ -226,6 +240,8 @@ class VigilantAttributeProxy(VigilantAttributeBase, Pyro4.Proxy):
     
     @value.setter
     def value(self, v):
+        if self.readonly:
+            raise NotSettableError("Value is read-only")
         return Pyro4.Proxy.__getattr__(self, "_set_value")(v)
     # no delete remotely
     
@@ -424,10 +440,9 @@ class StringVA(VigilantAttribute):
     def __init__(self, value="", *args, **kwargs):
         VigilantAttribute.__init__(self, value, *args, **kwargs)
         
-    def _set(self, value):
+    def _check(self, value):
         if not isinstance(value, basestring):
             raise InvalidTypeError("Value '%s' is not a string." % str(value))
-        VigilantAttribute._set(self, value)
 
 class FloatVA(VigilantAttribute):
     """
@@ -437,12 +452,12 @@ class FloatVA(VigilantAttribute):
     def __init__(self, value=0.0, *args, **kwargs):
         VigilantAttribute.__init__(self, value, *args, **kwargs)
         
-    def _set(self, value):
+    def _check(self, value):
         try:
+            # can be anything that can be converted to a float
             converted = float(value)
         except ValueError:
             raise InvalidTypeError("Value '%s' is not a float." % str(value))
-        VigilantAttribute._set(self, converted)
 
 class IntVA(VigilantAttribute):
     """
@@ -452,11 +467,10 @@ class IntVA(VigilantAttribute):
     def __init__(self, value=0, *args, **kwargs):
         VigilantAttribute.__init__(self, value, *args, **kwargs)
         
-    def _set(self, value):
+    def _check(self, value):
         # we really accept only int, to avoid hiding lose of precision
         if not isinstance(value, int):
             raise InvalidTypeError("Value '%s' is not a int." % str(value))
-        VigilantAttribute._set(self, value)
 
 class ListVA(VigilantAttribute):
     """
@@ -466,14 +480,13 @@ class ListVA(VigilantAttribute):
     def __init__(self, value=[], *args, **kwargs):
         VigilantAttribute.__init__(self, value, *args, **kwargs)
         
-    def _set(self, value):
+    def _check(self, value):
         try:
             converted = list(value)
         except TypeError:
             raise InvalidTypeError("Value '%s' is not a list." % str(value))
         # TODO we need to also detect whenever this list is modified
         
-        VigilantAttribute._set(self, converted)
 
 # TODO maybe should provide a factory that can take a VigilantAttributeBase class and return it
 # either Continuous or Enumerated
@@ -523,7 +536,7 @@ class Continuous(object):
     def range(self):
         del self._range
 
-    def _set(self, value):
+    def _check(self, value):
         """
         Should be called _in addition_ to the ._set() of VigilantAttributeBase
         returns nothing
@@ -547,7 +560,7 @@ class Enumerated(object):
         """
         self._set_choices(choices)
         
-    def _set(self, value):
+    def _check(self, value):
         if not value in self._choices:
             raise OutOfBoundError("Value '%s' is not part of possible choices: %s." % 
                         (str(value), ", ".join(map(str, self._choices))))
@@ -583,53 +596,49 @@ class FloatContinuous(FloatVA, Continuous):
     """
     A simple class which is both floating and continuous
     """
-    def __init__(self, value=0.0, range=[], unit=""):
+    def __init__(self, value=0.0, range=[], unit="", **kwargs):
         Continuous.__init__(self, range)
-        FloatVA.__init__(self, value, unit=unit)
+        FloatVA.__init__(self, value, unit=unit, **kwargs)
 
-    def _set(self, value):
-        # order is important
-        Continuous._set(self, value)
-        FloatVA._set(self, value)
+    def _check(self, value):
+        Continuous._check(self, value)
+        FloatVA._check(self, value)
 
 class StringEnumerated(StringVA, Enumerated):
     """
     A simple class which is both string and Enumerated
     """
-    def __init__(self, value, choices, unit=""):
+    def __init__(self, value, choices, unit="", **kwargs):
         Enumerated.__init__(self, choices)
-        StringVA.__init__(self, value, unit=unit)
+        StringVA.__init__(self, value, unit=unit, **kwargs)
 
-    def _set(self, value):
-        # order is important
-        Enumerated._set(self, value)
-        StringVA._set(self, value)
+    def _check(self, value):
+        Enumerated._check(self, value)
+        StringVA._check(self, value)
 
 class FloatEnumerated(FloatVA, Enumerated):
     """
     A simple class which is both floating and enumerated
     """
-    def __init__(self, value=0.0, choices=[], unit=""):
+    def __init__(self, value=0.0, choices=[], unit="", **kwargs):
         Enumerated.__init__(self, choices)
-        FloatVA.__init__(self, value, unit=unit)
+        FloatVA.__init__(self, value, unit=unit, **kwargs)
 
-    def _set(self, value):
-        # order is important
-        Enumerated._set(self, value)
-        FloatVA._set(self, value)
+    def _check(self, value):
+        Enumerated._check(self, value)
+        FloatVA._check(self, value)
 
 class IntEnumerated(IntVA, Enumerated):
     """
     A simple class which is both int and enumerated
     """
-    def __init__(self, value=0.0, choices=[], unit=""):
+    def __init__(self, value=0.0, choices=[], unit="", **kwargs):
         Enumerated.__init__(self, choices)
-        IntVA.__init__(self, value, unit=unit)
+        IntVA.__init__(self, value, unit=unit, **kwargs)
 
-    def _set(self, value):
-        # order is important
-        Enumerated._set(self, value)
-        IntVA._set(self, value)
+    def _check(self, value):
+        Enumerated._check(self, value)
+        IntVA._check(self, value)
 
 
 class MultiSpeedVA(VigilantAttribute, Continuous):
@@ -644,7 +653,7 @@ class MultiSpeedVA(VigilantAttribute, Continuous):
         VigilantAttribute.__init__(self, value, unit=unit, *args, **kwargs)
         
     # TODO detect whenever a value of the dict is changed 
-    def _set(self, value):
+    def _check(self, value):
         # a dict
         if not isinstance(value, dict):
             raise InvalidTypeError("Value '%s' is not a dict." % str(value))
@@ -653,7 +662,6 @@ class MultiSpeedVA(VigilantAttribute, Continuous):
             if v <= 0 or v < self._range[0] or v > self._range[1]:
                 raise OutOfBoundError("Trying to assign axis '%s' value '%s' outside of the range %s-%s." % 
                             (str(axis), str(value), str(self._range[0]), str(self._range[1])))
-        VigilantAttributeBase._set(self, value)
 
 class ResolutionVA(VigilantAttribute, Continuous):
     """
@@ -663,17 +671,11 @@ class ResolutionVA(VigilantAttribute, Continuous):
     be automatically adapted to a bigger one allowed.
     """
     
-    def __init__(self, value=(1,1), range=[], unit="", fitter=None, **kwargs):
+    def __init__(self, value=(1,1), range=[], unit="px", **kwargs):
         """
         range (2x (2-tuple of int)): minimum and maximum size in each dimension
-        fitter (callable (2-tuple of int) -> (2-tuple of int)): function which fits
-          the given resolution to whatever is allowed. If None, it will accepted as is.
         """  
         Continuous.__init__(self, range)
-        if fitter:
-            self._fitter = WeakMethod(fitter)
-        else:
-            self._fitter = None
         VigilantAttribute.__init__(self, value, unit=unit, **kwargs)
     
     def _set_range(self, new_range):
@@ -692,7 +694,7 @@ class ResolutionVA(VigilantAttribute, Continuous):
                             (str(self.value), str(new_range[0]), str(new_range[1])))
         self._range = tuple(new_range)
 
-    def _set(self, value):
+    def _check(self, value):
         """
         Raises:
             OutOfBoundError if the value is not within the authorised range
@@ -705,14 +707,6 @@ class ResolutionVA(VigilantAttribute, Continuous):
             raise OutOfBoundError("Trying to assign value '%s' outside of the range %s-%s." % 
                         (str(value), str(self._range[0]), str(self._range[1])))
         
-        if self._fitter:
-            try:
-                value = self._fitter(value)
-            except WeakRefLostError:
-                # Normally fitter is owned by the same instance of camera so no
-                # fitter would also mean that this VA has no sense anymore
-                raise OutOfBoundError("Fitting method has disappeared, cannot validate value.")
-        
-        VigilantAttribute._set(self, value)
+
 
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:
