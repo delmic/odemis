@@ -58,7 +58,7 @@ class VigilantAttributeBase(object):
         if setter is None:
             self._setter = self.__default_setter
         else:
-            self._setter = setter
+            self._setter = WeakMethod(setter) # to avoid cycles
         self.readonly = readonly
 
     # TODO move all the set stuff outside of Base, so that Proxy doesn't inherit them
@@ -84,7 +84,11 @@ class VigilantAttributeBase(object):
         prev_value = self._value
         
         self._check(value) # we allow the setter to even put illegal value, it's the master
-        self._value = self._setter(value)
+        try:
+            self._value = self._setter(value)
+        except WeakRefLostError:
+            self._value = self.__default_setter(value)
+            
         if prev_value != self._value:
             self.notify(self._value)
     
@@ -596,7 +600,7 @@ class FloatContinuous(FloatVA, Continuous):
     """
     A simple class which is both floating and continuous
     """
-    def __init__(self, value=0.0, range=[], unit="", **kwargs):
+    def __init__(self, value, range, unit="", **kwargs):
         Continuous.__init__(self, range)
         FloatVA.__init__(self, value, unit=unit, **kwargs)
 
@@ -620,7 +624,7 @@ class FloatEnumerated(FloatVA, Enumerated):
     """
     A simple class which is both floating and enumerated
     """
-    def __init__(self, value=0.0, choices=[], unit="", **kwargs):
+    def __init__(self, value, choices, unit="", **kwargs):
         Enumerated.__init__(self, choices)
         FloatVA.__init__(self, value, unit=unit, **kwargs)
 
@@ -632,7 +636,7 @@ class IntEnumerated(IntVA, Enumerated):
     """
     A simple class which is both int and enumerated
     """
-    def __init__(self, value=0.0, choices=[], unit="", **kwargs):
+    def __init__(self, value, choices, unit="", **kwargs):
         Enumerated.__init__(self, choices)
         IntVA.__init__(self, value, unit=unit, **kwargs)
 
@@ -647,7 +651,7 @@ class MultiSpeedVA(VigilantAttribute, Continuous):
     It's especially made for Actuator.speed: the value is a dict name => float
     Also the speed must be >0
     """
-    def __init__(self, value={}, range=[], unit="m/s", *args, **kwargs):
+    def __init__(self, value, range, unit="m/s", *args, **kwargs):
         Continuous.__init__(self, range)
         assert(range[0] >= 0)
         VigilantAttribute.__init__(self, value, unit=unit, *args, **kwargs)
@@ -701,7 +705,10 @@ class ResolutionVA(VigilantAttribute, Continuous):
         """
         if len(value) != 2:
             raise InvalidTypeError("Value '%s' is not a 2-tuple." % str(value))
-
+        
+        if not isinstance(value[0], (int, long)) or not isinstance(value[1], (int, long)):
+            raise InvalidTypeError("Value '%s' is not a 2-tuple of int." % str(value))
+        
         if (value[0] < self._range[0][0] or value[0] > self._range[1][0] or
             value[1] < self._range[0][1] or value[1] > self._range[1][1]):
             raise OutOfBoundError("Trying to assign value '%s' outside of the range %s-%s." % 

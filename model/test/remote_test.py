@@ -516,7 +516,7 @@ class FakeDataFlow(model.DataFlow):
         assert self._thread is None
         self._stop.clear()
         self._thread = threading.Thread(name="array generator", target=self.generate)
-        self._thread.deamon = True
+        self._thread.daemon = True
         self._thread.start()
     
     def stop_generate(self):

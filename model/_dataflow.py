@@ -63,12 +63,14 @@ class DataArray(numpy.ndarray):
     """
     
     # see http://docs.scipy.org/doc/numpy/user/basics.subclassing.html
-    def __new__(cls, input_array, metadata={}):
+    def __new__(cls, input_array, metadata=None):
         """
         input_array: array from which to initialise the data
         metadata (dict str-> value): a dict of (standard) names to their values
         """
         obj = numpy.asarray(input_array).view(cls)
+        if metadata is None:
+            metadata = {}
         obj.metadata = metadata
         return obj
 
@@ -334,9 +336,6 @@ class DataFlowProxy(DataFlowBase, Pyro4.Proxy):
         self.ctx = zmq.Context(1) # apparently 0MQ reuse contexts
         self.commands = self.ctx.socket(zmq.PAIR)
         self.commands.bind("inproc://" + self._global_name)
-#        self._thread = threading.Thread(name="zmq for dataflow " + self._global_name, 
-#                              target=self._listenForData, args=(self.ctx, self._global_name))
-#        self._thread.deamon = True
         self._thread = SubscribeProxyThread(self.notify, self._global_name, self.max_discard, self.ctx)
         self._thread.start()
         
