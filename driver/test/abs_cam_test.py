@@ -20,6 +20,8 @@ You should have received a copy of the GNU General Public License along with Del
 import model
 import time
 import unittest
+import gc
+gc.set_debug(gc.DEBUG_LEAK | gc.DEBUG_STATS)
 
 # It doesn't inherit from TestCase because it should not be run by itself
 class VirtualTestCam(object):
@@ -33,7 +35,23 @@ class VirtualTestCam(object):
     camera_type = None
     # name, role, children...
     camera_args = ("camera", "test", None)
+    
+    
+#    @classmethod
+#    def setUpClass(cls):
+#        cls.camera = cls.camera_type(*cls.camera_args)
+    
+#    @classmethod
+#    def tearUpClass(cls):
+#        cls.camera.terminate()
+    
+    def tearUp(self):
+#        print gc.get_referrers(self.camera)
+#        gc.collect()
+        pass
         
+    
+    @unittest.skip("to be separated")
     def test_scan(self):
         """
         Check that we can do a scan. It can pass only if we are
@@ -42,8 +60,9 @@ class VirtualTestCam(object):
         cameras = self.camera_type.scan()
         self.assertGreater(len(cameras), 0)
 
+#    @unittest.skip("simple")
     def test_acquire(self):
-        camera = self.camera_type(*self.camera_args)
+        camera = self.camera
         self.size = camera.shape[0:2]
         exposure = 0.1
 
@@ -57,10 +76,12 @@ class VirtualTestCam(object):
         self.assertEqual(im.shape, self.size)
         self.assertGreaterEqual(duration, exposure, "Error execution took %f s, less than exposure time %d." % (duration, exposure))
         self.assertIn(model.MD_EXP_TIME, im.metadata)
-        del camera
+#        camera.terminate()
         
+#    @unittest.skip("simple")
     def test_two_acquire(self):
-        camera = self.camera_type(*self.camera_args)
+#        camera = self.camera_type(*self.camera_args)
+        camera = self.camera
         self.size = camera.shape[0:2]
         exposure = 0.1
         camera.binning.value = 1 # just to check it works
@@ -83,11 +104,12 @@ class VirtualTestCam(object):
         self.assertEqual(im.shape, self.size)
         self.assertGreaterEqual(duration, exposure, "Error execution took %f s, less than exposure time %d." % (duration, exposure))
         self.assertIn(model.MD_EXP_TIME, im.metadata)
-        del camera
-        
+#        camera.terminate()
+    
+#    @unittest.skip("not implemented")
     def test_acquire_flow(self):
-        self.camera = self.camera_type(*self.camera_args)
-        self.size = self.camera.shape[0:2]
+#        self.camera = self.camera_type(*self.camera_args)
+        self.size = self.camera.shape[:2]
         exposure = 0.1
         self.camera.resolution.value = self.size
         self.camera.exposureTime.value = exposure
@@ -102,7 +124,7 @@ class VirtualTestCam(object):
             time.sleep(2) # 2s per image should be more than enough in any case
         
         self.assertEqual(self.left, 0)
-        del self.camera
+#        self.camera.terminate()
 
     def receive_image(self, dataflow, image):
         """
@@ -115,28 +137,91 @@ class VirtualTestCam(object):
         if self.left <= 0:
             dataflow.unsubscribe(self.receive_image)
 
+#    @unittest.skip("simple")
     def test_binning(self):
-        camera = self.camera_type(*self.camera_args)
+        camera = self.camera
         
         binnings = camera.binning.choices
         self.assertIn(1, binnings)
         # The SimCam of SDKv3 doesn't support binning, so let's just try on v2
         if not 2 in binnings:
-            # TODO how to skip a test in the middle?
-            del camera
+            # if there is no binning 2, there is no binning at all
+            assert(len(binnings) == 1)
+#            camera.terminate()
             self.skipTest("Camera doesn't support binning")
         
+        # binning should automatically resize the image
+        prev_size = camera.resolution.value
         camera.binning.value = 2
+        
+        # ask for the whole image
         self.size = (camera.shape[0] / 2, camera.shape[1] / 2)
         camera.resolution.value = self.size
         exposure = 0.1
         camera.exposureTime.value = exposure
         
         start = time.time()
-        im, metadata = camera.acquire((self.size[0]/2, self.size[1]/2), exposure, 2)
+        im = camera.acquireOne()
         duration = time.time() - start
     
-        self.assertEqual(im.shape, (self.size[0]/2, self.size[1]/2))
+        self.assertEqual(im.shape, self.size) # TODO a small size diff is fine if bigger than requested
         self.assertGreaterEqual(duration, exposure, "Error execution took %f s, less than exposure time %d." % (duration, exposure))
-        self.assertIn("Exposure time", metadata)
-        del camera
+        self.assertIn(model.MD_EXP_TIME, im.metadata)
+#        camera.terminate()
+        
+#    @unittest.skip("simple")
+    def test_aoi(self):
+        """
+        Check sub-area acquisition works
+        """
+        camera = self.camera
+        self.size = (camera.shape[0]/2, camera.shape[1]/2)
+        exposure = 0.1
+
+        camera.resolution.value = self.size
+        if camera.resolution.value == camera.shape[:2]:
+            # cannot divide the size by 2? Then it probably doesn't support AOI
+#            camera.terminate()
+            self.skipTest("Camera doesn't support area of interest")
+        
+        camera.exposureTime.value = exposure
+        start = time.time()
+        im = camera.data.get()
+        duration = time.time() - start
+
+        self.assertEqual(im.shape, self.size)
+        self.assertGreaterEqual(duration, exposure, "Error execution took %f s, less than exposure time %d." % (duration, exposure))
+        self.assertIn(model.MD_EXP_TIME, im.metadata)
+#        camera.terminate()
+        
+#    @unittest.skip("simple")
+    def test_error(self):
+        """
+        Errors should raise an exception but still allow to access the camera afterwards
+        """
+        camera = self.camera
+        # reset
+        camera.resolution.value = camera.shape[:2]
+        
+        
+        # empty resolution
+        try:
+            camera.resolution.value = (camera.shape[0], 0) # 0 px should be too small
+            self.fail("Empty resolution should fail")
+        except:
+            pass # good!
+        
+        # null and negative exposure time
+        try:
+            camera.exposureTime.value = 0.0 # 0 is too short
+            self.fail("Null exposure time should fail")
+        except:
+            pass # good!
+        
+        try:
+            camera.exposureTime.value = -1.0 # negative
+            self.fail("Negative exposure time should fail")
+        except:
+            pass # good!
+
+#        camera.terminate()

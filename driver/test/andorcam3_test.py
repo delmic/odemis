@@ -20,6 +20,8 @@ from driver import andorcam3
 from abs_cam_test import VirtualTestCam
 import unittest
 
+# FIXME temperature update doesn't die
+
 class TestAndorCam3(unittest.TestCase, VirtualTestCam):
     """
     Test directly the AndorCam3 class.
@@ -28,7 +30,14 @@ class TestAndorCam3(unittest.TestCase, VirtualTestCam):
     # name, role, children (must be None), device number
     camera_args = ("camera", "test", None, 0)
 
-     
+    @classmethod
+    def setUpClass(cls):
+        cls.camera = cls.camera_type(*cls.camera_args)
+    
+    @classmethod
+    def tearUpClass(cls):
+        cls.camera.terminate()
+        
 if __name__ == '__main__':
     unittest.main()
 
