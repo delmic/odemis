@@ -32,18 +32,18 @@ class DAGuiFrame(wx.Frame):
         microscope (model.Microscope): a microscope component on which the interface
          will be based.
         """
-        wx.Frame.__init__(self, None, size=(1024,768), title=OFFICIAL_NAME) # TODO almost fullscreen 
+        wx.Frame.__init__(self, None, size=(1024,768), title=OFFICIAL_NAME) # TODO almost fullscreen
         self.Bind(wx.EVT_CLOSE, self.OnClose)
-        
+
         # Statusbar
         #self.CreateStatusBar() # XXX needed?
-        
-#        self.secom_model = SECOMModel()
+
+        #self.secom_model = SECOMModel()
         self.secom_model = OpticalBackendConnected(microscope)
-        
+
         # Setting up the menu.
         menuBar = wx.MenuBar()
-        
+
         filemenu = wx.Menu()
         menuOpen = filemenu.Append(wx.ID_OPEN, "&Open...", "Select an image to display")
         self.Bind(wx.EVT_MENU, self.OnOpen, menuOpen)
@@ -53,36 +53,36 @@ class DAGuiFrame(wx.Frame):
         menuExit = filemenu.Append(wx.ID_EXIT, "E&xit", "Terminate the program")
         self.Bind(wx.EVT_MENU, self.OnClose, menuExit)
         menuBar.Append(filemenu,"&File")
-        
+
         viewmenu = wx.Menu()
         # Keep a ref to be able to modify it when crosshair is toggled
         self.menuCross = viewmenu.Append(wx.ID_ANY, "&Crosshair", "Display a cross on the center of the view",
                                     kind=wx.ITEM_CHECK)
         self.Bind(wx.EVT_MENU, self.ToggleCross, self.menuCross)
         menuBar.Append(viewmenu, "&View")
-        
+
         helpmenu = wx.Menu()
         menuAbout = helpmenu.Append(wx.ID_ABOUT, "&About", "Information about this program")
         self.Bind(wx.EVT_MENU, self.OnAbout, menuAbout)
         menuBar.Append(helpmenu, "&Help")
-        
+
         self.SetMenuBar(menuBar)
-        
+
         # Last directory visited (for file open)
         self.dirname = ""
-        
-        # TODO add toolbar, option pane 
+
+        # TODO add toolbar, option pane
         # The main frame
         self.panel = DblMicroscopePanel(self, wx.ID_ANY)
         self.viewmodel = self.panel.viewmodel
         self.menuCross.Check(self.viewmodel.crosshair.value) # TODO ensure sync
-        
+
         # Finish by displaying the window
         self.Show(True)
 
     def OnAbout(self, e):
         message = ("Delmic Acquisition Software for managing microscope.\n" +
-                   "Copyright © 2012 Delmic B.V.\n" + 
+                   "Copyright © 2012 Delmic B.V.\n" +
                    "Licensed under the GNU General Public License version 2")
         dlg = wx.MessageDialog(self, message,
                                "About " + OFFICIAL_NAME, wx.OK)
@@ -91,7 +91,7 @@ class DAGuiFrame(wx.Frame):
 
     def OnClose(self, e):
         self.Destroy()
-        
+
     def OnOpen(self, e):
         """ Open a file"""
         dlg = wx.FileDialog(self, "Choose one or two pictures", self.dirname, "",
@@ -102,7 +102,7 @@ class DAGuiFrame(wx.Frame):
             filenames = dlg.GetFilenames()
             self.dirname = dlg.GetDirectory()
         dlg.Destroy()
-        
+
         for i, f in enumerate(filenames):
             try:
                 fullname = os.path.join(self.dirname, f)
@@ -121,7 +121,7 @@ class DAGuiFrame(wx.Frame):
             name1 = "gui/1-optical-rot7.png"
             im1 = InstrumentalImage(wx.Image(name1), 7.14286e-7, (0.0,0.0))
             self.secom_model.optical_det_image.value = im1
-            
+
             name2 = "gui/1-sem-bse.png"
             im2 = InstrumentalImage(wx.Image(name2), 4.54545e-7, (2e-6, -1e-5))
             self.secom_model.sem_det_image.value = im2

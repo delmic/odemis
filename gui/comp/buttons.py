@@ -15,7 +15,8 @@ import odemis.gui.img.data as img
 class ImageButton(GenBitmapButton):
     """ Graphical button with hover effect.
 
-    The background colour is set to it's parent's
+    The background colour is set to that of its parent, or to the background
+    colour of an explicitly defined window called background_parent.
     """
 
     labelDelta = 0
@@ -76,6 +77,8 @@ class ImageButton(GenBitmapButton):
             bmp = self.bmpDisabled
         if self.bmpFocus and self.hasFocus:
             bmp = self.bmpFocus
+        if self.bmpSelected and not self.up:
+            bmp = self.bmpSelected
         bw, bh = bmp.GetWidth(), bmp.GetHeight()
         if not self.up:
             dx = dy = self.labelDelta
@@ -93,7 +96,14 @@ class ImageButton(GenBitmapButton):
     def SetLabelDelta(self, delta):
         self.labelDelta = delta
 
-class ImageTextButton(GenBitmapTextButton):  #pylint: disable=R0901
+class ImageTextButton(GenBitmapTextButton):
+    """ Graphical button with text and hover effect.
+
+    The text can be align using the following styles:
+    wx.ALIGN_LEFT, wx.ALIGN_CENTER, wx.ALIGN_RIGHT.
+
+    Left alignment is the default.
+    """
     # The displacement of the button content when it is pressed down, in pixels
     labelDelta = 1
     padding_x = 8
@@ -103,8 +113,8 @@ class ImageTextButton(GenBitmapTextButton):  #pylint: disable=R0901
 
         kwargs['style'] = kwargs.get('style', 0) | wx.NO_BORDER
 
-        self.background_parent = kwargs.pop('background_parent', None)
         self.labelDelta = kwargs.pop('label_delta', 0)
+        self.background_parent = kwargs.pop('background_parent', None)
 
         GenBitmapTextButton.__init__(self, *args, **kwargs)
 
@@ -200,7 +210,7 @@ class ImageTextButton(GenBitmapTextButton):  #pylint: disable=R0901
             self.faceDnClr = self.GetParent().GetBackgroundColour()
 
 class ImageToggleButton(GenBitmapToggleButton):  #pylint: disable=R0901
-    """ This class describes an image toggle button with hover effects """
+    """ Graphical toggle button with a hover effect. """
 
     # The displacement of the button content when it is pressed down, in pixels
     labelDelta = 0
@@ -208,11 +218,8 @@ class ImageToggleButton(GenBitmapToggleButton):  #pylint: disable=R0901
     def __init__(self, *args, **kwargs):
 
         kwargs['style'] = wx.NO_BORDER
-
-        self.background_parent = None
-        if kwargs.has_key('background_parent'):
-            self.background_parent = kwargs['background_parent']
-            del kwargs['background_parent']
+        self.labelDelta = kwargs.pop('label_delta', 0)
+        self.background_parent = kwargs.pop('background_parent', None)
 
         GenBitmapToggleButton.__init__(self, *args, **kwargs)
 
@@ -289,7 +296,9 @@ class ImageToggleButton(GenBitmapToggleButton):  #pylint: disable=R0901
         else:
             self.faceDnClr = self.GetParent().GetBackgroundColour()
 
-class ImageTextToggleButton(GenBitmapTextToggleButton):  #pylint: disable=R0901
+class ImageTextToggleButton(GenBitmapTextToggleButton):
+    """ Graphical toggle button with text and a hover effect. """
+
     # The displacement of the button content when it is pressed down, in pixels
     labelDelta = 1
     padding_x = 8
@@ -299,6 +308,7 @@ class ImageTextToggleButton(GenBitmapTextToggleButton):  #pylint: disable=R0901
 
         kwargs['style'] = kwargs.get('style', 0) | wx.NO_BORDER
 
+        self.labelDelta = kwargs.pop('label_delta', 0)
         self.background_parent = kwargs.pop('background_parent', None)
 
         GenBitmapTextToggleButton.__init__(self, *args, **kwargs)
@@ -383,7 +393,7 @@ class ImageTextToggleButton(GenBitmapTextToggleButton):  #pylint: disable=R0901
         else:
             pos_x = pos_x + self.padding_x
 
-        dc.DrawText(label, pos_x, (height - th) / 2 + dy + 1)      # draw the text
+        dc.DrawText(label, pos_x, (height - th) / 2 + dy + 1) # draw the text
 
     def InitColours(self):
         GenBitmapButton.InitColours(self)
@@ -393,8 +403,9 @@ class ImageTextToggleButton(GenBitmapTextToggleButton):  #pylint: disable=R0901
             self.faceDnClr = self.GetParent().GetBackgroundColour()
 
 class ColourButton(ImageButton):
-    """ This class describes an ImageButton that uses single-colour bitmap that
-    can be dynamically generated, allowing it to change colour.
+    """ An ImageButton that uses a single-colour bitmap
+    that will be dynamically generated, allowing it to change colour during the
+    buttons life time.
     """
 
     # The default colour for the colour button

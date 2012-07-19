@@ -564,38 +564,32 @@ class CaptionBarEvent(wx.PyCommandEvent):
 
         :param `evtType`: the event type.
         """
-
+        log.debug("CaptionBarEvent fired")
         wx.PyCommandEvent.__init__(self, evtType)
 
 
     def GetFoldStatus(self):
-        """
-        Returns whether the bar is expanded or collapsed. ``True`` means
+        """Returns whether the bar is expanded or collapsed. ``True`` means
         expanded.
         """
-
         return not self._bar.IsCollapsed()
 
 
     def GetBar(self):
         """ Returns the selected L{CaptionBar}. """
-
         return self._bar
 
 
     def SetTag(self, tag):
         """
         Assigns a tag to the selected L{CaptionBar}.
-
         :param `tag`: an instance of L{FoldPanelBar}.
         """
-
         self._tag = tag
 
 
     def GetTag(self):
         """ Returns the tag assigned to the selected L{CaptionBar}. """
-
         return self._tag
 
 
@@ -653,6 +647,8 @@ class CaptionBar(wx.Window):
          ``False`` otherwise.
         """
 
+        log.debug("Creating CaptionBar '%s'", caption)
+
         # Delmic
         bar_size = (20, 20)
         if cbstyle and cbstyle.BarHeightUsed():
@@ -691,7 +687,7 @@ class CaptionBar(wx.Window):
         self._mouse_is_over = False
 
         self.Bind(wx.EVT_PAINT, self.OnPaint)
-        self.Bind(wx.EVT_SIZE, self.OnSize)
+        #self.Bind(wx.EVT_SIZE, self.OnSize) # Delmic. Commented, doesn't seem we need it
         self.Bind(wx.EVT_MOUSE_EVENTS, self.OnMouseEvent)
         self.Bind(wx.EVT_CHAR, self.OnChar)
 
@@ -802,7 +798,6 @@ class CaptionBar(wx.Window):
         :note: This does not trigger a L{CaptionBarEvent} to be sent to the
          parent.
         """
-
         self._collapsed = True
         self.RedrawIconBitmap()
 
@@ -814,7 +809,6 @@ class CaptionBar(wx.Window):
         :note: This does not trigger a L{CaptionBarEvent} to be sent to the
          parent.
         """
-
         self._collapsed = False
         self.RedrawIconBitmap()
 
@@ -854,6 +848,8 @@ class CaptionBar(wx.Window):
         if not self._controlCreated:
             event.Skip()
             return
+
+        #log.debug("CaptionBar OnPaint Event")
 
         dc = wx.PaintDC(self)
         wndRect = self.GetRect()
@@ -1142,6 +1138,8 @@ class CaptionBar(wx.Window):
             event.Skip()
             return
 
+        log.debug("Processing Size event on CaptionBar")
+
         size = event.GetSize()
 
         if self._foldIcons:
@@ -1279,8 +1277,7 @@ class FoldPanelBar(wx.Panel):
 
         self.Bind(EVT_CAPTIONBAR, self.OnPressCaption)
         self.Bind(wx.EVT_SIZE, self.OnSizePanel)
-        self.Bind(wx.EVT_COLLAPSIBLEPANE_CHANGED, self.FitBar)
-
+        #self.Bind(wx.EVT_COLLAPSIBLEPANE_CHANGED, self.FitBar)
 
     def AddFoldPanel(self, caption="", id=wx.ID_ANY, collapsed=False, foldIcons=None, cbstyle=None):
         """
@@ -1302,6 +1299,8 @@ class FoldPanelBar(wx.Panel):
 
         if cbstyle is None:
             cbstyle = EmptyCaptionBarStyle
+
+        log.debug("Adding FoldPanelItem %s", caption)
 
         # create a fold panel item, which is first only the caption.
         # the user can now add a panel area which will be folded in
@@ -1326,12 +1325,13 @@ class FoldPanelBar(wx.Panel):
         item.Reposition(pos)
         self._panels.append(item)
 
-        self.FitBar() #Delmic
+        #self.FitBar() #Delmic
 
         return item
 
     # Delmic
     def RemoveFoldPanel(self, fold_panel):
+        log.debug("Removing fold FoldPanelItem '%s'", fold_panel._captionBar._caption)
         self._panels.remove(fold_panel)
         fold_panel.Destroy()
         self.FitBar() #Delmic
@@ -1388,6 +1388,8 @@ class FoldPanelBar(wx.Panel):
 
         """
 
+        log.debug("Adding '%s' to FoldPanelItem", panel._captionBar._caption)
+
         try:
             # The index of the panel to which we are adding a window
             item = self._panels.index(panel)
@@ -1396,14 +1398,16 @@ class FoldPanelBar(wx.Panel):
 
         # Delmic
         #
-        # The next piece of code covers functionality that was lacking in the 2.8.11 wxPython
-        # version of this module: If widgets were added anywhere else but the last fold panel,
-        # then the lower widgets would not move down to create space for that new widget.
+        # The next piece of code covers functionality that was lacking in the
+        # 2.8.11 wxPython version of this module: If widgets were added anywhere
+        # else but the last fold panel, then the lower widgets would not move
+        # down to create space for that new widget.
 
         old_size = panel.GetSize()
         panel.AddWindow(window, flags, spacing, leftSpacing, rightSpacing)
         new_size = panel.GetSize()
 
+        log.debug("Panel size changed from %s to %s", old_size, new_size)
         # If the height has increased
         if old_size.GetHeight() < new_size.GetHeight():
             difference = new_size.GetHeight() - old_size.GetHeight()
@@ -1443,7 +1447,7 @@ class FoldPanelBar(wx.Panel):
                 pos = p.GetPosition()
                 p.Reposition(pos[1] + difference)
 
-        self.FitBar() #Delmic
+        #self.FitBar() #Delmic
 
         # Delmic
         # Little tweak: return the window instead of '0'
@@ -1468,7 +1472,7 @@ class FoldPanelBar(wx.Panel):
             for p in self._panels[item + 1:]:
                 pos = p.GetPosition()
                 p.Reposition(pos[1] - difference)
-            self.FitBar() #Delmic
+            #self.FitBar() #Delmic
 
     # Delmic
     def RemoveAllFoldPanelWindows(self, panel):
@@ -1490,7 +1494,7 @@ class FoldPanelBar(wx.Panel):
             for p in self._panels[item + 1:]:
                 pos = p.GetPosition()
                 p.Reposition(pos[1] - difference)
-            self.FitBar() #Delmic
+            #self.FitBar() #Delmic
 
     def AddFoldPanelSeparator(self, panel, colour=wx.BLACK,
                               spacing=FPB_DEFAULT_SPACING,
@@ -1530,11 +1534,13 @@ class FoldPanelBar(wx.Panel):
         :param `event`: a `wx.SizeEvent` event to be processed.
         """
 
-        # skip all stuff when we are not initialised yet
 
+        # skip all stuff when we are not initialised yet
         if not self._controlCreated:
             event.Skip()
             return
+
+        log.debug("Processing Size event on FoldPanelBar")
 
         foldrect = self.GetRect()
 
@@ -1546,14 +1552,11 @@ class FoldPanelBar(wx.Panel):
 
         self._foldPanel.SetSize(foldrect[2:])
 
-        if self._agwStyle & FPB_COLLAPSE_TO_BOTTOM or self._agwStyle & FPB_EXCLUSIVE_FOLD:
-            rect = self.RepositionCollapsedToBottom()
-            vertical = self.IsVertical()
-            if vertical and rect.GetHeight() > 0 or not vertical and rect.GetWidth() > 0:
-                self.RefreshRect(rect)
-
-        # TODO: A smart way to check wether the old - new width of the
-        # panel changed, if so no need to resize the fold panel items
+        # if self._agwStyle & FPB_COLLAPSE_TO_BOTTOM or self._agwStyle & FPB_EXCLUSIVE_FOLD:
+        #     rect = self.RepositionCollapsedToBottom()
+        #     vertical = self.IsVertical()
+        #     if vertical and rect.GetHeight() > 0 or not vertical and rect.GetWidth() > 0:
+        #         self.RefreshRect(rect)
 
         self.RedisplayFoldPanelItems()
 
@@ -1563,6 +1566,8 @@ class FoldPanelBar(wx.Panel):
 
         :param `event`: a L{CaptionBarEvent} event to be processed.
         """
+
+        log.debug("FoldPanelBar caption event handler")
 
         # act upon the folding or expanding status of the bar
         # to expand or collapse the panel(s)
@@ -1583,7 +1588,10 @@ class FoldPanelBar(wx.Panel):
         """
 
         try:
-            i = self._panels.index(item)
+            if isinstance(item, int):
+                i = item
+            else:
+                i = self._panels.index(item)
         except:
             raise Exception("ERROR: Invalid Panel Passed To RefreshPanelsFrom: " + repr(item))
 
@@ -1596,7 +1604,6 @@ class FoldPanelBar(wx.Panel):
         if self._agwStyle & FPB_COLLAPSE_TO_BOTTOM or self._agwStyle & FPB_EXCLUSIVE_FOLD:
 
             offset = 0
-
             for panels in self._panels:
 
                 if panels.IsExpanded():
@@ -1608,7 +1615,10 @@ class FoldPanelBar(wx.Panel):
             self.RepositionCollapsedToBottom()
 
         else:
-            pos = self._panels[i].GetItemPos() + self._panels[i].GetPanelLength()
+            panel_height = self._panels[i].GetPanelLength()
+            panel_ypos = self._panels[i].GetItemPos()
+            pos =  panel_ypos + panel_height
+
             for j in range(i + 1, len(self._panels)):
                 pos = pos + self._panels[j].Reposition(pos)
 
@@ -1618,11 +1628,14 @@ class FoldPanelBar(wx.Panel):
         """ Make the FoldPanelBar as high as it's children """
 
         log.debug("Fitting FoldPabelBar")
-        self.Fit()
+
+        # Fit the fold panel around it's content
         self._foldPanel.Fit()
+        self.Fit()
 
         parent = self.GetParent()
         if parent.__class__ == wx.ScrolledWindow:
+            # Make the scrolled window's virtual size fit around it's content
             parent.FitInside()
 
 
@@ -1729,7 +1742,7 @@ class FoldPanelBar(wx.Panel):
         """
 
         try:
-            item = self._panels.index(foldpanel)
+            _ = self._panels.index(foldpanel)
         except:
             raise Exception("ERROR: Invalid Panel Passed To Collapse: " + repr(foldpanel))
 
@@ -1824,7 +1837,6 @@ class FoldPanelBar(wx.Panel):
         """
 
         try:
-            ind = self._panels[item]
             return self._panels[item]
         except:
             raise Exception("ERROR: List Index Out Of Range Or Bad Item Passed: " + repr(item) + \
@@ -1915,7 +1927,7 @@ class FoldPanelItem(wx.Panel):
 
         self.Bind(EVT_CAPTIONBAR, self.OnPressCaption)
         self.Bind(wx.EVT_PAINT, self.OnPaint)
-        self.Bind(wx.EVT_COLLAPSIBLEPANE_CHANGED, self.FitItem)
+        #self.Bind(wx.EVT_COLLAPSIBLEPANE_CHANGED, self.FitItem)
 
 
     def FitItem(self, evt):
@@ -2082,6 +2094,7 @@ class FoldPanelItem(wx.Panel):
 
         self.Freeze()
 
+
         vertical = self.IsVertical()
         xpos = (vertical and [-1] or [pos])[0]
         ypos = (vertical and [pos] or [-1])[0]
@@ -2101,6 +2114,7 @@ class FoldPanelItem(wx.Panel):
         :param `event`: a L{CaptionBarEvent} event to be processed.
         """
 
+        log.debug("FoldPanelItem caption event handler")
         # tell the upper container we are responsible
         # for this event, so it can fold the panel item
         # and do a refresh
@@ -2119,7 +2133,6 @@ class FoldPanelItem(wx.Panel):
         vertical = self.IsVertical()
         # force this panel to take the width of the parent panel and the y of the
         # user or calculated width (which will be recalculated by the contents here)
-
 
         if self._captionBar.IsCollapsed():
             size = self._captionBar.GetSize()
@@ -2147,8 +2160,11 @@ class FoldPanelItem(wx.Panel):
 
         self._captionBar.SetSize((xsize, ysize))
 
+        #log.debug("Resizing FoldPanelItem %s, to %s", id(self), size)
+
         # resize the panel
         self.SetSize(size)
+
 
         # go by all the controls and call Layout
 
