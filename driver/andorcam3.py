@@ -160,6 +160,7 @@ class AndorCam3(model.DigitalCamera):
              
         self.InitialiseLibrary()
         
+        self.temp_timer = None
         self.handle = self.Open(device)
         if device is None:
             # nothing else to initialise
@@ -218,8 +219,10 @@ class AndorCam3(model.DigitalCamera):
         
         current_temp = self.GetFloat(u"SensorTemperature")
         self.temperature = model.FloatVA(current_temp, unit="C", readonly=True)
+        self._metadata[model.MD_SENSOR_TEMP] = current_temp
         self.temp_timer = RepeatingTimer(10, self.updateTemperatureVA,
                                          "AndorCam3 temperature update")
+        self.temp_timer.start()
         
         # TODO some methods (with futures)
         
@@ -433,6 +436,11 @@ class AndorCam3(model.DigitalCamera):
         """
         to be called at regular interval to update the temperature
         """
+        if self.handle is None:
+            # might happen if terminate() has just been called
+            logging.info("No temperature update, camera is stopped")
+            return
+        
         temp = self.GetFloat(u"SensorTemperature")
         self._metadata[model.MD_SENSOR_TEMP] = temp
         # it's read-only, so we change it only via special _value)
@@ -537,8 +545,8 @@ class AndorCam3(model.DigitalCamera):
         # adapt resolution so that the AOI stays the same
         change = float(previous_binning) / value
         old_resolution = self.resolution.value
-        new_resolution = (round(old_resolution[0] * change),
-                          round(old_resolution[1] * change))
+        new_resolution = (int(round(old_resolution[0] * change)),
+                          int(round(old_resolution[1] * change)))
         self.resolution.value = new_resolution
         return self._binning
     
@@ -730,7 +738,7 @@ class AndorCam3(model.DigitalCamera):
         
         return cbuffer
     
-    def _buffer_as_array(self, cbuffer, size):
+    def _buffer_as_array(self, cbuffer, size, metadata=None):
         """
         Converts the buffer allocated for the image as an ndarray. zero-copy
         return a DataArray (metadata not initialised)
@@ -744,14 +752,14 @@ class AndorCam3(model.DigitalCamera):
             
         p = cast(cbuffer, POINTER(c_uint16))
         ndbuffer = numpy.ctypeslib.as_array(p, (stride / 2, size[1]))
-        dataarray = model.DataArray(ndbuffer)
+        dataarray = model.DataArray(ndbuffer, metadata)
         # crop the array in case of stride (should not cause copy)
         return dataarray[:size[0],:]
         
-    def acquire(self):
+    def acquireOne(self):
         """
         Acquire one image at the best quality.
-        return (2-tuple: DataArray): an array containing the image with the metadata
+        return (DataArray): an array containing the image with the metadata
         """
         assert not self.is_acquiring
         assert not self.GetBool(u"CameraAcquiring")
@@ -775,8 +783,7 @@ class AndorCam3(model.DigitalCamera):
         # memory allocation... and it'd get free'd at the end of the method
         # So rely on the assumption cbuffer is used as is
         assert(addressof(pbuffer.contents) == addressof(cbuffer))
-        array = self._buffer_as_array(cbuffer, size)
-        array.metadata = metadata
+        array = self._buffer_as_array(cbuffer, size, metadata)
     
         self.Command(u"AcquisitionStop")
         self.Flush()
@@ -785,11 +792,11 @@ class AndorCam3(model.DigitalCamera):
     
     def acquireFlow(self, callback, num=None):
         """
-        Set up the camera and acquire a flow of images at the best quality for the given
+        Set up the camera and acquireOne a flow of images at the best quality for the given
           parameters. Should not be called if already a flow is being acquired.
-        callback (callable (camera, numpy.ndarray, dict (string -> base types)) no return):
+        callback (callable (DataArray) no return):
          function called for each image acquired
-        num (None or int): number of images to acquire, or infinite if None
+        num (None or int): number of images to acquireOne, or infinite if None
         returns immediately. To stop acquisition, call stopAcquireFlow()
         """
         assert not self.is_acquiring
@@ -798,7 +805,7 @@ class AndorCam3(model.DigitalCamera):
         
         # Set up thread
         self.acquire_thread = threading.Thread(target=self._acquire_thread_run,
-               name="andorcam acquire flow thread",
+               name="andorcam acquireOne flow thread",
                args=(callback, num))
         self.acquire_thread.start()
         
@@ -818,7 +825,7 @@ class AndorCam3(model.DigitalCamera):
         exposure_time = self.exposureTime.value
         
         # Allocates a pipeline of two buffers in a pipe, so that when we are
-        # processing one buffer, the driver can already acquire the next image.
+        # processing one buffer, the driver can already acquireOne the next image.
         buffers = []
         nbuffers = 2
         for i in range(nbuffers):
@@ -844,8 +851,8 @@ class AndorCam3(model.DigitalCamera):
                     try:
                         self.Command(u"AcquisitionStop")
                     except ATError as (errno, strerr):
-                        logging.warning("AcquisitionStop failed with error %s:", strerr)
-                        pass
+                        logging.error("AcquisitionStop failed with error %s:", strerr)
+                        # try anyway
                     self.Command(u"AcquisitionStart")
                     continue
                 raise
@@ -855,8 +862,9 @@ class AndorCam3(model.DigitalCamera):
             # So rely on the assumption cbuffer is used as is
             cbuffer = buffers.pop(0)
             assert(addressof(pbuffer.contents) == addressof(cbuffer))
-            array = self._buffer_as_array(cbuffer, size)
-            array.metadata = metadata
+            
+            metadata[model.MD_SENSOR_TEMP] = self._metadata[model.MD_SENSOR_TEMP]
+            array = self._buffer_as_array(cbuffer, size, metadata)
             # next buffer
             cbuffer = self._allocate_buffer(size)
             self.QueueBuffer(cbuffer)
@@ -892,9 +900,22 @@ class AndorCam3(model.DigitalCamera):
             #assert threading.current_thread() != self.acquire_thread
             self.acquire_thread.join() # XXX timeout for safety? 
     
-    def __del__(self):
-        self.Close()
+    def terminate(self):
+        """
+        Must be called at the end of the usage
+        """
+        if self.temp_timer is not None:
+            self.temp_timer.cancel()
+            self.temp_timer = None
+            
+        if self.handle is not None:
+            self.Close()
+            self.handle = None
         self.FinaliseLibrary()
+    
+    # no __del__ so that it can be garbage collected
+    def __del__(self):
+        self.terminate()
     
     def selfTest(self):
         """
@@ -919,7 +940,7 @@ class AndorCam3(model.DigitalCamera):
         try:
             self.resolution.value = resolution
             self.exposureTime.value = 0.01
-            im = self.acquire()
+            im = self.acquireOne()
         except Exception as err:
             logging.warning("Failed to acquire an image: " + str(err))
             return False
@@ -961,33 +982,34 @@ class AndorCam3DataFlow(model.DataFlow):
         
     def get(self):
         # TODO if camera is already acquiring, wait for the coming picture
-        data = self.component.acquire()
-        # TODO we should avoid this: get() and acquire() simultaneously should be handled by the framework
-        # If some subscribers arrived during the acquire()
+        data = self.component.acquireOne()
+        # TODO we should avoid this: acquireOne() and acquireFlow() simultaneously should be handled by the framework
+        # If some subscribers arrived during the acquireOne()
         if self._listeners:
             self.notify(data)
             self.component.acquireFlow(self.notify)
         return data
     
-    # TODO use new methods from dataflow start_acquire
-    def subscribe(self, listener):
-        model.DataFlow.subscribe(self, listener)
-        # TODO nicer way to check whether the camera is already sending us data?
-        if not self.component.acquire_thread:
-            # is it in acquire()? If so, it will be done in .get()
-            if not self.component.is_acquiring:
-                self.component.acquireFlow(self.notify)
+    def start_generate(self):
+        assert(not self.component.acquire_thread)
+        
+        # is it in acquireOne()? If so, it will be done in .get()
+        if not self.component.is_acquiring:
+            self.component.acquireFlow(self.notify)
     
-    def unsubscribe(self, listener):
-        model.DataFlow.unsubscribe(self, listener)
-        if not self._listeners:
+    def stop_generate(self):
+        try:
             self.component.stopAcquireFlow()
+#            assert(not self.component.acquisition_lock.locked())
+        except ReferenceError:
+            # camera has been deleted, it's all fine, we'll be GC'd soon
+            pass
             
     def notify(self, data):
         model.DataFlow.notify(self, data)
 
    
-class RepeatingTimer(object):
+class RepeatingTimer(threading.Thread):
     """
     An almost endless timer thread. 
     It stops when calling cancel() or the callback disappears.
@@ -998,28 +1020,22 @@ class RepeatingTimer(object):
         callback (callable): function to call
         name (str): fancy name to give to the thread
         """
+        threading.Thread.__init__(self, name=name)
         self.callback = model.WeakMethod(callback)
         self.period = period
-        self.timer = None
-        self.name = name
-        self._schedule()
+        self.daemon = True
+        self.must_stop = threading.Event()
     
-    def _schedule(self):
-        self.timer = threading.Timer(self.period, self.timeup)
-        self.timer.name = self.name
-        self.timer.deamon = True # don't wait for it to finish
-        self.timer.start()
+    def run(self):
+        # use the timeout as a timer
+        while not self.must_stop.wait(self.period):
+            try:
+                self.callback()
+            except model.WeakRefLostError:
+                # it's gone, it's over
+                return
         
-    def timeup(self):
-        try:
-            self.callback()
-        except model.WeakRefLostError:
-            # it's gone, it's over
-            return
-        
-        self._schedule()
-       
     def cancel(self):
-        self.timer.cancel()     
+        self.must_stop.set()
 
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:
