@@ -1133,7 +1133,7 @@ class AndorCam2(model.DigitalCamera):
         camera.atcore.GetAvailableCameras(byref(dc))
 #        print "found %d devices." % dc.value
         
-        cameras = set()
+        cameras = []
         for i in range(dc.value):
             camera.handle = c_int32()
             camera.atcore.GetCameraHandle(c_int32(i), byref(camera.handle))
@@ -1141,9 +1141,9 @@ class AndorCam2(model.DigitalCamera):
             camera.Initialize()
             
             caps = camera.GetCapabilities()
-            model = "Andor " + AndorCapabilities.CameraTypes.get(caps.CameraType, "unknown")
-            resolution = camera.GetDetector()
-            cameras.add((i, model, resolution))
+            name = "Andor " + AndorCapabilities.CameraTypes.get(caps.CameraType, "unknown")
+#            resolution = camera.GetDetector()
+            cameras.append((name, {"device": i}))
             # seems to cause problem is the camera is to be reopened...
             # or if we try to use andorcam3 after.
 #            camera.Shutdown()
