@@ -161,7 +161,7 @@ class AndorCam3(model.DigitalCamera):
         self.InitialiseLibrary()
         
         self.temp_timer = None
-        self.handle = self.Open(device)
+        self.Open(device)
         if device is None:
             # nothing else to initialise
             return
@@ -247,16 +247,15 @@ class AndorCam3(model.DigitalCamera):
         """
         device (None or int): number of the device to open, as defined by Andor, cd scan()
           if None, uses the system handle, which allows very limited access to some information
-        return a c_int, the handle
         """
         if device is None:
-            return c_int(ATDLL.HANDLE_SYSTEM)
-        
-        handle = c_int()
-        self.atcore.AT_Open(device, byref(handle))
-        return handle
+            self.handle = c_int(ATDLL.HANDLE_SYSTEM)
+        else:
+            self.handle = c_int()
+            self.atcore.AT_Open(device, byref(self.handle))
     
     def Close(self):
+        assert self.handle is not None
         self.atcore.AT_Close(self.handle)
         
     def Command(self, command):
@@ -958,17 +957,17 @@ class AndorCam3(model.DigitalCamera):
         dc = camera.GetInt(u"Device Count")
         logging.debug("Found %d devices.", dc)
         
-        # we reuse the same object to avoid init/del all the time
+        # Trick: we reuse the same object to avoid init/del all the time
         system_handle = camera.handle
         
         cameras = []
         for i in range(dc):
-            camera.handle = camera.Open(i)
+            camera.Open(i)
             name = camera.getModelName()
             cameras.append((name, {"device": i}))
             camera.Close()
             
-        camera.handle = system_handle # for the del() to work fine
+        camera.handle = system_handle # for the terminate() to work fine
         return cameras
 
 
