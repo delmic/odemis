@@ -551,7 +551,7 @@ def main(args):
     
     # scan needs to have the backend stopped
     if options.scan:
-        if status != BACKEND_STOPPED:
+        if status == BACKEND_RUNNING:
             logging.error("Back-end running while trying to scan for devices")
             return 127
         try:
