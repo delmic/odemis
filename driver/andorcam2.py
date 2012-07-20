@@ -1142,11 +1142,9 @@ class AndorCam2(model.DigitalCamera):
             
             caps = camera.GetCapabilities()
             name = "Andor " + AndorCapabilities.CameraTypes.get(caps.CameraType, "unknown")
-#            resolution = camera.GetDetector()
             cameras.append((name, {"device": i}))
             # seems to cause problem is the camera is to be reopened...
-            # or if we try to use andorcam3 after.
-#            camera.Shutdown()
+            camera.Shutdown()
             
         camera.handle = None # so that there is no shutdown
         return cameras
