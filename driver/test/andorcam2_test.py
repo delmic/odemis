@@ -16,12 +16,16 @@ Delmic Acquisition Software is distributed in the hope that it will be useful, b
 
 You should have received a copy of the GNU General Public License along with Delmic Acquisition Software. If not, see http://www.gnu.org/licenses/.
 '''
-from abs_cam_test import VirtualTestCam
+from abs_cam_test import VirtualTestCam, VirtualStaticTestCam
 from driver import andorcam2
 import logging
 import unittest
 
 logging.getLogger().setLevel(logging.DEBUG)
+
+class StaticTestAndorCam2(unittest.TestCase, VirtualStaticTestCam):
+    camera_type = andorcam2.AndorCam2
+    camera_args = ("camera", "test", None, 0)
 
 class TestAndorCam2(unittest.TestCase, VirtualTestCam):
     """

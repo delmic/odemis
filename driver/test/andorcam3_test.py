@@ -17,10 +17,13 @@ Delmic Acquisition Software is distributed in the hope that it will be useful, b
 You should have received a copy of the GNU General Public License along with Delmic Acquisition Software. If not, see http://www.gnu.org/licenses/.
 '''
 from driver import andorcam3
-from abs_cam_test import VirtualTestCam
+from abs_cam_test import VirtualTestCam, VirtualStaticTestCam
 import unittest
 
-# FIXME temperature update doesn't die
+
+class StaticTestAndorCam3(unittest.TestCase, VirtualStaticTestCam):
+    camera_type = andorcam3.AndorCam3
+    camera_args = ("camera", "test", None, 0)
 
 class TestAndorCam3(unittest.TestCase, VirtualTestCam):
     """
