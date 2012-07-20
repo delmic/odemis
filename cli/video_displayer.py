@@ -31,10 +31,19 @@ class VideoDisplayer(object):
         """
         # Can be called from a separate thread, so don't call directly wxPython (not even BitmapFromImage)
         size = data.shape[0:2]
-        scale = int(math.ceil(numpy.amax(data) / 256.0))
-        if scale < 1:
-            scale = 1
-        data8 = numpy.array(data/scale, dtype="uint8") # 1 copy
+        # adapt the brightness (and make sure the image fits 8 bits)
+#        maxval = numpy.amax(data)
+#        if maxval < 256:
+#            # too dark
+#            scale = int(math.floor(256.0 / maxval))
+#            drescaled = data * scale
+#        else:
+#            scale = int(math.ceil(maxval / 256.0))
+#            drescaled = data / scale
+        minmax = [numpy.amin(data), numpy.amax(data)]
+        drescaled = numpy.interp(data, minmax, [0, 256])
+            
+        data8 = numpy.array(drescaled, dtype="uint8") # 1 copy
         rgb = numpy.dstack((data8, data8, data8)) # 1 copy
         self.app.img = wx.ImageFromData(*size, data=rgb.tostring())
         wx.CallAfter(self.app.update_view)
