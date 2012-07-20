@@ -16,6 +16,7 @@ Delmic Acquisition Software is distributed in the hope that it will be useful, b
 You should have received a copy of the GNU General Public License along with Delmic Acquisition Software. If not, see http://www.gnu.org/licenses/.
 '''
 # This is a basic command line interface to the odemis back-end
+from cli.video_displayer import VideoDisplayer
 from dataio import tiff
 from driver import andorcam3, andorcam2
 import Pyro4
@@ -477,7 +478,49 @@ def acquire(comp_name, dataflow_names, filename):
     
     tiff.ImageExporter.export(images[0], filename)
     return 0
+
+def live_display(comp_name, df_name):
+    """
+    Acquire an image from one (or more) dataflow
+    comp_name (string): name of the detector to find
+    df_name (string): name of the dataflow to access
+    """
+    try:
+        component = get_detector(comp_name)
+    except LookupError:
+        logging.error("Failed to find detector '%s'", comp_name)
+        return 127
+    except:
+        logging.error("Failed to contact the back-end")
+        return 127
     
+    # check the dataflow exists
+    try:
+        df = getattr(component, df_name)
+    except:
+        logging.error("Failed to find data-flow '%s' on component '%s'", df_name, comp_name)
+        return 129
+    
+    if not isinstance(df, model.DataFlowBase):
+        logging.error("'%s' is not a data-flow of component '%s'", df_name, comp_name)
+        return 129
+    
+    print "Press 'Q' to quit"
+    # create a window
+    size = component.resolution.value
+    window = VideoDisplayer("Live from %s.%s" % (comp_name, df_name), size)
+    
+        # update the picture and wait
+    def new_image_wrapper(df, image):
+        window.new_image(image)
+    try:
+        df.subscribe(new_image_wrapper)
+        
+        # wait until the window is closed
+        window.waitQuit()
+    finally:
+        df.unsubscribe(new_image_wrapper)
+
 def main(args):
     """
     Handles the command line arguments 
@@ -518,7 +561,10 @@ def main(args):
                          help="Acquire an image (default data-flow is \"data\")")
     dm_grp.add_argument("--output", "-o", dest="output",
                         help="name of the file where the image should be saved after acquisition. It is saved in TIFF format.")
-
+    dm_grpe.add_argument("--live", dest="live", nargs="+", 
+                         metavar=("<component>", "data-flow"),
+                         help="Display and update an image on the screen (default data-flow is \"data\")")
+    
     options = parser.parse_args(args[1:])
     
     # Set up logging before everything else
@@ -537,12 +583,13 @@ def main(args):
     if (not options.check and not options.kill and not options.scan 
         and not options.list and not options.stop and options.move is None
         and options.listprop is None and options.setattr is None
-        and options.acquire is None):
+        and options.acquire is None and options.live is None):
         logging.error("no action specified.")
         return 127
     if options.acquire is not None and options.output is None:
         logging.error("name of the output file must be specified.")
         return 127
+
     
     status = get_backend_status()
     if options.check:
@@ -603,7 +650,17 @@ def main(args):
             else:
                 dataflows = options.acquire[1:]
             acquire(component, dataflows, options.output)
-            
+          
+        if options.live is not None:
+            component = options.live[0]
+            if len(options.live) == 1:
+                dataflow = "data"
+            elif len(options.live) == 2:
+                dataflow = options.acquire[2]
+            else:
+                logging.error("live command accepts only one data-flow")
+                return 127
+            live_display(component, dataflow)
     except:
         logging.exception("Unexpected error while performing action.")
         return 127
