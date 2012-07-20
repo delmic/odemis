@@ -17,6 +17,7 @@ You should have received a copy of the GNU General Public License along with Del
 '''
 # This is a basic command line interface to the odemis back-end
 from dataio import tiff
+from driver import andorcam3, andorcam2
 import Pyro4
 import __version__
 import argparse
@@ -46,6 +47,41 @@ status_to_xtcode = {BACKEND_RUNNING: 0,
                     BACKEND_DEAD: 1,
                     BACKEND_STOPPED: 2
                     }
+
+# small object that can be remotely executed for scanning
+class Scanner(model.Component):
+    def __init__(self, cls, **kwargs):
+        assert(inspect.isclass(cls))
+        model.Component.__init__(self, "scanner for %s" % cls.__name__, **kwargs)
+        self.cls = cls
+    def scan(self):
+        logging.info("Scanning for '%s' devices", self.cls.__name__)
+        return self.cls.scan()
+
+def scan():
+    """
+    Scan for connected devices and list them
+    Output like:
+    Classname: 'Name of Device' init={arg: value, arg2: value2}
+    """
+    # only here, to avoid importing everything for other commands
+    import driver
+    num = 0
+    for module_name in driver.__all__:
+        module = __import__("driver."+module_name, fromlist=[module_name])
+        for cls_name, cls in inspect.getmembers(module, inspect.isclass):
+            if issubclass(cls, model.HwComponent) and hasattr(cls, "scan"):
+                # do it in a separate container so that we don't have to load
+                # all drivers in the same process (andor cams don't like it)
+                container_name = "scanner%d"%num
+                num += 1
+                scanner = model.createInNewContainer(container_name, Scanner, {"cls": cls})
+                devices = scanner.scan()
+                scanner.terminate()
+                model.getContainer(container_name).terminate()
+                for name, args in devices:
+                    print "%s.%s: '%s' init=%s" % (module_name, cls_name, name, str(args))
+                
 
 def kill_backend():
     try:
@@ -463,6 +499,8 @@ def main(args):
                          help="Kill the running back-end")
     dm_grpe.add_argument("--check", dest="check", action="store_true", default=False,
                          help="Check for a running back-end (only returns exit code)")
+    dm_grpe.add_argument("--scan", dest="scan", action="store_true", default=False,
+                         help="Scan for possible devices to connect (the back-end must be stopped)")
     dm_grpe.add_argument("--list", "-l", dest="list", action="store_true", default=False,
                          help="List the components of the microscope")
     dm_grpe.add_argument("--list-prop", "-L", dest="listprop", metavar="<component>",
@@ -496,8 +534,8 @@ def main(args):
     logging.getLogger().addHandler(handler)
     
     # anything to do?
-    if (not options.check and not options.kill and not options.list 
-        and not options.stop and options.move is None
+    if (not options.check and not options.kill and not options.scan 
+        and not options.list and not options.stop and options.move is None
         and options.listprop is None and options.setattr is None
         and options.acquire is None):
         logging.error("no action specified.")
@@ -510,6 +548,17 @@ def main(args):
     if options.check:
         logging.info("Status of back-end is %s", status)
         return status_to_xtcode[status]
+    
+    # scan needs to have the backend stopped
+    if options.scan:
+        if status != BACKEND_STOPPED:
+            logging.error("Back-end running while trying to scan for devices")
+            return 127
+        try:
+            return scan()
+        except:
+            logging.exception("Unexpected error while performing scan.")
+            return 127
     
     # check if there is already a backend running
     if status == BACKEND_STOPPED:
