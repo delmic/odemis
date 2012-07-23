@@ -68,6 +68,7 @@ def scan():
     # only here, to avoid importing everything for other commands
     import driver
     num = 0
+    # we scan by using every HwComponent class which has a .scan() method
     for module_name in driver.__all__:
         module = __import__("driver."+module_name, fromlist=[module_name])
         for cls_name, cls in inspect.getmembers(module, inspect.isclass):
@@ -82,7 +83,7 @@ def scan():
                 model.getContainer(container_name).terminate()
                 for name, args in devices:
                     print "%s.%s: '%s' init=%s" % (module_name, cls_name, name, str(args))
-                
+    return 0
 
 def kill_backend():
     try:

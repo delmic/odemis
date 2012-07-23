@@ -19,6 +19,7 @@ You should have received a copy of the GNU General Public License along with Del
 from cli import main
 import Image
 import StringIO
+import logging
 import os
 import re
 import subprocess
@@ -31,6 +32,12 @@ ODEMISD_PATH = "../../odemisd/main.py"
 SIM_CONFIG = "../../odemisd/test/optical-sim.odm.yaml"
 class TestWithoutBackend(unittest.TestCase):
     # all the test cases which don't need a backend running
+
+    def setUp(self):
+        # reset the logging (because otherwise it accumulates)
+        if logging.root:
+            del logging.root.handlers[:]
+    
     def test_help(self):
         """
         It checks handling help option
@@ -42,10 +49,9 @@ class TestWithoutBackend(unittest.TestCase):
             
             cmdline = "cli --help"
             ret = main.main(cmdline.split())
-            
         except SystemExit, exc:
             ret = exc.code
-        self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
+        self.assertEqual(ret, 0, "trying to run '%s' returned %d" % (cmdline, ret))
         
         output = out.getvalue()
         self.assertTrue("optional arguments" in output)
@@ -60,9 +66,30 @@ class TestWithoutBackend(unittest.TestCase):
         except SystemExit, exc: # because it's handled by argparse
             ret = exc.code
         self.assertNotEqual(ret, 0, "trying to run erroneous '%s'" % cmdline)
+
+    def test_scan(self):
+        try:
+            # change the stdout
+            out = StringIO.StringIO()
+            sys.stdout = out
+            
+            cmdline = "cli  --log-level=2 --scan"
+            ret = main.main(cmdline.split())
+        except SystemExit, exc:
+            ret = exc.code
+        self.assertEqual(ret, 0, "trying to run '%s' returned %d" % (cmdline, ret))
+        
+        output = out.getvalue()
+        # SimCam should be there for sure
+        self.assertTrue("andorcam3.AndorCam3" in output)
+    
     
 class TestWithBackend(unittest.TestCase):
     def setUp(self):
+        # reset the logging (because otherwise it accumulates)
+        if logging.root:
+            del logging.root.handlers[:]
+            
         # run the backend as a daemon
         # we cannot run it normally as the child would also think he's in a unittest
         cmdline = ODEMISD_PATH + " --log-level=2 --log-target=testdaemon.log --daemonize %s" % SIM_CONFIG
