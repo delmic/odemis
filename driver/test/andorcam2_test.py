@@ -23,6 +23,7 @@ import unittest
 
 logging.getLogger().setLevel(logging.DEBUG)
 
+@unittest.skip("simple")
 class StaticTestAndorCam2(unittest.TestCase, VirtualStaticTestCam):
     camera_type = andorcam2.AndorCam2
     camera_args = ("camera", "test", None, 0)

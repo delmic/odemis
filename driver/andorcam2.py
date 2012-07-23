@@ -409,7 +409,7 @@ class AndorCam2(model.DigitalCamera):
         self.temp_timer.start()
         
         self.acquisition_lock = threading.Lock()
-        self.acquire_must_stop = False
+        self.acquire_must_stop = threading.Event()
         self.acquire_thread = None
         
         self.data = AndorCam2DataFlow(self)
@@ -971,17 +971,21 @@ class AndorCam2(model.DigitalCamera):
             self.atcore.FreeInternalMemory() # TODO not sure it's needed
             return array
     
-    def acquireFlow(self, callback, num=None):
+    def start_flow(self, callback):
         """
         Set up the camera and acquireOne a flow of images at the best quality for the given
           parameters. Should not be called if already a flow is being acquired.
         callback (callable (DataArray) no return):
          function called for each image acquired
-        num (None or int): number of images to acquireOne, or infinite if None
-        returns immediately. To stop acquisition, call stopAcquireFlow()
         """
+        # if there is a very quick unsubscribe(), subscribe(), the previous
+        # thread might still be running
+        self.wait_stopped_flow() # no-op is the thread is not running
+        
         self.acquisition_lock.acquire()
+        
         self.select()
+        # Just to be sure
         status = c_int()
         self.atcore.GetStatus(byref(status))
         assert status.value == AndorV2DLL.DRV_IDLE
@@ -991,13 +995,12 @@ class AndorCam2(model.DigitalCamera):
         # Set up thread
         self.acquire_thread = threading.Thread(target=self._acquire_thread_run,
                 name="andorcam acquire flow thread",
-                args=(callback, num))
+                args=(callback,))
         self.acquire_thread.start()
         
-    def _acquire_thread_run(self, callback, num=None):
+    def _acquire_thread_run(self, callback):
         """
-        The core of the acquisition thread. Runs until it has acquired enough
-        images or acquire_must_stop is True.
+        The core of the acquisition thread. Runs until acquire_must_stop is set.
         """
         metadata = dict(self._metadata) # duplicate
         size = self.resolution.value
@@ -1010,7 +1013,7 @@ class AndorCam2(model.DigitalCamera):
         
         # Acquire the images
         self.atcore.StartAcquisition()
-        while (not self.acquire_must_stop and (num is None or num > 0)):
+        while not self.acquire_must_stop.is_set():
             cbuffer = self._allocate_buffer(size)
     
             metadata[model.MD_ACQ_DATE] = time.time() # time at the beginning
@@ -1034,36 +1037,28 @@ class AndorCam2(model.DigitalCamera):
             
             metadata[model.MD_SENSOR_TEMP] = self._metadata[model.MD_SENSOR_TEMP]
             array = self._buffer_as_array(cbuffer, size, metadata)
-            
             callback(array)
-            if num is not None:
-                num -= 1
     
         self.atcore.AbortAcquisition()
         self.atcore.FreeInternalMemory() # TODO not sure it's needed
         self.acquisition_lock.release()
+        self.acquire_must_stop.clear()
     
-    def stopAcquireFlow(self, sync=False):
+    def req_stop_flow(self, sync=False):
         """
-        Stop the acquisition of a flow of images.
-        sync (boolean): if True, wait that the acquisition is finished before returning.
-         Calling with this flag activated from the acquisition callback is not 
-         permitted (it would cause a dead-lock).
+        Cancel the acquisition of a flow of images: there will not be any notify() after this function
+        Note: the thread might still be running!
         """
-        # TODO should use threading primitives
-        self.acquire_must_stop = True
-        if sync:
-            self.waitAcquireFlow()
+        self.acquire_must_stop.set()
         
-    def waitAcquireFlow(self):
+    def wait_stopped_flow(self):
         """
         Waits until the end acquisition of a flow of images. Calling from the
          acquisition callback is not permitted (it would cause a dead-lock).
         """
         # "while" is mostly to not wait if it's already finished 
-        while self.acquisition_lock.locked():
+        while self.acquire_must_stop.is_set():
             # join() already checks that we are not the current_thread()
-            #assert threading.current_thread() != self.acquire_thread
             self.acquire_thread.join() # XXX timeout for safety? 
     
     def terminate(self):
@@ -1163,23 +1158,28 @@ class AndorCam2DataFlow(model.DataFlow):
         data = self.component.acquireOne()
         # TODO we should avoid this: get() and acquire() simultaneously should be handled by the framework
         # If some subscribers arrived during the acquire()
-        if self._listeners:
-            self.notify(data)
-            self.component.acquireFlow(self.notify)
+        # FIXME
+#        if self._listeners:
+#            self.notify(data)
+#            self.component.acquireFlow(self.notify)
         return data
     
+    # start/stop_generate are _never_ called simultaneously (thread-safe)
     def start_generate(self):
-        assert(not self.component.acquire_thread)
-        
         # is it in acquireOne()? If so, it will be done in .get()
-        if not self.component.acquisition_lock.locked():
-            self.component.acquireFlow(self.notify)
+#        if not self.component.acquisition_lock.locked():
+        try:
+            self.component.start_flow(self.notify)
+        except ReferenceError:
+            # camera has been deleted, it's all fine, we'll be GC'd soon
+            pass            
     
     def stop_generate(self):
         try:
-            self.component.stopAcquireFlow()
-            # TODO we are not waiting for the end of the acquisition, so don't count on start_generate that the lock is not locked
-#            assert(not self.component.acquisition_lock.locked())
+            self.component.req_stop_flow()
+            # we cannot wait for the thread to stop because:
+            # * it would be long
+            # * we can be called inside a notify(), which is inside the thread => would cause a dead-lock
         except ReferenceError:
             # camera has been deleted, it's all fine, we'll be GC'd soon
             pass

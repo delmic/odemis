@@ -33,7 +33,7 @@ class VirtualStaticTestCam(object):
     camera_type = None
     # name, role, children...
     camera_args = ("camera", "test", None)
-#    @unittest.skip("to be separated")
+    
     def test_scan(self):
         """
         Check that we can do a scan. It can pass only if we are
@@ -128,13 +128,95 @@ class VirtualTestCam(object):
             # end early if it's already finished
             if self.left == 0:
                 break
-            time.sleep(2) # 2s per image should be more than enough in any case
+            time.sleep(2 + exposure) # 2s per image should be more than enough in any case
         
         self.assertEqual(self.left, 0)
 
+    @unittest.skip("not implemented")
+    def test_data_flow_with_va(self):
+        self.size = self.camera.shape[:2]
+        exposure = 1.0 # long enough to be sure we can change VAs before the end
+        self.camera.resolution.value = self.size
+        self.camera.exposureTime.value = exposure
+        
+        number = 3
+        self.left = number
+        self.camera.data.subscribe(self.receive_image)
+        
+        # change the attribute
+        time.sleep(exposure)
+        self.camera.exposureTime.value = exposure/2        
+        # should just not raise any exception
+        
+        for i in range(number):
+            # end early if it's already finished
+            if self.left == 0:
+                break
+            time.sleep(2 + exposure) # 2s per image should be more than enough in any case
+        
+        self.assertEqual(self.left, 0)
+
+    @unittest.skip("not implemented")
+    def test_df_subscribe_get(self):
+        self.size = self.camera.shape[:2]
+        exposure = 1.0 # long enough to be sure we can do a get before the end
+        self.camera.resolution.value = self.size
+        self.camera.exposureTime.value = exposure
+        
+        number = 3
+        self.left = number
+        self.camera.data.subscribe(self.receive_image)
+        
+        # change the attribute
+        time.sleep(exposure)
+        self.camera.exposureTime.value = exposure/2
+        # should just not raise any exception
+        
+        # get an image (the next one being generated with the new settings, so probably the second one)
+        start = time.time()
+        im = self.camera.data.get()
+        duration = time.time() - start
+
+        self.assertEqual(im.shape, self.size)
+        self.assertGreaterEqual(duration, exposure, "Error execution took %f s, less than exposure time %d." % (duration, exposure))
+        self.assertIn(model.MD_EXP_TIME, im.metadata)
+        
+        for i in range(number):
+            # end early if it's already finished
+            if self.left == 0:
+                break
+            time.sleep(2 + exposure) # 2s per image should be more than enough in any case
+        
+        self.assertEqual(self.left, 0)
+
+    def test_df_double_subscribe(self):
+        self.size = self.camera.shape[:2]
+        exposure = 1.0 # long enough to be sure we can do a get before the end
+        number, number2 = 3, 5
+        self.camera.resolution.value = self.size
+        self.camera.exposureTime.value = exposure
+        
+        self.left = number
+        self.camera.data.subscribe(self.receive_image)
+        
+        time.sleep(exposure)
+        self.left2 = number2
+        self.camera.data.subscribe(self.receive_image2)
+        
+        for i in range(number + number2):
+            # end early if it's already finished
+            if self.left == 0 and self.left2 == 0:
+                break
+            time.sleep(2 + exposure) # 2s per image should be more than enough in any case
+        
+        # TODO check that at least the 3rd image is shared?
+        
+        self.assertEqual(self.left, 0)
+        self.assertEqual(self.left2, 0)
+
     def receive_image(self, dataflow, image):
         """
-        callback for acquireFlow of test_acquire_flow()
+        callback for df of test_acquire_flow()
         """
         self.assertEqual(image.shape, self.size)
         self.assertIn(model.MD_EXP_TIME, image.metadata)
@@ -143,7 +225,19 @@ class VirtualTestCam(object):
         if self.left <= 0:
             dataflow.unsubscribe(self.receive_image)
 
-#    @unittest.skip("simple")
+
+    def receive_image2(self, dataflow, image):
+        """
+        callback for df of test_acquire_flow()
+        """
+        self.assertEqual(image.shape, self.size)
+        self.assertIn(model.MD_EXP_TIME, image.metadata)
+        print "Received an image"
+        self.left2 -= 1
+        if self.left2 <= 0:
+            dataflow.unsubscribe(self.receive_image2)
+
+    @unittest.skip("simple")
     def test_binning(self):
         binnings = self.camera.binning.choices
         self.assertIn(1, binnings)
@@ -171,7 +265,7 @@ class VirtualTestCam(object):
         self.assertGreaterEqual(duration, exposure, "Error execution took %f s, less than exposure time %d." % (duration, exposure))
         self.assertIn(model.MD_EXP_TIME, im.metadata)
         
-#    @unittest.skip("simple")
+    @unittest.skip("simple")
     def test_aoi(self):
         """
         Check sub-area acquisition works
@@ -193,7 +287,7 @@ class VirtualTestCam(object):
         self.assertGreaterEqual(duration, exposure, "Error execution took %f s, less than exposure time %d." % (duration, exposure))
         self.assertIn(model.MD_EXP_TIME, im.metadata)
         
-#    @unittest.skip("simple")
+    @unittest.skip("simple")
     def test_error(self):
         """
         Errors should raise an exception but still allow to access the camera afterwards
