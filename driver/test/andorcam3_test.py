@@ -21,11 +21,12 @@ from abs_cam_test import VirtualTestCam, VirtualStaticTestCam
 import unittest
 
 
-class StaticTestAndorCam3(unittest.TestCase, VirtualStaticTestCam):
+class StaticTestAndorCam3(VirtualStaticTestCam, unittest.TestCase):
     camera_type = andorcam3.AndorCam3
     camera_args = ("camera", "test", None, 0)
 
-class TestAndorCam3(unittest.TestCase, VirtualTestCam):
+# Inheritance order is important for setUp, tearDown
+class TestAndorCam3(VirtualTestCam, unittest.TestCase):
     """
     Test directly the AndorCam3 class.
     """

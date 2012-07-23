@@ -65,20 +65,21 @@ class VirtualTestCam(object):
 #    @classmethod
 #    def tearUpClass(cls):
 #        cls.camera.terminate()
-    
+ 
+    def setUp(self):
+        # reset size and binning
+        self.camera.binning.value = 1
+        self.size = self.camera.shape[0:2]
+        self.camera.resolution.value = self.size
+           
     def tearUp(self):
 #        print gc.get_referrers(self.camera)
 #        gc.collect()
         pass
         
-    
-
 #    @unittest.skip("simple")
     def test_acquire(self):
-        self.size = self.camera.shape[0:2]
         exposure = 0.1
-
-        self.camera.resolution.value = self.size
         self.camera.exposureTime.value = exposure
         
         start = time.time()
@@ -91,10 +92,8 @@ class VirtualTestCam(object):
         
 #    @unittest.skip("simple")
     def test_two_acquire(self):
-        self.size = self.camera.shape[0:2]
         exposure = 0.1
         self.camera.binning.value = 1 # just to check it works
-        self.camera.resolution.value = self.size
         self.camera.exposureTime.value = exposure
         
         start = time.time()
@@ -114,11 +113,8 @@ class VirtualTestCam(object):
         self.assertGreaterEqual(duration, exposure, "Error execution took %f s, less than exposure time %d." % (duration, exposure))
         self.assertIn(model.MD_EXP_TIME, im.metadata)
     
-#    @unittest.skip("not implemented")
     def test_acquire_flow(self):
-        self.size = self.camera.shape[:2]
         exposure = 0.1
-        self.camera.resolution.value = self.size
         self.camera.exposureTime.value = exposure
         
         number = 5
@@ -132,11 +128,8 @@ class VirtualTestCam(object):
         
         self.assertEqual(self.left, 0)
 
-    @unittest.skip("not implemented")
     def test_data_flow_with_va(self):
-        self.size = self.camera.shape[:2]
         exposure = 1.0 # long enough to be sure we can change VAs before the end
-        self.camera.resolution.value = self.size
         self.camera.exposureTime.value = exposure
         
         number = 3
@@ -158,9 +151,7 @@ class VirtualTestCam(object):
 
     @unittest.skip("not implemented")
     def test_df_subscribe_get(self):
-        self.size = self.camera.shape[:2]
         exposure = 1.0 # long enough to be sure we can do a get before the end
-        self.camera.resolution.value = self.size
         self.camera.exposureTime.value = exposure
         
         number = 3
@@ -188,12 +179,11 @@ class VirtualTestCam(object):
             time.sleep(2 + exposure) # 2s per image should be more than enough in any case
         
         self.assertEqual(self.left, 0)
-
+    
+#    @unittest.skip("simple")
     def test_df_double_subscribe(self):
-        self.size = self.camera.shape[:2]
         exposure = 1.0 # long enough to be sure we can do a get before the end
         number, number2 = 3, 5
-        self.camera.resolution.value = self.size
         self.camera.exposureTime.value = exposure
         
         self.left = number
@@ -209,7 +199,8 @@ class VirtualTestCam(object):
                 break
             time.sleep(2 + exposure) # 2s per image should be more than enough in any case
         
-        # TODO check that at least the 3rd image is shared?
+        # TODO check that at least the 1st image is not shared and the 3rd image is shared?
+        # Use acq_date
         
         self.assertEqual(self.left, 0)
         self.assertEqual(self.left2, 0)
@@ -232,12 +223,12 @@ class VirtualTestCam(object):
         """
         self.assertEqual(image.shape, self.size)
         self.assertIn(model.MD_EXP_TIME, image.metadata)
-        print "Received an image"
+        print "Received an image in 2"
         self.left2 -= 1
         if self.left2 <= 0:
             dataflow.unsubscribe(self.receive_image2)
 
-    @unittest.skip("simple")
+#    @unittest.skip("simple")
     def test_binning(self):
         binnings = self.camera.binning.choices
         self.assertIn(1, binnings)
@@ -250,6 +241,7 @@ class VirtualTestCam(object):
         # binning should automatically resize the image
         prev_size = self.camera.resolution.value
         self.camera.binning.value = 2
+        self.assertNotEqual(self.camera.resolution.value, prev_size)
         
         # ask for the whole image
         self.size = (self.camera.shape[0] / 2, self.camera.shape[1] / 2)
@@ -265,7 +257,7 @@ class VirtualTestCam(object):
         self.assertGreaterEqual(duration, exposure, "Error execution took %f s, less than exposure time %d." % (duration, exposure))
         self.assertIn(model.MD_EXP_TIME, im.metadata)
         
-    @unittest.skip("simple")
+#    @unittest.skip("simple")
     def test_aoi(self):
         """
         Check sub-area acquisition works
@@ -287,14 +279,11 @@ class VirtualTestCam(object):
         self.assertGreaterEqual(duration, exposure, "Error execution took %f s, less than exposure time %d." % (duration, exposure))
         self.assertIn(model.MD_EXP_TIME, im.metadata)
         
-    @unittest.skip("simple")
+#    @unittest.skip("simple")
     def test_error(self):
         """
         Errors should raise an exception but still allow to access the camera afterwards
         """
-        # reset
-        self.camera.resolution.value = self.camera.shape[:2]
-        
         # empty resolution
         try:
             self.camera.resolution.value = (self.camera.shape[0], 0) # 0 px should be too small

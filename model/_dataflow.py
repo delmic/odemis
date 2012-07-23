@@ -170,6 +170,9 @@ class DataFlowBase(object):
                 l(self, data)
             except WeakRefLostError:
                 self.unsubscribe(l)
+            except:
+                # we cannot abort just because one listener failed
+                logging.exception("Exception when calling notifying a data_flow")
 
 
 # DataFlow object to create on the server (in a component)

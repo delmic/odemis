@@ -364,6 +364,7 @@ class AndorCam2(model.DigitalCamera):
         self._metadata[model.MD_SENSOR_SIZE] = resolution
         
         # setup everything best (fixed)
+        self._prev_settings = (None, None) # image, exposure
         self._setupBestQuality() # sets ._metadata[model.MD_BPP]
         self._shape = resolution + (2**self._metadata[model.MD_BPP],)
         
@@ -385,6 +386,8 @@ class AndorCam2(model.DigitalCamera):
                                         setter=self.setFanSpeed) # ratio to max speed
             self.setFanSpeed(1.0)
 
+        # needed for the AOI, we never change it after
+        self.atcore.SetReadMode(AndorV2DLL.RM_IMAGE)
         self._binning = (1,1) # horizontal, vertical (used by resolutionFitter())
         self._image_rect = (1, resolution[0], 1, resolution[1])
         # need to be before binning, as it is modified when changing binning         
@@ -397,9 +400,9 @@ class AndorCam2(model.DigitalCamera):
         
         maxexp = c_float()
         self.atcore.GetMaximumExposure(byref(maxexp))
-        range_exp = (1e-6, maxexp) # s
-        self.exposureTime = model.FloatContinuous(1.0, range_exp, unit="s", setter=self.setExposureTime)
-        self.setExposureTime(1.0)
+        range_exp = (1e-6, maxexp.value) # s
+        self._exposure_time = 1.0 # s
+        self.exposureTime = model.FloatContinuous(self._exposure_time, range_exp, unit="s", setter=self.setExposureTime)
         
         current_temp = self.GetTemperature()
         self.temperature = model.FloatVA(current_temp, unit="C", readonly=True)
@@ -759,7 +762,7 @@ class AndorCam2(model.DigitalCamera):
         assert((1 <= size[0]) and (size[0] <= resolution[0]) and
                (1 <= size[1]) and (size[1] <= resolution[1]))
         
-        self.atcore.SetReadMode(AndorV2DLL.RM_IMAGE) 
+
         # If the camera doesn't support Area of Interest, then it has to be the
         # size of the sensor
         caps = self.GetCapabilities()
@@ -796,7 +799,7 @@ class AndorCam2(model.DigitalCamera):
         max_size = (int(resolution[0] / self._binning[0]), 
                     int(resolution[1] / self._binning[1]))
         
-        self.atcore.SetReadMode(AndorV2DLL.RM_IMAGE) 
+        # SetReadMode() cannot be here because it cannot be called during acquisition 
         # If the camera doesn't support Area of Interest, then it has to be the
         # size of the sensor
         caps = self.GetCapabilities()
@@ -813,39 +816,19 @@ class AndorCam2(model.DigitalCamera):
         
         return size
 
-    def _SetImage(self):
-        """
-        Change the acquired image size (and position) according to the latest
-        requested binning and size
-        Does not call select()
-        """
-        self.atcore.SetImage(*(self._binning + self._image_rect))
-        self._metadata[model.MD_BINNING] = self._binning[0] # H and V should be equal
-    
-    def _setExposureTime(self, exp):
+    def setExposureTime(self, value):
         """
         Set the exposure time. It's automatically adapted to a working one.
         exp (0<float): exposure time in seconds
-        returns the actual new exposure time
+        returns the new exposure time
         """
-        assert(0.0 < exp)
+        assert(0.0 < value)
         
         maxexp = c_float()
         self.atcore.GetMaximumExposure(byref(maxexp))
-        exp = min(exp, maxexp.value)
-        self.atcore.SetExposureTime(c_float(exp))
-        
-        # Read actual value
-        exposure = c_float()
-        accumulate = c_float()
-        kinetic = c_float()
-        self.atcore.GetAcquisitionTimings(byref(exposure), byref(accumulate), byref(kinetic))
-        self._metadata[model.MD_EXP_TIME] = exposure.value
-        return exposure.value
-    
-    def setExposureTime(self, value):
-        # TODO make sure we are in a state it's possible to change exposure time
-        return self._setExposureTime(value)
+        # we cache it until just before the next acquisition  
+        self._exposure_time = min(value, maxexp.value)
+        return self._exposure_time
     
     @staticmethod
     def find_closest(val, l):
@@ -919,7 +902,44 @@ class AndorCam2(model.DigitalCamera):
         self.atcore.SetShutter(1, 0, 0, 0) # mode 0 = auto
         self.atcore.SetTriggerMode(0) # 0 = internal
 
+    
+    def _need_update_settings(self):
+        """
+        returns (boolean): True if _update_settings() needs to be called
+        """
+        new_image_settings = self._binning + self._image_rect
+        new_settings = (new_image_settings, self._exposure_time)
+        return new_settings != self._prev_settings
         
+    def _update_settings(self):
+        """
+        Commits the settings to the camera. Only the settings which have been
+        modified are updated.
+        Note: acquisition_lock must be taken, and acquisition must _not_ going on.
+        """
+        prev_image_settings, prev_exp_time = self._prev_settings
+
+        new_image_settings = self._binning + self._image_rect
+        if prev_image_settings != new_image_settings:   
+            logging.debug("Updating image settings") 
+            self.atcore.SetImage(*new_image_settings)
+            # there is no metadata for the resolution
+            self._metadata[model.MD_BINNING] = self._binning[0] # H and V should be equal
+    
+        new_exp_time = self._exposure_time
+        if prev_exp_time != new_exp_time:
+            logging.debug("Updating exposure time setting") 
+            self.atcore.SetExposureTime(c_float(new_exp_time))
+
+            # Read actual value
+            exposure = c_float()
+            accumulate = c_float()
+            kinetic = c_float()
+            self.atcore.GetAcquisitionTimings(byref(exposure), byref(accumulate), byref(kinetic))
+            self._metadata[model.MD_EXP_TIME] = exposure.value
+
+        self._prev_settings = (new_image_settings, new_exp_time)
+    
     def _allocate_buffer(self, size):
         """
         returns a cbuffer of the right size for an image
@@ -949,9 +969,9 @@ class AndorCam2(model.DigitalCamera):
             self.atcore.GetStatus(byref(status))
             assert status.value == AndorV2DLL.DRV_IDLE
             
-            self._SetImage() # update the binning/resolution settings
+            self._update_settings()
             metadata = dict(self._metadata) # duplicate
-            size = self.resolution.value
+            size = tuple(self.resolution.value) # duplicate
             
             # Acquire the image
             self.atcore.SetAcquisitionMode(1) # 1 = Single scan
@@ -990,7 +1010,6 @@ class AndorCam2(model.DigitalCamera):
         self.atcore.GetStatus(byref(status))
         assert status.value == AndorV2DLL.DRV_IDLE
         
-        self._SetImage() # update the binning/resolution settings
         
         # Set up thread
         self.acquire_thread = threading.Thread(target=self._acquire_thread_run,
@@ -1002,13 +1021,15 @@ class AndorCam2(model.DigitalCamera):
         """
         The core of the acquisition thread. Runs until acquire_must_stop is set.
         """
-        metadata = dict(self._metadata) # duplicate
-        size = self.resolution.value
-        self.atcore.SetAcquisitionMode(5) # 5 = Run till abort 
-        self.atcore.SetKineticCycleTime(0) # don't wait between acquisitions
         # We don't use the kinetic mode as it might go faster than we can
         # process them, and it's easy to do in software.
-        exposure_time = self.exposureTime.value
+        self.atcore.SetAcquisitionMode(5) # 5 = Run till abort 
+        self._update_settings()
+        self.atcore.SetKineticCycleTime(0) # don't wait between acquisitions
+        
+        metadata = dict(self._metadata) # duplicate
+        size = tuple(self.resolution.value) # duplicate
+        exposure_time = metadata[model.MD_EXP_TIME]
         readout_time = size[0] * size[1] * metadata[model.MD_READOUT_TIME] # s
         
         # Acquire the images
@@ -1020,6 +1041,7 @@ class AndorCam2(model.DigitalCamera):
             try:
                 self.WaitForAcquisition(exposure_time + readout_time + 1)
             except AndorV2Error as (errno, strerr):
+                # FIXME: this happens very often: not sure what's wrong, need fix
                 if errno == 20024: # DRV_NO_NEW_DATA
                     logging.warning("trying again to acquire image after error %s:", strerr)
                     try:
@@ -1027,6 +1049,7 @@ class AndorCam2(model.DigitalCamera):
                     except AndorV2Error as (errno, strerr):
                         logging.error("Image acquisition failed with error %s:", strerr)
                         # try anyway
+                    self.atcore.SetAcquisitionMode(5)
                     self.atcore.StartAcquisition()
                     continue
                 raise
@@ -1038,6 +1061,18 @@ class AndorCam2(model.DigitalCamera):
             metadata[model.MD_SENSOR_TEMP] = self._metadata[model.MD_SENSOR_TEMP]
             array = self._buffer_as_array(cbuffer, size, metadata)
             callback(array)
+            
+            # need to stop acquisition to update settings
+            if self._need_update_settings():
+                self.atcore.AbortAcquisition()
+                self._update_settings()
+                metadata = dict(self._metadata) # duplicate
+                size = tuple(self.resolution.value) # duplicate
+                exposure_time = metadata[model.MD_EXP_TIME]
+                readout_time = size[0] * size[1] * metadata[model.MD_READOUT_TIME] # s
+                self.atcore.SetAcquisitionMode(5) # needed ?
+                self.atcore.StartAcquisition()                
+            
     
         self.atcore.AbortAcquisition()
         self.atcore.FreeInternalMemory() # TODO not sure it's needed
@@ -1163,6 +1198,17 @@ class AndorCam2DataFlow(model.DataFlow):
 #            self.notify(data)
 #            self.component.acquireFlow(self.notify)
         return data
+    
+    # TODO 
+    def subscribe(self, listener):
+        # if the settings have been updated, the caller probably wants to wait
+        # until these new settings are affected before receiving an image
+        # OR not, anyway, it might change in the future!
+        # we can only certify settings if only one client?
+#        if need_update_settings:
+#            block_until_update
+#        continue
+        pass
     
     # start/stop_generate are _never_ called simultaneously (thread-safe)
     def start_generate(self):
