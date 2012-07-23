@@ -102,6 +102,7 @@ class DataFlowBase(object):
     """
     def __init__(self):
         self._listeners = set()
+        self._lock = threading.Lock() # need to be acquired to modify the set
     
     # to be overridden
     # not defined at all so that the proxy version automatically does a remote call 
@@ -118,17 +119,20 @@ class DataFlowBase(object):
         # TODO update rate argument to indicate how often we need an update?
         assert callable(listener)
         
-        count_before = len(self._listeners)
-        self._listeners.add(WeakMethod(listener))
-        if count_before == 0:
-            self.start_generate()
+        with self._lock:
+            count_before = len(self._listeners)
+            self._listeners.add(WeakMethod(listener))
+            
+            if count_before == 0:
+                self.start_generate()
         
     def unsubscribe(self, listener):
-        self._listeners.discard(WeakMethod(listener))
-        
-        count_after = len(self._listeners)
-        if count_after == 0:
-            self.stop_generate()
+        with self._lock():
+            self._listeners.discard(WeakMethod(listener))
+
+            count_after = len(self._listeners)
+            if count_after == 0:
+                self.stop_generate()
     
     # TODO should default to open a thread that continuously call get()
         
@@ -157,7 +161,11 @@ class DataFlowBase(object):
         """
         assert(isinstance(data, numpy.ndarray))
         
-        for l in self._listeners.copy(): # to allow modify the set while calling
+        # to allow modify the set while calling
+        with self._lock:
+            snapshot_listeners = self._listeners.copy()
+        
+        for l in snapshot_listeners: 
             try:
                 l(self, data)
             except WeakRefLostError:
@@ -241,6 +249,7 @@ class DataFlow(DataFlowBase):
             daemon.unregister(self)
         if self.ctx:
             self.pipe.close()
+            self.pipe = None
             self.ctx.term()
             self.ctx = None
     
@@ -254,34 +263,37 @@ class DataFlow(DataFlowBase):
     
     @oneway
     def subscribe(self, listener):
-        count_before = len(self._listeners)
-        
-        # add string to listeners if listener is string
-        if isinstance(listener, basestring):
-            self._remote_listeners.add(listener)
-        else:
-            assert callable(listener)
-            self._listeners.add(WeakMethod(listener))
+        with self._lock:
+            count_before = self._count_listeners()
+            
+            # add string to listeners if listener is string
+            if isinstance(listener, basestring):
+                self._remote_listeners.add(listener)
+            else:
+                assert callable(listener)
+                self._listeners.add(WeakMethod(listener))
 
-        if count_before == 0:
-            self.start_generate()
+            if count_before == 0:
+                self.start_generate()
             
     @oneway
     def unsubscribe(self, listener):
-        if isinstance(listener, basestring):
-            # remove string from listeners  
-            self._remote_listeners.discard(listener)
-        else:
-            assert callable(listener)
-            self._listeners.discard(WeakMethod(listener))
-
-        count_after = self._count_listeners()
-        if count_after == 0:
-            self.stop_generate()
+        with self._lock:
+            if isinstance(listener, basestring):
+                # remove string from listeners  
+                self._remote_listeners.discard(listener)
+            else:
+                assert callable(listener)
+                self._listeners.discard(WeakMethod(listener))
+    
+            count_after = self._count_listeners()
+            if count_after == 0:
+                self.stop_generate()
         
     def notify(self, data):
         # publish the data remotely
         if self.pipe and len(self._remote_listeners) > 0:
+            # TODO thread-safe for self.pipe ? 
             dformat = {"dtype": str(data.dtype), "shape": data.shape}
             self.pipe.send_pyobj(dformat, zmq.SNDMORE)
             self.pipe.send_pyobj(data.metadata, zmq.SNDMORE)
