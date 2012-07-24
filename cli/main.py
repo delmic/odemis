@@ -188,10 +188,30 @@ def print_data_flows(component):
 
 def print_vattribute(name, va):
     if va.unit:
-        unit = "(unit: %s)" % va.unit
+        unit = " (unit: %s)" % va.unit
     else:
         unit = ""
-    print "\t" + name + " (Vigilant Attribute)\t value: %s %s" % (str(va.value), unit)
+    
+    if va.readonly:
+        readonly = "RO "
+    else:
+        readonly = ""
+    
+    # we cannot discover if it continuous or enumerated, just try and see if it fails
+    try:
+        varange = va.range
+        str_range = " (range: %s -> %s)" % (str(varange[0]), str(varange[1]))
+    except:
+        str_range = ""
+    try:
+        vachoices = va.choices
+        str_choices = " (choices: %s)" % ", ".join([str(c) for c in vachoices])
+    except:
+        str_choices = ""    
+    
+    
+    print("\t" + name + " (%sVigilant Attribute)\t value: %s%s%s%s" %
+          (readonly, str(va.value), unit, str_range, str_choices))
 
 def print_vattributes(component):
     # find all vattributes
