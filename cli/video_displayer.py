@@ -78,11 +78,12 @@ class ImageWindowApp(wx.App):
         self.frame.Show()
     
     def update_view(self):
+        self.frame.Size = self.img.GetSize()
         self.imageCtrl.SetBitmap(wx.BitmapFromImage(self.img))
     
     def OnKey(self, event):
         key = event.GetKeyCode()
-        if chr(key) in ["q", "Q"]:
+        if key in [ord("q"), ord("Q")]:
             self.frame.Destroy()
             
         # everything else we don't process
