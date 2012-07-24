@@ -127,7 +127,7 @@ class DataFlowBase(object):
                 self.start_generate()
         
     def unsubscribe(self, listener):
-        with self._lock():
+        with self._lock:
             self._listeners.discard(WeakMethod(listener))
 
             count_after = len(self._listeners)
@@ -259,11 +259,25 @@ class DataFlow(DataFlowBase):
     def _count_listeners(self):
         return len(self._listeners) + len(self._remote_listeners)
     
-#    # To be overridden
-#    def get(self):
-#        # TODO timeout argument?
-#        pass
-    
+    def get(self):
+        """
+        Acquires one image and return it
+        return (DataArray)
+        Default implementation: it subscribes and, after receiving the first
+         image, unsubscribes. It's inefficient but simple and works in every case.
+        """
+        is_received = threading.Event()
+        data_shared = [None] # in python2 we need to create a new container object
+        
+        def receive_one_image(df, data):
+            df.unsubscribe(receive_one_image)
+            data_shared[0] = data
+            is_received.set()
+        
+        self.subscribe(receive_one_image)
+        is_received.wait()
+        return data_shared[0]
+     
     @oneway
     def subscribe(self, listener):
         with self._lock:
@@ -363,6 +377,7 @@ class DataFlowProxy(DataFlowBase, Pyro4.Proxy):
     
         # send subscription to the actual dataflow
         # a bit tricky because the underlying method gets created on the fly
+#        Pyro4.Proxy.subscribe(self, self._global_name)
         Pyro4.Proxy.__getattr__(self, "subscribe")(self._global_name)
 
     def stop_generate(self):
