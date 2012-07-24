@@ -1028,15 +1028,34 @@ class AndorCam2(model.DigitalCamera):
         self.atcore.SetKineticCycleTime(0) # don't wait between acquisitions
         
         metadata = dict(self._metadata) # duplicate
-        size = tuple(self.resolution.value) # duplicate
+        size = self.resolution.value
+        orig_size = self.resolution.value
         exposure_time = metadata[model.MD_EXP_TIME]
         readout_time = size[0] * size[1] * metadata[model.MD_READOUT_TIME] # s
         
         # Acquire the images
         self.atcore.StartAcquisition()
+        need_reinit = False
         while not self.acquire_must_stop.is_set():
-            cbuffer = self._allocate_buffer(size)
+            # need to stop acquisition to update settings
+            if self._need_update_settings() or need_reinit:
+                try:
+                    self.atcore.AbortAcquisition()
+                except AndorV2Error as (errno, strerr):
+                    # it was already aborted
+                    if errno != 20073: # DRV_IDLE
+                        raise
+                self.atcore.SetAcquisitionMode(5) # needed ?
+                self._update_settings()
+                metadata = dict(self._metadata) # duplicate
+                size = self.resolution.value
+                orig_size = self.resolution.value
+                exposure_time = metadata[model.MD_EXP_TIME]
+                readout_time = size[0] * size[1] * metadata[model.MD_READOUT_TIME] # s
+                self.atcore.StartAcquisition()
+                need_reinit = False
     
+            cbuffer = self._allocate_buffer(size)
             metadata[model.MD_ACQ_DATE] = time.time() # time at the beginning
             try:
                 self.WaitForAcquisition(exposure_time + readout_time + 1)
@@ -1044,37 +1063,27 @@ class AndorCam2(model.DigitalCamera):
                 # FIXME: this happens very often: not sure what's wrong, need fix
                 if errno == 20024: # DRV_NO_NEW_DATA
                     logging.warning("trying again to acquire image after error %s:", strerr)
-                    try:
-                        self.atcore.AbortAcquisition()
-                    except AndorV2Error as (errno, strerr):
-                        logging.error("Image acquisition failed with error %s:", strerr)
-                        # try anyway
-                    self.atcore.SetAcquisitionMode(5)
-                    self.atcore.StartAcquisition()
+                    need_reinit = True
                     continue
                 raise
                 
             # it might have acquired _several_ images in the time to process
             # one image. In this case we discard all but the last one.
             self.atcore.GetMostRecentImage16(cbuffer, size[0] * size[1])
-            
+
             metadata[model.MD_SENSOR_TEMP] = self._metadata[model.MD_SENSOR_TEMP]
             array = self._buffer_as_array(cbuffer, size, metadata)
+            if size != orig_size:
+                logging.warning("size != orig_size %s", str(orig_size))
+                print 
             callback(array)
-            
-            # need to stop acquisition to update settings
-            if self._need_update_settings():
-                self.atcore.AbortAcquisition()
-                self._update_settings()
-                metadata = dict(self._metadata) # duplicate
-                size = tuple(self.resolution.value) # duplicate
-                exposure_time = metadata[model.MD_EXP_TIME]
-                readout_time = size[0] * size[1] * metadata[model.MD_READOUT_TIME] # s
-                self.atcore.SetAcquisitionMode(5) # needed ?
-                self.atcore.StartAcquisition()                
-            
-    
-        self.atcore.AbortAcquisition()
+     
+        try:    
+            self.atcore.AbortAcquisition()
+        except AndorV2Error as (errno, strerr):
+            # it was already aborted
+            if errno != 20073: # DRV_IDLE
+                raise
         self.atcore.FreeInternalMemory() # TODO not sure it's needed
         self.acquisition_lock.release()
         self.acquire_must_stop.clear()
@@ -1082,10 +1091,18 @@ class AndorCam2(model.DigitalCamera):
     def req_stop_flow(self, sync=False):
         """
         Cancel the acquisition of a flow of images: there will not be any notify() after this function
-        Note: the thread might still be running!
+        Note: the thread should be already running
+        Note: the thread might still be running for a little while after!
         """
+        assert not self.acquire_must_stop.is_set()
         self.acquire_must_stop.set()
-        
+        try:
+            self.atcore.AbortAcquisition()
+        except AndorV2Error:
+            # probably complaining it's not possible because the acquisition is 
+            # already over, so nothing to do
+            pass
+          
     def wait_stopped_flow(self):
         """
         Waits until the end acquisition of a flow of images. Calling from the
@@ -1190,25 +1207,28 @@ class AndorCam2DataFlow(model.DataFlow):
     def get(self):
         # TODO if camera is already acquiring, subscribe and wait for the coming picture with an event
         # but we should make sure that VA have not been updated in between. 
-        data = self.component.acquireOne()
+#        data = self.component.acquireOne()
         # TODO we should avoid this: get() and acquire() simultaneously should be handled by the framework
         # If some subscribers arrived during the acquire()
         # FIXME
 #        if self._listeners:
 #            self.notify(data)
 #            self.component.acquireFlow(self.notify)
-        return data
-    
-    # TODO 
-    def subscribe(self, listener):
-        # if the settings have been updated, the caller probably wants to wait
-        # until these new settings are affected before receiving an image
-        # OR not, anyway, it might change in the future!
-        # we can only certify settings if only one client?
-#        if need_update_settings:
-#            block_until_update
-#        continue
-        pass
+#        return data
+
+        # FIXME
+        # For now we simplify by considering it as just a 1-image subscription
+        is_received = threading.Event()
+        data_shared = [None] # in python2 we need to create a new container object
+        
+        def receive_one_image(df, data):
+            df.unsubscribe(receive_one_image)
+            data_shared[0] = data
+            is_received.set()
+        
+        self.subscribe(receive_one_image)
+        is_received.wait()
+        return data_shared[0]
     
     # start/stop_generate are _never_ called simultaneously (thread-safe)
     def start_generate(self):

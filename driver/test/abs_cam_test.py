@@ -71,6 +71,7 @@ class VirtualTestCam(object):
         self.camera.binning.value = 1
         self.size = self.camera.shape[0:2]
         self.camera.resolution.value = self.size
+        self.acq_dates = (set(), set()) # 2 sets of dates, one for each receiver 
            
     def tearUp(self):
 #        print gc.get_referrers(self.camera)
@@ -149,7 +150,7 @@ class VirtualTestCam(object):
         
         self.assertEqual(self.left, 0)
 
-    @unittest.skip("not implemented")
+#    @unittest.skip("not implemented")
     def test_df_subscribe_get(self):
         exposure = 1.0 # long enough to be sure we can do a get before the end
         self.camera.exposureTime.value = exposure
@@ -199,8 +200,11 @@ class VirtualTestCam(object):
                 break
             time.sleep(2 + exposure) # 2s per image should be more than enough in any case
         
-        # TODO check that at least the 1st image is not shared and the 3rd image is shared?
+        # TODO check that at least the 3rd image is shared?
         # Use acq_date
+        common_dates = self.acq_dates[0] & self.acq_dates[1]
+        self.assertGreater(len(common_dates), 0, "No common dates between %r and %r" %
+                           (self.acq_dates[0], self.acq_dates[1]))
         
         self.assertEqual(self.left, 0)
         self.assertEqual(self.left2, 0)
@@ -211,6 +215,7 @@ class VirtualTestCam(object):
         """
         self.assertEqual(image.shape, self.size)
         self.assertIn(model.MD_EXP_TIME, image.metadata)
+        self.acq_dates[0].add(image.metadata[model.MD_ACQ_DATE])
         print "Received an image"
         self.left -= 1
         if self.left <= 0:
@@ -223,6 +228,7 @@ class VirtualTestCam(object):
         """
         self.assertEqual(image.shape, self.size)
         self.assertIn(model.MD_EXP_TIME, image.metadata)
+        self.acq_dates[1].add(image.metadata[model.MD_ACQ_DATE])
         print "Received an image in 2"
         self.left2 -= 1
         if self.left2 <= 0:
