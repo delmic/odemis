@@ -361,7 +361,7 @@ class StreamPanelEntry(wx.PyPanel):
                       border=34)
 
         self._sld_brightness = CustomSlider(
-            self._panel, -1, 128, (0, 255), (30, 60), (-1, 10),
+            self._panel, -1, 128, (0, 255), (30, 15), (-1, 10),
             wx.SL_HORIZONTAL)
 
         self._gbs.Add(self._sld_brightness, (1, 1), flag=wx.EXPAND)
@@ -387,7 +387,7 @@ class StreamPanelEntry(wx.PyPanel):
                       flag=wx.LEFT | wx.ALIGN_CENTRE_VERTICAL, border=34)
 
         self._sld_contrast = CustomSlider(
-            self._panel, -1, 128, (0, 255), (30, 60), (-1, 10),
+            self._panel, -1, 128, (0, 255), (30, 15), (-1, 10),
             wx.SL_HORIZONTAL)
 
         self._gbs.Add(self._sld_contrast, (2, 1), flag=wx.EXPAND)
