@@ -40,12 +40,22 @@ class VideoDisplayer(object):
 #        else:
 #            scale = int(math.ceil(maxval / 256.0))
 #            drescaled = data / scale
+        # This is still quite inefficient as it turns the 16 bits into floats
+        # in a new array and then convert it to 8 bit and then duplicate it 3 times.
+        # TODO: http://wxpython-users.1045709.n5.nabble.com/BitmapFromBuffer-speed-and-proposal-for-wx-Bitmap-CopyFromBuffer-td2333356.html
         minmax = [numpy.amin(data), numpy.amax(data)]
-        drescaled = numpy.interp(data, minmax, [0, 256])
+        drescaled = numpy.interp(data, minmax, [0, 256]) # this is qui
             
-        data8 = numpy.array(drescaled, dtype="uint8") # 1 copy
-        rgb = numpy.dstack((data8, data8, data8)) # 1 copy
-        self.app.img = wx.ImageFromData(*size, data=rgb.tostring())
+#        data8 = drescaled.astype("uint8") # 1 copy
+#        rgb = numpy.dstack((data8, data8, data8)) # 3 copies
+#        self.app.img = wx.ImageFromData(*size, data=rgb.tostring()) # 1 (fromdata) + 1(tostring) copy
+        rgb = numpy.empty(size + (3,), dtype="uint8") # 0 copy (1 malloc)
+        # dstack doesn't work because it doesn't generate in C order (uses strides)
+        rgb[:,:,0] = drescaled # 1 copy (+1 conversion)
+        rgb[:,:,1] = rgb[:,:,0] # 1 copy
+        rgb[:,:,2] = rgb[:,:,0] # 1 copy
+        self.app.img = wx.ImageFromBuffer(*size, dataBuffer=rgb) # 0 copy
+
         wx.CallAfter(self.app.update_view)
     
     def waitQuit(self):
@@ -68,12 +78,6 @@ class ImageWindowApp(wx.App):
         self.img = wx.EmptyImage(*size, clear=True)
         self.imageCtrl = wx.StaticBitmap(self.panel, wx.ID_ANY, wx.BitmapFromImage(self.img))
  
-#        self.mainSizer = wx.BoxSizer(wx.VERTICAL)
-#        self.mainSizer.Add(self.imageCtrl, 0, wx.ALL, 5)
-#        self.panel.SetSizer(self.mainSizer)
-#        self.mainSizer.Fit(self.frame)
- 
-        self.panel.Layout()
         self.panel.SetFocus()
         self.frame.Show()
     
