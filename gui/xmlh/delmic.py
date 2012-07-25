@@ -285,12 +285,12 @@ component.Manager.setMenu(c, 'control', 'Delmic unit integer text ctrl', 'odemis
 component.Manager.setTool(c, 'Controls', pos=(0, 2))
 
 
-### odemis.gui.comp.canvas.DraggableCanvas
+### odemis.gui.dblmscopepanel.DblMicroscopePanel
 
-c = component.Container('odemis.gui.comp.canvas.DraggableCanvas', ['window', 'top_level', 'control'],
+c = component.Container('odemis.gui.dblmscopepanel.DblMicroscopePanel', ['window', 'top_level', 'control'],
               ['pos', 'size'],
               image=images.TreePanel.GetImage())
 c.addStyles('wxTAB_TRAVERSAL')
 component.Manager.register(c)
-component.Manager.addXmlHandler(xh_delmic.DraggableCanvasXmlHandler)
-component.Manager.setMenu(c, 'ROOT', 'Delmic Canvas', 'odemis.gui.comp.canvas.DraggableCanvas', 10)
+component.Manager.addXmlHandler(xh_delmic.DblMicroscopePanelXmlHandler)
+component.Manager.setMenu(c, 'ROOT', 'Delmic Micros Panel', 'odemis.gui.dblmscopepanel.DblMicroscopePanel', 10)

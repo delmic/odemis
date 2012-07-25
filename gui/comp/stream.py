@@ -41,6 +41,8 @@ from odemis.gui.comp.buttons import ImageButton, ImageToggleButton, \
 from odemis.gui.comp.text import SuggestTextCtrl, IntegerTextCtrl, \
     UnitIntegerCtrl
 from odemis.gui.comp.foldpanelbar import FoldPanelBar
+from odemis.gui.comp.slider import CustomSlider
+
 from odemis.gui.util.conversion import wave2hex
 
 TEST_STREAM_LST = ["Aap", u"nöot", "noot", "mies", "kees", "vuur",
@@ -48,30 +50,6 @@ TEST_STREAM_LST = ["Aap", u"nöot", "noot", "mies", "kees", "vuur",
                   "aaa", "aaaa", "aaaaa", "aaaaaa", "aaaaaaa"]
 
 stream_remove_event, EVT_STREAM_REMOVE = wx.lib.newevent.NewEvent()
-
-class Slider(wx.Slider):
-    """ This custom Slider class was implemented so it would not capture
-    mouse wheel events, which were causing problems when the user wanted
-    to scroll through the main fold panel bar.
-    """
-
-    def __init__(self, *args, **kwargs):
-        wx.Slider.__init__(self, *args, **kwargs)
-        self.Bind(wx.EVT_MOUSEWHEEL, self.pass_to_scollwin)
-
-    def pass_to_scollwin(self, evt):
-        """ This event handler prevents anything from happening to the Slider on
-        MOUSEWHEEL events and passes the event on to any parent ScrolledWindow
-        """
-
-        # Find the parent ScolledWindow
-        win = self.Parent
-        while win and not isinstance(win, wx.ScrolledWindow):
-            win = win.Parent
-
-        # If a ScrolledWindow was found, pass on the event
-        if win:
-            win.GetEventHandler().ProcessEvent(evt)
 
 
 class Expander(wx.PyControl):
@@ -382,8 +360,8 @@ class StreamPanelEntry(wx.PyPanel):
                       flag=wx.LEFT | wx.ALIGN_CENTRE_VERTICAL,
                       border=34)
 
-        self._sld_brightness = Slider(
-            self._panel, -1, 128, 0, 255, (30, 60), (-1, 10),
+        self._sld_brightness = CustomSlider(
+            self._panel, -1, 128, (0, 255), (30, 60), (-1, 10),
             wx.SL_HORIZONTAL)
 
         self._gbs.Add(self._sld_brightness, (1, 1), flag=wx.EXPAND)
@@ -408,8 +386,8 @@ class StreamPanelEntry(wx.PyPanel):
         self._gbs.Add(lbl_contrast, (2, 0),
                       flag=wx.LEFT | wx.ALIGN_CENTRE_VERTICAL, border=34)
 
-        self._sld_contrast = Slider(
-            self._panel, -1, 128, 0, 255, (30, 60), (-1, 10),
+        self._sld_contrast = CustomSlider(
+            self._panel, -1, 128, (0, 255), (30, 60), (-1, 10),
             wx.SL_HORIZONTAL)
 
         self._gbs.Add(self._sld_contrast, (2, 1), flag=wx.EXPAND)

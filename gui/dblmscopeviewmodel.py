@@ -17,30 +17,30 @@ You should have received a copy of the GNU General Public License along with Del
 '''
 
 from instrmodel import InstrumentalImage
-from model import VigilantAttribute
+from odemis.model import VigilantAttribute
 
 class DblMscopeViewModel(object):
     """
     Data model of a view from 2 microscopes
     """
-    
+
     def __init__(self):
         # image density => field of view, position...
         # 0<float
         self.mpp = VigilantMPP(0.000025) # m/px  (0.25mm/px)
-        
+
         # how much one image is displayed on the other one
         # 0<=float<=1
         self.merge_ratio = VigilantMergeRatio(0.3) # no unit
-        
+
         self.images = [VigilantAttribute(InstrumentalImage(None, None, None)),
                        VigilantAttribute(InstrumentalImage(None, None, None))]
-        
+
         # center position of the view
         self.center = VigilantAttribute((0,0)) # (m, m)
-        
+
         self.crosshair = VigilantAttribute(True)
-        
+
 class VigilantMPP(VigilantAttribute):
     """
     VigilantAttribute with special validation for MPP (float>0)
@@ -48,7 +48,7 @@ class VigilantMPP(VigilantAttribute):
     def _set(self, value):
         assert(0.0 < value)
         VigilantAttribute._set(self, value)
-        
+
 class VigilantMergeRatio(VigilantAttribute):
     """
     VigilantAttribute with special validation for merge ratio

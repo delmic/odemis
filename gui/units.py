@@ -25,7 +25,7 @@ def round_significant(x, n):
     """
     if x == 0:
         return 0
-    
+
     return round(x, int(n - math.ceil(math.log10(abs(x)))))
 
 def round_down_significant(x, n):
@@ -34,9 +34,9 @@ def round_down_significant(x, n):
     """
     if x == 0:
         return 0
-    
+
     exp = n - math.ceil(math.log10(abs(x)))
-    if x > 0: 
+    if x > 0:
         ret = math.floor(x * 10 ** exp) / (10 ** exp)
     else:
         ret = math.ceil(x * 10 ** exp) / (10 ** exp)
@@ -45,7 +45,7 @@ def round_down_significant(x, n):
 
 def to_string_si_prefix(x):
     """
-    Convert a number to a string with the most appropriate SI prefix appended  
+    Convert a number to a string with the most appropriate SI prefix appended
     ex: 0.0012 -> "1.2m"
     x (float): number
     return (string)
@@ -58,6 +58,6 @@ def to_string_si_prefix(x):
     prefix_order = max(-12, min(prefix_order, 9)) # clamping
     rounded = "{:g}".format(x / (10.0 ** prefix_order))
     prefix = prefixes[prefix_order]
-    return rounded + prefix
+    return "{0} {1}".format(rounded, prefix)
 
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:

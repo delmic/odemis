@@ -10,9 +10,14 @@ import traceback
 
 import wx
 
+import Pyro4.errors
+
+import odemis.model
 import odemis.gui.main_xrc
-from  odemis.gui.xmlh import odemis_get_resources
+
+from odemis.gui.xmlh import odemis_get_resources
 from odemis.gui.log import log, create_gui_logger
+from odemis.gui.instrmodel import OpticalBackendConnected
 
 class OdemisGUIApp(wx.App):
     """ This is Odemis' main GUI application class
@@ -45,57 +50,21 @@ class OdemisGUIApp(wx.App):
         """ Application initialization, automatically run from the :wx:`App` constructor.
         """
 
+        try:
+            self.microscope = odemis.model.getMicroscope()
+            self.secom_model = OpticalBackendConnected(self.microscope)
+        except Pyro4.errors.CommunicationError, e:
+            log.exception("oei")
+            msg = "The Odemis GUI could not connect to the Odemis Daemon:\n\n {0}".format(e)
+            wx.MessageBox(msg,
+                          "Connection error",
+                          style=wx.OK|wx.ICON_ERROR)
+            sys.exit(1)
+
         # Load the main frame
         self.fr_main = odemis.gui.main_xrc.xrcfr_main(None)
+
         self.do_init()
-
-
-
-
-        #import odemis.gui.comp.foldpanelbar as fpb
-
-
-        # item = self.fr_main.fpb_settings.AddFoldPanel("Caption 1",
-        #                                               collapsed=False)
-
-        # self.fr_main.fpb_settings.AddFoldPanelWindow(item, wx.StaticText(item, -1, "*Bleep*"))
-
-        # self.fr_main.fpb_settings.AddFoldPanelWindow(item, wx.Panel(item, -1, size=(280, 500)))
-
-        # self.fr_main.fpb_settings.AddFoldPanelWindow(item, wx.StaticText(item, -1, "*Bleep*"))
-
-        # item = self.fr_main.fpb_settings.AddFoldPanel("Caption 2",
-        #                                               collapsed=False)
-
-        # self.fr_main.fpb_settings.AddFoldPanelWindow(item, wx.StaticText(item, -1, "*Bleep*"))
-
-        # self.fr_main.fpb_settings.AddFoldPanelWindow(item, wx.StaticText(item, -1, "*Bleep*"))
-
-        # self.fr_main.fpb_settings.AddFoldPanelWindow(item, wx.StaticText(item, -1, "*Bleep*"))
-
-        # self.fr_main.fpb_settings.AddFoldPanelWindow(item, wx.StaticText(item, -1, "*Bleep*"))
-
-        # self.fr_main.fpb_settings.AddFoldPanelWindow(item, wx.StaticText(item, -1, "One more bleep coming"))
-
-        # self.fr_main.fpb_settings.AddFoldPanelWindow(item, wx.Panel(item, -1, size=(280, 200)))
-
-        # self.fr_main.fpb_settings.AddFoldPanelWindow(item, wx.StaticText(item, -1, "*Last Bleep*"))
-
-
-        # self.fr_main.fpb_settings.Bind(fpb.EVT_CAPTIONBAR, self.height_test)
-
-        #self.fr_main.scr_win.EnableScrolling(False, True)
-        #self.fr_main.scr_win.SetScrollbars(-1, 10, 1, 1)
-
-        #self.height_test()
-
-        #self.dump(self.fr_main.fpb_settings)
-
-
-
-
-        #self.fr_main.scr_win.SetAutoLayout(1)
-
 
 
         # TODO: add a global reference to the main GUI frame
@@ -127,6 +96,11 @@ class OdemisGUIApp(wx.App):
         """
 
         self.init_logger()
+
+
+
+
+
         self.init_gui()
 
         #self.dlg_startup.label_version.SetLabel("%d.%d.%s" % (elit.constants.MAJOR_VERSION, elit.constants.MINOR_VERSION, elit.constants.REVISION_VERSION))
@@ -249,7 +223,9 @@ class OdemisGUIApp(wx.App):
         """ This method cleans up and closes the Odemis GUI. """
         logging.info("Exiting Odemis")
 
+
         # Put cleanup actions here (like disconnect from odemisd)
+
         #self.dlg_startup.Destroy()
         self.fr_main.Destroy()
 
