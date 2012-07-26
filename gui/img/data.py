@@ -1116,10 +1116,10 @@ getemptyBitmap = empty.GetBitmap
 #----------------------------------------------------------------------
 ico_blending_opt = PyEmbeddedImage(
     "iVBORw0KGgoAAAANSUhEUgAAAAcAAAALCAYAAACzkJeoAAAABmJLR0QA/wD/AP+gvaeTAAAA"
-    "CXBIWXMAAAsTAAALEwEAmpwYAAAAB3RJTUUH3AcZDRofA+TWjAAAAHZJREFUGNNtjjEKwkAQ"
-    "Rd+OKXIBTzDnlRCQlPZCKsHWO+QAX2zTpBeLtdngMu6H4TP/MfxJklbgyL9eBtyB1JjZgIG2"
-    "pgQgKQeQ3d2sLM8AF4AdngMca3gJ8Er5itL7ATrg7e59fQnwKH7bgxqegv8k6SBpq7Mv7eAd"
-    "1gdEBR4AAAAASUVORK5CYII=")
+    "CXBIWXMAAAsTAAALEwEAmpwYAAAAB3RJTUUH3AcaCgIcDwymBAAAAHpJREFUGNNtyysOwlAQ"
+    "BdDDCzsZy1ZYEctAoflYEhAYDA5TT0KKgQRPEFUU80qaR6+5mXsyo7qud5j4z3mMLaYDOEs4"
+    "Gs4p4YGmgAbPFBEtlgWuIqJN+VgXuIEOqwKrH0bEG9cM94h49T9hnnvRDX085N4P4Q0fXLrh"
+    "C24PG8CBO1a5AAAAAElFTkSuQmCC")
 index.append('ico_blending_opt')
 catalog['ico_blending_opt'] = ico_blending_opt
 getico_blending_optData = ico_blending_opt.GetData

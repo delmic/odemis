@@ -16,7 +16,7 @@ Delmic Acquisition Software is distributed in the hope that it will be useful, b
 You should have received a copy of the GNU General Public License along with Delmic Acquisition Software. If not, see http://www.gnu.org/licenses/.
 '''
 
-from odemis.gui.comp.canvas import DraggableCanvas, WorldToBufferPoint 
+from odemis.gui.comp.canvas import DraggableCanvas, WorldToBufferPoint
 import wx
 
 CROSSHAIR_COLOR = wx.GREEN
@@ -122,7 +122,7 @@ class DblMicroscopeCanvas(DraggableCanvas):
                 self.SetImage(i, iim.image, pos, scale)
                 #self.ReCenterBuffer(pos)
             else:
-                self.SetImage(i, None)
+                pass#self.SetImage(i, None)
 
     # Zoom/merge management
     def OnWheel(self, event):
@@ -131,7 +131,7 @@ class DblMicroscopeCanvas(DraggableCanvas):
             change *= 0.2 # softer
 
         if event.CmdDown(): # = Ctrl on Linux/Win or Cmd on Mac
-            self.viewmodel.merge_ratio.value += change * 0.1
+            self.viewmodel.merge_ratio.add_value(change * 0.1)
         else:
             self.Zoom(change)
 

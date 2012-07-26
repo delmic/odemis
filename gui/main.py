@@ -7,6 +7,7 @@ import logging
 import sys
 import threading
 import traceback
+import os.path
 
 import wx
 
@@ -44,7 +45,7 @@ class OdemisGUIApp(wx.App):
         # Constructor of the parent class
         # ONLY CALL IT AT THE END OF :py:method:`__init__` BECAUSE OnInit will be called
         # and it needs the attributes defined in this constructor!
-        wx.App.__init__(self, redirect=False)
+        wx.App.__init__(self, redirect=True)
 
     def OnInit(self):
         """ Application initialization, automatically run from the :wx:`App` constructor.
@@ -141,6 +142,11 @@ class OdemisGUIApp(wx.App):
         # TODO: Process GUI configuration here
         pass
 
+    def _module_path(self):
+        encoding = sys.getfilesystemencoding()
+        return os.path.dirname(unicode(__file__, encoding))
+
+
     def init_gui(self):
         """ This method binds events to menu items and initializes
         GUI controls """
@@ -148,7 +154,7 @@ class OdemisGUIApp(wx.App):
         try:
             # Add frame icon
             ib = wx.IconBundle()
-            ib.AddIconFromFile("gui/img/odemis.ico", wx.BITMAP_TYPE_ANY)
+            ib.AddIconFromFile(os.path.join(self._module_path(), "img/odemis.ico"), wx.BITMAP_TYPE_ANY)
             self.fr_main.SetIcons(ib)
 
             _, _, w, h = wx.ClientDisplayRect()
@@ -190,6 +196,7 @@ class OdemisGUIApp(wx.App):
 
             self.fr_main.Show()
             self.fr_main.Raise()
+            self.fr_main.Refresh()
 
             if log.level == logging.DEBUG:
                 self.goto_debug_mode()
@@ -267,7 +274,7 @@ class OdemisOutputWindow(object):
     def write(self, txt):
         if txt.strip() != "":
             print_catch_logger = logging.getLogger()
-            print_catch_logger.error("*Catch*: %s" % txt)
+            print_catch_logger.error("[CAP]: %s" % txt)
 
 def installThreadExcepthook():
     """ `Workaround for sys.excepthook thread bug <http://spyced.blogspot.com/2007/06/workaround-for-sysexcepthook-bug.html>`_

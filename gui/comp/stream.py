@@ -416,11 +416,11 @@ class StreamPanelEntry(wx.PyPanel):
 
         # Panel controls
 
-        self._sld_brightness.Bind(wx.EVT_COMMAND_SCROLL, self.on_brightness_slide)
+        self._sld_brightness.Bind(wx.EVT_LEFT_UP, self.on_brightness_slide)
         self._txt_brightness.Bind(wx.EVT_TEXT_ENTER, self.on_brightness_entered)
         self._txt_brightness.Bind(wx.EVT_CHAR, self.on_brightness_key)
 
-        self._sld_contrast.Bind(wx.EVT_COMMAND_SCROLL, self.on_contrast_slide)
+        self._sld_contrast.Bind(wx.EVT_LEFT_UP, self.on_contrast_slide)
         self._txt_contrast.Bind(wx.EVT_TEXT_ENTER, self.on_contrast_entered)
         self._txt_contrast.Bind(wx.EVT_CHAR, self.on_contrast_key)
 
@@ -452,6 +452,7 @@ class StreamPanelEntry(wx.PyPanel):
 
     def on_brightness_slide(self, evt):
         self._txt_brightness.SetValue(str(self._sld_brightness.GetValue()))
+        evt.Skip()
 
     def on_contrast_entered(self, evt):
         self._sld_contrast.SetValue(int(self._txt_contrast.GetValue()))
@@ -459,6 +460,7 @@ class StreamPanelEntry(wx.PyPanel):
 
     def on_contrast_slide(self, evt):
         self._txt_contrast.SetValue(str(self._sld_contrast.GetValue()))
+        evt.Skip()
 
     def on_contrast_key(self, evt):
         key = evt.GetKeyCode()

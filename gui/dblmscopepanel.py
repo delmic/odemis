@@ -28,6 +28,7 @@ from odemis.gui.comp.slider import CustomSlider
 from odemis.gui.instrmodel import InstrumentalImage
 from odemis.gui.img.data import getico_blending_optBitmap, \
     getico_blending_semBitmap
+from odemis.gui.log import log
 
 class DblMicroscopePanel(wx.Panel):
     """
@@ -81,7 +82,7 @@ class DblMicroscopePanel(wx.Panel):
                     wx.ID_ANY,
                     50,
                     (0, 100),
-                    size=(100, 16),
+                    size=(100, 12),
                     style=wx.SL_HORIZONTAL | wx.SL_AUTOTICKS | wx.SL_TICKS)
         self.mergeSlider.SetBackgroundColour(self.GetBackgroundColour())
         self.mergeSlider.SetForegroundColour("#4d4d4d")
@@ -90,7 +91,7 @@ class DblMicroscopePanel(wx.Panel):
         self.bmpIconOpt = wx.StaticBitmap(self, wx.ID_ANY, getico_blending_optBitmap())
         self.bmpIconSem = wx.StaticBitmap(self, wx.ID_ANY, getico_blending_semBitmap())
 
-        self.mergeSlider.Bind(wx.EVT_SLIDER, self.OnSlider)
+        self.mergeSlider.Bind(wx.EVT_LEFT_UP, self.OnSlider)
         self.viewmodel.merge_ratio.subscribe(self.avOnMergeRatio, True) #pylint: disable=E1101
 
 
@@ -100,6 +101,7 @@ class DblMicroscopePanel(wx.Panel):
         ###################################
 
         self.hfwDisplay = wx.StaticText(self) # Horizontal Full Width
+        self.hfwDisplay.Hide()
 
 
         ###################################
@@ -112,7 +114,7 @@ class DblMicroscopePanel(wx.Panel):
 
         leftColSizer = wx.BoxSizer(wx.VERTICAL)
         leftColSizer.Add(self.scaleDisplay, flag=wx.EXPAND)
-        leftColSizer.Add(self.hfwDisplay)
+        leftColSizer.Add(self.hfwDisplay, flag=wx.TOP, border=5)
 
         #  | Value label | Value label | Value label |
         # +-------
@@ -124,7 +126,7 @@ class DblMicroscopePanel(wx.Panel):
         labelSizer.Add(self.dwell_label, flag=wx.RIGHT, border=5)
 
         midColSizer = wx.BoxSizer(wx.VERTICAL)
-        midColSizer.Add(labelSizer)
+        midColSizer.Add(labelSizer, flag=wx.ALIGN_CENTER_VERTICAL)
 
         #  | Icon | Slider | Icon |
         # +-------
@@ -132,9 +134,9 @@ class DblMicroscopePanel(wx.Panel):
 
         sliderSizer = wx.BoxSizer(wx.HORIZONTAL)
 
-        sliderSizer.Add(self.bmpIconOpt, flag=wx.ALL, border=5)
-        sliderSizer.Add(self.mergeSlider, flag=wx.ALL, border=5)
-        sliderSizer.Add(self.bmpIconSem, flag=wx.ALL, border=5)
+        sliderSizer.Add(self.bmpIconOpt, flag=wx.RIGHT, border=3)
+        sliderSizer.Add(self.mergeSlider, flag=wx.EXPAND)
+        sliderSizer.Add(self.bmpIconSem, flag=wx.LEFT, border=3)
 
         rightColSizer = wx.BoxSizer(wx.VERTICAL)
         rightColSizer.Add(sliderSizer)
@@ -142,9 +144,9 @@ class DblMicroscopePanel(wx.Panel):
         # leftColSizer | midColSizer | rightColSizer
         legendSizer = wx.BoxSizer(wx.HORIZONTAL)
 
-        legendSizer.Add(leftColSizer, 1, flag=wx.EXPAND|wx.ALL, border=5)
-        legendSizer.Add(midColSizer, 2, flag=wx.EXPAND|wx.ALL, border=5)
-        legendSizer.Add(rightColSizer, 1, flag=wx.EXPAND|wx.ALL, border=5)
+        legendSizer.Add(leftColSizer, 0, flag=wx.EXPAND|wx.ALL, border=5)
+        legendSizer.Add(midColSizer, 1, flag=wx.EXPAND|wx.ALL, border=5)
+        legendSizer.Add(rightColSizer, 0, flag=wx.EXPAND|wx.ALL, border=5)
 
         #  Canvas
         # +------
@@ -180,35 +182,7 @@ class DblMicroscopePanel(wx.Panel):
 
 
 
-        self.viewmodel.mpp.subscribe(self.avOnMPP, True)
-
-        # imageSizer = wx.BoxSizer(wx.VERTICAL)
-        # imageSizerTop = wx.BoxSizer(wx.HORIZONTAL)
-        # imageSizerBottom = wx.BoxSizer(wx.HORIZONTAL)
-        # imageSizer.Add(imageSizerTop, 1, wx.ALIGN_CENTER|wx.EXPAND)
-        # imageSizer.Add(imageSizerBottom, 1, wx.ALIGN_CENTER|wx.EXPAND)
-
-        #imageSizerTop.Add(self.viewComboLeft, 0, wx.ALIGN_CENTER)
-        #imageSizerTop.AddStretchSpacer()
-        # imageSizerTop.Add(self.mergeSlider, 2, wx.ALIGN_CENTER|wx.LEFT|wx.RIGHT, 3)
-        #imageSizerTop.AddStretchSpacer()
-        #imageSizerTop.Add(self.viewComboRight, 0, wx.ALIGN_CENTER)
-
-
-        # self.imageSizerBLeft = wx.BoxSizer(wx.HORIZONTAL)
-        # self.imageSizerBRight = wx.BoxSizer(wx.HORIZONTAL)
-        # because the statictexts cannot be vertically centered
-        # sizervbl = wx.BoxSizer(wx.VERTICAL)
-        # sizervbl.AddStretchSpacer()
-        # sizervbl.Add(self.imageSizerBLeft, 0, wx.ALIGN_CENTER|wx.EXPAND)
-        # sizervbl.AddStretchSpacer()
-        # sizervbr = wx.BoxSizer(wx.VERTICAL)
-        # sizervbr.AddStretchSpacer()
-        # sizervbr.Add(self.imageSizerBRight, 0, wx.ALIGN_CENTER|wx.EXPAND)
-        # sizervbr.AddStretchSpacer()
-        # imageSizerBottom.Add(sizervbl, 1, wx.ALIGN_CENTER|wx.EXPAND)
-        # imageSizerBottom.Add(lineDisplay, 0, wx.ALIGN_CENTER|wx.EXPAND)
-        # imageSizerBottom.Add(sizervbr, 1, wx.ALIGN_CENTER|wx.EXPAND)
+        self.viewmodel.mpp.subscribe(self.avOnMPP, True)  #pylint: disable=E1101
 
 
 
@@ -248,7 +222,9 @@ class DblMicroscopePanel(wx.Panel):
         """
         Merge ratio slider
         """
+        log.error("pew")
         self.viewmodel.merge_ratio.value = self.mergeSlider.GetValue() / 100.0
+        event.Skip()
 
     def avOnMergeRatio(self, val):
         # round is important because int can cause unstable value
