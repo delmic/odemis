@@ -54,7 +54,11 @@ class VigilantMergeRatio(VigilantAttribute):
     VigilantAttribute with special validation for merge ratio
     # 0<=float<=1
     """
-    def _set(self, value):
+    def _set_value(self, value):
         # don't raise an error, just clamp the values
         final_val = sorted((0.0, 1.0) + (value,))[1] # clamp
-        VigilantAttribute._set(self, final_val)
+        VigilantAttribute._set_value(self, final_val)
+    
+    def add_value(self, value):
+        self._set_value(self.value + value)
+        
