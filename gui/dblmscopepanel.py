@@ -112,9 +112,9 @@ class DblMicroscopePanel(wx.Panel):
         # +-------
         #  HFW text
 
-        leftColSizer = wx.BoxSizer(wx.VERTICAL)
-        leftColSizer.Add(self.scaleDisplay, flag=wx.EXPAND)
-        leftColSizer.Add(self.hfwDisplay, flag=wx.TOP, border=5)
+        # leftColSizer = wx.BoxSizer(wx.VERTICAL)
+        # leftColSizer.Add(self.scaleDisplay, flag=wx.EXPAND)
+        # leftColSizer.Add(self.hfwDisplay, flag=wx.TOP, border=5)
 
         #  | Value label | Value label | Value label |
         # +-------
@@ -125,8 +125,8 @@ class DblMicroscopePanel(wx.Panel):
         labelSizer.Add(self.volta_label, flag=wx.RIGHT, border=5)
         labelSizer.Add(self.dwell_label, flag=wx.RIGHT, border=5)
 
-        midColSizer = wx.BoxSizer(wx.VERTICAL)
-        midColSizer.Add(labelSizer, flag=wx.ALIGN_CENTER_VERTICAL)
+        # midColSizer = wx.BoxSizer(wx.VERTICAL)
+        # midColSizer.Add(labelSizer, flag=wx.ALIGN_CENTER_VERTICAL)
 
         #  | Icon | Slider | Icon |
         # +-------
@@ -138,15 +138,16 @@ class DblMicroscopePanel(wx.Panel):
         sliderSizer.Add(self.mergeSlider, flag=wx.EXPAND)
         sliderSizer.Add(self.bmpIconSem, flag=wx.LEFT, border=3)
 
-        rightColSizer = wx.BoxSizer(wx.VERTICAL)
-        rightColSizer.Add(sliderSizer)
+        # rightColSizer = wx.BoxSizer(wx.VERTICAL)
+        # rightColSizer.Add(sliderSizer)
 
         # leftColSizer | midColSizer | rightColSizer
-        legendSizer = wx.BoxSizer(wx.HORIZONTAL)
 
-        legendSizer.Add(leftColSizer, 0, flag=wx.EXPAND|wx.ALL, border=5)
-        legendSizer.Add(midColSizer, 1, flag=wx.EXPAND|wx.ALL, border=5)
-        legendSizer.Add(rightColSizer, 0, flag=wx.EXPAND|wx.ALL, border=5)
+        legendSizer = wx.GridBagSizer()
+
+        legendSizer.Add(labelSizer, (0,0))
+        legendSizer.Add(self.scaleDisplay, (0,1))
+        legendSizer.Add(sliderSizer, (0,2))
 
         #  Canvas
         # +------

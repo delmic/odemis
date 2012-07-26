@@ -274,7 +274,7 @@ class OdemisOutputWindow(object):
     def write(self, txt):
         if txt.strip() != "":
             print_catch_logger = logging.getLogger()
-            print_catch_logger.error("[CAP]: %s" % txt)
+            print_catch_logger.error("[CAP] %s" % txt.strip())
 
 def installThreadExcepthook():
     """ `Workaround for sys.excepthook thread bug <http://spyced.blogspot.com/2007/06/workaround-for-sysexcepthook-bug.html>`_
