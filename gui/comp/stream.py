@@ -416,11 +416,13 @@ class StreamPanelEntry(wx.PyPanel):
 
         # Panel controls
 
+        self._sld_brightness.Bind(wx.EVT_MOTION, self.on_brightness_slide)
         self._sld_brightness.Bind(wx.EVT_LEFT_UP, self.on_brightness_slide)
         self._txt_brightness.Bind(wx.EVT_TEXT_ENTER, self.on_brightness_entered)
         self._txt_brightness.Bind(wx.EVT_CHAR, self.on_brightness_key)
 
         self._sld_contrast.Bind(wx.EVT_LEFT_UP, self.on_contrast_slide)
+        self._sld_contrast.Bind(wx.EVT_MOTION, self.on_contrast_slide)
         self._txt_contrast.Bind(wx.EVT_TEXT_ENTER, self.on_contrast_entered)
         self._txt_contrast.Bind(wx.EVT_CHAR, self.on_contrast_key)
 
