@@ -390,14 +390,16 @@ class AndorCam2(model.DigitalCamera):
 
         # needed for the AOI, we never change it after
         self.atcore.SetReadMode(AndorV2DLL.RM_IMAGE)
-        self._binning = (1,1) # horizontal, vertical (used by resolutionFitter())
+        # binning is horizontal, vertical (used by resolutionFitter()), but odemis
+        # only supports same value on both dimensions (for simplification)
+        self._binning = (1,1) # 
         self._image_rect = (1, resolution[0], 1, resolution[1])
         # need to be before binning, as it is modified when changing binning         
         self.resolution = model.ResolutionVA(resolution, [(1, 1), resolution], 
                                              setter=self.setResolution)
         self.setResolution(resolution)
         
-        self.binning = model.IntEnumerated(self._binning, self._getAvailableBinnings(),
+        self.binning = model.IntEnumerated(self._binning[0], self._getAvailableBinnings(),
                                            unit="px", setter=self.setBinning)
         
         maxexp = c_float()
@@ -512,7 +514,7 @@ class AndorCam2(model.DigitalCamera):
         if timeout is None:
             self.atcore.WaitForAcquisition()
         else:
-            print "waiting maximum %f s" % timeout
+            logging.debug("waiting for acquisition, maximum %f s", timeout)
             timeout_ms = c_uint(int(round(timeout * 1e3))) # ms
             self.atcore.WaitForAcquisitionTimeOut(timeout_ms)
     
@@ -1022,7 +1024,7 @@ class AndorCam2(model.DigitalCamera):
         The core of the acquisition thread. Runs until acquire_must_stop is set.
         """
         # We don't use the kinetic mode as it might go faster than we can
-        # process them, and it's easy to do in software.
+        # process them.
         self.atcore.SetAcquisitionMode(5) # 5 = Run till abort 
         self._update_settings()
         self.atcore.SetKineticCycleTime(0) # don't wait between acquisitions
@@ -1044,6 +1046,8 @@ class AndorCam2(model.DigitalCamera):
                 except AndorV2Error as (errno, strerr):
                     # it was already aborted
                     if errno != 20073: # DRV_IDLE
+                        self.acquisition_lock.release()
+                        self.acquire_must_stop.clear()
                         raise
                 self.atcore.SetAcquisitionMode(5) # needed ?
                 self._update_settings()
@@ -1058,9 +1062,8 @@ class AndorCam2(model.DigitalCamera):
             try:
                 self.WaitForAcquisition(exposure_time + readout_time + 1)
             except AndorV2Error as (errno, strerr):
-                if self.acquire_must_stop.is_set():
-                    break
-                # FIXME: this happens very often: not sure what's wrong, need fix
+                # Note: with SDK 2.93 it will happen after a few image grabbed, and
+                # there is no way to recover
                 if errno == 20024: # DRV_NO_NEW_DATA
                     # try one more time
                     self.atcore.CancelWait()
@@ -1068,16 +1071,11 @@ class AndorCam2(model.DigitalCamera):
                     cstatus = c_int()
                     self.atcore.GetStatus(byref(cstatus))
                     logging.warning("trying again to acquire image with status %d after error %s", cstatus.value, strerr)
-                    try:
-                        # FIXME this doesn't help
-                        self.WaitForAcquisition(exposure_time + readout_time + 1)
-                    except AndorV2Error as (errno, strerr):
-                        cstatus = c_int()
-                        self.atcore.GetStatus(byref(cstatus))         
-                        logging.warning("Double failure, trying harder to acquire image with status %d after error %s", cstatus.value, strerr)
-                        need_reinit = True
-                        continue
+                    need_reinit = True
+                    continue
                 else:
+                    self.acquisition_lock.release()
+                    self.acquire_must_stop.clear()
                     raise
                 
             cbuffer = self._allocate_buffer(size)
@@ -1089,6 +1087,8 @@ class AndorCam2(model.DigitalCamera):
                 if errno == 20024: # DRV_NO_NEW_DATA
                     logging.warning("failed to get latest image, retrying after error %s", strerr)
                 else:
+                    self.acquisition_lock.release()
+                    self.acquire_must_stop.clear()
                     raise                           
 
             metadata[model.MD_SENSOR_TEMP] = self._metadata[model.MD_SENSOR_TEMP]
@@ -1100,6 +1100,8 @@ class AndorCam2(model.DigitalCamera):
         except AndorV2Error as (errno, strerr):
             # it was already aborted
             if errno != 20073: # DRV_IDLE
+                self.acquisition_lock.release()
+                self.acquire_must_stop.clear()
                 raise
         self.atcore.FreeInternalMemory() # TODO not sure it's needed
         self.acquisition_lock.release()
@@ -1166,14 +1168,14 @@ class AndorCam2(model.DigitalCamera):
             self.atcore.GetHardwareVersion(byref(PCB), byref(Decode), 
                 byref(dummy1), byref(dummy2), byref(CameraFirmwareVersion), byref(CameraFirmwareBuild))
         except Exception as err:
-            print("Failed to read camera model: " + str(err))
+            logging.error("Failed to read camera model: " + str(err))
             return False
     
         # Try to get an image with the default resolution
         try:
             resolution = self.GetDetector()
         except Exception as err:
-            print("Failed to read camera resolution: " + str(err))
+            logging.error("Failed to read camera resolution: " + str(err))
             return False
         
         try:
@@ -1181,7 +1183,7 @@ class AndorCam2(model.DigitalCamera):
             self.exposureTime.value = 0.01
             im = self.acquireOne()
         except Exception as err:
-            print("Failed to acquire an image: " + str(err))
+            logging.error("Failed to acquire an image: " + str(err))
             return False
         
         return True
@@ -1196,7 +1198,7 @@ class AndorCam2(model.DigitalCamera):
         camera = AndorCam2("System", "bus") # system
         dc = c_uint32()
         camera.atcore.GetAvailableCameras(byref(dc))
-#        print "found %d devices." % dc.value
+        logging.debug("found %d devices.", dc.value)
         
         cameras = []
         for i in range(dc.value):
@@ -1236,17 +1238,7 @@ class AndorCam2DataFlow(model.DataFlow):
 #
 #        # FIXME
 #        # For now we simplify by considering it as just a 1-image subscription
-#        is_received = threading.Event()
-#        data_shared = [None] # in python2 we need to create a new container object
-#        
-#        def receive_one_image(df, data):
-#            df.unsubscribe(receive_one_image)
-#            data_shared[0] = data
-#            is_received.set()
-#        
-#        self.subscribe(receive_one_image)
-#        is_received.wait()
-#        return data_shared[0]
+
     
     # start/stop_generate are _never_ called simultaneously (thread-safe)
     def start_generate(self):
