@@ -7,12 +7,18 @@ import logging
 import sys
 import threading
 import traceback
+import os.path
 
 import wx
 
+import Pyro4.errors
+
+import odemis.model
 import odemis.gui.main_xrc
-from  odemis.gui.xmlh import odemis_get_resources
+
+from odemis.gui.xmlh import odemis_get_resources
 from odemis.gui.log import log, create_gui_logger
+from odemis.gui.instrmodel import OpticalBackendConnected
 
 class OdemisGUIApp(wx.App):
     """ This is Odemis' main GUI application class
@@ -39,63 +45,27 @@ class OdemisGUIApp(wx.App):
         # Constructor of the parent class
         # ONLY CALL IT AT THE END OF :py:method:`__init__` BECAUSE OnInit will be called
         # and it needs the attributes defined in this constructor!
-        wx.App.__init__(self, redirect=False)
+        wx.App.__init__(self, redirect=True)
 
     def OnInit(self):
         """ Application initialization, automatically run from the :wx:`App` constructor.
         """
 
+        try:
+            self.microscope = odemis.model.getMicroscope()
+            self.secom_model = OpticalBackendConnected(self.microscope)
+        except Pyro4.errors.CommunicationError, e:
+            log.exception("oei")
+            msg = "The Odemis GUI could not connect to the Odemis Daemon:\n\n {0}".format(e)
+            wx.MessageBox(msg,
+                          "Connection error",
+                          style=wx.OK|wx.ICON_ERROR)
+            sys.exit(1)
+
         # Load the main frame
         self.fr_main = odemis.gui.main_xrc.xrcfr_main(None)
+
         self.do_init()
-
-
-
-
-        #import odemis.gui.comp.foldpanelbar as fpb
-
-
-        # item = self.fr_main.fpb_settings.AddFoldPanel("Caption 1",
-        #                                               collapsed=False)
-
-        # self.fr_main.fpb_settings.AddFoldPanelWindow(item, wx.StaticText(item, -1, "*Bleep*"))
-
-        # self.fr_main.fpb_settings.AddFoldPanelWindow(item, wx.Panel(item, -1, size=(280, 500)))
-
-        # self.fr_main.fpb_settings.AddFoldPanelWindow(item, wx.StaticText(item, -1, "*Bleep*"))
-
-        # item = self.fr_main.fpb_settings.AddFoldPanel("Caption 2",
-        #                                               collapsed=False)
-
-        # self.fr_main.fpb_settings.AddFoldPanelWindow(item, wx.StaticText(item, -1, "*Bleep*"))
-
-        # self.fr_main.fpb_settings.AddFoldPanelWindow(item, wx.StaticText(item, -1, "*Bleep*"))
-
-        # self.fr_main.fpb_settings.AddFoldPanelWindow(item, wx.StaticText(item, -1, "*Bleep*"))
-
-        # self.fr_main.fpb_settings.AddFoldPanelWindow(item, wx.StaticText(item, -1, "*Bleep*"))
-
-        # self.fr_main.fpb_settings.AddFoldPanelWindow(item, wx.StaticText(item, -1, "One more bleep coming"))
-
-        # self.fr_main.fpb_settings.AddFoldPanelWindow(item, wx.Panel(item, -1, size=(280, 200)))
-
-        # self.fr_main.fpb_settings.AddFoldPanelWindow(item, wx.StaticText(item, -1, "*Last Bleep*"))
-
-
-        # self.fr_main.fpb_settings.Bind(fpb.EVT_CAPTIONBAR, self.height_test)
-
-        #self.fr_main.scr_win.EnableScrolling(False, True)
-        #self.fr_main.scr_win.SetScrollbars(-1, 10, 1, 1)
-
-        #self.height_test()
-
-        #self.dump(self.fr_main.fpb_settings)
-
-
-
-
-        #self.fr_main.scr_win.SetAutoLayout(1)
-
 
 
         # TODO: add a global reference to the main GUI frame
@@ -127,6 +97,11 @@ class OdemisGUIApp(wx.App):
         """
 
         self.init_logger()
+
+
+
+
+
         self.init_gui()
 
         #self.dlg_startup.label_version.SetLabel("%d.%d.%s" % (elit.constants.MAJOR_VERSION, elit.constants.MINOR_VERSION, elit.constants.REVISION_VERSION))
@@ -167,6 +142,11 @@ class OdemisGUIApp(wx.App):
         # TODO: Process GUI configuration here
         pass
 
+    def _module_path(self):
+        encoding = sys.getfilesystemencoding()
+        return os.path.dirname(unicode(__file__, encoding))
+
+
     def init_gui(self):
         """ This method binds events to menu items and initializes
         GUI controls """
@@ -174,7 +154,7 @@ class OdemisGUIApp(wx.App):
         try:
             # Add frame icon
             ib = wx.IconBundle()
-            ib.AddIconFromFile("gui/img/odemis.ico", wx.BITMAP_TYPE_ANY)
+            ib.AddIconFromFile(os.path.join(self._module_path(), "img/odemis.ico"), wx.BITMAP_TYPE_ANY)
             self.fr_main.SetIcons(ib)
 
             _, _, w, h = wx.ClientDisplayRect()
@@ -216,6 +196,7 @@ class OdemisGUIApp(wx.App):
 
             self.fr_main.Show()
             self.fr_main.Raise()
+            self.fr_main.Refresh()
 
             if log.level == logging.DEBUG:
                 self.goto_debug_mode()
@@ -249,7 +230,9 @@ class OdemisGUIApp(wx.App):
         """ This method cleans up and closes the Odemis GUI. """
         logging.info("Exiting Odemis")
 
+
         # Put cleanup actions here (like disconnect from odemisd)
+
         #self.dlg_startup.Destroy()
         self.fr_main.Destroy()
 
@@ -291,7 +274,7 @@ class OdemisOutputWindow(object):
     def write(self, txt):
         if txt.strip() != "":
             print_catch_logger = logging.getLogger()
-            print_catch_logger.error("*Catch*: %s" % txt)
+            print_catch_logger.error("[CAP] %s" % txt.strip())
 
 def installThreadExcepthook():
     """ `Workaround for sys.excepthook thread bug <http://spyced.blogspot.com/2007/06/workaround-for-sysexcepthook-bug.html>`_

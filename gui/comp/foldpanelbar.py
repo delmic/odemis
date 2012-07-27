@@ -1263,6 +1263,9 @@ class FoldPanelBar(wx.Panel):
 
         # the fold panel area
 
+        if [x for x in pos if x < 0]:
+            log.error("NEGATIVE POSITON!")
+
         self._foldPanel = wx.Panel(self, wx.ID_ANY, pos, size,
                                    wx.NO_BORDER | wx.TAB_TRAVERSAL)
 

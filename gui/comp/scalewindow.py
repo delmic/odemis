@@ -16,8 +16,9 @@ Delmic Acquisition Software is distributed in the hope that it will be useful, b
 You should have received a copy of the GNU General Public License along with Delmic Acquisition Software. If not, see http://www.gnu.org/licenses/.
 '''
 
-import units 
 import wx
+
+import odemis.gui.units as units
 
 #----------------------------------------------------------------------
 # DC Drawing Options
@@ -51,7 +52,7 @@ class BufferedWindow(wx.Control):
     L{BufferedWindow.UpdateDrawing} method. Since the drawing is stored in a bitmap, you
     can also save the drawing to file by calling the
     `SaveToFile(self, file_name, file_type)` method.
-    
+
     This is a wx.Control for the main reason that it gets the right colour
     and font.
     """
@@ -60,7 +61,7 @@ class BufferedWindow(wx.Control):
                  style=wx.NO_FULL_REPAINT_ON_RESIZE, bufferedstyle=SM_BUFFERED_DC):
         """
         Default class constructor.
-        
+
         :param `parent`: parent window. Must not be ``None``;
         :param `id`: window identifier. A value of -1 indicates a default value;
         :param `pos`: the control position. A value of (-1, -1) indicates a default position,
@@ -74,7 +75,7 @@ class BufferedWindow(wx.Control):
 
         wx.Control.__init__(self, parent, id, pos=pos, size=size, style=style)
         self._bufferedstyle = bufferedstyle
-        
+
         self.Bind(wx.EVT_PAINT, self.OnPaint)
         self.Bind(wx.EVT_SIZE, self.OnSize)
         self.Bind(wx.EVT_ERASE_BACKGROUND, lambda x: None)
@@ -82,14 +83,14 @@ class BufferedWindow(wx.Control):
         # OnSize called to make sure the buffer is initialized.
         # This might result in OnSize getting called twice on some
         # platforms at initialization, but little harm done.
-#        self.OnSize(None) # very annoying as it calls the methods before the init is done
+        # self.OnSize(None) # very annoying as it calls the methods before the init is done
 
 
     def Draw(self, dc):
         """
         This method should be overridden when sub-classed.
 
-        :param `dc`: an instance of `wx.DC`.        
+        :param `dc`: an instance of `wx.DC`.
         """
         pass
 
@@ -114,7 +115,7 @@ class BufferedWindow(wx.Control):
 
         :param `event`: a `wx.SizeEvent` event to be processed.
         """
-        
+
         self.Width, self.Height = self.GetClientSizeTuple()
 
         # Make new off screen bitmap: this bitmap will always have the
@@ -159,22 +160,28 @@ class BufferedWindow(wx.Control):
 
 class ScaleWindow(BufferedWindow):
     """
-    Little control that display a horizontal scale for a given screen density  
+    Little control that display a horizontal scale for a given screen density
     """
     def __init__(self, *args, **kwargs):
         BufferedWindow.__init__(self, *args, **kwargs)
         #self.mpp = 0.00027 # a not too crazy number (my screen density)
         self.mpp = None # unknown
-        self.MinSize = (80, 30) # we want at least a bit of space
+        self.MinSize = (120, 20) # we want at least a bit of space
         # This is called before the end of __init__()
         self.va = self.GetDefaultAttributes()
-        self.nod = 3
-        self.shift = 2
+        self.nod = 4
+        self.shift = 0
         self.significant = 1 # significant numbers to keep in the length
-        
+
+
+        self.gap = 3 # gap between line and text
+        self.background_col = "#1A1A1A"
+        self.foreground_col = "#BBBBBB"
+        self.line_wdith = 1
+
         # OnSize called to make sure the buffer is initialized.
         self.OnSize(None)
-        
+
     def SetMPP(self, mpp):
         """
         Set the meters per pixel of the scale.
@@ -187,11 +194,11 @@ class ScaleWindow(BufferedWindow):
 
     def GetLineWidth(self, dc):
         """
-        Returns the size in pixel of the scale line and its actual size. 
+        Returns the size in pixel of the scale line and its actual size.
         The pixel size is always less than the width of the window minus margin
         minus space for 8 characters
         dc (wx.DC)
-        return 2-tuple (int, float): pixel size, actual size (meter) 
+        return 2-tuple (int, float): pixel size, actual size (meter)
         """
         size = self.GetClientSize()
         maxWidth = size[0] - self.shift - dc.GetTextExtent(" 000mm")[0]
@@ -200,39 +207,45 @@ class ScaleWindow(BufferedWindow):
         actualWidth = units.round_down_significant(maxActualWidth, self.significant)
         width = int(actualWidth / self.mpp)
         return (width, actualWidth)
-        
+
     def Draw(self, dc):
-#        return self.DrawGC(dc)
+        # return self.DrawGC(dc)
         nod = self.nod
         shift = self.shift # to accommodate for the pen width
         vmiddle = self.GetClientSize()[1] / 2
-        
+
+
         dc.SetBackgroundMode(wx.SOLID)
-        dc.SetBackground(wx.Brush(self.va.colBg))
+        dc.SetBackground(wx.Brush(self.background_col))
         dc.Clear()
-        
+
         if not self.mpp: # unknown mpp => blank
             return
-        
-        dc.SetFont(self.va.font) # before GetLineWidth(), which needs it
-        dc.SetTextForeground(self.va.colFg)
-        dc.SetTextBackground(self.va.colBg)
-        
-        length, actual = self.GetLineWidth(dc)
-        
-        charSize = dc.GetTextExtent("M")
-        dc.DrawText(" " + units.to_string_si_prefix(actual) + "m", 
-                    shift + length, vmiddle - charSize[1] / 2)
 
-        pen = wx.Pen(wx.BLACK, 2)
+        dc.SetFont(self.GetFont()) # before GetLineWidth(), which needs it
+        dc.SetTextForeground(self.foreground_col)
+        dc.SetTextBackground(self.background_col)
+
+        length, actual = self.GetLineWidth(dc)
+
+        charSize = dc.GetTextExtent("M")
+        height = self.gap + charSize[1] + self.nod
+        main_line_y = vmiddle - (height /2) + nod
+
+        dc.DrawText(units.to_string_si_prefix(actual) + "m",
+                    0,
+                    main_line_y + self.gap)
+
+        pen = wx.Pen(self.foreground_col, self.line_wdith)
         pen.Cap = wx.CAP_PROJECTING
         dc.SetPen(pen)
-        
+
+
         # main line
-        lines = [(shift, vmiddle, shift + length, vmiddle)]
+        lines = [(shift, main_line_y , shift + length, main_line_y )]
         # nods at each end
-        lines += [(shift, vmiddle - nod, shift, vmiddle + nod)]
-        lines += [(shift + length, vmiddle - nod, shift + length, vmiddle + nod)]
+        lines += [(shift, main_line_y - nod, shift, main_line_y )]
+        lines += [(shift + length, main_line_y - nod, shift + length, main_line_y )]
         dc.DrawLineList(lines)
 
     def DrawGC(self, dc):
@@ -240,27 +253,30 @@ class ScaleWindow(BufferedWindow):
         same as Draw(), but using GraphicsContext, (i.e. HW accelerated and antialiased)
         Experimental!
         """
-        margin = 5
-        nod = 3
-        vmiddle = self.Height / 2
-        # not sure how to do this with GC
-        dc.SetBackgroundMode(wx.SOLID)
-        dc.SetBackground(wx.Brush(self.va.colBg))
-        dc.Clear()
-#        gc.Clear(self.va.colBg) # doesn't actual exist
 
-        
-#        gr = wx.GraphicsRenderer.GetDefaultRenderer()
-#        gc = gr.CreateContext(dc)
-        gc = wx.GraphicsContext.Create(dc)
+        raise NotImplementedError()
 
-        
-        pen = gc.CreatePen(wx.Pen(wx.BLACK, 2))
-        gc.SetPen(pen)
-        
-        gc.DrawLines([(margin, vmiddle), (self.Width - margin, vmiddle)])
-        gc.DrawLines([(margin, vmiddle - nod), (margin, vmiddle + nod)])
-        gc.DrawLines([(self.Width - margin, vmiddle - nod), (self.Width - margin, vmiddle + nod)])
-        # could use strokelines
-        
+        # margin = 5
+        # nod = 3
+        # vmiddle = self.Height / 2
+        # # not sure how to do this with GC
+        # dc.SetBackgroundMode(wx.SOLID)
+        # dc.SetBackground(wx.Brush(self.va.colBg))
+        # dc.Clear()
+        # #gc.Clear(self.va.colBg) # doesn't actual exist
+
+
+        # #gr = wx.GraphicsRenderer.GetDefaultRenderer()
+        # #gc = gr.CreateContext(dc)
+        # gc = wx.GraphicsContext.Create(dc)
+
+
+        # pen = gc.CreatePen(wx.Pen(wx.BLACK, 2))
+        # gc.SetPen(pen)
+
+        # gc.DrawLines([(margin, vmiddle), (self.Width - margin, vmiddle)])
+        # gc.DrawLines([(margin, vmiddle - nod), (margin, vmiddle + nod)])
+        # gc.DrawLines([(self.Width - margin, vmiddle - nod), (self.Width - margin, vmiddle + nod)])
+        # # could use strokelines
+
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:

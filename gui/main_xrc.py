@@ -37,10 +37,6 @@ class xrcfr_main(wx.Frame):
 
         # Define variables for the controls, bind event handlers
         self.menu_item_debug = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_debug"))
-        self.pnl_view_tl = xrc.XRCCTRL(self, "pnl_view_tl")
-        self.pnl_view_tr = xrc.XRCCTRL(self, "pnl_view_tr")
-        self.pnl_view_bl = xrc.XRCCTRL(self, "pnl_view_bl")
-        self.pnl_view_br = xrc.XRCCTRL(self, "pnl_view_br")
         self.btn_toggle_opt = xrc.XRCCTRL(self, "btn_toggle_opt")
         self.btn_toggle_sem = xrc.XRCCTRL(self, "btn_toggle_sem")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
@@ -87,90 +83,63 @@ def __init_resources():
       <object class="sizeritem">
         <object class="wxBoxSizer">
           <object class="sizeritem">
+            <object class="wxPanel" name="pnl_left">
+              <size>200,-1</size>
+              <bg>#333333</bg>
+            </object>
+            <flag>wxEXPAND</flag>
+          </object>
+          <object class="sizeritem">
             <object class="wxGridSizer">
               <object class="sizeritem">
-                <object class="wxPanel" name="pnl_view_tl">
-                  <bg>#D9B0BF</bg>
-                  <XRCED>
-                    <assign_var>1</assign_var>
-                  </XRCED>
-                  <object class="wxBoxSizer">
-                    <orient>wxVERTICAL</orient>
-                    <object class="sizeritem">
-                      <object class="odemis.gui.comp.canvas.DraggableCanvas"/>
-                      <option>1</option>
-                      <flag>wxEXPAND</flag>
-                    </object>
-                  </object>
+                <object class="odemis.gui.dblmscopepanel.DblMicroscopePanel" name="pnl_view_tl">
+                  <size>400,-1</size>
+                  <fg>#BFBFBF</fg>
+                  <bg>#1A1A1A</bg>
                 </object>
-                <flag>wxEXPAND</flag>
+                <flag>wxBOTTOM|wxRIGHT|wxEXPAND</flag>
+                <border>2</border>
                 <minsize>300,300</minsize>
               </object>
               <object class="sizeritem">
-                <object class="wxPanel" name="pnl_view_tr">
-                  <bg>#E5C19C</bg>
-                  <XRCED>
-                    <assign_var>1</assign_var>
-                  </XRCED>
-                  <object class="wxBoxSizer">
-                    <orient>wxVERTICAL</orient>
-                    <object class="sizeritem">
-                      <object class="odemis.gui.comp.canvas.DraggableCanvas"/>
-                      <option>1</option>
-                      <flag>wxEXPAND</flag>
-                    </object>
-                  </object>
+                <object class="odemis.gui.dblmscopepanel.DblMicroscopePanel" name="pnl_view_tr">
+                  <size>400,-1</size>
+                  <fg>#BFBFBF</fg>
+                  <bg>#1A1A1A</bg>
                 </object>
-                <flag>wxEXPAND</flag>
+                <flag>wxBOTTOM|wxLEFT|wxEXPAND</flag>
+                <border>2</border>
                 <minsize>300,300</minsize>
               </object>
               <object class="sizeritem">
-                <object class="wxPanel" name="pnl_view_bl">
-                  <bg>#ACA8EC</bg>
-                  <XRCED>
-                    <assign_var>1</assign_var>
-                  </XRCED>
-                  <object class="wxBoxSizer">
-                    <orient>wxVERTICAL</orient>
-                    <object class="sizeritem">
-                      <object class="odemis.gui.comp.canvas.DraggableCanvas"/>
-                      <option>1</option>
-                      <flag>wxEXPAND</flag>
-                    </object>
-                  </object>
+                <object class="odemis.gui.dblmscopepanel.DblMicroscopePanel" name="pnl_view_bl">
+                  <size>400,-1</size>
+                  <fg>#BFBFBF</fg>
+                  <bg>#1A1A1A</bg>
                 </object>
-                <flag>wxEXPAND</flag>
+                <flag>wxTOP|wxRIGHT|wxEXPAND</flag>
+                <border>2</border>
                 <minsize>300,300</minsize>
               </object>
               <object class="sizeritem">
-                <object class="wxPanel" name="pnl_view_br">
-                  <bg>#A8E876</bg>
-                  <XRCED>
-                    <assign_var>1</assign_var>
-                  </XRCED>
-                  <object class="wxBoxSizer">
-                    <orient>wxVERTICAL</orient>
-                    <object class="sizeritem">
-                      <object class="odemis.gui.comp.canvas.DraggableCanvas"/>
-                      <option>1</option>
-                      <flag>wxEXPAND</flag>
-                    </object>
-                  </object>
+                <object class="odemis.gui.dblmscopepanel.DblMicroscopePanel" name="pnl_view_br">
+                  <size>400,-1</size>
+                  <fg>#BFBFBF</fg>
+                  <bg>#1A1A1A</bg>
                 </object>
-                <flag>wxEXPAND</flag>
+                <flag>wxTOP|wxLEFT|wxEXPAND</flag>
+                <border>2</border>
                 <minsize>300,300</minsize>
               </object>
               <cols>2</cols>
               <rows>2</rows>
-              <vgap>2</vgap>
-              <hgap>2</hgap>
             </object>
             <option>1</option>
-            <flag>wxRIGHT|wxEXPAND</flag>
-            <border>2</border>
+            <flag>wxTOP|wxLEFT|wxRIGHT|wxEXPAND</flag>
+            <border>3</border>
           </object>
           <object class="sizeritem">
-            <object class="wxPanel">
+            <object class="wxPanel" name="pnl_right">
               <object class="wxBoxSizer">
                 <object class="sizeritem">
                   <object class="wxPanel" name="main_buttons">
@@ -267,6 +236,7 @@ def __init_resources():
                         <border>10</border>
                       </object>
                     </object>
+                    <size>400,-1</size>
                     <bg>#4D4D4D</bg>
                   </object>
                   <flag>wxEXPAND</flag>
@@ -359,7 +329,6 @@ def __init_resources():
                 </object>
                 <orient>wxVERTICAL</orient>
               </object>
-              <size>400,-1</size>
               <bg>#333333</bg>
               <style>wxBORDER_NONE</style>
             </object>
@@ -372,27 +341,37 @@ def __init_resources():
         <flag>wxEXPAND</flag>
       </object>
       <object class="sizeritem">
-        <object class="wxTextCtrl" name="txt_log">
+        <object class="wxPanel">
+          <object class="wxBoxSizer">
+            <orient>wxVERTICAL</orient>
+            <object class="sizeritem">
+              <object class="wxTextCtrl" name="txt_log">
+                <size>-1,200</size>
+                <fg>#4D4D4D</fg>
+                <bg>#BFBFBF</bg>
+                <font>
+                  <size>10</size>
+                  <style>normal</style>
+                  <weight>normal</weight>
+                  <underlined>0</underlined>
+                  <family>default</family>
+                  <face>Courier 10 Pitch</face>
+                  <encoding>UTF-8</encoding>
+                </font>
+                <hidden>1</hidden>
+                <style>wxTE_MULTILINE</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxTOP|wxEXPAND</flag>
+              <border>2</border>
+            </object>
+          </object>
           <size>-1,200</size>
-          <fg>#4D4D4D</fg>
-          <bg>#BFBFBF</bg>
-          <font>
-            <size>10</size>
-            <style>normal</style>
-            <weight>normal</weight>
-            <underlined>0</underlined>
-            <family>default</family>
-            <face>Courier 10 Pitch</face>
-            <encoding>UTF-8</encoding>
-          </font>
-          <hidden>1</hidden>
-          <style>wxTE_MULTILINE</style>
-          <XRCED>
-            <assign_var>1</assign_var>
-          </XRCED>
+          <bg>#4D4D4D</bg>
         </object>
-        <flag>wxTOP|wxEXPAND</flag>
-        <border>2</border>
+        <flag>wxEXPAND</flag>
       </object>
     </object>
     <title>Odemis</title>

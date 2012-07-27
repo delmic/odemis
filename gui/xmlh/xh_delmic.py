@@ -13,7 +13,7 @@ import odemis.gui.comp.foldpanelbar as fpb
 import odemis.gui.comp.stream as strm
 import odemis.gui.comp.buttons as btns
 import odemis.gui.comp.text as txt
-import odemis.gui.comp.canvas as cnvs
+import odemis.gui.dblmscopepanel as mscp
 
 ##################################
 # Fold Panel Bar related Handlers
@@ -508,7 +508,7 @@ class UnitIntegerCtrlHandler(xrc.XmlResourceHandler):
 # Canvas Handlers
 ##################################
 
-class DraggableCanvasXmlHandler(xrc.XmlResourceHandler):
+class DblMicroscopePanelXmlHandler(xrc.XmlResourceHandler):
     def __init__(self):
         xrc.XmlResourceHandler.__init__(self)
         # Specify the styles recognized by objects of this type
@@ -517,7 +517,7 @@ class DraggableCanvasXmlHandler(xrc.XmlResourceHandler):
 
     # This method and the next one are required for XmlResourceHandlers
     def CanHandle(self, node):
-        capable = self.IsOfClass(node, "odemis.gui.comp.canvas.DraggableCanvas")
+        capable = self.IsOfClass(node, "odemis.gui.dblmscopepanel.DblMicroscopePanel")
         return capable
 
     def DoCreateResource(self):
@@ -525,7 +525,7 @@ class DraggableCanvasXmlHandler(xrc.XmlResourceHandler):
 
         parent_window = self.GetParentAsWindow()
         # Now create the object
-        panel = cnvs.DraggableCanvas(parent_window)
+        panel = mscp.DblMicroscopePanel(parent_window)
         self.SetupWindow(panel)
         return panel
 
@@ -539,6 +539,6 @@ HANDLER_CLASS_LIST = [FixedStreamPanelEntryXmlHandler,
                       SuggestTextCtrlHandler,
                       UnitIntegerCtrlHandler,
                       ImageTextToggleButtonHandler,
-                      DraggableCanvasXmlHandler
+                      DblMicroscopePanelXmlHandler
                       ]
 
