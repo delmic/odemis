@@ -1193,7 +1193,7 @@ class AndorCam2(model.DigitalCamera):
         self.acquisition_lock.release()
         self.acquire_must_stop.clear()
     
-    def req_stop_flow(self, sync=False):
+    def req_stop_flow(self):
         """
         Cancel the acquisition of a flow of images: there will not be any notify() after this function
         Note: the thread should be already running
@@ -1327,13 +1327,11 @@ class AndorCam2DataFlow(model.DataFlow):
     
     # start/stop_generate are _never_ called simultaneously (thread-safe)
     def start_generate(self):
-        # is it in acquireOne()? If so, it will be done in .get()
-#        if not self.component.acquisition_lock.locked():
         try:
             self.component.start_flow(self.notify)
         except ReferenceError:
             # camera has been deleted, it's all fine, we'll be GC'd soon
-            pass            
+            pass
     
     def stop_generate(self):
         try:

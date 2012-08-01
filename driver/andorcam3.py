@@ -226,8 +226,8 @@ class AndorCam3(model.DigitalCamera):
         
         # TODO some methods (with futures)
         
-        self.is_acquiring = False
-        self.acquire_must_stop = False
+        self.acquisition_lock = threading.Lock()
+        self.acquire_must_stop = threading.Event()
         self.acquire_thread = None
         
         self.data = AndorCam3DataFlow(self)
@@ -760,58 +760,55 @@ class AndorCam3(model.DigitalCamera):
         Acquire one image at the best quality.
         return (DataArray): an array containing the image with the metadata
         """
-        assert not self.is_acquiring
-        assert not self.GetBool(u"CameraAcquiring")
-        self.is_acquiring = True
+        with self.acquisition_lock:
+            assert not self.GetBool(u"CameraAcquiring")
+            
+            metadata = dict(self._metadata) # duplicate
+            size = self.resolution.value
+            
+            cbuffer = self._allocate_buffer(size)
+            self.QueueBuffer(cbuffer)
+            
+            # Acquire the image
+            logging.info("acquiring one image of %d bytes", sizeof(cbuffer))
+            self.Command(u"AcquisitionStart")
+            exposure_time = self.exposureTime.value
+            readout_time = size[0] * size[1] * metadata[model.MD_READOUT_TIME] # s
+            metadata[model.MD_ACQ_DATE] = time.time() # time at the beginning
+            pbuffer, buffersize = self.WaitBuffer(exposure_time + readout_time + 1)
+            
+            # Cannot directly use pbuffer because we'd lose the reference to the 
+            # memory allocation... and it'd get free'd at the end of the method
+            # So rely on the assumption cbuffer is used as is
+            assert(addressof(pbuffer.contents) == addressof(cbuffer))
+            array = self._buffer_as_array(cbuffer, size, metadata)
         
-        metadata = dict(self._metadata) # duplicate
-        size = self.resolution.value
-        
-        cbuffer = self._allocate_buffer(size)
-        self.QueueBuffer(cbuffer)
-        
-        # Acquire the image
-        logging.info("acquiring one image of %d bytes", sizeof(cbuffer))
-        self.Command(u"AcquisitionStart")
-        exposure_time = self.exposureTime.value
-        readout_time = size[0] * size[1] * metadata[model.MD_READOUT_TIME] # s
-        metadata[model.MD_ACQ_DATE] = time.time() # time at the beginning
-        pbuffer, buffersize = self.WaitBuffer(exposure_time + readout_time + 1)
-        
-        # Cannot directly use pbuffer because we'd lose the reference to the 
-        # memory allocation... and it'd get free'd at the end of the method
-        # So rely on the assumption cbuffer is used as is
-        assert(addressof(pbuffer.contents) == addressof(cbuffer))
-        array = self._buffer_as_array(cbuffer, size, metadata)
+            self.Command(u"AcquisitionStop")
+            self.Flush()
+            return array
     
-        self.Command(u"AcquisitionStop")
-        self.Flush()
-        self.is_acquiring = False
-        return array
-    
-    def acquireFlow(self, callback, num=None):
+    def start_flow(self, callback):
         """
-        Set up the camera and acquireOne a flow of images at the best quality for the given
+        Set up the camera and acquire a flow of images at the best quality for the given
           parameters. Should not be called if already a flow is being acquired.
         callback (callable (DataArray) no return):
          function called for each image acquired
-        num (None or int): number of images to acquireOne, or infinite if None
-        returns immediately. To stop acquisition, call stopAcquireFlow()
+        returns immediately. To stop acquisition, call req_stop_flow()
         """
-        assert not self.is_acquiring
+        self.wait_stopped_flow() # no-op is the thread is not running
+        
+        self.acquisition_lock.acquire()
         assert not self.GetBool(u"CameraAcquiring")
-        self.is_acquiring = True
         
         # Set up thread
         self.acquire_thread = threading.Thread(target=self._acquire_thread_run,
-               name="andorcam acquireOne flow thread",
-               args=(callback, num))
+               name="andorcam acquire flow thread",
+               args=(callback,))
         self.acquire_thread.start()
         
-    def _acquire_thread_run(self, callback, num=None):
+    def _acquire_thread_run(self, callback):
         """
-        The core of the acquisition thread. Runs until it has acquired enough
-        images or acquire_must_stop is True.
+        The core of the acquisition thread. Runs until acquire_must_stop is True.
         """
         assert (self.isImplemented(u"CycleMode") and
                 self.isWritable(u"CycleMode"))
@@ -819,12 +816,12 @@ class AndorCam3(model.DigitalCamera):
         # We don't use the framecount feature as it's not always present, and
         # easy to do in software.
 
-
+        # TODO need to update settings when the AV are changed
         size = self.resolution.value
         exposure_time = self.exposureTime.value
         
         # Allocates a pipeline of two buffers in a pipe, so that when we are
-        # processing one buffer, the driver can already acquireOne the next image.
+        # processing one buffer, the driver can already acquire the next image.
         buffers = []
         nbuffers = 2
         for i in range(nbuffers):
@@ -836,7 +833,9 @@ class AndorCam3(model.DigitalCamera):
         logging.info("acquiring a series of images of %d bytes", sizeof(cbuffer))
         self.Command(u"AcquisitionStart")
         readout_time = size[0] * size[1] * self._metadata[model.MD_READOUT_TIME] # s
-        while (not self.acquire_must_stop and (num is None or num > 0)):
+        while not self.acquire_must_stop.is_set():
+            # XXX check if need to update settings first
+            
             metadata = dict(self._metadata) # duplicate
             metadata[model.MD_ACQ_DATE] = time.time() # time at the beginning
             try:
@@ -854,6 +853,8 @@ class AndorCam3(model.DigitalCamera):
                         # try anyway
                     self.Command(u"AcquisitionStart")
                     continue
+                self.acquisition_lock.release()
+                self.acquire_must_stop.clear()
                 raise
 
             # Cannot directly use pbuffer because we'd lose the reference to the 
@@ -870,31 +871,34 @@ class AndorCam3(model.DigitalCamera):
             buffers.append(cbuffer)
             
             callback(array)
-            if num is not None:
-                num -= 1
     
-        self.Command(u"AcquisitionStop")
+        try:
+            self.Command(u"AcquisitionStop")
+        except ATError:
+            pass # probably just complaining it was already stopped
         self.Flush()
-        self.is_acquiring = False
+        self.acquisition_lock.release()
+        self.acquire_must_stop.clear()
     
-    def stopAcquireFlow(self, sync=False):
+    def req_stop_flow(self):
         """
         Stop the acquisition of a flow of images.
         sync (boolean): if True, wait that the acquisition is finished before returning.
          Calling with this flag activated from the acquisition callback is not 
          permitted (it would cause a dead-lock).
         """
-        self.acquire_must_stop = True
-        if sync:
-            self.waitAcquireFlow()
+        assert not self.acquire_must_stop.is_set()
+        self.acquire_must_stop.set()
+        # TODO check that acquisitionstop actually stops the waitbuffer()
+        self.Command(u"AcquisitionStop")
         
-    def waitAcquireFlow(self):
+    def wait_stopped_flow(self):
         """
         Waits until the end acquisition of a flow of images. Calling from the
          acquisition callback is not permitted (it would cause a dead-lock).
         """
         # "while" is mostly to not wait if it's already finished 
-        while self.is_acquiring:
+        while self.acquire_must_stop.is_set():
             # join() already checks that we are not the current_thread()
             #assert threading.current_thread() != self.acquire_thread
             self.acquire_thread.join() # XXX timeout for safety? 
@@ -979,26 +983,28 @@ class AndorCam3DataFlow(model.DataFlow):
         model.DataFlow.__init__(self)
         self.component = weakref.proxy(camera)
         
-    def get(self):
-        # TODO if camera is already acquiring, wait for the coming picture
-        data = self.component.acquireOne()
-        # TODO we should avoid this: acquireOne() and acquireFlow() simultaneously should be handled by the framework
-        # If some subscribers arrived during the acquireOne()
-        if self._listeners:
-            self.notify(data)
-            self.component.acquireFlow(self.notify)
-        return data
-    
+#    def get(self):
+#        # TODO if camera is already acquiring, wait for the coming picture
+#        data = self.component.acquireOne()
+#        # TODO we should avoid this: acquireOne() and start_flow() simultaneously should be handled by the framework
+#        # If some subscribers arrived during the acquireOne()
+#        if self._listeners:
+#            self.notify(data)
+#            self.component.start_flow(self.notify)
+#        return data
+#  
+
+    # start/stop_generate are _never_ called simultaneously (thread-safe)
     def start_generate(self):
-        assert(not self.component.acquire_thread)
-        
-        # is it in acquireOne()? If so, it will be done in .get()
-        if not self.component.is_acquiring:
-            self.component.acquireFlow(self.notify)
+        try:
+            self.component.start_flow(self.notify)
+        except ReferenceError:
+            # camera has been deleted, it's all fine, we'll be GC'd soon
+            pass
     
     def stop_generate(self):
         try:
-            self.component.stopAcquireFlow()
+            self.component.req_stop_flow()
 #            assert(not self.component.acquisition_lock.locked())
         except ReferenceError:
             # camera has been deleted, it's all fine, we'll be GC'd soon

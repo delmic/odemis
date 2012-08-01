@@ -320,6 +320,8 @@ class DataFlow(DataFlowBase):
         DataFlowBase.notify(self, data)
     
     def __del__(self):
+        if self._count_listeners() > 0:
+            self.stop_generate()
         self._unregister()
 
 # DataFlowBase object automatically created on the client (in an Odemic component)
