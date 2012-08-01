@@ -216,7 +216,7 @@ class VirtualTestCam(object):
         self.assertEqual(image.shape, self.size)
         self.assertIn(model.MD_EXP_TIME, image.metadata)
         self.acq_dates[0].add(image.metadata[model.MD_ACQ_DATE])
-        print "Received an image"
+#        print "Received an image"
         self.left -= 1
         if self.left <= 0:
             dataflow.unsubscribe(self.receive_image)
@@ -229,7 +229,7 @@ class VirtualTestCam(object):
         self.assertEqual(image.shape, self.size)
         self.assertIn(model.MD_EXP_TIME, image.metadata)
         self.acq_dates[1].add(image.metadata[model.MD_ACQ_DATE])
-        print "Received an image in 2"
+#        print "Received an image in 2"
         self.left2 -= 1
         if self.left2 <= 0:
             dataflow.unsubscribe(self.receive_image2)
