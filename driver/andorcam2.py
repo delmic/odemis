@@ -1228,10 +1228,10 @@ class AndorCam2(model.DigitalCamera):
             self.temp_timer = None
         
         if self.handle is not None:
-            #self.atcore.CoolerOFF() # XXX Shall we?
             # TODO for some hardware we need to wait the temperature is above -20°C
             try:
                 self.atcore.SetCoolerMode(1) # Temperature is maintained on ShutDown
+                # FIXME: not sure if it does anything (with Clara)
             except:
                 pass
 
