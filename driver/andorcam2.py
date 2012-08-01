@@ -436,7 +436,7 @@ class AndorCam2(model.DigitalCamera):
             self.atcore.Initialize("/usr/local/etc/andor")
         logging.info("Initialisation completed.")
     
-    def Reinitialise(self):
+    def Reinitialize(self):
         """
         Waits for the camera to reappear and reinitialise it. Typically
         useful in case the user switched off/on the camera.
@@ -444,26 +444,34 @@ class AndorCam2(model.DigitalCamera):
          * temperature is -999
          * WaitForAcquisition returns DRV_NO_NEW_DATA
         """
-        # stop trying to read the temperature
+        # stop trying to read the temperature while we reinitialize
         if self.temp_timer is not None:
             self.temp_timer.cancel()
             self.temp_timer = None
-            
+        
+        # One Initialize() to let the driver detect there is nothing anymore
+        # it actually stops its internal threads
+        try:
+            # Hopefully it fails
+            # FIXME if the camera is back on already, it might block forever :-S
+            self.Initialize()
+        except AndorV2Error:
+            pass
+        
         # wait until the device is available
         # it's a bit tricky if there are more than one camera, but at least
         # should work fine with one camera.
         while self.GetAvailableCameras() <= self._device:
+            logging.info("Waiting for the camera to reappear")
             time.sleep(1)
         
-        prev_handle = self.handle
         self.handle = None
-        while self.handle != prev_handle:
+        while self.handle is None:
             try:
                 self.handle = self.GetCameraHandle(self._device)
             except AndorV2Error:
                 # it can happen
                 logging.error("failed to get the handle")
-                pass
             time.sleep(1)
         
         # reinitialise the sdk
@@ -472,7 +480,7 @@ class AndorCam2(model.DigitalCamera):
         try:
             self.Initialize()
         except AndorV2Error:
-            # it can fail the first time, when the SDK realises the camera disappeared
+            # Let's give it a second chance
             try:
                 self.Initialize()
             except:
@@ -507,11 +515,11 @@ class AndorCam2(model.DigitalCamera):
     
     def GetAvailableCameras(self):
         """
-        return the number of cameras available
+        return (int): the number of cameras available
         """
         dc = c_uint32()
         self.atcore.GetAvailableCameras(byref(dc))
-        return dc
+        return dc.value
     
     def GetCapabilities(self):
         """
@@ -1147,7 +1155,7 @@ class AndorCam2(model.DigitalCamera):
                     # -999°C means the camera is gone
                     if self.GetTemperature() == -999:
                         logging.error("Camera seems to have disappeared, will try to reinitialise it")
-                        self.Reinitialise() 
+                        self.Reinitialize() 
                         # if this succeeds, it still need to restart acquisition
                     need_reinit = True
                     continue
@@ -1274,12 +1282,11 @@ class AndorCam2(model.DigitalCamera):
         return (set of 3-tuple: device number (int), name (string), max resolution (2-tuple int))
         """
         camera = AndorCam2("System", "bus") # system
-        dc = c_uint32()
-        camera.atcore.GetAvailableCameras(byref(dc))
-        logging.debug("found %d devices.", dc.value)
+        dc = camera.GetAvailableCameras()
+        logging.debug("found %d devices.", dc)
         
         cameras = []
-        for i in range(dc.value):
+        for i in range(dc):
             camera.handle = c_int32()
             camera.atcore.GetCameraHandle(c_int32(i), byref(camera.handle))
             camera.select()
