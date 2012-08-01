@@ -164,13 +164,16 @@ class VirtualTestCam(object):
         self.camera.exposureTime.value = exposure/2
         # should just not raise any exception
         
-        # get an image (the next one being generated with the new settings, so probably the second one)
+        # get one image: probably the first one from the subscribe (without new exposure)
+        im = self.camera.data.get()
+        
+        # get a second image (this one must be generated with the new settings)
         start = time.time()
         im = self.camera.data.get()
         duration = time.time() - start
 
         self.assertEqual(im.shape, self.size)
-        self.assertGreaterEqual(duration, exposure, "Error execution took %f s, less than exposure time %d." % (duration, exposure))
+        self.assertGreaterEqual(duration, exposure/2, "Error execution took %f s, less than exposure time %d." % (duration, exposure))
         self.assertIn(model.MD_EXP_TIME, im.metadata)
         
         for i in range(number):
