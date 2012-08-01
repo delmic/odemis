@@ -23,7 +23,9 @@ import os
 import urllib
 import weakref
 
+# TODO needs a different value on Windows
 BASE_DIRECTORY="/var/run/odemisd"
+BASE_GROUP="odemis" # user group that is allowed to access the backend 
 
 # The special read-only attribute which are duplicated on proxy objects 
 class roattribute(property):
@@ -170,6 +172,10 @@ def getContainer(name):
     returns (a proxy to) the container with the given name
     raises an exception if no such container exist
     """
+    # detect when the base directory doesn't even exists and is readable
+    if not os.path.isdir(BASE_DIRECTORY + "/."): # + "/." to check it's readable 
+        raise IOError("Directory " + BASE_DIRECTORY + " is not accessible.")
+    
     # the container is the default pyro daemon at the address named by the container
     container = Pyro4.Proxy("PYRO:Pyro.Daemon@./u:"+BASE_DIRECTORY+"/"+urllib.quote(name)+".ipc",
                             oneways=["terminate"])

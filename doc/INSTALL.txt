@@ -6,11 +6,13 @@ sudo apt-get python-wxgtk2.8 python-imaging python-yaml python-gdal python-seria
 
 = Installing Odemis =
 
+Download the source code:
 git clone git@github.com:delmic/Pyro4.git
 git clone git@github.com:delmic/odemis.git
 
-sudo mkdir /var/run/odemisd/
-sudo chmod a+rwx /var/run/odemisd/
+Create a "odemis" group and add all the necessary users to it:
+sudo addgroup odemis
+sudo adduser myuser odemis
 
 = Installing the vendor device drivers =
 == Andor Clara camera ==
@@ -24,8 +26,10 @@ On Linux/Ubuntu you need to install libusb-dev (so that whereis reports libusb.s
 Also the the permissions of all the files must be allowed for normal user: everything is installed by default as root only, so nothing can work from the normal user account. See /usr/local/*/*andor*
 Finally, fix /etc/udev/rules.d/andor.rules to read as:
 ATTRS{idVendor}=="136e", MODE="0666"
+
 For example:
 sudo gedit /etc/udev/rules.d/andor.rules
+# add the line and save the file
 sudo udevadm control --reload-rules
 
 
@@ -37,12 +41,18 @@ On Linux, the bitflow driver has to be reinstalled (recompiled) each time the ke
 Nothing specific. Make sure that the normal user has permissions to access the serial port.
 For example, if it is a USB serial port adapter check the permissions of /dev/ttyUSB0.
 
+== Physik Instrumente E-861 piezo-motor controllers ==
+Nothing specific. Plug one via the USB cable to the computer and the other ones 
+in daisy chain to each other. At least one of the controller must have address 1.
+
+On old versions of Linux (before 3.2.7), you need to create a file
+/etc/udev/rules.d/99-usbftdi.rules with:
+SUBSYSTEMS=="usb", ATTRS{idProduct}=="1008", ATTRS{idVendor}=="1a72", RUN+="/sbin/modprobe -q ftdi-sio product=0x1008 vendor=0x1a72"
+
 = Configuring the instantiation file =
 This file describes the available hardware for Odemis. Basically, it list for each
 hardware, which driver to use and the parameters required. See the backend
 specification for precise syntax and example files.
-
-
 
 
 

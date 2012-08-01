@@ -19,9 +19,11 @@ You should have received a copy of the GNU General Public License along with Del
 from odemisd import modelgen
 import __version__
 import argparse
+import grp
 import logging
 import model
 import os
+import stat
 import sys
 
 _hwcomponents = set()
@@ -41,6 +43,47 @@ def updateMetadata(metadata, parent):
         except AttributeError:
             # no affects == empty set
             pass
+
+def set_base_group():
+    """
+    Change the current process to be running in the base group (odemis)
+    raise:
+        Exception in case it's not possible (lack of permissions...)
+    """
+    try:
+        gid_base = grp.getgrnam(model.BASE_GROUP).gr_gid
+    except KeyError:
+        logging.error(model.BASE_GROUP + " doesn't exists.")
+        raise
+    
+    try:
+        os.setgid(gid_base)
+    except OSError:
+        logging.warning("Not enough permissions to get group " + model.BASE_GROUP + ", trying anyway...")
+        
+    # everything created after must be rw by group
+    os.umask(~(stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IWGRP)) 
+
+def mk_base_dir():
+    """
+    Create the base directory for communication between containers if it's not
+    present yet. To create it, you likely need root permissions.
+    raise:
+        Exception in case it's not possible to create it (lack of permissions...)
+    """
+    if not os.path.exists(model.BASE_DIRECTORY):
+        # it will raise an appropriate exception if it fails to create it
+        os.mkdir(model.BASE_DIRECTORY)
+        
+#        # change the group
+#        gid_base = grp.getgrnam(model.BASE_GROUP).gr_gid
+#        os.chown(model.BASE_DIRECTORY, -1, gid_base)
+        # Files inside are all group odemis, and it can be listed by anyone
+        os.chmod(model.BASE_DIRECTORY, stat.S_ISGID | stat.S_IRWXU | stat.S_IRWXG | stat.S_IROTH | stat.S_IXOTH)
+        logging.debug("created directory " + model.BASE_DIRECTORY)
+    elif not os.path.isdir(model.BASE_DIRECTORY):
+        # the unlikely case it's a file
+        logging.warning(model.BASE_DIRECTORY + " is not a directory, trying anyway...")
 
 class BackendContainer(model.Container):
     """
@@ -98,8 +141,9 @@ status_to_xtcode = {BACKEND_RUNNING: 0,
                     }
 
 # TODO catch kill signal
-def run_backend(model_file, dry_run=False):
-
+def run_backend(model_file, daemon=False, dry_run=False):
+    
+    # parse the instantiation file 
     try:
         logging.debug("model instantiation file is: %s", model_file.name)
         inst_model = modelgen.get_instantiation_model(model_file)
@@ -107,8 +151,32 @@ def run_backend(model_file, dry_run=False):
     except modelgen.ParseError:
         logging.exception("Error while parsing file %s", model_file.name)
         return 127
-    
-    container = BackendContainer()
+
+    # change to odemis group and create the base directory
+    try:
+        set_base_group()
+    except:
+        logging.exception("Failed to get group " + model.BASE_GROUP)
+        return 127
+
+    try:
+        mk_base_dir() 
+    except:
+        logging.exception("Failed to create back-end directory " + model.BASE_DIRECTORY)
+        return 127
+
+    # create the root container
+    try:
+        # create daemon for containing the backend container
+        if daemon:
+            pid = os.fork()
+            if pid:
+                logging.debug("Daemon started with pid %d", pid)
+                return 0
+        container = BackendContainer()
+    except:
+        logging.exception("Failed to create back-end container")
+        return 127
     
     try:
         mic, comps, sub_containers = modelgen.instantiate_model(
@@ -242,14 +310,8 @@ def main(args):
         logging.error("No microscope model instantiation file provided")
         return 127
         
-    if options.daemon:
-        pid = os.fork()
-        if pid:
-            logging.debug("Daemon started with pid %d", pid)
-            return 0
-        
-    # let's become the backend for real
-    return run_backend(options.model, options.validate)
+    # let's become the back-end for real
+    return run_backend(options.model, options.daemon, options.validate)
 
 if __name__ == '__main__':
     ret = main(sys.argv)
