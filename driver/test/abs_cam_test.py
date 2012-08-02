@@ -203,8 +203,7 @@ class VirtualTestCam(object):
                 break
             time.sleep(2 + exposure) # 2s per image should be more than enough in any case
         
-        # TODO check that at least the 3rd image is shared?
-        # Use acq_date
+        # check that at least some images are shared?
         common_dates = self.acq_dates[0] & self.acq_dates[1]
         self.assertGreater(len(common_dates), 0, "No common dates between %r and %r" %
                            (self.acq_dates[0], self.acq_dates[1]))
