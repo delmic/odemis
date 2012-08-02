@@ -36,48 +36,55 @@
                 <object class="odemis.gui.dblmscopepanel.DblMicroscopePanel" name="pnl_view_tl">
                   <size>400,-1</size>
                   <fg>#BFBFBF</fg>
-                  <bg>#1A1A1A</bg>
+                  <bg>#000000</bg>
+                  <XRCED>
+                    <assign_var>1</assign_var>
+                  </XRCED>
                 </object>
-                <flag>wxBOTTOM|wxRIGHT|wxEXPAND</flag>
-                <border>2</border>
+                <flag>wxEXPAND</flag>
                 <minsize>300,300</minsize>
               </object>
               <object class="sizeritem">
                 <object class="odemis.gui.dblmscopepanel.DblMicroscopePanel" name="pnl_view_tr">
                   <size>400,-1</size>
                   <fg>#BFBFBF</fg>
-                  <bg>#1A1A1A</bg>
+                  <bg>#000000</bg>
+                  <XRCED>
+                    <assign_var>1</assign_var>
+                  </XRCED>
                 </object>
-                <flag>wxBOTTOM|wxLEFT|wxEXPAND</flag>
-                <border>2</border>
+                <flag>wxEXPAND</flag>
                 <minsize>300,300</minsize>
               </object>
               <object class="sizeritem">
                 <object class="odemis.gui.dblmscopepanel.DblMicroscopePanel" name="pnl_view_bl">
                   <size>400,-1</size>
                   <fg>#BFBFBF</fg>
-                  <bg>#1A1A1A</bg>
+                  <bg>#000000</bg>
+                  <XRCED>
+                    <assign_var>1</assign_var>
+                  </XRCED>
                 </object>
-                <flag>wxTOP|wxRIGHT|wxEXPAND</flag>
-                <border>2</border>
+                <flag>wxEXPAND</flag>
                 <minsize>300,300</minsize>
               </object>
               <object class="sizeritem">
                 <object class="odemis.gui.dblmscopepanel.DblMicroscopePanel" name="pnl_view_br">
                   <size>400,-1</size>
                   <fg>#BFBFBF</fg>
-                  <bg>#1A1A1A</bg>
+                  <bg>#000000</bg>
+                  <XRCED>
+                    <assign_var>1</assign_var>
+                  </XRCED>
                 </object>
-                <flag>wxTOP|wxLEFT|wxEXPAND</flag>
-                <border>2</border>
+                <flag>wxEXPAND</flag>
                 <minsize>300,300</minsize>
               </object>
               <cols>2</cols>
               <rows>2</rows>
             </object>
             <option>1</option>
-            <flag>wxTOP|wxLEFT|wxRIGHT|wxEXPAND</flag>
-            <border>3</border>
+            <flag>wxEXPAND</flag>
           </object>
           <object class="sizeritem">
             <object class="wxPanel" name="pnl_right">

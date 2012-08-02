@@ -175,8 +175,8 @@ class ScaleWindow(BufferedWindow):
 
 
         self.gap = 3 # gap between line and text
-        self.background_col = "#1A1A1A"
-        self.foreground_col = "#BBBBBB"
+        self.background_col = self.Parent.GetBackgroundColour()
+        self.foreground_col = self.Parent.GetForegroundColour()
         self.line_wdith = 1
 
         # OnSize called to make sure the buffer is initialized.
@@ -214,6 +214,9 @@ class ScaleWindow(BufferedWindow):
         shift = self.shift # to accommodate for the pen width
         vmiddle = self.GetClientSize()[1] / 2
 
+
+        self.background_col = self.Parent.GetBackgroundColour()
+        self.foreground_col = self.Parent.GetForegroundColour()
 
         dc.SetBackgroundMode(wx.SOLID)
         dc.SetBackground(wx.Brush(self.background_col))

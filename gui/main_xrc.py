@@ -20,12 +20,12 @@ class xrcfr_main(wx.Frame):
 #!XRCED:begin-block:xrcfr_main.PreCreate
     def PreCreate(self, pre):
         """ This function is called during the class's initialization.
-        
+
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
         pass
-        
+
 #!XRCED:end-block:xrcfr_main.PreCreate
 
     def __init__(self, parent):
@@ -37,6 +37,10 @@ class xrcfr_main(wx.Frame):
 
         # Define variables for the controls, bind event handlers
         self.menu_item_debug = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_debug"))
+        self.pnl_view_tl = xrc.XRCCTRL(self, "pnl_view_tl")
+        self.pnl_view_tr = xrc.XRCCTRL(self, "pnl_view_tr")
+        self.pnl_view_bl = xrc.XRCCTRL(self, "pnl_view_bl")
+        self.pnl_view_br = xrc.XRCCTRL(self, "pnl_view_br")
         self.btn_toggle_opt = xrc.XRCCTRL(self, "btn_toggle_opt")
         self.btn_toggle_sem = xrc.XRCCTRL(self, "btn_toggle_sem")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
@@ -95,48 +99,55 @@ def __init_resources():
                 <object class="odemis.gui.dblmscopepanel.DblMicroscopePanel" name="pnl_view_tl">
                   <size>400,-1</size>
                   <fg>#BFBFBF</fg>
-                  <bg>#1A1A1A</bg>
+                  <bg>#000000</bg>
+                  <XRCED>
+                    <assign_var>1</assign_var>
+                  </XRCED>
                 </object>
-                <flag>wxBOTTOM|wxRIGHT|wxEXPAND</flag>
-                <border>2</border>
+                <flag>wxEXPAND</flag>
                 <minsize>300,300</minsize>
               </object>
               <object class="sizeritem">
                 <object class="odemis.gui.dblmscopepanel.DblMicroscopePanel" name="pnl_view_tr">
                   <size>400,-1</size>
                   <fg>#BFBFBF</fg>
-                  <bg>#1A1A1A</bg>
+                  <bg>#000000</bg>
+                  <XRCED>
+                    <assign_var>1</assign_var>
+                  </XRCED>
                 </object>
-                <flag>wxBOTTOM|wxLEFT|wxEXPAND</flag>
-                <border>2</border>
+                <flag>wxEXPAND</flag>
                 <minsize>300,300</minsize>
               </object>
               <object class="sizeritem">
                 <object class="odemis.gui.dblmscopepanel.DblMicroscopePanel" name="pnl_view_bl">
                   <size>400,-1</size>
                   <fg>#BFBFBF</fg>
-                  <bg>#1A1A1A</bg>
+                  <bg>#000000</bg>
+                  <XRCED>
+                    <assign_var>1</assign_var>
+                  </XRCED>
                 </object>
-                <flag>wxTOP|wxRIGHT|wxEXPAND</flag>
-                <border>2</border>
+                <flag>wxEXPAND</flag>
                 <minsize>300,300</minsize>
               </object>
               <object class="sizeritem">
                 <object class="odemis.gui.dblmscopepanel.DblMicroscopePanel" name="pnl_view_br">
                   <size>400,-1</size>
                   <fg>#BFBFBF</fg>
-                  <bg>#1A1A1A</bg>
+                  <bg>#000000</bg>
+                  <XRCED>
+                    <assign_var>1</assign_var>
+                  </XRCED>
                 </object>
-                <flag>wxTOP|wxLEFT|wxEXPAND</flag>
-                <border>2</border>
+                <flag>wxEXPAND</flag>
                 <minsize>300,300</minsize>
               </object>
               <cols>2</cols>
               <rows>2</rows>
             </object>
             <option>1</option>
-            <flag>wxTOP|wxLEFT|wxRIGHT|wxEXPAND</flag>
-            <border>3</border>
+            <flag>wxEXPAND</flag>
           </object>
           <object class="sizeritem">
             <object class="wxPanel" name="pnl_right">

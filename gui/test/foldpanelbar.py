@@ -91,8 +91,10 @@ class FoldPanelBarTestCase(unittest.TestCase):
         """ Checks if the vertical scrollbar is present by comparing client and
             widget width
         """
-        return window.GetClientSize().GetWidth() < window.GetSize().GetWidth()
-
+        view_height = window.GetClientSize().GetHeight()
+        virtual_height = window.GetVirtualSize().GetHeight()
+        return virtual_height > view_height
+    
     @classmethod
     def has_horizontal_scrollbar(cls, window):
         """ Checks if the horizontal scrollbar is present by comparing client and
@@ -137,7 +139,7 @@ class FoldPanelBarTestCase(unittest.TestCase):
 
         for child in panel.GetChildren():
             self.assertIsInstance(child,
-                                  odemis.gui.comp.foldpanelbar.FoldPanelItem)
+                                  odemis.gui.comp.foldpanelbar.FoldPanelItem) 
             self.assertIsInstance(child.GetChildren()[0],
                                   odemis.gui.comp.foldpanelbar.CaptionBar)
 

@@ -16,8 +16,11 @@ Delmic Acquisition Software is distributed in the hope that it will be useful, b
 You should have received a copy of the GNU General Public License along with Delmic Acquisition Software. If not, see http://www.gnu.org/licenses/.
 '''
 
-from odemis.gui.comp.canvas import DraggableCanvas, WorldToBufferPoint
 import wx
+
+from odemis.gui.comp.canvas import DraggableCanvas, WorldToBufferPoint
+from odemis.gui.img.data import gettest_patternImage
+
 
 CROSSHAIR_COLOR = wx.GREEN
 CROSSHAIR_SIZE = 16
@@ -35,26 +38,30 @@ class DblMicroscopeCanvas(DraggableCanvas):
         DraggableCanvas.__init__(self, *args, **kwargs)
 
         parent = args[0]
-        self.viewmodel = parent.viewmodel
-        # meter per "world unit"
-        # for conversion between "world pos" in the canvas and a real unit
-        # mpp == mpwu => 1 world coord == 1 px => scale == 1
-        self.mpwu = self.viewmodel.mpp.value  #m/wu
-        # Should not be changed!
+        try:
+            self.viewmodel = parent.viewmodel
+            # meter per "world unit"
+            # for conversion between "world pos" in the canvas and a real unit
+            # mpp == mpwu => 1 world coord == 1 px => scale == 1
+            self.mpwu = self.viewmodel.mpp.value  #m/wu
+            # Should not be changed!
 
-        self.viewmodel.mpp.subscribe(self.avOnMPP)
-        self.viewmodel.center.subscribe(self.onViewCenter, True)
-        # not necessary to call at init: other image will do it as well anyway
-        self.viewmodel.images[0].subscribe(self.avOnImage)
-        self.viewmodel.images[1].subscribe(self.avOnImage, True)
-        self.viewmodel.merge_ratio.subscribe(self.avOnMergeRatio, True)
-        self.viewmodel.crosshair.subscribe(self.avOnCrossHair, True)
+            self.viewmodel.mpp.subscribe(self.avOnMPP)
+            self.viewmodel.center.subscribe(self.onViewCenter, True)
+            # not necessary to call at init: other image will do it as well anyway
+            self.viewmodel.images[0].subscribe(self.avOnImage)
+            self.viewmodel.images[1].subscribe(self.avOnImage, True)
+            self.viewmodel.merge_ratio.subscribe(self.avOnMergeRatio, True)
+            self.viewmodel.crosshair.subscribe(self.avOnCrossHair, True)
+        except AttributeError:
+            pass
 
         self.Bind(wx.EVT_MOUSEWHEEL, self.OnWheel)
 
         self.WorldOverlays.append(CrossHairOverlay("Blue", CROSSHAIR_SIZE, (-10,-10))) # debug
         self.WorldOverlays.append(CrossHairOverlay("Red", CROSSHAIR_SIZE, (10,10))) # debug
 
+        self.SetImage(0, gettest_patternImage(), (0.0, 0.0), 0.5)
 
     def onViewCenter(self, value):
         """

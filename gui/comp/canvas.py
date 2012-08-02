@@ -31,7 +31,6 @@ import os
 import time
 import wx
 
-from odemis.gui.img.data import gettest_patternImage
 from odemis.gui.log import log
 
 # A class for smooth, flicker-less display of anything on a window, with drag
@@ -109,7 +108,7 @@ class DraggableCanvas(wx.Panel):
 
         self.Bind(wx.EVT_CHAR, self.OnChar)
 
-        self.SetImage(0, gettest_patternImage(), (0.0, 0.0), 0.5)
+        #self.SetImage(0, gettest_patternImage(), (0.0, 0.0), 0.5)
 
     def OnChar(self, event):
         key = event.GetKeyCode()

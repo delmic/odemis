@@ -60,7 +60,7 @@ class OdemisGUIApp(wx.App):
             wx.MessageBox(msg,
                           "Connection error",
                           style=wx.OK|wx.ICON_ERROR)
-            sys.exit(1)
+            # sys.exit(1)
 
         # Load the main frame
         self.fr_main = odemis.gui.main_xrc.xrcfr_main(None)
@@ -169,7 +169,9 @@ class OdemisGUIApp(wx.App):
             # Do a final layout of the fold panel bar
             #wx.CallAfter(self.fr_main.fpb_settings.FitBar)
 
-
+            ##################################################
+            # TEST CODE
+            ##################################################
             def dodo(evt):
                 from odemis.gui.comp.stream import FixedStreamPanelEntry
                 fp = FixedStreamPanelEntry(self.fr_main.pnl_stream,
@@ -194,6 +196,16 @@ class OdemisGUIApp(wx.App):
             # wx.EVT_MENU(self.fr_main, self.fr_main.menu_item_activate.GetId(), self.on_activate)
             # wx.EVT_MENU(self.fr_main, self.fr_main.menu_item_update.GetId(), elit.updater.Updater.check_for_update)
 
+            # Keep track of focus
+            self.scope_panels = [self.fr_main.pnl_view_tl,
+                                 self.fr_main.pnl_view_tr,
+                                 self.fr_main.pnl_view_bl,
+                                 self.fr_main.pnl_view_br]
+
+            for scope_panel in self.scope_panels:
+                scope_panel.Bind(wx.EVT_CHILD_FOCUS, self.OnScopePanelFocus)
+
+
             self.fr_main.Show()
             self.fr_main.Raise()
             self.fr_main.Refresh()
@@ -205,6 +217,13 @@ class OdemisGUIApp(wx.App):
         except Exception:
             self.excepthook(*sys.exc_info())
             raise
+
+    def OnScopePanelFocus(self, evt):
+        """ Un-focus all panels """
+        evt.Skip()
+        for scope_panel in self.scope_panels:
+            scope_panel.SetFocus(False)
+
 
     def init_logger(self):
         """ Initialize logging functionality """

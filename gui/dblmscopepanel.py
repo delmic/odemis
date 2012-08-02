@@ -16,13 +16,12 @@ Delmic Acquisition Software is distributed in the hope that it will be useful, b
 You should have received a copy of the GNU General Public License along with Delmic Acquisition Software. If not, see http://www.gnu.org/licenses/.
 '''
 
-import sys
-
-import units
 import wx
 
-from dblmscopecanvas import DblMicroscopeCanvas
-from dblmscopeviewmodel import DblMscopeViewModel
+import units
+
+from odemis.gui.dblmscopecanvas import DblMicroscopeCanvas
+from odemis.gui.dblmscopeviewmodel import DblMscopeViewModel
 from odemis.gui.comp.scalewindow import ScaleWindow
 from odemis.gui.comp.slider import CustomSlider
 from odemis.gui.instrmodel import InstrumentalImage
@@ -39,125 +38,27 @@ class DblMicroscopePanel(wx.Panel):
     def __init__(self, *args, **kwargs):
         wx.Panel.__init__(self, *args, **kwargs)
 
-        try:
-            self.secom_model = wx.GetApp().secom_model
-        except AttributeError:
-            msg = "Could not find SECOM model"
-            wx.MessageBox(msg,
-                          "Application error",
-                          style=wx.OK|wx.ICON_ERROR)
-            sys.exit(1)
+        # Keep track of this panel's pseudo focus
+        self._has_focus = False
 
         self.viewmodel = DblMscopeViewModel()
 
         self.canvas = DblMicroscopeCanvas(self)
 
-        font = wx.Font(8, wx.FONTFAMILY_DEFAULT,
-                          wx.FONTSTYLE_NORMAL,
-                          wx.FONTWEIGHT_NORMAL)
-        self.SetFont(font)
-        self.SetBackgroundColour("#1A1A1A")
-        self.SetForegroundColour("#BBBBBB")
-
-        ###################################
-        # Standard legend widgets
-        ###################################
-
-        ##### Scale window
-
-        self.scaleDisplay = ScaleWindow(self)
-        self.scaleDisplay.SetFont(font)
+        self._build_windows()
 
 
-        #### Values`
+        try:
+            self.secom_model = wx.GetApp().secom_model
+        except AttributeError:
+            msg = "Could not find SECOM model"
 
-        self.magni_label = wx.StaticText(self, wx.ID_ANY, "Mag: 10x 10x")
-        self.volta_label = wx.StaticText(self, wx.ID_ANY, "Volt: 66 kV")
-        self.dwell_label = wx.StaticText(self, wx.ID_ANY, "Dwell: 666 μs")
+            # wx.MessageBox(msg,
+            #               "Application error",
+            #               style=wx.OK|wx.ICON_ERROR)
+            log.error(msg)
 
-        # Merge icons will be grabbed from gui.img.data
-        ##### Merge slider
-
-        self.mergeSlider = CustomSlider(self,
-                    wx.ID_ANY,
-                    50,
-                    (0, 100),
-                    size=(100, 12),
-                    style=wx.SL_HORIZONTAL | wx.SL_AUTOTICKS | wx.SL_TICKS)
-        self.mergeSlider.SetBackgroundColour(self.GetBackgroundColour())
-        self.mergeSlider.SetForegroundColour("#4d4d4d")
-        #self.mergeSlider.SetLineSize(50)
-
-        self.bmpIconOpt = wx.StaticBitmap(self, wx.ID_ANY, getico_blending_optBitmap())
-        self.bmpIconSem = wx.StaticBitmap(self, wx.ID_ANY, getico_blending_semBitmap())
-
-        self.mergeSlider.Bind(wx.EVT_LEFT_UP, self.OnSlider)
-        self.viewmodel.merge_ratio.subscribe(self.avOnMergeRatio, True) #pylint: disable=E1101
-
-
-
-        ###################################
-        # Optional legend widgets
-        ###################################
-
-        self.hfwDisplay = wx.StaticText(self) # Horizontal Full Width
-        self.hfwDisplay.Hide()
-
-
-        ###################################
-        # Size composition
-        ###################################
-
-        #  Scale
-        # +-------
-        #  HFW text
-
-        # leftColSizer = wx.BoxSizer(wx.VERTICAL)
-        # leftColSizer.Add(self.scaleDisplay, flag=wx.EXPAND)
-        # leftColSizer.Add(self.hfwDisplay, flag=wx.TOP, border=5)
-
-        #  | Value label | Value label | Value label |
-        # +-------
-        #  (?????) empty for now
-
-        labelSizer = wx.BoxSizer(wx.HORIZONTAL)
-        labelSizer.Add(self.magni_label, flag=wx.RIGHT, border=5)
-        labelSizer.Add(self.volta_label, flag=wx.RIGHT, border=5)
-        labelSizer.Add(self.dwell_label, flag=wx.RIGHT, border=5)
-
-        # midColSizer = wx.BoxSizer(wx.VERTICAL)
-        # midColSizer.Add(labelSizer, flag=wx.ALIGN_CENTER_VERTICAL)
-
-        #  | Icon | Slider | Icon |
-        # +-------
-        #  (?????) empty for now
-
-        sliderSizer = wx.BoxSizer(wx.HORIZONTAL)
-
-        sliderSizer.Add(self.bmpIconOpt, flag=wx.RIGHT, border=3)
-        sliderSizer.Add(self.mergeSlider, flag=wx.EXPAND)
-        sliderSizer.Add(self.bmpIconSem, flag=wx.LEFT, border=3)
-
-        # rightColSizer = wx.BoxSizer(wx.VERTICAL)
-        # rightColSizer.Add(sliderSizer)
-
-        # leftColSizer | midColSizer | rightColSizer
-
-        legendSizer = wx.GridBagSizer()
-
-        legendSizer.Add(labelSizer, (0,0))
-        legendSizer.Add(self.scaleDisplay, (0,1))
-        legendSizer.Add(sliderSizer, (0,2))
-
-        #  Canvas
-        # +------
-        #  Legend Sizer
-
-        mainSizer = wx.BoxSizer(wx.VERTICAL)
-
-        mainSizer.Add(self.canvas, 1, flag=wx.EXPAND)
-        mainSizer.Add(legendSizer, 0, wx.EXPAND) # 0 = fixed minimal size
-
+            return
 
         # Control for the selection before AddView(), which needs them
         #self.viewComboLeft = wx.ComboBox(self, style=wx.CB_READONLY, size=(140, -1))
@@ -165,22 +66,6 @@ class DblMicroscopePanel(wx.Panel):
 
         #self.Bind(wx.EVT_COMBOBOX, self.OnComboLeft, self.viewComboLeft)
         #self.Bind(wx.EVT_COMBOBOX, self.OnComboRight, self.viewComboRight)
-
-
-
-
-
-
-        #                                      mainSizer
-        #                    Canvas
-        # legendSizer\/
-        #|------scaleSizer---|---------------------imageSizer-----|
-        #|                   l      imageSizerTop                 |
-        #|-------------------l------------------------------------|
-        #|                   l     imageSizerBottom               |
-        #|                   l imageSizerBLeft l imageSizerBRight |
-        #|-------------------|------------------------------------|
-
 
 
         self.viewmodel.mpp.subscribe(self.avOnMPP, True)  #pylint: disable=E1101
@@ -207,11 +92,160 @@ class DblMicroscopePanel(wx.Panel):
         self.viewmodel.center.value = self.secom_model.stage_pos.value
         self.viewmodel.center.subscribe(self.onViewCenter)
 
-        self.SetSizer(mainSizer)
-        self.SetAutoLayout(True)
-        mainSizer.Fit(self)
+        self.Bind(wx.EVT_CHILD_FOCUS, self.OnChildFocus)
+
+        self.viewmodel.merge_ratio.subscribe(self.avOnMergeRatio, True) #pylint: disable=E1101
 
         self.Bind(wx.EVT_SIZE, self.OnSize)
+
+    def OnChildFocus(self, evt):
+        self.SetFocus(True)
+        evt.Skip()
+
+    def HasFocus(self):
+        return self._has_focus == True
+
+    def SetFocus(self, focus):   #pylint: disable=W0221
+        #wx.Panel.SetFocus(self)
+        self._has_focus = focus
+        if focus:
+            self.SetBackgroundColour("#127BA6")
+        else:
+            self.SetBackgroundColour("#000000")
+
+    def _build_windows(self):
+        """ Construct and lay out all sub windows of this panel """
+
+        font = wx.Font(8, wx.FONTFAMILY_DEFAULT,
+                          wx.FONTSTYLE_NORMAL,
+                          wx.FONTWEIGHT_NORMAL)
+        self.SetFont(font)
+        self.SetBackgroundColour("#1A1A1A")
+        self.SetForegroundColour("#BBBBBB")
+
+        ###################################
+        # Standard legend widgets
+        ###################################
+
+        ##### Scale window
+
+        legend_panel = wx.Panel(self)
+        legend_panel.SetBackgroundColour("#1A1A1A")
+        legend_panel.SetForegroundColour(self.GetForegroundColour())
+
+        self.scaleDisplay = ScaleWindow(legend_panel)
+        self.scaleDisplay.SetFont(font)
+
+
+        #### Values`
+
+        self.magni_label = wx.StaticText(legend_panel, wx.ID_ANY, "10x 10x")
+        self.magni_label.SetToolTipString("Magnification Optic Electron")
+        self.volta_label = wx.StaticText(legend_panel, wx.ID_ANY, "66 kV")
+        self.volta_label.SetToolTipString("Voltage")
+        self.dwell_label = wx.StaticText(legend_panel, wx.ID_ANY, "666 μs")
+        self.dwell_label.SetToolTipString("Dwell")
+
+        # Merge icons will be grabbed from gui.img.data
+        ##### Merge slider
+
+        self.mergeSlider = CustomSlider(legend_panel,
+                    wx.ID_ANY,
+                    50,
+                    (0, 100),
+                    size=(100, 12),
+                    style=wx.SL_HORIZONTAL | wx.SL_AUTOTICKS | wx.SL_TICKS)
+        self.mergeSlider.SetBackgroundColour(legend_panel.GetBackgroundColour())
+        self.mergeSlider.SetForegroundColour("#4d4d4d")
+        #self.mergeSlider.SetLineSize(50)
+
+        self.bmpIconOpt = wx.StaticBitmap(legend_panel, wx.ID_ANY, getico_blending_optBitmap())
+        self.bmpIconSem = wx.StaticBitmap(legend_panel, wx.ID_ANY, getico_blending_semBitmap())
+
+        self.mergeSlider.Bind(wx.EVT_LEFT_UP, self.OnSlider)
+
+        ###################################
+        # Optional legend widgets
+        ###################################
+
+        self.hfwDisplay = wx.StaticText(legend_panel) # Horizontal Full Width
+        #self.hfwDisplay.Hide()
+
+
+        ###################################
+        # Size composition
+        ###################################
+
+        #  Scale
+        # +-------
+        #  HFW text
+
+        # leftColSizer = wx.BoxSizer(wx.VERTICAL)
+        # leftColSizer.Add(self.scaleDisplay, flag=wx.EXPAND)
+        # leftColSizer.Add(self.hfwDisplay, flag=wx.TOP, border=5)
+
+        #  | Value label | Value label | Value label |
+        # +-------
+        #  (?????) empty for now
+
+        labelSizer = wx.BoxSizer(wx.HORIZONTAL)
+        labelSizer.Add(self.magni_label, flag=wx.RIGHT, border=10)
+        labelSizer.Add(self.volta_label, flag=wx.RIGHT, border=10)
+        labelSizer.Add(self.dwell_label, flag=wx.RIGHT, border=10)
+
+        # midColSizer = wx.BoxSizer(wx.VERTICAL)
+        # midColSizer.Add(labelSizer, flag=wx.ALIGN_CENTER_VERTICAL)
+
+        #  | Icon | Slider | Icon |
+        # +-------
+        #  (?????) empty for now
+
+        sliderSizer = wx.BoxSizer(wx.HORIZONTAL)
+
+        sliderSizer.Add(self.bmpIconOpt, flag=wx.RIGHT, border=3)
+        sliderSizer.Add(self.mergeSlider, flag=wx.EXPAND)
+        sliderSizer.Add(self.bmpIconSem, flag=wx.LEFT, border=3)
+
+        # rightColSizer = wx.BoxSizer(wx.VERTICAL)
+        # rightColSizer.Add(sliderSizer)
+
+        # leftColSizer | midColSizer | rightColSizer
+
+        legendSizer = wx.GridBagSizer(10, 10)
+
+        # First row
+
+        legendSizer.Add(self.scaleDisplay,
+                        (0, 0), flag=wx.ALIGN_CENTER_VERTICAL)
+        legendSizer.Add(labelSizer,
+                        (0, 1), flag=wx.ALIGN_CENTER_HORIZONTAL|wx.ALIGN_CENTER_VERTICAL)
+        legendSizer.Add(sliderSizer,
+                        (0, 2), flag=wx.ALIGN_CENTER_VERTICAL)
+
+        # Second row
+        legendSizer.Add(self.hfwDisplay,
+                         (1, 0))
+
+        legendSizer.AddGrowableCol(1)
+
+        #  Canvas
+        # +------
+        #  Legend Sizer
+
+        # legend_panel_sizer is needed to add a border around the legend
+        legend_panel_sizer = wx.BoxSizer(wx.VERTICAL)
+        legend_panel_sizer.Add(legendSizer, 1, border=5, flag=wx.ALL|wx.EXPAND)
+        legend_panel.SetSizerAndFit(legend_panel_sizer)
+
+        mainSizer = wx.BoxSizer(wx.VERTICAL)
+
+        mainSizer.Add(self.canvas, 1,
+                border=2, flag=wx.EXPAND|wx.TOP|wx.LEFT|wx.RIGHT)
+        mainSizer.Add(legend_panel, 0,
+                border=2, flag=wx.EXPAND|wx.BOTTOM|wx.LEFT|wx.RIGHT)
+
+        self.SetSizerAndFit(mainSizer)
+        self.SetAutoLayout(True)
 
     def OnComboLeft(self, event):
         self.ChangeView(0, event.GetString())

@@ -1217,7 +1217,7 @@ class FoldPanelBar(wx.Panel):
     will indicate the collapsed or expanded state.
     """
 
-    def __init__(self, parent, id= -1, pos=wx.DefaultPosition, size=wx.DefaultSize,
+    def __init__(self, parent, id= -1, pos=(0, 0), size=wx.DefaultSize,
                  style=wx.TAB_TRAVERSAL | wx.NO_BORDER, agwStyle=0):
         """
         Default class constructor.
@@ -1265,6 +1265,7 @@ class FoldPanelBar(wx.Panel):
 
         if [x for x in pos if x < 0]:
             log.error("NEGATIVE POSITON!")
+            raise Exception("NEGATIVE POSITON!")
 
         self._foldPanel = wx.Panel(self, wx.ID_ANY, pos, size,
                                    wx.NO_BORDER | wx.TAB_TRAVERSAL)
