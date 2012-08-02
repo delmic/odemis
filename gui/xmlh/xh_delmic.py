@@ -134,7 +134,7 @@ class FoldPanelBarXmlHandler(xrc.XmlResourceHandler):
         if self.GetClass() == 'odemis.gui.comp.foldpanelbar.FoldPanelBar':
             w = fpb.FoldPanelBar(self.GetParentAsWindow(),
                                  self.GetID(),
-                                 self.GetPosition(),
+                                 (0, 0),#self.GetPosition(),
                                  self.GetSize(),
                                  self.GetStyle(),
                                  self.GetStyle('exstyle'))
@@ -523,9 +523,12 @@ class DblMicroscopePanelXmlHandler(xrc.XmlResourceHandler):
     def DoCreateResource(self):
         assert self.GetInstance() is None
 
-        parent_window = self.GetParentAsWindow()
         # Now create the object
-        panel = mscp.DblMicroscopePanel(parent_window)
+        panel = mscp.DblMicroscopePanel(self.GetParentAsWindow(),
+                                        id=self.GetID(),
+                                        pos=self.GetPosition(),
+                                        size=self.GetSize(),
+                                        style=self.GetStyle())
         self.SetupWindow(panel)
         return panel
 
