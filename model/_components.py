@@ -66,8 +66,11 @@ def getComponents():
 class ArgumentError(Exception):
     pass
 
+class ComponentBase(object):
+    """Abstract class for a component"""
+    pass
 
-class Component(object):
+class Component(ComponentBase):
     '''
     Component to be shared remotely
     '''
@@ -87,6 +90,16 @@ class Component(object):
         self._parent = None
         self._children = set(children)
         # TODO update .parent of children?
+    
+    def _getproxystate(self):
+        """
+        Equivalent to __getstate__() of the proxy version
+        """
+        proxy_state = Pyro4.core.pyroObjectSerializer(self)[2]
+        return (proxy_state, self.parent,
+                _core.dump_roattributes(self),
+                _dataflow.dump_dataflows(self),
+                _vattributes.dump_vigilant_attributes(self))
     
     # .parent is a weakref so that there is no cycle. 
     # Too complicated to be a roattribute
@@ -133,16 +146,15 @@ class Component(object):
         self.terminate()
         
 # Run on the client (the process which asked for a given remote component)
-class ComponentProxy(Pyro4.Proxy):
+class ComponentProxy(ComponentBase, Pyro4.Proxy):
     """
     Representation of the Component in remote containers
     """
-    def __init__(self, uri, oneways=set(), asyncs=set()):
+    def __init__(self, uri):
         """
-        oneways (list string)
-        asyncs (list string)
+        Note: should not be called directly only created via pickling
         """
-        Pyro4.Proxy.__init__(self, uri, oneways, asyncs)
+        Pyro4.Proxy.__init__(self, uri)
         self._parent = None
     
     # same as in Component, but set via __setstate__
@@ -161,22 +173,22 @@ class ComponentProxy(Pyro4.Proxy):
 
     # The goal of __getstate__ is to allow pickling a proxy and getting a similar
     # proxy talking directly to the server (it reset the connection and the lock).
-    # TODO check if we need to return more (probably yes) -> but it has to be 
-    # compatible with the proxy creation
     def __getstate__(self):
-        # FIXME dump_roattributes is unlikely to work as load_roattributes() doesn't
-        # create roattributes
-        return (self.parent, _core.dump_roattributes(self), _dataflow.dump_dataflows(self),
+        proxy_state = Pyro4.Proxy.__getstate__(self)
+        return (proxy_state, self.parent, _core.dump_roattributes(self),
+                _dataflow.dump_dataflows(self),
                 _vattributes.dump_vigilant_attributes(self))
         
     def __setstate__(self, state):
         """
+        proxy state
         .parent (Component)
         roattributes (dict string -> value)
         dataflows (dict string -> dataflow)
         vas (dict string -> VA)
         """
-        self.parent, roattributes, dataflows, vas = state
+        proxy_state, self.parent, roattributes, dataflows, vas = state
+        Pyro4.Proxy.__setstate__(self, proxy_state)
         _core.load_roattributes(self, roattributes)
         _dataflow.load_dataflows(self, dataflows)
         _vattributes.load_vigilant_attributes(self, vas)
@@ -185,22 +197,15 @@ class ComponentProxy(Pyro4.Proxy):
 # to look more like the normal Proxy of Pyro
 # Converter from Component to ComponentProxy
 already_serialized = set()
-def odemicComponentSerializer(self):
+def ComponentSerializer(self):
     """reduce function that automatically replaces Component objects by a Proxy"""
     daemon=getattr(self,"_pyroDaemon",None)
     if daemon: # TODO might not be even necessary: They should be registering themselves in the init
-        self._odemicShared = True
-        
         # only return a proxy if the object is a registered pyro object
-        return (ComponentProxy,
-                # URI as a string is more compact
-                (str(daemon.uriFor(self)), Pyro4.core.get_oneways(self), Pyro4.core.get_asyncs(self)),
-                # in the state goes everything that might be recursive
-                (self.parent, _core.dump_roattributes(self), _dataflow.dump_dataflows(self), _vattributes.dump_vigilant_attributes(self))
-                )
+        return (ComponentProxy, (daemon.uriFor(self),), self._getproxystate())
     else:
         return self.__reduce__()
-Pyro4.Daemon.serializers[Component] = odemicComponentSerializer
+Pyro4.Daemon.serializers[Component] = ComponentSerializer
 
 
 class HwComponent(Component):
@@ -231,6 +236,13 @@ class HwComponent(Component):
         """
         return self._affects
 
+    def _set_affects(self, comps):
+        """
+        comps (set of HwComponents): list of the affected components 
+        Note: this is to be used only internally for initialisation!
+        """
+        self._affects = frozenset(comps)
+        
     def _set_affects_by_string(self, names):
         """
         names (list of 2-tuples (string, string)): list of the affected components 

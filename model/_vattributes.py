@@ -36,35 +36,90 @@ class NotSettableError(Exception):
 
 class VigilantAttributeBase(object):
     '''
-    A VigilantAttributeBase represents a value (an object) with:
-     * meta-information (min, max, unit, read-only...)
-     * observable behaviour (any one can ask to be notified when the value changes) 
+    An abstract class for VigilantAttributes and its proxy
+    It needs a .value member
     '''
 
-    def __init__(self, initval=None, unit="", readonly=False, setter=None):
+    def __init__(self, initval=None, unit=""):
         """
         Creates a VigilantAttributeBase with a given initial value
         initval (any type): the initial value
         unit (str): a SI unit in which the VA is expressed
+        """
+        self._listeners = set()
+        self._value = initval
+        self.unit = unit
+        
+    def subscribe(self, listener, init=False):
+        """
+        Register a callback function to be called when the VigilantAttributeBase is changed
+        listener (function): callback function which takes as argument val the new value
+        init (boolean): if True calls the listener directly, to initialise it
+        """
+        assert callable(listener)
+        self._listeners.add(WeakMethod(listener))
+        
+        if init:
+            listener(self.value)
+            
+        # TODO allow to pass custom additional parameters to the callback 
+
+    def unsubscribe(self, listener):
+        self._listeners.discard(WeakMethod(listener))
+
+    def notify(self, v):
+        for l in self._listeners.copy():
+            try:
+                l(v)
+            except WeakRefLostError:
+                self.unsubscribe(l)
+
+
+class VigilantAttribute(VigilantAttributeBase):
+    '''
+    A VigilantAttribute represents a value (an object) with:
+     * meta-information (min, max, unit, read-only...)
+     * observable behaviour (any one can ask to be notified when the value changes) 
+    '''
+    
+    def __init__(self, initval, readonly=False, setter=None, max_discard=100, *args, **kwargs):
+        """
         readonly (bool): if True, value setter will raise an exception. It's still
             possible to change the value by calling _set() and then notify()
         setter (callable value -> value): function that will be called whenever the value has to
             be changed and returns the new actual value (which might be different
             from what was given).
+        max_discard (int): mount of updates that can be discarded in a row if
+                            a new one is already available. 0 to keep (notify) 
+                            all the messages (dangerous if callback is slower
+                            than the generator).
         """
-        self._listeners = set()
-        self._value = initval
-        self.unit = unit
+        VigilantAttributeBase.__init__(self, initval, *args, **kwargs)
+        
+        self.readonly = readonly
         if setter is None:
             self._setter = self.__default_setter
         else:
             self._setter = WeakMethod(setter) # to avoid cycles
-        self.readonly = readonly
-
-    # TODO move all the set stuff outside of Base, so that Proxy doesn't inherit them
+        
+        # different from ._listeners for notify() to do different things
+        self._remote_listeners = set() # any unique string works
+        
+        self._global_name = None # to be filled when registered
+        self.ctx = None
+        self.pipe = None
+        self.max_discard = max_discard
 
     def __default_setter(self, value):
         return value
+    
+    def _getproxystate(self):
+        """
+        Equivalent to __getstate__() of the proxy version
+        """
+        proxy_state = Pyro4.core.pyroObjectSerializer(self)[2]
+        return (proxy_state, _core.dump_roattributes(self), self.unit,
+                self.readonly, self.max_discard)
     
     def _check(self, value):
         """
@@ -96,49 +151,6 @@ class VigilantAttributeBase(object):
         del self._value
     
     value = property(_get_value, _set_value, _del_value, "The actual value")
-        
-    def subscribe(self, listener, init=False):
-        """
-        Register a callback function to be called when the VigilantAttributeBase is changed
-        listener (function): callback function which takes as argument val the new value
-        init (boolean): if True calls the listener directly, to initialise it
-        """
-        assert callable(listener)
-        self._listeners.add(WeakMethod(listener))
-        
-        if init:
-            listener(self.value)
-            
-        # TODO allow to pass custom additional parameters to the callback 
-
-    def unsubscribe(self, listener):
-        self._listeners.discard(WeakMethod(listener))
-
-    def notify(self, v):
-        for l in self._listeners.copy():
-            try:
-                l(v)
-            except WeakRefLostError:
-                self.unsubscribe(l)
-
-
-class VigilantAttribute(VigilantAttributeBase):
-
-    def __init__(self, initval, max_discard=100, *args, **kwargs):
-        """
-        max_discard (int): mount of updates that can be discarded in a row if
-                            a new one is already available. 0 to keep (notify) 
-                            all the messages (dangerous if callback is slower
-                            than the generator).
-        """
-        VigilantAttributeBase.__init__(self, initval, *args, **kwargs)
-        # different from ._listeners for notify() to do different things
-        self._remote_listeners = set() # any unique string works
-        
-        self._global_name = None # to be filled when registered
-        self.ctx = None
-        self.pipe = None
-        self.max_discard = max_discard
         
     def _register(self, daemon):
         """
@@ -221,18 +233,15 @@ class VigilantAttribute(VigilantAttributeBase):
 class VigilantAttributeProxy(VigilantAttributeBase, Pyro4.Proxy):
     # init is as light as possible to reduce creation overhead in case the
     # object is actually never used
-    def __init__(self, uri, oneways=set(), asyncs=set(), max_discard=100, unit="", readonly=False):
+    def __init__(self, uri):
         """
-        uri, oneways, asyncs: see Proxy
-        max_discard (int): amount of messages that can be discarded in a row if
-                            a new one is already available. 0 to keep (notify) 
-                            all the messages (dangerous if callback is slower
-                            than the generator).
+        uri: see Proxy
         """ 
-        Pyro4.Proxy.__init__(self, uri, oneways, asyncs)
+        Pyro4.Proxy.__init__(self, uri)
         self._global_name = uri.sockname + "@" + uri.object
-        VigilantAttributeBase.__init__(self, None, unit=unit, readonly=readonly) # TODO setting None might not always be valid
-        self.max_discard = max_discard
+        VigilantAttributeBase.__init__(self) # TODO setting value=None might not always be valid
+        self.max_discard = 100
+        self.readonly = False # will be updated in __setstate__
         
         self.ctx = None
         self.commands = None
@@ -260,14 +269,30 @@ class VigilantAttributeProxy(VigilantAttributeBase, Pyro4.Proxy):
         return Pyro4.Proxy.__getattr__(self, "_get_range")()
     
     def __getstate__(self):
-        return (_core.dump_roattributes(self), )
+        # must permit to recreate a proxy in a different container
+        proxy_state = Pyro4.Proxy.__getstate__(self)
+        # we don't need value, it's always remotely accessed
+        return (proxy_state, _core.dump_roattributes(self), self.unit,
+                self.readonly, self.max_discard)
         
     def __setstate__(self, state):
         """
         roattributes (dict string -> value)
+        max_discard (int): amount of messages that can be discarded in a row if
+                            a new one is already available. 0 to keep (notify) 
+                            all the messages (dangerous if callback is slower
+                            than the generator).
         """
-        roattributes, = state
+        proxy_state, roattributes, unit, self.readonly, self.max_discard = state
+        Pyro4.Proxy.__setstate__(self, proxy_state)
+        VigilantAttributeBase.__init__(self, unit=unit)
         _core.load_roattributes(self, roattributes)
+        
+        self._global_name = self._pyroUri.sockname + "@" + self._pyroUri.object
+        
+        self.ctx = None
+        self.commands = None
+        self._thread = None
         
     def _create_thread(self):
         self.ctx = zmq.Context(1) # apparently 0MQ reuse contexts
@@ -416,24 +441,16 @@ def load_vigilant_attributes(self, vas):
     for name, df in vas.items():
         setattr(self, name, df)
 
-def odemicVASerializer(self):
+def VASerializer(self):
     """reduce function that automatically replaces Pyro objects by a Proxy"""
     daemon=getattr(self,"_pyroDaemon",None)
-    if daemon: # TODO might not be even necessary: They should be registering themselves in the init
-        self._odemicShared = True
+    if daemon:
         # only return a proxy if the object is a registered pyro object
-        return (VigilantAttributeProxy, 
-                (daemon.uriFor(self),
-                 Pyro4.core.get_oneways(self),
-                 Pyro4.core.get_asyncs(self),
-                 self.max_discard, self.unit, self.readonly), 
-                # in the state goes everything that might be recursive
-                (_core.dump_roattributes(self), )
-                )
+        return (VigilantAttributeProxy, (daemon.uriFor(self),), self._getproxystate())
     else:
         return self.__reduce__()
     
-Pyro4.Daemon.serializers[VigilantAttribute] = odemicVASerializer
+Pyro4.Daemon.serializers[VigilantAttribute] = VASerializer
 
      
 class StringVA(VigilantAttribute):

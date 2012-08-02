@@ -18,7 +18,6 @@ You should have received a copy of the GNU General Public License along with Del
 # This is a basic command line interface to the odemis back-end
 from cli.video_displayer import VideoDisplayer
 from dataio import tiff
-from driver import andorcam3, andorcam2
 import Pyro4
 import __version__
 import argparse
@@ -208,7 +207,6 @@ def print_vattribute(name, va):
         str_choices = " (choices: %s)" % ", ".join([str(c) for c in vachoices])
     except:
         str_choices = ""    
-    
     
     print("\t" + name + " (%sVigilant Attribute)\t value: %s%s%s%s" %
           (readonly, str(va.value), unit, str_range, str_choices))

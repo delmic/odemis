@@ -42,6 +42,7 @@ class roattribute(property):
 def get_roattributes(self):
     """
     list all roattributes of an instance
+    Note: this only works on an original class, not on a proxy
     """
 #    members = inspect.getmembers(self.__class__)
 #    return [name for name, obj in members if isinstance(obj, roattribute)]
@@ -60,7 +61,13 @@ def dump_roattributes(self):
     """
     list all the roattributes and their value
     """
-    return dict([[name, getattr(self, name)] for name in get_roattributes(self)])
+    # check whether self is a proxy or an original class
+    if hasattr(self, "_odemis_roattributes"):
+        roattr = self._odemis_roattributes
+    else:
+        roattr = get_roattributes(self)
+        
+    return dict([[name, getattr(self, name)] for name in roattr])
 
 def load_roattributes(self, roattributes):
     """
@@ -69,6 +76,9 @@ def load_roattributes(self, roattributes):
     """
     for a, value in roattributes.items():
         setattr(self, a, value)
+        
+    # save the list in case we need to pickle the object again
+    self._odemis_roattributes = roattributes.keys()
 
 
 # Container management functions and class
@@ -177,8 +187,9 @@ def getContainer(name):
         raise IOError("Directory " + BASE_DIRECTORY + " is not accessible.")
     
     # the container is the default pyro daemon at the address named by the container
-    container = Pyro4.Proxy("PYRO:Pyro.Daemon@./u:"+BASE_DIRECTORY+"/"+urllib.quote(name)+".ipc",
-                            oneways=["terminate"])
+    container = Pyro4.Proxy("PYRO:Pyro.Daemon@./u:"+BASE_DIRECTORY+"/"+urllib.quote(name)+".ipc")
+    container._pyroOneway.add("terminate")
+    
     # A proxy doesn't connect until the first remote call, check the connection
     container.ping() # raise an exception if connection fails
     return container
