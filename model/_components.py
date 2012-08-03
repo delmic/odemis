@@ -149,7 +149,7 @@ class ComponentProxy(ComponentBase, Pyro4.Proxy):
     @property
     def parent(self):
         if self._parent:
-            return self._parent() # TODO handle weakref exception?
+            return self._parent() # returns None if ref is gone
         else:
             return None
     @parent.setter
