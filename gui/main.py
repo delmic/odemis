@@ -65,86 +65,17 @@ class OdemisGUIApp(wx.App):
         # Load the main frame
         self.fr_main = odemis.gui.main_xrc.xrcfr_main(None)
 
-        self.do_init()
-
-
-        # TODO: add a global reference to the main GUI frame
-        #gui.MAIN_FRAME = self.fr_main
-
-        # Load the loading dialog
-        # self.dlg_startup = gui.fabrix_xrc.xrcdialog_load(self.fr_main)
-        # self.dlg_startup.panel_install.Hide()
-        # self.dlg_startup.Fit()
-        # self.dlg_startup.Layout()
-        # self.dlg_startup.Show()
-        # self.dlg_startup.Update()
-
-        # FIXME: Thread not running?
-        #threading.Thread(target=self.do_init).start()
-
-        # Start the clock (can't be launched from init thread)
+        self.init_logger()
+        self.init_gui()
 
         # Application successfully launched
         return True
 
-    def dump(self, item, indent=0):
-        for c in item.GetChildren():
-            print " " * indent, c
-            self.dump(c, indent + 2)
 
-    def do_init(self):
-        """ Odemis main GUI initialization method, run from :py:meth:`OnInit` in a separate thread.
-        """
-
-        self.init_logger()
-
-
-
-
-
-        self.init_gui()
-
-        #self.dlg_startup.label_version.SetLabel("%d.%d.%s" % (elit.constants.MAJOR_VERSION, elit.constants.MINOR_VERSION, elit.constants.REVISION_VERSION))
-
-        #self.dlg_startup.gauge_load.SetValue(0)
-
-        #self.dlg_startup.gauge_load.SetValue(1)
-        #self.dlg_startup.label_dialog.SetLabel("Logsysteem initialiseren")
-        #time.sleep(0.1)
-
-        # self.dlg_startup.gauge_load.SetValue(2)
-        # self.dlg_startup.label_dialog.SetLabel("Configuratie laden")
-        # self.init_config()
-        # time.sleep(0.1)
-
-        # self.dlg_startup.gauge_load.SetValue(3)
-        # self.dlg_startup.label_dialog.SetLabel("Verbinden met databank")
-        # self.init_db_connection()
-        # time.sleep(0.1)
-
-        # self.dlg_startup.gauge_load.SetValue(4)
-        # self.dlg_startup.label_dialog.SetLabel("Databank controleren")
-        # self.update_databases()
-        # time.sleep(0.1)
-
-        # self.dlg_startup.gauge_load.SetValue(5)
-        # self.dlg_startup.label_dialog.SetLabel("Programma starten")
-        # time.sleep(0.5)
-
-        # # Hide the loading dialog
-
-        # self.dlg_startup.Hide()
-
-
-
-    def init_config(self):
-        """ Initialize GUI configuration """
-        # TODO: Process GUI configuration here
-        pass
-
-    def _module_path(self):
-        encoding = sys.getfilesystemencoding()
-        return os.path.dirname(unicode(__file__, encoding))
+    def init_logger(self):
+        """ Initialize logging functionality """
+        #create_gui_logger(self.fr_main.txt_log)
+        log.info("Starting Odemis GUI version x.xx")
 
 
     def init_gui(self):
@@ -206,6 +137,8 @@ class OdemisGUIApp(wx.App):
                 scope_panel.Bind(wx.EVT_CHILD_FOCUS, self.OnScopePanelFocus)
 
 
+            self.fr_main.Bind(wx.EVT_CLOSE, self.on_close_window)
+            
             self.fr_main.Show()
             self.fr_main.Raise()
             self.fr_main.Refresh()
@@ -218,17 +151,26 @@ class OdemisGUIApp(wx.App):
             self.excepthook(*sys.exc_info())
             raise
 
+
+    def init_config(self):
+        """ Initialize GUI configuration """
+        # TODO: Process GUI configuration here
+        pass
+
+    def _module_path(self):
+        encoding = sys.getfilesystemencoding()
+        return os.path.dirname(unicode(__file__, encoding))
+
     def OnScopePanelFocus(self, evt):
-        """ Un-focus all panels """
+        """ Un-focus all panels
+        When the user tries to focus a scope panel, the event will first pass
+        through here, so this is where we unfocus all panels, after which
+        the event moves on and focusses the desired panel.
+        """
         evt.Skip()
         for scope_panel in self.scope_panels:
             scope_panel.SetFocus(False)
 
-
-    def init_logger(self):
-        """ Initialize logging functionality """
-        create_gui_logger(self.fr_main.txt_log)
-        log.info("Starting Odemis GUI version x.xx")
 
     def goto_debug_mode(self):
         """ This method sets the application into debug mode, setting the
@@ -247,13 +189,14 @@ class OdemisGUIApp(wx.App):
 
     def on_close_window(self, evt=None): #pylint: disable=W0613
         """ This method cleans up and closes the Odemis GUI. """
-        logging.info("Exiting Odemis")
 
+        logging.info("Exiting Odemis")
 
         # Put cleanup actions here (like disconnect from odemisd)
 
         #self.dlg_startup.Destroy()
         self.fr_main.Destroy()
+        sys.exit(0)
 
     def excepthook(self, type, value, trace): #pylint: disable=W0622
         """ Method to intercept unexpected errors that are not caught

@@ -1308,6 +1308,19 @@ getico_rem_strImage = ico_rem_str.GetImage
 getico_rem_strBitmap = ico_rem_str.GetBitmap
 
 #----------------------------------------------------------------------
+slider_dis = PyEmbeddedImage(
+    "iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAYAAADED76LAAAABmJLR0QA/wD/AP+gvaeTAAAA"
+    "CXBIWXMAAAsTAAALEwEAmpwYAAAAB3RJTUUH3AgCDBQ5S+BThwAAABl0RVh0Q29tbWVudABD"
+    "cmVhdGVkIHdpdGggR0lNUFeBDhcAAABESURBVBjTY2RgYGCorKxcyMDAEMeACha1t7fHM+KQ"
+    "hCtiwiPJwMDAEMfEQABQR8EiPPKLmI8cObLB1tZWiYGBQR+bNwG0GhC2ezQB4wAAAABJRU5E"
+    "rkJggg==")
+index.append('slider_dis')
+catalog['slider_dis'] = slider_dis
+getslider_disData = slider_dis.GetData
+getslider_disImage = slider_dis.GetImage
+getslider_disBitmap = slider_dis.GetBitmap
+
+#----------------------------------------------------------------------
 slider = PyEmbeddedImage(
     "iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAYAAADED76LAAAABmJLR0QA/wD/AP+gvaeTAAAA"
     "CXBIWXMAAAsTAAALEwEAmpwYAAAAB3RJTUUH3AcZDiEmYhUP5QAAABl0RVh0Q29tbWVudABD"

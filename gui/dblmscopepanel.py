@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-'''
+"""
 Created on 8 Feb 2012
 
 @author: Éric Piel
@@ -9,12 +9,20 @@ Copyright © 2012 Éric Piel, Delmic
 
 This file is part of Delmic Acquisition Software.
 
-Delmic Acquisition Software is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 2 of the License, or (at your option) any later version.
+Delmic Acquisition Software is free software: you can redistribute it and/or
+modify it under the terms of the GNU General Public License as published by the
+Free Software Foundation, either version 2 of the License, or (at your option)
+any later version.
 
-Delmic Acquisition Software is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+Delmic Acquisition Software is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
+details.
 
-You should have received a copy of the GNU General Public License along with Delmic Acquisition Software. If not, see http://www.gnu.org/licenses/.
-'''
+You should have received a copy of the GNU General Public License along with
+Delmic Acquisition Software. If not, see http://www.gnu.org/licenses/.
+
+"""
 
 import wx
 
@@ -43,8 +51,7 @@ class DblMicroscopePanel(wx.Panel):
 
         self.viewmodel = DblMscopeViewModel()
 
-        self.canvas = DblMicroscopeCanvas(self)
-
+        # Create all sub widgets used by this wx.Panel
         self._build_windows()
 
 
@@ -52,12 +59,7 @@ class DblMicroscopePanel(wx.Panel):
             self.secom_model = wx.GetApp().secom_model
         except AttributeError:
             msg = "Could not find SECOM model"
-
-            # wx.MessageBox(msg,
-            #               "Application error",
-            #               style=wx.OK|wx.ICON_ERROR)
             log.error(msg)
-
             return
 
         # Control for the selection before AddView(), which needs them
@@ -66,10 +68,6 @@ class DblMicroscopePanel(wx.Panel):
 
         #self.Bind(wx.EVT_COMBOBOX, self.OnComboLeft, self.viewComboLeft)
         #self.Bind(wx.EVT_COMBOBOX, self.OnComboRight, self.viewComboRight)
-
-
-        self.viewmodel.mpp.subscribe(self.avOnMPP, True)  #pylint: disable=E1101
-
 
 
         emptyView = MicroscopeEmptyView()
@@ -90,31 +88,27 @@ class DblMicroscopePanel(wx.Panel):
 
         # sync microscope stage with the view
         self.viewmodel.center.value = self.secom_model.stage_pos.value
-        self.viewmodel.center.subscribe(self.onViewCenter)
+
 
         self.Bind(wx.EVT_CHILD_FOCUS, self.OnChildFocus)
 
-        self.viewmodel.merge_ratio.subscribe(self.avOnMergeRatio, True) #pylint: disable=E1101
+        self._set_subscriptions()
+
+        self.ShowBlendingSlider(self.canvas.ImageCount() > 1)
 
         self.Bind(wx.EVT_SIZE, self.OnSize)
 
-    def OnChildFocus(self, evt):
-        self.SetFocus(True)
-        evt.Skip()
+    def _set_subscriptions(self):
+        """ Set all needed subscriptions to VigilantAttributes """
+        self.viewmodel.mpp.subscribe(self.avOnMPP, True)  #pylint: disable=E1101
+        self.viewmodel.center.subscribe(self.onViewCenter)
+        self.viewmodel.merge_ratio.subscribe(self.avOnMergeRatio, True) #pylint: disable=E1101
 
-    def HasFocus(self):
-        return self._has_focus == True
-
-    def SetFocus(self, focus):   #pylint: disable=W0221
-        #wx.Panel.SetFocus(self)
-        self._has_focus = focus
-        if focus:
-            self.SetBackgroundColour("#127BA6")
-        else:
-            self.SetBackgroundColour("#000000")
 
     def _build_windows(self):
         """ Construct and lay out all sub windows of this panel """
+
+        self.canvas = DblMicroscopeCanvas(self)
 
         font = wx.Font(8, wx.FONTFAMILY_DEFAULT,
                           wx.FONTSTYLE_NORMAL,
@@ -149,28 +143,27 @@ class DblMicroscopePanel(wx.Panel):
         # Merge icons will be grabbed from gui.img.data
         ##### Merge slider
 
-        self.mergeSlider = CustomSlider(legend_panel,
+        self.blendingSlider = CustomSlider(legend_panel,
                     wx.ID_ANY,
                     50,
                     (0, 100),
                     size=(100, 12),
                     style=wx.SL_HORIZONTAL | wx.SL_AUTOTICKS | wx.SL_TICKS)
-        self.mergeSlider.SetBackgroundColour(legend_panel.GetBackgroundColour())
-        self.mergeSlider.SetForegroundColour("#4d4d4d")
-        #self.mergeSlider.SetLineSize(50)
+        self.blendingSlider.SetBackgroundColour(legend_panel.GetBackgroundColour())
+        self.blendingSlider.SetForegroundColour("#4d4d4d")
+        #self.blendingSlider.SetLineSize(50)
 
         self.bmpIconOpt = wx.StaticBitmap(legend_panel, wx.ID_ANY, getico_blending_optBitmap())
         self.bmpIconSem = wx.StaticBitmap(legend_panel, wx.ID_ANY, getico_blending_semBitmap())
 
-        self.mergeSlider.Bind(wx.EVT_LEFT_UP, self.OnSlider)
+        self.blendingSlider.Bind(wx.EVT_LEFT_UP, self.OnSlider)
 
         ###################################
         # Optional legend widgets
         ###################################
 
         self.hfwDisplay = wx.StaticText(legend_panel) # Horizontal Full Width
-        #self.hfwDisplay.Hide()
-
+        self.hfwDisplay.Hide()
 
         ###################################
         # Size composition
@@ -189,9 +182,9 @@ class DblMicroscopePanel(wx.Panel):
         #  (?????) empty for now
 
         labelSizer = wx.BoxSizer(wx.HORIZONTAL)
-        labelSizer.Add(self.magni_label, flag=wx.RIGHT, border=10)
-        labelSizer.Add(self.volta_label, flag=wx.RIGHT, border=10)
-        labelSizer.Add(self.dwell_label, flag=wx.RIGHT, border=10)
+        labelSizer.Add(self.magni_label, flag=wx.RIGHT, border=20)
+        labelSizer.Add(self.volta_label, flag=wx.RIGHT, border=20)
+        labelSizer.Add(self.dwell_label, flag=wx.RIGHT, border=20)
 
         # midColSizer = wx.BoxSizer(wx.VERTICAL)
         # midColSizer.Add(labelSizer, flag=wx.ALIGN_CENTER_VERTICAL)
@@ -200,14 +193,14 @@ class DblMicroscopePanel(wx.Panel):
         # +-------
         #  (?????) empty for now
 
-        sliderSizer = wx.BoxSizer(wx.HORIZONTAL)
+        self.sliderSizer = wx.BoxSizer(wx.HORIZONTAL)
 
-        sliderSizer.Add(self.bmpIconOpt, flag=wx.RIGHT, border=3)
-        sliderSizer.Add(self.mergeSlider, flag=wx.EXPAND)
-        sliderSizer.Add(self.bmpIconSem, flag=wx.LEFT, border=3)
+        self.sliderSizer.Add(self.bmpIconOpt, flag=wx.RIGHT, border=3)
+        self.sliderSizer.Add(self.blendingSlider, flag=wx.EXPAND)
+        self.sliderSizer.Add(self.bmpIconSem, flag=wx.LEFT, border=3)
 
         # rightColSizer = wx.BoxSizer(wx.VERTICAL)
-        # rightColSizer.Add(sliderSizer)
+        # rightColSizer.Add(self.sliderSizer)
 
         # leftColSizer | midColSizer | rightColSizer
 
@@ -215,16 +208,15 @@ class DblMicroscopePanel(wx.Panel):
 
         # First row
 
-        legendSizer.Add(self.scaleDisplay,
-                        (0, 0), flag=wx.ALIGN_CENTER_VERTICAL)
         legendSizer.Add(labelSizer,
-                        (0, 1), flag=wx.ALIGN_CENTER_HORIZONTAL|wx.ALIGN_CENTER_VERTICAL)
-        legendSizer.Add(sliderSizer,
+                        (0, 0), flag=wx.ALIGN_CENTER_VERTICAL)
+        legendSizer.Add(self.scaleDisplay,
+                        (0, 1), flag=wx.ALIGN_CENTER_VERTICAL|wx.ALIGN_CENTER_HORIZONTAL)
+        legendSizer.Add(self.sliderSizer,
                         (0, 2), flag=wx.ALIGN_CENTER_VERTICAL)
 
         # Second row
-        legendSizer.Add(self.hfwDisplay,
-                         (1, 0))
+        legendSizer.Add(self.hfwDisplay, (1, 0))
 
         legendSizer.AddGrowableCol(1)
 
@@ -234,7 +226,7 @@ class DblMicroscopePanel(wx.Panel):
 
         # legend_panel_sizer is needed to add a border around the legend
         legend_panel_sizer = wx.BoxSizer(wx.VERTICAL)
-        legend_panel_sizer.Add(legendSizer, 1, border=5, flag=wx.ALL|wx.EXPAND)
+        legend_panel_sizer.Add(legendSizer, 1, border=10, flag=wx.ALL|wx.EXPAND)
         legend_panel.SetSizerAndFit(legend_panel_sizer)
 
         mainSizer = wx.BoxSizer(wx.VERTICAL)
@@ -247,6 +239,45 @@ class DblMicroscopePanel(wx.Panel):
         self.SetSizerAndFit(mainSizer)
         self.SetAutoLayout(True)
 
+
+    ################################################
+    ## Panel control
+    ################################################
+
+    def ShowBlendingSlider(self, show):
+        # print self.sliderSizer.GetMinSize()
+        # print self.sliderSizer.GetSize()
+        self.bmpIconOpt.Show(show)
+        self.blendingSlider.Show(show)
+        self.bmpIconSem.Show(show)
+
+
+    ## END Panel control
+
+
+    ################################################
+    ## Event handling
+    ################################################
+
+    def OnChildFocus(self, evt):
+        self.SetFocus(True)
+        evt.Skip()
+
+    def HasFocus(self):
+        return self._has_focus == True
+
+    def SetFocus(self, focus):   #pylint: disable=W0221
+        #wx.Panel.SetFocus(self)
+        self._has_focus = focus
+
+        if focus:
+            self.SetBackgroundColour("#127BA6")
+        else:
+            self.SetBackgroundColour("#000000")
+
+
+    ## END Event handling
+
     def OnComboLeft(self, event):
         self.ChangeView(0, event.GetString())
 
@@ -257,14 +288,13 @@ class DblMicroscopePanel(wx.Panel):
         """
         Merge ratio slider
         """
-        log.error("pew")
-        self.viewmodel.merge_ratio.value = self.mergeSlider.GetValue() / 100.0
+        self.viewmodel.merge_ratio.value = self.blendingSlider.GetValue() / 100.0
         event.Skip()
 
     def avOnMergeRatio(self, val):
         # round is important because int can cause unstable value
         # int(0.58*100) = 57
-        self.mergeSlider.SetValue(round(val * 100))
+        self.blendingSlider.SetValue(round(val * 100))
 
 
     # We link only one way the position:
@@ -288,10 +318,6 @@ class DblMicroscopePanel(wx.Panel):
         label = "HFW: %sm" % units.to_string_si_prefix(hfw)
         self.hfwDisplay.SetLabel(label)
 
-#    # Change picture one/two
-#    def SetImage(self, index, im, pos = None, mpp = None):
-#        self.canvas.SetImage(index, im, pos, mpp)
-#
     def AddView(self, view):
         self.views.append(view)
 
@@ -339,9 +365,9 @@ class DblMicroscopePanel(wx.Panel):
 
         # Remove slider if not 2 views
         if isinstance(view, MicroscopeEmptyView) or isinstance(oppView, MicroscopeEmptyView):
-            self.mergeSlider.Hide()
+            self.blendingSlider.Hide()
         else:
-            self.mergeSlider.Show()
+            self.blendingSlider.Show()
 
         # TODO: find out if that's the nice behaviour, or should just keep it?
         if needSwap:
