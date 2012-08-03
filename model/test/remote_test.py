@@ -104,22 +104,39 @@ class SerializerTest(unittest.TestCase):
 class ProxyOfProxyTest(unittest.TestCase):
 # Test sharing a shared component from the client
 
-# 2 possibilities:
-# 1
-#  create one remote container with an object (Component)
-#  create a second remote container with a special Component which can getObjects
-#  ask the special component to pass the object of the first container (by name/name)
-#  assert _pyroUri is same as _pyroUri of our direct proxy to first object
-#  assert indirect proxy works fine (roattribute available, function calls)
-
-# 2
 #  create one remote container with an object (Component)
 #  create a second remote container with a HwComponent
-#  change .affects of HwComponent to the first object (XXX How to change affects?)
+#  change .affects of HwComponent to the first object
 #  
     def test_component(self):
         comp = model.createInNewContainer("testscont", model.HwComponent, 
                                           {"name":"MyComp", "role":"affected"})
+        self.assertEqual(comp.name, "MyComp")
+            
+        comp2 = model.createInNewContainer("testscont2", model.HwComponent, 
+                                           {"name":"MyComp2", "role":"affecter"})
+        self.assertEqual(comp2.name, "MyComp2")
+        
+        comp2._set_affects(set([comp]))
+        self.assertEqual(len(comp2.affects), 1)
+        for c in comp2.affects:
+            self.assertTrue(isinstance(c, model.ComponentBase))
+            self.assertEqual(c.name, "MyComp")
+            self.assertEqual(c.role, "affected")
+            
+        comp2_new = model.getObject("testscont2", "MyComp2")
+        self.assertEqual(comp2_new.name, "MyComp2")
+        self.assertEqual(len(comp2_new.affects), 1)
+            
+        comp.terminate()
+        comp2.terminate()
+        model.getContainer("testscont").terminate()
+        model.getContainer("testscont2").terminate()
+        time.sleep(0.1) # give it some time to terminate
+    
+    def test_roattributes(self):
+        comp = model.createInNewContainer("testscont", MyComponent, 
+                                          {"name":"MyComp"})
         self.assertEqual(comp.name, "MyComp")
         
         comp2 = model.createInNewContainer("testscont2", model.HwComponent, 
@@ -127,51 +144,49 @@ class ProxyOfProxyTest(unittest.TestCase):
         self.assertEqual(comp2.name, "MyComp2")
         
         comp2._set_affects(set([comp]))
-        
-#        comp2_new = model.getObject("testscont2", "MyComp2")
-        self.assertEquals(len(comp2.affects), 1)
+        self.assertEqual(len(comp2.affects), 1)
         for c in comp2.affects:
             self.assertTrue(isinstance(c, model.ComponentBase))
             self.assertEqual(c.name, "MyComp")
+            val = comp.my_value
+            self.assertEqual(val, "ro", "Reading attribute failed")
         
         comp.terminate()
         comp2.terminate()
         model.getContainer("testscont").terminate()
         model.getContainer("testscont2").terminate()
+        time.sleep(0.1) # give it some time to terminate
     
-    # roattr
-    
-    @unittest.skip("unfinished")
     def test_dataflow(self):
-        comp = model.createInNewContainer("testcont", MyComponent, {"name":"MyComp"})
+        comp = model.createInNewContainer("testscont", MyComponent, 
+                                          {"name":"MyComp"})
         self.assertEqual(comp.name, "MyComp")
-        val = comp.my_value
-        self.assertEqual(val, "ro", "Reading attribute failed")
         
-        comp_prime = model.getObject("testcont", "MyComp")
-        self.assertEqual(comp_prime.name, "MyComp")
+        comp2 = model.createInNewContainer("testscont2", model.HwComponent, 
+                                           {"name":"MyComp2", "role":"affecter"})
+        self.assertEqual(comp2.name, "MyComp2")
         
-        container = model.getContainer("testcont")
-        container.ping()
-        comp.terminate()
-        container.terminate()
-        rdaemon = Pyro4.Proxy("PYRO:Pyro.Daemon@./u:"+self.container_name)
-        comp = rdaemon.getObject("mycomp")
+        comp2._set_affects(set([comp]))
+        self.assertEqual(len(comp2.affects), 1)
+        comp_indir = list(comp2.affects)[0]
 
         self.count = 0
         self.data_arrays_sent = 0
-        comp.data.reset()
+        comp_indir.data.reset()
         
-        comp.data.subscribe(self.receive_data)
+        comp_indir.data.subscribe(self.receive_data)
         time.sleep(0.5)
-        comp.data.unsubscribe(self.receive_data)
+        comp_indir.data.unsubscribe(self.receive_data)
         count_end = self.count
         print "received %d arrays over %d" % (self.count, self.data_arrays_sent)
         
         time.sleep(0.1)
         self.assertEqual(count_end, self.count)
 
-        comp.stopServer()
+        comp.terminate()
+        comp2.terminate()
+        model.getContainer("testscont").terminate()
+        model.getContainer("testscont2").terminate()
         time.sleep(0.1) # give it some time to terminate
     
     def receive_data(self, dataflow, data):
@@ -615,6 +630,7 @@ class FakeDataFlow(model.DataFlow):
         self._stop.set()
         
         # to avoid blocking when unsubscribe from callback
+        # Note: in real life it's better to join() in start_generate()
         if threading.current_thread() != self._thread:
             self._thread.join()
         self._thread = None
