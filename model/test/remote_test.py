@@ -128,9 +128,9 @@ class ProxyOfProxyTest(unittest.TestCase):
         
         comp2._set_affects(set([comp]))
         
-        comp2_new = model.getObject("testscont2", "MyComp2")
-        self.assertEquals(len(comp2_new.affects), 1)
-        for c in comp2_new.affects:
+#        comp2_new = model.getObject("testscont2", "MyComp2")
+        self.assertEquals(len(comp2.affects), 1)
+        for c in comp2.affects:
             self.assertTrue(isinstance(c, model.ComponentBase))
             self.assertEqual(c.name, "MyComp")
         
@@ -138,7 +138,9 @@ class ProxyOfProxyTest(unittest.TestCase):
         comp2.terminate()
         model.getContainer("testscont").terminate()
         model.getContainer("testscont2").terminate()
-        
+    
+    # roattr
+    
     @unittest.skip("unfinished")
     def test_dataflow(self):
         comp = model.createInNewContainer("testcont", MyComponent, {"name":"MyComp"})
