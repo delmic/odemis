@@ -436,11 +436,13 @@ class CombinedActuator(Actuator):
             child.parent = self
             self._axis_to_child[axis] = (child, axes_map[axis])
             
-            # special treatment needed if this is just a test :-(
-            # TODO get MockComponent derive from Actuator if the class also derives from Actuator
-            if isinstance(child, MockComponent):
-                continue
-            if not isinstance(child, Actuator):
+            # FIXME: how do we check if it's an actuator?
+            # At least, it has .ranges and .axes (and they are set and dict)
+#            if not isinstance(child, Actuator):
+            if not isinstance(child, ComponentBase):
+                raise Exception("Child %s is not a component." % str(child))
+            if (not hasattr(child, "ranges") or not isinstance(child.ranges, dict) or
+                not hasattr(child, "axes") or not isinstance(child.axes, set)):
                 raise Exception("Child %s is not an actuator." % str(child))
             self._ranges[axis] = child.ranges[axes_map[axis]]
 
@@ -449,7 +451,7 @@ class CombinedActuator(Actuator):
         # check if can do absolute positioning: all the axes have moveAbs()
         canAbs = True
         for controller in self._axes:
-            canAbs &= hasattr(controller, "moveAbs")
+            canAbs &= hasattr(controller, "moveAbs") # TODO: need to use capabilities, to work with proxies
         if canAbs:
             self.moveAbs = self._moveAbs
             
@@ -523,16 +525,26 @@ class MockComponent(HwComponent):
     It's used for validation of the instantiation model. 
     Do not use or inherit when writing a device driver!
     """
-    def __init__(self, name, role, children=None, mock_vas=None, daemon=None, **kwargs):
+    def __init__(self, name, role, _realcls, children=None, _vas=None, daemon=None, **kwargs):
         """
-        mock_vas (list of string): a list of mock vigilant attributes to create
+        _realcls (class): the class we pretend to be
+        _vas (list of string): a list of mock vigilant attributes to create
         """
         HwComponent.__init__(self, name, role, daemon=daemon)
         if len(kwargs) > 0:
             logging.debug("Component '%s' got init arguments '%r'", name, kwargs)
         
-        if mock_vas is not None:
-            for va in mock_vas:
+        # Special handling of actuators, for CombinedActuator
+        # Can not be generic for every roattribute, as we don't know what to put as value
+        if issubclass(_realcls, Actuator):
+            self.axes = set(["x"])
+            self.ranges = {"x": [-1, 1]}
+            # make them roattributes for proxy
+            print " it's an Actuator" 
+            self._odemis_roattributes = ["axes", "ranges"]
+        
+        if _vas is not None:
+            for va in _vas:
                 self.__dict__[va] = _vattributes.VigilantAttributeBase(None)
         
         if not children:

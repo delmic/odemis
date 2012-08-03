@@ -60,7 +60,7 @@ class TestCommandLine(unittest.TestCase):
     @staticmethod
     def create_test_validate_pass(filename):
         def test_validate_pass(self):
-            cmdline = "odemisd --validate %s" % filename
+            cmdline = "odemisd --log-level=2 --validate %s" % filename
             ret = main.main(cmdline.split())
             self.assertEqual(ret, 0, "error detected in correct config "
                                 "file '%s'" % filename)
