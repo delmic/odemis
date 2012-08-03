@@ -212,6 +212,10 @@ class DraggableCanvas(wx.Panel):
         self.Images[index] = im
         self.ShouldUpdateDrawing()
 
+    def ImageCount(self):
+        """ Return the number of images stored within the canvas """
+        return len([i for i in self.Images if i])
+
 
     def OnPaint(self, event):
         """ Quick update of the window content with the buffer + the static

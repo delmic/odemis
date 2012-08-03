@@ -1,7 +1,10 @@
 
 import wx
-from odemis.gui.img.data import getsliderBitmap
-from odemis.gui.log import log
+from wx.lib.agw.aui.aui_utilities import StepColour, MakeDisabledBitmap, \
+    DarkenBitmap
+
+from odemis.gui.img.data import getsliderBitmap, getslider_disBitmap
+#from odemis.gui.log import log
 
 class Slider(wx.Slider):
     """ This custom Slider class was implemented so it would not capture
@@ -62,6 +65,7 @@ class CustomSlider(wx.PyPanel):
 
         #Get Pointer's bitmap
         self.bitmap = getsliderBitmap()
+        self.bitmap_dis = getslider_disBitmap()
 
         # Pointer dimensions
         self.handle_width, self.handle_height = self.bitmap.GetSize()
@@ -89,16 +93,30 @@ class CustomSlider(wx.PyPanel):
         bgc = self.Parent.GetBackgroundColour()
         dc.SetBackground(wx.Brush(bgc, wx.SOLID))
         dc.Clear()
-        dc.SetPen(wx.Pen(self.Parent.GetForegroundColour(), 1))
+
+        fgc = self.Parent.GetForegroundColour()
+
+        if not self.Enabled:
+            fgc = StepColour(fgc, 50)
+
+
+        dc.SetPen(wx.Pen(fgc, 1))
 
         dc.DrawLine(self.half_h_width, half_height,
                     width - self.half_h_width, half_height)
 
 
-        dc.DrawBitmap(self.bitmap,
-                      self.pointerPos,
-                      half_height - self.half_h_height,
-                      True)
+        if self.Enabled:
+            dc.DrawBitmap(self.bitmap,
+                          self.pointerPos,
+                          half_height - self.half_h_height,
+                          True)
+        else:
+            dc.DrawBitmap(self.bitmap_dis,
+                          self.pointerPos,
+                          half_height - self.half_h_height,
+                          True)
+
         event.Skip()
 
     def OnLeftDown(self, event=None):
@@ -169,6 +187,7 @@ class CustomSlider(wx.PyPanel):
             self.current_value = value
 
         self.pointerPos = self._val_to_pixel()
+
         self.Refresh()
 
     def GetValue(self):

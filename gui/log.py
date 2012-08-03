@@ -41,7 +41,7 @@ def create_gui_logger(log_field):
             log.removeHandler(handler)
 
 class TextFieldHandler(logging.Handler):
-    """` Custom log handler, used to output log entries to a text field. """
+    """ Custom log handler, used to output log entries to a text field. """
     def __init__(self):
         """ Call the parent constructor and initialize the handler """
         logging.Handler.__init__(self)
