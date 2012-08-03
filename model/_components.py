@@ -161,7 +161,7 @@ class ComponentProxy(ComponentBase, Pyro4.Proxy):
     @property
     def parent(self):
         if self._parent:
-            return self._parent()
+            return self._parent() # TODO handle weakref exception?
         else:
             return None
     @parent.setter
@@ -196,7 +196,6 @@ class ComponentProxy(ComponentBase, Pyro4.Proxy):
 # Note: this could be directly __reduce__ of Component, but is a separate function
 # to look more like the normal Proxy of Pyro
 # Converter from Component to ComponentProxy
-already_serialized = set()
 def ComponentSerializer(self):
     """reduce function that automatically replaces Component objects by a Proxy"""
     daemon=getattr(self,"_pyroDaemon",None)
@@ -217,7 +216,7 @@ class HwComponent(Component):
     def __init__(self, name, role, *args, **kwargs):
         Component.__init__(self, name, *args, **kwargs)
         self._role = role
-        self._affects = set() # will be set later via _set_affects_by_string
+        self._affects = frozenset()
         self._swVersion = "Unknown (Odemis %s)" % __version__.version
         self._hwVersion = "Unknown"
         
@@ -228,11 +227,9 @@ class HwComponent(Component):
         """ 
         return self._role
 
-    @roattribute
-    def affects(self):
+    def _get_affects(self):
         """
-        set of HwComponents which are affected by this component (i.e. if this 
-        component changes of state, it will be detected by the affected components)
+        for remote access
         """
         return self._affects
 
@@ -242,20 +239,13 @@ class HwComponent(Component):
         Note: this is to be used only internally for initialisation!
         """
         self._affects = frozenset(comps)
-        
-    def _set_affects_by_string(self, names):
-        """
-        names (list of 2-tuples (string, string)): list of the affected components 
-        by container name and component name
-        """
-        # this is to be used only internally for initialisation!
-        # TODO: make it work to pass just a component (= pass a proxy of a proxy and still returns a proxy)
-        affects = set()
-        for cont_name, comp_name in names:
-            affects = _core.getObject(cont_name, comp_name)
-        
-        self._affects = affects
-    
+
+    # no setter, to force to use the hidden _set_affects() with parsimony
+    affects = property(_get_affects, 
+                doc = """set of HwComponents which are affected by this component
+                         (i.e. if this component changes of state, it will be 
+                         detected by the affected components).""")
+
     @roattribute
     def swVersion(self):
         return self._swVersion
@@ -283,7 +273,34 @@ class HwComponent(Component):
 #    @staticmethod
 #    def scan(self):
 #        pass
-        
+
+class HwComponentProxy(ComponentProxy):
+    """
+    Representation of the HwComponent in remote containers
+    """
+    # Almost the same as a ComponentProxy, excepted it has a .affects
+    def __init__(self, uri):
+        """
+        Note: should not be called directly only created via pickling
+        """
+        ComponentProxy.__init__(self, uri)
+    
+    @property
+    def affects(self):
+        # it needs to be remote because we have to update it after it has been
+        # shared.
+        return self._get_affects()
+
+def HwComponentSerializer(self):
+    """reduce function that automatically replaces Component objects by a Proxy"""
+    daemon=getattr(self,"_pyroDaemon",None)
+    if daemon: # TODO might not be even necessary: They should be registering themselves in the init
+        # only return a proxy if the object is a registered pyro object
+        return (HwComponentProxy, (daemon.uriFor(self),), self._getproxystate())
+    else:
+        return self.__reduce__()
+Pyro4.Daemon.serializers[HwComponent] = HwComponentSerializer
+
 class Microscope(HwComponent):
     """
     A component which represent the whole microscope. 
