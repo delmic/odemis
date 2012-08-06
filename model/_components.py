@@ -287,6 +287,7 @@ def HwComponentSerializer(self):
         return (HwComponentProxy, (daemon.uriFor(self),), self._getproxystate())
     else:
         return self.__reduce__()
+    
 Pyro4.Daemon.serializers[HwComponent] = HwComponentSerializer
 
 class Microscope(HwComponent):
