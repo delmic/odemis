@@ -261,11 +261,13 @@ class VigilantAttributeProxy(VigilantAttributeBase, Pyro4.Proxy):
     # for enumerated VA
     @property
     def choices(self):
+#        logging.debug("accessing choices remotely for VA %s", self._global_name)
         return Pyro4.Proxy.__getattr__(self, "_get_choices")()
     
     # for continuous VA
     @property
     def range(self):
+#        logging.debug("accessing range remotely for VA %s", self._global_name)
         return Pyro4.Proxy.__getattr__(self, "_get_range")()
     
     def __getstate__(self):

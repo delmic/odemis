@@ -24,7 +24,7 @@ import logging
 import urllib
 import weakref
 
-BACKEND_FILE = "backend.ipc" # the official ipc file for backend (just to detect status)
+BACKEND_FILE = _core.BASE_DIRECTORY + "/backend.ipc" # the official ipc file for backend (just to detect status)
 BACKEND_NAME = "backend" # the official name for the backend container
 
 def getMicroscope():
@@ -546,7 +546,7 @@ class MockComponent(HwComponent):
         
         if _vas is not None:
             for va in _vas:
-                self.__dict__[va] = _vattributes.VigilantAttributeBase(None)
+                self.__dict__[va] = _vattributes.VigilantAttribute(None)
         
         if not children:
             return

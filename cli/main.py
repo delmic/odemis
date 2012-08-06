@@ -37,9 +37,11 @@ def get_backend_status():
         if len(microscope.name) > 0:
             return BACKEND_RUNNING
     except:
+        logging.info("Failed to find microscope")
         if os.path.exists(model.BACKEND_FILE):
             return BACKEND_DEAD
         else:
+            logging.info("Back-end %s file doesn't exists", model.BACKEND_FILE)
             return BACKEND_STOPPED
     return BACKEND_DEAD
 
@@ -206,14 +208,13 @@ def print_vattribute(name, va):
         vachoices = va.choices
         str_choices = " (choices: %s)" % ", ".join([str(c) for c in vachoices])
     except:
-        str_choices = ""    
+        str_choices = ""
     
     print("\t" + name + " (%sVigilant Attribute)\t value: %s%s%s%s" %
           (readonly, str(va.value), unit, str_range, str_choices))
 
 def print_vattributes(component):
     # find all vattributes
-    # 
     for name, value in inspect.getmembers(component, lambda x: isinstance(x, model.VigilantAttributeBase)):
         print_vattribute(name, value)
     
