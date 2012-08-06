@@ -61,11 +61,9 @@ def dump_roattributes(self):
     """
     list all the roattributes and their value
     """
-    # check whether self is a proxy or an original class
-    if hasattr(self, "_odemis_roattributes"):
-        roattr = self._odemis_roattributes
-    else:
-        roattr = get_roattributes(self)
+    # if it is a proxy, use _odemis_roattributes
+    roattr = getattr(self, "_odemis_roattributes", [])
+    roattr += get_roattributes(self)
         
     return dict([[name, getattr(self, name)] for name in roattr])
 
@@ -142,6 +140,7 @@ class Container(Pyro4.core.Daemon):
     def terminate(self):
         """
         stops the server
+        Can be called remotely or locally
         """
         # wrapper to shutdown(), in order to be more consistent with the vocabulary
         self.shutdown()
@@ -150,6 +149,7 @@ class Container(Pyro4.core.Daemon):
     def close(self):
         """
         Cleans up everything behind, once the container is already done with running
+        Has to be called locally, at the end.
         """
         # unregister every object still around, to be sure everything gets
         # deallocated from the memory (but normally, it's up to the client to

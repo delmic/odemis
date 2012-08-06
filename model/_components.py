@@ -24,21 +24,6 @@ import logging
 import urllib
 import weakref
 
-# TODO detect when it's the same thread and avoid proxy?
-#_microscope = None
-#def getMicroscope():
-#    """
-#    return the microscope component managed by the backend
-#    """
-#    return _microscope
-#
-#_hwcomponents = []
-#def getComponents():
-#    """
-#    return all the components managed by the backend
-#    """
-#    return _hwcomponents
-
 BACKEND_FILE = "backend.ipc" # the official ipc file for backend (just to detect status)
 BACKEND_NAME = "backend" # the official name for the backend container
 
@@ -49,12 +34,10 @@ def getMicroscope():
     backend = _core.getContainer(BACKEND_NAME)
     return backend.getRoot()
 
-#_hwcomponents = []
 def getComponents():
     """
     return all the HwComponents managed by the backend
     """
-#    return _hwcomponents
     microscope = getMicroscope()
     # TODO look into children and parents? Or delete this method? Or how to share 
     # really all the components?
@@ -74,7 +57,7 @@ class Component(ComponentBase):
     '''
     Component to be shared remotely
     '''
-    def __init__(self, name, parent=None, children=set(), daemon=None):
+    def __init__(self, name, parent=None, children=None, daemon=None):
         """
         name (string): unique name used to identify the component
         parent (Component): the parent of this component, that will be in .parent
@@ -83,11 +66,15 @@ class Component(ComponentBase):
         daemon (Pyro4.daemon): daemon via which the object will be registered. 
             default=None => not registered
         """
+        ComponentBase.__init__(self)
         self._name = name
         if daemon:
             daemon.register(self, urllib.quote(name)) # registered under its name
         
         self._parent = None
+        self.parent = parent
+        if children is None:
+            children = set()
         self._children = set(children)
         # TODO update .parent of children?
     
@@ -155,13 +142,14 @@ class ComponentProxy(ComponentBase, Pyro4.Proxy):
         Note: should not be called directly only created via pickling
         """
         Pyro4.Proxy.__init__(self, uri)
+        ComponentBase.__init__(self)
         self._parent = None
     
     # same as in Component, but set via __setstate__
     @property
     def parent(self):
         if self._parent:
-            return self._parent() # TODO handle weakref exception?
+            return self._parent() # returns None if ref is gone
         else:
             return None
     @parent.setter
@@ -369,11 +357,15 @@ class Actuator(HwComponent):
     A component which represents an actuator (motorised part). 
     This is an abstract class that should be inherited. 
     """
-    def __init__(self, name, role, axes=[], ranges={}, children=None, **kwargs):
+    def __init__(self, name, role, axes=None, ranges=None, children=None, **kwargs):
         HwComponent.__init__(self, name, role, **kwargs)
         if children:
             raise ArgumentError("Actuator components cannot have children.")
+        if axes is None:
+            axes = []
         self._axes = frozenset(axes)
+        if ranges is None:
+            ranges = {}
         self._ranges = dict(ranges)
     
     @roattribute
@@ -444,12 +436,14 @@ class CombinedActuator(Actuator):
             child.parent = self
             self._axis_to_child[axis] = (child, axes_map[axis])
             
-            # special treatment needed if this is just a test :-(
-            # TODO get MockComponent derive from Actuator if the class also derives from Actuator
-            if isinstance(child, MockComponent):
-                continue
-            if not isinstance(child, Actuator):
-                    raise Exception("Child %s is not an actuator." % str(child))
+            # FIXME: how do we check if it's an actuator?
+            # At least, it has .ranges and .axes (and they are set and dict)
+#            if not isinstance(child, Actuator):
+            if not isinstance(child, ComponentBase):
+                raise Exception("Child %s is not a component." % str(child))
+            if (not hasattr(child, "ranges") or not isinstance(child.ranges, dict) or
+                not hasattr(child, "axes") or not isinstance(child.axes, set)):
+                raise Exception("Child %s is not an actuator." % str(child))
             self._ranges[axis] = child.ranges[axes_map[axis]]
 
         self._axes = frozenset(self._axis_to_child.keys())
@@ -457,7 +451,7 @@ class CombinedActuator(Actuator):
         # check if can do absolute positioning: all the axes have moveAbs()
         canAbs = True
         for controller in self._axes:
-            canAbs &= hasattr(controller, "moveAbs")
+            canAbs &= hasattr(controller, "moveAbs") # TODO: need to use capabilities, to work with proxies
         if canAbs:
             self.moveAbs = self._moveAbs
             
@@ -531,16 +525,27 @@ class MockComponent(HwComponent):
     It's used for validation of the instantiation model. 
     Do not use or inherit when writing a device driver!
     """
-    def __init__(self, name, role, children=None, mock_vas=[], daemon=None, **kwargs):
+    def __init__(self, name, role, _realcls, children=None, _vas=None, daemon=None, **kwargs):
         """
-        mock_vas (list of string): a list of mock vigilant attributes to create
+        _realcls (class): the class we pretend to be
+        _vas (list of string): a list of mock vigilant attributes to create
         """
         HwComponent.__init__(self, name, role, daemon=daemon)
         if len(kwargs) > 0:
             logging.debug("Component '%s' got init arguments '%r'", name, kwargs)
         
-        for va in mock_vas:
-            self.__dict__[va] = _vattributes.VigilantAttributeBase(None)
+        # Special handling of actuators, for CombinedActuator
+        # Can not be generic for every roattribute, as we don't know what to put as value
+        if issubclass(_realcls, Actuator):
+            self.axes = set(["x"])
+            self.ranges = {"x": [-1, 1]}
+            # make them roattributes for proxy
+            print " it's an Actuator" 
+            self._odemis_roattributes = ["axes", "ranges"]
+        
+        if _vas is not None:
+            for va in _vas:
+                self.__dict__[va] = _vattributes.VigilantAttributeBase(None)
         
         if not children:
             return
@@ -556,18 +561,4 @@ class MockComponent(HwComponent):
             self._children.add(child)
             child.parent = self
         
-#    # For everything that is not standard we return a mock VigilantAttributeBase
-#    def __getattr__(self, attrName):
-#        if not attrName in self.__dict__:
-#            if attrName.startswith("_"): # hidden values are never properties
-#                logging.debug("Component %s deny having attribute %s", self.name, attrName)
-#                raise AttributeError(attrName)
-#            elif attrName == "children": # special value
-#                raise AttributeError(attrName)
-#            
-#            prop = _vattributes.VigilantAttributeBase(None)
-#            logging.debug("Component %s creating vigilant attribute %s", self.name, attrName)
-#            self.__dict__[attrName] = prop
-#        return self.__dict__[attrName]
-    
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:

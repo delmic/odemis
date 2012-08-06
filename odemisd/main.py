@@ -26,7 +26,8 @@ import os
 import stat
 import sys
 
-_hwcomponents = set()
+# TODO the way metadata is updated has probably to be completely changed
+# cf specification (=> send all the metadata to the data generator)
 def updateMetadata(metadata, parent):
     """
     Update/fill the metadata with all the metadata from all the components
@@ -36,7 +37,7 @@ def updateMetadata(metadata, parent):
       Note that the metadata from this very component are not added.
     """
     # find every component which affects the parent
-    for comp in _hwcomponents:
+    for comp in model.getComponents():
         try:
             if parent in comp.affects:
                 metadata.update(comp.getMetadata())
@@ -100,7 +101,6 @@ class BackendContainer(model.Container):
                 container.terminate()
             except:
                 logging.warning("Failed to terminate container %r", container)
-                pass
     
         model.Container.terminate(self)
     
@@ -116,8 +116,8 @@ def terminate_all_components(components):
         try:
             comp.terminate()
         except:
+            # can happen if it was already terminated 
             logging.warning("Failed to terminate component '%s'", comp.name)
-            pass
 
 
 BACKEND_RUNNING = "RUNNING"
@@ -181,10 +181,9 @@ def run_backend(model_file, daemon=False, dry_run=False):
     try:
         mic, comps, sub_containers = modelgen.instantiate_model(
                                         inst_model, container, 
-                                        create_sub_containers=False, # TODO make it possible
+                                        create_sub_containers=True,
                                         dry_run=dry_run)
         # update the model
-        _hwcomponents = comps
         container.setMicroscope(mic)
         container.sub_containers |= sub_containers
         logging.info("model has been successfully instantiated")
@@ -197,7 +196,7 @@ def run_backend(model_file, daemon=False, dry_run=False):
     
     if dry_run:
         logging.info("model has been successfully validated, exiting")
-        terminate_all_components(_hwcomponents)
+        terminate_all_components(comps)
         container.terminate()
         return 0    # everything went fine
     
@@ -207,12 +206,12 @@ def run_backend(model_file, daemon=False, dry_run=False):
     except:
         # This is coming here in case of signal received when the daemon is running
         logging.exception("When running backend container")
-        terminate_all_components(_hwcomponents)
+        terminate_all_components(comps)
         container.terminate()
         return 127
     
     try:
-        terminate_all_components(_hwcomponents)
+        terminate_all_components(comps)
         container.close()
     except:
         logging.exception("Failed to end the backend container cleanly")
