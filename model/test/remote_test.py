@@ -29,6 +29,7 @@ import pickle
 import threading
 import time
 import unittest
+from model._vattributes import VigilantAttributeBase
 
 #gc.set_debug(gc.DEBUG_LEAK | gc.DEBUG_STATS)
 
@@ -110,22 +111,22 @@ class ProxyOfProxyTest(unittest.TestCase):
 #  
     def test_component(self):
         comp = model.createInNewContainer("testscont", model.HwComponent, 
-                                          {"name":"MyComp", "role":"affected"})
-        self.assertEqual(comp.name, "MyComp")
+                                          {"name":"MyHwComp", "role":"affected"})
+        self.assertEqual(comp.name, "MyHwComp")
             
         comp2 = model.createInNewContainer("testscont2", model.HwComponent, 
-                                           {"name":"MyComp2", "role":"affecter"})
-        self.assertEqual(comp2.name, "MyComp2")
+                                           {"name":"MyHwComp2", "role":"affecter"})
+        self.assertEqual(comp2.name, "MyHwComp2")
         
         comp2._set_affects(set([comp]))
         self.assertEqual(len(comp2.affects), 1)
         for c in comp2.affects:
             self.assertTrue(isinstance(c, model.ComponentBase))
-            self.assertEqual(c.name, "MyComp")
+            self.assertEqual(c.name, "MyHwComp")
             self.assertEqual(c.role, "affected")
             
-        comp2_new = model.getObject("testscont2", "MyComp2")
-        self.assertEqual(comp2_new.name, "MyComp2")
+        comp2_new = model.getObject("testscont2", "MyHwComp2")
+        self.assertEqual(comp2_new.name, "MyHwComp2")
         self.assertEqual(len(comp2_new.affects), 1)
             
         comp.terminate()
@@ -134,14 +135,33 @@ class ProxyOfProxyTest(unittest.TestCase):
         model.getContainer("testscont2").terminate()
         time.sleep(0.1) # give it some time to terminate
     
+    def test_va(self):
+        comp = model.createInNewContainer("testscont", SimpleHwComponent, 
+                                          {"name":"MyHwComp", "role":"affected"})
+        self.assertEqual(comp.name, "MyHwComp")
+        
+        comp2 = model.createInNewContainer("testscont2", model.HwComponent, 
+                                           {"name":"MyHwComp2", "role":"affecter"})
+        self.assertEqual(comp2.name, "MyHwComp2")
+        
+        comp2._set_affects(set([comp]))
+        self.assertEqual(len(comp2.affects), 1)
+        comp_indir = list(comp2.affects)[0]
+        prop = comp_indir.prop
+        self.assertIsInstance(prop, VigilantAttributeBase)
+        self.assertEqual(prop.value, 42)
+        prop.value += 1
+        self.assertEqual(prop.value, 43)
+        self.assertEqual(comp.prop.value, 43)
+    
     def test_roattributes(self):
         comp = model.createInNewContainer("testscont", MyComponent, 
                                           {"name":"MyComp"})
         self.assertEqual(comp.name, "MyComp")
         
         comp2 = model.createInNewContainer("testscont2", model.HwComponent, 
-                                           {"name":"MyComp2", "role":"affecter"})
-        self.assertEqual(comp2.name, "MyComp2")
+                                           {"name":"MyHwComp2", "role":"affecter"})
+        self.assertEqual(comp2.name, "MyHwComp2")
         
         comp2._set_affects(set([comp]))
         self.assertEqual(len(comp2.affects), 1)
@@ -163,8 +183,8 @@ class ProxyOfProxyTest(unittest.TestCase):
         self.assertEqual(comp.name, "MyComp")
         
         comp2 = model.createInNewContainer("testscont2", model.HwComponent, 
-                                           {"name":"MyComp2", "role":"affecter"})
-        self.assertEqual(comp2.name, "MyComp2")
+                                           {"name":"MyHwComp2", "role":"affecter"})
+        self.assertEqual(comp2.name, "MyHwComp2")
         
         comp2._set_affects(set([comp]))
         self.assertEqual(len(comp2.affects), 1)
@@ -402,6 +422,7 @@ class RemoteTest(unittest.TestCase):
         comp = rdaemon.getObject("mycomp")
 
         prop = comp.prop
+        self.assertIsInstance(prop, VigilantAttributeBase)
         self.assertEqual(prop.value, 42)
         prop.value += 1
         self.assertEqual(prop.value, 43)
@@ -491,6 +512,24 @@ def ServerLoop(socket_name):
 
 class MyError(Exception):
     pass
+
+
+class SimpleHwComponent(model.HwComponent):
+    """
+    A Hw component that does nothing
+    """
+    def __init__(self, *args, **kwargs):
+        model.HwComponent.__init__(self, *args, **kwargs)
+        self.data = FakeDataFlow()
+        # TODO automatically register the property when serializing the Component
+        self.prop = model.IntVA(42)
+        self.cont = model.FloatContinuous(2.0, [-1, 3.4])
+        self.enum = model.StringEnumerated("a", set(["a", "c", "bfds"]))
+        
+    @roattribute
+    def my_value(self):
+        return "ro"
+    
 
 class MyComponent(model.Component):
     """

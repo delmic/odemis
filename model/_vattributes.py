@@ -414,7 +414,7 @@ class SubscribeProxyThread(threading.Thread):
 
 
 def unregister_vigilant_attributes(self):
-    for name, value in inspect.getmembers(self, lambda x: isinstance(x, VigilantAttribute)):
+    for name, value in inspect.getmembers(self, lambda x: isinstance(x, VigilantAttributeBase)):
         value._unregister()
     
 def dump_vigilant_attributes(self):
@@ -427,7 +427,7 @@ def dump_vigilant_attributes(self):
     """
     vas = dict()
     daemon = self._pyroDaemon
-    for name, value in inspect.getmembers(self, lambda x: isinstance(x, VigilantAttribute)):
+    for name, value in inspect.getmembers(self, lambda x: isinstance(x, VigilantAttributeBase)):
         if not hasattr(value, "_pyroDaemon"):
             value._register(daemon)
         vas[name] = value
