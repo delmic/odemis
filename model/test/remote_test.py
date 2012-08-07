@@ -17,7 +17,9 @@ You should have received a copy of the GNU General Public License along with Del
 '''
 from concurrent import futures
 from concurrent.futures.thread import ThreadPoolExecutor
+from driver import andorcam3
 from model import roattribute, oneway, isasync
+from model._vattributes import VigilantAttributeBase
 from multiprocessing.process import Process
 from threading import Thread
 import Pyro4
@@ -29,11 +31,9 @@ import pickle
 import threading
 import time
 import unittest
-from model._vattributes import VigilantAttributeBase
 
 #gc.set_debug(gc.DEBUG_LEAK | gc.DEBUG_STATS)
-
-#@unittest.skip("simple")
+        
 class ContainerTest(unittest.TestCase):
     def test_empty_container(self):
         container = model.createNewContainer("testempty")
@@ -50,7 +50,7 @@ class ContainerTest(unittest.TestCase):
         container = model.getContainer("testscont")
         comp.terminate()
         container.terminate()
-        
+
     def test_instantiate_component(self):
         comp = model.createInNewContainer("testcont", MyComponent, {"name":"MyComp"})
         self.assertEqual(comp.name, "MyComp")
@@ -80,6 +80,32 @@ class ContainerTest(unittest.TestCase):
         # we are not terminating the children, but this should be caught by the container
         model.getContainer("testmulti").terminate()
 
+    def test_andorcam3(self):
+        comp = model.createInNewContainer("testcont", andorcam3.AndorCam3, 
+                                          {"name":"camera", "role":"test", 
+                                           "children":None, "device":0})
+        self.assertEqual(comp.name, "camera")
+        
+        self.assertIsInstance(comp.targetTemperature, VigilantAttributeBase)
+                
+        ttemp = comp.targetTemperature.value
+        self.assertTrue(-300 < ttemp and ttemp < 100)
+        comp.targetTemperature.value = comp.targetTemperature.range[0]
+        self.assertEqual(comp.targetTemperature.value, comp.targetTemperature.range[0])
+        
+        comp.terminate()
+        model.getContainer("testcont").terminate()
+
+    def test_timeout(self):
+        server = threading.Thread(target=ServerLoop, args=("backend",))
+        server.start()
+        time.sleep(0.1) # give it some time to start
+        
+        rdaemon = Pyro4.Proxy("PYRO:Pyro.Daemon@./u:backend")
+        print rdaemon.ping()
+        time.sleep(8)
+        
+    
 #@unittest.skip("simple")
 class SerializerTest(unittest.TestCase):
     
@@ -100,8 +126,9 @@ class SerializerTest(unittest.TestCase):
         self.assertEqual(parentc_unpickled.value, 42)
         
 
-
-
+    
+    
+#@unittest.skip("simple")
 class ProxyOfProxyTest(unittest.TestCase):
 # Test sharing a shared component from the client
 
@@ -147,12 +174,31 @@ class ProxyOfProxyTest(unittest.TestCase):
         comp2._set_affects(set([comp]))
         self.assertEqual(len(comp2.affects), 1)
         comp_indir = list(comp2.affects)[0]
+        self.assertIsInstance(comp_indir.prop, VigilantAttributeBase)
+        self.assertIsInstance(comp_indir.cont, VigilantAttributeBase)
+        self.assertIsInstance(comp_indir.enum, VigilantAttributeBase)
+                
         prop = comp_indir.prop
-        self.assertIsInstance(prop, VigilantAttributeBase)
         self.assertEqual(prop.value, 42)
         prop.value += 1
         self.assertEqual(prop.value, 43)
         self.assertEqual(comp.prop.value, 43)
+        
+        self.assertEqual(comp_indir.cont.value, 2.0)
+        self.assertIsInstance(comp_indir.cont.range, tuple)
+        try:
+            # there is no such thing, it should fail
+            print "Choices:", comp_indir.cont.choices
+            self.fail("Accessing choices should fail")
+        except:
+            pass
+        
+        self.assertEqual(comp_indir.enum.value, "a")
+        
+        comp.terminate()
+        comp2.terminate()
+        model.getContainer("testscont").terminate()
+        model.getContainer("testscont2").terminate()
     
     def test_roattributes(self):
         comp = model.createInNewContainer("testscont", MyComponent, 
@@ -175,7 +221,6 @@ class ProxyOfProxyTest(unittest.TestCase):
         comp2.terminate()
         model.getContainer("testscont").terminate()
         model.getContainer("testscont2").terminate()
-        time.sleep(0.1) # give it some time to terminate
     
     def test_dataflow(self):
         comp = model.createInNewContainer("testscont", MyComponent, 
@@ -501,6 +546,7 @@ def ServerLoop(socket_name):
         pass
     daemon = Pyro4.Daemon(unixsocket=socket_name)
     component = MyComponent("mycomp", daemon)
+#    component = SimpleComponent("simpcomp", daemon=daemon)
     childc = FamilyValueComponent("child", 43, daemon=daemon)
     parentc = FamilyValueComponent("parent", 42, parent=None, children=[childc], daemon=daemon)
     childc.parent = parentc
@@ -513,7 +559,16 @@ def ServerLoop(socket_name):
 class MyError(Exception):
     pass
 
-
+class SimpleComponent(model.Component):
+    """
+    A component that does nothing
+    """
+    def __init__(self, *args, **kwargs):
+        model.Component.__init__(self, *args, **kwargs)
+        
+    def ping(self):
+        return "pong"
+    
 class SimpleHwComponent(model.HwComponent):
     """
     A Hw component that does nothing
@@ -542,9 +597,8 @@ class MyComponent(model.Component):
         self.data = FakeDataFlow()
         # TODO automatically register the property when serializing the Component
         self.prop = model.IntVA(42)
-        self.cont = model.FloatContinuous(2.0, [-1, 3.4])
+        self.cont = model.FloatContinuous(2.0, [-1, 3.4], unit="C")
         self.enum = model.StringEnumerated("a", set(["a", "c", "bfds"]))
-        
     
     @roattribute
     def my_value(self):

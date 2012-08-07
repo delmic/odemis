@@ -192,9 +192,10 @@ class AndorCam3(model.DigitalCamera):
         self._metadata[model.MD_SENSOR_PIXEL_SIZE] = self.pixelSize.value
         
         # Strong cooling for low (image) noise
-        self.targetTemperature = model.FloatContinuous(-100, [-275, 100], "C", 
+        ranges = self.GetFloatRanges(u"TargetSensorTemperature")
+        self.targetTemperature = model.FloatContinuous(ranges[0], ranges, unit="C", 
                                                        setter=self.setTargetTemperature)
-        self.setTargetTemperature(-100)
+        self.setTargetTemperature(ranges[0])
         
         if self.isImplemented(u"FanSpeed"):
             # max speed
@@ -413,11 +414,12 @@ class AndorCam3(model.DigitalCamera):
         The cooler the less dark noise. Not everything is possible, but it will
         try to accommodate by targeting the closest temperature possible.
         temp (-300 < float < 100): temperature in C
-        return actual tempature requested
+        return actual temperature requested
         """
         assert((-300 <= temp) and (temp <= 100))
         # TODO apparently the Neo also has a "Temperature Control" which might be
         # better to use
+        # In theory not necessary as the VA will ensure this anyway
         ranges = self.GetFloatRanges(u"TargetSensorTemperature")
         temp = sorted(ranges + (temp,))[1]
         self.SetFloat(u"TargetSensorTemperature", temp)

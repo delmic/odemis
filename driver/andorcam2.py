@@ -377,9 +377,13 @@ class AndorCam2(model.DigitalCamera):
         
         # Strong cooling for low (image) noise
         if self.hasSetFunction(AndorCapabilities.SETFUNCTION_TEMPERATURE):
-            self.targetTemperature = model.FloatContinuous(-100, [-275, 100], "C",
+            if self.hasGetFunction(AndorCapabilities.GETFUNCTION_TEMPERATURERANGE):
+                ranges = self.GetTemperatureRange()
+            else:
+                ranges = [-275, 100]
+            self.targetTemperature = model.FloatContinuous(ranges[0], ranges, unit="C",
                                                             setter=self.setTargetTemperature)
-            self.setTargetTemperature(-45)
+            self.setTargetTemperature(ranges[0])
                     
         if self.hasFeature(AndorCapabilities.FEATURES_FANCONTROL):
             # max speed

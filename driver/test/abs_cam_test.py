@@ -77,7 +77,17 @@ class VirtualTestCam(object):
 #        print gc.get_referrers(self.camera)
 #        gc.collect()
         pass
+    
+    def test_temp(self):
+        if (not hasattr(self.camera, "targetTemperature") or 
+            not isinstance(self.camera.targetTemperature, model.VigilantAttributeBase)):
+            self.skipTest("Camera doesn't support setting temperature")
         
+        ttemp = self.camera.targetTemperature.value
+        self.assertTrue(-300 < ttemp and ttemp < 100)
+        self.camera.targetTemperature.value = self.camera.targetTemperature.range[0]
+        self.assertEqual(self.camera.targetTemperature.value, self.camera.targetTemperature.range[0])
+    
 #    @unittest.skip("simple")
     def test_acquire(self):
         exposure = 0.1

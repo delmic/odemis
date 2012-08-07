@@ -20,8 +20,14 @@ import Pyro4
 import logging
 import multiprocessing
 import os
+import threading
 import urllib
 import weakref
+Pyro4.config.COMMTIMEOUT = 30.0 # a bit of timeout
+# thread is buggy: it creates many threads that eventually block forever
+# unless there is a timeout, in which case they die 
+Pyro4.config.SERVERTYPE = "multiplex" # thread is buggy and creates lots of threads
+# But multiplex seems to handle badly callbacks
 
 # TODO needs a different value on Windows
 BASE_DIRECTORY="/var/run/odemisd"
@@ -129,13 +135,13 @@ class Container(Pyro4.core.Daemon):
         # To be set by the user of the container 
         self.rootId = None # objectId of a "Root" component
         
-    def run(self, *args, **kwargs):
+    def run(self):
         """
         runs and serve the objects registered in the container.
         returns only when .terminate() is called
         """
         # wrapper to requestLoop() just because the name is strange
-        self.requestLoop(*args, **kwargs)
+        self.requestLoop()
 
     def terminate(self):
         """
@@ -177,9 +183,10 @@ class Container(Pyro4.core.Daemon):
         return comp
 
 # helper functions
-def getContainer(name):
+def getContainer(name, validate=True):
     """
     returns (a proxy to) the container with the given name
+    validate (boolean): if the connection should be validated
     raises an exception if no such container exist
     """
     # detect when the base directory doesn't even exists and is readable
@@ -191,7 +198,8 @@ def getContainer(name):
     container._pyroOneway.add("terminate")
     
     # A proxy doesn't connect until the first remote call, check the connection
-    container.ping() # raise an exception if connection fails
+    if validate:
+        container.ping() # raise an exception if connection fails
     return container
 
 def getObject(container_name, object_name):
@@ -199,24 +207,27 @@ def getObject(container_name, object_name):
     returns (a proxy to) the object with the given name in the given container
     raises an exception if no such object or container exist
     """
-    container = getContainer(container_name)
+    container = getContainer(container_name, validate=False)
     return container.getObject(urllib.quote(object_name))
 
-def createNewContainer(name):
+def createNewContainer(name, validate=True):
     """
     creates a new container in an independent and isolated process
+    validate (boolean): if the connection should be validated
     returns the (proxy to the) new container
     """
     # create a container separately
     isready = multiprocessing.Event()
     p = Process(name="Container "+name, target=_manageContainer, args=(name,isready))
+#    isready = threading.Event()
+#    p = threading.Thread(name="Container "+name, target=_manageContainer, args=(name,isready))
     p.start()
     if not isready.wait(3): # wait maximum 3s
         logging.error("Container %s is taking too long to get ready", name)
         raise IOError("Container creation timeout")
 
     # connect to the new container
-    return getContainer(name)
+    return getContainer(name, validate)
  
 def createInNewContainer(container_name, klass, kwargs):
     """
@@ -226,7 +237,7 @@ def createInNewContainer(container_name, klass, kwargs):
     kwargs (dict (str -> value)): arguments for the __init__() of the component
     returns the (proxy to the) new component
     """
-    container = createNewContainer(container_name)
+    container = createNewContainer(container_name, validate=False)
     return container.instantiate(klass, kwargs)
  
 def _manageContainer(name, isready=None):
