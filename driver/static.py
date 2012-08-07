@@ -16,6 +16,7 @@ You should have received a copy of the GNU General Public License along with Del
 '''
 from model._core import roattribute
 import __version__
+import collections
 import model
 
 
@@ -53,3 +54,60 @@ class OpticalLens(model.HwComponent):
     @roattribute
     def magnigication(self):
         return self._magnification
+    
+    
+class LightFilter(model.HwComponent):
+    """
+    A very simple class which just represent a light filter (blocks a wavelength 
+    band).
+    It should "affect" the detector on which it's in front of, if it's filtering
+    the "out" path, or "affect" the emitter in which it's after, if it's
+    filtering the "in" path.
+    """
+    def __init__(self, name, role, band, **kwargs):
+        """
+        name (string): should be the name of the product (for metadata)
+        band ((list of) 2-tuple of float > 0): (m) lower and higher bound of the
+          wavelength of the light which goes _through_. If it's a list, it implies
+          that the filter is multi-band.
+        """
+        model.HwComponent.__init__(self, name, role, **kwargs)
+
+        self._swVersion = "N/A (Odemis %s)" % __version__.version
+        self._hwVersion = name
+        
+        # Create a 2-tuple or a set of 2-tuples 
+        if not isinstance(band, collections.Iterable) or len(band) == 0:
+            raise TypeError("band must be a (list of a) list of 2 floats")
+        # is it a list of list?
+        if isinstance(band[0], collections.Iterable):
+            # => set of 2-tuples
+            new_band = []
+            for sb in band:
+                if len(sb) != 2:
+                    raise TypeError("Expected only 2 floats in band, found %d" % len(sb))
+                if sb[0] > sb[1]:
+                    raise TypeError("Min of band must be first in list")
+                new_band.append(tuple(sb))
+            band = frozenset(new_band)
+        else:
+            # 2-tuple
+            if len(band) != 2:
+                raise TypeError("Expected only 2 floats in band, found %d" % len(band))
+            if band[0] > band[1]:
+                raise TypeError("Min of band must be first in list")
+            band = tuple(band)
+             
+        self._band = band
+        # TODO: MD_OUT_WL or MD_IN_WL depending on affect
+        self._metadata = {model.MD_FILTER_NAME: name,
+                          model.MD_OUT_WL: band}
+        
+    def getMetadata(self):
+        return self._metadata
+    
+    # For info to the user once the component is created
+    @roattribute
+    def band(self):
+        return self._band 
+    

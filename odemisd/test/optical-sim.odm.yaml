@@ -1,7 +1,7 @@
 SimOptical: {
     class: Microscope,
     role: brightfield,
-    emitters: [Light, "Nikon Super Duper"],
+    emitters: [Light, "Nikon Super Duper", "MultiBand Fixed Filter"],
     detectors: ["Andor SimCam"],
     actuators: ["Stage"],
 }
@@ -18,6 +18,12 @@ Light: {
     class: static.OpticalLens,
     role: lens,
     init: {mag: 10.0}, # ratio
+    affects: ["Andor SimCam"]
+}
+"MultiBand Fixed Filter": {
+    class: static.LightFilter,
+    role: lens,
+    init: {band: [[430e-9, 480e-9], [520e-9, 600e-9]]}, # m,m
     affects: ["Andor SimCam"]
 }
 "Andor SimCam": {
