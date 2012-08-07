@@ -141,7 +141,7 @@ class Stage2DTest(unittest.TestCase, ActuatorTest):
     
     actuator_type = simulated.Stage2D
     # name, role, children (must be None)
-    actuator_args = ("stage", "test", None)
+    actuator_args = ("stage", "test", {"x", "y"}, None)
 
 
 if __name__ == "__main__":

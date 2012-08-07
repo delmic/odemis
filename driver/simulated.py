@@ -58,16 +58,29 @@ class Stage2D(model.Actuator):
     """
     Simulated stage component. Just pretends to be able to move all around.
     """
-    def __init__(self, name, role, children=None, **kwargs):
-        assert ("axes" not in kwargs) and ("ranges" not in kwargs)
+    def __init__(self, name, role, axes, ranges=None, children=None, **kwargs):
+#        assert ("axes" not in kwargs) and ("ranges" not in kwargs)
+        assert len(axes) > 0
+        if ranges is None:
+            ranges = {}
+            for a in axes:
+                ranges[a] = [0, 0.1]
+                
         model.Actuator.__init__(self, name, role, children=children,
-                                axes=["x", "y"], 
-                                ranges={"x": [0, 0.1], "y": [0, 0.1]},
+                                axes=axes, 
+                                ranges=ranges,
                                 **kwargs)
-        # can move 10cm on both axis
-        self._position = {"x": 0.05, "y": 0.05} # starts in the middle
-        self.speed = model.MultiSpeedVA({"x": 10., "y": 10.}, [0., 10.], "m/s")
+        # start at the centre
+        self._position = {}
+        for a in axes:
+            self._position[a] = (self.ranges[a][0] + self.ranges[a][1]) / 2.0  
         
+        init_speed = {}
+        for a in axes:
+            init_speed[a] = 10.0 
+        self.speed = model.MultiSpeedVA(init_speed, [0., 10.], "m/s")
+        
+    # TODO that's obviously not static!!!
     @roattribute
     def position(self):
         # TODO should depend on the time and the current queue of moves
@@ -75,7 +88,7 @@ class Stage2D(model.Actuator):
         
     def getMetadata(self):
         metadata = {}
-        metadata[model.MD_POS] = (self._position["x"], self._position["y"])
+        metadata[model.MD_POS] = tuple([self._position[a] for a in self.axes])
         return metadata
         
     def moveRel(self, pos):
