@@ -47,9 +47,11 @@ MD_SENSOR_PIXEL_SIZE = "Sensor pixel size" # (m, m), distance between the centre
 MD_SENSOR_SIZE = "Sensor size" # px, px
 MD_SENSOR_TEMP = "Sensor temperature" # C
 MD_POS = "Centre position" # (m, m), location of the picture centre relative to top-left of the sample)
-MD_IN_WL = "Input wavelength range" # (m, m), lower and upper range of the wavelenth input
-MD_OUT_WL = "Output wavelength range"  # (m, m), lower and upper range of the filtered wavelenth before the camera
+MD_IN_WL = "Input wavelength range" # (m, m), lower and upper range of the wavelength input
+MD_OUT_WL = "Output wavelength range"  # (m, m), lower and upper range of the filtered wavelength before the camera
 MD_LIGHT_POWER = "Light power" # W, power of the emitting light
+MD_LENS_NAME = "Lens name" # str product name of the lens
+MD_OPT_MAG = "Optical magnification" # float (ratio), magnification factor
 
 class DataArray(numpy.ndarray):
     """

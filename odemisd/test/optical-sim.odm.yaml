@@ -1,7 +1,7 @@
 SimOptical: {
     class: Microscope,
     role: brightfield,
-    emitters: [Light],
+    emitters: [Light, "Nikon Super Duper"],
     detectors: ["Andor SimCam"],
     actuators: ["Stage"],
 }
@@ -13,6 +13,12 @@ Light: {
     properties: {
         power: 100 # W
     }
+}
+"Nikon Super Duper": {
+    class: static.OpticalLens,
+    role: lens,
+    init: {mag: 10.0}, # ratio
+    affects: ["Andor SimCam"]
 }
 "Andor SimCam": {
     class: andorcam3.AndorCam3,
