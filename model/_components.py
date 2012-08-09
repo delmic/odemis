@@ -541,7 +541,6 @@ class MockComponent(HwComponent):
             self.axes = set(["x"])
             self.ranges = {"x": [-1, 1]}
             # make them roattributes for proxy
-            print " it's an Actuator" 
             self._odemis_roattributes = ["axes", "ranges"]
         
         if _vas is not None:

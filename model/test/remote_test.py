@@ -97,13 +97,16 @@ class ContainerTest(unittest.TestCase):
         model.getContainer("testcont").terminate()
 
     def test_timeout(self):
+        if Pyro4.config.COMMTIMEOUT == 0 or Pyro4.config.COMMTIMEOUT > 20:
+            self.skipTest("Timeout too long (%d s) to test." % Pyro4.config.COMMTIMEOUT)
         server = threading.Thread(target=ServerLoop, args=("backend",))
         server.start()
         time.sleep(0.1) # give it some time to start
         
         rdaemon = Pyro4.Proxy("PYRO:Pyro.Daemon@./u:backend")
-        print rdaemon.ping()
-        time.sleep(8)
+        rdaemon.ping()
+        time.sleep(Pyro4.config.COMMTIMEOUT + 2)
+        rdaemon.ping()
         
     
 #@unittest.skip("simple")
