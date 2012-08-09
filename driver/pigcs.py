@@ -283,29 +283,45 @@ class Controller(object):
         assert(axis in self._channels)
         if steps == 0:
             return
-        self._sendOrderCommand("OSM %d %d\n" % (axis, steps))
+        self._sendOrderCommand("OSM %d %f\n" % (axis, steps))
         
-        
-#
-#
-#OAD (Open-Loop Analog Driving): move using analog
-#The allowable range is between -55 and 55. Float
-#
-#
-#SSA (Set Step Amplitude) : for nanostepping 
-#between 0 and 55. Float
-#=> just use the max and modify the velocity
+    
+    def SetStepAmplitude(self, axis, amplitude):
+        """
+        Set the amplitude of one step (in nanostep mode). It affects the velocity
+        of OLMoveStep.
+        Note: probably it's best to set it to 55 and use OVL to change speed.
+        axis (1<int<16): axis number
+        amplitude (0<=float<=55): voltage applied (the more the further)
+        """
+        #SSA (Set Step Amplitude) : for nanostepping 
+        assert(axis in self._channels)
+        assert((0 <= amplitude) and (amplitude <= 55))
+        self._sendOrderCommand("SSA %d %f\n" % (axis, amplitude))
+
+    def OLAnalogDriving(self, axis, amplitude):
+        """
+        Use analog mode to move the axis by a given amplitude.
+        axis (1<int<16): axis number
+        amplitude (-55<=float<=55): Amplitude of the move. It's only a small move.
+          55 is approximately 5 um.
+        """
+        #OAD (Open-Loop Analog Driving): move using analog
+        assert(axis in self._channels)
+        assert((-55 <= amplitude) and (amplitude <= 55))
+        self._sendOrderCommand("OAD %d %f\n" % (axis, amplitude))        
+
+
 #
 #OVL (Set Open-Loop Velocity)
 #in step-cycles/s
+# default = 200 (~ 0.002 m/s)
 #OAC (Set Open-Loop Acceleration)
 #in step-cycles/s²
+# default = 2000
 #ODC (Set Open-Loop Deceleration)
 #in step-cycles/s²
-#
-#
-
-
+# default = 2000
 
 
       
