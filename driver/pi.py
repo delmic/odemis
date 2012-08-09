@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 '''
 Created on 22 Feb 2012
@@ -139,7 +138,7 @@ class PIRedStone(object):
         self.speed_max = 0.5 # m/s, from the documentation (= no waittime)
         
         self.address = address
-        # allow to not initialise the controller (mostly for ScanNetwork())
+        # allow to not initialise the controller (mostly for .scan())
         if address is None:
             self.try_recover = False # really raw mode
             return
@@ -194,6 +193,7 @@ class PIRedStone(object):
             success = self.recoverTimeout()
             if success:
                 logging.warning("PI controller %d timeout, but recovered.", self.address)
+                # TODO try to send again the command
             else:
                 raise IOError("PI controller %d timeout, not recovered." % self.address)
             
@@ -669,7 +669,7 @@ class PIRedStone(object):
         ser = PIRedStone.openSerialPort(port)
         pi = PIRedStone(ser)
         
-        logging.info("Serial network scanning in progress...")
+        logging.info("Serial network scanning for PI Redstones in progress...")
         pi.try_recover = False # timeouts are expected!
         present = set([])
         for i in range(max_add + 1):
@@ -724,7 +724,7 @@ class FakeSerial(object):
      
 class FakePIRedStone(PIRedStone):
     """
-    Fake version of the PIRedstone which pretent do be a motor, while just
+    Fake version of the PIRedstone which pretend do be a motor, while just
     writing the commands to a file. For test purpose only
     """
     def __init__(self, *args):
@@ -788,7 +788,6 @@ class FakePIRedStone(PIRedStone):
         ser._pi_select = -1
         return ser
         
-        
 class StageRedStone(Actuator):
     """
     An actuator made entirely of redstone controllers connected on the same serial port
@@ -838,6 +837,9 @@ class StageRedStone(Actuator):
         self.speed.subscribe(self.onSpeed, init=True)
         self.doer_thread = ActionDoer(name="PI Redstone doer Thread")
         self.doer_thread.start()
+        
+        # TODO swVersion (=odemis + serial driver name cf readlink /sys/class/tty/tty*/device/driver)
+        # TODO hwVersion (= firmware version of each axis)
         
     def getMetadata(self):
         metadata = {}
