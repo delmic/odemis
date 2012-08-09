@@ -457,10 +457,9 @@ class AndorCam2(model.DigitalCamera):
         # it actually stops its internal threads
         try:
             # Hopefully it fails
-            # FIXME if the camera is back on already, it might block forever :-S
-            self.Initialize()
+            self.atcore.ShutDown()
         except AndorV2Error:
-            pass
+            logging.warning("Reinitialisation failed to shutdown the driver")
         
         # wait until the device is available
         # it's a bit tricky if there are more than one camera, but at least
@@ -469,23 +468,17 @@ class AndorCam2(model.DigitalCamera):
             logging.info("Waiting for the camera to reappear")
             time.sleep(1)
         
-        self.handle = None
-        while self.handle is None:
-            try:
-                self.handle = self.GetCameraHandle(self._device)
-            except AndorV2Error:
-                # it can happen
-                logging.error("failed to get the handle")
-            time.sleep(1)
-        
         # reinitialise the sdk
-        self.select()
         logging.info("Trying to reinitialise the camera %d...", self._device)
         try:
+            self.handle = self.GetCameraHandle(self._device)
+            self.select()
             self.Initialize()
         except AndorV2Error:
             # Let's give it a second chance
             try:
+                self.handle = self.GetCameraHandle(self._device)
+                self.select()
                 self.Initialize()
             except:
                 logging.info("Reinitialisation failed")
