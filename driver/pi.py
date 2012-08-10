@@ -945,6 +945,7 @@ class StageRedStone(Actuator):
             if addresses:
                 arg = {}
                 for add in addresses:
+                    #FIXME 
                     arg["axis" + str(add)] = (add, 0) # channel 0
                     arg["axis" + str(add)] = (add, 1) # channel 1
                 found.append(("Actuator " + p, {"port": p, "axes": arg}))

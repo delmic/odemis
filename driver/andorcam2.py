@@ -1276,7 +1276,7 @@ class AndorCam2(model.DigitalCamera):
         """
         List all the available cameras.
         Note: it's not recommended to call this method when cameras are being used
-        return (set of 3-tuple: device number (int), name (string), max resolution (2-tuple int))
+        return (list of 2-tuple: name (strin), device number (int))
         """
         camera = AndorCam2("System", "bus") # system
         dc = camera.GetAvailableCameras()

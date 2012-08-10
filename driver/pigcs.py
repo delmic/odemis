@@ -14,8 +14,13 @@ Delmic Acquisition Software is distributed in the hope that it will be useful, b
 
 You should have received a copy of the GNU General Public License along with Delmic Acquisition Software. If not, see http://www.gnu.org/licenses/.
 '''
+import __version__
+import glob
 import logging
+import model
+import os
 import serial
+import sys
 
 """
 Driver to handle PI's piezo motor controllers that follow the 'GCS' (General
@@ -66,17 +71,21 @@ and waits for it to finish.
 """
 
 class Controller(object):
-    def __init__(self, ser, address=None):
+    def __init__(self, ser, address=None, axes=None):
         """
         ser: a serial port (opened)
         address 1<int<16: address as configured on the controller
         If not address is given, it just allows to do some raw commands
+        axes (dict int -> boolean): determine which axis will be used and whether
+          it will be used closed-loop (True) or open-loop (False). 
         """
         self.serial = ser
         self.address = address
         # did the user asked for a raw access only?
         if address is None:
             return
+        if axes is None:
+            raise LookupError("Need to have at least one axis configured")
         
         self._channels = self.GetAxes() # available channels (=axes)
         # dict axis -> boolean
@@ -84,9 +93,22 @@ class Controller(object):
         # dict axis -> boolean
         self._hasSensor = dict([(a, self.hasSensor(a)) for a in self._channels])
         
-        # TODO
-        self._speed = 1.0 # m/s
-        self._accel = 10.0 # m/s² (both acceleration and deceleration) 
+        for a in axes:
+            if not a in self._channels:
+                raise LookupError("Axis %d is not supported by controller %d" % (a, address))
+            if axes[a]: # want closed-loop?
+                if not self._hasSensor[a]:
+                    raise LookupError("Axis %d of controller %d does not support closed-loop mode" % (a, address))
+                # for now we don't handle closed-loop anyway...
+                raise NotImplementedError("Closed-loop support not yet implemented")
+        
+
+        
+        # actually set just before a move
+        self._speed_max = 10 # m/s
+        self._speed = dict([(a, 1.0) for a in axes]) # m/s
+        self._accel_max = 100 # m/s²
+        self._accel = dict([(a, 10.0) for a in axes]) # m/s² (both acceleration and deceleration) 
     
     
     def _sendOrderCommand(self, com):
@@ -403,7 +425,18 @@ class Controller(object):
 #OMR (Relative Open-Loop Motion)
 #OMA (Absolute Open-Loop Motion)
 #
-      
+    
+    def setSpeed(self, axis, speed):
+        """
+        Changes the move speed of the motor (for the next move).
+        Note: in open-loop mode, it's very approximate.
+        speed (0<float<5): speed in m/s.
+        axis (int 0 or 1): axis to pic  
+        """
+        assert((0 < speed) and (speed < self._speed_max))
+        assert(axis in self._channels)
+        self._speed[axis] = speed
+    
     @staticmethod
     def scan(port, max_add=16):
         """
@@ -420,27 +453,31 @@ class Controller(object):
         present = {}
         for i in range(1, max_add+1):
             # ask for controller #i
-            logging.info("Querying address %d", i)
+            logging.debug("Querying address %d", i)
 
             # is it answering?
             try:
                 ctrl.address = i
-                version = ctrl.GetIdentification()
-                present[i] = (version, ctrl.GetSyntaxVersion(), ctrl.GetAxes(), ctrl.hasLimitSwitches(1))
-                print ctrl.GetAvailableCommands()
-                print ctrl.GetAvailableParameters()
-                print ctrl.GetRecoderConfig()
-                print ctrl.GetMotionStatus()
-                print ctrl.GetStatus()
-                
-                new_ctrl = Controller(ser, i)
-                print new_ctrl._hasLimit
-                print new_ctrl._hasSensor
-                
-                print new_ctrl.SetServo(1, False)
-                print new_ctrl.GetErrorNum()
-                print new_ctrl.GetStatus()
-                
+                axes = {}
+                for a in ctrl.GetAxes():
+                    axes = {a: ctrl.hasSensor(a)}
+                if not axes:
+                    logging.info("Found controller %d with no axis", i)
+                else:
+                    present[i] = axes
+#                version = ctrl.GetIdentification()
+#                print ctrl.GetAvailableCommands()
+#                print ctrl.GetAvailableParameters()
+#                print ctrl.GetRecoderConfig()
+#                print ctrl.GetMotionStatus()
+#                print ctrl.GetStatus()
+#                new_ctrl = Controller(ser, i)
+#                print new_ctrl._hasLimit
+#                print new_ctrl._hasSensor
+#                
+#                print new_ctrl.SetServo(1, False)
+#                print new_ctrl.GetErrorNum()
+#                print new_ctrl.GetStatus()
             except IOError:
                 pass
         
@@ -465,20 +502,152 @@ class Controller(object):
         )
         
         return ser
+
+
+class Bus(model.Actuator):
+    """
+    Represent a chain of PI controller over a serial port
+    """
+    def __init__(self, name, role, children, port, axes):
+        """
+        port (string): name of the serial port to connect to the controllers
+        axes (dict string=> 3-tuple(1<=int<=16, 1<=int, boolean): the configuration
+         of the network. For each axis name associates the controller address,
+         channel, and whether it's closed-loop (absolute positioning) or not.
+         Note that even if it's made of several controllers, each controller is 
+         _not_ seen as a child from the odemis model point of view.
+        """
+        # this set ._axes and ._ranges
+        model.Actuator.__init__(self, name, role, children=children, axes=axes.keys())
+        
+        ser = Controller.openSerialPort(port)
+
+        # Prepare initialisation by grouping axes from the same controller
+        ac_to_axis = {} # address, channel -> axis name
+        controllers = {} # address -> dict (axis -> boolean)
+        for axis, (add, channel, isCL) in axes.items():
+            if not add in controllers:
+                controllers[add] = {}
+            elif channel in controllers[add]:
+                raise ValueError("Cannot associate multiple axes to controller %d:%d" % (add, channel))
+            ac_to_axis[(add, channel)] = axis 
+            controllers[add].update({channel: isCL})
+
+        # Init each controller            
+        self._axis_to_cc = {} # axis name => (Controller, channel)
+        # TODO also a rangesRel : min and max of a step 
+        self._position = {}
+        speed = {}
+        for address, channels in controllers.items():
+            try:
+                controller = Controller(ser, address, channels)
+            except IOError:
+                logging.exception("Failed to find a controller with address %d on %s", address, port)
+                raise
+            except LookupError:
+                logging.exception("Failed to initialise controller %d on %s", address, port)
+                raise
+            for c in channels:
+                axis = ac_to_axis[(address, c)]
+                self._axis_to_cc[axis] = (controller, c)
+            
+            # TODO if closed-loop, the ranges should be updated after homing
+            # For now we put very large one
+            self._ranges[axis] = [0, 1] # m
+            
+            # TODO move to a known position (0,0) at init?
+            # for now we have no idea where we are => in the middle so that we can always move
+            # TODO if closed-loop, the positions should be updated after homing
+            self._position[axis] = 0.5 # m
+            
+            # Just to make sure it doesn't go too fast
+            speed[axis] = 0.1 # m/s
+        
+        
+        
+        # min speed = don't be crazy slow. max speed from hardware spec
+        self.speed = model.MultiSpeedVA(speed, range=[10e-6, 0.5], unit="m/s",
+                                        setter=self.setSpeed)
+        self.setSpeed(speed)
+        
+        # set HW and SW version
+        self._swVersion = "%s (serial driver: %s)" % (__version__.version, self.getSerialDriver(port))
+        hwversions = []
+        for axis, (ctrl, channel) in self._axis_to_cc.items():
+            hwversions += "'%s': %s (GCS %s)" % (axis, ctrl.GetIdentification(), ctrl.GetSyntaxVersion())
+        self._hwVersion = ", ".join(hwversions)
     
-addresses = Controller.scan("/dev/ttyUSB0", max_add=1)
-print addresses
+#        self._action_mgr = ActionMgr()
+#        self._action_mgr.start()
+    
+    def getSerialDriver(self, name):
+        """
+        return (string): the name of the serial driver used for the given port
+        """
+        # In linux, can be found as link of /sys/class/tty/tty*/device/driver
+        if sys.platform.startswith('linux'):
+            path = "/sys/class/tty/" + os.path.basename(name) + "/device/driver"
+            try:
+                return os.path.basename(os.readlink(path))
+            except OSError:
+                return "Unknown"
+        else:
+            return "Unknown"
+    
+    def setSpeed(self, value):
+        """
+        value (dict string-> float): speed for each axis
+        returns (dict string-> float): the new value
+        """
+        for axis, v in value.items():
+            controller, channel = self._axis_to_cc[axis]
+            controller.setSpeed(channel, v)
+        return value
+    
+    def getPosition(self):
+        # TODO: for closed-loop axes, use ctrl.getPosition
+        return self._position
+    
+    @staticmethod
+    def scan(port=None):
+        """
+        port (string): name of the serial port. If None, all the serial ports are tried
+        returns (list of 2-tuple): name, args (port, axes(channel -> CL?)
+        Note: it's obviously not advised to call this function if moves on the motors are ongoing
+        """ 
+        if port:
+            ports = [port]
+        else:
+            if os.name == "nt":
+                ports = ["COM" + str(n) for n in range (0,8)]
+            else:
+                ports = glob.glob('/dev/ttyS?*') +  glob.glob('/dev/ttyUSB?*')
+        
+        axes_names = "xyzabcdefghijklmnopqrstuvw"
+        found = []  # (list of 2-tuple): name, args (port, axes(channel -> CL?)
+        for p in ports:
+            try:
+                controllers = Controller.scan(p)
+            except serial.SerialException:
+                # not possible to use this port? next one!
+                continue
+            
+            if controllers:
+                axis_num = 0
+                arg = {}
+                for add, axes in controllers.items():
+                    for a, cl in axes.items():
+                        arg[axes_names[axis_num]] = (add, a, cl)
+                        axis_num += 1
+                found.append(("Actuator " + os.path.basename(p),
+                             {"port": p, "axes": arg}))
+        
+        return found
+    
+    
+#addresses = Controller.scan("/dev/ttyUSB0", max_add=1)
+#addresses = Bus.scan()
+#print addresses
+stage = Bus("test", "stage", children=None, port="/dev/ttyUSB0", axes={"x":(1,1,False)})
+print stage.swVersion
 
-#
-
-#
-#Example:
-#SVO 1 0
-#OAD 1 40
-#RNP 1
-#SSA 1 40
-#OSM 1 100
-#OMA 1 6
-#OMR 1 -3
-#RNP 1
-#OAD 1 -40
