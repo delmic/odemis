@@ -444,6 +444,29 @@ class Controller(object):
         assert(axis in self._channels)
         self._speed[axis] = speed
     
+    
+    
+    def waitEndMotion(self, axes=None):
+        """
+        Wait until the motion of all the given axis is finished.
+        Note: there is a 5 s timeout
+        axes (None or set of int): axes to check whether for move, or all if None
+        """
+        #TODO use the time, distance, and speed of last move to evaluate the timeout
+        # approximately the time for the longest move
+        timeout = 5 #s
+        end = time.time() + timeout
+        
+        if axes is None:
+            axes = self._channels
+        else:
+            assert len(self._channels - axes) == 0
+        
+        while axes & self.GetMotionStatus():
+            if time.time() <= end:
+                raise IOError("Timeout while waiting for end of motion")
+            time.sleep(0.005)
+        
     @staticmethod
     def scan(port, max_add=16):
         """
