@@ -21,6 +21,7 @@ import model
 import os
 import serial
 import sys
+import time
 
 """
 Driver to handle PI's piezo motor controllers that follow the 'GCS' (General
@@ -87,29 +88,35 @@ class Controller(object):
         if axes is None:
             raise LookupError("Need to have at least one axis configured")
         
+        # reinitialise (just in case)
+        self.Reboot()
+        self.GetErrorNum()
+        
         self._channels = self.GetAxes() # available channels (=axes)
         # dict axis -> boolean
         self._hasLimit = dict([(a, self.hasLimitSwitches(a)) for a in self._channels])
         # dict axis -> boolean
         self._hasSensor = dict([(a, self.hasSensor(a)) for a in self._channels])
         
-        for a in axes:
+        for a, cl in axes.items():
             if not a in self._channels:
                 raise LookupError("Axis %d is not supported by controller %d" % (a, address))
-            if axes[a]: # want closed-loop?
+            if cl: # want closed-loop?
                 if not self._hasSensor[a]:
                     raise LookupError("Axis %d of controller %d does not support closed-loop mode" % (a, address))
+                self.SetServo(a, True)
                 # for now we don't handle closed-loop anyway...
                 raise NotImplementedError("Closed-loop support not yet implemented")
+            else:
+                # that should be the default, but for safety we force it
+                self.SetServo(a, False)
         
-
         
         # actually set just before a move
         self._speed_max = 10 # m/s
         self._speed = dict([(a, 1.0) for a in axes]) # m/s
         self._accel_max = 100 # m/s²
         self._accel = dict([(a, 10.0) for a in axes]) # m/s² (both acceleration and deceleration) 
-    
     
     def _sendOrderCommand(self, com):
         """
@@ -126,15 +133,12 @@ class Controller(object):
         Send a command and return its report (first line sent)
         com (string): the command to send (without address prefix but with \n)
         return (string or list of strings): the report without prefix 
-           (e.g.,"0 1") nor newline. If multiline: returns a list of each line 
+           (e.g.,"0 1") nor newline. If answer is multiline: returns a list of each line 
         """
         assert(len(com) <= 100) # commands can be quite long (with floats)
         full_com = "%d %s" % (self.address, com)
         logging.debug("Sending: %s", full_com.encode('string_escape'))
         self.serial.write(full_com)
-        
-        # TODO see if it's really necessary to have multiline: it should just
-        # keep reading if it's " \n"
         
         char = self.serial.read() # empty if timeout
         line = ""
@@ -171,6 +175,8 @@ class Controller(object):
         else:
             return lines
     
+    # The following are function directly mapping to the controller commands.
+    # In general it should not be need to use them directly from outside this class
     def GetIdentification(self):
         #*IDN? (Get Device Identification):
         #ex: 0 2 (c)2010 Physik Instrumente(PI) Karlsruhe,E-861 Version 7.2.0
@@ -292,6 +298,7 @@ class Controller(object):
     
     def Reboot(self):
         self._sendOrderCommand("RBT\n")
+        time.sleep(1) # give it some time to reboot before it's accessible again
 
     def RelaxPiezos(self, axis):
         """
