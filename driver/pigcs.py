@@ -48,6 +48,7 @@ In open-loop, the controller has 2 ways to move the actuators:
 
 In closed-loop, it's all automagical.
 
+The recommended maximum step frequency is 800 Hz. 
 
 The architecture of the driver relies on three main classes:
  * Controller: represent one controller with one or several axes (E-861 has only one)
@@ -81,7 +82,7 @@ class Controller(object):
         # dict axis -> boolean
         self._hasLimit = dict([(a, self.hasLimitSwitches(a)) for a in self._channels])
         # dict axis -> boolean
-        self._hasServo = False # TODO: how?
+        self._hasSensor = dict([(a, self.hasSensor(a)) for a in self._channels])
         
         # TODO
         self._speed = 1.0 # m/s
@@ -193,19 +194,35 @@ class Controller(object):
     
     def hasLimitSwitches(self, axis):
         """
-        Report where the given axis has limit switches (is able to detect 
-         the end of the axis.
+        Report whether the given axis has limit switches (is able to detect 
+         the ends of the axis).
+        Note: apparently it's just read from a configuration value in flash 
+        memory. Can be configured easily with PIMikroMove
         axis (1<int<16): axis number
         """
+        #LIM? (Indicate Limit Switches)
         assert((1 <= axis) and (axis <= 16))
         
-        #LIM? (Indicate Limit Switches)
-        #Seems to just read a configuration value in flash memory. Can be configured
-        #easily with PIMikroMove
         answer = self._sendQueryCommand("LIM? %d\n" % axis)
         # 1 => True, 0 => False
         return answer == "1"
  
+    def hasSensor(self, axis):
+        """
+        Report whether the given axis has a sensor (is able to measure the 
+         distance travelled). 
+        Note: apparently it's just read from a configuration value in flash 
+        memory. Can be configured easily with PIMikroMove
+        axis (1<int<16): axis number
+        """
+        # TRS? (Indicate Reference Switch)
+        assert((1 <= axis) and (axis <= 16))
+        
+        answer = self._sendQueryCommand("TRS? %d\n" % axis)
+        # 1 => True, 0 => False
+        return answer == "1"
+ 
+
     def GetMotionStatus(self):
         """
         returns (set of int): the set of moving axes
@@ -250,6 +267,9 @@ class Controller(object):
         answer = self._sendQueryCommand("ERR?\n")
         error = int(answer, 10)
         return error
+    
+    def Reboot(self):
+        self._sendOrderCommand("RBT\n")
 
     def RelaxPiezos(self, axis):
         """
@@ -271,7 +291,8 @@ class Controller(object):
 
     def SetServo(self, axis, activated):
         """
-        Activate or de-activate the servo
+        Activate or de-activate the servo. 
+        Note: only activate it if there is a sensor (cf .hasSensor and ._hasSensor)
         axis (1<int<16): axis number
         activated (boolean): True if the servo should be activated (closed-loop)
         """
@@ -279,6 +300,7 @@ class Controller(object):
         assert(axis in self._channels)
         
         if activated:
+            assert(self._hasSensor[axis])
             state = 1
         else:
             state = 0
@@ -359,6 +381,7 @@ class Controller(object):
 
 #Abs (with sensor = closed-loop):
 #MOV (Set Target Position)
+#MVR (Set Target Relative To Current Position)
 #
 #FNL (Fast Reference Move To Negative Limit)
 #FPL (Fast Reference Move To Positive Limit)
@@ -375,7 +398,8 @@ class Controller(object):
 #ACC (Set Closed-Loop Acceleration)
 #DEC (Set Closed-Loop Deceleration)
 #
-# Not clear what they do different from OSM. In physical unit?
+# Different from OSM because they use the sensor and are defined in physical unit.
+# Servo must be off! => Probably useless... compared to MOV/MVR
 #OMR (Relative Open-Loop Motion)
 #OMA (Absolute Open-Loop Motion)
 #
@@ -408,7 +432,14 @@ class Controller(object):
                 print ctrl.GetRecoderConfig()
                 print ctrl.GetMotionStatus()
                 print ctrl.GetStatus()
-                print ctrl.GetErrorNum()
+                
+                new_ctrl = Controller(ser, i)
+                print new_ctrl._hasLimit
+                print new_ctrl._hasSensor
+                
+                print new_ctrl.SetServo(1, False)
+                print new_ctrl.GetErrorNum()
+                print new_ctrl.GetStatus()
                 
             except IOError:
                 pass
@@ -435,7 +466,7 @@ class Controller(object):
         
         return ser
     
-addresses = Controller.scan("/dev/ttyUSB1", max_add=1)
+addresses = Controller.scan("/dev/ttyUSB0", max_add=1)
 print addresses
 
 #
