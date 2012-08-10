@@ -77,7 +77,15 @@ class Controller(object):
         if address is None:
             return
         
-        self._channels = set([]) # available channels (=axes)
+        self._channels = self.GetAxes() # available channels (=axes)
+        # dict axis -> boolean
+        self._hasLimit = dict([(a, self.hasLimitSwitches(a)) for a in self._channels])
+        # dict axis -> boolean
+        self._hasServo = False # TODO: how?
+        
+        # TODO
+        self._speed = 1.0 # m/s
+        self._accel = 10.0 # m/s² (both acceleration and deceleration) 
     
     
     def _sendOrderCommand(self, com):
@@ -152,9 +160,14 @@ class Controller(object):
         return self._sendQueryCommand("CSV?\n")
     
     def GetAxes(self):
+        """
+        returns (set of int): all the available axes
+        """
         #SAI? (Get List Of Current Axis Identifiers)
         #SAI? ALL: list all axes (included disabled ones)
-        axes = self._sendQueryCommand("SAI? ALL\n")
+        answer = self._sendQueryCommand("SAI? ALL\n")
+        # TODO check it works with multiple axes
+        axes = set([int(a) for a in answer.split(" ")])
         return axes
     
     def GetAvailableCommands(self):
@@ -311,19 +324,61 @@ class Controller(object):
         assert((-55 <= amplitude) and (amplitude <= 55))
         self._sendOrderCommand("OAD %d %f\n" % (axis, amplitude))        
 
+    def SetOLVelocity(self, axis, velocity):
+        """
+        Moves an axis for a number of steps. Can be done only with servo off.
+        axis (1<int<16): axis number
+        velocity (0<float): velocity in step-cycles/s. Default is 200 (~ 0.002 m/s)
+        """
+        #OVL (Set Open-Loop Velocity)
+        assert(axis in self._channels)
+        assert(velocity > 0)
+        self._sendOrderCommand("OVL %d %f\n" % (axis, velocity))
+    
+    def SetOLAcceleration(self, axis, value):
+        """
+        Moves an axis for a number of steps. Can be done only with servo off.
+        axis (1<int<16): axis number
+        value (0<float): acceleration in step-cycles/s. Default is 2000 
+        """
+        #OAC (Set Open-Loop Acceleration)
+        assert(axis in self._channels)
+        assert(value > 0)
+        self._sendOrderCommand("OVL %d %f\n" % (axis, value))
+        
+    def SetOLDeceleration(self, axis, value):
+        """
+        Moves an axis for a number of steps. Can be done only with servo off.
+        axis (1<int<16): axis number
+        value (0<float): decelaration in step-cycles/s. Default is 2000 
+        """
+        #ODC (Set Open-Loop Deceleration)
+        assert(axis in self._channels)
+        assert(value > 0)
+        self._sendOrderCommand("OVL %d %f\n" % (axis, value))
 
+#Abs (with sensor = closed-loop):
+#MOV (Set Target Position)
 #
-#OVL (Set Open-Loop Velocity)
-#in step-cycles/s
-# default = 200 (~ 0.002 m/s)
-#OAC (Set Open-Loop Acceleration)
-#in step-cycles/s²
-# default = 2000
-#ODC (Set Open-Loop Deceleration)
-#in step-cycles/s²
-# default = 2000
-
-
+#FNL (Fast Reference Move To Negative Limit)
+#FPL (Fast Reference Move To Positive Limit)
+#FRF (Fast Reference Move To Reference Switch)
+#
+#POS? (GetRealPosition)
+#ONT? (Get On Target State)
+#
+#TMN? (Get Minimum Commandable Position)
+#TMX? (Get Maximum Commandable Position)
+#Min-Max position in physical units (μm)
+#
+#VEL (Set Closed-Loop Velocity)
+#ACC (Set Closed-Loop Acceleration)
+#DEC (Set Closed-Loop Deceleration)
+#
+# Not clear what they do different from OSM. In physical unit?
+#OMR (Relative Open-Loop Motion)
+#OMA (Absolute Open-Loop Motion)
+#
       
     @staticmethod
     def scan(port, max_add=16):
@@ -385,30 +440,6 @@ print addresses
 
 #
 
-#
-#Abs (with sensor = closed-loop):
-#MOV (Set Target Position)
-#
-#FNL (Fast Reference Move To Negative Limit)
-#FPL (Fast Reference Move To Positive Limit)
-#FRF (Fast Reference Move To Reference Switch)
-#
-#POS? (GetRealPosition)
-#ONT? (Get On Target State)
-#
-#TMN? (Get Minimum Commandable Position)
-#TMX? (Get Maximum Commandable Position)
-#Min-Max position in physical units (μm)
-#
-#VEL (Set Closed-Loop Velocity)
-#ACC (Set Closed-Loop Acceleration)
-#DEC (Set Closed-Loop Deceleration)
-#
-#
-#OMR (Relative Open-Loop Motion)
-#
-#OMA (Absolute Open-Loop Motion)
-#
 #
 #Example:
 #SVO 1 0
