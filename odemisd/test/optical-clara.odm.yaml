@@ -5,6 +5,7 @@ SimOptical: {
     detectors: [Clara],
     actuators: ["Stage"],
 }
+
 Light: {
     class: simulated.Light,
     role: brightlight,
@@ -14,14 +15,17 @@ Light: {
         power: 100 # W
     }
 }
+
 Clara: {
     class: andorcam2.AndorCam2,
     role: ccd,
     init: {device: 0} # 0 is almost always correct
 }
+
 "Stage": {
     class: simulated.Stage2D,
     role: stage,
+    init: {axes: ["x", "y"]},
     affects: [Clara],
     properties: {
         speed: {'x':1.0, 'y':1.0} #m/s

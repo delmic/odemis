@@ -16,11 +16,13 @@ sudo adduser myuser odemis
 
 = Installing the vendor device drivers =
 == Andor Clara camera ==
+
 Install Andor SDK (USB product).
-WARNING! not all versions work:
-* v2.93 doesn't work because it blocks after a few image acquired
+WARNING! no version works fully, but a frankstein one:
+* v2.93 (and v2.91+) doesn't work because it blocks after a few image acquired
 * v2.90 doesn't support changing the preamp gain
-* v2.91 and v2.92 use 100% of CPU when acquiring images
+* The firmware of v2.90 (/usr/local/etc/andor) and code from v2.93
+  (/usr/local/lib) works (but use 100% of CPU when acquiring images)
 
 On Linux/Ubuntu you need to install libusb-dev (so that whereis reports libusb.so).
 Also the the permissions of all the files must be allowed for normal user:
