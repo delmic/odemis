@@ -102,10 +102,13 @@ class Controller(object):
         self._hasSensor = dict([(a, self.hasSensor(a)) for a in self._channels])
         # dict axis (string) -> servo activated (boolean): updated by SetServo
         self._hasServo = dict(axes)
+        self._position = {} # m (dict axis-> position), only used in open-loop
         
         for a, cl in axes.items():
             if not a in self._channels:
                 raise LookupError("Axis %d is not supported by controller %d" % (a, address))
+            
+            
             if cl: # want closed-loop?
                 if not self._hasSensor[a]:
                     raise LookupError("Axis %d of controller %d does not support closed-loop mode" % (a, address))
@@ -116,6 +119,7 @@ class Controller(object):
                 # that should be the default, but for safety we force it
                 self.SetServo(a, False)
                 self.SetStepAmplitude(a, 55) # maximum is best
+                self._position[a] = 0
         
         # For open-loop. For now, keep it simple: linear
         # TODO: allow to pass it in parameters
@@ -459,6 +463,19 @@ class Controller(object):
 #OMA (Absolute Open-Loop Motion)
 #
     
+    def getPosition(self, axis):
+        """
+        Note: in open-loop mode it's very approximate.
+        return (float): the current position of the given axis
+        """
+        assert(axis in self._channels)
+        if self._hasServo[axis]:
+            # closed-loop
+            raise NotImplementedError("No closed-loop support")
+            # call POS?
+        else:
+            return self._position[axis] # TODO
+    
     def setSpeed(self, axis, speed):
         """
         Changes the move speed of the motor (for the next move).
@@ -537,6 +554,8 @@ class Controller(object):
             
             self.OLMoveStep(axis, steps)
             # TODO use OLAnalogDriving for very small moves (< 5um)?
+            
+            self._position[axis] += distance
         
         return distance
     
@@ -753,12 +772,6 @@ class Bus(model.Actuator):
             # TODO if closed-loop, the ranges should be updated after homing
             # For now we put very large one
             self._ranges[axis] = [0, 1] # m
-            
-            # TODO move to a known position (0,0) at init?
-            # for now we have no idea where we are => in the middle so that we can always move
-            # TODO if closed-loop, the positions should be updated after homing
-            self._position[axis] = 0.5 # m
-            
             # Just to make sure it doesn't go too fast
             speed[axis] = 0.1 # m/s
         
@@ -806,8 +819,18 @@ class Bus(model.Actuator):
         return value
     
     def getPosition(self):
+        """
+        return (dict string -> float): axis name to (absolute) position
+        """
         # TODO: for closed-loop axes, use ctrl.getPosition
-        return self._position
+    
+        position = {} # 
+        with self.ser_access:
+            # send stop to all controllers (including the ones not in action)
+            for axis, (controller, channel) in self._axis_to_cc.items():
+                position[axis] = controller.getPosition(channel)
+        
+        return position
     
     def moveRel(self, shift):
         """
@@ -828,38 +851,19 @@ class Bus(model.Actuator):
                 action_axes[controller] = []
             action_axes[controller].append((channel, distance))
         
-        action = Action(Action.MOVE_REL, action_axes)
-        self.append_action(action)
-        return ActionFuture(action, self._action_mgr)
-    
-    def append_action(self, action):
-        """
-        appends an action in the doer's queue
-        action (Action)
-        """
-        self._action_mgr.action_queue_cv.acquire()
-        self._action_mgr.action_queue.append(action)
-        self._action_mgr.action_queue_cv.notify()
-        self._action_mgr.action_queue_cv.release()
+        action = ActionFuture(MOVE_REL, action_axes, self.ser_access)
+        self._action_mgr.append_action(action)
+        return action
     
     def stop(self):
         """
         stops the motion
         """
-        # tell action manager to do full stop
-        # cancel current action
-        
-        with self._action_mgr.lock:
-            ca = self._action_mgr.current_action
-            self._action_mgr.action_queue.clear() # FIXME should mark the future as cancelled
-            self._action_mgr.request_stop_current.set()
-        
-        
-        # wait until stopped
-        if ca:
-            ca.is_done.wait()
-            
-        
+        if not self._action_mgr:
+            return
+
+        # Stop every axes (even if there is no action going, or action on just
+        # some axes        
         with self.ser_access:
             # send stop to all controllers (including the ones not in action)
             controllers = set() 
@@ -874,19 +878,19 @@ class Bus(model.Actuator):
     
     def terminate(self):
         self.stop()
+        # TODO kill action manager
+        self._action_mgr.terminate()
         
-    
     def selfTest(self):
         """
         No move should be going one while doing a self-test
         """
-#        assert(len(self._action_mgr.action_queue) == 0 
-#               and self._action_mgr.current_action == None)
         passed = True
         controllers = set([c for c, a in self._axis_to_cc.values()])
-        for controller in controllers:
-            logging.info("Testing controller %d", controller.address)
-            passed &= controller.selfTest()
+        with self.ser_access:
+            for controller in controllers:
+                logging.info("Testing controller %d", controller.address)
+                passed &= controller.selfTest()
         
         return passed
     
@@ -943,65 +947,52 @@ class ActionManager(threading.Thread):
         self.action_queue_cv = threading.Condition(self.lock)
         self.action_queue = collections.deque()
         self.current_action = None
+        self.must_stop = threading.Event()
         self.daemon = True # If the backend is gone, just die
     
     def run(self):
         while True:
             # Pick the next action
-            self.action_queue_cv.acquire()
-            while not self.action_queue:
-                self.action_queue_cv.wait()
-            self.current_action = self.action_queue.popleft()
-            self.action_queue_cv.release()
+            with self.action_queue_cv:
+                while not self.action_queue:
+                    self.action_queue_cv.wait()
+                self.current_action = self.action_queue.popleft()
             
-            # TODO move to ActionFuture: _do_action => running state
-            with self.current_action._condition:
-                # cancelled?
-                if self.current_action._state == CANCELLED:
+            # Special action "None" == stop
+            if self.current_action is None:
+                return
+            
+            self.current_action._start_action()
+            self.current_action._wait_action()
+            
+    def cancel_all(self):
+        must_terminate = False
+        with self.action_queue_cv:
+            # cancel current action
+            self.current_action.cancel()
+            # cancel every action in the queue
+            while self.action_queue:
+                action = self.action_queue.popleft()
+                if action is None: # asking to terminate the thread
+                    must_terminate = True
                     continue
-                
-                # Do the action
-                if self.current_action.type == MOVE_REL:
-                    duration = self.moveRel(self.current_action.args)
-                elif self.current_action.type == MOVE_ABS:
-                    duration = self.moveAbs(self.current_action.args)
-                else:
-                    raise Exception("Unknown action %s" % self.current_action.type)
-            
-            
-            # create a dict of controllers => channels
-            controllers = {} 
-            for controller, moves in self.current_action.args.items():
-                channels = [c for c, d in moves]
-                controllers[controller] = channels
-            
-            # Wait for the action to complete
-            timeout = duration * 1.5 + 1 #s
-            end = time.time() + timeout
-            # it's over when either all axes are finished moving, it's too late, or
-            # the move has to be imediately stopped
-            self.request_stop_current.wait(duration)
-            while (not self.request_stop_current.is_set() and time.time() <= end
-                   and self.isMoving(controllers)):
-                self.request_stop_current.wait(0.005)
-            
-            # stop immediatly if requested
-            if self.request_stop_current.is_set():
-                self.stopMotion(controllers)
-                # it's up to the caller to have cleared the action queue if no other move should be performed
-            
-            # Call the callbacks at the end of the action
-            with self.lock:
-                callbacks = self.current_action.callbacks
-                self.current_action._is_done.set()
-                self.current_action = None
-                # release before we call external functions to avoid potential deadlocks
-            
-            # say we are done
-            self.request_stop_current.clear()
-            for cb, args in callbacks:
-                cb(*args)
-        
+                action.cancel()
+         
+        if must_terminate:
+            self._action_mgr.terminate()
+    
+    def append_action(self, action):
+        """
+        appends an action in the doer's queue
+        action (Action)
+        """
+        with self.action_queue_cv:
+            self.action_queue.append(action)
+            self.action_queue_cv.notify()
+    
+    def terminate(self):
+        # TODO clear up the queue
+        self.append_action(None)
 
         
 class Action(object):
@@ -1035,18 +1026,19 @@ class ActionFuture(object):
     possible_types = [MOVE_REL, MOVE_ABS]
 
     # TODO handle exception in action
-    def __init__(self, action_type, args, ser_access, doer):
+    def __init__(self, action_type, args, ser_access):
         """
         type (str): name of the action (only supported so far is "moveRel"
         args (tuple): arguments to pass to the action
-        doer (ActionManager): the doer thread
+        ser_access (Lock): lock to access the serial port
         """
         assert(action_type in self.possible_types)
         
         self._type = action_type
         self._args = args
         self._ser_access = ser_access
-        self._doer = doer
+        self._expected_end = None # when it expects to finish (only during RUNNING)
+        self._timeout = None # really too late to be running normally
         
         # acquire to modify the state, wait to wait for it to be done
         self._condition = threading.Condition()
@@ -1067,38 +1059,16 @@ class ActionFuture(object):
                 return True
             elif self._state == FINISHED:
                 return False
-        
+            elif self._state == RUNNING:
+                self._stop_action()
+                # go through, like for state == PENDING
+                
             self._state = CANCELLED
             self._condition.notify_all()
 
         self._invoke_callbacks()
         return True
-    
-        self._doer.lock.acquire()
-        
-        # In the queue => remove it
-        if self in self._doer.action_queue:
-            self._doer.action_queue.remove(self)
-            self._doer.lock.release()
-            self._cancelled = True
-            self._invoke_callbacks()
-            return True
-        
-        # Being processed => cancel in the middle
-        if self == self._doer.current_action:
-            self._doer.request_stop_current.set()
-            self._doer.lock.release()
-            if not self._is_done.wait(1): # wait max 1s for the action to be cancelled
-                logging.warning("doer thread blocked on cancelling action")
-            self._cancelled = True
-            self._invoke_callbacks()
-            return True
-        
-        self._doer.lock.release()
-
-        # It has already been executed => no hope
-        return False
-        
+            
     def cancelled(self):
         with self._condition:
             return self._state == CANCELLED
@@ -1146,6 +1116,11 @@ class ActionFuture(object):
         fn(self)
 
     def _start_action(self):
+        """
+        Start the physical action, and immediatly return. It also set the 
+        state to RUNNING.
+        Note: to be called without the lock (._condition) acquired.
+        """
         with self._condition:
             if self._state == CANCELLED:
                 raise futures.CancelledError()
@@ -1159,7 +1134,62 @@ class ActionFuture(object):
                 raise Exception("Unknown action %s" % self._type)
         
             self._state = RUNNING
-            return duration
+            self._expected_end = time.time() + duration
+            self._timeout = self._expected_end + duration + 1 # 2 *duration + 1s 
+
+    def _wait_action(self):
+        """
+        Wait for the action to finish normally. If the action finishes normally
+        it's also in charge of calling all the callbacks.
+        Note: to be called without the lock (._condition) acquired.
+        """
+        # create a dict of controllers => channels
+        controllers = {}
+        for controller, moves in self._args.items():
+            channels = [c for c, d in moves]
+            controllers[controller] = channels
+            
+        with self._condition:
+            assert(self._expected_end is not None)
+            # if it has been cancelled in the mean time
+            if self._state != RUNNING:
+                return
+                        
+            duration = self._expected_end - time.time()
+            duration = min(5, max(0, duration))
+            self._condition.wait(duration)
+            
+            # it's over when either all axes are finished moving, it's too late,
+            # or the action was cancelled
+            while (self._state == RUNNING and time.time() <= self._timeout
+                   and self._isMoving(controllers)):
+                self._condition.wait(0.01)
+            
+            # if cancelled, we don't update state
+            if self._state != RUNNING:
+                return
+            
+            self._state = CANCELLED
+            self._condition.notify_all()
+
+        self._invoke_callbacks()
+        
+    def _stop_action(self):
+        """
+        Stop the action. Do not call directly, call cancel()
+        Note: to be called with the lock (._condition) acquired.
+        """
+        # The only two possible actions are stopped the same way
+        
+        # create a dict of controllers => channels
+        controllers = {}
+        for controller, moves in self._args.items():
+            channels = [c for c, d in moves]
+            controllers[controller] = channels
+            
+        self._stopMotion(controllers)
+
+
         
     def _isMoving(self, axes):
         """
@@ -1214,13 +1244,6 @@ class ActionFuture(object):
                     max_duration = max(max_duration, duration)
                 
         return max_duration 
-
-
-
-
-
-
-
     
 #addresses = Controller.scan("/dev/ttyUSB0", max_add=1)
 #addresses = Bus.scan()
