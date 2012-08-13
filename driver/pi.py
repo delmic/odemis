@@ -439,7 +439,8 @@ class PIRedStone(object):
     def moveRel(self, axis, distance):
         """
         Move on a given axis for a given pulse length, will repeat the steps if
-        it requires more than one step.
+        it requires more than one step. It's asynchronous: the method might return
+        before the move is complete.
         axis (int 0 or 1): the output channel
         distance (float): the distance of move in m (can be negative)
         returns (float): approximate distance actually moved

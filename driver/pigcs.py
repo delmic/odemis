@@ -97,6 +97,8 @@ class Controller(object):
         self._hasLimit = dict([(a, self.hasLimitSwitches(a)) for a in self._channels])
         # dict axis -> boolean
         self._hasSensor = dict([(a, self.hasSensor(a)) for a in self._channels])
+        # dict axis (string) -> servo activated (boolean): updated by SetServo
+        self._hasServo = dict(axes)
         
         for a, cl in axes.items():
             if not a in self._channels:
@@ -111,12 +113,17 @@ class Controller(object):
                 # that should be the default, but for safety we force it
                 self.SetServo(a, False)
         
+        # For open-loop. For now, keep it simple: linear
+        # TODO: allow to pass it in parameters
+        self.move_calibration = 1e5 # step/m 
+        self.min_stepsize = 0.01 # step, under this, no move at all
         
         # actually set just before a move
         self._speed_max = 10 # m/s
         self._speed = dict([(a, 1.0) for a in axes]) # m/s
         self._accel_max = 100 # m/s²
-        self._accel = dict([(a, 10.0) for a in axes]) # m/s² (both acceleration and deceleration) 
+        self._accel = dict([(a, 10.0) for a in axes]) # m/s² (both acceleration and deceleration)
+        self._prev_speed_accel = (dict(), dict()) 
     
     def _sendOrderCommand(self, com):
         """
@@ -334,6 +341,7 @@ class Controller(object):
         else:
             state = 0
         self._sendOrderCommand("SVO %d %d\n" % (axis, state))
+        self._hasServo[axis] = activated
 
     # Functions for relative move in open-loop (no sensor)
     def OLMoveStep(self, axis, steps):
@@ -401,7 +409,7 @@ class Controller(object):
         """
         Moves an axis for a number of steps. Can be done only with servo off.
         axis (1<int<16): axis number
-        value (0<float): decelaration in step-cycles/s. Default is 2000 
+        value (0<float): deceleration in step-cycles/s. Default is 2000 
         """
         #ODC (Set Open-Loop Deceleration)
         assert(axis in self._channels)
@@ -437,14 +445,126 @@ class Controller(object):
         """
         Changes the move speed of the motor (for the next move).
         Note: in open-loop mode, it's very approximate.
-        speed (0<float<5): speed in m/s.
-        axis (int 0 or 1): axis to pic  
+        speed (0<float<10): speed in m/s.
+        axis (1<=int<=16): the axis
         """
         assert((0 < speed) and (speed < self._speed_max))
         assert(axis in self._channels)
         self._speed[axis] = speed
+
+    def setAccel(self, axis, accel):
+        """
+        Changes the move acceleration (and deceleration) of the motor (for the next move).
+        Note: in open-loop mode, it's very approximate.
+        accel (0<float<100): acceleration in m/s².
+        axis (1<=int<=16): the axis
+        """
+        assert((0 < accel) and (accel < self._accel_max))
+        assert(axis in self._channels)
+        self._accel[axis] = accel
+    
+    def _updateSpeedAccel(self, axis):
+        """
+        Update the speed and acceleration values for the given axis. 
+        It's only done if necessary, and only for the current closed- or open-
+        loop mode.
+        axis (1<=int<=16): the axis
+        """
+        prev_speed = self._prev_speed_accel[0].get(axis, None)
+        new_speed = self._speed[axis]
+        if prev_speed != new_speed:
+            if self._hasServo[axis]:
+                raise NotImplementedError("No closed-loop support")
+            else:
+                steps_ps = self.convertSpeedToDevice(new_speed)
+                self.SetOLVelocity(axis, steps_ps)
+            self._prev_speed_accel[0][axis] = new_speed
+        
+        prev_accel = self._prev_speed_accel[1].get(axis, None)
+        new_accel = self._accel[axis]
+        if prev_accel != new_accel:
+            if self._hasServo[axis]:
+                raise NotImplementedError("No closed-loop support")
+            else:
+                steps_pss = self.convertAccelToDevice(new_accel)
+                self.SetOLAcceleration(axis, steps_pss)
+                self.SetOLDeceleration(axis, steps_pss)
+            self._prev_speed_accel[1][axis] = new_accel       
+        
+    def moveRel(self, axis, distance):
+        """
+        Move on a given axis for a given pulse length, will repeat the steps if
+        it requires more than one step. It's asynchronous: the method might return
+        before the move is complete.
+        axis (1<=int<=16): the axis
+        distance (float): the distance of move in m (can be negative)
+        returns (float): approximate distance actually moved
+        """
+        assert(axis in self._channels)
+        
+        self._updateSpeedAccel(axis)
+        
+        # open-loop and closed-loop use different commands
+        if self._hasServo[axis]:
+            # closed-loop
+            raise NotImplementedError("No closed-loop support")
+            # call MVR
+        else:
+            steps = self.convertDistanceToDevice(distance)
+            if steps == 0: # if distance is too small, report it
+                return 0
+            
+            self.OLMoveStep(axis, steps)
+            # TODO use OLAnalogDriving for very small moves (< 5um)?
+        
+        return distance
     
     
+    def convertDistanceToDevice(self, distance):
+        """
+        converts meters to the unit for this device (steps) in open-loop.
+        distance (float): meters (can be negative)
+        return (float): number of steps, <0 if going opposite direction
+            0 if too small to move.
+        """
+        steps = distance * self.move_calibration
+        if abs(steps) < self.min_stepsize:
+            return 0
+        
+        return steps
+    
+    def convertSpeedToDevice(self, speed):
+        """
+        converts meters/s to the unit for this device (steps/s) in open-loop.
+        distance (float): meters/s (can be negative)
+        return (float): number of steps/s, <0 if going opposite direction
+        """
+        steps_ps = speed * self.move_calibration
+        
+        return steps_ps
+    
+    # in linear approximation, it's the same
+    convertAccelToDevice = convertSpeedToDevice
+    
+    
+    def isMoving(self, axes=None):
+        """
+        Indicate whether the motors are moving. 
+        axes (None or set of int): axes to check whether for move, or all if None
+        return (boolean): True if at least one of the axes is moving, False otherwise
+        """
+        if axes is None:
+            axes = self._channels
+        else:
+            assert axes.issubset(self._channels)
+        
+        return not axes.isdisjoint(self.GetMotionStatus())
+    
+    def stopMotion(self):
+        """
+        Stop the motion on all axes immediately
+        """
+        self.Stop()
     
     def waitEndMotion(self, axes=None):
         """
@@ -457,12 +577,7 @@ class Controller(object):
         timeout = 5 #s
         end = time.time() + timeout
         
-        if axes is None:
-            axes = self._channels
-        else:
-            assert len(self._channels - axes) == 0
-        
-        while axes & self.GetMotionStatus():
+        while self.isMoving(axes):
             if time.time() <= end:
                 raise IOError("Timeout while waiting for end of motion")
             time.sleep(0.005)
@@ -592,8 +707,6 @@ class Bus(model.Actuator):
             
             # Just to make sure it doesn't go too fast
             speed[axis] = 0.1 # m/s
-        
-        
         
         # min speed = don't be crazy slow. max speed from hardware spec
         self.speed = model.MultiSpeedVA(speed, range=[10e-6, 0.5], unit="m/s",
