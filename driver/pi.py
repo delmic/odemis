@@ -188,7 +188,7 @@ class PIRedStone(object):
             
         if not char:
             if not self.try_recover:
-                raise IOError("PI controller %d timeout.")
+                raise IOError("PI controller %d timeout." % self.address)
                 
             success = self.recoverTimeout()
             if success:

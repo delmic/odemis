@@ -85,6 +85,7 @@ class Controller(object):
         """
         self.serial = ser
         self.address = address
+        self._try_recover = False # for now, fully raw access
         # did the user asked for a raw access only?
         if address is None:
             return
@@ -121,6 +122,8 @@ class Controller(object):
                 self.SetStepAmplitude(a, 55) # maximum is best
                 self._position[a] = 0
         
+        self._try_recover = True # full feature only after init 
+        
         # For open-loop. For now, keep it simple: linear
         # TODO: allow to pass it in parameters
         self.move_calibration = 1e5 # step/m 
@@ -143,14 +146,12 @@ class Controller(object):
         logging.debug("Sending: %s", full_com.encode('string_escape'))
         self.serial.write(full_com)
         
-    def _sendQueryCommand(self, com):
+    def _sendQueryCommandRaw(self, com):
         """
-        Send a command and return its report (first line sent)
+        Send a command and return its report (raw)
         com (string): the command to send (without address prefix but with \n)
-        return (string or list of strings): the report without prefix 
-           (e.g.,"0 1") nor newline. If answer is multiline: returns a list of each line 
+        return (list of strings): the complete report with each line separated and without \n 
         """
-        assert(len(com) <= 100) # commands can be quite long (with floats)
         full_com = "%d %s" % (self.address, com)
         logging.debug("Sending: %s", full_com.encode('string_escape'))
         self.serial.write(full_com)
@@ -160,9 +161,8 @@ class Controller(object):
         lines = []
         while char:
             if char == "\n":
-                if len(line) > 0 and line[-1] == " ":
-                    # multiline
-                    lines.append(line[:-1])# don't include the space
+                if len(line) > 0 and line[-1] == " ": # multiline: " \n"
+                    lines.append(line[:-1]) # don't include the space
                     line = ""
                 else:
                     # full end
@@ -174,21 +174,76 @@ class Controller(object):
             char = self.serial.read()
             
         if not char:
-            # TODO try to recover (RBT) and resend the command
-            raise IOError("controller %d timeout, not recovered." % self.address)
+            raise IOError("Controller %d timeout." % self.address)
         
-        assert len(lines) > 0
+        return lines
+    
+    
+    def _sendQueryCommand(self, com):
+        """
+        Send a command and return its report
+        com (string): the command to send (without address prefix but with \n)
+        return (string or list of strings): the report without prefix 
+           (e.g.,"0 1") nor newline. If answer is multiline: returns a list of each line 
+        """
+        assert(len(com) <= 100) # commands can be quite long (with floats)
+        try:
+            lines = self._sendQueryCommandRaw(com)
+        except IOError as ex:
+            if not self._try_recover:
+                raise
             
-        logging.debug("Receive: %s", "\n".join(lines).encode('string_escape'))
+            success = self.recoverTimeout()
+            if success:
+                logging.warning("Controller %d timeout after '%s', but recovered.", self.address, com)
+                # try one more time
+                lines = self._sendQueryCommandRaw(com)
+            else:
+                raise IOError("Controller %d timeout after '%s', not recovered." % (self.address, com))
+    
+        assert len(lines) > 0
+
+        logging.debug("Received: %s", "\n".join(lines).encode('string_escape'))
         prefix = "0 %d " % self.address
         if not lines[0].startswith(prefix):
-            raise IOError("Report prefix unexpected after '%s': '%s'." % (full_com, lines[0]))
+            raise IOError("Report prefix unexpected after '%s': '%s'." % (com, lines[0]))
         lines[0] = lines[0][len(prefix):]
 
         if len(lines) == 1:
             return lines[0]
         else:
             return lines
+    
+    def recoverTimeout(self):
+        """
+        Try to recover from error in the controller state
+        return (boolean): True if it recovered
+        """
+        # Give it some time to recover from whatever
+        time.sleep(0.5)
+        
+        # It appears to make the controller more comfortable...
+        self._sendOrderCommand("ERR?\n")
+        char = self.serial.read()
+        while char:
+            if char == "\n":
+                # TOOD Check if error == 307 or 308?
+                return True
+            char = self.serial.read()
+
+        # We timed out again, try harder: reboot
+        self.Reboot()
+        self._sendOrderCommand("ERR?\n")
+        char = " "
+        while char:
+            if char == "\n":
+                #TODO reset all the values (SetServo...)
+                self._prev_speed_accel = (dict(), dict())
+                return True
+            char = self.serial.read()
+
+        # that's getting pretty hopeless 
+        return False
     
     # The following are function directly mapping to the controller commands.
     # In general it should not be need to use them directly from outside this class
@@ -285,7 +340,6 @@ class Controller(object):
             bitmap = bitmap >> 1
         return mv_axes
 
-    
     def GetStatus(self):
         #SRG? = "\x04" (Query Status Register Value)
         #SRG? 1 1
@@ -298,8 +352,19 @@ class Controller(object):
         # TODO change to constants
         return value
     
-    # "\x07" (Request Controller Ready Status)
-
+    def IsReady(self):
+        """
+        return (boolean): True if ready for new command
+        """
+        # "\x07" (Request Controller Ready Status)
+        # returns 177 if ready, 178 if not
+        ans = self._sendQueryCommand("\x07")
+        if ans == "\xb1":
+            return True
+        elif ans == "\xb2":
+            return False
+        
+        logging.warning("Controller %d replied unknown ready status '%s'", self.address, ans)
     
     def GetErrorNum(self):
         """
@@ -326,12 +391,38 @@ class Controller(object):
         assert(axis in self._channels)
         self._sendOrderCommand("RNP %d\n" % axis)
 
+    def Halt(self, axis=None):
+        """
+        Stop motion with deceleration
+        Note: see Stop
+        axis (1<int<16): axis number, 
+        """
+        #HLT (Stop All Axes): immediate stop (high deceleration != HLT)
+        # set error code to 10
+        if axis is None:
+            self._sendOrderCommand("HLT\n")
+        else:
+            assert(axis in self._channels)
+            self._sendOrderCommand("HLT %d\n" % axis)
+#        time.sleep(1) # give it some time to stop before it's accessible again
+
+        # need to recover from the "error", otherwise nothing works
+        error = self.GetErrorNum()
+        if error != 10: #PI_CNTR_STOP
+            logging.warning("Stopped controller %d, but error code is %d instead of 10", self.address, error) 
+
     def Stop(self):
         """
         Stop immediately motion on all axes
         """
-        #STP = "\x24" (Stop All Axes): immediate stop (high deceleration != HLT)
-        self._sendOrderCommand("\x24")
+        #STP = "\x18" (Stop All Axes): immediate stop (high deceleration != HLT)
+        # set error code to 10
+        self._sendOrderCommand("\x18")
+
+        # need to recover from the "error", otherwise nothing works
+        error = self.GetErrorNum()
+        if error != 10: #PI_CNTR_STOP
+            logging.warning("Stopped controller %d, but error code is %d instead of 10", self.address, error) 
 
     def SetServo(self, axis, activated):
         """
@@ -683,19 +774,6 @@ class Controller(object):
                     logging.info("Found controller %d with no axis", i)
                 else:
                     present[i] = axes
-#                version = ctrl.GetIdentification()
-#                print ctrl.GetAvailableCommands()
-#                print ctrl.GetAvailableParameters()
-#                print ctrl.GetRecoderConfig()
-#                print ctrl.GetMotionStatus()
-#                print ctrl.GetStatus()
-#                new_ctrl = Controller(ser, i)
-#                print new_ctrl._hasLimit
-#                print new_ctrl._hasSensor
-#                
-#                print new_ctrl.SetServo(1, False)
-#                print new_ctrl.GetErrorNum()
-#                print new_ctrl.GetStatus()
             except IOError:
                 pass
         
@@ -791,7 +869,7 @@ class Bus(model.Actuator):
         # to acquire before sending anything on the serial port
         self.ser_access = threading.Lock()
         
-        self._action_mgr = ActionManager(self.ser_access)
+        self._action_mgr = ActionManager()
         self._action_mgr.start()
     
     def getSerialDriver(self, name):
@@ -822,8 +900,6 @@ class Bus(model.Actuator):
         """
         return (dict string -> float): axis name to (absolute) position
         """
-        # TODO: for closed-loop axes, use ctrl.getPosition
-    
         position = {} # 
         with self.ser_access:
             # send stop to all controllers (including the ones not in action)
@@ -859,14 +935,14 @@ class Bus(model.Actuator):
         """
         stops the motion
         """
-        if not self._action_mgr:
-            return
+        if self._action_mgr:
+            self._action_mgr.cancel_all() 
 
         # Stop every axes (even if there is no action going, or action on just
         # some axes        
         with self.ser_access:
             # send stop to all controllers (including the ones not in action)
-            controllers = set() 
+            controllers = set()
             for axis, (controller, channel) in self._axis_to_cc.items():
                 if controller not in controllers:
                     controller.stopMotion()
@@ -878,8 +954,10 @@ class Bus(model.Actuator):
     
     def terminate(self):
         self.stop()
-        # TODO kill action manager
-        self._action_mgr.terminate()
+        
+        if self._action_mgr:
+            self._action_mgr.terminate()
+            self._action_mgr = None
         
     def selfTest(self):
         """
@@ -940,15 +1018,13 @@ class ActionManager(threading.Thread):
     For each action in the queue: performs and wait until the action is finished
     At the end of the action, call all the callbacks
     """
-    def __init__(self, ser_access, name="PIGCS action manager"):
+    def __init__(self, name="PIGCS action manager"):
         threading.Thread.__init__(self, name=name)
+        self.daemon = True # If the backend is gone, just die
 
-        self.lock = threading.Lock() # used to synchronise action_queue and current_action
-        self.action_queue_cv = threading.Condition(self.lock)
+        self.action_queue_cv = threading.Condition()
         self.action_queue = collections.deque()
         self.current_action = None
-        self.must_stop = threading.Event()
-        self.daemon = True # If the backend is gone, just die
     
     def run(self):
         while True:
@@ -969,7 +1045,9 @@ class ActionManager(threading.Thread):
         must_terminate = False
         with self.action_queue_cv:
             # cancel current action
-            self.current_action.cancel()
+            if self.current_action:
+                self.current_action.cancel()
+                
             # cancel every action in the queue
             while self.action_queue:
                 action = self.action_queue.popleft()
@@ -979,7 +1057,7 @@ class ActionManager(threading.Thread):
                 action.cancel()
          
         if must_terminate:
-            self._action_mgr.terminate()
+            self.append_action(None)
     
     def append_action(self, action):
         """
@@ -991,20 +1069,10 @@ class ActionManager(threading.Thread):
             self.action_queue_cv.notify()
     
     def terminate(self):
-        # TODO clear up the queue
+        """
+        Ask the action manager to terminate (once all the queued actions are done)
+        """
         self.append_action(None)
-
-        
-class Action(object):
-    """
-    A container class representing an action for a RedStone controller
-    """
-    def __init__(self,  callbacks=None):
-        """
-
-        callbacks (set of 2-tuples): set of methods to call when the action is over 
-           (weakref to method, tuple arg to method)
-        """
 
 
 MOVE_REL = "moveRel"
@@ -1246,9 +1314,21 @@ class ActionFuture(object):
         return max_duration 
     
 #addresses = Controller.scan("/dev/ttyUSB0", max_add=1)
+
 #addresses = Bus.scan()
 #print addresses
+
 stage = Bus("test", "stage", children=None, port="/dev/ttyUSB0", axes={"x":(1,1,False)})
 print stage.swVersion
 print stage.selfTest()
+stage.stop()
 
+#ser = Controller.openSerialPort("/dev/ttyUSB0")
+#ctrl = Controller(ser, 1, {1: False})
+#print ctrl.GetIdentification()
+#print "ready=", ctrl.IsReady()
+#ctrl._sendOrderCommand("\x24") # known to fail
+##ctrl._sendOrderCommand("RBT\n")
+#print "ready=", ctrl.IsReady()
+##ctrl.Halt(1)
+#print ctrl.GetErrorNum()
