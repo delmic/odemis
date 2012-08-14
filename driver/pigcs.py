@@ -1332,8 +1332,8 @@ class ActionFuture(object):
                 
         return max_duration 
     
-logging.getLogger().setLevel(logging.DEBUG)
-#addresses = Controller.scan("/dev/ttyUSB0", max_add=1)
+
+
 
 #addresses = Bus.scan()
 #print addresses
@@ -1347,31 +1347,4 @@ logging.getLogger().setLevel(logging.DEBUG)
 #print move.running()
 #print move.result()
 #stage.stop()
-
-#ser = Controller.openSerialPort("/dev/ttyUSB0")
-#ctrl = Controller(ser, 1, {1: False})
-#print ctrl.GetIdentification()
-#print "ready=", ctrl.IsReady()
-#ctrl._sendOrderCommand("\x24") # known to fail
-#print "ready=", ctrl.IsReady()
-#print ctrl.GetErrorNum()
-
-ser = Controller.openSerialPort("/dev/ttyUSB0")
-ctrl = Controller(ser, 1, {1: False})
-print ctrl.GetIdentification()
-#print ctrl.GetParameter(1, 0xa), ctrl.GetParameter(1, 0x4a), ctrl.GetParameter(1, 0x4b) 
-#print ctrl.GetParameter(1, 0x7000204), ctrl.GetParameter(1, 0x7000205), ctrl.GetParameter(1, 0x7000206) 
-#print ctrl.GetParameter(1, 0xe), ctrl.GetParameter(1, 0xf), ctrl.GetParameter(1, 0x7000601) 
-
-#print ctrl.moveRel(1, 0.01)
-ctrl._updateSpeedAccel(1)
-print ctrl.GetErrorNum()
-#print ctrl.isMoving(set([1]))
-ctrl._sendOrderCommand("OSM 1 1000.0\n")
-print ctrl.GetErrorNum()
-print ctrl.GetStatus()
-print ctrl.isMoving(set([1]))
-print ctrl.GetErrorNum()
-time.sleep(1)
-print ctrl.isMoving(set([1]))
 
