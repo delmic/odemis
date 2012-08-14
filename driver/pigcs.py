@@ -130,10 +130,10 @@ class Controller(object):
         self.min_stepsize = 0.01 # step, under this, no move at all
         
         # actually set just before a move
-        self._speed_max = 10 # m/s
-        self._speed = dict([(a, 1.0) for a in axes]) # m/s
-        self._accel_max = 100 # m/s²
-        self._accel = dict([(a, 10.0) for a in axes]) # m/s² (both acceleration and deceleration)
+        self._speed_max = 0.1 # m/s
+        self._speed = dict([(a, 0.002) for a in axes]) # m/s
+        self._accel_max = 1 # m/s²
+        self._accel = dict([(a, 0.02) for a in axes]) # m/s² (both acceleration and deceleration)
         self._prev_speed_accel = (dict(), dict()) 
     
     def _sendOrderCommand(self, com):
@@ -195,11 +195,13 @@ class Controller(object):
             
             success = self.recoverTimeout()
             if success:
-                logging.warning("Controller %d timeout after '%s', but recovered.", self.address, com)
+                logging.warning("Controller %d timeout after '%s', but recovered.",
+                                self.address, com.encode('string_escape'))
                 # try one more time
                 lines = self._sendQueryCommandRaw(com)
             else:
-                raise IOError("Controller %d timeout after '%s', not recovered." % (self.address, com))
+                raise IOError("Controller %d timeout after '%s', not recovered." %
+                              (self.address, com.encode('string_escape')))
     
         assert len(lines) > 0
 
@@ -454,8 +456,7 @@ class Controller(object):
         assert(axis in self._channels)
         if steps == 0:
             return
-        self._sendOrderCommand("OSM %d %f\n" % (axis, steps))
-        
+        self._sendOrderCommand("OSM %d %.5g\n" % (axis, steps))
     
     def SetStepAmplitude(self, axis, amplitude):
         """
@@ -468,7 +469,7 @@ class Controller(object):
         #SSA (Set Step Amplitude) : for nanostepping 
         assert(axis in self._channels)
         assert((0 <= amplitude) and (amplitude <= 55))
-        self._sendOrderCommand("SSA %d %f\n" % (axis, amplitude))
+        self._sendOrderCommand("SSA %d %.5g\n" % (axis, amplitude))
 
     def GetStepAmplitude(self, axis):
         """
@@ -494,7 +495,7 @@ class Controller(object):
         #OAD (Open-Loop Analog Driving): move using analog
         assert(axis in self._channels)
         assert((-55 <= amplitude) and (amplitude <= 55))
-        self._sendOrderCommand("OAD %d %f\n" % (axis, amplitude))        
+        self._sendOrderCommand("OAD %d %.5g\n" % (axis, amplitude))        
 
     def SetOLVelocity(self, axis, velocity):
         """
@@ -505,7 +506,7 @@ class Controller(object):
         #OVL (Set Open-Loop Velocity)
         assert(axis in self._channels)
         assert(velocity > 0)
-        self._sendOrderCommand("OVL %d %f\n" % (axis, velocity))
+        self._sendOrderCommand("OVL %d %.5g\n" % (axis, velocity))
     
     def SetOLAcceleration(self, axis, value):
         """
@@ -516,7 +517,7 @@ class Controller(object):
         #OAC (Set Open-Loop Acceleration)
         assert(axis in self._channels)
         assert(value > 0)
-        self._sendOrderCommand("OVL %d %f\n" % (axis, value))
+        self._sendOrderCommand("OAC %d %.5g\n" % (axis, value))
         
     def SetOLDeceleration(self, axis, value):
         """
@@ -527,7 +528,7 @@ class Controller(object):
         #ODC (Set Open-Loop Deceleration)
         assert(axis in self._channels)
         assert(value > 0)
-        self._sendOrderCommand("OVL %d %f\n" % (axis, value))
+        self._sendOrderCommand("ODC %d %.5g\n" % (axis, value))
 
 #Abs (with sensor = closed-loop):
 #MOV (Set Target Position)
@@ -650,7 +651,6 @@ class Controller(object):
         
         return distance
     
-    
     def convertDistanceToDevice(self, distance):
         """
         converts meters to the unit for this device (steps) in open-loop.
@@ -671,12 +671,10 @@ class Controller(object):
         return (float): number of steps/s, <0 if going opposite direction
         """
         steps_ps = speed * self.move_calibration
-        
         return steps_ps
     
     # in linear approximation, it's the same
     convertAccelToDevice = convertSpeedToDevice
-    
     
     def isMoving(self, axes=None):
         """
@@ -851,7 +849,7 @@ class Bus(model.Actuator):
             # For now we put very large one
             self._ranges[axis] = [0, 1] # m
             # Just to make sure it doesn't go too fast
-            speed[axis] = 0.1 # m/s
+            speed[axis] = 0.001 # m/s
         
         # min speed = don't be crazy slow. max speed from hardware spec
         self.speed = model.MultiSpeedVA(speed, range=[10e-6, 0.5], unit="m/s",
@@ -933,7 +931,9 @@ class Bus(model.Actuator):
     
     def stop(self):
         """
-        stops the motion
+        stops the motion on all axes
+        Warning: this might stop the motion even of axes not managed (it stops
+        all the axes of all controller managed).
         """
         if self._action_mgr:
             self._action_mgr.cancel_all() 
@@ -1007,8 +1007,6 @@ class Bus(model.Actuator):
                              {"port": p, "axes": arg}))
         
         return found
-
-
 
 
 class ActionManager(threading.Thread):
@@ -1224,20 +1222,23 @@ class ActionFuture(object):
                 return
                         
             duration = self._expected_end - time.time()
-            duration = min(5, max(0, duration))
+            duration = min(15, max(0, duration))
+            logging.debug("Waiting %f s for the move to finish", duration)
+            print time.time()
             self._condition.wait(duration)
             
             # it's over when either all axes are finished moving, it's too late,
             # or the action was cancelled
             while (self._state == RUNNING and time.time() <= self._timeout
                    and self._isMoving(controllers)):
+                print time.time()
                 self._condition.wait(0.01)
             
             # if cancelled, we don't update state
             if self._state != RUNNING:
                 return
             
-            self._state = CANCELLED
+            self._state = FINISHED
             self._condition.notify_all()
 
         self._invoke_callbacks()
@@ -1257,8 +1258,6 @@ class ActionFuture(object):
             
         self._stopMotion(controllers)
 
-
-        
     def _isMoving(self, axes):
         """
         axes (dict: Controller -> list (int)): controller to channel which must be check for move
@@ -1292,7 +1291,7 @@ class ActionFuture(object):
             for controller, channels in axes.items():
                 for channel, distance in channels:
                     actual_dist = controller.moveRel(channel, distance)
-                    duration = controller.getSpeed(channel) * actual_dist
+                    duration = actual_dist / controller.getSpeed(channel) 
                     max_duration = max(max_duration, duration)
                 
         return max_duration
@@ -1308,11 +1307,12 @@ class ActionFuture(object):
             for controller, channels in axes.items():
                 for channel, distance in channels:
                     actual_dist = controller.moveAbs(channel, distance)
-                    duration = controller.getSpeed(channel) * actual_dist
+                    duration = actual_dist / controller.getSpeed(channel) 
                     max_duration = max(max_duration, duration)
                 
         return max_duration 
     
+logging.getLogger().setLevel(logging.DEBUG)
 #addresses = Controller.scan("/dev/ttyUSB0", max_add=1)
 
 #addresses = Bus.scan()
@@ -1321,6 +1321,11 @@ class ActionFuture(object):
 stage = Bus("test", "stage", children=None, port="/dev/ttyUSB0", axes={"x":(1,1,False)})
 print stage.swVersion
 print stage.selfTest()
+move = stage.moveRel({"x": 0.01}) # 10s
+print move.running()
+time.sleep(1)
+print move.running()
+print move.result()
 stage.stop()
 
 #ser = Controller.openSerialPort("/dev/ttyUSB0")
@@ -1328,7 +1333,21 @@ stage.stop()
 #print ctrl.GetIdentification()
 #print "ready=", ctrl.IsReady()
 #ctrl._sendOrderCommand("\x24") # known to fail
-##ctrl._sendOrderCommand("RBT\n")
 #print "ready=", ctrl.IsReady()
-##ctrl.Halt(1)
 #print ctrl.GetErrorNum()
+
+#ser = Controller.openSerialPort("/dev/ttyUSB0")
+#ctrl = Controller(ser, 1, {1: False})
+#print ctrl.GetIdentification()
+##print ctrl.moveRel(1, 0.01)
+#ctrl._updateSpeedAccel(1)
+#print ctrl.GetErrorNum()
+##print ctrl.isMoving(set([1]))
+#ctrl._sendOrderCommand("OSM 1 1000.0\n")
+#print ctrl.GetErrorNum()
+#print ctrl.GetStatus()
+#print ctrl.isMoving(set([1]))
+#print ctrl.GetErrorNum()
+#time.sleep(1)
+#print ctrl.isMoving(set([1]))
+
