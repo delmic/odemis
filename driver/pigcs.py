@@ -124,16 +124,19 @@ class Controller(object):
         
         self._try_recover = True # full feature only after init 
         
-        # For open-loop. For now, keep it simple: linear
+        # For open-loop. For now, keep it simple: linear, using info from manual
         # TODO: allow to pass it in parameters
         self.move_calibration = 1e5 # step/m 
         self.min_stepsize = 0.01 # step, under this, no move at all
         
         # actually set just before a move
-        self._speed_max = 0.1 # m/s
-        self._speed = dict([(a, 0.002) for a in axes]) # m/s
-        self._accel_max = 1 # m/s²
-        self._accel = dict([(a, 0.02) for a in axes]) # m/s² (both acceleration and deceleration)
+        # The max using closed-loop info seem purely arbitrary
+        # (max m/s) = (max step/s) / (step/m)
+        self._speed_max = float(self.GetParameter(1, 0x7000204)) / self.move_calibration # m/s
+        self._speed = dict([(a, self._speed_max/2) for a in axes]) # m/s
+        # (max m/s²) = (max step/s²) / (step/m)
+        self._accel_max = float(self.GetParameter(1, 0x7000205)) / self.move_calibration # m/s²
+        self._accel = dict([(a, self._accel_max/2) for a in axes]) # m/s² (both acceleration and deceleration)
         self._prev_speed_accel = (dict(), dict()) 
     
     def _sendOrderCommand(self, com):
@@ -247,6 +250,7 @@ class Controller(object):
         # that's getting pretty hopeless 
         return False
     
+    
     # The following are function directly mapping to the controller commands.
     # In general it should not be need to use them directly from outside this class
     def GetIdentification(self):
@@ -283,7 +287,21 @@ class Controller(object):
         # first line starts with \x00
         lines = self._sendQueryCommand("HPA?\n")
         lines[0].lstrip("\x00")
-        return lines 
+        return lines
+     
+    def GetParameter(self, axis, param):
+        """
+        axis (1<int<16): axis number
+        param (0<int): parameter id (cf p.35)
+        returns (string): the string representing this parameter 
+        """
+        # SPA? (Get Volatile Memory Parameters)
+        assert((1 <= axis) and (axis <= 16))
+        assert(0 <= param)
+        
+        answer = self._sendQueryCommand("SPA? %d %d\n" % (axis, param))
+        value = answer.split("=")[1]
+        return value
 
     def GetRecoderConfig(self):
         """
@@ -832,6 +850,7 @@ class Bus(model.Actuator):
         # TODO also a rangesRel : min and max of a step 
         self._position = {}
         speed = {}
+        max_speed = 1 # m/s
         for address, channels in controllers.items():
             try:
                 controller = Controller(ser, address, channels)
@@ -850,9 +869,10 @@ class Bus(model.Actuator):
             self._ranges[axis] = [0, 1] # m
             # Just to make sure it doesn't go too fast
             speed[axis] = 0.001 # m/s
+            max_speed = max(max_speed, controller._speed_max)
         
         # min speed = don't be crazy slow. max speed from hardware spec
-        self.speed = model.MultiSpeedVA(speed, range=[10e-6, 0.5], unit="m/s",
+        self.speed = model.MultiSpeedVA(speed, range=[10e-6, 0.1], unit="m/s",
                                         setter=self.setSpeed)
         self.setSpeed(speed)
         
@@ -1318,15 +1338,15 @@ logging.getLogger().setLevel(logging.DEBUG)
 #addresses = Bus.scan()
 #print addresses
 
-stage = Bus("test", "stage", children=None, port="/dev/ttyUSB0", axes={"x":(1,1,False)})
-print stage.swVersion
-print stage.selfTest()
-move = stage.moveRel({"x": 0.01}) # 10s
-print move.running()
-time.sleep(1)
-print move.running()
-print move.result()
-stage.stop()
+#stage = Bus("test", "stage", children=None, port="/dev/ttyUSB0", axes={"x":(1,1,False)})
+#print stage.swVersion
+#print stage.selfTest()
+#move = stage.moveRel({"x": 0.01}) # 10s
+#print move.running()
+#time.sleep(1)
+#print move.running()
+#print move.result()
+#stage.stop()
 
 #ser = Controller.openSerialPort("/dev/ttyUSB0")
 #ctrl = Controller(ser, 1, {1: False})
@@ -1336,18 +1356,22 @@ stage.stop()
 #print "ready=", ctrl.IsReady()
 #print ctrl.GetErrorNum()
 
-#ser = Controller.openSerialPort("/dev/ttyUSB0")
-#ctrl = Controller(ser, 1, {1: False})
-#print ctrl.GetIdentification()
-##print ctrl.moveRel(1, 0.01)
-#ctrl._updateSpeedAccel(1)
-#print ctrl.GetErrorNum()
-##print ctrl.isMoving(set([1]))
-#ctrl._sendOrderCommand("OSM 1 1000.0\n")
-#print ctrl.GetErrorNum()
-#print ctrl.GetStatus()
+ser = Controller.openSerialPort("/dev/ttyUSB0")
+ctrl = Controller(ser, 1, {1: False})
+print ctrl.GetIdentification()
+#print ctrl.GetParameter(1, 0xa), ctrl.GetParameter(1, 0x4a), ctrl.GetParameter(1, 0x4b) 
+#print ctrl.GetParameter(1, 0x7000204), ctrl.GetParameter(1, 0x7000205), ctrl.GetParameter(1, 0x7000206) 
+#print ctrl.GetParameter(1, 0xe), ctrl.GetParameter(1, 0xf), ctrl.GetParameter(1, 0x7000601) 
+
+#print ctrl.moveRel(1, 0.01)
+ctrl._updateSpeedAccel(1)
+print ctrl.GetErrorNum()
 #print ctrl.isMoving(set([1]))
-#print ctrl.GetErrorNum()
-#time.sleep(1)
-#print ctrl.isMoving(set([1]))
+ctrl._sendOrderCommand("OSM 1 1000.0\n")
+print ctrl.GetErrorNum()
+print ctrl.GetStatus()
+print ctrl.isMoving(set([1]))
+print ctrl.GetErrorNum()
+time.sleep(1)
+print ctrl.isMoving(set([1]))
 
