@@ -4,7 +4,7 @@
 Created on 14 Aug 2012
 
 @author: Éric Piel
-Testing class for pi.py and dacontrol.py .
+Testing class for pigcs.py .
 
 Copyright © 2012 Éric Piel, Delmic
 
@@ -49,8 +49,8 @@ class TestController(unittest.TestCase):
     def test_move(self):
         ser = pigcs.Controller.openSerialPort(PORT)
         ctrl = pigcs.Controller(ser, *CONFIG_CTRL_BASIC)
-        speed = ctrl._speed_max / 10
-        self.assertGreater(ctrl._speed_max, 100e-6, "Maximum speed is expected to be more than 100μm/s")
+        speed = ctrl.speed_max / 10
+        self.assertGreater(ctrl.speed_max, 100e-6, "Maximum speed is expected to be more than 100μm/s")
         ctrl.setSpeed(1, speed)
         distance = ctrl.moveRel(1, speed/2) # should take 0.5s
         self.assertGreater(distance, 0)
