@@ -851,7 +851,6 @@ class Bus(model.Actuator):
         # Init each controller            
         self._axis_to_cc = {} # axis name => (Controller, channel)
         # TODO also a rangesRel : min and max of a step 
-        self._position = {}
         speed = {}
         max_speed = 1 # m/s
         for address, channels in controllers.items():
@@ -951,7 +950,7 @@ class Bus(model.Actuator):
         action = ActionFuture(MOVE_REL, action_axes, self.ser_access)
         self._action_mgr.append_action(action)
         return action
-    
+
     def stop(self):
         """
         stops the motion on all axes
@@ -1058,8 +1057,8 @@ class ActionManager(threading.Thread):
             # Special action "None" == stop
             if self.current_action is None:
                 return
-        
-            try:    
+
+            try:
                 self.current_action._start_action()
                 self.current_action._wait_action()
             except futures.CancelledError:

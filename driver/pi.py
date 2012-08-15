@@ -814,13 +814,10 @@ class StageRedStone(model.Actuator):
          Note that even if it's made of several controllers, each controller is 
          _not_ seen as a child from the odemis model point of view.
         """ 
-        model.Actuator.__init__(self, name, role, children)
+        model.Actuator.__init__(self, name, role, children=children, axes=axes.keys())
         
         ser = PIRedStone.openSerialPort(port)
 #        ser = FakePIRedStone.openSerialPort(port) # use FakePIRedStone for testing
-
-        # the axis names as required by Actuator
-        self._axes = frozenset(axes.keys())
         
         # Not to be mistaken with axes which is a simple public view
         self._axis_to_child = {} # axis name => (PIRedStone, channel)
@@ -837,12 +834,11 @@ class StageRedStone(model.Actuator):
             # TODO request also the ranges from the arguments?
             # For now we put very large one
             self._ranges[axis] = [0, 1] # m
-            
             # Just to make sure it doesn't go too fast
             speed[axis] = 0.1 # m/s
             
         # min speed = don't be crazy slow. max speed from hardware spec
-        self.speed = model.MultiSpeedVA(value=speed, range=[10e-6, 0.5], unit="m/s",
+        self.speed = model.MultiSpeedVA(speed, range=[10e-6, 0.5], unit="m/s",
                                         setter=self.setSpeed)
         self.setSpeed(speed)
         
@@ -926,7 +922,7 @@ class StageRedStone(model.Actuator):
         action = ActionFuture(MOVE_REL, action_axes, self.ser_access)
         self._action_mgr.append_action(action)
         return action
-        
+
     def stop(self):
         """
         stops the motion on all axes
@@ -967,6 +963,7 @@ class StageRedStone(model.Actuator):
             for controller in controllers:
                 logging.info("Testing controller %d", controller.address)
                 passed &= controller.selfTest()
+        
         return passed
     
     @staticmethod
@@ -985,7 +982,7 @@ class StageRedStone(model.Actuator):
                 ports = ["COM" + str(n) for n in range (0,8)]
             else:
                 ports = glob.glob('/dev/ttyS?*') +  glob.glob('/dev/ttyUSB?*')
-                
+        
         axes_names = "xyzabcdefghijklmnopqrstuvw"
         found = []  # tuple of (name, dict (port=>port, axes =>list of addresses)
         for p in ports:
@@ -1004,7 +1001,7 @@ class StageRedStone(model.Actuator):
                     arg[axes_names[axis_num]] = (add, 1) # channel 1
                     axis_num += 1
                 found.append(("Actuator " + os.path.basename(p),
-                              {"port": p, "axes": arg}))
+                             {"port": p, "axes": arg}))
         
         return found
     
@@ -1035,7 +1032,7 @@ class ActionManager(threading.Thread):
             # Special action "None" == stop
             if self.current_action is None:
                 return
-            
+
             try:
                 self.current_action._start_action()
                 self.current_action._wait_action()
