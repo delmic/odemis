@@ -20,12 +20,12 @@ class xrcfr_main(wx.Frame):
 #!XRCED:begin-block:xrcfr_main.PreCreate
     def PreCreate(self, pre):
         """ This function is called during the class's initialization.
-
+        
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
         pass
-
+        
 #!XRCED:end-block:xrcfr_main.PreCreate
 
     def __init__(self, parent):
@@ -96,7 +96,7 @@ def __init_resources():
           <object class="sizeritem">
             <object class="wxGridSizer">
               <object class="sizeritem">
-                <object class="odemis.gui.dblmscopepanel.DblMicroscopePanel" name="pnl_view_tl">
+                <object class="DblMicroscopePanel" name="pnl_view_tl">
                   <size>400,-1</size>
                   <fg>#BFBFBF</fg>
                   <bg>#000000</bg>
@@ -108,7 +108,7 @@ def __init_resources():
                 <minsize>300,300</minsize>
               </object>
               <object class="sizeritem">
-                <object class="odemis.gui.dblmscopepanel.DblMicroscopePanel" name="pnl_view_tr">
+                <object class="DblMicroscopePanel" name="pnl_view_tr">
                   <size>400,-1</size>
                   <fg>#BFBFBF</fg>
                   <bg>#000000</bg>
@@ -120,7 +120,7 @@ def __init_resources():
                 <minsize>300,300</minsize>
               </object>
               <object class="sizeritem">
-                <object class="odemis.gui.dblmscopepanel.DblMicroscopePanel" name="pnl_view_bl">
+                <object class="DblMicroscopePanel" name="pnl_view_bl">
                   <size>400,-1</size>
                   <fg>#BFBFBF</fg>
                   <bg>#000000</bg>
@@ -132,7 +132,7 @@ def __init_resources():
                 <minsize>300,300</minsize>
               </object>
               <object class="sizeritem">
-                <object class="odemis.gui.dblmscopepanel.DblMicroscopePanel" name="pnl_view_br">
+                <object class="DblMicroscopePanel" name="pnl_view_br">
                   <size>400,-1</size>
                   <fg>#BFBFBF</fg>
                   <bg>#000000</bg>
@@ -157,7 +157,7 @@ def __init_resources():
                     <object class="wxBoxSizer">
                       <orient>wxHORIZONTAL</orient>
                       <object class="sizeritem">
-                        <object class="odemis.gui.comp.buttons.ImageTextToggleButton" name="btn_toggle_press">
+                        <object class="ImageTextToggleButton" name="btn_toggle_press">
                           <size>90,-1</size>
                           <label>0 kPa</label>
                           <delta>1</delta>
@@ -180,7 +180,7 @@ def __init_resources():
                         <border>10</border>
                       </object>
                       <object class="sizeritem">
-                        <object class="odemis.gui.comp.buttons.ImageTextToggleButton" name="btn_toggle_opt">
+                        <object class="ImageTextToggleButton" name="btn_toggle_opt">
                           <size>90,-1</size>
                           <label>OPTICAL</label>
                           <delta>1</delta>
@@ -206,7 +206,7 @@ def __init_resources():
                         <border>10</border>
                       </object>
                       <object class="sizeritem">
-                        <object class="odemis.gui.comp.buttons.ImageTextToggleButton" name="btn_toggle_sem">
+                        <object class="ImageTextToggleButton" name="btn_toggle_sem">
                           <size>90,-1</size>
                           <label>SEM     </label>
                           <delta>1</delta>
@@ -235,7 +235,7 @@ def __init_resources():
                         <option>1</option>
                       </object>
                       <object class="sizeritem">
-                        <object class="odemis.gui.comp.buttons.PopupImageButton" name="btn_toggle_pause">
+                        <object class="PopupImageButton" name="btn_toggle_pause">
                           <size>50,-1</size>
                           <default>1</default>
                           <bitmap>img_btn_pause_png</bitmap>
@@ -257,17 +257,21 @@ def __init_resources():
                     <object class="wxBoxSizer">
                       <orient>wxVERTICAL</orient>
                       <object class="sizeritem">
-                        <object class="odemis.gui.comp.foldpanelbar.FoldPanelBar" name="fpb_settings">
-                          <object class="odemis.gui.comp.foldpanelbar.FoldPanelItem">
+                        <object class="FoldPanelBar" name="fpb_settings">
+                          <object class="FoldPanelItem">
                             <label>OPTICAL SETTINGS</label>
                             <collapsed>1</collapsed>
+                            <fg>#1A1A1A</fg>
+                            <bg>#555555</bg>
                           </object>
-                          <object class="odemis.gui.comp.foldpanelbar.FoldPanelItem">
+                          <object class="FoldPanelItem">
                             <label>SEM SETTINGS</label>
                             <collapsed>1</collapsed>
+                            <fg>#1A1A1A</fg>
+                            <bg>#555555</bg>
                           </object>
-                          <object class="odemis.gui.comp.foldpanelbar.FoldPanelItem">
-                            <object class="wxPanel" name="pnl_stream" subclass="odemis.gui.comp.stream.StreamPanel">
+                          <object class="FoldPanelItem">
+                            <object class="wxPanel" name="pnl_stream" subclass="StreamPanel">
                               <fg>#7F7F7F</fg>
                               <bg>#333333</bg>
                               <XRCED>
@@ -275,11 +279,14 @@ def __init_resources():
                               </XRCED>
                             </object>
                             <label>STREAMS</label>
-                            <bg>#333333</bg>
+                            <fg>#1A1A1A</fg>
+                            <bg>#555555</bg>
                           </object>
-                          <object class="odemis.gui.comp.foldpanelbar.FoldPanelItem">
+                          <object class="FoldPanelItem">
                             <label>ANNOTATIONS</label>
                             <collapsed>1</collapsed>
+                            <fg>#1A1A1A</fg>
+                            <bg>#555555</bg>
                           </object>
                           <spacing>0</spacing>
                           <leftspacing>0</leftspacing>
@@ -308,7 +315,7 @@ def __init_resources():
                     <object class="wxBoxSizer">
                       <orient>wxVERTICAL</orient>
                       <object class="sizeritem">
-                        <object class="odemis.gui.comp.buttons.ImageTextButton" name="btn_aquire">
+                        <object class="ImageTextButton" name="btn_aquire">
                           <size>380,-1</size>
                           <label>AQUIRE IMAGE</label>
                           <delta>1</delta>

@@ -113,8 +113,8 @@ def __init_resources():
           <object class="wxBoxSizer">
             <orient>wxVERTICAL</orient>
             <object class="sizeritem">
-              <object class="odemis.gui.comp.foldpanelbar.FoldPanelBar" name="fpb">
-                <object class="odemis.gui.comp.foldpanelbar.FoldPanelItem" name="panel_1">
+              <object class="FoldPanelBar" name="fpb">
+                <object class="FoldPanelItem" name="panel_1">
                   <object class="wxStaticText">
                     <label>LABEL</label>
                   </object>
@@ -122,7 +122,8 @@ def __init_resources():
                     <label>LABEL</label>
                   </object>
                   <label>Test Panel 1</label>
-                  <bg>#1E90FF</bg>
+                  <fg>#1A1A1A</fg>
+                  <bg>#666666</bg>
                   <font>
                     <size>13</size>
                     <style>normal</style>
@@ -136,7 +137,7 @@ def __init_resources():
                     <assign_var>1</assign_var>
                   </XRCED>
                 </object>
-                <object class="odemis.gui.comp.foldpanelbar.FoldPanelItem" name="panel_2">
+                <object class="FoldPanelItem" name="panel_2">
                   <object class="wxStaticText">
                     <label>LABEL</label>
                   </object>
@@ -169,12 +170,22 @@ def __init_resources():
                   </object>
                   <label>Test Panel 2</label>
                   <collapsed>1</collapsed>
-                  <bg>#A9D25E</bg>
+                  <fg>#1A1A1A</fg>
+                  <bg>#666666</bg>
+                  <font>
+                    <size>13</size>
+                    <style>normal</style>
+                    <weight>normal</weight>
+                    <underlined>0</underlined>
+                    <family>default</family>
+                    <face>Ubuntu</face>
+                    <encoding>UTF-8</encoding>
+                  </font>
                   <XRCED>
                     <assign_var>1</assign_var>
                   </XRCED>
                 </object>
-                <object class="odemis.gui.comp.foldpanelbar.FoldPanelItem" name="panel_3">
+                <object class="FoldPanelItem" name="panel_3">
                   <object class="wxStaticText">
                     <label>LABEL</label>
                   </object>
@@ -194,13 +205,23 @@ def __init_resources():
                     <label>LABEL</label>
                   </object>
                   <label>Test Panel 3</label>
-                  <bg>#D08261</bg>
+                  <fg>#1A1A1A</fg>
+                  <bg>#666666</bg>
+                  <font>
+                    <size>13</size>
+                    <style>normal</style>
+                    <weight>normal</weight>
+                    <underlined>0</underlined>
+                    <family>default</family>
+                    <face>Ubuntu</face>
+                    <encoding>UTF-8</encoding>
+                  </font>
                   <XRCED>
                     <assign_var>1</assign_var>
                   </XRCED>
                 </object>
                 <spacing>0</spacing>
-                <bg>#4D4D4D</bg>
+                <bg>#1E90FF</bg>
                 <XRCED>
                   <assign_var>1</assign_var>
                 </XRCED>
@@ -220,6 +241,7 @@ def __init_resources():
       <orient>wxVERTICAL</orient>
     </object>
     <title>Fold Panel Bar Test Frame</title>
+    <bg>#666666</bg>
   </object>
   <object class="wxFrame" name="stream_frame">
     <object class="wxBoxSizer">
@@ -229,8 +251,8 @@ def __init_resources():
           <object class="wxBoxSizer">
             <orient>wxVERTICAL</orient>
             <object class="sizeritem">
-              <object class="odemis.gui.comp.foldpanelbar.FoldPanelBar" name="fpb">
-                <object class="odemis.gui.comp.foldpanelbar.FoldPanelItem">
+              <object class="FoldPanelBar" name="fpb">
+                <object class="FoldPanelItem">
                   <object class="wxPanel" name="stream_panel" subclass="odemis.gui.comp.stream.StreamPanel">
                     <fg>#7F7F7F</fg>
                     <bg>#333333</bg>
@@ -281,7 +303,7 @@ def __init_resources():
       <object class="wxBoxSizer">
         <orient>wxVERTICAL</orient>
         <object class="sizeritem">
-          <object class="odemis.gui.comp.text.SuggestTextCtrl" name="txt_suggest">
+          <object class="SuggestTextCtrl" name="txt_suggest">
             <size>200,-1</size>
             <value>suggest text field</value>
             <XRCED>
@@ -293,7 +315,7 @@ def __init_resources():
           <border>10</border>
         </object>
         <object class="sizeritem">
-          <object class="odemis.gui.comp.text.UnitIntegerCtrl">
+          <object class="UnitIntegerCtrl">
             <size>200,-1</size>
             <value>9</value>
             <min>-10</min>
@@ -304,7 +326,7 @@ def __init_resources():
           <border>10</border>
         </object>
         <object class="sizeritem">
-          <object class="odemis.gui.comp.text.UnitIntegerCtrl">
+          <object class="UnitIntegerCtrl">
             <size>200,-1</size>
             <min>-10</min>
             <max>10</max>

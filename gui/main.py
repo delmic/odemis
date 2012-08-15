@@ -45,7 +45,7 @@ class OdemisGUIApp(wx.App):
         # Constructor of the parent class
         # ONLY CALL IT AT THE END OF :py:method:`__init__` BECAUSE OnInit will be called
         # and it needs the attributes defined in this constructor!
-        wx.App.__init__(self, redirect=True)
+        wx.App.__init__(self, redirect=False)
 
     def OnInit(self):
         """ Application initialization, automatically run from the :wx:`App` constructor.
@@ -54,13 +54,17 @@ class OdemisGUIApp(wx.App):
         try:
             self.microscope = odemis.model.getMicroscope()
             self.secom_model = OpticalBackendConnected(self.microscope)
-        except Pyro4.errors.CommunicationError, e:
+        except (IOError, Pyro4.errors.CommunicationError), e:
             log.exception("oei")
-            msg = "The Odemis GUI could not connect to the Odemis Daemon:\n\n {0}".format(e)
-            wx.MessageBox(msg,
-                          "Connection error",
-                          style=wx.OK|wx.ICON_ERROR)
-            # sys.exit(1)
+            msg = ("The Odemis GUI could not connect to the Odemis Daemon:\n\n"
+                   "{0}\n\n"
+                   "Launch GUI anyway?").format(e)
+
+            answer = wx.MessageBox(msg,
+                                   "Connection error",
+                                    style=wx.YES|wx.NO|wx.ICON_ERROR)
+            if answer == wx.NO:
+                sys.exit(1)
 
         # Load the main frame
         self.fr_main = odemis.gui.main_xrc.xrcfr_main(None)
@@ -138,7 +142,7 @@ class OdemisGUIApp(wx.App):
 
 
             self.fr_main.Bind(wx.EVT_CLOSE, self.on_close_window)
-            
+
             self.fr_main.Show()
             self.fr_main.Raise()
             self.fr_main.Refresh()

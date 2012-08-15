@@ -8,12 +8,12 @@
 # replacement should take place before any references are made to the frames,
 # dialog and controls defined within the main_xrc.py module.
 
-import odemis.gui.main_xrc
-
 def odemis_get_resources():
     """ This function provides access to the XML handlers needed for
         non-standard controls defined in the XRC file.
     """
+
+    import odemis.gui.main_xrc
 
     if odemis.gui.main_xrc.__res == None:
         from odemis.gui.xmlh.xh_delmic import HANDLER_CLASS_LIST
@@ -21,3 +21,16 @@ def odemis_get_resources():
         for handler_klass in HANDLER_CLASS_LIST:
             odemis.gui.main_xrc.__res.InsertHandler(handler_klass())
     return odemis.gui.main_xrc.__res
+
+def odemis_get_test_resources():
+    """ This function provides access to the XML handlers needed by
+        the test  GUI.
+    """
+    import odemis.gui.test.test_gui
+
+    if odemis.gui.test.test_gui.__res == None:
+        from odemis.gui.xmlh.xh_delmic import HANDLER_CLASS_LIST
+        odemis.gui.test.test_gui.__init_resources()
+        for handler_klass in HANDLER_CLASS_LIST:
+            odemis.gui.test.test_gui.__res.InsertHandler(handler_klass())
+    return odemis.gui.test.test_gui.__res
