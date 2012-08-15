@@ -17,6 +17,7 @@ from wx.lib.inspection import InspectionTool
 import odemis.gui.test.test_gui
 
 from odemis.gui.comp.stream import FixedStreamPanelEntry, CustomStreamPanelEntry
+from odemis.gui.xmlh import odemis_get_test_resources
 
 # Sleep timer in milliseconds
 SLEEP_TIME = 100
@@ -26,19 +27,6 @@ MANUAL = True
 INSPECT = False
 
 TEST_STREAMS = ["aap", "noot", "mies", "etc"]
-
-def odemis_get_resources():
-    """ This function provides access to the XML handlers needed for
-        non-standard controls defined in the XRC file.
-    """
-    if odemis.gui.test.test_gui.__res == None:
-        from odemis.gui.xmlh.xh_delmic import HANDLER_CLASS_LIST
-
-        odemis.gui.test.test_gui.__init_resources()
-        for handler_klass in HANDLER_CLASS_LIST:
-            odemis.gui.test.test_gui.__res.InsertHandler(handler_klass())
-
-    return odemis.gui.test.test_gui.__res
 
 def loop():
     app = wx.GetApp()
@@ -53,7 +41,7 @@ def loop():
 
 class TestApp(wx.App):
     def __init__(self):
-        odemis.gui.test.test_gui.get_resources = odemis_get_resources
+        odemis.gui.test.test_gui.get_resources = odemis_get_test_resources
         self.test_frame = None
         wx.App.__init__(self, redirect=False)
 
@@ -128,7 +116,7 @@ class FoldPanelBarTestCase(unittest.TestCase):
         # Add an editable entry
         wx.MilliSleep(SLEEP_TIME)
         custom_entry = CustomStreamPanelEntry(self.frm.stream_panel,
-                                            label="First Custom Stream")
+                                              label="First Custom Stream")
         self.frm.stream_panel.add_stream(custom_entry)
         loop()
 
@@ -203,7 +191,7 @@ class FoldPanelBarTestCase(unittest.TestCase):
         # Add a callback/name combo to the add button
         def brightfield_callback():
             fixed_entry = FixedStreamPanelEntry(self.frm.stream_panel,
-                                           label="Brightfield")
+                                                label="Brightfield")
             self.frm.stream_panel.add_stream(fixed_entry)
 
         self.frm.stream_panel.add_actions({"Brightfield": brightfield_callback})

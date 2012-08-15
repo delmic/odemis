@@ -42,8 +42,8 @@ from odemis.gui.comp.text import SuggestTextCtrl, IntegerTextCtrl, \
     UnitIntegerCtrl
 from odemis.gui.comp.foldpanelbar import FoldPanelBar
 from odemis.gui.comp.slider import CustomSlider
-
 from odemis.gui.util.conversion import wave2hex
+from odemis.gui.img.data import getemptyBitmap
 
 TEST_STREAM_LST = ["Aap", u"nöot", "noot", "mies", "kees", "vuur",
                   "quantummechnica", "Repelsteeltje", "", "XXX", "a", "aa",
@@ -176,10 +176,11 @@ class CustomExpander(Expander):
 
         self.stream_color = None
         self._btn_color = ColourButton(self, -1,
-                                size=(18,18),
-                                colour=self.stream_color,
-                                background_parent=parent,
-                                use_hover=True)
+                                       bitmap=getemptyBitmap(),
+                                       size=(18,18),
+                                       colour=self.stream_color,
+                                       background_parent=parent,
+                                       use_hover=True)
 
         self._btn_color.SetToolTipString("Select colour")
 
@@ -247,9 +248,8 @@ class StreamPanelEntry(wx.PyPanel):
         self._panel = wx.Panel(self, style=wx.TAB_TRAVERSAL | wx.NO_BORDER)
         self._panel.Hide()
 
-        self._gbs = wx.GridBagSizer(3, 5)
-        self._gbs.AddGrowableCol(1, 1)
-        self._panel.SetSizer(self._gbs)
+        self._gbs = wx.GridBagSizer(3, 5)        
+        self._panel.SetSizer(self._gbs)        
 
         self._expander = None
 
@@ -406,6 +406,8 @@ class StreamPanelEntry(wx.PyPanel):
                       flag=wx.ALIGN_CENTRE_VERTICAL | wx.RIGHT,
                       border=10)
 
+        self._gbs.AddGrowableCol(1)
+        
         # ==== Bind events
 
         # Expander
@@ -596,7 +598,7 @@ class StreamPanelEntry(wx.PyPanel):
     def Destroy(self, *args, **kwargs):
         fpb_item = self.Parent
         wx.PyPanel.Destroy(self, *args, **kwargs)
-        fpb_item.FitStreams()
+        #fpb_item.FitStreams()
 
     # def Layout(self):
     #     pcp.PyCollapsiblePane.Layout(self)
@@ -678,9 +680,10 @@ class CustomStreamPanelEntry(StreamPanelEntry): #pylint: disable=R0901
 
 
         self._btn_excitation = ColourButton(self._panel, -1,
-                                     size=(18,18),
-                                     colour=wave2hex(self._excitation),
-                                     background_parent=self._panel)
+                                            bitmap=getemptyBitmap(),
+                                            size=(18,18),
+                                            colour=wave2hex(self._excitation),
+                                            background_parent=self._panel)
         self._btn_excitation.SetToolTipString("Wavelength colour")
 
         self._gbs.Add(self._btn_excitation, (3, 2),
@@ -706,9 +709,10 @@ class CustomStreamPanelEntry(StreamPanelEntry): #pylint: disable=R0901
                       border=10)
 
         self._btn_emission = ColourButton(self._panel, -1,
-                                     size=(18,18),
-                                     colour=wave2hex(self._emission),
-                                     background_parent=self._panel)
+                                          bitmap=getemptyBitmap(),
+                                          size=(18,18),
+                                          colour=wave2hex(self._emission),
+                                          background_parent=self._panel)
         self._btn_emission.SetToolTipString("Wavelength colour")
 
         self._gbs.Add(self._btn_emission, (4, 2),
@@ -779,7 +783,7 @@ class StreamPanel(wx.Panel):
 
         self.btn_add_stream.Bind(wx.EVT_LISTBOX, self.on_add_stream)
 
-        self.FitStreams()
+        #self.FitStreams()
 
     # === Event Handlers
 
@@ -796,36 +800,30 @@ class StreamPanel(wx.Panel):
         eo = evt.GetEventObject()
         wx.CallAfter(eo.Destroy)
 
-    def FitStreams(self):
-
-        h = self._sz.GetMinSize().GetHeight()
-
-        log.debug("Setting StreamPanel height to %s", h)
-        self.SetSize((-1, h))
-
-        # Force the parent to update its size by calling Fit
-        self.Parent.Fit()
-        # The panel size is cached in the _PanelSize attribute.
-        # Make sure it's updated by calling ResizePanel
-        self.Parent.ResizePanel()
-
-        p = self.GetParent()
-
-        while not isinstance(p, FoldPanelBar):
-            p = p.GetParent()
-
-        p.Freeze()
-        p.RefreshPanelsFrom(self.GetParent())
-        p.FitBar()
-        p.Thaw()
+#    def FitStreams(self):
+#
+#        h = self._sz.GetMinSize().GetHeight()
+#
+#        log.debug("Setting StreamPanel height to %s", h)
+#        self.SetSize((-1, h))
+#
+#        # Force the parent to update its size by calling Fit
+#        self.Parent.Fit()
+#        # The panel size is cached in the _PanelSize attribute.
+#        # Make sure it's updated by calling ResizePanel
+#                
+#        p = self.GetParent()
+#
+#        while not isinstance(p, FoldPanelBar):
+#            p = p.GetParent()
 
     def show_add_button(self):
         self.btn_add_stream.Show()
-        self.FitStreams()
+        #self.FitStreams()
 
     def hide_add_button(self):
         self.btn_add_stream.Hide()
-        self.FitStreams()
+        #self.FitStreams()
 
     def is_empty(self):
         return len(self.entries) == 0
@@ -869,13 +867,14 @@ class StreamPanel(wx.Panel):
 
         stream_panel_entry.Layout()
 
-        self.Refresh()
-        self.FitStreams()
+        self.Parent.Layout()
+        #self.Refresh()
+        #self.FitStreams()
 
     def hide_stream(self, stream_pos):
         self.entries[stream_pos].Hide()
         self.Refresh()
-        self.FitStreams()
+        #self.FitStreams()
 
     def remove_stream(self, stream_pos):
         stream_obj = self.entries.pop(stream_pos)
