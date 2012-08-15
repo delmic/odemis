@@ -20,8 +20,28 @@ import Pyro4
 import logging
 import multiprocessing
 import os
-import time
+import threading
+import urllib
 import weakref
+#Pyro4.config.COMMTIMEOUT = 30.0 # a bit of timeout
+# There is a problem with threadpool: threads have a timeout on waiting for a 
+# request. That obvioulsy doesn't make much sense, but also means it's not
+# possible to put a global timeout with the current version and threadpool. 
+# One possibility is to change ._pyroTimeout on each proxy.
+
+
+# thread is restricted: it can handle at the same time only
+# MAXTHREADS concurrent connections (which is MINTHREADS because there is a bug).
+# After that it simply blocks. As there is one connection per object, it goes fast.
+# Multiplex can handle a much larger number of connections, but will always
+# execute the requests one at a time. It seems to handle badly callbacks 
+#Pyro4.config.SERVERTYPE = "multiplex"
+Pyro4.config.THREADPOOL_MINTHREADS = 24
+# TODO make sure Pyro can grow the pool: for now it allocates a huge static number of threads
+
+# TODO needs a different value on Windows
+BASE_DIRECTORY="/var/run/odemisd"
+BASE_GROUP="odemis" # user group that is allowed to access the backend 
 
 # The special read-only attribute which are duplicated on proxy objects 
 class roattribute(property):
@@ -38,6 +58,7 @@ class roattribute(property):
 def get_roattributes(self):
     """
     list all roattributes of an instance
+    Note: this only works on an original class, not on a proxy
     """
 #    members = inspect.getmembers(self.__class__)
 #    return [name for name, obj in members if isinstance(obj, roattribute)]
@@ -56,7 +77,11 @@ def dump_roattributes(self):
     """
     list all the roattributes and their value
     """
-    return dict([[name, getattr(self, name)] for name in get_roattributes(self)])
+    # if it is a proxy, use _odemis_roattributes
+    roattr = getattr(self, "_odemis_roattributes", [])
+    roattr += get_roattributes(self)
+        
+    return dict([[name, getattr(self, name)] for name in roattr])
 
 def load_roattributes(self, roattributes):
     """
@@ -65,6 +90,9 @@ def load_roattributes(self, roattributes):
     """
     for a, value in roattributes.items():
         setattr(self, a, value)
+        
+    # save the list in case we need to pickle the object again
+    self._odemis_roattributes = roattributes.keys()
 
 
 # Container management functions and class
@@ -88,7 +116,13 @@ class ContainerObject(Pyro4.core.DaemonObject):
         returns the new component instantiated
         """
         return self.daemon.instantiate(klass, kwargs)
-
+    
+    def getRoot(self):
+        """
+        returns the root object, if it has been defined in the container
+        """
+        return self.getObject(self.daemon.rootId)
+    
 # Basically a wrapper around the Pyro Daemon 
 class Container(Pyro4.core.Daemon):
     def __init__(self, name):
@@ -96,8 +130,8 @@ class Container(Pyro4.core.Daemon):
         name: name of the container (must be unique)
         """
         assert not "/" in name
-        # TODO put all the sockets in some specified directory on the fs /var/odemis/?
-        self.ipc_name = name + ".ipc"
+        # all the sockets are in the same directory so it's independent from the PWD
+        self.ipc_name = BASE_DIRECTORY + "/" + urllib.quote(name) + ".ipc"
         
         if os.path.exists(self.ipc_name):
             try:
@@ -108,25 +142,30 @@ class Container(Pyro4.core.Daemon):
 
         Pyro4.Daemon.__init__(self, unixsocket=self.ipc_name, interface=ContainerObject)
         
-    def run(self, *args, **kwargs):
+        # To be set by the user of the container 
+        self.rootId = None # objectId of a "Root" component
+        
+    def run(self):
         """
         runs and serve the objects registered in the container.
         returns only when .terminate() is called
         """
         # wrapper to requestLoop() just because the name is strange
-        self.requestLoop(*args, **kwargs)
+        self.requestLoop()
 
-    def terminate(self, *args, **kwargs):
+    def terminate(self):
         """
         stops the server
+        Can be called remotely or locally
         """
         # wrapper to shutdown(), in order to be more consistent with the vocabulary
-        self.shutdown(*args, **kwargs)
+        self.shutdown()
         # All the cleaning is done in the original thread, after the run()
     
     def close(self):
         """
         Cleans up everything behind, once the container is already done with running
+        Has to be called locally, at the end.
         """
         # unregister every object still around, to be sure everything gets
         # deallocated from the memory (but normally, it's up to the client to
@@ -154,15 +193,23 @@ class Container(Pyro4.core.Daemon):
         return comp
 
 # helper functions
-def getContainer(name):
+def getContainer(name, validate=True):
     """
     returns (a proxy to) the container with the given name
+    validate (boolean): if the connection should be validated
     raises an exception if no such container exist
     """
+    # detect when the base directory doesn't even exists and is readable
+    if not os.path.isdir(BASE_DIRECTORY + "/."): # + "/." to check it's readable 
+        raise IOError("Directory " + BASE_DIRECTORY + " is not accessible.")
+    
     # the container is the default pyro daemon at the address named by the container
-    container = Pyro4.Proxy("PYRO:Pyro.Daemon@./u:"+name+".ipc", oneways=["terminate"])
+    container = Pyro4.Proxy("PYRO:Pyro.Daemon@./u:"+BASE_DIRECTORY+"/"+urllib.quote(name)+".ipc")
+    container._pyroOneway.add("terminate")
+    
     # A proxy doesn't connect until the first remote call, check the connection
-    container.ping() # raise an exception if connection fails
+    if validate:
+        container.ping() # raise an exception if connection fails
     return container
 
 def getObject(container_name, object_name):
@@ -170,24 +217,27 @@ def getObject(container_name, object_name):
     returns (a proxy to) the object with the given name in the given container
     raises an exception if no such object or container exist
     """
-    container = getContainer(container_name)
-    return container.getObject(object_name)
+    container = getContainer(container_name, validate=False)
+    return container.getObject(urllib.quote(object_name))
 
-def createNewContainer(name):
+def createNewContainer(name, validate=True):
     """
     creates a new container in an independent and isolated process
+    validate (boolean): if the connection should be validated
     returns the (proxy to the) new container
     """
     # create a container separately
     isready = multiprocessing.Event()
     p = Process(name="Container "+name, target=_manageContainer, args=(name,isready))
+#    isready = threading.Event()
+#    p = threading.Thread(name="Container "+name, target=_manageContainer, args=(name,isready))
     p.start()
     if not isready.wait(3): # wait maximum 3s
         logging.error("Container %s is taking too long to get ready", name)
         raise IOError("Container creation timeout")
 
     # connect to the new container
-    return getContainer(name)
+    return getContainer(name, validate)
  
 def createInNewContainer(container_name, klass, kwargs):
     """
@@ -197,7 +247,7 @@ def createInNewContainer(container_name, klass, kwargs):
     kwargs (dict (str -> value)): arguments for the __init__() of the component
     returns the (proxy to the) new component
     """
-    container = createNewContainer(container_name)
+    container = createNewContainer(container_name, validate=False)
     return container.instantiate(klass, kwargs)
  
 def _manageContainer(name, isready=None):

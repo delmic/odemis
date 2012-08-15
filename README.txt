@@ -1,14 +1,8 @@
 Odemis, Open Delmic Microscope Software
 
 = Requirements = 
-Linux (tested on Ubuntu 11.10 32-bits) or Windows (7)
-Python (v2.7) with python-wxgtk2.8 (wxPython), python-imaging (PIL), 
-python-yaml (PyYaml), python-gdal (GDAL), python-serial (pyserial)
-
-For Andor Neo camera support:
-Andor SDK v3.3+ -- on Linux, the bitflow driver has to be reinstalled (recompiled) each time the kernel is updated.
-For Andor Clara camera support:
-Andor SDK v2.97 -- on Linux/Ubuntu you need to install libusb-dev (so that whereis reports libusb.so). Also the the permissions of all the files must be allowed for normal user: everything is installed by default as root only, so nothing can work from the normal user account. 
+Linux (tested on Ubuntu 12.04 32-bits) or Windows (7)
+Python (v2.7)
 
 = Installation =
 See the doc/INSTALL.txt document for the complete installation procedure.
@@ -19,7 +13,11 @@ should be started first.
 
 Run as "odemisd ...", with ... replaced by the correct arguments.
 See "odemisd --help" for information.
+For example:
+PYTHONPATH=./:../Pyro4/src/ ./odemisd/main.py --daemonize --log-level=2 odemisd/test/optical-sim.odm.yaml
 
+To use the command line interface use:
+PYTHONPATH=./:../Pyro4/src/ ./cli/main.py --help
 
 = License =
 GPLv2, see the LICENSE.txt file for the complete license.

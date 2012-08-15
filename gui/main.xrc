@@ -8,145 +8,358 @@
           <label>Hello</label>
         </object>
       </object>
-    </object>
-    <object class="wxFlexGridSizer">
-      <cols>2</cols>
-      <rows>1</rows>
-      <growablecols>0</growablecols>
-      <growablerows>0</growablerows>
-      <object class="sizeritem">
-        <object class="wxGridSizer">
-          <object class="sizeritem">
-            <object class="wxPanel">
-              <bg>#D9B0BF</bg>
-            </object>
-            <flag>wxEXPAND</flag>
-            <minsize>300,300</minsize>
-          </object>
-          <object class="sizeritem">
-            <object class="wxPanel">
-              <bg>#E5C19C</bg>
-            </object>
-            <flag>wxEXPAND</flag>
-            <minsize>300,300</minsize>
-          </object>
-          <object class="sizeritem">
-            <object class="wxPanel">
-              <bg>#ACA8EC</bg>
-            </object>
-            <flag>wxEXPAND</flag>
-            <minsize>300,300</minsize>
-          </object>
-          <object class="sizeritem">
-            <object class="wxPanel">
-              <bg>#A8E876</bg>
-            </object>
-            <flag>wxEXPAND</flag>
-            <minsize>300,300</minsize>
-          </object>
-          <cols>2</cols>
-          <rows>2</rows>
+      <object class="wxMenu">
+        <object class="wxMenuItem" name="menu_item_debug">
+          <label>Debug</label>
+          <checkable>1</checkable>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
         </object>
-        <option>1</option>
+        <label>Help</label>
+      </object>
+    </object>
+    <object class="wxBoxSizer">
+      <orient>wxVERTICAL</orient>
+      <object class="sizeritem">
+        <object class="wxPanel" name="pnl_tab">
+          <object class="wxBoxSizer">
+            <orient>wxHORIZONTAL</orient>
+            <object class="sizeritem">
+              <object class="wxStaticBitmap">
+                <bitmap>img/logo_h30.png</bitmap>
+              </object>
+              <flag>wxTOP|wxRIGHT</flag>
+              <border>5</border>
+            </object>
+          </object>
+          <bg>#BFBFBF</bg>
+        </object>
         <flag>wxEXPAND</flag>
-        <ratio>1</ratio>
+        <minsize>-1,30</minsize>
       </object>
       <object class="sizeritem">
         <object class="wxBoxSizer">
           <object class="sizeritem">
-            <object class="wxScrolledWindow" name="scr_win">
-              <object class="wxBoxSizer">
-                <orient>wxVERTICAL</orient>
-                <object class="sizeritem">
-                  <object class="odemis.gui.comp.foldpanelbar.FoldPanelBar" name="fpb_settings">
-                    <object class="odemis.gui.comp.foldpanelbar.FoldPanelItem">
-                      <label>Optical Settings</label>
-                      <object class="wxPanel">
-                        <object class="wxBoxSizer">
-                          <orient>wxVERTICAL</orient>
-                          <object class="sizeritem">
-                            <object class="wxFlexGridSizer">
-                              <object class="sizeritem">
-                                <object class="wxStaticText">
-                                  <label>Slider</label>
-                                </object>
-                                <flag>wxTOP</flag>
-                                <border>3</border>
-                              </object>
-                              <object class="sizeritem">
-                                <object class="wxSlider"/>
-                                <flag>wxEXPAND</flag>
-                              </object>
-                              <object class="sizeritem">
-                                <object class="wxStaticText">
-                                  <label>Value</label>
-                                </object>
-                                <flag>wxTOP</flag>
-                                <border>3</border>
-                              </object>
-                              <object class="sizeritem">
-                                <object class="wxTextCtrl"/>
-                                <flag>wxEXPAND</flag>
-                              </object>
-                              <cols>2</cols>
-                              <rows>1</rows>
-                              <vgap>5</vgap>
-                              <hgap>10</hgap>
-                              <growablecols>1</growablecols>
-                            </object>
-                            <flag>wxBOTTOM|wxEXPAND</flag>
-                            <border>5</border>
-                          </object>
-                        </object>
-                      </object>
-                    </object>
-                    <object class="odemis.gui.comp.foldpanelbar.FoldPanelItem">
-                      <label>SEM Settings</label>
-                    </object>
-                    <object class="odemis.gui.comp.foldpanelbar.FoldPanelItem">
-                      <label>Streams</label>
-                      <object class="wxCollapsiblePane">
-                        <label>Wababa</label>
-                        <object class="panewindow">
-                          <object class="wxButton">
-                            <label>klick meh!</label>
-                          </object>
-                        </object>
-                      </object>
-                    </object>
-                    <XRCED>
-                      <assign_var>1</assign_var>
-                    </XRCED>
-                    <object class="odemis.gui.comp.foldpanelbar.FoldPanelItem">
-                      <label>Overlay</label>
-                    </object>
-                  </object>
-                  <flag>wxEXPAND</flag>
+            <object class="wxPanel" name="pnl_left">
+              <size>200,-1</size>
+              <bg>#333333</bg>
+            </object>
+            <flag>wxEXPAND</flag>
+          </object>
+          <object class="sizeritem">
+            <object class="wxGridSizer">
+              <object class="sizeritem">
+                <object class="DblMicroscopePanel" name="pnl_view_tl">
+                  <size>400,-1</size>
+                  <fg>#BFBFBF</fg>
+                  <bg>#000000</bg>
+                  <XRCED>
+                    <assign_var>1</assign_var>
+                  </XRCED>
                 </object>
+                <flag>wxEXPAND</flag>
+                <minsize>300,300</minsize>
               </object>
-              <size>300,-1</size>
-              <style>wxVSCROLL</style>
-              <XRCED>
-                <assign_var>1</assign_var>
-              </XRCED>
+              <object class="sizeritem">
+                <object class="DblMicroscopePanel" name="pnl_view_tr">
+                  <size>400,-1</size>
+                  <fg>#BFBFBF</fg>
+                  <bg>#000000</bg>
+                  <XRCED>
+                    <assign_var>1</assign_var>
+                  </XRCED>
+                </object>
+                <flag>wxEXPAND</flag>
+                <minsize>300,300</minsize>
+              </object>
+              <object class="sizeritem">
+                <object class="DblMicroscopePanel" name="pnl_view_bl">
+                  <size>400,-1</size>
+                  <fg>#BFBFBF</fg>
+                  <bg>#000000</bg>
+                  <XRCED>
+                    <assign_var>1</assign_var>
+                  </XRCED>
+                </object>
+                <flag>wxEXPAND</flag>
+                <minsize>300,300</minsize>
+              </object>
+              <object class="sizeritem">
+                <object class="DblMicroscopePanel" name="pnl_view_br">
+                  <size>400,-1</size>
+                  <fg>#BFBFBF</fg>
+                  <bg>#000000</bg>
+                  <XRCED>
+                    <assign_var>1</assign_var>
+                  </XRCED>
+                </object>
+                <flag>wxEXPAND</flag>
+                <minsize>300,300</minsize>
+              </object>
+              <cols>2</cols>
+              <rows>2</rows>
             </object>
             <option>1</option>
             <flag>wxEXPAND</flag>
-            <minsize>300,-1</minsize>
           </object>
           <object class="sizeritem">
-            <object class="wxButton">
-              <label>Self Destruct</label>
+            <object class="wxPanel" name="pnl_right">
+              <object class="wxBoxSizer">
+                <object class="sizeritem">
+                  <object class="wxPanel" name="main_buttons">
+                    <object class="wxBoxSizer">
+                      <orient>wxHORIZONTAL</orient>
+                      <object class="sizeritem">
+                        <object class="ImageTextToggleButton" name="btn_toggle_press">
+                          <size>90,-1</size>
+                          <label>0 kPa</label>
+                          <delta>1</delta>
+                          <bitmap>img/btn_press.png</bitmap>
+                          <hover>img/btn_press_h.png</hover>
+                          <selected>img/btn_press_on_a.png</selected>
+                          <fg>#1A1A1A</fg>
+                          <font>
+                            <size>11</size>
+                            <style>normal</style>
+                            <weight>normal</weight>
+                            <underlined>0</underlined>
+                            <family>default</family>
+                            <face>Ubuntu</face>
+                            <encoding>UTF-8</encoding>
+                          </font>
+                          <style>wxALIGN_RIGHT</style>
+                        </object>
+                        <flag>wxALL|wxEXPAND</flag>
+                        <border>10</border>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="ImageTextToggleButton" name="btn_toggle_opt">
+                          <size>90,-1</size>
+                          <label>OPTICAL</label>
+                          <delta>1</delta>
+                          <bitmap>img/btn_opt.png</bitmap>
+                          <hover>img/btn_opt_h.png</hover>
+                          <selected>img/btn_opt_on_a.png</selected>
+                          <fg>#1A1A1A</fg>
+                          <font>
+                            <size>11</size>
+                            <style>normal</style>
+                            <weight>normal</weight>
+                            <underlined>0</underlined>
+                            <family>default</family>
+                            <face>Ubuntu</face>
+                            <encoding>UTF-8</encoding>
+                          </font>
+                          <style>wxALIGN_RIGHT</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <flag>wxTOP|wxBOTTOM|wxRIGHT</flag>
+                        <border>10</border>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="ImageTextToggleButton" name="btn_toggle_sem">
+                          <size>90,-1</size>
+                          <label>SEM     </label>
+                          <delta>1</delta>
+                          <bitmap>img/btn_sem.png</bitmap>
+                          <hover>img/btn_sem_h.png</hover>
+                          <selected>img/btn_sem_on_a.png</selected>
+                          <fg>#1A1A1A</fg>
+                          <font>
+                            <size>11</size>
+                            <style>normal</style>
+                            <weight>normal</weight>
+                            <underlined>0</underlined>
+                            <family>default</family>
+                            <face>Ubuntu</face>
+                            <encoding>UTF-8</encoding>
+                          </font>
+                          <style>wxALIGN_RIGHT</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <flag>wxTOP|wxBOTTOM|wxRIGHT</flag>
+                        <border>10</border>
+                      </object>
+                      <object class="spacer">
+                        <option>1</option>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="PopupImageButton" name="btn_toggle_pause">
+                          <size>50,-1</size>
+                          <default>1</default>
+                          <bitmap>img/btn_pause.png</bitmap>
+                          <hover>img/btn_pause_h.png</hover>
+                          <selected>img/btn_pause_a.png</selected>
+                          <fg>#1A1A1A</fg>
+                        </object>
+                        <flag>wxTOP|wxBOTTOM|wxRIGHT</flag>
+                        <border>10</border>
+                      </object>
+                    </object>
+                    <size>400,-1</size>
+                    <bg>#4D4D4D</bg>
+                  </object>
+                  <flag>wxEXPAND</flag>
+                </object>
+                <object class="sizeritem">
+                  <object class="wxScrolledWindow" name="scr_win_right">
+                    <object class="wxBoxSizer">
+                      <orient>wxVERTICAL</orient>
+                      <object class="sizeritem">
+                        <object class="FoldPanelBar" name="fpb_settings">
+                          <object class="FoldPanelItem">
+                            <label>OPTICAL SETTINGS</label>
+                            <collapsed>1</collapsed>
+                            <fg>#1A1A1A</fg>
+                            <bg>#555555</bg>
+                          </object>
+                          <object class="FoldPanelItem">
+                            <label>SEM SETTINGS</label>
+                            <collapsed>1</collapsed>
+                            <fg>#1A1A1A</fg>
+                            <bg>#555555</bg>
+                          </object>
+                          <object class="FoldPanelItem">
+                            <object class="wxPanel" name="pnl_stream" subclass="odemis.gui.comp.stream.StreamPanel">
+                              <fg>#7F7F7F</fg>
+                              <bg>#333333</bg>
+                              <XRCED>
+                                <assign_var>1</assign_var>
+                              </XRCED>
+                            </object>
+                            <label>STREAMS</label>
+                            <fg>#1A1A1A</fg>
+                            <bg>#555555</bg>
+                          </object>
+                          <object class="FoldPanelItem">
+                            <label>ANNOTATIONS</label>
+                            <collapsed>1</collapsed>
+                            <fg>#1A1A1A</fg>
+                            <bg>#555555</bg>
+                          </object>
+                          <spacing>0</spacing>
+                          <leftspacing>0</leftspacing>
+                          <rightspacing>0</rightspacing>
+                          <bg>#333333</bg>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <flag>wxEXPAND</flag>
+                      </object>
+                    </object>
+                    <size>400,-1</size>
+                    <bg>#333333</bg>
+                    <style>wxVSCROLL</style>
+                    <XRCED>
+                      <assign_var>1</assign_var>
+                    </XRCED>
+                  </object>
+                  <option>1</option>
+                  <flag>wxEXPAND</flag>
+                  <minsize>400,400</minsize>
+                </object>
+                <object class="sizeritem">
+                  <object class="wxPanel">
+                    <object class="wxBoxSizer">
+                      <orient>wxVERTICAL</orient>
+                      <object class="sizeritem">
+                        <object class="ImageTextButton" name="btn_aquire">
+                          <size>380,-1</size>
+                          <label>AQUIRE IMAGE</label>
+                          <delta>1</delta>
+                          <bitmap>img/btn_aquire_image.png</bitmap>
+                          <hover>img/btn_aquire_image_h.png</hover>
+                          <selected>img/btn_aquire_image_a.png</selected>
+                          <fg>#E5E5E5</fg>
+                          <font>
+                            <size>14</size>
+                            <style>normal</style>
+                            <weight>normal</weight>
+                            <underlined>0</underlined>
+                            <family>default</family>
+                            <face>Ubuntu</face>
+                            <encoding>UTF-8</encoding>
+                          </font>
+                          <style>wxALIGN_CENTRE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <flag>wxALL</flag>
+                        <border>10</border>
+                      </object>
+                    </object>
+                    <bg>#4D4D4D</bg>
+                  </object>
+                  <flag>wxEXPAND</flag>
+                </object>
+                <orient>wxVERTICAL</orient>
+              </object>
+              <bg>#333333</bg>
+              <style>wxBORDER_NONE</style>
             </object>
-            <flag>wxALL|wxEXPAND</flag>
-            <border>10</border>
+            <flag>wxEXPAND</flag>
+            <minsize>400,400</minsize>
           </object>
-          <orient>wxVERTICAL</orient>
+          <orient>wxHORIZONTAL</orient>
         </object>
+        <option>1</option>
         <flag>wxEXPAND</flag>
+      </object>
+      <object class="sizeritem">
+        <object class="wxPanel" name="pnl_log">
+          <object class="wxBoxSizer">
+            <orient>wxVERTICAL</orient>
+            <object class="sizeritem">
+              <object class="wxTextCtrl" name="txt_log">
+                <size>-1,200</size>
+                <fg>#4D4D4D</fg>
+                <bg>#BFBFBF</bg>
+                <font>
+                  <size>10</size>
+                  <style>normal</style>
+                  <weight>normal</weight>
+                  <underlined>0</underlined>
+                  <family>default</family>
+                  <face>Courier 10 Pitch</face>
+                  <encoding>UTF-8</encoding>
+                </font>
+                <style>wxTE_MULTILINE</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxEXPAND</flag>
+            </object>
+          </object>
+          <size>-1,200</size>
+          <bg>#4D4D4D</bg>
+          <hidden>1</hidden>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
+        <flag>wxTOP|wxEXPAND</flag>
+        <border>2</border>
       </object>
     </object>
     <title>Odemis</title>
     <centered>1</centered>
+    <bg>#000000</bg>
+    <font>
+      <size>9</size>
+      <style>normal</style>
+      <weight>normal</weight>
+      <underlined>0</underlined>
+      <family>default</family>
+      <face>Ubuntu</face>
+      <encoding>UTF-8</encoding>
+    </font>
   </object>
 </resource>

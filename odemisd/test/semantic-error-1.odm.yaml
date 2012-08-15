@@ -21,6 +21,7 @@ Light: {
 "Stage": {
     class: simulated.Stage2D,
     role: stage,
+    init: {axes: ["x", "y"]},
     affects: ["Andor SimCam"],
     properties: {
         speed: {'x':1, 'y':1} #m/s

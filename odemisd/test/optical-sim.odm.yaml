@@ -1,10 +1,11 @@
 SimOptical: {
     class: Microscope,
     role: brightfield,
-    emitters: [Light],
+    emitters: [Light, "Nikon Super Duper", "MultiBand Fixed Filter"],
     detectors: ["Andor SimCam"],
-    actuators: ["Stage"],
+    actuators: ["Stage", "SEM-Optical Alignment", "OpticalZ actuator"],
 }
+
 Light: {
     class: simulated.Light,
     role: brightlight,
@@ -14,17 +15,53 @@ Light: {
         power: 100 # W
     }
 }
+
+"Nikon Super Duper": {
+    class: static.OpticalLens,
+    role: lens,
+    init: {mag: 10.0}, # ratio
+    affects: ["Andor SimCam"]
+}
+
+"MultiBand Fixed Filter": {
+    class: static.LightFilter,
+    role: filter,
+    init: {band: [[430e-9, 480e-9], [520e-9, 600e-9]]}, # m,m
+    affects: ["Andor SimCam"]
+}
+
 "Andor SimCam": {
     class: andorcam3.AndorCam3,
     role: ccd,
     init: {device: 1} # 1 is almost always SimCam
 }
+
 "Stage": {
     class: simulated.Stage2D,
     role: stage,
+    init: {axes: ["x", "y"]},
     affects: ["Andor SimCam"],
     properties: {
-        speed: {'x':1, 'y':1} #m/s
+        speed: {'x':1.0, 'y':1.0} #m/s
     }
 }
 
+"SEM-Optical Alignment": {
+    class: simulated.Stage2D,
+    role: align,
+    init: {axes: ["x", "y"]},
+    affects: ["Andor SimCam"],
+    properties: {
+        speed: {'x':0.1, 'y':0.1} #m/s
+    }
+}
+
+"OpticalZ actuator": {
+    class: simulated.Stage2D,
+    role: focus,
+    init: {axes: ["z"]},
+    affects: ["Andor SimCam"],
+    properties: {
+        speed: {'z':0.1} #m/s
+    }
+}

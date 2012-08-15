@@ -1,5 +1,6 @@
 # based on https://github.com/github/gitignore/blob/master/Python.gitignore
 *.py[cod]
+*.log
 
 # backup files
 *~
@@ -39,3 +40,6 @@ odemis.sublime-workspace
 
 #Translations
 *.mo
+
+#Machine dependant
+launch_daemon

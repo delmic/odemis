@@ -135,14 +135,13 @@ class AndorCam3(model.DigitalCamera):
     a CCD/CMOS camera.
     This implementation is for the Andor SDK v3.
     
-    It offers mostly two main high level methods: acquire() and acquireFlow(),
-    which respectively offer the possibility to get one and several images from
-    the camera.
+    It offers mostly a couple of VigilantAttributes to modify the settings, and a 
+    DataFlow to get one or several images from the camera.
     
     It also provide low-level methods corresponding to the SDK functions.
     """
     
-    def __init__(self, name, role, children=None, device=None):
+    def __init__(self, name, role, children=None, device=None, **kwargs):
         """
         Initialises the device
         device (None or int): number of the device to open, as defined by Andor, cd scan()
@@ -150,10 +149,10 @@ class AndorCam3(model.DigitalCamera):
         Raises:
           ATError if the device cannot be opened.
         """
-        model.DigitalCamera.__init__(self, name, role, children)
+        model.DigitalCamera.__init__(self, name, role, children, **kwargs)
         
         if os.name == "nt":
-            # That's not gonna fly... need to put this into ATDLL
+            # FIXME That's not gonna fly... need to put this into ATDLL
             self.atcore = windll.LoadLibrary('libatcore.dll') # TODO check it works
         else:
             # Global so that its sub-libraries can access it
@@ -161,7 +160,8 @@ class AndorCam3(model.DigitalCamera):
              
         self.InitialiseLibrary()
         
-        self.handle = self.Open(device)
+        self.temp_timer = None
+        self.Open(device)
         if device is None:
             # nothing else to initialise
             return
@@ -171,57 +171,64 @@ class AndorCam3(model.DigitalCamera):
         # Describe the camera
         # up-to-date metadata to be included in dataflow
         self._metadata = {model.MD_HW_NAME: self.getModelName()}
+        
+        # odemis + sdk
+        self._swVersion = "%s (driver %s)" % (__version__.version, self.getSDKVersion()) 
+        self._metadata[model.MD_SW_VERSION] = self._swVersion
+        self._hwVersion = self.getHwVersion()
+        self._metadata[model.MD_HW_VERSION] = self._hwVersion
+        
         resolution = self.getSensorResolution()
         self._metadata[model.MD_SENSOR_SIZE] = resolution
 
         # setup everything best (fixed)
         self._setupBestQuality()
-        self.shape = resolution + (2**self._metadata[model.MD_BPP],)
+        self._shape = resolution + (2**self._metadata[model.MD_BPP],)
         
+        # put the detector pixelSize
         psize = (self.GetFloat(u"PixelWidth") * 1e-6,
                  self.GetFloat(u"PixelHeight") * 1e-6)
-        self.pixelSize = model.Property(psize, unit="m", readonly=True)
+        self.pixelSize = model.VigilantAttribute(psize, unit="m", readonly=True)
         self._metadata[model.MD_SENSOR_PIXEL_SIZE] = self.pixelSize.value
         
-        # odemis + sdk
-        self.swVersion = __version__.version + "(driver " + self.getSDKVersion() + ")" 
-        self._metadata[model.MD_SW_VERSION] = self.swVersion
-        self.hwVersion = self.getHwVersion()
-        self._metadata[model.MD_HW_VERSION] = self.hwVersion
-        
         # Strong cooling for low (image) noise
-        self.targetTemperature = model.FloatContinuous(-100, [-275, 100], "C")
-        self.targetTemperature.subscribe(self.onTargetTemperature, init=True)
+        ranges = self.GetFloatRanges(u"TargetSensorTemperature")
+        self.targetTemperature = model.FloatContinuous(ranges[0], ranges, unit="C", 
+                                                       setter=self.setTargetTemperature)
+        self.setTargetTemperature(ranges[0])
         
         if self.isImplemented(u"FanSpeed"):
             # max speed
-            self.fanSpeed = model.FloatContinuous(1.0, [0.0, 1.0]) # ratio to max speed
-            self.fanSpeed.subscribe(self.onFanSpeed, init=True)
+            self.fanSpeed = model.FloatContinuous(1.0, [0.0, 1.0], unit="",
+                                                  setter=self.setFanSpeed) # ratio to max speed
+            self.setFanSpeed(1.0)
 
         self._binning = 1 # used by resolutionFitter()
         # need to be before binning, as it is modified when changing binning         
-        self.resolution = ResolutionProperty(resolution, [(1, 1), resolution], 
-                                             fitter=self.resolutionFitter)
-        self.resolution.subscribe(self.onResolution, init=True)
+        self.resolution = model.ResolutionVA(resolution, [(1, 1), resolution], 
+                                             setter=self.setResolution)
+        self.setResolution(resolution)
         
-        self.binning = model.IntEnumerated(self._binning, self._getAvailableBinnings(), "px")
-        self.binning.subscribe(self.onBinning, init=True)
+        self.binning = model.IntEnumerated(self._binning, self._getAvailableBinnings(),
+                                           unit="px", setter=self.setBinning)
+        self.setBinning(self._binning)
         
-        range_exp = self.GetFloatRanges(u"ExposureTime")
-        if range_exp[0] <= 0.0:
-            range_exp[0] = 1e-6 # s, to make sure != 0 
-        self.exposureTime = model.FloatContinuous(1.0, range_exp, "s")
-        self.exposureTime.subscribe(self.onExposureTime, init=True)
+        range_exp = list(self.GetFloatRanges(u"ExposureTime"))
+        range_exp[0] = max(range_exp[0], 1e-6) # s, to make sure != 0 
+        self.exposureTime = model.FloatContinuous(1.0, range_exp, unit="s", setter=self.setExposureTime)
+        self.setExposureTime(1.0)
         
         current_temp = self.GetFloat(u"SensorTemperature")
-        self.temperature = model.FloatProperty(current_temp, unit="C", readonly=True)
-        self.temp_timer = RepeatingTimer(10, self.updateTemperatureProperty,
+        self.temperature = model.FloatVA(current_temp, unit="C", readonly=True)
+        self._metadata[model.MD_SENSOR_TEMP] = current_temp
+        self.temp_timer = RepeatingTimer(10, self.updateTemperatureVA,
                                          "AndorCam3 temperature update")
+        self.temp_timer.start()
         
         # TODO some methods (with futures)
         
-        self.is_acquiring = False
-        self.acquire_must_stop = False
+        self.acquisition_lock = threading.Lock()
+        self.acquire_must_stop = threading.Event()
         self.acquire_thread = None
         
         self.data = AndorCam3DataFlow(self)
@@ -241,16 +248,15 @@ class AndorCam3(model.DigitalCamera):
         """
         device (None or int): number of the device to open, as defined by Andor, cd scan()
           if None, uses the system handle, which allows very limited access to some information
-        return a c_int, the handle
         """
         if device is None:
-            return c_int(ATDLL.HANDLE_SYSTEM)
-        
-        handle = c_int()
-        self.atcore.AT_Open(device, byref(handle))
-        return handle
+            self.handle = c_int(ATDLL.HANDLE_SYSTEM)
+        else:
+            self.handle = c_int()
+            self.atcore.AT_Open(device, byref(self.handle))
     
     def Close(self):
+        assert self.handle is not None
         self.atcore.AT_Close(self.handle)
         
     def Command(self, command):
@@ -402,16 +408,18 @@ class AndorCam3(model.DigitalCamera):
         """
         return (self.GetInt(u"SensorWidth"), self.GetInt(u"SensorHeight"))
     
-    def onTargetTemperature(self, temp):
+    def setTargetTemperature(self, temp):
         """
         Change the targeted temperature of the CCD.
         The cooler the less dark noise. Not everything is possible, but it will
         try to accommodate by targeting the closest temperature possible.
         temp (-300 < float < 100): temperature in C
+        return actual temperature requested
         """
         assert((-300 <= temp) and (temp <= 100))
         # TODO apparently the Neo also has a "Temperature Control" which might be
         # better to use
+        # In theory not necessary as the VA will ensure this anyway
         ranges = self.GetFloatRanges(u"TargetSensorTemperature")
         temp = sorted(ranges + (temp,))[1]
         self.SetFloat(u"TargetSensorTemperature", temp)
@@ -423,22 +431,29 @@ class AndorCam3(model.DigitalCamera):
 
         # TODO: a more generic function which set up the fan to the right speed
         # according to the target temperature?
+        return temp
 
-    def updateTemperatureProperty(self):
+    def updateTemperatureVA(self):
         """
         to be called at regular interval to update the temperature
         """
+        if self.handle is None:
+            # might happen if terminate() has just been called
+            logging.info("No temperature update, camera is stopped")
+            return
+        
         temp = self.GetFloat(u"SensorTemperature")
         self._metadata[model.MD_SENSOR_TEMP] = temp
-        # it's read-only, so we change it only via special _set()
-        self.temperature._set(temp)
-        self.temperature.notify()
+        # it's read-only, so we change it only via special _value)
+        self.temperature._value = temp
+        self.temperature.notify(self.temperature.value)
         logging.debug("temp is %d", temp)
 
-    def onFanSpeed(self, speed):
+    def setFanSpeed(self, speed):
         """
         Change the fan speed. Will accommodate to whichever speed is possible.
         speed (0<=float<= 1): ratio of full speed -> 0 is slowest, 1.0 is fastest
+        return actual speed set
         """
         assert((0 <= speed) and (speed <= 1))
         
@@ -449,8 +464,9 @@ class AndorCam3(model.DigitalCamera):
         # for the Neo and the SimCam. Looks like this for Neo:
         # [u"Off", u"Low", u"On"]
         values = self.GetEnumStringAvailable(u"FanSpeed")
-        val = values[int(round(speed * (len(values) - 1)))]
-        self.SetEnumString(u"FanSpeed", val)
+        speed_index = int(round(speed * (len(values) - 1)))
+        self.SetEnumString(u"FanSpeed", values[speed_index])
+        return float(speed_index) / len(values)
         
     @staticmethod
     def find_closest(val, l):
@@ -477,7 +493,6 @@ class AndorCam3(model.DigitalCamera):
         binning (int 1, 2, 3, 4, or 8): how many pixels horizontally and vertically
          are combined to create "super pixels"
         Note: super pixels are always square
-        return (tuple): metadata corresponding to the setup
         """
         values = [1, 2, 3, 4, 8]
         assert(binning in values)
@@ -500,11 +515,11 @@ class AndorCam3(model.DigitalCamera):
                                   " does not match fixed binning " +
                                   str(act_binning))
             
-        self.binning.value = binning
+        return binning
     
     def _getAvailableBinnings(self):
         """
-        returns  list of int with the available binning (same for horizontal
+        returns  list of int with the available binnings (same for horizontal
           and vertical)
         """
         # Nicely the API is different depending on cameras...
@@ -519,25 +534,25 @@ class AndorCam3(model.DigitalCamera):
             else:
                 return set([1])
 
-    def onBinning(self, value):
+    def setBinning(self, value):
         """
-        Called when "binning" property is modified. It actually modifies the camera binning.
+        Called when "binning" VA is modified. It actually modifies the camera binning.
         """
         previous_binning = self._binning
         #TODO queue this for after acquisition.
-        self._setBinning(value)
-        self._metadata[model.MD_BINNING] = value
+        self._binning = self._setBinning(value)
+        self._metadata[model.MD_BINNING] = self._binning
         
         # adapt resolution so that the AOI stays the same
         change = float(previous_binning) / value
         old_resolution = self.resolution.value
-        new_resolution = (round(old_resolution[0] * change),
-                          round(old_resolution[1] * change))
+        new_resolution = (int(round(old_resolution[0] * change)),
+                          int(round(old_resolution[1] * change)))
         self.resolution.value = new_resolution
-        self._binning = value
+        return self._binning
     
     def getModelName(self):
-        model = "Andor " + self.GetString(u"CameraModel")
+        model_name = "Andor " + self.GetString(u"CameraModel")
         # TODO there seems to be a bug in SimCam v3.1: => check v3.3
 #        self.atcore.isImplemented(self.handle, u"SerialNumber") return true
 #        but self.atcore.GetInt(self.handle, u"SerialNumber") fail with error code 2 = AT_ERR_NOTIMPLEMENTED
@@ -547,7 +562,7 @@ class AndorCam3(model.DigitalCamera):
         except ATError:
             serial_str = ""
             
-        return "%s%s" % (model, serial_str)
+        return "%s%s" % (model_name, serial_str)
     
     def getSDKVersion(self):
         try:
@@ -608,10 +623,11 @@ class AndorCam3(model.DigitalCamera):
         self.SetInt(u"AOIHeight", c_uint64(size[1]))
         self.SetInt(u"AOITop", c_uint64(lt[1]))
     
-    def onResolution(self, value):
+    def setResolution(self, value):
         # TODO wait until we are done with image acquisition
-        # The fitter has made all the job to make sure it's allowed resolution
-        self._setSize(value)
+        new_res = self.resolutionFitter(value)
+        self._setSize(new_res)
+        return new_res
     
     def resolutionFitter(self, size_req):
         """
@@ -650,14 +666,16 @@ class AndorCam3(model.DigitalCamera):
         """
         assert(0.0 < exp)
         self.SetFloat(u"ExposureTime",  exp)
-        self.exposureTime.value = self.GetFloat(u"ExposureTime")
-        if self.exposureTime.value != exp:
-            logging.debug("adapted exposure time from %f to %f", exp, self.exposureTime.value)
+        act_exp = self.GetFloat(u"ExposureTime")
+        if act_exp != exp:
+            logging.debug("adapted exposure time from %f to %f", exp, act_exp)
+        return act_exp
     
-    def onExposureTime(self, value):
+    def setExposureTime(self, value):
         # TODO make sure we are in a state it's possible to change exposure time
-        self._setExposureTime(value)
-        self._metadata[model.MD_EXP_TIME] = value
+        exp = self._setExposureTime(value)
+        self._metadata[model.MD_EXP_TIME] = exp
+        return exp
     
     def _setupBestQuality(self):
         """
@@ -679,7 +697,7 @@ class AndorCam3(model.DigitalCamera):
         if self.isImplemented(u"PreAmpGainControl"):
             # If not, we are on a SimCam so it doesn't matter
             self.SetEnumString(u"PreAmpGainControl", u"Gain 1 Gain 4 (16 bit)")
-            self._metadata[model.MD_GAIN] = 33 # according to doc: 20/0.6
+            self._metadata[model.MD_GAIN] = 33.0 # according to doc: 20/0.6
 #        self.SetEnumString(u"PreAmpGainSelector", u"Low")
 #        self.SetEnumString(u"PreAmpGain", u"x1")
 #        self.SetEnumString(u"PreAmpGainSelector", u"High")
@@ -721,7 +739,7 @@ class AndorCam3(model.DigitalCamera):
         
         return cbuffer
     
-    def _buffer_as_array(self, cbuffer, size):
+    def _buffer_as_array(self, cbuffer, size, metadata=None):
         """
         Converts the buffer allocated for the image as an ndarray. zero-copy
         return a DataArray (metadata not initialised)
@@ -735,68 +753,64 @@ class AndorCam3(model.DigitalCamera):
             
         p = cast(cbuffer, POINTER(c_uint16))
         ndbuffer = numpy.ctypeslib.as_array(p, (stride / 2, size[1]))
-        dataarray = model.DataArray(ndbuffer)
+        dataarray = model.DataArray(ndbuffer, metadata)
         # crop the array in case of stride (should not cause copy)
         return dataarray[:size[0],:]
         
-    def acquire(self):
+    def acquireOne(self):
         """
         Acquire one image at the best quality.
-        return (2-tuple: DataArray): an array containing the image with the metadata
+        return (DataArray): an array containing the image with the metadata
         """
-        assert not self.is_acquiring
-        assert not self.GetBool(u"CameraAcquiring")
-        self.is_acquiring = True
+        with self.acquisition_lock:
+            assert not self.GetBool(u"CameraAcquiring")
+            
+            metadata = dict(self._metadata) # duplicate
+            size = self.resolution.value
+            
+            cbuffer = self._allocate_buffer(size)
+            self.QueueBuffer(cbuffer)
+            
+            # Acquire the image
+            logging.info("acquiring one image of %d bytes", sizeof(cbuffer))
+            self.Command(u"AcquisitionStart")
+            exposure_time = self.exposureTime.value
+            readout_time = size[0] * size[1] * metadata[model.MD_READOUT_TIME] # s
+            metadata[model.MD_ACQ_DATE] = time.time() # time at the beginning
+            pbuffer, buffersize = self.WaitBuffer(exposure_time + readout_time + 1)
+            
+            # Cannot directly use pbuffer because we'd lose the reference to the 
+            # memory allocation... and it'd get free'd at the end of the method
+            # So rely on the assumption cbuffer is used as is
+            assert(addressof(pbuffer.contents) == addressof(cbuffer))
+            array = self._buffer_as_array(cbuffer, size, metadata)
         
-        metadata = dict(self._metadata) # duplicate
-        size = self.resolution.value
-        
-        cbuffer = self._allocate_buffer(size)
-        self.QueueBuffer(cbuffer)
-        
-        # Acquire the image
-        logging.info("acquiring one image of %d bytes", sizeof(cbuffer))
-        self.Command(u"AcquisitionStart")
-        exposure_time = self.exposureTime.value
-        readout_time = size[0] * size[1] * metadata[model.MD_READOUT_TIME] # s
-        metadata[model.MD_ACQ_DATE] = time.time() # time at the beginning
-        pbuffer, buffersize = self.WaitBuffer(exposure_time + readout_time + 1)
-        
-        # Cannot directly use pbuffer because we'd lose the reference to the 
-        # memory allocation... and it'd get free'd at the end of the method
-        # So rely on the assumption cbuffer is used as is
-        assert(addressof(pbuffer.contents) == addressof(cbuffer))
-        array = self._buffer_as_array(cbuffer, size)
-        array.metadata = metadata
+            self.Command(u"AcquisitionStop")
+            self.Flush()
+            return array
     
-        self.Command(u"AcquisitionStop")
-        self.Flush()
-        self.is_acquiring = False
-        return array
-    
-    def acquireFlow(self, callback, num=None):
+    def start_flow(self, callback):
         """
         Set up the camera and acquire a flow of images at the best quality for the given
           parameters. Should not be called if already a flow is being acquired.
-        callback (callable (camera, numpy.ndarray, dict (string -> base types)) no return):
+        callback (callable (DataArray) no return):
          function called for each image acquired
-        num (None or int): number of images to acquire, or infinite if None
-        returns immediately. To stop acquisition, call stopAcquireFlow()
+        returns immediately. To stop acquisition, call req_stop_flow()
         """
-        assert not self.is_acquiring
+        self.wait_stopped_flow() # no-op is the thread is not running
+        
+        self.acquisition_lock.acquire()
         assert not self.GetBool(u"CameraAcquiring")
-        self.is_acquiring = True
         
         # Set up thread
         self.acquire_thread = threading.Thread(target=self._acquire_thread_run,
                name="andorcam acquire flow thread",
-               args=(callback, num))
+               args=(callback,))
         self.acquire_thread.start()
         
-    def _acquire_thread_run(self, callback, num=None):
+    def _acquire_thread_run(self, callback):
         """
-        The core of the acquisition thread. Runs until it has acquired enough
-        images or acquire_must_stop is True.
+        The core of the acquisition thread. Runs until acquire_must_stop is True.
         """
         assert (self.isImplemented(u"CycleMode") and
                 self.isWritable(u"CycleMode"))
@@ -804,7 +818,7 @@ class AndorCam3(model.DigitalCamera):
         # We don't use the framecount feature as it's not always present, and
         # easy to do in software.
 
-
+        # TODO need to update settings when the AV are changed
         size = self.resolution.value
         exposure_time = self.exposureTime.value
         
@@ -821,7 +835,9 @@ class AndorCam3(model.DigitalCamera):
         logging.info("acquiring a series of images of %d bytes", sizeof(cbuffer))
         self.Command(u"AcquisitionStart")
         readout_time = size[0] * size[1] * self._metadata[model.MD_READOUT_TIME] # s
-        while (not self.acquire_must_stop and (num is None or num > 0)):
+        while not self.acquire_must_stop.is_set():
+            # XXX check if need to update settings first
+            
             metadata = dict(self._metadata) # duplicate
             metadata[model.MD_ACQ_DATE] = time.time() # time at the beginning
             try:
@@ -835,10 +851,12 @@ class AndorCam3(model.DigitalCamera):
                     try:
                         self.Command(u"AcquisitionStop")
                     except ATError as (errno, strerr):
-                        logging.warning("AcquisitionStop failed with error %s:", strerr)
-                        pass
+                        logging.error("AcquisitionStop failed with error %s:", strerr)
+                        # try anyway
                     self.Command(u"AcquisitionStart")
                     continue
+                self.acquisition_lock.release()
+                self.acquire_must_stop.clear()
                 raise
 
             # Cannot directly use pbuffer because we'd lose the reference to the 
@@ -846,46 +864,63 @@ class AndorCam3(model.DigitalCamera):
             # So rely on the assumption cbuffer is used as is
             cbuffer = buffers.pop(0)
             assert(addressof(pbuffer.contents) == addressof(cbuffer))
-            array = self._buffer_as_array(cbuffer, size)
-            array.metadata = metadata
+            
+            metadata[model.MD_SENSOR_TEMP] = self._metadata[model.MD_SENSOR_TEMP]
+            array = self._buffer_as_array(cbuffer, size, metadata)
             # next buffer
             cbuffer = self._allocate_buffer(size)
             self.QueueBuffer(cbuffer)
             buffers.append(cbuffer)
             
             callback(array)
-            if num is not None:
-                num -= 1
     
-        self.Command(u"AcquisitionStop")
+        try:
+            self.Command(u"AcquisitionStop")
+        except ATError:
+            pass # probably just complaining it was already stopped
         self.Flush()
-        self.is_acquiring = False
+        self.acquisition_lock.release()
+        self.acquire_must_stop.clear()
     
-    def stopAcquireFlow(self, sync=False):
+    def req_stop_flow(self):
         """
         Stop the acquisition of a flow of images.
         sync (boolean): if True, wait that the acquisition is finished before returning.
          Calling with this flag activated from the acquisition callback is not 
          permitted (it would cause a dead-lock).
         """
-        self.acquire_must_stop = True
-        if sync:
-            self.waitAcquireFlow()
+        assert not self.acquire_must_stop.is_set()
+        self.acquire_must_stop.set()
+        # TODO check that acquisitionstop actually stops the waitbuffer()
+        self.Command(u"AcquisitionStop")
         
-    def waitAcquireFlow(self):
+    def wait_stopped_flow(self):
         """
         Waits until the end acquisition of a flow of images. Calling from the
          acquisition callback is not permitted (it would cause a dead-lock).
         """
         # "while" is mostly to not wait if it's already finished 
-        while self.is_acquiring:
+        while self.acquire_must_stop.is_set():
             # join() already checks that we are not the current_thread()
             #assert threading.current_thread() != self.acquire_thread
             self.acquire_thread.join() # XXX timeout for safety? 
     
-    def __del__(self):
-        self.Close()
+    def terminate(self):
+        """
+        Must be called at the end of the usage
+        """
+        if self.temp_timer is not None:
+            self.temp_timer.cancel()
+            self.temp_timer = None
+            
+        if self.handle is not None:
+            self.Close()
+            self.handle = None
         self.FinaliseLibrary()
+    
+    # no __del__ so that it can be garbage collected
+    def __del__(self):
+        self.terminate()
     
     def selfTest(self):
         """
@@ -910,7 +945,7 @@ class AndorCam3(model.DigitalCamera):
         try:
             self.resolution.value = resolution
             self.exposureTime.value = 0.01
-            im = self.acquire()
+            im = self.acquireOne()
         except Exception as err:
             logging.warning("Failed to acquire an image: " + str(err))
             return False
@@ -928,91 +963,19 @@ class AndorCam3(model.DigitalCamera):
         dc = camera.GetInt(u"Device Count")
         logging.debug("Found %d devices.", dc)
         
-        # we reuse the same object to avoid init/del all the time
+        # Trick: we reuse the same object to avoid init/del all the time
         system_handle = camera.handle
         
         cameras = []
         for i in range(dc):
-            camera.handle = camera.Open(i)
+            camera.Open(i)
             name = camera.getModelName()
             cameras.append((name, {"device": i}))
             camera.Close()
             
-        camera.handle = system_handle # for the del() to work fine
+        camera.handle = system_handle # for the terminate() to work fine
         return cameras
 
-
-class ResolutionProperty(model.Property):
-    """
-    Property which represents a resolution : 2-tuple of int
-    It can only be set a min and max, but might also have additional constraints
-    It's allowed to request any resolution within min and max, but it will
-    be automatically adapted to a bigger one allowed.
-    """
-    
-    def __init__(self, value="", rrange=[], unit="", readonly=False, fitter=None):
-        """
-        fitter callable (2-tuple of int) -> (2-tuple of int): function which fits
-          the given resolution to whatever is allowed. If None, it will not be adapted.
-        """  
-        self._set_range(rrange)
-        if fitter:
-            self._fitter = model.WeakMethod(fitter)
-        else:
-            self._fitter = None
-        model.Property.__init__(self, value, unit, readonly)
-
-    @property
-    def range(self):
-        """The range within which the value of the property can be"""
-        return self._range
-    
-    def _set_range(self, new_range):
-        """
-        Override to do more checking on the range.
-        """
-        if len(new_range) != 2:
-                raise model.InvalidTypeError("Range '%s' is not a 2-tuple." % str(new_range))
-        if new_range[0][0] > new_range[1][0] or new_range[0][1] > new_range[1][1]:
-            raise model.InvalidTypeError("Range min %s should be smaller than max %s." 
-                                   % (str(new_range[0]), str(new_range[1])))
-        if hasattr(self, "value"):
-            if (self.value[0] < new_range[0][0] or self.value[0] > new_range[1][0] or
-                self.value[1] < new_range[0][1] or self.value[1] > new_range[1][1]):
-                raise model.OutOfBoundError("Current value '%s' is outside of the range %s-%s." % 
-                            (str(self.value), str(new_range[0]), str(new_range[1])))
-        self._range = tuple(new_range)
-
-    @range.setter
-    def range(self, value):
-        self._set_range(value)
-    
-    @range.deleter
-    def range(self):
-        del self._range
-
-    def _set(self, value):
-        """
-        Raises:
-            OutOfBoundError if the value is not within the authorised range
-        """
-        if len(value) != 2:
-            raise model.InvalidTypeError("Value '%s' is not a 2-tuple." % str(value))
-
-        if (value[0] < self._range[0][0] or value[0] > self._range[1][0] or
-            value[1] < self._range[0][1] or value[1] > self._range[1][1]):
-            raise model.OutOfBoundError("Trying to assign value '%s' outside of the range %s-%s." % 
-                        (str(value), str(self._range[0]), str(self._range[1])))
-        
-        if self._fitter:
-            try:
-                value = self._fitter(value)
-            except model.WeakRefLostError:
-                # Normally fitter is owned by the same instance of camera so no
-                # fitter would also mean that this property has no sense anymore
-                raise model.OutOfBoundError("Fitting method has disappeared, cannot validate value.")
-        
-        model.Property._set(self, value)
 
 class AndorCam3DataFlow(model.DataFlow):
     def __init__(self, camera):
@@ -1022,34 +985,38 @@ class AndorCam3DataFlow(model.DataFlow):
         model.DataFlow.__init__(self)
         self.component = weakref.proxy(camera)
         
-    def get(self):
-        model.DataFlow.get(self)
-        # TODO if camera is already acquiring, wait for the coming picture
-        data = self.component.acquire()
-        # If some subscribers arrived during the acquire()
-        if self._listeners:
-            self.notify(data)
-            self.component.acquireFlow(self.notify)
-        return data
+#    def get(self):
+#        # TODO if camera is already acquiring, wait for the coming picture
+#        data = self.component.acquireOne()
+#        # TODO we should avoid this: acquireOne() and start_flow() simultaneously should be handled by the framework
+#        # If some subscribers arrived during the acquireOne()
+#        if self._listeners:
+#            self.notify(data)
+#            self.component.start_flow(self.notify)
+#        return data
+#  
+
+    # start/stop_generate are _never_ called simultaneously (thread-safe)
+    def start_generate(self):
+        try:
+            self.component.start_flow(self.notify)
+        except ReferenceError:
+            # camera has been deleted, it's all fine, we'll be GC'd soon
+            pass
     
-    def subscribe(self, listener):
-        model.DataFlow.subscribe(self, listener)
-        # TODO nicer way to check whether the camera is already sending us data?
-        if not self.component.acquire_thread:
-            # is it in acquire()? If so, it will be done in .get()
-            if not self.component.is_acquiring:
-                self.component.acquireFlow(self.notify)
-    
-    def unsubscribe(self, listener):
-        model.DataFlow.unsubscribe(self, listener)
-        if not self._listeners:
-            self.component.stopAcquireFlow()
+    def stop_generate(self):
+        try:
+            self.component.req_stop_flow()
+#            assert(not self.component.acquisition_lock.locked())
+        except ReferenceError:
+            # camera has been deleted, it's all fine, we'll be GC'd soon
+            pass
             
     def notify(self, data):
         model.DataFlow.notify(self, data)
 
    
-class RepeatingTimer(object):
+class RepeatingTimer(threading.Thread):
     """
     An almost endless timer thread. 
     It stops when calling cancel() or the callback disappears.
@@ -1060,28 +1027,22 @@ class RepeatingTimer(object):
         callback (callable): function to call
         name (str): fancy name to give to the thread
         """
+        threading.Thread.__init__(self, name=name)
         self.callback = model.WeakMethod(callback)
         self.period = period
-        self.timer = None
-        self.name = name
-        self._schedule()
+        self.daemon = True
+        self.must_stop = threading.Event()
     
-    def _schedule(self):
-        self.timer = threading.Timer(self.period, self.timeup)
-        self.timer.name = self.name
-        self.timer.deamon = True # don't wait for it to finish
-        self.timer.start()
+    def run(self):
+        # use the timeout as a timer
+        while not self.must_stop.wait(self.period):
+            try:
+                self.callback()
+            except model.WeakRefLostError:
+                # it's gone, it's over
+                return
         
-    def timeup(self):
-        try:
-            self.callback()
-        except model.WeakRefLostError:
-            # it's gone, it's over
-            return
-        
-        self._schedule()
-       
     def cancel(self):
-        self.timer.cancel()     
+        self.must_stop.set()
 
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:

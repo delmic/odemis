@@ -3,7 +3,17 @@
 '''
 Created on 29 Mar 2012
 
-@author: piel
+@author: Éric Piel
+
+Copyright © 2012 Éric Piel, Delmic
+
+This file is part of Open Delmic Microscope Software.
+
+Delmic Acquisition Software is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 2 of the License, or (at your option) any later version.
+
+Delmic Acquisition Software is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with Delmic Acquisition Software. If not, see http://www.gnu.org/licenses/.
 '''
 import model
 import unittest
@@ -185,6 +195,20 @@ class VigilantAttributeTest(unittest.TestCase):
         
         prop.value = 1
         assert(prop.value == 1)
+        
+    def delegate_set_float(self, value):
+        return value + 1.0 # unusual behaviour
+    
+    def test_setter(self):
+        """
+        check the delegation
+        """
+        prop = model.FloatVA(2.0, setter=self.delegate_set_float)
+        # maybe it should be 3.0? But it's better not to call the delegate setter
+        # anyway, the owner can always also call the setter by itself
+        self.assertEqual(prop.value, 2.0) 
+        prop.value = 10.0
+        self.assertEqual(prop.value, 11.0)
            
 class LittleObject(object):
     def __init__(self):

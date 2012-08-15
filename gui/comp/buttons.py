@@ -6,28 +6,33 @@
 # in XRCED's plugin directory.
 
 import wx
+
 from wx.lib.buttons import GenBitmapButton, GenBitmapToggleButton, \
-    GenBitmapTextToggleButton
+    GenBitmapTextToggleButton, GenBitmapTextButton
+
+import odemis.gui.img.data as img
 
 class ImageButton(GenBitmapButton):
     """ Graphical button with hover effect.
 
-    The background colour is set to it's parent's
+    The background colour is set to that of its parent, or to the background
+    colour of an explicitly defined window called background_parent.
     """
 
     labelDelta = 0
 
     def __init__(self, *args, **kwargs):
-
+        """ If the background_parent keyword argument is provided, it will be
+        used to determine the background colour of the button. Otherwise, the
+        direct parent will be used.
+        """
         if kwargs.has_key('style'):
             kwargs['style'] |= wx.NO_BORDER
         else:
             kwargs['style'] = wx.NO_BORDER
 
-        self.background_parent = None
-        if kwargs.has_key('background_parent'):
-            self.background_parent = kwargs['background_parent']
-            del kwargs['background_parent']
+        self.background_parent = kwargs.pop('background_parent', None)
+        self.labelDelta = kwargs.pop('label_delta', 0)
 
         GenBitmapButton.__init__(self, *args, **kwargs)
 
@@ -72,6 +77,8 @@ class ImageButton(GenBitmapButton):
             bmp = self.bmpDisabled
         if self.bmpFocus and self.hasFocus:
             bmp = self.bmpFocus
+        if self.bmpSelected and not self.up:
+            bmp = self.bmpSelected
         bw, bh = bmp.GetWidth(), bmp.GetHeight()
         if not self.up:
             dx = dy = self.labelDelta
@@ -86,8 +93,124 @@ class ImageButton(GenBitmapButton):
         else:
             self.faceDnClr = self.GetParent().GetBackgroundColour()
 
+    def SetLabelDelta(self, delta):
+        self.labelDelta = delta
+
+class ImageTextButton(GenBitmapTextButton):
+    """ Graphical button with text and hover effect.
+
+    The text can be align using the following styles:
+    wx.ALIGN_LEFT, wx.ALIGN_CENTER, wx.ALIGN_RIGHT.
+
+    Left alignment is the default.
+    """
+    # The displacement of the button content when it is pressed down, in pixels
+    labelDelta = 1
+    padding_x = 8
+    padding_y = 1
+
+    def __init__(self, *args, **kwargs):
+
+        kwargs['style'] = kwargs.get('style', 0) | wx.NO_BORDER
+
+        self.labelDelta = kwargs.pop('label_delta', 0)
+        self.background_parent = kwargs.pop('background_parent', None)
+
+        GenBitmapTextButton.__init__(self, *args, **kwargs)
+
+        self.bmpHover = None
+        self.hovering = False
+
+        self.Bind(wx.EVT_ENTER_WINDOW, self.OnEnter)
+        self.Bind(wx.EVT_LEAVE_WINDOW, self.OnLeave)
+
+    def SetBitmaps(self, bmp_h=None, bmp_sel=None):
+        """ This method sets additional bitmaps for hovering and selection """
+        if bmp_h:
+            self.SetBitmapHover(bmp_h)
+        if bmp_sel:
+            self.SetBitmapSelected(bmp_sel)
+
+    def GetBitmapHover(self):
+        return self.bmpHover
+
+    def SetBitmapHover(self, bitmap):
+        """Set bitmap to display when the button is hovered over"""
+        self.bmpHover = bitmap
+
+    def OnEnter(self, evt):
+        if self.bmpHover:
+            self.hovering = True
+            self.Refresh()
+
+    def OnLeave(self, evt):
+        if self.bmpHover:
+            self.hovering = False
+            self.Refresh()
+
+    def DrawLabel(self, dc, width, height, dx=0, dy=0):
+
+        bmp = self.bmpLabel
+
+        # If one or more bitmaps are defined...
+        if bmp is not None:
+            if self.hovering and self.bmpHover:
+                bmp = self.bmpHover
+            if self.bmpDisabled and not self.IsEnabled():
+                bmp = self.bmpDisabled
+            if self.bmpFocus and self.hasFocus:
+                bmp = self.bmpFocus
+            if self.bmpSelected and not self.up:
+                bmp = self.bmpSelected
+            bw, bh = bmp.GetWidth(), bmp.GetHeight()
+            if not self.up:
+                dx = dy = self.labelDelta
+            hasMask = bmp.GetMask() is not None
+        # no bitmap -> size is zero
+        else:
+            bw = bh = 0
+
+        # Determine font and font colour
+        dc.SetFont(self.GetFont())
+        if self.IsEnabled():
+            dc.SetTextForeground(self.GetForegroundColour())
+        else:
+            dc.SetTextForeground(wx.SystemSettings.GetColour(wx.SYS_COLOUR_GRAYTEXT))
+
+        # Get the label text
+        label = self.GetLabel()
+
+        # Determine the size of the text
+        tw, th = dc.GetTextExtent(label) # size of text
+        if not self.up:
+            dx = dy = self.labelDelta
+
+        # Calculate the x position for the given background bitmap
+        # The bitmap will be center within the button.
+        pos_x = (width - bw) / 2 + dx
+        if bmp is not None:
+            #Background bitmap is centered
+            dc.DrawBitmap(bmp, (width - bw) / 2, (height - bh) / 2, hasMask)
+
+
+        if self.HasFlag(wx.ALIGN_CENTER):
+            pos_x = pos_x + (bw - tw) / 2
+        elif self.HasFlag(wx.ALIGN_RIGHT):
+            pos_x = pos_x + bw - tw - self.padding_x
+        else:
+            pos_x = pos_x + self.padding_x
+
+        dc.DrawText(label, pos_x, (height - th) / 2 + dy + self.padding_y)      # draw the text
+
+    def InitColours(self):
+        GenBitmapButton.InitColours(self)
+        if self.background_parent:
+            self.faceDnClr = self.background_parent.GetBackgroundColour()
+        else:
+            self.faceDnClr = self.GetParent().GetBackgroundColour()
+
 class ImageToggleButton(GenBitmapToggleButton):  #pylint: disable=R0901
-    """ This class describes an image toggle button with hover effects """
+    """ Graphical toggle button with a hover effect. """
 
     # The displacement of the button content when it is pressed down, in pixels
     labelDelta = 0
@@ -95,11 +218,8 @@ class ImageToggleButton(GenBitmapToggleButton):  #pylint: disable=R0901
     def __init__(self, *args, **kwargs):
 
         kwargs['style'] = wx.NO_BORDER
-
-        self.background_parent = None
-        if kwargs.has_key('background_parent'):
-            self.background_parent = kwargs['background_parent']
-            del kwargs['background_parent']
+        self.labelDelta = kwargs.pop('label_delta', 0)
+        self.background_parent = kwargs.pop('background_parent', None)
 
         GenBitmapToggleButton.__init__(self, *args, **kwargs)
 
@@ -164,7 +284,10 @@ class ImageToggleButton(GenBitmapToggleButton):  #pylint: disable=R0901
         if not self.up:
             dx = dy = self.labelDelta
         hasMask = bmp.GetMask() != None
-        dc.DrawBitmap(bmp, (width - bw) / 2 + dx, (height - bh) / 2 + dy, hasMask)
+        dc.DrawBitmap(bmp,
+                      (width - bw) / 2 + dx,
+                      (height - bh) / 2 + dy,
+                      hasMask)
 
     def InitColours(self):
         GenBitmapButton.InitColours(self)
@@ -173,18 +296,20 @@ class ImageToggleButton(GenBitmapToggleButton):  #pylint: disable=R0901
         else:
             self.faceDnClr = self.GetParent().GetBackgroundColour()
 
-class ImageTextToggleButton(GenBitmapTextToggleButton):  #pylint: disable=R0901
+class ImageTextToggleButton(GenBitmapTextToggleButton):
+    """ Graphical toggle button with text and a hover effect. """
+
     # The displacement of the button content when it is pressed down, in pixels
     labelDelta = 1
+    padding_x = 8
+    padding_y = 1
 
     def __init__(self, *args, **kwargs):
 
-        kwargs['style'] = wx.NO_BORDER
+        kwargs['style'] = kwargs.get('style', 0) | wx.NO_BORDER
 
-        self.background_parent = None
-        if kwargs.has_key('background_parent'):
-            self.background_parent = kwargs['background_parent']
-            del kwargs['background_parent']
+        self.labelDelta = kwargs.pop('label_delta', 0)
+        self.background_parent = kwargs.pop('background_parent', None)
 
         GenBitmapTextToggleButton.__init__(self, *args, **kwargs)
 
@@ -261,10 +386,14 @@ class ImageTextToggleButton(GenBitmapTextToggleButton):  #pylint: disable=R0901
             #dc.DrawBitmap(bmp, (width - bw) / 2 + dx, (height - bh) / 2 + dy, hasMask)
             dc.DrawBitmap(bmp, (width - bw) / 2, (height - bh) / 2, hasMask)
 
-        # The text is right aligned for now
+        if self.HasFlag(wx.ALIGN_CENTER):
+            pos_x = pos_x + (bw - tw) / 2
+        elif self.HasFlag(wx.ALIGN_RIGHT):
+            pos_x = pos_x + bw - tw - self.padding_x
+        else:
+            pos_x = pos_x + self.padding_x
 
-        pos_x = pos_x + bw - tw - 8 # 5 is padding
-        dc.DrawText(label, pos_x, (height - th) / 2 + dy + 1)      # draw the text
+        dc.DrawText(label, pos_x, (height - th) / 2 + dy + 1) # draw the text
 
     def InitColours(self):
         GenBitmapButton.InitColours(self)
@@ -272,6 +401,60 @@ class ImageTextToggleButton(GenBitmapTextToggleButton):  #pylint: disable=R0901
             self.faceDnClr = self.background_parent.GetBackgroundColour()
         else:
             self.faceDnClr = self.GetParent().GetBackgroundColour()
+
+class ColourButton(ImageButton):
+    """ An ImageButton that uses a single-colour bitmap
+    that will be dynamically generated, allowing it to change colour during the
+    buttons life time.
+    """
+
+    # The default colour for the colour button
+    DEFAULT_COLOR = "#88BA38"
+
+    def __init__(self, *args, **kwargs):
+
+        colour = kwargs.pop('colour', None)
+        self.use_hover = kwargs.pop('use_hover', False)
+        ImageButton.__init__(self, *args, **kwargs)
+        self.set_colour(colour)
+
+    def set_colour(self, colour=None):
+        """ Update the colour button to reflect the provided colour """
+
+        self.colour = colour or self.DEFAULT_COLOR
+
+        BMP_EMPTY = img.getemptyBitmap()
+
+        brush = wx.Brush(self.colour)
+        pen = wx.Pen(self.colour)
+        bmp = BMP_EMPTY.GetSubBitmap(
+                    wx.Rect(0, 0, BMP_EMPTY.GetWidth(), BMP_EMPTY.GetHeight()))
+        mdc = wx.MemoryDC()
+        mdc.SelectObject(bmp)
+        mdc.SetBrush(brush)
+        mdc.SetPen(pen)
+        mdc.DrawRectangle(4, 4, 10, 10)
+        mdc.SelectObject(wx.NullBitmap)
+
+        self.SetBitmapLabel(bmp)
+
+        if self.use_hover:
+            BMP_EMPTY_H = img.getempty_hBitmap()
+            bmp = BMP_EMPTY_H.GetSubBitmap(
+                        wx.Rect(0, 0, BMP_EMPTY.GetWidth(), BMP_EMPTY.GetHeight()))
+            mdc = wx.MemoryDC()
+            mdc.SelectObject(bmp)
+            mdc.SetBrush(brush)
+            mdc.SetPen(pen)
+            mdc.DrawRectangle(4, 4, 10, 10)
+            mdc.SelectObject(wx.NullBitmap)
+
+            self.SetBitmaps(bmp)
+
+        self.Refresh()
+
+    def get_colour(self):
+        return self.colour
 
 class PopupImageButton(ImageButton):
 
@@ -307,7 +490,7 @@ class PopupImageButton(ImageButton):
                 self.Bind(wx.EVT_LISTBOX, self.on_select)
 
             def on_select(self, evt):
-                #print self.lb.GetStringSelection()
+                evt.Skip()
                 self.Dismiss()
                 self.OnDismiss()
 

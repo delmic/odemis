@@ -57,7 +57,7 @@ class ActuatorTest(object):
         dev = self.actuator_type(*self.actuator_args)
         self.assertGreaterEqual(len(dev.axes), 1, "Actuator has no axis")
         self.assertIsInstance(dev.ranges, dict, "range is not a dict")
-        self.assertIsInstance(dev.speed, model.Property, "range is not a Property")
+        self.assertIsInstance(dev.speed, model.VigilantAttribute, "range is not a VigilantAttribute")
         self.assertIsInstance(dev.speed.value, dict, "speed value is not a dict")
         
     def test_moveAbs(self):
@@ -137,11 +137,11 @@ class ActuatorTest(object):
 #            self.fail("Speed not consistent: ratio of " + str(ratio) + 
 #                         "instead of " + str(expected_ratio) + ".")
         
-class Stage2DTest(ActuatorTest, unittest.TestCase):
+class Stage2DTest(unittest.TestCase, ActuatorTest):
     
     actuator_type = simulated.Stage2D
     # name, role, children (must be None)
-    actuator_args = ("stage", "test", None)
+    actuator_args = ("stage", "test", {"x", "y"}, None)
 
 
 if __name__ == "__main__":

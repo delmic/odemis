@@ -1,14 +1,95 @@
 How to install Odemis
 
-= Installing the dependencies = 
+= Installing the dependencies =
 You need Ubuntu 12.04 (x86 - 32 bits).
-sudo apt-get python-wxgtk2.8 python-imaging python-yaml python-gdal python-serial 
+sudo apt-get python-wxgtk2.8 python-imaging python-yaml python-gdal python-serial python-zmq
 
 = Installing Odemis =
 
-git clone git@github.com:pieleric/odemis.git
+Download the source code:
+git clone git@github.com:delmic/Pyro4.git
+git clone git@github.com:delmic/odemis.git
+
+Create a "odemis" group and add all the necessary users to it:
+sudo addgroup odemis
+sudo adduser myuser odemis
+
+= Installing the vendor device drivers =
+== Andor Clara camera ==
+
+Install Andor SDK (USB product).
+WARNING! no version works fully, but a frankstein one:
+* v2.93 (and v2.91+) doesn't work because it blocks after a few image acquired
+* v2.90 doesn't support changing the preamp gain
+* The firmware of v2.90 (/usr/local/etc/andor) and code from v2.93
+  (/usr/local/lib) works (but use 100% of CPU when acquiring images)
+
+On Linux/Ubuntu you need to install libusb-dev (so that whereis reports libusb.so).
+Also the the permissions of all the files must be allowed for normal user:
+everything is installed by default as root only, so nothing can work from the
+normal user account. See /usr/local/*/*andor*
+Finally, fix /etc/udev/rules.d/andor.rules to read as:
+ATTRS{idVendor}=="136e", MODE="0666"
+
+For example:
+sudo gedit /etc/udev/rules.d/andor.rules
+# add the line and save the file
+sudo udevadm control --reload-rules
+
+
+== Andor Neo camera ==
+Install Andor SDK v3.3+
+On Linux, the bitflow driver has to be reinstalled (recompiled) each time the kernel is updated.
+
+== Physik Instrumente C-170 piezo-motor controllers ==
+Nothing specific. Make sure that the normal user has permissions to access the serial port.
+For example, if it is a USB serial port adapter check the permissions of /dev/ttyUSB0.
+
+== Physik Instrumente E-861 piezo-motor controllers ==
+Nothing specific. Plug one via the USB cable to the computer and the other ones
+in daisy chain to each other. At least one of the controller must have address 1.
+
+On old versions of Linux (before 3.2.7), you need to create a file
+/etc/udev/rules.d/99-usbftdi.rules with:
+SUBSYSTEMS=="usb", ATTRS{idProduct}=="1008", ATTRS{idVendor}=="1a72", RUN+="/sbin/modprobe -q ftdi-sio product=0x1008 vendor=0x1a72"
 
 = Configuring the instantiation file =
 This file describes the available hardware for Odemis. Basically, it list for each
 hardware, which driver to use and the parameters required. See the backend
 specification for precise syntax and example files.
+
+= wxPython 2.9 =
+
+** NOTE: wxPython 2.9 might not function well! **
+
+Installing wxpython 2.9
+
+Get wxPython:
+
+- Download and unpack wxPython 2.9.4.0 source code
+    http://downloads.sourceforge.net/project/wxpython/wxPython/2.9.4.0/wxPython-src-2.9.4.0.tar.bz2?r=http%3A%2F%2Fwxpython.org%2Fdownload.php&ts=1344420887&use_mirror=switch
+- Download the 2.9.4.1 patch file into /wxPython-src-2.9.4.0
+    http://sourceforge.net/projects/wxpython/files/wxPython/2.9.4.0/wxPython-src-2.9.4.1.patch/download
+- From /wxPython-src-2.9.4.0 run
+    patch -p0 <name_of_patch_file
+
+Make sure the following is installed:
+
+- sudo apt-get install libgtk2.0-dev freeglut3 freeglut3-dev freeglut3-dbg libgl1-mesa-glx libglu1-mesa libgl1-mesa-dev libglu1-mesa-dev libgstreamer0.10-dev libgconf2-dev libsdl1.2-dev zlib1g-dev libjpeg-dev libtiff4-dev python-gst0.10-dev python-dev
+
+Compiling:
+
+- Go to the wxPython-src-2.9.4.0/wxPython directory
+- run 'sudo python2.7 build-wxpython.py --build_dir=../build --install'
+
+Preparing XRCED:
+
+- Find the location where you Python packages are installed:
+    python -c "import wx; import os; print os.path.dirname(wx.__file__)"
+- Goto the XRCED directory
+    cd tools/XRCed/plugins
+- Create symbolic links to xh_delmic.py and delmic.py files in the
+  odemis/gui/xmlh directory.
+    sudo ln -s <path to odemis root dir>/gui/xmlh/xh_delmic.py
+    sudo ln -s <path to odemis root dir>/gui/xmlh/delmic.py
+

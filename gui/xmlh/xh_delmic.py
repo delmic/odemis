@@ -7,14 +7,18 @@
 import wx
 import wx.lib.buttons
 import wx.xrc as xrc
-from wx.tools.XRCed.globals import TRACE
 
 import odemis.gui.comp.foldpanelbar as fpb
 import odemis.gui.comp.stream as strm
 import odemis.gui.comp.buttons as btns
 import odemis.gui.comp.text as txt
+import odemis.gui.dblmscopepanel as mscp
 
-class FixedStreamPanelXmlHandler(xrc.XmlResourceHandler):
+##################################
+# Fold Panel Bar related Handlers
+##################################
+
+class FixedStreamPanelEntryXmlHandler(xrc.XmlResourceHandler):
     def __init__(self):
         xrc.XmlResourceHandler.__init__(self)
         # Specify the styles recognized by objects of this type
@@ -26,13 +30,16 @@ class FixedStreamPanelXmlHandler(xrc.XmlResourceHandler):
 
     # This method and the next one are required for XmlResourceHandlers
     def CanHandle(self, node):
-        return self.IsOfClass(node, "odemis.gui.comp.stream.FixedStreamPanel")
+        capable = self.IsOfClass(node, "FixedStreamPanelEntry")
+
+        return capable
 
     def DoCreateResource(self):
         assert self.GetInstance() is None
 
+        parent_window = self.GetParentAsWindow()
         # Now create the object
-        panel = strm.FixedStreamPanel(self.GetParentAsWindow(),
+        panel = strm.FixedStreamPanelEntry(parent_window,
                                       self.GetID(),
                                       self.GetText('label'),
                                       self.GetPosition(),
@@ -47,13 +54,15 @@ class FixedStreamPanelXmlHandler(xrc.XmlResourceHandler):
         # Set standard window attributes
         self.SetupWindow(panel)
         panel.finalize()
+
+        parent_window.add_stream(panel)
         # Create any child windows of this node
         # deprecated: all children are hard-coded
         #self.CreateChildren(panel.get_panel())
 
         return panel
 
-class CustomStreamPanelXmlHandler(xrc.XmlResourceHandler):
+class CustomStreamPanelEntryXmlHandler(xrc.XmlResourceHandler):
     def __init__(self):
         xrc.XmlResourceHandler.__init__(self)
         # Specify the styles recognized by objects of this type
@@ -65,13 +74,13 @@ class CustomStreamPanelXmlHandler(xrc.XmlResourceHandler):
 
     # This method and the next one are required for XmlResourceHandlers
     def CanHandle(self, node):
-        return self.IsOfClass(node, "odemis.gui.comp.stream.CustomStreamPanel")
+        return self.IsOfClass(node, "CustomStreamPanelEntry")
 
     def DoCreateResource(self):
         assert self.GetInstance() is None
 
         # Now create the object
-        panel = strm.CustomStreamPanel(self.GetParentAsWindow(),
+        panel = strm.CustomStreamPanelEntry(self.GetParentAsWindow(),
                                       self.GetID(),
                                       self.GetText('label'),
                                       self.GetPosition(),
@@ -98,91 +107,47 @@ class FoldPanelBarXmlHandler(xrc.XmlResourceHandler):
         xrc.XmlResourceHandler.__init__(self)
         # Standard styles
         self.AddWindowStyles()
-        # Custom styles
-        self.AddStyle('FPB_SINGLE_FOLD', fpb.FPB_SINGLE_FOLD)
-        self.AddStyle('FPB_COLLAPSE_TO_BOTTOM', fpb.FPB_COLLAPSE_TO_BOTTOM)
-        self.AddStyle('FPB_EXCLUSIVE_FOLD', fpb.FPB_EXCLUSIVE_FOLD)
-        self.AddStyle('FPB_HORIZONTAL', fpb.FPB_HORIZONTAL)
-        self.AddStyle('FPB_VERTICAL', fpb.FPB_VERTICAL)
-        self._isInside = False
-        self.current_foldpanelitem = None
-        self.spacing = fpb.FPB_DEFAULT_SPACING
-        self.left_spacing = fpb.FPB_DEFAULT_LEFTSPACING
-        self.right_spacing = fpb.FPB_DEFAULT_RIGHTSPACING
+        #self._isInside = False
 
     def CanHandle(self, node):
         # return not self._isInside and self.IsOfClass(node, 'wx.lib.foldpanelbar.FoldPanelBar') or \
         #        self._isInside and self.IsOfClass(node, 'foldpanel')
-        return self.IsOfClass(node, 'odemis.gui.comp.foldpanelbar.FoldPanelBar') \
-               or self._isInside and self.IsOfClass(node, 'odemis.gui.comp.foldpanelbar.FoldPanelItem') \
+        return self.IsOfClass(node, 'FoldPanelBar')
 
 
     # Process XML parameters and create the object
     def DoCreateResource(self):
-        TRACE('DoCreateResource: %s', self.GetClass())
 
-        if self.GetClass() == 'odemis.gui.comp.foldpanelbar.FoldPanelBar':
+        if self.GetClass() == 'FoldPanelBar':
+            #print "Creating FoldpanelBar"
             w = fpb.FoldPanelBar(self.GetParentAsWindow(),
                                  self.GetID(),
                                  self.GetPosition(),
                                  self.GetSize(),
-                                 self.GetStyle(),
-                                 self.GetStyle('exstyle'))
+                                 self.GetStyle())
 
-            if self.HasParam('spacing'):
-                self.spacing = self.GetLong('spacing')
+            # if self.HasParam('spacing'):
+            #     self.spacing = self.GetLong('spacing')
 
-            if self.HasParam('leftspacing'):
-                self.left_spacing = self.GetLong('leftspacing')
+            # if self.HasParam('leftspacing'):
+            #     self.left_spacing = self.GetLong('leftspacing')
 
-            if self.HasParam('rightspacing'):
-                self.right_spacing = self.GetLong('rightspacing')
+            # if self.HasParam('rightspacing'):
+            #     self.right_spacing = self.GetLong('rightspacing')
 
             self.SetupWindow(w)
-            self._w = w
-            old_ins = self._isInside
-            self._isInside = True
-            # Note: CreateChildren will call this method again
-            self.CreateChildren(w, True)
-            self._isInside = old_ins
 
-            parent = self._w.GetParent()
+            parent = w.GetParent()
             if parent.__class__ == wx.ScrolledWindow:
                 parent.EnableScrolling(False, True)
                 parent.SetScrollbars(-1, 10, 1, 1)
 
+            self.CreateChildren(w, False)
+
             return w
-        elif self.GetClass() == 'odemis.gui.comp.foldpanelbar.FoldPanelItem':
-            item = self._w.AddFoldPanel(self.GetText('label'),
-                                        collapsed=self.GetBool('collapsed'),
-                                        id=self.GetID())
-            self.current_foldpanelitem = item
-
-            n = self.GetParamNode("object")
-            wnd = None
-
-            while n:
-                #print "Creating Window ", n.GetPropVal('class', "")
-                if n.Name != 'object':
-                    n = n.Next
-                    continue
-                wnd = self.CreateResFromNode(n, self.current_foldpanelitem, None)
-                if wnd:
-                    self._w.AddFoldPanelWindow(self.current_foldpanelitem,
-                                               wnd,
-                                               spacing=self.spacing,
-                                               leftSpacing=self.left_spacing,
-                                               rightSpacing=self.right_spacing)
-                n = n.Next
-
-            # If the last one, was a window ctrl...
-            if n and n.Name == 'object' and wnd:
-                pass
 
 
-        #wx.CallAfter(self._w.FitBar)
-
-class FoldPanelXmlHandler(xrc.XmlResourceHandler):
+class FoldPanelItemXmlHandler(xrc.XmlResourceHandler):
     def __init__(self):
         xrc.XmlResourceHandler.__init__(self)
         # Standard styles
@@ -190,15 +155,34 @@ class FoldPanelXmlHandler(xrc.XmlResourceHandler):
         # Custom styles
 
     def CanHandle(self, node):
-        # return not self._isInside and self.IsOfClass(node, 'wx.lib.foldpanelbar.FoldPanelBar') or \
-        #        self._isInside and self.IsOfClass(node, 'foldpanel')
-        return self.IsOfClass(node, 'odemis.gui.comp.foldpanelbar.FoldPanelBar') \
-               or self.IsOfClass(node, 'odemis.gui.comp.foldpanelbar.FoldPanelItem') \
+        return self.IsOfClass(node, 'FoldPanelItem')
 
 
     # Process XML parameters and create the object
     def DoCreateResource(self):
-        pass
+
+        if self.GetClass() == 'FoldPanelItem':
+            #print "Creating FoldpanelItem"
+            parent = self.GetParentAsWindow()
+            w = fpb.FoldPanelItem(parent,
+                                  self.GetID(),
+                                  self.GetPosition(),
+                                  self.GetSize(),
+                                  self.GetStyle(),
+                                  self.GetText('label'),
+                                  self.GetBool('collapsed'))
+            self.SetupWindow(w)
+
+            self.CreateChildren(w, False)
+
+            # Move all the FoldPanelItem children to the main sizer
+            w.children_to_sizer()
+            parent.add_item(w)
+            return w
+
+################################
+# ImageButton sub class handlers
+################################
 
 class GenBitmapButtonHandler(xrc.XmlResourceHandler):
     def __init__(self):
@@ -249,7 +233,7 @@ class ImageButtonHandler(xrc.XmlResourceHandler):
         # Custom styles
 
     def CanHandle(self, node):
-        return self.IsOfClass(node, 'odemis.gui.comp.buttons.ImageButton')
+        return self.IsOfClass(node, 'ImageButton')
 
     # Process XML parameters and create the object
     def DoCreateResource(self):
@@ -264,7 +248,8 @@ class ImageButtonHandler(xrc.XmlResourceHandler):
                             bmp,
                             pos=self.GetPosition(),
                             size=self.GetSize(),
-                            style=self.GetStyle())
+                            style=self.GetStyle(),
+                            label_delta=self.GetLong('delta'))
 
         if self.GetParamNode("selected"):
             bmp = self.GetBitmap("selected")
@@ -278,6 +263,160 @@ class ImageButtonHandler(xrc.XmlResourceHandler):
             bmp = self.GetBitmap("focus")
             w.SetBitmapFocus(bmp)
 
+
+        if self.GetParamNode("disabled"):
+            bmp = self.GetBitmap("disabled")
+            w.SetBitmapDisabled(bmp)
+
+        self.SetupWindow(w)
+        return w
+
+class ImageTextButtonHandler(xrc.XmlResourceHandler):
+
+    def __init__(self):
+        xrc.XmlResourceHandler.__init__(self)
+        # Standard styles
+        self.AddWindowStyles()
+        # Custom styles
+        self.AddStyle('wxALIGN_LEFT', wx.ALIGN_LEFT)
+        self.AddStyle('wxALIGN_RIGHT', wx.ALIGN_RIGHT)
+        self.AddStyle('wxALIGN_CENTRE', wx.ALIGN_CENTRE)
+
+    def CanHandle(self, node):
+        return self.IsOfClass(node, 'ImageTextButton')
+
+    # Process XML parameters and create the object
+    def DoCreateResource(self):
+        assert self.GetInstance() is None
+
+        bmp = wx.NullBitmap
+        if self.GetParamNode("bitmap"):
+            bmp = self.GetBitmap("bitmap")
+
+        w = btns.ImageTextButton(self.GetParentAsWindow(),
+                                 self.GetID(),
+                                 bmp,
+                                 pos=self.GetPosition(),
+                                 size=self.GetSize(),
+                                 style=self.GetStyle(),
+                                 label=self.GetText('label'),
+                                 label_delta=self.GetLong('delta'))
+
+        if self.GetParamNode("selected"):
+            bmp = self.GetBitmap("selected")
+            w.SetBitmapSelected(bmp)
+
+        if self.GetParamNode("hover"):
+            bmp = self.GetBitmap("hover")
+            w.SetBitmapHover(bmp)
+
+        if self.GetParamNode("focus"):
+            bmp = self.GetBitmap("focus")
+            w.SetBitmapFocus(bmp)
+
+        if self.GetParamNode("disabled"):
+            bmp = self.GetBitmap("disabled")
+            w.SetBitmapDisabled(bmp)
+
+        self.SetupWindow(w)
+        return w
+
+
+
+class ImageTextToggleButtonHandler(xrc.XmlResourceHandler):
+
+    def __init__(self):
+        xrc.XmlResourceHandler.__init__(self)
+        # Standard styles
+        self.AddWindowStyles()
+        # Custom styles
+        self.AddStyle('wxALIGN_LEFT', wx.ALIGN_LEFT)
+        self.AddStyle('wxALIGN_RIGHT', wx.ALIGN_RIGHT)
+        self.AddStyle('wxALIGN_CENTRE', wx.ALIGN_CENTRE)
+
+    def CanHandle(self, node):
+        return self.IsOfClass(
+            node, 'ImageTextToggleButton')
+
+    # Process XML parameters and create the object
+    def DoCreateResource(self):
+        assert self.GetInstance() is None
+
+        bmp = wx.NullBitmap
+        if self.GetParamNode("bitmap"):
+            bmp = self.GetBitmap("bitmap")
+
+        w = btns.ImageTextToggleButton(self.GetParentAsWindow(),
+                                       self.GetID(),
+                                       bmp,
+                                       pos=self.GetPosition(),
+                                       size=self.GetSize(),
+                                       style=self.GetStyle(),
+                                       label=self.GetText('label'),
+                                       label_delta=self.GetLong('delta'))
+
+        if self.GetParamNode("selected"):
+            bmp = self.GetBitmap("selected")
+            w.SetBitmapSelected(bmp)
+
+        if self.GetParamNode("hover"):
+            bmp = self.GetBitmap("hover")
+            w.SetBitmapHover(bmp)
+
+        if self.GetParamNode("focus"):
+            bmp = self.GetBitmap("focus")
+            w.SetBitmapFocus(bmp)
+
+        if self.GetParamNode("disabled"):
+            bmp = self.GetBitmap("disabled")
+            w.SetBitmapDisabled(bmp)
+
+        self.SetupWindow(w)
+        return w
+
+class ImageTextTabButtonButtonHandler(xrc.XmlResourceHandler):
+
+    def __init__(self):
+        xrc.XmlResourceHandler.__init__(self)
+        # Standard styles
+        self.AddWindowStyles()
+        # Custom styles
+        self.AddStyle('wxALIGN_LEFT', wx.ALIGN_LEFT)
+        self.AddStyle('wxALIGN_RIGHT', wx.ALIGN_RIGHT)
+        self.AddStyle('wxALIGN_CENTRE', wx.ALIGN_CENTRE)
+
+    def CanHandle(self, node):
+        return self.IsOfClass(
+            node, 'ImageTextTabButton')
+
+    # Process XML parameters and create the object
+    def DoCreateResource(self):
+        assert self.GetInstance() is None
+
+        bmp = wx.NullBitmap
+        if self.GetParamNode("bitmap"):
+            bmp = self.GetBitmap("bitmap")
+
+        w = btns.ImageTextTabButton(self.GetParentAsWindow(),
+                                       self.GetID(),
+                                       bmp,
+                                       pos=self.GetPosition(),
+                                       size=self.GetSize(),
+                                       style=self.GetStyle(),
+                                       label=self.GetText('label'),
+                                       label_delta=self.GetLong('delta'))
+
+        if self.GetParamNode("selected"):
+            bmp = self.GetBitmap("selected")
+            w.SetBitmapSelected(bmp)
+
+        if self.GetParamNode("hover"):
+            bmp = self.GetBitmap("hover")
+            w.SetBitmapHover(bmp)
+
+        if self.GetParamNode("focus"):
+            bmp = self.GetBitmap("focus")
+            w.SetBitmapFocus(bmp)
 
         if self.GetParamNode("disabled"):
             bmp = self.GetBitmap("disabled")
@@ -295,7 +434,7 @@ class PopupImageButtonHandler(xrc.XmlResourceHandler):
         # Custom styles
 
     def CanHandle(self, node):
-        return self.IsOfClass(node, 'odemis.gui.comp.buttons.PopupImageButton')
+        return self.IsOfClass(node, 'PopupImageButton')
 
     # Process XML parameters and create the object
     def DoCreateResource(self):
@@ -306,11 +445,11 @@ class PopupImageButtonHandler(xrc.XmlResourceHandler):
             bmp = self.GetBitmap("bitmap")
 
         w = btns.PopupImageButton(self.GetParentAsWindow(),
-                                self.GetID(),
-                                bmp,
-                                pos=self.GetPosition(),
-                                size=self.GetSize(),
-                                style=self.GetStyle())
+                                  self.GetID(),
+                                  bmp,
+                                  pos=self.GetPosition(),
+                                  size=self.GetSize(),
+                                  style=self.GetStyle())
 
         if self.GetParamNode("selected"):
             bmp = self.GetBitmap("selected")
@@ -323,7 +462,6 @@ class PopupImageButtonHandler(xrc.XmlResourceHandler):
         if self.GetParamNode("focus"):
             bmp = self.GetBitmap("focus")
             w.SetBitmapFocus(bmp)
-
 
         if self.GetParamNode("disabled"):
             bmp = self.GetBitmap("disabled")
@@ -341,7 +479,7 @@ class SuggestTextCtrlHandler(xrc.XmlResourceHandler):
         # Custom styles
 
     def CanHandle(self, node):
-        return self.IsOfClass(node, 'odemis.gui.comp.text.SuggestTextCtrl')
+        return self.IsOfClass(node, 'SuggestTextCtrl')
 
     # Process XML parameters and create the object
     def DoCreateResource(self):
@@ -366,7 +504,7 @@ class UnitIntegerCtrlHandler(xrc.XmlResourceHandler):
         # Custom styles
 
     def CanHandle(self, node):
-        return self.IsOfClass(node, 'odemis.gui.comp.text.UnitIntegerCtrl')
+        return self.IsOfClass(node, 'UnitIntegerCtrl')
 
     # Process XML parameters and create the object
     def DoCreateResource(self):
@@ -384,12 +522,47 @@ class UnitIntegerCtrlHandler(xrc.XmlResourceHandler):
         self.SetupWindow(w)
         return w
 
+##################################
+# Canvas Handlers
+##################################
 
-HANDLER_CLASS_LIST = [FixedStreamPanelXmlHandler,
-                      CustomStreamPanelXmlHandler,
+class DblMicroscopePanelXmlHandler(xrc.XmlResourceHandler):
+    def __init__(self):
+        xrc.XmlResourceHandler.__init__(self)
+        # Specify the styles recognized by objects of this type
+        self.AddStyle("wxTAB_TRAVERSAL", wx.TAB_TRAVERSAL)
+        self.AddWindowStyles()
+
+    # This method and the next one are required for XmlResourceHandlers
+    def CanHandle(self, node):
+        capable = self.IsOfClass(node, "DblMicroscopePanel")
+        return capable
+
+    def DoCreateResource(self):
+        assert self.GetInstance() is None
+
+        # Now create the object
+        panel = mscp.DblMicroscopePanel(self.GetParentAsWindow(),
+                                        id=self.GetID(),
+                                        pos=self.GetPosition(),
+                                        size=self.GetSize(),
+                                        style=self.GetStyle())
+        self.SetupWindow(panel)
+        return panel
+
+HANDLER_CLASS_LIST = [
+                      CustomStreamPanelEntryXmlHandler,
+                      DblMicroscopePanelXmlHandler,
+                      FixedStreamPanelEntryXmlHandler,
                       FoldPanelBarXmlHandler,
+                      FoldPanelItemXmlHandler,
                       GenBitmapButtonHandler,
                       ImageButtonHandler,
+                      ImageTextButtonHandler,
+                      ImageTextTabButtonButtonHandler,
+                      ImageTextToggleButtonHandler,
                       PopupImageButtonHandler,
                       SuggestTextCtrlHandler,
-                      UnitIntegerCtrlHandler]
+                      UnitIntegerCtrlHandler,
+                      ]
+

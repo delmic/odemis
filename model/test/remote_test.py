@@ -17,7 +17,9 @@ You should have received a copy of the GNU General Public License along with Del
 '''
 from concurrent import futures
 from concurrent.futures.thread import ThreadPoolExecutor
+from driver import andorcam3
 from model import roattribute, oneway, isasync
+from model._vattributes import VigilantAttributeBase
 from multiprocessing.process import Process
 from threading import Thread
 import Pyro4
@@ -31,15 +33,24 @@ import time
 import unittest
 
 #gc.set_debug(gc.DEBUG_LEAK | gc.DEBUG_STATS)
-
-
+        
 class ContainerTest(unittest.TestCase):
-    
     def test_empty_container(self):
         container = model.createNewContainer("testempty")
         container.ping()
         container.terminate()
     
+    def test_instantiate_simple_component(self):
+        comp = model.createInNewContainer("testscont", FamilyValueComponent, {"name":"MyComp"})
+        self.assertEqual(comp.name, "MyComp")
+        
+        comp_prime = model.getObject("testscont", "MyComp")
+        self.assertEqual(comp_prime.name, "MyComp")
+        
+        container = model.getContainer("testscont")
+        comp.terminate()
+        container.terminate()
+
     def test_instantiate_component(self):
         comp = model.createInNewContainer("testcont", MyComponent, {"name":"MyComp"})
         self.assertEqual(comp.name, "MyComp")
@@ -53,7 +64,7 @@ class ContainerTest(unittest.TestCase):
         container.ping()
         comp.terminate()
         container.terminate()
-        
+    
     def test_multi_components(self):
         comp = model.createInNewContainer("testmulti", FatherComponent, {"name":"Father", "children_num":3})
         self.assertEqual(comp.name, "Father")
@@ -69,6 +80,35 @@ class ContainerTest(unittest.TestCase):
         # we are not terminating the children, but this should be caught by the container
         model.getContainer("testmulti").terminate()
 
+    def test_andorcam3(self):
+        comp = model.createInNewContainer("testcont", andorcam3.AndorCam3, 
+                                          {"name":"camera", "role":"test", 
+                                           "children":None, "device":0})
+        self.assertEqual(comp.name, "camera")
+        
+        self.assertIsInstance(comp.targetTemperature, VigilantAttributeBase)
+                
+        ttemp = comp.targetTemperature.value
+        self.assertTrue(-300 < ttemp and ttemp < 100)
+        comp.targetTemperature.value = comp.targetTemperature.range[0]
+        self.assertEqual(comp.targetTemperature.value, comp.targetTemperature.range[0])
+        
+        comp.terminate()
+        model.getContainer("testcont").terminate()
+
+    def test_timeout(self):
+        if Pyro4.config.COMMTIMEOUT == 0 or Pyro4.config.COMMTIMEOUT > 20:
+            self.skipTest("Timeout too long (%d s) to test." % Pyro4.config.COMMTIMEOUT)
+        server = threading.Thread(target=ServerLoop, args=("backend",))
+        server.start()
+        time.sleep(0.1) # give it some time to start
+        
+        rdaemon = Pyro4.Proxy("PYRO:Pyro.Daemon@./u:backend")
+        rdaemon.ping()
+        time.sleep(Pyro4.config.COMMTIMEOUT + 2)
+        rdaemon.ping()
+        
+    
 #@unittest.skip("simple")
 class SerializerTest(unittest.TestCase):
     
@@ -88,7 +128,141 @@ class SerializerTest(unittest.TestCase):
         parentc_unpickled = pickle.loads(dump)
         self.assertEqual(parentc_unpickled.value, 42)
         
-# TODO test sharing a shared component from the client (probably broken for now)
+
+    
+    
+#@unittest.skip("simple")
+class ProxyOfProxyTest(unittest.TestCase):
+# Test sharing a shared component from the client
+
+#  create one remote container with an object (Component)
+#  create a second remote container with a HwComponent
+#  change .affects of HwComponent to the first object
+#  
+    def test_component(self):
+        comp = model.createInNewContainer("testscont", model.HwComponent, 
+                                          {"name":"MyHwComp", "role":"affected"})
+        self.assertEqual(comp.name, "MyHwComp")
+            
+        comp2 = model.createInNewContainer("testscont2", model.HwComponent, 
+                                           {"name":"MyHwComp2", "role":"affecter"})
+        self.assertEqual(comp2.name, "MyHwComp2")
+        
+        comp2._set_affects(set([comp]))
+        self.assertEqual(len(comp2.affects), 1)
+        for c in comp2.affects:
+            self.assertTrue(isinstance(c, model.ComponentBase))
+            self.assertEqual(c.name, "MyHwComp")
+            self.assertEqual(c.role, "affected")
+            
+        comp2_new = model.getObject("testscont2", "MyHwComp2")
+        self.assertEqual(comp2_new.name, "MyHwComp2")
+        self.assertEqual(len(comp2_new.affects), 1)
+            
+        comp.terminate()
+        comp2.terminate()
+        model.getContainer("testscont").terminate()
+        model.getContainer("testscont2").terminate()
+        time.sleep(0.1) # give it some time to terminate
+    
+    def test_va(self):
+        comp = model.createInNewContainer("testscont", SimpleHwComponent, 
+                                          {"name":"MyHwComp", "role":"affected"})
+        self.assertEqual(comp.name, "MyHwComp")
+        
+        comp2 = model.createInNewContainer("testscont2", model.HwComponent, 
+                                           {"name":"MyHwComp2", "role":"affecter"})
+        self.assertEqual(comp2.name, "MyHwComp2")
+        
+        comp2._set_affects(set([comp]))
+        self.assertEqual(len(comp2.affects), 1)
+        comp_indir = list(comp2.affects)[0]
+        self.assertIsInstance(comp_indir.prop, VigilantAttributeBase)
+        self.assertIsInstance(comp_indir.cont, VigilantAttributeBase)
+        self.assertIsInstance(comp_indir.enum, VigilantAttributeBase)
+                
+        prop = comp_indir.prop
+        self.assertEqual(prop.value, 42)
+        prop.value += 1
+        self.assertEqual(prop.value, 43)
+        self.assertEqual(comp.prop.value, 43)
+        
+        self.assertEqual(comp_indir.cont.value, 2.0)
+        self.assertIsInstance(comp_indir.cont.range, tuple)
+        try:
+            # there is no such thing, it should fail
+            print "Choices:", comp_indir.cont.choices
+            self.fail("Accessing choices should fail")
+        except:
+            pass
+        
+        self.assertEqual(comp_indir.enum.value, "a")
+        
+        comp.terminate()
+        comp2.terminate()
+        model.getContainer("testscont").terminate()
+        model.getContainer("testscont2").terminate()
+    
+    def test_roattributes(self):
+        comp = model.createInNewContainer("testscont", MyComponent, 
+                                          {"name":"MyComp"})
+        self.assertEqual(comp.name, "MyComp")
+        
+        comp2 = model.createInNewContainer("testscont2", model.HwComponent, 
+                                           {"name":"MyHwComp2", "role":"affecter"})
+        self.assertEqual(comp2.name, "MyHwComp2")
+        
+        comp2._set_affects(set([comp]))
+        self.assertEqual(len(comp2.affects), 1)
+        for c in comp2.affects:
+            self.assertTrue(isinstance(c, model.ComponentBase))
+            self.assertEqual(c.name, "MyComp")
+            val = comp.my_value
+            self.assertEqual(val, "ro", "Reading attribute failed")
+        
+        comp.terminate()
+        comp2.terminate()
+        model.getContainer("testscont").terminate()
+        model.getContainer("testscont2").terminate()
+    
+    def test_dataflow(self):
+        comp = model.createInNewContainer("testscont", MyComponent, 
+                                          {"name":"MyComp"})
+        self.assertEqual(comp.name, "MyComp")
+        
+        comp2 = model.createInNewContainer("testscont2", model.HwComponent, 
+                                           {"name":"MyHwComp2", "role":"affecter"})
+        self.assertEqual(comp2.name, "MyHwComp2")
+        
+        comp2._set_affects(set([comp]))
+        self.assertEqual(len(comp2.affects), 1)
+        comp_indir = list(comp2.affects)[0]
+
+        self.count = 0
+        self.data_arrays_sent = 0
+        comp_indir.data.reset()
+        
+        comp_indir.data.subscribe(self.receive_data)
+        time.sleep(0.5)
+        comp_indir.data.unsubscribe(self.receive_data)
+        count_end = self.count
+        print "received %d arrays over %d" % (self.count, self.data_arrays_sent)
+        
+        time.sleep(0.1)
+        self.assertEqual(count_end, self.count)
+
+        comp.terminate()
+        comp2.terminate()
+        model.getContainer("testscont").terminate()
+        model.getContainer("testscont2").terminate()
+        time.sleep(0.1) # give it some time to terminate
+    
+    def receive_data(self, dataflow, data):
+        self.count += 1
+        self.assertEqual(data.shape, (2048, 2048))
+        self.data_arrays_sent = data[0][0]
+        self.assertGreaterEqual(self.data_arrays_sent, self.count)
+
 #@unittest.skip("simple")
 class RemoteTest(unittest.TestCase):
     """
@@ -296,6 +470,7 @@ class RemoteTest(unittest.TestCase):
         comp = rdaemon.getObject("mycomp")
 
         prop = comp.prop
+        self.assertIsInstance(prop, VigilantAttributeBase)
         self.assertEqual(prop.value, 42)
         prop.value += 1
         self.assertEqual(prop.value, 43)
@@ -374,6 +549,7 @@ def ServerLoop(socket_name):
         pass
     daemon = Pyro4.Daemon(unixsocket=socket_name)
     component = MyComponent("mycomp", daemon)
+#    component = SimpleComponent("simpcomp", daemon=daemon)
     childc = FamilyValueComponent("child", 43, daemon=daemon)
     parentc = FamilyValueComponent("parent", 42, parent=None, children=[childc], daemon=daemon)
     childc.parent = parentc
@@ -386,6 +562,33 @@ def ServerLoop(socket_name):
 class MyError(Exception):
     pass
 
+class SimpleComponent(model.Component):
+    """
+    A component that does nothing
+    """
+    def __init__(self, *args, **kwargs):
+        model.Component.__init__(self, *args, **kwargs)
+        
+    def ping(self):
+        return "pong"
+    
+class SimpleHwComponent(model.HwComponent):
+    """
+    A Hw component that does nothing
+    """
+    def __init__(self, *args, **kwargs):
+        model.HwComponent.__init__(self, *args, **kwargs)
+        self.data = FakeDataFlow()
+        # TODO automatically register the property when serializing the Component
+        self.prop = model.IntVA(42)
+        self.cont = model.FloatContinuous(2.0, [-1, 3.4])
+        self.enum = model.StringEnumerated("a", set(["a", "c", "bfds"]))
+        
+    @roattribute
+    def my_value(self):
+        return "ro"
+    
+
 class MyComponent(model.Component):
     """
     A component that does everything
@@ -397,9 +600,8 @@ class MyComponent(model.Component):
         self.data = FakeDataFlow()
         # TODO automatically register the property when serializing the Component
         self.prop = model.IntVA(42)
-        self.cont = model.FloatContinuous(2.0, [-1, 3.4])
+        self.cont = model.FloatContinuous(2.0, [-1, 3.4], unit="C")
         self.enum = model.StringEnumerated("a", set(["a", "c", "bfds"]))
-        
     
     @roattribute
     def my_value(self):
@@ -483,7 +685,7 @@ class FatherComponent(model.Component):
         return self._value
     
     
-class FakeDataFlow(model.DataFlowRemotable):
+class FakeDataFlow(model.DataFlow):
     def __init__(self, *args, **kwargs):
         super(FakeDataFlow, self).__init__(*args, **kwargs)
         self.shape = (2048, 2048)
@@ -516,7 +718,7 @@ class FakeDataFlow(model.DataFlowRemotable):
         assert self._thread is None
         self._stop.clear()
         self._thread = threading.Thread(name="array generator", target=self.generate)
-        self._thread.deamon = True
+        self._thread.daemon = True
         self._thread.start()
     
     def stop_generate(self):
@@ -524,6 +726,7 @@ class FakeDataFlow(model.DataFlowRemotable):
         self._stop.set()
         
         # to avoid blocking when unsubscribe from callback
+        # Note: in real life it's better to join() in start_generate()
         if threading.current_thread() != self._thread:
             self._thread.join()
         self._thread = None
