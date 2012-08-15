@@ -1331,3 +1331,17 @@ class ActionFuture(object):
                     max_duration = max(max_duration, duration)
                 
         return max_duration 
+
+
+#PORT = "/dev/ttyUSB0"
+#CONFIG_CTRL_BASIC = (1, {1: False})
+#ser = Controller.openSerialPort(PORT)
+#ctrl = Controller(ser, *CONFIG_CTRL_BASIC)
+#
+#for val in range(55):
+#    ctrl.OLAnalogDriving(1, val)
+#    time.sleep(1)
+#    
+#for val in range(55):
+#    ctrl.OLAnalogDriving(1, -val)
+#    time.sleep(1)

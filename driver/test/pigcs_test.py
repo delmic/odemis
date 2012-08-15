@@ -32,7 +32,8 @@ if os.name == "nt":
 else:
     PORT = "/dev/ttyUSB0"
 
-CONFIG_BUS_BASIC = {"x":(1, 1, False)} 
+CONFIG_BUS_BASIC = {"x":(1, 1, False)}
+CONFIG_BUS_TWO = {"x":(1, 1, False), "x":(2, 1, False)}  
 CONFIG_CTRL_BASIC = (1, {1: False})
 
 #@unittest.skip("faster") 
@@ -253,10 +254,14 @@ class TestActuator(unittest.TestCase):
         self.assertFalse(f.cancelled())
         self.assertTrue(f.done())
     
-    @unittest.skip("need two axes")  
     def test_move_circle(self):
-        stage = pigcs.Bus("test", "stage", None, PORT, CONFIG_BUS_BASIC)
-        stage.speed.value = {"x":1e-3}
+        # check if we can run it
+        devices = pigcs.Bus.scan(PORT)
+        if len(devices) < 2:
+            self.skipTest("Couldn't find two controllers")
+        
+        stage = pigcs.Bus("test", "stage", None, PORT, CONFIG_BUS_TWO)
+        stage.speed.value = {"x":1e-3, "y":1e-3}
         radius = 100e-6 # m
         # each step has to be big enough so that each move is above imprecision
         steps = 100

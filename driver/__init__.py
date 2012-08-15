@@ -15,4 +15,4 @@ Delmic Acquisition Software is distributed in the hope that it will be useful, b
 You should have received a copy of the GNU General Public License along with Delmic Acquisition Software. If not, see http://www.gnu.org/licenses/.
 '''
 # in case it's need to find all the devices supported (e.g., for a scan)
-__all__ = ["andorcam3", "andorcam2", "pi", "simulated"]
+__all__ = ["andorcam3", "andorcam2", "pi", "pigcs", "simulated"]
