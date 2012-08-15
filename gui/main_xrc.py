@@ -47,6 +47,7 @@ class xrcfr_main(wx.Frame):
         self.fpb_settings = xrc.XRCCTRL(self, "fpb_settings")
         self.pnl_stream = xrc.XRCCTRL(self, "pnl_stream")
         self.btn_aquire = xrc.XRCCTRL(self, "btn_aquire")
+        self.pnl_log = xrc.XRCCTRL(self, "pnl_log")
         self.txt_log = xrc.XRCCTRL(self, "txt_log")
 
 
@@ -271,7 +272,7 @@ def __init_resources():
                             <bg>#555555</bg>
                           </object>
                           <object class="FoldPanelItem">
-                            <object class="wxPanel" name="pnl_stream" subclass="StreamPanel">
+                            <object class="wxPanel" name="pnl_stream" subclass="odemis.gui.comp.stream.StreamPanel">
                               <fg>#7F7F7F</fg>
                               <bg>#333333</bg>
                               <XRCED>
@@ -359,7 +360,7 @@ def __init_resources():
         <flag>wxEXPAND</flag>
       </object>
       <object class="sizeritem">
-        <object class="wxPanel">
+        <object class="wxPanel" name="pnl_log">
           <object class="wxBoxSizer">
             <orient>wxVERTICAL</orient>
             <object class="sizeritem">
@@ -376,20 +377,23 @@ def __init_resources():
                   <face>Courier 10 Pitch</face>
                   <encoding>UTF-8</encoding>
                 </font>
-                <hidden>1</hidden>
                 <style>wxTE_MULTILINE</style>
                 <XRCED>
                   <assign_var>1</assign_var>
                 </XRCED>
               </object>
-              <flag>wxTOP|wxEXPAND</flag>
-              <border>2</border>
+              <flag>wxEXPAND</flag>
             </object>
           </object>
           <size>-1,200</size>
           <bg>#4D4D4D</bg>
+          <hidden>1</hidden>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
         </object>
-        <flag>wxEXPAND</flag>
+        <flag>wxTOP|wxEXPAND</flag>
+        <border>2</border>
       </object>
     </object>
     <title>Odemis</title>

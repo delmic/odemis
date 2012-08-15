@@ -45,7 +45,7 @@ class OdemisGUIApp(wx.App):
         # Constructor of the parent class
         # ONLY CALL IT AT THE END OF :py:method:`__init__` BECAUSE OnInit will be called
         # and it needs the attributes defined in this constructor!
-        wx.App.__init__(self, redirect=False)
+        wx.App.__init__(self, redirect=True)
 
     def OnInit(self):
         """ Application initialization, automatically run from the :wx:`App` constructor.
@@ -78,7 +78,7 @@ class OdemisGUIApp(wx.App):
 
     def init_logger(self):
         """ Initialize logging functionality """
-        #create_gui_logger(self.fr_main.txt_log)
+        create_gui_logger(self.fr_main.txt_log)
         log.info("Starting Odemis GUI version x.xx")
 
 
@@ -188,7 +188,7 @@ class OdemisGUIApp(wx.App):
 
     def on_debug(self, evt=None): #pylint: disable=W0613
         """ Show or hides the log text field according to the debug menu item. """
-        self.fr_main.txt_log.Show(self.fr_main.menu_item_debug.IsChecked())
+        self.fr_main.pnl_log.Show(self.fr_main.menu_item_debug.IsChecked())
         self.fr_main.Layout()
 
     def on_close_window(self, evt=None): #pylint: disable=W0613
