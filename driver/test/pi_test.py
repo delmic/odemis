@@ -4,7 +4,7 @@
 Created on 1 mar 2012
 
 @author: Éric Piel
-Testing class for pi.py and dacontrol.py .
+Testing class for pi.py .
 
 Copyright © 2012 Éric Piel, Delmic
 
@@ -16,12 +16,15 @@ Delmic Acquisition Software is distributed in the hope that it will be useful, b
 
 You should have received a copy of the GNU General Public License along with Delmic Acquisition Software. If not, see http://www.gnu.org/licenses/.
 '''
-import unittest
+from concurrent import futures
+from driver import pi
+import logging
+import math
 import os
 import time
-import math
+import unittest
 
-from driver import pi
+logging.getLogger().setLevel(logging.INFO)
 
 if os.name == "nt":
     PORT = "COM1"
@@ -50,7 +53,7 @@ class TestPIRedStone(unittest.TestCase):
             cont = pi.PIRedStone(ser, add)
             self.assertTrue(cont.selfTest(), "Controller self test failed.")
           
-#    @unittest.skip("don't have the hardware")  
+#    @unittest.skip("don't have the hardware")
     def test_scan(self):
         """
         Check that we can do a scan network. It can pass only if we are
@@ -94,7 +97,7 @@ class TestPIRedStone(unittest.TestCase):
         move = {'x':100e-6, 'y':100e-6}
         f = stage.moveRel(move)
         # 0.001s should be too short
-        self.assertRaises(OSError, f.result, 0.001)
+        self.assertRaises(futures.TimeoutError, f.result, 0.001)
         
 
     def test_speed(self):

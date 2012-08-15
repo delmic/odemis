@@ -14,7 +14,8 @@ Delmic Acquisition Software is distributed in the hope that it will be useful, b
 
 You should have received a copy of the GNU General Public License along with Delmic Acquisition Software. If not, see http://www.gnu.org/licenses/.
 '''
-from model import roattribute, Actuator
+from concurrent import futures
+import __version__
 import collections
 import glob
 import logging
@@ -22,6 +23,7 @@ import math
 import model
 import os
 import serial
+import sys
 import threading
 import time
 
@@ -74,11 +76,6 @@ ERROR_COMMAND_NOT_FOUND = 0x01 #01: command not found
 #0A: macro storage overflow
 
 
-# TODO: refactorise so that there is a more clear bus/controller objects distinction
-# Currently each controller is in charge of selecting itself on the bus by using
-# the serial port object as a global container. This should be moved to the bus 
-# object. The bus object should be the only one directly accessible.  
-
 class PIRedStone(object):
     '''
     This represents the bare PI C-170 piezo motor controller (Redstone), the 
@@ -125,6 +122,24 @@ class PIRedStone(object):
         if no address is given, then no controller is selected
         '''
         self.serial = ser
+        self.address = address
+        self._try_recover = False # really raw mode
+        # allow to not initialise the controller (mostly for .scan())
+        if address is None:
+            return
+        
+        # Small check to verify it's responding
+        self.select()
+        try:
+            add = self.tellBoardAddress()
+            if add != address:
+                logging.warning("asked for PI controller %d and was answered by controller %d.", address, add)
+        except IOError:
+            raise IOError("No answer from PI controller %d" % address)
+
+        self._try_recover = True
+        
+        self._position = [0, 0] # m (float, float: position)
         
         # TODO use values passed in parameter
         # found by second degree regression with measurement of 50, 100, 150, 200, 250 steps
@@ -137,22 +152,7 @@ class PIRedStone(object):
         self.speed = [0.1, 0.1] # m/s for each axis 
         self.speed_max = 0.5 # m/s, from the documentation (= no waittime)
         
-        self.address = address
-        # allow to not initialise the controller (mostly for .scan())
-        if address is None:
-            self.try_recover = False # really raw mode
-            return
         
-        self.try_recover = True
-        # Small check to verify it's responding
-        self.select()
-        try:
-            add = self.tellBoardAddress()
-            if add != address:
-                logging.warning("asked for PI controller %d and was answered by controller %d.", address, add)
-        except IOError:
-            raise IOError("No answer from PI controller %d" % address)
-
     def _sendSetCommand(self, com):
         """
         Send a command which does not expect any report back
@@ -187,7 +187,7 @@ class PIRedStone(object):
             report += char
             
         if not char:
-            if not self.try_recover:
+            if not self._try_recover:
                 raise IOError("PI controller %d timeout." % self.address)
                 
             success = self.recoverTimeout()
@@ -475,7 +475,9 @@ class PIRedStone(object):
 #        print distance, com
         self._sendSetCommand(com + "\r")
         
-        return self.convertDeviceToM((steps, stepsize))
+        act_dist = self.convertDeviceToM((steps, stepsize))
+        self._position[axis] += act_dist
+        return act_dist
     
     def isMoving(self, axis=None):
         """
@@ -618,20 +620,30 @@ class PIRedStone(object):
         a, b, c = self.move_calibration
         return sign * steps * (a*abs(stepsize)**2 + b*abs(stepsize) + c)
                
-               
-    def setSpeed(self, speed, axis):
+    def getPosition(self, axis):
+        """
+        axis (int 0 or 1): axis to pic  
+        Note: it's very approximate.
+        return (float): the current position of the given axis
+        """
+        assert((0 <= axis) and (axis <= 1))
+        return self._position[axis]
+            
+    def setSpeed(self, axis, speed):
         """
         Changes the move speed of the motor (for the next move). It's very 
         approximate.
-        speed (0<float<5): speed in m/s.
         axis (int 0 or 1): axis to pic  
+        speed (0<float<5): speed in m/s.
         """
         assert((0 < speed) and (speed < self.speed_max))
         assert((0 <= axis) and (axis <= 1))
         
         self.speed[axis] = speed
-
-        
+    
+    def getSpeed(self, axis):
+        return self.speed[axis]
+    
     def speedToWaittime(self, speed, move):
         """
         Converts the speed to a waittime for a given move.
@@ -671,7 +683,7 @@ class PIRedStone(object):
         pi = PIRedStone(ser)
         
         logging.info("Serial network scanning for PI Redstones in progress...")
-        pi.try_recover = False # timeouts are expected!
+        pi._try_recover = False # timeouts are expected!
         present = set([])
         for i in range(max_add + 1):
             # ask for controller #i
@@ -688,7 +700,7 @@ class PIRedStone(object):
             except IOError:
                 pass
         
-        pi.try_recover = True
+        pi._try_recover = True
         return present
         
     @staticmethod
@@ -789,7 +801,7 @@ class FakePIRedStone(PIRedStone):
         ser._pi_select = -1
         return ser
         
-class StageRedStone(Actuator):
+class StageRedStone(model.Actuator):
     """
     An actuator made entirely of redstone controllers connected on the same serial port
     Can have an arbitrary number of axes (up to 32 in theory)
@@ -802,62 +814,96 @@ class StageRedStone(Actuator):
          Note that even if it's made of several controllers, each controller is 
          _not_ seen as a child from the odemis model point of view.
         """ 
-        Actuator.__init__(self, name, role, children)
+        model.Actuator.__init__(self, name, role, children)
         
-        ser = PIRedStone.openSerialPort(port) # use FakePIRedStone for testing
-        
+        ser = PIRedStone.openSerialPort(port)
+#        ser = FakePIRedStone.openSerialPort(port) # use FakePIRedStone for testing
+
         # the axis names as required by Actuator
         self._axes = frozenset(axes.keys())
         
         # Not to be mistaken with axes which is a simple public view
         self._axis_to_child = {} # axis name => (PIRedStone, channel)
-        self.ranges = {}
         # TODO also a rangesRel : min and max of a step 
-        self._position = {}
         speed = {}
         controllers = {} # address => PIRedStone
         for axis, (add, channel) in axes.items():
             if not add in controllers:
-                controllers[add] = PIRedStone(ser, add) # use FakePIRedStone for testing
+                controllers[add] = PIRedStone(ser, add)
+#                controllers[add] = FakePIRedStone(ser, add) # use FakePIRedStone for testing
             controller = controllers[add]
             self._axis_to_child[axis] = (controller, channel)
             
             # TODO request also the ranges from the arguments?
             # For now we put very large one
-            self.ranges[axis] = [0, 1] # m
-            
-            # TODO move to a known position (0,0) at init?
-            # for now we have no idea where we are => in the middle so that we can always move
-            self._position[axis] = 0.5 # m
+            self._ranges[axis] = [0, 1] # m
             
             # Just to make sure it doesn't go too fast
-            speed[axis] = 0.1 # m/s 
+            speed[axis] = 0.1 # m/s
             
         # min speed = don't be crazy slow. max speed from hardware spec
-        self.speed = model.MultiSpeedVA(value=speed, range=[10e-6, 0.5], unit="m/s")
-        self.speed.subscribe(self.onSpeed, init=True)
-        self.doer_thread = ActionManager(name="PI Redstone doer Thread")
-        self.doer_thread.start()
+        self.speed = model.MultiSpeedVA(value=speed, range=[10e-6, 0.5], unit="m/s",
+                                        setter=self.setSpeed)
+        self.setSpeed(speed)
+        
+        # set HW and SW version
+        self._swVersion = "%s (serial driver: %s)" % (__version__.version, self.getSerialDriver(port))
+        hwversions = []
+        for axis, (ctrl, channel) in self._axis_to_child.items():
+            hwversions += "'%s': %s" % (axis, ctrl.versionReport())
+        self._hwVersion = ", ".join(hwversions)
+        
+        # to acquire before sending anything on the serial port
+        self.ser_access = threading.Lock()
+        
+        self._action_mgr = ActionManager()
+        self._action_mgr.start()
         
         # TODO swVersion (=odemis + serial driver name cf readlink /sys/class/tty/tty*/device/driver)
         # TODO hwVersion (= firmware version of each axis)
         
     def getMetadata(self):
         metadata = {}
-        metadata[model.MD_POS] = (self._position["x"], self._position["y"])
+        pos = self.getPosition()
+        metadata[model.MD_POS] = (pos["x"], pos["y"])
         return metadata
     
-    def onSpeed(self, value):
+    def getSerialDriver(self, name):
+        """
+        return (string): the name of the serial driver used for the given port
+        """
+        # In linux, can be found as link of /sys/class/tty/tty*/device/driver
+        if sys.platform.startswith('linux'):
+            path = "/sys/class/tty/" + os.path.basename(name) + "/device/driver"
+            try:
+                return os.path.basename(os.readlink(path))
+            except OSError:
+                return "Unknown"
+        else:
+            return "Unknown"
+    
+    def setSpeed(self, value):
+        """
+        value (dict string-> float): speed for each axis
+        returns (dict string-> float): the new value
+        """
         for axis, v in value.items():
             controller, channel = self._axis_to_child[axis]
-            controller.setSpeed(v, channel)
-            
-    # to make it read-only
-    @roattribute
-    def position(self):
-        # TODO: position is optional, or is it really needed to simplify?
-        # Used for the metadata of the picture
-        return self._position
+            controller.setSpeed(channel, v)
+        return value
+    
+    def getPosition(self):
+        """
+        return (dict string -> float): axis name to (absolute) position
+        Note: this is very approximate
+        """
+        position = {}
+        with self.ser_access:
+            # send stop to all controllers (including the ones not in action)
+            for axis, (controller, channel) in self._axis_to_child.items():
+                position[axis] = controller.getPosition(channel)
+        
+        return position
     
     def moveRel(self, shift):
         """
@@ -877,46 +923,50 @@ class StageRedStone(Actuator):
                 action_axes[controller] = []
             action_axes[controller].append((channel, distance))
         
-        action = Action(Action.MOVE_REL, action_axes)
-        self.append_action(action)
-        return ActionFuture(action, self.doer_thread)
+        action = ActionFuture(MOVE_REL, action_axes, self.ser_access)
+        self._action_mgr.append_action(action)
+        return action
         
-    def append_action(self, action):
-        """
-        appends an action in the doer's queue
-        action (Action)
-        """
-        self.doer_thread.action_queue_cv.acquire()
-        self.doer_thread.action_queue.append(action)
-        self.doer_thread.action_queue_cv.notify()
-        self.doer_thread.action_queue_cv.release()
-    
     def stop(self):
         """
-        stops the motion
+        stops the motion on all axes
+        Warning: this might stop the motion even of axes not managed (it stops
+        all the axes of all controller managed).
         """
-        self.doer_thread.lock.acquire()
-        ca = self.doer_thread.current_action
-        self.doer_thread.action_queue.clear() # FIXME should mark the future as cancelled
-        self.doer_thread.request_stop_current.set()
-        self.doer_thread.lock.release()
+        if self._action_mgr:
+            self._action_mgr.cancel_all() 
+
+        # Stop every axes (even if there is no action going, or action on just
+        # some axes        
+        with self.ser_access:
+            # send stop to all controllers (including the ones not in action)
+            controllers = set()
+            for axis, (controller, channel) in self._axis_to_child.items():
+                if controller not in controllers:
+                    controller.stopMotion()
+                    controllers.add(controller)
+            
+            # wait all controllers are done moving
+            for controller in controllers:
+                controller.waitEndMotion()
+    
+    def terminate(self):
+        self.stop()
         
-        # wait until stopped
-        if ca:
-            ca.is_done.wait()
+        if self._action_mgr:
+            self._action_mgr.terminate()
+            self._action_mgr = None
         
     def selfTest(self):
         """
         No move should be going one while doing a self-test
         """
-        assert(len(self.doer_thread.action_queue) == 0 
-               and self.doer_thread.current_action == None)
         passed = True
         controllers = set([c for c, a in self._axis_to_child.values()])
-        for controller in controllers:
-            logging.info("Testing controller %d", controller.address)
-            passed &= controller.selfTest()
-        
+        with self.ser_access:
+            for controller in controllers:
+                logging.info("Testing controller %d", controller.address)
+                passed &= controller.selfTest()
         return passed
     
     @staticmethod
@@ -936,6 +986,7 @@ class StageRedStone(Actuator):
             else:
                 ports = glob.glob('/dev/ttyS?*') +  glob.glob('/dev/ttyUSB?*')
                 
+        axes_names = "xyzabcdefghijklmnopqrstuvw"
         found = []  # tuple of (name, dict (port=>port, axes =>list of addresses)
         for p in ports:
             try:
@@ -945,15 +996,19 @@ class StageRedStone(Actuator):
                 continue
             
             if addresses:
+                axis_num = 0
                 arg = {}
                 for add in addresses:
-                    #FIXME 
-                    arg["axis" + str(add)] = (add, 0) # channel 0
-                    arg["axis" + str(add)] = (add, 1) # channel 1
-                found.append(("Actuator " + p, {"port": p, "axes": arg}))
+                    arg[axes_names[axis_num]] = (add, 0) # channel 0
+                    axis_num += 1
+                    arg[axes_names[axis_num]] = (add, 1) # channel 1
+                    axis_num += 1
+                found.append(("Actuator " + os.path.basename(p),
+                              {"port": p, "axes": arg}))
         
         return found
     
+# TODO share with PIGCS?
 class ActionManager(threading.Thread):
     """
     Thread running the requested actions (=moves)
@@ -961,230 +1016,288 @@ class ActionManager(threading.Thread):
     For each action in the queue: performs and wait until the action is finished
     At the end of the action, call all the callbacks
     """
-    def __init__(self, **kwargs):
-        threading.Thread.__init__(self, **kwargs)
-        self.lock = threading.Lock()
-        self.action_queue_cv = threading.Condition(self.lock)
+    def __init__(self, name="PI RedStone action manager"):
+        threading.Thread.__init__(self, name=name)
+        self.daemon = True # If the backend is gone, just die
+
+        self.action_queue_cv = threading.Condition()
         self.action_queue = collections.deque()
         self.current_action = None
-        self.request_stop_current = threading.Event()
-        self.daemon = True # If the backend is gone, just die
     
     def run(self):
         while True:
             # Pick the next action
-            self.action_queue_cv.acquire()
-            while not self.action_queue:
-                self.action_queue_cv.wait()
-            self.current_action = self.action_queue.popleft()
-            self.action_queue_cv.release()
+            with self.action_queue_cv:
+                while not self.action_queue:
+                    self.action_queue_cv.wait()
+                self.current_action = self.action_queue.popleft()
             
-            # Do the action
-            # current_action.type and current_action.args are fixed, so no need for lock
-            if self.current_action.type == Action.MOVE_REL:
-                self.moveRel(self.current_action.args)
-#            elif action_name == "moveAbs":
-#                self.doer_moveAbs(args)
-            else:
-                raise Exception("Unknown action %s" % self.current_action.type)
+            # Special action "None" == stop
+            if self.current_action is None:
+                return
             
-            # create a dict of controllers => channels
-            controllers = {} 
-            for controller, moves in self.current_action.args.items():
-                channels = [c for c, d in moves]
-                controllers[controller] = channels
+            try:
+                self.current_action._start_action()
+                self.current_action._wait_action()
+            except futures.CancelledError:
+                # cancelled in the mean time: skip the action
+                pass
             
-            # Wait for the action to complete
-            timeout = 5 #s
-            end = time.time() + timeout
-            # it's over when either all axes are finished moving, it's too late, or
-            # the move has to be imediately stopped 
-            while (not self.request_stop_current.is_set() and time.time() <= end
-                   and self.isMoving(controllers)):
-                self.request_stop_current.wait(0.005)
-            
-            # stop immediatly if requested
-            if self.request_stop_current.is_set():
-                self.stopMotion(controllers)
-                # it's up to the caller to have cleared the action queue if no other move should be performed
-            
-            # Call the callbacks at the end of the action
-            self.lock.acquire()
-            callbacks = self.current_action.callbacks
-            self.current_action.is_done.set()
-            self.current_action = None
-            # release before we call external functions to avoid potential deadlocks
-            self.lock.release() 
-            
-            # say we are done
-            self.request_stop_current.clear()
-            for cb, args in callbacks:
-                cb(*args)
-        
-    def isMoving(self, axes):
-        """
-        axes (dict: PIRedStone -> list (int)): controller to channel which must be check for move
-        """
-        moving = False
-        for controller, channels in axes.items():
-            if len(channels) == 0:
-                logging.warning("Asked to check move on a controller without any axis")
-            if len(channels) == 1:
-                moving |= controller.isMoving(channels[0])
-            else:
-                # In theory this should always be fine because the other axes
-                # should be stopped anyway
-                moving |= controller.isMoving() # all
-        return moving
+    def cancel_all(self):
+        must_terminate = False
+        with self.action_queue_cv:
+            # cancel current action
+            if self.current_action:
+                self.current_action.cancel()
+                
+            # cancel every action in the queue
+            while self.action_queue:
+                action = self.action_queue.popleft()
+                if action is None: # asking to terminate the thread
+                    must_terminate = True
+                    continue
+                action.cancel()
+         
+        if must_terminate:
+            self.append_action(None)
     
-    def stopMotion(self, axes):
+    def append_action(self, action):
         """
-        axes (dict: PIRedStone -> list (int)): controller to channel which must be stopped
+        appends an action in the doer's queue
+        action (Action)
         """
-        for controller in axes:
-            # it can only stop all axes (that's the point anyway)
-            controller.stopMotion()
+        with self.action_queue_cv:
+            self.action_queue.append(action)
+            self.action_queue_cv.notify()
     
-    def moveRel(self, axes):
+    def terminate(self):
         """
-        axes (dict: PIRedStone -> list (tuple(int, double)): 
-            controller to list of channel/distance to move (m)
+        Ask the action manager to terminate (once all the queued actions are done)
         """
-        for controller, channels in axes.items():
-            for channel, distance in channels:
-                controller.moveRel(channel, distance)
-        
-#        def doer_moveAbs(self, move):
-#            pass
-        
-class Action(object):
-    """
-    A container class representing an action for a RedStone controller
-    """
-    MOVE_REL = "moveRel"
-    possible_types = [MOVE_REL]
-    def __init__(self, action_type, args, callbacks=None):
-        """
-        type (str): name of the action (only supported so far is "moveRel"
-        args (tuple): arguments to pass to the action
-        callbacks (set of 2-tuples): set of methods to call when the action is over 
-           (weakref to method, tuple arg to method)
-        """
-        assert(action_type in self.possible_types)
-        self.type = action_type
-        self.args = args
-        if callbacks is None:
-            callbacks = set() # need to use None to avoid always the same set()
-        self.callbacks = callbacks
-        self.is_done = threading.Event() # True to signal action has finished
+        self.append_action(None)
+
+
+MOVE_REL = "moveRel"
+
+PENDING = 'PENDING'
+RUNNING = 'RUNNING'
+CANCELLED = 'CANCELLED'
+FINISHED = 'FINISHED'
 
 class ActionFuture(object):
     """
     Provides the interface for the clients to manipulate an (asynchronous) action 
     they requested.
     It follows http://docs.python.org/dev/library/concurrent.futures.html
-    Internally, it has a reference to the action in the action queue and to the
-    doer thread.
+    The result is always None, or raises an Exception.
+    Internally, it has a reference to the action manager thread.
     """
-    def __init__(self, action, doer):
+    possible_types = [MOVE_REL]
+
+    # TODO handle exception in action
+    def __init__(self, action_type, args, ser_access):
         """
-        action (Action): the action to manage
-        doer (??): the doer thread
+        type (str): name of the action (only supported so far is "moveRel"
+        args (tuple): arguments to pass to the action
+        ser_access (Lock): lock to access the serial port
         """
-        self._doer = doer
-        self._action = action
-        self._cancelled = False
+        assert(action_type in self.possible_types)
+        
+        self._type = action_type
+        self._args = args
+        self._ser_access = ser_access
+        self._expected_end = None # when it expects to finish (only during RUNNING)
+        self._timeout = None # really too late to be running normally
+        
+        # acquire to modify the state, wait to wait for it to be done
+        self._condition = threading.Condition()
+        self._state = PENDING
+        self._callbacks = []
     
+    def _invoke_callbacks(self):
+        # do not call with _condition! And ensure it's called only once
+        for callback in self._callbacks:
+            try:
+                callback(self)
+            except Exception:
+                logging.exception('exception calling callback for %r', self)
+
     def cancel(self):
-        # Already cancelled => easy
-        if self.cancelled():
-            return True
-        
-        # In the queue => remove it
-        self._doer.lock.acquire()
-        if self._action in self._doer.action_queue:
-            self._doer.action_queue.remove(self._action)
-            self._doer.lock.release()
-            self._cancelled = True
-            self._notify_all()
-            return True
-        
-        # Being processed => cancel in the middle
-        if self._action == self._doer.current_action:
-            self._doer.request_stop_current.set()
-            self._doer.lock.release()
-            if not self._action.is_done.wait(1): # wait max 1s for the action to be cancelled
-                logging.warning("doer thread blocked on cancelling action")
-            self._cancelled = True
-            self._notify_all()
-            return True
-        self._doer.lock.release()
+        with self._condition:
+            if self._state == CANCELLED:
+                return True
+            elif self._state == FINISHED:
+                return False
+            elif self._state == RUNNING:
+                self._stop_action()
+                # go through, like for state == PENDING
+            
+            self._state = CANCELLED
+            self._condition.notify_all()
 
-        # It has already been executed => no hope
-        return False
-
-    def _notify_all(self):
-        """
-        Call all the callbacks. Should be done only once per future!
-        """
-        for fn, args in self._action.callbacks:
-            fn(args)
-        
+        self._invoke_callbacks()
+        return True
+            
     def cancelled(self):
-        return self._cancelled
+        with self._condition:
+            return self._state == CANCELLED
 
     def running(self):
-        return not self.done()
+        with self._condition:
+            return self._state == RUNNING
 
     def done(self):
-        # if action not in the queue or under process => it's done
-        with self._doer.lock:
-            if (self._action in self._doer.action_queue 
-                or self._action == self._doer.current_action):
-#                if self._action in self._doer.action_queue:
-#                    print "action is still in queue:", self._doer.action_queue
-#                elif self._action == self._doer.current_action:
-#                    print "action being executed"
-#                else:
-#                    print "no idea why not done"
-                return False
-            else:
-                return True
+        with self._condition:
+            return self._state in [CANCELLED, FINISHED]
 
     def result(self, timeout=None):
-        if self.cancelled():
-            raise OSError("Cancelled")
-#            raise concurrent.futures.CancelledError() # TODO
-        if self.running():
-            # wait the current action is done and check again
-            if not self._action.is_done.wait(timeout):
-#                raise concurrent.futures.TimeoutError() # TODO
-                raise OSError("Timeout")
-        return None # because the result of the action is always None
+        with self._condition:
+            if self._state == CANCELLED:
+                raise futures.CancelledError()
+            elif self._state == FINISHED:
+                return None
+            
+            self._condition.wait(timeout)
+
+            if self._state == CANCELLED:
+                raise futures.CancelledError()
+            elif self._state == FINISHED:
+                return None
+            else:
+                raise futures.TimeoutError()
 
     def exception(self, timeout=None):
         """
         return None or return what result raises
         """
         try:
-            self.result(timeout)
-#        except concurrent.futures.CancelledError() as exp: # TODO
-        except OSError as exp:
+            return self.result(timeout)
+        except (futures.TimeoutError, futures.CancelledError) as exp:
             raise exp
         except Exception as exp:
             return exp
-        
-        return None
 
     def add_done_callback(self, fn):
-        with self._doer.lock:
-            # like done() but holding the lock
-            if (self._action in self._doer.action_queue 
-                or self._action == self._doer.current_action):
-                self._action.callbacks.add((model.WeakMethod(fn), (self,)))
-                assert(not self._action.is_done.is_set())
+        with self._condition:
+            if self._state not in [CANCELLED, FINISHED]:
+                self._callbacks.append(fn)
                 return
         fn(self)
 
-                               
+    def _start_action(self):
+        """
+        Start the physical action, and immediatly return. It also set the 
+        state to RUNNING.
+        Note: to be called without the lock (._condition) acquired.
+        """
+        with self._condition:
+            if self._state == CANCELLED:
+                raise futures.CancelledError()
+            
+            # Do the action
+            if self._type == MOVE_REL:
+                duration = self._moveRel(self._args)
+            else:
+                raise Exception("Unknown action %s" % self._type)
+        
+            self._state = RUNNING
+            duration = min(duration, 60) # => wait maximum 2 min
+            self._expected_end = time.time() + duration
+            self._timeout = self._expected_end + duration + 1, # 2 *duration + 1s 
+
+    def _wait_action(self):
+        """
+        Wait for the action to finish normally. If the action finishes normally
+        it's also in charge of calling all the callbacks.
+        Note: to be called without the lock (._condition) acquired.
+        """
+        # create a dict of controllers => channels
+        controllers = {}
+        for controller, moves in self._args.items():
+            channels = [c for c, d in moves]
+            controllers[controller] = channels
+            
+        with self._condition:
+            assert(self._expected_end is not None)
+            # if it has been cancelled in the mean time
+            if self._state != RUNNING:
+                return
+                        
+            duration = self._expected_end - time.time()
+            duration = max(0, duration) 
+            logging.debug("Waiting %f s for the move to finish", duration)
+            self._condition.wait(duration)
+            
+            # it's over when either all axes are finished moving, it's too late,
+            # or the action was cancelled
+            while (self._state == RUNNING and time.time() <= self._timeout
+                   and self._isMoving(controllers)):
+                self._condition.wait(0.01)
+            
+            # if cancelled, we don't update state
+            if self._state != RUNNING:
+                return
+            
+            self._state = FINISHED
+            self._condition.notify_all()
+
+        self._invoke_callbacks()
+        
+    def _stop_action(self):
+        """
+        Stop the action. Do not call directly, call cancel()
+        Note: to be called with the lock (._condition) acquired.
+        """
+        # The only two possible actions are stopped the same way
+        
+        # create a dict of controllers => channels
+        controllers = {}
+        for controller, moves in self._args.items():
+            channels = [c for c, d in moves]
+            controllers[controller] = channels
+            
+        self._stopMotion(controllers)
+
+    def _isMoving(self, axes):
+        """
+        axes (dict: Controller -> list (int)): controller to channel which must be check for move
+        """
+        with self._ser_access:
+            moving = False
+            for controller, channels in axes.items():
+                if len(channels) == 0:
+                    logging.warning("Asked to check move on a controller without any axis")
+                if len(channels) == 1:
+                    moving |= controller.isMoving(channels[0])
+                else:
+                    # In theory this should always be fine because the other axes
+                    # should be stopped anyway
+                    moving |= controller.isMoving() # all
+            return moving
+    
+    def _stopMotion(self, axes):
+        """
+        axes (dict: PIRedStone -> list (int)): controller to channel which must be stopped
+        """
+        with self._ser_access:
+            for controller in axes:
+                # it can only stop all axes (that's the point anyway)
+                controller.stopMotion()
+    
+    def _moveRel(self, axes):
+        """
+        axes (dict: PIRedStone -> list (tuple(int, double)): 
+            controller to list of channel/distance to move (m)
+        returns (float): approximate time in s it will take (optimistic)
+        """
+        with self._ser_access:
+            max_duration = 0 #s
+            for controller, channels in axes.items():
+                for channel, distance in channels:
+                    actual_dist = controller.moveRel(channel, distance)
+                    duration = abs(actual_dist) / controller.getSpeed(channel) 
+                    max_duration = max(max_duration, duration)
+                
+        return max_duration
+                          
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:
