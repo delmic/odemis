@@ -82,20 +82,6 @@ class FoldPanelBarTestCase(unittest.TestCase):
             print "."*indent, child.__class__.__name__
             cls.dump_win_tree(child, indent + 2)
 
-    @classmethod
-    def has_vertical_scrollbar(cls, window):
-        """ Checks if the vertical scroll bar is present by comparing client and
-            widget width
-        """
-        return window.GetClientSize().GetWidth() < window.GetSize().GetWidth()
-
-    @classmethod
-    def has_horizontal_scrollbar(cls, window):
-        """ Checks if the horizontal scrollbar is present by comparing client and
-            widget width
-        """
-        return window.GetClientSize().GetHeight() < window.GetSize().GetHeight()
-
     def test_stream_interface(self):
 
         loop()
@@ -124,7 +110,6 @@ class FoldPanelBarTestCase(unittest.TestCase):
         self.assertEqual(
             self.frm.stream_panel.get_stream_position(custom_entry),
             0)
-
 
         # Add a fixed stream
         wx.MilliSleep(SLEEP_TIME)

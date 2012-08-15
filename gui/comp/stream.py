@@ -40,7 +40,7 @@ from odemis.gui.comp.buttons import ImageButton, ImageToggleButton, \
     ImageTextToggleButton, ColourButton, PopupImageButton
 from odemis.gui.comp.text import SuggestTextCtrl, IntegerTextCtrl, \
     UnitIntegerCtrl
-from odemis.gui.comp.foldpanelbar import FoldPanelBar
+from odemis.gui.comp.foldpanelbar import FoldPanelItem
 from odemis.gui.comp.slider import CustomSlider
 from odemis.gui.util.conversion import wave2hex
 from odemis.gui.img.data import getemptyBitmap
@@ -203,6 +203,10 @@ class CustomExpander(Expander):
     def get_stream_color(self):
         return self._btn_color.get_color()
 
+
+
+
+
 class StreamPanelEntry(wx.PyPanel):
     """ The StreamPanelEntry super class, a special case collapsible pane.
 
@@ -248,8 +252,8 @@ class StreamPanelEntry(wx.PyPanel):
         self._panel = wx.Panel(self, style=wx.TAB_TRAVERSAL | wx.NO_BORDER)
         self._panel.Hide()
 
-        self._gbs = wx.GridBagSizer(3, 5)        
-        self._panel.SetSizer(self._gbs)        
+        self._gbs = wx.GridBagSizer(3, 5)
+        self._panel.SetSizer(self._gbs)
 
         self._expander = None
 
@@ -407,7 +411,7 @@ class StreamPanelEntry(wx.PyPanel):
                       border=10)
 
         self._gbs.AddGrowableCol(1)
-        
+
         # ==== Bind events
 
         # Expander
@@ -783,7 +787,7 @@ class StreamPanel(wx.Panel):
 
         self.btn_add_stream.Bind(wx.EVT_LISTBOX, self.on_add_stream)
 
-        #self.FitStreams()
+        self.FitStreams()
 
     # === Event Handlers
 
@@ -800,30 +804,30 @@ class StreamPanel(wx.Panel):
         eo = evt.GetEventObject()
         wx.CallAfter(eo.Destroy)
 
-#    def FitStreams(self):
-#
-#        h = self._sz.GetMinSize().GetHeight()
-#
-#        log.debug("Setting StreamPanel height to %s", h)
-#        self.SetSize((-1, h))
-#
-#        # Force the parent to update its size by calling Fit
-#        self.Parent.Fit()
-#        # The panel size is cached in the _PanelSize attribute.
-#        # Make sure it's updated by calling ResizePanel
-#                
-#        p = self.GetParent()
-#
-#        while not isinstance(p, FoldPanelBar):
-#            p = p.GetParent()
+    def FitStreams(self):
+
+        h = self._sz.GetMinSize().GetHeight()
+
+        log.debug("Setting StreamPanel height to %s", h)
+        self.SetSize((-1, h))
+
+        # The panel size is cached in the _PanelSize attribute.
+        # Make sure it's updated by calling ResizePanel
+
+        p = self.Parent
+
+        while not isinstance(p, FoldPanelItem):
+            p = p.Parent
+
+        p._refresh()
 
     def show_add_button(self):
         self.btn_add_stream.Show()
-        #self.FitStreams()
+        self.FitStreams()
 
     def hide_add_button(self):
         self.btn_add_stream.Hide()
-        #self.FitStreams()
+        self.FitStreams()
 
     def is_empty(self):
         return len(self.entries) == 0
@@ -867,14 +871,13 @@ class StreamPanel(wx.Panel):
 
         stream_panel_entry.Layout()
 
-        self.Parent.Layout()
         #self.Refresh()
-        #self.FitStreams()
+        self.FitStreams()
 
     def hide_stream(self, stream_pos):
         self.entries[stream_pos].Hide()
         self.Refresh()
-        #self.FitStreams()
+        self.FitStreams()
 
     def remove_stream(self, stream_pos):
         stream_obj = self.entries.pop(stream_pos)
