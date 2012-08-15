@@ -133,6 +133,7 @@ class Controller(object):
         # The max using closed-loop info seem purely arbitrary
         # (max m/s) = (max step/s) / (step/m)
         self._speed_max = float(self.GetParameter(1, 0x7000204)) / self.move_calibration # m/s
+        # Note: the E-861 claims max 0.015 m/s but actually never goes above 0.004 m/s
         self._speed = dict([(a, self._speed_max/2) for a in axes]) # m/s
         # (max m/s²) = (max step/s²) / (step/m)
         self._accel_max = float(self.GetParameter(1, 0x7000205)) / self.move_calibration # m/s²
@@ -593,7 +594,7 @@ class Controller(object):
         speed (0<float<10): speed in m/s.
         axis (1<=int<=16): the axis
         """
-        assert((0 < speed) and (speed < self._speed_max))
+        assert((0 < speed) and (speed <= self._speed_max))
         assert(axis in self._channels)
         self._speed[axis] = speed
 
@@ -607,7 +608,7 @@ class Controller(object):
         accel (0<float<100): acceleration in m/s².
         axis (1<=int<=16): the axis
         """
-        assert((0 < accel) and (accel < self._accel_max))
+        assert((0 < accel) and (accel <= self._accel_max))
         assert(axis in self._channels)
         self._accel[axis] = accel
     
@@ -689,7 +690,7 @@ class Controller(object):
         return (float): number of steps/s, <0 if going opposite direction
         """
         steps_ps = speed * self.move_calibration
-        return steps_ps
+        return max(1, steps_ps) # don't go at 0 m/s!
     
     # in linear approximation, it's the same
     convertAccelToDevice = convertSpeedToDevice
@@ -1148,7 +1149,7 @@ class ActionFuture(object):
             elif self._state == RUNNING:
                 self._stop_action()
                 # go through, like for state == PENDING
-                
+            
             self._state = CANCELLED
             self._condition.notify_all()
 
@@ -1220,8 +1221,9 @@ class ActionFuture(object):
                 raise Exception("Unknown action %s" % self._type)
         
             self._state = RUNNING
+            duration = min(duration, 60) # => wait maximum 2 min
             self._expected_end = time.time() + duration
-            self._timeout = self._expected_end + duration + 1 # 2 *duration + 1s 
+            self._timeout = self._expected_end + duration + 1, # 2 *duration + 1s 
 
     def _wait_action(self):
         """
@@ -1242,16 +1244,14 @@ class ActionFuture(object):
                 return
                         
             duration = self._expected_end - time.time()
-            duration = min(15, max(0, duration))
+            duration = max(0, duration) 
             logging.debug("Waiting %f s for the move to finish", duration)
-            print time.time()
             self._condition.wait(duration)
             
             # it's over when either all axes are finished moving, it's too late,
             # or the action was cancelled
             while (self._state == RUNNING and time.time() <= self._timeout
                    and self._isMoving(controllers)):
-                print time.time()
                 self._condition.wait(0.01)
             
             # if cancelled, we don't update state
@@ -1311,7 +1311,7 @@ class ActionFuture(object):
             for controller, channels in axes.items():
                 for channel, distance in channels:
                     actual_dist = controller.moveRel(channel, distance)
-                    duration = actual_dist / controller.getSpeed(channel) 
+                    duration = abs(actual_dist) / controller.getSpeed(channel) 
                     max_duration = max(max_duration, duration)
                 
         return max_duration
@@ -1327,24 +1327,7 @@ class ActionFuture(object):
             for controller, channels in axes.items():
                 for channel, distance in channels:
                     actual_dist = controller.moveAbs(channel, distance)
-                    duration = actual_dist / controller.getSpeed(channel) 
+                    duration = abs(actual_dist) / controller.getSpeed(channel) 
                     max_duration = max(max_duration, duration)
                 
         return max_duration 
-    
-
-
-
-#addresses = Bus.scan()
-#print addresses
-
-#stage = Bus("test", "stage", children=None, port="/dev/ttyUSB0", axes={"x":(1,1,False)})
-#print stage.swVersion
-#print stage.selfTest()
-#move = stage.moveRel({"x": 0.01}) # 10s
-#print move.running()
-#time.sleep(1)
-#print move.running()
-#print move.result()
-#stage.stop()
-

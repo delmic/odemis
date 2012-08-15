@@ -89,7 +89,7 @@ class TestPIRedStone(unittest.TestCase):
         dur_sync = time.time() - start
         self.assertTrue(f.done())
         
-        self.assertGreater(dur_sync, dur_async - delta, "Sync should take more time than async.")
+        self.assertGreater(dur_sync, max(0, dur_async - delta), "Sync should take more time than async.")
         
         move = {'x':100e-6, 'y':100e-6}
         f = stage.moveRel(move)
