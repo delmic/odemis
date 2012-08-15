@@ -22,7 +22,7 @@ c.addEvents('EVT_COMMAND_COLLPANE_CHANGED')
 component.Manager.register(c)
 component.Manager.addXmlHandler(xh_delmic.FixedStreamPanelEntryXmlHandler)
 component.Manager.setMenu(c, 'TOP_LEVEL', 'Delmic fixed stream entry', 'FixedStreamPanelEntry', 3)
-component.Manager.setMenu(c, 'ROOT', 'Delmic fixed stream panel', 'FixedStreamPanel', 3)
+component.Manager.setMenu(c, 'ROOT', 'Delmic fixed stream', 'FixedStreamPanel', 3)
 
 c = component.Container('CustomStreamPanelEntry',
     ['window', 'top_level', 'control'],
@@ -32,7 +32,7 @@ c.addEvents('EVT_COMMAND_COLLPANE_CHANGED')
 component.Manager.register(c)
 component.Manager.addXmlHandler(xh_delmic.CustomStreamPanelEntryXmlHandler)
 component.Manager.setMenu(c, 'TOP_LEVEL', 'Delmic custom stream entry', 'CustomStreamPanelEntry', 4)
-component.Manager.setMenu(c, 'ROOT', 'Delmic custom stream panel', 'CustomStreamPanel', 4)
+component.Manager.setMenu(c, 'ROOT', 'Delmic custom stream', 'CustomStreamPanel', 4)
 
 
 ##### FoldPanelBar #####
@@ -50,7 +50,8 @@ c.setParamClass('leftspacing', params.ParamIntNN)
 c.setParamClass('rightspacing', params.ParamIntNN)
 component.Manager.register(c)
 component.Manager.addXmlHandler(xh_delmic.FoldPanelBarXmlHandler)
-component.Manager.setMenu(c, 'bar', 'Delmic fold panel bar', 'FoldPanelBar', 1)
+component.Manager.setMenu(c, 'bar', 'Delmic fold bar', 'FoldPanelBar', 1)
+
 
 c = component.Container('FoldPanelItem',
     ['window', 'top_level', 'control'],
@@ -59,9 +60,9 @@ c = component.Container('FoldPanelItem',
 #c.addStyles('FPB_SINGLE_FOLD', 'FPB_COLLAPSE_TO_BOTTOM',
 #            'FPB_EXCLUSIVE_FOLD', 'FPB_HORIZONTAL', 'FPB_VERTICAL')
 component.Manager.register(c)
-component.Manager.addXmlHandler(xh_delmic.FoldPanelXmlHandler)
-component.Manager.setMenu(c, 'TOP_LEVEL', 'Delmic fold panel', 'FoldPanel', 2)
-component.Manager.setMenu(c, 'ROOT', 'Delmic fold panel', 'FoldPanel', 2)
+component.Manager.addXmlHandler(xh_delmic.FoldPanelItemXmlHandler)
+component.Manager.setMenu(c, 'TOP_LEVEL', 'Delmic fold panel', 'FoldPanelItem', 2)
+component.Manager.setMenu(c, 'ROOT', 'Delmic fold panel', 'FoldPanelItem', 2)
 #component.Manager.setMenu(c, 'container', 'Delmic fold panel', 'FoldPanel', 10)
 
 
@@ -120,7 +121,7 @@ c.setParamClass('disabled', params.ParamBitmap)
 c.addEvents('EVT_BUTTON')
 component.Manager.register(c)
 component.Manager.addXmlHandler(xh_delmic.ImageButtonHandler)
-component.Manager.setMenu(c, 'button', 'Delmic hover bitmap button', 'ImageButton', 20)
+component.Manager.setMenu(c, 'button', 'Delmic bitmap button', 'ImageButton', 20)
 component.Manager.setTool(c, 'Controls', pos=(1, 1))
 
 
@@ -153,7 +154,7 @@ c.setParamClass('disabled', params.ParamBitmap)
 c.addEvents('EVT_BUTTON')
 component.Manager.register(c)
 component.Manager.addXmlHandler(xh_delmic.ImageTextButtonHandler)
-component.Manager.setMenu(c, 'button', 'Delmic hover bitmap text button', 'ImageTextButton', 20)
+component.Manager.setMenu(c, 'button', 'Delmic bitmap text button', 'ImageTextButton', 20)
 component.Manager.setTool(c, 'Controls', pos=(1, 1))
 
 ### ImageTextToggleButton
@@ -185,12 +186,12 @@ c.setParamClass('disabled', params.ParamBitmap)
 c.addEvents('EVT_BUTTON')
 component.Manager.register(c)
 component.Manager.addXmlHandler(xh_delmic.ImageTextToggleButtonHandler)
-component.Manager.setMenu(c, 'button', 'Delmic hover bitmap text toggle button', 'ImageTextToggleButton', 20)
+component.Manager.setMenu(c, 'button', 'Delmic bitmap text toggle button', 'ImageTextToggleButton', 20)
 component.Manager.setTool(c, 'Controls', pos=(1, 1))
 
-### ImageTextTabButton
+### TabButton
 
-c = component.Component('ImageTextTabButton', ['control', 'tool'],
+c = component.Component('TabButton', ['control', 'tool'],
               ['pos', 'size', 'default', 'label', 'delta',
                'bitmap', 'hover', 'selected', 'focus', 'disabled'],
               image=images.TreeBitmapButton.GetImage())
@@ -216,8 +217,8 @@ c.setParamClass('disabled', params.ParamBitmap)
 
 c.addEvents('EVT_BUTTON')
 component.Manager.register(c)
-component.Manager.addXmlHandler(xh_delmic.ImageTextTabButtonButtonHandler)
-component.Manager.setMenu(c, 'button', 'Delmic tab button', 'ImageTextTabButton', 20)
+component.Manager.addXmlHandler(xh_delmic.TabButtonButtonHandler)
+component.Manager.setMenu(c, 'button', 'Delmic tab button', 'TabButton', 20)
 component.Manager.setTool(c, 'Controls', pos=(1, 1))
 
 ### PopupImageButton
@@ -250,9 +251,9 @@ component.Manager.setMenu(c, 'button', 'Delmic popup bitmap button', 'PopupImage
 component.Manager.setTool(c, 'Controls', pos=(1, 1))
 
 
-### odemis.gui.comp.text.SuggestTextCtrl
+### SuggestTextCtrl
 
-c = component.Component('odemis.gui.comp.text.SuggestTextCtrl', ['control','tool'],
+c = component.Component('SuggestTextCtrl', ['control','tool'],
               ['pos', 'size', 'value', 'maxlength'],
               image=images.TreeTextCtrl.GetImage())
 c.addStyles('wxTE_NO_VSCROLL',
@@ -278,13 +279,13 @@ c.setParamClass('value', params.ParamMultilineText)
 c.addEvents('EVT_TEXT', 'EVT_TEXT_ENTER', 'EVT_TEXT_URL', 'EVT_TEXT_MAXLEN')
 component.Manager.register(c)
 component.Manager.addXmlHandler(xh_delmic.SuggestTextCtrlHandler)
-component.Manager.setMenu(c, 'control', 'Delmic suggest text ctrl', 'odemis.gui.comp.text.SuggestTextCtrl', 1)
+component.Manager.setMenu(c, 'control', 'Delmic suggest text ctrl', 'SuggestTextCtrl', 1)
 component.Manager.setTool(c, 'Controls', pos=(0,2))
 
 
-### odemis.gui.comp.text.UnitIntegerCtrl
+### UnitIntegerCtrl
 
-c = component.Component('odemis.gui.comp.text.UnitIntegerCtrl', ['control','tool'],
+c = component.Component('UnitIntegerCtrl', ['control','tool'],
               ['pos', 'size', 'value', 'min', 'max', 'unit'],
               image=images.TreeTextCtrl.GetImage())
 c.addStyles('wxTE_NO_VSCROLL',
@@ -313,7 +314,7 @@ c.setParamClass('unit', params.MetaParamText(80))
 c.addEvents('EVT_TEXT', 'EVT_TEXT_ENTER', 'EVT_TEXT_URL', 'EVT_TEXT_MAXLEN')
 component.Manager.register(c)
 component.Manager.addXmlHandler(xh_delmic.UnitIntegerCtrlHandler)
-component.Manager.setMenu(c, 'control', 'Delmic unit integer text ctrl', 'odemis.gui.comp.text.UnitIntegerCtrl', 1)
+component.Manager.setMenu(c, 'control', 'Delmic unit integer text ctrl', 'UnitIntegerCtrl', 1)
 component.Manager.setTool(c, 'Controls', pos=(0, 2))
 
 

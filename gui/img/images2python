@@ -10,9 +10,9 @@ for file in `ls *.png`
 do
     if [ $first -eq 1 ]
     then
-        img2py -c $file data.py
+        img2py -c -f $file data.py
         first=0
     else
-        img2py -c -a $file data.py
+        img2py -c -a -f $file data.py
     fi
 done

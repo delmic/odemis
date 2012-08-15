@@ -20,12 +20,12 @@ class xrcfr_main(wx.Frame):
 #!XRCED:begin-block:xrcfr_main.PreCreate
     def PreCreate(self, pre):
         """ This function is called during the class's initialization.
-
+        
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
         pass
-
+        
 #!XRCED:end-block:xrcfr_main.PreCreate
 
     def __init__(self, parent):
@@ -37,6 +37,9 @@ class xrcfr_main(wx.Frame):
 
         # Define variables for the controls, bind event handlers
         self.menu_item_debug = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_debug"))
+        self.tab_btn_live = xrc.XRCCTRL(self, "tab_btn_live")
+        self.tab_btn_gallery = xrc.XRCCTRL(self, "tab_btn_gallery")
+        self.pnl_tab_live = xrc.XRCCTRL(self, "pnl_tab_live")
         self.pnl_view_tl = xrc.XRCCTRL(self, "pnl_view_tl")
         self.pnl_view_tr = xrc.XRCCTRL(self, "pnl_view_tr")
         self.pnl_view_bl = xrc.XRCCTRL(self, "pnl_view_bl")
@@ -47,6 +50,8 @@ class xrcfr_main(wx.Frame):
         self.fpb_settings = xrc.XRCCTRL(self, "fpb_settings")
         self.pnl_stream = xrc.XRCCTRL(self, "pnl_stream")
         self.btn_aquire = xrc.XRCCTRL(self, "btn_aquire")
+        self.pnl_tab_gallery = xrc.XRCCTRL(self, "pnl_tab_gallery")
+        self.pnl_log = xrc.XRCCTRL(self, "pnl_log")
         self.txt_log = xrc.XRCCTRL(self, "txt_log")
 
 
@@ -62,7 +67,7 @@ def __init_resources():
     wx.FileSystem.AddHandler(wx.MemoryFSHandler())
 
     main_xrc = '''\
-<?xml version="1.0" ?><resource class="">
+<?xml version="1.0" ?><resource class="TabButton">
   <object class="wxFrame" name="fr_main">
     <object class="wxMenuBar">
       <object class="wxMenu">
@@ -85,274 +90,370 @@ def __init_resources():
     <object class="wxBoxSizer">
       <orient>wxVERTICAL</orient>
       <object class="sizeritem">
-        <object class="wxBoxSizer">
-          <object class="sizeritem">
-            <object class="wxPanel" name="pnl_left">
-              <size>200,-1</size>
-              <bg>#333333</bg>
+        <object class="wxPanel" name="pnl_tab_buttons">
+          <object class="wxBoxSizer">
+            <orient>wxHORIZONTAL</orient>
+            <object class="sizeritem">
+              <object class="TabButton" name="tab_btn_live">
+                <size>160,30</size>
+                <default>1</default>
+                <label>LIVE STREAMS</label>
+                <bitmap>img_tab_inactive_png</bitmap>
+                <hover>img_tab_hover_png</hover>
+                <selected>img_tab_active_png</selected>
+                <fg>#E5E5E5</fg>
+                <font>
+                  <size>11</size>
+                  <style>normal</style>
+                  <weight>normal</weight>
+                  <underlined>0</underlined>
+                  <family>default</family>
+                  <face>Ubuntu</face>
+                  <encoding>UTF-8</encoding>
+                </font>
+                <style>wxALIGN_CENTRE</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxLEFT|wxALIGN_BOTTOM</flag>
+              <border>20</border>
             </object>
-            <flag>wxEXPAND</flag>
-          </object>
-          <object class="sizeritem">
-            <object class="wxGridSizer">
-              <object class="sizeritem">
-                <object class="odemis.gui.dblmscopepanel.DblMicroscopePanel" name="pnl_view_tl">
-                  <size>400,-1</size>
-                  <fg>#BFBFBF</fg>
-                  <bg>#000000</bg>
-                  <XRCED>
-                    <assign_var>1</assign_var>
-                  </XRCED>
-                </object>
-                <flag>wxEXPAND</flag>
-                <minsize>300,300</minsize>
+            <object class="sizeritem">
+              <object class="TabButton" name="tab_btn_gallery">
+                <size>160,30</size>
+                <label>PROJECT GALLERY</label>
+                <bitmap>img_tab_inactive_png</bitmap>
+                <hover>img_tab_hover_png</hover>
+                <selected>img_tab_active_png</selected>
+                <fg>#E5E5E5</fg>
+                <font>
+                  <size>11</size>
+                  <style>normal</style>
+                  <weight>normal</weight>
+                  <underlined>0</underlined>
+                  <family>default</family>
+                  <face>Ubuntu</face>
+                  <encoding>UTF-8</encoding>
+                </font>
+                <style>wxALIGN_CENTRE</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
               </object>
-              <object class="sizeritem">
-                <object class="odemis.gui.dblmscopepanel.DblMicroscopePanel" name="pnl_view_tr">
-                  <size>400,-1</size>
-                  <fg>#BFBFBF</fg>
-                  <bg>#000000</bg>
-                  <XRCED>
-                    <assign_var>1</assign_var>
-                  </XRCED>
-                </object>
-                <flag>wxEXPAND</flag>
-                <minsize>300,300</minsize>
-              </object>
-              <object class="sizeritem">
-                <object class="odemis.gui.dblmscopepanel.DblMicroscopePanel" name="pnl_view_bl">
-                  <size>400,-1</size>
-                  <fg>#BFBFBF</fg>
-                  <bg>#000000</bg>
-                  <XRCED>
-                    <assign_var>1</assign_var>
-                  </XRCED>
-                </object>
-                <flag>wxEXPAND</flag>
-                <minsize>300,300</minsize>
-              </object>
-              <object class="sizeritem">
-                <object class="odemis.gui.dblmscopepanel.DblMicroscopePanel" name="pnl_view_br">
-                  <size>400,-1</size>
-                  <fg>#BFBFBF</fg>
-                  <bg>#000000</bg>
-                  <XRCED>
-                    <assign_var>1</assign_var>
-                  </XRCED>
-                </object>
-                <flag>wxEXPAND</flag>
-                <minsize>300,300</minsize>
-              </object>
-              <cols>2</cols>
-              <rows>2</rows>
+              <flag>wxLEFT|wxALIGN_BOTTOM</flag>
+              <border>20</border>
             </object>
-            <option>1</option>
-            <flag>wxEXPAND</flag>
+            <object class="spacer">
+              <option>1</option>
+              <flag>wxEXPAND</flag>
+            </object>
+            <object class="sizeritem">
+              <object class="wxStaticBitmap">
+                <bitmap>img_logo_h30_png</bitmap>
+              </object>
+              <flag>wxTOP|wxRIGHT</flag>
+              <border>10</border>
+            </object>
           </object>
-          <object class="sizeritem">
-            <object class="wxPanel" name="pnl_right">
-              <object class="wxBoxSizer">
+          <bg>#BFBFBF</bg>
+        </object>
+        <flag>wxEXPAND</flag>
+        <minsize>-1,40</minsize>
+      </object>
+      <object class="sizeritem">
+        <object class="wxPanel" name="pnl_tab_live">
+          <object class="wxBoxSizer">
+            <object class="sizeritem">
+              <object class="wxPanel" name="pnl_left">
+                <size>200,-1</size>
+                <bg>#333333</bg>
+              </object>
+              <flag>wxEXPAND</flag>
+            </object>
+            <object class="sizeritem">
+              <object class="wxGridSizer">
                 <object class="sizeritem">
-                  <object class="wxPanel" name="main_buttons">
-                    <object class="wxBoxSizer">
-                      <orient>wxHORIZONTAL</orient>
-                      <object class="sizeritem">
-                        <object class="odemis.gui.comp.buttons.ImageTextToggleButton" name="btn_toggle_press">
-                          <size>90,-1</size>
-                          <label>0 kPa</label>
-                          <delta>1</delta>
-                          <bitmap>img_btn_press_png</bitmap>
-                          <hover>img_btn_press_h_png</hover>
-                          <selected>img_btn_press_on_a_png</selected>
-                          <fg>#1A1A1A</fg>
-                          <font>
-                            <size>11</size>
-                            <style>normal</style>
-                            <weight>normal</weight>
-                            <underlined>0</underlined>
-                            <family>default</family>
-                            <face>Ubuntu</face>
-                            <encoding>UTF-8</encoding>
-                          </font>
-                          <style>wxALIGN_RIGHT</style>
-                        </object>
-                        <flag>wxALL|wxEXPAND</flag>
-                        <border>10</border>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="odemis.gui.comp.buttons.ImageTextToggleButton" name="btn_toggle_opt">
-                          <size>90,-1</size>
-                          <label>OPTICAL</label>
-                          <delta>1</delta>
-                          <bitmap>img_btn_opt_png</bitmap>
-                          <hover>img_btn_opt_h_png</hover>
-                          <selected>img_btn_opt_on_a_png</selected>
-                          <fg>#1A1A1A</fg>
-                          <font>
-                            <size>11</size>
-                            <style>normal</style>
-                            <weight>normal</weight>
-                            <underlined>0</underlined>
-                            <family>default</family>
-                            <face>Ubuntu</face>
-                            <encoding>UTF-8</encoding>
-                          </font>
-                          <style>wxALIGN_RIGHT</style>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <flag>wxTOP|wxBOTTOM|wxRIGHT</flag>
-                        <border>10</border>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="odemis.gui.comp.buttons.ImageTextToggleButton" name="btn_toggle_sem">
-                          <size>90,-1</size>
-                          <label>SEM     </label>
-                          <delta>1</delta>
-                          <bitmap>img_btn_sem_png</bitmap>
-                          <hover>img_btn_sem_h_png</hover>
-                          <selected>img_btn_sem_on_a_png</selected>
-                          <fg>#1A1A1A</fg>
-                          <font>
-                            <size>11</size>
-                            <style>normal</style>
-                            <weight>normal</weight>
-                            <underlined>0</underlined>
-                            <family>default</family>
-                            <face>Ubuntu</face>
-                            <encoding>UTF-8</encoding>
-                          </font>
-                          <style>wxALIGN_RIGHT</style>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <flag>wxTOP|wxBOTTOM|wxRIGHT</flag>
-                        <border>10</border>
-                      </object>
-                      <object class="spacer">
-                        <option>1</option>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="odemis.gui.comp.buttons.PopupImageButton" name="btn_toggle_pause">
-                          <size>50,-1</size>
-                          <default>1</default>
-                          <bitmap>img_btn_pause_png</bitmap>
-                          <hover>img_btn_pause_h_png</hover>
-                          <selected>img_btn_pause_a_png</selected>
-                          <fg>#1A1A1A</fg>
-                        </object>
-                        <flag>wxTOP|wxBOTTOM|wxRIGHT</flag>
-                        <border>10</border>
-                      </object>
-                    </object>
+                  <object class="DblMicroscopePanel" name="pnl_view_tl">
                     <size>400,-1</size>
-                    <bg>#4D4D4D</bg>
-                  </object>
-                  <flag>wxEXPAND</flag>
-                </object>
-                <object class="sizeritem">
-                  <object class="wxScrolledWindow" name="scr_win_right">
-                    <object class="wxBoxSizer">
-                      <orient>wxVERTICAL</orient>
-                      <object class="sizeritem">
-                        <object class="odemis.gui.comp.foldpanelbar.FoldPanelBar" name="fpb_settings">
-                          <object class="odemis.gui.comp.foldpanelbar.FoldPanelItem">
-                            <label>OPTICAL SETTINGS</label>
-                            <collapsed>1</collapsed>
-                          </object>
-                          <object class="odemis.gui.comp.foldpanelbar.FoldPanelItem">
-                            <label>SEM SETTINGS</label>
-                            <collapsed>1</collapsed>
-                          </object>
-                          <object class="odemis.gui.comp.foldpanelbar.FoldPanelItem">
-                            <object class="wxPanel" name="pnl_stream" subclass="odemis.gui.comp.stream.StreamPanel">
-                              <fg>#7F7F7F</fg>
-                              <bg>#333333</bg>
-                              <XRCED>
-                                <assign_var>1</assign_var>
-                              </XRCED>
-                            </object>
-                            <label>STREAMS</label>
-                            <bg>#333333</bg>
-                          </object>
-                          <object class="odemis.gui.comp.foldpanelbar.FoldPanelItem">
-                            <label>ANNOTATIONS</label>
-                            <collapsed>1</collapsed>
-                          </object>
-                          <spacing>0</spacing>
-                          <leftspacing>0</leftspacing>
-                          <rightspacing>0</rightspacing>
-                          <bg>#333333</bg>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <flag>wxEXPAND</flag>
-                      </object>
-                    </object>
-                    <size>400,-1</size>
-                    <bg>#333333</bg>
-                    <style>wxVSCROLL</style>
+                    <fg>#BFBFBF</fg>
+                    <bg>#000000</bg>
                     <XRCED>
                       <assign_var>1</assign_var>
                     </XRCED>
                   </object>
-                  <option>1</option>
                   <flag>wxEXPAND</flag>
-                  <minsize>400,400</minsize>
+                  <minsize>300,300</minsize>
                 </object>
                 <object class="sizeritem">
-                  <object class="wxPanel">
-                    <object class="wxBoxSizer">
-                      <orient>wxVERTICAL</orient>
-                      <object class="sizeritem">
-                        <object class="odemis.gui.comp.buttons.ImageTextButton" name="btn_aquire">
-                          <size>380,-1</size>
-                          <label>AQUIRE IMAGE</label>
-                          <delta>1</delta>
-                          <bitmap>img_btn_aquire_image_png</bitmap>
-                          <hover>img_btn_aquire_image_h_png</hover>
-                          <selected>img_btn_aquire_image_a_png</selected>
-                          <fg>#E5E5E5</fg>
-                          <font>
-                            <size>14</size>
-                            <style>normal</style>
-                            <weight>normal</weight>
-                            <underlined>0</underlined>
-                            <family>default</family>
-                            <face>Ubuntu</face>
-                            <encoding>UTF-8</encoding>
-                          </font>
-                          <style>wxALIGN_CENTRE</style>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <flag>wxALL</flag>
-                        <border>10</border>
-                      </object>
-                    </object>
-                    <bg>#4D4D4D</bg>
+                  <object class="DblMicroscopePanel" name="pnl_view_tr">
+                    <size>400,-1</size>
+                    <fg>#BFBFBF</fg>
+                    <bg>#000000</bg>
+                    <XRCED>
+                      <assign_var>1</assign_var>
+                    </XRCED>
                   </object>
                   <flag>wxEXPAND</flag>
+                  <minsize>300,300</minsize>
                 </object>
-                <orient>wxVERTICAL</orient>
+                <object class="sizeritem">
+                  <object class="DblMicroscopePanel" name="pnl_view_bl">
+                    <size>400,-1</size>
+                    <fg>#BFBFBF</fg>
+                    <bg>#000000</bg>
+                    <XRCED>
+                      <assign_var>1</assign_var>
+                    </XRCED>
+                  </object>
+                  <flag>wxEXPAND</flag>
+                  <minsize>300,300</minsize>
+                </object>
+                <object class="sizeritem">
+                  <object class="DblMicroscopePanel" name="pnl_view_br">
+                    <size>400,-1</size>
+                    <fg>#BFBFBF</fg>
+                    <bg>#000000</bg>
+                    <XRCED>
+                      <assign_var>1</assign_var>
+                    </XRCED>
+                  </object>
+                  <flag>wxEXPAND</flag>
+                  <minsize>300,300</minsize>
+                </object>
+                <cols>2</cols>
+                <rows>2</rows>
               </object>
-              <bg>#333333</bg>
-              <style>wxBORDER_NONE</style>
+              <option>1</option>
+              <flag>wxEXPAND</flag>
             </object>
-            <flag>wxEXPAND</flag>
-            <minsize>400,400</minsize>
+            <object class="sizeritem">
+              <object class="wxPanel" name="pnl_right">
+                <object class="wxBoxSizer">
+                  <object class="sizeritem">
+                    <object class="wxPanel" name="main_buttons">
+                      <object class="wxBoxSizer">
+                        <orient>wxHORIZONTAL</orient>
+                        <object class="sizeritem">
+                          <object class="ImageTextToggleButton" name="btn_toggle_press">
+                            <size>90,-1</size>
+                            <label>0 kPa</label>
+                            <delta>1</delta>
+                            <bitmap>img_btn_press_png</bitmap>
+                            <hover>img_btn_press_h_png</hover>
+                            <selected>img_btn_press_on_a_png</selected>
+                            <fg>#1A1A1A</fg>
+                            <font>
+                              <size>11</size>
+                              <style>normal</style>
+                              <weight>normal</weight>
+                              <underlined>0</underlined>
+                              <family>default</family>
+                              <face>Ubuntu</face>
+                              <encoding>UTF-8</encoding>
+                            </font>
+                            <style>wxALIGN_RIGHT</style>
+                          </object>
+                          <flag>wxALL|wxEXPAND</flag>
+                          <border>10</border>
+                        </object>
+                        <object class="sizeritem">
+                          <object class="ImageTextToggleButton" name="btn_toggle_opt">
+                            <size>90,-1</size>
+                            <label>OPTICAL</label>
+                            <delta>1</delta>
+                            <bitmap>img_btn_opt_png</bitmap>
+                            <hover>img_btn_opt_h_png</hover>
+                            <selected>img_btn_opt_on_a_png</selected>
+                            <fg>#1A1A1A</fg>
+                            <font>
+                              <size>11</size>
+                              <style>normal</style>
+                              <weight>normal</weight>
+                              <underlined>0</underlined>
+                              <family>default</family>
+                              <face>Ubuntu</face>
+                              <encoding>UTF-8</encoding>
+                            </font>
+                            <style>wxALIGN_RIGHT</style>
+                            <XRCED>
+                              <assign_var>1</assign_var>
+                            </XRCED>
+                          </object>
+                          <flag>wxTOP|wxBOTTOM|wxRIGHT</flag>
+                          <border>10</border>
+                        </object>
+                        <object class="sizeritem">
+                          <object class="ImageTextToggleButton" name="btn_toggle_sem">
+                            <size>90,-1</size>
+                            <label>SEM     </label>
+                            <delta>1</delta>
+                            <bitmap>img_btn_sem_png</bitmap>
+                            <hover>img_btn_sem_h_png</hover>
+                            <selected>img_btn_sem_on_a_png</selected>
+                            <fg>#1A1A1A</fg>
+                            <font>
+                              <size>11</size>
+                              <style>normal</style>
+                              <weight>normal</weight>
+                              <underlined>0</underlined>
+                              <family>default</family>
+                              <face>Ubuntu</face>
+                              <encoding>UTF-8</encoding>
+                            </font>
+                            <style>wxALIGN_RIGHT</style>
+                            <XRCED>
+                              <assign_var>1</assign_var>
+                            </XRCED>
+                          </object>
+                          <flag>wxTOP|wxBOTTOM|wxRIGHT</flag>
+                          <border>10</border>
+                        </object>
+                        <object class="spacer">
+                          <option>1</option>
+                        </object>
+                        <object class="sizeritem">
+                          <object class="PopupImageButton" name="btn_toggle_pause">
+                            <size>50,-1</size>
+                            <default>1</default>
+                            <bitmap>img_btn_pause_png</bitmap>
+                            <hover>img_btn_pause_h_png</hover>
+                            <selected>img_btn_pause_a_png</selected>
+                            <fg>#1A1A1A</fg>
+                          </object>
+                          <flag>wxTOP|wxBOTTOM|wxRIGHT</flag>
+                          <border>10</border>
+                        </object>
+                      </object>
+                      <size>400,-1</size>
+                      <bg>#4D4D4D</bg>
+                    </object>
+                    <flag>wxEXPAND</flag>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxScrolledWindow" name="scr_win_right">
+                      <object class="wxBoxSizer">
+                        <orient>wxVERTICAL</orient>
+                        <object class="sizeritem">
+                          <object class="FoldPanelBar" name="fpb_settings">
+                            <object class="FoldPanelItem">
+                              <label>OPTICAL SETTINGS</label>
+                              <collapsed>1</collapsed>
+                              <fg>#1A1A1A</fg>
+                              <bg>#555555</bg>
+                            </object>
+                            <object class="FoldPanelItem">
+                              <label>SEM SETTINGS</label>
+                              <collapsed>1</collapsed>
+                              <fg>#1A1A1A</fg>
+                              <bg>#555555</bg>
+                            </object>
+                            <object class="FoldPanelItem">
+                              <object class="wxPanel" name="pnl_stream" subclass="odemis.gui.comp.stream.StreamPanel">
+                                <fg>#7F7F7F</fg>
+                                <bg>#333333</bg>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                              </object>
+                              <label>STREAMS</label>
+                              <fg>#1A1A1A</fg>
+                              <bg>#555555</bg>
+                            </object>
+                            <object class="FoldPanelItem">
+                              <label>ANNOTATIONS</label>
+                              <collapsed>1</collapsed>
+                              <fg>#1A1A1A</fg>
+                              <bg>#555555</bg>
+                            </object>
+                            <spacing>0</spacing>
+                            <leftspacing>0</leftspacing>
+                            <rightspacing>0</rightspacing>
+                            <bg>#333333</bg>
+                            <XRCED>
+                              <assign_var>1</assign_var>
+                            </XRCED>
+                          </object>
+                          <flag>wxEXPAND</flag>
+                        </object>
+                      </object>
+                      <size>400,-1</size>
+                      <bg>#333333</bg>
+                      <style>wxVSCROLL</style>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <option>1</option>
+                    <flag>wxEXPAND</flag>
+                    <minsize>400,400</minsize>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxPanel">
+                      <object class="wxBoxSizer">
+                        <orient>wxVERTICAL</orient>
+                        <object class="sizeritem">
+                          <object class="ImageTextButton" name="btn_aquire">
+                            <size>380,-1</size>
+                            <label>AQUIRE IMAGE</label>
+                            <delta>1</delta>
+                            <bitmap>img_btn_aquire_image_png</bitmap>
+                            <hover>img_btn_aquire_image_h_png</hover>
+                            <selected>img_btn_aquire_image_a_png</selected>
+                            <fg>#E5E5E5</fg>
+                            <font>
+                              <size>14</size>
+                              <style>normal</style>
+                              <weight>normal</weight>
+                              <underlined>0</underlined>
+                              <family>default</family>
+                              <face>Ubuntu</face>
+                              <encoding>UTF-8</encoding>
+                            </font>
+                            <style>wxALIGN_CENTRE</style>
+                            <XRCED>
+                              <assign_var>1</assign_var>
+                            </XRCED>
+                          </object>
+                          <flag>wxALL</flag>
+                          <border>10</border>
+                        </object>
+                      </object>
+                      <bg>#4D4D4D</bg>
+                    </object>
+                    <flag>wxEXPAND</flag>
+                  </object>
+                  <orient>wxVERTICAL</orient>
+                </object>
+                <bg>#333333</bg>
+                <style>wxBORDER_NONE</style>
+              </object>
+              <flag>wxEXPAND</flag>
+              <minsize>400,400</minsize>
+            </object>
+            <orient>wxHORIZONTAL</orient>
           </object>
-          <orient>wxHORIZONTAL</orient>
+          <bg>#333333</bg>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
         </object>
         <option>1</option>
         <flag>wxEXPAND</flag>
       </object>
       <object class="sizeritem">
-        <object class="wxPanel">
+        <object class="wxPanel" name="pnl_tab_gallery">
+          <bg>#333333</bg>
+          <hidden>1</hidden>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
+        <option>1</option>
+        <flag>wxEXPAND</flag>
+      </object>
+      <object class="sizeritem">
+        <object class="wxPanel" name="pnl_log">
           <object class="wxBoxSizer">
             <orient>wxVERTICAL</orient>
             <object class="sizeritem">
@@ -369,20 +470,23 @@ def __init_resources():
                   <face>Courier 10 Pitch</face>
                   <encoding>UTF-8</encoding>
                 </font>
-                <hidden>1</hidden>
                 <style>wxTE_MULTILINE</style>
                 <XRCED>
                   <assign_var>1</assign_var>
                 </XRCED>
               </object>
-              <flag>wxTOP|wxEXPAND</flag>
-              <border>2</border>
+              <flag>wxEXPAND</flag>
             </object>
           </object>
           <size>-1,200</size>
           <bg>#4D4D4D</bg>
+          <hidden>1</hidden>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
         </object>
-        <flag>wxEXPAND</flag>
+        <flag>wxTOP|wxEXPAND</flag>
+        <border>2</border>
       </object>
     </object>
     <title>Odemis</title>
@@ -399,6 +503,215 @@ def __init_resources():
     </font>
   </object>
 </resource>'''
+
+    img_tab_inactive_png = '''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00\xa0\x00\x00\x00\x1e\x08\x06\x00\x00\x00\
+\xab\x0f\x15(\x00\x00\x00\x06bKGD\x00\xff\x00\xff\x00\xff\xa0\xbd\xa7\x93\
+\x00\x00\x00\x09pHYs\x00\x00\x0b\x13\x00\x00\x0b\x13\x01\x00\x9a\x9c\x18\
+\x00\x00\x00\x07tIME\x07\xdc\x08\x06\x0b#
+\xee\x1a\x13w\x00\x00\x00\x19tEXtComment\x00Created with GIMPW\x81\x0e\
+\x17\x00\x00\x00\x90IDATx\xda\xed\xd7;\x15\x021\x14E\xd1\x9b\x88\x98\x16\
+\x0c\x81\x80Q1\xd5\x13\x91j\xb4\x80!pB\x13\x014\x90fo\x09w\x9d\x95O\xcb\
+4\xc6\xb8$9\x92\xecI\xb6\xc0o\x9cI\xce\xaaz\x27I\x9b\xf1\xdd\x92<l\xc3\x1f\
+\xdd\xab\xea\xd9\xe6\xc9\xf7\xb2\x07\x0b\\\xfb\xbcva\x85\xa3\xcf7\x1f\xac\
+\xb0w\x1f\x0e\x16\xda\xba\x0dXI\x80\x08\x10\x01\x82\x00\x11 \x08\x10\x01\
+\x82\x00\x11 \x08\x10\x01\x82\x00\x11 \x08\x10\x01\x82\x00\x11 \x08\x10\
+\x01\x82\x00\x11 \x08\x10\x01\xc2W>"\xa8\x0f\xb7\xbc\xedY\xef\x00\x00\x00\
+\x00IEND\xaeB`\x82'''
+
+    img_tab_hover_png = '''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00\xa0\x00\x00\x00\x1e\x08\x06\x00\x00\x00\
+\xab\x0f\x15(\x00\x00\x00\x06bKGD\x00\xff\x00\xff\x00\xff\xa0\xbd\xa7\x93\
+\x00\x00\x00\x09pHYs\x00\x00\x0b\x13\x00\x00\x0b\x13\x01\x00\x9a\x9c\x18\
+\x00\x00\x00\x07tIME\x07\xdc\x08\x06\x0e//\x0f`J\xd7\x00\x00\x00\x19tEX\
+tComment\x00Created with GIMPW\x81\x0e\x17\x00\x00\x00\x90IDATx\xda\xed\
+\xd7;\x11\x021\x18\x85\xd1\x9b\x88\xd8\x16\x0c\xc1\xa4^\x15+e\xa5\xfc\x03\
+\x86\xc0\x09M\x04\xd0@\x9as$\xdc\xf9&\x8f\x96i\x8cqIr$\xd9\x93l\x81\xdf\
+8\x93\x9cU\xf5N\x926\xe3\xbb%y\xd8\x86?\xbaW\xd5\xb3\xcd\x93\xefe\x0f\x16\
+\xb8\xf6y\xed\xc2
+G\x9fo>Xa\xef>\x1c,\xb4u\x1b\xb0\x92\x00\x11 \x02\x04\x01"@\x10 \x02\x04\
+\x01"@\x10 \x02\x04\x01"@\x10 \x02\x04\x01"@\x10 \x02\x04\x01"@\x10 \x02\
+\x84\xaf|\x00$O\x0f\x09\xd8\x122v\x00\x00\x00\x00IEND\xaeB`\x82'''
+
+    img_tab_active_png = '''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00\xa0\x00\x00\x00\x1e\x08\x06\x00\x00\x00\
+\xab\x0f\x15(\x00\x00\x00\x06bKGD\x00\xff\x00\xff\x00\xff\xa0\xbd\xa7\x93\
+\x00\x00\x00\x09pHYs\x00\x00\x0b\x13\x00\x00\x0b\x13\x01\x00\x9a\x9c\x18\
+\x00\x00\x00\x07tIME\x07\xdc\x08\x06\x0b"5Ag\x0f\x0b\x00\x00\x00\x19tEX\
+tComment\x00Created with GIMPW\x81\x0e\x17\x00\x00\x00\x91IDATx\xda\xed\
+\xd7K\x15\x021\x14D\xc1ND\xcc\x16<D\x07\x08\x18\x15#e\xb4\x80\x8e\xe7\x01\
+\x9c\xb0\x89\x006\x90M\x95\x84>\xf7\xe4\xd32\x8d1.I\x8e${\x92-\xf0\x1bg\
+\x92\xb3\xaa\xdeI\xd2f|\xb7$\x0f\xdb\xf0G\xf7\xaaz\xb6y\xf2\xbd\xec\xc1\
+\x02\xd7>\xaf]X\xe1\xe8\xf3\xcd\x07+\xec\xdd\x87\x83\x85\xb6n\x03V\x12 \
+\x02D\x80 @\x04\x08\x02D\x80 @\x04\x08\x02D\x80 @\x04\x08\x02D\x80 @\x04\
+\x08\x02D\x80 @\x04\x08\x02D\x80\xf0\x95\x0f\xa5\x1b\x0e\xb2\x19m\\g\x00\
+\x00\x00\x00IEND\xaeB`\x82'''
+
+    img_logo_h30_png = '''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00e\x00\x00\x00\x18\x08\x06\x00\x00\x00\xe3\
+\xc03\xd0\x00\x00\x010iCCPICC Profile\x00\x00x\xda\xad\x8e\xbdJ\xc3P\x18\
+@\xcf\x0d\x82E\xa1V\x0c\xe2\xe0p\x27QPL[\x07\xc5)\xfd\xa1\x08\x82\xb5:$\
+\xd9\x9a4T)M\xc2\xcd\xf5\xa7\x0f\xe1\xe8\xd6\xc1\xc5\xdd\x27prt\x10\x14\
+\x9f\xc07P\x9c:8D\xc8\xe0 \x82g:\xdf\xe1\xe3\xe3\x03\xc3\xb2\x1b\xb5\xa6\
+Q\x82a\xa4U\xa7U\x93\x8e\xeb\xc9\xe9\x27
+\xcc\xb2@\x95\xddn\x90&v\xbb\xbd\x0f\x10\xc5Q\xc8\x0f>_\x11\x00\xcf\x1b\
+v\xa3\xd6\xe4o\xcc\x04\x89\xd2\xc0\x04\xa8\xf4\xc24\x00a\x01\x83\x0b\x9d\
+h\x10c\xc0\xf4\x07\x89\x06q\x07\x98\xea\xb8S\x07\xf1\x00\x14\xfb\x99\xbf\
+\x00E?\xf37\xa0\xa8\x1c\xd7\x03\xf1\x01\x98}\xc7\xf5\xc0(\x00\xa6\x9f\xf9\
+2`\xea\xf0R\x03\xd4\xe3d\xa4N\xfb\x27ZV,\xcb\x92v/\xf6Cy4Ju8L\xe5^\x14\xc4\
+*\x89UW\x87= \xfb\x0f\x80\xf9l\xb1\xd3\xaa\xc9\xd5\xf2\xce\xce\xf6\x1a\xff\
+\x8c\xe3z2\xb3\xf7C\x04 \x16\x1f\xf3\x96\x13\x9c\xa9\xf3o\x15F\xf5\xf79\
+\xbf1^\x82\x83[\x98\x9a\xe4m\xeb
+n\xd6a\xee:o+e(m\xc2\xfd\xf8\x0b\xc3\xafPoW;\xe4t\x00\x00\x00\x06bKGD\x00\
+\xff\x00\xff\x00\xff\xa0\xbd\xa7\x93\x00\x00\x00\x09pHYs\x00\x00L\xe5\x00\
+\x00L\xe5\x01u\xce\xf0\x95\x00\x00\x00\x07tIME\x07\xdc\x08\x06\x0e+\x0c\
+\xc9k\xfe\xa1\x00\x00\x0c\xd5IDATh\xde\xcdZ{xU\xd5\x95\xff\xad\xbdOn\x12\
+\xc0Ty\x08J\xb1\xb6\x94\x97Jy\xc8\x08\xf7qn\x12\x12\xe4\x0d\x9a\x80fH\x88\
+\x14\xf8\xdaO\xc4\xc1\x8e\x9f\x1d\xc6\xd8yP\xda\xa2\x9d\x01\xb5"Z\x04Q\xc0\
+\x8a\x12\x86\xf0(\x92\x00I\xeeM\x82\xe4\x8b<Sh\x87\xf9:\x16y(\xa8\x97\x11\
+.I\xee9{\xaf\xf9#\xf7\x84\x9b\x9b\\\x1e\x01m\xf7\xf7\xe5\x8f\xbb\xcf>k\xaf\
+\xb5~{\xff\xd6\xe3\x04\xe8\xe0xk\xcd\x9a6s\x13\x27N\xc4\xd71\xa6M\x9b\xd6\
+f\xce4\xcd\x1b\x92\xd9\xb3g\xcfk^\xfb\xd4SOuh\x8f\xfc\x276^\xf7;c\xf2\xde\
+\x06ud3\xaf\xc7\x83\xea\x9a\x1a\x00@\xd6\xe8\xd1\xfd"\x91H\xa6\x90\xf2\xe3\
+\xca\xca\xca\xd2\x9b\x0d\x88\xe9\xf3!XU\xe5\xec5\xb0\xa9\xa9)K\x08q.\x10\
+\x0c\xbew\xa3\xb2\x87\x0d\x1b6Ek=E\x08Q\x0d\xa0;\x00\x9b\x88\xfe\xa0\xb5\
+\x1e\xe7r\xb9\xd6555\xfd\x83\x94\xb2h\xff\xfe\xfd\xa7\xae\x1f\x90b\xac_\
+\x9e\x8b\x19Ol\x1c\xa2\x14\x17\x11A%Z\xcb\xe0d\x025v\xee\xe4\xfa\xe5\xaa\
+\xff\x9cZot\xc4\x98\xea\x9a\x1ax=\x9e\x19\xcc\xbc>\x1c\x0e\x03\x00\x0c\xe6\
+"\x007\x1d\x94`U\x15\xbc\x1e\xcf\x04f\xde\xee\xec%\xa5\\\x06\xe0\x86@).\
+.\xc6\xa2E\x8bL\xadu\x0e\x11\xf5\xd4Z\x0f\x04p\xd20\x8c\x01J\xa9|\xa5\x94\
+\xa1\xb5.\x14B\xbc\xe6\xf7\xfb\xcf\x04\x02\x01}\xad\xb2\x0b\x9e\xd8\x88\
+u\xcbs\x91\xffD\xf1\xa0\x88e\x1fd\xbe\xd2j\xfa?)\xe9\xad\xc9\xde\x01O\xe5\
+\xcf\xfc\x01\x8f\xc9{\x1b\xa2\xa3F)\xa5zi\xadAD\xdc\x02\xf8\xd74\xb4\xd6\
+\xdf\xba\xd9{\xe5\xe6\xe6"99\xb9(55\xb5_JJ\xca#]\xbbv\xbdW\x08\xf1\x17\x00\
+uD\xb4O\x08\xb1G\x08qX\x081\xe8\xfc\xf9\xf3\x9b\x87\x0e\x1d\xda\xfbZ\xe4\
+\xce|r\x13\xd6-\x9f\x86\x19\xf3\xde\xef\x17\xb1T\x153@DLD\xb1\xfaC\x08:\
+*\x04\xcdMq\x19\xdf\xdf\xf0\xda\xf4\x05\xf93\xc0\x0b~\xf6{\x94\xbd[\x08\
+\xa3\xc3V\x11q\x94\xfb\x08_\xffp\x8c\xb9\xa9{\xd5\xd6\xd6F\x00|\xe1\xfc\
+\x1e2d\xc8\xdd\x00\xfe\x87\x88\x06\x01\xb8\x83\x99\xef\x05\xf0\x1df\xce\
+\x12Bt\x196l\x98<p\xe0@B\x1a\xcar\x13\xd6\xfe&\x07\xb3\x16l\xea\x1an\xb0\
+\xeb\x99\xd9ED\xcc\xcc\x04\x02\xc0\xc4B\xd09!\xc4\x9cwWL\xdb\x06\x00\xf9\
+\xf3\x8b[\xde\xe9\xe7\x13\x9aY\xa7\xc3\x98D=\xf5M \xf2M\x8c\xfb\xee\xbb\
+\x0f\x87\x0e\x1d\xca\x88\xfe\\\xecv\xbb\xef\x88D"s\x99\xf9\xac\x10\xe2\xb0\
+\xd6\xfaGZ\xeb\xe1#F\x8c\xc8\xa9\xab\xab\x0b\xc5\xbf?\xe7\x1fK\xb0j\xe9\
+T\xfc\xfd\xbc\x8d}\xc2\x0d\xf6\x87\xb1\x804\xdf\x12\x94\x90\xc0\xea\x0d\
+\xaf=\xb2%\xf6\xbd\xf5\xaf\xe4\xb6\xd1E\xdc\xd8\xf9\xbd>\x16)\xde\xb8\xf1\
+o\x12\x90\xdfo\xdf\x8e\xfa\xfa\xfaVs\xa9\xa9\xa9!\x00\x16\x11\x9d\x02 \x85\
+\x10\x27\x89Hv\xea\xd4\xe9"\x00\x0c\x1e<\x18S\xa7NmY\xbfj\xe9T\xbc\xbe\xb6\
+N([\xefc\xe6;\x9b\xdd\xc3$\xa5\xd8\xe3r\xc9>\xac\xf9!\x07\x90\xc2\xc2Y\xad\
+\xf6z\xac\xb0\xb0\xcd\x81o32\xfc~T\x04\x02\x00\x00\xbfi\x8eRJ\x0d\x8c\x06\
+CAD_
+!\x8e\xda\xb6\xedg\xe6\xc5D\x04f\x86a\x18\xcfVUW\xff*\x91\xe1\xd9YY=\x1a\
+\x1b\x1bG2\xf3\xdd\xcc\x9c&\x84\xb0\x99\xf9,\x11\x1d\x1f4h\xd0\x87+\xdf\
+xC\x0d\x1b:\x14\x03\xfa\xf7\xc7\xbb\xef\xb5\x8e\xe1\xeeQ\xa3\xf2\x98\xf9\
+w\xce^R\xca\xa5\xd555O\xc7\xc8\xc6\xa5K\x97\xee\xd5Z\xf7&"r\xbb\xdd\xa5\
+K\x97-\xe3t\xbf\xff{\xb6m\x8f\x02\xf0\xed(+\x84\x00|\xdc\xb9s\xe7\xea\xd2\
+\xb2\xb2\xaf\xa2\x8e\x83i\x9a&\x98\x072s\x0f\x006\x80\xd3R\xca\xfd\x81`\
+\xf0\xa8\xb3\xc7\xd0\xa1C\x9f\x8b\x06\xfecZ\xeb\xef\x1f>|\xf8^\x00\x985\
+o\x05\xd6\xbc\xfa8\xf2\xe7\x17w\xb3,\xb5Wk\xeeGD_\x10a\x93a\xc8\xdf\xbc\
+\xb3<\xf7\x88#c\xf2\xa4I)\xa1P\xe8~f\xfe\x1e\x80\xdb\x01\xa4\x12Q\x033\x9f\
+\x96R\x1e\x0d\x04\x83\x87\xda\xa5\xafQ#G\xa2"\x10@fF\xc6\xb0\xa6\xa6\xa6\
+b\xcb\xb2\xee\x04\xe0bn\x0e!D\x04\xadu\xe4j\xc1v\xc9\x92%X\xfe\xca+\x18\
+;v\xac<v\xec\xd8k\xe1px&\x00\xd9\x9c\xa81b\x02\xb7U__\xc1o\x9a\x0b\x02\
+\xc1\xe0\xfa\x03\x07\x0fv\xf4\xc0\xff\x04@!3\x27\xd5\xd6\xd6>\xe7\xf3z\x1b\
+"\x91\xc8"\x00\xa9\x00\x043\x83\x88\x00\xc0\xbep\xe1\x82e\xfa|\xff$\xa5\
+<\xe8q\xbb7\x01H\x8b\xda\x18\x0d\x97\xc4Z\xeb\x88\xc7\xed\xde\xde\xa5K\x97\
+GK\xcb\xcal\xc30\xca\x94R\xa9Dt@\x08\xd1\xcb\xd9tG\xc9\x8b\x00\x00\xcbR\
+\x95\xcc\xdc\xcf\x90\xa2\x88\x08\xcb\xd3\xba\xb8\xbez\xfd\xd7S[|\xe4\xf3\
+z\x8b>\xff\xfc\xf3\xa7\x01t\x8a\xf7gs.\xa3#\x1e\xb7\xfb\xcf\xc9\xc9\xc9\
+\xd3Z\x81\xe27M\x04\x82A\xf8\xbc\xdeg\x1a\x1a\x1a^p\x14t\x048\x27\x0b\x80\
++F`\x9b1\xe2\xfe\xfb\xb1p\xe1B\xf8Ms\xe0\xd1\xa3G7k\xad\x07\xc4\xcbq\xae\
+wTV\xb7H$\xb2\xce\xeb\xf1d\xce\x9b7on~A\x01\xe6\xcc\x9e\x8dU\xabW_\x0f(\
+\x12@\x12\x11\xb1m\xdb\x8b\xdbg[\x06\x11If\x96\x96e\xbdl\xdbv\xacM\xf1\xc3\
+\xc5\xcc9\xe1px\x1d\x80\xbc\xba\xba\xba}\x00\xf69\x0f\x07\x0f\x1e\xfcG!\
+\xc4_\x0e\x1e<8!\xef\xf1\x8do2\xf3\xf6{\x06\xf4\x1a\xf2\xefO\xa7+\x00\xc8\
+\xcch\x0eO\xe9~\xff]\x96em\xb3m{p"\x9d\xa2a$\x05\xc0=\x96m\xf7k\x01%+3\x13\
+\xbb\xcb\xcba\xfa|sm\xdb~!\xeapff\x12B\x9c\x93R.\x27\xa2C\x00\x92\x95Ry\
+Z\xeb\x87\x12\xc5\xfa\xba\x8f>B\xba\xdf\xdf?\x12\x89T3sW\x07\x10!\xc4\x09\
+)\xe5\xf3DT/\x84\xb8\xc5\xb6\xed\xb1J\xa9\x27\x1d\xa7(\xa5\xe6\xacX\xb1\
+"\x09\xc0cG\x8e\x1c\xb9\xe1X!\xa5<!\xa5,"!N)\xdb\xceVJ\xfd\x14\x80\xa4f\
+\x85Z\xec\x93R\xae\x97R\xae\x89\xda6_)5.\xaa3\x94R\x8f\xfaM\xf3\x9d@0\xd8\
+\x12\xa0\x87\x0f\x1f\x0e\x00s\x84\x10g\x16.\xfb2\xb9\xd3\xb7\xeez\xfc\xcd\
+\xe7G\x86\x01`\xd6\x82MX\xf3R\x0e\xca+*0u\xca\x94\xce\xe7\xce\x9d;\xa8\xb5\
+\xbe-\xf6P\x1a\x86\xf1\x86\x10b\x0b\x11\x9dg\xe6>J\xa9iZ\xeb\x87\x89h\xc7\
+\xa4\xf1\xe3\xb7\xb4\x80\xb2\xbb\xbc\x1cY\xa3G\xdfy\xe9\xd2\xa5\x95\xdc\
+\xac1\x11\x11I)[]S\xf3\xe38{7x\xdc\xee\xd3Z\xffk\xfcmyp\xcc\x18\x94\x96\
+\x95\xc1\xb2\xac\xe7\xe3\x00\xd9V\xb3w\xef\xe489\xdb\xb3\xb3\xb2^\x08\x87\
+\xc3\x07\x01t\x05\x00\xdb\xb6\x0b\xfd\xa6\xf9j \x18\xdcw\x03\x89!\x84\x10\
+\xffU]S\x93\x133_\xee7\xcd\x03\x91H\xe4\xfd(m\x12\x00JII\x99RQY\xb95V\x27\
+\xaf\xc7\xb3J)5\xdb\x89aJ\xa9\x1f\x01h\x01\xa5Sj\xaa\xd0Z\xf7\xd4Z\xf7\xaf\
+\xdc0\x01\x00\xa4\xdf4\xd7\x05\x82\xc1\xc65/\xe5\xb4\xdc\x00\xaf\xc7S\xec\
+\x00\x12\xf5\xe7\xff\xa6\xa5\xa5yw\x96\x96\x9e\x89\xd3\xf9\x9d\xcc\x8c\x8c\
+\xe1D\xf4\xd9\xc2\xa2\xa2\xd6\xd9WCC\xc3\xb31\xdc\x0b"\xda\xee\x00\x92=\
+zt|Aw\xbe=\xfa*-+\xc3\xb8\xb1c{1\xf3C\x0eE\x91\x10z\xe6\xf4\xe9S\xda\xf3\
+\xe0\xae\xdd\xbbO\x12\xd1\x8b\xd1SDQ`\xf2n\xb8\xb0a^\x1b?\x17\x08\x067F\
+\x1d\xed\xf0\xf9\x97\x15\x95\x95[\xfdq}4"z\x8b\x88T\x8c\xad}\xe3D\x19\x00\
+\x96\x01XMD\xab\x01\xac\x04p\x8b\xf3p\xca\xe4\xc90}\xbe\xef2\xb3\x27\xa6\
+`l2\x0c#ogi\xe9\x19\x87\xdab\xe3xyE\xc5\xfe=\xe5\xe5\xa72\xfc\xfe\xcb\x81\
+>3##\xb9\xb1\xb1qx\x0c\xaaLB\xfc\xae\xc5y{\xf6\xc4\x17\x8f\x09K\x94p8<\xcb\
+\x01\x97\x99!\x88\xaa7\x94\x94LH\xf7\xfbS\x1280)\x12\x89\xb4\x04Y\x00}G\
+gf\xca=\xe5\xe5\xaacu\xede\xc7\x27\x88+\xad\xe2H \x18l\xedq\xc3\x88(\xa5\
+\xec(\xd5\xb5\x97\xa52\x00+\xd1\xfe[\xb6n\x85\xe9\xf3\xdd\xc3\xcc\xb7\xb4\
+\xf8@\x88S\xc1\xaa\xaaZ\x00(\xaf\xa8h\xb5\xfe\xc3}\x97I\xa1"\x10\xb8\x0c\
+\x8aeY\xc9\x00z\xc4(\xc0R\x88?u\xa4xd\xe6\x07b\x1c\xc4J)S)e^\xc5\x91-\x94\
+r#E\xed\xd5\xea\xa7+\x9c\xa5\x9b\xdb\x82`\x1e\x1a\xb7o\xc5\xb5\xbe+b^\x12\
+D\x94\x14\xf7\xbc\xe9J}\x0fJ\xdc\xab\xea\x14\x9ba\x11\x91MDMW\xfa\x03\x10\
+\x89\xee\xd7\x04\xe0\xe3\xbe\xfd\xfb\xab\x0e{\x84\xfe\xfa}\x06"\xea\x14\
+\xf7\xfb\xe2\xb5\xbe\x1b{"\x1537\xc6\xa1}{Gn\x8a\x10\xe2\xb4\xd6:\x96\x0e\
+^IJJz\x87\x99\x93\xae5kZ\xf9\xfa\xeb\xdfX\xa7\xe1k\x1a\xa7\xe3|9\xe8\xba\
+AIIIi\x0c\x87\xc3\x9fFk
+\x00 \xad\xf5\xe89\xb3g\xef\xae\xad\xadE\xdf\xbe}\xb1\xb9\xa4\xa4\x0d7\
+\xa3}PJ\x01\xfc0&\xd5u\x07\xab\xaa~\xd2\xde\xda\xd1\x99\x99\xd8S^\xde\\\
+\x27\xf9\xfd\x08D;\x097xL\xff\xea\xc00smL\xc2\xc4Z\xeb\x07&M\x9cx\xcb\xb6\
+\xed\xdb/\x8c\x1b;\x16\x1f\xec\xdc\xd9\xae\x0f<n\xf7e\xfa*\xdb\xb5\xcb"\
+\xa2\xaa\xcb2\x99\xb4\xd6\xf3\x8f\x1f?\x9eq\xa4\xbe\xbe\x15 p2\x81\x04\x86\
+w\xeb\xd6\xad\x98\x88\x1ab\x14\x1a\xe9\xf3z\xdb\xfd|\xb7\xa7\xbc\x1c\x8f\
+>\xf2HRFzz\xbf@ \x80\xec\xec\xeck\xb19\xe5o\xb9\xb9Y8s&\x84\x10\x8e\xde\
+\x16\x87P\xd2B\xa1\xd0/\x00\xb4\x02\xc4\xf1\xc1\xf3K\x96P\xba\xdf?\xa2f\
+\xef\xde\xd6\x01\xb5w\xef\xde\x8b?\xf9\xe4\x93\xa2h\x1c`fN\xb3,\xab\xcc\
+\xeb\xf1\xecp\xb9\\/\xdez\xeb\xad\xfb\x95R\xaeP(\xf4\x98m\xdb\xcf\xb5\xa7\
+\xd0\xd8\x07\x1fD(\x14\xb2\x84\x10\xff\xa1\xb5\xfe\x993o\xdb\xf62\xaf\xc7\
+3=))\xe9\xe7}\xfa\xf4\xa9z{\xed\xda\xf0\x84\xf1\xe3{_\xbcxq\xd2\x89\x13\
+\x27\x9e%"\x01\xe0\xdb\xbbv\xedJ\x94M\xc5Ny\xaerJ\xd1\x91Xx\xb3\xc6\xdb\
+k\xd7\x02\xc0\x17>\x9f\xefU\xdb\xb2\x16;\xb5\x9aR\xeaI\x8f\xdb=\xd90\x8c\
+\xa2\xdb\xbav-\xdd\xbcy\xf3\xe7S\xa7L\xb9#\x14
+M+))\xf9\x17f>\x93\x99\x91\xe1\x16\xb1M\xbd\xf7\xde\xbf\xd1\xe5r\xf9\x89\
+\xa8\xc9\x01\x06\x80TJMnhh\xd8}\xe6\xcc\x99\xd0\xd9\xb3g?\xb3,\xeb\x05f\
+N\x8b\xfdh\xe3\x8c\x9d\xa5\xa5\xa8\xa8\xacD\xf7\xee\xdd\x17\x11\xd1V\xc7\
+\x07\xd1,\xcc\xd3\xd8\xd8\xb8\xe3\xf8\xf1\xe3\x17\xdc\xa3F\xe9P(\xf4\x89\
+eY+\x98\xb9\x8f\xd6\xfaN\xaf\xc73?>\x87\x8f\xd2a(\x8e
+\x06\xf8\xbc\xde\x89?}\xe6\x19\xba\xde\x0c\xeb\x9bJ\x01\xd2n\xbb\x0dUU\
+U\xbf\x90R\xae\x8c\xf5\x81\xd6\xfa\xeeH$\xb2\xfe\xb3O?=\xe7\x1e5\x8a\xcf\
+\x9e={\xda\xb2\xac\x97\xb5\xd6\xdd\x01\x0c\xb6,k\x9c\x88)\xe2\xe07MT\x06\
+\x02A\x97\xcb\xf5wB\x88s\xccL\x0e8N\xdb\xc51\x9a\x88>\x8d>oc\xaf\xdf4Q\xb2\
+e\x8b\x9d\x92\x92\x92#\xa5\x9c\x1bW\xb0\xc5~\x85\xe3X:\x14B4J)\xdb\xa3\x82\
+c\x00\xbe\xe2\xcb\xbd\x91T\xa5\xd4\xe6c\xc7\x8eu\x8e\xf773;7%a\x9d\xe2\xe8\
+\xcc\xcc\xf2
+7M\xc6\xac\x95\x892\xd7D\xb7\xd2;r$\x00\xa0G\x8f\x1e?6\x0cc:\x11\xa9X\x1f\
+\xa0\x9d\xaf\x91\x00X\x08!\x8d\xb8\x8a\x17\x19\xe9\xe9\xa8\xa8\xac<\x02\
+\xe0v\xd3\xe7{Xk\x9d\xab\xb5\xbe\x8b\x88\\\x00\x9a\x84\x102\x0cc\x8d\xd6\
+\x9a\x999/\xda\xea&)\xe5\xbe\xf8b\x8c\x01\xbb\xaa\xbaz\xd5\xb2\xa5K\xdf\
+\xdc\xb4i\xd3l\xad\xf5\x83Z\xeb^D\x94\xc4\xccZ\x08\xd1DD\x1f\x0b!\xca\x03\
+\xc1\xe0\xda\xf6Nx\x94
+N\xf8M3\xd7\xb6\xed"fN\x11B\x9cv\xb9\\\xff\xbcu\xdb\xb6\x8b\xd9\xd9\xd9\
+\x10D0\x0c\xe3\x03\xad\xf5\x171\xcd\xc9\xffn7\xb31\x8c\x97\xa3:\x03\xc0\
+\xa5\x04\xd9\xdf\x19)\xe5R\x27\x11"\xa2sq7W\x13\xd1\x1bB\x88n\x97\xc5\x1a\
+\xadd\xed\xf8\xe0\x03\x00\xc0\xc9\x93\x27\xb9\xee\xa3\x8f6\x020L\xd3\xcc\
+\xd3JM\xd0ZG\x10\xb9\xa2\x87,"\xa5<-\x84\xd8\x15\x08\x06\xdfl\x8f}\x00\
+\x003\x0b
+\xda\xcc\xfdp\xd6\xac\xab\x16t\xe3\xc7\x8fo3\x97\x15\xd7\x9eaf<VXh\x14\
+\x14\x14\xb4\xf9\xc06&A\x90\x1f\xf9@K-\x8a\x82\xfc|\x99Hv\xfc\xf0y\xbdW\
+\xfc\x0d\x00>\x9f\xef\x9a\xe8\xe8\xf6\xee\xdd\xaf\xba\xc6\x9f\xe0\xdf\x9e\
+r\x1e~\xb8\xcd\\\xfe\x8c\x19rfA\x81l\xcf_\xff\x0f\xd2Ic=\xea9\x94\xbd\x00\
+\x00\x00\x00IEND\xaeB`\x82'''
 
     img_btn_press_png = '''\
 \x89PNG\x0d
@@ -1186,6 +1499,10 @@ s\xdd\xdf}\xbe\x8d\xe1\x00\x80)\xe8?\xe6\xaa*@\xdd7\xae\x9d\x00\x00\x00\
 \x00IEND\xaeB`\x82'''
 
     wx.MemoryFSHandler.AddFile('XRC/main/main_xrc', main_xrc)
+    wx.MemoryFSHandler.AddFile('XRC/main/img_tab_inactive_png', img_tab_inactive_png)
+    wx.MemoryFSHandler.AddFile('XRC/main/img_tab_hover_png', img_tab_hover_png)
+    wx.MemoryFSHandler.AddFile('XRC/main/img_tab_active_png', img_tab_active_png)
+    wx.MemoryFSHandler.AddFile('XRC/main/img_logo_h30_png', img_logo_h30_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_btn_press_png', img_btn_press_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_btn_press_h_png', img_btn_press_h_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_btn_press_on_a_png', img_btn_press_on_a_png)
