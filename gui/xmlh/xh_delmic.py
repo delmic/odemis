@@ -374,7 +374,7 @@ class ImageTextToggleButtonHandler(xrc.XmlResourceHandler):
         self.SetupWindow(w)
         return w
 
-class ImageTextTabButtonButtonHandler(xrc.XmlResourceHandler):
+class TabButtonButtonHandler(xrc.XmlResourceHandler):
 
     def __init__(self):
         xrc.XmlResourceHandler.__init__(self)
@@ -387,7 +387,7 @@ class ImageTextTabButtonButtonHandler(xrc.XmlResourceHandler):
 
     def CanHandle(self, node):
         return self.IsOfClass(
-            node, 'ImageTextTabButton')
+            node, 'TabButton')
 
     # Process XML parameters and create the object
     def DoCreateResource(self):
@@ -397,7 +397,7 @@ class ImageTextTabButtonButtonHandler(xrc.XmlResourceHandler):
         if self.GetParamNode("bitmap"):
             bmp = self.GetBitmap("bitmap")
 
-        w = btns.ImageTextTabButton(self.GetParentAsWindow(),
+        w = btns.TabButton(self.GetParentAsWindow(),
                                        self.GetID(),
                                        bmp,
                                        pos=self.GetPosition(),
@@ -421,6 +421,9 @@ class ImageTextTabButtonButtonHandler(xrc.XmlResourceHandler):
         if self.GetParamNode("disabled"):
             bmp = self.GetBitmap("disabled")
             w.SetBitmapDisabled(bmp)
+
+        if self.GetBool('default'):
+            w.SetToggle(True)
 
         self.SetupWindow(w)
         return w
@@ -559,10 +562,10 @@ HANDLER_CLASS_LIST = [
                       GenBitmapButtonHandler,
                       ImageButtonHandler,
                       ImageTextButtonHandler,
-                      ImageTextTabButtonButtonHandler,
                       ImageTextToggleButtonHandler,
                       PopupImageButtonHandler,
                       SuggestTextCtrlHandler,
+                      TabButtonButtonHandler,
                       UnitIntegerCtrlHandler,
                       ]
 
