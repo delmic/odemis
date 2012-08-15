@@ -855,9 +855,6 @@ class StageRedStone(model.Actuator):
         self._action_mgr = ActionManager()
         self._action_mgr.start()
         
-        # TODO swVersion (=odemis + serial driver name cf readlink /sys/class/tty/tty*/device/driver)
-        # TODO hwVersion (= firmware version of each axis)
-        
     def getMetadata(self):
         metadata = {}
         pos = self.getPosition()
