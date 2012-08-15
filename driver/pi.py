@@ -188,7 +188,7 @@ class PIRedStone(object):
             
         if not char:
             if not self.try_recover:
-                raise IOError("PI controller %d timeout.")
+                raise IOError("PI controller %d timeout." % self.address)
                 
             success = self.recoverTimeout()
             if success:
@@ -439,7 +439,8 @@ class PIRedStone(object):
     def moveRel(self, axis, distance):
         """
         Move on a given axis for a given pulse length, will repeat the steps if
-        it requires more than one step.
+        it requires more than one step. It's asynchronous: the method might return
+        before the move is complete.
         axis (int 0 or 1): the output channel
         distance (float): the distance of move in m (can be negative)
         returns (float): approximate distance actually moved
@@ -835,7 +836,7 @@ class StageRedStone(Actuator):
         # min speed = don't be crazy slow. max speed from hardware spec
         self.speed = model.MultiSpeedVA(value=speed, range=[10e-6, 0.5], unit="m/s")
         self.speed.subscribe(self.onSpeed, init=True)
-        self.doer_thread = ActionDoer(name="PI Redstone doer Thread")
+        self.doer_thread = ActionManager(name="PI Redstone doer Thread")
         self.doer_thread.start()
         
         # TODO swVersion (=odemis + serial driver name cf readlink /sys/class/tty/tty*/device/driver)
@@ -862,6 +863,7 @@ class StageRedStone(Actuator):
         """
         Move the stage the defined values in m for each axis given.
         shift dict(string-> float): name of the axis and shift in m
+        returns (Future): future that control the asynchronous move
         """
         action_axes = {}
         for axis, distance in shift.items():
@@ -877,7 +879,7 @@ class StageRedStone(Actuator):
         
         action = Action(Action.MOVE_REL, action_axes)
         self.append_action(action)
-        return RedStoneFuture(action, self.doer_thread)
+        return ActionFuture(action, self.doer_thread)
         
     def append_action(self, action):
         """
@@ -925,7 +927,7 @@ class StageRedStone(Actuator):
         returns: a possible way to initialise the stage by using each controller as two axes
         Note: it is not possible to detect whether a controller has one or two axes (channel).
         Note²: it's obviously not advised to call this function if moves on the motors are ongoing
-        """ 
+        """
         if port:
             ports = [port]
         else:
@@ -952,7 +954,7 @@ class StageRedStone(Actuator):
         
         return found
     
-class ActionDoer(threading.Thread):
+class ActionManager(threading.Thread):
     """
     Thread running the requested actions (=moves)
     Provides a queue (deque) of actions (action_queue)
@@ -998,12 +1000,12 @@ class ActionDoer(threading.Thread):
             # it's over when either all axes are finished moving, it's too late, or
             # the move has to be imediately stopped 
             while (not self.request_stop_current.is_set() and time.time() <= end
-                   and self.is_moving(controllers)):
+                   and self.isMoving(controllers)):
                 self.request_stop_current.wait(0.005)
             
             # stop immediatly if requested
             if self.request_stop_current.is_set():
-                self.stop_move(controllers)
+                self.stopMotion(controllers)
                 # it's up to the caller to have cleared the action queue if no other move should be performed
             
             # Call the callbacks at the end of the action
@@ -1019,7 +1021,7 @@ class ActionDoer(threading.Thread):
             for cb, args in callbacks:
                 cb(*args)
         
-    def is_moving(self, axes):
+    def isMoving(self, axes):
         """
         axes (dict: PIRedStone -> list (int)): controller to channel which must be check for move
         """
@@ -1035,7 +1037,7 @@ class ActionDoer(threading.Thread):
                 moving |= controller.isMoving() # all
         return moving
     
-    def stop_move(self, axes):
+    def stopMotion(self, axes):
         """
         axes (dict: PIRedStone -> list (int)): controller to channel which must be stopped
         """
@@ -1076,7 +1078,7 @@ class Action(object):
         self.callbacks = callbacks
         self.is_done = threading.Event() # True to signal action has finished
 
-class RedStoneFuture(object):
+class ActionFuture(object):
     """
     Provides the interface for the clients to manipulate an (asynchronous) action 
     they requested.
