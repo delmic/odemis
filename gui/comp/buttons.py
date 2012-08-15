@@ -402,6 +402,16 @@ class ImageTextToggleButton(GenBitmapTextToggleButton):
         else:
             self.faceDnClr = self.GetParent().GetBackgroundColour()
 
+class TabButton(ImageTextToggleButton):
+    def OnLeftDown(self, event):
+        if not self.IsEnabled() or not self.up:
+            return
+        self.saveUp = self.up
+        self.up = not self.up
+        self.CaptureMouse()
+        self.SetFocus()
+        self.Refresh()
+
 class ColourButton(ImageButton):
     """ An ImageButton that uses a single-colour bitmap
     that will be dynamically generated, allowing it to change colour during the
