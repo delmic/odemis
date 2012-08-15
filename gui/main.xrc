@@ -22,6 +22,23 @@
     <object class="wxBoxSizer">
       <orient>wxVERTICAL</orient>
       <object class="sizeritem">
+        <object class="wxPanel" name="pnl_tab">
+          <object class="wxBoxSizer">
+            <orient>wxHORIZONTAL</orient>
+            <object class="sizeritem">
+              <object class="wxStaticBitmap">
+                <bitmap>img/logo_h30.png</bitmap>
+              </object>
+              <flag>wxTOP|wxRIGHT</flag>
+              <border>5</border>
+            </object>
+          </object>
+          <bg>#BFBFBF</bg>
+        </object>
+        <flag>wxEXPAND</flag>
+        <minsize>-1,30</minsize>
+      </object>
+      <object class="sizeritem">
         <object class="wxBoxSizer">
           <object class="sizeritem">
             <object class="wxPanel" name="pnl_left">

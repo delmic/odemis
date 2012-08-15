@@ -1,5 +1,3 @@
-
-
 import wx
 from wx.lib.agw.aui.aui_utilities import StepColour
 

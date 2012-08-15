@@ -51,6 +51,8 @@ TEST_STREAM_LST = ["Aap", u"nöot", "noot", "mies", "kees", "vuur",
 
 stream_remove_event, EVT_STREAM_REMOVE = wx.lib.newevent.NewEvent()
 
+CAPTION_PADDING_RIGHT = 10
+SCROLLBAR_WIDTH = 0
 
 class Expander(wx.PyControl):
     """ An Expander is a header/button control at the top of a StreamPanelEntry.
@@ -87,8 +89,8 @@ class Expander(wx.PyControl):
         # ===== Fold icons
 
         self._foldIcons = wx.ImageList(16, 16)
-        self._foldIcons.Add(img.getarr_downBitmap())
-        self._foldIcons.Add(img.getarr_rightBitmap())
+        self._foldIcons.Add(img.getarr_down_sBitmap())
+        self._foldIcons.Add(img.getarr_right_sBitmap())
 
         # ===== Remove button
 
@@ -148,8 +150,11 @@ class Expander(wx.PyControl):
         It needs to be called from the parent's paint event
         handler.
         """
+        global SCROLLBAR_WIDTH
+        SCROLLBAR_WIDTH = wx.SystemSettings_GetMetric(wx.SYS_VSCROLL_X) - 3
+
         wndRect = self.GetRect()
-        drw = wndRect.GetRight() - 16 - 15
+        drw = wndRect.GetRight() - 16 - CAPTION_PADDING_RIGHT - SCROLLBAR_WIDTH
         self._foldIcons.Draw(self._parent._collapsed, dc, drw,
                              (wndRect.GetHeight() - 16) / 2,
                              wx.IMAGELIST_DRAW_TRANSPARENT)
@@ -269,12 +274,9 @@ class StreamPanelEntry(wx.PyPanel):
 
     def on_remove(self, evt):
         log.debug("Removing stream panel '%s'", self._expander.get_label())
-        #fpb_item = self.Parent
-        #self.Destroy()
-        #fpb_item.Layout()
-        new_evt = stream_remove_event()
-        new_evt.SetEventObject(self)
-        wx.PostEvent(self, new_evt)
+        fpb_item = self.Parent
+        self.Destroy()
+        fpb_item.Layout()
 
     def on_visibility(self, evt):
         if self._expander._btn_vis.up:
@@ -598,7 +600,7 @@ class StreamPanelEntry(wx.PyPanel):
     def Destroy(self, *args, **kwargs):
         fpb_item = self.Parent
         wx.PyPanel.Destroy(self, *args, **kwargs)
-        #fpb_item.FitStreams()
+        fpb_item.FitStreams()
 
     # def Layout(self):
     #     pcp.PyCollapsiblePane.Layout(self)
