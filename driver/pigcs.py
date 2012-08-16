@@ -98,6 +98,9 @@ class Controller(object):
             # FIXME: there seems to be problems to recover sometimes from a 
             # disturbed controller. Not sure what is required to do. Seems to
             # be just the right commands with the right timing....
+            # In this state, the error led directly turns on when the usb cable
+            # is connected in.
+            # maybe self.GetErrorNum() first? 
             self.Reboot()
             self.GetErrorNum()
         except IOError:
