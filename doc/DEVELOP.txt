@@ -19,6 +19,7 @@ later version of Odemis, then the contract will also cover the extension.
 
 Ubuntu 12.04 (32 bits)
 Eclipse + PyDev plug-in + Pylint
+XRCed (package python-wxtools) for GUI edition
 
 = Downloading the source code =
 
@@ -29,8 +30,8 @@ git clone git@github.com:pieleric/odemis.git
 Odemis is composed of three distinct layers:
 
  * The drivers: many independent modules which are each an adapter between a 
-   hardware component and the rest of Odemis, following a specific programming
-   interface (which depends on the type of the hardware).
+   hardware component and the rest of Odemis, following a programming
+   interface (with specificities for each type of the hardware).
    The code is found in the drivers/ directory.
 
  * The back-end: it is the core of Odemis and is in charge of connecting the 
@@ -45,6 +46,9 @@ Odemis is composed of three distinct layers:
    command line version.
    The code is found in the directory corresponding to the interface. For the 
    GUI, the code is in the gui/ directory.
+   Another user interface is the command-line interface (CLI). It allows basic
+   manipulation of the microscope via a terminal, or in a script. The code is
+   found in the cli/ directory.
    
 Additionally, every directory contains a test/ directory which contains various
 Python test classes used to validate the behaviour of the program.
@@ -69,7 +73,17 @@ Optionally, send your extension to Delmic as a git patch or fork.
 
 = Automating the acquisition of data =
 
-Write a new user interface (in Python) which does the tasks you want.
+There are several ways to automate the data acquisition. There are mostly a 
+trade-off between simplicity of development and complexity of the task to 
+automate.
+
+For the easiest tasks, a shell script calling the cli program might be the 
+most appropriate way. See the cli "--help" command for a list of all possible
+commands.
+
+For more complex tasks, it might be easier to write a specialised python program.
+In this case, the program directly access the backend. A good way to start is to
+look at the source code of the cli. It shows examples of the most common tasks.
 
 Alternatively you may want to add the automated task as one option to the GUI.
 See later section about extending the GUI.
@@ -81,19 +95,20 @@ Like every complex piece of software, Odemis contains bugs, even though we do
 our best to minimize their amount. In the event you are facing a bug, we advise
 you first to report it to us (info@delmic.com). We might have already solved it
 or might be able to fix it for you. If neither of these two options work out,
-you can try and fix it yourself. When reporting a bug, please include a
+you can try to fix it yourself. When reporting a bug, please include a
 description of what is happening compared to what you expect to happen, the log
-files and screen shots if relevant.
+files and screen-shots if relevant.
 
 If you try to solve a bug by yourself, the first step is to download the latest
-version of Odemis via git.  For this you can do in a terminal: git clone
-git@github.com:pieleric/odemis.git
+version of Odemis via git.  For this you can do in a terminal:
+git clone git@github.com:odemis/odemis.git
+git clone git@github.com:odemis/Pyro4.git
 
-The next step is to locate the bug.  Have a look at the log files. You can add
+The next step is to locate the bug. Have a look at the log files. You can add
 "--log-level=2" as a start-up parameter to increase the verbosity. It's also
-possible to run either odemisd (and the drivers) or the GUI from Eclipse. You
-can then run in debug mode, place breakpoints, observe the value of variables
-and modify the code.
+possible to run either odemisd (and the drivers, with the "--debug" parameter)
+or the GUI from Eclipse. You can then run in debug mode, place breakpoints,
+observe the value of variables and modify the code.
 
 Once the bug fixed, commit your code using "git add ..." and "git commit -a", 
 and send us the patch for inclusion in the next version of Odemis.

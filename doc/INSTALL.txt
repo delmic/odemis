@@ -2,7 +2,7 @@ How to install Odemis
 
 = Installing the dependencies =
 You need Ubuntu 12.04 (x86 - 32 bits).
-sudo apt-get python-wxgtk2.8 python-imaging python-yaml python-gdal python-serial python-zmq
+sudo apt-get python-wxgtk2.8 python-imaging python-yaml python-gdal python-serial python-zmq python-concurrent.futures
 
 = Installing Odemis =
 
@@ -12,7 +12,7 @@ git clone git@github.com:delmic/odemis.git
 
 Create a "odemis" group and add all the necessary users to it:
 sudo addgroup odemis
-sudo adduser myuser odemis
+sudo adduser replace_by_login_name odemis
 
 = Installing the vendor device drivers =
 == Andor Clara camera ==
@@ -64,28 +64,29 @@ specification for precise syntax and example files.
 
 Installing wxpython 2.9
 
-Get wxPython:
-
-- Download and unpack wxPython 2.9.4.0 source code
-    http://downloads.sourceforge.net/project/wxpython/wxPython/2.9.4.0/wxPython-src-2.9.4.0.tar.bz2?r=http%3A%2F%2Fwxpython.org%2Fdownload.php&ts=1344420887&use_mirror=switch
+- Download wxPython 2.9.4.0 source code
+    http://downloads.sourceforge.net/project/wxpython/wxPython/2.9.4.0/wxPython-src-2.9.4.0.tar.bz2?r=&ts=1345106877&use_mirror=switch
 - Download the 2.9.4.1 patch file into /wxPython-src-2.9.4.0
     http://sourceforge.net/projects/wxpython/files/wxPython/2.9.4.0/wxPython-src-2.9.4.1.patch/download
-- From /wxPython-src-2.9.4.0 run
-    patch -p0 <name_of_patch_file
+- Unpack and patch the source:
+tar xf wxPython-src-2.9.4.0.tar.bz2
+cd wxPython-src-2.9.4.0/
+patch -p0 -i ../wxPython-src-2.9.4.1.patch
 
-Make sure the following is installed:
+- Make sure the following dependencies are installed:
+sudo apt-get install libgtk2.0-dev freeglut3 freeglut3-dev freeglut3-dbg libgl1-mesa-glx libglu1-mesa libgl1-mesa-dev libglu1-mesa-dev libgstreamer0.10-dev libgconf2-dev libsdl1.2-dev zlib1g-dev libjpeg-dev libtiff4-dev python-gst0.10-dev python-dev
 
-- sudo apt-get install libgtk2.0-dev freeglut3 freeglut3-dev freeglut3-dbg libgl1-mesa-glx libglu1-mesa libgl1-mesa-dev libglu1-mesa-dev libgstreamer0.10-dev libgconf2-dev libsdl1.2-dev zlib1g-dev libjpeg-dev libtiff4-dev python-gst0.10-dev python-dev
+- Compile:
+cd wxPython
+sudo python2.7 build-wxpython.py --build_dir=../build --install
 
-Compiling:
-
-- Go to the wxPython-src-2.9.4.0/wxPython directory
-- run 'sudo python2.7 build-wxpython.py --build_dir=../build --install'
+- Update library database:
+sudo ldconfig
 
 Preparing XRCED:
 
 - Find the location where you Python packages are installed:
-    python -c "import wx; import os; print os.path.dirname(wx.__file__)"
+    cd $(python -c "import wx; import os; print os.path.dirname(wx.__file__)")
 - Goto the XRCED directory
     cd tools/XRCed/plugins
 - Create symbolic links to xh_delmic.py and delmic.py files in the
