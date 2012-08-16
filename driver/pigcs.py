@@ -823,7 +823,7 @@ class Bus(model.Actuator):
     """
     Represent a chain of PI controller over a serial port
     """
-    def __init__(self, name, role, children, port, axes):
+    def __init__(self, name, role, port, axes, children=None, **kwargs):
         """
         port (string): name of the serial port to connect to the controllers
         axes (dict string=> 3-tuple(1<=int<=16, 1<=int, boolean): the configuration
@@ -833,7 +833,7 @@ class Bus(model.Actuator):
          _not_ seen as a child from the odemis model point of view.
         """
         # this set ._axes and ._ranges
-        model.Actuator.__init__(self, name, role, children=children, axes=axes.keys())
+        model.Actuator.__init__(self, name, role, axes=axes.keys(), children=children, **kwargs)
         
         ser = Controller.openSerialPort(port)
 

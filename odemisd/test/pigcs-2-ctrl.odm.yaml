@@ -2,23 +2,15 @@ SimOptical: {
     class: Microscope,
     role: brightfield,
     emitters: [Light],
-    detectors: ["Andor SimCam"],
     actuators: [PIGCS],
 }
 
 Light: {
     class: simulated.Light,
     role: brightlight,
-    affects: ["Andor SimCam"],
     properties: {
         power: 100 # W
     }
-}
-
-"Andor SimCam": {
-    class: andorcam3.AndorCam3,
-    role: ccd,
-    init: {device: 1} # 1 is almost always SimCam
 }
 
 PIGCS: {
