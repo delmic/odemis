@@ -15,6 +15,7 @@ Delmic Acquisition Software is distributed in the hope that it will be useful, b
 You should have received a copy of the GNU General Public License along with Delmic Acquisition Software. If not, see http://www.gnu.org/licenses/.
 '''
 from concurrent import futures
+from model import isasync
 import __version__
 import collections
 import glob
@@ -689,6 +690,7 @@ class PIRedStone(object):
             # ask for controller #i
             logging.info("Querying address %d", i)
             pi.addressSelection(i)
+            pi.address = i
 
             # is it answering?
             try:
@@ -700,6 +702,7 @@ class PIRedStone(object):
             except IOError:
                 pass
         
+        pi.address = None
         pi._try_recover = True
         return present
         
@@ -846,7 +849,7 @@ class StageRedStone(model.Actuator):
         self._swVersion = "%s (serial driver: %s)" % (__version__.version, self.getSerialDriver(port))
         hwversions = []
         for axis, (ctrl, channel) in self._axis_to_child.items():
-            hwversions += "'%s': %s" % (axis, ctrl.versionReport())
+            hwversions.append("'%s': %s" % (axis, ctrl.versionReport()))
         self._hwVersion = ", ".join(hwversions)
         
         # to acquire before sending anything on the serial port
@@ -898,6 +901,7 @@ class StageRedStone(model.Actuator):
         
         return position
     
+    @isasync
     def moveRel(self, shift):
         """
         Move the stage the defined values in m for each axis given.
