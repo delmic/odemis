@@ -20,7 +20,10 @@ import gdal
 import model
 import time
 
+# User-friendly name
 FORMAT = "TIFF"
+# list of file-name extensions possible, the first one is the default when saving a file 
+EXTENSIONS = [".tiff", ".tif"]
 
 # Conversion from our internal tagname convention to (gdal) TIFF tagname
 # string -> (string, callable)
@@ -40,7 +43,7 @@ class ImageExporter(object):
     '''
     Export TIFF images
     '''
-    
+
     @staticmethod
     def _saveAsTiffGDAL(data, filename):
         """
@@ -73,7 +76,9 @@ class ImageExporter(object):
         #pil_im = Image.fromstring('I', size, array.tostring(), 'raw', 'I;16', 0, -1)
         # 16bits files are converted to 32 bit float TIFF with PIL
         pil_im.save(filename, "TIFF") 
-    
+
+    # TODO need better interface, to allow multiple page export. => A list of data?
+    # TODO interface must support thumbnail export as well
     @staticmethod
     def export(data, filename):
         '''
