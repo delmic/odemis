@@ -203,10 +203,10 @@ class CustomExpander(Expander):
 
     def set_stream_color(self, color=None):
         """ Update the color button to reflect the provided color """
-        self._btn_color.set_color(color)
+        self._btn_color.set_colour(color)
 
     def get_stream_color(self):
-        return self._btn_color.get_color()
+        return self._btn_color.get_colour()
 
 
 
