@@ -43,17 +43,9 @@ class OpticalLens(model.HwComponent):
         
         self._swVersion = "N/A (Odemis %s)" % __version__.version
         self._hwVersion = name
-        self._magnification = mag
-        self._metadata = {model.MD_LENS_NAME: name,
-                          model.MD_OPT_MAG: mag}
         
-    def getMetadata(self):
-        return self._metadata
-    
-    # For info to the user once the component is created
-    @roattribute
-    def magnigication(self):
-        return self._magnification
+        # never updated again: it's static!
+        self.magnification = model.VigilantAttribute(mag, unit="", readonly=True)
     
     
 class LightFilter(model.HwComponent):

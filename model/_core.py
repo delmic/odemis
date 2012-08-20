@@ -229,6 +229,7 @@ def createNewContainer(name, validate=True):
     # create a container separately
     isready = multiprocessing.Event()
     p = Process(name="Container "+name, target=_manageContainer, args=(name,isready))
+    # TODO allow to select between process and thread, for debugging
 #    isready = threading.Event()
 #    p = threading.Thread(name="Container "+name, target=_manageContainer, args=(name,isready))
     p.start()

@@ -15,7 +15,6 @@ Delmic Acquisition Software is distributed in the hope that it will be useful, b
 You should have received a copy of the GNU General Public License along with Delmic Acquisition Software. If not, see http://www.gnu.org/licenses/.
 '''
 
-
 from ctypes import *
 import __version__
 import logging
@@ -235,6 +234,15 @@ class AndorCam3(model.DigitalCamera):
     
     def getMetadata(self):
         return self._metadata
+    
+    def updateMetadata(self, md):
+        """
+        Update the metadata associated with every image acquired to these
+        new values. It's accumulative, so previous metadata values will be kept
+        if they are not given.
+        md (dict string -> value): the metadata
+        """
+        self._metadata.update(md)
     
     # low level methods, wrapper to the actual SDK functions
     # TODO: not _everything_ is implemented, just what we need
