@@ -92,9 +92,12 @@ class Controller(object):
         if axes is None:
             raise LookupError("Need to have at least one axis configured")
         
-        # reinitialise (just in case)
-        self.Reboot()
-        self.GetErrorNum()
+        # reinitialise: make sure it's back to normal and ensure it's responding
+        try:
+            self.Reboot()
+            self.GetErrorNum()
+        except IOError:
+            raise IOError("No answer from controller %d" % address)
         
         self._channels = self.GetAxes() # available channels (=axes)
         # dict axis -> boolean
@@ -108,7 +111,6 @@ class Controller(object):
         for a, cl in axes.items():
             if not a in self._channels:
                 raise LookupError("Axis %d is not supported by controller %d" % (a, address))
-            
             
             if cl: # want closed-loop?
                 if not self._hasSensor[a]:
@@ -132,11 +134,12 @@ class Controller(object):
         # actually set just before a move
         # The max using closed-loop info seem purely arbitrary
         # (max m/s) = (max step/s) / (step/m)
-        self._speed_max = float(self.GetParameter(1, 0x7000204)) / self.move_calibration # m/s
-        self._speed = dict([(a, self._speed_max/2) for a in axes]) # m/s
+        self.speed_max = float(self.GetParameter(1, 0x7000204)) / self.move_calibration # m/s
+        # Note: the E-861 claims max 0.015 m/s but actually never goes above 0.004 m/s
+        self._speed = dict([(a, self.speed_max/2) for a in axes]) # m/s
         # (max m/s²) = (max step/s²) / (step/m)
-        self._accel_max = float(self.GetParameter(1, 0x7000205)) / self.move_calibration # m/s²
-        self._accel = dict([(a, self._accel_max/2) for a in axes]) # m/s² (both acceleration and deceleration)
+        self.accel_max = float(self.GetParameter(1, 0x7000205)) / self.move_calibration # m/s²
+        self._accel = dict([(a, self.accel_max/2) for a in axes]) # m/s² (both acceleration and deceleration)
         self._prev_speed_accel = (dict(), dict()) 
     
     def _sendOrderCommand(self, com):
@@ -584,7 +587,7 @@ class Controller(object):
             raise NotImplementedError("No closed-loop support")
             # call POS?
         else:
-            return self._position[axis] # TODO
+            return self._position[axis]
     
     def setSpeed(self, axis, speed):
         """
@@ -593,7 +596,7 @@ class Controller(object):
         speed (0<float<10): speed in m/s.
         axis (1<=int<=16): the axis
         """
-        assert((0 < speed) and (speed < self._speed_max))
+        assert((0 < speed) and (speed <= self.speed_max))
         assert(axis in self._channels)
         self._speed[axis] = speed
 
@@ -607,7 +610,7 @@ class Controller(object):
         accel (0<float<100): acceleration in m/s².
         axis (1<=int<=16): the axis
         """
-        assert((0 < accel) and (accel < self._accel_max))
+        assert((0 < accel) and (accel <= self.accel_max))
         assert(axis in self._channels)
         self._accel[axis] = accel
     
@@ -689,7 +692,7 @@ class Controller(object):
         return (float): number of steps/s, <0 if going opposite direction
         """
         steps_ps = speed * self.move_calibration
-        return steps_ps
+        return max(1, steps_ps) # don't go at 0 m/s!
     
     # in linear approximation, it's the same
     convertAccelToDevice = convertSpeedToDevice
@@ -848,7 +851,6 @@ class Bus(model.Actuator):
         # Init each controller            
         self._axis_to_cc = {} # axis name => (Controller, channel)
         # TODO also a rangesRel : min and max of a step 
-        self._position = {}
         speed = {}
         max_speed = 1 # m/s
         for address, channels in controllers.items():
@@ -869,10 +871,10 @@ class Bus(model.Actuator):
             self._ranges[axis] = [0, 1] # m
             # Just to make sure it doesn't go too fast
             speed[axis] = 0.001 # m/s
-            max_speed = max(max_speed, controller._speed_max)
+            max_speed = max(max_speed, controller.speed_max)
         
         # min speed = don't be crazy slow. max speed from hardware spec
-        self.speed = model.MultiSpeedVA(speed, range=[10e-6, 0.1], unit="m/s",
+        self.speed = model.MultiSpeedVA(speed, range=[10e-6, max_speed], unit="m/s",
                                         setter=self.setSpeed)
         self.setSpeed(speed)
         
@@ -918,7 +920,7 @@ class Bus(model.Actuator):
         """
         return (dict string -> float): axis name to (absolute) position
         """
-        position = {} # 
+        position = {}
         with self.ser_access:
             # send stop to all controllers (including the ones not in action)
             for axis, (controller, channel) in self._axis_to_cc.items():
@@ -948,7 +950,7 @@ class Bus(model.Actuator):
         action = ActionFuture(MOVE_REL, action_axes, self.ser_access)
         self._action_mgr.append_action(action)
         return action
-    
+
     def stop(self):
         """
         stops the motion on all axes
@@ -1055,9 +1057,13 @@ class ActionManager(threading.Thread):
             # Special action "None" == stop
             if self.current_action is None:
                 return
-            
-            self.current_action._start_action()
-            self.current_action._wait_action()
+
+            try:
+                self.current_action._start_action()
+                self.current_action._wait_action()
+            except futures.CancelledError:
+                # cancelled in the mean time: skip the action
+                pass
             
     def cancel_all(self):
         must_terminate = False
@@ -1148,7 +1154,7 @@ class ActionFuture(object):
             elif self._state == RUNNING:
                 self._stop_action()
                 # go through, like for state == PENDING
-                
+            
             self._state = CANCELLED
             self._condition.notify_all()
 
@@ -1220,8 +1226,9 @@ class ActionFuture(object):
                 raise Exception("Unknown action %s" % self._type)
         
             self._state = RUNNING
+            duration = min(duration, 60) # => wait maximum 2 min
             self._expected_end = time.time() + duration
-            self._timeout = self._expected_end + duration + 1 # 2 *duration + 1s 
+            self._timeout = self._expected_end + duration + 1, # 2 *duration + 1s 
 
     def _wait_action(self):
         """
@@ -1242,16 +1249,14 @@ class ActionFuture(object):
                 return
                         
             duration = self._expected_end - time.time()
-            duration = min(15, max(0, duration))
+            duration = max(0, duration) 
             logging.debug("Waiting %f s for the move to finish", duration)
-            print time.time()
             self._condition.wait(duration)
             
             # it's over when either all axes are finished moving, it's too late,
             # or the action was cancelled
             while (self._state == RUNNING and time.time() <= self._timeout
                    and self._isMoving(controllers)):
-                print time.time()
                 self._condition.wait(0.01)
             
             # if cancelled, we don't update state
@@ -1311,7 +1316,7 @@ class ActionFuture(object):
             for controller, channels in axes.items():
                 for channel, distance in channels:
                     actual_dist = controller.moveRel(channel, distance)
-                    duration = actual_dist / controller.getSpeed(channel) 
+                    duration = abs(actual_dist) / controller.getSpeed(channel) 
                     max_duration = max(max_duration, duration)
                 
         return max_duration
@@ -1327,24 +1332,21 @@ class ActionFuture(object):
             for controller, channels in axes.items():
                 for channel, distance in channels:
                     actual_dist = controller.moveAbs(channel, distance)
-                    duration = actual_dist / controller.getSpeed(channel) 
+                    duration = abs(actual_dist) / controller.getSpeed(channel) 
                     max_duration = max(max_duration, duration)
                 
         return max_duration 
-    
 
 
-
-#addresses = Bus.scan()
-#print addresses
-
-#stage = Bus("test", "stage", children=None, port="/dev/ttyUSB0", axes={"x":(1,1,False)})
-#print stage.swVersion
-#print stage.selfTest()
-#move = stage.moveRel({"x": 0.01}) # 10s
-#print move.running()
-#time.sleep(1)
-#print move.running()
-#print move.result()
-#stage.stop()
-
+#PORT = "/dev/ttyUSB0"
+#CONFIG_CTRL_BASIC = (1, {1: False})
+#ser = Controller.openSerialPort(PORT)
+#ctrl = Controller(ser, *CONFIG_CTRL_BASIC)
+#
+#for val in range(55):
+#    ctrl.OLAnalogDriving(1, val)
+#    time.sleep(1)
+#    
+#for val in range(55):
+#    ctrl.OLAnalogDriving(1, -val)
+#    time.sleep(1)
