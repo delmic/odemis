@@ -45,9 +45,15 @@ On Linux, the bitflow driver has to be reinstalled (recompiled) each time the ke
 Nothing specific. Make sure that the normal user has permissions to access the serial port.
 For example, if it is a USB serial port adapter check the permissions of /dev/ttyUSB0.
 
+For Linux: make sure you copy the content of install/linux/ to / and run:
+sudo udevadm control --reload-rules
+
 == Physik Instrumente E-861 piezo-motor controllers ==
 Nothing specific. Plug one via the USB cable to the computer and the other ones
 in daisy chain to each other. At least one of the controller must have address 1.
+
+For Linux: make sure you copy the content of install/linux/ to / and run:
+sudo udevadm control --reload-rules
 
 On old versions of Linux (before 3.2.7), you need to create a file
 /etc/udev/rules.d/99-usbftdi.rules with:

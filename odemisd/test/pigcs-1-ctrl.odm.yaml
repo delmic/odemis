@@ -16,7 +16,7 @@ Light: {
 PIGCS: {
     class: pigcs.Bus,
     role: stage,
-    init: {port: "/dev/ttyUSB0", axes: {"x": [1, 1, False]}},
+    init: {port: "/dev/ttyPIGCS", axes: {"x": [1, 1, False]}},
     properties: {
         speed: {'x':0.001} # m/s
     }

@@ -14,7 +14,7 @@ Delmic Acquisition Software is distributed in the hope that it will be useful, b
 
 You should have received a copy of the GNU General Public License along with Delmic Acquisition Software. If not, see http://www.gnu.org/licenses/.
 '''
-from model import roattribute
+from model import isasync
 import logging
 import model
 import time
@@ -90,7 +90,7 @@ class Stage2D(model.Actuator):
         self.position._value = self._position
         self.position.notify(self.position.value)
         
-    # not async as it's a very simple future
+    @isasync
     def moveRel(self, pos):
         time_start = time.time()
         maxtime = 0
@@ -106,6 +106,7 @@ class Stage2D(model.Actuator):
         # TODO queue the move and pretend the position is changed only after the given time
         return InstantaneousFuture()
         
+    @isasync
     def moveAbs(self, pos):
         time_start = time.time()
         maxtime = 0

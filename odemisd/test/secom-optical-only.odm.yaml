@@ -1,0 +1,69 @@
+SECOM: {
+    class: Microscope,
+    role: brightfield,
+    emitters: [Light, "Nikon Super Duper", "MultiBand Fixed Filter"],
+    detectors: ["Andor Clara"],
+    actuators: ["Redstone Stage", Focus],
+}
+
+Light: {
+    class: simulated.Light,
+    role: brightlight,
+    affects: ["Andor Clara"],
+    properties: {
+        power: 100 # W
+    }
+}
+
+"Nikon Super Duper": {
+    class: static.OpticalLens,
+    role: lens,
+    init: {mag: 10.0}, # ratio
+    affects: ["Andor Clara"]
+}
+
+"MultiBand Fixed Filter": {
+    class: static.LightFilter,
+    role: filter,
+    init: {band: [[430e-9, 480e-9], [520e-9, 600e-9]]}, # m,m
+    affects: ["Andor Clara"]
+}
+
+"Andor Clara": {
+    class: andorcam2.AndorCam2,
+    role: ccd,
+    init: {device: 0} # the only Andor camera connected so always 0
+}
+
+
+"Redstone Stage": {
+    class: pi.StageRedStone,
+    role: stage,
+    init: {port: /dev/ttyPIRS, 'x': [0, 0], 'y': [0, 1]}, # addresses of the controllers on the serial bus
+    affects: ["Andor Clara"],
+    properties: {
+        speed: 1 #m/s
+    }
+}
+
+Focus: {
+    class: pigcs.Bus,
+    role: focus,
+    init: {port: "/dev/ttyPIGCS", axes: {"z": [1, 1, False]}},
+    affects: ["Andor Clara"],
+    properties: {
+        speed: {'z':0.001} # m/s
+    }
+}
+
+#"Dual-view alignment": {
+#    class: pigcs.Bus,
+#    role: align,
+#    init: {port: "/dev/ttyPIGCS", axes: {"x": [1, 1, False], "y": [2, 1, False]}},
+#    affects: ["Quanta SED", "Andor Clara"],
+#    properties: {
+#        speed: {'x':0.001, 'y':0.001} # m/s
+#    }
+#}
+# for the focus (Z), might need either a combinedactuator with a third controller on dual-view, or the controller on a separate USB (but it's hard to know which controller is which without using a fixed USB port)
+
