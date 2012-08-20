@@ -19,7 +19,7 @@ import odemis.gui.main_xrc
 from odemis.gui.xmlh import odemis_get_resources
 from odemis.gui.log import log, create_gui_logger
 from odemis.gui.instrmodel import OpticalBackendConnected
-from odemis.gui.controler.settingspanel import SettingsPanel
+from odemis.gui.controler.settingspanel import SettingsSideBar
 
 
 class OdemisGUIApp(wx.App):
@@ -46,7 +46,8 @@ class OdemisGUIApp(wx.App):
         wx.App.__init__(self, redirect=True)
 
     def OnInit(self):
-        """ Application initialization, automatically run from the :wx:`App` constructor.
+        """ Application initialization, automatically run from the :wx:`App`
+        constructor.
         """
 
         try:
@@ -87,7 +88,9 @@ class OdemisGUIApp(wx.App):
         try:
             # Add frame icon
             ib = wx.IconBundle()
-            ib.AddIconFromFile(os.path.join(self._module_path(), "img/odemis.ico"), wx.BITMAP_TYPE_ANY)
+            ib.AddIconFromFile(os.path.join(self._module_path(),
+                                            "img/odemis.ico"),
+                                            wx.BITMAP_TYPE_ANY)
             self.main_frame.SetIcons(ib)
 
             #log.debug("Setting frame size to %sx%s", w, h)
@@ -112,8 +115,7 @@ class OdemisGUIApp(wx.App):
             # TEST CODE
             ##################################################
             def dodo(evt):
-                from odemis.gui.comp.stream import FixedStreamPanelEntry, \
-                    CustomStreamPanelEntry
+                from odemis.gui.comp.stream import CustomStreamPanelEntry
                 # fp = FixedStreamPanelEntry(self.main_frame.pnl_stream,
                 #                            label="First Fixed Stream")
                 fp = CustomStreamPanelEntry(self.main_frame.pnl_stream,
@@ -127,6 +129,10 @@ class OdemisGUIApp(wx.App):
 
 
             # Menu events
+
+            wx.EVT_MENU(self.main_frame,
+                        self.main_frame.menu_item_quit.GetId(),
+                        self.on_close_window)
 
             wx.EVT_MENU(self.main_frame,
                         self.main_frame.menu_item_debug.GetId(),
@@ -162,7 +168,7 @@ class OdemisGUIApp(wx.App):
                 self.goto_debug_mode()
 
 
-            self.settings_controler = SettingsPanel(self.main_frame)
+            self.settings_controler = SettingsSideBar(self.main_frame)
 
             # Query Odemis daemon (Should move this to separate thread)
 

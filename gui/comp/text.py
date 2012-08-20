@@ -44,7 +44,7 @@ locale.setlocale(locale.LC_ALL, "")
 #
 # wxPython Custom Widget Collection 20060207
 # Written By: Edward Flick (eddy -=at=- cdf-imaging -=dot=- com)
-#             Michele Petrazzo (michele -=dot=- petrazzo -=at=- unipex -=dot=- it)
+#             Michele Petrazzo (michele -=dot=- petrazzo -=at=- unipex =dot= it)
 #             Will Sadkin (wsadkin-=at=- nameconnector -=dot=- com)
 # Copyright 2006 (c) CDF Inc. ( http://www.cdf-imaging.com )
 # Contributed to the wxPython project under the wxPython project's license.

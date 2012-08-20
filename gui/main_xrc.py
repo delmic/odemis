@@ -20,12 +20,12 @@ class xrcfr_main(wx.Frame):
 #!XRCED:begin-block:xrcfr_main.PreCreate
     def PreCreate(self, pre):
         """ This function is called during the class's initialization.
-        
+
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
         pass
-        
+
 #!XRCED:end-block:xrcfr_main.PreCreate
 
     def __init__(self, parent):
@@ -36,6 +36,8 @@ class xrcfr_main(wx.Frame):
         self.PostCreate(pre)
 
         # Define variables for the controls, bind event handlers
+        self.menu_item_quit = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_quit"))
+        self.menu_item_inspect = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_inspect"))
         self.menu_item_debug = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_debug"))
         self.tab_btn_live = xrc.XRCCTRL(self, "tab_btn_live")
         self.tab_btn_gallery = xrc.XRCCTRL(self, "tab_btn_gallery")
@@ -48,7 +50,10 @@ class xrcfr_main(wx.Frame):
         self.btn_toggle_sem = xrc.XRCCTRL(self, "btn_toggle_sem")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
         self.fpb_settings = xrc.XRCCTRL(self, "fpb_settings")
+        self.fp_optical_settings = xrc.XRCCTRL(self, "fp_optical_settings")
+        self.fp_sem_settings = xrc.XRCCTRL(self, "fp_sem_settings")
         self.pnl_stream = xrc.XRCCTRL(self, "pnl_stream")
+        self.fp_annotations = xrc.XRCCTRL(self, "fp_annotations")
         self.btn_aquire = xrc.XRCCTRL(self, "btn_aquire")
         self.pnl_tab_gallery = xrc.XRCCTRL(self, "pnl_tab_gallery")
         self.pnl_log = xrc.XRCCTRL(self, "pnl_log")
@@ -67,16 +72,25 @@ def __init_resources():
     wx.FileSystem.AddHandler(wx.MemoryFSHandler())
 
     main_xrc = '''\
-<?xml version="1.0" ?><resource class="TabButton">
+<?xml version="1.0" ?><resource class="FoldPanelItem">
   <object class="wxFrame" name="fr_main">
     <object class="wxMenuBar">
       <object class="wxMenu">
         <label>File</label>
-        <object class="wxMenuItem">
-          <label>Hello</label>
+        <object class="wxMenuItem" name="menu_item_quit">
+          <label>Quit</label>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
         </object>
       </object>
       <object class="wxMenu">
+        <object class="wxMenuItem" name="menu_item_inspect">
+          <label>Inspect GUI</label>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
         <object class="wxMenuItem" name="menu_item_debug">
           <label>Debug</label>
           <checkable>1</checkable>
@@ -252,9 +266,10 @@ def __init_resources():
                               <face>Ubuntu</face>
                               <encoding>UTF-8</encoding>
                             </font>
+                            <hidden>1</hidden>
                             <style>wxALIGN_RIGHT</style>
                           </object>
-                          <flag>wxALL|wxEXPAND</flag>
+                          <flag>wxTOP|wxBOTTOM|wxLEFT|wxEXPAND</flag>
                           <border>10</border>
                         </object>
                         <object class="sizeritem">
@@ -280,7 +295,7 @@ def __init_resources():
                               <assign_var>1</assign_var>
                             </XRCED>
                           </object>
-                          <flag>wxTOP|wxBOTTOM|wxRIGHT</flag>
+                          <flag>wxTOP|wxBOTTOM|wxLEFT</flag>
                           <border>10</border>
                         </object>
                         <object class="sizeritem">
@@ -306,7 +321,7 @@ def __init_resources():
                               <assign_var>1</assign_var>
                             </XRCED>
                           </object>
-                          <flag>wxTOP|wxBOTTOM|wxRIGHT</flag>
+                          <flag>wxTOP|wxBOTTOM|wxLEFT</flag>
                           <border>10</border>
                         </object>
                         <object class="spacer">
@@ -336,17 +351,22 @@ def __init_resources():
                         <orient>wxVERTICAL</orient>
                         <object class="sizeritem">
                           <object class="FoldPanelBar" name="fpb_settings">
-                            <object class="FoldPanelItem">
+                            
+                            <object class="FoldPanelItem" name="fp_optical_settings">
                               <label>OPTICAL SETTINGS</label>
-                              <collapsed>1</collapsed>
                               <fg>#1A1A1A</fg>
                               <bg>#555555</bg>
+                              <XRCED>
+                                <assign_var>1</assign_var>
+                              </XRCED>
                             </object>
-                            <object class="FoldPanelItem">
+                            <object class="FoldPanelItem" name="fp_sem_settings">
                               <label>SEM SETTINGS</label>
-                              <collapsed>1</collapsed>
                               <fg>#1A1A1A</fg>
                               <bg>#555555</bg>
+                              <XRCED>
+                                <assign_var>1</assign_var>
+                              </XRCED>
                             </object>
                             <object class="FoldPanelItem">
                               <object class="wxPanel" name="pnl_stream" subclass="odemis.gui.comp.stream.StreamPanel">
@@ -360,11 +380,14 @@ def __init_resources():
                               <fg>#1A1A1A</fg>
                               <bg>#555555</bg>
                             </object>
-                            <object class="FoldPanelItem">
+                            <object class="FoldPanelItem" name="fp_annotations">
                               <label>ANNOTATIONS</label>
                               <collapsed>1</collapsed>
                               <fg>#1A1A1A</fg>
                               <bg>#555555</bg>
+                              <XRCED>
+                                <assign_var>1</assign_var>
+                              </XRCED>
                             </object>
                             <spacing>0</spacing>
                             <leftspacing>0</leftspacing>
@@ -443,6 +466,33 @@ def __init_resources():
       </object>
       <object class="sizeritem">
         <object class="wxPanel" name="pnl_tab_gallery">
+          <object class="wxBoxSizer">
+            <object class="spacer">
+              <option>1</option>
+              <flag>wxEXPAND|wxALIGN_CENTRE_VERTICAL</flag>
+            </object>
+            <object class="sizeritem">
+              <object class="wxStaticText">
+                <label>The amazing invisible gallery.</label>
+                <fg>#7F7F7F</fg>
+                <font>
+                  <size>8</size>
+                  <style>normal</style>
+                  <weight>normal</weight>
+                  <underlined>0</underlined>
+                  <family>default</family>
+                  <face>Ubuntu</face>
+                  <encoding>UTF-8</encoding>
+                </font>
+              </object>
+              <flag>wxALIGN_CENTRE_VERTICAL</flag>
+            </object>
+            <orient>wxHORIZONTAL</orient>
+            <object class="spacer">
+              <option>1</option>
+              <flag>wxEXPAND|wxALIGN_CENTRE_VERTICAL</flag>
+            </object>
+          </object>
           <bg>#333333</bg>
           <hidden>1</hidden>
           <XRCED>

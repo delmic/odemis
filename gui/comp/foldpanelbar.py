@@ -137,6 +137,15 @@ class FoldPanelItem(wx.Panel):
     def has_vert_scrollbar(self):
         return self.Parent.has_vert_scrollbar()
 
+    def add_item(self, item):
+        """ Append the given item to the panel sizer """
+
+        assert item.Parent == self
+        self._sizer.Add(item,
+                        flag=wx.EXPAND|wx.BOTTOM,
+                        border=1)
+
+
     def _refresh(self):
         """ Refresh the ScrolledWindow grandparent, so it and all it's
         children will get the appropriate size
