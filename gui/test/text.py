@@ -14,28 +14,16 @@ if os.getcwd().endswith('test'):
 
 import wx
 import odemis.gui.test.test_gui
-
+from odemis.gui.xmlh import odemis_get_test_resources
 
 SLEEP_TIME = 100 # Sleep timer in milliseconds
 MANUAL = True # If manual is set to True, the window will be kept open at the end
-INSPECT = False
+INSPECT = True
 
 TEST_LST = ["Aap", u"nöot", "noot", "mies", "kees", "vuur", "quantummechnica",
             "Repelsteeltje", "", "XXX", "a", "aa", "aaa", "aaaa",
             "aaaaa", "aaaaaa", "aaaaaaa"]
 
-def odemis_get_resources():
-    """ This function provides access to the XML handlers needed for
-        non-standard controls defined in the XRC file.
-    """
-    if odemis.gui.test.test_gui.__res == None:
-        from odemis.gui.xmlh.xh_delmic import HANDLER_CLASS_LIST
-
-        odemis.gui.test.test_gui.__init_resources()
-        for handler_klass in HANDLER_CLASS_LIST:
-            odemis.gui.test.test_gui.__res.InsertHandler(handler_klass())
-
-    return odemis.gui.test.test_gui.__res
 
 def loop():
     app = wx.GetApp()
