@@ -29,7 +29,7 @@ import model
 import numpy
 import wx
 
-from model import VigilantAttribute
+from odemis.model import VigilantAttribute
 
 class SECOMModel(object):
     """
