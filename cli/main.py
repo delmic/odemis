@@ -106,7 +106,6 @@ def print_component(comp, level):
     else:
         indent = u" ↳"*level + " "
     print indent + comp.name + "\trole:" + comp.role
-    # TODO display .affects
     # TODO would be nice to display which class is the component
     # TODO:
     # * if emitter, display .shape
@@ -155,36 +154,21 @@ def list_components():
 def print_roattribute(name, value):
     print "\t" + name + " (RO Attribute)\t value: %s" % str(value)
 
-#known_fixed_attributes = ["shape", "axes", "ranges"]
-non_roattributes_classes = (Pyro4.core._RemoteMethod, Pyro4.Proxy, model.Component,
-                            model.DataFlowBase, model.VigilantAttributeBase)
 non_roattributes_names = ("name", "role", "parent", "children", "affects", 
                           "actuators", "detectors", "emitters")
 def print_roattributes(component):
-    # roattributes are a bit tricky because they look like completely normal value
-    # so we find them by elimination
-    for name, value in inspect.getmembers(component):
-        # it should not start with a "_"
-        if name.startswith("_"):
-            continue
-        # it should not be a special name
+    for name, value in model.getROAttributes(component).items():
+        # some are handled specifically
         if name in non_roattributes_names:
-            continue
-        # it should not be callable
-        if callable(value):
-            continue
-        # it should not be a special class
-        if isinstance(value, non_roattributes_classes):
             continue
         print_roattribute(name, value)
         
-
 def print_data_flow(name, df):
     print "\t" + name + " (Data-flow)"
 
 def print_data_flows(component):
     # find all dataflows
-    for name, value in inspect.getmembers(component, lambda x: isinstance(x, model.DataFlowBase)):
+    for name, value in model.getDataFlows(component).items():
         print_data_flow(name, value)
 
 def print_vattribute(name, va):
@@ -214,8 +198,7 @@ def print_vattribute(name, va):
           (readonly, str(va.value), unit, str_range, str_choices))
 
 def print_vattributes(component):
-    # find all vattributes
-    for name, value in inspect.getmembers(component, lambda x: isinstance(x, model.VigilantAttributeBase)):
+    for name, value in model.getVAs(component).items():   
         print_vattribute(name, value)
     
 def print_attributes(component):

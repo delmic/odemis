@@ -14,13 +14,14 @@ Delmic Acquisition Software is distributed in the hope that it will be useful, b
 
 You should have received a copy of the GNU General Public License along with Delmic Acquisition Software. If not, see http://www.gnu.org/licenses/.
 '''
-from _core import roattribute
 from Pyro4.core import isasync
+from _core import roattribute
 import Pyro4
 import __version__
 import _core
 import _dataflow
 import _vattributes
+import inspect
 import logging
 import urllib
 import weakref
@@ -46,6 +47,28 @@ def getComponents():
     comps.add(microscope)
     return comps
 
+# Helper functions to list selectively the special attributes of a component
+def getVAs(component):
+    """
+    returns (dict of name -> VigilantAttributeBase): all the VAs in the component with their name
+    """
+    # like dump_vigilante_attributes, but doesn't register them
+    vas = inspect.getmembers(component, lambda x: isinstance(x, _vattributes.VigilantAttributeBase))
+    return dict(vas)
+
+def getROAttributes(component):
+    """
+    returns (dict of name -> value): all the names of the roattributes and their values
+    """
+    return _core.dump_roattributes(component)
+
+def getDataFlows(component):
+    """
+    returns (dict of name -> DataFlow): all the DataFlows in the component with their name
+    """
+    # like dump_dataflow, but doesn't register them
+    dfs = inspect.getmembers(component, lambda x: isinstance(x, _dataflow.DataFlowBase))
+    return dict(dfs)
 
 class ArgumentError(Exception):
     pass

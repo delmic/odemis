@@ -856,7 +856,8 @@ class Bus(model.Actuator):
 
         # Init each controller            
         self._axis_to_cc = {} # axis name => (Controller, channel)
-        # TODO also a rangesRel : min and max of a step 
+        # TODO also a rangesRel : min and max of a step
+        position = {} 
         speed = {}
         max_speed = 1 # m/s
         for address, channels in controllers.items():
@@ -871,13 +872,18 @@ class Bus(model.Actuator):
             for c in channels:
                 axis = ac_to_axis[(address, c)]
                 self._axis_to_cc[axis] = (controller, c)
-            
-            # TODO if closed-loop, the ranges should be updated after homing
-            # For now we put very large one
-            self._ranges[axis] = [0, 1] # m
-            # Just to make sure it doesn't go too fast
-            speed[axis] = 0.001 # m/s
-            max_speed = max(max_speed, controller.speed_max)
+                
+                position[axis] = controller.getPosition(c)
+                # TODO if closed-loop, the ranges should be updated after homing
+                # For now we put very large one
+                self._ranges[axis] = [0, 1] # m
+                # Just to make sure it doesn't go too fast
+                speed[axis] = 0.001 # m/s
+                max_speed = max(max_speed, controller.speed_max)
+        
+        
+        # RO, as to modify it the client must use .moveRel() or .moveAbs()
+        self.position = model.VigilantAttribute(position, unit="m", readonly=True)
         
         # min speed = don't be crazy slow. max speed from hardware spec
         self.speed = model.MultiSpeedVA(speed, range=[10e-6, max_speed], unit="m/s",
@@ -891,12 +897,38 @@ class Bus(model.Actuator):
             hwversions.append("'%s': %s (GCS %s)" % (axis, ctrl.GetIdentification(), ctrl.GetSyntaxVersion()))
         self._hwVersion = ", ".join(hwversions)
     
-    
         # to acquire before sending anything on the serial port
         self.ser_access = threading.Lock()
         
         self._action_mgr = ActionManager()
         self._action_mgr.start()
+
+    def _getPosition(self):
+        """
+        return (dict string -> float): axis name to (absolute) position
+        """
+        position = {}
+        with self.ser_access:
+            # send stop to all controllers (including the ones not in action)
+            for axis, (controller, channel) in self._axis_to_cc.items():
+                position[axis] = controller.getPosition(channel)
+        
+        return position
+    
+    # TODO needs to be triggered by end of action, or directly controller? 
+    # maybe whenever a controller updates it's position?
+    # How to avoid updating each axis one-by-one?
+    # Maybe we should just do it regularly as long as there are actions in the queue
+    def _updatePosition(self):
+        """
+        update the position VA
+        Note: it should not be called while holding the lock to the serial port
+        """
+        pos = self._getPosition() # TODO: improve efficiency
+        
+        # it's read-only, so we change it via _value
+        self.position._value = pos
+        self.position.notify(self.position.value)
     
     def getSerialDriver(self, name):
         """
@@ -921,18 +953,6 @@ class Bus(model.Actuator):
             controller, channel = self._axis_to_cc[axis]
             controller.setSpeed(channel, v)
         return value
-    
-    def getPosition(self):
-        """
-        return (dict string -> float): axis name to (absolute) position
-        """
-        position = {}
-        with self.ser_access:
-            # send stop to all controllers (including the ones not in action)
-            for axis, (controller, channel) in self._axis_to_cc.items():
-                position[axis] = controller.getPosition(channel)
-        
-        return position
     
     @isasync
     def moveRel(self, shift):
@@ -1045,13 +1065,14 @@ class ActionManager(threading.Thread):
     For each action in the queue: performs and wait until the action is finished
     At the end of the action, call all the callbacks
     """
-    def __init__(self, name="PIGCS action manager"):
+    def __init__(self, bus, name="PIGCS action manager"):
         threading.Thread.__init__(self, name=name)
         self.daemon = True # If the backend is gone, just die
 
         self.action_queue_cv = threading.Condition()
         self.action_queue = collections.deque()
         self.current_action = None
+        self._bus = bus
     
     def run(self):
         while True:
@@ -1072,6 +1093,9 @@ class ActionManager(threading.Thread):
                 # cancelled in the mean time: skip the action
                 pass
             
+            # update position after the action is done
+            self._bus.updatePosition()
+    
     def cancel_all(self):
         must_terminate = False
         with self.action_queue_cv:
