@@ -253,7 +253,7 @@ def __init_resources():
             <object class="sizeritem">
               <object class="FoldPanelBar" name="fpb">
                 <object class="FoldPanelItem">
-                  <object class="wxPanel" name="stream_panel" subclass="odemis.gui.comp.stream.StreamPanel">
+                  <object class="wxPanel" name="stream_panel" subclass="gui.comp.stream.StreamPanel">
                     <fg>#7F7F7F</fg>
                     <bg>#333333</bg>
                     <font>

@@ -4,12 +4,9 @@ import inspect
 
 import wx
 
-# FIXME: when we import odemis.model, isinstance checking doesn't work
-# for some reason.
-import model
-
-from odemis.gui.comp.foldpanelbar import FoldPanelItem
-from odemis.gui.log import log
+from gui.comp.foldpanelbar import FoldPanelItem
+from gui.log import log
+from model import VigilantAttributeBase
 
 MAIN_FRAME = None
 
@@ -94,9 +91,9 @@ class SettingsSideBar(object):
     def add_ccd(self, comp):
         self._optical_panel.add_ro_value("Camera", comp.name)
 
-        vigil_attrs = []
+        vigil_attrs = model.getVAs(comp)
 
-        for name, value in inspect.getmembers(comp, lambda x: isinstance(x, model.VigilantAttributeBase)):
+        for name, value in vigil_attrs.iteritems():
             log.warn(name)
             self._optical_panel.add_value(name, value)
 

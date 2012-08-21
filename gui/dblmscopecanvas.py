@@ -18,8 +18,8 @@ You should have received a copy of the GNU General Public License along with Del
 
 import wx
 
-from odemis.gui.comp.canvas import DraggableCanvas, WorldToBufferPoint
-from odemis.gui.img.data import gettest_patternImage
+from gui.comp.canvas import DraggableCanvas, WorldToBufferPoint
+from gui.img.data import gettest_patternImage
 
 
 CROSSHAIR_COLOR = wx.GREEN

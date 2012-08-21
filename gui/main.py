@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
+balh
 """
 
 import logging
@@ -14,13 +15,13 @@ import wx
 
 import Pyro4.errors
 
-import odemis.model
-import odemis.gui.main_xrc
+import model
+import gui.main_xrc
 
-from odemis.gui.xmlh import odemis_get_resources
-from odemis.gui.log import log, create_gui_logger
-from odemis.gui.instrmodel import OpticalBackendConnected
-from odemis.gui.controler.settingspanel import SettingsSideBar
+from gui.xmlh import odemis_get_resources
+from gui.log import log, create_gui_logger
+from gui.instrmodel import OpticalBackendConnected
+from gui.controler.settingspanel import SettingsSideBar
 
 
 class OdemisGUIApp(wx.App):
@@ -30,7 +31,7 @@ class OdemisGUIApp(wx.App):
     def __init__(self):
         # Replace the standard 'get_resources' with our augmented one, that
         # can handle more control types. See the xhandler package for more info.
-        odemis.gui.main_xrc.get_resources = odemis_get_resources
+        gui.main_xrc.get_resources = odemis_get_resources
 
         # Declare attributes BEFORE calling the super class constructor
         # because it will call 'OnInit' which uses them.
@@ -52,7 +53,7 @@ class OdemisGUIApp(wx.App):
         """
 
         try:
-            self.microscope = odemis.model.getMicroscope()
+            self.microscope = model.getMicroscope()
             self.secom_model = OpticalBackendConnected(self.microscope)
         except (IOError, Pyro4.errors.CommunicationError), e:
             log.exception("oei")
@@ -67,7 +68,7 @@ class OdemisGUIApp(wx.App):
                 sys.exit(1)
 
         # Load the main frame
-        self.main_frame = odemis.gui.main_xrc.xrcfr_main(None)
+        self.main_frame = gui.main_xrc.xrcfr_main(None)
 
         self.init_logger()
         self.init_gui()
@@ -116,7 +117,7 @@ class OdemisGUIApp(wx.App):
             # TEST CODE
             ##################################################
             def dodo(evt):
-                from odemis.gui.comp.stream import CustomStreamPanelEntry
+                from gui.comp.stream import CustomStreamPanelEntry
                 # fp = FixedStreamPanelEntry(self.main_frame.pnl_stream,
                 #                            label="First Fixed Stream")
                 fp = CustomStreamPanelEntry(self.main_frame.pnl_stream,
@@ -173,7 +174,7 @@ class OdemisGUIApp(wx.App):
 
             # Query Odemis daemon (Should move this to separate thread)
 
-            microscope = odemis.model.getMicroscope()
+            microscope = model.getMicroscope()
 
             for comp in microscope.detectors:
                 if comp.role == 'ccd':

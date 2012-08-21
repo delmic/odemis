@@ -8,11 +8,11 @@ import wx
 import wx.lib.buttons
 import wx.xrc as xrc
 
-import odemis.gui.comp.foldpanelbar as fpb
-import odemis.gui.comp.stream as strm
-import odemis.gui.comp.buttons as btns
-import odemis.gui.comp.text as txt
-import odemis.gui.dblmscopepanel as mscp
+import gui.comp.foldpanelbar as fpb
+import gui.comp.stream as strm
+import gui.comp.buttons as btns
+import gui.comp.text as txt
+import gui.dblmscopepanel as mscp
 
 ##################################
 # Fold Panel Bar related Handlers

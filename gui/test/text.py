@@ -13,8 +13,8 @@ if os.getcwd().endswith('test'):
     print "Working directory changed to", os.getcwd()
 
 import wx
-import odemis.gui.test.test_gui
-from odemis.gui.xmlh import odemis_get_test_resources
+import gui.test.test_gui
+from gui.xmlh import odemis_get_test_resources
 
 SLEEP_TIME = 100 # Sleep timer in milliseconds
 MANUAL = True # If manual is set to True, the window will be kept open at the end
@@ -38,12 +38,12 @@ def loop():
 
 class TestApp(wx.App):
     def __init__(self):
-        odemis.gui.test.test_gui.get_resources = odemis_get_resources
+        gui.test.test_gui.get_resources = odemis_get_resources
         self.test_frame = None
         wx.App.__init__(self, redirect=False)
 
     def OnInit(self):
-        self.test_frame = odemis.gui.test.test_gui.xrctext_frame(None)
+        self.test_frame = gui.test.test_gui.xrctext_frame(None)
         self.test_frame.SetSize((400, 400))
         self.test_frame.Center()
         self.test_frame.Layout()

@@ -26,7 +26,7 @@ Delmic Acquisition Software. If not, see http://www.gnu.org/licenses/.
 
 import wx
 
-import odemis.gui.units as units
+import gui.units as units
 
 #----------------------------------------------------------------------
 # DC Drawing Options

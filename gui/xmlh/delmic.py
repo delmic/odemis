@@ -6,9 +6,10 @@
 # Create a symbolic link to this and the xh_delmic module within XRCED's
 # plugins folder.
 
-import xh_delmic
 from wx.tools.XRCed import component, params, images, attribute
 from wx.tools.XRCed.globals import TRACE
+
+import xh_delmic
 
 TRACE('*** creating xh_delmic components')
 
@@ -318,7 +319,7 @@ component.Manager.setMenu(c, 'control', 'Delmic unit integer text ctrl', 'UnitIn
 component.Manager.setTool(c, 'Controls', pos=(0, 2))
 
 
-### odemis.gui.dblmscopepanel.DblMicroscopePanel
+### gui.dblmscopepanel.DblMicroscopePanel
 
 c = component.Container('DblMicroscopePanel', ['window', 'top_level', 'control'],
               ['pos', 'size'],

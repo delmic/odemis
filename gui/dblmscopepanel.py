@@ -28,16 +28,16 @@ import wx
 
 import units
 
-from odemis.gui.dblmscopecanvas import DblMicroscopeCanvas
-from odemis.gui.dblmscopeviewmodel import DblMscopeViewModel
-from odemis.gui.comp.scalewindow import ScaleWindow
-from odemis.gui.comp.slider import CustomSlider
-from odemis.gui.img.data import getico_blending_optBitmap, \
+from gui.dblmscopecanvas import DblMicroscopeCanvas
+from gui.dblmscopeviewmodel import DblMscopeViewModel
+from gui.comp.scalewindow import ScaleWindow
+from gui.comp.slider import CustomSlider
+from gui.img.data import getico_blending_optBitmap, \
     getico_blending_semBitmap
 
-from odemis.gui.microscopeview import MicroscopeEmptyView, MicroscopeOpticalView, \
+from gui.microscopeview import MicroscopeEmptyView, MicroscopeOpticalView, \
     MicroscopeSEView
-from odemis.gui.log import log
+from gui.log import log
 
 class DblMicroscopePanel(wx.Panel):
     """

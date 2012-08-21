@@ -1,18 +1,18 @@
 # -*- coding: utf-8 -*-
 
 #===============================================================================
-# Test module for Odemis' custom FoldPanelBar in odemis.gui.comp
+# Test module for Odemis' custom FoldPanelBar in gui.comp
 #===============================================================================
 
-from odemis.gui.log import log, set_level
+from gui.log import log, set_level
 set_level(50)
 
 import unittest
 import wx
 
-import odemis.gui.test.test_gui
+import gui.test.test_gui
 
-from odemis.gui.xmlh import odemis_get_test_resources
+from gui.xmlh import odemis_get_test_resources
 
 SLEEP_TIME = 100 # Sleep timer in milliseconds
 MANUAL = True # If manual is set to True, the window will be kept open at the end
@@ -32,12 +32,12 @@ def loop():
 
 class TestApp(wx.App):
     def __init__(self):
-        odemis.gui.test.test_gui.get_resources = odemis_get_test_resources
+        gui.test.test_gui.get_resources = odemis_get_test_resources
         self.test_frame = None
         wx.App.__init__(self, redirect=False)
 
     def OnInit(self):
-        self.test_frame = odemis.gui.test.test_gui.xrcfpb_frame(None)
+        self.test_frame = gui.test.test_gui.xrcfpb_frame(None)
         self.test_frame.SetSize((400, 400))
         self.test_frame.Center()
         self.test_frame.Layout()
@@ -81,7 +81,7 @@ class FoldPanelBarTestCase(unittest.TestCase):
     @classmethod
     def build_caption_event(cls, foldpanelitem):
 
-        import odemis.gui.comp.foldpanelbar as ofpb
+        import gui.comp.foldpanelbar as ofpb
 
         cap_bar = foldpanelitem.GetCaptionBar()
         event = ofpb.CaptionBarEvent(ofpb.wxEVT_CAPTIONBAR)
@@ -102,7 +102,7 @@ class FoldPanelBarTestCase(unittest.TestCase):
 
         fpb = self.app.test_frame.scrwin.GetChildren()[0]
 
-        import odemis.gui.comp.foldpanelbar as ofpb
+        import gui.comp.foldpanelbar as ofpb
         self.assertIsInstance(fpb, ofpb.FoldPanelBar)
 
         #self.dump_win_tree(self.app.test_frame)

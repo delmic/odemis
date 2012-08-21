@@ -10,7 +10,7 @@ import wx
 from wx.lib.buttons import GenBitmapButton, GenBitmapToggleButton, \
     GenBitmapTextToggleButton, GenBitmapTextButton
 
-import odemis.gui.img.data as img
+import gui.img.data as img
 
 class ImageButton(GenBitmapButton):
     """ Graphical button with hover effect.

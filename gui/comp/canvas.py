@@ -31,7 +31,7 @@ import os
 import time
 import wx
 
-from odemis.gui.log import log
+from gui.log import log
 
 # A class for smooth, flicker-less display of anything on a window, with drag
 # and zoom capability a bit like:

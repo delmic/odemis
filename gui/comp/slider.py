@@ -3,8 +3,8 @@ import wx
 from wx.lib.agw.aui.aui_utilities import StepColour, MakeDisabledBitmap, \
     DarkenBitmap
 
-from odemis.gui.img.data import getsliderBitmap, getslider_disBitmap
-#from odemis.gui.log import log
+from gui.img.data import getsliderBitmap, getslider_disBitmap
+#from gui.log import log
 
 class Slider(wx.Slider):
     """ This custom Slider class was implemented so it would not capture
