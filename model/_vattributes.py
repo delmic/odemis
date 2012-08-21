@@ -33,6 +33,8 @@ class OutOfBoundError(Exception):
 class NotSettableError(Exception):
     pass
 
+class NotApplicableError(Exception):
+    pass
 
 class VigilantAttributeBase(object):
     '''
@@ -40,7 +42,7 @@ class VigilantAttributeBase(object):
     It needs a .value member
     '''
 
-    def __init__(self, initval=None, unit=""):
+    def __init__(self, initval=None, unit=None):
         """
         Creates a VigilantAttributeBase with a given initial value
         initval (any type): the initial value
@@ -261,14 +263,23 @@ class VigilantAttributeProxy(VigilantAttributeBase, Pyro4.Proxy):
     # for enumerated VA
     @property
     def choices(self):
-#        logging.debug("accessing choices remotely for VA %s", self._global_name)
-        return Pyro4.Proxy.__getattr__(self, "_get_choices")()
+        try:
+            value = Pyro4.Proxy.__getattr__(self, "_get_choices")()
+        except AttributeError:
+            # if we let AttributeError, python will look in the super classes,
+            # and eventually get a RemoteMethod from the Proxy :-(
+            # So return our own NotApplicableError exception
+            raise NotApplicableError()
+        return value
     
     # for continuous VA
     @property
     def range(self):
-#        logging.debug("accessing range remotely for VA %s", self._global_name)
-        return Pyro4.Proxy.__getattr__(self, "_get_range")()
+        try:
+            value = Pyro4.Proxy.__getattr__(self, "_get_range")()
+        except AttributeError:
+            raise NotApplicableError()   
+        return value
     
     def __getstate__(self):
         # must permit to recreate a proxy in a different container
