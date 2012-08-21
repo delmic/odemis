@@ -1,60 +1,94 @@
-# -*- coding: utf-8 -*-
-
-import inspect
+#-*- coding: utf-8 -*-
 
 import wx
 
 from gui.comp.foldpanelbar import FoldPanelItem
 from gui.log import log
-from model import getVAs
+from model import getVAs, getROAttributes
 
 MAIN_FRAME = None
 
+BACKGROUND_COLOUR = "#333333"
+FOREGROUND_COLOUR = "#DDDDDD"
+FOREGROUND_COLOUR_DIS = "#666666"
+
 class SettingsPanel(object):
-    """ Settings base class """
+    """ Settings base class which describes an indirect wrapper for
+    FoldPanelItems.
+
+    Do not instantiate this class, but always inherit it.
+    """
 
     def __init__(self, fp_panel, default_msg):
         self.fb_panel = fp_panel
         assert isinstance(self.fb_panel, FoldPanelItem)
 
         self.panel = wx.Panel(self.fb_panel)
-        self.panel.SetBackgroundColour("#333333")
-        self.panel.SetForegroundColour("#666666")
+        # FIXME: Move hardcoded layout options to a more suitable place
+        self.panel.SetBackgroundColour(BACKGROUND_COLOUR)
+        self.panel.SetForegroundColour(FOREGROUND_COLOUR)
 
         self._sizer = wx.GridBagSizer()
+
+        self.panel.SetForegroundColour(FOREGROUND_COLOUR_DIS)
         self._sizer.Add(wx.StaticText(self.panel, -1, default_msg),
                         (0, 0), flag=wx.ALL, border=5)
+        self.panel.SetForegroundColour(FOREGROUND_COLOUR)
 
         self.panel.SetSizer(self._sizer)
         self.fb_panel.add_item(self.panel)
 
-        self.num_values = 0
+        self.num_entries = 0
 
-    def add_ro_value(self, label="", value=None):
-        if self.num_values == 0:
-            self.panel.SetForegroundColour("#DDDDDD")
+    def _clear(self):
+        # Remove default 'no content' label
+        if self.num_entries == 0:
             self.panel.GetChildren()[0].Destroy()
 
+    def add_label(self, label, value):
+        self._clear()
+         # Create label
         self._sizer.Add(wx.StaticText(self.panel, -1, "%s:" % label),
-                        (self.num_values, 0), flag=wx.ALL, border=5)
+                        (self.num_entries, 0), flag=wx.ALL, border=5)
+
+        self.panel.SetForegroundColour(FOREGROUND_COLOUR_DIS)
+
         self._sizer.Add(wx.StaticText(self.panel, -1, unicode(value)),
-                        (self.num_values, 1), flag=wx.ALL, border=5)
-        self.num_values += 1
-        self.fb_panel.Parent.Layout()
+                        (self.num_entries, 1),
+                        flag=wx.ALL,
+                        border=5)
+        self.panel.SetForegroundColour(FOREGROUND_COLOUR)
+        self.num_entries += 1
 
 
-    def add_value(self, label="", value=None):
-        if self.num_values == 0:
-            self.panel.SetForegroundColour("#DDDDDD")
-            self.panel.GetChildren()[0].Destroy()
+    def add_value(self, label, value):
+        self._clear()
 
-
+        # Create label
         self._sizer.Add(wx.StaticText(self.panel, -1, "%s:" % label),
-                        (self.num_values, 0), flag=wx.ALL, border=5)
+                        (self.num_entries, 0), flag=wx.ALL, border=5)
+
+        # If a value is provided
         if value:
-            self._sizer.Add(wx.StaticText(self.panel, -1, unicode(value)),
-                            (self.num_values, 1), flag=wx.ALL, border=5)
-        self.num_values += 1
+
+            unit =  value.unit or ""
+
+            if value.readonly:
+                self.panel.SetForegroundColour(FOREGROUND_COLOUR_DIS)
+
+                if isinstance(value.value, tuple):
+                    lbl = " x ".join(["%s %s" % (v, unit) for v in value.value])
+                else:
+                    lbl = unicode("%s %s" % (value.value, unit))
+
+                self._sizer.Add(wx.StaticText(self.panel, -1, lbl),
+                                (self.num_entries, 1), flag=wx.ALL, border=5)
+                self.panel.SetForegroundColour(FOREGROUND_COLOUR)
+            else:
+                self._sizer.Add(wx.StaticText(self.panel, -1, unicode(value.value)),
+                                (self.num_entries, 1), flag=wx.ALL, border=5)
+
+        self.num_entries += 1
         self.fb_panel.Parent.Layout()
 
 
@@ -89,11 +123,12 @@ class SettingsSideBar(object):
     # Optical microscope settings
 
     def add_ccd(self, comp):
-        self._optical_panel.add_ro_value("Camera", comp.name)
+        self._optical_panel.add_label("Camera", comp.name)
 
         vigil_attrs = getVAs(comp)
 
         for name, value in vigil_attrs.iteritems():
-            log.warn(name)
+            log.warn("%s %s", value.value, type(value.value))
             self._optical_panel.add_value(name, value)
+
 
