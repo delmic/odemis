@@ -17,7 +17,7 @@ For example:
 PYTHONPATH=./src/:../Pyro4/src/ ./src/odemis/odemisd/main.py --daemonize --log-level=2 src/odemis/odemisd/test/optical-sim.odm.yaml
 
 To use the command line interface use:
-PYTHONPATH=./:../Pyro4/src/ ./src/odemis/cli/main.py --help
+PYTHONPATH=./src/:../Pyro4/src/ ./src/odemis/cli/main.py --help
 
 = License =
 GPLv2, see the LICENSE.txt file for the complete license.
