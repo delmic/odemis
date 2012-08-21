@@ -293,12 +293,13 @@ class CaptionBar(wx.Window):
 
         index = self._collapsed
 
-        drw = wndRect.GetRight() - self._iconWidth - CAPTION_PADDING_RIGHT
+        x_pos = self.Parent.grandparent.GetSize().GetWidth() - \
+                self._iconWidth - CAPTION_PADDING_RIGHT
 
         if not self.Parent.has_vert_scrollbar():
-            drw -= SCROLLBAR_WIDTH
+            x_pos -= SCROLLBAR_WIDTH
 
-        self._foldIcons.Draw(index, dc, drw,
+        self._foldIcons.Draw(index, dc, x_pos,
                              (wndRect.GetHeight() - self._iconHeight) / 2,
                              wx.IMAGELIST_DRAW_TRANSPARENT)
 
@@ -391,7 +392,10 @@ class CaptionBar(wx.Window):
         if not self.Parent.has_vert_scrollbar():
             padding_right += SCROLLBAR_WIDTH
 
-        rect.SetX(rect.GetWidth() - self._iconWidth - padding_right)
+        x_pos = self.Parent.grandparent.GetSize().GetWidth() - \
+                self._iconWidth - padding_right
+
+        rect.SetX(x_pos)
         rect.SetWidth(self._iconWidth + padding_right)
         self.RefreshRect(rect)
 

@@ -6,7 +6,7 @@ import wx
 
 from gui.comp.foldpanelbar import FoldPanelItem
 from gui.log import log
-from model import VigilantAttributeBase
+from model import getVAs
 
 MAIN_FRAME = None
 
@@ -91,7 +91,7 @@ class SettingsSideBar(object):
     def add_ccd(self, comp):
         self._optical_panel.add_ro_value("Camera", comp.name)
 
-        vigil_attrs = model.getVAs(comp)
+        vigil_attrs = getVAs(comp)
 
         for name, value in vigil_attrs.iteritems():
             log.warn(name)

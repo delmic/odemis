@@ -447,11 +447,11 @@ def __init_resources():
                   </object>
                   <orient>wxVERTICAL</orient>
                 </object>
+                <size>400,-1</size>
                 <bg>#333333</bg>
                 <style>wxBORDER_NONE</style>
               </object>
               <flag>wxEXPAND</flag>
-              <minsize>400,400</minsize>
             </object>
             <orient>wxHORIZONTAL</orient>
           </object>
