@@ -155,7 +155,7 @@ class CustomSlider(wx.PyPanel):
     def OnMotion(self, event=None):
         if self.GetCapture():
             self.getPointerLimitPos(event.GetX())
-        self.Refresh()
+            self.Refresh()
 
 
     def OnSize(self, event=None):

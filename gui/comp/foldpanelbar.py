@@ -221,6 +221,9 @@ class CaptionBar(wx.Window):
 
 
 
+    def set_caption(self, caption):
+        self._caption = caption
+
     def IsCollapsed(self):
         """ Returns wether the status of the bar is expanded or collapsed. """
 

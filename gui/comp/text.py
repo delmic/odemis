@@ -44,7 +44,7 @@ locale.setlocale(locale.LC_ALL, "")
 #
 # wxPython Custom Widget Collection 20060207
 # Written By: Edward Flick (eddy -=at=- cdf-imaging -=dot=- com)
-#             Michele Petrazzo (michele -=dot=- petrazzo -=at=- unipex -=dot=- it)
+#             Michele Petrazzo (michele -=dot=- petrazzo -=at=- unipex =dot= it)
 #             Will Sadkin (wsadkin-=at=- nameconnector -=dot=- com)
 # Copyright 2006 (c) CDF Inc. ( http://www.cdf-imaging.com )
 # Contributed to the wxPython project under the wxPython project's license.
@@ -69,7 +69,9 @@ class SuggestTextCtrl (wx.TextCtrl, listmix.ColumnSorterMixin):
         by calling setChoices.
         """
         if 'style' in therest:
-            therest['style'] = wx.TE_PROCESS_ENTER | wx.BORDER_NONE | therest['style']
+            therest['style'] = wx.TE_PROCESS_ENTER | \
+                               wx.BORDER_NONE | \
+                               therest['style']
         else:
             therest['style'] = wx.TE_PROCESS_ENTER | wx.BORDER_NONE
         wx.TextCtrl.__init__(self, parent, **therest)

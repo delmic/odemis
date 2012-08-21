@@ -1,14 +1,23 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<resource class="TabButton">
+<resource class="FoldPanelItem">
   <object class="wxFrame" name="fr_main">
     <object class="wxMenuBar">
       <object class="wxMenu">
         <label>File</label>
-        <object class="wxMenuItem">
-          <label>Hello</label>
+        <object class="wxMenuItem" name="menu_item_quit">
+          <label>Quit</label>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
         </object>
       </object>
       <object class="wxMenu">
+        <object class="wxMenuItem" name="menu_item_inspect">
+          <label>Inspect GUI</label>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
         <object class="wxMenuItem" name="menu_item_debug">
           <label>Debug</label>
           <checkable>1</checkable>
@@ -184,9 +193,10 @@
                               <face>Ubuntu</face>
                               <encoding>UTF-8</encoding>
                             </font>
+                            <hidden>1</hidden>
                             <style>wxALIGN_RIGHT</style>
                           </object>
-                          <flag>wxALL|wxEXPAND</flag>
+                          <flag>wxTOP|wxBOTTOM|wxLEFT|wxEXPAND</flag>
                           <border>10</border>
                         </object>
                         <object class="sizeritem">
@@ -212,7 +222,7 @@
                               <assign_var>1</assign_var>
                             </XRCED>
                           </object>
-                          <flag>wxTOP|wxBOTTOM|wxRIGHT</flag>
+                          <flag>wxTOP|wxBOTTOM|wxLEFT</flag>
                           <border>10</border>
                         </object>
                         <object class="sizeritem">
@@ -238,7 +248,7 @@
                               <assign_var>1</assign_var>
                             </XRCED>
                           </object>
-                          <flag>wxTOP|wxBOTTOM|wxRIGHT</flag>
+                          <flag>wxTOP|wxBOTTOM|wxLEFT</flag>
                           <border>10</border>
                         </object>
                         <object class="spacer">
@@ -268,17 +278,22 @@
                         <orient>wxVERTICAL</orient>
                         <object class="sizeritem">
                           <object class="FoldPanelBar" name="fpb_settings">
-                            <object class="FoldPanelItem">
+                            
+                            <object class="FoldPanelItem" name="fp_optical_settings">
                               <label>OPTICAL SETTINGS</label>
-                              <collapsed>1</collapsed>
                               <fg>#1A1A1A</fg>
                               <bg>#555555</bg>
+                              <XRCED>
+                                <assign_var>1</assign_var>
+                              </XRCED>
                             </object>
-                            <object class="FoldPanelItem">
+                            <object class="FoldPanelItem" name="fp_sem_settings">
                               <label>SEM SETTINGS</label>
-                              <collapsed>1</collapsed>
                               <fg>#1A1A1A</fg>
                               <bg>#555555</bg>
+                              <XRCED>
+                                <assign_var>1</assign_var>
+                              </XRCED>
                             </object>
                             <object class="FoldPanelItem">
                               <object class="wxPanel" name="pnl_stream" subclass="odemis.gui.comp.stream.StreamPanel">
@@ -292,11 +307,14 @@
                               <fg>#1A1A1A</fg>
                               <bg>#555555</bg>
                             </object>
-                            <object class="FoldPanelItem">
+                            <object class="FoldPanelItem" name="fp_annotations">
                               <label>ANNOTATIONS</label>
                               <collapsed>1</collapsed>
                               <fg>#1A1A1A</fg>
                               <bg>#555555</bg>
+                              <XRCED>
+                                <assign_var>1</assign_var>
+                              </XRCED>
                             </object>
                             <spacing>0</spacing>
                             <leftspacing>0</leftspacing>
@@ -375,6 +393,33 @@
       </object>
       <object class="sizeritem">
         <object class="wxPanel" name="pnl_tab_gallery">
+          <object class="wxBoxSizer">
+            <object class="spacer">
+              <option>1</option>
+              <flag>wxEXPAND|wxALIGN_CENTRE_VERTICAL</flag>
+            </object>
+            <object class="sizeritem">
+              <object class="wxStaticText">
+                <label>The amazing invisible gallery.</label>
+                <fg>#7F7F7F</fg>
+                <font>
+                  <size>8</size>
+                  <style>normal</style>
+                  <weight>normal</weight>
+                  <underlined>0</underlined>
+                  <family>default</family>
+                  <face>Ubuntu</face>
+                  <encoding>UTF-8</encoding>
+                </font>
+              </object>
+              <flag>wxALIGN_CENTRE_VERTICAL</flag>
+            </object>
+            <orient>wxHORIZONTAL</orient>
+            <object class="spacer">
+              <option>1</option>
+              <flag>wxEXPAND|wxALIGN_CENTRE_VERTICAL</flag>
+            </object>
+          </object>
           <bg>#333333</bg>
           <hidden>1</hidden>
           <XRCED>

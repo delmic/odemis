@@ -40,7 +40,7 @@ def getComponents():
     return all the HwComponents managed by the backend
     """
     microscope = getMicroscope()
-    # TODO look into children and parents? Or delete this method? Or how to share 
+    # TODO look into children and parents? Or delete this method? Or how to share
     # really all the components?
     comps = set(microscope.detectors | microscope.actuators | microscope.emitters)
     comps.add(microscope)
@@ -64,21 +64,21 @@ class Component(ComponentBase):
         parent (Component): the parent of this component, that will be in .parent
         children (set of Component): the children of this component, that will
             be in .children
-        daemon (Pyro4.daemon): daemon via which the object will be registered. 
+        daemon (Pyro4.daemon): daemon via which the object will be registered.
             default=None => not registered
         """
         ComponentBase.__init__(self)
         self._name = name
         if daemon:
             daemon.register(self, urllib.quote(name)) # registered under its name
-        
+
         self._parent = None
         self.parent = parent
         if children is None:
             children = set()
         self._children = set(children)
         # TODO update .parent of children?
-    
+
     def _getproxystate(self):
         """
         Equivalent to __getstate__() of the proxy version
@@ -88,8 +88,8 @@ class Component(ComponentBase):
                 _core.dump_roattributes(self),
                 _dataflow.dump_dataflows(self),
                 _vattributes.dump_vigilant_attributes(self))
-    
-    # .parent is a weakref so that there is no cycle. 
+
+    # .parent is a weakref so that there is no cycle.
     # Too complicated to be a roattribute
     @property
     def parent(self):
@@ -104,15 +104,15 @@ class Component(ComponentBase):
             self._parent = weakref.ref(p)
         else:
             self._parent = None
-    
+
     @roattribute
     def children(self):
         return self._children
-    
+
     @roattribute
     def name(self):
         return self._name
-    
+
     def terminate(self):
         """
         Stop the Component from executing.
@@ -120,7 +120,7 @@ class Component(ComponentBase):
         """
         for c in self.children:
             c.terminate()
-            
+
         # in case we are registered
         daemon = getattr(self, "_pyroDaemon", None)
         if daemon:
@@ -129,10 +129,10 @@ class Component(ComponentBase):
             _dataflow.unregister_dataflows(self)
             _vattributes.unregister_vigilant_attributes(self)
             daemon.unregister(self)
-        
+
     def __del__(self):
         self.terminate()
-        
+
 # Run on the client (the process which asked for a given remote component)
 class ComponentProxy(ComponentBase, Pyro4.Proxy):
     """
@@ -145,7 +145,7 @@ class ComponentProxy(ComponentBase, Pyro4.Proxy):
         Pyro4.Proxy.__init__(self, uri)
         ComponentBase.__init__(self)
         self._parent = None
-    
+
     # same as in Component, but set via __setstate__
     @property
     def parent(self):
@@ -167,7 +167,7 @@ class ComponentProxy(ComponentBase, Pyro4.Proxy):
         return (proxy_state, self.parent, _core.dump_roattributes(self),
                 _dataflow.dump_dataflows(self),
                 _vattributes.dump_vigilant_attributes(self))
-        
+
     def __setstate__(self, state):
         """
         proxy state
@@ -201,19 +201,19 @@ class HwComponent(Component):
     A generic class which represents a physical component of the microscope
     This is an abstract class that should be inherited.
     """
-    
+
     def __init__(self, name, role, *args, **kwargs):
         Component.__init__(self, name, *args, **kwargs)
         self._role = role
         self._affects = frozenset()
         self._swVersion = "Unknown (Odemis %s)" % __version__.version
         self._hwVersion = "Unknown"
-        
+
     @roattribute
     def role(self):
         """
         string: The role of this component in the microscope
-        """ 
+        """
         return self._role
 
     def _get_affects(self):
@@ -224,29 +224,29 @@ class HwComponent(Component):
 
     def _set_affects(self, comps):
         """
-        comps (set of HwComponents): list of the affected components 
+        comps (set of HwComponents): list of the affected components
         Note: this is to be used only internally for initialisation!
         """
         self._affects = frozenset(comps)
 
     # no setter, to force to use the hidden _set_affects() with parsimony
-    affects = property(_get_affects, 
+    affects = property(_get_affects,
                 doc = """set of HwComponents which are affected by this component
-                         (i.e. if this component changes of state, it will be 
+                         (i.e. if this component changes of state, it will be
                          detected by the affected components).""")
 
     @roattribute
     def swVersion(self):
         return self._swVersion
-    
+
     @roattribute
     def hwVersion(self):
         return self._hwVersion
-    
+
     # to be overridden by any component which actually can provide metadata
     def getMetadata(self):
         return {}
-    
+
     # to be overridden by components which can do self test
     def selfTest(self):
         """
@@ -257,7 +257,7 @@ class HwComponent(Component):
         """
         # by default it works
         return True
-    
+
     # components which can detect hardware should provide this static method scan()
 #    @staticmethod
 #    def scan(self):
@@ -273,7 +273,7 @@ class HwComponentProxy(ComponentProxy):
         Note: should not be called directly only created via pickling
         """
         ComponentProxy.__init__(self, uri)
-    
+
     @property
     def affects(self):
         # it needs to be remote because we have to update it after it has been
@@ -288,19 +288,19 @@ def HwComponentSerializer(self):
         return (HwComponentProxy, (daemon.uriFor(self),), self._getproxystate())
     else:
         return self.__reduce__()
-    
+
 Pyro4.Daemon.serializers[HwComponent] = HwComponentSerializer
 
 class Microscope(HwComponent):
     """
-    A component which represent the whole microscope. 
-    It does nothing by itself, just contains other components. 
+    A component which represent the whole microscope.
+    It does nothing by itself, just contains other components.
     """
     def __init__(self, name, role, children=None, daemon=None, **kwargs):
         HwComponent.__init__(self, name, role, daemon=daemon)
         if children:
             raise ArgumentError("Microscope component cannot have children.")
-        
+
         if kwargs:
             raise ArgumentError("Microscope component cannot have initialisation arguments.")
 
@@ -308,7 +308,7 @@ class Microscope(HwComponent):
         self._detectors = set()
         self._actuators = set()
         self._emitters = set()
-        
+
     @roattribute
     def detectors(self):
         return self._detectors
@@ -321,8 +321,8 @@ class Microscope(HwComponent):
 
 class Detector(HwComponent):
     """
-    A component which represents a detector. 
-    This is an abstract class that should be inherited. 
+    A component which represents a detector.
+    This is an abstract class that should be inherited.
     """
     def __init__(self, name, role, children=None, **kwargs):
         HwComponent.__init__(self, name, role, **kwargs)
@@ -333,13 +333,13 @@ class Detector(HwComponent):
         # To be overridden
         self._shape = (0) # maximum value of each dimension of the detector. A CCD camera 2560x1920 with 12 bits intensity has a 3D shape (2560,1920,2048).
         self.pixelSize = None # VA representing the size of a pixel (in meters). More precisely it should be the average distance between the centres of two pixels.
-        self.data = None # Data-flow coming from this detector. 
+        self.data = None # Data-flow coming from this detector.
         # normally a detector doesn't affect anything
-    
+
     @roattribute
     def shape(self):
         return self._shape
-        
+
 class DigitalCamera(Detector):
     """
     A component which represent a digital camera (i.e., CCD or CMOS)
@@ -347,17 +347,17 @@ class DigitalCamera(Detector):
     """
     def __init__(self, name, role, children=None, **kwargs):
         Detector.__init__(self, name, role, children, **kwargs)
-        
+
         # To be overridden by a VA
         self.binning = None # how many CCD pixels are merged (in each dimension) to form one pixel on the image.
         self.resolution = None # (2-tuple of int): number of pixels in the image generated for each dimension. If it's smaller than the full resolution of the captor, it's centred.
         self.exposureTime = None # (float): time in second for the exposure for one image.
-        
+
 
 class Actuator(HwComponent):
     """
-    A component which represents an actuator (motorised part). 
-    This is an abstract class that should be inherited. 
+    A component which represents an actuator (motorised part).
+    This is an abstract class that should be inherited.
     """
     def __init__(self, name, role, axes=None, ranges=None, children=None, **kwargs):
         HwComponent.__init__(self, name, role, **kwargs)
@@ -369,12 +369,12 @@ class Actuator(HwComponent):
         if ranges is None:
             ranges = {}
         self._ranges = dict(ranges)
-    
+
     @roattribute
     def axes(self):
         """ set of string: name of each axis available."""
         return self._axes
-    
+
     @roattribute
     def ranges(self):
         """
@@ -382,7 +382,7 @@ class Actuator(HwComponent):
         for moving
         """
         return self._ranges
-      
+
     # to be overridden
     @isasync
     def moveRel(self, shift):
@@ -393,55 +393,55 @@ class Actuator(HwComponent):
         returns (Future): object to control the move request
         """
         raise NotImplementedError()
-    
+
     # TODO this doesn't work over the network, because the proxy will always
     # say that the method exists.
     # moveAbs(self, pos): should be implemented if and only if supported
-        
+
 class Emitter(HwComponent):
     """
-    A component which represents an emitter. 
-    This is an abstract class that should be inherited. 
+    A component which represents an emitter.
+    This is an abstract class that should be inherited.
     """
     def __init__(self, name, role, children=None, **kwargs):
         HwComponent.__init__(self, name, role, **kwargs)
         if children:
             raise ArgumentError("Emitter components cannot have children.")
-        
+
         # TODO remotable
         self.shape = None # must be initialised by the sub-class
-        
-        
+
+
 class CombinedActuator(Actuator):
     """
     An object representing an actuator made of several (real actuators)=
      = a set of axes that can be moved and optionally report their position.
     """
 
-    # TODO: this is not finished, just a copy paste from a RedStone which could 
+    # TODO: this is not finished, just a copy paste from a RedStone which could
     # be extended to a really combined actuator
     def __init__(self, name, role, children, axes_map, **kwargs):
         """
-        name (string) 
+        name (string)
         role (string)
         children (dict str -> actuator): axis name -> actuator to be used for this axis
         axes_map (dict str -> str): axis name in this actuator -> axis name in the child actuator
         """
         Actuator.__init__(self, name, role, **kwargs)
-        
+
         if not children:
             raise Exception("Combined Actuator needs children")
-        
+
         self._ranges = {}
         self._axis_to_child = {} # axis name => (Actuator, axis name)
         for axis, child in children.items():
             self._children.add(child)
             child.parent = self
             self._axis_to_child[axis] = (child, axes_map[axis])
-            
+
             # FIXME: how do we check if it's an actuator?
             # At least, it has .ranges and .axes (and they are set and dict)
-#            if not isinstance(child, Actuator):
+            # if not isinstance(child, Actuator):
             if not isinstance(child, ComponentBase):
                 raise Exception("Child %s is not a component." % str(child))
             if (not hasattr(child, "ranges") or not isinstance(child.ranges, dict) or
@@ -450,17 +450,17 @@ class CombinedActuator(Actuator):
             self._ranges[axis] = child.ranges[axes_map[axis]]
 
         self._axes = frozenset(self._axis_to_child.keys())
-        
+
         # check if can do absolute positioning: all the axes have moveAbs()
         canAbs = True
         for controller in self._axes:
             canAbs &= hasattr(controller, "moveAbs") # TODO: need to use capabilities, to work with proxies
         if canAbs:
             self.moveAbs = self._moveAbs
-            
+
         # TODO speed
         # TODO position
-        
+
     def moveRel(self, shift):
         u"""
         Move the stage the defined values in m for each axis given.
@@ -474,19 +474,19 @@ class CombinedActuator(Actuator):
             child, child_axis = self._axes[axis]
             f = child[child_axis].moveRel(distance)
             futures.append(f)
-        
+
         if len(futures) == 1:
             return futures[0]
         else:
             #TODO return future composed of multiple futures
             return None
-    
+
     # duplicated as moveAbs() iff all the axes have moveAbs()
     def _moveAbs(self, pos):
         u"""
         Move the stage to the defined position in m for each axis given.
         pos dict(string-> float): name of the axis and position in m
-        sync (boolean): whether the moves should be done asynchronously or the 
+        sync (boolean): whether the moves should be done asynchronously or the
         method should return only when all the moves are over (sync=True)
         """
         # TODO what's the origin? => need a different conversion?
@@ -495,12 +495,12 @@ class CombinedActuator(Actuator):
             if axis not in self._axis_to_child:
                 raise Exception("Axis unknown: " + str(axis))
             self._axes[axis].moveAbs(distance)
-        
-    
+
+
     def stop(self, axis=None):
         """
         stops the motion
-        axis (string): name of the axis to stop, or all of them if not indicated 
+        axis (string): name of the axis to stop, or all of them if not indicated
         """
         if not axis:
             for controller in self._axis_to_child:
@@ -508,11 +508,11 @@ class CombinedActuator(Actuator):
         else:
             controller = self._axis_to_child[axis]
             controller.stop()
-        
+
     def waitStop(self, axis=None):
         """
         wait until the stops the motion
-        axis (string): name of the axis to stop, or all of them if not indicated 
+        axis (string): name of the axis to stop, or all of them if not indicated
         """
         if not axis:
             for controller in self._axis_to_child:
@@ -520,12 +520,12 @@ class CombinedActuator(Actuator):
         else:
             controller = self._axis_to_child[axis]
             controller.waitStop()
-        
-        
+
+
 class MockComponent(HwComponent):
     """
     A very special component which does nothing but can pretend to be any component
-    It's used for validation of the instantiation model. 
+    It's used for validation of the instantiation model.
     Do not use or inherit when writing a device driver!
     """
     def __init__(self, name, role, _realcls, children=None, _vas=None, daemon=None, **kwargs):
@@ -536,7 +536,7 @@ class MockComponent(HwComponent):
         HwComponent.__init__(self, name, role, daemon=daemon)
         if len(kwargs) > 0:
             logging.debug("Component '%s' got init arguments '%r'", name, kwargs)
-        
+
         # Special handling of actuators, for CombinedActuator
         # Can not be generic for every roattribute, as we don't know what to put as value
         if issubclass(_realcls, Actuator):
@@ -544,23 +544,23 @@ class MockComponent(HwComponent):
             self.ranges = {"x": [-1, 1]}
             # make them roattributes for proxy
             self._odemis_roattributes = ["axes", "ranges"]
-        
+
         if _vas is not None:
             for va in _vas:
                 self.__dict__[va] = _vattributes.VigilantAttribute(None)
-        
+
         if not children:
             return
-        
+
         for child_name, child_args in children.items():
             # we don't care of child_name as it's only for internal use in the real component
-            
+
             if isinstance(child_args, dict): # delegation
                 child = MockComponent(**child_args)
             else: # explicit creation (already done)
                 child = child_args
-                
+
             self._children.add(child)
             child.parent = self
-        
+
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:

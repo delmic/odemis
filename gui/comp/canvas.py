@@ -318,7 +318,7 @@ class DraggableCanvas(wx.Panel):
         overlays must have a Draw(dc, shift, scale) method
         """
         self.world_pos_buffer = self.world_pos_requested
-        log.debug("New drawing at %s", self.world_pos_buffer)
+        #log.debug("New drawing at %s", self.world_pos_buffer)
         dc.Clear()
         # set and reset the origin here because Blit in onPaint gets "confused" with values > 2048
         # centred on self.world_pos_buffer
@@ -497,7 +497,7 @@ class DraggableCanvas(wx.Panel):
 
         t_now = time.time()
         fps = 1.0 / float(t_now - t_start)
-        log.debug("Display speed: %s fps", fps)
+        #log.debug("Display speed: %s fps", fps)
 
     def WorldToBufferPoint(self, pos):
         """ Converts a position from world coordinates to buffer coordinates using
