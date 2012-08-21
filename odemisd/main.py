@@ -17,6 +17,7 @@ You should have received a copy of the GNU General Public License along with Del
 '''
 
 from odemisd import modelgen
+from odemisd.mdupdater import MetadataUpdater
 import __version__
 import argparse
 import grp
@@ -55,22 +56,33 @@ class BackendContainer(model.Container):
     """
     def __init__(self, name=model.BACKEND_NAME):
         model.Container.__init__(self, name)
+        self.components = set() # to be updated later on
         self.sub_containers = set() # to be updated later on
     
-    def terminate(self):  
+    def terminate(self):
+        # Stop all the components
+        for comp in self.components:
+            try:
+                comp.terminate()
+            except:
+                logging.warning("Failed to terminate component '%s'", comp.name)
+        
+        # end all the (sub-)containers
         for container in self.sub_containers:
             try:
                 container.terminate()
             except:
                 logging.warning("Failed to terminate container %r", container)
     
+        # end ourself
         model.Container.terminate(self)
     
     def setMicroscope(self, component):
         self.rootId = component._pyroId
 
+
 class BackendRunner(object):
-    CONTAINER_DISABLE="0" # only for debugging: everything is created in the process
+    CONTAINER_DISABLE="0" # only for debugging: everything is created in the process: no backend accessible
     CONTAINER_ALL_IN_ONE="1" # one backend container for everything
     CONTAINER_SEPARATED="+" # each component is started in a separate container
     
@@ -78,7 +90,6 @@ class BackendRunner(object):
         """
         containement (CONTAINER_*): the type of container policy to use
         """
-        
         self.model = model_file
         self.daemon = daemon
         self.dry_run = dry_run
@@ -147,11 +158,12 @@ class BackendRunner(object):
                 logging.warning("Failed to terminate component '%s'", comp.name)
     
     def stop(self):
-        self.terminate_all_components()
         if self._container:
             self._container.terminate()
             self._container.close()
-    
+        else:
+            self.terminate_all_components()
+            
     def run(self):
         # parse the instantiation file 
         try:
@@ -182,6 +194,7 @@ class BackendRunner(object):
                 pid = os.fork()
                 if pid:
                     logging.debug("Daemon started with pid %d", pid)
+                    # TODO: we could try to contact the backend and see if it managed to start
                     return 0
             if self.containement != BackendRunner.CONTAINER_DISABLE:
                 self._container = BackendContainer()
@@ -198,10 +211,11 @@ class BackendRunner(object):
                                             inst_model, self._container, 
                                             create_sub_containers,
                                             dry_run=self.dry_run)
-            # update the model
+            # save the model
             if self._container:
                 self._container.setMicroscope(mic)
                 self._container.sub_containers |= sub_containers
+            self._components = comps
             logging.info("model has been successfully instantiated")
             logging.debug("model microscope is %s", mic.name) 
             logging.debug("model components are %s", ", ".join([c.name for c in comps])) 
@@ -215,6 +229,16 @@ class BackendRunner(object):
             self.stop()
             return 0    # everything went fine
         
+        try:
+            # special "meta" component
+            mdUpdater = self._container.instantiate(MetadataUpdater, 
+             {"name": "Metadata Updater", "microscope": mic, "components": comps})
+            self._components.add(mdUpdater)
+        except:
+            logging.exception("When starting the metadata updater")
+            self.stop()
+            return 127
+        
         if self.containement == BackendRunner.CONTAINER_DISABLE:
             # in case it was not clear it's only for debug!
             logging.warning("Going to wait for an hour and die")
@@ -223,18 +247,13 @@ class BackendRunner(object):
             return 0
         
         try:
+            self._container.components = self._components
             logging.info("Microscope is now available in container '%s'", model.BACKEND_NAME)
             self._container.run()
         except:
             # This is coming here in case of signal received when the daemon is running
             logging.exception("When running back-end container")
             self.stop()
-            return 127
-        
-        try:
-            self.stop()
-        except:
-            logging.exception("Failed to end the back-end container cleanly")
             return 127
         
         return 0
@@ -352,7 +371,8 @@ def main(args):
         return 127
     
     if options.debug:
-        cont_pol = BackendRunner.CONTAINER_DISABLE
+        #cont_pol = BackendRunner.CONTAINER_DISABLE
+        cont_pol = BackendRunner.CONTAINER_ALL_IN_ONE
     else:
         cont_pol = BackendRunner.CONTAINER_SEPARATED
     

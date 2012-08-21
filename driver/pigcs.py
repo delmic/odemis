@@ -15,6 +15,7 @@ Delmic Acquisition Software is distributed in the hope that it will be useful, b
 You should have received a copy of the GNU General Public License along with Delmic Acquisition Software. If not, see http://www.gnu.org/licenses/.
 '''
 from concurrent import futures
+from model import isasync
 import __version__
 import collections
 import glob
@@ -94,6 +95,12 @@ class Controller(object):
         
         # reinitialise: make sure it's back to normal and ensure it's responding
         try:
+            # FIXME: there seems to be problems to recover sometimes from a 
+            # disturbed controller. Not sure what is required to do. Seems to
+            # be just the right commands with the right timing....
+            # In this state, the error led directly turns on when the usb cable
+            # is connected in.
+            # maybe self.GetErrorNum() first? 
             self.Reboot()
             self.GetErrorNum()
         except IOError:
@@ -797,7 +804,6 @@ class Controller(object):
                 pass
         
         ctrl.address = None
-        
         return present
     
     @staticmethod
@@ -823,7 +829,7 @@ class Bus(model.Actuator):
     """
     Represent a chain of PI controller over a serial port
     """
-    def __init__(self, name, role, children, port, axes):
+    def __init__(self, name, role, port, axes, children=None, **kwargs):
         """
         port (string): name of the serial port to connect to the controllers
         axes (dict string=> 3-tuple(1<=int<=16, 1<=int, boolean): the configuration
@@ -833,7 +839,7 @@ class Bus(model.Actuator):
          _not_ seen as a child from the odemis model point of view.
         """
         # this set ._axes and ._ranges
-        model.Actuator.__init__(self, name, role, children=children, axes=axes.keys())
+        model.Actuator.__init__(self, name, role, axes=axes.keys(), children=children, **kwargs)
         
         ser = Controller.openSerialPort(port)
 
@@ -882,7 +888,7 @@ class Bus(model.Actuator):
         self._swVersion = "%s (serial driver: %s)" % (__version__.version, self.getSerialDriver(port))
         hwversions = []
         for axis, (ctrl, channel) in self._axis_to_cc.items():
-            hwversions += "'%s': %s (GCS %s)" % (axis, ctrl.GetIdentification(), ctrl.GetSyntaxVersion())
+            hwversions.append("'%s': %s (GCS %s)" % (axis, ctrl.GetIdentification(), ctrl.GetSyntaxVersion()))
         self._hwVersion = ", ".join(hwversions)
     
     
@@ -928,6 +934,7 @@ class Bus(model.Actuator):
         
         return position
     
+    @isasync
     def moveRel(self, shift):
         """
         Move the stage the defined values in m for each axis given.
@@ -1007,7 +1014,7 @@ class Bus(model.Actuator):
             if os.name == "nt":
                 ports = ["COM" + str(n) for n in range (0,8)]
             else:
-                ports = glob.glob('/dev/ttyS?*') +  glob.glob('/dev/ttyUSB?*')
+                ports = glob.glob('/dev/ttyS?*') + glob.glob('/dev/ttyUSB?*')
         
         axes_names = "xyzabcdefghijklmnopqrstuvw"
         found = []  # (list of 2-tuple): name, args (port, axes(channel -> CL?)
@@ -1337,16 +1344,3 @@ class ActionFuture(object):
                 
         return max_duration 
 
-
-#PORT = "/dev/ttyUSB0"
-#CONFIG_CTRL_BASIC = (1, {1: False})
-#ser = Controller.openSerialPort(PORT)
-#ctrl = Controller(ser, *CONFIG_CTRL_BASIC)
-#
-#for val in range(55):
-#    ctrl.OLAnalogDriving(1, val)
-#    time.sleep(1)
-#    
-#for val in range(55):
-#    ctrl.OLAnalogDriving(1, -val)
-#    time.sleep(1)

@@ -14,7 +14,7 @@ Delmic Acquisition Software is distributed in the hope that it will be useful, b
 
 You should have received a copy of the GNU General Public License along with Delmic Acquisition Software. If not, see http://www.gnu.org/licenses/.
 '''
-from model import roattribute
+from model import isasync
 import logging
 import model
 import time
@@ -73,24 +73,24 @@ class Stage2D(model.Actuator):
         # start at the centre
         self._position = {}
         for a in axes:
-            self._position[a] = (self.ranges[a][0] + self.ranges[a][1]) / 2.0  
+            self._position[a] = (self.ranges[a][0] + self.ranges[a][1]) / 2.0
+        # RO, as to modify it the client must use .moveRel() or .moveAbs()
+        self.position = model.VigilantAttribute(self._position, unit="m", readonly=True)
         
         init_speed = {}
         for a in axes:
             init_speed[a] = 10.0 
         self.speed = model.MultiSpeedVA(init_speed, [0., 10.], "m/s")
+    
+    def _updatePosition(self):
+        """
+        update the position VA
+        """
+        # it's read-only, so we change it via _value
+        self.position._value = self._position
+        self.position.notify(self.position.value)
         
-    # TODO that's obviously not static!!!
-    @roattribute
-    def position(self):
-        # TODO should depend on the time and the current queue of moves
-        return self._position
-        
-    def getMetadata(self):
-        metadata = {}
-        metadata[model.MD_POS] = tuple([self._position[a] for a in self.axes])
-        return metadata
-        
+    @isasync
     def moveRel(self, pos):
         time_start = time.time()
         maxtime = 0
@@ -102,9 +102,11 @@ class Stage2D(model.Actuator):
             maxtime = max(maxtime, abs(change) / self.speed.value[axis])
         
         time_end = time_start + maxtime
+        self._updatePosition()
         # TODO queue the move and pretend the position is changed only after the given time
         return InstantaneousFuture()
         
+    @isasync
     def moveAbs(self, pos):
         time_start = time.time()
         maxtime = 0
@@ -118,6 +120,7 @@ class Stage2D(model.Actuator):
          
         # TODO stop add this move
         time_end = time_start + maxtime
+        self._updatePosition()
         return InstantaneousFuture()
     
     def stop(self, axes=None):

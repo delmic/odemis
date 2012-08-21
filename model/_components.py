@@ -15,6 +15,7 @@ Delmic Acquisition Software is distributed in the hope that it will be useful, b
 You should have received a copy of the GNU General Public License along with Delmic Acquisition Software. If not, see http://www.gnu.org/licenses/.
 '''
 from _core import roattribute
+from Pyro4.core import isasync
 import Pyro4
 import __version__
 import _core
@@ -383,6 +384,7 @@ class Actuator(HwComponent):
         return self._ranges
 
     # to be overridden
+    @isasync
     def moveRel(self, shift):
         """
         Move the stage the defined values in m for each axis given. This is an

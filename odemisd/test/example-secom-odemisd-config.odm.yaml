@@ -50,11 +50,13 @@ Quanta: {
 }
 
 "Dual-view alignment": {
-    class: pi.StageRedStone,
-    role: lenseshift, # specific role to secom
-    init: {port: /dev/tty0, 'x': [0, 0], 'y': [0, 1]}, # having the controllers on the same bus as the stage would require the use of 2 CombinedActuators pointing to the same child, with different axes
-    affects: ["Andor Clara"],
+    class: pigcs.Bus,
+    role: align,
+    init: {port: "/dev/ttyPIGCS", axes: {"x": [1, 1, False], "y": [2, 1, False]}},
+    affects: ["Quanta SED", "Andor Clara"],
     properties: {
-        speed: 0.1 #m/s
+        speed: {'x':0.001, 'y':0.001} # m/s
     }
 }
+# for the focus (Z), might need either a combinedactuator with a third controller on dual-view, or the controller on a separate USB (but it's hard to know which controller is which without using a fixed USB port)
+
