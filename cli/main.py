@@ -186,12 +186,13 @@ def print_vattribute(name, va):
     try:
         varange = va.range
         str_range = " (range: %s -> %s)" % (str(varange[0]), str(varange[1]))
-    except:
+    except (AttributeError, model.NotApplicableError):
         str_range = ""
+        
     try:
         vachoices = va.choices
         str_choices = " (choices: %s)" % ", ".join([str(c) for c in vachoices])
-    except:
+    except (AttributeError, model.NotApplicableError):
         str_choices = ""
     
     print("\t" + name + " (%sVigilant Attribute)\t value: %s%s%s%s" %
