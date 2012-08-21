@@ -69,7 +69,9 @@ class SuggestTextCtrl (wx.TextCtrl, listmix.ColumnSorterMixin):
         by calling setChoices.
         """
         if 'style' in therest:
-            therest['style'] = wx.TE_PROCESS_ENTER | wx.BORDER_NONE | therest['style']
+            therest['style'] = wx.TE_PROCESS_ENTER | \
+                               wx.BORDER_NONE | \
+                               therest['style']
         else:
             therest['style'] = wx.TE_PROCESS_ENTER | wx.BORDER_NONE
         wx.TextCtrl.__init__(self, parent, **therest)
