@@ -1,12 +1,20 @@
+import logging
 
 # Inspired by code from:
 # http://codingmess.blogspot.nl/2009/05/conversion-of-wavelength-in-nanometers.html
+# based on:
+# http://www.physics.sfasu.edu/astro/color/spectra.html
 def wave2rgb(wavelength):
     """ Convert a nanometer integer wavelength into a (r,g,b) value, with
     value ranges [0..255]
     """
 
     w = int(wavelength)
+    # outside of the visible spectrum, use fixed colour
+    if w < 380: # ultraviolet
+        w = 380
+    elif w > 780: # infrared
+        w = 780
 
     # colour
     if w >= 380 and w < 440:
@@ -34,22 +42,9 @@ def wave2rgb(wavelength):
         g = 0.0
         b = 0.0
     else:
-        r = 0.0
-        g = 0.0
-        b = 0.0
+        logging.warning("Unable to compute RGB for wavelength %d", w)
 
-    # intensity correction
-    if w >= 380 and w < 420:
-        sss = 0.3 + 0.7 * (w - 350) / (420 - 350)
-    elif w >= 420 and w <= 700:
-        sss = 1.0
-    elif w > 700 and w <= 780:
-        sss = 0.3 + 0.7 * (780 - w) / (780 - 700)
-    else:
-        sss = 0.0
-    sss *= 255
-
-    return int(sss*r), int(sss*g), int(sss*b)
+    return int(255*r), int(255*g), int(255*b)
 
 def wave2hex(wavelength):
     return "#%02x%02x%02x" % wave2rgb(wavelength)
