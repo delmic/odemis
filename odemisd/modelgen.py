@@ -21,7 +21,6 @@ import logging
 import model
 import re
 import yaml
-from model._components import Microscope
 
 class ParseError(Exception):
     pass
@@ -290,7 +289,7 @@ class Instantiator(object):
         ret = set([root])
         for child in getattr(root, "children", set()):
             ret |= self.get_children(child)
-        if isinstance(root, Microscope):
+        if isinstance(root, model.Microscope):
             for child in (root.detectors | root.emitters | root.actuators):
                 ret |= self.get_children(child)
         

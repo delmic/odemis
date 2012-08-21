@@ -17,8 +17,8 @@ You should have received a copy of the GNU General Public License along with Del
 
 from ctypes import *
 import __version__
-import logging
 import model
+import logging
 import numpy
 import os
 import re

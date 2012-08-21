@@ -17,8 +17,8 @@ You should have received a copy of the GNU General Public License along with Del
 
 from Pyro4.core import oneway
 from _core import WeakMethod, WeakRefLostError
+from . import _core
 import Pyro4
-import _core
 import inspect
 import logging
 import threading

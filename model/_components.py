@@ -15,12 +15,12 @@ Delmic Acquisition Software is distributed in the hope that it will be useful, b
 You should have received a copy of the GNU General Public License along with Delmic Acquisition Software. If not, see http://www.gnu.org/licenses/.
 '''
 from Pyro4.core import isasync
-from _core import roattribute
-import Pyro4
+from ._core import roattribute
+from . import _vattributes
+from . import _dataflow
+from . import _core
 import __version__
-import _core
-import _dataflow
-import _vattributes
+import Pyro4
 import inspect
 import logging
 import urllib

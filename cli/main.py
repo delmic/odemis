@@ -16,15 +16,15 @@ Delmic Acquisition Software is distributed in the hope that it will be useful, b
 You should have received a copy of the GNU General Public License along with Delmic Acquisition Software. If not, see http://www.gnu.org/licenses/.
 '''
 # This is a basic command line interface to the odemis back-end
+
 from cli.video_displayer import VideoDisplayer
 from dataio import tiff
-import Pyro4
+import model
 import __version__
 import argparse
 import collections
 import inspect
 import logging
-import model
 import os
 import sys
 
