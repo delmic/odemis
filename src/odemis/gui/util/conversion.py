@@ -1,4 +1,6 @@
 
+# Inspired by code from:
+# http://codingmess.blogspot.nl/2009/05/conversion-of-wavelength-in-nanometers.html
 def wave2rgb(wavelength):
     """ Convert a nanometer integer wavelength into a (r,g,b) value, with
     value ranges [0..255]
