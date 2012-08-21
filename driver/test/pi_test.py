@@ -29,7 +29,7 @@ logging.getLogger().setLevel(logging.INFO)
 if os.name == "nt":
     PORT = "COM1"
 else:
-    PORT = "/dev/ttyUSB0"
+    PORT = "/dev/ttyPIRS" #"/dev/ttyUSB0"
 
 CONFIG_RS_SECOM_1 = {'x': (0, 0), 'y': (0, 1)}
 CONFIG_RS_SECOM_2 = {'x': (1, 0), 'y': (0, 0)}
@@ -64,11 +64,11 @@ class TestPIRedStone(unittest.TestCase):
         
         for name, kwargs in devices:
             print "opening ", name
-            stage = pi.StageRedStone(name, "stage", None, **kwargs)
+            stage = pi.StageRedStone(name, "stage", **kwargs)
             self.assertTrue(stage.selfTest(), "Controller self test failed.")
             
     def test_simple(self):
-        stage = pi.StageRedStone("test", "stage", None, PORT, self.config)
+        stage = pi.StageRedStone("test", "stage", PORT, self.config)
         move = {'x':0.01e-6, 'y':0.01e-6}
         stage.moveRel(move)
         time.sleep(0.1) # wait for the move to finish
@@ -77,7 +77,7 @@ class TestPIRedStone(unittest.TestCase):
         # For moves big enough, sync should always take more time than async
         delta = 0.0001 # s
         
-        stage = pi.StageRedStone("test", "stage", None, PORT, self.config)
+        stage = pi.StageRedStone("test", "stage", PORT, self.config)
         stage.speed.value = {"x":0.001, "y":0.001}
         move = {'x':100e-6, 'y':100e-6}
         start = time.time()
@@ -108,7 +108,7 @@ class TestPIRedStone(unittest.TestCase):
         delta_ratio = 2.0 # no unit 
         
         # fast move
-        stage = pi.StageRedStone("test", "stage", None, PORT, self.config)
+        stage = pi.StageRedStone("test", "stage", PORT, self.config)
         stage.speed.value = {"x":0.001} # max speed of E-861 in practice
         move = {'x':1e-3}
         start = time.time()
@@ -142,7 +142,7 @@ class TestPIRedStone(unittest.TestCase):
                          " instead of " + str(expected_ratio) + ".")
 
     def test_stop(self):
-        stage = pi.StageRedStone("test", "stage", None, PORT, self.config)
+        stage = pi.StageRedStone("test", "stage", PORT, self.config)
         stage.stop()
         
         move = {'x':100e-6, 'y':100e-6}
@@ -154,7 +154,7 @@ class TestPIRedStone(unittest.TestCase):
         """
         Ask for several long moves in a row, and checks that nothing breaks
         """
-        stage = pi.StageRedStone("test", "stage", None, PORT, self.config)
+        stage = pi.StageRedStone("test", "stage", PORT, self.config)
         move_forth = {'x':1e-3, 'y':1e-3}
         move_back = {'x':-1e-3, 'y':-1e-3}
         stage.speed.value = {"x":0.001, "y":0.001} # => 1s per move
@@ -173,7 +173,7 @@ class TestPIRedStone(unittest.TestCase):
         self.assertGreaterEqual(dur, expected_time)
         
     def test_cancel(self):
-        stage = pi.StageRedStone("test", "stage", None, PORT, self.config)
+        stage = pi.StageRedStone("test", "stage", PORT, self.config)
         move_forth = {'x':1e-3}
         move_back = {'x':-1e-3}
         stage.speed.value = {"x":1e-3} # => 1s per move
@@ -201,7 +201,7 @@ class TestPIRedStone(unittest.TestCase):
         f1.result() # wait for the move to be finished
         
     def test_not_cancel(self):
-        stage = pi.StageRedStone("test", "stage", None, PORT, self.config)
+        stage = pi.StageRedStone("test", "stage", PORT, self.config)
         small_move_forth = {'x':1e-4}
         stage.speed.value = {"x":1e-3} # => 0.1s per move
         # test cancel after done => not cancelled
@@ -226,7 +226,7 @@ class TestPIRedStone(unittest.TestCase):
         self.assertTrue(f.done())
 
     def test_move_circle(self):
-        stage = pi.StageRedStone("test", "stage", None, PORT, self.config)
+        stage = pi.StageRedStone("test", "stage", PORT, self.config)
         stage.speed.value = {"x":0.1, "y":0.1}
         radius = 100e-6 # m
         # each step has to be big enough so that each move is above imprecision
@@ -244,7 +244,7 @@ class TestPIRedStone(unittest.TestCase):
             cur_pos = next_pos
 
     def test_future_callback(self):
-        stage = pi.StageRedStone("test", "stage", None, PORT, self.config)
+        stage = pi.StageRedStone("test", "stage", PORT, self.config)
         move_forth = {'x':1e-4}
         move_back = {'x':-1e-4}
         stage.speed.value = {"x":1e-3} # => 0.1s per move

@@ -900,7 +900,7 @@ class Bus(model.Actuator):
         # to acquire before sending anything on the serial port
         self.ser_access = threading.Lock()
         
-        self._action_mgr = ActionManager()
+        self._action_mgr = ActionManager(self)
         self._action_mgr.start()
 
     def _getPosition(self):
@@ -977,6 +977,8 @@ class Bus(model.Actuator):
         action = ActionFuture(MOVE_REL, action_axes, self.ser_access)
         self._action_mgr.append_action(action)
         return action
+    
+    # TODO implement moveAbs
 
     def stop(self):
         """
@@ -1094,7 +1096,7 @@ class ActionManager(threading.Thread):
                 pass
             
             # update position after the action is done
-            self._bus.updatePosition()
+            self._bus._updatePosition()
     
     def cancel_all(self):
         must_terminate = False

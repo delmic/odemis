@@ -30,7 +30,7 @@ logging.getLogger().setLevel(logging.INFO)
 if os.name == "nt":
     PORT = "COM1"
 else:
-    PORT = "/dev/ttyUSB0"
+    PORT = "/dev/ttyPIGCS" #"/dev/ttyUSB0"
 
 CONFIG_BUS_BASIC = {"x":(1, 1, False)}
 CONFIG_BUS_TWO = {"x":(1, 1, False), "x":(2, 1, False)}  
@@ -91,11 +91,11 @@ class TestActuator(unittest.TestCase):
         
         for name, kwargs in devices:
             print "opening ", name
-            stage = pigcs.Bus("test", "stage", None, **kwargs)
+            stage = pigcs.Bus("test", "stage", **kwargs)
             self.assertTrue(stage.selfTest(), "Controller self test failed.")
             
     def test_simple(self):
-        stage = pigcs.Bus("test", "stage", None, PORT, CONFIG_BUS_BASIC)
+        stage = pigcs.Bus("test", "stage", PORT, CONFIG_BUS_BASIC)
         move = {'x':0.01e-6}
         stage.moveRel(move)
         time.sleep(0.1) # wait for the move to finish
@@ -104,7 +104,7 @@ class TestActuator(unittest.TestCase):
         # For moves big enough, sync should always take more time than async
         delta = 0.0001 # s
         
-        stage = pigcs.Bus("test", "stage", None, PORT, CONFIG_BUS_BASIC)
+        stage = pigcs.Bus("test", "stage", PORT, CONFIG_BUS_BASIC)
         stage.speed.value = {"x":1e-3}
         move = {'x':100e-6}
         start = time.time()
@@ -135,7 +135,7 @@ class TestActuator(unittest.TestCase):
         delta_ratio = 2.0 # no unit 
         
         # fast move
-        stage = pigcs.Bus("test", "stage", None, PORT, CONFIG_BUS_BASIC)
+        stage = pigcs.Bus("test", "stage", PORT, CONFIG_BUS_BASIC)
         stage.speed.value = {"x":0.001} # max speed of E-861 in practice
         move = {'x':1e-3}
         start = time.time()
@@ -169,7 +169,7 @@ class TestActuator(unittest.TestCase):
                          " instead of " + str(expected_ratio) + ".")
 
     def test_stop(self):
-        stage = pigcs.Bus("test", "stage", None, PORT, CONFIG_BUS_BASIC)
+        stage = pigcs.Bus("test", "stage", PORT, CONFIG_BUS_BASIC)
         stage.stop()
         
         move = {'x':100e-6}
@@ -181,7 +181,7 @@ class TestActuator(unittest.TestCase):
         """
         Ask for several long moves in a row, and checks that nothing breaks
         """
-        stage = pigcs.Bus("test", "stage", None, PORT, CONFIG_BUS_BASIC)
+        stage = pigcs.Bus("test", "stage", PORT, CONFIG_BUS_BASIC)
         move_forth = {'x':1e-3}
         move_back = {'x':-1e-3}
         stage.speed.value = {"x":1e-3} # => 1s per move
@@ -202,7 +202,7 @@ class TestActuator(unittest.TestCase):
         self.assertGreaterEqual(dur, expected_time)
     
     def test_cancel(self):
-        stage = pigcs.Bus("test", "stage", None, PORT, CONFIG_BUS_BASIC)
+        stage = pigcs.Bus("test", "stage", PORT, CONFIG_BUS_BASIC)
         move_forth = {'x':1e-3}
         move_back = {'x':-1e-3}
         stage.speed.value = {"x":1e-3} # => 1s per move
@@ -230,7 +230,7 @@ class TestActuator(unittest.TestCase):
         f1.result() # wait for the move to be finished
         
     def test_not_cancel(self):
-        stage = pigcs.Bus("test", "stage", None, PORT, CONFIG_BUS_BASIC)
+        stage = pigcs.Bus("test", "stage", PORT, CONFIG_BUS_BASIC)
         small_move_forth = {'x':1e-4}
         stage.speed.value = {"x":1e-3} # => 0.1s per move
         # test cancel after done => not cancelled
@@ -260,7 +260,7 @@ class TestActuator(unittest.TestCase):
         if len(devices) < 2:
             self.skipTest("Couldn't find two controllers")
         
-        stage = pigcs.Bus("test", "stage", None, PORT, CONFIG_BUS_TWO)
+        stage = pigcs.Bus("test", "stage", PORT, CONFIG_BUS_TWO)
         stage.speed.value = {"x":1e-3, "y":1e-3}
         radius = 100e-6 # m
         # each step has to be big enough so that each move is above imprecision
@@ -278,7 +278,7 @@ class TestActuator(unittest.TestCase):
             cur_pos = next_pos
 
     def test_future_callback(self):
-        stage = pigcs.Bus("test", "stage", None, PORT, CONFIG_BUS_BASIC)
+        stage = pigcs.Bus("test", "stage", PORT, CONFIG_BUS_BASIC)
         move_forth = {'x':1e-4}
         move_back = {'x':-1e-4}
         stage.speed.value = {"x":1e-3} # => 0.1s per move

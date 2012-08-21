@@ -825,6 +825,7 @@ class StageRedStone(model.Actuator):
         # Not to be mistaken with axes which is a simple public view
         self._axis_to_child = {} # axis name => (PIRedStone, channel)
         # TODO also a rangesRel : min and max of a step 
+        position = {}
         speed = {}
         controllers = {} # address => PIRedStone
         for axis, (add, channel) in axes.items():
@@ -834,12 +835,16 @@ class StageRedStone(model.Actuator):
             controller = controllers[add]
             self._axis_to_child[axis] = (controller, channel)
             
+            position[axis] = controller.getPosition(channel)
             # TODO request also the ranges from the arguments?
             # For now we put very large one
             self._ranges[axis] = [0, 1] # m
             # Just to make sure it doesn't go too fast
             speed[axis] = 0.1 # m/s
-            
+        
+        # RO, as to modify it the client must use .moveRel() or .moveAbs()
+        self.position = model.VigilantAttribute(position, unit="m", readonly=True)
+        
         # min speed = don't be crazy slow. max speed from hardware spec
         self.speed = model.MultiSpeedVA(speed, range=[10e-6, 0.5], unit="m/s",
                                         setter=self.setSpeed)
@@ -855,15 +860,37 @@ class StageRedStone(model.Actuator):
         # to acquire before sending anything on the serial port
         self.ser_access = threading.Lock()
         
-        self._action_mgr = ActionManager()
+        self._action_mgr = ActionManager(self)
         self._action_mgr.start()
-        
-    def getMetadata(self):
-        metadata = {}
-        pos = self.getPosition()
-        metadata[model.MD_POS] = (pos["x"], pos["y"])
-        return metadata
     
+    def _getPosition(self):
+        """
+        return (dict string -> float): axis name to (absolute) position
+        Note: this is very approximate
+        """
+        position = {}
+        with self.ser_access:
+            # send stop to all controllers (including the ones not in action)
+            for axis, (controller, channel) in self._axis_to_child.items():
+                position[axis] = controller.getPosition(channel)
+        
+        return position
+
+    # TODO needs to be triggered by end of action, or directly controller? 
+    # maybe whenever a controller updates it's position?
+    # How to avoid updating each axis one-by-one?
+    # Maybe we should just do it regularly as long as there are actions in the queue
+    def _updatePosition(self):
+        """
+        update the position VA
+        Note: it should not be called while holding the lock to the serial port
+        """
+        pos = self._getPosition() # TODO: improve efficiency
+        
+        # it's read-only, so we change it via _value
+        self.position._value = pos
+        self.position.notify(self.position.value)
+
     def getSerialDriver(self, name):
         """
         return (string): the name of the serial driver used for the given port
@@ -877,7 +904,7 @@ class StageRedStone(model.Actuator):
                 return "Unknown"
         else:
             return "Unknown"
-    
+
     def setSpeed(self, value):
         """
         value (dict string-> float): speed for each axis
@@ -887,20 +914,7 @@ class StageRedStone(model.Actuator):
             controller, channel = self._axis_to_child[axis]
             controller.setSpeed(channel, v)
         return value
-    
-    def getPosition(self):
-        """
-        return (dict string -> float): axis name to (absolute) position
-        Note: this is very approximate
-        """
-        position = {}
-        with self.ser_access:
-            # send stop to all controllers (including the ones not in action)
-            for axis, (controller, channel) in self._axis_to_child.items():
-                position[axis] = controller.getPosition(channel)
-        
-        return position
-    
+
     @isasync
     def moveRel(self, shift):
         """
@@ -1014,13 +1028,14 @@ class ActionManager(threading.Thread):
     For each action in the queue: performs and wait until the action is finished
     At the end of the action, call all the callbacks
     """
-    def __init__(self, name="PI RedStone action manager"):
+    def __init__(self, bus, name="PI RedStone action manager"):
         threading.Thread.__init__(self, name=name)
         self.daemon = True # If the backend is gone, just die
 
         self.action_queue_cv = threading.Condition()
         self.action_queue = collections.deque()
         self.current_action = None
+        self._bus = bus
     
     def run(self):
         while True:
@@ -1040,6 +1055,9 @@ class ActionManager(threading.Thread):
             except futures.CancelledError:
                 # cancelled in the mean time: skip the action
                 pass
+            
+            # update position after the action is done
+            self._bus._updatePosition()
             
     def cancel_all(self):
         must_terminate = False
