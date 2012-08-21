@@ -33,17 +33,17 @@ import wx
 import wx.combo
 import wx.lib.newevent
 
-import odemis.gui.img.data as img
+import gui.img.data as img
 
-from odemis.gui.log import log
-from odemis.gui.comp.buttons import ImageButton, ImageToggleButton, \
+from gui.log import log
+from gui.comp.buttons import ImageButton, ImageToggleButton, \
     ImageTextToggleButton, ColourButton, PopupImageButton
-from odemis.gui.comp.text import SuggestTextCtrl, IntegerTextCtrl, \
+from gui.comp.text import SuggestTextCtrl, IntegerTextCtrl, \
     UnitIntegerCtrl
-from odemis.gui.comp.foldpanelbar import FoldPanelItem
-from odemis.gui.comp.slider import CustomSlider
-from odemis.gui.util.conversion import wave2hex
-from odemis.gui.img.data import getemptyBitmap
+from gui.comp.foldpanelbar import FoldPanelItem
+from gui.comp.slider import CustomSlider
+from gui.util.conversion import wave2hex
+from gui.img.data import getemptyBitmap
 
 TEST_STREAM_LST = ["Aap", u"nöot", "noot", "mies", "kees", "vuur",
                   "quantummechnica", "Repelsteeltje", "", "XXX", "a", "aa",

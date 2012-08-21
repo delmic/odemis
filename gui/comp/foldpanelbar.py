@@ -3,8 +3,8 @@
 import wx
 from wx.lib.agw.aui.aui_utilities import StepColour
 
-from odemis.gui.log import log
-from odemis.gui.img.data import getarr_rightBitmap, getarr_downBitmap
+from gui.log import log
+from gui.img.data import getarr_rightBitmap, getarr_downBitmap
 
 
 CAPTION_BAR_SIZE = (-1, 40)

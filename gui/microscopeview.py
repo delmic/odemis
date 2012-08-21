@@ -2,8 +2,8 @@
 
 import wx
 
-import odemis.gui.units as units
-from odemis.gui.instrmodel import InstrumentalImage
+import gui.units as units
+from gui.instrmodel import InstrumentalImage
 
 
 class MicroscopeView(object):

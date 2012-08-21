@@ -30,7 +30,7 @@ import sys
 import wx
 import wx.lib.mixins.listctrl as listmix
 
-from odemis.gui.log import log
+from gui.log import log
 
 # Locale is needed for correct string sorting
 locale.setlocale(locale.LC_ALL, "")

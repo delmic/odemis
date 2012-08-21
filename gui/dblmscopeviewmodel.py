@@ -25,7 +25,7 @@ Delmic Acquisition Software. If not, see http://www.gnu.org/licenses/.
 """
 
 from instrmodel import InstrumentalImage
-from odemis.model import VigilantAttribute
+from model import VigilantAttribute
 
 class DblMscopeViewModel(object):
     """

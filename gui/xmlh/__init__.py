@@ -13,24 +13,24 @@ def odemis_get_resources():
         non-standard controls defined in the XRC file.
     """
 
-    import odemis.gui.main_xrc
+    import gui.main_xrc
 
-    if odemis.gui.main_xrc.__res == None:
-        from odemis.gui.xmlh.xh_delmic import HANDLER_CLASS_LIST
-        odemis.gui.main_xrc.__init_resources()
+    if gui.main_xrc.__res == None:
+        from gui.xmlh.xh_delmic import HANDLER_CLASS_LIST
+        gui.main_xrc.__init_resources()
         for handler_klass in HANDLER_CLASS_LIST:
-            odemis.gui.main_xrc.__res.InsertHandler(handler_klass())
-    return odemis.gui.main_xrc.__res
+            gui.main_xrc.__res.InsertHandler(handler_klass())
+    return gui.main_xrc.__res
 
 def odemis_get_test_resources():
     """ This function provides access to the XML handlers needed by
         the test  GUI.
     """
-    import odemis.gui.test.test_gui
+    import gui.test.test_gui
 
-    if odemis.gui.test.test_gui.__res == None:
-        from odemis.gui.xmlh.xh_delmic import HANDLER_CLASS_LIST
-        odemis.gui.test.test_gui.__init_resources()
+    if gui.test.test_gui.__res == None:
+        from gui.xmlh.xh_delmic import HANDLER_CLASS_LIST
+        gui.test.test_gui.__init_resources()
         for handler_klass in HANDLER_CLASS_LIST:
-            odemis.gui.test.test_gui.__res.InsertHandler(handler_klass())
-    return odemis.gui.test.test_gui.__res
+            gui.test.test_gui.__res.InsertHandler(handler_klass())
+    return gui.test.test_gui.__res
