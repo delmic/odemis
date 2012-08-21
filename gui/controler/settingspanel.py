@@ -94,9 +94,9 @@ class SettingsSideBar(object):
     def add_ccd(self, comp):
         self._optical_panel.add_ro_value("Camera", comp.name)
 
-        vigil_attrs = []
+        vigil_attrs = model.getVAs(comp)
 
-        for name, value in inspect.getmembers(comp, lambda x: isinstance(x, model.VigilantAttributeBase)):
+        for name, value in vigil_attrs.iteritems():
             log.warn(name)
             self._optical_panel.add_value(name, value)
 
