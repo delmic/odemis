@@ -14,10 +14,10 @@ should be started first.
 Run as "odemisd ...", with ... replaced by the correct arguments.
 See "odemisd --help" for information.
 For example:
-PYTHONPATH=./:../Pyro4/src/ ./odemisd/main.py --daemonize --log-level=2 odemisd/test/optical-sim.odm.yaml
+PYTHONPATH=./src/:../Pyro4/src/ ./src/odemis/odemisd/main.py --daemonize --log-level=2 src/odemis/odemisd/test/optical-sim.odm.yaml
 
 To use the command line interface use:
-PYTHONPATH=./:../Pyro4/src/ ./cli/main.py --help
+PYTHONPATH=./:../Pyro4/src/ ./src/odemis/cli/main.py --help
 
 = License =
 GPLv2, see the LICENSE.txt file for the complete license.
