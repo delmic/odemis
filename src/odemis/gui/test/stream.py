@@ -15,7 +15,6 @@ import wx
 from wx.lib.inspection import InspectionTool
 
 import odemis.gui.test.test_gui
-
 from odemis.gui.comp.stream import FixedStreamPanelEntry, CustomStreamPanelEntry
 from odemis.gui.xmlh import odemis_get_test_resources
 
@@ -41,12 +40,12 @@ def loop():
 
 class TestApp(wx.App):
     def __init__(self):
-        gui.test.test_gui.get_resources = odemis_get_test_resources
+        odemis.gui.test.test_gui.get_resources = odemis_get_test_resources
         self.test_frame = None
         wx.App.__init__(self, redirect=False)
 
     def OnInit(self):
-        self.test_frame = gui.test.test_gui.xrcstream_frame(None)
+        self.test_frame = odemis.gui.test.test_gui.xrcstream_frame(None)
         self.test_frame.SetSize((400, 400))
         self.test_frame.Center()
         self.test_frame.Layout()

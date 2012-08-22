@@ -18,7 +18,7 @@ from odemis.gui.xmlh import odemis_get_test_resources
 
 SLEEP_TIME = 100 # Sleep timer in milliseconds
 MANUAL = True # If manual is set to True, the window will be kept open at the end
-INSPECT = True
+INSPECT = False
 
 TEST_LST = ["Aap", u"nöot", "noot", "mies", "kees", "vuur", "quantummechnica",
             "Repelsteeltje", "", "XXX", "a", "aa", "aaa", "aaaa",
@@ -38,12 +38,12 @@ def loop():
 
 class TestApp(wx.App):
     def __init__(self):
-        gui.test.test_gui.get_resources = odemis_get_resources
+        odemis.gui.test.test_gui.get_resources = odemis_get_test_resources
         self.test_frame = None
         wx.App.__init__(self, redirect=False)
 
     def OnInit(self):
-        self.test_frame = gui.test.test_gui.xrctext_frame(None)
+        self.test_frame = odemis.gui.test.test_gui.xrctext_frame(None)
         self.test_frame.SetSize((400, 400))
         self.test_frame.Center()
         self.test_frame.Layout()

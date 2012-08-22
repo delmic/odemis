@@ -25,11 +25,12 @@ Delmic Acquisition Software. If not, see http://www.gnu.org/licenses/.
 """
 
 import logging
-from odemis import model
+
 import numpy
 import wx
 
-from odemis.model import VigilantAttribute
+from odemis.model import VigilantAttribute, MD_POS, MD_PIXEL_SIZE, \
+    MD_SENSOR_PIXEL_SIZE
 
 class SECOMModel(object):
     """
@@ -87,9 +88,10 @@ class OpticalBackendConnected(SECOMModel):
 
 
         try:
-            self.prev_pos = (self.stage.position["x"], self.stage.position["y"])
+            self.prev_pos = (self.stage.position.value["x"],
+                             self.stage.position.value["y"])
         except (KeyError, AttributeError):
-            self.prev_pos = (0,0)
+            self.prev_pos = (0, 0)
         # override
         self.stage_pos = VigilantAttribute(self.prev_pos) # (m,m) => (X,Y)
         self.stage_pos.subscribe(self.avOnStagePos)
@@ -112,17 +114,17 @@ class OpticalBackendConnected(SECOMModel):
 
         try:
             # TODO should be initialised by backend
-            pos = data.metadata[model.MD_POS]
+            pos = data.metadata[MD_POS]
         except KeyError:
             logging.warning("position of image unknown")
             pos = self.prev_pos # at least it shouldn't be too wrong
 
         try:
-            mpp = data.metadata[model.MD_PIXEL_SIZE][0]
+            mpp = data.metadata[MD_PIXEL_SIZE][0]
         except KeyError:
             logging.warning("pixel density of image unknown")
             # Hopefully it'll be within the same magnitude
-            mpp = data.metadata[model.MD_SENSOR_PIXEL_SIZE][0] / 60 # XXX
+            mpp = data.metadata[MD_SENSOR_PIXEL_SIZE][0] / 60 # XXX
 
 #        h = hpy() # memory profiler
 #        print h.heap()
