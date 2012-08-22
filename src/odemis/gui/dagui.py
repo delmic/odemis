@@ -7,13 +7,13 @@ Created on 31 jan 2012
 
 Copyright © 2012 Éric Piel, Delmic
 
-This file is part of Delmic Acquisition Software.
+This file is part of Odemis.
 
-Delmic Acquisition Software is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 2 of the License, or (at your option) any later version.
+Odemis is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 2 of the License, or (at your option) any later version.
 
-Delmic Acquisition Software is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with Delmic Acquisition Software. If not, see http://www.gnu.org/licenses/.
+You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 
 from dblmscopepanel import DblMicroscopePanel
@@ -61,11 +61,6 @@ class DAGuiFrame(wx.Frame):
         self.Bind(wx.EVT_MENU, self.ToggleCross, self.menuCross)
         menuBar.Append(viewmenu, "&View")
 
-        helpmenu = wx.Menu()
-        menuAbout = helpmenu.Append(wx.ID_ABOUT, "&About", "Information about this program")
-        self.Bind(wx.EVT_MENU, self.OnAbout, menuAbout)
-        menuBar.Append(helpmenu, "&Help")
-
         self.SetMenuBar(menuBar)
 
         # Last directory visited (for file open)
@@ -79,15 +74,6 @@ class DAGuiFrame(wx.Frame):
 
         # Finish by displaying the window
         self.Show(True)
-
-    def OnAbout(self, e):
-        message = ("Delmic Acquisition Software for managing microscope.\n" +
-                   "Copyright © 2012 Delmic B.V.\n" +
-                   "Licensed under the GNU General Public License version 2")
-        dlg = wx.MessageDialog(self, message,
-                               "About " + OFFICIAL_NAME, wx.OK)
-        dlg.ShowModal() # blocking
-        dlg.Destroy()
 
     def OnClose(self, e):
         self.Destroy()
