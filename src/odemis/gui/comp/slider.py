@@ -1,10 +1,10 @@
+# -*- coding: utf-8 -*-
 
 import wx
-from wx.lib.agw.aui.aui_utilities import StepColour, MakeDisabledBitmap, \
-    DarkenBitmap
+
+from wx.lib.agw.aui.aui_utilities import StepColour
 
 from odemis.gui.img.data import getsliderBitmap, getslider_disBitmap
-#from odemis.gui.log import log
 
 class Slider(wx.Slider):
     """ This custom Slider class was implemented so it would not capture
@@ -37,8 +37,9 @@ class CustomSlider(wx.PyPanel):
     Custom Slider class
     """
 
-    def __init__(self, parent, id=wx.ID_ANY, value=0.0, val_range=(0.0, 1.0), size=(-1, -1),
-                    pos=wx.DefaultPosition, style=wx.NO_BORDER, name="CustomSlider"):
+    def __init__(self, parent, id=wx.ID_ANY, value=0.0, val_range=(0.0, 1.0),
+                 size=(-1, -1), pos=wx.DefaultPosition, style=wx.NO_BORDER,
+                 name="CustomSlider"):
 
         """
         Default class constructor.
@@ -71,6 +72,9 @@ class CustomSlider(wx.PyPanel):
         self.handle_width, self.handle_height = self.bitmap.GetSize()
         self.half_h_width = self.handle_width / 2
         self.half_h_height = self.handle_height / 2
+
+        # A text control linked to the slider
+        self.linked_field = None
 
         #Events
         self.Bind(wx.EVT_PAINT, self.OnPaint)
@@ -155,6 +159,13 @@ class CustomSlider(wx.PyPanel):
     def OnMotion(self, event=None):
         if self.GetCapture():
             self.getPointerLimitPos(event.GetX())
+
+            if self.linked_field:
+                if hasattr(self.linked_field, 'SetValueStr'):
+                    self.linked_field.SetValueStr(self.current_value)
+                else:
+                    self.linked_field.SetValue(self.current_value)
+
             self.Refresh()
 
 
@@ -176,7 +187,9 @@ class CustomSlider(wx.PyPanel):
 
     def _pixel_to_val(self):
         prcnt = float(self.pointerPos) / (self.GetSize()[0] - self.handle_width)
-        return int((self.value_range[1] - self.value_range[0]) * prcnt + self.value_range[0])
+        #return int((self.value_range[1] - self.value_range[0]) * prcnt + self.value_range[0])
+        return (self.value_range[1] - self.value_range[0]) * prcnt + self.value_range[0]
+
 
     def SetValue(self, value):
         if value < self.value_range[0]:
@@ -195,4 +208,7 @@ class CustomSlider(wx.PyPanel):
 
     def GetRange(self, range):
         self.value_range = range
+
+    def set_linked_field(self, text_ctrl):
+        self.linked_field = text_ctrl
 
