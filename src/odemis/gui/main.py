@@ -15,6 +15,7 @@ import wx
 
 import Pyro4.errors
 
+from odemis import __version__
 from odemis import model
 from odemis.gui import main_xrc
 
@@ -22,6 +23,7 @@ from odemis.gui.xmlh import odemis_get_resources
 from odemis.gui.log import log, create_gui_logger
 from odemis.gui.instrmodel import OpticalBackendConnected
 from odemis.gui.controler.settingspanel import SettingsSideBar
+from odemis.gui.controler.acquisition import AcquisitionController
 
 
 class OdemisGUIApp(wx.App):
@@ -113,19 +115,18 @@ class OdemisGUIApp(wx.App):
             # Do a final layout of the fold panel bar
             #wx.CallAfter(self.main_frame.fpb_settings.FitBar)
 
-            ##################################################
-            # TEST CODE
-            ##################################################
-            def dodo(evt):
-                from odemis.gui.comp.stream import CustomStreamPanelEntry
-                # fp = FixedStreamPanelEntry(self.main_frame.pnl_stream,
-                #                            label="First Fixed Stream")
-                fp = CustomStreamPanelEntry(self.main_frame.pnl_stream,
-                                            label="Custom Stream")
-                self.main_frame.pnl_stream.add_stream(fp)
-
-            self.main_frame.btn_aquire.Bind(wx.EVT_BUTTON, dodo)
-
+#            ##################################################
+#            # TEST CODE
+#            ##################################################
+#            def dodo(evt):
+#                from odemis.gui.comp.stream import CustomStreamPanelEntry
+#                # fp = FixedStreamPanelEntry(self.main_frame.pnl_stream,
+#                #                            label="First Fixed Stream")
+#                fp = CustomStreamPanelEntry(self.main_frame.pnl_stream,
+#                                            label="Custom Stream")
+#                self.main_frame.pnl_stream.add_stream(fp)
+#
+#            self.main_frame.btn_aquire.Bind(wx.EVT_BUTTON, dodo)
 
 
 
@@ -143,6 +144,10 @@ class OdemisGUIApp(wx.App):
             wx.EVT_MENU(self.main_frame,
                         self.main_frame.menu_item_inspect.GetId(),
                         self.on_inspect)
+            
+            wx.EVT_MENU(self.main_frame,
+                        self.main_frame.menu_item_about.GetId(),
+                        self.on_about)
 
             # wx.EVT_MENU(self.main_frame, self.main_frame.menu_item_debug.GetId(), self.on_debug)
             # wx.EVT_MENU(self.main_frame, self.main_frame.menu_item_error.GetId(), self.on_send_report)
@@ -182,6 +187,8 @@ class OdemisGUIApp(wx.App):
 
             #print_microscope_tree(microscope)
 
+            self.acquisition_controller = AcquisitionController(self.main_frame)
+            
         except Exception:
             self.excepthook(*sys.exc_info())
             #raise
@@ -238,6 +245,16 @@ class OdemisGUIApp(wx.App):
     def on_timer(self, event): #pylint: disable=W0613
         """ Timer stuff """
         pass
+
+    def on_about(self, evt):
+        message = ("%s\n%s\n\nLicensed under the %s." % 
+                   (__version__.name,
+                    __version__.copyright,
+                    __version__.license))
+        dlg = wx.MessageDialog(self.main_frame, message,
+                               "About " + __version__.shortname, wx.OK)
+        dlg.ShowModal() # blocking
+        dlg.Destroy()
 
     def on_inspect(self, evt):
         from wx.lib.inspection import InspectionTool
