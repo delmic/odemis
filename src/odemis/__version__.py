@@ -25,10 +25,8 @@ def _get_version():
         return "version unknown"
     
     try:
-        p = subprocess.Popen(["git", "describe",
-                              "--tags", "--dirty", "--always"],
-                             stdout=subprocess.PIPE)
-        return p.stdout.read().strip()
+        out = subprocess.check_output(["git", "describe", "--tags", "--dirty", "--always"])
+        return out.strip()
     except EnvironmentError:
         print "unable to run git"
         return "version unknown"
@@ -37,5 +35,6 @@ version = _get_version()
 name = "Open Delmic Microscope Software"
 shortname = "Odemis"
 copyright = "Copyright © 2012 Delmic"
+license = "GNU General Public License version 2"
 
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:

@@ -539,8 +539,8 @@ def main(args):
     # arguments handling 
     parser = argparse.ArgumentParser(description=__version__.name)
 
-    parser.add_argument('--version', action='version', 
-                        version=__version__.name + " " + __version__.version + " – " + __version__.copyright)
+    parser.add_argument('--version', dest="version", action='store_true',
+                        help="show program's version number and exit")
     opt_grp = parser.add_argument_group('Options')
     opt_grp.add_argument("--log-level", dest="loglev", metavar="<level>", type=int,
                         default=0, help="Set verbosity level (0-2, default = 0)")
@@ -574,6 +574,13 @@ def main(args):
                          help="Display and update an image on the screen (default data-flow is \"data\")")
     
     options = parser.parse_args(args[1:])
+    
+    # Cannot use the internal feature, because it doesn't support multiline
+    if options.version:
+        print (__version__.name + " " + __version__.version + "\n" +
+               __version__.copyright + "\n" + 
+               "Licensed under the " + __version__.license)
+        return 0
     
     # Set up logging before everything else
     if options.loglev < 0:
