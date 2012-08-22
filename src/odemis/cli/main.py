@@ -484,7 +484,7 @@ def acquire(comp_name, dataflow_names, filename):
             logging.error("Failed to acquire image from component '%s'", comp_name)
             return 127
     
-    tiff.ImageExporter.export(images[0], filename)
+    tiff.export(images[0], filename)
     return 0
 
 def live_display(comp_name, df_name):

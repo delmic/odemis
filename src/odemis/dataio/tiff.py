@@ -39,57 +39,53 @@ DATagToTiffTag = {model.MD_SW_VERSION: ("TIFFTAG_SOFTWARE", str),
 #TIFFTAG_YRESOLUTION
 #TIFFTAG_RESOLUTIONUNIT
 # TODO how to put our own tags?
-class ImageExporter(object):
-    '''
-    Export TIFF images
-    '''
 
-    @staticmethod
-    def _saveAsTiffGDAL(data, filename):
-        """
-        Saves a DataArray as a TIFF file.
-        data (ndarray): 2D data of int or float
-        filename (string): name of the file to save
-        """
-    
-        driver = gdal.GetDriverByName("GTiff")
-        
-        # gdal expects the data to be in 'F' order, but it's in 'C'
-        # TODO check this from numpy!
-        data.shape = (data.shape[1], data.shape[0])
-        ds = gdal_array.OpenArray(data)
-        data.shape = (data.shape[1], data.shape[0])
-        for key, val in data.metadata.items():
-            if key in DATagToTiffTag:
-                ds.SetMetadataItem(DATagToTiffTag[key][0], DATagToTiffTag[key][1](val))
-        driver.CreateCopy(filename, ds) # , options=["COMPRESS=LZW"] # LZW makes test image bigger
-    
-    @staticmethod
-    def _saveAsTiffPIL(array, filename):
-        """
-        Saves an array as a TIFF file.
-        array (ndarray): 2D array of int or float
-        filename (string): name of the file to save
-        """
-        # Two memory copies for one conversion! because of the stride, fromarray() does as bad
-        pil_im = Image.fromarray(array)
-        #pil_im = Image.fromstring('I', size, array.tostring(), 'raw', 'I;16', 0, -1)
-        # 16bits files are converted to 32 bit float TIFF with PIL
-        pil_im.save(filename, "TIFF") 
+# TODO no need for a class with only staticmethods!
+# => just a module with a bunch of functions
 
-    # TODO need better interface, to allow multiple page export. => A list of data?
-    # TODO interface must support thumbnail export as well
-    @staticmethod
-    def export(data, filename):
-        '''
-        Write a TIFF file with the given image and metadata
-        data (model.DataArray): the data to export, must be 2D of int or float
-            metadata is taken directly from the data object.
-        filename (string): filename of the file to create (including path)
-        '''
-        # TODO should probably not enforce it: respect duck typing
-        assert(isinstance(data, model.DataArray))
-        ImageExporter._saveAsTiffGDAL(data, filename)
-        
-        
-        
+# Export part
+def _saveAsTiffGDAL(data, filename):
+    """
+    Saves a DataArray as a TIFF file.
+    data (ndarray): 2D data of int or float
+    filename (string): name of the file to save
+    """
+    driver = gdal.GetDriverByName("GTiff")
+    
+    # gdal expects the data to be in 'F' order, but it's in 'C'
+    # TODO check this from numpy!
+    data.shape = (data.shape[1], data.shape[0])
+    ds = gdal_array.OpenArray(data)
+    data.shape = (data.shape[1], data.shape[0])
+    for key, val in data.metadata.items():
+        if key in DATagToTiffTag:
+            ds.SetMetadataItem(DATagToTiffTag[key][0], DATagToTiffTag[key][1](val))
+    driver.CreateCopy(filename, ds) # , options=["COMPRESS=LZW"] # LZW makes test image bigger
+
+def _saveAsTiffPIL(array, filename):
+    """
+    Saves an array as a TIFF file.
+    array (ndarray): 2D array of int or float
+    filename (string): name of the file to save
+    """
+    # Two memory copies for one conversion! because of the stride, fromarray() does as bad
+    pil_im = Image.fromarray(array)
+    #pil_im = Image.fromstring('I', size, array.tostring(), 'raw', 'I;16', 0, -1)
+    # 16bits files are converted to 32 bit float TIFF with PIL
+    pil_im.save(filename, "TIFF") 
+
+# TODO need better interface, to allow multiple page export. => A list of data?
+# TODO interface must support thumbnail export as well
+def export(data, filename):
+    '''
+    Write a TIFF file with the given image and metadata
+    data (model.DataArray): the data to export, must be 2D of int or float
+        metadata is taken directly from the data object.
+    filename (string): filename of the file to create (including path)
+    '''
+    # TODO should probably not enforce it: respect duck typing
+    assert(isinstance(data, model.DataArray))
+    _saveAsTiffGDAL(data, filename)
+    
+    
+    
