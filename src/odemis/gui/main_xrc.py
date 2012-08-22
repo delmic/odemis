@@ -368,7 +368,7 @@ def __init_resources():
                               </XRCED>
                             </object>
                             <object class="FoldPanelItem">
-                              <object class="wxPanel" name="pnl_stream" subclass="gui.comp.stream.StreamPanel">
+                              <object class="wxPanel" name="pnl_stream" subclass="odemis.gui.comp.stream.StreamPanel">
                                 <fg>#7F7F7F</fg>
                                 <bg>#333333</bg>
                                 <XRCED>
