@@ -36,6 +36,7 @@ class xrcfr_main(wx.Frame):
         self.PostCreate(pre)
 
         # Define variables for the controls, bind event handlers
+        self.menu_item_qacquire = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_qacquire"))
         self.menu_item_quit = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_quit"))
         self.menu_item_inspect = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_inspect"))
         self.menu_item_debug = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_debug"))
@@ -77,6 +78,14 @@ def __init_resources():
     <object class="wxMenuBar">
       <object class="wxMenu">
         <label>File</label>
+        <object class="wxMenuItem" name="menu_item_qacquire">
+          <label>Save Snapshot</label>
+          <accel>Ctrl+P</accel>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
+        <object class="separator"/>
         <object class="wxMenuItem" name="menu_item_quit">
           <label>Quit</label>
           <XRCED>
