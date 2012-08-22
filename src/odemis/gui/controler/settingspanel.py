@@ -1,6 +1,7 @@
 #-*- coding: utf-8 -*-
 
 import math
+import re
 
 import wx
 
@@ -75,6 +76,10 @@ class SettingsPanel(object):
         self._clear()
 
         # Create label
+
+        label = re.sub(r"([A-Z])", r" \1", label)
+        label = label.capitalize()
+
         self._sizer.Add(wx.StaticText(self.panel, -1, "%s:" % label),
                         (self.num_entries, 0), flag=wx.ALL, border=5)
 
