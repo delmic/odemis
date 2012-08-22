@@ -185,7 +185,7 @@ def print_vattribute(name, va):
     # we cannot discover if it continuous or enumerated, just try and see if it fails
     try:
         varange = va.range
-        str_range = " (range: %s -> %s)" % (str(varange[0]), str(varange[1]))
+        str_range = " (range: %s → %s)" % (str(varange[0]), str(varange[1]))
     except (AttributeError, model.NotApplicableError):
         str_range = ""
         
