@@ -40,6 +40,7 @@ class xrcfr_main(wx.Frame):
         self.menu_item_quit = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_quit"))
         self.menu_item_inspect = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_inspect"))
         self.menu_item_debug = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_debug"))
+        self.menu_item_about = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_about"))
         self.tab_btn_live = xrc.XRCCTRL(self, "tab_btn_live")
         self.tab_btn_gallery = xrc.XRCCTRL(self, "tab_btn_gallery")
         self.pnl_tab_live = xrc.XRCCTRL(self, "pnl_tab_live")
@@ -103,6 +104,13 @@ def __init_resources():
         <object class="wxMenuItem" name="menu_item_debug">
           <label>Debug</label>
           <checkable>1</checkable>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
+        <object class="separator"/>
+        <object class="wxMenuItem" name="menu_item_about">
+          <label>About</label>
           <XRCED>
             <assign_var>1</assign_var>
           </XRCED>

@@ -33,6 +33,13 @@
             <assign_var>1</assign_var>
           </XRCED>
         </object>
+        <object class="separator"/>
+        <object class="wxMenuItem" name="menu_item_about">
+          <label>About</label>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
         <label>Help</label>
       </object>
     </object>
