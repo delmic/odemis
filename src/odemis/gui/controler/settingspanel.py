@@ -1,11 +1,17 @@
 #-*- coding: utf-8 -*-
 
+import math
+
 import wx
+
+import odemis.gui.comp.text as text
 
 from ..comp.foldpanelbar import FoldPanelItem
 from odemis.gui.log import log
-from odemis.model import getVAs
-from odemis.model import NotApplicableError
+from odemis.gui.comp.slider import CustomSlider
+from odemis.model import getVAs, NotApplicableError
+
+
 
 MAIN_FRAME = None
 
@@ -33,11 +39,13 @@ class SettingsPanel(object):
 
         self.panel.SetForegroundColour(FOREGROUND_COLOUR_DIS)
         self._sizer.Add(wx.StaticText(self.panel, -1, default_msg),
-                        (0, 0), flag=wx.ALL, border=5)
+                        (0, 1), flag=wx.ALL, border=5)
         self.panel.SetForegroundColour(FOREGROUND_COLOUR)
 
         self.panel.SetSizer(self._sizer)
         self.fb_panel.add_item(self.panel)
+
+        self._sizer.AddGrowableCol(1)
 
         self.num_entries = 0
 
@@ -105,20 +113,74 @@ class SettingsPanel(object):
             val  = value.value
             ctrl = None
 
-
             if has_choices:
                 pass
             elif has_range:
-                pass
+                if isinstance(val, (int, float)):
+                    ctrl = CustomSlider(self.panel, value=val,
+                                        val_range=value.range,
+                                        size=(30, 15),
+                                        pos=(-1, 10),
+                                        style=wx.SL_HORIZONTAL)
 
+                    # Experience showed that 255 steps is a nice number
+                    # for keyboard inc/dec of the value
+                    step = (value.range[1] - value.range[0]) / 255.0
+                    # To keep the inc/dec values 'clean', set the step
+                    # value to the nearest power of 10
+                    step = 10 ** round(math.log10(step))
+
+                    if isinstance(val, int):
+                        klass = text.UnitIntegerCtrl
+                        # We want an integer.
+                        step = max(step, 1)
+                    else:
+                        klass = text.UnitFloatCtrl
+
+                    txt = klass(self.panel, -1,
+                                val,
+                                style=wx.NO_BORDER,
+                                size=(60, -1),
+                                min_val=value.range[0],
+                                max_val=value.range[1],
+                                unit=unit,
+                                accuracy=2,
+                                step=step)
+
+                    txt.SetForegroundColour("#2FA7D4")
+                    txt.SetBackgroundColour(self.panel.GetBackgroundColour())
+
+                    ctrl.set_linked_field(txt)
+                    txt.set_linked_slider(ctrl)
+
+                    self._sizer.Add(txt, (self.num_entries, 2),
+                            flag=wx.ALL, border=5)
+
+                # if isinstance(val, int):
+                #     ctrl = text.UnitIntegerCtrl(self.panel,
+                #                                 -1,
+                #                                 val,
+                #                                 unit=unit,
+                #                                 min_val=value.range[0],
+                #                                 max_val=value.range[1])
+                # elif isinstance(val, float):
+                #      ctrl = text.UnitFloatCtrl(self.panel,
+                #                               -1,
+                #                               val,
+                #                               unit=unit,
+                #                               min_val=value.range[0],
+                #                               max_val=value.range[1])
+
+            # Default representation
             if not ctrl:
                 lbl = unicode("%s %s" % (val, unit))
                 ctrl = wx.StaticText(self.panel, -1, lbl)
 
             self._sizer.Add(ctrl, (self.num_entries, 1),
-                            flag=wx.ALL, border=5)
+                            flag=wx.ALL|wx.EXPAND, border=5)
 
         self.num_entries += 1
+
         self.fb_panel.Parent.Layout()
 
 

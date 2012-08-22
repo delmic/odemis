@@ -472,15 +472,24 @@ class NumberTextCtrl(wx.TextCtrl):
 
         key_inc = kwargs.pop('key_inc', True)
         self.step = kwargs.pop('step', 1)
+        self.accuracy = kwargs.pop('accuracy', 0)
 
         # For the wx.EVT_TEXT_ENTER event to work, the TE_PROCESS_ENTER
         # style needs to be set, but setting it in XRC throws an error
         # A possible workaround is to include the style by hand
         kwargs['style'] = kwargs.get('style', 0) | wx.TE_PROCESS_ENTER
 
+        if len(args) > 2:
+            val = args[2]
+            args = args[:2]
+        else:
+            val = kwargs.pop('value', None)
+
+        # A slider control can be linkes to this text ctrl
+        self.linked_slider = None
+
         wx.TextCtrl.__init__(self, *args, **kwargs)
 
-        val = args[2] if len(args) > 2 else kwargs.get('value', None)
 
         # Set the value so it will be validated to be a valid integer
         if val:
@@ -494,6 +503,9 @@ class NumberTextCtrl(wx.TextCtrl):
 
         self.Bind(wx.EVT_TEXT_ENTER, self.on_text_enter)
 
+
+    def set_linked_slider(self, slider):
+        self.linked_slider = slider
 
     def _check_value(self, val):
         """ Returns the numerical value after making sure it's correct.
@@ -532,8 +544,13 @@ class NumberTextCtrl(wx.TextCtrl):
             if val:
                 val = self.GetValidator()._cast(val)
             wx.TextCtrl.SetValue(self, unicode(val))
+
+            if self.linked_slider:
+                self.linked_slider.SetValue(val)
+
         except ValueError:
-            raise ValueError("Value '%s' is not a valid number." % val)
+            msg = "Value '%s' is not a valid number for %s."
+            raise ValueError(msg % (val, self.__class__.__name__))
 
     SetValueStr = SetValue
 
@@ -634,7 +651,12 @@ class UnitNumberCtrl(NumberTextCtrl):
 
     def SetValueStr(self, val):
         self.SetValue(val)
-        wx.TextCtrl.SetValue(self, "%s %s" % (val, self.unit))
+        if self.accuracy:
+            str_val = "%s %s" % (round(val, self.accuracy), self.unit)
+        else:
+            str_val = "%s %s" % (val, self.unit)
+
+        wx.TextCtrl.SetValue(self, str_val)
 
     def GetValue(self):
         """ Return the value as an integer
@@ -644,7 +666,7 @@ class UnitNumberCtrl(NumberTextCtrl):
         val = wx.TextCtrl.GetValue(self)
 
         # Strip the unit symbols
-        if val.endswith(self.unit):
+        if self.unit and val.endswith(self.unit):
             val = val[:-len(self.unit)]
 
         return self._check_value(val)
@@ -739,7 +761,11 @@ class FloatTextCtrl(NumberTextCtrl):
         min_val = kwargs.pop('min_val', None)
         max_val = kwargs.pop('max_val', None)
         kwargs['validator'] = FloatValidator(min_val, max_val)
-        kwargs['step'] = 0.1
+        if not kwargs.has_key('step'):
+            kwargs['step'] = 0.1
+        if not kwargs.has_key('accuracy'):
+            kwargs['accuracy'] = 3  # number of decimal spaces right of the .
+
         NumberTextCtrl.__init__(self, *args, **kwargs)
 
 class UnitFloatCtrl(UnitNumberCtrl):
@@ -747,5 +773,10 @@ class UnitFloatCtrl(UnitNumberCtrl):
         min_val = kwargs.pop('min_val', None)
         max_val = kwargs.pop('max_val', None)
         kwargs['validator'] = FloatValidator(min_val, max_val)
-        kwargs['step'] = 0.1
+        if not kwargs.has_key('step'):
+            kwargs['step'] = 0.1
+        if not kwargs.has_key('accuracy'):
+            kwargs['accuracy'] = 3  # number of decimal spaces right of the .
+
         UnitNumberCtrl.__init__(self, *args, **kwargs)
+

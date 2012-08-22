@@ -462,7 +462,7 @@ class StreamPanelEntry(wx.PyPanel):
 
     def on_brightness_slide(self, evt):
         if self._sld_brightness.HasCapture():
-            self._txt_brightness.SetValue(str(self._sld_brightness.GetValue()))
+            self._txt_brightness.SetValue(self._sld_brightness.GetValue())
         evt.Skip()
 
     def on_contrast_entered(self, evt):
@@ -471,7 +471,7 @@ class StreamPanelEntry(wx.PyPanel):
 
     def on_contrast_slide(self, evt):
         if self._sld_contrast.HasCapture():
-            self._txt_contrast.SetValue(str(self._sld_contrast.GetValue()))
+            self._txt_contrast.SetValue(self._sld_contrast.GetValue())
         evt.Skip()
 
     def on_contrast_key(self, evt):
