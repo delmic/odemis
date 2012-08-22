@@ -525,6 +525,33 @@ class UnitIntegerCtrlHandler(xrc.XmlResourceHandler):
         self.SetupWindow(w)
         return w
 
+class UnitFloatCtrlHandler(xrc.XmlResourceHandler):
+
+    def __init__(self):
+        xrc.XmlResourceHandler.__init__(self)
+        # Standard styles
+        self.AddWindowStyles()
+        # Custom styles
+
+    def CanHandle(self, node):
+        return self.IsOfClass(node, 'UnitFloatCtrl')
+
+    # Process XML parameters and create the object
+    def DoCreateResource(self):
+        assert self.GetInstance() is None
+
+        w = txt.UnitFloatCtrl(self.GetParentAsWindow(),
+                              id=self.GetID(),
+                              value=self.GetText('value'),
+                              pos=self.GetPosition(),
+                              size=self.GetSize(),
+                              style=self.GetStyle(),
+                              unit=self.GetText('unit'),
+                              min_val=self.GetLong('min'),
+                              max_val=self.GetLong('max'))
+        self.SetupWindow(w)
+        return w
+
 ##################################
 # Canvas Handlers
 ##################################
@@ -566,6 +593,7 @@ HANDLER_CLASS_LIST = [
                       PopupImageButtonHandler,
                       SuggestTextCtrlHandler,
                       TabButtonButtonHandler,
+                      UnitFloatCtrlHandler,
                       UnitIntegerCtrlHandler,
                       ]
 

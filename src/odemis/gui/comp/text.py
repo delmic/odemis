@@ -361,63 +361,23 @@ class SuggestTextCtrl (wx.TextCtrl, listmix.ColumnSorterMixin):
         self.dropdown.SetClientSize(self.popupsize)
 
 
-class IntegerValidator(wx.PyValidator):
-    """ This validator can be used to make sure only valid characters are
-    entered into a control (digits and a minus symbol).
-    It can also validate if the value that is present is a valid integer.
-    """
+class NumberValidator(wx.PyValidator):
+    """ Base class used for number validation """
 
     def __init__(self, min_val=None, max_val=None):
         """ Constructor """
         wx.PyValidator.__init__(self)
         self.Bind(wx.EVT_CHAR, self.OnChar)
 
-        # All legal characters
-        self.legal = "-0123456789"
+        # String of legal characters
+        self.legal = "0123456789"
 
+        # Minimun and maximum allowed values
         self.min_val = min_val
         self.max_val = max_val
 
-    def Clone(self):    #pylint: disable=W0221
-        """ Required method """
-        return IntegerValidator(self.min_val, self.max_val)
-
-    def Validate(self, win=None):#pylint: disable=W0221,W0613
-        """ This method is called when the 'Validate()' method is called on the
-        parent of the TextCtrl to which this validator belongs. It can also
-        be called as a stan-alone validation method.
-
-        """
-
-        fld = self.GetWindow()
-        val = fld.GetValue()
-
-        validated, _ = self.validate_value(val)
-
-        log.debug("Value {} is {}valid".format(val, "" if validated else "not"))
-
-        return validated
-
-    def validate_value(self, val):
-        """ Validate the given value
-
-        This method returns a 2-tuple of which the first element is a boolean
-        indication if the validation succeeded (True) and the second element
-        is equal to the 'val' argument, or to the min/max value if the value
-        exceeded its bounds.
-
-        """
-
-        msg = "Value {} out of range [{}, {}]"
-
-        if val is not None and val != "-":
-            if self.min_val is not None and val < self.min_val:
-                log.debug(msg.format(val, self.min_val, self.max_val))
-                return False, self.min_val
-            if self.max_val is not None and val > self.max_val:
-                log.debug(msg.format(val, self.min_val, self.max_val))
-                return False, self.max_val
-        return True, val
+    def Clone(self): #pylint: disable=W0221
+        raise NotImplementedError
 
     def OnChar(self, event):
         """ This method prevents the entry of illegal characters """
@@ -449,7 +409,7 @@ class IntegerValidator(wx.PyValidator):
 
             try:
                 if val != "-":
-                    val = int(val)
+                    val = self._cast(val)
                 log.debug("Key accepted")
                 event.Skip()
             except ValueError:
@@ -460,30 +420,63 @@ class IntegerValidator(wx.PyValidator):
         # from reaching the text control
         return
 
-class IntegerTextCtrl(wx.TextCtrl):
-    """ This class describes a text field that may only hold integer data.
+    def Validate(self, win=None):#pylint: disable=W0221,W0613
+        """ This method is called when the 'Validate()' method is called on the
+        parent of the TextCtrl to which this validator belongs. It can also
+        be called as a stan-alone validation method.
 
-    The 'min_val' and 'max_val' keyword arguments may be used to set limits on
-    the value contained within the control.
+        """
 
-    When the 'key_inc' argument is set, the value can be altered by the up and
-    down cursor keys.
+        fld = self.GetWindow()
+        val = fld.GetValue()
 
-    If the object is created with an invalid integer value a ValueError
-    exception will be raised.
+        validated, _ = self.validate_value(val)
 
-    """
+        log.debug("Value {} is {}valid".format(val, "" if validated else "not"))
+
+        return validated
+
+    def validate_value(self, val):
+        """ Validate the given value
+
+        This method returns a 2-tuple of which the first element is a boolean
+        indication if the validation succeeded (True) and the second element
+        is equal to the 'val' argument, or to the min/max value if the value
+        exceeded its bounds.
+
+        """
+
+        msg = "Value {} out of range [{}, {}]"
+
+        if val is not None and val != "-" and self.min_val != self.max_val:
+            if self.min_val is not None and val < self.min_val:
+                log.debug(msg.format(val, self.min_val, self.max_val))
+                return False, self.min_val
+            if self.max_val is not None and val > self.max_val:
+                log.debug(msg.format(val, self.min_val, self.max_val))
+                return False, self.max_val
+        return True, val
+
+    def _cast(self, val):
+        """ Try to cast the value string to the desired type """
+        raise NotImplementedError
+
+class NumberTextCtrl(wx.TextCtrl):
+    """ A base text control specifically tailored to contain numerical data """
+
     def __init__(self, *args, **kwargs):
 
-        min_val = kwargs.pop('min_val', None)
-        max_val = kwargs.pop('max_val', None)
+        # Make sure that a validator is provided
+        if not kwargs.has_key("validator"):
+            raise ValueError("No validator set!")
+
         key_inc = kwargs.pop('key_inc', True)
+        self.step = kwargs.pop('step', 1)
 
         # For the wx.EVT_TEXT_ENTER event to work, the TE_PROCESS_ENTER
         # style needs to be set, but setting it in XRC throws an error
         # A possible workaround is to include the style by hand
         kwargs['style'] = kwargs.get('style', 0) | wx.TE_PROCESS_ENTER
-        kwargs['validator'] = IntegerValidator(min_val, max_val)
 
         wx.TextCtrl.__init__(self, *args, **kwargs)
 
@@ -501,27 +494,29 @@ class IntegerTextCtrl(wx.TextCtrl):
 
         self.Bind(wx.EVT_TEXT_ENTER, self.on_text_enter)
 
+
+    def _check_value(self, val):
+        """ Returns the numerical value after making sure it's correct.
+
+        If the value is not correct, the control is given the focus again.
+        """
+        try:
+            return self.GetValidator()._cast(val)
+        except ValueError:
+            if val is None or len(val) == 0:
+                return None
+            else:
+                log.error("Illegal %s value %s", self.__class__.__name__, val)
+                wx.CallAfter(self.SetFocus)
+                return None
+        return None
+
     def GetValue(self): #pylint: disable=W0221
         """ Return the value as an integer, or None if no (valid) value is
         present.
         """
         val = wx.TextCtrl.GetValue(self)
-
         return self._check_value(val)
-
-
-    def _check_value(self, val):
-        try:
-            return int(val)
-        except ValueError:
-            if val is None or len(val) == 0:
-                return None
-            else:
-                log.error("Illegal %s value %s",
-                              self.__class__.__name__, val)
-                wx.CallAfter(self.SetFocus)
-                return None
-        return None
 
     def GetValueStr(self):
         """ Return the value of the control as a string """
@@ -535,16 +530,16 @@ class IntegerTextCtrl(wx.TextCtrl):
             log.debug("Setting value to '%s' for %s",
                       val, self.__class__.__name__)
             if val:
-                val = int(val)
+                val = self.GetValidator()._cast(val)
             wx.TextCtrl.SetValue(self, unicode(val))
         except ValueError:
-            raise ValueError("Value '%s' is not a valid integer." % val)
+            raise ValueError("Value '%s' is not a valid number." % val)
 
     SetValueStr = SetValue
 
     def reset(self):
         """ Set the content of the text control to just the numerical value """
-        self.SetValue(unicode(self.GetValue() or ""))
+        self.SetValue(unicode(self.GetValue()))
 
     def on_text_enter(self, evt):
         val = self.GetValue()
@@ -568,9 +563,9 @@ class IntegerTextCtrl(wx.TextCtrl):
         val = self.GetValue()
 
         if key == wx.WXK_UP:
-            val += 1
+            val += self.step
         elif key == wx.WXK_DOWN:
-            val -= 1
+            val -= self.step
         else:
             evt.Skip()
             return
@@ -592,34 +587,29 @@ class IntegerTextCtrl(wx.TextCtrl):
         val = self.GetValue()
         wx.CallAfter(self.SetSelection, 0, 0)
 
-        if val:
+        if val is not None and val != "":
             validated, new_val = self.GetValidator().validate_value(val)
+
             if validated:
                 self.SetValueStr(val)
             else:
                 self.SetValueStr(new_val)
 
-
-class UnitIntegerCtrl(IntegerTextCtrl):
-    """ This class represents a text control which is capable of formatting
-    it's content according to the unit it set to: '<int value> <unit str>'
-
-    The value defaults to 0 if none is provided. The 'unit' argument is
-    manditory.
-
-    When the value is set through the API, the units are shown.
-    When the control gets the focus, the value is shown without the units
-    When focus is lost, the units will be shown again.
-    """
+class UnitNumberCtrl(NumberTextCtrl):
 
     def __init__(self, *args, **kwargs):
 
+        # Make sure that a validator is provided
+        if not kwargs.has_key("unit"):
+            raise ValueError("No unit type set!")
+
         self.unit = kwargs.pop('unit', "")
 
-        IntegerTextCtrl.__init__(self, *args, **kwargs)
+        NumberTextCtrl.__init__(self, *args, **kwargs)
 
         val = args[2] if len(args) > 2 else kwargs.get('value', None)
-        if val:
+
+        if val is not None and val != "":
             self.SetValueStr(val)
 
     # def on_focus(self, evt):
@@ -642,7 +632,6 @@ class UnitIntegerCtrl(IntegerTextCtrl):
     #         else:
     #             self.SetValueStr(new_val)
 
-
     def SetValueStr(self, val):
         self.SetValue(val)
         wx.TextCtrl.SetValue(self, "%s %s" % (val, self.unit))
@@ -662,3 +651,101 @@ class UnitIntegerCtrl(IntegerTextCtrl):
 
     def GetValueStr(self):
         return "%s %s" % (IntegerTextCtrl.GetValueStr(self), self.unit)
+
+#########################################
+# Integer controls
+#########################################
+
+class IntegerValidator(NumberValidator):
+    """ This validator can be used to make sure only valid characters are
+    entered into a control (digits and a minus symbol).
+    It can also validate if the value that is present is a valid integer.
+    """
+
+    def __init__(self, min_val=None, max_val=None):
+        """ Constructor """
+        NumberValidator.__init__(self, min_val, max_val)
+        # Legal characters for a signed integer
+        self.legal += "-"
+
+
+    def Clone(self):    #pylint: disable=W0221
+        """ Required method """
+        return IntegerValidator(self.min_val, self.max_val)
+
+    def _cast(self, val):
+        return int(val)
+
+
+class IntegerTextCtrl(NumberTextCtrl):
+    """ This class describes a text field that may only hold integer data.
+
+    The 'min_val' and 'max_val' keyword arguments may be used to set limits on
+    the value contained within the control.
+
+    When the 'key_inc' argument is set, the value can be altered by the up and
+    down cursor keys.
+
+    If the object is created with an invalid integer value a ValueError
+    exception will be raised.
+
+    """
+
+    def __init__(self, *args, **kwargs):
+        min_val = kwargs.pop('min_val', None)
+        max_val = kwargs.pop('max_val', None)
+        kwargs['validator'] = IntegerValidator(min_val, max_val)
+        NumberTextCtrl.__init__(self, *args, **kwargs)
+
+class UnitIntegerCtrl(UnitNumberCtrl):
+    """ This class represents a text control which is capable of formatting
+    it's content according to the unit it set to: '<int value> <unit str>'
+
+    The value defaults to 0 if none is provided. The 'unit' argument is
+    manditory.
+
+    When the value is set through the API, the units are shown.
+    When the control gets the focus, the value is shown without the units
+    When focus is lost, the units will be shown again.
+    """
+
+    def __init__(self, *args, **kwargs):
+        min_val = kwargs.pop('min_val', None)
+        max_val = kwargs.pop('max_val', None)
+        kwargs['validator'] = IntegerValidator(min_val, max_val)
+        UnitNumberCtrl.__init__(self, *args, **kwargs)
+
+#########################################
+# Float controls
+#########################################
+
+class FloatValidator(NumberValidator):
+    def __init__(self, min_val=None, max_val=None):
+        """ Constructor """
+        NumberValidator.__init__(self, min_val, max_val)
+        # Legal characters for a signed integer
+        self.legal += "-."
+
+
+    def Clone(self):    #pylint: disable=W0221
+        """ Required method """
+        return FloatValidator(self.min_val, self.max_val)
+
+    def _cast(self, val):
+        return float(val)
+
+class FloatTextCtrl(NumberTextCtrl):
+    def __init__(self, *args, **kwargs):
+        min_val = kwargs.pop('min_val', None)
+        max_val = kwargs.pop('max_val', None)
+        kwargs['validator'] = FloatValidator(min_val, max_val)
+        kwargs['step'] = 0.1
+        NumberTextCtrl.__init__(self, *args, **kwargs)
+
+class UnitFloatCtrl(UnitNumberCtrl):
+    def __init__(self, *args, **kwargs):
+        min_val = kwargs.pop('min_val', None)
+        max_val = kwargs.pop('max_val', None)
+        kwargs['validator'] = FloatValidator(min_val, max_val)
+        kwargs['step'] = 0.1
+        UnitNumberCtrl.__init__(self, *args, **kwargs)

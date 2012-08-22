@@ -4,7 +4,8 @@ import wx
 
 from ..comp.foldpanelbar import FoldPanelItem
 from odemis.gui.log import log
-from odemis.model import getVAs, getROAttributes
+from odemis.model import getVAs
+from odemis.model import NotApplicableError
 
 MAIN_FRAME = None
 
@@ -45,19 +46,20 @@ class SettingsPanel(object):
         if self.num_entries == 0:
             self.panel.GetChildren()[0].Destroy()
 
-    def add_label(self, label, value):
+    def add_label(self, label, value=None):
         self._clear()
          # Create label
         self._sizer.Add(wx.StaticText(self.panel, -1, "%s:" % label),
                         (self.num_entries, 0), flag=wx.ALL, border=5)
 
-        self.panel.SetForegroundColour(FOREGROUND_COLOUR_DIS)
+        if value:
+            self.panel.SetForegroundColour(FOREGROUND_COLOUR_DIS)
 
-        self._sizer.Add(wx.StaticText(self.panel, -1, unicode(value)),
-                        (self.num_entries, 1),
-                        flag=wx.ALL,
-                        border=5)
-        self.panel.SetForegroundColour(FOREGROUND_COLOUR)
+            self._sizer.Add(wx.StaticText(self.panel, -1, unicode(value)),
+                            (self.num_entries, 1),
+                            flag=wx.ALL,
+                            border=5)
+            self.panel.SetForegroundColour(FOREGROUND_COLOUR)
         self.num_entries += 1
 
 
@@ -68,25 +70,53 @@ class SettingsPanel(object):
         self._sizer.Add(wx.StaticText(self.panel, -1, "%s:" % label),
                         (self.num_entries, 0), flag=wx.ALL, border=5)
 
-        # If a value is provided
-        if value:
+        if not value:
+            log.warn("No value provided for %s", label)
+            return
 
-            unit =  value.unit or ""
+        unit =  value.unit or ""
 
-            if value.readonly:
-                self.panel.SetForegroundColour(FOREGROUND_COLOUR_DIS)
+        if value.readonly:
+            self.panel.SetForegroundColour(FOREGROUND_COLOUR_DIS)
 
-                if isinstance(value.value, tuple):
-                    lbl = " x ".join(["%s %s" % (v, unit) for v in value.value])
-                else:
-                    lbl = unicode("%s %s" % (value.value, unit))
-
-                self._sizer.Add(wx.StaticText(self.panel, -1, lbl),
-                                (self.num_entries, 1), flag=wx.ALL, border=5)
-                self.panel.SetForegroundColour(FOREGROUND_COLOUR)
+            if isinstance(value.value, tuple):
+                lbl = " x ".join(["%s %s" % (v, unit) for v in value.value])
             else:
-                self._sizer.Add(wx.StaticText(self.panel, -1, unicode(value.value)),
-                                (self.num_entries, 1), flag=wx.ALL, border=5)
+                lbl = unicode("%s %s" % (value.value, unit))
+
+            self._sizer.Add(wx.StaticText(self.panel, -1, lbl),
+                            (self.num_entries, 1), flag=wx.ALL, border=5)
+            self.panel.SetForegroundColour(FOREGROUND_COLOUR)
+        else:
+
+            has_choices = True
+            try:
+                log.debug("%s has choices %s", label, value.choices)
+            except (AttributeError, NotApplicableError):
+                has_choices = False
+
+            has_range = True
+
+            try:
+                log.debug("%s has range %s", label, value.range)
+            except (AttributeError, NotApplicableError):
+                has_range = False
+
+            val  = value.value
+            ctrl = None
+
+
+            if has_choices:
+                pass
+            elif has_range:
+                pass
+
+            if not ctrl:
+                lbl = unicode("%s %s" % (val, unit))
+                ctrl = wx.StaticText(self.panel, -1, lbl)
+
+            self._sizer.Add(ctrl, (self.num_entries, 1),
+                            flag=wx.ALL, border=5)
 
         self.num_entries += 1
         self.fb_panel.Parent.Layout()

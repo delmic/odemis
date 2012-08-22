@@ -105,7 +105,7 @@ def __init_resources():
     wx.FileSystem.AddHandler(wx.MemoryFSHandler())
 
     test_gui_xrc = '''\
-<?xml version="1.0" ?><resource class="">
+<?xml version="1.0" ?><resource class="UnitFloatCtrl">
   <object class="wxFrame" name="fpb_frame">
     <object class="wxBoxSizer">
       <object class="sizeritem">
@@ -328,9 +328,20 @@ def __init_resources():
         <object class="sizeritem">
           <object class="UnitIntegerCtrl">
             <size>200,-1</size>
+            <value>0</value>
             <min>-10</min>
             <max>10</max>
             <unit>μm</unit>
+          </object>
+          <flag>wxALL|wxALIGN_CENTRE</flag>
+          <border>10</border>
+        </object>
+        
+        <object class="sizeritem">
+          <object class="UnitFloatCtrl">
+            <size>200,-1</size>
+            <value>4.44</value>
+            <unit>kg</unit>
           </object>
           <flag>wxALL|wxALIGN_CENTRE</flag>
           <border>10</border>
