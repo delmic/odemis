@@ -26,7 +26,8 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 import wx
 
-import units
+from .util import units
+from .log import log
 
 from .dblmscopecanvas import DblMicroscopeCanvas
 from .dblmscopeviewmodel import DblMscopeViewModel
@@ -34,7 +35,6 @@ from .comp.scalewindow import ScaleWindow
 from .comp.slider import CustomSlider
 from .img.data import getico_blending_optBitmap, getico_blending_semBitmap
 from .microscopeview import MicroscopeEmptyView, MicroscopeOpticalView, MicroscopeSEView
-from .log import log
 
 class DblMicroscopePanel(wx.Panel):
     """
@@ -75,6 +75,7 @@ class DblMicroscopePanel(wx.Panel):
         #[(emptyView, self.viewComboLeft, self.imageSizerBLeft),
         #                 (emptyView, self.viewComboRight, self.imageSizerBRight)]
 
+        # TODO change to use streams: set of streams visible in this panel
         # can be called only with display ready
         self.views = []
         self.AddView(emptyView)

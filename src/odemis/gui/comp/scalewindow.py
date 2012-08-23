@@ -26,7 +26,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 import wx
 
-import odemis.gui.units as units
+from ..util import units
 
 #----------------------------------------------------------------------
 # DC Drawing Options

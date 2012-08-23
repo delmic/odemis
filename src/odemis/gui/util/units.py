@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 '''
 Created on 20 Feb 2012
@@ -46,13 +45,13 @@ def round_down_significant(x, n):
 def to_string_si_prefix(x):
     """
     Convert a number to a string with the most appropriate SI prefix appended
-    ex: 0.0012 -> "1.2m"
+    ex: 0.0012 -> "1.2 m"
     x (float): number
     return (string)
     """
     prefixes = {9: "G", 6: "M", 3: "k", 0: "", -3: "m", -6:"µ", -9:"n", -12:"p"}
     if x == 0:
-        return "0"
+        return "0 "
     most_significant = int(math.floor(math.log10(abs(x))))
     prefix_order = (most_significant / 3) * 3 # rounding
     prefix_order = max(-12, min(prefix_order, 9)) # clamping

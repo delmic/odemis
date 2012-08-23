@@ -16,7 +16,7 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 import unittest
-from odemis.gui import units
+from odemis.gui.util import units
 
 class TestUnits(unittest.TestCase):
 
@@ -53,19 +53,19 @@ class TestUnits(unittest.TestCase):
 
     def test_to_string_si_prefix(self):
         #         (input) (expected output)
-        values = [((1,), "1"),
-                  ((-1.234,), "-1.234"),
-                  ((-1234,), "-1.234k"),
-                  ((1600,), "1.6k"),
-                  ((-1600,), "-1.6k"),
-                  ((0.0001236,), "123.6µ"),
-                  ((0.0012,), "1.2m"),
-                  ((0,), "0"),
+        values = [((1,), "1 "),
+                  ((-1.234,), "-1.234 "),
+                  ((-1234,), "-1.234 k"),
+                  ((1600,), "1.6 k"),
+                  ((-1600,), "-1.6 k"),
+                  ((0.0001236,), "123.6 µ"),
+                  ((0.0012,), "1.2 m"),
+                  ((0,), "0 "),
                   ]
         for (i, eo) in values:
             o = units.to_string_si_prefix(*i)
             self.assertEquals(o, eo,
-                              "%f is %s while expected %s" % (i[0], o, eo))
+                              "%f is '%s' while expected '%s'" % (i[0], o, eo))
 if __name__ == "__main__":
     unittest.main()
     

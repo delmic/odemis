@@ -14,8 +14,8 @@ You should have received a copy of the GNU General Public License along with Ode
 '''
 import wx
 
-import odemis.gui.units as units
-from odemis.gui.instrmodel import InstrumentalImage
+from .util import units
+from .instrmodel import InstrumentalImage
 
 
 class MicroscopeView(object):
