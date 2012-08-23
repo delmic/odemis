@@ -428,6 +428,15 @@ class AndorCam2(model.DigitalCamera):
     def getMetadata(self):
         return self._metadata
     
+    def updateMetadata(self, md):
+        """
+        Update the metadata associated with every image acquired to these
+        new values. It's accumulative, so previous metadata values will be kept
+        if they are not given.
+        md (dict string -> value): the metadata
+        """
+        self._metadata.update(md)
+    
     # low level methods, wrapper to the actual SDK functions
     # they do not ensure the actual camera is selected, you have to call select()
     # TODO: not _everything_ is implemented, just what we need
