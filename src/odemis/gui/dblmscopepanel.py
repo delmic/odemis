@@ -69,6 +69,7 @@ class DblMicroscopePanel(wx.Panel):
         #self.Bind(wx.EVT_COMBOBOX, self.OnComboRight, self.viewComboRight)
 
 
+        self.views = []
         emptyView = MicroscopeEmptyView()
         # display : left and right view
         self.displays = []
@@ -77,14 +78,17 @@ class DblMicroscopePanel(wx.Panel):
 
         # TODO change to use streams: set of streams visible in this panel
         # can be called only with display ready
-        self.views = []
         self.AddView(emptyView)
-        self.AddView(MicroscopeOpticalView(self, self.secom_model, self.viewmodel))
-        self.AddView(MicroscopeSEView(self, self.secom_model, self.viewmodel))
+#        self.AddView(MicroscopeOpticalView(self, self.secom_model, self.viewmodel))
+#        self.AddView(MicroscopeSEView(self, self.secom_model, self.viewmodel))
 
         # Select the default views
         #self.ChangeView(0, self.views[1].name)
         #self.ChangeView(1, self.views[2].name)
+        #FIXME: this is a BIG shortcut => need streams
+        opt_view = MicroscopeOpticalView(self, self.secom_model, self.viewmodel)
+        self.AddView(opt_view)
+        opt_view.Show(self.viewmodel.images[0])
 
         # sync microscope stage with the view
         self.viewmodel.center.value = self.secom_model.stage_pos.value
@@ -335,6 +339,7 @@ class DblMicroscopePanel(wx.Panel):
         combo: the combobox which has to be updated
         sizer: the sizer containing the controls
         """
+#        FIXME: this is broken, and never to be used again!!
         # find the view
         view = None
         for v in self.views:

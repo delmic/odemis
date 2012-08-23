@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
 Created on 16 Feb 2012
@@ -21,16 +20,16 @@ details.
 
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
-
 """
 
-import logging
-
-import numpy
-import wx
-
+from odemis import model
+from odemis.gui.log import log
+from odemis.gui.util.img import DataArray2wxImage
 from odemis.model import VigilantAttribute, MD_POS, MD_PIXEL_SIZE, \
     MD_SENSOR_PIXEL_SIZE
+import logging
+
+
 
 class SECOMModel(object):
     """
@@ -45,8 +44,12 @@ class SECOMModel(object):
         # FIXME: maybe could go into (sub)classes like OpticalEmitter, SEDetector...
         self.optical_emt_wavelength = VigilantAttribute(450) # nm XXX a range?
         self.optical_det_wavelength = VigilantAttribute(568) # nm
-        self.optical_det_exposure_time = VigilantAttribute(0.5) # s
+        self.optical_det_exposure_time = VigilantAttribute(1.0) # s
         self.optical_det_image = VigilantAttribute(InstrumentalImage(None, None, None))
+        self.optical_det_raw = None # the last raw data received
+        self.optical_auto_bc = True # whether to use auto brightness & contrast
+        self.optical_contrast = model.FloatContinuous(0, range=[-1, 1]) # ratio, contrast if no auto
+        self.optical_brightness = model.FloatContinuous(0, range=[-1, 1]) # ratio, balance if no auto 
 
         self.sem_emt_dwell_time = VigilantAttribute(0.00001) #s
         self.sem_emt_spot = VigilantAttribute(4) # no unit (could be m²)
@@ -98,31 +101,48 @@ class OpticalBackendConnected(SECOMModel):
 
         # direct linking
         self.optical_det_exposure_time = self.camera.exposureTime
-        #self.camera.data.subscribe(self.onNewCameraImage)
+        self.optical_depth = self.camera.shape[2]
+        
+        
+        # No SEM 
+        #self.sem_det_image = VigilantAttribute(InstrumentalImage(None, None, None))
+        
+        # FIXME: on ON/OFF from GUI 
+        self.turnOn()
 
-        # empty
-        self.sem_det_image = VigilantAttribute(InstrumentalImage(None, None, None))
-
+    def turnOn(self):
+        self.camera.data.subscribe(self.onNewCameraImage)
+        
+    def turnOff(self):
+        self.camera.data.unsubscribe(self.onNewCameraImage)        
+        
+    # TODO: see if really necessary: because __del__ prevents GC to work
+    def __del__(self):
+        self.turnOff()
+        
     def onNewCameraImage(self, dataflow, data):
-        size = data.shape[0:2]
-        # TODO make only one copy for conversion 16bits -> 3x8
-        # TODO insert brightness and contrast computation instead of copy
-        data8 = numpy.array(data, dtype="uint8") # 1 copy
-        rgb = numpy.dstack((data8, data8, data8)) # 1 copy
-        im = wx.ImageFromData(*size, data=rgb.tostring())
+        if self.optical_auto_bc:
+            brightness = None
+            contrast = None
+        else:
+            brightness = self.optical_brightness
+            contrast = self.optical_contrast
+        
+        self.optical_det_raw = data
+        im = DataArray2wxImage(data, self.optical_depth, brightness, contrast)
         im.InitAlpha() # it's a different buffer so useless to do it in numpy
 
         try:
             # TODO should be initialised by backend
             pos = data.metadata[MD_POS]
         except KeyError:
-            logging.warning("position of image unknown")
+            log.warning("position of image unknown")
             pos = self.prev_pos # at least it shouldn't be too wrong
 
         try:
             mpp = data.metadata[MD_PIXEL_SIZE][0]
         except KeyError:
-            logging.warning("pixel density of image unknown")
+            log.warning("pixel density of image unknown")
             # Hopefully it'll be within the same magnitude
             mpp = data.metadata[MD_SENSOR_PIXEL_SIZE][0] / 60 # XXX
 
@@ -132,14 +152,17 @@ class OpticalBackendConnected(SECOMModel):
 
     def avOnStagePos(self, val):
         move = {}
-        if hasattr(self.stage, "moveAbs"):
-            # absolute
-            move = {"x": val[0], "y": val[1]}
-            self.stage.moveAbs(move)
-        else:
-            # relative
-            move = {"x": val[0] - self.prev_pos[0], "y": val[1] - self.prev_pos[1]}
-            self.stage.moveRel(move)
+        # TODO: a way to know if it can do absolute move? => .capabilities!
+#        if hasattr(self.stage, "moveAbs"):
+#            # absolute
+#            move = {"x": val[0], "y": val[1]}
+#            self.stage.moveAbs(move)
+#        else:
+
+        # relative
+        move = {"x": val[0] - self.prev_pos[0], "y": val[1] - self.prev_pos[1]}
+        self.stage.moveRel(move)
+        
         self.prev_pos = val
 
 
@@ -175,11 +198,14 @@ class MicroscopeModel(object):
     """
     pass
     # streams:
-    #    + list of raw images (ordered by time)
-    #    + coloration + contrast + brightness + name
+    #    + list of raw images that compose the whole view (ordered by time)
+    #    + colouration + contrast + brightness + name + ...
     #    + InstrumentalImage corresponding to the tiling of all the raw images
+    # streams can be add, removed, listed.
     # stage : to move the sample
+    # focus_a, focus_b...: actuators whose name is associated to a specific action in the GUI 
     # microscope: links to the real microscope component provided by the backend
     #
 
+    # each canvas gets a set of streams to display
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:

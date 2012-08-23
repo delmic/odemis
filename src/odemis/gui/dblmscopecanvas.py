@@ -61,7 +61,7 @@ class DblMicroscopeCanvas(DraggableCanvas):
         self.WorldOverlays.append(CrossHairOverlay("Blue", CROSSHAIR_SIZE, (-10,-10))) # debug
         self.WorldOverlays.append(CrossHairOverlay("Red", CROSSHAIR_SIZE, (10,10))) # debug
 
-        self.SetImage(0, gettest_patternImage(), (0.0, 0.0), 0.5)
+        #self.SetImage(0, gettest_patternImage(), (0.0, 0.0), 0.5)
         #self.SetImage(1, gettest_patternImage(), (0.0, 0.0), 0.5)
 
     def onViewCenter(self, value):

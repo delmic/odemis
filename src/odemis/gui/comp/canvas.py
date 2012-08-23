@@ -108,8 +108,6 @@ class DraggableCanvas(wx.Panel):
 
         self.Bind(wx.EVT_CHAR, self.OnChar)
 
-        #self.SetImage(0, gettest_patternImage(), (0.0, 0.0), 0.5)
-
     def OnChar(self, event):
         key = event.GetKeyCode()
 

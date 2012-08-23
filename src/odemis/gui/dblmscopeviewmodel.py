@@ -1,6 +1,4 @@
-#!/usr/bin/env python
 # -*- coding: utf-8 -*-
-
 """
 Created on 17 Feb 2012
 
@@ -25,6 +23,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
 from .instrmodel import InstrumentalImage
+from odemis.gui.img.data import gettest_patternImage
 from odemis.model import VigilantAttribute
 
 class DblMscopeViewModel(object):
@@ -41,8 +40,11 @@ class DblMscopeViewModel(object):
         # 0<=float<=1
         self.merge_ratio = VigilantMergeRatio(0.3) # no unit
 
-        self.images = [VigilantAttribute(InstrumentalImage(None, None, None)),
+        #TODO default to black? 
+        self.images = [VigilantAttribute(InstrumentalImage(gettest_patternImage(), mpp=self.mpp.value, center=(0.0, 0.0))),
                        VigilantAttribute(InstrumentalImage(None, None, None))]
+        #self.images = [VigilantAttribute(InstrumentalImage(None, None, None)),
+        #               VigilantAttribute(InstrumentalImage(None, None, None))]
 
         # center position of the view
         self.center = VigilantAttribute((0, 0)) # (m, m)
@@ -53,9 +55,8 @@ class VigilantMPP(VigilantAttribute):
     """
     VigilantAttribute with special validation for MPP (float>0)
     """
-    def _set(self, value):
+    def _check(self, value):
         assert(0.0 < value)
-        VigilantAttribute._set(self, value)
 
 class VigilantMergeRatio(VigilantAttribute):
     """

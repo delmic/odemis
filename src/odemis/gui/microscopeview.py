@@ -12,10 +12,11 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
+from .instrmodel import InstrumentalImage
+from .util import units
+from odemis.gui.log import log
 import wx
 
-from .util import units
-from .instrmodel import InstrumentalImage
 
 
 class MicroscopeView(object):
@@ -48,25 +49,25 @@ class MicroscopeView(object):
 
         self.sizer = None
 
-    def Show(self, combo, sizer, outimage):
+    def Show(self, outimage):
         self.outimage = outimage
         self.UpdateImage()
-        self.sizer = sizer
-
-        # Put the new controls
-        first = True
-        for c in self.legend_controls:
-            if first:
-                first = False
-            else:
-                sizer.AddStretchSpacer()
-            sizer.Add(c, 0, wx.ALIGN_CENTER_HORIZONTAL|wx.LEFT|wx.RIGHT|wx.EXPAND, 3)
-            c.Show()
-
-        #Update the combobox
-        combo.Selection = combo.FindString(self.name)
-
-        sizer.Layout()
+#        self.sizer = sizer
+#
+#        # Put the new controls
+#        first = True
+#        for c in self.legend_controls:
+#            if first:
+#                first = False
+#            else:
+#                sizer.AddStretchSpacer()
+#            sizer.Add(c, 0, wx.ALIGN_CENTER_HORIZONTAL|wx.LEFT|wx.RIGHT|wx.EXPAND, 3)
+#            c.Show()
+#
+#        #Update the combobox
+#        combo.Selection = combo.FindString(self.name)
+#
+#        sizer.Layout()
 
     def UpdateImage(self):
         if self.outimage:

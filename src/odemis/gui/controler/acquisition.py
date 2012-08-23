@@ -68,7 +68,7 @@ class AcquisitionController(object):
                             filename)
             return
         
-        # TODO
+        # TODO: how to get the viewports list without explicitly naming them?
         # find the current focused viewport
         scope_panels = [self._frame.pnl_view_tl,
                         self._frame.pnl_view_tr,
@@ -117,7 +117,7 @@ class AcquisitionController(object):
             pass
             # drop to default
         else:
-            logging.warning("Platform not supported for picture folder")
+            log.warning("Platform not supported for picture folder")
         
         
         # fall-back to HOME
