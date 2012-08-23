@@ -14,7 +14,7 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
-import math
+from odemis.gui.util.img import DataArray2wxImage
 import numpy
 import wx
 
@@ -40,33 +40,7 @@ class VideoDisplayer(object):
         at ratio 1:1)
         data (numpy.ndarray): an 2D array containing the image (can be 3D if in RGB)
         """
-        # Can be called from a separate thread, so don't call directly wxPython (not even BitmapFromImage)
-        size = data.shape[0:2]
-        # adapt the brightness (and make sure the image fits 8 bits)
-#        maxval = numpy.amax(data)
-#        if maxval < 256:
-#            # too dark
-#            scale = int(math.floor(256.0 / maxval))
-#            drescaled = data * scale
-#        else:
-#            scale = int(math.ceil(maxval / 256.0))
-#            drescaled = data / scale
-        # This is still quite inefficient as it turns the 16 bits into floats
-        # in a new array and then convert it to 8 bit and then duplicate it 3 times.
-        # TODO: http://wxpython-users.1045709.n5.nabble.com/BitmapFromBuffer-speed-and-proposal-for-wx-Bitmap-CopyFromBuffer-td2333356.html
-        minmax = [numpy.amin(data), numpy.amax(data)]
-        drescaled = numpy.interp(data, minmax, [0, 256]) # this is qui
-            
-#        data8 = drescaled.astype("uint8") # 1 copy
-#        rgb = numpy.dstack((data8, data8, data8)) # 3 copies
-#        self.app.img = wx.ImageFromData(*size, data=rgb.tostring()) # 1 (fromdata) + 1(tostring) copy
-        rgb = numpy.empty(size + (3,), dtype="uint8") # 0 copy (1 malloc)
-        # dstack doesn't work because it doesn't generate in C order (uses strides)
-        rgb[:,:,0] = drescaled # 1 copy (+1 conversion)
-        rgb[:,:,1] = rgb[:,:,0] # 1 copy
-        rgb[:,:,2] = rgb[:,:,0] # 1 copy
-        self.app.img = wx.ImageFromBuffer(*size, dataBuffer=rgb) # 0 copy
-
+        self.app.img = DataArray2wxImage(data) # auto brightness/contrast
         wx.CallAfter(self.app.update_view)
     
     def waitQuit(self):
