@@ -93,6 +93,9 @@ class DraggableCanvas(wx.Panel):
         self.dragging = False
         self.drag_init_pos = (0, 0) # px, px: initial position of mouse when started dragging
 
+        self._rdragging = False
+        self._rdrag_prev_pos = None # (int, int) px
+        
         # timer to give a delay before redrawing so we wait to see if there are several events waiting
         self.DrawTimer = wx.PyTimer(self.OnDrawTimer)
 
@@ -125,10 +128,24 @@ class DraggableCanvas(wx.Panel):
             self.ShiftView((0, -change))
 
     def OnRightDown(self, event):
-        pass
+        if self.dragging:
+            return
+        
+        self._rdragging = True
+        self._rdrag_prev_pos = event.GetPositionTuple()
+        self.SetCursor(wx.StockCursor(wx.CURSOR_SIZENS))
+        if not self.HasCapture():
+            self.CaptureMouse()
+
+        # Get the focus back when receiving a click
+        self.SetFocus()
 
     def OnRightUp(self, event):
-        self.ShouldUpdateDrawing()
+        if self._rdragging:
+            self._rdragging = False
+            self.SetCursor(wx.STANDARD_CURSOR)
+            if self.HasCapture():
+                self.ReleaseMouse()
 
     def ShiftView(self, shift):
         """ Moves the position of the view by a delta
@@ -138,6 +155,9 @@ class DraggableCanvas(wx.Panel):
                             self.world_pos_buffer[1] - (shift[1] / self.scale)))
 
     def OnLeftDown(self, event):
+        if self._rdragging:
+            return
+        
         self.dragging = True
         # There might be several draggings before the buffer is updated
         # So take into account the current drag_shift to compensate
@@ -170,6 +190,15 @@ class DraggableCanvas(wx.Panel):
             self.drag_shift = (pos[0] - self.drag_init_pos[0],
                                pos[1] - self.drag_init_pos[1])
             self.Refresh()
+        
+        if self._rdragging:
+            pos = event.GetPositionTuple()
+            shift = (pos[0] - self._rdrag_prev_pos[0],
+                     pos[1] - self._rdrag_prev_pos[1])
+            if shift[0]:
+                self.onExtraAxisMove(0, shift[0])
+            if shift[1]:
+                self.onExtraAxisMove(1, shift[1])
 
     def OnDblClick(self, event):
         pos = event.GetPositionTuple()
@@ -188,6 +217,19 @@ class DraggableCanvas(wx.Panel):
         log.debug("double click at %s", new_pos)
         self.ReCenterBuffer(new_pos)
 
+    def onExtraAxisMove(self, axis, shift):
+        """
+        called when the extra dimensions are modified (right drag)
+        axis (0<int): the axis modified 
+            0 => right vertical
+            1 => right horizontal
+        shift (int): relative amount of pixel moved
+            >0: toward up/right
+        """
+        # We have nothing to do
+        # Inheriting classes can do more
+        pass
+    
     # Change picture one/two
     def SetImage(self, index, im, pos = None, scale = None):
         """

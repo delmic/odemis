@@ -50,6 +50,7 @@ class DblMscopeViewModel(object):
         self.center = VigilantAttribute((0, 0)) # (m, m)
 
         self.crosshair = VigilantAttribute(True)
+        self.opt_focus = None # should be an actuator
 
 class VigilantMPP(VigilantAttribute):
     """

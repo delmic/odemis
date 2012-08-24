@@ -56,6 +56,7 @@ class DblMicroscopePanel(wx.Panel):
 
         try:
             self.secom_model = wx.GetApp().secom_model
+            self.viewmodel.opt_focus = self.secom_model.opt_focus
         except AttributeError:
             msg = "Could not find SECOM model"
             log.error(msg)
@@ -69,8 +70,8 @@ class DblMicroscopePanel(wx.Panel):
         #self.Bind(wx.EVT_COMBOBOX, self.OnComboRight, self.viewComboRight)
 
 
-        self.views = []
-        emptyView = MicroscopeEmptyView()
+#        self.views = []
+#        emptyView = MicroscopeEmptyView()
         # display : left and right view
         self.displays = []
         #[(emptyView, self.viewComboLeft, self.imageSizerBLeft),
@@ -78,7 +79,7 @@ class DblMicroscopePanel(wx.Panel):
 
         # TODO change to use streams: set of streams visible in this panel
         # can be called only with display ready
-        self.AddView(emptyView)
+#        self.AddView(emptyView)
 #        self.AddView(MicroscopeOpticalView(self, self.secom_model, self.viewmodel))
 #        self.AddView(MicroscopeSEView(self, self.secom_model, self.viewmodel))
 
@@ -86,9 +87,8 @@ class DblMicroscopePanel(wx.Panel):
         #self.ChangeView(0, self.views[1].name)
         #self.ChangeView(1, self.views[2].name)
         #FIXME: this is a BIG shortcut => need streams
-        opt_view = MicroscopeOpticalView(self, self.secom_model, self.viewmodel)
-        self.AddView(opt_view)
-        opt_view.Show(self.viewmodel.images[0])
+        self.opt_view = MicroscopeOpticalView(self, self.secom_model, self.viewmodel)
+        self.opt_view.Show(self.viewmodel.images[0])
 
         # sync microscope stage with the view
         self.viewmodel.center.value = self.secom_model.stage_pos.value

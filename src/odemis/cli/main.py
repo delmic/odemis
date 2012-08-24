@@ -379,7 +379,7 @@ def set_attr(comp_name, attr_name, str_val):
         return 127
     return 0
 
-MAX_DISTANCE = 0.1 #m
+MAX_DISTANCE = 0.01 #m
 def move(comp_name, axis_name, str_distance):
     """
     move (relatively) the axis of the given component by the specified about of µm

@@ -38,8 +38,7 @@ class SECOMModel(object):
     """
 
     def __init__(self):
-        self.stage_pos = VigilantAttribute((0, 0)) # m,m
-        self.stage_pos.subscribe(self.avOnStagePos)
+        self.stage_pos = VigilantAttribute((0, 0), setter=self.avOnStagePos) # m,m
 
         # FIXME: maybe could go into (sub)classes like OpticalEmitter, SEDetector...
         self.optical_emt_wavelength = VigilantAttribute(450) # nm XXX a range?
@@ -55,9 +54,12 @@ class SECOMModel(object):
         self.sem_emt_spot = VigilantAttribute(4) # no unit (could be m²)
         self.sem_emt_hv = VigilantAttribute(30000) # V
         self.sem_det_image = VigilantAttribute(InstrumentalImage(None, None, None))
+        
+        self.opt_focus = None # this is directly an Actuator
 
     def avOnStagePos(self, val):
         logging.info("requested to move stage to pos: %s", str(val))
+        return val
 
 class OpticalBackendConnected(SECOMModel):
     """
@@ -89,7 +91,18 @@ class OpticalBackendConnected(SECOMModel):
         if not self.stage:
             raise Exception("no stage found in the microscope")
 
+        self.opt_focus = None
+        for a in microscope.actuators:
+            if a.role == "focus":
+                self.opt_focus = a
+                break
+        # it's not an error to not have focus
+        if not self.opt_focus: 
+            log.info("no focus actuator found in the microscope")
 
+        # DEBUG XXX
+        self.opt_focus.moveRel({"z": 0})
+        
         try:
             self.prev_pos = (self.stage.position.value["x"],
                              self.stage.position.value["y"])
@@ -164,6 +177,7 @@ class OpticalBackendConnected(SECOMModel):
         self.stage.moveRel(move)
         
         self.prev_pos = val
+        return val
 
 
 class SECOMBackendConnected(SECOMModel):

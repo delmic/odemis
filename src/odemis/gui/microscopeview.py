@@ -125,7 +125,6 @@ class MicroscopeOpticalView(MicroscopeImageView):
                                      viewmodel, name)
 
         self.datamodel = datamodel
-        self.viewmodel = viewmodel
 
         self.LegendWl = wx.StaticText(parent)
         self.LegendET = wx.StaticText(parent)
@@ -153,7 +152,6 @@ class MicroscopeSEView(MicroscopeImageView):
                                      viewmodel, name)
 
         self.datamodel = datamodel
-        self.viewmodel = viewmodel
 
         self.LegendDwell = wx.StaticText(parent)
         self.LegendSpot = wx.StaticText(parent)

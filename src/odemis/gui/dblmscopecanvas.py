@@ -16,10 +16,11 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 
-import wx
-
 from .comp.canvas import DraggableCanvas, WorldToBufferPoint
 from .img.data import gettest_patternImage
+from odemis.gui.log import log
+import wx
+
 
 
 CROSSHAIR_COLOR = wx.GREEN
@@ -77,9 +78,26 @@ class DblMicroscopeCanvas(DraggableCanvas):
         """
         DraggableCanvas.ReCenterBuffer(self, pos)
 
-        print "expects to move stage to pos:", self.world_pos_requested
+#        print "expects to move stage to pos:", self.world_pos_requested
         self.viewmodel.center.value = self.world_pos_requested
 
+    def onExtraAxisMove(self, axis, shift):
+        """
+        called when the extra dimensions are modified (right drag)
+        axis (0<int): the axis modified 
+            0 => right vertical
+            1 => right horizontal
+        shift (int): relative amount of pixel moved
+            >0: toward up/right
+        """
+        # we link axis 0 (up/down) to optical focus
+        if axis == 0 and self.viewmodel.opt_focus:
+            # conversion: 1 px => 1 um (so a whole screen is like 1mm)
+            val = 1e-6 * shift # m
+            assert(abs(val) < 0.01) # never move by 1 cm
+            log.info("Moving focus by %f m", val)
+            log.info("moving actuator %s", self.viewmodel.opt_focus.name)
+            self.viewmodel.opt_focus.moveRel({"z": val})
 
     def avOnCrossHair(self, activated):
         """

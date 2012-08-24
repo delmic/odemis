@@ -87,8 +87,12 @@ class AcquisitionController(object):
             # add metadata on the way the stream is displayed 
         
         # FIXME: this is a very simplified version until we introduce full support for streams
-        df = panel.secom_model.camera.data
-        data = df.get() # TODO we should reuse last image, instead of getting a new one
+        data = panel.opt_view.datamodel.optical_det_raw
+        if data is None:
+            # Try harder
+            log.warning("Failed to get the last raw image, will acquire a new one")
+            df = panel.secom_model.camera.data
+            data = df.get()
              
         # record everything to a file
         exporter.export(data, filename)
