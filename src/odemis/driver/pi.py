@@ -809,7 +809,7 @@ class StageRedStone(model.Actuator):
     An actuator made entirely of redstone controllers connected on the same serial port
     Can have an arbitrary number of axes (up to 32 in theory)
     """
-    def __init__(self, name, role, port, axes, children=None, **kwargs):
+    def __init__(self, name, role, port, axes, **kwargs):
         """
         port (string): name of the serial port to connect to the controllers
         axes (dict string=> 2-tuple): the configuration of the network.
@@ -817,7 +817,7 @@ class StageRedStone(model.Actuator):
          Note that even if it's made of several controllers, each controller is 
          _not_ seen as a child from the odemis model point of view.
         """ 
-        model.Actuator.__init__(self, name, role, axes=axes.keys(), children=children, **kwargs)
+        model.Actuator.__init__(self, name, role, axes=axes.keys(), **kwargs)
         
         ser = PIRedStone.openSerialPort(port)
 #        ser = FakePIRedStone.openSerialPort(port) # use FakePIRedStone for testing
@@ -922,6 +922,7 @@ class StageRedStone(model.Actuator):
         shift dict(string-> float): name of the axis and shift in m
         returns (Future): future that control the asynchronous move
         """
+        shift = self._applyInversionRel(shift)
         action_axes = {}
         for axis, distance in shift.items():
             if axis not in self.axes:

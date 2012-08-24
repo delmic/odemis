@@ -58,7 +58,7 @@ class Stage2D(model.Actuator):
     """
     Simulated stage component. Just pretends to be able to move all around.
     """
-    def __init__(self, name, role, axes, ranges=None, children=None, **kwargs):
+    def __init__(self, name, role, axes, ranges=None, **kwargs):
 #        assert ("axes" not in kwargs) and ("ranges" not in kwargs)
         assert len(axes) > 0
         if ranges is None:
@@ -66,10 +66,8 @@ class Stage2D(model.Actuator):
             for a in axes:
                 ranges[a] = [0, 0.1]
                 
-        model.Actuator.__init__(self, name, role, children=children,
-                                axes=axes, 
-                                ranges=ranges,
-                                **kwargs)
+        model.Actuator.__init__(self, name, role, axes=axes, ranges=ranges, **kwargs)
+        
         # start at the centre
         self._position = {}
         for a in axes:
@@ -91,11 +89,12 @@ class Stage2D(model.Actuator):
         self.position.notify(self.position.value)
         
     @isasync
-    def moveRel(self, pos):
+    def moveRel(self, shift):
+        shift = self._applyInversionRel(shift)
         time_start = time.time()
         maxtime = 0
-        for axis, change in pos.items():
-            if not axis in pos:
+        for axis, change in shift.items():
+            if not axis in shift:
                 raise ValueError("Axis '%s' doesn't exist." % str(axis))
             self._position[axis] += change
             logging.info("moving axis %s to %f", axis, self._position[axis])
@@ -108,6 +107,7 @@ class Stage2D(model.Actuator):
         
     @isasync
     def moveAbs(self, pos):
+        pos = self._applyInversionAbs(pos)
         time_start = time.time()
         maxtime = 0
         for axis, new_pos in pos.items():

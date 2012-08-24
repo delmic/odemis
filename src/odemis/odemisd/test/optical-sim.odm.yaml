@@ -53,7 +53,8 @@ Light: {
     affects: ["Andor SimCam"],
     children: {"x": FakePIGCS, "y": FakePIGCS},
     init: {
-        axes_map: {"x": "x", "y": "y"} # maybe use theta & phi?
+        axes_map: {"x": "x", "y": "y"}, # maybe use theta & phi?
+        inverted: ["x"]
     },
     properties: {
         speed: {'x':0.1, 'y':0.1} #m/s

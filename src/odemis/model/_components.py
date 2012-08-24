@@ -382,13 +382,27 @@ class Actuator(HwComponent):
     A component which represents an actuator (motorised part).
     This is an abstract class that should be inherited.
     """
-    def __init__(self, name, role, axes=None, ranges=None, children=None, **kwargs):
+    def __init__(self, name, role, axes=None, inverted=None, ranges=None, children=None, **kwargs):
+        """
+        axes (set of string): set of the names of the axes
+        inverted (set of string): sub-set of axes with the name of all axes which
+            are to be inverted (move in opposite direction)
+        ranges (dict string -> 2-tuple of float): name of the axis to min, max position
+        """
         HwComponent.__init__(self, name, role, **kwargs)
         if children:
-            raise ArgumentError("Actuator components cannot have children.")
+            raise ArgumentError("Actuator %s cannot have children.", name)
         if axes is None:
             axes = []
         self._axes = frozenset(axes)
+        if inverted is None:
+            inverted = []
+        self._inverted = frozenset(inverted)
+        if not self._inverted <= self._axes:
+            non_existing = self._inverted - self._axes
+            raise ArgumentError("Actuator %s has non-existing inverted axes: %s.",
+                                ", ".join(non_existing))
+        
         if ranges is None:
             ranges = {}
         self._ranges = dict(ranges)
@@ -420,7 +434,28 @@ class Actuator(HwComponent):
     # TODO this doesn't work over the network, because the proxy will always
     # say that the method exists.
     # moveAbs(self, pos): should be implemented if and only if supported
-
+    
+    # helper methods
+    def _applyInversionRel(self, shift):
+        """
+        shift (dict string -> float): the shift for a moveRel()
+        return (dict string -> float): the shift with inversion of axes applied
+        """
+        ret = dict(shift)
+        for a in self._inverted:
+            ret[a] = -ret[a]
+        return ret
+    
+    def _applyInversionAbs(self, pos):
+        """
+        pos (dict string -> float): the new position for a moveAbs()
+        return (dict string -> float): the position with inversion of axes applied
+        """
+        ret = dict(pos)
+        for a in self._inverted:
+            ret[a] = self._ranges[a][0] + self._ranges[a][1] - ret[a] 
+        return ret
+    
 class Emitter(HwComponent):
     """
     A component which represents an emitter.
@@ -450,14 +485,15 @@ class CombinedActuator(Actuator):
         children (dict str -> actuator): axis name -> actuator to be used for this axis
         axes_map (dict str -> str): axis name in this actuator -> axis name in the child actuator
         """
-        Actuator.__init__(self, name, role, **kwargs)
-
         if not children:
-            raise Exception("CombinedActuator needs children")
+            raise ArgumentError("CombinedActuator needs children")
 
         if set(children.keys()) != set(axes_map.keys()):
-            raise LookupError("CombinedActuator needs the same keys in children and axes_map")
+            raise ArgumentError("CombinedActuator needs the same keys in children and axes_map")
         
+        # this set ._axes and ._ranges
+        Actuator.__init__(self, name, role, axes=children.keys(), **kwargs)
+
         self._axis_to_child = {} # axis name => (Actuator, axis name)
         self._position = {}
         self._speed = {}
@@ -470,15 +506,13 @@ class CombinedActuator(Actuator):
             # At least, it has .ranges and .axes (and they are set and dict)
             # if not isinstance(child, Actuator):
             if not isinstance(child, ComponentBase):
-                raise Exception("Child %s is not a component." % str(child))
+                raise ArgumentError("Child %s is not a component." % str(child))
             if (not hasattr(child, "ranges") or not isinstance(child.ranges, dict) or
                 not hasattr(child, "axes") or not isinstance(child.axes, collections.Set)):
-                raise Exception("Child %s is not an actuator." % str(child))
+                raise ArgumentError("Child %s is not an actuator." % str(child))
             self._ranges[axis] = child.ranges[axes_map[axis]]
             self._position[axis] = child.position.value[axes_map[axis]]
             self._speed[axis] = child.speed.value[axes_map[axis]]
-
-        self._axes = frozenset(self._axis_to_child.keys())
 
         # check if can do absolute positioning: all the axes have moveAbs()
         canAbs = True
@@ -553,6 +587,7 @@ class CombinedActuator(Actuator):
         Move the stage the defined values in m for each axis given.
         shift dict(string-> float): name of the axis and shift in m
         """
+        shift = self._applyInversionRel(shift)
         # TODO check values are within range
         futures = []
         for axis, distance in shift.items():
@@ -566,7 +601,7 @@ class CombinedActuator(Actuator):
             return futures[0]
         else:
             #TODO return future composed of multiple futures
-            return None
+            return futures[0]
 
     # duplicated as moveAbs() iff all the axes have moveAbs()
     def _moveAbs(self, pos):

@@ -829,7 +829,7 @@ class Bus(model.Actuator):
     """
     Represent a chain of PI controller over a serial port
     """
-    def __init__(self, name, role, port, axes, children=None, **kwargs):
+    def __init__(self, name, role, port, axes, **kwargs):
         """
         port (string): name of the serial port to connect to the controllers
         axes (dict string=> 3-tuple(1<=int<=16, 1<=int, boolean): the configuration
@@ -839,7 +839,7 @@ class Bus(model.Actuator):
          _not_ seen as a child from the odemis model point of view.
         """
         # this set ._axes and ._ranges
-        model.Actuator.__init__(self, name, role, axes=axes.keys(), children=children, **kwargs)
+        model.Actuator.__init__(self, name, role, axes=axes.keys(), **kwargs)
         
         ser = Controller.openSerialPort(port)
 
@@ -961,6 +961,7 @@ class Bus(model.Actuator):
         shift dict(string-> float): name of the axis and shift in m
         returns (Future): future that control the asynchronous move
         """
+        shift = self._applyInversionRel(shift)
         # converts the request into one action (= a dict controller -> channels + distance) 
         action_axes = {}
         for axis, distance in shift.items():
