@@ -14,8 +14,8 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
-from driver import simulated
-import model
+from odemis.driver import simulated
+from odemis import model
 import unittest
 
 class ActuatorTest(object):
@@ -39,20 +39,13 @@ class ActuatorTest(object):
         
         for name, kwargs in devices:
             print "opening ", name
-            dev = self.actuator_type(name, "actuator", None, **kwargs)
+            dev = self.actuator_type(name, "actuator", children=None, **kwargs)
             self.assertTrue(dev.selfTest(), "Actuator self test failed.")
 
     def test_selfTest(self):
         dev = self.actuator_type(*self.actuator_args)
         self.assertTrue(dev.selfTest(), "Actuator self test failed.")
-
-    def test_metadata(self):
-        dev = self.actuator_type(*self.actuator_args)
-        md = dev.getMetadata()
-        self.assertIsInstance(md, dict, "Metadata should be a dict")
-        if hasattr(dev, "position"):
-            self.assertGreaterEqual(len(md), 1, "Metadata doesn't contain position information")
-    
+   
     def test_simple(self):
         dev = self.actuator_type(*self.actuator_args)
         self.assertGreaterEqual(len(dev.axes), 1, "Actuator has no axis")
@@ -72,13 +65,13 @@ class ActuatorTest(object):
             move[axis] = (dev.ranges[axis][0] + dev.ranges[axis][1]) / 2
         f = dev.moveAbs(move)
         f.result() # wait
-        self.assertDictEqual(move, dev.position, "Actuator didn't move to the requested position")
+        self.assertDictEqual(move, dev.position.value, "Actuator didn't move to the requested position")
 
     def test_moveRel(self):
         dev = self.actuator_type(*self.actuator_args)
 
         if hasattr(dev, "position"):
-            prev_pos = dev.position
+            prev_pos = dev.position.value
             
         move = {}
         # move by 1%
@@ -93,7 +86,7 @@ class ActuatorTest(object):
         f = dev.moveRel(move)
         f.result() # wait
         if hasattr(dev, "position"):
-            self.assertDictEqual(expected_pos, dev.position, "Actuator didn't move to the requested position")
+            self.assertDictEqual(expected_pos, dev.position.value, "Actuator didn't move to the requested position")
 
     def test_stop(self):
         dev = self.actuator_type(*self.actuator_args)
@@ -141,7 +134,7 @@ class Stage2DTest(unittest.TestCase, ActuatorTest):
     
     actuator_type = simulated.Stage2D
     # name, role, children (must be None)
-    actuator_args = ("stage", "test", {"x", "y"}, None)
+    actuator_args = ("stage", "test", {"x", "y"})
 
 
 if __name__ == "__main__":

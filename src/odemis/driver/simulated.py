@@ -59,6 +59,9 @@ class Stage2D(model.Actuator):
     Simulated stage component. Just pretends to be able to move all around.
     """
     def __init__(self, name, role, axes, ranges=None, **kwargs):
+        """
+        axes (set of string): names of the axes
+        """
 #        assert ("axes" not in kwargs) and ("ranges" not in kwargs)
         assert len(axes) > 0
         if ranges is None:

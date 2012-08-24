@@ -547,6 +547,8 @@ class CombinedActuator(Actuator):
                     self._speed[a] = value[axes_map[axis]]
                 self._updateSpeed()
             c.speed.subscribe(update_speed_per_child)
+            
+        #TODO hwVersion swVersion
 
     def _updatePosition(self):
         """
@@ -582,6 +584,7 @@ class CombinedActuator(Actuator):
             final_value[axis] = child.speed.value[ma]
         return final_value
 
+    @isasync
     def moveRel(self, shift):
         """
         Move the stage the defined values in m for each axis given.
@@ -589,12 +592,13 @@ class CombinedActuator(Actuator):
         """
         shift = self._applyInversionRel(shift)
         # TODO check values are within range
+        # TODO merge multiple axes for the same children
         futures = []
         for axis, distance in shift.items():
             if axis not in self._axis_to_child:
                 raise Exception("Axis unknown: " + str(axis))
-            child, child_axis = self._axes[axis]
-            f = child[child_axis].moveRel(distance)
+            child, child_axis = self._axis_to_child[axis]
+            f = child.moveRel({child_axis: distance})
             futures.append(f)
 
         if len(futures) == 1:
@@ -604,6 +608,7 @@ class CombinedActuator(Actuator):
             return futures[0]
 
     # duplicated as moveAbs() iff all the axes have moveAbs()
+    @isasync
     def _moveAbs(self, pos):
         u"""
         Move the stage to the defined position in m for each axis given.
@@ -616,7 +621,8 @@ class CombinedActuator(Actuator):
         for axis, distance in pos.items():
             if axis not in self._axis_to_child:
                 raise Exception("Axis unknown: " + str(axis))
-            self._axes[axis].moveAbs(distance)
+            child, child_axis = self._axis_to_child[axis]
+            f = child.moveAbs({child_axis: distance})
 
 
     def stop(self):
