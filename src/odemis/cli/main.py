@@ -104,7 +104,7 @@ def print_component(comp, level):
     if level == 0:
         indent = ""
     else:
-        indent = u" ↳"*level + " "
+        indent = "  "*level + "↳ "
     print indent + comp.name + "\trole:" + comp.role
     # TODO would be nice to display which class is the component
     # TODO:
