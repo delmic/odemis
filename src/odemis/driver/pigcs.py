@@ -887,8 +887,8 @@ class Bus(model.Actuator):
         
         # min speed = don't be crazy slow. max speed from hardware spec
         self.speed = model.MultiSpeedVA(speed, range=[10e-6, max_speed], unit="m/s",
-                                        setter=self.setSpeed)
-        self.setSpeed(speed)
+                                        setter=self._setSpeed)
+        self._setSpeed(speed)
         
         # set HW and SW version
         self._swVersion = "%s (serial driver: %s)" % (__version__.version, self.getSerialDriver(port))
@@ -944,7 +944,7 @@ class Bus(model.Actuator):
         else:
             return "Unknown"
     
-    def setSpeed(self, value):
+    def _setSpeed(self, value):
         """
         value (dict string-> float): speed for each axis
         returns (dict string-> float): the new value

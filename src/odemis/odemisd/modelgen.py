@@ -337,10 +337,12 @@ class Instantiator(object):
                 # detect child with multiple parents
                 if ("parent" in self.ast[child_name] and
                     self.ast[child_name]["parent"] != name):
-                    raise SemanticError("Error in "
-                            "microscope instantiation file: component %s "
-                            "is child of both %s and %s." 
-                            % (child_name, name, self.ast[child_name]["parent"]))
+                    logging.warning("component %s is child of both %s and %s.", 
+                            child_name, name, self.ast[child_name]["parent"])
+#                    raise SemanticError("Error in "
+#                            "microscope instantiation file: component %s "
+#                            "is child of both %s and %s." 
+#                            % (child_name, name, self.ast[child_name]["parent"]))
                 self.ast[child_name]["parent"] = name
         
         # try to get every component, at the end, we have all of them 
@@ -417,6 +419,7 @@ def instantiate_model(inst_model, container=None, create_sub_containers=False,
     try:
         instantiator.instantiate_model()
     except:
+        logging.exception("Failed to instantiate the model")
         # clean up by stopping everything which we had started
         for comp in instantiator.components:
             try:

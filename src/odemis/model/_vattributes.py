@@ -136,6 +136,7 @@ class VigilantAttribute(VigilantAttributeBase):
 
     # cannot be oneway because we need the exception in case of error
     def _set_value(self, value):
+        # TODO need a lock?
         if self.readonly:
             raise NotSettableError("Value is read-only")
         prev_value = self._value

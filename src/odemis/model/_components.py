@@ -14,15 +14,15 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
-from Pyro4.core import isasync
+from . import _core, _dataflow, _vattributes
 from ._core import roattribute
-from . import _vattributes
-from . import _dataflow
-from . import _core
+from Pyro4.core import isasync
 from odemis import __version__
 import Pyro4
+import collections
 import inspect
 import logging
+import threading
 import urllib
 import weakref
 
@@ -453,10 +453,14 @@ class CombinedActuator(Actuator):
         Actuator.__init__(self, name, role, **kwargs)
 
         if not children:
-            raise Exception("Combined Actuator needs children")
+            raise Exception("CombinedActuator needs children")
 
-        self._ranges = {}
+        if set(children.keys()) != set(axes_map.keys()):
+            raise LookupError("CombinedActuator needs the same keys in children and axes_map")
+        
         self._axis_to_child = {} # axis name => (Actuator, axis name)
+        self._position = {}
+        self._speed = {}
         for axis, child in children.items():
             self._children.add(child)
             child.parent = self
@@ -468,24 +472,84 @@ class CombinedActuator(Actuator):
             if not isinstance(child, ComponentBase):
                 raise Exception("Child %s is not a component." % str(child))
             if (not hasattr(child, "ranges") or not isinstance(child.ranges, dict) or
-                not hasattr(child, "axes") or not isinstance(child.axes, set)):
+                not hasattr(child, "axes") or not isinstance(child.axes, collections.Set)):
                 raise Exception("Child %s is not an actuator." % str(child))
             self._ranges[axis] = child.ranges[axes_map[axis]]
+            self._position[axis] = child.position.value[axes_map[axis]]
+            self._speed[axis] = child.speed.value[axes_map[axis]]
 
         self._axes = frozenset(self._axis_to_child.keys())
 
         # check if can do absolute positioning: all the axes have moveAbs()
         canAbs = True
-        for controller in self._axes:
-            canAbs &= hasattr(controller, "moveAbs") # TODO: need to use capabilities, to work with proxies
+        for child, axis in self._axis_to_child.values():
+            canAbs &= hasattr(child, "moveAbs") # TODO: need to use capabilities, to work with proxies
         if canAbs:
             self.moveAbs = self._moveAbs
 
-        # TODO speed
-        # TODO position
+
+        children_axes = {} # dict actuator -> set of string (our axes) 
+        for axis, (child, axis_mapped) in self._axis_to_child.items():
+            if child in children_axes:
+                children_axes[child].add(axis)
+            else:
+                children_axes[child] = set([axis])
+            
+        # position & speed: special VAs combining multiple VAs
+        self.position = _vattributes.VigilantAttribute(self._position, unit="m", readonly=True)
+        for c, axes in children_axes.items():
+            def update_position_per_child(value):
+                for a in axes:
+                    self._position[a] = value[axes_map[axis]]
+                self._updatePosition()
+            c.position.subscribe(update_position_per_child)
+            
+        # TODO should have a range per axis
+        self.speed = _vattributes.MultiSpeedVA(self._speed, [0., 10.], "m/s", 
+                                               setter=self._setSpeed)
+        for c, axes in children_axes.items():
+            def update_speed_per_child(value):
+                for a in axes:
+                    self._speed[a] = value[axes_map[axis]]
+                self._updateSpeed()
+            c.speed.subscribe(update_speed_per_child)
+
+    def _updatePosition(self):
+        """
+        update the position VA
+        """
+        # it's read-only, so we change it via _value
+        self.position._value = self._position
+        self.position.notify(self._position)
+        
+    def _updateSpeed(self):
+        """
+        update the speed VA
+        """
+        # we must not call the setter, so write directly the raw value
+        self.speed._value = self._speed
+        self.speed.notify(self._speed)
+        
+    def _setSpeed(self, value):
+        """
+        value (dict string-> float): speed for each axis
+        returns (dict string-> float): the new value
+        """
+        # FIXME the problem with this implementation is that the subscribers
+        # will receive multiple notifications for each set:
+        # * one for each axis (via _updateSpeed from each child)
+        # * the actual one (but it's probably dropped as it's the same value)
+        final_value = dict(value) # copy
+        for axis, v in value.items():
+            child, ma = self._axis_to_child[axis]
+            new_speed = dict(child.speed.value) # copy
+            new_speed[ma] = v
+            child.speed.value = new_speed
+            final_value[axis] = child.speed.value[ma]
+        return final_value
 
     def moveRel(self, shift):
-        u"""
+        """
         Move the stage the defined values in m for each axis given.
         shift dict(string-> float): name of the axis and shift in m
         """
@@ -520,29 +584,23 @@ class CombinedActuator(Actuator):
             self._axes[axis].moveAbs(distance)
 
 
-    def stop(self, axis=None):
+    def stop(self):
         """
-        stops the motion
-        axis (string): name of the axis to stop, or all of them if not indicated
+        stops the motion on every axes
         """
-        if not axis:
-            for controller in self._axis_to_child:
-                controller.stop()
-        else:
-            controller = self._axis_to_child[axis]
-            controller.stop()
-
-    def waitStop(self, axis=None):
-        """
-        wait until the stops the motion
-        axis (string): name of the axis to stop, or all of them if not indicated
-        """
-        if not axis:
-            for controller in self._axis_to_child:
-                controller.waitStop()
-        else:
-            controller = self._axis_to_child[axis]
-            controller.waitStop()
+        # TODO: only stop the children axes that we control (need a "axes" argument)
+        threads = []
+        for child in self._children:
+            # it's synchronous, but we want to stop them as soon as possible
+            thread = threading.Thread(name="stopping fork", target=child.stop)
+            thread.start()
+            threads.append(thread)
+            
+        # wait for completion
+        for thread in threads:
+            thread.join(1)
+            if thread.is_alive():
+                logging.warning("Stopping child actuator of '%s' is taking more than 1s", self.name)
 
 
 class MockComponent(HwComponent):
@@ -585,5 +643,38 @@ class MockComponent(HwComponent):
 
             self._children.add(child)
             child.parent = self
+
+
+class InstantaneousFuture(object):
+    """
+    This is a simple class which follow the Future interface and represent a 
+    call already finished successfully when returning.
+    """
+    def __init__(self, result=None, exception=None):
+        self._result = result
+        self._exception = exception
+    
+    def cancel(self):
+        return False
+
+    def cancelled(self):
+        return False
+
+    def running(self):
+        return False
+
+    def done(self):
+        return True
+
+    def result(self, timeout=None):
+        if self._exception:
+            raise self._exception
+        return self._result
+
+    def exception(self, timeout=None):
+        return self._exception
+
+    def add_done_callback(self, fn):
+        fn(self)
 
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:

@@ -79,7 +79,7 @@ class Stage2D(model.Actuator):
         
         init_speed = {}
         for a in axes:
-            init_speed[a] = 10.0 
+            init_speed[a] = 10.0 # we are super fast! 
         self.speed = model.MultiSpeedVA(init_speed, [0., 10.], "m/s")
     
     def _updatePosition(self):
@@ -104,7 +104,7 @@ class Stage2D(model.Actuator):
         time_end = time_start + maxtime
         self._updatePosition()
         # TODO queue the move and pretend the position is changed only after the given time
-        return InstantaneousFuture()
+        return model.InstantaneousFuture()
         
     @isasync
     def moveAbs(self, pos):
@@ -121,43 +121,11 @@ class Stage2D(model.Actuator):
         # TODO stop add this move
         time_end = time_start + maxtime
         self._updatePosition()
-        return InstantaneousFuture()
+        return model.InstantaneousFuture()
     
     def stop(self, axes=None):
         # TODO empty the queue for the given axes
         return
-        
 
-class InstantaneousFuture(object):
-    """
-    This is a simple class which follow the Future interface and represent a 
-    call already finished successfully when returning.
-    """
-    def __init__(self, result=None, exception=None):
-        self._result = result
-        self._exception = exception
-    
-    def cancel(self):
-        return False
-
-    def cancelled(self):
-        return False
-
-    def running(self):
-        return False
-
-    def done(self):
-        return True
-
-    def result(self, timeout=None):
-        if self._exception:
-            raise self._exception
-        return self._result
-
-    def exception(self, timeout=None):
-        return self._exception
-
-    def add_done_callback(self, fn):
-        fn(self)
 
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:
