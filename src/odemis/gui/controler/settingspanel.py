@@ -1,6 +1,6 @@
 #-*- coding: utf-8 -*-
 '''
-@author: Rinze de Laat 
+@author: Rinze de Laat
 
 Copyright © 2012 Rinze de Laat, Delmic
 
@@ -84,7 +84,7 @@ class SettingsPanel(object):
         self.num_entries += 1
 
 
-    def add_value(self, label, value):
+    def add_value(self, label, value, control_type=None):
         self._clear()
 
         # Create label

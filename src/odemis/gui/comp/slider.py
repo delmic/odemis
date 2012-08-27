@@ -1,6 +1,6 @@
 #-*- coding: utf-8 -*-
 '''
-@author: Rinze de Laat 
+@author: Rinze de Laat
 
 Copyright © 2012 Rinze de Laat, Delmic
 
@@ -151,6 +151,7 @@ class CustomSlider(wx.PyPanel):
         # log.debug("OnLeftUp")
         if self.HasCapture():
             self.ReleaseMouse()
+
         event.Skip()
 
 
@@ -168,16 +169,16 @@ class CustomSlider(wx.PyPanel):
         #calculate value, based on pointer position
         self.current_value = self._pixel_to_val()
 
+        if self.linked_field:
+            if hasattr(self.linked_field, 'SetValueStr'):
+                self.linked_field.SetValueStr(self.current_value)
+            else:
+                self.linked_field.SetValue(self.current_value)
+
 
     def OnMotion(self, event=None):
         if self.GetCapture():
             self.getPointerLimitPos(event.GetX())
-
-            if self.linked_field:
-                if hasattr(self.linked_field, 'SetValueStr'):
-                    self.linked_field.SetValueStr(self.current_value)
-                else:
-                    self.linked_field.SetValue(self.current_value)
 
             self.Refresh()
 
