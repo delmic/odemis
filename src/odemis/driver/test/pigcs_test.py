@@ -17,7 +17,7 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from concurrent import futures
-from driver import pigcs
+from odemis.driver import pigcs
 import logging
 import math
 import os
@@ -33,7 +33,7 @@ else:
     PORT = "/dev/ttyPIGCS" #"/dev/ttyUSB0"
 
 CONFIG_BUS_BASIC = {"x":(1, 1, False)}
-CONFIG_BUS_TWO = {"x":(1, 1, False), "x":(2, 1, False)}  
+CONFIG_BUS_TWO = {"x":(1, 1, False), "y":(2, 1, False)}  
 CONFIG_CTRL_BASIC = (1, {1: False})
 
 #@unittest.skip("faster") 
@@ -329,3 +329,10 @@ class TestActuator(unittest.TestCase):
 if __name__ == "__main__":
     #import sys;sys.argv = ['', 'Test.testName']
     unittest.main()
+
+#    addresses = pigcs.Controller.scan(PORT)
+#    print addresses
+#
+#    stage = pigcs.Bus("test", "stage", PORT, CONFIG_BUS_BASIC)
+#    print stage.hwVersion
+#    print stage.selfTest()

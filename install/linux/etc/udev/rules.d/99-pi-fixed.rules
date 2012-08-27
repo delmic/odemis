@@ -1,6 +1,31 @@
 # force the USB connection to also be available as /dev/ttyPIGCS
 # Note: it's going to fail if two devices are plugged in!
-SUBSYSTEMS=="usb", ATTRS{idProduct}=="1008", ATTRS{idVendor}=="1a72", KERNEL=="ttyUSB[0-9]*", SYMLINK="ttyPIGCS"
+# as found in the E-861
+SUBSYSTEMS=="usb", ATTRS{idProduct}=="1008", ATTRS{idVendor}=="1a72", KERNEL=="ttyUSB[0-9]*", SYMLINK="ttyPIE"
+
+# as found in the C-867.160
+SUBSYSTEMS=="usb", ATTRS{idProduct}=="1009", ATTRS{idVendor}=="1a72", KERNEL=="ttyUSB[0-9]*", SYMLINK="ttyPIC"
+
+# from FTDIBUS.inf (windows driver):
+#E0A0="PI C-865 Piezomotor Controller"
+#E0A1="PI Encoder Trigger Box"
+#1000="PI C-866 Piezomotor Controller"
+#1001="PI C-663 Mercury-Step"
+#1002="PI C-725 Piezomotor Controller"
+#1005="PI E-517 Digital Piezo Controller Operation Module"
+#1007="PI C-863"
+#1008="PI E-861 PiezoWalk(R) Controller"
+#1009="PI C-867 Piezomotor Controller"
+#100D="PI E-609 Digital Piezo Controller"
+#100E="PI E-709 Digital Piezo Controller"
+#100F="PI Digital Piezo Controller"
+#1011="PI Digital Piezo Controller"
+#1012="PI Motion Controller"
+#1013="PI Motion Controller"
+#1014="PI Device"
+#1015="PI Device"
+#1016="PI Digital Servo Module"
 
 # just a serial port converted
 SUBSYSTEMS=="usb", ATTRS{idProduct}=="2303", ATTRS{idVendor}=="067b", KERNEL=="ttyUSB[0-9]*", SYMLINK="ttyPIRS"
+
