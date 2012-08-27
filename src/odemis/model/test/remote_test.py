@@ -17,14 +17,13 @@ You should have received a copy of the GNU General Public License along with Ode
 '''
 from concurrent import futures
 from concurrent.futures.thread import ThreadPoolExecutor
-from driver import andorcam3
-from model import roattribute, oneway, isasync
-from model._vattributes import VigilantAttributeBase
+from odemis.model import roattribute, oneway, isasync
+from odemis.model._vattributes import VigilantAttributeBase
 from multiprocessing.process import Process
 from threading import Thread
 import Pyro4
 import gc
-import model
+from odemis import model
 import numpy
 import os
 import pickle
@@ -33,7 +32,8 @@ import time
 import unittest
 
 #gc.set_debug(gc.DEBUG_LEAK | gc.DEBUG_STATS)
-        
+
+#@unittest.skip("simple")
 class ContainerTest(unittest.TestCase):
     def test_empty_container(self):
         container = model.createNewContainer("testempty")
@@ -79,22 +79,6 @@ class ContainerTest(unittest.TestCase):
         comp.terminate()
         # we are not terminating the children, but this should be caught by the container
         model.getContainer("testmulti").terminate()
-
-    def test_andorcam3(self):
-        comp = model.createInNewContainer("testcont", andorcam3.AndorCam3, 
-                                          {"name":"camera", "role":"test", 
-                                           "children":None, "device":0})
-        self.assertEqual(comp.name, "camera")
-        
-        self.assertIsInstance(comp.targetTemperature, VigilantAttributeBase)
-                
-        ttemp = comp.targetTemperature.value
-        self.assertTrue(-300 < ttemp and ttemp < 100)
-        comp.targetTemperature.value = comp.targetTemperature.range[0]
-        self.assertEqual(comp.targetTemperature.value, comp.targetTemperature.range[0])
-        
-        comp.terminate()
-        model.getContainer("testcont").terminate()
 
     def test_timeout(self):
         if Pyro4.config.COMMTIMEOUT == 0 or Pyro4.config.COMMTIMEOUT > 20:
@@ -191,7 +175,7 @@ class ProxyOfProxyTest(unittest.TestCase):
         self.assertIsInstance(comp_indir.cont.range, tuple)
         try:
             # there is no such thing, it should fail
-            print "Choices:", comp_indir.cont.choices
+            c = len(comp_indir.cont.choices)
             self.fail("Accessing choices should fail")
         except:
             pass
@@ -294,6 +278,7 @@ class RemoteTest(unittest.TestCase):
         comp.stopServer()
         time.sleep(0.1) # give it some time to terminate
 
+#    @unittest.skip("simple")
     def test_exception(self):
         rdaemon = Pyro4.Proxy("PYRO:Pyro.Daemon@./u:"+self.container_name)
         comp = rdaemon.getObject("mycomp")
@@ -320,7 +305,7 @@ class RemoteTest(unittest.TestCase):
         self.assertEqual(val, "ro", "Reading attribute failed")
         comp.stopServer()
         time.sleep(0.1) # give it some time to terminate
-
+    
     def test_async(self):
         """
         test futures
@@ -344,6 +329,58 @@ class RemoteTest(unittest.TestCase):
         self.assertGreater(ft1.result(), 2)
         
         self.assertEqual(comp.get_number_futures(), 2)
+        
+        comp.stopServer()
+        time.sleep(0.1) # give it some time to terminate
+
+    def test_unref_futures(self):
+        """
+        test many futures which don't even get referenced
+        It should behave as if the function does not return anything
+        """
+        rdaemon = Pyro4.Proxy("PYRO:Pyro.Daemon@./u:"+self.container_name)
+        comp = rdaemon.getObject("mycomp")
+        comp.set_number_futures(0)
+        
+        expected = 100 # there was a bug with expected > threadpool size (=24)
+        start = time.time()
+        for i in range(expected):
+            comp.do_long(0.1)
+            
+        ft_last = comp.do_long(0.1)
+        ft_last.result()
+        duration = time.time() - start
+        self.assertGreaterEqual(duration, expected * 0.1)
+        
+        self.assertEqual(comp.get_number_futures(), expected + 1)
+        
+        comp.stopServer()
+        time.sleep(0.1) # give it some time to terminate
+
+    def test_ref_futures(self):
+        """
+        test many futures which get referenced and accumulated
+        It should behave as if the function does not return anything
+        """
+        rdaemon = Pyro4.Proxy("PYRO:Pyro.Daemon@./u:"+self.container_name)
+        comp = rdaemon.getObject("mycomp")
+        comp.set_number_futures(0)
+        small_futures = []
+        
+        expected = 100 # there was a bug with expected > threadpool size (=24)
+        start = time.time()
+        for i in range(expected):
+            small_futures.append(comp.do_long(0.1))
+        
+        ft_last = comp.do_long(0.1)
+        ft_last.result()
+        duration = time.time() - start
+        self.assertGreaterEqual(duration, expected * 0.1)
+        
+        for f in small_futures:
+            self.assertTrue(f.done())
+        
+        self.assertEqual(comp.get_number_futures(), expected + 1)
         
         comp.stopServer()
         time.sleep(0.1) # give it some time to terminate
