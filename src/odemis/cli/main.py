@@ -39,6 +39,7 @@ def get_backend_status():
     except:
         logging.info("Failed to find microscope")
         if os.path.exists(model.BACKEND_FILE):
+            logging.exception("Unresponsive back-end")
             return BACKEND_DEAD
         else:
             logging.info("Back-end %s file doesn't exists", model.BACKEND_FILE)

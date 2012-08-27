@@ -124,9 +124,12 @@ class OpticalBackendConnected(SECOMModel):
         self.turnOn()
 
     def turnOn(self):
+        # TODO turn on the light
         self.camera.data.subscribe(self.onNewCameraImage)
         
     def turnOff(self):
+        # TODO turn of the light
+        # TODO forbid move in this mode (or just forbid move in the canvas if no stream?)
         self.camera.data.unsubscribe(self.onNewCameraImage)        
         
     # TODO: see if really necessary: because __del__ prevents GC to work
