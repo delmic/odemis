@@ -133,8 +133,8 @@ class OpticalBackendConnected(SECOMModel):
         self.camera.data.unsubscribe(self.onNewCameraImage)
 
     # TODO: see if really necessary: because __del__ prevents GC to work
-    # def __del__(self):
-    #     self.turnOff()
+    def __del__(self):
+        self.turnOff()
 
     def onNewCameraImage(self, dataflow, data):
         if self.optical_auto_bc:

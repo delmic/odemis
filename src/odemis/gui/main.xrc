@@ -359,7 +359,7 @@
                         <object class="sizeritem">
                           <object class="ImageTextButton" name="btn_aquire">
                             <size>380,-1</size>
-                            <label>AQUIRE IMAGE</label>
+                            <label>ACQUIRE IMAGE</label>
                             <delta>1</delta>
                             <bitmap>img/btn_aquire_image.png</bitmap>
                             <hover>img/btn_aquire_image_h.png</hover>
