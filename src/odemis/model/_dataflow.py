@@ -126,16 +126,15 @@ class DataFlowBase(object):
         with self._lock:
             count_before = len(self._listeners)
             self._listeners.add(WeakMethod(listener))
-            
             if count_before == 0:
                 self.start_generate()
         
     def unsubscribe(self, listener):
         with self._lock:
+            count_before = len(self._listeners)
             self._listeners.discard(WeakMethod(listener))
-
             count_after = len(self._listeners)
-            if count_after == 0:
+            if count_before > 0 and count_after == 0:
                 self.stop_generate()
     
     # TODO should default to open a thread that continuously call get()
