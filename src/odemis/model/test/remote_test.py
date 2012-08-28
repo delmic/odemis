@@ -532,6 +532,15 @@ class RemoteTest(unittest.TestCase):
         prop.value = 3 # +1
         self.assertEqual(self.called, called_before)
         
+        # re-susbcribe
+        prop.subscribe(self.receive_va_update)
+        # change remotely
+        comp.change_prop(45)
+        time.sleep(0.1) # give time to receive notifications
+        self.assertEqual(prop.value, 45)
+        prop.unsubscribe(self.receive_va_update)
+        self.assertEqual(self.called, called_before+1)
+        
         try:
             prop.value = 7.5
             self.fail("Assigning float to a int should not be allowed.")
@@ -655,6 +664,14 @@ class MyComponent(model.Component):
         always raise an exception
         """
         raise MyError
+    
+    # oneway to ensure that it will be set in a different thread than the call
+    @oneway
+    def change_prop(self, value):
+        """
+        set a new value for the VA prop
+        """
+        self.prop.value = value
     
     @isasync
     def do_long(self, duration=5):
