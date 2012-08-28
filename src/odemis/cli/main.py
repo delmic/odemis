@@ -27,6 +27,7 @@ import inspect
 import logging
 import os
 import sys
+from Pyro4.errors import CommunicationError
 
 BACKEND_RUNNING = "RUNNING"
 BACKEND_DEAD = "DEAD"
@@ -36,14 +37,17 @@ def get_backend_status():
         microscope = model.getMicroscope()
         if len(microscope.name) > 0:
             return BACKEND_RUNNING
-    except:
+    except CommunicationError:
         logging.info("Failed to find microscope")
         if os.path.exists(model.BACKEND_FILE):
-            logging.exception("Unresponsive back-end")
             return BACKEND_DEAD
         else:
             logging.info("Back-end %s file doesn't exists", model.BACKEND_FILE)
             return BACKEND_STOPPED
+    except:
+        logging.exception("Unresponsive back-end")
+        return BACKEND_DEAD
+        
     return BACKEND_DEAD
 
 status_to_xtcode = {BACKEND_RUNNING: 0,
