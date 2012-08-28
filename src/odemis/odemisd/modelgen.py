@@ -279,7 +279,8 @@ class Instantiator(object):
                 # now the child ought to be created
                 return self.get_component_by_name(name)
     
-    def get_children(self, root):
+    @staticmethod
+    def get_children(root):
         """
         Return the set of components which are referenced from the given component 
          (children, emitters, detectors, actuators...)
@@ -288,10 +289,10 @@ class Instantiator(object):
         """
         ret = set([root])
         for child in getattr(root, "children", set()):
-            ret |= self.get_children(child)
+            ret |= Instantiator.get_children(child)
         if isinstance(root, model.Microscope):
             for child in (root.detectors | root.emitters | root.actuators):
-                ret |= self.get_children(child)
+                ret |= Instantiator.get_children(child)
         
         return ret
     
