@@ -56,7 +56,7 @@ class OdemisGUIApp(wx.App):
         # Constructor of the parent class
         # ONLY CALL IT AT THE END OF :py:method:`__init__` BECAUSE OnInit will be called
         # and it needs the attributes defined in this constructor!
-        wx.App.__init__(self, redirect=False)
+        wx.App.__init__(self, redirect=True)
 
     def OnInit(self):
         """ Application initialization, automatically run from the :wx:`App`
@@ -280,7 +280,12 @@ class OdemisGUIApp(wx.App):
         logging.info("Exiting Odemis")
 
         # Put cleanup actions here (like disconnect from odemisd)
-        self.secom_model.turnOff()
+        try:
+            self.secom_model.turnOff()
+        except AttributeError:
+            # The attribute exception was added because turnOff was preventing
+            # us form close the frame
+            pass
 
         #self.dlg_startup.Destroy()
         self.main_frame.Destroy()
