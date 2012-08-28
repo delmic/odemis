@@ -15,13 +15,13 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from concurrent import futures
+from odemis import __version__, model
 from odemis.model import isasync
-from odemis import model
-from odemis import __version__
 import collections
 import glob
 import logging
 import os
+import re
 import serial
 import sys
 import threading
@@ -74,6 +74,10 @@ it into a command for the Controller, which sends it to the actual PI controller
 and waits for it to finish.  
 
 """
+# constants for model number
+MODEL_C867 = 867
+MODEL_E861 = 861
+MODEL_UNKNOWN = 0
 
 class Controller(object):
     def __init__(self, ser, address=None, axes=None):
@@ -106,6 +110,11 @@ class Controller(object):
         except IOError:
             raise IOError("No answer from controller %d" % address)
         
+        self._model = self.getModel()
+        if self._model == MODEL_UNKNOWN:
+            logging.warning("Controller %d is an unsupported version (%s)", self.address, self.GetIdentification())
+        #TODO support C867
+        
         self._channels = self.GetAxes() # available channels (=axes)
         # dict axis -> boolean
         self._hasLimit = dict([(a, self.hasLimitSwitches(a)) for a in self._channels])
@@ -126,6 +135,8 @@ class Controller(object):
                 # for now we don't handle closed-loop anyway...
                 raise NotImplementedError("Closed-loop support not yet implemented")
             else:
+                if self._model == MODEL_C867: # only support closed-loop mode
+                    raise LookupError("Axis %d of controller %d does not support open-loop mode" % (a, address))
                 # that should be the default, but for safety we force it
                 self.SetServo(a, False)
                 self.SetStepAmplitude(a, 55) # maximum is best
@@ -141,6 +152,17 @@ class Controller(object):
         # actually set just before a move
         # The max using closed-loop info seem purely arbitrary
         # (max m/s) = (max step/s) / (step/m)
+        
+        # FIXME: how to use the closed-loop version? 
+#        max_vel = float(self.GetParameter(1, 0xA)) # in unit/s
+#        num_unit = float(self.GetParameter(1, 0xE))
+#        den_unit = float(self.GetParameter(1, 0xF))
+#        max_accel = float(self.GetParameter(1, 0x4A)) # in unit/s²
+#        print max_vel, max_accel, num_unit, den_unit
+#        self.speed_max = max_vel
+#        self.accel_max = max_accel
+        
+        # FIXME 0x7000204 seems specific to E-861. need different initialisation per controller
         self.speed_max = float(self.GetParameter(1, 0x7000204)) / self.move_calibration # m/s
         # Note: the E-861 claims max 0.015 m/s but actually never goes above 0.004 m/s
         self._speed = dict([(a, self.speed_max/2) for a in axes]) # m/s
@@ -282,6 +304,7 @@ class Controller(object):
         #SAI? ALL: list all axes (included disabled ones)
         answer = self._sendQueryCommand("SAI? ALL\n")
         # TODO check it works with multiple axes
+        # FIXME: apparently it can be a string (see TVI?)
         axes = set([int(a) for a in answer.split(" ")])
         return axes
     
@@ -582,7 +605,21 @@ class Controller(object):
 #OMR (Relative Open-Loop Motion)
 #OMA (Absolute Open-Loop Motion)
 #
-    
+
+    idn_matches = {
+               "Physik Instrumente.*,.*C-867": MODEL_C867,
+               "Physik Instrumente.*,.*E-861": MODEL_E861
+               }
+    def getModel(self):
+        """
+        returns a model constant
+        """
+        idn = self.GetIdentification()
+        for m, c in self.idn_matches.items():
+            if re.search(m, idn):
+                return c
+        return MODEL_UNKNOWN
+           
     def getPosition(self, axis):
         """
         Note: in open-loop mode it's very approximate.
@@ -761,12 +798,21 @@ class Controller(object):
                 logging.error("Controller %d report axes %s", self.address, str(axes))
                 return False
         
-            for a in self._channels:
-                self.SetStepAmplitude(a, 10)
-                amp = self.GetStepAmplitude(a)
-                if amp != 10:
-                    logging.error("Failed to modify amplitude of controller %d (%f instead of 10)", self.address, amp)
-                    return False
+            if self._model not in (MODEL_E861, ): # support open-loop mode
+                for a in self._channels:
+                    self.SetStepAmplitude(a, 10)
+                    amp = self.GetStepAmplitude(a)
+                    if amp != 10:
+                        logging.error("Failed to modify amplitude of controller %d (%f instead of 10)", self.address, amp)
+                        return False
+
+            if self._model in (MODEL_C867, ): # support temperature reading
+                # TODO put the temperature as a RO VA?
+                current_temp = float(self.GetParameter(1, 0x57))
+                max_temp = float(self.GetParameter(1, 0x58))
+                if current_temp >= max_temp:
+                    logging.error("Motor of controller %d too hot (%f C)", self.address, current_temp)
+                    return False                        
         except:
             return False
         
@@ -1005,6 +1051,10 @@ class Bus(model.Actuator):
                 controller.waitEndMotion()
     
     def terminate(self):
+        if not hasattr(self, "_action_mgr"):
+            # not even fully initialised 
+            return
+        
         self.stop()
         
         if self._action_mgr:

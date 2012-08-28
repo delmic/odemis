@@ -280,6 +280,7 @@ class OdemisGUIApp(wx.App):
         logging.info("Exiting Odemis")
 
         # Put cleanup actions here (like disconnect from odemisd)
+        self.secom_model.turnOff()
 
         #self.dlg_startup.Destroy()
         self.main_frame.Destroy()

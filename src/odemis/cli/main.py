@@ -39,6 +39,7 @@ def get_backend_status():
     except:
         logging.info("Failed to find microscope")
         if os.path.exists(model.BACKEND_FILE):
+            logging.exception("Unresponsive back-end")
             return BACKEND_DEAD
         else:
             logging.info("Back-end %s file doesn't exists", model.BACKEND_FILE)
@@ -480,6 +481,12 @@ def acquire(comp_name, dataflow_names, filename):
             image = df.get()
             images.append(image)
             logging.info("Acquired an image of dimension %r.", image.shape)
+            dim = (image.shape[0] * image.metadata[model.MD_PIXEL_SIZE][0],
+                   image.shape[1] * image.metadata[model.MD_PIXEL_SIZE][1])
+            logging.info("Physical dimension of image is %fx%f m.", dim[0], dim[1])
+            dim_sens = (image.shape[0] * image.metadata[model.MD_SENSOR_PIXEL_SIZE][0],
+                        image.shape[1] * image.metadata[model.MD_SENSOR_PIXEL_SIZE][1])
+            logging.info("Physical dimension of sensor is %fx%f m.", dim_sens[0], dim_sens[1])
         except:
             logging.error("Failed to acquire image from component '%s'", comp_name)
             return 127

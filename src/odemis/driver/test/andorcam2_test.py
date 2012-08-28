@@ -17,7 +17,7 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from abs_cam_test import VirtualTestCam, VirtualStaticTestCam
-from driver import andorcam2
+from odemis.driver import andorcam2
 import logging
 import unittest
 

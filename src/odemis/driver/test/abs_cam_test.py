@@ -17,7 +17,7 @@ You should have received a copy of the GNU General Public License along with Ode
 '''
 # This is not a real test case, but just a stub to be used for each camera driver.
 
-import model
+from odemis import model
 import time
 import unittest
 import gc
