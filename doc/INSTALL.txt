@@ -18,7 +18,7 @@ sudo adduser replace_by_login_name odemis
 == Andor Clara camera ==
 
 Install Andor SDK (USB product).
-WARNING! no version works fully, but a frankstein one:
+WARNING! no version works fully, but a Frankstein one:
 * v2.93 (and v2.91+) doesn't work because it blocks after a few image acquired
 * v2.90 doesn't support changing the preamp gain
 * The firmware of v2.90 (/usr/local/etc/andor) and code from v2.93
@@ -70,8 +70,6 @@ hardware, which driver to use and the parameters required. See the backend
 specification for precise syntax and example files.
 
 = wxPython 2.9 =
-
-** NOTE: wxPython 2.9 might not function well! **
 
 Installing wxpython 2.9
 
