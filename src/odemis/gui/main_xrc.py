@@ -434,7 +434,7 @@ def __init_resources():
                         <object class="sizeritem">
                           <object class="ImageTextButton" name="btn_aquire">
                             <size>380,-1</size>
-                            <label>AQUIRE IMAGE</label>
+                            <label>ACQUIRE IMAGE</label>
                             <delta>1</delta>
                             <bitmap>img_btn_aquire_image_png</bitmap>
                             <hover>img_btn_aquire_image_h_png</hover>

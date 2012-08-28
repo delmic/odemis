@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 '''
-@author: Rinze de Laat 
+@author: Rinze de Laat
 
 Copyright © 2012 Rinze de Laat, Éric Piel, Delmic
 
@@ -153,7 +153,7 @@ class OdemisGUIApp(wx.App):
             wx.EVT_MENU(self.main_frame,
                         self.main_frame.menu_item_inspect.GetId(),
                         self.on_inspect)
-            
+
             wx.EVT_MENU(self.main_frame,
                         self.main_frame.menu_item_about.GetId(),
                         self.on_about)
@@ -197,7 +197,7 @@ class OdemisGUIApp(wx.App):
             #print_microscope_tree(microscope)
 
             self.acquisition_controller = AcquisitionController(self.main_frame)
-            
+
         except Exception:
             self.excepthook(*sys.exc_info())
             #raise
@@ -256,7 +256,7 @@ class OdemisGUIApp(wx.App):
         pass
 
     def on_about(self, evt):
-        message = ("%s\n%s\n\nLicensed under the %s." % 
+        message = ("%s\n%s\n\nLicensed under the %s." %
                    (__version__.name,
                     __version__.copyright,
                     __version__.license))
@@ -280,7 +280,12 @@ class OdemisGUIApp(wx.App):
         logging.info("Exiting Odemis")
 
         # Put cleanup actions here (like disconnect from odemisd)
-        self.secom_model.turnOff()
+        try:
+            self.secom_model.turnOff()
+        except AttributeError:
+            # The attribute exception was added because turnOff was preventing
+            # us form close the frame
+            pass
 
         #self.dlg_startup.Destroy()
         self.main_frame.Destroy()

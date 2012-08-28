@@ -402,7 +402,7 @@ class Actuator(HwComponent):
             non_existing = self._inverted - self._axes
             raise ArgumentError("Actuator %s has non-existing inverted axes: %s.",
                                 ", ".join(non_existing))
-        
+
         if ranges is None:
             ranges = {}
         self._ranges = dict(ranges)
@@ -434,7 +434,7 @@ class Actuator(HwComponent):
     # TODO this doesn't work over the network, because the proxy will always
     # say that the method exists.
     # moveAbs(self, pos): should be implemented if and only if supported
-    
+
     # helper methods
     def _applyInversionRel(self, shift):
         """
@@ -445,7 +445,7 @@ class Actuator(HwComponent):
         for a in self._inverted:
             ret[a] = -ret[a]
         return ret
-    
+
     def _applyInversionAbs(self, pos):
         """
         pos (dict string -> float): the new position for a moveAbs()
@@ -453,9 +453,9 @@ class Actuator(HwComponent):
         """
         ret = dict(pos)
         for a in self._inverted:
-            ret[a] = self._ranges[a][0] + self._ranges[a][1] - ret[a] 
+            ret[a] = self._ranges[a][0] + self._ranges[a][1] - ret[a]
         return ret
-    
+
 class Emitter(HwComponent):
     """
     A component which represents an emitter.
@@ -490,7 +490,7 @@ class CombinedActuator(Actuator):
 
         if set(children.keys()) != set(axes_map.keys()):
             raise ArgumentError("CombinedActuator needs the same keys in children and axes_map")
-        
+
         # this set ._axes and ._ranges
         Actuator.__init__(self, name, role, axes=children.keys(), **kwargs)
 
@@ -522,13 +522,13 @@ class CombinedActuator(Actuator):
             self.moveAbs = self._moveAbs
 
 
-        children_axes = {} # dict actuator -> set of string (our axes) 
+        children_axes = {} # dict actuator -> set of string (our axes)
         for axis, (child, axis_mapped) in self._axis_to_child.items():
             if child in children_axes:
                 children_axes[child].add(axis)
             else:
                 children_axes[child] = set([axis])
-            
+
         # position & speed: special VAs combining multiple VAs
         self.position = _vattributes.VigilantAttribute(self._position, unit="m", readonly=True)
         for c, axes in children_axes.items():
@@ -537,9 +537,9 @@ class CombinedActuator(Actuator):
                     self._position[a] = value[axes_map[axis]]
                 self._updatePosition()
             c.position.subscribe(update_position_per_child)
-            
+
         # TODO should have a range per axis
-        self.speed = _vattributes.MultiSpeedVA(self._speed, [0., 10.], "m/s", 
+        self.speed = _vattributes.MultiSpeedVA(self._speed, [0., 10.], "m/s",
                                                setter=self._setSpeed)
         for c, axes in children_axes.items():
             def update_speed_per_child(value):
@@ -547,7 +547,7 @@ class CombinedActuator(Actuator):
                     self._speed[a] = value[axes_map[axis]]
                 self._updateSpeed()
             c.speed.subscribe(update_speed_per_child)
-            
+
         #TODO hwVersion swVersion
 
     def _updatePosition(self):
@@ -557,7 +557,7 @@ class CombinedActuator(Actuator):
         # it's read-only, so we change it via _value
         self.position._value = self._position
         self.position.notify(self._position)
-        
+
     def _updateSpeed(self):
         """
         update the speed VA
@@ -565,7 +565,7 @@ class CombinedActuator(Actuator):
         # we must not call the setter, so write directly the raw value
         self.speed._value = self._speed
         self.speed.notify(self._speed)
-        
+
     def _setSpeed(self, value):
         """
         value (dict string-> float): speed for each axis
@@ -636,7 +636,7 @@ class CombinedActuator(Actuator):
             thread = threading.Thread(name="stopping fork", target=child.stop)
             thread.start()
             threads.append(thread)
-            
+
         # wait for completion
         for thread in threads:
             thread.join(1)
@@ -688,13 +688,13 @@ class MockComponent(HwComponent):
 
 class InstantaneousFuture(object):
     """
-    This is a simple class which follow the Future interface and represent a 
+    This is a simple class which follow the Future interface and represent a
     call already finished successfully when returning.
     """
     def __init__(self, result=None, exception=None):
         self._result = result
         self._exception = exception
-    
+
     def cancel(self):
         return False
 

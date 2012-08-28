@@ -48,13 +48,13 @@ class SECOMModel(object):
         self.optical_det_raw = None # the last raw data received
         self.optical_auto_bc = True # whether to use auto brightness & contrast
         self.optical_contrast = model.FloatContinuous(0, range=[-1, 1]) # ratio, contrast if no auto
-        self.optical_brightness = model.FloatContinuous(0, range=[-1, 1]) # ratio, balance if no auto 
+        self.optical_brightness = model.FloatContinuous(0, range=[-1, 1]) # ratio, balance if no auto
 
         self.sem_emt_dwell_time = VigilantAttribute(0.00001) #s
         self.sem_emt_spot = VigilantAttribute(4) # no unit (could be m²)
         self.sem_emt_hv = VigilantAttribute(30000) # V
         self.sem_det_image = VigilantAttribute(InstrumentalImage(None, None, None))
-        
+
         self.opt_focus = None # this is directly an Actuator
 
     def avOnStagePos(self, val):
@@ -97,12 +97,12 @@ class OpticalBackendConnected(SECOMModel):
                 self.opt_focus = a
                 break
         # it's not an error to not have focus
-        if not self.opt_focus: 
+        if not self.opt_focus:
             log.info("no focus actuator found in the microscope")
 
         # DEBUG XXX
         self.opt_focus.moveRel({"z": 0})
-        
+
         try:
             self.prev_pos = (self.stage.position.value["x"],
                              self.stage.position.value["y"])
@@ -115,27 +115,27 @@ class OpticalBackendConnected(SECOMModel):
         # direct linking
         self.optical_det_exposure_time = self.camera.exposureTime
         self.optical_depth = self.camera.shape[2]
-        
-        
-        # No SEM 
+
+
+        # No SEM
         #self.sem_det_image = VigilantAttribute(InstrumentalImage(None, None, None))
-        
-        # FIXME: on ON/OFF from GUI 
-        self.turnOn()
+
+        # FIXME: on ON/OFF from GUI
+        #self.turnOn()
 
     def turnOn(self):
         # TODO turn on the light
         self.camera.data.subscribe(self.onNewCameraImage)
-        
+
     def turnOff(self):
         # TODO turn of the light
         # TODO forbid move in this mode (or just forbid move in the canvas if no stream?)
-        self.camera.data.unsubscribe(self.onNewCameraImage)        
-        
+        self.camera.data.unsubscribe(self.onNewCameraImage)
+
     # TODO: see if really necessary: because __del__ prevents GC to work
     def __del__(self):
         self.turnOff()
-        
+
     def onNewCameraImage(self, dataflow, data):
         if self.optical_auto_bc:
             brightness = None
@@ -143,7 +143,7 @@ class OpticalBackendConnected(SECOMModel):
         else:
             brightness = self.optical_brightness
             contrast = self.optical_contrast
-        
+
         self.optical_det_raw = data
         im = DataArray2wxImage(data, self.optical_depth, brightness, contrast)
         im.InitAlpha() # it's a different buffer so useless to do it in numpy
@@ -178,7 +178,7 @@ class OpticalBackendConnected(SECOMModel):
         # relative
         move = {"x": val[0] - self.prev_pos[0], "y": val[1] - self.prev_pos[1]}
         self.stage.moveRel(move)
-        
+
         self.prev_pos = val
         return val
 
@@ -220,7 +220,7 @@ class MicroscopeModel(object):
     #    + InstrumentalImage corresponding to the tiling of all the raw images
     # streams can be add, removed, listed.
     # stage : to move the sample
-    # focus_a, focus_b...: actuators whose name is associated to a specific action in the GUI 
+    # focus_a, focus_b...: actuators whose name is associated to a specific action in the GUI
     # microscope: links to the real microscope component provided by the backend
     #
 

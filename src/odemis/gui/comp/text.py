@@ -401,9 +401,14 @@ class NumberValidator(wx.PyValidator):
             else:
                 val = unicode(val)
 
+
             #pos = self.GetWindow().GetInsertionPoint()
             start, end = fld.GetSelection()
             val = val[:start] + chr(key) + val[end:]
+
+            if chr(key) in ('.', ','):
+                val = val.replace('..', '.')
+                val =val.replace(',,', ',')
 
             log.debug("Checking against %s", val)
 
@@ -546,7 +551,8 @@ class NumberTextCtrl(wx.TextCtrl):
             wx.TextCtrl.SetValue(self, unicode(val))
 
             if self.linked_slider:
-                self.linked_slider.SetValue(val)
+                if self.linked_slider.GetValue() != val:
+                    self.linked_slider.SetValue(val)
 
         except ValueError:
             msg = "Value '%s' is not a valid number for %s."
@@ -580,9 +586,9 @@ class NumberTextCtrl(wx.TextCtrl):
         val = self.GetValue()
 
         if key == wx.WXK_UP:
-            val += self.step
+            val = (val or 0) + self.step
         elif key == wx.WXK_DOWN:
-            val -= self.step
+            val = (val or 0) - self.step
         else:
             evt.Skip()
             return
@@ -652,7 +658,8 @@ class UnitNumberCtrl(NumberTextCtrl):
     def SetValueStr(self, val):
         self.SetValue(val)
         if self.accuracy:
-            str_val = "%s %s" % (round(val, self.accuracy), self.unit)
+            frm = "%0." + str(self.accuracy) + "f %s"
+            str_val = frm % (val, self.unit)
         else:
             str_val = "%s %s" % (val, self.unit)
 

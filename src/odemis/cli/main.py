@@ -119,7 +119,7 @@ def print_component(comp, level):
 
 def print_component_tree(root, level=0):
     """
-    Print all the components starting from the root. 
+    Print all the components starting from the root.
     root (Component): the component at the root of the tree
     level (int > 0): hierarchy level (for pretty printing)
     """
@@ -132,7 +132,7 @@ def print_component_tree(root, level=0):
 
 def print_microscope_tree(mic):
     """
-    Print all the components starting from the microscope. 
+    Print all the components starting from the microscope.
     root (Microscope): a microscope
     """
     # first print the microscope
@@ -147,7 +147,7 @@ def print_microscope_tree(mic):
     # no children
 
 def list_components():
-    # We actually just browse as a tree the microscope 
+    # We actually just browse as a tree the microscope
     try:
         microscope = model.getMicroscope()
     except:
@@ -159,7 +159,7 @@ def list_components():
 def print_roattribute(name, value):
     print "\t" + name + " (RO Attribute)\t value: %s" % str(value)
 
-non_roattributes_names = ("name", "role", "parent", "children", "affects", 
+non_roattributes_names = ("name", "role", "parent", "children", "affects",
                           "actuators", "detectors", "emitters")
 def print_roattributes(component):
     for name, value in model.getROAttributes(component).items():
@@ -167,7 +167,7 @@ def print_roattributes(component):
         if name in non_roattributes_names:
             continue
         print_roattribute(name, value)
-        
+
 def print_data_flow(name, df):
     print "\t" + name + " (Data-flow)"
 
@@ -181,36 +181,36 @@ def print_vattribute(name, va):
         unit = " (unit: %s)" % va.unit
     else:
         unit = ""
-    
+
     if va.readonly:
         readonly = "RO "
     else:
         readonly = ""
-    
+
     # we cannot discover if it continuous or enumerated, just try and see if it fails
     try:
         varange = va.range
         str_range = " (range: %s → %s)" % (str(varange[0]), str(varange[1]))
     except (AttributeError, model.NotApplicableError):
         str_range = ""
-        
+
     try:
         vachoices = va.choices
         str_choices = " (choices: %s)" % ", ".join([str(c) for c in vachoices])
     except (AttributeError, model.NotApplicableError):
         str_choices = ""
-    
+
     print("\t" + name + " (%sVigilant Attribute)\t value: %s%s%s%s" %
           (readonly, str(va.value), unit, str_range, str_choices))
 
 def print_vattributes(component):
-    for name, value in model.getVAs(component).items():   
+    for name, value in model.getVAs(component).items():
         print_vattribute(name, value)
-    
+
 def print_attributes(component):
     print "Component '%s':" % component.name
     print "\trole: %s" % component.role
-    print "\taffects: " + ", ".join(["'"+c.name+"'" for c in component.affects]) 
+    print "\taffects: " + ", ".join(["'"+c.name+"'" for c in component.affects])
     print_roattributes(component)
     print_vattributes(component)
     print_data_flows(component)
@@ -229,10 +229,10 @@ def get_component_from_set(comp_name, components):
         if c.name == comp_name:
             component = c
             break
-   
+
     if component is None:
         raise LookupError("Failed to find component '%s'", comp_name)
-    
+
     return component
 
 def get_component(comp_name):
@@ -244,7 +244,7 @@ def get_component(comp_name):
         other exception if there is an error while contacting the backend
     """
     return get_component_from_set(comp_name, model.getComponents())
-    
+
 
 def get_actuator(comp_name):
     """
@@ -283,10 +283,10 @@ def list_properties(comp_name):
     except:
         logging.error("Failed to contact the back-end")
         return 127
-   
+
     print_attributes(component)
     return 0
-    
+
 def boolify(s):
     if s == 'True' or s == 'true':
         return True
@@ -300,7 +300,7 @@ def reproduceTypedValue(real_val, str_val):
     real_val (object): value with the type that must be converted to
     str_val (string): string that will be converted
     return the value contained in the string with the type of the real value
-    raises 
+    raises
       ValueError() if not possible to convert
       TypeError() if type of real value is not supported
     """
@@ -320,7 +320,7 @@ def reproduceTypedValue(real_val, str_val):
             logging.warning("Type of attribute is unknown, using string")
             sub_real_val = ""
             value_real_val = ""
-            
+
         dict_val = {}
         for sub_str in str_val.split(','):
             item = sub_str.split(':')
@@ -341,7 +341,7 @@ def reproduceTypedValue(real_val, str_val):
             iter_val.append(reproduceTypedValue(sub_real_val, sub_str))
         final_val = type(real_val)(iter_val) # cast to real type
         return final_val
-    
+
     raise TypeError("Type %r is not supported to convert %s" % (type(real_val), str_val))
 
 def set_attr(comp_name, attr_name, str_val):
@@ -363,11 +363,11 @@ def set_attr(comp_name, attr_name, str_val):
     except:
         logging.error("Failed to find attribute '%s' on component '%s'", attr_name, comp_name)
         return 129
-    
+
     if not isinstance(attr, model.VigilantAttributeBase):
         logging.error("'%s' is not a vigilant attribute of component '%s'", attr_name, comp_name)
         return 129
-    
+
     try:
         new_val = reproduceTypedValue(attr.value, str_val)
     except TypeError:
@@ -376,7 +376,7 @@ def set_attr(comp_name, attr_name, str_val):
     except ValueError:
         logging.error("Impossible to convert '%s' to a %r", str_val, type(attr.value))
         return 127
-    
+
     try:
         attr.value = new_val
     except:
@@ -403,41 +403,41 @@ def move(comp_name, axis_name, str_distance):
     if axis_name not in component.axes:
         logging.error("Actuator %s has not axis '%s'", comp_name, axis_name)
         return 129
-    
+
     try:
         distance = float(str_distance) * 1e-6 # µm -> m
     except ValueError:
         logging.error("Distance '%s' cannot be converted to a number", str_distance)
         return 127
-    
+
     if abs(distance) > MAX_DISTANCE:
         logging.error("Distance of %f m is too big (> %f m)", distance, MAX_DISTANCE)
         return 129
-    
+
     try:
 #        for i in range(1000): # FIXME seems to fail (all sent, but only 10 applied, then blocking in futures?)
-#            print i 
+#            print i
 #            component.moveRel({axis_name: distance})
         move = component.moveRel({axis_name: distance})
         move.result() # TODO: flag for sync? FIXME: it seems to fail sometimes if quiting before the end
     except:
         logging.error("Failed to move axis %s of component %s", axis_name, comp_name)
         return 127
-    
+
     return 0
 
 def stop_move():
     """
     stop the move of every axis of every actuators
     """
-    # We actually just browse as a tree the microscope 
+    # We actually just browse as a tree the microscope
     try:
         microscope = model.getMicroscope()
         actuators = microscope.actuators
     except:
         logging.error("Failed to contact the back-end")
         return 127
-    
+
     ret = 0
     for actuator in actuators:
         try:
@@ -445,7 +445,7 @@ def stop_move():
         except:
             logging.error("Failed to stop actuator %s", actuator.name)
             ret = 127
-    
+
     return ret
 
 def acquire(comp_name, dataflow_names, filename):
@@ -463,7 +463,7 @@ def acquire(comp_name, dataflow_names, filename):
     except:
         logging.error("Failed to contact the back-end")
         return 127
-    
+
     # check the dataflow exists
     dataflows = []
     for df_name in dataflow_names:
@@ -472,12 +472,12 @@ def acquire(comp_name, dataflow_names, filename):
         except:
             logging.error("Failed to find data-flow '%s' on component '%s'", df_name, comp_name)
             return 129
-        
+
         if not isinstance(df, model.DataFlowBase):
             logging.error("'%s' is not a data-flow of component '%s'", df_name, comp_name)
             return 129
         dataflows.append(df)
-    
+
     # TODO support multiple dataflows with multiple pages in the file
     images = []
     for df in dataflows:
@@ -494,7 +494,7 @@ def acquire(comp_name, dataflow_names, filename):
         except:
             logging.error("Failed to acquire image from component '%s'", comp_name)
             return 127
-    
+
     tiff.export(images[0], filename)
     return 0
 
@@ -512,29 +512,29 @@ def live_display(comp_name, df_name):
     except:
         logging.error("Failed to contact the back-end")
         return 127
-    
+
     # check the dataflow exists
     try:
         df = getattr(component, df_name)
     except:
         logging.error("Failed to find data-flow '%s' on component '%s'", df_name, comp_name)
         return 129
-    
+
     if not isinstance(df, model.DataFlowBase):
         logging.error("'%s' is not a data-flow of component '%s'", df_name, comp_name)
         return 129
-    
+
     print "Press 'Q' to quit"
     # create a window
     size = component.resolution.value
     window = VideoDisplayer("Live from %s.%s" % (comp_name, df_name), size)
-    
+
         # update the picture and wait
     def new_image_wrapper(df, image):
         window.new_image(image)
     try:
         df.subscribe(new_image_wrapper)
-        
+
         # wait until the window is closed
         window.waitQuit()
     finally:
@@ -542,12 +542,12 @@ def live_display(comp_name, df_name):
 
 def main(args):
     """
-    Handles the command line arguments 
+    Handles the command line arguments
     args is the list of arguments passed
     return (int): value to return to the OS as program exit code
     """
 
-    # arguments handling 
+    # arguments handling
     parser = argparse.ArgumentParser(description=__version__.name)
 
     parser.add_argument('--version', dest="version", action='store_true',
@@ -575,38 +575,38 @@ def main(args):
                          help=u"move the axis by the amount of µm.")
     dm_grpe.add_argument("--stop", "-S", dest="stop", action="store_true", default=False,
                          help="Immediately stop all the actuators in all directions.")
-    dm_grpe.add_argument("--acquire", "-a", dest="acquire", nargs="+", 
+    dm_grpe.add_argument("--acquire", "-a", dest="acquire", nargs="+",
                          metavar=("<component>", "data-flow"),
                          help="Acquire an image (default data-flow is \"data\")")
     dm_grp.add_argument("--output", "-o", dest="output",
                         help="name of the file where the image should be saved after acquisition. It is saved in TIFF format.")
-    dm_grpe.add_argument("--live", dest="live", nargs="+", 
+    dm_grpe.add_argument("--live", dest="live", nargs="+",
                          metavar=("<component>", "data-flow"),
                          help="Display and update an image on the screen (default data-flow is \"data\")")
-    
+
     options = parser.parse_args(args[1:])
-    
+
     # Cannot use the internal feature, because it doesn't support multiline
     if options.version:
         print (__version__.name + " " + __version__.version + "\n" +
-               __version__.copyright + "\n" + 
+               __version__.copyright + "\n" +
                "Licensed under the " + __version__.license)
         return 0
-    
+
     # Set up logging before everything else
     if options.loglev < 0:
         parser.error("log-level must be positive.")
     loglev_names = [logging.WARNING, logging.INFO, logging.DEBUG]
     loglev = loglev_names[min(len(loglev_names) - 1, options.loglev)]
     logging.getLogger().setLevel(loglev)
-    
+
     # change the log format to be more descriptive
     handler = logging.StreamHandler()
     handler.setFormatter(logging.Formatter('%(asctime)s (%(module)s) %(levelname)s: %(message)s'))
     logging.getLogger().addHandler(handler)
-    
+
     # anything to do?
-    if (not options.check and not options.kill and not options.scan 
+    if (not options.check and not options.kill and not options.scan
         and not options.list and not options.stop and options.move is None
         and options.listprop is None and options.setattr is None
         and options.acquire is None and options.live is None):
@@ -616,12 +616,13 @@ def main(args):
         logging.error("name of the output file must be specified.")
         return 127
 
-    
+
     status = get_backend_status()
     if options.check:
         logging.info("Status of back-end is %s", status)
+        print status
         return status_to_xtcode[status]
-    
+
     # scan needs to have the backend stopped
     if options.scan:
         if status == BACKEND_RUNNING:
@@ -632,7 +633,7 @@ def main(args):
         except:
             logging.exception("Unexpected error while performing scan.")
             return 127
-    
+
     # check if there is already a backend running
     if status == BACKEND_STOPPED:
         logging.error("No running back-end")
@@ -640,24 +641,24 @@ def main(args):
     elif status == BACKEND_DEAD:
         logging.error("Back-end appears to be non-responsive.")
         return 127
-    
+
     try:
         if options.kill:
             return kill_backend()
-    
+
         if options.list:
             return list_components()
-        
+
         if options.listprop is not None:
             return list_properties(options.listprop)
-        
+
         if options.setattr is not None:
             for c, a, v in options.setattr:
                 ret = set_attr(c, a, v)
                 if ret != 0:
                     return ret
             return 0
-        
+
         if options.move is not None:
             for c, a, d in options.move:
                 ret = move(c, a, d)
@@ -665,10 +666,10 @@ def main(args):
                 if ret != 0:
                     return ret
             return 0
-        
+
         if options.stop:
             return stop_move()
-        
+
         if options.acquire is not None:
             component = options.acquire[0]
             if len(options.acquire) == 1:
@@ -676,7 +677,7 @@ def main(args):
             else:
                 dataflows = options.acquire[1:]
             acquire(component, dataflows, options.output)
-          
+
         if options.live is not None:
             component = options.live[0]
             if len(options.live) == 1:
@@ -690,12 +691,12 @@ def main(args):
     except:
         logging.exception("Unexpected error while performing action.")
         return 127
-    
+
     return 0
 
 if __name__ == '__main__':
     ret = main(sys.argv)
-    logging.shutdown() 
+    logging.shutdown()
     exit(ret)
-    
+
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:

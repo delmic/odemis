@@ -1,6 +1,6 @@
 #-*- coding: utf-8 -*-
 '''
-@author: Rinze de Laat 
+@author: Rinze de Laat
 
 Copyright © 2012 Rinze de Laat, Delmic
 
@@ -17,6 +17,7 @@ import wx
 
 from wx.lib.agw.aui.aui_utilities import StepColour
 
+from odemis.gui.log import log
 from odemis.gui.img.data import getsliderBitmap, getslider_disBitmap
 
 class Slider(wx.Slider):
@@ -45,6 +46,8 @@ class Slider(wx.Slider):
 
 
 
+
+
 class CustomSlider(wx.PyPanel):
     """
     Custom Slider class
@@ -52,7 +55,7 @@ class CustomSlider(wx.PyPanel):
 
     def __init__(self, parent, id=wx.ID_ANY, value=0.0, val_range=(0.0, 1.0),
                  size=(-1, -1), pos=wx.DefaultPosition, style=wx.NO_BORDER,
-                 name="CustomSlider"):
+                 name="CustomSlider", scale=None):
 
         """
         Default class constructor.
@@ -64,6 +67,7 @@ class CustomSlider(wx.PyPanel):
                      then a default size is chosen.
         @param style: use wx.Panel styles
         @param name: Window name.
+        @param scale: linear or
         """
 
         wx.PyPanel.__init__(self, parent, id, pos, size, style, name)
@@ -88,6 +92,25 @@ class CustomSlider(wx.PyPanel):
 
         # A text control linked to the slider
         self.linked_field = None
+
+        def _pow_val_to_perc(r0, r1, v):
+            p = abs((v - r0) / (r1 - r0))
+            p = p**(1/3.0)
+
+            return p
+
+        def _pow_perc_to_val(r0, r1, p):
+            p = p**3
+            v = (r1 - r0) * p + r0
+            return v
+
+        if scale == "exp":
+            self._percentage_to_val = _pow_perc_to_val
+            self._val_to_percentage = _pow_val_to_perc
+        else:
+            self._percentage_to_val = lambda r0, r1, p: (r1 - r0) * p + r0
+            self._val_to_percentage = lambda r0, r1, v: (v - r0) / (r1 - r0)
+
 
         #Events
         self.Bind(wx.EVT_PAINT, self.OnPaint)
@@ -119,8 +142,16 @@ class CustomSlider(wx.PyPanel):
 
         dc.SetPen(wx.Pen(fgc, 1))
 
+        # Main line
         dc.DrawLine(self.half_h_width, half_height,
                     width - self.half_h_width, half_height)
+
+        # ticks
+        vals = [self.range_span * s for s in [v / 10.0 for v in range(11)]]
+        for v in vals:
+            pix_x = self._val_to_pixel(v)
+            dc.DrawLine(pix_x, half_height - 1,
+                        pix_x, half_height)
 
 
         if self.Enabled:
@@ -140,6 +171,7 @@ class CustomSlider(wx.PyPanel):
         #Capture Mouse
         # log.debug("OnLeftDown")
         self.CaptureMouse()
+
         self.getPointerLimitPos(event.GetX())
 
         self.Refresh()
@@ -151,6 +183,7 @@ class CustomSlider(wx.PyPanel):
         # log.debug("OnLeftUp")
         if self.HasCapture():
             self.ReleaseMouse()
+
         event.Skip()
 
 
@@ -168,16 +201,16 @@ class CustomSlider(wx.PyPanel):
         #calculate value, based on pointer position
         self.current_value = self._pixel_to_val()
 
+        if self.linked_field:
+            if hasattr(self.linked_field, 'SetValueStr'):
+                self.linked_field.SetValueStr(self.current_value)
+            else:
+                self.linked_field.SetValue(self.current_value)
+
 
     def OnMotion(self, event=None):
         if self.GetCapture():
             self.getPointerLimitPos(event.GetX())
-
-            if self.linked_field:
-                if hasattr(self.linked_field, 'SetValueStr'):
-                    self.linked_field.SetValueStr(self.current_value)
-                else:
-                    self.linked_field.SetValue(self.current_value)
 
             self.Refresh()
 
@@ -190,19 +223,25 @@ class CustomSlider(wx.PyPanel):
         self.pointerPos = self._val_to_pixel()
         self.Refresh()
 
-    def _val_to_perc(self):
-        """ Give the value as a range percentage """
-        return ((self.current_value - self.value_range[0]) / self.range_span) * 100.0
+    # def _current_val_to_perc(self):
+    #     """ Give the value as a range percentage """
+    #     return ((self.current_value - self.value_range[0]) / self.range_span)
 
-    def _val_to_pixel(self):
+    def _val_to_pixel(self, val=None):
+        val = self.current_value if val is None else val
         slider_width = self.GetSize()[0] - self.handle_width
-        return int(abs(slider_width * (self._val_to_perc() / 100)))
+        prcnt = self._val_to_percentage(self.value_range[0],
+                                        self.value_range[1],
+                                        val)
+        return int(abs(slider_width * prcnt))
 
     def _pixel_to_val(self):
         prcnt = float(self.pointerPos) / (self.GetSize()[0] - self.handle_width)
         #return int((self.value_range[1] - self.value_range[0]) * prcnt + self.value_range[0])
-        return (self.value_range[1] - self.value_range[0]) * prcnt + self.value_range[0]
-
+        #return (self.value_range[1] - self.value_range[0]) * prcnt + self.value_range[0]
+        return self._percentage_to_val(self.value_range[0],
+                                       self.value_range[1],
+                                       prcnt)
 
     def SetValue(self, value):
         if value < self.value_range[0]:
