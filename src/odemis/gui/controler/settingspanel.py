@@ -105,8 +105,6 @@ class VigilantAttributeConnector(object):
     def disconnect(self):
         self.vigilattr.unsubscribe(self.sub_func)
 
-
-
 class SettingsPanel(object):
     """ Settings base class which describes an indirect wrapper for
     FoldPanelItems.
