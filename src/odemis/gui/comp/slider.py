@@ -187,6 +187,8 @@ class CustomSlider(wx.PyPanel):
         # log.debug("OnLeftUp")
         if self.HasCapture():
             self.ReleaseMouse()
+            self._update_linked_field(self.current_value)
+
 
         event.Skip()
 
@@ -205,19 +207,12 @@ class CustomSlider(wx.PyPanel):
         #calculate value, based on pointer position
         self.current_value = self._pixel_to_val()
 
-        if self.linked_field:
-            if hasattr(self.linked_field, 'SetValueStr'):
-                self.linked_field.SetValueStr(self.current_value)
-            else:
-                self.linked_field.SetValue(self.current_value)
-
 
     def OnMotion(self, event=None):
         if self.GetCapture():
             self.getPointerLimitPos(event.GetX())
 
             self.Refresh()
-
 
     def OnSize(self, event=None):
         """
@@ -257,7 +252,21 @@ class CustomSlider(wx.PyPanel):
 
         self.pointerPos = self._val_to_pixel()
 
+        import threading
+
+        print "text", threading.current_thread().ident
+
         self.Refresh()
+
+    def _update_linked_field(self, value):
+        """ Update any linked field to the same value as this slider
+        """
+        if self.linked_field:
+            if self.linked_field.GetValue() != value:
+                if hasattr(self.linked_field, 'SetValueStr'):
+                    self.linked_field.SetValueStr(value)
+                else:
+                    self.linked_field.SetValue(value)
 
     def GetValue(self):
         return self.current_value

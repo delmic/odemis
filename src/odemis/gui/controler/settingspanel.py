@@ -30,7 +30,8 @@ import odemis.gui.comp.text as text
 from ..comp.foldpanelbar import FoldPanelItem
 from odemis.gui.log import log
 from odemis.gui.comp.slider import CustomSlider
-from odemis.model import getVAs, NotApplicableError, VigilantAttributeBase
+from odemis.model import getVAs, NotApplicableError, VigilantAttributeBase, \
+    OutOfBoundError
 
 
 
@@ -41,6 +42,7 @@ MAIN_FRAME = None
 BACKGROUND_COLOUR = "#333333"
 FOREGROUND_COLOUR = "#DDDDDD"
 FOREGROUND_COLOUR_DIS = "#666666"
+FOREGROUND_COLOUR_EDIT = "#2FA7D4"
 
 CONTROL_NONE = 0    # No control needed or possible
 CONTROL_LABEL = 1   # Static text for read only values
@@ -75,34 +77,55 @@ SETTINGS = {
                     "range": (0.01, 3.00),
                     "scale": "exp",
                 },
-                "temperature":
-                {
+                # "temperature":
+                # {
 
-                },
-                "binning":
-                {
-                    "control_type": CONTROL_INT,
-                },
+                # },
+                # "binning":
+                # {
+                #     "control_type": CONTROL_INT,
+                # },
             }
            }
 
+def _call_after_wrapper(f):
+    def wrapped(value):
+        print "WEEEEEEE"
+        wx.CallAfter(f, value)
+    return wrapped
+
 class VigilantAttributeConnector(object):
-
-    def __init__(self, va, ctrl, sub_func):
-        self.vigilattr = va
+    """ This class connects a vigilant attribute with a wxPython control,
+    making sure that the changes in one are automatically reflected in the
+    other.
+    """
+    def __init__(self, vigilattr, ctrl, sub_func, change_event=None):
+        self.vigilattr = vigilattr
         self.ctrl = ctrl
-        self.sub_func = sub_func
+        self.sub_func = _call_after_wrapper(sub_func)
+        self.change_event = change_event
 
-        self.vigilattr.subscribe(sub_func)
+        # Subscribe to the vigilant attribute and initialize
+        self.vigilattr.subscribe(self.sub_func, True)
+        # If necessary, bind the provided change event
+        if change_event:
+            self.ctrl.Bind(change_event, self._on_value_change)
 
-    def _connect_control_update(self):
-
-        self.ctrl.Bind(wx.EVT_TEXT_ENTER, )
-
-    def __del__(self):
-        self.disconnect()
+    def _on_value_change(self, evt):
+        """ This method is called when the value of the control is
+        changed.
+        """
+        try:
+            log.warn("Assign value to vigilant attribute")
+            self.vigilattr.value = self.ctrl.GetValue()
+        except OutOfBoundError:
+            log.error("Illegal value")
+        finally:
+            evt.Skip()
 
     def disconnect(self):
+        log.debug("Disconnecting VigilantAttributeConnector")
+        self.ctrl.Unbind(self.change_event, self._on_value_change)
         self.vigilattr.unsubscribe(self.sub_func)
 
 class SettingsPanel(object):
@@ -187,6 +210,24 @@ class SettingsPanel(object):
             # Return default control
             return CONTROL_TEXT
 
+    def _get_rng_and_choice(self, va, conf):
+        """ Retrieve the range and choices values from the vigilant attribute
+        or override them with the values provided in the configration.
+        """
+        rng = (None, None)
+        choices = None
+
+        try:
+            rng = conf.get("range", va.range)
+        except (AttributeError, NotApplicableError):
+            pass
+
+        try:
+            choices = conf.get("choices", va.choices)
+        except (AttributeError, NotApplicableError):
+            pass
+
+        return rng, choices
 
     def add_label(self, label, value=None):
         """ Adds a label to the settings panel, accompanied by an immutable
@@ -229,20 +270,29 @@ class SettingsPanel(object):
         lbl_ctrl = wx.StaticText(self.panel, -1, "%s:" % label)
         self._sizer.Add(lbl_ctrl, (self.num_entries, 0), flag=wx.ALL, border=5)
 
+
         # If no value provided...
         if not value:
             log.warn("No value provided for %s", label)
-            self.num_entries += 1
             self.fb_panel.Parent.Layout()
-            self.entries.append((lbl_ctrl, None, None))
+            self.num_entries += 1
             return
+
 
         # Get unit from config, vattribute or use an empty one
         unit =  conf.get('unit', value.unit or "")
-
+        # Get the range and choices
+        rng, choices = self._get_rng_and_choice(value, conf)
+        # Get the defined type of control or assign a default one
         control_type = conf.get('control_type',
                                 self._determine_default_control(value))
 
+
+        # the Vigilant Attribute Connector connects the wx control to the
+        # vigilatn attribute.
+        vac = None
+
+        # Create the needed wxPython controls
 
         if control_type == CONTROL_NONE:
             # No value
@@ -253,20 +303,23 @@ class SettingsPanel(object):
             # In this case the value need to be transformed into a string
 
             self.panel.SetForegroundColour(FOREGROUND_COLOUR_DIS)
-            if isinstance(value.value, tuple):
-                # Maximum number of chars per value
-                txt = " x ".join(["%s %s" % (v, unit) for v in value.value])
-            else:
-                txt = u"%s %s" % (value.value, unit)
             new_ctrl = wx.StaticText(self.panel, -1, size=(200, -1))
-
-            #value.subscribe(lambda v: new_ctrl.SetLabel(u"%s %s" % (v, unit)), True)
-
             self.panel.SetForegroundColour(FOREGROUND_COLOUR)
 
-        elif control_type == CONTROL_SLIDER:
+            def format_label(value):
+                if isinstance(value, tuple):
+                    # Maximum number of chars per value
+                    txt = " x ".join(["%s %s" % (v, unit) for v in value])
+                else:
+                    txt = u"%s %s" % (value, unit)
+                new_ctrl.SetLabel(txt)
 
-            rng = conf.get("range", value.range)
+            vac = VigilantAttributeConnector(value,
+                                             new_ctrl,
+                                             format_label)
+
+        elif control_type == CONTROL_SLIDER:
+            # The slider is accompanied by an extra number text field
 
             new_ctrl = CustomSlider(self.panel, value=value.value,
                                     val_range=rng,
@@ -275,59 +328,80 @@ class SettingsPanel(object):
                                     style=wx.SL_HORIZONTAL,
                                     scale=conf.get('scale', None))
 
+            # Dynamically create step size based on range
             step = (rng[1] - rng[0]) / 255.0
             # To keep the inc/dec values 'clean', set the step
             # value to the nearest power of 10
             step = 10 ** round(math.log10(step))
 
+            # Determing the type of number text control to link with the slider
             if isinstance(value.value, int):
                 log.debug("Adding int field to slider")
                 klass = text.UnitIntegerCtrl
-                # We want an integer.
+                # Enforce integer stepping
                 step = max(step, 1)
             else:
                 log.debug("Adding float field to slider")
                 klass = text.UnitFloatCtrl
 
-            txt = klass(self.panel, -1,
-                        value.value,
-                        style=wx.NO_BORDER,
-                        size=(60, -1),
-                        min_val=rng[0],
-                        max_val=rng[1],
-                        unit=unit,
-                        accuracy=2,
-                        step=step)
+            txt_ctrl = klass(self.panel, -1,
+                            value.value,
+                            style=wx.NO_BORDER,
+                            size=(60, -1),
+                            min_val=rng[0],
+                            max_val=rng[1],
+                            unit=unit,
+                            accuracy=2,
+                            step=step)
 
-            txt.SetForegroundColour("#2FA7D4")
-            txt.SetBackgroundColour(self.panel.GetBackgroundColour())
+            # Assign default colour scheme to the text control
+            txt_ctrl.SetForegroundColour(FOREGROUND_COLOUR_EDIT)
+            txt_ctrl.SetBackgroundColour(self.panel.GetBackgroundColour())
 
-            new_ctrl.set_linked_field(txt)
-            txt.set_linked_slider(new_ctrl)
+            new_ctrl.set_linked_field(txt_ctrl)
+            txt_ctrl.set_linked_slider(new_ctrl)
 
-            self._sizer.Add(txt, (self.num_entries, 2), flag=wx.ALL, border=5)
+            self._sizer.Add(txt_ctrl, (self.num_entries, 2), flag=wx.ALL, border=5)
+
+            # Only connect one control to the vigilant attribute.
+            # Communication between the controls should keep them 'synchronized'
+            # value wise.
+            vat = VigilantAttributeConnector(value,
+                                             txt_ctrl,
+                                             txt_ctrl.SetValueStr,
+                                             wx.EVT_TEXT_ENTER)
+
+            # vas = VigilantAttributeConnector(value,
+            #                                  new_ctrl,
+            #                                  new_ctrl.SetValue,
+            #                                  wx.EVT_LEFT_UP)
+            vac = vat
 
         elif control_type == CONTROL_INT:
-            rng = conf.get("range", (None, None))
             new_ctrl = text.UnitIntegerCtrl(self.panel,
                                             -1,
                                             style=wx.NO_BORDER,
                                             unit=unit,
                                             min_val=rng[0],
-                                            max_val=rng[1])
-            new_ctrl.SetForegroundColour("#2FA7D4")
+                                            max_val=rng[1],
+                                            choices=choices)
+            new_ctrl.SetForegroundColour(FOREGROUND_COLOUR_EDIT)
             new_ctrl.SetBackgroundColour(self.panel.GetBackgroundColour())
 
             #value.subscribe(lambda v: new_ctrl.SetValue(v))
 
+            #new_ctrl.SetValue("AAAAAA")
 
-                #new_ctrl.SetValue("AAAAAA")
-
-            value.subscribe(lambda v: log.warn("lambda"))
-            value.subscribe(set_on_notify)
-            f = get_func(new_ctrl.SetValue)
+            # value.subscribe(lambda v: log.warn("lambda"))
+            # value.subscribe(set_on_notify)
+            # f = get_func(new_ctrl.SetValue)
             #self.entries.append(f)
-            value.subscribe(f)
+            # value.subscribe(f)
+
+            vac = VigilantAttributeConnector(value,
+                                             new_ctrl,
+                                             new_ctrl.SetValueStr,
+                                             wx.EVT_TEXT_ENTER)
 
 
         elif control_type == CONTROL_FLT:
@@ -337,7 +411,7 @@ class SettingsPanel(object):
                                           unit=unit,
                                           min_val=value.range[0],
                                           max_val=value.range[1])
-            new_ctrl.SetForegroundColour("#2FA7D4")
+            new_ctrl.SetForegroundColour(FOREGROUND_COLOUR_EDIT)
             new_ctrl.SetBackgroundColour(self.panel.GetBackgroundColour())
 
         else:
@@ -348,8 +422,9 @@ class SettingsPanel(object):
 
         self._sizer.Add(new_ctrl, (self.num_entries, 1),
                         flag=wx.ALL|wx.EXPAND, border=5)
+
         self.num_entries += 1
-        self.entries.append((lbl_ctrl, new_ctrl, value))
+        self.entries.append(vac)
         self.fb_panel.Parent.Layout()
 
 def set_on_notify(v):

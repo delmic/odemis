@@ -89,7 +89,7 @@ def __init_resources():
         </object>
         <object class="wxMenuItem" name="menu_item_halt">
           <label>Stop all axes</label>
-          <accel>[Esc]</accel>
+          <accel>Esc</accel>
           <XRCED>
             <assign_var>1</assign_var>
           </XRCED>
