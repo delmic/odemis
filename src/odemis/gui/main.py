@@ -81,12 +81,17 @@ class OdemisGUIApp(wx.App):
         # Load the main frame
         self.main_frame = main_xrc.xrcfr_main(None)
 
+        #self.main_frame.Bind(wx.EVT_CHAR, self.on_key)
+
         self.init_logger()
         self.init_gui()
 
         # Application successfully launched
         return True
 
+    def on_halt(self, evt):
+        print "Stop! Hammer Time."
+        evt.Skip()
 
     def init_logger(self):
         """ Initialize logging functionality """
@@ -157,6 +162,17 @@ class OdemisGUIApp(wx.App):
             wx.EVT_MENU(self.main_frame,
                         self.main_frame.menu_item_about.GetId(),
                         self.on_about)
+
+            wx.EVT_MENU(self.main_frame,
+                        self.main_frame.menu_item_halt.GetId(),
+                        self.on_halt)
+
+            accel_tbl = wx.AcceleratorTable([
+                (wx.ACCEL_NORMAL, wx.WXK_ESCAPE,
+                 self.main_frame.menu_item_halt.GetId())
+            ])
+
+            self.main_frame.SetAcceleratorTable(accel_tbl)
 
             # wx.EVT_MENU(self.main_frame, self.main_frame.menu_item_debug.GetId(), self.on_debug)
             # wx.EVT_MENU(self.main_frame, self.main_frame.menu_item_error.GetId(), self.on_send_report)
@@ -280,12 +296,7 @@ class OdemisGUIApp(wx.App):
         logging.info("Exiting Odemis")
 
         # Put cleanup actions here (like disconnect from odemisd)
-        try:
-            self.secom_model.turnOff()
-        except AttributeError:
-            # The attribute exception was added because turnOff was preventing
-            # us form close the frame
-            pass
+        self.secom_model.turnOff()
 
         #self.dlg_startup.Destroy()
         self.main_frame.Destroy()

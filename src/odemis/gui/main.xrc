@@ -11,6 +11,13 @@
             <assign_var>1</assign_var>
           </XRCED>
         </object>
+        <object class="wxMenuItem" name="menu_item_halt">
+          <label>Halt</label>
+          <accel>Esc</accel>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
         <object class="separator"/>
         <object class="wxMenuItem" name="menu_item_quit">
           <label>Quit</label>
