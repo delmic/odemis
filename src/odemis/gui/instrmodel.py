@@ -182,6 +182,13 @@ class OpticalBackendConnected(SECOMModel):
         self.prev_pos = val
         return val
 
+    def stopMotion(self):
+        """
+        Stops immediately every axis
+        """
+        self.stage.stop()
+        self.opt_focus.stop()
+        logging.info("stopped motion on every axes")
 
 class SECOMBackendConnected(SECOMModel):
     """

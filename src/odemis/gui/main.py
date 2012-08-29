@@ -89,9 +89,11 @@ class OdemisGUIApp(wx.App):
         # Application successfully launched
         return True
 
-    def on_halt(self, evt):
-        print "Stop! Hammer Time."
-        evt.Skip()
+    def on_stop_axes(self, evt):
+        if self.secom_model is None:
+            evt.Skip()
+        
+        self.secom_model.stopMotion()
 
     def init_logger(self):
         """ Initialize logging functionality """
@@ -165,7 +167,7 @@ class OdemisGUIApp(wx.App):
 
             wx.EVT_MENU(self.main_frame,
                         self.main_frame.menu_item_halt.GetId(),
-                        self.on_halt)
+                        self.on_stop_axes)
 
             # The escape accelerator has to be added manually, because for some
             # reason, the 'ESC' key will not register using XRCED.

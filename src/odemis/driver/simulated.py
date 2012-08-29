@@ -128,6 +128,7 @@ class Stage2D(model.Actuator):
     
     def stop(self, axes=None):
         # TODO empty the queue for the given axes
+        logging.warning("Stopping all axes: %s", ", ".join(self.axes))
         return
 
 
