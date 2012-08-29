@@ -68,15 +68,43 @@ CONTROL_COMBO = 7   # Drop down combo box
 
 SETTINGS = {
             "ccd":
+            {
+                "exposureTime":
                 {
-                    "exposureTime":
-                        {
-                            "control_type": CONTROL_SLIDER,
-                            "range": (0.01, 3.00),
-                            "scale": "exp",
-                        }
-                }
+                    "control_type": CONTROL_SLIDER,
+                    "range": (0.01, 3.00),
+                    "scale": "exp",
+                },
+                "temperature":
+                {
+
+                },
+                "binning":
+                {
+                    "control_type": CONTROL_INT,
+                },
+            }
            }
+
+class VigilantAttributeConnector(object):
+
+    def __init__(self, va, ctrl, sub_func):
+        self.vigilattr = va
+        self.ctrl = ctrl
+        self.sub_func = sub_func
+
+        self.vigilattr.subscribe(sub_func)
+
+    def _connect_control_update(self):
+
+        self.ctrl.Bind(wx.EVT_TEXT_ENTER, )
+
+    def __del__(self):
+        self.disconnect()
+
+    def disconnect(self):
+        self.vigilattr.unsubscribe(self.sub_func)
+
 
 
 class SettingsPanel(object):
@@ -108,6 +136,7 @@ class SettingsPanel(object):
         self._sizer.AddGrowableCol(1)
 
         self.num_entries = 0
+        self.entries = []
 
     def _clear(self):
         # Remove default 'no content' label
@@ -139,8 +168,10 @@ class SettingsPanel(object):
                 max_len = 5
                 # If there are too many choices, or their values are too long
                 # in string representation, use a dropdown box
+
+                choices_str = "".join([str(c) for c in value.choices])
                 if len(value.choices) < max_items and \
-                   len("".join(value.choices)) < max_items * max_len:
+                   len(choices_str) < max_items * max_len:
                     return CONTROL_RADIO
                 else:
                     return CONTROL_COMBO
@@ -164,19 +195,22 @@ class SettingsPanel(object):
         value if one's provided.
         """
         self._clear()
-         # Create label
-        self._sizer.Add(wx.StaticText(self.panel, -1, "%s:" % label),
-                        (self.num_entries, 0), flag=wx.ALL, border=5)
+        # Create label
+        lbl_ctrl = wx.StaticText(self.panel, -1, "%s:" % label)
+        self._sizer.Add(lbl_ctrl, (self.num_entries, 0), flag=wx.ALL, border=5)
+
+        value_ctrl = None
 
         if value:
             self.panel.SetForegroundColour(FOREGROUND_COLOUR_DIS)
 
-            self._sizer.Add(wx.StaticText(self.panel, -1, unicode(value)),
-                            (self.num_entries, 1),
-                            flag=wx.ALL,
-                            border=5)
+            value_ctrl = wx.StaticText(self.panel, -1, unicode(value))
+            self._sizer.Add(value_ctrl, (self.num_entries, 1),
+                            flag=wx.ALL, border=5)
             self.panel.SetForegroundColour(FOREGROUND_COLOUR)
+
         self.num_entries += 1
+        self.entries.append((lbl_ctrl, value_ctrl, value))
 
     def add_value(self, label, value, conf=None):
         """ Add a label/value pair to the settings panel.
@@ -194,14 +228,15 @@ class SettingsPanel(object):
         # Format label
         label = conf.get('label', self._label_to_human(label))
         # Add the label to the panel
-        self._sizer.Add(wx.StaticText(self.panel, -1, "%s:" % label),
-                        (self.num_entries, 0), flag=wx.ALL, border=5)
+        lbl_ctrl = wx.StaticText(self.panel, -1, "%s:" % label)
+        self._sizer.Add(lbl_ctrl, (self.num_entries, 0), flag=wx.ALL, border=5)
 
         # If no value provided...
         if not value:
             log.warn("No value provided for %s", label)
             self.num_entries += 1
             self.fb_panel.Parent.Layout()
+            self.entries.append((lbl_ctrl, None, None))
             return
 
         # Get unit from config, vattribute or use an empty one
@@ -221,11 +256,15 @@ class SettingsPanel(object):
 
             self.panel.SetForegroundColour(FOREGROUND_COLOUR_DIS)
             if isinstance(value.value, tuple):
+                # Maximum number of chars per value
                 txt = " x ".join(["%s %s" % (v, unit) for v in value.value])
             else:
-                txt = unicode("%s %s" % (value.value, unit))
+                txt = u"%s %s" % (value.value, unit)
+            new_ctrl = wx.StaticText(self.panel, -1, size=(200, -1))
+
+            #value.subscribe(lambda v: new_ctrl.SetLabel(u"%s %s" % (v, unit)), True)
+
             self.panel.SetForegroundColour(FOREGROUND_COLOUR)
-            new_ctrl = wx.StaticText(self.panel, -1, txt)
 
         elif control_type == CONTROL_SLIDER:
 
@@ -271,12 +310,28 @@ class SettingsPanel(object):
             self._sizer.Add(txt, (self.num_entries, 2), flag=wx.ALL, border=5)
 
         elif control_type == CONTROL_INT:
+            rng = conf.get("range", (None, None))
             new_ctrl = text.UnitIntegerCtrl(self.panel,
                                             -1,
-                                            value.value,
+                                            style=wx.NO_BORDER,
                                             unit=unit,
-                                            min_val=value.range[0],
-                                            max_val=value.range[1])
+                                            min_val=rng[0],
+                                            max_val=rng[1])
+            new_ctrl.SetForegroundColour("#2FA7D4")
+            new_ctrl.SetBackgroundColour(self.panel.GetBackgroundColour())
+
+            #value.subscribe(lambda v: new_ctrl.SetValue(v))
+
+
+                #new_ctrl.SetValue("AAAAAA")
+
+            value.subscribe(lambda v: log.warn("lambda"))
+            value.subscribe(set_on_notify)
+            f = get_func(new_ctrl.SetValue)
+            #self.entries.append(f)
+            value.subscribe(f)
+
+
         elif control_type == CONTROL_FLT:
             new_ctrl = text.UnitFloatCtrl(self.panel,
                                          -1,
@@ -284,6 +339,8 @@ class SettingsPanel(object):
                                           unit=unit,
                                           min_val=value.range[0],
                                           max_val=value.range[1])
+            new_ctrl.SetForegroundColour("#2FA7D4")
+            new_ctrl.SetBackgroundColour(self.panel.GetBackgroundColour())
 
         else:
             txt = unicode("%s %s" % (value.value, unit))
@@ -294,8 +351,17 @@ class SettingsPanel(object):
         self._sizer.Add(new_ctrl, (self.num_entries, 1),
                         flag=wx.ALL|wx.EXPAND, border=5)
         self.num_entries += 1
+        self.entries.append((lbl_ctrl, new_ctrl, value))
         self.fb_panel.Parent.Layout()
 
+def set_on_notify(v):
+    log.warn("def")
+
+def get_func(ctrl_func):
+    def _listener(v):
+        log.warn("funcy")
+        ctrl_func(v)
+    return _listener
 
 class StreamPanel(object):
     pass
@@ -325,6 +391,7 @@ class SettingsSideBar(object):
                                     MAIN_FRAME.fp_optical_settings,
                                     "No optical microscope found")
 
+        self.blah = []
     # Optical microscope settings
 
     def add_ccd(self, comp):
@@ -337,6 +404,7 @@ class SettingsSideBar(object):
             for name, value in vigil_attrs.iteritems():
 
                 if SETTINGS["ccd"].has_key(name):
+                    self.blah.append(value)
                     self._optical_panel.add_value(name,
                                                   value,
                                                   SETTINGS["ccd"][name])
@@ -344,5 +412,8 @@ class SettingsSideBar(object):
                     log.debug("No configuration found for %s attribute", name)
         else:
             log.warn("No CCD settings found! Generating default controls")
+
+            for name, value in vigil_attrs.iteritems():
+                self._optical_panel.add_value(name, value)
 
 

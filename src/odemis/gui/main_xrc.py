@@ -75,7 +75,7 @@ def __init_resources():
     wx.FileSystem.AddHandler(wx.MemoryFSHandler())
 
     main_xrc = '''\
-<?xml version="1.0" ?><resource class="FoldPanelItem">
+<?xml version="1.0" ?><resource class="wxMenuItem">
   <object class="wxFrame" name="fr_main">
     <object class="wxMenuBar">
       <object class="wxMenu">
@@ -88,8 +88,8 @@ def __init_resources():
           </XRCED>
         </object>
         <object class="wxMenuItem" name="menu_item_halt">
-          <label>Halt</label>
-          <accel>Esc</accel>
+          <label>Stop all axes</label>
+          <accel>[Esc]</accel>
           <XRCED>
             <assign_var>1</assign_var>
           </XRCED>

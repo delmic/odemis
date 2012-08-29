@@ -16,6 +16,6 @@ def print_res(res):
 if __name__ == '__main__':
     comp = main.get_component("FakePIGCS")
     comp.speed.subscribe(print_speed, init=True)
-    cam = main.get_component("Andor SimCam")
-    cam.targetTemperature.subscribe(print_speed, init=True)
+    cam = main.get_component("Clara")
+    cam.binning.subscribe(print_speed, init=True)
     raw_input("Press Enter to end...")
