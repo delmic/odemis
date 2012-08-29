@@ -620,7 +620,6 @@ def main(args):
     status = get_backend_status()
     if options.check:
         logging.info("Status of back-end is %s", status)
-        print status
         return status_to_xtcode[status]
 
     # scan needs to have the backend stopped
