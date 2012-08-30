@@ -42,7 +42,9 @@ if [ $status -ne 0 ]; then
         echo "done"
     else
         echo "failed"
-        tail -n 30 "$LOGFILE"
+        grep "ERROR" "$LOGFILE" | tail -n 30
+	echo "For more log message see file $LOGFILE"
+	read -p "Press [Enter] to quit..."
         exit 1
     fi
 fi
