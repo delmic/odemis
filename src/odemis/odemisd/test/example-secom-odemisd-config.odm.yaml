@@ -42,7 +42,7 @@ Quanta: {
 "Redstone Stage": {
     class: pi.StageRedStone,
     role: stage,
-    init: {port: /dev/ttyUSB0, 'x': [1, 0], 'y': [0, 0]}, # addresses of the controllers on the serial bus
+    init: {port: /dev/ttyPIRS, 'x': [1, 0], 'y': [0, 0]}, # addresses of the controllers on the serial bus
     affects: ["Quanta SED", "Andor Clara"],
     properties: {
         speed: 1 #m/s
@@ -52,7 +52,7 @@ Quanta: {
 "Dual-view alignment": {
     class: pigcs.Bus,
     role: align,
-    init: {port: "/dev/ttyPIGCS", axes: {"x": [1, 1, False], "y": [2, 1, False]}},
+    init: {port: "/dev/ttyPIE", axes: {"x": [1, 1, False], "y": [2, 1, False]}},
     affects: ["Quanta SED", "Andor Clara"],
     properties: {
         speed: {'x':0.001, 'y':0.001} # m/s

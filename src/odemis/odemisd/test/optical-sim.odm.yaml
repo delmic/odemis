@@ -39,10 +39,10 @@ Light: {
 "FakeRedStoneStage": {
     class: simulated.Stage2D,
     role: stage,
-    init: {axes: ["x", "y"]},
+    init: {axes: [x, y]},
     affects: ["Andor SimCam"],
     properties: {
-        speed: {'x':0.1, 'y':0.1} #m/s
+        speed: {x: 0.1, y: 0.1} #m/s
     }
 }
 
@@ -57,7 +57,7 @@ Light: {
         inverted: ["x"]
     },
     properties: {
-        speed: {'x':0.1, 'y':0.1} #m/s
+        speed: {'x': 0.1, 'y': 0.1} #m/s
     }
 }
 
@@ -70,7 +70,7 @@ Light: {
         axes_map: {"z": "z"}
     },
     properties: {
-        speed: {'z':0.1} #m/s
+        speed: {'z': 0.1} #m/s
     }
 }
 
