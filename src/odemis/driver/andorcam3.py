@@ -864,6 +864,7 @@ class AndorCam3(model.DigitalCamera):
                     self.Command(u"AcquisitionStart")
                     continue
                 self.acquisition_lock.release()
+                logging.debug("Acquisition thread closed after giving up")
                 self.acquire_must_stop.clear()
                 raise
 
@@ -888,6 +889,7 @@ class AndorCam3(model.DigitalCamera):
             pass # probably just complaining it was already stopped
         self.Flush()
         self.acquisition_lock.release()
+        logging.debug("Acquisition thread closed")
         self.acquire_must_stop.clear()
     
     def req_stop_flow(self):

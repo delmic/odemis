@@ -1112,7 +1112,8 @@ class AndorCam2(model.DigitalCamera):
         """
         # We don't use the kinetic mode as it might go faster than we can
         # process them.
-        self.atcore.SetAcquisitionMode(5) # 5 = Run till abort 
+        self.atcore.SetAcquisitionMode(5) # 5 = Run till abort
+        self._prev_settings = (None, None) # force updating the settings 
         self._update_settings()
         self.atcore.SetKineticCycleTime(0) # don't wait between acquisitions
         
@@ -1180,6 +1181,7 @@ class AndorCam2(model.DigitalCamera):
                     logging.warning("failed to get latest image, retrying after error %s", strerr)
                 else:
                     self.acquisition_lock.release()
+                    logging.debug("Acquisition thread closed after giving up")
                     self.acquire_must_stop.clear()
                     raise                           
 
@@ -1193,10 +1195,12 @@ class AndorCam2(model.DigitalCamera):
             # it was already aborted
             if errno != 20073: # DRV_IDLE
                 self.acquisition_lock.release()
+                logging.debug("Acquisition thread closed after giving up")
                 self.acquire_must_stop.clear()
                 raise
         self.atcore.FreeInternalMemory() # TODO not sure it's needed
         self.acquisition_lock.release()
+        logging.debug("Acquisition thread closed")
         self.acquire_must_stop.clear()
     
     def req_stop_flow(self):
