@@ -195,6 +195,7 @@ class DraggableCanvas(wx.Panel):
             pos = event.GetPositionTuple()
             shift = (pos[0] - self._rdrag_prev_pos[0],
                      pos[1] - self._rdrag_prev_pos[1])
+            self._rdrag_prev_pos = pos
             if shift[0]:
                 self.onExtraAxisMove(0, shift[0])
             if shift[1]:

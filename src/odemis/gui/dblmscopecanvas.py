@@ -92,10 +92,11 @@ class DblMicroscopeCanvas(DraggableCanvas):
         shift (int): relative amount of pixel moved
             >0: toward up/right
         """
-        # we link axis 0 (up/down) to optical focus
-        if axis == 0 and self.viewmodel.opt_focus:
+        # we link axis 1 (up/down) to optical focus
+        if axis == 1 and self.viewmodel.opt_focus:
             # conversion: 1 px => 1 um (so a whole screen is like 1mm)
-            val = 1e-6 * shift # m
+            # negative == go up => need to inverse value
+            val = -1e-6 * shift # m
             assert(abs(val) < 0.01) # never move by 1 cm
             log.debug("Moving focus by %f um", val * 1e6)
 #            log.info("moving actuator %s", self.viewmodel.opt_focus.name)
