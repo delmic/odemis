@@ -364,7 +364,7 @@ class SuggestTextCtrl (wx.TextCtrl, listmix.ColumnSorterMixin):
 class NumberValidator(wx.PyValidator):
     """ Base class used for number validation """
 
-    def __init__(self, min_val=None, max_val=None):
+    def __init__(self, min_val=None, max_val=None, choices=None):
         """ Constructor """
         wx.PyValidator.__init__(self)
         self.Bind(wx.EVT_CHAR, self.OnChar)
@@ -375,6 +375,18 @@ class NumberValidator(wx.PyValidator):
         # Minimun and maximum allowed values
         self.min_val = min_val
         self.max_val = max_val
+        self.choices = choices
+
+        self._validate_choices()
+
+    def _validate_choices(self):
+
+        if self.choices:
+            for c in self.choices:
+                valid, _ = self.validate_value(c)
+
+                if not valid:
+                    raise ValueError("Illegal value (%s) found in choices" % c)
 
     def Clone(self): #pylint: disable=W0221
         raise NotImplementedError
@@ -408,7 +420,7 @@ class NumberValidator(wx.PyValidator):
 
             if chr(key) in ('.', ','):
                 val = val.replace('..', '.')
-                val =val.replace(',,', ',')
+                val =val.replace(',,', ',') #pylint: disable=C0323
 
             log.debug("Checking against %s", val)
 
@@ -451,15 +463,19 @@ class NumberValidator(wx.PyValidator):
 
         """
 
-        msg = "Value {} out of range [{}, {}]"
+        if self.choices:
+            if val not in self.choices:
+                return False, val
+        else:
+            msg = "Value {} out of range [{}, {}]"
 
-        if val is not None and val != "-" and self.min_val != self.max_val:
-            if self.min_val is not None and val < self.min_val:
-                log.debug(msg.format(val, self.min_val, self.max_val))
-                return False, self.min_val
-            if self.max_val is not None and val > self.max_val:
-                log.debug(msg.format(val, self.min_val, self.max_val))
-                return False, self.max_val
+            if val is not None and val != "-" and self.min_val != self.max_val:
+                if self.min_val is not None and val < self.min_val:
+                    log.debug(msg.format(val, self.min_val, self.max_val))
+                    return False, self.min_val
+                if self.max_val is not None and val > self.max_val:
+                    log.debug(msg.format(val, self.min_val, self.max_val))
+                    return False, self.max_val
         return True, val
 
     def _cast(self, val):
@@ -476,7 +492,7 @@ class NumberTextCtrl(wx.TextCtrl):
             raise ValueError("No validator set!")
 
         key_inc = kwargs.pop('key_inc', True)
-        self.step = kwargs.pop('step', 1)
+        self.step = kwargs.pop('step', None)
         self.accuracy = kwargs.pop('accuracy', 0)
 
         # For the wx.EVT_TEXT_ENTER event to work, the TE_PROCESS_ENTER
@@ -495,7 +511,6 @@ class NumberTextCtrl(wx.TextCtrl):
 
         wx.TextCtrl.__init__(self, *args, **kwargs)
 
-
         # Set the value so it will be validated to be a valid integer
         if val:
             self.SetValue(val)
@@ -511,6 +526,14 @@ class NumberTextCtrl(wx.TextCtrl):
 
     def set_linked_slider(self, slider):
         self.linked_slider = slider
+
+    def _update_linked_slider(self, value):
+        """ Update any linked field to the same value as this slider
+        """
+        if self.linked_slider:
+            if self.linked_slider.GetValue() != value:
+                self.linked_slider.SetValue(value)
+
 
     def _check_value(self, val):
         """ Returns the numerical value after making sure it's correct.
@@ -541,7 +564,7 @@ class NumberTextCtrl(wx.TextCtrl):
 
     def SetValue(self, val): #pylint: disable=W0221
         """ Set the value of the control or raise and exception when the value
-        is not a valid integer.
+        cannot be cast to the required data type.
         """
         try:
             log.debug("Setting value to '%s' for %s",
@@ -549,10 +572,6 @@ class NumberTextCtrl(wx.TextCtrl):
             if val:
                 val = self.GetValidator()._cast(val)
             wx.TextCtrl.SetValue(self, unicode(val))
-
-            if self.linked_slider:
-                if self.linked_slider.GetValue() != val:
-                    self.linked_slider.SetValue(val)
 
         except ValueError:
             msg = "Value '%s' is not a valid number for %s."
@@ -569,6 +588,9 @@ class NumberTextCtrl(wx.TextCtrl):
         wx.CallAfter(self.SetSelection, 0, 0)
         if val:
             validated, new_val = self.GetValidator().validate_value(val)
+
+            self._update_linked_slider(new_val)
+
             if validated:
                 self.SetValue(val)
             else:
@@ -582,6 +604,7 @@ class NumberTextCtrl(wx.TextCtrl):
 
         The event is ignored otherwise.
         """
+
         key = evt.GetKeyCode()
         val = self.GetValue()
 
@@ -596,6 +619,9 @@ class NumberTextCtrl(wx.TextCtrl):
         validated, val = self.GetValidator().validate_value(val)
         if validated:
             self.SetValue(val)
+            self._update_linked_slider(val)
+        else:
+            log.warn("Invalid value %s", val)
 
     def on_focus(self, evt):
         """ Remove the units from the displayed value on focus """
@@ -613,10 +639,14 @@ class NumberTextCtrl(wx.TextCtrl):
         if val is not None and val != "":
             validated, new_val = self.GetValidator().validate_value(val)
 
+            self._update_linked_slider(new_val)
+
             if validated:
                 self.SetValueStr(val)
             else:
                 self.SetValueStr(new_val)
+
+        evt.Skip()
 
 class UnitNumberCtrl(NumberTextCtrl):
 
@@ -656,6 +686,14 @@ class UnitNumberCtrl(NumberTextCtrl):
     #             self.SetValueStr(new_val)
 
     def SetValueStr(self, val):
+        """ Set the value of the controls, after formatting that value
+        with a possible unit indicator and such.
+        """
+        import threading
+
+        print "text", threading.current_thread().ident
+
+
         self.SetValue(val)
         if self.accuracy:
             frm = "%0." + str(self.accuracy) + "f %s"
@@ -691,16 +729,16 @@ class IntegerValidator(NumberValidator):
     It can also validate if the value that is present is a valid integer.
     """
 
-    def __init__(self, min_val=None, max_val=None):
+    def __init__(self, min_val=None, max_val=None, choices=None):
         """ Constructor """
-        NumberValidator.__init__(self, min_val, max_val)
+        NumberValidator.__init__(self, min_val, max_val, choices)
         # Legal characters for a signed integer
         self.legal += "-"
 
 
     def Clone(self):    #pylint: disable=W0221
         """ Required method """
-        return IntegerValidator(self.min_val, self.max_val)
+        return IntegerValidator(self.min_val, self.max_val, self.choices)
 
     def _cast(self, val):
         return int(val)
@@ -715,6 +753,9 @@ class IntegerTextCtrl(NumberTextCtrl):
     When the 'key_inc' argument is set, the value can be altered by the up and
     down cursor keys.
 
+    The 'choices' keyword argument can be used to pass an iterable containing
+    valid values
+
     If the object is created with an invalid integer value a ValueError
     exception will be raised.
 
@@ -723,7 +764,8 @@ class IntegerTextCtrl(NumberTextCtrl):
     def __init__(self, *args, **kwargs):
         min_val = kwargs.pop('min_val', None)
         max_val = kwargs.pop('max_val', None)
-        kwargs['validator'] = IntegerValidator(min_val, max_val)
+        choices = kwargs.pop('choices', None)
+        kwargs['validator'] = IntegerValidator(min_val, max_val, choices)
         NumberTextCtrl.__init__(self, *args, **kwargs)
 
 class UnitIntegerCtrl(UnitNumberCtrl):
@@ -741,7 +783,8 @@ class UnitIntegerCtrl(UnitNumberCtrl):
     def __init__(self, *args, **kwargs):
         min_val = kwargs.pop('min_val', None)
         max_val = kwargs.pop('max_val', None)
-        kwargs['validator'] = IntegerValidator(min_val, max_val)
+        choices = kwargs.pop('choices', None)
+        kwargs['validator'] = IntegerValidator(min_val, max_val, choices)
         UnitNumberCtrl.__init__(self, *args, **kwargs)
 
 #########################################
@@ -749,16 +792,16 @@ class UnitIntegerCtrl(UnitNumberCtrl):
 #########################################
 
 class FloatValidator(NumberValidator):
-    def __init__(self, min_val=None, max_val=None):
+    def __init__(self, min_val=None, max_val=None, choices=None):
         """ Constructor """
-        NumberValidator.__init__(self, min_val, max_val)
+        NumberValidator.__init__(self, min_val, max_val, choices)
         # Legal characters for a signed integer
         self.legal += "-."
 
 
     def Clone(self):    #pylint: disable=W0221
         """ Required method """
-        return FloatValidator(self.min_val, self.max_val)
+        return FloatValidator(self.min_val, self.max_val, self.choices)
 
     def _cast(self, val):
         return float(val)
@@ -767,11 +810,10 @@ class FloatTextCtrl(NumberTextCtrl):
     def __init__(self, *args, **kwargs):
         min_val = kwargs.pop('min_val', None)
         max_val = kwargs.pop('max_val', None)
-        kwargs['validator'] = FloatValidator(min_val, max_val)
-        if not kwargs.has_key('step'):
-            kwargs['step'] = 0.1
-        if not kwargs.has_key('accuracy'):
-            kwargs['accuracy'] = 3  # number of decimal spaces right of the .
+        choices = kwargs.pop('choices', None)
+        kwargs['validator'] = FloatValidator(min_val, max_val, choices)
+        kwargs['step'] = kwargs.get('step', 0.1)
+        kwargs['accuracy'] = kwargs.get('accuracy', 3) # decimal places
 
         NumberTextCtrl.__init__(self, *args, **kwargs)
 
@@ -779,11 +821,10 @@ class UnitFloatCtrl(UnitNumberCtrl):
     def __init__(self, *args, **kwargs):
         min_val = kwargs.pop('min_val', None)
         max_val = kwargs.pop('max_val', None)
-        kwargs['validator'] = FloatValidator(min_val, max_val)
-        if not kwargs.has_key('step'):
-            kwargs['step'] = 0.1
-        if not kwargs.has_key('accuracy'):
-            kwargs['accuracy'] = 3  # number of decimal spaces right of the .
+        choices = kwargs.pop('choices', None)
+        kwargs['validator'] = FloatValidator(min_val, max_val, choices)
+        kwargs['step'] = kwargs.get('step', 0.1)
+        kwargs['accuracy'] = kwargs.get('accuracy', 3) # decimal places
 
         UnitNumberCtrl.__init__(self, *args, **kwargs)
 
