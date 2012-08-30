@@ -26,7 +26,8 @@ if [ $status -ne 0 ]; then
 
     # start a new one
     echo -n "Starting back-end.."
-    sudo odemisd --daemon --log-level=2 --log-target "$LOGFILE" "$MODEL"
+    # use sudo background mode to be sure it won't be killed at the end
+    sudo -b odemisd --daemon --log-level=2 --log-target "$LOGFILE" "$MODEL"
     status=$?
     if [ $status -ne 0 ]; then
         echo " failed"
