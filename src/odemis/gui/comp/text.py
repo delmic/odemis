@@ -690,17 +690,18 @@ class UnitNumberCtrl(NumberTextCtrl):
         with a possible unit indicator and such.
         """
         import threading
+        print  "text", "SetValueStr", threading.current_thread().name, threading.current_thread().ident
 
-        print "text", threading.current_thread().ident
-
-
+        # Call this so the value gets tested
         self.SetValue(val)
+
         if self.accuracy:
             frm = "%0." + str(self.accuracy) + "f %s"
             str_val = frm % (val, self.unit)
         else:
             str_val = "%s %s" % (val, self.unit)
 
+        # Set the final value, including formatting and units
         wx.TextCtrl.SetValue(self, str_val)
 
     def GetValue(self):

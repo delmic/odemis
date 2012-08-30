@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<resource class="wxMenuItem">
+<resource class="DblMicroscopePanel">
   <object class="wxFrame" name="fr_main">
     <object class="wxMenuBar">
       <object class="wxMenu">
@@ -137,22 +137,11 @@
             <object class="sizeritem">
               <object class="wxGridSizer">
                 <object class="sizeritem">
-                  <object class="DblMicroscopePanel" name="pnl_view_tl">
-                    <size>400,-1</size>
-                    <fg>#BFBFBF</fg>
-                    <bg>#000000</bg>
-                    <XRCED>
-                      <assign_var>1</assign_var>
-                    </XRCED>
-                  </object>
-                  <flag>wxEXPAND</flag>
-                  <minsize>300,300</minsize>
-                </object>
-                <object class="sizeritem">
                   <object class="DblMicroscopePanel" name="pnl_view_tr">
                     <size>400,-1</size>
                     <fg>#BFBFBF</fg>
                     <bg>#000000</bg>
+                    <hidden>1</hidden>
                     <XRCED>
                       <assign_var>1</assign_var>
                     </XRCED>
@@ -165,6 +154,7 @@
                     <size>400,-1</size>
                     <fg>#BFBFBF</fg>
                     <bg>#000000</bg>
+                    <hidden>1</hidden>
                     <XRCED>
                       <assign_var>1</assign_var>
                     </XRCED>
@@ -177,6 +167,7 @@
                     <size>400,-1</size>
                     <fg>#BFBFBF</fg>
                     <bg>#000000</bg>
+                    <hidden>1</hidden>
                     <XRCED>
                       <assign_var>1</assign_var>
                     </XRCED>
@@ -186,6 +177,18 @@
                 </object>
                 <cols>2</cols>
                 <rows>2</rows>
+              </object>
+              <option>1</option>
+              <flag>wxEXPAND</flag>
+            </object>
+            <object class="sizeritem">
+              <object class="DblMicroscopePanel" name="pnl_view_tl">
+                <size>400,-1</size>
+                <fg>#BFBFBF</fg>
+                <bg>#000000</bg>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
               </object>
               <option>1</option>
               <flag>wxEXPAND</flag>

@@ -243,6 +243,9 @@ class CustomSlider(wx.PyPanel):
                                        prcnt)
 
     def SetValue(self, value):
+        import threading
+        print  "slider", threading.current_thread().name, threading.current_thread().ident
+
         if value < self.value_range[0]:
             self.current_value = self.value_range[0]
         elif value > self.value_range[1]:
@@ -251,10 +254,6 @@ class CustomSlider(wx.PyPanel):
             self.current_value = value
 
         self.pointerPos = self._val_to_pixel()
-
-        import threading
-
-        print "text", threading.current_thread().ident
 
         self.Refresh()
 

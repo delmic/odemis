@@ -20,12 +20,12 @@ class xrcfr_main(wx.Frame):
 #!XRCED:begin-block:xrcfr_main.PreCreate
     def PreCreate(self, pre):
         """ This function is called during the class's initialization.
-
+        
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
         pass
-
+        
 #!XRCED:end-block:xrcfr_main.PreCreate
 
     def __init__(self, parent):
@@ -45,10 +45,10 @@ class xrcfr_main(wx.Frame):
         self.tab_btn_live = xrc.XRCCTRL(self, "tab_btn_live")
         self.tab_btn_gallery = xrc.XRCCTRL(self, "tab_btn_gallery")
         self.pnl_tab_live = xrc.XRCCTRL(self, "pnl_tab_live")
-        self.pnl_view_tl = xrc.XRCCTRL(self, "pnl_view_tl")
         self.pnl_view_tr = xrc.XRCCTRL(self, "pnl_view_tr")
         self.pnl_view_bl = xrc.XRCCTRL(self, "pnl_view_bl")
         self.pnl_view_br = xrc.XRCCTRL(self, "pnl_view_br")
+        self.pnl_view_tl = xrc.XRCCTRL(self, "pnl_view_tl")
         self.btn_toggle_opt = xrc.XRCCTRL(self, "btn_toggle_opt")
         self.btn_toggle_sem = xrc.XRCCTRL(self, "btn_toggle_sem")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
@@ -75,7 +75,7 @@ def __init_resources():
     wx.FileSystem.AddHandler(wx.MemoryFSHandler())
 
     main_xrc = '''\
-<?xml version="1.0" ?><resource class="wxMenuItem">
+<?xml version="1.0" ?><resource class="DblMicroscopePanel">
   <object class="wxFrame" name="fr_main">
     <object class="wxMenuBar">
       <object class="wxMenu">
@@ -213,22 +213,11 @@ def __init_resources():
             <object class="sizeritem">
               <object class="wxGridSizer">
                 <object class="sizeritem">
-                  <object class="DblMicroscopePanel" name="pnl_view_tl">
-                    <size>400,-1</size>
-                    <fg>#BFBFBF</fg>
-                    <bg>#000000</bg>
-                    <XRCED>
-                      <assign_var>1</assign_var>
-                    </XRCED>
-                  </object>
-                  <flag>wxEXPAND</flag>
-                  <minsize>300,300</minsize>
-                </object>
-                <object class="sizeritem">
                   <object class="DblMicroscopePanel" name="pnl_view_tr">
                     <size>400,-1</size>
                     <fg>#BFBFBF</fg>
                     <bg>#000000</bg>
+                    <hidden>1</hidden>
                     <XRCED>
                       <assign_var>1</assign_var>
                     </XRCED>
@@ -241,6 +230,7 @@ def __init_resources():
                     <size>400,-1</size>
                     <fg>#BFBFBF</fg>
                     <bg>#000000</bg>
+                    <hidden>1</hidden>
                     <XRCED>
                       <assign_var>1</assign_var>
                     </XRCED>
@@ -253,6 +243,7 @@ def __init_resources():
                     <size>400,-1</size>
                     <fg>#BFBFBF</fg>
                     <bg>#000000</bg>
+                    <hidden>1</hidden>
                     <XRCED>
                       <assign_var>1</assign_var>
                     </XRCED>
@@ -262,6 +253,18 @@ def __init_resources():
                 </object>
                 <cols>2</cols>
                 <rows>2</rows>
+              </object>
+              <option>1</option>
+              <flag>wxEXPAND</flag>
+            </object>
+            <object class="sizeritem">
+              <object class="DblMicroscopePanel" name="pnl_view_tl">
+                <size>400,-1</size>
+                <fg>#BFBFBF</fg>
+                <bg>#000000</bg>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
               </object>
               <option>1</option>
               <flag>wxEXPAND</flag>

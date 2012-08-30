@@ -82,6 +82,7 @@ SETTINGS = {
 
                 # },
                 # "binning":
+
                 # {
                 #     "control_type": CONTROL_INT,
                 # },
@@ -90,7 +91,7 @@ SETTINGS = {
 
 def _call_after_wrapper(f):
     def wrapped(value):
-        print "WEEEEEEE"
+        print "Setting value to", value, "using", f.__name__
         wx.CallAfter(f, value)
     return wrapped
 
@@ -106,7 +107,8 @@ class VigilantAttributeConnector(object):
         self.change_event = change_event
 
         # Subscribe to the vigilant attribute and initialize
-        self.vigilattr.subscribe(self.sub_func, True)
+        #FIXME: self.vigilattr.subscribe(self.sub_func, True)
+
         # If necessary, bind the provided change event
         if change_event:
             self.ctrl.Bind(change_event, self._on_value_change)
@@ -358,8 +360,8 @@ class SettingsPanel(object):
             txt_ctrl.SetForegroundColour(FOREGROUND_COLOUR_EDIT)
             txt_ctrl.SetBackgroundColour(self.panel.GetBackgroundColour())
 
-            new_ctrl.set_linked_field(txt_ctrl)
-            txt_ctrl.set_linked_slider(new_ctrl)
+            #new_ctrl.set_linked_field(txt_ctrl)
+            #txt_ctrl.set_linked_slider(new_ctrl)
 
             self._sizer.Add(txt_ctrl, (self.num_entries, 2), flag=wx.ALL, border=5)
 
@@ -371,11 +373,12 @@ class SettingsPanel(object):
                                              txt_ctrl.SetValueStr,
                                              wx.EVT_TEXT_ENTER)
 
-            # vas = VigilantAttributeConnector(value,
-            #                                  new_ctrl,
-            #                                  new_ctrl.SetValue,
-            #                                  wx.EVT_LEFT_UP)
-            vac = vat
+            vas = VigilantAttributeConnector(value,
+                                             new_ctrl,
+                                             new_ctrl.SetValue,
+                                             wx.EVT_LEFT_UP)
+
+            vac = (vat, vas)
 
         elif control_type == CONTROL_INT:
             new_ctrl = text.UnitIntegerCtrl(self.panel,
