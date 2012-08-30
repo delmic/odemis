@@ -19,6 +19,7 @@ from odemis.gui.log import log
 import os
 import subprocess
 import sys
+import threading
 import time
 import wx
 
@@ -42,14 +43,20 @@ class AcquisitionController(object):
         # Link snapshot menu to snapshot action
         wx.EVT_MENU(self._frame,
             self._frame.menu_item_qacquire.GetId(),
-            self.snapshot_viewport)
+            self.start_snapshot_viewport)
         
         # Link "acquire image" button to image acquisition
         # TODO: for now it's just snapshot, but should be linked to the acquisition window
-        self._frame.btn_aquire.Bind(wx.EVT_BUTTON, self.snapshot_viewport)
+        self._frame.btn_aquire.Bind(wx.EVT_BUTTON, self.start_snapshot_viewport)
         
+    def start_snapshot_viewport(self, event):
+        """
+        wrapper to run snapshot_viewport in a separate thread as it can take time
+        """
+        thread = threading.Thread(target=self.snapshot_viewport)
+        thread.start()
         
-    def snapshot_viewport(self, event):
+    def snapshot_viewport(self):
         """
         Save a snapshot of the raw image from the focused viewport on the filesystem.
         The name of the file follows the scheme date-time.tiff (e.g.,

@@ -1,0 +1,13 @@
+[Desktop Entry]
+Name=Odemis
+GenericName=Microscope software
+Comment=Open Delmic Microscope Software
+Keywords=Delmic;
+Exec=odemis-start
+Terminal=true
+Type=Application
+Icon=/usr/share/icons/hicolor/scalable/apps/nm-device-wired.svg
+Categories=Utility;
+StartupWMClass=main.py
+StartupNotify=true
+

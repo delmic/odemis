@@ -922,7 +922,7 @@ class Bus(model.Actuator):
                 position[axis] = controller.getPosition(c)
                 # TODO if closed-loop, the ranges should be updated after homing
                 # For now we put very large one
-                self._ranges[axis] = [0, 1] # m
+                self._ranges[axis] = [-1, 1] # m
                 # Just to make sure it doesn't go too fast
                 speed[axis] = 0.001 # m/s
                 max_speed = max(max_speed, controller.speed_max)

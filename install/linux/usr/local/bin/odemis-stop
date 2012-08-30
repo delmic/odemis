@@ -1,0 +1,29 @@
+#!/bin/bash
+# Stop the gui and back-end in any case
+
+. /etc/odemis.conf
+
+export PYTHONPATH
+
+# kill the GUI if it's already there
+if pgrep -f $GUI > /dev/null; then
+    pkill -f $GUI
+fi
+
+
+# Stop the backend 
+if pgrep -f $BACKEND > /dev/null; then
+    # try nicely
+    odemis-cli --kill
+    
+    sleep 2
+    # still there?
+    if pgrep -f $BACKEND > /dev/null; then
+        echo "Back-end still running, killing it..."
+        # TODO: only use sudo if the backend is running as root
+        sudo pkill -f $BACKEND
+    fi
+fi
+
+# clean up
+rm -rf /var/run/odemid/*

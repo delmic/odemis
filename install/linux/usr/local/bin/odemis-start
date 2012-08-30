@@ -1,0 +1,51 @@
+#!/bin/bash
+# Start the gui and back-end in any case
+# might ask to type password become root
+
+. /etc/odemis.conf
+
+export PYTHONPATH
+
+# kill the GUI if it's already there
+if pgrep -f $GUI > /dev/null; then
+    echo "Found the GUI still running, killing it first..."
+    pkill -f $GUI
+fi
+
+# start the backend if not available
+odemis-cli --check
+status=$?
+if [ $status -ne 0 ]; then
+    # backend not responding or dead
+    if [ $status -gt 2 ]; then
+        echo "Warning: failed to check status of back-end"
+    fi
+    
+    # kill the current backend
+    pkill -f $BACKEND
+
+    # start a new one
+    echo -n "Starting back-end.."
+    sudo odemisd --daemon --log-level=2 --log-target "$LOGFILE" "$MODEL"
+    status=$?
+    if [ $status -ne 0 ]; then
+        echo " failed"
+        exit 1
+    fi
+    
+    # For Clara, initialisation can be pretty long
+    echo -n ". "
+    sleep 5
+    
+    # Check (and synchronise)
+    if odemis-cli --check; then
+        echo "done"
+    else
+        echo "failed"
+        tail -n 30 "$LOGFILE"
+        exit 1
+    fi
+fi
+
+# start the GUI
+odemis-gui
