@@ -89,12 +89,6 @@ class OdemisGUIApp(wx.App):
         # Application successfully launched
         return True
 
-    def on_stop_axes(self, evt):
-        if self.secom_model is None:
-            evt.Skip()
-        
-        self.secom_model.stopMotion()
-
     def init_logger(self):
         """ Initialize logging functionality """
         create_gui_logger(self.main_frame.txt_log)
@@ -217,6 +211,11 @@ class OdemisGUIApp(wx.App):
             #print_microscope_tree(microscope)
 
             self.acquisition_controller = AcquisitionController(self.main_frame)
+            
+            # Main on/off buttons => only optical for now
+            # FIXME: special _bitmap_ toggle button doesn't seem to generate EVT_TOGGLEBUTTON
+#            self.main_frame.btn_toggle_opt.Bind(wx.EVT_TOGGLEBUTTON, self.on_toggle_opt)
+            self.main_frame.btn_toggle_opt.Bind(wx.EVT_BUTTON, self.on_toggle_opt)
 
         except Exception:
             self.excepthook(*sys.exc_info())
@@ -274,6 +273,19 @@ class OdemisGUIApp(wx.App):
     def on_timer(self, event): #pylint: disable=W0613
         """ Timer stuff """
         pass
+
+    def on_stop_axes(self, evt):
+        if self.secom_model is None:
+            evt.Skip()
+        
+        self.secom_model.stopMotion()
+
+    def on_toggle_opt(self, event):
+        if self.secom_model:
+            if event.isDown: # if ToggleEvent, could use isChecked()
+                self.secom_model.turnOn()
+            else:
+                self.secom_model.turnOff()  
 
     def on_about(self, evt):
         message = ("%s\n%s\n\nLicensed under the %s." %
