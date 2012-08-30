@@ -189,7 +189,7 @@ class OdemisGUIApp(wx.App):
 
             for scope_panel in self.scope_panels:
                 scope_panel.Bind(wx.EVT_CHILD_FOCUS, self.OnScopePanelFocus)
-
+            self.scope_panels[0].SetFocus(True) # to ensure at least one panel has the focus
 
             self.main_frame.Bind(wx.EVT_CLOSE, self.on_close_window)
 
@@ -197,9 +197,9 @@ class OdemisGUIApp(wx.App):
             self.main_frame.Show()
             #self.main_frame.Raise()
             #self.main_frame.Refresh()
-
-            if log.level == logging.DEBUG:
-                self.goto_debug_mode()
+#
+#            if log.level == logging.DEBUG:
+#                self.goto_debug_mode()
 
 
             self.settings_controler = SettingsSideBar(self.main_frame)
