@@ -69,7 +69,7 @@ class DraggableCanvas(wx.Panel):
 
         self.world_pos_buffer = (0, 0) # centre pos of the buffer in the world
         # the position the view is asking to the next buffer recomputation
-        self.world_pos_requested = self.world_pos_buffer # in buffer-coordinates: =1px at scale = 1 
+        self.world_pos_requested = self.world_pos_buffer # in buffer-coordinates: =1px at scale = 1
 
         # buffer = the whole image to be displayed
         self._dcBuffer = wx.MemoryDC()
@@ -95,7 +95,7 @@ class DraggableCanvas(wx.Panel):
 
         self._rdragging = False
         self._rdrag_prev_pos = None # (int, int) px
-        
+
         # timer to give a delay before redrawing so we wait to see if there are several events waiting
         self.DrawTimer = wx.PyTimer(self.OnDrawTimer)
 
@@ -130,7 +130,7 @@ class DraggableCanvas(wx.Panel):
     def OnRightDown(self, event):
         if self.dragging:
             return
-        
+
         self._rdragging = True
         self._rdrag_prev_pos = event.GetPositionTuple()
         self.SetCursor(wx.StockCursor(wx.CURSOR_SIZENS))
@@ -157,7 +157,7 @@ class DraggableCanvas(wx.Panel):
     def OnLeftDown(self, event):
         if self._rdragging:
             return
-        
+
         self.dragging = True
         # There might be several draggings before the buffer is updated
         # So take into account the current drag_shift to compensate
@@ -190,7 +190,7 @@ class DraggableCanvas(wx.Panel):
             self.drag_shift = (pos[0] - self.drag_init_pos[0],
                                pos[1] - self.drag_init_pos[1])
             self.Refresh()
-        
+
         if self._rdragging:
             pos = event.GetPositionTuple()
             shift = (pos[0] - self._rdrag_prev_pos[0],
@@ -221,7 +221,7 @@ class DraggableCanvas(wx.Panel):
     def onExtraAxisMove(self, axis, shift):
         """
         called when the extra dimensions are modified (right drag)
-        axis (0<int): the axis modified 
+        axis (0<int): the axis modified
             0 => right vertical
             1 => right horizontal
         shift (int): relative amount of pixel moved
@@ -230,7 +230,7 @@ class DraggableCanvas(wx.Panel):
         # We have nothing to do
         # Inheriting classes can do more
         pass
-    
+
     # Change picture one/two
     def SetImage(self, index, im, pos = None, scale = None):
         """
@@ -404,8 +404,15 @@ class DraggableCanvas(wx.Panel):
             ret = im.Copy()
             tl = full_rect[0:2]
         elif total_scale < 1.0:
-            ret = im.Scale(*full_rect[2:4])
-            tl = full_rect[0:2]
+            # Scaling to values smaller than 1.0 was throwing exceptions
+            w, h = full_rect[2:4]
+            if w > 1 and h > 1:
+                log.debug("Scaling to %s, %s", w, h)
+                ret = im.Scale(*full_rect[2:4])
+                tl = full_rect[0:2]
+            else:
+                log.warn("Illegal image scale %s, %s", w, h)
+                return (None, None)
         elif total_scale > 1.0:
             # We could end-up with a lot of the up-scaling useless, so crop it
             orig_size = im.GetSize()
