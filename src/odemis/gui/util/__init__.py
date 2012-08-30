@@ -12,5 +12,5 @@ def call_after(f, self, *args, **kwargs):
 
 def call_after_wrapper(f, *args, **kwargs):
     def wrapzor(*args, **kwargs):
-        return f(*args, **kwargs)
+        return wx.CallAfter(f, *args, **kwargs)
     return wrapzor
