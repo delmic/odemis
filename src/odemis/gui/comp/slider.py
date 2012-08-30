@@ -206,6 +206,7 @@ class CustomSlider(wx.PyPanel):
 
         #calculate value, based on pointer position
         self.current_value = self._pixel_to_val()
+        self._update_linked_field(self.current_value)
 
 
     def OnMotion(self, event=None):

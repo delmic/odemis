@@ -785,20 +785,25 @@ class StreamPanel(wx.Panel):
 
         self._set_warning()
 
-        self.btn_add_stream.Bind(wx.EVT_LISTBOX, self.on_add_stream)
+        #FIXME: dropdown not working atm
+        #self.btn_add_stream.Bind(wx.EVT_LISTBOX, self.on_add_stream)
+        self.btn_add_stream.Bind(wx.EVT_BUTTON, self.on_add_stream)
 
         self.FitStreams()
 
     # === Event Handlers
 
     def on_add_stream(self, evt):
-        evt_obj = evt.GetEventObject()
-        stream_name = evt_obj.GetStringSelection()
+        csp = CustomStreamPanelEntry(self, label="Custom Stream")
+        self.add_stream(csp)
 
-        if self.menu_actions.has_key(stream_name):
-            self.menu_actions[stream_name]()
-        else:
-            raise KeyError("Stream named '%s' not found!", evt.data)
+        # evt_obj = evt.GetEventObject()
+        # stream_name = evt_obj.GetStringSelection()
+
+        # if self.menu_actions.has_key(stream_name):
+        #     self.menu_actions[stream_name]()
+        # else:
+        #     raise KeyError("Stream named '%s' not found!", evt.data)
 
     def on_stream_remove(self, evt):
         eo = evt.GetEventObject()

@@ -12,10 +12,12 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
+import wx
+
 from .instrmodel import InstrumentalImage
 from .util import units
 from odemis.gui.log import log
-import wx
+from odemis.gui.util import call_after
 
 
 
@@ -84,25 +86,31 @@ class MicroscopeImageView(MicroscopeView):
     def __init__(self, parent, iim, viewmodel, name="Image"):
         MicroscopeView.__init__(self, name)
 
+        self.Parent = parent
+
         self.viewmodel = viewmodel
         self.LegendMag = wx.StaticText(parent)
+        self.LegendMag.SetToolTipString("Magnicifaction")
         self.legend_controls.append(self.LegendMag)
 
         iim.subscribe(self.avImage)
-        viewmodel.mpp.subscribe(self.avMPP, True)
 
+        #viewmodel.mpp.subscribe(self.avMPP, True)
+
+    @call_after
     def avImage(self, value):
         self.inimage = value
         # This method might be called from any thread
         # GUI can be updated only from the GUI thread, so just send an event
-        wx.CallAfter(self.UpdateImage)
-        wx.CallAfter(self.avMPP, None)
+        self.UpdateImage()
+        self.avMPP(None)
 
+    @call_after
     def avMPP(self, unused):
         # TODO: shall we use the real density of the screen?
         # We could use real density but how much important is it?
         mppScreen = 0.00025 # 0.25 mm/px
-        label = "Mag: "
+        label = ""
         if self.inimage.mpp:
             magIm = mppScreen / self.inimage.mpp # as if 1 im.px == 1 sc.px
             if magIm >= 1:
@@ -114,10 +122,10 @@ class MicroscopeImageView(MicroscopeView):
                 label += " ×" + str(units.round_significant(magDig, 3))
             else:
                 label += " /" + str(units.round_significant(1.0/magDig, 3))
-        self.LegendMag.SetLabel(label)
 
-        if self.sizer:
-            self.sizer.Layout()
+        self.LegendMag.SetLabel(label)
+        self.Parent.Layout()
+
 
 class MicroscopeOpticalView(MicroscopeImageView):
     def __init__(self, parent, datamodel, viewmodel, name="Optical"):
@@ -127,24 +135,32 @@ class MicroscopeOpticalView(MicroscopeImageView):
         self.datamodel = datamodel
 
         self.LegendWl = wx.StaticText(parent)
+        self.LegendWl.SetToolTipString("Wavelength")
         self.LegendET = wx.StaticText(parent)
+        self.LegendET.SetToolTipString("Exposure Time")
         self.legend_controls += [self.LegendWl, self.LegendET]
 
         datamodel.optical_emt_wavelength.subscribe(self.avWavelength)
         datamodel.optical_det_wavelength.subscribe(self.avWavelength, True)
         datamodel.optical_det_exposure_time.subscribe(self.avExposureTime, True)
 
+    @call_after
     def avWavelength(self, value):
         # need to know both wavelengthes, so just look into the values
         win = self.datamodel.optical_emt_wavelength.value
         wout = self.datamodel.optical_det_wavelength.value
 
-        label = "Wavelength: " + str(win) + "nm/" + str(wout) + "nm"
-        self.LegendWl.SetLabel(label)
+        label = unicode(win) + " nm/" + unicode(wout) + " nm"
 
+        self.LegendWl.SetLabel(label)
+        self.Parent.Layout()
+
+    @call_after
     def avExposureTime(self, value):
-        label = "Exposure: %ss" % units.to_string_si_prefix(value)
+        label = unicode("%0.2f s" % (value))
         self.LegendET.SetLabel(label)
+        self.Parent.Layout()
+
 
 class MicroscopeSEView(MicroscopeImageView):
     def __init__(self, parent, datamodel, viewmodel, name="SE Detector"):
@@ -166,14 +182,17 @@ class MicroscopeSEView(MicroscopeImageView):
         datamodel.sem_emt_hv.subscribe(self.avHV, True)
 
     # TODO need to use the right dimensions for the units
+    @call_after
     def avDwellTime(self, value):
         label = "Dwell: %ss" % units.to_string_si_prefix(value)
         self.LegendDwell.SetLabel(label)
 
+    @call_after
     def avSpot(self, value):
         label = "Spot: %g" % value
         self.LegendSpot.SetLabel(label)
 
+    @call_after
     def avHV(self, value):
         label = "HV: %sV" % units.to_string_si_prefix(value)
         self.LegendHV.SetLabel(label)

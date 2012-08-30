@@ -1,4 +1,4 @@
-    #-*- coding: utf-8 -*-
+#-*- coding: utf-8 -*-
 """
 @author: Rinze de Laat
 
@@ -28,6 +28,7 @@ import wx
 import odemis.gui.comp.text as text
 
 from ..comp.foldpanelbar import FoldPanelItem
+from odemis.gui.util import call_after_wrapper
 from odemis.gui.log import log
 from odemis.gui.comp.slider import CustomSlider
 from odemis.model import getVAs, NotApplicableError, VigilantAttributeBase, \
@@ -77,23 +78,18 @@ SETTINGS = {
                     "range": (0.01, 3.00),
                     "scale": "exp",
                 },
-                # "temperature":
-                # {
+                "temperature":
+                {
 
-                # },
-                # "binning":
-
-                # {
-                #     "control_type": CONTROL_INT,
-                # },
+                },
+                "binning":
+                {
+                    "control_type": CONTROL_RADIO,
+                    "choices": [1, 2, 4],
+                },
             }
            }
 
-def _call_after_wrapper(f):
-    def wrapped(value):
-        print "Setting value to", value, "using", f.__name__
-        wx.CallAfter(f, value)
-    return wrapped
 
 class VigilantAttributeConnector(object):
     """ This class connects a vigilant attribute with a wxPython control,
@@ -103,11 +99,12 @@ class VigilantAttributeConnector(object):
     def __init__(self, vigilattr, ctrl, sub_func, change_event=None):
         self.vigilattr = vigilattr
         self.ctrl = ctrl
-        self.sub_func = _call_after_wrapper(sub_func)
+        self.sub_func = call_after_wrapper(sub_func)
         self.change_event = change_event
 
         # Subscribe to the vigilant attribute and initialize
-        #FIXME: self.vigilattr.subscribe(self.sub_func, True)
+
+        self.vigilattr.subscribe(self.sub_func, True)
 
         # If necessary, bind the provided change event
         if change_event:
@@ -360,8 +357,8 @@ class SettingsPanel(object):
             txt_ctrl.SetForegroundColour(FOREGROUND_COLOUR_EDIT)
             txt_ctrl.SetBackgroundColour(self.panel.GetBackgroundColour())
 
-            #new_ctrl.set_linked_field(txt_ctrl)
-            #txt_ctrl.set_linked_slider(new_ctrl)
+            new_ctrl.set_linked_field(txt_ctrl)
+            txt_ctrl.set_linked_slider(new_ctrl)
 
             self._sizer.Add(txt_ctrl, (self.num_entries, 2), flag=wx.ALL, border=5)
 
@@ -406,6 +403,12 @@ class SettingsPanel(object):
                                              new_ctrl.SetValueStr,
                                              wx.EVT_TEXT_ENTER)
 
+        elif control_type in (CONTROL_RADIO, CONTROL_COMBO):
+            new_ctrl = wx.ComboBox(self.panel, -1, u"%s %s" % (value.value, unit), (0, 0),
+                         (100, 16), [u"%s %s" % (c, unit) for c in choices],
+                         wx.NO_BORDER | wx.CB_DROPDOWN | wx.TE_PROCESS_ENTER | wx.CB_SORT)
+            new_ctrl.SetForegroundColour(FOREGROUND_COLOUR_EDIT)
+            new_ctrl.SetBackgroundColour(self.panel.GetBackgroundColour())
 
         elif control_type == CONTROL_FLT:
             new_ctrl = text.UnitFloatCtrl(self.panel,

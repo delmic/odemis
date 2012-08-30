@@ -75,7 +75,7 @@ def __init_resources():
     wx.FileSystem.AddHandler(wx.MemoryFSHandler())
 
     main_xrc = '''\
-<?xml version="1.0" ?><resource class="DblMicroscopePanel">
+<?xml version="1.0" ?><resource class="wxGridSizer">
   <object class="wxFrame" name="fr_main">
     <object class="wxMenuBar">
       <object class="wxMenu">
@@ -210,6 +210,7 @@ def __init_resources():
               </object>
               <flag>wxEXPAND</flag>
             </object>
+            
             <object class="sizeritem">
               <object class="wxGridSizer">
                 <object class="sizeritem">

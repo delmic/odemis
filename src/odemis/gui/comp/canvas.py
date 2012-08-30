@@ -406,7 +406,7 @@ class DraggableCanvas(wx.Panel):
         elif total_scale < 1.0:
             # Scaling to values smaller than 1.0 was throwing exceptions
             w, h = full_rect[2:4]
-            if w > 1 and h > 1:
+            if w >= 1 and h >= 1:
                 log.debug("Scaling to %s, %s", w, h)
                 ret = im.Scale(*full_rect[2:4])
                 tl = full_rect[0:2]

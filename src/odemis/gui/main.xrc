@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<resource class="DblMicroscopePanel">
+<resource class="wxGridSizer">
   <object class="wxFrame" name="fr_main">
     <object class="wxMenuBar">
       <object class="wxMenu">
@@ -134,6 +134,7 @@
               </object>
               <flag>wxEXPAND</flag>
             </object>
+            
             <object class="sizeritem">
               <object class="wxGridSizer">
                 <object class="sizeritem">

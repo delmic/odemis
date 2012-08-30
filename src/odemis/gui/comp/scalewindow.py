@@ -80,6 +80,7 @@ class BufferedWindow(wx.Control):
         :param `bufferedstyle`: if set to ``SM_BUFFERED_DC``, double-buffering will
          be used.
         """
+        style |= wx.NO_BORDER
 
         wx.Control.__init__(self, parent, id, pos=pos, size=size, style=style)
         self._bufferedstyle = bufferedstyle

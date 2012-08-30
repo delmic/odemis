@@ -50,10 +50,9 @@ class DblMicroscopePanel(wx.Panel):
         self._has_focus = False
 
         self.viewmodel = DblMscopeViewModel()
-
-        # Create all sub widgets used by this wx.Panel
-        self._build_windows()
-
+        self.legend_panel = wx.Panel(self)
+        # put here so MicroscopeOpticalView will pick up on it
+        self.legend_panel.SetForegroundColour("#BBBBBB")
 
         try:
             self.secom_model = wx.GetApp().secom_model
@@ -62,6 +61,18 @@ class DblMicroscopePanel(wx.Panel):
             msg = "Could not find SECOM model"
             log.error(msg)
             return
+
+        # Select the default views
+        #self.ChangeView(0, self.views[1].name)
+        #self.ChangeView(1, self.views[2].name)
+        #FIXME: this is a BIG shortcut => need streams
+
+        self.opt_view = MicroscopeOpticalView(self.legend_panel, self.secom_model, self.viewmodel)
+
+        # Create all sub widgets used by this wx.Panel
+        self._build_windows()
+
+        self.opt_view.Show(self.viewmodel.images[0])
 
         # Control for the selection before AddView(), which needs them
         #self.viewComboLeft = wx.ComboBox(self, style=wx.CB_READONLY, size=(140, -1))
@@ -84,12 +95,7 @@ class DblMicroscopePanel(wx.Panel):
 #        self.AddView(MicroscopeOpticalView(self, self.secom_model, self.viewmodel))
 #        self.AddView(MicroscopeSEView(self, self.secom_model, self.viewmodel))
 
-        # Select the default views
-        #self.ChangeView(0, self.views[1].name)
-        #self.ChangeView(1, self.views[2].name)
-        #FIXME: this is a BIG shortcut => need streams
-        self.opt_view = MicroscopeOpticalView(self, self.secom_model, self.viewmodel)
-        self.opt_view.Show(self.viewmodel.images[0])
+
 
         # sync microscope stage with the view
         self.viewmodel.center.value = self.secom_model.stage_pos.value
@@ -128,39 +134,39 @@ class DblMicroscopePanel(wx.Panel):
 
         ##### Scale window
 
-        legend_panel = wx.Panel(self)
-        legend_panel.SetBackgroundColour("#1A1A1A")
-        legend_panel.SetForegroundColour(self.GetForegroundColour())
 
-        self.scaleDisplay = ScaleWindow(legend_panel)
+        self.legend_panel.SetBackgroundColour("#1A1A1A")
+        self.legend_panel.SetForegroundColour(self.GetForegroundColour())
+
+        self.scaleDisplay = ScaleWindow(self.legend_panel)
         self.scaleDisplay.SetFont(font)
 
 
         #### Values
 
-        self.magni_label = wx.StaticText(legend_panel, wx.ID_ANY, "10x 10x")
-        self.magni_label.SetToolTipString("Magnification Optic Electron")
-        self.volta_label = wx.StaticText(legend_panel, wx.ID_ANY, "66 kV")
-        self.volta_label.SetToolTipString("Voltage")
-        self.dwell_label = wx.StaticText(legend_panel, wx.ID_ANY, "666 μs")
-        self.dwell_label.SetToolTipString("Dwell")
+        # self.magni_label = wx.StaticText(self.legend_panel, wx.ID_ANY, "10x 10x")
+        # self.magni_label.SetToolTipString("Magnification Optic Electron")
+        # self.volta_label = wx.StaticText(self.legend_panel, wx.ID_ANY, "66 kV")
+        # self.volta_label.SetToolTipString("Voltage")
+        # self.dwell_label = wx.StaticText(self.legend_panel, wx.ID_ANY, "666 μs")
+        # self.dwell_label.SetToolTipString("Dwell")
 
         # Merge icons will be grabbed from gui.img.data
         ##### Merge slider
 
-        self.blendingSlider = CustomSlider(legend_panel,
+        self.blendingSlider = CustomSlider(self.legend_panel,
                     wx.ID_ANY,
                     50,
                     (0, 100),
                     size=(100, 12),
                     style=wx.SL_HORIZONTAL | wx.SL_AUTOTICKS | wx.SL_TICKS)
 
-        self.blendingSlider.SetBackgroundColour(legend_panel.GetBackgroundColour())
+        self.blendingSlider.SetBackgroundColour(self.legend_panel.GetBackgroundColour())
         self.blendingSlider.SetForegroundColour("#4d4d4d")
         #self.blendingSlider.SetLineSize(50)
 
-        self.bmpIconOpt = wx.StaticBitmap(legend_panel, wx.ID_ANY, getico_blending_optBitmap())
-        self.bmpIconSem = wx.StaticBitmap(legend_panel, wx.ID_ANY, getico_blending_semBitmap())
+        self.bmpIconOpt = wx.StaticBitmap(self.legend_panel, wx.ID_ANY, getico_blending_optBitmap())
+        self.bmpIconSem = wx.StaticBitmap(self.legend_panel, wx.ID_ANY, getico_blending_semBitmap())
 
         self.blendingSlider.Bind(wx.EVT_LEFT_UP, self.OnSlider)
 
@@ -168,7 +174,7 @@ class DblMicroscopePanel(wx.Panel):
         # Optional legend widgets
         ###################################
 
-        self.hfwDisplay = wx.StaticText(legend_panel) # Horizontal Full Width
+        self.hfwDisplay = wx.StaticText(self.legend_panel) # Horizontal Full Width
         self.hfwDisplay.Hide()
 
         ###################################
@@ -187,10 +193,15 @@ class DblMicroscopePanel(wx.Panel):
         # +-------
         #  (?????) empty for now
 
+
         labelSizer = wx.BoxSizer(wx.HORIZONTAL)
-        labelSizer.Add(self.magni_label, flag=wx.RIGHT, border=20)
-        labelSizer.Add(self.volta_label, flag=wx.RIGHT, border=20)
-        labelSizer.Add(self.dwell_label, flag=wx.RIGHT, border=20)
+
+        for c in self.opt_view.legend_controls:
+            labelSizer.Add(c, flag=wx.RIGHT, border=20)
+
+        # labelSizer.Add(self.magni_label, flag=wx.RIGHT, border=20)
+        # labelSizer.Add(self.volta_label, flag=wx.RIGHT, border=20)
+        # labelSizer.Add(self.dwell_label, flag=wx.RIGHT, border=20)
 
         # midColSizer = wx.BoxSizer(wx.VERTICAL)
         # midColSizer.Add(labelSizer, flag=wx.ALIGN_CENTER_VERTICAL)
@@ -233,13 +244,13 @@ class DblMicroscopePanel(wx.Panel):
         # legend_panel_sizer is needed to add a border around the legend
         legend_panel_sizer = wx.BoxSizer(wx.VERTICAL)
         legend_panel_sizer.Add(legendSizer, 1, border=10, flag=wx.ALL|wx.EXPAND)
-        legend_panel.SetSizerAndFit(legend_panel_sizer)
+        self.legend_panel.SetSizerAndFit(legend_panel_sizer)
 
         mainSizer = wx.BoxSizer(wx.VERTICAL)
 
         mainSizer.Add(self.canvas, 1,
                 border=2, flag=wx.EXPAND|wx.TOP|wx.LEFT|wx.RIGHT)
-        mainSizer.Add(legend_panel, 0,
+        mainSizer.Add(self.legend_panel, 0,
                 border=2, flag=wx.EXPAND|wx.BOTTOM|wx.LEFT|wx.RIGHT)
 
         self.SetSizerAndFit(mainSizer)
@@ -269,7 +280,7 @@ class DblMicroscopePanel(wx.Panel):
         self.SetFocus(True)
         evt.Skip()
 
-    def HasFocus(self):
+    def HasFocus(self, *args, **kwargs):
         return self._has_focus == True
 
     def SetFocus(self, focus):   #pylint: disable=W0221
