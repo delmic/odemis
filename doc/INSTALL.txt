@@ -7,12 +7,17 @@ sudo apt-get install python-wxgtk2.8 python-imaging python-yaml python-gdal pyth
 = Installing Odemis =
 
 Download the source code:
+cd ~/development
 git clone git@github.com:delmic/Pyro4.git
 git clone git@github.com:delmic/odemis.git
 
 Create a "odemis" group and add all the necessary users to it:
 sudo addgroup odemis
 sudo adduser replace_by_login_name odemis
+
+On Linux, install the files this way:
+cd odemis/install/linux
+sudo cp -dr --preserve=mode,xattr,timestamps * /
 
 = Installing the vendor device drivers =
 == Andor Clara camera ==
