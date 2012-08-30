@@ -14,21 +14,26 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
+import logging
 import os
 import subprocess
 
 # Generic information constants
 
 def _get_version():
-    if not os.path.isdir(".git"):
+    # change directory to root
+    rootdir = os.path.join(os.path.dirname(__file__), "..", "..") # odemis/src/odemis/../..
+    
+    if not os.path.isdir(rootdir) or not os.path.isdir(os.path.join(rootdir, ".git")):
         # TODO should fallback to a VERSION file
         return "version unknown"
     
     try:
-        out = subprocess.check_output(["git", "describe", "--tags", "--dirty", "--always"])
+        out = subprocess.check_output(args=["git", "describe", "--tags", "--dirty", "--always"],
+                                      cwd=rootdir)
         return out.strip()
     except EnvironmentError:
-        print "unable to run git"
+        logging.warning("unable to run git")
         return "version unknown"
 
 version = _get_version()
