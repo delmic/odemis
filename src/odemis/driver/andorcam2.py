@@ -1117,10 +1117,9 @@ class AndorCam2(model.DigitalCamera):
         self._update_settings()
         self.atcore.SetKineticCycleTime(0) # don't wait between acquisitions
         
-        metadata = dict(self._metadata) # duplicate
         size = self.resolution.value
-        exposure_time = metadata[model.MD_EXP_TIME]
-        readout_time = size[0] * size[1] * metadata[model.MD_READOUT_TIME] # s
+        exposure_time = self.exposureTime.value
+        readout_time = size[0] * size[1] * self._metadata[model.MD_READOUT_TIME] # s
         
         # Acquire the images
         self.atcore.StartAcquisition()
@@ -1141,11 +1140,12 @@ class AndorCam2(model.DigitalCamera):
                 self._update_settings()
                 metadata = dict(self._metadata) # duplicate
                 size = self.resolution.value
-                exposure_time = metadata[model.MD_EXP_TIME]
-                readout_time = size[0] * size[1] * metadata[model.MD_READOUT_TIME] # s
+                exposure_time = self.exposureTime.value
+                readout_time = size[0] * size[1] * self._metadata[model.MD_READOUT_TIME] # s
                 self.atcore.StartAcquisition()
                 need_reinit = False
     
+            metadata = dict(self._metadata) # duplicate
             metadata[model.MD_ACQ_DATE] = time.time() # time at the beginning
             try:
                 self.WaitForAcquisition(exposure_time + readout_time + 1)

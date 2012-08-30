@@ -826,7 +826,6 @@ class AndorCam3(model.DigitalCamera):
         # We don't use the framecount feature as it's not always present, and
         # easy to do in software.
 
-        # TODO need to update settings when the AV are changed
         size = self.resolution.value
         exposure_time = self.exposureTime.value
         
