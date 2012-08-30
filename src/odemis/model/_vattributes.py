@@ -393,9 +393,7 @@ class SubscribeProxyThread(threading.Thread):
         poller.register(self.data, zmq.POLLIN)
         discarded = 0
         while True:
-            logging.debug("waiting for a va message")
             socks = dict(poller.poll())
-            logging.debug("received one va message")
 
             # process commands
             if socks.get(self.commands) == zmq.POLLIN:
@@ -413,7 +411,6 @@ class SubscribeProxyThread(threading.Thread):
 
             # receive data
             if socks.get(self.data) == zmq.POLLIN:
-                logging.debug("received one va data")
                 value = self.data.recv_pyobj()
                 # more fresh data already?
                 if (self.data.getsockopt(zmq.EVENTS) & zmq.POLLIN and

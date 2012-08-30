@@ -689,8 +689,8 @@ class UnitNumberCtrl(NumberTextCtrl):
         """ Set the value of the controls, after formatting that value
         with a possible unit indicator and such.
         """
-        import threading
-        print  "text", "SetValueStr", threading.current_thread().name, threading.current_thread().ident
+#        import threading
+#        print  "text", "SetValueStr", threading.current_thread().name, threading.current_thread().ident
 
         # Call this so the value gets tested
         self.SetValue(val)
