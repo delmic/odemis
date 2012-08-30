@@ -34,7 +34,8 @@ from .dblmscopeviewmodel import DblMscopeViewModel
 from .comp.scalewindow import ScaleWindow
 from .comp.slider import CustomSlider
 from .img.data import getico_blending_optBitmap, getico_blending_semBitmap
-from .microscopeview import MicroscopeEmptyView, MicroscopeOpticalView, MicroscopeSEView
+from .microscopeview import MicroscopeEmptyView, MicroscopeOpticalView, \
+    MicroscopeSEView
 
 class DblMicroscopePanel(wx.Panel):
     """
@@ -98,7 +99,7 @@ class DblMicroscopePanel(wx.Panel):
 
         self._set_subscriptions()
 
-        self.ShowBlendingSlider(self.canvas.ImageCount() > 1)
+        self.ShowBlendingSlider(self.canvas.ImageCount() > 0)
 
         self.Bind(wx.EVT_SIZE, self.OnSize)
 
@@ -135,7 +136,7 @@ class DblMicroscopePanel(wx.Panel):
         self.scaleDisplay.SetFont(font)
 
 
-        #### Values`
+        #### Values
 
         self.magni_label = wx.StaticText(legend_panel, wx.ID_ANY, "10x 10x")
         self.magni_label.SetToolTipString("Magnification Optic Electron")
@@ -153,6 +154,7 @@ class DblMicroscopePanel(wx.Panel):
                     (0, 100),
                     size=(100, 12),
                     style=wx.SL_HORIZONTAL | wx.SL_AUTOTICKS | wx.SL_TICKS)
+
         self.blendingSlider.SetBackgroundColour(legend_panel.GetBackgroundColour())
         self.blendingSlider.SetForegroundColour("#4d4d4d")
         #self.blendingSlider.SetLineSize(50)
