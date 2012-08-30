@@ -69,7 +69,7 @@ class DraggableCanvas(wx.Panel):
 
         self.world_pos_buffer = (0, 0) # centre pos of the buffer in the world
         # the position the view is asking to the next buffer recomputation
-        self.world_pos_requested = self.world_pos_buffer # m, m
+        self.world_pos_requested = self.world_pos_buffer # in buffer-coordinates: =1px at scale = 1 
 
         # buffer = the whole image to be displayed
         self._dcBuffer = wx.MemoryDC()

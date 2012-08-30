@@ -67,7 +67,7 @@ class Stage2D(model.Actuator):
         if ranges is None:
             ranges = {}
             for a in axes:
-                ranges[a] = [0, 0.1]
+                ranges[a] = [-0.1, 0.1]
                 
         model.Actuator.__init__(self, name, role, axes=axes, ranges=ranges, **kwargs)
         
@@ -100,7 +100,12 @@ class Stage2D(model.Actuator):
             if not axis in shift:
                 raise ValueError("Axis '%s' doesn't exist." % str(axis))
             self._position[axis] += change
-            logging.info("moving axis %s to %f", axis, self._position[axis])
+            if (self._position[axis] < self._ranges[axis][0] or
+                self._position[axis] > self._ranges[axis][1]):
+                logging.warning("moving axis %s to %f, outside of range %r", 
+                                axis, self._position[axis], self._ranges[axis])
+            else: 
+                logging.info("moving axis %s to %f", axis, self._position[axis])
             maxtime = max(maxtime, abs(change) / self.speed.value[axis])
         
         time_end = time_start + maxtime

@@ -464,7 +464,6 @@ class SettingsSideBar(object):
                                     MAIN_FRAME.fp_optical_settings,
                                     "No optical microscope found")
 
-        self.blah = []
     # Optical microscope settings
 
     def add_ccd(self, comp):
@@ -477,7 +476,6 @@ class SettingsSideBar(object):
             for name, value in vigil_attrs.iteritems():
 
                 if SETTINGS["ccd"].has_key(name):
-                    self.blah.append(value)
                     self._optical_panel.add_value(name,
                                                   value,
                                                   SETTINGS["ccd"][name])

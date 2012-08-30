@@ -69,7 +69,8 @@ class DblMicroscopeCanvas(DraggableCanvas):
         """
         An external component asks us to move the view
         """
-        self.ReCenterBuffer(value)
+        pos = (value[0] / self.mpwu, value[1] / self.mpwu)
+        self.ReCenterBuffer(pos)
 
     def ReCenterBuffer(self, pos):
         """
@@ -78,8 +79,9 @@ class DblMicroscopeCanvas(DraggableCanvas):
         """
         DraggableCanvas.ReCenterBuffer(self, pos)
 
-#        print "expects to move stage to pos:", self.world_pos_requested
-        self.viewmodel.center.value = self.world_pos_requested
+        new_pos = self.world_pos_requested
+        physical_pos = (new_pos[0] * self.mpwu, new_pos[1] * self.mpwu)
+        self.viewmodel.center.value = physical_pos
 
     def onExtraAxisMove(self, axis, shift):
         """
@@ -95,8 +97,8 @@ class DblMicroscopeCanvas(DraggableCanvas):
             # conversion: 1 px => 1 um (so a whole screen is like 1mm)
             val = 1e-6 * shift # m
             assert(abs(val) < 0.01) # never move by 1 cm
-            log.info("Moving focus by %f m", val)
-            log.info("moving actuator %s", self.viewmodel.opt_focus.name)
+            log.debug("Moving focus by %f um", val * 1e6)
+#            log.info("moving actuator %s", self.viewmodel.opt_focus.name)
             self.viewmodel.opt_focus.moveRel({"z": val})
 
     def avOnCrossHair(self, activated):
@@ -143,12 +145,12 @@ class DblMicroscopeCanvas(DraggableCanvas):
             iim = self.viewmodel.images[i].value
             if iim.image:
                 scale = float(iim.mpp) / self.mpwu
-                #pos = (iim.center[0] / self.mpwu, iim.center[1] / self.mpwu)
-                pos = iim.center
+                pos = (iim.center[0] / self.mpwu, iim.center[1] / self.mpwu)
+                #pos = iim.center
                 self.SetImage(i, iim.image, pos, scale)
                 #self.ReCenterBuffer(pos)
             else:
-                pass#self.SetImage(i, None)
+                pass
 
     # Zoom/merge management
     def OnWheel(self, event):

@@ -838,7 +838,7 @@ class StageRedStone(model.Actuator):
             position[axis] = controller.getPosition(channel)
             # TODO request also the ranges from the arguments?
             # For now we put very large one
-            self._ranges[axis] = [0, 1] # m
+            self._ranges[axis] = [-1, 1] # m
             # Just to make sure it doesn't go too fast
             speed[axis] = 0.1 # m/s
         
