@@ -18,7 +18,7 @@ Light: {
 "Nikon Super Duper": {
     class: static.OpticalLens,
     role: lens,
-    init: {mag: 10.0}, # ratio
+    init: {mag: 40.0}, # ratio
     affects: [Clara]
 }
 
@@ -37,15 +37,17 @@ Clara: {
 
 # PI RedStone jumpers (.=off):
 # X,Y = 1234...8
+# X => Ch1
+# Y => Ch2
 
 "Redstone Stage": {
     class: pi.StageRedStone,
     role: stage,
     affects: [Clara],
     init: {
-        port: /dev/ttyPIRS,
-        axes: {x: [0, 0], y: [0, 1]}, # axis -> controller, channel
-        inverted: ["x"]
+        port: /dev/ttyS0, # /dev/ttyPIRS
+        axes: {x: [0, 1], y: [0, 0]}, # axis -> controller, channel
+        inverted: ["x", "y"]
     }, 
     properties: {
         speed: {'x': 0.001, 'y': 0.001} #m/s
