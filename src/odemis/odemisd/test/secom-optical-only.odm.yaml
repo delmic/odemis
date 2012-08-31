@@ -35,17 +35,20 @@ Clara: {
     init: {device: 0} # the only Andor camera connected so always 0
 }
 
+# PI RedStone jumpers (.=off):
+# X,Y = 1234...8
+
 "Redstone Stage": {
     class: pi.StageRedStone,
     role: stage,
     affects: [Clara],
     init: {
         port: /dev/ttyPIRS,
-        x: [0, 0], y: [0, 1], # axis -> controller, channel
+        axes: {x: [0, 0], y: [0, 1]}, # axis -> controller, channel
         inverted: ["x"]
     }, 
     properties: {
-        speed: 0.01 #m/s
+        speed: {'x': 0.001, 'y': 0.001} #m/s
     }
 }
 
@@ -54,13 +57,13 @@ Clara: {
     class: CombinedActuator,
     role: align,
     affects: [Clara],
-    children: {"x": PIGCS, "y": PIGCS},
+    children: {"l": PIGCS, "r": PIGCS},
     init: {
-        axes_map: {"x": "x", "y": "y"}, # maybe use theta & phi?
-        inverted: ["x"]
+        axes_map: {"l": "l", "r": "r"},
+        inverted: ["l"]
     },
     properties: {
-        speed: {'x': 0.001, 'y': 0.001} #m/s
+        speed: {'l': 0.001, 'r': 0.001} #m/s
     }
 }
 
@@ -77,12 +80,17 @@ Clara: {
     }
 }
 
+# PI E-861 jumpers (. = off):
+# L = 1234.6..
+# R = 123..6..
+# Z = 12.4.6..
+
 PIGCS: {
     class: pigcs.Bus,
     role: AlignAndFocus,
     init: {
         port: "/dev/ttyPIE",
-        axes: {"x": [1, 1, False], "y": [2, 1, False], "z": [3, 1, False]} # axis -> controller, channel, closed-loop?
+        axes: {"l": [1, 1, False], "r": [2, 1, False], "z": [3, 1, False]} # axis -> controller, channel, closed-loop?
     },
 }
 
