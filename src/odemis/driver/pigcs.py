@@ -770,7 +770,6 @@ class Controller(object):
         # approximately the time for the longest move
         timeout = 5 #s
         end = time.time() + timeout
-        
         while self.isMoving(axes):
             if time.time() <= end:
                 raise IOError("Timeout while waiting for end of motion")
