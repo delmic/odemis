@@ -17,6 +17,7 @@ You should have received a copy of the GNU General Public License along with Ode
 
 from odemis.gui.log import log
 import os
+import re
 import subprocess
 import sys
 import threading
@@ -127,9 +128,8 @@ class AcquisitionController(object):
         brightness_orig = 1.0 # TODO: read the previous brightness 
         
         # find the names of the active (=connected) screens
-        #outputs = self.get_display_outputs()
-        #XXX
-        outputs = ["LVDS1"]
+        outputs = self.get_display_outputs()
+#        outputs = ["LVDS1"]
         
         # start with very bright and slowly decrease to 1.0
         try:
@@ -137,6 +137,7 @@ class AcquisitionController(object):
             start = time.time()
             end = start + duration
             self.set_output_brightness(outputs, brightness_max)
+            time.sleep(0.1)
             now = time.time()
             while now <= end:
                 time.sleep(0.05) # ensure not to use too much CPU
@@ -145,12 +146,21 @@ class AcquisitionController(object):
                 pos = (now - start) / duration
                 brightness = 1/(1/brightness_max + (1 - 1/brightness_max) * pos)
                 self.set_output_brightness(outputs, brightness)
-            
         finally:
             # make sure we put it back
-            time.sleep(0.1)
+            time.sleep(0.05)
             self.set_output_brightness(outputs, brightness_orig)
-         
+
+    @staticmethod
+    def get_display_outputs():
+        """
+        returns (set of strings): names of outputs used
+        """
+        xrandr_out = subprocess.check_output("xrandr")
+        # only pick the "connected" outputs
+        ret = re.findall("^(\\w+) connected ", xrandr_out, re.MULTILINE)
+        return ret
+        
     @staticmethod
     def set_output_brightness(outputs, brightness):
         """
