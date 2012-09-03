@@ -10,8 +10,7 @@ controls, of which XRC knows nothing by default.
 The little wrapper added to the pywxrc.XmlResourceCompiler.NodeContainsFilename
 method,  will return true if it contains a value ending with '.png', indicating
 the content is an PNG image.
-
-"""
+"""  #pylint: disable=W0105
 
 if __name__ == '__main__':
     try:

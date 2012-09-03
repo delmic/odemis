@@ -412,6 +412,7 @@ def __init_resources():
                               <collapsed>1</collapsed>
                               <fg>#1A1A1A</fg>
                               <bg>#555555</bg>
+                              <hidden>1</hidden>
                               <XRCED>
                                 <assign_var>1</assign_var>
                               </XRCED>
