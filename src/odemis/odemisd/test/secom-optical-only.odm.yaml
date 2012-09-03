@@ -45,9 +45,9 @@ Clara: {
     role: stage,
     affects: [Clara],
     init: {
-        port: /dev/ttyS0, # /dev/ttyPIRS
+        port: /dev/ttyS0, # serial port on the board
+        # port: /dev/ttyPIRS, # USB serial port
         axes: {x: [0, 1], y: [0, 0]}, # axis -> controller, channel
-        inverted: ["x", "y"]
     }, 
     properties: {
         speed: {'x': 0.001, 'y': 0.001} #m/s
@@ -62,7 +62,7 @@ Clara: {
     children: {"l": PIGCS, "r": PIGCS},
     init: {
         axes_map: {"l": "l", "r": "r"},
-        inverted: ["l"]
+#        inverted: ["l"]
     },
     properties: {
         speed: {'l': 0.001, 'r': 0.001} #m/s
