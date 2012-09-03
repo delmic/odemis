@@ -874,7 +874,7 @@ class StageRedStone(model.Actuator):
             for axis, (controller, channel) in self._axis_to_child.items():
                 position[axis] = controller.getPosition(channel)
         
-        return position
+        return self._applyInversionAbs(position)
 
     # TODO needs to be triggered by end of action, or directly controller? 
     # maybe whenever a controller updates it's position?
