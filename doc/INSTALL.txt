@@ -1,7 +1,5 @@
 How to install Odemis
 
-
-
 = Installing the dependencies =
 
 You need Ubuntu 12.04 (x86 - 32 bits).
@@ -47,7 +45,6 @@ choice.)
     sudo ln -s <path to odemis root dir>/gui/xmlh/delmic.py
 
 
-
 = Installing Odemis =
 
 Download the source code:
@@ -59,11 +56,11 @@ Create a "odemis" group and add all the necessary users to it:
 sudo addgroup odemis
 sudo adduser replace_by_login_name odemis
 
+(You need to log out to get the user in the new group)
+
 On Linux, install the files this way:
 cd odemis/install/linux
 sudo cp -dr --preserve=mode,xattr,timestamps * /
-
-
 
 = Installing the vendor device drivers =
 
@@ -111,6 +108,13 @@ kernel is updated.
 Nothing specific. Make sure that the normal user has permissions to access the
 serial port. For example, if it is a USB serial port adapter check the
 permissions of /dev/ttyUSB0.
+
+== Physik Instrumente C-170 (Redstone) piezo-motor controllers ==
+
+Nothing specific. Make sure that the normal user has permissions to access the
+serial port. For example, if it is a USB serial port adapter check the
+permissions of /dev/ttyUSB0. Typically, you need to do this:
+sudo adduser replace_by_login_name dialout
 
 For Linux: make sure you copy the content of install/linux/ to / and run:
 sudo udevadm control --reload-rules

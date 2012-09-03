@@ -90,7 +90,7 @@ class MicroscopeImageView(MicroscopeView):
 
         self.viewmodel = viewmodel
         self.LegendMag = wx.StaticText(parent)
-        self.LegendMag.SetToolTipString("Magnicifaction")
+        self.LegendMag.SetToolTipString("Magnification")
         self.legend_controls.append(self.LegendMag)
 
         iim.subscribe(self.avImage)
@@ -99,6 +99,12 @@ class MicroscopeImageView(MicroscopeView):
 
     @call_after
     def avImage(self, value):
+        # if first image display: automatically adapt the display to 1:1
+        # this ensures it's easy to reach a digital magnification = 1.0
+        if self.inimage.image is None:
+            if value and value.mpp:
+                self.viewmodel.mpp.value = value.mpp
+        
         self.inimage = value
         # This method might be called from any thread
         # GUI can be updated only from the GUI thread, so just send an event

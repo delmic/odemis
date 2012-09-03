@@ -458,7 +458,8 @@ class Actuator(HwComponent):
         """
         ret = dict(shift)
         for a in self._inverted:
-            ret[a] = -ret[a]
+            if a in ret:
+                ret[a] = -ret[a]
         return ret
 
     def _applyInversionAbs(self, pos):
@@ -468,7 +469,8 @@ class Actuator(HwComponent):
         """
         ret = dict(pos)
         for a in self._inverted:
-            ret[a] = self._ranges[a][0] + self._ranges[a][1] - ret[a]
+            if a in ret:
+                ret[a] = self._ranges[a][0] + self._ranges[a][1] - ret[a]
         return ret
 
 class Emitter(HwComponent):
@@ -535,7 +537,6 @@ class CombinedActuator(Actuator):
             canAbs &= hasattr(child, "moveAbs") # TODO: need to use capabilities, to work with proxies
         if canAbs:
             self.moveAbs = self._moveAbs
-
 
         children_axes = {} # dict actuator -> set of string (our axes)
         for axis, (child, axis_mapped) in self._axis_to_child.items():
@@ -613,6 +614,7 @@ class CombinedActuator(Actuator):
             if axis not in self._axis_to_child:
                 raise Exception("Axis unknown: " + str(axis))
             child, child_axis = self._axis_to_child[axis]
+            logging.debug("Moving axis %s -> %s by %f", axis, child_axis, distance)
             f = child.moveRel({child_axis: distance})
             futures.append(f)
 

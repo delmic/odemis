@@ -17,6 +17,7 @@ You should have received a copy of the GNU General Public License along with Ode
 
 from odemis.gui.log import log
 import os
+import re
 import subprocess
 import sys
 import threading
@@ -33,6 +34,7 @@ class AcquisitionController(object):
         main_frame (wx.Frame): the main GUI frame, which we will control
         """
         self._frame = main_frame
+        self._anim_thread = None 
         
         # nice default paths
         # Snapshots: always the "Pictures" user folder
@@ -48,6 +50,7 @@ class AcquisitionController(object):
         # Link "acquire image" button to image acquisition
         # TODO: for now it's just snapshot, but should be linked to the acquisition window
         self._frame.btn_aquire.Bind(wx.EVT_BUTTON, self.start_snapshot_viewport)
+        
         
     def start_snapshot_viewport(self, event):
         """
@@ -93,6 +96,8 @@ class AcquisitionController(object):
             # get the raw data
             # add metadata on the way the stream is displayed 
         
+        self.start_snapshot_animation()
+        
         # FIXME: this is a very simplified version until we introduce full support for streams
         data = panel.opt_view.datamodel.optical_det_raw
         if data is None:
@@ -104,6 +109,83 @@ class AcquisitionController(object):
         # record everything to a file
         exporter.export(data, filename)
         log.info("Snapshot saved as file '%s'.", filename)
+    
+    def start_snapshot_animation(self):
+        """
+        Starts an animation to indicate that a snapshot is taken
+        Note: there is no way to stop it
+        """
+        # if there is already a thread: let it know to restart
+        if self._anim_thread and self._anim_thread.is_alive():
+            return
+        
+        # otherwise start a new animation thread
+        self._anim_thread = threading.Thread(target=self.snapshot_animation, name="snapshot animation")
+        self._anim_thread.start()
+    
+    def snapshot_animation(self, duration=0.6):
+        """
+        Change the brightness of all the screens to very high, and slowly decrease it back to original value (1.0)
+        duration (0<float): duration in second of the animation
+        """
+        assert (0 < duration)
+        brightness_orig = 1.0 # TODO: read the previous brightness 
+        
+        # find the names of the active (=connected) screens
+        outputs = self.get_display_outputs()
+#        outputs = ["LVDS1"]
+        
+        # start with very bright and slowly decrease to 1.0
+        try:
+            brightness_max = 10.0
+            start = time.time()
+            end = start + duration
+            self.set_output_brightness(outputs, brightness_max)
+            time.sleep(0.1)
+            now = time.time()
+            while now <= end:
+                time.sleep(0.05) # ensure not to use too much CPU
+                now = time.time()
+                # it should decrease quickly at the beginning and slowly at the end => 1/x (x 1/max->1)
+                pos = (now - start) / duration
+                brightness = 1/(1/brightness_max + (1 - 1/brightness_max) * pos)
+                self.set_output_brightness(outputs, brightness)
+        finally:
+            # make sure we put it back
+            time.sleep(0.05)
+            self.set_output_brightness(outputs, brightness_orig)
+
+    @staticmethod
+    def get_display_outputs():
+        """
+        returns (set of strings): names of outputs used
+        """
+        xrandr_out = subprocess.check_output("xrandr")
+        # only pick the "connected" outputs
+        ret = re.findall("^(\\w+) connected ", xrandr_out, re.MULTILINE)
+        return ret
+        
+    @staticmethod
+    def set_output_brightness(outputs, brightness):
+        """
+        Set the brightness of all the display outputs given
+        outputs (set of string): names of graphical output (screen) as xrandr uses them
+        brightness (0<=float): brightness
+        raises:
+            exception in case change of brightness failed
+        """
+        assert (0 <= brightness)
+        if not len(outputs):
+            return
+        # to simplify, we don't use the XRANDR API, but just call xrandr command
+        # we need to build a whole line with all the outputs, like:
+        # xrandr --output VGA1 --brigtness 2 --output LVDS1 --brigthness 2
+        args = ["xrandr"]
+        for o in outputs:
+            args += ["--output", o, "--brightness", "%f" % brightness]
+        
+        log.debug("Calling: %s", " ".join(args))
+        subprocess.check_call(args)
     
     @staticmethod
     def get_picture_folder():

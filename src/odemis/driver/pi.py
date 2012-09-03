@@ -515,9 +515,10 @@ class PIRedStone(object):
         # approximately the time for the longest move
         timeout = 5 #s
         end = time.time() + timeout
-        while self.isMoving(axis) and time.time() <= end:
+        while self.isMoving(axis):
+            if time.time() <= end:
+                raise IOError("Timeout while waiting for end of motion")
             time.sleep(0.005)
-        # TODO raise exception if timeout
     
     def selfTest(self):
         """
@@ -681,20 +682,20 @@ class PIRedStone(object):
         # TODO to speed up, we could try to send address selection and TB in burst
         # to all the range and then listen.
         ser = PIRedStone.openSerialPort(port)
-        pi = PIRedStone(ser)
+        ctrl = PIRedStone(ser)
         
         logging.info("Serial network scanning for PI Redstones in progress...")
-        pi._try_recover = False # timeouts are expected!
+        ctrl._try_recover = False # timeouts are expected!
         present = set([])
         for i in range(max_add + 1):
             # ask for controller #i
             logging.info("Querying address %d", i)
-            pi.addressSelection(i)
-            pi.address = i
+            ctrl.addressSelection(i)
+            ctrl.address = i
 
             # is it answering?
             try:
-                add = pi.tellBoardAddress()
+                add = ctrl.tellBoardAddress()
                 if add == i:
                     present.add(add)
                 else:
@@ -702,8 +703,7 @@ class PIRedStone(object):
             except IOError:
                 pass
         
-        pi.address = None
-        pi._try_recover = True
+        ctrl.address = None
         return present
         
     @staticmethod
@@ -812,7 +812,7 @@ class StageRedStone(model.Actuator):
     def __init__(self, name, role, port, axes, **kwargs):
         """
         port (string): name of the serial port to connect to the controllers
-        axes (dict string=> 2-tuple): the configuration of the network.
+        axes (dict string=> 2-tuple (0<=int<=15, 0<=int<=1)): the configuration of the network.
          for each axis name the controller address and channel
          Note that even if it's made of several controllers, each controller is 
          _not_ seen as a child from the odemis model point of view.
@@ -874,7 +874,7 @@ class StageRedStone(model.Actuator):
             for axis, (controller, channel) in self._axis_to_child.items():
                 position[axis] = controller.getPosition(channel)
         
-        return position
+        return self._applyInversionAbs(position)
 
     # TODO needs to be triggered by end of action, or directly controller? 
     # maybe whenever a controller updates it's position?
@@ -923,6 +923,7 @@ class StageRedStone(model.Actuator):
         returns (Future): future that control the asynchronous move
         """
         shift = self._applyInversionRel(shift)
+        # converts the request into one action (= a dict controller -> channels + distance) 
         action_axes = {}
         for axis, distance in shift.items():
             if axis not in self.axes:
@@ -963,6 +964,10 @@ class StageRedStone(model.Actuator):
                 controller.waitEndMotion()
     
     def terminate(self):
+        if not hasattr(self, "_action_mgr"):
+            # not even fully initialised 
+            return
+        
         self.stop()
         
         if self._action_mgr:
@@ -1000,7 +1005,7 @@ class StageRedStone(model.Actuator):
                 ports = glob.glob('/dev/ttyS?*') +  glob.glob('/dev/ttyUSB?*')
         
         axes_names = "xyzabcdefghijklmnopqrstuvw"
-        found = []  # tuple of (name, dict (port=>port, axes =>list of addresses)
+        found = []  # tuple of (name, args (dict with: port=>port, axes=>add, channel)
         for p in ports:
             try:
                 addresses = PIRedStone.scan(p, max_add)
@@ -1287,8 +1292,7 @@ class ActionFuture(object):
                 if len(channels) == 1:
                     moving |= controller.isMoving(channels[0])
                 else:
-                    # In theory this should always be fine because the other axes
-                    # should be stopped anyway
+                    # There are maximum 2 channels on the RedStone
                     moving |= controller.isMoving() # all
             return moving
     

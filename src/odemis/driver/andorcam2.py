@@ -950,7 +950,7 @@ class AndorCam2(model.DigitalCamera):
                 self.atcore.GetHSSpeed(channel, oa, i, byref(hsspeed))
                 hsspeeds.add((channel, i, hsspeed.value))
 
-        channel, idx, hsspeed = min(hsspeeds, key=lambda x: x[2])
+        channel, idx, hsspeed = max(hsspeeds, key=lambda x: x[2])
         self.atcore.SetADChannel(channel)
 
         try:
@@ -962,6 +962,7 @@ class AndorCam2(model.DigitalCamera):
         hsspeed = c_float() # MHz
         self.atcore.GetHSSpeed(channel, oa, idx, byref(hsspeed))
         self._metadata[model.MD_READOUT_TIME] = 1.0 / (hsspeed.value * 1e6) # s
+        logging.debug("Setting readout speed to %f MHz", hsspeed.value)
 
         nb_vsspeeds = c_int()
         self.atcore.GetNumberVSSpeeds(byref(nb_vsspeeds))
@@ -978,9 +979,10 @@ class AndorCam2(model.DigitalCamera):
         # None supported on the Clara?
         gains = self.GetPreAmpGainsAvailable()
         # TODO let the user decide (as every value can be useful)
-        gain = min(gains) # for now we pick the minimum
+        gain = max(gains) # for now we pick the minimum
         self.SetPreAmpGain(gain)
         self._metadata[model.MD_GAIN] = gain
+        logging.debug("Setting gain to %f", gain)
 
         # Doesn't seem to work for the clara (or single scan mode?)
 #        self.atcore.SetFilterMode(2) # 2 = on
@@ -1117,10 +1119,9 @@ class AndorCam2(model.DigitalCamera):
         self._update_settings()
         self.atcore.SetKineticCycleTime(0) # don't wait between acquisitions
         
-        metadata = dict(self._metadata) # duplicate
         size = self.resolution.value
-        exposure_time = metadata[model.MD_EXP_TIME]
-        readout_time = size[0] * size[1] * metadata[model.MD_READOUT_TIME] # s
+        exposure_time = self.exposureTime.value
+        readout_time = size[0] * size[1] * self._metadata[model.MD_READOUT_TIME] # s
         
         # Acquire the images
         self.atcore.StartAcquisition()
@@ -1141,11 +1142,12 @@ class AndorCam2(model.DigitalCamera):
                 self._update_settings()
                 metadata = dict(self._metadata) # duplicate
                 size = self.resolution.value
-                exposure_time = metadata[model.MD_EXP_TIME]
-                readout_time = size[0] * size[1] * metadata[model.MD_READOUT_TIME] # s
+                exposure_time = self.exposureTime.value
+                readout_time = size[0] * size[1] * self._metadata[model.MD_READOUT_TIME] # s
                 self.atcore.StartAcquisition()
                 need_reinit = False
     
+            metadata = dict(self._metadata) # duplicate
             metadata[model.MD_ACQ_DATE] = time.time() # time at the beginning
             try:
                 self.WaitForAcquisition(exposure_time + readout_time + 1)

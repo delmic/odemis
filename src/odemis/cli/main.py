@@ -37,7 +37,7 @@ def get_backend_status():
         microscope = model.getMicroscope()
         if len(microscope.name) > 0:
             return BACKEND_RUNNING
-    except CommunicationError:
+    except (IOError, CommunicationError):
         logging.info("Failed to find microscope")
         if os.path.exists(model.BACKEND_FILE):
             return BACKEND_DEAD

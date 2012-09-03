@@ -149,7 +149,6 @@ class OpticalBackendConnected(SECOMModel):
         im.InitAlpha() # it's a different buffer so useless to do it in numpy
 
         try:
-            # TODO should be initialised by backend
             pos = data.metadata[MD_POS]
         except KeyError:
             log.warning("position of image unknown")
