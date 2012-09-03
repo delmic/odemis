@@ -16,7 +16,7 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
-from odemisd import main
+from odemis.odemisd import main
 import StringIO
 import logging
 import os
@@ -25,7 +25,7 @@ import sys
 import time
 import unittest
 
-ODEMISD_PATH = "../../odemisd/main.py"
+ODEMISD_CMD = "python2.7 -m odemis.odemisd.main"
 SIM_CONFIG = "optical-sim.odm.yaml"
 
 class TestCommandLine(unittest.TestCase):
@@ -37,6 +37,7 @@ class TestCommandLine(unittest.TestCase):
         configs_pass = ["optical-sim.odm.yaml",
            "example-optical-odemisd-config.odm.yaml",
            "example-combined-actuator.odm.yaml",
+           "secom-sim.odm.yaml",
            #"example-secom-odemisd-config.odm.yaml", # not all components exist yet
            ]
 
@@ -135,7 +136,7 @@ class TestCommandLine(unittest.TestCase):
         
         # run the backend as a daemon
         # we cannot run it normally as the child would also think he's in a unittest
-        cmdline = ODEMISD_PATH + " --log-level=2 --log-target=testdaemon.log --daemonize %s" % SIM_CONFIG
+        cmdline = ODEMISD_CMD + " --log-level=2 --log-target=testdaemon.log --daemonize %s" % SIM_CONFIG
         ret = subprocess.call(cmdline.split())
         self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
         
@@ -151,12 +152,12 @@ class TestCommandLine(unittest.TestCase):
         ret = main.main(cmdline.split())
         self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
         
-        time.sleep(1) # give some time to stop
+        time.sleep(5) # give some time to stop
         
         # backend should be stopped by now
         cmdline = "odemisd --log-level=2 --log-target=test.log --check"
         ret = main.main(cmdline.split())
-        self.assertEqual(ret, 2, "Back-end not stopped")
+        self.assertEqual(ret, 2, "Back-end not stopped: ret = %d" % ret)
         
         os.remove("test.log")
         os.remove("testdaemon.log")
