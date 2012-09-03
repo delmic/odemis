@@ -1,7 +1,7 @@
 SECOM: {
     class: Microscope,
     role: brightfield,
-    emitters: [Light, "Nikon Super Duper", "MultiBand Fixed Filter"],
+    emitters: [Light, "Nikon Super Duper", "MultiBand Fixed Filter", EBeam],
     detectors: [Clara],
     actuators: ["Redstone Stage", "SEM-Optical Alignment", "OpticalZ actuator"],
 }
@@ -13,6 +13,11 @@ Light: {
     properties: {
         power: 100 # W
     }
+}
+
+EBeam: {
+    class: simulated.EBeam,
+    role: e-beam,
 }
 
 "Nikon Super Duper": {
