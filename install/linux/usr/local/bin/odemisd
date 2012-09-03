@@ -2,7 +2,9 @@
 # Start the cli
 
 . /etc/odemis.conf
+# make sure we don't use too much memory
+MAXMEM=2000000 # 2Gb
+ulimit -d $MAXMEM -m $MAXMEM -v $MAXMEM
 
 export PYTHONPATH
-
 python2.7 $ODEMISPATH/$BACKEND "$@"
