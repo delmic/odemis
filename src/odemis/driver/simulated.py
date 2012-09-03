@@ -30,15 +30,15 @@ class Light(model.Emitter):
     Simulated bright light component. Just pretends to be always on with wide
     spectrum emitted (white).
     """
-    def __init__(self, name, role, children=None, **kwargs):
-        model.Emitter.__init__(self, name, role, children, **kwargs)
+    def __init__(self, name, role, **kwargs):
+        model.Emitter.__init__(self, name, role, **kwargs)
         
         self.shape = (1)
         
-        self.wavelength = model.FloatVA(560e-9, unit = "m", readonly=True) # average of white
-        self.spectrumWidth = model.FloatVA(360e-9, unit = "m", readonly=True) # visible light
-        self.power = model.FloatEnumerated(100, (0,100), unit = "W")
-        self.power.subscribe(self.on_power, init=True)
+        self.wavelength = model.FloatVA(560e-9, unit="m", readonly=True) # average of white
+        self.spectrumWidth = model.FloatVA(360e-9, unit="m", readonly=True) # visible light
+        self.power = model.FloatEnumerated(100, (0, 100), unit="W",
+                                           setter=self.setPower)
     
     def getMetadata(self):
         metadata = {}
@@ -47,12 +47,53 @@ class Light(model.Emitter):
         metadata[model.MD_LIGHT_POWER] = self.power.value
         return metadata
     
-    def on_power(self, value):
-        if value == 100:
-            logging.info("Light is on")
-        else:
+    def setPower(self, value):
+        if value == 0:
             logging.info("Light is off")
+        else:
+            logging.info("Light is on")
+        return value
 
+
+class EBeam(model.Emitter):
+    """
+    Simulated electron beam (typical of SEM/TEM). Just provide the vigilant 
+    attributes for now.
+    """
+    def __init__(self, name, role, **kwargs):
+        model.Emitter.__init__(self, name, role, **kwargs)
+        
+        self.shape = (2048, 2048) # maximum resolution
+        
+        self.resolution = model.ResolutionVA(self.shape, [(1, 1), self.shape], 
+                                             setter=self.setResolution)
+        
+        self.dwellTime = model.FloatContinuous(1.0, [1e-9, 10], unit="s")
+        self.energy = model.IntEnumerated(0, [0, 10e3, 20e3, 30e3], unit="eV",
+                                           setter=self.setEnergy)
+        self.spotSize = model.IntEnumerated(1, [1e-9, 1.5e-9, 2e-9, 2.5e-9, 3e-9], unit="m²", # ~1nm
+                                           setter=self.setSpotSize)
+    
+    def getMetadata(self):
+        metadata = {model.MD_DWELL_TIME: self.dwellTime.value,
+                    model.MD_EBEAM_ENERGY: self.energy.value,
+                    model.MD_EBEAM_SPOT_DIAM: self.spotSize.value}
+        return metadata
+    
+    def setEnergy(self, value):
+        if value == 0:
+            logging.info("E-beam is off")
+        else:
+            logging.info("E-beam is on, voltage: %d eV", value)
+        return value
+    
+    def setResolution(self, value):
+        logging.info("E-beam scanning now area of %r", value)
+        return value
+    
+    def setSpotSize(self, value):
+        logging.info("E-beam spot size is now %d m", value)
+        return value
 
 class Stage2D(model.Actuator):
     """
