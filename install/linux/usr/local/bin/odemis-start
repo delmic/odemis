@@ -21,8 +21,14 @@ if [ $status -ne 0 ]; then
         echo "Warning: failed to check status of back-end"
     fi
     
+    # install cgroup, for memory protection
+    if [ ! -d /sys/fs/cgroup/memory/odemisd -a -x /usr/bin/cgcreate ]; then
+        echo "Creating cgroup"
+        sudo /usr/bin/cgcreate -a :odemis -g memory:odemisd
+    fi
+    
     # kill the current backend
-    pkill -f $BACKEND
+    sudo pkill -f $BACKEND
 
     # start a new one
     echo -n "Starting back-end.."
