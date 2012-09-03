@@ -34,6 +34,7 @@ class AcquisitionController(object):
         main_frame (wx.Frame): the main GUI frame, which we will control
         """
         self._frame = main_frame
+        self._anim_thread = None 
         
         # nice default paths
         # Snapshots: always the "Pictures" user folder
@@ -49,6 +50,7 @@ class AcquisitionController(object):
         # Link "acquire image" button to image acquisition
         # TODO: for now it's just snapshot, but should be linked to the acquisition window
         self._frame.btn_aquire.Bind(wx.EVT_BUTTON, self.start_snapshot_viewport)
+        
         
     def start_snapshot_viewport(self, event):
         """
@@ -114,10 +116,12 @@ class AcquisitionController(object):
         Note: there is no way to stop it
         """
         # if there is already a thread: let it know to restart
+        if self._anim_thread and self._anim_thread.is_alive():
+            return
         
         # otherwise start a new animation thread
-        t = threading.Thread(target=self.snapshot_animation, name="snapshot animation")
-        t.start()
+        self._anim_thread = threading.Thread(target=self.snapshot_animation, name="snapshot animation")
+        self._anim_thread.start()
     
     def snapshot_animation(self, duration=0.6):
         """
