@@ -210,7 +210,6 @@ def __init_resources():
               </object>
               <flag>wxEXPAND</flag>
             </object>
-            
             <object class="sizeritem">
               <object class="wxGridSizer">
                 <object class="sizeritem">

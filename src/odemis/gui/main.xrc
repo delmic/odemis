@@ -134,7 +134,6 @@
               </object>
               <flag>wxEXPAND</flag>
             </object>
-            
             <object class="sizeritem">
               <object class="wxGridSizer">
                 <object class="sizeritem">
