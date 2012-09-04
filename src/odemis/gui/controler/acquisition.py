@@ -51,6 +51,9 @@ class AcquisitionController(object):
         # TODO: for now it's just snapshot, but should be linked to the acquisition window
         self._frame.btn_aquire.Bind(wx.EVT_BUTTON, self.start_snapshot_viewport)
         
+        # find the names of the active (=connected) screens
+        # it's slow, so do it only at init (=expect not to change screen during acquisition)
+        self._outputs = self.get_display_outputs()
         
     def start_snapshot_viewport(self, event):
         """
@@ -131,29 +134,25 @@ class AcquisitionController(object):
         assert (0 < duration)
         brightness_orig = 1.0 # TODO: read the previous brightness 
         
-        # find the names of the active (=connected) screens
-        outputs = self.get_display_outputs()
-#        outputs = ["LVDS1"]
-        
         # start with very bright and slowly decrease to 1.0
         try:
             brightness_max = 10.0
             start = time.time()
             end = start + duration
-            self.set_output_brightness(outputs, brightness_max)
-            time.sleep(0.1)
+            self.set_output_brightness(self._outputs, brightness_max)
+            time.sleep(0.1) # first is a bit longer
             now = time.time()
             while now <= end:
-                time.sleep(0.05) # ensure not to use too much CPU
-                now = time.time()
                 # it should decrease quickly at the beginning and slowly at the end => 1/x (x 1/max->1)
                 pos = (now - start) / duration
                 brightness = 1/(1/brightness_max + (1 - 1/brightness_max) * pos)
-                self.set_output_brightness(outputs, brightness)
+                self.set_output_brightness(self._outputs, brightness)
+                time.sleep(0.05) # ensure not to use too much CPU
+                now = time.time()
         finally:
             # make sure we put it back
             time.sleep(0.05)
-            self.set_output_brightness(outputs, brightness_orig)
+            self.set_output_brightness(self._outputs, brightness_orig)
 
     @staticmethod
     def get_display_outputs():
@@ -175,11 +174,12 @@ class AcquisitionController(object):
             exception in case change of brightness failed
         """
         assert (0 <= brightness)
+        log.debug("setting brightness to %f", brightness)
         if not len(outputs):
             return
         # to simplify, we don't use the XRANDR API, but just call xrandr command
         # we need to build a whole line with all the outputs, like:
-        # xrandr --output VGA1 --brigtness 2 --output LVDS1 --brigthness 2
+        # xrandr --output VGA1 --brigthness 2 --output LVDS1 --brigthness 2
         args = ["xrandr"]
         for o in outputs:
             args += ["--output", o, "--brightness", "%f" % brightness]

@@ -614,7 +614,7 @@ class CombinedActuator(Actuator):
             if axis not in self._axis_to_child:
                 raise Exception("Axis unknown: " + str(axis))
             child, child_axis = self._axis_to_child[axis]
-            logging.debug("Moving axis %s -> %s by %f", axis, child_axis, distance)
+            logging.debug("Moving axis %s -> %s by %g", axis, child_axis, distance)
             f = child.moveRel({child_axis: distance})
             futures.append(f)
 

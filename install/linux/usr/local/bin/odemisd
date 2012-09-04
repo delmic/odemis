@@ -2,9 +2,28 @@
 # Start the cli
 
 . /etc/odemis.conf
+
+RUNNER=""
+
 # make sure we don't use too much memory
-MAXMEM=2000000 # 2Gb
-ulimit -d $MAXMEM -m $MAXMEM -v $MAXMEM
+if [ -d /sys/fs/cgroup/memory/odemisd -a -x /usr/bin/cgexec ]; then
+    MAXMEM=$(( 2 * 1024 * 1024 * 1024 )) # 2Gb
+    # ulimit doesn't work because it can only specify virtual memory, which is extremelly unpredictable for multiple processes
+    #ulimit -S -d $MAXMEM -v $(( 2 * $MAXMEM ))
+    echo $MAXMEM > /sys/fs/cgroup/memory/odemisd/memory.limit_in_bytes
+    echo $MAXMEM > /sys/fs/cgroup/memory/odemisd/memory.memsw.limit_in_bytes
+    status=$?
+    if [ $status -eq 0 ]; then
+        RUNNER="/usr/bin/cgexec -g memory:odemisd"
+    fi
+fi
+
+if [ "$RUNNER" == "" ]; then
+    echo "Warning: failed to set memory limit protection for odemisd"
+    echo "Ensure you have odemisd cgroup available"
+    # that should do it:
+    # sudo cgcreate -a piel -g memory:odemisd
+fi
 
 export PYTHONPATH
-python2.7 $ODEMISPATH/$BACKEND "$@"
+$RUNNER python2.7 $ODEMISPATH/$BACKEND "$@"

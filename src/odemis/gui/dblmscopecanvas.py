@@ -94,12 +94,11 @@ class DblMicroscopeCanvas(DraggableCanvas):
         """
         # we link axis 1 (up/down) to optical focus
         if axis == 1 and self.viewmodel.opt_focus:
-            # conversion: 1 px => 1 um (so a whole screen is like 1mm)
+            # conversion: 1 unit => 0.1 μm (so a whole screen is like 1mm)
             # negative == go up => need to inverse value
-            val = -1e-6 * shift # m
+            val = -0.1e-6 * shift # m
             assert(abs(val) < 0.01) # never move by 1 cm
-            log.debug("Moving focus by %f um", val * 1e6)
-#            log.info("moving actuator %s", self.viewmodel.opt_focus.name)
+            log.debug("Moving focus by %f μm", val * 1e6)
             self.viewmodel.opt_focus.moveRel({"z": val})
 
     def avOnCrossHair(self, activated):
