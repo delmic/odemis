@@ -80,10 +80,6 @@ SETTINGS = {
                     "range": (0.01, 3.00),
                     "scale": "exp",
                 },
-                "temperature":
-                {
-
-                },
                 "binning":
                 {
                     "control_type": CONTROL_RADIO,
@@ -96,6 +92,19 @@ SETTINGS = {
                                 (1280, 1080),
                                 (640, 540),
                                 (320, 270)]),
+                },
+             # what we don't want to display:
+                "targetTemperature":
+                {
+                    "control_type": CONTROL_NONE,
+                },
+                "fanSpeed":
+                {
+                    "control_type": CONTROL_NONE,
+                },
+                "pixelSize":
+                {
+                    "control_type": CONTROL_NONE,
                 },
             }
            }
@@ -277,6 +286,19 @@ class SettingsPanel(object):
         # If no conf provided, set it to an empty dictionary
         conf = conf or {}
 
+        # Get unit from config, vattribute or use an empty one
+        unit =  conf.get('unit', value.unit or "")
+        # Get the range and choices
+        rng, choices = self._get_rng_and_choice(value, conf)
+        # Get the defined type of control or assign a default one
+        control_type = conf.get('control_type',
+                                self._determine_default_control(value))
+
+        # Special case, early stop
+        if control_type == CONTROL_NONE:
+            # No value, not even label
+            return
+
         # Remove any 'empty panel' warning
         self._clear()
 
@@ -286,35 +308,12 @@ class SettingsPanel(object):
         lbl_ctrl = wx.StaticText(self.panel, -1, "%s:" % label)
         self._sizer.Add(lbl_ctrl, (self.num_entries, 0), flag=wx.ALL, border=5)
 
-
-        # If no value provided...
-        if not value:
-            log.warn("No value provided for %s", label)
-            self.fb_panel.Parent.Layout()
-            self.num_entries += 1
-            return
-
-
-        # Get unit from config, vattribute or use an empty one
-        unit =  conf.get('unit', value.unit or "")
-        # Get the range and choices
-        rng, choices = self._get_rng_and_choice(value, conf)
-        # Get the defined type of control or assign a default one
-        control_type = conf.get('control_type',
-                                self._determine_default_control(value))
-
-
         # the Vigilant Attribute Connector connects the wx control to the
         # vigilatn attribute.
         vac = None
 
         # Create the needed wxPython controls
-
-        if control_type == CONTROL_NONE:
-            # No value
-            return
-
-        elif control_type == CONTROL_LABEL:
+        if control_type == CONTROL_LABEL:
             # Read only value
             # In this case the value need to be transformed into a string
 
@@ -524,16 +523,11 @@ class SettingsSideBar(object):
         self._optical_panel.add_label("Camera", comp.name)
         vigil_attrs = getVAs(comp)
 
-        if SETTINGS.has_key("ccd"):
-
+        if SETTINGS.has_key(comp.role):
             for name, value in vigil_attrs.iteritems():
-
-                if SETTINGS["ccd"].has_key(name):
-                    self._optical_panel.add_value(name,
-                                                  value,
-                                                  SETTINGS["ccd"][name])
-                else:
-                    log.debug("No configuration found for %s attribute", name)
+                self._optical_panel.add_value(name,
+                                              value,
+                                              SETTINGS[comp.role].get(name, None))
         else:
             log.warn("No CCD settings found! Generating default controls")
 
