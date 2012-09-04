@@ -111,6 +111,7 @@ def __init_resources():
         </object>
         <object class="wxMenuItem" name="menu_item_debug">
           <label>Debug</label>
+          <accel>Ctrl+D</accel>
           <checkable>1</checkable>
           <XRCED>
             <assign_var>1</assign_var>
@@ -210,7 +211,6 @@ def __init_resources():
               </object>
               <flag>wxEXPAND</flag>
             </object>
-            
             <object class="sizeritem">
               <object class="wxGridSizer">
                 <object class="sizeritem">
@@ -279,7 +279,7 @@ def __init_resources():
                         <orient>wxHORIZONTAL</orient>
                         <object class="sizeritem">
                           <object class="ImageTextToggleButton" name="btn_toggle_press">
-                            <size>90,-1</size>
+                            <size>92,-1</size>
                             <label>0 kPa</label>
                             <delta>1</delta>
                             <bitmap>img_btn_press_png</bitmap>
@@ -303,7 +303,7 @@ def __init_resources():
                         </object>
                         <object class="sizeritem">
                           <object class="ImageTextToggleButton" name="btn_toggle_opt">
-                            <size>90,-1</size>
+                            <size>92,-1</size>
                             <label>OPTICAL</label>
                             <delta>1</delta>
                             <bitmap>img_btn_opt_png</bitmap>
@@ -329,7 +329,7 @@ def __init_resources():
                         </object>
                         <object class="sizeritem">
                           <object class="ImageTextToggleButton" name="btn_toggle_sem">
-                            <size>90,-1</size>
+                            <size>92,-1</size>
                             <label>SEM     </label>
                             <delta>1</delta>
                             <bitmap>img_btn_sem_png</bitmap>
@@ -358,7 +358,7 @@ def __init_resources():
                         </object>
                         <object class="sizeritem">
                           <object class="PopupImageButton" name="btn_toggle_pause">
-                            <size>50,-1</size>
+                            <size>51,-1</size>
                             <default>1</default>
                             <bitmap>img_btn_pause_png</bitmap>
                             <hover>img_btn_pause_h_png</hover>
@@ -413,6 +413,7 @@ def __init_resources():
                               <collapsed>1</collapsed>
                               <fg>#1A1A1A</fg>
                               <bg>#555555</bg>
+                              <hidden>1</hidden>
                               <XRCED>
                                 <assign_var>1</assign_var>
                               </XRCED>
@@ -445,7 +446,7 @@ def __init_resources():
                         <orient>wxVERTICAL</orient>
                         <object class="sizeritem">
                           <object class="ImageTextButton" name="btn_aquire">
-                            <size>380,-1</size>
+                            <size>382,-1</size>
                             <label>ACQUIRE IMAGE</label>
                             <delta>1</delta>
                             <bitmap>img_btn_aquire_image_png</bitmap>

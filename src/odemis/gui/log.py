@@ -1,6 +1,6 @@
 #-*- coding: utf-8 -*-
 '''
-@author: Rinze de Laat 
+@author: Rinze de Laat
 
 Copyright © 2012 Rinze de Laat, Delmic
 
@@ -14,7 +14,12 @@ You should have received a copy of the GNU General Public License along with Ode
 '''
 
 import logging
+import os.path
+from logging.handlers import RotatingFileHandler
+
 import wx
+
+LOG_FILE = "gui.log"
 
 LOG_LINES = 500
 log = None
@@ -53,6 +58,24 @@ def create_gui_logger(log_field):
     for handler in log.handlers:
         if not isinstance(handler, TextFieldHandler):
             log.removeHandler(handler)
+
+    # Path to the log file
+    logfile_path = os.path.join(os.path.dirname(__file__), LOG_FILE)
+    # Maximum size of the log file before it's rotated (1048576 = 1024^2 = 1MiB)
+    max_logfile_size = 1048576
+    # Maximum number of (rotated) log files
+    max_logfile_count = 1
+    # Formatting string for logging messages to file
+    file_format = logging.Formatter(("%(asctime)s - "
+                                     "%(levelname)s\t%(module)s(%(lineno)d):  "
+                                     "%(message)s"), '%Y-%m-%d %H:%M:%S')
+
+    file_handler = RotatingFileHandler(logfile_path, 'a',
+                                       max_logfile_size,
+                                       max_logfile_count)
+
+    file_handler.setFormatter(file_format)
+    log.addHandler(file_handler)
 
 class TextFieldHandler(logging.Handler):
     """ Custom log handler, used to output log entries to a text field. """

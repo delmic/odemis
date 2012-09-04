@@ -56,7 +56,7 @@ class OdemisGUIApp(wx.App):
         # Constructor of the parent class
         # ONLY CALL IT AT THE END OF :py:method:`__init__` BECAUSE OnInit will be called
         # and it needs the attributes defined in this constructor!
-        wx.App.__init__(self, redirect=False)
+        wx.App.__init__(self, redirect=True)
 
     def OnInit(self):
         """ Application initialization, automatically run from the :wx:`App`
@@ -103,7 +103,7 @@ class OdemisGUIApp(wx.App):
             # Add frame icon
             ib = wx.IconBundle()
             ib.AddIconFromFile(os.path.join(self._module_path(),
-                                            "img/odemis.ico"),
+                                            "img/icon128.png"),
                                             wx.BITMAP_TYPE_ANY)
             self.main_frame.SetIcons(ib)
 
