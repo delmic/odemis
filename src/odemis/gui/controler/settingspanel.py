@@ -87,15 +87,15 @@ SETTINGS = {
                 "binning":
                 {
                     "control_type": CONTROL_RADIO,
-                    "choices": [1, 2, 4],
+                    "choices": set([1, 2, 4]),
                 },
                 "resolution":
                 {
                     "control_type": CONTROL_COMBO,
-                    "choices": [(2560, 2160),
+                    "choices": set([(2560, 2160),
                                 (1280, 1080),
                                 (640, 540),
-                                (320, 270)],
+                                (320, 270)]),
                 },
             }
            }
@@ -222,22 +222,24 @@ class SettingsPanel(object):
 
     def _get_rng_and_choice(self, va, conf):
         """ Retrieve the range and choices values from the vigilant attribute
-        or override them with the values provided in the configration.
+        or override them with the values provided in the configuration.
         """
-        rng = None
-        choices = None
+        rng = conf.get("range", None)
 
         try:
-            rng = conf.get("range", None)
             if rng is None:
                 rng = va.range
+            else: # merge
+                rng = [max(rng[0], va.range[0]), min(rng[1], va.range[1])]
         except (AttributeError, NotApplicableError):
             pass
 
+        choices = conf.get("choices", None)
         try:
-            choices = conf.get("choices", None)
             if choices is None:
                 choices = va.choices
+            else: # merge = intersection
+                choices &= va.choices 
         except (AttributeError, NotApplicableError):
             pass
 
@@ -425,7 +427,7 @@ class SettingsPanel(object):
             new_ctrl = GraphicalRadioButtonControl(self.panel,
                                                    -1,
                                                    size=(-1, 16),
-                                                   choices=choices,
+                                                   choices=sorted(choices),
                                                    style=wx.NO_BORDER)
             vac = VigilantAttributeConnector(value,
                                              new_ctrl,
@@ -438,14 +440,14 @@ class SettingsPanel(object):
             if isinstance(value.value, collections.Iterable):
                 value_str = u"%s %s" % (u" x ".join([unicode(s) for s in value.value]), unit)
 
-                choices = [u"%s %s" % (u" x ".join([unicode(s) for s in c]), unit) for c in choices]
+                choices = [u"%s %s" % (u" x ".join([unicode(s) for s in c]), unit) for c in sorted(choices)]
             else:
                 value_str = u"%s %s" % (value.value, unit)
-                choices = [u"%s %s" % (c, unit) for c in choices]
+                choices = [u"%s %s" % (c, unit) for c in sorted(choices)]
 
             new_ctrl = wx.ComboBox(self.panel, -1,
                                 value_str, (0, 0), (100, 16), choices,
-                wx.NO_BORDER|wx.CB_DROPDOWN|wx.TE_PROCESS_ENTER|wx.CB_SORT)
+                wx.NO_BORDER|wx.CB_DROPDOWN|wx.TE_PROCESS_ENTER)
             new_ctrl.SetForegroundColour(FOREGROUND_COLOUR_EDIT)
             new_ctrl.SetBackgroundColour(self.panel.GetBackgroundColour())
 
