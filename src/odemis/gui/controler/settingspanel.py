@@ -22,6 +22,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 import math
 import re
+import collections
 
 import wx
 
@@ -87,6 +88,14 @@ SETTINGS = {
                 {
                     "control_type": CONTROL_RADIO,
                     "choices": [1, 2, 4],
+                },
+                "resolution":
+                {
+                    "control_type": CONTROL_COMBO,
+                    "choices": [(2560, 2160),
+                                (1280, 1080),
+                                (640, 540),
+                                (320, 270)],
                 },
             }
            }
@@ -215,16 +224,20 @@ class SettingsPanel(object):
         """ Retrieve the range and choices values from the vigilant attribute
         or override them with the values provided in the configration.
         """
-        rng = (None, None)
+        rng = None
         choices = None
 
         try:
-            rng = conf.get("range", va.range)
+            rng = conf.get("range", None)
+            if rng is None:
+                rng = va.range
         except (AttributeError, NotApplicableError):
             pass
 
         try:
-            choices = conf.get("choices", va.choices)
+            choices = conf.get("choices", None)
+            if choices is None:
+                choices = va.choices
         except (AttributeError, NotApplicableError):
             pass
 
@@ -362,7 +375,10 @@ class SettingsPanel(object):
             new_ctrl.set_linked_field(txt_ctrl)
             txt_ctrl.set_linked_slider(new_ctrl)
 
-            self._sizer.Add(txt_ctrl, (self.num_entries, 2), flag=wx.ALL, border=5)
+            self._sizer.Add(txt_ctrl,
+                            (self.num_entries, 2),
+                            flag=wx.ALL,
+                            border=5)
 
             # Only connect one control to the vigilant attribute.
             # Communication between the controls should keep them 'synchronized'
@@ -408,7 +424,7 @@ class SettingsPanel(object):
         elif control_type == CONTROL_RADIO:
             new_ctrl = GraphicalRadioButtonControl(self.panel,
                                                    -1,
-                                                   size=(-1, 30),
+                                                   size=(-1, 16),
                                                    choices=choices,
                                                    style=wx.NO_BORDER)
             vac = VigilantAttributeConnector(value,
@@ -417,11 +433,27 @@ class SettingsPanel(object):
                                              wx.EVT_BUTTON)
 
         elif control_type == CONTROL_COMBO:
-            new_ctrl = wx.ComboBox(self.panel, -1, u"%s %s" % (value.value, unit), (0, 0),
-                         (100, 16), [u"%s %s" % (c, unit) for c in choices],
-                         wx.NO_BORDER | wx.CB_DROPDOWN | wx.TE_PROCESS_ENTER | wx.CB_SORT)
+
+            # If the value is non-atomic
+            if isinstance(value.value, collections.Iterable):
+                value_str = u"%s %s" % (u" x ".join([unicode(s) for s in value.value]), unit)
+
+                choices = [u"%s %s" % (u" x ".join([unicode(s) for s in c]), unit) for c in choices]
+            else:
+                value_str = u"%s %s" % (value.value, unit)
+                choices = [u"%s %s" % (c, unit) for c in choices]
+
+            new_ctrl = wx.ComboBox(self.panel, -1,
+                                value_str, (0, 0), (100, 16), choices,
+                wx.NO_BORDER|wx.CB_DROPDOWN|wx.TE_PROCESS_ENTER|wx.CB_SORT)
             new_ctrl.SetForegroundColour(FOREGROUND_COLOUR_EDIT)
             new_ctrl.SetBackgroundColour(self.panel.GetBackgroundColour())
+
+            vac = VigilantAttributeConnector(value,
+                                             new_ctrl,
+                                             new_ctrl.SetValue,
+                                             wx.EVT_COMBOBOX)
+
 
         elif control_type == CONTROL_FLT:
             new_ctrl = text.UnitFloatCtrl(self.panel,

@@ -1095,9 +1095,9 @@ getbtn_semBitmap = btn_sem.GetBitmap
 #----------------------------------------------------------------------
 btn_sml_a = PyEmbeddedImage(
     "iVBORw0KGgoAAAANSUhEUgAAAB4AAAAQCAYAAAABOs/SAAAABmJLR0QA/wD/AP+gvaeTAAAA"
-    "CXBIWXMAAAsTAAALEwEAmpwYAAAAB3RJTUUH3AkECSwDhLOCSQAAAD1JREFUOMvt0UENADAM"
-    "AsAumRVU1L+rtszEMh4DAxdgAWAIsjMzJDAADVxVGnhmPoO72409tT++A5N04yc59z4pbzLb"
-    "gtQAAAAASUVORK5CYII=")
+    "CXBIWXMAAAsTAAALEwEAmpwYAAAAB3RJTUUH3AkEDRkQpTWp/QAAAD5JREFUOMvt0UENADAM"
+    "AkCWzEp91b+GtszEMh4DAxdgASAE2ZkJCRwRGriqNPDMfAZ3txt7an98Bybpxk9yAMLHKW+i"
+    "LpjpAAAAAElFTkSuQmCC")
 index.append('btn_sml_a')
 catalog['btn_sml_a'] = btn_sml_a
 getbtn_sml_aData = btn_sml_a.GetData
