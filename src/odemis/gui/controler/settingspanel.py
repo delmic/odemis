@@ -116,10 +116,11 @@ class VigilantAttributeConnector(object):
         changed.
         """
         try:
-            log.warn("Assign value to vigilant attribute")
-            self.vigilattr.value = self.ctrl.GetValue()
-        except OutOfBoundError:
-            log.error("Illegal value")
+            value = self.ctrl.GetValue()
+            log.warn("Assign value %s to vigilant attribute", value)
+            self.vigilattr.value = value
+        except OutOfBoundError, oobe:
+            log.error("Illegal value: %s", oobe)
         finally:
             evt.Skip()
 
@@ -407,8 +408,14 @@ class SettingsPanel(object):
         elif control_type == CONTROL_RADIO:
             new_ctrl = GraphicalRadioButtonControl(self.panel,
                                                    -1,
+                                                   size=(-1, 30),
                                                    choices=choices,
-                                                   style=wx.NO_BORDER | wx.CB_DROPDOWN | wx.TE_PROCESS_ENTER | wx.CB_SORT)
+                                                   style=wx.NO_BORDER)
+            vac = VigilantAttributeConnector(value,
+                                             new_ctrl,
+                                             new_ctrl.SetValue,
+                                             wx.EVT_BUTTON)
+
         elif control_type == CONTROL_COMBO:
             new_ctrl = wx.ComboBox(self.panel, -1, u"%s %s" % (value.value, unit), (0, 0),
                          (100, 16), [u"%s %s" % (c, unit) for c in choices],

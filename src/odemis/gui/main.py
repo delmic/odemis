@@ -56,7 +56,7 @@ class OdemisGUIApp(wx.App):
         # Constructor of the parent class
         # ONLY CALL IT AT THE END OF :py:method:`__init__` BECAUSE OnInit will be called
         # and it needs the attributes defined in this constructor!
-        wx.App.__init__(self, redirect=False)
+        wx.App.__init__(self, redirect=True)
 
     def OnInit(self):
         """ Application initialization, automatically run from the :wx:`App`

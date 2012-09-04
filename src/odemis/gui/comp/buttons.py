@@ -28,7 +28,7 @@ from wx.lib.buttons import GenBitmapButton, GenBitmapToggleButton, \
 import odemis.gui.img.data as img
 
 def resize_bmp(btn_size, bmp):
-    """ Size the given image to it will match the size of the button """
+    """ Size the given image so it will match the size of the button """
 
     if btn_size:
         btn_width, _ = btn_size
@@ -63,8 +63,9 @@ class ImageButton(GenBitmapButton):
         self.labelDelta = kwargs.pop('label_delta', 0)
 
         # Fit the bmp if needed
-        args = list(args)
-        args[2] = resize_bmp(kwargs.get('size', None), args[2])
+        if len(args) >= 3:
+            args = list(args)
+            args[2] = resize_bmp(kwargs.get('size', None), args[2])
 
         GenBitmapButton.__init__(self, *args, **kwargs)
 
@@ -463,6 +464,23 @@ class ImageTextToggleButton(GenBitmapTextToggleButton):
             self.faceDnClr = self.GetParent().GetBackgroundColour()
 
 class TabButton(ImageTextToggleButton):
+
+    def OnLeftDown(self, event):
+        if not self.IsEnabled() or not self.up:
+            return
+        self.saveUp = self.up
+        self.up = not self.up
+        self.CaptureMouse()
+        self.SetFocus()
+        self.Refresh()
+
+class GraphicRadioButton(ImageTextToggleButton):
+
+    def __init__(self, *args, **kwargs):
+        self.value = kwargs.pop('value')
+        kwargs['label'] = unicode(self.value)
+        ImageTextToggleButton.__init__(self, *args, **kwargs)
+
     def OnLeftDown(self, event):
         if not self.IsEnabled() or not self.up:
             return
