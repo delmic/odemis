@@ -367,7 +367,6 @@ class Detector(HwComponent):
         if children:
             raise ArgumentError("Detector components cannot have children.")
 
-        # TODO to be remotable
         # To be overridden
         self._shape = (0) # maximum value of each dimension of the detector. A CCD camera 2560x1920 with 12 bits intensity has a 3D shape (2560,1920,2048).
         self.pixelSize = None # VA representing the size of a pixel (in meters). More precisely it should be the average distance between the centres of two pixels.

@@ -32,8 +32,8 @@ sudo python2.7 build-wxpython.py --build_dir=../build --install
 - *important!* Update library database:
 sudo ldconfig
 
-Optionally, if you want to modify the graphical user interace, you need to
-make the follwing prepartion concerning XRCEd. (XRCED is the GUI editor of
+Optionally, if you want to modify the graphical user interface, you need to
+make the following preparation concerning XRCEd. (XRCED is the GUI editor of
 choice.)
 
 - Find the location where you Python packages are installed:
@@ -68,8 +68,12 @@ sudo cp -dr --preserve=mode,xattr,timestamps install/linux/* /
 
 == Andor Clara camera ==
 
+Note that it's recommended to plug the USB cable to a separate USB hub (to 
+ensure full bandwidth availability). To check this you can use:
+lsusb -t
+
 - Install the driver:
-  WARNING! no version works fully, but if we create a Frankstein one, it does:
+  WARNING! no version works fully, but if we create a Frankenstein one, it does:
   * v2.93 (and v2.91+) doesn't work because it blocks after a few image acquired
   * v2.90 doesn't support changing the preamp gain
   * The firmware of v2.90 (/usr/local/etc/andor) and code from v2.93
@@ -81,8 +85,8 @@ sudo cp -dr --preserve=mode,xattr,timestamps install/linux/* /
   sudo install etc/* /usr/local/etc/andor/
 
 
-On Linux/Ubuntu you need to install libusb-dev (so that whereis reports
-libusb.so).
+On Linux/Ubuntu you need to install libusb-dev (or have a link from libusb.so to
+libusb-0.1.so.4).
 
 Also the the permissions of all the files must be allowed for normal user:
 everything is installed by default as root only, so nothing can work from the
@@ -131,6 +135,6 @@ SUBSYSTEMS=="usb", ATTRS{idProduct}=="1008", ATTRS{idVendor}=="1a72", RUN+="/sbi
 
 = Configuring the instantiation file =
 This file describes the available hardware for Odemis. Basically, it list for each
-hardware, which driver to use and the parameters required. See the backend
+hardware, which driver to use and the parameters required. See the back-end
 specification for precise syntax and example files.
 
