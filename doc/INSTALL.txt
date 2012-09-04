@@ -60,8 +60,8 @@ sudo adduser replace_by_login_name odemis
 (You need to log out to get the user in the new group)
 
 On Linux, install the files this way:
-cd odemis/install/linux
-sudo cp -dr --preserve=mode,xattr,timestamps * /
+cd odemis
+sudo cp -dr --preserve=mode,xattr,timestamps install/linux/* /
 
 
 = Installing the vendor device drivers =
