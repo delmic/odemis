@@ -103,7 +103,7 @@ class OdemisGUIApp(wx.App):
             # Add frame icon
             ib = wx.IconBundle()
             ib.AddIconFromFile(os.path.join(self._module_path(),
-                                            "img/odemis.ico"),
+                                            "img/icon128.png"),
                                             wx.BITMAP_TYPE_ANY)
             self.main_frame.SetIcons(ib)
 

@@ -31,6 +31,7 @@ from ..comp.foldpanelbar import FoldPanelItem
 from odemis.gui.util import call_after_wrapper
 from odemis.gui.log import log
 from odemis.gui.comp.slider import CustomSlider
+from odemis.gui.comp.radio import GraphicalRadioButtonControl
 from odemis.model import getVAs, NotApplicableError, VigilantAttributeBase, \
     OutOfBoundError
 
@@ -403,7 +404,12 @@ class SettingsPanel(object):
                                              new_ctrl.SetValueStr,
                                              wx.EVT_TEXT_ENTER)
 
-        elif control_type in (CONTROL_RADIO, CONTROL_COMBO):
+        elif control_type == CONTROL_RADIO:
+            new_ctrl = GraphicalRadioButtonControl(self.panel,
+                                                   -1,
+                                                   choices=choices,
+                                                   style=wx.NO_BORDER | wx.CB_DROPDOWN | wx.TE_PROCESS_ENTER | wx.CB_SORT)
+        elif control_type == CONTROL_COMBO:
             new_ctrl = wx.ComboBox(self.panel, -1, u"%s %s" % (value.value, unit), (0, 0),
                          (100, 16), [u"%s %s" % (c, unit) for c in choices],
                          wx.NO_BORDER | wx.CB_DROPDOWN | wx.TE_PROCESS_ENTER | wx.CB_SORT)

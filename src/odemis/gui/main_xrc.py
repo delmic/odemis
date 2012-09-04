@@ -111,6 +111,7 @@ def __init_resources():
         </object>
         <object class="wxMenuItem" name="menu_item_debug">
           <label>Debug</label>
+          <accel>Ctrl+D</accel>
           <checkable>1</checkable>
           <XRCED>
             <assign_var>1</assign_var>
@@ -445,7 +446,7 @@ def __init_resources():
                         <orient>wxVERTICAL</orient>
                         <object class="sizeritem">
                           <object class="ImageTextButton" name="btn_aquire">
-                            <size>380,-1</size>
+                            <size>280,-1</size>
                             <label>ACQUIRE IMAGE</label>
                             <delta>1</delta>
                             <bitmap>img_btn_aquire_image_png</bitmap>
