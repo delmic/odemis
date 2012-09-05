@@ -710,7 +710,7 @@ class AndorCam2(model.DigitalCamera):
         assert((0 <= gain))
         
         gains = self.GetPreAmpGains()
-        self.atcore.SetPreAmpGain(index_closest(gains, gain))
+        self.atcore.SetPreAmpGain(index_closest(gain, gains))
     
     def GetPreAmpGains(self):
         """
