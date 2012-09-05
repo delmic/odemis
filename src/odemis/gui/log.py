@@ -61,8 +61,8 @@ def create_gui_logger(log_field):
 
     # Path to the log file
     logfile_path = os.path.join(os.path.dirname(__file__), LOG_FILE)
-    # Maximum size of the log file before it's rotated (1048576 = 1024^2 = 1MiB)
-    max_logfile_size = 1048576
+    # Maximum size of the log file before it's rotated
+    max_logfile_size = 512**2
     # Maximum number of (rotated) log files
     max_logfile_count = 1
     # Formatting string for logging messages to file
