@@ -147,7 +147,7 @@ class VigilantAttribute(VigilantAttributeBase):
         except WeakRefLostError:
             self._value = self.__default_setter(value)
 
-        if prev_value != self._value:
+        if prev_value != self._value or value != self._value:
             self.notify(self._value)
 
     def _del_value(self):
