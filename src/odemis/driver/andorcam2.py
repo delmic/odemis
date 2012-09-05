@@ -711,8 +711,6 @@ class AndorCam2(model.DigitalCamera):
         """
         return (list of float): gain (multiplication, no unit) ordered by index
         """
-        # depends on the current settings of the readout rates, so they should
-        # already be fixed.
         gains = []
         nb_gains = c_int()
         self.atcore.GetNumberPreAmpGains(byref(nb_gains))
@@ -1018,10 +1016,11 @@ class AndorCam2(model.DigitalCamera):
         gains = self.gain.choices
         for i in range(len(gains)):
             c, hs = self._getChannelHSSpeed(self._readout_rate)
-            is_avail = c_int()
-            self.atcore.IsPreAmpGainAvailable(c, self._output_amp, hs, i, byref(is_avail))
-            if is_avail == 0:
-                gains[i] = -100000 # should never be picked up
+            # FIXME: this doesn't work is driver is acquiring
+#            is_avail = c_int()
+#            self.atcore.IsPreAmpGainAvailable(c, self._output_amp, hs, i, byref(is_avail))
+#            if is_avail == 0:
+#                gains[i] = -100000 # should never be picked up
                  
         self._gain = find_closest(value, gains)
         return self._gain
