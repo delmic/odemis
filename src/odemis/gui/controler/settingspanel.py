@@ -115,10 +115,6 @@ SETTINGS = {
                 {
                     "control_type": CONTROL_COMBO,
                     "choices": resolution_from_range,
-                    # "choices": set([(2560, 2160),
-                    #             (1280, 1080),
-                    #             (640, 540),
-                    #             (320, 270)]),
                 },
             # what we don't want to display:
                 "targetTemperature":
@@ -145,10 +141,7 @@ SETTINGS = {
                 "resolution":
                 {
                     "control_type": CONTROL_COMBO,
-                    "choices": set([(2048, 2048),
-                                (1024, 1024),
-                                (512, 512),
-                                (256, 256)]),
+                    "choices": resolution_from_range,
                 },
             }
         }
@@ -575,11 +568,11 @@ class SettingsSideBar(object):
         for comp in microscope.detectors:
             if comp.role == 'ccd':
                 self.add_ccd(comp)
-        
+
         for comp in microscope.emitters:
             if comp.role == 'e-beam':
                 self.add_ebeam(comp)
-                
+
     # Optical microscope settings
     def add_ccd(self, comp):
         self._optical_panel.add_label("Camera", comp.name)
