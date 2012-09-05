@@ -202,15 +202,7 @@ class OdemisGUIApp(wx.App):
 #                self.goto_debug_mode()
 
 
-            self.settings_controler = SettingsSideBar(self.main_frame)
-
-            # Query Odemis daemon (Should move this to separate thread)
-
-            microscope = model.getMicroscope()
-
-            for comp in microscope.detectors:
-                if comp.role == 'ccd':
-                    self.settings_controler.add_ccd(comp)
+            self.settings_controler = SettingsSideBar(self.main_frame, model.getMicroscope())
 
             #print_microscope_tree(microscope)
 
