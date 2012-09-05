@@ -56,6 +56,31 @@ CONTROL_SLIDER = 5  # Value slider
 CONTROL_RADIO = 6  # Choice buttons (like radio buttons)
 CONTROL_COMBO = 7   # Drop down combo box
 
+
+# Utility functions
+
+def resolution_from_range(va, conf):
+    """ Try and get the maximum value of range and use
+    that to construct a list of resolutions
+    """
+    try:
+        log.debug("Generating resolutions...")
+        res = [max(va.range)]
+
+        for dummy in range(3):
+            width = res[-1][0] / 2
+            height = res[-1][1] / 2
+            res.append((width, height))
+        return res
+
+    except NotApplicableError:
+        return set()
+
+def choice_to_str(choice, unit):
+    if not isinstance(choice, collections.Iterable):
+        choice = [unicode(choice)]
+    return u"%s %s" % (u" x ".join([unicode(c) for c in choice]), unit)
+
 # Default settings for the different components.
 # (Just a ccd for now, 2012-8-27)
 # Values in the settings dictionary will be used to steer the default
@@ -77,8 +102,8 @@ SETTINGS = {
                 "exposureTime":
                 {
                     "control_type": CONTROL_SLIDER,
-                    "range": (0.01, 3.00),
                     "scale": "exp",
+                    "range": (0.01, 3.00),
                 },
                 "binning":
                 {
@@ -88,12 +113,13 @@ SETTINGS = {
                 "resolution":
                 {
                     "control_type": CONTROL_COMBO,
-                    "choices": set([(2560, 2160),
-                                (1280, 1080),
-                                (640, 540),
-                                (320, 270)]),
+                    "choices": resolution_from_range,
+                    # "choices": set([(2560, 2160),
+                    #             (1280, 1080),
+                    #             (640, 540),
+                    #             (320, 270)]),
                 },
-             # what we don't want to display:
+            # what we don't want to display:
                 "targetTemperature":
                 {
                     "control_type": CONTROL_NONE,
@@ -109,25 +135,23 @@ SETTINGS = {
             }
            }
 
-
 class VigilantAttributeConnector(object):
     """ This class connects a vigilant attribute with a wxPython control,
     making sure that the changes in one are automatically reflected in the
     other.
     """
-    def __init__(self, vigilattr, ctrl, sub_func, change_event=None):
+    def __init__(self, vigilattr, ctrl, sub_func, *change_events):
         self.vigilattr = vigilattr
         self.ctrl = ctrl
         self.sub_func = call_after_wrapper(sub_func)
-        self.change_event = change_event
+        self.change_events = change_events
 
         # Subscribe to the vigilant attribute and initialize
 
         self.vigilattr.subscribe(self.sub_func, True)
 
-        # If necessary, bind the provided change event
-        if change_event:
-            self.ctrl.Bind(change_event, self._on_value_change)
+        for event in self.change_events:
+            self.ctrl.Bind(event, self._on_value_change)
 
     def _on_value_change(self, evt):
         """ This method is called when the value of the control is
@@ -144,7 +168,8 @@ class VigilantAttributeConnector(object):
 
     def disconnect(self):
         log.debug("Disconnecting VigilantAttributeConnector")
-        self.ctrl.Unbind(self.change_event, self._on_value_change)
+        for event in self.change_events:
+            self.ctrl.Unbind(event, self._on_value_change)
         self.vigilattr.unsubscribe(self.sub_func)
 
 class SettingsPanel(object):
@@ -245,10 +270,12 @@ class SettingsPanel(object):
 
         choices = conf.get("choices", None)
         try:
-            if choices is None:
+            if hasattr(choices, '__call__'):
+                choices = choices(va, conf)
+            elif choices is None:
                 choices = va.choices
             else: # merge = intersection
-                choices &= va.choices 
+                choices &= va.choices
         except (AttributeError, NotApplicableError):
             pass
 
@@ -381,9 +408,6 @@ class SettingsPanel(object):
                             flag=wx.ALL,
                             border=5)
 
-            # Only connect one control to the vigilant attribute.
-            # Communication between the controls should keep them 'synchronized'
-            # value wise.
             vat = VigilantAttributeConnector(value,
                                              txt_ctrl,
                                              txt_ctrl.SetValueStr,
@@ -435,25 +459,37 @@ class SettingsPanel(object):
 
         elif control_type == CONTROL_COMBO:
 
-            # If the value is non-atomic
-            if isinstance(value.value, collections.Iterable):
-                value_str = u"%s %s" % (u" x ".join([unicode(s) for s in value.value]), unit)
+            new_ctrl = wx.ComboBox(self.panel, -1, pos=(0, 0), size=(100, 16),
+                                    style=wx.NO_BORDER |
+                                          wx.CB_DROPDOWN |
+                                          wx.TE_PROCESS_ENTER|
+                                          wx.CB_READONLY)
 
-                choices = [u"%s %s" % (u" x ".join([unicode(s) for s in c]), unit) for c in sorted(choices)]
-            else:
-                value_str = u"%s %s" % (value.value, unit)
-                choices = [u"%s %s" % (c, unit) for c in sorted(choices)]
 
-            new_ctrl = wx.ComboBox(self.panel, -1,
-                                value_str, (0, 0), (100, 16), choices,
-                wx.NO_BORDER|wx.CB_DROPDOWN|wx.TE_PROCESS_ENTER)
+            def _getvalue_wrapper(self, *args, **kwargs):
+                def wrapper(*args, **kwargs):
+                    if self.GetSelection() != wx.NOT_FOUND:
+                        data = self.GetClientData(self.GetSelection())
+                        return data
+                    return None
+                return wrapper
+
+            new_ctrl.GetValue = _getvalue_wrapper(new_ctrl)
+
+            #str_choices = [choice_to_str(choice, unit) for choice in choices]
+            #new_ctrl.AutoComplete(str_choices)
+
+            for choice in choices:
+                new_ctrl.Append(choice_to_str(choice, unit), choice)
+
             new_ctrl.SetForegroundColour(FOREGROUND_COLOUR_EDIT)
             new_ctrl.SetBackgroundColour(self.panel.GetBackgroundColour())
 
-            vac = VigilantAttributeConnector(value,
-                                             new_ctrl,
-                                             new_ctrl.SetValue,
-                                             wx.EVT_COMBOBOX)
+            vac = VigilantAttributeConnector(
+                    value,
+                    new_ctrl,
+                    lambda v: new_ctrl.SetValue(choice_to_str(v, unit)),
+                    wx.EVT_COMBOBOX, wx.EVT_TEXT_ENTER)
 
 
         elif control_type == CONTROL_FLT:

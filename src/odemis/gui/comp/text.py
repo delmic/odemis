@@ -253,7 +253,8 @@ class SuggestTextCtrl (wx.TextCtrl, listmix.ColumnSorterMixin):
         The items will be sorted case insensitively.
         """
         self._choices = choices
-        flags = wx.LC_REPORT | wx.LC_SINGLE_SEL | wx.LC_SORT_ASCENDING | wx.LC_NO_HEADER
+        flags = wx.LC_REPORT | wx.LC_SINGLE_SEL | \
+                wx.LC_SORT_ASCENDING | wx.LC_NO_HEADER
         self.dropdownlistbox.SetWindowStyleFlag(flags)
         if not isinstance(choices, list):
             self._choices = list(choices)
@@ -265,11 +266,13 @@ class SuggestTextCtrl (wx.TextCtrl, listmix.ColumnSorterMixin):
         self._updateDataList(self._choices)
         self.dropdownlistbox.InsertColumn(0, "")
         for num, colVal in enumerate(self._choices):
-            index = self.dropdownlistbox.InsertImageStringItem(sys.maxint, colVal, -1)
+            index = self.dropdownlistbox.InsertImageStringItem(sys.maxint,
+                                                               colVal, -1)
             self.dropdownlistbox.SetStringItem(index, 0, colVal)
             self.dropdownlistbox.SetItemData(index, num)
         self._setListSize()
-        # there is only one choice for both search and fetch if setting a single column:
+        # there is only one choice for both search and fetch if setting a
+        # single column:
         self._colSearch = 0
         self._colFetch = -1
 
@@ -320,9 +323,10 @@ class SuggestTextCtrl (wx.TextCtrl, listmix.ColumnSorterMixin):
                 self.dropdown.SetSize(size)
                 self.dropdownlistbox.SetSize(self.dropdown.GetClientSize())
             if y + size.GetHeight() < self._screenheight :
-                self.dropdown . SetPosition (wx.Point(x, y))
+                self.dropdown.SetPosition(wx.Point(x, y))
             else:
-                self.dropdown . SetPosition (wx.Point(x, y - height - size.GetHeight()))
+                self.dropdown.SetPosition(
+                    wx.Point(x, y - height - size.GetHeight()))
         self.dropdown.Show(show)
 
     def _listItemVisible(self) :
