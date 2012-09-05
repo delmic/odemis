@@ -107,13 +107,13 @@ class MetadataUpdater(model.Component):
         
         # we need to keep the information on the detector to update
         def updatePixelDensity(unused):
-            # the formula is very simple: actual MpP = CCD MpP / (Mag * binning)
+            # the formula is very simple: actual MpP = CCD MpP * binning / Mag
             try:
                 binning = detector.binning.value
             except AttributeError:
                 binning = 1
             mag = float(lens.magnification.value)
-            mpp = (captor_mpp[0] / (mag * binning), captor_mpp[1] / (mag * binning)) 
+            mpp = (captor_mpp[0] * binning / mag, captor_mpp[1] * binning / mag) 
             md = {model.MD_PIXEL_SIZE: mpp}
             detector.updateMetadata(md)
         
