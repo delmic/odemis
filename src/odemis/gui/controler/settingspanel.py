@@ -20,21 +20,22 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 
-import math
-import re
-import collections
-
-import wx
-
-import odemis.gui.comp.text as text
-
 from ..comp.foldpanelbar import FoldPanelItem
-from odemis.gui.util import call_after_wrapper
-from odemis.gui.log import log
-from odemis.gui.comp.slider import CustomSlider
+from odemis.gui import util
 from odemis.gui.comp.radio import GraphicalRadioButtonControl
+from odemis.gui.comp.slider import CustomSlider
+from odemis.gui.log import log
+from odemis.gui.util import call_after_wrapper
 from odemis.model import getVAs, NotApplicableError, VigilantAttributeBase, \
     OutOfBoundError
+import collections
+import math
+import odemis.gui.comp.text as text
+import re
+import wx
+
+
+
 
 
 
@@ -132,8 +133,25 @@ SETTINGS = {
                 {
                     "control_type": CONTROL_NONE,
                 },
+            },
+            "e-beam":
+            {
+                "dwellTime":
+                {
+                    "control_type": CONTROL_SLIDER,
+                    "range": (0.01, 3.00),
+                    "scale": "exp",
+                },
+                "resolution":
+                {
+                    "control_type": CONTROL_COMBO,
+                    "choices": set([(2048, 2048),
+                                (1024, 1024),
+                                (512, 512),
+                                (256, 256)]),
+                },
             }
-           }
+        }
 
 class VigilantAttributeConnector(object):
     """ This class connects a vigilant attribute with a wxPython control,
@@ -246,6 +264,7 @@ class SettingsPanel(object):
             try:
                 # An exception will be raised if no range attribute is found
                 log.debug("found range %s", value.range)
+                # TODO: if unit is "s" => scale=exp
                 if isinstance(value.value, (int, float)):
                     return CONTROL_SLIDER
             except (AttributeError, NotApplicableError):
@@ -339,6 +358,7 @@ class SettingsPanel(object):
         # vigilatn attribute.
         vac = None
 
+        log.debug("Adding VA %s", label)
         # Create the needed wxPython controls
         if control_type == CONTROL_LABEL:
             # Read only value
@@ -503,7 +523,7 @@ class SettingsPanel(object):
             new_ctrl.SetBackgroundColour(self.panel.GetBackgroundColour())
 
         else:
-            txt = unicode("%s %s" % (value.value, unit))
+            txt = util.units.readable_str(value.value, unit)
             new_ctrl = wx.StaticText(self.panel, -1, txt)
 
 
@@ -540,34 +560,46 @@ class SettingsSideBar(object):
     of the setting panel.
     """
 
-    def __init__(self, main_frame):
-        global MAIN_FRAME
-        MAIN_FRAME = main_frame
+    def __init__(self, main_frame, microscope):
+        self._main_frame = main_frame
 
         self._stream_panel = StreamPanel()
         self._sem_panel = SemSettingsPanel(
-                                    MAIN_FRAME.fp_sem_settings,
+                                    main_frame.fp_sem_settings,
                                     "No SEM found")
         self._optical_panel = OpticalSettingsPanel(
-                                    MAIN_FRAME.fp_optical_settings,
+                                    main_frame.fp_optical_settings,
                                     "No optical microscope found")
 
+        # Query Odemis daemon (Should move this to separate thread)
+        for comp in microscope.detectors:
+            if comp.role == 'ccd':
+                self.add_ccd(comp)
+        
+        for comp in microscope.emitters:
+            if comp.role == 'e-beam':
+                self.add_ebeam(comp)
+                
     # Optical microscope settings
-
     def add_ccd(self, comp):
-
         self._optical_panel.add_label("Camera", comp.name)
+
         vigil_attrs = getVAs(comp)
+        for name, value in vigil_attrs.items():
+            if comp.role in SETTINGS and name in SETTINGS[comp.role]:
+                conf = SETTINGS[comp.role][name]
+            else:
+                conf = None
+            self._optical_panel.add_value(name, value, conf)
 
-        if SETTINGS.has_key(comp.role):
-            for name, value in vigil_attrs.iteritems():
-                self._optical_panel.add_value(name,
-                                              value,
-                                              SETTINGS[comp.role].get(name, None))
-        else:
-            log.warn("No CCD settings found! Generating default controls")
+    def add_ebeam(self, comp):
+#        self._sem_panel.add_label("SEM", comp.name)
 
-            for name, value in vigil_attrs.iteritems():
-                self._optical_panel.add_value(name, value)
-
+        vigil_attrs = getVAs(comp)
+        for name, value in vigil_attrs.items():
+            if comp.role in SETTINGS and name in SETTINGS[comp.role]:
+                conf = SETTINGS[comp.role][name]
+            else:
+                conf = None
+            self._sem_panel.add_value(name, value, conf)
 

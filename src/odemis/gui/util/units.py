@@ -16,6 +16,7 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
+import collections
 import math
 
 def round_significant(x, n):
@@ -49,14 +50,27 @@ def to_string_si_prefix(x):
     x (float): number
     return (string)
     """
-    prefixes = {9: "G", 6: "M", 3: "k", 0: "", -3: "m", -6:"µ", -9:"n", -12:"p"}
+    prefixes = {9: u"G", 6: u"M", 3: u"k", 0: u"", -3: u"m", -6: u"µ", -9: u"n", -12: u"p"}
     if x == 0:
-        return "0 "
+        return u"0 "
     most_significant = int(math.floor(math.log10(abs(x))))
     prefix_order = (most_significant / 3) * 3 # rounding
     prefix_order = max(-12, min(prefix_order, 9)) # clamping
-    rounded = "{:g}".format(x / (10.0 ** prefix_order))
+    rounded = "%g" % (x / (10.0 ** prefix_order))
     prefix = prefixes[prefix_order]
-    return "{0} {1}".format(rounded, prefix)
+    return "%s %s" % (rounded, prefix)
 
+def readable_str(value, unit=None):
+    """
+    Convert a value with a unit into a displayable string for the user
+    value (any type): can be a number or a collection of number
+    return (string)
+    """
+    unit = unit or u""
+    if isinstance(value, collections.Iterable):
+        val_str = u"%s%s" % (u" x ".join([to_string_si_prefix(v) for v in value]), unit)
+    else:
+        val_str = u"%s%s" % (to_string_si_prefix(value), unit)
+    
+    return val_str
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:
