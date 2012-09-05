@@ -32,6 +32,11 @@ def find_closest(val, l):
     """ 
     return min(l, key=lambda x:abs(x - val))
 
+def index_closest(val, l):
+    """
+    finds in a list the index of the closest existing value from a given value
+    """ 
+    return min(enumerate(l), key=lambda x:abs(x[1] - val))[0]
 
 class AndorV2Error(Exception):
     def __init__(self, errno, strerror):
@@ -705,7 +710,7 @@ class AndorCam2(model.DigitalCamera):
         assert((0 <= gain))
         
         gains = self.GetPreAmpGains()
-        self.atcore.SetPreAmpGain(gains.index(gain))
+        self.atcore.SetPreAmpGain(index_closest(gains, gain))
     
     def GetPreAmpGains(self):
         """
