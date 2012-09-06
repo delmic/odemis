@@ -100,9 +100,6 @@ class OpticalBackendConnected(SECOMModel):
         if not self.opt_focus:
             log.info("no focus actuator found in the microscope")
 
-        # DEBUG XXX
-        self.opt_focus.moveRel({"z": 0})
-
         try:
             self.prev_pos = (self.stage.position.value["x"],
                              self.stage.position.value["y"])

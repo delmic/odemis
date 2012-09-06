@@ -198,7 +198,7 @@ class DraggableCanvas(wx.Panel):
             # the further from the original point, the more it moves for one pixel
             # => use 3 points: starting point, previous point, current point
             # if dis < 32 px => min : dis (small linear zone)
-            # else: 1/32 * sign* dis**2 => (square zone) 
+            # else: dis + 1/32 * sign* (dis-32)**2 => (square zone) 
             # send diff between value and previous value sent => it should always be at the same position for the cursor at the same place
             linear_zone = 32.0
             pos = event.GetPositionTuple()
@@ -207,10 +207,12 @@ class DraggableCanvas(wx.Panel):
                 if abs(shift) <= linear_zone:
                     value = shift
                 else:
-                    value = abs(shift) * shift / linear_zone # abs is to keep sign
+                    ssquare = cmp(shift, 0) * (shift - linear_zone)**2
+                    value = shift + ssquare / linear_zone
                 change = value - self._rdrag_prev_value[i]
-                self.onExtraAxisMove(i, change)
-                self._rdrag_prev_value[i] = value
+                if change:
+                    self.onExtraAxisMove(i, change)
+                    self._rdrag_prev_value[i] = value
             
     def OnDblClick(self, event):
         pos = event.GetPositionTuple()
