@@ -39,7 +39,10 @@ EBeam: {
 Clara: {
     class: andorcam2.AndorCam2,
     role: ccd,
-    init: {device: 0} # the only Andor camera connected so always 0
+    init: {device: 0}, # the only Andor camera connected so always 0
+    properties: {
+        exposureTime: 0.3, # s
+    }
 }
 
 # PI RedStone jumpers (.=off):
@@ -55,6 +58,7 @@ Clara: {
         port: /dev/ttyS0, # serial port on the board
         # port: /dev/ttyPIRS, # USB serial port
         axes: {x: [0, 1], y: [0, 0]}, # axis -> controller, channel
+        inverted: ["y"],
     }, 
     properties: {
         speed: {'x': 0.001, 'y': 0.001} #m/s
@@ -86,7 +90,7 @@ Clara: {
         axes_map: {"z": "z"}
     },
     properties: {
-        speed: {'z': 0.001} #m/s
+        speed: {'z': 0.01} #m/s
     }
 }
 
