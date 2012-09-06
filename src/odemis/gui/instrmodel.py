@@ -87,6 +87,9 @@ class OpticalBackendConnected(SECOMModel):
         for a in microscope.actuators:
             if a.role == "stage":
                 self.stage = a
+                # TODO: subscribe to the real position, self.stage.position, and recenter the view of all viewports
+                # on each of these moves
+                self.stage.position.subscribe(self._onPhysicalStagePos)
                 break
         if not self.stage:
             raise Exception("no stage found in the microscope")
@@ -104,11 +107,12 @@ class OpticalBackendConnected(SECOMModel):
             self.prev_pos = (self.stage.position.value["x"],
                              self.stage.position.value["y"])
         except (KeyError, AttributeError):
-            self.prev_pos = (0, 0)
-        # override
-        self.stage_pos = VigilantAttribute(self.prev_pos) # (m,m) => (X,Y)
-        self.stage_pos.subscribe(self.avOnStagePos)
-
+            self.prev_pos = (0, 0) # TODO moves this control to stage setup above
+        # TODO: instead do:
+        # self._onPhysicalStagePos(self.stage.position.value)
+        # just setting the raw value should be fine
+        self.stage_pos.value = self.prev_pos
+        
         # direct linking
         self.optical_det_exposure_time = self.camera.exposureTime
         self.optical_depth = self.camera.shape[2]
@@ -161,6 +165,14 @@ class OpticalBackendConnected(SECOMModel):
 #        h = hpy() # memory profiler
 #        print h.heap()
         self.optical_det_image.value = InstrumentalImage(im, mpp, pos)
+
+    def _onPhysicalStagePos(self, pos):
+        # TODO make sure we cannot go into an infinite loop with avOnStagePos
+        # * avOnStagePos should be a setter
+        # * we should update the raw value of stage_pos + notify
+        #self.stage_pos.value = (pos["x"], pos["y"])
+        pass
+
 
     def avOnStagePos(self, val):
         move = {}
