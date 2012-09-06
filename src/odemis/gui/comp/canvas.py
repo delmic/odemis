@@ -120,13 +120,13 @@ class DraggableCanvas(wx.Panel):
             change = 2 # softer
 
         if key == wx.WXK_LEFT:
-            self.ShiftView((-change, 0))
-        elif key == wx.WXK_RIGHT:
             self.ShiftView((change, 0))
+        elif key == wx.WXK_RIGHT:
+            self.ShiftView((-change, 0))
         elif key == wx.WXK_DOWN:
-            self.ShiftView((0, change))
-        elif key == wx.WXK_UP:
             self.ShiftView((0, -change))
+        elif key == wx.WXK_UP:
+            self.ShiftView((0, change))
 
     def OnRightDown(self, event):
         if self.dragging:
