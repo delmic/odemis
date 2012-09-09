@@ -284,8 +284,9 @@ class OdemisGUIApp(wx.App):
                 self.secom_model.turnOff()
 
     def on_about(self, evt):
-        message = ("%s\n%s\n\nLicensed under the %s." %
+        message = ("%s\nVersion %s.\n\n%s.\nLicensed under the %s." %
                    (__version__.name,
+                    __version__.version,
                     __version__.copyright,
                     __version__.license))
         dlg = wx.MessageDialog(self.main_frame, message,
