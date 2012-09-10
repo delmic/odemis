@@ -43,6 +43,13 @@ Pyro4.config.THREADPOOL_MINTHREADS = 24
 BASE_DIRECTORY="/var/run/odemisd"
 BASE_GROUP="odemis" # user group that is allowed to access the backend 
 
+#TODO special attributes, which are just properties that are explicitely duplicated
+# on the proxy. Getting/setting them always acces the actual objet remotely.
+# declarator is like a property. Two possible implementations:
+# * special message types (get/set) instead of method call
+# * create special methods on the object, to handle these attributes (when the parent object is registered or shared)
+
+
 # The special read-only attribute which are duplicated on proxy objects 
 class roattribute(property):
     """
@@ -52,7 +59,7 @@ class roattribute(property):
     between the containers).
     """
     # the implementation is just a (python) property with only a different name
-    # TODO force to not have setter, but I have no idea how to, override setter?
+    # TODO force to not have setter, but I have no idea how to, override __init__?
     pass
 
 def get_roattributes(self):
