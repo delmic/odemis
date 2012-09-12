@@ -20,6 +20,15 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 
+import collections
+import math
+import re
+
+import wx
+
+import odemis.gui.comp.text as text
+import odemis.gui.util.units as utun
+
 from ..comp.foldpanelbar import FoldPanelItem
 from odemis.gui import util
 from odemis.gui.comp.radio import GraphicalRadioButtonControl
@@ -28,11 +37,8 @@ from odemis.gui.log import log
 from odemis.gui.util import call_after_wrapper
 from odemis.model import getVAs, NotApplicableError, VigilantAttributeBase, \
     OutOfBoundError
-import collections
-import math
-import odemis.gui.comp.text as text
-import re
-import wx
+
+
 
 
 
@@ -81,6 +87,14 @@ def choice_to_str(choice, unit):
     if not isinstance(choice, collections.Iterable):
         choice = [unicode(choice)]
     return u"%s %s" % (u" x ".join([unicode(c) for c in choice]), unit)
+
+def traverse(seq_val):
+    if isinstance(seq_val, collections.Iterable):
+        for value in seq_val:
+            for subvalue in traverse(value):
+                yield subvalue
+    else:
+        yield seq_val
 
 # Default settings for the different components.
 # (Just a ccd for now, 2012-8-27)
@@ -132,6 +146,10 @@ SETTINGS = {
             },
             "e-beam":
             {
+                "energy":
+                {
+                    "format": True
+                },
                 "dwellTime":
                 {
                     "control_type": CONTROL_SLIDER,
@@ -266,12 +284,14 @@ class SettingsPanel(object):
             # Return default control
             return CONTROL_TEXT
 
-    def _get_rng_and_choice(self, va, conf):
+    def _get_rng_choice_unit(self, va, conf):
         """ Retrieve the range and choices values from the vigilant attribute
         or override them with the values provided in the configuration.
         """
-        rng = conf.get("range", None)
 
+        format = conf.get("format", False)
+
+        rng = conf.get("range", None)
         try:
             if rng is None:
                 rng = va.range
@@ -291,7 +311,10 @@ class SettingsPanel(object):
         except (AttributeError, NotApplicableError):
             pass
 
-        return rng, choices
+        # Get unit from config, vattribute or use an empty one
+        unit =  conf.get('unit', va.unit or "")
+
+        return rng, choices, unit
 
     def add_label(self, label, value=None):
         """ Adds a label to the settings panel, accompanied by an immutable
@@ -325,10 +348,18 @@ class SettingsPanel(object):
         # If no conf provided, set it to an empty dictionary
         conf = conf or {}
 
-        # Get unit from config, vattribute or use an empty one
-        unit =  conf.get('unit', value.unit or "")
+
         # Get the range and choices
-        rng, choices = self._get_rng_and_choice(value, conf)
+        rng, choices, unit = self._get_rng_choice_unit(value, conf)
+
+        if choices:
+            if all([isinstance(c, (int, float)) for c in choices]):
+                choice_labels, prefix = utun.si_scale_list(choices)
+                choice_labels = [u"%g" % c for c in choice_labels]
+                unit = prefix + unit
+            else:
+                choice_labels = [unicode(c) for c in choices]
+
         # Get the defined type of control or assign a default one
         control_type = conf.get('control_type',
                                 self._determine_default_control(value))
@@ -445,7 +476,6 @@ class SettingsPanel(object):
             new_ctrl.SetBackgroundColour(self.panel.GetBackgroundColour())
 
             #value.subscribe(lambda v: new_ctrl.SetValue(v))
-
             #new_ctrl.SetValue("AAAAAA")
 
             # value.subscribe(lambda v: log.warn("lambda"))
@@ -463,8 +493,10 @@ class SettingsPanel(object):
             new_ctrl = GraphicalRadioButtonControl(self.panel,
                                                    -1,
                                                    size=(-1, 16),
-                                                   choices=sorted(choices),
-                                                   style=wx.NO_BORDER)
+                                                   choices=choices,
+                                                   style=wx.NO_BORDER,
+                                                   labels=choice_labels,
+                                                   units=unit)
             vac = VigilantAttributeConnector(value,
                                              new_ctrl,
                                              new_ctrl.SetValue,

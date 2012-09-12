@@ -37,6 +37,8 @@ class GraphicalRadioButtonControl(wx.Panel):
 
         self.choices = kwargs.pop("choices", [])
         self.buttons = []
+        self.labels = kwargs.pop("labels", [])
+        self.units = kwargs.pop("units", None)
 
 
 
@@ -46,13 +48,14 @@ class GraphicalRadioButtonControl(wx.Panel):
 
         sizer = wx.BoxSizer(wx.HORIZONTAL)
 
-        for choice in self.choices:
+        for choice, label in zip(self.choices, self.labels):
             btn = GraphicRadioButton(self,
                                      -1,
                                      getbtn_smlBitmap(),
                                      value=choice,
                                      size=(self.bnt_width, 16),
                                      style=wx.ALIGN_CENTER,
+                                     label=label,
                                      label_delta=1)
 
             btn.SetForegroundColour("#000000")
@@ -64,12 +67,17 @@ class GraphicalRadioButtonControl(wx.Panel):
             self.buttons.append(btn)
 
             sizer.Add(btn, flag=wx.RIGHT, border=5)
-            btn.Bind(wx.EVT_LEFT_DOWN, self.OnClick)
+            btn.Bind(wx.EVT_BUTTON, self.OnClick)
+
+        if self.units:
+            lbl = wx.StaticText(self, -1, self.units)
+            lbl.SetForegroundColour("#DDDDDD")
+            sizer.Add(lbl, flag=wx.RIGHT, border=5)
 
         self.SetSizer(sizer)
 
-    def _reset_buttons(self):
-        for button in self.buttons:
+    def _reset_buttons(self, btn=None):
+        for button in [b for b in self.buttons if b != btn]:
             button.SetToggle(False)
 
     def SetValue(self, value):
@@ -86,12 +94,8 @@ class GraphicalRadioButtonControl(wx.Panel):
                 return btn.value
 
     def OnClick(self, evt):
-
         btn = evt.GetEventObject()
-        if btn.GetToggle():
-            return
-
-        self._reset_buttons()
+        self._reset_buttons(btn)
         #if not btn.GetToggle():
         evt.Skip()
 

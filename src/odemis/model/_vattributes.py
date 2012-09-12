@@ -599,7 +599,7 @@ class Enumerated(object):
 
     def _check(self, value):
         if not value in self._choices:
-            raise OutOfBoundError("Value '%s' is not part of possible choices: %s." %
+            raise OutOfBoundError("Value %s is not part of possible choices: %s." %
                         (str(value), ", ".join(map(str, self._choices))))
 
     def _get_choices(self):
@@ -613,10 +613,10 @@ class Enumerated(object):
         try:
             new_choices = frozenset(new_choices_raw)
         except TypeError:
-            raise InvalidTypeError("Choices '%s' is not a set." % str(new_choices_raw))
+            raise InvalidTypeError("Choices %s is not a set." % str(new_choices_raw))
         if hasattr(self, "value"):
             if not self.value in new_choices:
-                raise OutOfBoundError("Current value '%s' is not part of possible choices: %s." %
+                raise OutOfBoundError("Current value %s is not part of possible choices: %s." %
                             (str(self.value), ", ".join(map(str, new_choices))))
         self._choices = new_choices
 

@@ -478,7 +478,8 @@ class GraphicRadioButton(ImageTextToggleButton):
 
     def __init__(self, *args, **kwargs):
         self.value = kwargs.pop('value')
-        kwargs['label'] = unicode(self.value)
+        if not kwargs.get('label', False):
+            kwargs['label'] = u"%g" % self.value
         ImageTextToggleButton.__init__(self, *args, **kwargs)
 
     def OnLeftDown(self, event):
