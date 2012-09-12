@@ -1094,10 +1094,10 @@ getbtn_semBitmap = btn_sem.GetBitmap
 
 #----------------------------------------------------------------------
 btn_sml_a = PyEmbeddedImage(
-    "iVBORw0KGgoAAAANSUhEUgAAAB4AAAAQCAYAAAABOs/SAAAABmJLR0QA/wD/AP+gvaeTAAAA"
-    "CXBIWXMAAAsTAAALEwEAmpwYAAAAB3RJTUUH3AkEDRkQpTWp/QAAAD5JREFUOMvt0UENADAM"
-    "AkCWzEp91b+GtszEMh4DAxdgASAE2ZkJCRwRGriqNPDMfAZ3txt7an98Bybpxk9yAMLHKW+i"
-    "LpjpAAAAAElFTkSuQmCC")
+    "iVBORw0KGgoAAAANSUhEUgAAADAAAAAQCAYAAABQrvyxAAAABmJLR0QA/wD/AP+gvaeTAAAA"
+    "CXBIWXMAAAsTAAALEwEAmpwYAAAAB3RJTUUH3AkMDgcZz1q4MAAAAEVJREFUSMft0lEJADAM"
+    "Q8EMZqW+6l9D28zD9jECiYPjZQEghLczE9KAiNAGVJU2YGYM+ArobhdwAV/IAF/oHkDSBVzg"
+    "YQdJNylvJ5CxZgAAAABJRU5ErkJggg==")
 index.append('btn_sml_a')
 catalog['btn_sml_a'] = btn_sml_a
 getbtn_sml_aData = btn_sml_a.GetData
@@ -1106,10 +1106,10 @@ getbtn_sml_aBitmap = btn_sml_a.GetBitmap
 
 #----------------------------------------------------------------------
 btn_sml_h = PyEmbeddedImage(
-    "iVBORw0KGgoAAAANSUhEUgAAAB4AAAAQCAYAAAABOs/SAAAABmJLR0QA/wD/AP+gvaeTAAAA"
-    "CXBIWXMAAAsTAAALEwEAmpwYAAAAB3RJTUUH3AkECS0wInjSHgAAAD1JREFUOMtj3L9//3+G"
-    "AQAs79+/ZxgQi////z8wFv/792+EWfz3798RZvHIC+o/f/6MBvUwt3jAiswR52MAc08v5NVL"
-    "3cQAAAAASUVORK5CYII=")
+    "iVBORw0KGgoAAAANSUhEUgAAADAAAAAQCAYAAABQrvyxAAAABmJLR0QA/wD/AP+gvaeTAAAA"
+    "CXBIWXMAAAsTAAALEwEAmpwYAAAAB3RJTUUH3AkMDgcRwYEwAgAAAENJREFUSMft1lENAEAI"
+    "AlBvu/6VjGQBFWM4JjR4gw+eu8OI8yPCqAEAuAHdLcAqoKoE0IRON5CZmpAmdBpAfyXUwHIG"
+    "MVQv5PaKr+cAAAAASUVORK5CYII=")
 index.append('btn_sml_h')
 catalog['btn_sml_h'] = btn_sml_h
 getbtn_sml_hData = btn_sml_h.GetData
@@ -1118,10 +1118,10 @@ getbtn_sml_hBitmap = btn_sml_h.GetBitmap
 
 #----------------------------------------------------------------------
 btn_sml = PyEmbeddedImage(
-    "iVBORw0KGgoAAAANSUhEUgAAAB4AAAAQCAYAAAABOs/SAAAABmJLR0QA/wD/AP+gvaeTAAAA"
-    "CXBIWXMAAAsTAAALEwEAmpwYAAAAB3RJTUUH3AkECSo7+uudUQAAAD9JREFUOMtjPH78+H+G"
-    "AQAs9+7dYxgQi////z8wFv/9+3dgLP73798I8/GoxXSz+M+fP6NBPVqADDMfD1QlAQCThC+9"
-    "8ss4gAAAAABJRU5ErkJggg==")
+    "iVBORw0KGgoAAAANSUhEUgAAADAAAAAQCAYAAABQrvyxAAAABmJLR0QA/wD/AP+gvaeTAAAA"
+    "CXBIWXMAAAsTAAALEwEAmpwYAAAAB3RJTUUH3AkMDgcfJjkdBQAAAEJJREFUSMft1kENADAI"
+    "BEGa1L8tXKAEuHro75I9B5N9wMlMhfFuVYU1QJI3YGa8AbtLAQAAnAHdTQEAHDIK8Mx97wHM"
+    "Ki+9v9MffwAAAABJRU5ErkJggg==")
 index.append('btn_sml')
 catalog['btn_sml'] = btn_sml
 getbtn_smlData = btn_sml.GetData
