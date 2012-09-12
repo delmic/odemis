@@ -19,7 +19,7 @@ from logging.handlers import RotatingFileHandler
 
 import wx
 
-LOG_FILE = "gui.log"
+LOG_FILE = "odemis-gui.log"
 
 LOG_LINES = 500
 log = None
@@ -60,7 +60,7 @@ def create_gui_logger(log_field):
             log.removeHandler(handler)
 
     # Path to the log file
-    logfile_path = os.path.join(os.path.dirname(__file__), LOG_FILE)
+    logfile_path = os.path.join(os.path.expanduser("~"), LOG_FILE)
     # Maximum size of the log file before it's rotated
     max_logfile_size = 512**2
     # Maximum number of (rotated) log files
