@@ -257,7 +257,7 @@ class SuggestTextCtrl (wx.TextCtrl, listmix.ColumnSorterMixin):
                 wx.LC_SORT_ASCENDING | wx.LC_NO_HEADER
         self.dropdownlistbox.SetWindowStyleFlag(flags)
         if not isinstance(choices, list):
-            self._choices = list(choices)
+            self._choices = list(choibces)
         #prevent errors on "old" systems
         if sys.version.startswith("2.3"):
             self._choices.sort(lambda x, y: cmp(x.lower(), y.lower()))

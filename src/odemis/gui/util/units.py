@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-'''
+"""
 Created on 20 Feb 2012
 
 @author: Éric Piel
@@ -10,14 +10,31 @@ Copyright © 2012 Éric Piel, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 2 of the License, or (at your option) any later version.
+Odemis is free software: you can redistribute it and/or modify it under the
+terms of the GNU General Public License as published by the Free Software
+Foundation, either version 2 of the License, or (at your option) any later
+version.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
-'''
+You should have received a copy of the GNU General Public License along with
+Odemis. If not, see http://www.gnu.org/licenses/.
+
+"""
+
 import collections
 import math
+
+SI_PREFIXES = {9: u"G",
+               6: u"M",
+               3: u"k",
+               0: u"",
+               -3: u"m",
+               -6: u"µ",
+               -9: u"n",
+               -12: u"p"}
 
 def round_significant(x, n):
     """
@@ -40,8 +57,33 @@ def round_down_significant(x, n):
         ret = math.floor(x * 10 ** exp) / (10 ** exp)
     else:
         ret = math.ceil(x * 10 ** exp) / (10 ** exp)
-#    assert(abs(ret) <= abs(x))
+    # assert(abs(ret) <= abs(x))
     return ret
+
+def get_si_scale(x):
+    """ This function returns the best fitting SI scale for the given numerical
+    value x.
+    Returns a (float, string) tuple: (divisor , SI prefix)
+    """
+    most_significant = int(math.floor(math.log10(abs(x))))
+    prefix_order = (most_significant / 3) * 3 # rounding to multiple of 3
+    prefix_order = max(-12, min(prefix_order, 9)) # clamping
+    return (10.0 ** prefix_order), SI_PREFIXES[prefix_order]
+
+def to_si_scale(x):
+    """ Scale the given value x to the best fitting metric prefix.
+    Return a tuple: (scaled value of x, prefix)
+    """
+    divisor, prefix = get_si_scale(x)
+    return x / divisor, prefix
+
+def si_scale_list(values):
+    """ Scales a list of numerical values using the same metrix scale """
+    if values:
+        marker = max(values) or min(values)
+        divisor, prefix = get_si_scale(marker)
+        return [v / divisor for v in values], prefix
+    return None, ""
 
 def to_string_si_prefix(x):
     """
@@ -50,15 +92,7 @@ def to_string_si_prefix(x):
     x (float): number
     return (string)
     """
-    prefixes = {9: u"G", 6: u"M", 3: u"k", 0: u"", -3: u"m", -6: u"µ", -9: u"n", -12: u"p"}
-    if x == 0:
-        return u"0 "
-    most_significant = int(math.floor(math.log10(abs(x))))
-    prefix_order = (most_significant / 3) * 3 # rounding
-    prefix_order = max(-12, min(prefix_order, 9)) # clamping
-    rounded = "%g" % (x / (10.0 ** prefix_order))
-    prefix = prefixes[prefix_order]
-    return "%s %s" % (rounded, prefix)
+    return "%g %s" % to_si_scale(x)
 
 def readable_str(value, unit=None):
     """
@@ -71,6 +105,6 @@ def readable_str(value, unit=None):
         val_str = u"%s%s" % (u" x ".join([to_string_si_prefix(v) for v in value]), unit)
     else:
         val_str = u"%s%s" % (to_string_si_prefix(value), unit)
-    
+
     return val_str
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:

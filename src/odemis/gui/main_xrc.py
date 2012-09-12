@@ -97,6 +97,7 @@ def __init_resources():
         <object class="separator"/>
         <object class="wxMenuItem" name="menu_item_quit">
           <label>Quit</label>
+          <accel>Ctrl+Q</accel>
           <XRCED>
             <assign_var>1</assign_var>
           </XRCED>
