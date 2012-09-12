@@ -83,10 +83,10 @@ def resolution_from_range(va, conf):
     except NotApplicableError:
         return set()
 
-def choice_to_str(choice, unit):
+def choice_to_str(choice):
     if not isinstance(choice, collections.Iterable):
         choice = [unicode(choice)]
-    return u"%s %s" % (u" x ".join([unicode(c) for c in choice]), unit)
+    return u" x ".join([unicode(c) for c in choice])
 
 def traverse(seq_val):
     if isinstance(seq_val, collections.Iterable):
@@ -147,6 +147,10 @@ SETTINGS = {
             "e-beam":
             {
                 "energy":
+                {
+                    "format": True
+                },
+                "spotSize":
                 {
                     "format": True
                 },
@@ -289,8 +293,6 @@ class SettingsPanel(object):
         or override them with the values provided in the configuration.
         """
 
-        format = conf.get("format", False)
-
         rng = conf.get("range", None)
         try:
             if rng is None:
@@ -352,13 +354,15 @@ class SettingsPanel(object):
         # Get the range and choices
         rng, choices, unit = self._get_rng_choice_unit(value, conf)
 
+        format = conf.get("format", False)
+
         if choices:
-            if all([isinstance(c, (int, float)) for c in choices]):
+            if format and all([isinstance(c, (int, float)) for c in choices]):
                 choice_labels, prefix = utun.si_scale_list(choices)
                 choice_labels = [u"%g" % c for c in choice_labels]
                 unit = prefix + unit
             else:
-                choice_labels = [unicode(c) for c in choices]
+                choice_labels = [choice_to_str(c) for c in choices]
 
         # Get the defined type of control or assign a default one
         control_type = conf.get('control_type',
@@ -511,8 +515,8 @@ class SettingsPanel(object):
                                           wx.CB_READONLY)
 
 
-            def _getvalue_wrapper(self, *args, **kwargs):
-                def wrapper(*args, **kwargs):
+            def _getvalue_wrapper(self):
+                def wrapper():
                     if self.GetSelection() != wx.NOT_FOUND:
                         data = self.GetClientData(self.GetSelection())
                         return data
@@ -521,19 +525,36 @@ class SettingsPanel(object):
 
             new_ctrl.GetValue = _getvalue_wrapper(new_ctrl)
 
+            def _setvalue_wrapper(self):
+                def wrapper(value):
+                    for i in range(self.Count):
+                        if self.GetClientData(i) == value:
+                            self.SetSelection(i)
+                            break
+                        print "????????????????", self.GetClientData(i), value
+                return wrapper
+
+            new_ctrl.SetValue = _setvalue_wrapper(new_ctrl)
+
             #str_choices = [choice_to_str(choice, unit) for choice in choices]
             #new_ctrl.AutoComplete(str_choices)
 
-            for choice in choices:
-                new_ctrl.Append(choice_to_str(choice, unit), choice)
+            for choice, label in zip(choices, choice_labels):
+                new_ctrl.Append(u"%s %s" % (label, unit), choice)
 
             new_ctrl.SetForegroundColour(FOREGROUND_COLOUR_EDIT)
             new_ctrl.SetBackgroundColour(self.panel.GetBackgroundColour())
 
+            def _get_subfunc(unit):
+                def subfunc(v):
+                    log.warn(v)
+                    new_ctrl.SetValue(u"%s %s" % (choice_to_str(v), unit))
+                return subfunc
+
             vac = VigilantAttributeConnector(
                     value,
                     new_ctrl,
-                    lambda v: new_ctrl.SetValue(choice_to_str(v, unit)),
+                    new_ctrl.SetValue,
                     wx.EVT_COMBOBOX, wx.EVT_TEXT_ENTER)
 
 
