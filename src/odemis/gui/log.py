@@ -91,11 +91,6 @@ class TextFieldHandler(logging.Handler):
     def emit(self, record):
         """ Write a record, in color, to a text field. """
         if self.textfield is not None:
-            if self.textfield.GetNumberOfLines() > LOG_LINES:
-                # Removes the characters from posit`ion 0 up to and including the first line break
-                self.textfield.Remove(0, self.textfield.GetValue().find('\n') + 1)
-                #self.textfield.Remove(self.textfield.GetValue().rfind('\n'), len(self.textfield.GetValue()))
-
             color = "#777777"
 
             if record.levelno > logging.WARNING:
@@ -113,8 +108,8 @@ class TextFieldHandler(logging.Handler):
 
     def write_to_field(self, record, color):
 
-        if self.textfield.GetNumberOfLines() > LOG_LINES:
-            # Removes the characters from posit`ion 0 up to and including the first line break
+        while self.textfield.GetNumberOfLines() > LOG_LINES:
+            # Removes the characters from position 0 up to and including the first line break
             self.textfield.Remove(0, self.textfield.GetValue().find('\n') + 1)
             #self.textfield.Remove(self.textfield.GetValue().rfind('\n'), len(self.textfield.GetValue()))
 
