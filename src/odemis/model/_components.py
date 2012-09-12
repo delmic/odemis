@@ -17,6 +17,7 @@ You should have received a copy of the GNU General Public License along with Ode
 from . import _core, _dataflow, _vattributes
 from ._core import roattribute
 from Pyro4.core import isasync
+from abc import ABCMeta, abstractmethod
 from odemis import __version__
 import Pyro4
 import collections
@@ -90,7 +91,7 @@ class ArgumentError(Exception):
 
 class ComponentBase(object):
     """Abstract class for a component"""
-    pass
+    __metaclass__ = ABCMeta
 
 class Component(ComponentBase):
     '''
@@ -181,7 +182,6 @@ class ComponentProxy(ComponentBase, Pyro4.Proxy):
         Note: should not be called directly only created via pickling
         """
         Pyro4.Proxy.__init__(self, uri)
-        ComponentBase.__init__(self)
         self._parent = None
 
     # same as in Component, but set via __setstate__
@@ -239,6 +239,7 @@ class HwComponent(Component):
     A generic class which represents a physical component of the microscope
     This is an abstract class that should be inherited.
     """
+    __metaclass__ = ABCMeta
 
     def __init__(self, name, role, *args, **kwargs):
         Component.__init__(self, name, *args, **kwargs)
@@ -362,6 +363,8 @@ class Detector(HwComponent):
     A component which represents a detector.
     This is an abstract class that should be inherited.
     """
+    __metaclass__ = ABCMeta
+
     def __init__(self, name, role, children=None, **kwargs):
         HwComponent.__init__(self, name, role, **kwargs)
         if children:
@@ -382,6 +385,8 @@ class DigitalCamera(Detector):
     A component which represent a digital camera (i.e., CCD or CMOS)
     It's basically a detector with a few more compulsory VAs
     """
+    __metaclass__ = ABCMeta
+
     def __init__(self, name, role, children=None, **kwargs):
         Detector.__init__(self, name, role, children, **kwargs)
 
@@ -396,6 +401,8 @@ class Actuator(HwComponent):
     A component which represents an actuator (motorised part).
     This is an abstract class that should be inherited.
     """
+    __metaclass__ = ABCMeta
+
     def __init__(self, name, role, axes=None, inverted=None, ranges=None, children=None, **kwargs):
         """
         axes (set of string): set of the names of the axes
@@ -420,6 +427,8 @@ class Actuator(HwComponent):
         if ranges is None:
             ranges = {}
         self._ranges = dict(ranges)
+        
+        # it should also have a .position VA
 
     @roattribute
     def axes(self):
@@ -434,7 +443,7 @@ class Actuator(HwComponent):
         """
         return self._ranges
 
-    # to be overridden
+    @abstractmethod
     @isasync
     def moveRel(self, shift):
         """
@@ -443,7 +452,7 @@ class Actuator(HwComponent):
         shift dict(string-> float): name of the axis and shift in m
         returns (Future): object to control the move request
         """
-        raise NotImplementedError()
+        pass
 
     # TODO this doesn't work over the network, because the proxy will always
     # say that the method exists.
@@ -477,6 +486,8 @@ class Emitter(HwComponent):
     A component which represents an emitter.
     This is an abstract class that should be inherited.
     """
+    __metaclass__ = ABCMeta
+
     def __init__(self, name, role, children=None, **kwargs):
         HwComponent.__init__(self, name, role, **kwargs)
         if children:
