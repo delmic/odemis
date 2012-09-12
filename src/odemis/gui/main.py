@@ -14,25 +14,24 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 
+from odemis import __version__, model
+from odemis.gui import main_xrc
+from odemis.gui.controler.acquisition import AcquisitionController
+from odemis.gui.controler.settingspanel import SettingsSideBar
+from odemis.gui.instrmodel import OpticalBackendConnected, InstrumentalImage
+from odemis.gui.log import log, create_gui_logger
+from odemis.gui.xmlh import odemis_get_resources
+import Pyro4.errors
 import logging
+import os.path
 import sys
 import threading
 import traceback
-import os.path
-
 import wx
 
-import Pyro4.errors
 
-from odemis import __version__
-from odemis import model
-from odemis.gui import main_xrc
 
-from odemis.gui.xmlh import odemis_get_resources
-from odemis.gui.log import log, create_gui_logger
-from odemis.gui.instrmodel import OpticalBackendConnected
-from odemis.gui.controler.settingspanel import SettingsSideBar
-from odemis.gui.controler.acquisition import AcquisitionController
+
 
 
 class OdemisGUIApp(wx.App):
@@ -169,11 +168,11 @@ class OdemisGUIApp(wx.App):
 
             wx.EVT_MENU(self.main_frame,
                         self.main_frame.menu_item_load1.GetId(),
-                        self.on_about)
+                        self.on_load_example1)
 
             wx.EVT_MENU(self.main_frame,
                         self.main_frame.menu_item_load2.GetId(),
-                        self.on_about)
+                        self.on_load_example2)
 
             # The escape accelerator has to be added manually, because for some
             # reason, the 'ESC' key will not register using XRCED.
@@ -268,6 +267,38 @@ class OdemisGUIApp(wx.App):
             scope_panel.SetFocus(False)
 
 
+    def on_load_example1(self, e):
+        """ Open the two files for example """
+        try:
+            pos = self.secom_model.stage_pos.value
+            name1 = os.path.join(os.path.dirname(__file__), "1-optical-rot7.png")
+            im1 = InstrumentalImage(wx.Image(name1), 7.14286e-7, pos)
+
+            pos = (pos[0] + 2e-6, pos[1] - 1e-5)
+            name2 = os.path.join(os.path.dirname(__file__), "1-sem-bse.png")
+            im2 = InstrumentalImage(wx.Image(name2), 4.54545e-7, pos)
+            
+            self.secom_model.sem_det_image.value = im2
+            self.secom_model.optical_det_image.value = im1
+        except e:
+            log.exception("Failed to load example")
+            
+    def on_load_example2(self, e):
+        """ Open the two files for example """
+        try:
+            pos = self.secom_model.stage_pos.value
+            name2 = os.path.join(os.path.dirname(__file__), "3-sem.png")
+            im2 = InstrumentalImage(wx.Image(name2), 2.5e-07, pos)
+
+            pos = (pos[0] + 5.5e-06, pos[1] + 1e-6)
+            name1 = os.path.join(os.path.dirname(__file__), "3-optical.png")
+            im1 = InstrumentalImage(wx.Image(name1), 1.34e-07, pos)
+            
+            self.secom_model.sem_det_image.value = im2
+            self.secom_model.optical_det_image.value = im1
+        except e:
+            log.exception("Failed to load example")
+            
     def goto_debug_mode(self):
         """ This method sets the application into debug mode, setting the
         log level and opening the log panel. """

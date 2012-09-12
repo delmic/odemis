@@ -71,7 +71,8 @@ class EBeam(model.Emitter):
         self.dwellTime = model.FloatContinuous(1.0, [1e-9, 10], unit="s")
         self.energy = model.FloatEnumerated(0, [0, 10e3, 20e3, 30e3], unit="eV",
                                            setter=self.setEnergy)
-        self.spotSize = model.FloatEnumerated(1, [1e-9, 1.5e-9, 2e-9, 2.5e-9, 3e-9], unit=u"m²", # ~1nm
+        # FIXME: this actually should be 1e-18 m² to get 1nm², but as the GUI doesn't handle dimension in units, for now we cheat
+        self.spotSize = model.FloatEnumerated(1e-9, [1e-9, 1.5e-9, 2e-9, 2.5e-9, 3e-9], unit=u"m²", # ~1nm
                                            setter=self.setSpotSize)
     
     def getMetadata(self):

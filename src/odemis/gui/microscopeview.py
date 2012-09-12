@@ -32,7 +32,7 @@ class MicroscopeView(object):
         """
         self.name = name #
         self.legend_controls = [] # list of wx.Control to display in the legend
-        self.outimage = None # ActiveValue of instrumental image
+        self.outimage = None # VA of instrumental image
         self.inimage = InstrumentalImage(None, None, None) # instrumental image
         self.sizer = None
 
@@ -95,7 +95,7 @@ class MicroscopeImageView(MicroscopeView):
 
         iim.subscribe(self.avImage)
 
-        #viewmodel.mpp.subscribe(self.avMPP, True)
+        viewmodel.mpp.subscribe(self.avMPP)
 
     @call_after
     def avImage(self, value):
@@ -175,17 +175,18 @@ class MicroscopeSEView(MicroscopeImageView):
 
         self.datamodel = datamodel
 
-        self.LegendDwell = wx.StaticText(parent)
-        self.LegendSpot = wx.StaticText(parent)
-        self.LegendHV = wx.StaticText(parent)
-
-        self.legend_controls += [self.LegendDwell,
-                                 self.LegendSpot,
-                                 self.LegendHV]
-
-        datamodel.sem_emt_dwell_time.subscribe(self.avDwellTime, True)
-        datamodel.sem_emt_spot.subscribe(self.avSpot, True)
-        datamodel.sem_emt_hv.subscribe(self.avHV, True)
+        self.LegendMag.Hide() # for the demo, one magnification is enough
+#        self.LegendDwell = wx.StaticText(parent)
+#        self.LegendSpot = wx.StaticText(parent)
+#        self.LegendHV = wx.StaticText(parent)
+#
+#        self.legend_controls += [self.LegendDwell,
+#                                 self.LegendSpot,
+#                                 self.LegendHV]
+#
+#        datamodel.sem_emt_dwell_time.subscribe(self.avDwellTime, True)
+#        datamodel.sem_emt_spot.subscribe(self.avSpot, True)
+#        datamodel.sem_emt_hv.subscribe(self.avHV, True)
 
     # TODO need to use the right dimensions for the units
     @call_after

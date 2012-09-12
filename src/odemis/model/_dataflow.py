@@ -56,7 +56,7 @@ MD_OPT_MAG = "Optical magnification" # float (ratio), magnification factor
 MD_FILTER_NAME = "Filter name" # str, product name of the light filter
 MD_DWELL_TIME = "Pixel dwell time" # s (float), time the electron beam spends per pixel
 MD_EBEAM_ENERGY = "Electron beam energy" # eV (float), energy of the electron beam TODO: in SI, ie, Joules? 
-MD_EBEAM_SPOT_DIAM = "Electron beam spot diameter" # m (float), approximate diameter of the electron beam spot  
+MD_EBEAM_SPOT_DIAM = "Electron beam spot diameter" # m (float), approximate diameter of the electron beam spot (typically function of the current)  
 
 class DataArray(numpy.ndarray):
     """

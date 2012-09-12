@@ -16,8 +16,8 @@ You should have received a copy of the GNU General Public License along with Ode
 '''
 
 from ctypes import *
-from odemis import model
-from odemis import __version__
+from odemis import __version__, model
+import gc
 import logging
 import numpy
 import os
@@ -1252,6 +1252,10 @@ class AndorCam2(model.DigitalCamera):
                 
             array = self._buffer_as_array(cbuffer, size, metadata)
             callback(array)
+         
+            # force the GC to non-used buffers, for some reason, without this
+            # the GC runs only after we've managed to fill up the memory
+            gc.collect()
      
         # ending cleanly
         try:

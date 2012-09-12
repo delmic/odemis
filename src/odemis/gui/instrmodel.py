@@ -41,8 +41,8 @@ class SECOMModel(object):
         self.stage_pos = VigilantAttribute((0, 0), setter=self.avOnStagePos) # m,m
 
         # FIXME: maybe could go into (sub)classes like OpticalEmitter, SEDetector...
-        self.optical_emt_wavelength = VigilantAttribute(390) # nm 
-        self.optical_det_wavelength = VigilantAttribute(750) # nm
+        self.optical_emt_wavelength = VigilantAttribute(488, unit="nm") 
+        self.optical_det_wavelength = VigilantAttribute(507, unit="nm")
         self.optical_det_exposure_time = VigilantAttribute(1.0) # s
         self.optical_det_image = VigilantAttribute(InstrumentalImage(None, None, None))
         self.optical_det_raw = None # the last raw data received
@@ -52,7 +52,7 @@ class SECOMModel(object):
 
         self.sem_emt_dwell_time = VigilantAttribute(0.00001) #s
         self.sem_emt_spot = VigilantAttribute(4) # no unit (could be m²)
-        self.sem_emt_hv = VigilantAttribute(30000) # V
+        self.sem_emt_hv = VigilantAttribute(30000) # eV
         self.sem_det_image = VigilantAttribute(InstrumentalImage(None, None, None))
 
         self.opt_focus = None # this is directly an Actuator
@@ -117,17 +117,10 @@ class OpticalBackendConnected(SECOMModel):
         self.optical_det_exposure_time = self.camera.exposureTime
         self.optical_depth = self.camera.shape[2]
 
-
-        # No SEM
-        #self.sem_det_image = VigilantAttribute(InstrumentalImage(None, None, None))
-
-        # FIXME: on ON/OFF from GUI
-        #self.turnOn()
-
     def turnOn(self):
         # TODO turn on the light
         self.camera.data.subscribe(self.onNewCameraImage)
-
+        
     def turnOff(self):
         # TODO turn of the light
         # TODO forbid move in this mode (or just forbid move in the canvas if no stream?)
