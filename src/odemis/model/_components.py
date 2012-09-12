@@ -17,6 +17,7 @@ You should have received a copy of the GNU General Public License along with Ode
 from . import _core, _dataflow, _vattributes
 from ._core import roattribute
 from Pyro4.core import isasync
+from abc import ABCMeta, abstractmethod
 from odemis import __version__
 import Pyro4
 import collections
