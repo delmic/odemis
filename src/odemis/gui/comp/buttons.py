@@ -26,15 +26,19 @@ from wx.lib.buttons import GenBitmapButton, GenBitmapToggleButton, \
     GenBitmapTextToggleButton, GenBitmapTextButton
 
 import odemis.gui.img.data as img
+from odemis.gui.log import log
 
 def resize_bmp(btn_size, bmp):
-    """ Size the given image so it will match the size of the button """
+    """ Resize the given image so it will match the size of the button """
 
     if btn_size:
         btn_width, _ = btn_size
         img_width, img_height = bmp.GetSize()
 
         if btn_width > 0 and img_width != btn_width:
+            log.debug("Resizing button bmp from %s to %s",
+                      bmp.GetSize(),
+                      btn_size)
             new_img = bmp.ConvertToImage()
             return new_img.Rescale(btn_width, img_height).ConvertToBitmap()
 
@@ -63,9 +67,27 @@ class ImageButton(GenBitmapButton):
         self.labelDelta = kwargs.pop('label_delta', 0)
 
         # Fit the bmp if needed
-        if len(args) >= 3:
-            args = list(args)
-            args[2] = resize_bmp(kwargs.get('size', None), args[2])
+        # Resizing should always be minimal, so distortion is minimum
+
+        # If the bmp arg is provided (which is the 3rd one: parent, id, bmp)
+
+        bmp = args[2] if len(args) >= 3 else kwargs.get('bitmap', None)
+        size = args[4] if len(args) >= 5 else kwargs.get('size', None)
+
+        if bmp:
+            if size:
+                args = list(args)
+                # Resize and replace original bmp
+                if len(args) >= 3:
+                    args[2] = resize_bmp(size, bmp)
+                else:
+                    kwargs['bitmap'] = resize_bmp(size, bmp)
+            else:
+                # Set the size of the button to match the bmp
+                if len(args) >= 5:
+                    args[4] = bmp.GetSize()
+                else:
+                    kwargs['size'] = bmp.GetSize()
 
         GenBitmapButton.__init__(self, *args, **kwargs)
 
