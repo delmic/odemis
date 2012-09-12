@@ -167,6 +167,14 @@ class OdemisGUIApp(wx.App):
                         self.main_frame.menu_item_halt.GetId(),
                         self.on_stop_axes)
 
+            wx.EVT_MENU(self.main_frame,
+                        self.main_frame.menu_item_load1.GetId(),
+                        self.on_about)
+
+            wx.EVT_MENU(self.main_frame,
+                        self.main_frame.menu_item_load2.GetId(),
+                        self.on_about)
+
             # The escape accelerator has to be added manually, because for some
             # reason, the 'ESC' key will not register using XRCED.
             accel_tbl = wx.AcceleratorTable([

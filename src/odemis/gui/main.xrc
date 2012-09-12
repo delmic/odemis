@@ -19,6 +19,21 @@
           </XRCED>
         </object>
         <object class="separator"/>
+        <object class="wxMenuItem" name="menu_item_load1">
+          <label>Load Example 1</label>
+          <accel>Ctrl+1</accel>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
+        <object class="wxMenuItem" name="menu_item_load2">
+          <label>Load Example 2</label>
+          <accel>Ctrl+2</accel>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
+        <object class="separator"/>
         <object class="wxMenuItem" name="menu_item_quit">
           <label>Quit</label>
           <accel>Ctrl+Q</accel>
