@@ -32,7 +32,7 @@ class MicroscopeView(object):
         """
         self.name = name #
         self.legend_controls = [] # list of wx.Control to display in the legend
-        self.outimage = None # ActiveValue of instrumental image
+        self.outimage = None # VA of instrumental image
         self.inimage = InstrumentalImage(None, None, None) # instrumental image
         self.sizer = None
 
@@ -95,7 +95,7 @@ class MicroscopeImageView(MicroscopeView):
 
         iim.subscribe(self.avImage)
 
-        #viewmodel.mpp.subscribe(self.avMPP, True)
+        viewmodel.mpp.subscribe(self.avMPP)
 
     @call_after
     def avImage(self, value):

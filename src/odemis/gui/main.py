@@ -168,11 +168,11 @@ class OdemisGUIApp(wx.App):
 
             wx.EVT_MENU(self.main_frame,
                         self.main_frame.menu_item_load1.GetId(),
-                        self.on_about)
+                        self.on_load_example1)
 
             wx.EVT_MENU(self.main_frame,
                         self.main_frame.menu_item_load2.GetId(),
-                        self.on_about)
+                        self.on_load_example2)
 
             # The escape accelerator has to be added manually, because for some
             # reason, the 'ESC' key will not register using XRCED.
@@ -270,13 +270,32 @@ class OdemisGUIApp(wx.App):
     def on_load_example1(self, e):
         """ Open the two files for example """
         try:
+            pos = self.secom_model.stage_pos.value
             name1 = os.path.join(os.path.dirname(__file__), "1-optical-rot7.png")
-            im1 = InstrumentalImage(wx.Image(name1), 7.14286e-7, (0.0,0.0))
-            self.secom_model.optical_det_image.value = im1
+            im1 = InstrumentalImage(wx.Image(name1), 7.14286e-7, pos)
 
+            pos = (pos[0] + 2e-6, pos[1] - 1e-5)
             name2 = os.path.join(os.path.dirname(__file__), "1-sem-bse.png")
-            im2 = InstrumentalImage(wx.Image(name2), 4.54545e-7, (2e-6, -1e-5))
+            im2 = InstrumentalImage(wx.Image(name2), 4.54545e-7, pos)
+            
             self.secom_model.sem_det_image.value = im2
+            self.secom_model.optical_det_image.value = im1
+        except e:
+            log.exception("Failed to load example")
+            
+    def on_load_example2(self, e):
+        """ Open the two files for example """
+        try:
+            pos = self.secom_model.stage_pos.value
+            name2 = os.path.join(os.path.dirname(__file__), "3-sem.png")
+            im2 = InstrumentalImage(wx.Image(name2), 2.5e-07, pos)
+
+            pos = (pos[0] + 5.5e-06, pos[1] + 1e-6)
+            name1 = os.path.join(os.path.dirname(__file__), "3-optical.png")
+            im1 = InstrumentalImage(wx.Image(name1), 1.34e-07, pos)
+            
+            self.secom_model.sem_det_image.value = im2
+            self.secom_model.optical_det_image.value = im1
         except e:
             log.exception("Failed to load example")
             

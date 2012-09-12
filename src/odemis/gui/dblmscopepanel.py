@@ -107,7 +107,8 @@ class DblMicroscopePanel(wx.Panel):
 
         self._set_subscriptions()
 
-        self.ShowBlendingSlider(self.canvas.ImageCount() > 0)
+        self.ShowBlendingSlider(True)
+#        self.ShowBlendingSlider(self.canvas.ImageCount() > 0)
 
         self.Bind(wx.EVT_SIZE, self.OnSize)
 

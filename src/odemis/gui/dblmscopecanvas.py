@@ -181,6 +181,8 @@ class DblMicroscopeCanvas(DraggableCanvas):
                 self.SetImage(i, iim.image, pos, scale)
                 #self.ReCenterBuffer(pos)
             else:
+                #TODO： that should be better, but we don't do it for now, to detect when to reset mpp
+                #self.SetImage(i, None) # removes the image
                 pass
 
     # Zoom/merge management
