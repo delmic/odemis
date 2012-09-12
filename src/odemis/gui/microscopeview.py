@@ -175,17 +175,18 @@ class MicroscopeSEView(MicroscopeImageView):
 
         self.datamodel = datamodel
 
-        self.LegendDwell = wx.StaticText(parent)
-        self.LegendSpot = wx.StaticText(parent)
-        self.LegendHV = wx.StaticText(parent)
-
-        self.legend_controls += [self.LegendDwell,
-                                 self.LegendSpot,
-                                 self.LegendHV]
-
-        datamodel.sem_emt_dwell_time.subscribe(self.avDwellTime, True)
-        datamodel.sem_emt_spot.subscribe(self.avSpot, True)
-        datamodel.sem_emt_hv.subscribe(self.avHV, True)
+        self.LegendMag.Hide() # for the demo, one magnification is enough
+#        self.LegendDwell = wx.StaticText(parent)
+#        self.LegendSpot = wx.StaticText(parent)
+#        self.LegendHV = wx.StaticText(parent)
+#
+#        self.legend_controls += [self.LegendDwell,
+#                                 self.LegendSpot,
+#                                 self.LegendHV]
+#
+#        datamodel.sem_emt_dwell_time.subscribe(self.avDwellTime, True)
+#        datamodel.sem_emt_spot.subscribe(self.avSpot, True)
+#        datamodel.sem_emt_hv.subscribe(self.avHV, True)
 
     # TODO need to use the right dimensions for the units
     @call_after

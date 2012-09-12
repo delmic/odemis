@@ -41,8 +41,8 @@ class DblMscopeViewModel(object):
         self.merge_ratio = VigilantMergeRatio(0.3) # no unit
 
         #TODO default to black? 
-        self.images = [VigilantAttribute(InstrumentalImage(gettest_patternImage(), mpp=self.mpp.value, center=(0.0, 0.0))),
-                       VigilantAttribute(InstrumentalImage(None, None, None))]
+        self.images = [VigilantAttribute(InstrumentalImage(None, None, None)),
+                       VigilantAttribute(InstrumentalImage(gettest_patternImage(), mpp=self.mpp.value, center=(0.0, 0.0)))]
         #self.images = [VigilantAttribute(InstrumentalImage(None, None, None)),
         #               VigilantAttribute(InstrumentalImage(None, None, None))]
 
