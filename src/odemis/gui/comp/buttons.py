@@ -178,9 +178,27 @@ class ImageTextButton(GenBitmapTextButton):
         self.background_parent = kwargs.pop('background_parent', None)
 
         # Fit the bmp if needed
-        args = list(args)
-        args[2] = resize_bmp(kwargs.get('size', None), args[2])
+        # Resizing should always be minimal, so distortion is minimum
 
+        # If the bmp arg is provided (which is the 3rd one: parent, id, bmp)
+
+        bmp = args[2] if len(args) >= 3 else kwargs.get('bitmap', None)
+        size = args[4] if len(args) >= 5 else kwargs.get('size', None)
+
+        if bmp:
+            if size:
+                args = list(args)
+                # Resize and replace original bmp
+                if len(args) >= 3:
+                    args[2] = resize_bmp(size, bmp)
+                else:
+                    kwargs['bitmap'] = resize_bmp(size, bmp)
+            else:
+                # Set the size of the button to match the bmp
+                if len(args) >= 5:
+                    args[4] = bmp.GetSize()
+                else:
+                    kwargs['size'] = bmp.GetSize()
 
         GenBitmapTextButton.__init__(self, *args, **kwargs)
 
@@ -291,8 +309,27 @@ class ImageToggleButton(GenBitmapToggleButton):  #pylint: disable=R0901
         self.background_parent = kwargs.pop('background_parent', None)
 
         # Fit the bmp if needed
-        args = list(args)
-        args[2] = resize_bmp(kwargs.get('size', None), args[2])
+        # Resizing should always be minimal, so distortion is minimum
+
+        # If the bmp arg is provided (which is the 3rd one: parent, id, bmp)
+
+        bmp = args[2] if len(args) >= 3 else kwargs.get('bitmap', None)
+        size = args[4] if len(args) >= 5 else kwargs.get('size', None)
+
+        if bmp:
+            if size:
+                args = list(args)
+                # Resize and replace original bmp
+                if len(args) >= 3:
+                    args[2] = resize_bmp(size, bmp)
+                else:
+                    kwargs['bitmap'] = resize_bmp(size, bmp)
+            else:
+                # Set the size of the button to match the bmp
+                if len(args) >= 5:
+                    args[4] = bmp.GetSize()
+                else:
+                    kwargs['size'] = bmp.GetSize()
 
         GenBitmapToggleButton.__init__(self, *args, **kwargs)
 
@@ -388,8 +425,27 @@ class ImageTextToggleButton(GenBitmapTextToggleButton):
         self.background_parent = kwargs.pop('background_parent', None)
 
         # Fit the bmp if needed
-        args = list(args)
-        args[2] = resize_bmp(kwargs.get('size', None), args[2])
+        # Resizing should always be minimal, so distortion is minimum
+
+        # If the bmp arg is provided (which is the 3rd one: parent, id, bmp)
+
+        bmp = args[2] if len(args) >= 3 else kwargs.get('bitmap', None)
+        size = args[4] if len(args) >= 5 else kwargs.get('size', None)
+
+        if bmp:
+            if size:
+                args = list(args)
+                # Resize and replace original bmp
+                if len(args) >= 3:
+                    args[2] = resize_bmp(size, bmp)
+                else:
+                    kwargs['bitmap'] = resize_bmp(size, bmp)
+            else:
+                # Set the size of the button to match the bmp
+                if len(args) >= 5:
+                    args[4] = bmp.GetSize()
+                else:
+                    kwargs['size'] = bmp.GetSize()
 
         GenBitmapTextToggleButton.__init__(self, *args, **kwargs)
 
@@ -567,10 +623,10 @@ class ColourButton(ImageButton):
     def get_colour(self):
         return self.colour
 
-class PopupImageButton(ImageButton):
+class PopupImageButton(ImageTextButton):
 
     def __init__(self, *args, **kwargs):
-        ImageButton.__init__(self, *args, **kwargs)
+        ImageTextButton.__init__(self, *args, **kwargs)
         self.choices = None
         self.Bind(wx.EVT_BUTTON, self.show_menu)
 

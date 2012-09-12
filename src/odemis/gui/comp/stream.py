@@ -779,7 +779,10 @@ class StreamPanel(wx.Panel):
         self.txt_no_stream = wx.StaticText(self, -1, msg)
         self._sz.Add(self.txt_no_stream, 0, wx.ALL | wx.ALIGN_CENTER, 10)
 
-        self.btn_add_stream = PopupImageButton(self, -1, bitmap=img.getstream_addBitmap())
+        self.btn_add_stream = PopupImageButton(self, -1,
+                                               bitmap=img.getstream_addBitmap(),
+                                               label="ADD STREAM",
+                                               style=wx.ALIGN_CENTER)
         self.btn_add_stream.SetBitmaps(img.getstream_add_hBitmap())
         self._sz.Add(self.btn_add_stream, flag=wx.ALL, border=5)
 
