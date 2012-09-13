@@ -304,11 +304,12 @@ class SettingsPanel(object):
 
         choices = conf.get("choices", None)
         try:
-            if hasattr(choices, '__call__'):
+            if callable(choices):
                 choices = choices(va, conf)
             elif choices is None:
                 choices = va.choices
             else: # merge = intersection
+                # TODO: if va.range but no va.choices, ensure that choices is within va.range
                 choices &= va.choices
         except (AttributeError, NotApplicableError):
             pass
