@@ -109,7 +109,7 @@ class CustomSlider(wx.PyPanel):
             self._val_to_percentage = _pow_val_to_perc
         else:
             self._percentage_to_val = lambda r0, r1, p: (r1 - r0) * p + r0
-            self._val_to_percentage = lambda r0, r1, v: (v - r0) / (r1 - r0)
+            self._val_to_percentage = lambda r0, r1, v: (float(v) - r0) / (r1 - r0)
 
 
         #Events

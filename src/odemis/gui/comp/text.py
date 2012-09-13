@@ -612,9 +612,9 @@ class NumberTextCtrl(wx.TextCtrl):
         key = evt.GetKeyCode()
         val = self.GetValue()
 
-        if key == wx.WXK_UP:
+        if key == wx.WXK_UP and self.step is not None:
             val = (val or 0) + self.step
-        elif key == wx.WXK_DOWN:
+        elif key == wx.WXK_DOWN and self.step is not None:
             val = (val or 0) - self.step
         else:
             evt.Skip()

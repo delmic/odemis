@@ -46,9 +46,9 @@ class SECOMModel(object):
         self.optical_det_exposure_time = VigilantAttribute(1.0) # s
         self.optical_det_image = VigilantAttribute(InstrumentalImage(None, None, None))
         self.optical_det_raw = None # the last raw data received
-        self.optical_auto_bc = True # whether to use auto brightness & contrast
-        self.optical_contrast = model.FloatContinuous(0, range=[-1, 1]) # ratio, contrast if no auto
-        self.optical_brightness = model.FloatContinuous(0, range=[-1, 1]) # ratio, balance if no auto
+        self.optical_auto_bc = VigilantAttribute(True) # whether to use auto brightness & contrast
+        self.optical_contrast = model.FloatContinuous(0, range=[-100, 100]) # ratio, contrast if no auto
+        self.optical_brightness = model.FloatContinuous(0, range=[-100, 100]) # ratio, balance if no auto
 
         self.sem_emt_dwell_time = VigilantAttribute(0.00001) #s
         self.sem_emt_spot = VigilantAttribute(4) # no unit (could be m²)
@@ -116,6 +116,11 @@ class OpticalBackendConnected(SECOMModel):
         # direct linking
         self.optical_det_exposure_time = self.camera.exposureTime
         self.optical_depth = self.camera.shape[2]
+        
+        # get notified when brightness/contrast is updated
+        self.optical_auto_bc.subscribe(self.onBrightnessContrast)
+        self.optical_contrast.subscribe(self.onBrightnessContrast)
+        self.optical_brightness.subscribe(self.onBrightnessContrast)
 
     def turnOn(self):
         # TODO turn on the light
@@ -130,13 +135,23 @@ class OpticalBackendConnected(SECOMModel):
     def __del__(self):
         self.turnOff()
 
+    def onBrightnessContrast(self, unused):
+        # called whenever brightness/contrast changes
+        # => needs to recompute the image (but not too often, so we do it in a timer)
+        
+        # is there any image to update?
+        if self.optical_det_raw is None:
+            return
+        # TODO: in timer
+        self.onNewCameraImage(None, self.optical_det_raw)
+        
     def onNewCameraImage(self, dataflow, data):
-        if self.optical_auto_bc:
+        if self.optical_auto_bc.value:
             brightness = None
             contrast = None
         else:
-            brightness = self.optical_brightness
-            contrast = self.optical_contrast
+            brightness = self.optical_brightness.value / 100.
+            contrast = self.optical_contrast.value / 100.
 
         self.optical_det_raw = data
         im = DataArray2wxImage(data, self.optical_depth, brightness, contrast)

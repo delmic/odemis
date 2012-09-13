@@ -141,6 +141,7 @@ class OdemisGUIApp(wx.App):
 
             from odemis.gui.comp.stream import FixedStreamPanelEntry
             fp = FixedStreamPanelEntry(self.main_frame.pnl_stream,
+                                       stream=self.secom_model, # TODO should pass a stream
                                        label="Bright field Stream")
             self.main_frame.pnl_stream.add_stream(fp)
 
