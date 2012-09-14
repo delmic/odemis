@@ -16,8 +16,8 @@ You should have received a copy of the GNU General Public License along with Ode
 '''
 
 from ctypes import *
-from odemis import model
-from odemis import __version__
+from odemis import __version__, model
+import gc
 import logging
 import numpy
 import os
@@ -25,6 +25,18 @@ import threading
 import time
 import weakref
 
+# Helper function
+def find_closest(val, l):
+    """
+    finds in a list the closest existing value from a given value
+    """ 
+    return min(l, key=lambda x:abs(x - val))
+
+def index_closest(val, l):
+    """
+    finds in a list the index of the closest existing value from a given value
+    """ 
+    return min(enumerate(l), key=lambda x:abs(x[1] - val))[0]
 
 class AndorV2Error(Exception):
     def __init__(self, errno, strerror):
@@ -365,9 +377,9 @@ class AndorCam2(model.DigitalCamera):
         self._metadata[model.MD_SENSOR_SIZE] = resolution
         
         # setup everything best (fixed)
-        self._prev_settings = (None, None) # image, exposure
-        self._setupBestQuality() # sets ._metadata[model.MD_BPP]
-        self._shape = resolution + (2**self._metadata[model.MD_BPP],)
+        self._prev_settings = [None, None, None, None] # image, exposure, readout, gain
+        self._setStaticSettings()
+        self._shape = resolution + (2**self._getMaxBPP(),)
         
         # put the detector pixelSize
         psize = self.GetPixelSize()
@@ -391,8 +403,6 @@ class AndorCam2(model.DigitalCamera):
                                         setter=self.setFanSpeed) # ratio to max speed
             self.setFanSpeed(1.0)
 
-        # needed for the AOI, we never change it after
-        self.atcore.SetReadMode(AndorV2DLL.RM_IMAGE)
         # binning is horizontal, vertical (used by resolutionFitter()), but odemis
         # only supports same value on both dimensions (for simplification)
         self._binning = (1,1) # 
@@ -405,11 +415,26 @@ class AndorCam2(model.DigitalCamera):
         self.binning = model.IntEnumerated(self._binning[0], self._getAvailableBinnings(),
                                            unit="px", setter=self.setBinning)
         
+        # default values try to get live microscopy imaging more likely to show something
         maxexp = c_float()
         self.atcore.GetMaximumExposure(byref(maxexp))
         range_exp = (1e-6, maxexp.value) # s
         self._exposure_time = 1.0 # s
-        self.exposureTime = model.FloatContinuous(self._exposure_time, range_exp, unit="s", setter=self.setExposureTime)
+        self.exposureTime = model.FloatContinuous(self._exposure_time, range_exp,
+                                                  unit="s", setter=self.setExposureTime)
+        
+        # For the Clara: 0 = conventional, 1 = Extended Near Infra-Red
+        self._output_amp = 0 # less noise
+        
+        ror_choices = sorted(self.GetReadoutRates())
+        self._readout_rate = max(ror_choices) # default to fast acquisition
+        self.readoutRate = model.FloatEnumerated(self._readout_rate, ror_choices,
+                                                 unit="Hz", setter=self.setReadoutRate)
+        
+        gain_choices = sorted(self.GetPreAmpGains())
+        self._gain = min(gain_choices) # default to high gain
+        self.gain = model.FloatEnumerated(self._gain, gain_choices, unit="",
+                                          setter=self.setGain)
         
         current_temp = self.GetTemperature()
         self.temperature = model.FloatVA(current_temp, unit="C", readonly=True)
@@ -424,6 +449,25 @@ class AndorCam2(model.DigitalCamera):
         
         self.data = AndorCam2DataFlow(self)
         logging.debug("Camera component ready to use.")
+    
+    def _setStaticSettings(self):
+        """
+        Set up all the values that we don't need to change after.
+        Should only be called at initialisation
+        """
+        # needed for the AOI
+        self.atcore.SetReadMode(AndorV2DLL.RM_IMAGE)
+        
+        # Doesn't seem to work for the clara (or single scan mode?)
+#        self.atcore.SetFilterMode(2) # 2 = on
+#        metadata['Filter'] = "Cosmic Ray filter"
+
+        # TODO: according to doc: if AC_FEATURES_SHUTTEREX you MUST use SetShutterEx()
+        # TODO: 20, 20 ms for open/closing times matter in auto? Should be 0, more?
+        # Clara : 20, 20 gives horrible results. Default for Andor Solis: 10, 0
+        # Apparently, if there is no shutter, it should be 0, 0
+        self.atcore.SetShutter(1, 0, 0, 0) # mode 0 = auto
+        self.atcore.SetTriggerMode(0) # 0 = internal
     
     def getMetadata(self):
         return self._metadata
@@ -462,10 +506,8 @@ class AndorCam2(model.DigitalCamera):
             self.temp_timer.cancel()
             self.temp_timer = None
         
-        # One Initialize() to let the driver detect there is nothing anymore
-        # it actually stops its internal threads
+        # This stops the driver's internal threads
         try:
-            # Hopefully it fails
             self.atcore.ShutDown()
         except AndorV2Error:
             logging.warning("Reinitialisation failed to shutdown the driver")
@@ -496,9 +538,8 @@ class AndorCam2(model.DigitalCamera):
         logging.info("Reinitialisation successful")
         
         # put back the settings
-        self._prev_settings = (None, None)
-        self._setupBestQuality()
-        self.atcore.SetReadMode(AndorV2DLL.RM_IMAGE)
+        self._prev_settings = [None, None, None, None]
+        self._setStaticSettings()
         self.setTargetTemperature(self.targetTemperature.value)
         self.setFanSpeed(self.fanSpeed.value)
     
@@ -559,6 +600,14 @@ class AndorCam2(model.DigitalCamera):
         self.atcore.GetTemperatureRange(byref(mint), byref(maxt))
         return mint.value, maxt.value
     
+    def GetStatus(self):
+        """
+        return int: status, as in AndorV2DLL.DRV_*
+        """
+        status = c_int()
+        self.atcore.GetStatus(byref(status))
+        return status.value
+    
     def GetMaximumBinning(self, readmode):
         """
         readmode (0<= int <= 4): cf SetReadMode
@@ -581,6 +630,14 @@ class AndorCam2(model.DigitalCamera):
         status = self.atcore.GetTemperature(byref(temp))
         return temp.value
         
+    def GetAcquisitionTimings(self):
+        """
+        returns (3-tuple float): exposure, accumulate, kinetic time in seconds
+        """
+        exposure, accumulate, kinetic = c_float(), c_float(), c_float() 
+        self.atcore.GetAcquisitionTimings(byref(exposure), byref(accumulate), byref(kinetic))
+        return exposure.value, accumulate.value, kinetic.value
+
     def GetVersionInfo(self):
         """
         return (2-tuple string, string): the driver and sdk info 
@@ -604,37 +661,70 @@ class AndorCam2(model.DigitalCamera):
             logging.debug("waiting for acquisition, maximum %f s", timeout)
             timeout_ms = c_uint(int(round(timeout * 1e3))) # ms
             self.atcore.WaitForAcquisitionTimeOut(timeout_ms)
+
+    def GetReadoutRates(self):
+        """
+        returns (set of float): all available readout rates, in Hz
+        """  
+        # Each channel has different horizontal shift speeds possible
+        # and different (preamp) gain
+        hsspeeds = set()
+        
+        nb_channels = c_int()
+        nb_hsspeeds = c_int()
+        hsspeed = c_float()
+        self.atcore.GetNumberADChannels(byref(nb_channels))
+        for channel in range(nb_channels.value):
+            self.atcore.GetNumberHSSpeeds(channel, self._output_amp, byref(nb_hsspeeds))
+            for i in range(nb_hsspeeds.value):
+                self.atcore.GetHSSpeed(channel, self._output_amp, i, byref(hsspeed))
+                # FIXME: Doc says iStar and Classic systems report speed in microsecond per pixel
+                hsspeeds.add(hsspeed.value * 10e6)
+        
+        return hsspeeds
+
+    def _getChannelHSSpeed(self, speed):
+        """
+        speed (0<float): a valid speed in Hz
+        returns (2-tuple int, int): the indexes of the channel and hsspeed
+        """
+        nb_channels = c_int()
+        nb_hsspeeds = c_int()
+        hsspeed = c_float()
+        self.atcore.GetNumberADChannels(byref(nb_channels))
+        for channel in range(nb_channels.value):
+            self.atcore.GetNumberHSSpeeds(channel, self._output_amp, byref(nb_hsspeeds))
+            for i in range(nb_hsspeeds.value):
+                self.atcore.GetHSSpeed(channel, self._output_amp, i, byref(hsspeed))
+                if speed == hsspeed.value * 10e6:
+                    return channel, i
+
+        raise KeyError("Couldn't find readout rate %f", speed)
     
-    # TODO provide a VA for the user to change this value
     def SetPreAmpGain(self, gain):
         """
         set the pre-amp-gain 
-        gain (float): wished gain (multiplication, no unit), if not available, 
-          the closest possible will be picked
+        gain (float): wished gain (multiplication, no unit), should be a correct value
         return (float): the actual gain set
         """
         assert((0 <= gain))
-        gains = self.GetPreAmpGainsAvailable()
-        closest = self.find_closest(gain, gains)
-        self.atcore.SetPreAmpGain(gains.index(gain))
-        return closest
+        
+        gains = self.GetPreAmpGains()
+        self.atcore.SetPreAmpGain(index_closest(gain, gains))
     
-    def GetPreAmpGainsAvailable(self):
+    def GetPreAmpGains(self):
         """
         return (list of float): gain (multiplication, no unit) ordered by index
         """
-        # depends on the current settings of the readout rates, so they should
-        # already be fixed.
         gains = []
-        nb_gains = c_int() 
+        nb_gains = c_int()
         self.atcore.GetNumberPreAmpGains(byref(nb_gains))
         for i in range(nb_gains.value):
             gain = c_float()
             self.atcore.GetPreAmpGain(i, byref(gain))
             gains.append(gain.value)
         return gains
-    
-    
+
     # High level methods
     def select(self):
         """
@@ -677,7 +767,7 @@ class AndorCam2(model.DigitalCamera):
         """
         caps = self.GetCapabilities()
         return bool(caps.GetFunctions & function)
-    
+
     def setTargetTemperature(self, temp):
         """
         Change the targeted temperature of the CCD.
@@ -847,7 +937,6 @@ class AndorCam2(model.DigitalCamera):
          twice smaller if the binning is 2 instead of 1. It must be a allowed
          resolution.
         """
-        # TODO how to pass information on what is allowed?
         full_res = self._shape[:2]
         resolution = full_res[0] / self._binning[0], full_res[1] / self._binning[1] 
         assert((1 <= size[0]) and (size[0] <= resolution[0]) and
@@ -921,85 +1010,49 @@ class AndorCam2(model.DigitalCamera):
         self._exposure_time = min(value, maxexp.value)
         return self._exposure_time
     
-    @staticmethod
-    def find_closest(val, l):
-        """
-        finds in a list the closest existing value from a given value
-        """ 
-        return min(l, key=lambda x:abs(x - val))
+    def setReadoutRate(self, value):
+        # Everything (within the choices) is fine, just need to update gain.
+        self._readout_rate = value
+        self.gain.value = self.setGain(self.gain.value)
+        return value
     
-    def _setupBestQuality(self):
-        """
-        Select parameters for the camera for the best quality
-        """
-        # For the Clara: 0 = conventional, 1 = Extended Near Infra-Red
-        oa = 1 # as much as we can
+    def setGain(self, value):
+        # not every gain is compatible with the readout rate (channel/hsspeed)
+        gains = self.gain.choices
+        for i in range(len(gains)):
+            c, hs = self._getChannelHSSpeed(self._readout_rate)
+            # FIXME: this doesn't work is driver is acquiring
+#            is_avail = c_int()
+#            self.atcore.IsPreAmpGainAvailable(c, self._output_amp, hs, i, byref(is_avail))
+#            if is_avail == 0:
+#                gains[i] = -100000 # should never be picked up
+                 
+        self._gain = find_closest(value, gains)
+        return self._gain
         
-        # Slower read out => less noise
-        
-        # Each channel has different horizontal shift speeds possible
-        # find the channel with the lowest speed
+    def _getMaxBPP(self):
+        """
+        return (0<int): the maximum number of bits per pixel for the camera
+        """ 
+        # bits per pixel depends on the AD channel
+        mbpp = 0
+        bpp = c_int()
         nb_channels = c_int()
         self.atcore.GetNumberADChannels(byref(nb_channels))
-        hsspeeds = set()
         for channel in range(nb_channels.value):
-            nb_hsspeeds = c_int()
-            self.atcore.GetNumberHSSpeeds(channel, oa, byref(nb_hsspeeds))
-            for i in range(nb_hsspeeds.value):
-                hsspeed = c_float()
-                self.atcore.GetHSSpeed(channel, oa, i, byref(hsspeed))
-                hsspeeds.add((channel, i, hsspeed.value))
+            self.atcore.GetBitDepth(channel, byref(bpp))
+            mbpp = max(mbpp, bpp.value)
 
-        channel, idx, hsspeed = min(hsspeeds, key=lambda x: x[2])
-        self.atcore.SetADChannel(channel)
-
-        try:
-            self.atcore.SetOutputAmplifier(oa)
-        except AndorV2Error:
-            pass # unsupported
-
-        self.atcore.SetHSSpeed(oa, idx)
-        hsspeed = c_float() # MHz
-        self.atcore.GetHSSpeed(channel, oa, idx, byref(hsspeed))
-        self._metadata[model.MD_READOUT_TIME] = 1.0 / (hsspeed.value * 1e6) # s
-
-        nb_vsspeeds = c_int()
-        self.atcore.GetNumberVSSpeeds(byref(nb_vsspeeds))
-        speed_idx, vsspeed = c_int(), c_float() # ms
-        self.atcore.GetFastestRecommendedVSSpeed(byref(speed_idx), byref(vsspeed))
-        self.atcore.SetVSSpeed(speed_idx)
-
-        # bits per pixel depends just on the AD channel
-        bpp = c_int()
-        self.atcore.GetBitDepth(channel, byref(bpp))
-        self._metadata[model.MD_BPP] = bpp.value
-
-        # EMCCDGAIN, DDGTIMES, DDGIO, EMADVANCED => lots of gain settings
-        # None supported on the Clara?
-        gains = self.GetPreAmpGainsAvailable()
-        # TODO let the user decide (as every value can be useful)
-        gain = min(gains) # for now we pick the minimum
-        self.SetPreAmpGain(gain)
-        self._metadata[model.MD_GAIN] = gain
-
-        # Doesn't seem to work for the clara (or single scan mode?)
-#        self.atcore.SetFilterMode(2) # 2 = on
-#        metadata['Filter'] = "Cosmic Ray filter"
-
-        # TODO: according to doc: if AC_FEATURES_SHUTTEREX you MUST use SetShutterEx()
-        # TODO: 20, 20 ms for open/closing times matter in auto? Should be 0, more?
-        # Clara : 20, 20 gives horrible results. Default for Andor Solis: 10, 0
-        # Apparently, if there is no shutter, it should be 0, 0
-        self.atcore.SetShutter(1, 0, 0, 0) # mode 0 = auto
-        self.atcore.SetTriggerMode(0) # 0 = internal
-
-    
+        assert(mbpp > 0)
+        return mbpp
+        
     def _need_update_settings(self):
         """
         returns (boolean): True if _update_settings() needs to be called
         """
         new_image_settings = self._binning + self._image_rect
-        new_settings = (new_image_settings, self._exposure_time)
+        new_settings = [new_image_settings, self._exposure_time,
+                        self._readout_rate, self._gain]
         return new_settings != self._prev_settings
         
     def _update_settings(self):
@@ -1008,7 +1061,40 @@ class AndorCam2(model.DigitalCamera):
         modified are updated.
         Note: acquisition_lock must be taken, and acquisition must _not_ going on.
         """
-        prev_image_settings, prev_exp_time = self._prev_settings
+        prev_image_settings, prev_exp_time, prev_readout_rate, prev_gain = self._prev_settings
+
+        if prev_readout_rate != self._readout_rate:
+            logging.debug("Updating readout rate settings to %f Hz", self._readout_rate) 
+
+            # set readout rate 
+            channel, hsspeed = self._getChannelHSSpeed(self._readout_rate)
+            self.atcore.SetADChannel(channel)
+            try:
+                self.atcore.SetOutputAmplifier(self._output_amp)
+            except AndorV2Error:
+                pass # unsupported
+    
+            self.atcore.SetHSSpeed(self._output_amp, hsspeed)
+            self._metadata[model.MD_READOUT_TIME] = 1.0 / self._readout_rate # s
+    
+            # fastest VSspeed which doesn't need to increase noise (voltage) 
+#            nb_vsspeeds = c_int()
+#            self.atcore.GetNumberVSSpeeds(byref(nb_vsspeeds))
+            speed_idx, vsspeed = c_int(), c_float() # ms
+            self.atcore.GetFastestRecommendedVSSpeed(byref(speed_idx), byref(vsspeed))
+            self.atcore.SetVSSpeed(speed_idx)
+    
+            # bits per pixel depends just on the AD channel
+            bpp = c_int()
+            self.atcore.GetBitDepth(channel, byref(bpp))
+            self._metadata[model.MD_BPP] = bpp.value
+
+        if prev_gain != self._gain:
+            logging.debug("Updating gain to %f", self._gain)
+            # EMCCDGAIN, DDGTIMES, DDGIO, EMADVANCED => lots of gain settings
+            # None supported on the Clara?
+            self.SetPreAmpGain(self._gain)
+            self._metadata[model.MD_GAIN] = self._gain
 
         new_image_settings = self._binning + self._image_rect
         if prev_image_settings != new_image_settings:   
@@ -1017,19 +1103,16 @@ class AndorCam2(model.DigitalCamera):
             # there is no metadata for the resolution
             self._metadata[model.MD_BINNING] = self._binning[0] # H and V should be equal
     
-        new_exp_time = self._exposure_time
-        if prev_exp_time != new_exp_time:
-            logging.debug("Updating exposure time setting") 
-            self.atcore.SetExposureTime(c_float(new_exp_time))
-
+        if prev_exp_time != self._exposure_time:
+            self.atcore.SetExposureTime(c_float(self._exposure_time))
             # Read actual value
-            exposure = c_float()
-            accumulate = c_float()
-            kinetic = c_float()
-            self.atcore.GetAcquisitionTimings(byref(exposure), byref(accumulate), byref(kinetic))
-            self._metadata[model.MD_EXP_TIME] = exposure.value
+            exposure, accumulate, kinetic = self.GetAcquisitionTimings()
+            self._metadata[model.MD_EXP_TIME] = exposure
+            logging.debug("Updating exposure time setting to %f s (asked %f s)",
+                          exposure, self._exposure_time) 
 
-        self._prev_settings = (new_image_settings, new_exp_time)
+        self._prev_settings = [new_image_settings, self._exposure_time, 
+                               self._readout_rate, self._gain]
     
     def _allocate_buffer(self, size):
         """
@@ -1056,24 +1139,25 @@ class AndorCam2(model.DigitalCamera):
         """
         with self.acquisition_lock:
             self.select()
-            status = c_int()
-            self.atcore.GetStatus(byref(status))
-            assert status.value == AndorV2DLL.DRV_IDLE
+            assert(self.GetStatus() == AndorV2DLL.DRV_IDLE)
             
+            self.atcore.SetAcquisitionMode(1) # 1 = Single scan
+            # Seems exposure needs to be re-set after setting acquisition mode
+            self._prev_settings[1] = None # 1 => exposure time
             self._update_settings()
             metadata = dict(self._metadata) # duplicate
-            size = tuple(self.resolution.value) # duplicate
-            
+                        
             # Acquire the image
-            self.atcore.SetAcquisitionMode(1) # 1 = Single scan
             self.atcore.StartAcquisition()
             
-            # "kinetic" of GetAcquisitionTimings() should give the about same time as
-            # exposure_time + readout_time
-            exposure_time = self.exposureTime.value
-            readout_time = size[0] * size[1] * metadata[model.MD_READOUT_TIME] # s
-            metadata[model.MD_ACQ_DATE] = time.time() # time at the beginning
-            self.WaitForAcquisition(exposure_time + readout_time + 1)
+            size = self.resolution.value
+            exposure, accumulate, kinetic = self.GetAcquisitionTimings()
+            logging.debug("Accumulate time = %f, kinetic = %f", accumulate, kinetic)
+            self._metadata[model.MD_EXP_TIME] = exposure
+            readout = size[0] * size[1] * self._metadata[model.MD_READOUT_TIME] # s
+            # kinetic should be approximately same as exposure + readout => play safe
+            duration = max(kinetic, exposure + readout)
+            self.WaitForAcquisition(duration + 1)
             
             cbuffer = self._allocate_buffer(size)
             self.atcore.GetMostRecentImage16(cbuffer, size[0] * size[1])
@@ -1095,10 +1179,7 @@ class AndorCam2(model.DigitalCamera):
         self.acquisition_lock.acquire()
         
         self.select()
-        # Just to be sure
-        status = c_int()
-        self.atcore.GetStatus(byref(status))
-        assert status.value == AndorV2DLL.DRV_IDLE
+        assert(self.GetStatus() == AndorV2DLL.DRV_IDLE) # Just to be sure
         
         # Set up thread
         self.acquire_thread = threading.Thread(target=self._acquire_thread_run,
@@ -1110,60 +1191,58 @@ class AndorCam2(model.DigitalCamera):
         """
         The core of the acquisition thread. Runs until acquire_must_stop is set.
         """
-        # We don't use the kinetic mode as it might go faster than we can
-        # process them.
-        self.atcore.SetAcquisitionMode(5) # 5 = Run till abort
-        self._prev_settings = (None, None) # force updating the settings 
-        self._update_settings()
-        self.atcore.SetKineticCycleTime(0) # don't wait between acquisitions
-        
-        metadata = dict(self._metadata) # duplicate
-        size = self.resolution.value
-        exposure_time = metadata[model.MD_EXP_TIME]
-        readout_time = size[0] * size[1] * metadata[model.MD_READOUT_TIME] # s
-        
-        # Acquire the images
-        self.atcore.StartAcquisition()
-        need_reinit = False
+        need_reinit = True
         while not self.acquire_must_stop.is_set():
             # need to stop acquisition to update settings
-            if self._need_update_settings() or need_reinit:
+            if need_reinit or self._need_update_settings():
                 try:
-                    self.atcore.AbortAcquisition()
-                    time.sleep(0.1)
+                    if self.GetStatus() == AndorV2DLL.DRV_ACQUIRING:
+                        self.atcore.AbortAcquisition()
+                        time.sleep(0.1)
                 except AndorV2Error as (errno, strerr):
                     # it was already aborted
                     if errno != 20073: # DRV_IDLE
                         self.acquisition_lock.release()
                         self.acquire_must_stop.clear()
                         raise
-                self.atcore.SetAcquisitionMode(5) # needed ?
+                # We don't use the kinetic mode as it might go faster than we can
+                # process them.
+                self.atcore.SetAcquisitionMode(5) # 5 = Run till abort
+                # Seems exposure needs to be re-set after setting acquisition mode
+                self._prev_settings[1] = None # 1 => exposure time
                 self._update_settings()
-                metadata = dict(self._metadata) # duplicate
-                size = self.resolution.value
-                exposure_time = metadata[model.MD_EXP_TIME]
-                readout_time = size[0] * size[1] * metadata[model.MD_READOUT_TIME] # s
+                self.atcore.SetKineticCycleTime(0) # don't wait between acquisitions
                 self.atcore.StartAcquisition()
+                
+                size = self.resolution.value
+                exposure, accumulate, kinetic = self.GetAcquisitionTimings()
+                logging.debug("Accumulate time = %f, kinetic = %f", accumulate, kinetic)
+                readout = size[0] * size[1] * self._metadata[model.MD_READOUT_TIME] # s
+                # kinetic should be approximately same as exposure + readout => play safe
+                duration = max(kinetic, exposure + readout)
                 need_reinit = False
     
+            # Acquire the images
+            metadata = dict(self._metadata) # duplicate
             metadata[model.MD_ACQ_DATE] = time.time() # time at the beginning
+            cbuffer = self._allocate_buffer(size)
             try:
-                self.WaitForAcquisition(exposure_time + readout_time + 1)
+                self.WaitForAcquisition(duration + 1)
+                # it might have acquired _several_ images in the time to process
+                # one image. In this case we discard all but the last one.
+                self.atcore.GetMostRecentImage16(cbuffer, size[0] * size[1])
             except AndorV2Error as (errno, strerr):
                 # Note: with SDK 2.93 it will happen after a few image grabbed, and
                 # there is no way to recover
                 if errno == 20024: # DRV_NO_NEW_DATA
-                    # try one more time
                     self.atcore.CancelWait()
-                    time.sleep(0.1)
-                    cstatus = c_int()
-                    self.atcore.GetStatus(byref(cstatus))
-                    logging.warning("trying again to acquire image with status %d after error %s", cstatus.value, strerr)
                     # -999°C means the camera is gone
                     if self.GetTemperature() == -999:
                         logging.error("Camera seems to have disappeared, will try to reinitialise it")
-                        self.Reinitialize() 
-                        # if this succeeds, it still need to restart acquisition
+                        self.Reinitialize()
+                    else:  
+                        time.sleep(0.1)
+                        logging.warning("trying again to acquire image after error %s", strerr)
                     need_reinit = True
                     continue
                 else:
@@ -1171,26 +1250,17 @@ class AndorCam2(model.DigitalCamera):
                     self.acquire_must_stop.clear()
                     raise
                 
-            cbuffer = self._allocate_buffer(size)
-            # it might have acquired _several_ images in the time to process
-            # one image. In this case we discard all but the last one.
-            try:
-                self.atcore.GetMostRecentImage16(cbuffer, size[0] * size[1])
-            except AndorV2Error as (errno, strerr):
-                if errno == 20024: # DRV_NO_NEW_DATA
-                    logging.warning("failed to get latest image, retrying after error %s", strerr)
-                else:
-                    self.acquisition_lock.release()
-                    logging.debug("Acquisition thread closed after giving up")
-                    self.acquire_must_stop.clear()
-                    raise                           
-
-            metadata[model.MD_SENSOR_TEMP] = self._metadata[model.MD_SENSOR_TEMP]
             array = self._buffer_as_array(cbuffer, size, metadata)
             callback(array)
+         
+            # force the GC to non-used buffers, for some reason, without this
+            # the GC runs only after we've managed to fill up the memory
+            gc.collect()
      
-        try:    
-            self.atcore.AbortAcquisition()
+        # ending cleanly
+        try:
+            if self.GetStatus() == AndorV2DLL.DRV_ACQUIRING:
+                self.atcore.AbortAcquisition()
         except AndorV2Error as (errno, strerr):
             # it was already aborted
             if errno != 20073: # DRV_IDLE

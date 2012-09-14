@@ -40,14 +40,12 @@ class DblMscopeViewModel(object):
         # 0<=float<=1
         self.merge_ratio = VigilantMergeRatio(0.3) # no unit
 
-        #TODO default to black? 
-        self.images = [VigilantAttribute(InstrumentalImage(gettest_patternImage(), mpp=self.mpp.value, center=(0.0, 0.0))),
-                       VigilantAttribute(InstrumentalImage(None, None, None))]
-        #self.images = [VigilantAttribute(InstrumentalImage(None, None, None)),
-        #               VigilantAttribute(InstrumentalImage(None, None, None))]
-
         # center position of the view
         self.center = VigilantAttribute((0, 0)) # (m, m)
+
+        #TODO default to black? 
+        self.images = [VigilantAttribute(InstrumentalImage(None, None, None)),
+                       VigilantAttribute(InstrumentalImage(gettest_patternImage(), mpp=self.mpp.value, center=self.center.value))]
 
         self.crosshair = VigilantAttribute(True)
         self.opt_focus = None # should be an actuator

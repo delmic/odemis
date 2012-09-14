@@ -94,7 +94,8 @@ class DraggableCanvas(wx.Panel):
         self.drag_init_pos = (0, 0) # px, px: initial position of mouse when started dragging
 
         self._rdragging = False
-        self._rdrag_prev_pos = None # (int, int) px
+        self._rdrag_init_pos = None # (int, int) px
+        self._rdrag_prev_value = None # (float, float) last absolute value, for sending the change
 
         # timer to give a delay before redrawing so we wait to see if there are several events waiting
         self.DrawTimer = wx.PyTimer(self.OnDrawTimer)
@@ -119,20 +120,21 @@ class DraggableCanvas(wx.Panel):
             change = 2 # softer
 
         if key == wx.WXK_LEFT:
-            self.ShiftView((-change, 0))
-        elif key == wx.WXK_RIGHT:
             self.ShiftView((change, 0))
+        elif key == wx.WXK_RIGHT:
+            self.ShiftView((-change, 0))
         elif key == wx.WXK_DOWN:
-            self.ShiftView((0, change))
-        elif key == wx.WXK_UP:
             self.ShiftView((0, -change))
+        elif key == wx.WXK_UP:
+            self.ShiftView((0, change))
 
     def OnRightDown(self, event):
         if self.dragging:
             return
 
         self._rdragging = True
-        self._rdrag_prev_pos = event.GetPositionTuple()
+        self._rdrag_init_pos = event.GetPositionTuple()
+        self._rdrag_prev_value = [0, 0]
         self.SetCursor(wx.StockCursor(wx.CURSOR_SIZENS))
         if not self.HasCapture():
             self.CaptureMouse()
@@ -192,15 +194,26 @@ class DraggableCanvas(wx.Panel):
             self.Refresh()
 
         if self._rdragging:
+            # TODO: make it non-linear:
+            # the further from the original point, the more it moves for one pixel
+            # => use 3 points: starting point, previous point, current point
+            # if dis < 32 px => min : dis (small linear zone)
+            # else: dis + 1/32 * sign* (dis-32)**2 => (square zone) 
+            # send diff between value and previous value sent => it should always be at the same position for the cursor at the same place
+            linear_zone = 32.0
             pos = event.GetPositionTuple()
-            shift = (pos[0] - self._rdrag_prev_pos[0],
-                     pos[1] - self._rdrag_prev_pos[1])
-            self._rdrag_prev_pos = pos
-            if shift[0]:
-                self.onExtraAxisMove(0, shift[0])
-            if shift[1]:
-                self.onExtraAxisMove(1, shift[1])
-
+            for i in range(2):
+                shift = pos[i] - self._rdrag_init_pos[i]
+                if abs(shift) <= linear_zone:
+                    value = shift
+                else:
+                    ssquare = cmp(shift, 0) * (shift - linear_zone)**2
+                    value = shift + ssquare / linear_zone
+                change = value - self._rdrag_prev_value[i]
+                if change:
+                    self.onExtraAxisMove(i, change)
+                    self._rdrag_prev_value[i] = value
+            
     def OnDblClick(self, event):
         pos = event.GetPositionTuple()
         center = (self.ClientSize[0] / 2, self.ClientSize[1] / 2)

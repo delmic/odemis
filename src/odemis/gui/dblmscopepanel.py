@@ -68,11 +68,13 @@ class DblMicroscopePanel(wx.Panel):
         #FIXME: this is a BIG shortcut => need streams
 
         self.opt_view = MicroscopeOpticalView(self.legend_panel, self.secom_model, self.viewmodel)
+        self.sem_view = MicroscopeSEView(self.legend_panel, self.secom_model, self.viewmodel)
 
         # Create all sub widgets used by this wx.Panel
         self._build_windows()
 
-        self.opt_view.Show(self.viewmodel.images[0])
+        self.sem_view.Show(self.viewmodel.images[0])
+        self.opt_view.Show(self.viewmodel.images[1])
 
         # Control for the selection before AddView(), which needs them
         #self.viewComboLeft = wx.ComboBox(self, style=wx.CB_READONLY, size=(140, -1))
@@ -105,7 +107,8 @@ class DblMicroscopePanel(wx.Panel):
 
         self._set_subscriptions()
 
-        self.ShowBlendingSlider(self.canvas.ImageCount() > 0)
+        self.ShowBlendingSlider(True)
+#        self.ShowBlendingSlider(self.canvas.ImageCount() > 0)
 
         self.Bind(wx.EVT_SIZE, self.OnSize)
 

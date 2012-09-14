@@ -41,18 +41,18 @@ class SECOMModel(object):
         self.stage_pos = VigilantAttribute((0, 0), setter=self.avOnStagePos) # m,m
 
         # FIXME: maybe could go into (sub)classes like OpticalEmitter, SEDetector...
-        self.optical_emt_wavelength = VigilantAttribute(390) # nm 
-        self.optical_det_wavelength = VigilantAttribute(750) # nm
+        self.optical_emt_wavelength = VigilantAttribute(488, unit="nm") 
+        self.optical_det_wavelength = VigilantAttribute(507, unit="nm")
         self.optical_det_exposure_time = VigilantAttribute(1.0) # s
         self.optical_det_image = VigilantAttribute(InstrumentalImage(None, None, None))
         self.optical_det_raw = None # the last raw data received
-        self.optical_auto_bc = True # whether to use auto brightness & contrast
-        self.optical_contrast = model.FloatContinuous(0, range=[-1, 1]) # ratio, contrast if no auto
-        self.optical_brightness = model.FloatContinuous(0, range=[-1, 1]) # ratio, balance if no auto
+        self.optical_auto_bc = VigilantAttribute(True) # whether to use auto brightness & contrast
+        self.optical_contrast = model.FloatContinuous(0, range=[-100, 100]) # ratio, contrast if no auto
+        self.optical_brightness = model.FloatContinuous(0, range=[-100, 100]) # ratio, balance if no auto
 
         self.sem_emt_dwell_time = VigilantAttribute(0.00001) #s
         self.sem_emt_spot = VigilantAttribute(4) # no unit (could be m²)
-        self.sem_emt_hv = VigilantAttribute(30000) # V
+        self.sem_emt_hv = VigilantAttribute(30000) # eV
         self.sem_det_image = VigilantAttribute(InstrumentalImage(None, None, None))
 
         self.opt_focus = None # this is directly an Actuator
@@ -87,6 +87,9 @@ class OpticalBackendConnected(SECOMModel):
         for a in microscope.actuators:
             if a.role == "stage":
                 self.stage = a
+                # TODO: subscribe to the real position, self.stage.position, and recenter the view of all viewports
+                # on each of these moves
+                self.stage.position.subscribe(self._onPhysicalStagePos)
                 break
         if not self.stage:
             raise Exception("no stage found in the microscope")
@@ -100,33 +103,29 @@ class OpticalBackendConnected(SECOMModel):
         if not self.opt_focus:
             log.info("no focus actuator found in the microscope")
 
-        # DEBUG XXX
-        self.opt_focus.moveRel({"z": 0})
-
         try:
             self.prev_pos = (self.stage.position.value["x"],
                              self.stage.position.value["y"])
         except (KeyError, AttributeError):
-            self.prev_pos = (0, 0)
-        # override
-        self.stage_pos = VigilantAttribute(self.prev_pos) # (m,m) => (X,Y)
-        self.stage_pos.subscribe(self.avOnStagePos)
-
+            self.prev_pos = (0, 0) # TODO moves this control to stage setup above
+        # TODO: instead do:
+        # self._onPhysicalStagePos(self.stage.position.value)
+        # just setting the raw value should be fine
+        self.stage_pos.value = self.prev_pos
+        
         # direct linking
         self.optical_det_exposure_time = self.camera.exposureTime
         self.optical_depth = self.camera.shape[2]
-
-
-        # No SEM
-        #self.sem_det_image = VigilantAttribute(InstrumentalImage(None, None, None))
-
-        # FIXME: on ON/OFF from GUI
-        #self.turnOn()
+        
+        # get notified when brightness/contrast is updated
+        self.optical_auto_bc.subscribe(self.onBrightnessContrast)
+        self.optical_contrast.subscribe(self.onBrightnessContrast)
+        self.optical_brightness.subscribe(self.onBrightnessContrast)
 
     def turnOn(self):
         # TODO turn on the light
         self.camera.data.subscribe(self.onNewCameraImage)
-
+        
     def turnOff(self):
         # TODO turn of the light
         # TODO forbid move in this mode (or just forbid move in the canvas if no stream?)
@@ -136,20 +135,29 @@ class OpticalBackendConnected(SECOMModel):
     def __del__(self):
         self.turnOff()
 
+    def onBrightnessContrast(self, unused):
+        # called whenever brightness/contrast changes
+        # => needs to recompute the image (but not too often, so we do it in a timer)
+        
+        # is there any image to update?
+        if self.optical_det_raw is None:
+            return
+        # TODO: in timer
+        self.onNewCameraImage(None, self.optical_det_raw)
+        
     def onNewCameraImage(self, dataflow, data):
-        if self.optical_auto_bc:
+        if self.optical_auto_bc.value:
             brightness = None
             contrast = None
         else:
-            brightness = self.optical_brightness
-            contrast = self.optical_contrast
+            brightness = self.optical_brightness.value / 100.
+            contrast = self.optical_contrast.value / 100.
 
         self.optical_det_raw = data
         im = DataArray2wxImage(data, self.optical_depth, brightness, contrast)
         im.InitAlpha() # it's a different buffer so useless to do it in numpy
 
         try:
-            # TODO should be initialised by backend
             pos = data.metadata[MD_POS]
         except KeyError:
             log.warning("position of image unknown")
@@ -165,6 +173,14 @@ class OpticalBackendConnected(SECOMModel):
 #        h = hpy() # memory profiler
 #        print h.heap()
         self.optical_det_image.value = InstrumentalImage(im, mpp, pos)
+
+    def _onPhysicalStagePos(self, pos):
+        # TODO make sure we cannot go into an infinite loop with avOnStagePos
+        # * avOnStagePos should be a setter
+        # * we should update the raw value of stage_pos + notify
+        #self.stage_pos.value = (pos["x"], pos["y"])
+        pass
+
 
     def avOnStagePos(self, val):
         move = {}

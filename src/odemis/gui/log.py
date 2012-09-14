@@ -1,6 +1,6 @@
 #-*- coding: utf-8 -*-
 '''
-@author: Rinze de Laat 
+@author: Rinze de Laat
 
 Copyright © 2012 Rinze de Laat, Delmic
 
@@ -14,7 +14,12 @@ You should have received a copy of the GNU General Public License along with Ode
 '''
 
 import logging
+import os.path
+from logging.handlers import RotatingFileHandler
+
 import wx
+
+LOG_FILE = "odemis-gui.log"
 
 LOG_LINES = 500
 log = None
@@ -54,6 +59,24 @@ def create_gui_logger(log_field):
         if not isinstance(handler, TextFieldHandler):
             log.removeHandler(handler)
 
+    # Path to the log file
+    logfile_path = os.path.join(os.path.expanduser("~"), LOG_FILE)
+    # Maximum size of the log file before it's rotated
+    max_logfile_size = 512**2
+    # Maximum number of (rotated) log files
+    max_logfile_count = 1
+    # Formatting string for logging messages to file
+    file_format = logging.Formatter(("%(asctime)s - "
+                                     "%(levelname)s\t%(module)s(%(lineno)d):  "
+                                     "%(message)s"), '%Y-%m-%d %H:%M:%S')
+
+    file_handler = RotatingFileHandler(logfile_path, 'a',
+                                       max_logfile_size,
+                                       max_logfile_count)
+
+    file_handler.setFormatter(file_format)
+    log.addHandler(file_handler)
+
 class TextFieldHandler(logging.Handler):
     """ Custom log handler, used to output log entries to a text field. """
     def __init__(self):
@@ -68,11 +91,6 @@ class TextFieldHandler(logging.Handler):
     def emit(self, record):
         """ Write a record, in color, to a text field. """
         if self.textfield is not None:
-            if self.textfield.GetNumberOfLines() > LOG_LINES:
-                # Removes the characters from posit`ion 0 up to and including the first line break
-                self.textfield.Remove(0, self.textfield.GetValue().find('\n') + 1)
-                #self.textfield.Remove(self.textfield.GetValue().rfind('\n'), len(self.textfield.GetValue()))
-
             color = "#777777"
 
             if record.levelno > logging.WARNING:
@@ -90,8 +108,8 @@ class TextFieldHandler(logging.Handler):
 
     def write_to_field(self, record, color):
 
-        if self.textfield.GetNumberOfLines() > LOG_LINES:
-            # Removes the characters from posit`ion 0 up to and including the first line break
+        while self.textfield.GetNumberOfLines() > LOG_LINES:
+            # Removes the characters from position 0 up to and including the first line break
             self.textfield.Remove(0, self.textfield.GetValue().find('\n') + 1)
             #self.textfield.Remove(self.textfield.GetValue().rfind('\n'), len(self.textfield.GetValue()))
 

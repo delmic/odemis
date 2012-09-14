@@ -1,6 +1,6 @@
 #-*- coding: utf-8 -*-
 '''
-@author: Rinze de Laat 
+@author: Rinze de Laat
 
 Copyright © 2012 Rinze de Laat, Delmic
 
@@ -26,6 +26,23 @@ from wx.lib.buttons import GenBitmapButton, GenBitmapToggleButton, \
     GenBitmapTextToggleButton, GenBitmapTextButton
 
 import odemis.gui.img.data as img
+from odemis.gui.log import log
+
+def resize_bmp(btn_size, bmp):
+    """ Resize the given image so it will match the size of the button """
+
+    if btn_size:
+        btn_width, _ = btn_size
+        img_width, img_height = bmp.GetSize()
+
+        if btn_width > 0 and img_width != btn_width:
+            log.debug("Resizing button bmp from %s to %s",
+                      bmp.GetSize(),
+                      btn_size)
+            new_img = bmp.ConvertToImage()
+            return new_img.Rescale(btn_width, img_height).ConvertToBitmap()
+
+    return bmp
 
 class ImageButton(GenBitmapButton):
     """ Graphical button with hover effect.
@@ -48,6 +65,29 @@ class ImageButton(GenBitmapButton):
 
         self.background_parent = kwargs.pop('background_parent', None)
         self.labelDelta = kwargs.pop('label_delta', 0)
+
+        # Fit the bmp if needed
+        # Resizing should always be minimal, so distortion is minimum
+
+        # If the bmp arg is provided (which is the 3rd one: parent, id, bmp)
+
+        bmp = args[2] if len(args) >= 3 else kwargs.get('bitmap', None)
+        size = args[4] if len(args) >= 5 else kwargs.get('size', None)
+
+        if bmp:
+            if size:
+                args = list(args)
+                # Resize and replace original bmp
+                if len(args) >= 3:
+                    args[2] = resize_bmp(size, bmp)
+                else:
+                    kwargs['bitmap'] = resize_bmp(size, bmp)
+            else:
+                # Set the size of the button to match the bmp
+                if len(args) >= 5:
+                    args[4] = bmp.GetSize()
+                else:
+                    kwargs['size'] = bmp.GetSize()
 
         GenBitmapButton.__init__(self, *args, **kwargs)
 
@@ -75,6 +115,7 @@ class ImageButton(GenBitmapButton):
     def SetBitmaps(self, bmp_h=None):
         """ This method sets additional bitmaps for hovering and selection """
         if bmp_h:
+            bmp_h = resize_bmp(self.GetSize(), bmp_h)
             self.SetBitmapHover(bmp_h)
 
     def GetBitmapHover(self):
@@ -114,6 +155,9 @@ class ImageButton(GenBitmapButton):
 class ImageTextButton(GenBitmapTextButton):
     """ Graphical button with text and hover effect.
 
+    rescale: if the rescale keyword argument is True and the button has a size,
+    the background image will be scaled to fit.
+
     The text can be align using the following styles:
     wx.ALIGN_LEFT, wx.ALIGN_CENTER, wx.ALIGN_RIGHT.
 
@@ -129,7 +173,32 @@ class ImageTextButton(GenBitmapTextButton):
         kwargs['style'] = kwargs.get('style', 0) | wx.NO_BORDER
 
         self.labelDelta = kwargs.pop('label_delta', 0)
+        self.rescale = kwargs.pop('rescale', False)
+
         self.background_parent = kwargs.pop('background_parent', None)
+
+        # Fit the bmp if needed
+        # Resizing should always be minimal, so distortion is minimum
+
+        # If the bmp arg is provided (which is the 3rd one: parent, id, bmp)
+
+        bmp = args[2] if len(args) >= 3 else kwargs.get('bitmap', None)
+        size = args[4] if len(args) >= 5 else kwargs.get('size', None)
+
+        if bmp:
+            if size:
+                args = list(args)
+                # Resize and replace original bmp
+                if len(args) >= 3:
+                    args[2] = resize_bmp(size, bmp)
+                else:
+                    kwargs['bitmap'] = resize_bmp(size, bmp)
+            else:
+                # Set the size of the button to match the bmp
+                if len(args) >= 5:
+                    args[4] = bmp.GetSize()
+                else:
+                    kwargs['size'] = bmp.GetSize()
 
         GenBitmapTextButton.__init__(self, *args, **kwargs)
 
@@ -141,9 +210,12 @@ class ImageTextButton(GenBitmapTextButton):
 
     def SetBitmaps(self, bmp_h=None, bmp_sel=None):
         """ This method sets additional bitmaps for hovering and selection """
+
         if bmp_h:
+            bmp_h = resize_bmp(self.GetSize(), bmp_h)
             self.SetBitmapHover(bmp_h)
         if bmp_sel:
+            bmp_sel = resize_bmp(self.GetSize(), bmp_sel)
             self.SetBitmapSelected(bmp_sel)
 
     def GetBitmapHover(self):
@@ -236,6 +308,29 @@ class ImageToggleButton(GenBitmapToggleButton):  #pylint: disable=R0901
         self.labelDelta = kwargs.pop('label_delta', 0)
         self.background_parent = kwargs.pop('background_parent', None)
 
+        # Fit the bmp if needed
+        # Resizing should always be minimal, so distortion is minimum
+
+        # If the bmp arg is provided (which is the 3rd one: parent, id, bmp)
+
+        bmp = args[2] if len(args) >= 3 else kwargs.get('bitmap', None)
+        size = args[4] if len(args) >= 5 else kwargs.get('size', None)
+
+        if bmp:
+            if size:
+                args = list(args)
+                # Resize and replace original bmp
+                if len(args) >= 3:
+                    args[2] = resize_bmp(size, bmp)
+                else:
+                    kwargs['bitmap'] = resize_bmp(size, bmp)
+            else:
+                # Set the size of the button to match the bmp
+                if len(args) >= 5:
+                    args[4] = bmp.GetSize()
+                else:
+                    kwargs['size'] = bmp.GetSize()
+
         GenBitmapToggleButton.__init__(self, *args, **kwargs)
 
         if self.background_parent:
@@ -253,10 +348,13 @@ class ImageToggleButton(GenBitmapToggleButton):  #pylint: disable=R0901
     def SetBitmaps(self, bmp_h=None, bmp_sel=None, bmp_sel_h=None):
         """ This method sets additional bitmaps for hovering and selection """
         if bmp_h:
+            bmp_h = resize_bmp(self.GetSize(), bmp_h)
             self.SetBitmapHover(bmp_h)
         if bmp_sel:
+            bmp_sel = resize_bmp(self.GetSize(), bmp_sel)
             self.SetBitmapSelected(bmp_sel)
         if bmp_sel_h:
+            bmp_sel_h = resize_bmp(self.GetSize(), bmp_sel_h)
             self.SetBitmapSelectedHover(bmp_sel_h)
 
     def GetBitmapHover(self):
@@ -326,6 +424,29 @@ class ImageTextToggleButton(GenBitmapTextToggleButton):
         self.labelDelta = kwargs.pop('label_delta', 0)
         self.background_parent = kwargs.pop('background_parent', None)
 
+        # Fit the bmp if needed
+        # Resizing should always be minimal, so distortion is minimum
+
+        # If the bmp arg is provided (which is the 3rd one: parent, id, bmp)
+
+        bmp = args[2] if len(args) >= 3 else kwargs.get('bitmap', None)
+        size = args[4] if len(args) >= 5 else kwargs.get('size', None)
+
+        if bmp:
+            if size:
+                args = list(args)
+                # Resize and replace original bmp
+                if len(args) >= 3:
+                    args[2] = resize_bmp(size, bmp)
+                else:
+                    kwargs['bitmap'] = resize_bmp(size, bmp)
+            else:
+                # Set the size of the button to match the bmp
+                if len(args) >= 5:
+                    args[4] = bmp.GetSize()
+                else:
+                    kwargs['size'] = bmp.GetSize()
+
         GenBitmapTextToggleButton.__init__(self, *args, **kwargs)
 
         self.bmpHover = None
@@ -338,10 +459,13 @@ class ImageTextToggleButton(GenBitmapTextToggleButton):
     def SetBitmaps(self, bmp_h=None, bmp_sel=None, bmp_sel_h=None):
         """ This method sets additional bitmaps for hovering and selection """
         if bmp_h:
+            bmp_h = resize_bmp(self.GetSize(), bmp_h)
             self.SetBitmapHover(bmp_h)
         if bmp_sel:
+            bmp_sel = resize_bmp(self.GetSize(), bmp_sel)
             self.SetBitmapSelected(bmp_sel)
         if bmp_sel_h:
+            bmp_sel_h = resize_bmp(self.GetSize(), bmp_sel_h)
             self.SetBitmapSelectedHover(bmp_sel_h)
 
     def GetBitmapHover(self):
@@ -418,6 +542,24 @@ class ImageTextToggleButton(GenBitmapTextToggleButton):
             self.faceDnClr = self.GetParent().GetBackgroundColour()
 
 class TabButton(ImageTextToggleButton):
+
+    def OnLeftDown(self, event):
+        if not self.IsEnabled() or not self.up:
+            return
+        self.saveUp = self.up
+        self.up = not self.up
+        self.CaptureMouse()
+        self.SetFocus()
+        self.Refresh()
+
+class GraphicRadioButton(ImageTextToggleButton):
+
+    def __init__(self, *args, **kwargs):
+        self.value = kwargs.pop('value')
+        if not kwargs.get('label', False):
+            kwargs['label'] = u"%g" % self.value
+        ImageTextToggleButton.__init__(self, *args, **kwargs)
+
     def OnLeftDown(self, event):
         if not self.IsEnabled() or not self.up:
             return
@@ -481,10 +623,10 @@ class ColourButton(ImageButton):
     def get_colour(self):
         return self.colour
 
-class PopupImageButton(ImageButton):
+class PopupImageButton(ImageTextButton):
 
     def __init__(self, *args, **kwargs):
-        ImageButton.__init__(self, *args, **kwargs)
+        ImageTextButton.__init__(self, *args, **kwargs)
         self.choices = None
         self.Bind(wx.EVT_BUTTON, self.show_menu)
 

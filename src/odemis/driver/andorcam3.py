@@ -16,8 +16,8 @@ You should have received a copy of the GNU General Public License along with Ode
 '''
 
 from ctypes import *
-from odemis import __version__
-from odemis import model
+from odemis import __version__, model
+import gc
 import logging
 import numpy
 import os
@@ -826,7 +826,6 @@ class AndorCam3(model.DigitalCamera):
         # We don't use the framecount feature as it's not always present, and
         # easy to do in software.
 
-        # TODO need to update settings when the AV are changed
         size = self.resolution.value
         exposure_time = self.exposureTime.value
         
@@ -876,12 +875,17 @@ class AndorCam3(model.DigitalCamera):
             
             metadata[model.MD_SENSOR_TEMP] = self._metadata[model.MD_SENSOR_TEMP]
             array = self._buffer_as_array(cbuffer, size, metadata)
-            # next buffer
+            
+            # Next buffer. We cannot reuse the buffer because we don't know if
+            # the callee still needs it or not
             cbuffer = self._allocate_buffer(size)
             self.QueueBuffer(cbuffer)
             buffers.append(cbuffer)
-            
             callback(array)
+            
+            # force the GC to non-used buffers, for some reason, without this
+            # the GC runs only after we've managed to fill up the memory
+            gc.collect()
     
         try:
             self.Command(u"AcquisitionStop")
@@ -902,7 +906,10 @@ class AndorCam3(model.DigitalCamera):
         assert not self.acquire_must_stop.is_set()
         self.acquire_must_stop.set()
         # TODO check that acquisitionstop actually stops the waitbuffer()
-        self.Command(u"AcquisitionStop")
+        # FIXME: it seems calling AcquisitionStop here cause the thread to go crazy
+        # => need to find a way to stop the acquisition even if it's very long
+        # maybe changing the exposure time?
+#        self.Command(u"AcquisitionStop")
         
     def wait_stopped_flow(self):
         """
@@ -911,8 +918,6 @@ class AndorCam3(model.DigitalCamera):
         """
         # "while" is mostly to not wait if it's already finished 
         while self.acquire_must_stop.is_set():
-            # join() already checks that we are not the current_thread()
-            #assert threading.current_thread() != self.acquire_thread
             self.acquire_thread.join() # XXX timeout for safety? 
     
     def terminate(self):

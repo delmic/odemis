@@ -17,6 +17,7 @@ You should have received a copy of the GNU General Public License along with Ode
 from . import _core, _dataflow, _vattributes
 from ._core import roattribute
 from Pyro4.core import isasync
+from abc import ABCMeta, abstractmethod
 from odemis import __version__
 import Pyro4
 import collections
@@ -90,7 +91,7 @@ class ArgumentError(Exception):
 
 class ComponentBase(object):
     """Abstract class for a component"""
-    pass
+    __metaclass__ = ABCMeta
 
 class Component(ComponentBase):
     '''
@@ -181,7 +182,6 @@ class ComponentProxy(ComponentBase, Pyro4.Proxy):
         Note: should not be called directly only created via pickling
         """
         Pyro4.Proxy.__init__(self, uri)
-        ComponentBase.__init__(self)
         self._parent = None
 
     # same as in Component, but set via __setstate__
@@ -239,6 +239,7 @@ class HwComponent(Component):
     A generic class which represents a physical component of the microscope
     This is an abstract class that should be inherited.
     """
+    __metaclass__ = ABCMeta
 
     def __init__(self, name, role, *args, **kwargs):
         Component.__init__(self, name, *args, **kwargs)
@@ -362,12 +363,13 @@ class Detector(HwComponent):
     A component which represents a detector.
     This is an abstract class that should be inherited.
     """
+    __metaclass__ = ABCMeta
+
     def __init__(self, name, role, children=None, **kwargs):
         HwComponent.__init__(self, name, role, **kwargs)
         if children:
             raise ArgumentError("Detector components cannot have children.")
 
-        # TODO to be remotable
         # To be overridden
         self._shape = (0) # maximum value of each dimension of the detector. A CCD camera 2560x1920 with 12 bits intensity has a 3D shape (2560,1920,2048).
         self.pixelSize = None # VA representing the size of a pixel (in meters). More precisely it should be the average distance between the centres of two pixels.
@@ -383,6 +385,8 @@ class DigitalCamera(Detector):
     A component which represent a digital camera (i.e., CCD or CMOS)
     It's basically a detector with a few more compulsory VAs
     """
+    __metaclass__ = ABCMeta
+
     def __init__(self, name, role, children=None, **kwargs):
         Detector.__init__(self, name, role, children, **kwargs)
 
@@ -397,6 +401,8 @@ class Actuator(HwComponent):
     A component which represents an actuator (motorised part).
     This is an abstract class that should be inherited.
     """
+    __metaclass__ = ABCMeta
+
     def __init__(self, name, role, axes=None, inverted=None, ranges=None, children=None, **kwargs):
         """
         axes (set of string): set of the names of the axes
@@ -421,6 +427,8 @@ class Actuator(HwComponent):
         if ranges is None:
             ranges = {}
         self._ranges = dict(ranges)
+        
+        # it should also have a .position VA
 
     @roattribute
     def axes(self):
@@ -435,7 +443,7 @@ class Actuator(HwComponent):
         """
         return self._ranges
 
-    # to be overridden
+    @abstractmethod
     @isasync
     def moveRel(self, shift):
         """
@@ -444,7 +452,7 @@ class Actuator(HwComponent):
         shift dict(string-> float): name of the axis and shift in m
         returns (Future): object to control the move request
         """
-        raise NotImplementedError()
+        pass
 
     # TODO this doesn't work over the network, because the proxy will always
     # say that the method exists.
@@ -458,7 +466,8 @@ class Actuator(HwComponent):
         """
         ret = dict(shift)
         for a in self._inverted:
-            ret[a] = -ret[a]
+            if a in ret:
+                ret[a] = -ret[a]
         return ret
 
     def _applyInversionAbs(self, pos):
@@ -468,7 +477,8 @@ class Actuator(HwComponent):
         """
         ret = dict(pos)
         for a in self._inverted:
-            ret[a] = self._ranges[a][0] + self._ranges[a][1] - ret[a]
+            if a in ret:
+                ret[a] = self._ranges[a][0] + self._ranges[a][1] - ret[a]
         return ret
 
 class Emitter(HwComponent):
@@ -476,6 +486,8 @@ class Emitter(HwComponent):
     A component which represents an emitter.
     This is an abstract class that should be inherited.
     """
+    __metaclass__ = ABCMeta
+
     def __init__(self, name, role, children=None, **kwargs):
         HwComponent.__init__(self, name, role, **kwargs)
         if children:
@@ -535,7 +547,6 @@ class CombinedActuator(Actuator):
             canAbs &= hasattr(child, "moveAbs") # TODO: need to use capabilities, to work with proxies
         if canAbs:
             self.moveAbs = self._moveAbs
-
 
         children_axes = {} # dict actuator -> set of string (our axes)
         for axis, (child, axis_mapped) in self._axis_to_child.items():
@@ -613,6 +624,7 @@ class CombinedActuator(Actuator):
             if axis not in self._axis_to_child:
                 raise Exception("Axis unknown: " + str(axis))
             child, child_axis = self._axis_to_child[axis]
+            logging.debug("Moving axis %s -> %s by %g", axis, child_axis, distance)
             f = child.moveRel({child_axis: distance})
             futures.append(f)
 

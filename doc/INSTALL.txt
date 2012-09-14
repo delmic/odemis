@@ -1,11 +1,10 @@
 How to install Odemis
 
 
-
 = Installing the dependencies =
 
 You need Ubuntu 12.04 (x86 - 32 bits).
-sudo apt-get install python-imaging python-yaml python-gdal python-serial python-zmq python-concurrent.futures python-scipy
+sudo apt-get install python-imaging python-yaml python-gdal python-serial python-zmq python-concurrent.futures python-scipy python-decorator cgroup-bin
 
 wxPython 2.9 is also required, but it has to be built form source as described
 in the following section.
@@ -33,8 +32,8 @@ sudo python2.7 build-wxpython.py --build_dir=../build --install
 - *important!* Update library database:
 sudo ldconfig
 
-Optionally, if you want to modify the graphical user interace, you need to
-make the follwing prepartion concerning XRCEd. (XRCED is the GUI editor of
+Optionally, if you want to modify the graphical user interface, you need to
+make the following preparation concerning XRCEd. (XRCED is the GUI editor of
 choice.)
 
 - Find the location where you Python packages are installed:
@@ -45,7 +44,6 @@ choice.)
   odemis/gui/xmlh directory.
     sudo ln -s <path to odemis root dir>/gui/xmlh/xh_delmic.py
     sudo ln -s <path to odemis root dir>/gui/xmlh/delmic.py
-
 
 
 = Installing Odemis =
@@ -59,19 +57,23 @@ Create a "odemis" group and add all the necessary users to it:
 sudo addgroup odemis
 sudo adduser replace_by_login_name odemis
 
-On Linux, install the files this way:
-cd odemis/install/linux
-sudo cp -dr --preserve=mode,xattr,timestamps * /
+(You need to log out to get the user in the new group)
 
+On Linux, install the files this way:
+cd odemis
+sudo cp -dr --preserve=mode,xattr,timestamps install/linux/* /
 
 
 = Installing the vendor device drivers =
 
 == Andor Clara camera ==
 
-- Install Andor SDK (USB product) version 3.3.1 (3.3.3 does *not* work).
+Note that it's recommended to plug the USB cable to a separate USB hub (to 
+ensure full bandwidth availability). To check this you can use:
+lsusb -t
+
 - Install the driver:
-  WARNING! no version works fully, but if we create a Frankstein one, it does:
+  WARNING! no version works fully, but if we create a Frankenstein one, it does:
   * v2.93 (and v2.91+) doesn't work because it blocks after a few image acquired
   * v2.90 doesn't support changing the preamp gain
   * The firmware of v2.90 (/usr/local/etc/andor) and code from v2.93
@@ -83,8 +85,8 @@ sudo cp -dr --preserve=mode,xattr,timestamps * /
   sudo install etc/* /usr/local/etc/andor/
 
 
-On Linux/Ubuntu you need to install libusb-dev (so that whereis reports
-libusb.so).
+On Linux/Ubuntu you need to install libusb-dev (or have a link from libusb.so to
+libusb-0.1.so.4).
 
 Also the the permissions of all the files must be allowed for normal user:
 everything is installed by default as root only, so nothing can work from the
@@ -99,18 +101,19 @@ sudo gedit /etc/udev/rules.d/andor.rules
 sudo udevadm control --reload-rules
 
 
-== Andor Neo camera ==
+== Andor Neo camera (used for camera simulator too) ==
 
-- Install Andor SDK v3.3+
+- Install Andor SDK v3.1 (3.3 does *not* work for simulator).
 
 On Linux, the bitflow driver has to be reinstalled (recompiled) each time the
 kernel is updated.
 
-== Physik Instrumente C-170 piezo-motor controllers ==
+== Physik Instrumente C-170 (Redstone) piezo-motor controllers ==
 
 Nothing specific. Make sure that the normal user has permissions to access the
 serial port. For example, if it is a USB serial port adapter check the
-permissions of /dev/ttyUSB0.
+permissions of /dev/ttyUSB0. Typically, you need to do this:
+sudo adduser replace_by_login_name dialout
 
 For Linux: make sure you copy the content of install/linux/ to / and run:
 sudo udevadm control --reload-rules
@@ -132,6 +135,6 @@ SUBSYSTEMS=="usb", ATTRS{idProduct}=="1008", ATTRS{idVendor}=="1a72", RUN+="/sbi
 
 = Configuring the instantiation file =
 This file describes the available hardware for Odemis. Basically, it list for each
-hardware, which driver to use and the parameters required. See the backend
+hardware, which driver to use and the parameters required. See the back-end
 specification for precise syntax and example files.
 

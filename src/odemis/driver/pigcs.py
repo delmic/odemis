@@ -770,7 +770,6 @@ class Controller(object):
         # approximately the time for the longest move
         timeout = 5 #s
         end = time.time() + timeout
-        
         while self.isMoving(axes):
             if time.time() <= end:
                 raise IOError("Timeout while waiting for end of motion")
@@ -959,7 +958,7 @@ class Bus(model.Actuator):
             for axis, (controller, channel) in self._axis_to_cc.items():
                 position[axis] = controller.getPosition(channel)
         
-        return position
+        return self._applyInversionAbs(position)
     
     # TODO needs to be triggered by end of action, or directly controller? 
     # maybe whenever a controller updates it's position?

@@ -19,6 +19,7 @@ You should have received a copy of the GNU General Public License along with Ode
 from .comp.canvas import DraggableCanvas, WorldToBufferPoint
 from .img.data import gettest_patternImage
 from odemis.gui.log import log
+import threading
 import wx
 
 
@@ -58,6 +59,12 @@ class DblMicroscopeCanvas(DraggableCanvas):
             pass
 
         self.Bind(wx.EVT_MOUSEWHEEL, self.OnWheel)
+        
+        # TODO: If it's too resource consuming, which might want to create just our own thread
+        # FIXME: "stop all axes" should also cancel the next timer  
+        self._moveFocusLock = threading.Lock()
+        self._moveFocusDistance = 0
+        self._moveFocusTimer = wx.PyTimer(self.moveFocus)
 
 #        self.WorldOverlays.append(CrossHairOverlay("Blue", CROSSHAIR_SIZE, (-10,-10))) # debug
 #        self.WorldOverlays.append(CrossHairOverlay("Red", CROSSHAIR_SIZE, (10,10))) # debug
@@ -94,13 +101,36 @@ class DblMicroscopeCanvas(DraggableCanvas):
         """
         # we link axis 1 (up/down) to optical focus
         if axis == 1 and self.viewmodel.opt_focus:
-            # conversion: 1 px => 1 um (so a whole screen is like 1mm)
-            # negative == go up => need to inverse value
-            val = -1e-6 * shift # m
+            # conversion: 1 unit => 0.1 μm (so a whole screen, ~44000u, is a couple of mm)
+            # TODO this should be adjusted by the lens magnification:
+            # the higher the magnification, the smaller is the change (=> proportional ?)
+            # negative == go up == closer from the sample
+            val = 0.1e-6 * shift # m
             assert(abs(val) < 0.01) # never move by 1 cm
-            log.debug("Moving focus by %f um", val * 1e6)
-#            log.info("moving actuator %s", self.viewmodel.opt_focus.name)
-            self.viewmodel.opt_focus.moveRel({"z": val})
+            
+            self.queueMoveFocus(val)
+
+    def queueMoveFocus(self, shift, period = 0.1):
+        """
+        Move the focus, but at most every period, to avoid accumulating 
+        many slow small moves.
+        shift (float): distance of the focus move
+        period (second): maximum time to wait before it will be moved
+        """
+        # update the complete move to do
+        with self._moveFocusLock:
+            self._moveFocusDistance += shift
+        
+        # start the timer if not yet started
+        if not self._moveFocusTimer.IsRunning():
+            self._moveFocusTimer.Start(period * 1000.0, oneShot=True)
+
+    def moveFocus(self):
+        with self._moveFocusLock:
+            shift = self._moveFocusDistance
+            self._moveFocusDistance = 0
+        log.debug("Moving focus by %f μm", shift * 1e6)
+        self.viewmodel.opt_focus.moveRel({"z": shift})
 
     def avOnCrossHair(self, activated):
         """
@@ -151,6 +181,8 @@ class DblMicroscopeCanvas(DraggableCanvas):
                 self.SetImage(i, iim.image, pos, scale)
                 #self.ReCenterBuffer(pos)
             else:
+                #TODO： that should be better, but we don't do it for now, to detect when to reset mpp
+                #self.SetImage(i, None) # removes the image
                 pass
 
     # Zoom/merge management

@@ -32,7 +32,7 @@ class MicroscopeView(object):
         """
         self.name = name #
         self.legend_controls = [] # list of wx.Control to display in the legend
-        self.outimage = None # ActiveValue of instrumental image
+        self.outimage = None # VA of instrumental image
         self.inimage = InstrumentalImage(None, None, None) # instrumental image
         self.sizer = None
 
@@ -90,15 +90,21 @@ class MicroscopeImageView(MicroscopeView):
 
         self.viewmodel = viewmodel
         self.LegendMag = wx.StaticText(parent)
-        self.LegendMag.SetToolTipString("Magnicifaction")
+        self.LegendMag.SetToolTipString("Magnification")
         self.legend_controls.append(self.LegendMag)
 
         iim.subscribe(self.avImage)
 
-        #viewmodel.mpp.subscribe(self.avMPP, True)
+        viewmodel.mpp.subscribe(self.avMPP)
 
     @call_after
     def avImage(self, value):
+        # if first image display: automatically adapt the display to 1:1
+        # this ensures it's easy to reach a digital magnification = 1.0
+        if self.inimage.image is None:
+            if value and value.mpp:
+                self.viewmodel.mpp.value = value.mpp
+        
         self.inimage = value
         # This method might be called from any thread
         # GUI can be updated only from the GUI thread, so just send an event
@@ -169,17 +175,18 @@ class MicroscopeSEView(MicroscopeImageView):
 
         self.datamodel = datamodel
 
-        self.LegendDwell = wx.StaticText(parent)
-        self.LegendSpot = wx.StaticText(parent)
-        self.LegendHV = wx.StaticText(parent)
-
-        self.legend_controls += [self.LegendDwell,
-                                 self.LegendSpot,
-                                 self.LegendHV]
-
-        datamodel.sem_emt_dwell_time.subscribe(self.avDwellTime, True)
-        datamodel.sem_emt_spot.subscribe(self.avSpot, True)
-        datamodel.sem_emt_hv.subscribe(self.avHV, True)
+        self.LegendMag.Hide() # for the demo, one magnification is enough
+#        self.LegendDwell = wx.StaticText(parent)
+#        self.LegendSpot = wx.StaticText(parent)
+#        self.LegendHV = wx.StaticText(parent)
+#
+#        self.legend_controls += [self.LegendDwell,
+#                                 self.LegendSpot,
+#                                 self.LegendHV]
+#
+#        datamodel.sem_emt_dwell_time.subscribe(self.avDwellTime, True)
+#        datamodel.sem_emt_spot.subscribe(self.avSpot, True)
+#        datamodel.sem_emt_hv.subscribe(self.avHV, True)
 
     # TODO need to use the right dimensions for the units
     @call_after

@@ -21,15 +21,17 @@ details.
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
+from odemis.gui.log import log
 import numpy
 import scipy
+import time
 import wx
 
 # various functions to convert and modify images (DataArray and wxImage)
 
 def DataArray2wxImage(data, depth=None, brightness=None, contrast=None):
     """
-    data (DataArray): 2D image greyscale
+    data (DataArray of unsigned int): 2D image greyscale (unsigned float might work as well)
     depth (None or 1<int): maximum value possibly encoded (12 bits => 4096)
         None => brightness and contrast auto
     brightness (None or -1<=float<=1): brightness change.
@@ -44,14 +46,10 @@ def DataArray2wxImage(data, depth=None, brightness=None, contrast=None):
     
     # fit it to 8 bits and update brightness and contrast at the same time 
     if brightness is None and contrast is None:
-        # This is still quite inefficient as it turns the 16 bits into floats
-        # in a new array and then convert it to 8 bit and then duplicate it 3 times.
-        # TODO: http://wxpython-users.1045709.n5.nabble.com/BitmapFromBuffer-speed-and-proposal-for-wx-Bitmap-CopyFromBuffer-td2333356.html
-#        minmax = [numpy.amin(data), numpy.amax(data)] 
-#        drescaled = numpy.interp(data, minmax, [0, 256])
         drescaled = scipy.misc.bytescale(data)
     elif brightness == 0 and contrast == 0:
         assert(depth is not None)
+        log.info("Applying brightness and contrast 0 with depth = %d", depth)
         if depth == 256:
             drescaled = data
         else:
@@ -61,16 +59,29 @@ def DataArray2wxImage(data, depth=None, brightness=None, contrast=None):
         assert(depth is not None)
         assert(contrast is not None)
         assert(brightness is not None)
+        log.info("Applying brightness %f and contrast %f with depth = %d", brightness, contrast, depth)
         # see http://docs.opencv.org/doc/tutorials/core/basic_linear_transform/basic_linear_transform.html
+        # and http://pippin.gimp.org/image-processing/chap_point.html
+        # contrast is typically between 1/(depth/2) -> depth/2: = (depth/2)^our_contrast 
         # brightness: newpixel = origpix + brightness*depth
-        # contrast: newpixel = (origix - depth/2) * contrast + depth/2
+        # contrast: newpixel = (origpix - depth/2) * contrast + depth/2
         # truncate
-        # (could be possible to use lookup table to speed up)
-        corrected = (data + (brightness * depth - depth/2.0)) * contrast + depth/2.0 
-        # XXX need to truncate
-        # TODO: check more bytescale
-        drescaled = scipy.misc.bytescale(corrected, cmin=0, cmax=depth)
-        #raise NotImplementedError("No brightness and contrast change supported")
+        # in Python this is:
+        # corrected = (data - depth/2.0) * ((depth/2.0) ** contrast) + (depth/2.0 + brightness * depth)
+        # numpy.clip(corrected, 0, depth, corrected) # inplace
+        # drescaled_orig = scipy.misc.bytescale(corrected, cmin=0, cmax=depth)
+
+        # There are 2 ways to speed it up:
+        # * lookup table (not tried)
+        # * use the fact that it's a linear transform, like bytescale (that's what we do) => 30% speed-up 
+        hd = depth/2.0
+        a = hd ** contrast
+        b = hd * a - (hd + brightness * depth)
+        d0 = b/a
+        d256 = (b + depth)/a
+        # bytescale: linear mapping cmin, cmax -> low, high; and then take the low byte (can overflow)
+        drescaled = scipy.misc.bytescale(data.clip(d0, d256), cmin=d0, cmax=d256)
+        
 
     # TODO: shall we also handle colouration here?
         

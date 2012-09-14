@@ -20,19 +20,28 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 
+import collections
 import math
 import re
 
 import wx
 
 import odemis.gui.comp.text as text
+import odemis.gui.util.units as utun
 
 from ..comp.foldpanelbar import FoldPanelItem
-from odemis.gui.util import call_after_wrapper
-from odemis.gui.log import log
+from odemis.gui import util
+from odemis.gui.comp.radio import GraphicalRadioButtonControl
 from odemis.gui.comp.slider import CustomSlider
+from odemis.gui.log import log
+from odemis.gui.util import call_after_wrapper
 from odemis.model import getVAs, NotApplicableError, VigilantAttributeBase, \
     OutOfBoundError
+
+
+
+
+
 
 
 
@@ -53,6 +62,39 @@ CONTROL_TEXT = 4    # Editable text value (with or without unit)
 CONTROL_SLIDER = 5  # Value slider
 CONTROL_RADIO = 6  # Choice buttons (like radio buttons)
 CONTROL_COMBO = 7   # Drop down combo box
+
+
+# Utility functions
+
+def resolution_from_range(va, conf):
+    """ Try and get the maximum value of range and use
+    that to construct a list of resolutions
+    """
+    try:
+        log.debug("Generating resolutions...")
+        res = [max(va.range)]
+
+        for dummy in range(3):
+            width = res[-1][0] / 2
+            height = res[-1][1] / 2
+            res.append((width, height))
+        return res
+
+    except NotApplicableError:
+        return set()
+
+def choice_to_str(choice):
+    if not isinstance(choice, collections.Iterable):
+        choice = [unicode(choice)]
+    return u" x ".join([unicode(c) for c in choice])
+
+def traverse(seq_val):
+    if isinstance(seq_val, collections.Iterable):
+        for value in seq_val:
+            for subvalue in traverse(value):
+                yield subvalue
+    else:
+        yield seq_val
 
 # Default settings for the different components.
 # (Just a ccd for now, 2012-8-27)
@@ -75,56 +117,92 @@ SETTINGS = {
                 "exposureTime":
                 {
                     "control_type": CONTROL_SLIDER,
-                    "range": (0.01, 3.00),
                     "scale": "exp",
-                },
-                "temperature":
-                {
-
+                    "range": (0.01, 3.00),
                 },
                 "binning":
                 {
                     "control_type": CONTROL_RADIO,
-                    "choices": [1, 2, 4],
+                    "choices": set([1, 2, 4]),
+                },
+                "resolution":
+                {
+                    "control_type": CONTROL_COMBO,
+                    "choices": resolution_from_range,
+                },
+            # what we don't want to display:
+                "targetTemperature":
+                {
+                    "control_type": CONTROL_NONE,
+                },
+                "fanSpeed":
+                {
+                    "control_type": CONTROL_NONE,
+                },
+                "pixelSize":
+                {
+                    "control_type": CONTROL_NONE,
+                },
+            },
+            "e-beam":
+            {
+                "energy":
+                {
+                    "format": True
+                },
+                "spotSize":
+                {
+                    "format": True
+                },
+                "dwellTime":
+                {
+                    "control_type": CONTROL_SLIDER,
+                    "range": (0.01, 3.00),
+                    "scale": "exp",
+                },
+                "resolution":
+                {
+                    "control_type": CONTROL_COMBO,
+                    "choices": resolution_from_range,
                 },
             }
-           }
-
+        }
 
 class VigilantAttributeConnector(object):
     """ This class connects a vigilant attribute with a wxPython control,
     making sure that the changes in one are automatically reflected in the
     other.
     """
-    def __init__(self, vigilattr, ctrl, sub_func, change_event=None):
+    def __init__(self, vigilattr, ctrl, sub_func, *change_events):
         self.vigilattr = vigilattr
         self.ctrl = ctrl
         self.sub_func = call_after_wrapper(sub_func)
-        self.change_event = change_event
+        self.change_events = change_events
 
         # Subscribe to the vigilant attribute and initialize
 
         self.vigilattr.subscribe(self.sub_func, True)
 
-        # If necessary, bind the provided change event
-        if change_event:
-            self.ctrl.Bind(change_event, self._on_value_change)
+        for event in self.change_events:
+            self.ctrl.Bind(event, self._on_value_change)
 
     def _on_value_change(self, evt):
         """ This method is called when the value of the control is
         changed.
         """
         try:
-            log.warn("Assign value to vigilant attribute")
-            self.vigilattr.value = self.ctrl.GetValue()
-        except OutOfBoundError:
-            log.error("Illegal value")
+            value = self.ctrl.GetValue()
+            log.warn("Assign value %s to vigilant attribute", value)
+            self.vigilattr.value = value
+        except OutOfBoundError, oobe:
+            log.error("Illegal value: %s", oobe)
         finally:
             evt.Skip()
 
     def disconnect(self):
         log.debug("Disconnecting VigilantAttributeConnector")
-        self.ctrl.Unbind(self.change_event, self._on_value_change)
+        for event in self.change_events:
+            self.ctrl.Unbind(event, self._on_value_change)
         self.vigilattr.unsubscribe(self.sub_func)
 
 class SettingsPanel(object):
@@ -201,6 +279,7 @@ class SettingsPanel(object):
             try:
                 # An exception will be raised if no range attribute is found
                 log.debug("found range %s", value.range)
+                # TODO: if unit is "s" => scale=exp
                 if isinstance(value.value, (int, float)):
                     return CONTROL_SLIDER
             except (AttributeError, NotApplicableError):
@@ -209,24 +288,36 @@ class SettingsPanel(object):
             # Return default control
             return CONTROL_TEXT
 
-    def _get_rng_and_choice(self, va, conf):
+    def _get_rng_choice_unit(self, va, conf):
         """ Retrieve the range and choices values from the vigilant attribute
-        or override them with the values provided in the configration.
+        or override them with the values provided in the configuration.
         """
-        rng = (None, None)
-        choices = None
 
+        rng = conf.get("range", None)
         try:
-            rng = conf.get("range", va.range)
+            if rng is None:
+                rng = va.range
+            else: # merge
+                rng = [max(rng[0], va.range[0]), min(rng[1], va.range[1])]
         except (AttributeError, NotApplicableError):
             pass
 
+        choices = conf.get("choices", None)
         try:
-            choices = conf.get("choices", va.choices)
+            if callable(choices):
+                choices = choices(va, conf)
+            elif choices is None:
+                choices = va.choices
+            else: # merge = intersection
+                # TODO: if va.range but no va.choices, ensure that choices is within va.range
+                choices &= va.choices
         except (AttributeError, NotApplicableError):
             pass
 
-        return rng, choices
+        # Get unit from config, vattribute or use an empty one
+        unit =  conf.get('unit', va.unit or "")
+
+        return rng, choices, unit
 
     def add_label(self, label, value=None):
         """ Adds a label to the settings panel, accompanied by an immutable
@@ -260,6 +351,29 @@ class SettingsPanel(object):
         # If no conf provided, set it to an empty dictionary
         conf = conf or {}
 
+
+        # Get the range and choices
+        rng, choices, unit = self._get_rng_choice_unit(value, conf)
+
+        format = conf.get("format", False)
+
+        if choices:
+            if format and all([isinstance(c, (int, float)) for c in choices]):
+                choice_labels, prefix = utun.si_scale_list(choices)
+                choice_labels = [u"%g" % c for c in choice_labels]
+                unit = prefix + unit
+            else:
+                choice_labels = [choice_to_str(c) for c in choices]
+
+        # Get the defined type of control or assign a default one
+        control_type = conf.get('control_type',
+                                self._determine_default_control(value))
+
+        # Special case, early stop
+        if control_type == CONTROL_NONE:
+            # No value, not even label
+            return
+
         # Remove any 'empty panel' warning
         self._clear()
 
@@ -269,35 +383,13 @@ class SettingsPanel(object):
         lbl_ctrl = wx.StaticText(self.panel, -1, "%s:" % label)
         self._sizer.Add(lbl_ctrl, (self.num_entries, 0), flag=wx.ALL, border=5)
 
-
-        # If no value provided...
-        if not value:
-            log.warn("No value provided for %s", label)
-            self.fb_panel.Parent.Layout()
-            self.num_entries += 1
-            return
-
-
-        # Get unit from config, vattribute or use an empty one
-        unit =  conf.get('unit', value.unit or "")
-        # Get the range and choices
-        rng, choices = self._get_rng_and_choice(value, conf)
-        # Get the defined type of control or assign a default one
-        control_type = conf.get('control_type',
-                                self._determine_default_control(value))
-
-
         # the Vigilant Attribute Connector connects the wx control to the
         # vigilatn attribute.
         vac = None
 
+        log.debug("Adding VA %s", label)
         # Create the needed wxPython controls
-
-        if control_type == CONTROL_NONE:
-            # No value
-            return
-
-        elif control_type == CONTROL_LABEL:
+        if control_type == CONTROL_LABEL:
             # Read only value
             # In this case the value need to be transformed into a string
 
@@ -360,11 +452,11 @@ class SettingsPanel(object):
             new_ctrl.set_linked_field(txt_ctrl)
             txt_ctrl.set_linked_slider(new_ctrl)
 
-            self._sizer.Add(txt_ctrl, (self.num_entries, 2), flag=wx.ALL, border=5)
+            self._sizer.Add(txt_ctrl,
+                            (self.num_entries, 2),
+                            flag=wx.ALL,
+                            border=5)
 
-            # Only connect one control to the vigilant attribute.
-            # Communication between the controls should keep them 'synchronized'
-            # value wise.
             vat = VigilantAttributeConnector(value,
                                              txt_ctrl,
                                              txt_ctrl.SetValueStr,
@@ -389,7 +481,6 @@ class SettingsPanel(object):
             new_ctrl.SetBackgroundColour(self.panel.GetBackgroundColour())
 
             #value.subscribe(lambda v: new_ctrl.SetValue(v))
-
             #new_ctrl.SetValue("AAAAAA")
 
             # value.subscribe(lambda v: log.warn("lambda"))
@@ -403,12 +494,70 @@ class SettingsPanel(object):
                                              new_ctrl.SetValueStr,
                                              wx.EVT_TEXT_ENTER)
 
-        elif control_type in (CONTROL_RADIO, CONTROL_COMBO):
-            new_ctrl = wx.ComboBox(self.panel, -1, u"%s %s" % (value.value, unit), (0, 0),
-                         (100, 16), [u"%s %s" % (c, unit) for c in choices],
-                         wx.NO_BORDER | wx.CB_DROPDOWN | wx.TE_PROCESS_ENTER | wx.CB_SORT)
+        elif control_type == CONTROL_RADIO:
+            new_ctrl = GraphicalRadioButtonControl(self.panel,
+                                                   -1,
+                                                   size=(-1, 16),
+                                                   choices=choices,
+                                                   style=wx.NO_BORDER,
+                                                   labels=choice_labels,
+                                                   units=unit)
+            vac = VigilantAttributeConnector(value,
+                                             new_ctrl,
+                                             new_ctrl.SetValue,
+                                             wx.EVT_BUTTON)
+
+        elif control_type == CONTROL_COMBO:
+
+            new_ctrl = wx.ComboBox(self.panel, -1, pos=(0, 0), size=(100, 16),
+                                    style=wx.NO_BORDER |
+                                          wx.CB_DROPDOWN |
+                                          wx.TE_PROCESS_ENTER|
+                                          wx.CB_READONLY)
+
+
+            def _getvalue_wrapper(self):
+                def wrapper():
+                    if self.GetSelection() != wx.NOT_FOUND:
+                        data = self.GetClientData(self.GetSelection())
+                        return data
+                    return None
+                return wrapper
+
+            new_ctrl.GetValue = _getvalue_wrapper(new_ctrl)
+
+            def _setvalue_wrapper(self):
+                def wrapper(value):
+                    for i in range(self.Count):
+                        if self.GetClientData(i) == value:
+                            self.SetSelection(i)
+                            break
+                        print "????????????????", self.GetClientData(i), value
+                return wrapper
+
+            new_ctrl.SetValue = _setvalue_wrapper(new_ctrl)
+
+            #str_choices = [choice_to_str(choice, unit) for choice in choices]
+            #new_ctrl.AutoComplete(str_choices)
+
+            for choice, label in zip(choices, choice_labels):
+                new_ctrl.Append(u"%s %s" % (label, unit), choice)
+
             new_ctrl.SetForegroundColour(FOREGROUND_COLOUR_EDIT)
             new_ctrl.SetBackgroundColour(self.panel.GetBackgroundColour())
+
+            def _get_subfunc(unit):
+                def subfunc(v):
+                    log.warn(v)
+                    new_ctrl.SetValue(u"%s %s" % (choice_to_str(v), unit))
+                return subfunc
+
+            vac = VigilantAttributeConnector(
+                    value,
+                    new_ctrl,
+                    new_ctrl.SetValue,
+                    wx.EVT_COMBOBOX, wx.EVT_TEXT_ENTER)
+
 
         elif control_type == CONTROL_FLT:
             new_ctrl = text.UnitFloatCtrl(self.panel,
@@ -421,7 +570,7 @@ class SettingsPanel(object):
             new_ctrl.SetBackgroundColour(self.panel.GetBackgroundColour())
 
         else:
-            txt = unicode("%s %s" % (value.value, unit))
+            txt = util.units.readable_str(value.value, unit)
             new_ctrl = wx.StaticText(self.panel, -1, txt)
 
 
@@ -458,39 +607,46 @@ class SettingsSideBar(object):
     of the setting panel.
     """
 
-    def __init__(self, main_frame):
-        global MAIN_FRAME
-        MAIN_FRAME = main_frame
+    def __init__(self, main_frame, microscope):
+        self._main_frame = main_frame
 
         self._stream_panel = StreamPanel()
         self._sem_panel = SemSettingsPanel(
-                                    MAIN_FRAME.fp_sem_settings,
+                                    main_frame.fp_sem_settings,
                                     "No SEM found")
         self._optical_panel = OpticalSettingsPanel(
-                                    MAIN_FRAME.fp_optical_settings,
+                                    main_frame.fp_optical_settings,
                                     "No optical microscope found")
 
+        # Query Odemis daemon (Should move this to separate thread)
+        for comp in microscope.detectors:
+            if comp.role == 'ccd':
+                self.add_ccd(comp)
+
+        for comp in microscope.emitters:
+            if comp.role == 'e-beam':
+                self.add_ebeam(comp)
+
     # Optical microscope settings
-
     def add_ccd(self, comp):
-
         self._optical_panel.add_label("Camera", comp.name)
+
         vigil_attrs = getVAs(comp)
+        for name, value in vigil_attrs.items():
+            if comp.role in SETTINGS and name in SETTINGS[comp.role]:
+                conf = SETTINGS[comp.role][name]
+            else:
+                conf = None
+            self._optical_panel.add_value(name, value, conf)
 
-        if SETTINGS.has_key("ccd"):
+    def add_ebeam(self, comp):
+#        self._sem_panel.add_label("SEM", comp.name)
 
-            for name, value in vigil_attrs.iteritems():
-
-                if SETTINGS["ccd"].has_key(name):
-                    self._optical_panel.add_value(name,
-                                                  value,
-                                                  SETTINGS["ccd"][name])
-                else:
-                    log.debug("No configuration found for %s attribute", name)
-        else:
-            log.warn("No CCD settings found! Generating default controls")
-
-            for name, value in vigil_attrs.iteritems():
-                self._optical_panel.add_value(name, value)
-
+        vigil_attrs = getVAs(comp)
+        for name, value in vigil_attrs.items():
+            if comp.role in SETTINGS and name in SETTINGS[comp.role]:
+                conf = SETTINGS[comp.role][name]
+            else:
+                conf = None
+            self._sem_panel.add_value(name, value, conf)
 

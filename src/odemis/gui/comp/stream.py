@@ -238,18 +238,21 @@ class StreamPanelEntry(wx.PyPanel):
 
     expander_class = FixedExpander
 
-    def __init__(self, parent, wid=wx.ID_ANY, label="no label",
+    def __init__(self, parent, stream, wid=wx.ID_ANY, label="no label",
                  pos=wx.DefaultPosition, size=wx.DefaultSize,
                  style=wx.CP_DEFAULT_STYLE, agwStyle=0,
                  validator=wx.DefaultValidator, name="CollapsiblePane",
                  collapsed=True):
+        """
+        stream (Stream): the data model to be displayed (and modified by the user)
+        """
 
         wx.PyPanel.__init__(self, parent, wid, pos, size, style, name)
 
         self.SetBackgroundColour("#4D4D4D")
         self.SetForegroundColour("#DDDDDD")
-
-        self._label = label
+        self._stream = stream
+        self._label = label # TODO should be in the stream
         self._collapsed = True
         self._agwStyle = agwStyle | wx.CP_NO_TLW_RESIZE #|wx.CP_GTK_EXPANDER
 
@@ -366,8 +369,11 @@ class StreamPanelEntry(wx.PyPanel):
                       flag=wx.LEFT | wx.ALIGN_CENTRE_VERTICAL,
                       border=34)
 
+        # FIXME: we need to ensure it's possible to have a value == 0 (and not just 1/201)
         self._sld_brightness = CustomSlider(
-            self._panel, -1, 128, (0, 255), (30, 15), (-1, 10),
+            self._panel, -1,
+            self._stream.optical_brightness.value, self._stream.optical_brightness.range,
+            (30, 15), (-1, 10),
             wx.SL_HORIZONTAL)
 
         self._gbs.Add(self._sld_brightness, (1, 1), flag=wx.EXPAND)
@@ -378,7 +384,8 @@ class StreamPanelEntry(wx.PyPanel):
                 style=wx.NO_BORDER,
                 size=(30, -1),
                 min_val=self._sld_brightness.GetMin(),
-                max_val=self._sld_brightness.GetMax())
+                max_val=self._sld_brightness.GetMax(),
+                step=10)
         self._txt_brightness.SetForegroundColour("#2FA7D4")
         self._txt_brightness.SetBackgroundColour(self.GetBackgroundColour())
 
@@ -393,7 +400,9 @@ class StreamPanelEntry(wx.PyPanel):
                       flag=wx.LEFT | wx.ALIGN_CENTRE_VERTICAL, border=34)
 
         self._sld_contrast = CustomSlider(
-            self._panel, -1, 128, (0, 255), (30, 15), (-1, 10),
+            self._panel, -1,
+            self._stream.optical_contrast.value, self._stream.optical_contrast.range,
+            (30, 15), (-1, 10),
             wx.SL_HORIZONTAL)
 
         self._gbs.Add(self._sld_contrast, (2, 1), flag=wx.EXPAND)
@@ -404,7 +413,8 @@ class StreamPanelEntry(wx.PyPanel):
                 style=wx.NO_BORDER,
                 size=(30, -1),
                 min_val=self._sld_contrast.GetMin(),
-                max_val=self._sld_contrast.GetMax())
+                max_val=self._sld_contrast.GetMax(),
+                step=10)
         self._txt_contrast.SetForegroundColour("#2FA7D4")
         self._txt_contrast.SetBackgroundColour(self.GetBackgroundColour())
 
@@ -423,7 +433,7 @@ class StreamPanelEntry(wx.PyPanel):
         self._expander._btn_play.Bind(wx.EVT_BUTTON, self.on_play)
 
         # Panel controls
-
+        # TODO maybe reuse VigilantAttributeConnector?
         self._sld_brightness.Bind(wx.EVT_MOTION, self.on_brightness_slide)
         self._sld_brightness.Bind(wx.EVT_LEFT_UP, self.on_brightness_slide)
         self._txt_brightness.Bind(wx.EVT_TEXT_ENTER, self.on_brightness_entered)
@@ -436,42 +446,51 @@ class StreamPanelEntry(wx.PyPanel):
 
         self._btn_auto_contrast.Bind(wx.EVT_BUTTON, self.on_toggle_autocontrast)
 
+        self._btn_auto_contrast.SetToggle(self._stream.optical_auto_bc.value)
+        self.on_toggle_autocontrast(None) # to ensure the controls are disabled if necessary
 
 
     def on_toggle_autocontrast(self, evt):
-        enabled = not self._btn_auto_contrast.GetToggle()
-
-        self._sld_brightness.Enable(enabled)
-        self._txt_brightness.Enable(enabled)
-
-        self._sld_contrast.Enable(enabled)
-        self._txt_contrast.Enable(enabled)
+        enabled = self._btn_auto_contrast.GetToggle()
+        # disable the manual controls if it's on
+        ctrl_enabled = not enabled
+        self._sld_brightness.Enable(ctrl_enabled)
+        self._txt_brightness.Enable(ctrl_enabled)
+        self._sld_contrast.Enable(ctrl_enabled)
+        self._txt_contrast.Enable(ctrl_enabled)
+        
+        self._stream.optical_auto_bc.value = enabled
 
     def on_brightness_key(self, evt):
         key = evt.GetKeyCode()
 
         if key in (wx.WXK_UP, wx.WXK_DOWN):
             self._sld_brightness.SetValue(self._txt_brightness.GetValue())
+            self._stream.optical_brightness.value = self._txt_brightness.GetValue()
 
         evt.Skip()
 
 
     def on_brightness_entered(self, evt):
         self._sld_brightness.SetValue(int(self._txt_brightness.GetValue()))
+        self._stream.optical_brightness.value = self._txt_brightness.GetValue()
         evt.Skip()
 
     def on_brightness_slide(self, evt):
         if self._sld_brightness.HasCapture():
             self._txt_brightness.SetValue(self._sld_brightness.GetValue())
+            self._stream.optical_brightness.value = self._sld_brightness.GetValue()
         evt.Skip()
 
     def on_contrast_entered(self, evt):
         self._sld_contrast.SetValue(int(self._txt_contrast.GetValue()))
+        self._stream.optical_contrast.value = self._txt_contrast.GetValue()
         evt.Skip()
 
     def on_contrast_slide(self, evt):
         if self._sld_contrast.HasCapture():
             self._txt_contrast.SetValue(self._sld_contrast.GetValue())
+            self._stream.optical_contrast.value = self._sld_contrast.GetValue()
         evt.Skip()
 
     def on_contrast_key(self, evt):
@@ -479,6 +498,7 @@ class StreamPanelEntry(wx.PyPanel):
 
         if key in (wx.WXK_UP, wx.WXK_DOWN):
             self._sld_contrast.SetValue(self._txt_contrast.GetValue())
+            self._stream.optical_contrast.value = self._txt_contrast.GetValue()
 
         evt.Skip()
 
@@ -779,9 +799,12 @@ class StreamPanel(wx.Panel):
         self.txt_no_stream = wx.StaticText(self, -1, msg)
         self._sz.Add(self.txt_no_stream, 0, wx.ALL | wx.ALIGN_CENTER, 10)
 
-        self.btn_add_stream = PopupImageButton(self, bitmap=img.getstream_addBitmap())
+        self.btn_add_stream = PopupImageButton(self, -1,
+                                               bitmap=img.getstream_addBitmap(),
+                                               label="ADD STREAM",
+                                               style=wx.ALIGN_CENTER)
         self.btn_add_stream.SetBitmaps(img.getstream_add_hBitmap())
-        self._sz.Add(self.btn_add_stream, 0)
+        self._sz.Add(self.btn_add_stream, flag=wx.ALL, border=5)
 
         self._set_warning()
 

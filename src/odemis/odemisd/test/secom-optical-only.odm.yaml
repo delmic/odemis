@@ -1,7 +1,7 @@
 SECOM: {
     class: Microscope,
     role: brightfield,
-    emitters: [Light, "Nikon Super Duper", "MultiBand Fixed Filter"],
+    emitters: [Light, "Nikon Super Duper", "MultiBand Fixed Filter", EBeam],
     detectors: [Clara],
     actuators: ["Redstone Stage", "SEM-Optical Alignment", "OpticalZ actuator"],
 }
@@ -15,10 +15,15 @@ Light: {
     }
 }
 
+EBeam: {
+    class: simulated.EBeam,
+    role: e-beam,
+}
+
 "Nikon Super Duper": {
     class: static.OpticalLens,
     role: lens,
-    init: {mag: 10.0}, # ratio
+    init: {mag: 40.0}, # ratio
     affects: [Clara]
 }
 
@@ -29,23 +34,34 @@ Light: {
     affects: [Clara]
 }
 
+# Axes: X is horizontal on screen (going left->right), physical left->right of sample when user is inserting the sample
+#       Y is vertical going top-> bottom, physical: far->close from user looking from the top
 Clara: {
     class: andorcam2.AndorCam2,
     role: ccd,
-    init: {device: 0} # the only Andor camera connected so always 0
+    init: {device: 0}, # the only Andor camera connected so always 0
+    properties: {
+        exposureTime: 0.3, # s
+    }
 }
 
+# PI RedStone jumpers (.=off):
+# X,Y = 1234...8
+# X => Ch1
+# Y => Ch2
+# Axes should be synchronized with the camera
 "Redstone Stage": {
     class: pi.StageRedStone,
     role: stage,
     affects: [Clara],
     init: {
-        port: /dev/ttyPIRS,
-        x: [0, 0], y: [0, 1], # axis -> controller, channel
-        inverted: ["x"]
+        port: /dev/ttyS0, # serial port on the board
+        # port: /dev/ttyPIRS, # USB serial port
+        axes: {x: [0, 1], y: [0, 0]}, # axis -> controller, channel
+        inverted: ["y"],
     }, 
     properties: {
-        speed: 0.01 #m/s
+        speed: {'x': 0.001, 'y': 0.001} #m/s
     }
 }
 
@@ -54,16 +70,17 @@ Clara: {
     class: CombinedActuator,
     role: align,
     affects: [Clara],
-    children: {"x": PIGCS, "y": PIGCS},
+    children: {"l": PIGCS, "r": PIGCS},
     init: {
-        axes_map: {"x": "x", "y": "y"}, # maybe use theta & phi?
-        inverted: ["x"]
+        axes_map: {"l": "l", "r": "r"},
+#        inverted: ["l"]
     },
     properties: {
-        speed: {'x': 0.001, 'y': 0.001} #m/s
+        speed: {'l': 0.001, 'r': 0.001} #m/s
     }
 }
 
+# Z axis of focus: decreasing means "closer to the sample"
 "OpticalZ actuator": {
     class: CombinedActuator,
     role: focus,
@@ -73,16 +90,21 @@ Clara: {
         axes_map: {"z": "z"}
     },
     properties: {
-        speed: {'z': 0.001} #m/s
+        speed: {'z': 0.01} #m/s
     }
 }
+
+# PI E-861 jumpers (. = off):
+# L = 1234.6..
+# R = 123..6..
+# Z = 12.4.6..
 
 PIGCS: {
     class: pigcs.Bus,
     role: AlignAndFocus,
     init: {
         port: "/dev/ttyPIE",
-        axes: {"x": [1, 1, False], "y": [2, 1, False], "z": [3, 1, False]} # axis -> controller, channel, closed-loop?
+        axes: {"l": [1, 1, False], "r": [2, 1, False], "z": [3, 1, False]} # axis -> controller, channel, closed-loop?
     },
 }
 

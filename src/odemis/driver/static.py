@@ -43,8 +43,8 @@ class OpticalLens(model.HwComponent):
         self._swVersion = "N/A (Odemis %s)" % __version__.version
         self._hwVersion = name
         
-        # never updated again: it's static!
-        self.magnification = model.VigilantAttribute(mag, unit="", readonly=True)
+        # allow the user to modify the value, if the lens is manually changed
+        self.magnification = model.FloatContinuous(mag, range=[1e-3, 1e6], unit="")
     
     
 class LightFilter(model.HwComponent):

@@ -21,12 +21,19 @@ if [ $status -ne 0 ]; then
         echo "Warning: failed to check status of back-end"
     fi
     
+    # install cgroup, for memory protection
+    if [ ! -d /sys/fs/cgroup/memory/odemisd -a -x /usr/bin/cgcreate ]; then
+        echo "Creating cgroup"
+        sudo /usr/bin/cgcreate -a :odemis -g memory:odemisd
+    fi
+    
     # kill the current backend
-    pkill -f $BACKEND
+    sudo pkill -f $BACKEND
 
     # start a new one
     echo -n "Starting back-end.."
-    sudo odemisd --daemon --log-level=2 --log-target "$LOGFILE" "$MODEL"
+    # use sudo background mode to be sure it won't be killed at the end
+    sudo -b odemisd --daemonize --log-level=2 --log-target "$LOGFILE" "$MODEL"
     status=$?
     if [ $status -ne 0 ]; then
         echo " failed"
@@ -42,7 +49,9 @@ if [ $status -ne 0 ]; then
         echo "done"
     else
         echo "failed"
-        tail -n 30 "$LOGFILE"
+        grep "ERROR" "$LOGFILE" | tail -n 30
+	echo "For more log message see file $LOGFILE"
+	read -p "Press [Enter] to quit..."
         exit 1
     fi
 fi

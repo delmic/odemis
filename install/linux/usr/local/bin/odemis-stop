@@ -26,4 +26,4 @@ if pgrep -f $BACKEND > /dev/null; then
 fi
 
 # clean up
-rm -rf /var/run/odemid/*
+sudo rm -rf /var/run/odemid/*
