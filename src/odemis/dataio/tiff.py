@@ -16,6 +16,7 @@ You should have received a copy of the GNU General Public License along with Ode
 '''
 from odemis import model
 from osgeo import gdal_array
+from libtiff import TIFF
 import Image
 import gdal
 import time
@@ -24,6 +25,7 @@ import time
 FORMAT = "TIFF"
 # list of file-name extensions possible, the first one is the default when saving a file 
 EXTENSIONS = [".tiff", ".tif"]
+
 
 # Conversion from our internal tagname convention to (gdal) TIFF tagname
 # string -> (string, callable)
@@ -40,10 +42,8 @@ DATagToTiffTag = {model.MD_SW_VERSION: ("TIFFTAG_SOFTWARE", str),
 #TIFFTAG_RESOLUTIONUNIT
 # TODO how to put our own tags?
 
-# TODO no need for a class with only staticmethods!
-# => just a module with a bunch of functions
-
 # Export part
+# GDAL Python API is documented here: http://gdal.org/python/
 def _saveAsTiffGDAL(data, filename):
     """
     Saves a DataArray as a TIFF file.
@@ -60,8 +60,33 @@ def _saveAsTiffGDAL(data, filename):
     for key, val in data.metadata.items():
         if key in DATagToTiffTag:
             ds.SetMetadataItem(DATagToTiffTag[key][0], DATagToTiffTag[key][1](val))
-    driver.CreateCopy(filename, ds) # , options=["COMPRESS=LZW"] # LZW makes test image bigger
-
+    driver.CreateCopy(filename, ds, options=["PROFILE=BASELINE"]) # , options=["COMPRESS=LZW"] # LZW makes test image bigger
+    
+def _saveAsMultiTiffGDAL(ldata, filename):
+    """
+    Saves a list of DataArray as a multiple-page TIFF file.
+    ldata (list of ndarray): list of 2D data of int or float. Should have at least one array
+    filename (string): name of the file to save
+    """
+    # FIXME: This doesn't work because GDAL generates one channel per image 
+    # (band) instead of one _page_. It might be possible to use the notion of 
+    # subdatasets but it's not clear of GTiff supports them. 
+    # see http://www.gdal.org/gdal_tutorial.html
+    # and http://www.gdal.org/frmt_hdf5.html 
+    # and http://osgeo-org.1560.n6.nabble.com/ngpython-and-GetSubDataSets-td3760233.html
+    assert(len(ldata) > 0)
+    driver = gdal.GetDriverByName("GTiff")
+    
+    data0 = ldata[0]
+    datatype = gdal_array.NumericTypeCodeToGDALTypeCode(data0.dtype.type)
+    # FIXME: we assume all the data is the same shape and type
+    ds = driver.Create(filename, data0.shape[1], data0.shape[0], len(ldata), datatype)
+    
+    for i, data in enumerate(ldata):
+        data.shape = (data.shape[1], data.shape[0])
+        ds.GetRasterBand(i+1).WriteArray(data)
+        data.shape = (data.shape[1], data.shape[0])
+        
 def _saveAsTiffPIL(array, filename):
     """
     Saves an array as a TIFF file.
@@ -72,20 +97,44 @@ def _saveAsTiffPIL(array, filename):
     pil_im = Image.fromarray(array)
     #pil_im = Image.fromstring('I', size, array.tostring(), 'raw', 'I;16', 0, -1)
     # 16bits files are converted to 32 bit float TIFF with PIL
-    pil_im.save(filename, "TIFF") 
+    pil_im.save(filename, "TIFF")
 
-# TODO need better interface, to allow multiple page export. => A list of data?
+
+# TODO support thumbnails: http://www.libtiff.org/man/thumbnail.1.html
+def _saveAsTiffLT(data, filename):
+    """
+    Saves a DataArray as a TIFF file.
+    data (ndarray): 2D data of int or float
+    filename (string): name of the file to save
+    """
+    tif = TIFF.open(filename, mode='w')
+    tif.write_image(data)
+
+def _saveAsMultiTiffLT(ldata, filename):
+    """
+    Saves a list of DataArray as a multiple-page TIFF file.
+    ldata (list of ndarray): list of 2D data of int or float. Should have at least one array
+    filename (string): name of the file to save
+    """
+    tif = TIFF.open(filename, mode='w')
+
+    for data in ldata:    
+        tif.write_image(data)
+
 # TODO interface must support thumbnail export as well
 def export(data, filename):
     '''
     Write a TIFF file with the given image and metadata
-    data (model.DataArray): the data to export, must be 2D of int or float
-        metadata is taken directly from the data object.
+    data (list of model.DataArray, or model.DataArray): the data to export, 
+        must be 2D of int or float. Metadata is taken directly from the data 
+        object. If it's a list, a multiple page file is created.
     filename (string): filename of the file to create (including path)
     '''
-    # TODO should probably not enforce it: respect duck typing
-    assert(isinstance(data, model.DataArray))
-    _saveAsTiffGDAL(data, filename)
-    
+    if isinstance(data, list):
+        _saveAsMultiTiffLT(data, filename)
+    else:
+        # TODO should probably not enforce it: respect duck typing
+        assert(isinstance(data, model.DataArray))
+        _saveAsTiffLT(data, filename)
     
     

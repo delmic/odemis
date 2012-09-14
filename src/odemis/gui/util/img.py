@@ -24,7 +24,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from odemis.gui.log import log
 import numpy
 import scipy
-import time
 import wx
 
 # various functions to convert and modify images (DataArray and wxImage)
