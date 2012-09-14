@@ -24,6 +24,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from odemis.gui.log import log
 import numpy
 import scipy
+import time
 import wx
 
 # various functions to convert and modify images (DataArray and wxImage)
@@ -63,15 +64,24 @@ def DataArray2wxImage(data, depth=None, brightness=None, contrast=None):
         # and http://pippin.gimp.org/image-processing/chap_point.html
         # contrast is typically between 1/(depth/2) -> depth/2: = (depth/2)^our_contrast 
         # brightness: newpixel = origpix + brightness*depth
-        # contrast: newpixel = origpix + (origpix - depth/2) * contrast + depth/2
+        # contrast: newpixel = (origpix - depth/2) * contrast + depth/2
         # truncate
-        # (could be possible to use lookup table to speed up)
-        # FIXME: possible to directly do this in bytescale?
-        corrected = (data - depth/2.0) * ((depth/2.0) ** contrast) + (depth/2.0 + brightness * depth)
-        # bytescale will overflow otherwise
-        numpy.clip(corrected, 0, depth, corrected) # inplace 
-        # bytescale: linear mapping cmin, cmax -> low, high; and then take the low byte
-        drescaled = scipy.misc.bytescale(corrected, cmin=0, cmax=depth)
+        # in Python this is:
+        # corrected = (data - depth/2.0) * ((depth/2.0) ** contrast) + (depth/2.0 + brightness * depth)
+        # numpy.clip(corrected, 0, depth, corrected) # inplace
+        # drescaled_orig = scipy.misc.bytescale(corrected, cmin=0, cmax=depth)
+
+        # There are 2 ways to speed it up:
+        # * lookup table (not tried)
+        # * use the fact that it's a linear transform, like bytescale (that's what we do) => 30% speed-up 
+        hd = depth/2.0
+        a = hd ** contrast
+        b = hd * a - (hd + brightness * depth)
+        d0 = b/a
+        d256 = (b + depth)/a
+        # bytescale: linear mapping cmin, cmax -> low, high; and then take the low byte (can overflow)
+        drescaled = scipy.misc.bytescale(data.clip(d0, d256), cmin=d0, cmax=d256)
+        
 
     # TODO: shall we also handle colouration here?
         

@@ -369,6 +369,7 @@ class StreamPanelEntry(wx.PyPanel):
                       flag=wx.LEFT | wx.ALIGN_CENTRE_VERTICAL,
                       border=34)
 
+        # FIXME: we need to ensure it's possible to have a value == 0 (and not just 1/201)
         self._sld_brightness = CustomSlider(
             self._panel, -1,
             self._stream.optical_brightness.value, self._stream.optical_brightness.range,
