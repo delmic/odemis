@@ -14,7 +14,6 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
-from odemis.model import roattribute
 from odemis import __version__
 from odemis import model
 import collections
@@ -87,18 +86,20 @@ class LightFilter(model.HwComponent):
                 raise TypeError("Expected only 2 floats in band, found %d" % len(band))
             if band[0] > band[1]:
                 raise TypeError("Min of band must be first in list")
-            band = tuple(band)
-             
-        self._band = band
+            band = [tuple(band)]
+        
+        # Check that the values are in m: they are typically within nm (< um!)
+        max_val = 1e-6
+        for low, high in band:
+            if low > max_val or high > max_val:
+                raise ValueError("Band contains very high values for light wavelength, ensure the value is in meters: %r.", band)
+        
+        self.band = model.ListVA(band, unit="m")
+        
         # TODO: MD_OUT_WL or MD_IN_WL depending on affect
         self._metadata = {model.MD_FILTER_NAME: name,
                           model.MD_OUT_WL: band}
         
     def getMetadata(self):
         return self._metadata
-    
-    # For info to the user once the component is created
-    @roattribute
-    def band(self):
-        return self._band 
     
