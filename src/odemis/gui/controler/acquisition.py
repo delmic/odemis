@@ -149,10 +149,15 @@ class AcquisitionController(object):
                 self.set_output_brightness(self._outputs, brightness)
                 time.sleep(0.05) # ensure not to use too much CPU
                 now = time.time()
+        except subprocess.CalledProcessError:
+            log.info("Failed to run snapshot animation.")
         finally:
             # make sure we put it back
             time.sleep(0.05)
-            self.set_output_brightness(self._outputs, brightness_orig)
+            try:
+                self.set_output_brightness(self._outputs, brightness_orig)
+            except subprocess.CalledProcessError:
+                pass
 
     @staticmethod
     def get_display_outputs():
