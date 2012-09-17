@@ -34,12 +34,14 @@ class Light(model.Emitter):
         model.Emitter.__init__(self, name, role, **kwargs)
         
         self.shape = (1)
+        self.power = model.FloatEnumerated(100, (0, 100), unit="W")
+        self.power.subscribe(self._updatePower)
+        # just one band: white
+        # emissions is list of 0 <= floats <= 1. Always 1.0: cannot lower it.
+        self.emissions = model.ListVA([1.0], unit="", setter=lambda x: [1.0])
+        self.spectra = model.ListVA([(380e-9, 160e-9, 560e-9, 960e-9, 740e-9)],
+                                     unit="m", readonly=True) # list of 5-tuples of floats
         
-        self.wavelength = model.FloatVA(560e-9, unit="m", readonly=True) # average of white
-        self.spectrumWidth = model.FloatVA(360e-9, unit="m", readonly=True) # visible light
-        self.power = model.FloatEnumerated(100, (0, 100), unit="W",
-                                           setter=self.setPower)
-    
     def getMetadata(self):
         metadata = {}
         metadata[model.MD_IN_WL] = (380e-9, 740e-9)
@@ -47,12 +49,11 @@ class Light(model.Emitter):
         metadata[model.MD_LIGHT_POWER] = self.power.value
         return metadata
     
-    def setPower(self, value):
+    def _updatePower(self, value):
         if value == 0:
             logging.info("Light is off")
         else:
             logging.info("Light is on")
-        return value
 
 
 class EBeam(model.Emitter):
