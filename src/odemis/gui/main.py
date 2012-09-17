@@ -278,12 +278,12 @@ class OdemisGUIApp(wx.App):
             pos = (pos[0] + 2e-6, pos[1] - 1e-5)
             name2 = os.path.join(os.path.dirname(__file__), "1-sem-bse.png")
             im2 = InstrumentalImage(wx.Image(name2), 4.54545e-7, pos)
-            
+
             self.secom_model.sem_det_image.value = im2
             self.secom_model.optical_det_image.value = im1
         except e:
             log.exception("Failed to load example")
-            
+
     def on_load_example2(self, e):
         """ Open the two files for example """
         try:
@@ -294,12 +294,12 @@ class OdemisGUIApp(wx.App):
             pos = (pos[0] + 5.5e-06, pos[1] + 1e-6)
             name1 = os.path.join(os.path.dirname(__file__), "3-optical.png")
             im1 = InstrumentalImage(wx.Image(name1), 1.34e-07, pos)
-            
+
             self.secom_model.sem_det_image.value = im2
             self.secom_model.optical_det_image.value = im1
         except e:
             log.exception("Failed to load example")
-            
+
     def goto_debug_mode(self):
         """ This method sets the application into debug mode, setting the
         log level and opening the log panel. """
@@ -359,30 +359,11 @@ class OdemisGUIApp(wx.App):
         """ Method to intercept unexpected errors that are not caught
         anywhere else and redirects them to the logger. """
         exc = traceback.format_exception(type, value, trace)
-
         log.error("".join(exc))
 
+        # When an exception occurs, automatically got to debug mode.
         if not isinstance(value, NotImplementedError):
-            # TODO: create custom dialogs for Odemis
-
-            # msg = "Unexpected error!"
-            # answer = elit.dialog.error_report_dialog(self.main_frame, msg, 'Onverwachte fout!')
-            # if  answer == wx.ID_YES:
-            #     try:
-            #         print "Sending error report"
-            #         self.main_frame.Hide()
-            #         elit.util.report_error()
-            #         print "Error report sent"
-            #     except: #pylint: disable=W0702
-            #         logging.exception("Error report failed")
-
-            # sys.exit will only terminate the thread it's called from,
-            # so on_close_window is called to make sure everything
-            # is cleaned up before exiting.
-
-            #self.on_close_window()
-            #sys.exit(1)
-            pass
+            self.goto_debug_mode()
 
 class OdemisOutputWindow(object):
     """ Helper class which allows ``wx`` to display uncaught
