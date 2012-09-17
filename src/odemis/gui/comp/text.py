@@ -26,6 +26,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 import locale
 import sys
+import math
 
 import wx
 import wx.lib.mixins.listctrl as listmix
@@ -257,7 +258,7 @@ class SuggestTextCtrl (wx.TextCtrl, listmix.ColumnSorterMixin):
                 wx.LC_SORT_ASCENDING | wx.LC_NO_HEADER
         self.dropdownlistbox.SetWindowStyleFlag(flags)
         if not isinstance(choices, list):
-            self._choices = list(choibces)
+            self._choices = list(choices)
         #prevent errors on "old" systems
         if sys.version.startswith("2.3"):
             self._choices.sort(lambda x, y: cmp(x.lower(), y.lower()))
@@ -486,6 +487,14 @@ class NumberValidator(wx.PyValidator):
         """ Try to cast the value string to the desired type """
         raise NotImplementedError
 
+def _step_from_range(min_val, max_val):
+    """ Dynamically create step size based on range """
+    step = (max_val - min_val) / 255.0
+    # To keep the inc/dec values 'clean', set the step
+    # value to the nearest power of 10
+    step = 10 ** round(math.log10(step))
+    return step
+
 class NumberTextCtrl(wx.TextCtrl):
     """ A base text control specifically tailored to contain numerical data """
 
@@ -496,7 +505,7 @@ class NumberTextCtrl(wx.TextCtrl):
             raise ValueError("No validator set!")
 
         key_inc = kwargs.pop('key_inc', True)
-        self.step = kwargs.pop('step', None)
+        self.step = kwargs.pop('step', 0)
         self.accuracy = kwargs.pop('accuracy', 0)
 
         # For the wx.EVT_TEXT_ENTER event to work, the TE_PROCESS_ENTER
@@ -510,8 +519,9 @@ class NumberTextCtrl(wx.TextCtrl):
         else:
             val = kwargs.pop('value', None)
 
-        # A slider control can be linkes to this text ctrl
-        self.linked_slider = None
+        # Optional callback function for when the value changes through user
+        # action. Contains dummy function by default.
+        self.change_callback = lambda x: x
 
         wx.TextCtrl.__init__(self, *args, **kwargs)
 
@@ -528,16 +538,9 @@ class NumberTextCtrl(wx.TextCtrl):
         self.Bind(wx.EVT_TEXT_ENTER, self.on_text_enter)
 
 
-    def set_linked_slider(self, slider):
-        self.linked_slider = slider
-
-    def _update_linked_slider(self, value):
-        """ Update any linked field to the same value as this slider
-        """
-        if self.linked_slider:
-            if self.linked_slider.GetValue() != value:
-                self.linked_slider.SetValue(value)
-
+    def set_change_callback(self, callback_function):
+        if hasattr(callback_function, '__call__'):
+            self.change_callback = callback_function
 
     def _check_value(self, val):
         """ Returns the numerical value after making sure it's correct.
@@ -593,7 +596,7 @@ class NumberTextCtrl(wx.TextCtrl):
         if val:
             validated, new_val = self.GetValidator().validate_value(val)
 
-            self._update_linked_slider(new_val)
+            self.change_callback(new_val)
 
             if validated:
                 self.SetValue(val)
@@ -612,9 +615,9 @@ class NumberTextCtrl(wx.TextCtrl):
         key = evt.GetKeyCode()
         val = self.GetValue()
 
-        if key == wx.WXK_UP and self.step is not None:
+        if key == wx.WXK_UP and self.step:
             val = (val or 0) + self.step
-        elif key == wx.WXK_DOWN and self.step is not None:
+        elif key == wx.WXK_DOWN and self.step:
             val = (val or 0) - self.step
         else:
             evt.Skip()
@@ -623,7 +626,7 @@ class NumberTextCtrl(wx.TextCtrl):
         validated, val = self.GetValidator().validate_value(val)
         if validated:
             self.SetValue(val)
-            self._update_linked_slider(val)
+            self.change_callback(val)
         else:
             log.warn("Invalid value %s", val)
 
@@ -643,7 +646,7 @@ class NumberTextCtrl(wx.TextCtrl):
         if val is not None and val != "":
             validated, new_val = self.GetValidator().validate_value(val)
 
-            self._update_linked_slider(new_val)
+            self.change_callback(new_val)
 
             if validated:
                 self.SetValueStr(val)
@@ -790,6 +793,10 @@ class UnitIntegerCtrl(UnitNumberCtrl):
         max_val = kwargs.pop('max_val', None)
         choices = kwargs.pop('choices', None)
         kwargs['validator'] = IntegerValidator(min_val, max_val, choices)
+
+        if 'step' not in kwargs and None not in (min_val, max_val):
+            kwargs['step'] = max(_step_from_range(min_val, max_val), 1)
+
         UnitNumberCtrl.__init__(self, *args, **kwargs)
 
 #########################################
@@ -828,7 +835,10 @@ class UnitFloatCtrl(UnitNumberCtrl):
         max_val = kwargs.pop('max_val', None)
         choices = kwargs.pop('choices', None)
         kwargs['validator'] = FloatValidator(min_val, max_val, choices)
-        kwargs['step'] = kwargs.get('step', 0.1)
+
+        if 'step' not in kwargs and None not in (min_val, max_val):
+            kwargs['step'] = _step_from_range(min_val, max_val)
+
         kwargs['accuracy'] = kwargs.get('accuracy', 3) # decimal places
 
         UnitNumberCtrl.__init__(self, *args, **kwargs)
