@@ -32,7 +32,7 @@ import odemis.gui.util.units as utun
 from ..comp.foldpanelbar import FoldPanelItem
 from odemis.gui import util
 from odemis.gui.comp.radio import GraphicalRadioButtonControl
-from odemis.gui.comp.slider import CustomSlider
+from odemis.gui.comp.slider import Slider
 from odemis.gui.log import log
 from odemis.gui.util import call_after_wrapper
 from odemis.model import getVAs, NotApplicableError, VigilantAttributeBase, \
@@ -412,7 +412,7 @@ class SettingsPanel(object):
         elif control_type == CONTROL_SLIDER:
             # The slider is accompanied by an extra number text field
 
-            new_ctrl = CustomSlider(self.panel, value=value.value,
+            new_ctrl = Slider(self.panel, value=value.value,
                                     val_range=rng,
                                     size=(30, 15),
                                     pos=(-1, 10),
@@ -591,14 +591,16 @@ def get_func(ctrl_func):
         ctrl_func(v)
     return _listener
 
-class StreamPanel(object):
-    pass
-
 class SemSettingsPanel(SettingsPanel):
     pass
 
 class OpticalSettingsPanel(SettingsPanel):
     pass
+
+class StreamPanel(object):
+
+    def __init__(self, strm_panel):
+        self.panel = strm_panel
 
 class SettingsSideBar(object):
     """ The main controller class for the settigns panel in the live view.
@@ -610,7 +612,7 @@ class SettingsSideBar(object):
     def __init__(self, main_frame, microscope):
         self._main_frame = main_frame
 
-        self._stream_panel = StreamPanel()
+        self._stream_panel = StreamPanel(main_frame.pnl_stream)
         self._sem_panel = SemSettingsPanel(
                                     main_frame.fp_sem_settings,
                                     "No SEM found")

@@ -20,50 +20,23 @@ from wx.lib.agw.aui.aui_utilities import StepColour
 from odemis.gui.log import log
 from odemis.gui.img.data import getsliderBitmap, getslider_disBitmap
 
-class Slider(wx.Slider):
-    """ This custom Slider class was implemented so it would not capture
-    mouse wheel events, which were causing problems when the user wanted
-    to scroll through the main fold panel bar.
-    """
 
-    def __init__(self, *args, **kwargs):
-        wx.Slider.__init__(self, *args, **kwargs)
-        self.Bind(wx.EVT_MOUSEWHEEL, self.pass_to_scollwin)
-
-    def pass_to_scollwin(self, evt):
-        """ This event handler prevents anything from happening to the Slider on
-        MOUSEWHEEL events and passes the event on to any parent ScrolledWindow
-        """
-
-        # Find the parent ScolledWindow
-        win = self.Parent
-        while win and not isinstance(win, wx.ScrolledWindow):
-            win = win.Parent
-
-        # If a ScrolledWindow was found, pass on the event
-        if win:
-            win.GetEventHandler().ProcessEvent(evt)
-
-
-
-
-
-class CustomSlider(wx.PyPanel):
+class Slider(wx.PyPanel):
     """
     Custom Slider class
     """
 
     def __init__(self, parent, id=wx.ID_ANY, value=0.0, val_range=(0.0, 1.0),
                  size=(-1, -1), pos=wx.DefaultPosition, style=wx.NO_BORDER,
-                 name="CustomSlider", scale=None):
+                 name="Slider", scale=None):
 
         """
         Default class constructor.
         @param parent: Parent window. Must not be None.
-        @param id: CustomSlider identifier. A value of -1 indicates a default value.
-        @param pos: CustomSlider position. If the position (-1, -1) is specified
+        @param id: Slider identifier. A value of -1 indicates a default value.
+        @param pos: Slider position. If the position (-1, -1) is specified
                     then a default position is chosen.
-        @param size: CustomSlider size. If the default size (-1, -1) is specified
+        @param size: Slider size. If the default size (-1, -1) is specified
                      then a default size is chosen.
         @param style: use wx.Panel styles
         @param name: Window name.

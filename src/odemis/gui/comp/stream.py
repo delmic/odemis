@@ -41,7 +41,7 @@ from .buttons import ImageButton, ImageToggleButton, \
 from .text import SuggestTextCtrl, IntegerTextCtrl, \
     UnitIntegerCtrl
 from .foldpanelbar import FoldPanelItem
-from .slider import CustomSlider
+from .slider import Slider
 from odemis.gui.util.conversion import wave2hex
 from odemis.gui.img.data import getemptyBitmap
 
@@ -370,7 +370,7 @@ class StreamPanelEntry(wx.PyPanel):
                       border=34)
 
         # FIXME: we need to ensure it's possible to have a value == 0 (and not just 1/201)
-        self._sld_brightness = CustomSlider(
+        self._sld_brightness = Slider(
             self._panel, -1,
             self._stream.optical_brightness.value, self._stream.optical_brightness.range,
             (30, 15), (-1, 10),
@@ -399,7 +399,7 @@ class StreamPanelEntry(wx.PyPanel):
         self._gbs.Add(lbl_contrast, (2, 0),
                       flag=wx.LEFT | wx.ALIGN_CENTRE_VERTICAL, border=34)
 
-        self._sld_contrast = CustomSlider(
+        self._sld_contrast = Slider(
             self._panel, -1,
             self._stream.optical_contrast.value, self._stream.optical_contrast.range,
             (30, 15), (-1, 10),
@@ -458,7 +458,7 @@ class StreamPanelEntry(wx.PyPanel):
         self._txt_brightness.Enable(ctrl_enabled)
         self._sld_contrast.Enable(ctrl_enabled)
         self._txt_contrast.Enable(ctrl_enabled)
-        
+
         self._stream.optical_auto_bc.value = enabled
 
     def on_brightness_key(self, evt):
