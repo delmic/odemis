@@ -86,7 +86,7 @@ class LightFilter(model.HwComponent):
                 raise TypeError("Expected only 2 floats in band, found %d" % len(band))
             if band[0] > band[1]:
                 raise TypeError("Min of band must be first in list")
-            band = [tuple(band)]
+            band = frozenset([tuple(band)])
         
         # Check that the values are in m: they are typically within nm (< um!)
         max_val = 1e-6
