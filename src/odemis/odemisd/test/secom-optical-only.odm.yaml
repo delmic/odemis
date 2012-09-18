@@ -30,7 +30,7 @@ EBeam: {
 "MultiBand Fixed Filter": {
     class: static.LightFilter,
     role: filter,
-    init: {band: [[430e-9, 480e-9], [520e-9, 600e-9]]}, # m,m
+    init: {band: [[430.e-9, 480.e-9], [520.e-9, 600.e-9]]}, # m,m
     affects: [Clara]
 }
 
