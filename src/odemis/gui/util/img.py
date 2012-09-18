@@ -97,9 +97,9 @@ def DataArray2wxImage(data, depth=None, brightness=None, contrast=None, tint=(25
         rgb[:,:,2] = drescaled # 1 copy
     else:
         rtint, gtint, btint = tint
-        # multiply by a float, cast back to int, and put into another array
-        numpy.multiply(drescaled, btint / 255., dtype="uint8", out=rgb[:,:,0])
-        numpy.multiply(drescaled, gtint / 255., dtype="uint8", out=rgb[:,:,1])
-        numpy.multiply(drescaled, rtint / 255., dtype="uint8", out=rgb[:,:,2])
+        # multiply by a float, cast back to type of out, and put into out array
+        numpy.multiply(drescaled, btint / 255., out=rgb[:,:,0])
+        numpy.multiply(drescaled, gtint / 255., out=rgb[:,:,1])
+        numpy.multiply(drescaled, rtint / 255., out=rgb[:,:,2])
 
     return wx.ImageFromBuffer(*size, dataBuffer=rgb) # 0 copy

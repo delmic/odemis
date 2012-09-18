@@ -50,8 +50,8 @@ class SECOMModel(object):
         self.optical_det_image = VigilantAttribute(InstrumentalImage(None, None, None))
         self.optical_det_raw = None # the last raw data received
         self.optical_auto_bc = VigilantAttribute(True) # whether to use auto brightness & contrast
-        self.optical_contrast = model.FloatContinuous(0, range=[-100, 100]) # ratio, contrast if no auto
-        self.optical_brightness = model.FloatContinuous(0, range=[-100, 100]) # ratio, balance if no auto
+        self.optical_contrast = model.FloatContinuous(0., range=[-100, 100]) # ratio, contrast if no auto
+        self.optical_brightness = model.FloatContinuous(0., range=[-100, 100]) # ratio, balance if no auto
 
         self.sem_emt_dwell_time = VigilantAttribute(0.00001) #s
         self.sem_emt_spot = VigilantAttribute(4) # no unit (could be m²)
@@ -220,12 +220,14 @@ class InstrumentalImage(object):
     """
     Contains an RGB bitmap and meta-data about where it is taken
     """
+    # It'd be best to have it as a subclass of wx.Image, but wxPython has many
+    # functions which return a wx.Image. We'd need to "override" them as well. 
 
     def __init__(self, im, mpp, center, rotation=0.0):
         """
-        im wx.Image
-        mpp (float>0): meters per pixel
-        center (2-tuple float): position (in meters) of the center of the image
+        im (None or wx.Image)
+        mpp (None or float>0): meters per pixel
+        center (None or 2-tuple float): position (in meters) of the center of the image
         rotation (float): rotation in degrees (i.e., 180 = upside-down) 
         Note: When displayed, the scaling, translation, and rotation have to be 
         applied "independently": scaling doesn't affect the translation, and 
@@ -233,16 +235,15 @@ class InstrumentalImage(object):
         """
         self.image = im
         # TODO should be a tuple (x/y)
-        assert(mpp > 0)
+        assert(mpp is None or (mpp > 0))
         self.mpp = mpp
-        assert(len(center) == 2)
+        assert(center is None or (len(center) == 2))
         self.center = center
         self.rotation = rotation
 
 
-
 # THE FUTURE：
-class Microscope(object):
+class MicroscopeGUI(object):
     """
     Represent a microscope directly for a graphical user interface.
     Provides direct reference to the HwComponents and 
@@ -252,6 +253,7 @@ class Microscope(object):
         """
         microscope (model.Microscope): the root of the HwComponent tree provided by the back-end
         """
+        self.microscope = microscope
         # These are either HwComponents or None (if not available)
         self.ccd = None
         self.stage = None
@@ -289,9 +291,15 @@ class Microscope(object):
             raise Exception("no emitter found in the microscope")
 
         self.streams = [] # list of streams available (handled by StreamController)
-        self.viewports = [] # list of viewports available
+        self.views = [] # list of MicroscopeViews available (handled by ViewController)
         
-    
+    def stopMotion(self):
+        """
+        Stops immediately every axis
+        """
+        self.stage.stop()
+        self.opt_focus.stop()
+        logging.info("stopped motion on every axes")
     # streams:
     #    + list of raw images that compose the whole view (ordered by time)
     #    + colouration + contrast + brightness + name + ...
@@ -490,5 +498,67 @@ def FluoStream(Stream):
         emissions = [0] * len(spectra)
         emissions[i] = 1
         self._light.emissions.value = emissions
+
+
+class MicroscopeView(object):
+    """
+    Represents a view from a microscope, and ways to alter it.
+    Basically, its input is a list of streams with merging functions, and can
+    request stage and focus move.
+    """
+    def __init__(self, stage, focus0=None, focus1=None):
+        """
+        stage (Actuator): actuator with two axes: x and y
+        focus0 (Actuator): actuator with one axis: z. Can be None
+        focus1 (Actuator): actuator with one axis: z. Can be None
+        Focuses 0 and 1 are modified when changing focus along X and Y axis.
+        """
+        self._stage = stage
+        self._focus = [focus0, focus1]
         
+        # The real stage position, to be modified via moveStage()
+        # TODO: shall we provide a VA as a simplified view of the stage.position which can move?
+        self.stage_pos = stage.position
+        stage.position.subscribe(self.onStagePos)
+        
+        # the current center of the view, which might be different from the stage
+        # TODO: we might need to have it on the MicroscopeGUI, if all the viewports must display the same location
+        pos = self.stage_pos.value
+        self.view_pos = model.ListVA((pos["x"], pos["y"]), unit="m")
+    
+        # ordered list of streams to display
+        # TODO might need to be more complex object, such as a tree with 
+        # leaves as stream and fork as merge functions
+        self.streams = model.ListVA([])
+        
+        # a thumbnail version of what is displayed
+        self.thumbnail = model.VigilantAttribute(InstrumentalImage(None, None, None))
+    
+    def moveStage(self):
+        """
+        move the stage to the current view_pos
+        return: a future (that allows to know when the move is finished)
+        """
+        pos = self.view_pos.value
+        # TODO: a way to know if it can do absolute move? => .capabilities!
+#        if hasattr(self.stage, "moveAbs"):
+#            # absolute
+#            move = {"x": pos[0], "y": pos[1]}
+#            self._stage.moveAbs(move)
+#        else:
+
+        # relative
+        prev_pos = self.stage_pos.value
+        move = {"x": pos[0] - prev_pos["x"], "y": pos[1] - prev_pos["y"]}
+        return self._stage.moveRel(move)
+
+    def onStagePos(self, pos):
+        # we want to recenter the viewports whenever the stage moves
+        # Not sure whether that's really the right way to do it though...
+        # TODO: avoid it to move the view when the user is dragging the view
+        #  => might require cleverness
+        self.view_pos = model.ListVA((pos["x"], pos["y"]), unit="m")
+    
+    
+    
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:

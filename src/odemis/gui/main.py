@@ -91,7 +91,7 @@ class OdemisGUIApp(wx.App):
     def init_logger(self):
         """ Initialize logging functionality """
         create_gui_logger(self.main_frame.txt_log)
-        log.info("Starting Odemis GUI version 0.80")
+        log.info("Starting Odemis GUI")
 
 
     def init_gui(self):

@@ -380,7 +380,7 @@ class StreamPanelEntry(wx.PyPanel):
 
 
         self._txt_brightness = IntegerTextCtrl(self._panel, -1,
-                str(self._sld_brightness.GetValue()),
+                str(int(self._sld_brightness.GetValue())),
                 style=wx.NO_BORDER,
                 size=(30, -1),
                 min_val=self._sld_brightness.GetMin(),
@@ -409,7 +409,7 @@ class StreamPanelEntry(wx.PyPanel):
 
 
         self._txt_contrast = IntegerTextCtrl(self._panel, -1,
-                str(self._sld_contrast.GetValue()),
+                str(int(self._sld_contrast.GetValue())),
                 style=wx.NO_BORDER,
                 size=(30, -1),
                 min_val=self._sld_contrast.GetMin(),
