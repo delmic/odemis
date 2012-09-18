@@ -15,12 +15,14 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 
-from Pyro4.core import oneway
-from ._core import WeakMethod, WeakRefLostError
 from . import _core
+from ._core import WeakMethod, WeakRefLostError
+from Pyro4.core import oneway
 import Pyro4
+import collections
 import inspect
 import logging
+import numbers
 import threading
 import zmq
 
@@ -479,7 +481,7 @@ class StringVA(VigilantAttribute):
 
     def _check(self, value):
         if not isinstance(value, basestring):
-            raise InvalidTypeError("Value '%s' is not a string." % str(value))
+            raise InvalidTypeError("Value '%r' is not a string." % value)
 
 class FloatVA(VigilantAttribute):
     """
@@ -487,18 +489,17 @@ class FloatVA(VigilantAttribute):
     """
 
     def __init__(self, value=0.0, *args, **kwargs):
-        VigilantAttribute.__init__(self, value, *args, **kwargs)
+        # make sure the value is a float
+        VigilantAttribute.__init__(self, float(value), *args, **kwargs)
 
     def _check(self, value):
-        try:
-            # can be anything that can be converted to a float
-            converted = float(value)
-        except ValueError:
-            raise InvalidTypeError("Value '%s' is not a float." % str(value))
+        # can be anything that looks more or less like a float
+        if not isinstance(value, numbers.Real):
+            raise InvalidTypeError("Value '%r' is not a float." % value)
 
 class IntVA(VigilantAttribute):
     """
-    A VA which contains a float
+    A VA which contains a integer
     """
 
     def __init__(self, value=0, *args, **kwargs):
@@ -507,7 +508,7 @@ class IntVA(VigilantAttribute):
     def _check(self, value):
         # we really accept only int, to avoid hiding lose of precision
         if not isinstance(value, int):
-            raise InvalidTypeError("Value '%s' is not a int." % str(value))
+            raise InvalidTypeError("Value '%r' is not a int." % value)
 
 class ListVA(VigilantAttribute):
     """
@@ -518,12 +519,23 @@ class ListVA(VigilantAttribute):
         VigilantAttribute.__init__(self, value, *args, **kwargs)
 
     def _check(self, value):
-        try:
-            converted = list(value)
-        except TypeError:
-            raise InvalidTypeError("Value '%s' is not a list." % str(value))
+        if not isinstance(value, collections.Iterable):
+            raise InvalidTypeError("Value '%r' is not a list." % value)
         # TODO we need to also detect whenever this list is modified
 
+
+class BooleanVA(VigilantAttribute):
+    """
+    A VA which contains a boolean
+    """
+
+    def __init__(self, value, *args, **kwargs):
+        VigilantAttribute.__init__(self, value, *args, **kwargs)
+
+    def _check(self, value):
+        # we really accept only boolean, to avoid hiding lose of data
+        if not isinstance(value, bool):
+            raise InvalidTypeError("Value '%r' is not a boolean." % value)
 
 # TODO maybe should provide a factory that can take a VigilantAttributeBase class and return it
 # either Continuous or Enumerated
