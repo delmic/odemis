@@ -21,48 +21,25 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
 import collections
-import math
 import re
 
 import wx
 
+import odemis.gui
 import odemis.gui.comp.text as text
 import odemis.gui.util.units as utun
 
 from ..comp.foldpanelbar import FoldPanelItem
 from odemis.gui import util
 from odemis.gui.comp.radio import GraphicalRadioButtonControl
-from odemis.gui.comp.slider import CustomSlider
+from odemis.gui.comp.slider import UnitIntegerSlider, UnitFloatSlider
 from odemis.gui.log import log
 from odemis.gui.util import call_after_wrapper
 from odemis.model import getVAs, NotApplicableError, VigilantAttributeBase, \
     OutOfBoundError
 
 
-
-
-
-
-
-
 MAIN_FRAME = None
-
-# FIXME: Move hardcoded layout options to a more suitable place
-
-BACKGROUND_COLOUR = "#333333"
-FOREGROUND_COLOUR = "#DDDDDD"
-FOREGROUND_COLOUR_DIS = "#666666"
-FOREGROUND_COLOUR_EDIT = "#2FA7D4"
-
-CONTROL_NONE = 0    # No control needed or possible
-CONTROL_LABEL = 1   # Static text for read only values
-CONTROL_INT = 2     # Editable integer value
-CONTROL_FLT = 3     # Editable float value
-CONTROL_TEXT = 4    # Editable text value (with or without unit)
-CONTROL_SLIDER = 5  # Value slider
-CONTROL_RADIO = 6  # Choice buttons (like radio buttons)
-CONTROL_COMBO = 7   # Drop down combo box
-
 
 # Utility functions
 
@@ -116,32 +93,33 @@ SETTINGS = {
             {
                 "exposureTime":
                 {
-                    "control_type": CONTROL_SLIDER,
-                    "scale": "exp",
+                    "control_type": odemis.gui.CONTROL_SLIDER,
+                    "scale": "cubic",
                     "range": (0.01, 3.00),
+                    "type": "float",
                 },
                 "binning":
                 {
-                    "control_type": CONTROL_RADIO,
+                    "control_type": odemis.gui.CONTROL_RADIO,
                     "choices": set([1, 2, 4]),
                 },
                 "resolution":
                 {
-                    "control_type": CONTROL_COMBO,
+                    "control_type": odemis.gui.CONTROL_COMBO,
                     "choices": resolution_from_range,
                 },
             # what we don't want to display:
                 "targetTemperature":
                 {
-                    "control_type": CONTROL_NONE,
+                    "control_type": odemis.gui.CONTROL_NONE,
                 },
                 "fanSpeed":
                 {
-                    "control_type": CONTROL_NONE,
+                    "control_type": odemis.gui.CONTROL_NONE,
                 },
                 "pixelSize":
                 {
-                    "control_type": CONTROL_NONE,
+                    "control_type": odemis.gui.CONTROL_NONE,
                 },
             },
             "e-beam":
@@ -156,13 +134,14 @@ SETTINGS = {
                 },
                 "dwellTime":
                 {
-                    "control_type": CONTROL_SLIDER,
+                    "control_type": odemis.gui.CONTROL_SLIDER,
                     "range": (0.01, 3.00),
-                    "scale": "exp",
+                    "scale": "cubic",
+                    "type": "float",
                 },
                 "resolution":
                 {
-                    "control_type": CONTROL_COMBO,
+                    "control_type": odemis.gui.CONTROL_COMBO,
                     "choices": resolution_from_range,
                 },
             }
@@ -218,15 +197,15 @@ class SettingsPanel(object):
 
         self.panel = wx.Panel(self.fb_panel)
 
-        self.panel.SetBackgroundColour(BACKGROUND_COLOUR)
-        self.panel.SetForegroundColour(FOREGROUND_COLOUR)
+        self.panel.SetBackgroundColour(odemis.gui.BACKGROUND_COLOUR)
+        self.panel.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR)
 
         self._sizer = wx.GridBagSizer()
 
-        self.panel.SetForegroundColour(FOREGROUND_COLOUR_DIS)
+        self.panel.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_DIS)
         self._sizer.Add(wx.StaticText(self.panel, -1, default_msg),
                         (0, 1), flag=wx.ALL, border=5)
-        self.panel.SetForegroundColour(FOREGROUND_COLOUR)
+        self.panel.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR)
 
         self.panel.SetSizer(self._sizer)
         self.fb_panel.add_item(self.panel)
@@ -252,10 +231,10 @@ class SettingsPanel(object):
         """
         if not value:
             log.warn("No value provided!")
-            return CONTROL_NONE
+            return odemis.gui.CONTROL_NONE
 
         if value.readonly:
-            return CONTROL_LABEL
+            return odemis.gui.CONTROL_LABEL
         else:
             try:
                 # This statement will raise an exception when no choices are
@@ -270,9 +249,9 @@ class SettingsPanel(object):
                 choices_str = "".join([str(c) for c in value.choices])
                 if len(value.choices) < max_items and \
                    len(choices_str) < max_items * max_len:
-                    return CONTROL_RADIO
+                    return odemis.gui.CONTROL_RADIO
                 else:
-                    return CONTROL_COMBO
+                    return odemis.gui.CONTROL_COMBO
             except (AttributeError, NotApplicableError):
                 pass
 
@@ -281,12 +260,12 @@ class SettingsPanel(object):
                 log.debug("found range %s", value.range)
                 # TODO: if unit is "s" => scale=exp
                 if isinstance(value.value, (int, float)):
-                    return CONTROL_SLIDER
+                    return odemis.gui.CONTROL_SLIDER
             except (AttributeError, NotApplicableError):
                 pass
 
             # Return default control
-            return CONTROL_TEXT
+            return odemis.gui.CONTROL_TEXT
 
     def _get_rng_choice_unit(self, va, conf):
         """ Retrieve the range and choices values from the vigilant attribute
@@ -331,12 +310,12 @@ class SettingsPanel(object):
         value_ctrl = None
 
         if value:
-            self.panel.SetForegroundColour(FOREGROUND_COLOUR_DIS)
+            self.panel.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_DIS)
 
             value_ctrl = wx.StaticText(self.panel, -1, unicode(value))
             self._sizer.Add(value_ctrl, (self.num_entries, 1),
                             flag=wx.ALL, border=5)
-            self.panel.SetForegroundColour(FOREGROUND_COLOUR)
+            self.panel.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR)
 
         self.num_entries += 1
         self.entries.append((lbl_ctrl, value_ctrl, value))
@@ -370,7 +349,7 @@ class SettingsPanel(object):
                                 self._determine_default_control(value))
 
         # Special case, early stop
-        if control_type == CONTROL_NONE:
+        if control_type == odemis.gui.CONTROL_NONE:
             # No value, not even label
             return
 
@@ -389,13 +368,13 @@ class SettingsPanel(object):
 
         log.debug("Adding VA %s", label)
         # Create the needed wxPython controls
-        if control_type == CONTROL_LABEL:
+        if control_type == odemis.gui.CONTROL_LABEL:
             # Read only value
             # In this case the value need to be transformed into a string
 
-            self.panel.SetForegroundColour(FOREGROUND_COLOUR_DIS)
+            self.panel.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_DIS)
             new_ctrl = wx.StaticText(self.panel, -1, size=(200, -1))
-            self.panel.SetForegroundColour(FOREGROUND_COLOUR)
+            self.panel.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR)
 
             def format_label(value):
                 if isinstance(value, tuple):
@@ -409,67 +388,30 @@ class SettingsPanel(object):
                                              new_ctrl,
                                              format_label)
 
-        elif control_type == CONTROL_SLIDER:
+        elif control_type == odemis.gui.CONTROL_SLIDER:
             # The slider is accompanied by an extra number text field
 
-            new_ctrl = CustomSlider(self.panel, value=value.value,
-                                    val_range=rng,
-                                    size=(30, 15),
-                                    pos=(-1, 10),
-                                    style=wx.SL_HORIZONTAL,
-                                    scale=conf.get('scale', None))
-
-            # Dynamically create step size based on range
-            step = (rng[1] - rng[0]) / 255.0
-            # To keep the inc/dec values 'clean', set the step
-            # value to the nearest power of 10
-            step = 10 ** round(math.log10(step))
-
-            # Determing the type of number text control to link with the slider
-            if isinstance(value.value, int):
-                log.debug("Adding int field to slider")
-                klass = text.UnitIntegerCtrl
-                # Enforce integer stepping
-                step = max(step, 1)
+            if conf.get('type', "integer") == "integer":
+                klass = UnitIntegerSlider
             else:
-                log.debug("Adding float field to slider")
-                klass = text.UnitFloatCtrl
+                klass = UnitFloatSlider
 
-            txt_ctrl = klass(self.panel, -1,
-                            value.value,
-                            style=wx.NO_BORDER,
-                            size=(60, -1),
-                            min_val=rng[0],
-                            max_val=rng[1],
-                            unit=unit,
-                            accuracy=2,
-                            step=step)
+            new_ctrl = klass(self.panel,
+                             value=value.value,
+                             val_range=rng,
+                             scale=conf.get('scale', None),
+                             unit=unit,
+                             t_size=(50, -1))
 
-            # Assign default colour scheme to the text control
-            txt_ctrl.SetForegroundColour(FOREGROUND_COLOUR_EDIT)
-            txt_ctrl.SetBackgroundColour(self.panel.GetBackgroundColour())
-
-            new_ctrl.set_linked_field(txt_ctrl)
-            txt_ctrl.set_linked_slider(new_ctrl)
-
-            self._sizer.Add(txt_ctrl,
-                            (self.num_entries, 2),
-                            flag=wx.ALL,
-                            border=5)
-
-            vat = VigilantAttributeConnector(value,
-                                             txt_ctrl,
-                                             txt_ctrl.SetValueStr,
-                                             wx.EVT_TEXT_ENTER)
-
-            vas = VigilantAttributeConnector(value,
+            vac = VigilantAttributeConnector(value,
                                              new_ctrl,
                                              new_ctrl.SetValue,
-                                             wx.EVT_LEFT_UP)
+                                             wx.EVT_COMMAND_ENTER)
+                                             # TODO: left_up not needed?
+                                             #wx.EVT_LEFT_UP)
 
-            vac = (vat, vas)
 
-        elif control_type == CONTROL_INT:
+        elif control_type == odemis.gui.CONTROL_INT:
             new_ctrl = text.UnitIntegerCtrl(self.panel,
                                             -1,
                                             style=wx.NO_BORDER,
@@ -477,24 +419,15 @@ class SettingsPanel(object):
                                             min_val=rng[0],
                                             max_val=rng[1],
                                             choices=choices)
-            new_ctrl.SetForegroundColour(FOREGROUND_COLOUR_EDIT)
+            new_ctrl.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_EDIT)
             new_ctrl.SetBackgroundColour(self.panel.GetBackgroundColour())
-
-            #value.subscribe(lambda v: new_ctrl.SetValue(v))
-            #new_ctrl.SetValue("AAAAAA")
-
-            # value.subscribe(lambda v: log.warn("lambda"))
-            # value.subscribe(set_on_notify)
-            # f = get_func(new_ctrl.SetValue)
-            #self.entries.append(f)
-            # value.subscribe(f)
 
             vac = VigilantAttributeConnector(value,
                                              new_ctrl,
                                              new_ctrl.SetValueStr,
                                              wx.EVT_TEXT_ENTER)
 
-        elif control_type == CONTROL_RADIO:
+        elif control_type == odemis.gui.CONTROL_RADIO:
             new_ctrl = GraphicalRadioButtonControl(self.panel,
                                                    -1,
                                                    size=(-1, 16),
@@ -507,7 +440,7 @@ class SettingsPanel(object):
                                              new_ctrl.SetValue,
                                              wx.EVT_BUTTON)
 
-        elif control_type == CONTROL_COMBO:
+        elif control_type == odemis.gui.CONTROL_COMBO:
 
             new_ctrl = wx.ComboBox(self.panel, -1, pos=(0, 0), size=(100, 16),
                                     style=wx.NO_BORDER |
@@ -543,7 +476,7 @@ class SettingsPanel(object):
             for choice, label in zip(choices, choice_labels):
                 new_ctrl.Append(u"%s %s" % (label, unit), choice)
 
-            new_ctrl.SetForegroundColour(FOREGROUND_COLOUR_EDIT)
+            new_ctrl.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_EDIT)
             new_ctrl.SetBackgroundColour(self.panel.GetBackgroundColour())
 
             def _get_subfunc(unit):
@@ -559,14 +492,14 @@ class SettingsPanel(object):
                     wx.EVT_COMBOBOX, wx.EVT_TEXT_ENTER)
 
 
-        elif control_type == CONTROL_FLT:
+        elif control_type == odemis.gui.CONTROL_FLT:
             new_ctrl = text.UnitFloatCtrl(self.panel,
                                          -1,
                                           value.value,
                                           unit=unit,
                                           min_val=value.range[0],
                                           max_val=value.range[1])
-            new_ctrl.SetForegroundColour(FOREGROUND_COLOUR_EDIT)
+            new_ctrl.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_EDIT)
             new_ctrl.SetBackgroundColour(self.panel.GetBackgroundColour())
 
         else:
@@ -591,14 +524,16 @@ def get_func(ctrl_func):
         ctrl_func(v)
     return _listener
 
-class StreamPanel(object):
-    pass
-
 class SemSettingsPanel(SettingsPanel):
     pass
 
 class OpticalSettingsPanel(SettingsPanel):
     pass
+
+class StreamPanel(object):
+
+    def __init__(self, strm_panel):
+        self.panel = strm_panel
 
 class SettingsSideBar(object):
     """ The main controller class for the settigns panel in the live view.
@@ -610,7 +545,7 @@ class SettingsSideBar(object):
     def __init__(self, main_frame, microscope):
         self._main_frame = main_frame
 
-        self._stream_panel = StreamPanel()
+        self._stream_panel = StreamPanel(main_frame.pnl_stream)
         self._sem_panel = SemSettingsPanel(
                                     main_frame.fp_sem_settings,
                                     "No SEM found")

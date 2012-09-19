@@ -20,12 +20,12 @@ class xrcfpb_frame(wx.Frame):
 #!XRCED:begin-block:xrcfpb_frame.PreCreate
     def PreCreate(self, pre):
         """ This function is called during the class's initialization.
-
+        
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
         pass
-
+        
 #!XRCED:end-block:xrcfpb_frame.PreCreate
 
     def __init__(self, parent):
@@ -105,7 +105,7 @@ def __init_resources():
     wx.FileSystem.AddHandler(wx.MemoryFSHandler())
 
     test_gui_xrc = '''\
-<?xml version="1.0" ?><resource class="UnitFloatCtrl">
+<?xml version="1.0" ?><resource version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
   <object class="wxFrame" name="fpb_frame">
     <object class="wxBoxSizer">
       <object class="sizeritem">
@@ -336,7 +336,6 @@ def __init_resources():
           <flag>wxALL|wxALIGN_CENTRE</flag>
           <border>10</border>
         </object>
-        
         <object class="sizeritem">
           <object class="UnitFloatCtrl">
             <size>200,-1</size>

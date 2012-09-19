@@ -32,7 +32,7 @@ from .log import log
 from .dblmscopecanvas import DblMicroscopeCanvas
 from .dblmscopeviewmodel import DblMscopeViewModel
 from .comp.scalewindow import ScaleWindow
-from .comp.slider import CustomSlider
+from .comp.slider import Slider
 from .img.data import getico_blending_optBitmap, getico_blending_semBitmap
 from .microscopeview import MicroscopeEmptyView, MicroscopeOpticalView, \
     MicroscopeSEView
@@ -157,7 +157,7 @@ class DblMicroscopePanel(wx.Panel):
         # Merge icons will be grabbed from gui.img.data
         ##### Merge slider
 
-        self.blendingSlider = CustomSlider(self.legend_panel,
+        self.blendingSlider = Slider(self.legend_panel,
                     wx.ID_ANY,
                     50,
                     (0, 100),

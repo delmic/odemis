@@ -38,10 +38,9 @@ import odemis.gui.img.data as img
 from odemis.gui.log import log
 from .buttons import ImageButton, ImageToggleButton, \
     ImageTextToggleButton, ColourButton, PopupImageButton
-from .text import SuggestTextCtrl, IntegerTextCtrl, \
-    UnitIntegerCtrl
+from .text import SuggestTextCtrl, UnitIntegerCtrl
 from .foldpanelbar import FoldPanelItem
-from .slider import CustomSlider
+from .slider import UnitIntegerSlider
 from odemis.gui.util.conversion import wave2hex
 from odemis.gui.img.data import getemptyBitmap
 
@@ -56,8 +55,8 @@ SCROLLBAR_WIDTH = 0
 
 class Expander(wx.PyControl):
     """ An Expander is a header/button control at the top of a StreamPanelEntry.
-    It provides a means to expand or collapse the StreamPanelEntry, as wel as a label
-    and various buttons offering easy access to much used functionality.
+    It provides a means to expand or collapse the StreamPanelEntry, as wel as a
+    label and various buttons offering easy access to much used functionality.
 
     Structure:
 
@@ -363,35 +362,21 @@ class StreamPanelEntry(wx.PyPanel):
 
 
         # ====== Second row, brightness label, slider and value
-
         lbl_brightness = wx.StaticText(self._panel, -1, "brightness:")
         self._gbs.Add(lbl_brightness, (1, 0),
                       flag=wx.LEFT | wx.ALIGN_CENTRE_VERTICAL,
                       border=34)
 
         # FIXME: we need to ensure it's possible to have a value == 0 (and not just 1/201)
-        self._sld_brightness = CustomSlider(
-            self._panel, -1,
-            self._stream.optical_brightness.value, self._stream.optical_brightness.range,
-            (30, 15), (-1, 10),
-            wx.SL_HORIZONTAL)
+        self._sld_brightness = UnitIntegerSlider(
+                              self._panel,
+                              value=self._stream.optical_brightness.value,
+                              val_range=self._stream.optical_brightness.range,
+                              t_size=(40,-1),
+                              unit="",
+                              name="brightness_slider")
 
         self._gbs.Add(self._sld_brightness, (1, 1), flag=wx.EXPAND)
-
-
-        self._txt_brightness = IntegerTextCtrl(self._panel, -1,
-                str(int(self._sld_brightness.GetValue())),
-                style=wx.NO_BORDER,
-                size=(30, -1),
-                min_val=self._sld_brightness.GetMin(),
-                max_val=self._sld_brightness.GetMax(),
-                step=10)
-        self._txt_brightness.SetForegroundColour("#2FA7D4")
-        self._txt_brightness.SetBackgroundColour(self.GetBackgroundColour())
-
-        self._gbs.Add(self._txt_brightness, (1, 2),
-                      flag=wx.ALIGN_CENTRE_VERTICAL | wx.RIGHT,
-                      border=10)
 
         # ====== Third row, brightness label, slider and value
 
@@ -399,28 +384,15 @@ class StreamPanelEntry(wx.PyPanel):
         self._gbs.Add(lbl_contrast, (2, 0),
                       flag=wx.LEFT | wx.ALIGN_CENTRE_VERTICAL, border=34)
 
-        self._sld_contrast = CustomSlider(
-            self._panel, -1,
-            self._stream.optical_contrast.value, self._stream.optical_contrast.range,
-            (30, 15), (-1, 10),
-            wx.SL_HORIZONTAL)
+        self._sld_contrast = UnitIntegerSlider(
+                             self._panel,
+                             value=self._stream.optical_contrast.value,
+                             val_range=self._stream.optical_contrast.range,
+                             t_size=(40,-1),
+                             unit="",
+                             name="contrast_slider")
 
         self._gbs.Add(self._sld_contrast, (2, 1), flag=wx.EXPAND)
-
-
-        self._txt_contrast = IntegerTextCtrl(self._panel, -1,
-                str(int(self._sld_contrast.GetValue())),
-                style=wx.NO_BORDER,
-                size=(30, -1),
-                min_val=self._sld_contrast.GetMin(),
-                max_val=self._sld_contrast.GetMax(),
-                step=10)
-        self._txt_contrast.SetForegroundColour("#2FA7D4")
-        self._txt_contrast.SetBackgroundColour(self.GetBackgroundColour())
-
-        self._gbs.Add(self._txt_contrast, (2, 2),
-                      flag=wx.ALIGN_CENTRE_VERTICAL | wx.RIGHT,
-                      border=10)
 
         self._gbs.AddGrowableCol(1)
 
@@ -436,13 +408,13 @@ class StreamPanelEntry(wx.PyPanel):
         # TODO maybe reuse VigilantAttributeConnector?
         self._sld_brightness.Bind(wx.EVT_MOTION, self.on_brightness_slide)
         self._sld_brightness.Bind(wx.EVT_LEFT_UP, self.on_brightness_slide)
-        self._txt_brightness.Bind(wx.EVT_TEXT_ENTER, self.on_brightness_entered)
-        self._txt_brightness.Bind(wx.EVT_CHAR, self.on_brightness_key)
+        # self._txt_brightness.Bind(wx.EVT_TEXT_ENTER, self.on_brightness_entered)
+        # self._txt_brightness.Bind(wx.EVT_CHAR, self.on_brightness_key)
 
         self._sld_contrast.Bind(wx.EVT_MOTION, self.on_contrast_slide)
         self._sld_contrast.Bind(wx.EVT_LEFT_UP, self.on_contrast_slide)
-        self._txt_contrast.Bind(wx.EVT_TEXT_ENTER, self.on_contrast_entered)
-        self._txt_contrast.Bind(wx.EVT_CHAR, self.on_contrast_key)
+        # self._txt_contrast.Bind(wx.EVT_TEXT_ENTER, self.on_contrast_entered)
+        # self._txt_contrast.Bind(wx.EVT_CHAR, self.on_contrast_key)
 
         self._btn_auto_contrast.Bind(wx.EVT_BUTTON, self.on_toggle_autocontrast)
 
@@ -455,41 +427,42 @@ class StreamPanelEntry(wx.PyPanel):
         # disable the manual controls if it's on
         ctrl_enabled = not enabled
         self._sld_brightness.Enable(ctrl_enabled)
-        self._txt_brightness.Enable(ctrl_enabled)
+        # self._txt_brightness.Enable(ctrl_enabled)
         self._sld_contrast.Enable(ctrl_enabled)
-        self._txt_contrast.Enable(ctrl_enabled)
-        
+        # self._txt_contrast.Enable(ctrl_enabled)
+
         self._stream.optical_auto_bc.value = enabled
 
     def on_brightness_key(self, evt):
         key = evt.GetKeyCode()
 
         if key in (wx.WXK_UP, wx.WXK_DOWN):
-            self._sld_brightness.SetValue(self._txt_brightness.GetValue())
-            self._stream.optical_brightness.value = self._txt_brightness.GetValue()
+            # self._sld_brightness.SetValue(self._txt_brightness.GetValue())
+            # self._stream.optical_brightness.value = self._txt_brightness.GetValue()
+            pass
 
         evt.Skip()
 
 
     def on_brightness_entered(self, evt):
-        self._sld_brightness.SetValue(int(self._txt_brightness.GetValue()))
-        self._stream.optical_brightness.value = self._txt_brightness.GetValue()
+        #self._sld_brightness.SetValue(int(self._txt_brightness.GetValue()))
+        #self._stream.optical_brightness.value = self._txt_brightness.GetValue()
         evt.Skip()
 
     def on_brightness_slide(self, evt):
         if self._sld_brightness.HasCapture():
-            self._txt_brightness.SetValue(self._sld_brightness.GetValue())
+         #   self._txt_brightness.SetValue(self._sld_brightness.GetValue())
             self._stream.optical_brightness.value = self._sld_brightness.GetValue()
         evt.Skip()
 
     def on_contrast_entered(self, evt):
-        self._sld_contrast.SetValue(int(self._txt_contrast.GetValue()))
-        self._stream.optical_contrast.value = self._txt_contrast.GetValue()
+        #self._sld_contrast.SetValue(int(self._txt_contrast.GetValue()))
+        #self._stream.optical_contrast.value = self._txt_contrast.GetValue()
         evt.Skip()
 
     def on_contrast_slide(self, evt):
         if self._sld_contrast.HasCapture():
-            self._txt_contrast.SetValue(self._sld_contrast.GetValue())
+            # self._txt_contrast.SetValue(self._sld_contrast.GetValue())
             self._stream.optical_contrast.value = self._sld_contrast.GetValue()
         evt.Skip()
 
@@ -497,8 +470,9 @@ class StreamPanelEntry(wx.PyPanel):
         key = evt.GetKeyCode()
 
         if key in (wx.WXK_UP, wx.WXK_DOWN):
-            self._sld_contrast.SetValue(self._txt_contrast.GetValue())
-            self._stream.optical_contrast.value = self._txt_contrast.GetValue()
+            # self._sld_contrast.SetValue(self._txt_contrast.GetValue())
+            # self._stream.optical_contrast.value = self._txt_contrast.GetValue()
+            pass
 
         evt.Skip()
 
