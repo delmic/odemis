@@ -534,7 +534,6 @@ class NumberTextCtrl(wx.TextCtrl):
 
         self.Bind(wx.EVT_KILL_FOCUS, self.on_kill_focus)
         self.Bind(wx.EVT_SET_FOCUS, self.on_focus)
-
         self.Bind(wx.EVT_TEXT_ENTER, self.on_text_enter)
 
     def _check_value(self, val):
@@ -574,6 +573,7 @@ class NumberTextCtrl(wx.TextCtrl):
             if val:
                 val = self.GetValidator()._cast(val)
             wx.TextCtrl.SetValue(self, unicode(val))
+            self._send_change_event()
 
         except ValueError:
             msg = "Value '%s' is not a valid number for %s."
@@ -584,6 +584,21 @@ class NumberTextCtrl(wx.TextCtrl):
     def reset(self):
         """ Set the content of the text control to just the numerical value """
         self.SetValue(unicode(self.GetValue()))
+
+    # -----------------
+    # Event handlers
+    # -----------------
+
+
+    def _send_change_event(self):
+        changeEvent = wx.CommandEvent(wx.wxEVT_COMMAND_ENTER, self.GetId())
+         # Set the originating object for the event (ourselves)
+        changeEvent.SetEventObject(self)
+
+        # Watch for a possible listener of this event that will catch it and
+        # eventually process it
+        self.GetEventHandler().ProcessEvent(changeEvent)
+
 
     def on_text_enter(self, evt):
         val = self.GetValue()
@@ -597,7 +612,7 @@ class NumberTextCtrl(wx.TextCtrl):
                 self.SetValue(new_val)
 
             # Skip the EVT_TEXT_ENTER event when the value set
-            evt.Skip()
+            #yyevt.Skip()
 
     def on_char(self, evt):
         """ This event handler increases or decreases the integer value when
@@ -614,6 +629,8 @@ class NumberTextCtrl(wx.TextCtrl):
         elif key == wx.WXK_DOWN and self.step:
             val = (val or 0) - self.step
         else:
+            # Skip the event, so it can be processed in the regular way
+            # (As in validate typed numbers etc.)
             evt.Skip()
             return
 
@@ -645,7 +662,11 @@ class NumberTextCtrl(wx.TextCtrl):
                 self.SetValueStr(new_val)
 
             # SKip the EVT_KILL_FOCUS event when the value is set
-            evt.Skip()
+            #evt.Skip()
+
+    # -----------------
+    # END Event handlers
+    # -----------------
 
 class UnitNumberCtrl(NumberTextCtrl):
 

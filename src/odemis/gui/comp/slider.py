@@ -170,7 +170,7 @@ class Slider(wx.PyPanel):
         #Release Mouse
         if self.HasCapture():
             self.ReleaseMouse()
-        event.Skip()
+            event.Skip()
 
 
     def getPointerLimitPos(self, xPos):
@@ -265,14 +265,16 @@ class NumberSlider(Slider):
         self.linked_field.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_EDIT)
         self.linked_field.SetBackgroundColour(parent.GetBackgroundColour())
 
-        self.Bind(wx.EVT_TEXT_ENTER, self._update_slider, self.linked_field)
-        self.Bind(wx.EVT_KILL_FOCUS, self._update_slider, self.linked_field)
+        self.linked_field.Bind(wx.EVT_COMMAND_ENTER, self._update_slider)
 
     def _update_slider(self, evt):
-        text_val = self.linked_field.GetValue()
+        if not self.HasCapture():
+            text_val = self.linked_field.GetValue()
 
-        if self.GetValue() != text_val:
-            self.SetValue(text_val)
+            if self.GetValue() != text_val:
+                log.debug("Number changed, updating slider")
+                self.SetValue(text_val)
+                evt.Skip()
 
     def getPointerLimitPos(self, xPos):
         """ Overridden method, so the linked field update could be added """

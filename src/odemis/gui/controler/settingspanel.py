@@ -403,10 +403,12 @@ class SettingsPanel(object):
                              unit=unit,
                              t_size=(50, -1))
 
-            # vac = VigilantAttributeConnector(value,
-            #                                  new_ctrl,
-            #                                  new_ctrl.SetValue,
-            #                                  wx.EVT_LEFT_UP)
+            vac = VigilantAttributeConnector(value,
+                                             new_ctrl,
+                                             new_ctrl.SetValue,
+                                             wx.EVT_COMMAND_ENTER)
+                                             # TODO: left_up not needed?
+                                             #wx.EVT_LEFT_UP)
 
 
         elif control_type == odemis.gui.CONTROL_INT:
@@ -419,15 +421,6 @@ class SettingsPanel(object):
                                             choices=choices)
             new_ctrl.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_EDIT)
             new_ctrl.SetBackgroundColour(self.panel.GetBackgroundColour())
-
-            #value.subscribe(lambda v: new_ctrl.SetValue(v))
-            #new_ctrl.SetValue("AAAAAA")
-
-            # value.subscribe(lambda v: log.warn("lambda"))
-            # value.subscribe(set_on_notify)
-            # f = get_func(new_ctrl.SetValue)
-            #self.entries.append(f)
-            # value.subscribe(f)
 
             vac = VigilantAttributeConnector(value,
                                              new_ctrl,

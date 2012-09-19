@@ -378,21 +378,6 @@ class StreamPanelEntry(wx.PyPanel):
 
         self._gbs.Add(self._sld_brightness, (1, 1), flag=wx.EXPAND)
 
-
-        # self._txt_brightness = IntegerTextCtrl(self._panel, -1,
-        #         str(self._sld_brightness.GetValue()),
-        #         style=wx.NO_BORDER,
-        #         size=(30, -1),
-        #         min_val=self._sld_brightness.GetMin(),
-        #         max_val=self._sld_brightness.GetMax(),
-        #         step=10)
-        # self._txt_brightness.SetForegroundColour("#2FA7D4")
-        # self._txt_brightness.SetBackgroundColour(self.GetBackgroundColour())
-
-        # self._gbs.Add(self._txt_brightness, (1, 2),
-        #               flag=wx.ALIGN_CENTRE_VERTICAL | wx.RIGHT,
-        #               border=10)
-
         # ====== Third row, brightness label, slider and value
 
         lbl_contrast = wx.StaticText(self._panel, -1, "contrast:")
@@ -408,21 +393,6 @@ class StreamPanelEntry(wx.PyPanel):
                              name="contrast_slider")
 
         self._gbs.Add(self._sld_contrast, (2, 1), flag=wx.EXPAND)
-
-
-        # self._txt_contrast = IntegerTextCtrl(self._panel, -1,
-        #         str(self._sld_contrast.GetValue()),
-        #         style=wx.NO_BORDER,
-        #         size=(30, -1),
-        #         min_val=self._sld_contrast.GetMin(),
-        #         max_val=self._sld_contrast.GetMax(),
-        #         step=10)
-        # self._txt_contrast.SetForegroundColour("#2FA7D4")
-        # self._txt_contrast.SetBackgroundColour(self.GetBackgroundColour())
-
-        # self._gbs.Add(self._txt_contrast, (2, 2),
-        #               flag=wx.ALIGN_CENTRE_VERTICAL | wx.RIGHT,
-        #               border=10)
 
         self._gbs.AddGrowableCol(1)
 
