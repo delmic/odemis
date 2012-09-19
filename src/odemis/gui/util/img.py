@@ -34,7 +34,7 @@ def DataArray2wxImage(data, depth=None, brightness=None, contrast=None, tint=(25
     depth (None or 1<int): maximum value possibly encoded (12 bits => 4096)
         None => brightness and contrast auto
     brightness (None or -1<=float<=1): brightness change.
-        None => auto. 0 => no change. -1 => fully black
+        None => auto. 0 => no change. -1 => fully black, 1 => fully white
     contrast  (None or -1<=float<=1): contrast change.
         None => auto. 0 => no change. -1 => fully grey, 1 => white/black only
     Note: if auto, both contrast and brightness must be None
@@ -79,9 +79,10 @@ def DataArray2wxImage(data, depth=None, brightness=None, contrast=None, tint=(25
         a = hd ** contrast
         b = hd * a - (hd + brightness * depth)
         d0 = b/a
-        d256 = (b + depth)/a
+        d255 = (b + depth)/a
         # bytescale: linear mapping cmin, cmax -> low, high; and then take the low byte (can overflow)
-        drescaled = scipy.misc.bytescale(data.clip(d0, d256), cmin=d0, cmax=d256)
+        # TODO: do only clipping if useful: d0 >0 or d256 < depth
+        drescaled = scipy.misc.bytescale(data.clip(d0, d255), cmin=d0, cmax=d255)
         
 
     # Now duplicate it 3 times to make it rgb (as a simple approximation of greyscale)
@@ -98,8 +99,8 @@ def DataArray2wxImage(data, depth=None, brightness=None, contrast=None, tint=(25
     else:
         rtint, gtint, btint = tint
         # multiply by a float, cast back to type of out, and put into out array
-        numpy.multiply(drescaled, btint / 255., out=rgb[:,:,0])
+        numpy.multiply(drescaled, rtint / 255., out=rgb[:,:,0])
         numpy.multiply(drescaled, gtint / 255., out=rgb[:,:,1])
-        numpy.multiply(drescaled, rtint / 255., out=rgb[:,:,2])
+        numpy.multiply(drescaled, btint / 255., out=rgb[:,:,2])
 
     return wx.ImageFromBuffer(*size, dataBuffer=rgb) # 0 copy
