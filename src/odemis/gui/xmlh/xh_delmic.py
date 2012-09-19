@@ -1,17 +1,25 @@
 # -*- coding: utf-8 -*-
-'''
+
+"""
 @author: Rinze de Laat
 
 Copyright © 2012 Rinze de Laat, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 2 of the License, or (at your option) any later version.
+Odemis is free software: you can redistribute it and/or modify it under the
+terms of the GNU General Public License as published by the Free Software
+Foundation, either version 2 of the License, or (at your option) any later
+version.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
-'''
+You should have received a copy of the GNU General Public License along with
+Odemis. If not, see http://www.gnu.org/licenses/.
+
+"""
 
 # This module is used to construct Delmic's custom FoldPanelBar according to
 # the definition in the XRC configuration file.
@@ -139,15 +147,6 @@ class FoldPanelBarXmlHandler(xrc.XmlResourceHandler):
                                  self.GetPosition(),
                                  self.GetSize(),
                                  self.GetStyle())
-
-            # if self.HasParam('spacing'):
-            #     self.spacing = self.GetLong('spacing')
-
-            # if self.HasParam('leftspacing'):
-            #     self.left_spacing = self.GetLong('leftspacing')
-
-            # if self.HasParam('rightspacing'):
-            #     self.right_spacing = self.GetLong('rightspacing')
 
             self.SetupWindow(w)
 
@@ -527,9 +526,11 @@ class UnitIntegerCtrlHandler(xrc.XmlResourceHandler):
     def DoCreateResource(self):
         assert self.GetInstance() is None
 
+        val = int(self.GetText('value'))
+
         w = txt.UnitIntegerCtrl(self.GetParentAsWindow(),
                                 id=self.GetID(),
-                                value=self.GetText('value'),
+                                value=val,
                                 pos=self.GetPosition(),
                                 size=self.GetSize(),
                                 style=self.GetStyle(),
@@ -554,9 +555,11 @@ class UnitFloatCtrlHandler(xrc.XmlResourceHandler):
     def DoCreateResource(self):
         assert self.GetInstance() is None
 
+        val = float(self.GetText('value'))
+
         w = txt.UnitFloatCtrl(self.GetParentAsWindow(),
                               id=self.GetID(),
-                              value=self.GetText('value'),
+                              value=val,
                               pos=self.GetPosition(),
                               size=self.GetSize(),
                               style=self.GetStyle(),
