@@ -1,6 +1,6 @@
 #-*- coding: utf-8 -*-
 '''
-@author: Rinze de Laat 
+@author: Rinze de Laat
 
 Copyright © 2012 Rinze de Laat, Delmic
 
