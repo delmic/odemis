@@ -32,7 +32,7 @@ import odemis.gui.util.units as utun
 from ..comp.foldpanelbar import FoldPanelItem
 from odemis.gui import util
 from odemis.gui.comp.radio import GraphicalRadioButtonControl
-from odemis.gui.comp.slider import TextSlider
+from odemis.gui.comp.slider import UnitIntegerSlider, UnitFloatSlider
 from odemis.gui.log import log
 from odemis.gui.util import call_after_wrapper
 from odemis.model import getVAs, NotApplicableError, VigilantAttributeBase, \
@@ -96,6 +96,7 @@ SETTINGS = {
                     "control_type": odemis.gui.CONTROL_SLIDER,
                     "scale": "cubic",
                     "range": (0.01, 3.00),
+                    "type": "float",
                 },
                 "binning":
                 {
@@ -136,6 +137,7 @@ SETTINGS = {
                     "control_type": odemis.gui.CONTROL_SLIDER,
                     "range": (0.01, 3.00),
                     "scale": "cubic",
+                    "type": "float",
                 },
                 "resolution":
                 {
@@ -389,33 +391,23 @@ class SettingsPanel(object):
         elif control_type == odemis.gui.CONTROL_SLIDER:
             # The slider is accompanied by an extra number text field
 
-            new_ctrl = TextSlider(self.panel, value=value.value,
-                                          val_range=rng,
-                                          size=(30, 15),
-                                          pos=(-1, 10),
-                                          style=wx.SL_HORIZONTAL,
-                                          scale=conf.get('scale', None),
-                                          unit=unit)
+            if conf.get('type', "integer") == "integer":
+                klass = UnitIntegerSlider
+            else:
+                klass = UnitFloatSlider
 
-            # new_ctrl.set_linked_field(txt_ctrl)
-            # txt_ctrl.set_linked_slider(new_ctrl)
+            new_ctrl = klass(self.panel,
+                             value=value.value,
+                             val_range=rng,
+                             scale=conf.get('scale', None),
+                             unit=unit,
+                             t_size=(50, -1))
 
-            # self._sizer.Add(txt_ctrl,
-            #                 (self.num_entries, 2),
-            #                 flag=wx.ALL,
-            #                 border=5)
-
-            # vat = VigilantAttributeConnector(value,
-            #                                  txt_ctrl,
-            #                                  txt_ctrl.SetValueStr,
-            #                                  wx.EVT_TEXT_ENTER)
-
-            # vas = VigilantAttributeConnector(value,
+            # vac = VigilantAttributeConnector(value,
             #                                  new_ctrl,
             #                                  new_ctrl.SetValue,
             #                                  wx.EVT_LEFT_UP)
 
-            # vac = (vat, vas)
 
         elif control_type == odemis.gui.CONTROL_INT:
             new_ctrl = text.UnitIntegerCtrl(self.panel,

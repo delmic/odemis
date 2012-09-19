@@ -28,7 +28,7 @@ import odemis.gui
 
 from odemis.gui.log import log
 from odemis.gui.img.data import getsliderBitmap, getslider_disBitmap
-from .text import UnitFloatCtrl, UnitIntegerCtrl
+from .text import NumberTextCtrl, UnitFloatCtrl, UnitIntegerCtrl
 
 
 class Slider(wx.PyPanel):
@@ -39,11 +39,9 @@ class Slider(wx.PyPanel):
     def __init__(self, parent, id=wx.ID_ANY, value=0.0, val_range=(0.0, 1.0),
                  size=(-1, -1), pos=wx.DefaultPosition, style=wx.NO_BORDER,
                  name="Slider", scale=None):
-
         """
         @param parent: Parent window. Must not be None.
-        @param id:     Slider identifier. A value of -1 indicates a default
-                       value.
+        @param id:     Slider identifier.
         @param pos:    Slider position. If the position (-1, -1) is specified
                        then a default position is chosen.
         @param size:   Slider size. If the default size (-1, -1) is specified
@@ -245,40 +243,39 @@ class Slider(wx.PyPanel):
         self.value_range = range
 
 
-class TextSlider(Slider):
+class NumberSlider(Slider):
     """ A Slider with an extra linkes text field showing the current value """
 
     def __init__(self, parent, id=wx.ID_ANY, value=0.0, val_range=(0.0, 1.0),
                  size=(-1, -1), pos=wx.DefaultPosition, style=wx.NO_BORDER,
-                 name="Slider", scale=None, t_size=(60, -1), unit=""):
+                 name="Slider", scale=None, t_class=NumberTextCtrl,
+                 t_size=(50, -1), unit="", accuracy=0):
         Slider.__init__(self, parent, id, value, val_range, size,
                         pos, style, name, scale)
 
-        # A text control linked to the slider
-        self.linked_field = None
-
-        if isinstance(value, int):
-            log.debug("Adding int field to slider")
-            klass = UnitIntegerCtrl
-        else:
-            log.debug("Adding float field to slider")
-            klass = UnitFloatCtrl
-
-        self.linked_field = klass(self, -1,
-                                  value,
-                                  style=wx.NO_BORDER|wx.ALIGN_RIGHT,
-                                  size=t_size,
-                                  min_val=val_range[0],
-                                  max_val=val_range[1],
-                                  unit=unit,
-                                  accuracy=2)
+        self.linked_field = t_class(self, -1,
+                                    value,
+                                    style=wx.NO_BORDER,
+                                    size=t_size,
+                                    min_val=val_range[0],
+                                    max_val=val_range[1],
+                                    unit=unit,
+                                    accuracy=accuracy)
 
         self.linked_field.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_EDIT)
-        self.linked_field.SetBackgroundColour(odemis.gui.BACKGROUND_COLOUR)
+        self.linked_field.SetBackgroundColour(parent.GetBackgroundColour())
 
-        self.linked_field.set_change_callback(self.SetValue)
+        self.Bind(wx.EVT_TEXT_ENTER, self._update_slider, self.linked_field)
+        self.Bind(wx.EVT_KILL_FOCUS, self._update_slider, self.linked_field)
+
+    def _update_slider(self, evt):
+        text_val = self.linked_field.GetValue()
+
+        if self.GetValue() != text_val:
+            self.SetValue(text_val)
 
     def getPointerLimitPos(self, xPos):
+        """ Overridden method, so the linked field update could be added """
         Slider.getPointerLimitPos(self, xPos)
         self._update_linked_field(self.current_value)
 
@@ -312,3 +309,24 @@ class TextSlider(Slider):
         self.linked_field.SetPosition((t_x, t_y))
 
         Slider.OnPaint(self, event)
+
+
+class UnitIntegerSlider(NumberSlider):
+
+    def __init__(self, *args, **kwargs):
+        kwargs['t_class'] = UnitIntegerCtrl
+        NumberSlider.__init__(self, *args, **kwargs)
+
+    def _update_linked_field(self, value):
+        value = int(value)
+        NumberSlider._update_linked_field(self, value)
+
+class UnitFloatSlider(NumberSlider):
+
+    def __init__(self, *args, **kwargs):
+        kwargs['t_class'] = UnitFloatCtrl
+
+        if 'accuracy' not in kwargs:
+            kwargs['accuracy'] = 2
+
+        NumberSlider.__init__(self, *args, **kwargs)
