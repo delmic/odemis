@@ -20,11 +20,13 @@ import logging
 # based on:
 # http://www.physics.sfasu.edu/astro/color/spectra.html
 def wave2rgb(wavelength):
-    """ Convert a nanometer integer wavelength into a (r,g,b) value, with
-    value ranges [0..255]
+    """
+    Convert a wavelength into a (r,g,b) value
+    wavelength (0<float): wavelength in m
+    return (3-tupe int in 0..255): RGB value
     """
 
-    w = int(wavelength)
+    w = int(round(wavelength * 1e9))
     # outside of the visible spectrum, use fixed colour
     if w < 380: # ultraviolet
         w = 380

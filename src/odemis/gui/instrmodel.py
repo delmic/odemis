@@ -23,11 +23,14 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
 from odemis import model
+from odemis.gui import util
 from odemis.gui.log import log
 from odemis.gui.util.img import DataArray2wxImage
 from odemis.model import VigilantAttribute, MD_POS, MD_PIXEL_SIZE, \
     MD_SENSOR_PIXEL_SIZE
 import logging
+import wx
+from odemis.gui.util.units import readable_str
 
 
 
@@ -47,8 +50,8 @@ class SECOMModel(object):
         self.optical_det_image = VigilantAttribute(InstrumentalImage(None, None, None))
         self.optical_det_raw = None # the last raw data received
         self.optical_auto_bc = VigilantAttribute(True) # whether to use auto brightness & contrast
-        self.optical_contrast = model.FloatContinuous(0, range=[-100, 100]) # ratio, contrast if no auto
-        self.optical_brightness = model.FloatContinuous(0, range=[-100, 100]) # ratio, balance if no auto
+        self.optical_contrast = model.FloatContinuous(0., range=[-100, 100]) # ratio, contrast if no auto
+        self.optical_brightness = model.FloatContinuous(0., range=[-100, 100]) # ratio, balance if no auto
 
         self.sem_emt_dwell_time = VigilantAttribute(0.00001) #s
         self.sem_emt_spot = VigilantAttribute(4) # no unit (could be m²)
@@ -215,28 +218,88 @@ class SECOMBackendConnected(SECOMModel):
 
 class InstrumentalImage(object):
     """
-    Contains a bitmap and meta data about it
+    Contains an RGB bitmap and meta-data about where it is taken
     """
+    # It'd be best to have it as a subclass of wx.Image, but wxPython has many
+    # functions which return a wx.Image. We'd need to "override" them as well. 
 
-    def __init__(self, im, mpp, center):
+    def __init__(self, im, mpp, center, rotation=0.0):
         """
-        im wx.Image
-        mpp (float>0)
-        center (2-tuple float)
+        im (None or wx.Image)
+        mpp (None or float>0): meters per pixel
+        center (None or 2-tuple float): position (in meters) of the center of the image
+        rotation (float): rotation in degrees (i.e., 180 = upside-down) 
+        Note: When displayed, the scaling, translation, and rotation have to be 
+        applied "independently": scaling doesn't affect the translation, and 
+        rotation is applied from the center of the image.
         """
         self.image = im
         # TODO should be a tuple (x/y)
+        assert(mpp is None or (mpp > 0))
         self.mpp = mpp
+        assert(center is None or (len(center) == 2))
         self.center = center
-
+        self.rotation = rotation
 
 
 # THE FUTURE：
-class MicroscopeModel(object):
+class MicroscopeGUI(object):
     """
-    Represent a microscope directly for a graphical user interface
+    Represent a microscope directly for a graphical user interface.
+    Provides direct reference to the HwComponents and 
     """
-    pass
+    
+    def __init__(self, microscope):
+        """
+        microscope (model.Microscope): the root of the HwComponent tree provided by the back-end
+        """
+        self.microscope = microscope
+        # These are either HwComponents or None (if not available)
+        self.ccd = None
+        self.stage = None
+        self.focus = None # actuator to change the camera focus 
+        self.light = None
+        self.ebeam = None
+        self.sed = None
+        
+        for d in microscope.detectors:
+            if d.role == "ccd":
+                self.ccd = d
+            elif d.role == "se-detector":
+                self.sed = d
+        if not self.ccd and not self.sed:
+            raise Exception("no camera nor SE-detector found in the microscope")
+
+        for a in microscope.actuators:
+            if a.role == "stage":
+                self.stage = a
+                # TODO: viewports should subscribe to the stage
+            elif a.role == "focus":
+                self.opt_focus = a
+        if not self.stage:
+            raise Exception("no stage found in the microscope")
+        # it's not an error to not have focus
+        if not self.focus:
+            log.info("no focus actuator found in the microscope")
+
+        for e in microscope.emitters:
+            if e.role == "light":
+                self.light = e
+            elif e.role == "e-beam":
+                self.ebeam = e
+        if not self.light and not self.ebeam:
+            raise Exception("no emitter found in the microscope")
+
+        self.streams = [] # list of streams available (handled by StreamController)
+        self.views = [] # list of MicroscopeViews available (handled by ViewController)
+        
+    def stopMotion(self):
+        """
+        Stops immediately every axis
+        """
+        self.stage.stop()
+        self.opt_focus.stop()
+        logging.info("stopped motion on every axes")
     # streams:
     #    + list of raw images that compose the whole view (ordered by time)
     #    + colouration + contrast + brightness + name + ...
@@ -248,4 +311,254 @@ class MicroscopeModel(object):
     #
 
     # each canvas gets a set of streams to display
+    
+    
+# almost every public attribute of the model object is exported as a VA, in order
+# to have the GUI automatically modify and update it. 
+    
+class Stream(object):
+    """
+    Represents a stream: the data from a detector with a given emitter active
+    Basically it handles acquiring the data from the hardware and renders it as
+    an InstrumentalImage with the given image transformation .
+    """
+    def __init__(self, name, detector, dataflow):
+        """
+        name (string): user-friendly name of this stream
+        detector (Detector): the detector which has the dataflow
+        dataflow (Dataflow): the dataflow from which to get the data 
+        """
+        self.name = VigilantAttribute(name)
+        self._detector = detector
+        self._dataflow = dataflow # this should not be accessed directly
+        self.raw = [] # list of DataArray received and used to generate the image
+        # the most important attribute
+        self.image = VigilantAttribute(InstrumentalImage(None, None, None))
+        
+        # whether
+        self.active = model.BooleanVA(False)
+        self.active.subscribe(self.onActive)
+        
+        self._depth = self._detector.shape[2] # used for B/C adjustment
+        self.auto_bc = model.BooleanVA(True) # whether to use auto brightness & contrast
+        # these 2 are only used if auto_bc is False
+        self.contrast = model.FloatContinuous(0, range=[-100, 100]) # ratio, contrast if no auto
+        self.brightness = model.FloatContinuous(0, range=[-100, 100]) # ratio, balance if no auto
+
+        self.auto_bc.subscribe(self.onBrightnessContrast)
+        self.contrast.subscribe(self.onBrightnessContrast)
+        self.brightness.subscribe(self.onBrightnessContrast)
+
+    def onActive(self, active):
+        # Normally is called only the value _changes_
+        if active:
+            self._dataflow.subscribe(self.onNewImage)
+        else:
+            self._dataflow.unsubscribe(self.onNewImage)
+
+    # TODO: see if really necessary: because __del__ prevents GC to work
+    def __del__(self):
+        self.active.value = False
+
+    def _updateImage(self, tint=(255, 255, 255)):
+        """
+        Recomputes the image with all the raw data available
+        tint (int): colouration of the image, only used by FluoStream to avoid code duplication
+        """
+        data = self.raw[0]
+        if self.auto_bc.value:
+            brightness = None
+            contrast = None
+        else:
+            brightness = self.brightness.value / 100.
+            contrast = self.contrast.value / 100.
+        
+        im = DataArray2wxImage(data, self._depth, brightness, contrast, tint)
+        im.InitAlpha() # it's a different buffer so useless to do it in numpy
+
+        try:
+            pos = data.metadata[MD_POS]
+        except KeyError:
+            log.warning("position of image unknown")
+            pos = (0, 0)
+
+        try:
+            mpp = data.metadata[MD_PIXEL_SIZE][0]
+        except KeyError:
+            log.warning("pixel density of image unknown")
+            # Hopefully it'll be within the same magnitude
+            mpp = data.metadata[MD_SENSOR_PIXEL_SIZE][0] / 10.
+
+        self.image.value = InstrumentalImage(im, mpp, pos)
+        
+    def onBrightnessContrast(self, unused):
+        # called whenever brightness/contrast changes
+        # => needs to recompute the image (but not too often, so we do it in a timer)
+        
+        # is there any image to update?
+        if not len(self.raw):
+            return
+        # TODO: in timer
+        self._updateImage()
+        
+    def onNewImage(self, dataflow, data):
+        self.raw[0] = data
+        self._updateImage()
+
+def FluoStream(Stream):
+    """
+    Stream containing images obtained via epi-fluorescence.
+    It basically knows how to select the right emission/filtered wavelengths, 
+    and how to taint the image.
+    """
+    
+    def __init__(self, name, detector, dataflow, light, filter):
+        """
+        name (string): user-friendly name of this stream
+        detector (Detector): the detector which has the dataflow
+        dataflow (Dataflow): the dataflow from which to get the data
+        light (Light): the HwComponent to modify the light excitation
+        filter (Filter): the HwComponent to modify the emission light filtering
+        """
+        Stream.__init__(name, detector, dataflow)
+        self._light = light
+        self._filter = filter
+        
+        # This is what is displayed to the user
+        # TODO use the current value of the light and filter
+        self.excitation = model.FloatContinuous(488e-9, unit="m")
+        self.excitation.subscribe(self.onExcitation)
+        self.emission = model.FloatContinuous(507e-9, unit="m") 
+        self.emission.subscribe(self.onEmission)
+        
+        # colouration of the image
+        defaultTint = util.conversion.wave2rgb(self.emission.value)
+        self.tint = VigilantAttribute(defaultTint, unit="RGB")  
+        
+        # Only update Emission or Excitation only if the stream is active
+        
+    def onActive(self, active):
+        if active:
+            self._setLightExcitation()
+            self._setFilterEmission()
+        Stream.onActive(self, active)
+
+    def _updateImage(self):
+        Stream._updateImage(self, self.tint.value)
+      
+    def onExcitation(self, value):
+        if self.active.value:
+            self._setLightExcitation()
+    
+    def onEmission(self, value):
+        if self.active.value:
+            self._setFilterEmission()
+            
+    def _setFilterEmission(self):
+        wl = self.emission.value
+        if self._filter.band.readonly:
+            # we can only check that it's correct
+            fitting = False
+            for l, h in self._filter.band.value:
+                if l < wl and wl < h:
+                    fitting = True
+                    break
+            if not fitting:
+                log.warning("Emission wavelength %s doesn't fit the filter", 
+                            readable_str(wl, "m"))
+            return
+        
+        # TODO: improve fitting algorithm!
+        # at least, we need to decide a way to select the band
+        # choices on the VA?
+        pass
+    
+    def _setLightExcitation(self):
+        wl = self.excitation.value 
+        def fitting(wl, spec):
+            """
+            returns a big number if spec fits to wl
+            wl (float)
+            spec (5-tuple float)
+            """
+            # is it included?
+            if spec[0] > wl or wl < spec[4]:
+                return 0
+            
+            distance = abs(wl - spec[2]) # distance to 100%
+            if distance == 0:
+                return float("inf")
+            return 1. / distance
+            
+        spectra = self._light.spectra.value
+        # arg_max with fitting function as key 
+        i = spectra.index(max(spectra, key=lambda x: fitting(wl, x)))
+        
+        # create an emissions with only one source active
+        emissions = [0] * len(spectra)
+        emissions[i] = 1
+        self._light.emissions.value = emissions
+
+
+class MicroscopeView(object):
+    """
+    Represents a view from a microscope, and ways to alter it.
+    Basically, its input is a list of streams with merging functions, and can
+    request stage and focus move.
+    """
+    def __init__(self, stage, focus0=None, focus1=None):
+        """
+        stage (Actuator): actuator with two axes: x and y
+        focus0 (Actuator): actuator with one axis: z. Can be None
+        focus1 (Actuator): actuator with one axis: z. Can be None
+        Focuses 0 and 1 are modified when changing focus along X and Y axis.
+        """
+        self._stage = stage
+        self._focus = [focus0, focus1]
+        
+        # The real stage position, to be modified via moveStage()
+        # TODO: shall we provide a VA as a simplified view of the stage.position which can move?
+        self.stage_pos = stage.position
+        stage.position.subscribe(self.onStagePos)
+        
+        # the current center of the view, which might be different from the stage
+        # TODO: we might need to have it on the MicroscopeGUI, if all the viewports must display the same location
+        pos = self.stage_pos.value
+        self.view_pos = model.ListVA((pos["x"], pos["y"]), unit="m")
+    
+        # ordered list of streams to display
+        # TODO might need to be more complex object, such as a tree with 
+        # leaves as stream and fork as merge functions
+        self.streams = model.ListVA([])
+        
+        # a thumbnail version of what is displayed
+        self.thumbnail = model.VigilantAttribute(InstrumentalImage(None, None, None))
+    
+    def moveStage(self):
+        """
+        move the stage to the current view_pos
+        return: a future (that allows to know when the move is finished)
+        """
+        pos = self.view_pos.value
+        # TODO: a way to know if it can do absolute move? => .capabilities!
+#        if hasattr(self.stage, "moveAbs"):
+#            # absolute
+#            move = {"x": pos[0], "y": pos[1]}
+#            self._stage.moveAbs(move)
+#        else:
+
+        # relative
+        prev_pos = self.stage_pos.value
+        move = {"x": pos[0] - prev_pos["x"], "y": pos[1] - prev_pos["y"]}
+        return self._stage.moveRel(move)
+
+    def onStagePos(self, pos):
+        # we want to recenter the viewports whenever the stage moves
+        # Not sure whether that's really the right way to do it though...
+        # TODO: avoid it to move the view when the user is dragging the view
+        #  => might require cleverness
+        self.view_pos = model.ListVA((pos["x"], pos["y"]), unit="m")
+    
+    
+    
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:

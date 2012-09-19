@@ -28,7 +28,7 @@ import wx
 
 # various functions to convert and modify images (DataArray and wxImage)
 
-def DataArray2wxImage(data, depth=None, brightness=None, contrast=None):
+def DataArray2wxImage(data, depth=None, brightness=None, contrast=None, tint=(255, 255, 255)):
     """
     data (DataArray of unsigned int): 2D image greyscale (unsigned float might work as well)
     depth (None or 1<int): maximum value possibly encoded (12 bits => 4096)
@@ -38,6 +38,8 @@ def DataArray2wxImage(data, depth=None, brightness=None, contrast=None):
     contrast  (None or -1<=float<=1): contrast change.
         None => auto. 0 => no change. -1 => fully grey, 1 => white/black only
     Note: if auto, both contrast and brightness must be None
+    tint (3-tuple of 0 < int <256): RGB colour of the final image (each pixel is 
+        multiplied by the value. Default is white. 
     returns (wxImage): rgb (888) converted image with the same dimension
     """
     assert(len(data.shape) == 2) # => 2D with greyscale
@@ -82,13 +84,22 @@ def DataArray2wxImage(data, depth=None, brightness=None, contrast=None):
         drescaled = scipy.misc.bytescale(data.clip(d0, d256), cmin=d0, cmax=d256)
         
 
-    # TODO: shall we also handle colouration here?
-        
     # Now duplicate it 3 times to make it rgb (as a simple approximation of greyscale)
     # dstack doesn't work because it doesn't generate in C order (uses strides)
     # apparently this is as fast (or even a bit better):
     rgb = numpy.empty(size + (3,), dtype="uint8") # 0 copy (1 malloc)
-    rgb[:,:,0] = drescaled # 1 copy
-    rgb[:,:,1] = drescaled # 1 copy
-    rgb[:,:,2] = drescaled # 1 copy
+    
+    # Tint (colouration)
+    if tint == (255, 255, 255):
+        # fast path when no tint
+        rgb[:,:,0] = drescaled # 1 copy
+        rgb[:,:,1] = drescaled # 1 copy
+        rgb[:,:,2] = drescaled # 1 copy
+    else:
+        rtint, gtint, btint = tint
+        # multiply by a float, cast back to type of out, and put into out array
+        numpy.multiply(drescaled, btint / 255., out=rgb[:,:,0])
+        numpy.multiply(drescaled, gtint / 255., out=rgb[:,:,1])
+        numpy.multiply(drescaled, rtint / 255., out=rgb[:,:,2])
+
     return wx.ImageFromBuffer(*size, dataBuffer=rgb) # 0 copy
