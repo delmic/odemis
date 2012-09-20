@@ -65,6 +65,9 @@ def get_si_scale(x):
     value x.
     Returns a (float, string) tuple: (divisor , SI prefix)
     """
+    if x == 0:
+        return (1, "")
+    
     most_significant = int(math.floor(math.log10(abs(x))))
     prefix_order = (most_significant / 3) * 3 # rounding to multiple of 3
     prefix_order = max(-12, min(prefix_order, 9)) # clamping
