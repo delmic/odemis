@@ -169,8 +169,8 @@ class Component(ComponentBase):
             _vattributes.unregister_vigilant_attributes(self)
             daemon.unregister(self)
 
-    def __del__(self):
-        self.terminate()
+#    def __del__(self):
+#        self.terminate()
 
 # Run on the client (the process which asked for a given remote component)
 class ComponentProxy(ComponentBase, Pyro4.Proxy):
