@@ -45,7 +45,6 @@ class Light(model.Emitter):
     def getMetadata(self):
         metadata = {}
         metadata[model.MD_IN_WL] = (380e-9, 740e-9)
-        metadata[model.MD_OUT_WL] = (380e-9, 740e-9) 
         metadata[model.MD_LIGHT_POWER] = self.power.value
         return metadata
     
