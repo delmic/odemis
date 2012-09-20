@@ -40,5 +40,4 @@ odemis.sublime-workspace
 
 #Machine dependant
 launch_daemon
-cli
 xrced
