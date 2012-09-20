@@ -933,7 +933,6 @@ class AndorCam3(model.DigitalCamera):
             self.handle = None
         self.FinaliseLibrary()
     
-    # no __del__ so that it can be garbage collected
     def __del__(self):
         self.terminate()
     
