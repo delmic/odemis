@@ -26,7 +26,7 @@ def wave2rgb(wavelength):
     return (3-tupe int in 0..255): RGB value
     """
 
-    w = int(round(wavelength * 1e9))
+    w = wavelength * 1e9
     # outside of the visible spectrum, use fixed colour
     if w < 380: # ultraviolet
         w = 380
