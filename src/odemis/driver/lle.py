@@ -61,7 +61,7 @@ class LLE(model.Emitter):
         
         self.shape = (1)
         self._max_power = 100
-        self.power = model.FloatEnumerated(0, (0, self._max_power), unit="W")
+        self.power = model.FloatContinuous(0, (0, self._max_power), unit="W")
 
         # emissions is list of 0 <= floats <= 1.
         self._intensities = [0.0] * 7 # start off
@@ -90,9 +90,9 @@ class LLE(model.Emitter):
         
         # Update temperature every 10s
         self.temperature = model.FloatVA(current_temp, unit="C", readonly=True)
-        self.temp_timer = RepeatingTimer(10, self._updateTemperature,
+        self._temp_timer = RepeatingTimer(10, self._updateTemperature,
                                          "LLE temperature update")
-        self.temp_timer.start()
+        self._temp_timer.start()
     
     
     def getMetadata(self):
@@ -116,10 +116,10 @@ class LLE(model.Emitter):
     def _sendCommand(self, com):
         """
         Send a command which does not expect any report back
-        com (string): command to send
+        com (bytearray): command to send
         """
         assert(len(com) <= 10) # commands cannot be long
-        logging.debug("Sending: %s", com.encode('string_escape'))
+        logging.debug("Sending: %s", str(com).encode('hex_codec'))
         self._serial.write(com)
         
     def _readResponse(self, length):
@@ -127,19 +127,19 @@ class LLE(model.Emitter):
         receive a response from the engine
         com (string): command to send (including the \n if necessary)
         length (0<int): length of the response to receive
-        return (string of length == length): the response received (raw) 
+        return (bytearray of length == length): the response received (raw) 
         raises:
             IOError in case of timeout
         """
-        response = ""
+        response = bytearray()
         while len(response) < length:
             char = self._serial.read()
             if not char:
-                raise IOError("Device timeout after receiving %s.", 
-                              response.encode('string_escape'))
-            response += char
+                # TODO: try to reinitialise the device (it might have been turned on/off)
+                raise IOError("Device timeout after receiving %s.", str(response).encode('hex_codec'))
+            response.append(char)
             
-        logging.debug("Received: %s", response.encode('string_escape'))
+        logging.debug("Received: %s", response)
         return response
         
     def _initDevice(self):
@@ -148,8 +148,8 @@ class LLE(model.Emitter):
         """
         with self._ser_access:
             # from the documentation:
-            self._sendCommand("\x57\x02\xff\x50") # Set GPIO0-3 as open drain output
-            self._sendCommand("\x57\x03\xab\x50") # Set GPI05-7 push-pull out, GPIO4 open drain out
+            self._sendCommand(b"\x57\x02\xff\x50") # Set GPIO0-3 as open drain output
+            self._sendCommand(b"\x57\x03\xab\x50") # Set GPI05-7 push-pull out, GPIO4 open drain out
 
     def _setDeviceManual(self):
         """
@@ -157,8 +157,8 @@ class LLE(model.Emitter):
         """
         with self._ser_access:
             # from the documentation:
-            self._sendCommand("\x57\x02\x55\x50") # Set GPIO0-3 as input
-            self._sendCommand("\x57\x03\x55\x50") # Set GPI04-7 as input
+            self._sendCommand(b"\x57\x02\x55\x50") # Set GPIO0-3 as input
+            self._sendCommand(b"\x57\x03\x55\x50") # Set GPI04-7 as input
 
     # Sources number for the driver are:
     # 0: Red
@@ -180,7 +180,7 @@ class LLE(model.Emitter):
         Yellow has precedence over green.
         sources (set of 0<= int <= 6): source to be activated, the rest will be turned off
         """
-        com = "\x4F\x00\x50" # the second byte will contain the sources to activate
+        com = bytearray(b"\x4F\x00\x50") # the second byte will contain the sources to activate
         
         # Do we need to active Green filter?
         if (1 in sources or 4 in sources) and len(sources) > 1:
@@ -193,7 +193,7 @@ class LLE(model.Emitter):
                 s_byte &= ~ (1 << 1)
             s_byte &= ~ (1 << s) 
         
-        com[1] = chr(s_byte)
+        com[1] = s_byte
         with self._ser_access:
             self._sendCommand(com)
     
@@ -215,19 +215,19 @@ class LLE(model.Emitter):
         assert(0 <= source and source <= 6)
         bit, addr = self.source2BitAddr[source]
         
-        com = "\x53\x18\x03\x0F\xFF\xF0\x50"
+        com = bytearray(b"\x53\x18\x03\x0F\xFF\xF0\x50")
         #            ^^       ^   ^  ^ : modified bits
         #         address    bit intensity
         
         # address
-        com[1] = chr(addr)
+        com[1] = addr
         # bit
-        com[3] = chr(1 << bit)
+        com[3] = 1 << bit
         
         # intensity is inverted
         b_intensity = 0xfff0 & (((~intensity) << 4) | 0xf00f)
-        com[4] = chr(b_intensity >> 8)
-        com[5] = chr(b_intensity & 0xff)
+        com[4] = b_intensity >> 8
+        com[5] = b_intensity & 0xff
         
         with self._ser_access:
             self._sendCommand(com)
@@ -240,9 +240,9 @@ class LLE(model.Emitter):
         # The most significant 11 bits of the two bytes are used
         # with a resolution of 0.125 deg C.
         with self._ser_access:
-            self._sendCommand("\x53\x91\x02\x50")
+            self._sendCommand(b"\x53\x91\x02\x50")
             resp = bytearray(self._readResponse(2))
-        val = 0.125 * ((((resp[1] << 8) | resp[0]) >> 5) & 0x7ff)
+        val = 0.125 * ((((resp[0] << 8) | resp[1]) >> 5) & 0x7ff)
         return val
     
     def _updateTemperature(self):
@@ -262,23 +262,19 @@ class LLE(model.Emitter):
                 need_update = True
                 if self._intensities[i] > self._max_power/255.:
                     toTurnOn.add(i)  
-                self._setSourceIntensity(i, self._intensities[i] * 255. / self._max_power)
+                self._setSourceIntensity(i, int(round(self._intensities[i] * 255. / self._max_power)))
         
         if need_update:
             self._enableSources(toTurnOn)
             
-        self._prev_intensities = self._intensities
+        self._prev_intensities = list(self._intensities)
         
     def _updatePower(self, value):
         # set the actual values
         for i in range(7):
             self._intensities[i] = self.emissions.value[i] * value
-
-        if value == 0:
-            logging.debug("Light is off")
-        else:
-            logging.debug("Light is on")
-    
+        self._updateIntensities()
+        
     def _setEmissions(self, intensities):
         """
         intensities (list of 7 floats [0..1]): intensity of each source
@@ -302,14 +298,11 @@ class LLE(model.Emitter):
         
 
     def terminate(self):
-        if self.temp_timer is not None:
-            self.temp_timer.cancel()
-            self.temp_timer = None
+        if hasattr(self, "_temp_timer") and self._temp_timer:
+            self._temp_timer.cancel()
+            self._temp_timer = None
         
         self._setDeviceManual()
-        
-    def __del__(self):
-        self.terminate()
         
     def selfTest(self):
         """
@@ -319,7 +312,10 @@ class LLE(model.Emitter):
         # only the temperature response something
         try:
             temp = self.GetTemperature()
-            if -300 < temp and temp < 250:
+            if temp == 0:
+                # means that we read only 0's
+                logging.warning("device reports suspicious temperature of exactly 0°C.")
+            if 0 < temp and temp < 250:
                 return True
         except:
             logging.exception("Selftest failed")
@@ -394,6 +390,25 @@ class LLE(model.Emitter):
         
         return ser 
     
+class FakeLLE(LLE):
+    """
+    For testing purpose only. To test the driver without hardware.
+    Note: you still need a serial port (but nothing will be sent to it)
+    Pretends to connect but actually just print the commands sent.
+    """
+    def _sendCommand(self, com):
+        assert(len(com) <= 10) # commands cannot be long
+        logging.debug("Sending: %s", str(com).encode('hex_codec'))
+        
+    def _readResponse(self, length):
+        # it might only ask for the temperature
+        if length == 2:
+            response = bytearray(b"\x26\xA0") # 38.625°C
+        else:
+            raise IOError("Unknown read")
+            
+        logging.debug("Received: %s", str(response).encode('hex_codec'))
+        return response
 
 # Copy from andorcam3
 class RepeatingTimer(threading.Thread):
@@ -424,3 +439,4 @@ class RepeatingTimer(threading.Thread):
         
     def cancel(self):
         self.must_stop.set()
+
