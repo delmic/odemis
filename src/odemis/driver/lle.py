@@ -29,21 +29,13 @@ class LLE(model.Emitter):
     Spectra, but might be compatible with other hardware with less channels.
     Documentation: Spectra TTL IF Doc.pdf. Micromanager's driver "LumencorSpectra"
     might also be a source of documentation (BSD license).
+    
+    The API doesn't allow asynchronous actions. So the switch of source/intensities
+    is considered instantaneous by the software. It obviously is not, but the 
+    documentation states about 200 μs. As it's smaller than most camera frame
+    rates, it shouldn't matter much. 
     '''
 
-    # Sources number are for the driver are:
-    # 0: Red
-    # 1: Green (see below)
-    # 2: Cyan
-    # 3: UV
-    # 4: Yellow (see below)
-    # 5: Blue
-    # 6: Teal
-
-    # Actual sources are more complicated:
-    # 0, 2, 3, 5, 6 are as is. 1 is for Yellow/Green. Setting 4 selects 
-    # whether yellow or green is used.
-    
 
     def __init__(self, name, role, port, _noinit=False, **kwargs):
         """
@@ -62,27 +54,33 @@ class LLE(model.Emitter):
         model.Emitter.__init__(self, name, role, **kwargs)
         
         # Test the LLE answers back
+        current_temp = self.GetTemperature()
         
         # Init the LLE
         self._initDevice()
         
         self.shape = (1)
-        self.power = model.FloatEnumerated(0, (0, 100), unit="W")
+        self._max_power = 100
+        self.power = model.FloatEnumerated(0, (0, self._max_power), unit="W")
 
         # emissions is list of 0 <= floats <= 1.
-        self._intensities = [0.0] * 7
+        self._intensities = [0.0] * 7 # start off
         self.emissions = model.ListVA(list(self._intensities), unit="", 
                                       setter=self._setEmissions)
-        # TODO find right values from documentation
-        self.spectra = model.ListVA([(380e-9, 160e-9, 560e-9, 960e-9, 740e-9),
-                                     
-                                     
-                                     
-                                     
+        # FIXME: values are just from reading the documentation graph => better values?
+        # list of 5-tuples of floats: filter-low, 25% low, max, 25% high, filter-high 
+        self.spectra = model.ListVA([(615e-9, 625e-9, 635e-9, 640e-9, 650e-9), # Red
+                                     (455e-9, 465e-9, 475e-9, 485e-9, 495e-9), # Cyan
+                                     (525e-9, 540e-9, 550e-9, 555e-9, 560e-9), # Green
+                                     (375e-9, 390e-9, 400e-9, 402e-9, 405e-9), # UV
+                                     (595e-9, 580e-9, 565e-9, 560e-9, 555e-9), # Yellow
+                                     (420e-9, 430e-9, 437e-9, 445e-9, 455e-9), # Blue
+                                     (495e-9, 505e-9, 515e-9, 520e-9, 530e-9), # Teal
                                      ],
-                                     unit="m", readonly=True) # list of 5-tuples of floats
+                                     unit="m", readonly=True) 
         
         self._prev_intensities = [None] * 7 # => will update for sure
+        self._updateIntensities() # turn off every source
         
         self.power.subscribe(self._updatePower)
         # set HW and SW version
@@ -90,17 +88,30 @@ class LLE(model.Emitter):
         self._hwVersion = "Lumencor Light Engine" # hardware doesn't report any version
         
         
-        # TODO temperature: it seems there is a temperature sensor
-    
-    
+        # Update temperature every 10s
+        self.temperature = model.FloatVA(current_temp, unit="C", readonly=True)
+        self.temp_timer = RepeatingTimer(10, self._updateTemperature,
+                                         "LLE temperature update")
+        self.temp_timer.start()
     
     
     def getMetadata(self):
         metadata = {}
+        # MD_IN_WL expects just min/max => if multiple sources, we need to combine
+        wl_range = (1, 0) # big min, small max
+        power = 0
+        for i in range(len(self._intensities)):
+            if self._intensities[i] > 0:
+                wl_range = (min(wl_range[0], self.spectra.value[i][0]),
+                            min(wl_range[1], self.spectra.value[i][4]))
+                # FIXME: not sure how to combine
+                power = max(power, self._intensities[i])
+        
+        if wl_range == (1, 0):
+            wl_range = (0, 0)
         metadata[model.MD_IN_WL] = (380e-9, 740e-9)
-        metadata[model.MD_LIGHT_POWER] = self.power.value
+        metadata[model.MD_LIGHT_POWER] = power
         return metadata
-
 
     def _sendCommand(self, com):
         """
@@ -111,7 +122,7 @@ class LLE(model.Emitter):
         logging.debug("Sending: %s", com.encode('string_escape'))
         self._serial.write(com)
         
-    def _receiveResponse(self, length):
+    def _readResponse(self, length):
         """
         receive a response from the engine
         com (string): command to send (including the \n if necessary)
@@ -148,8 +159,20 @@ class LLE(model.Emitter):
             # from the documentation:
             self._sendCommand("\x57\x02\x55\x50") # Set GPIO0-3 as input
             self._sendCommand("\x57\x03\x55\x50") # Set GPI04-7 as input
+
+    # Sources number for the driver are:
+    # 0: Red
+    # 1: Green (see below)
+    # 2: Cyan
+    # 3: UV
+    # 4: Yellow (see below)
+    # 5: Blue
+    # 6: Teal
+
+    # Actual sources are more complicated:
+    # 0, 2, 3, 5, 6 are as is. 1 is for Yellow/Green. Setting 4 selects 
+    # whether yellow (activated) or green (deactivated) is used.
    
-    
     def _enableSources(self, sources):
         """
         Select the light sources which must be enabled.
@@ -166,8 +189,8 @@ class LLE(model.Emitter):
         s_byte = 0x7f # reset a bit to 0 to activate
         for s in sources:
             assert(0 <= s and s <= 6)
-            if s == 4: # for yellow, "green/yellow" (1) channel must be activated
-                s_byte &= ~ (1 << 1) 
+            if s == 4: # for yellow, "green/yellow" (1) channel must be activated (0)
+                s_byte &= ~ (1 << 1)
             s_byte &= ~ (1 << s) 
         
         com[1] = chr(s_byte)
@@ -218,9 +241,15 @@ class LLE(model.Emitter):
         # with a resolution of 0.125 deg C.
         with self._ser_access:
             self._sendCommand("\x53\x91\x02\x50")
-            resp = bytearray(self._receiveResponse(2))
+            resp = bytearray(self._readResponse(2))
         val = 0.125 * ((((resp[1] << 8) | resp[0]) >> 5) & 0x7ff)
         return val
+    
+    def _updateTemperature(self):
+        temp = self.GetTemperature()
+        self.temperature._value = temp
+        self.temperature.notify(self.temperature.value)
+        logging.debug("LLE temp is %g", temp)
     
     def _updateIntensities(self):
         """
@@ -231,9 +260,9 @@ class LLE(model.Emitter):
         for i in range(7):
             if self._prev_intensities[i] != self._intensities[i]:
                 need_update = True
-                if self._intensities[i] > 1/255.:
+                if self._intensities[i] > self._max_power/255.:
                     toTurnOn.add(i)  
-                self._setSourceIntensity(i, self._intensities[i] * 255)
+                self._setSourceIntensity(i, self._intensities[i] * 255. / self._max_power)
         
         if need_update:
             self._enableSources(toTurnOn)
@@ -273,7 +302,14 @@ class LLE(model.Emitter):
         
 
     def terminate(self):
+        if self.temp_timer is not None:
+            self.temp_timer.cancel()
+            self.temp_timer = None
+        
         self._setDeviceManual()
+        
+    def __del__(self):
+        self.terminate()
         
     def selfTest(self):
         """
@@ -357,3 +393,34 @@ class LLE(model.Emitter):
         )
         
         return ser 
+    
+
+# Copy from andorcam3
+class RepeatingTimer(threading.Thread):
+    """
+    An almost endless timer thread. 
+    It stops when calling cancel() or the callback disappears.
+    """
+    def __init__(self, period, callback, name="TimerThread"):
+        """
+        period (float): time in second between two calls
+        callback (callable): function to call
+        name (str): fancy name to give to the thread
+        """
+        threading.Thread.__init__(self, name=name)
+        self.callback = model.WeakMethod(callback)
+        self.period = period
+        self.daemon = True
+        self.must_stop = threading.Event()
+    
+    def run(self):
+        # use the timeout as a timer
+        while not self.must_stop.wait(self.period):
+            try:
+                self.callback()
+            except model.WeakRefLostError:
+                # it's gone, it's over
+                return
+        
+    def cancel(self):
+        self.must_stop.set()
