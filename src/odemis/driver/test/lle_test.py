@@ -62,6 +62,31 @@ class TestLLE(unittest.TestCase):
         em[1] = 0.5
         dev.emissions.value = em
         self.assertGreater(dev.emissions.value[1], 0)
+              
+        dev.terminate()  
+    
+    def test_multi(self):
+        """simultaneous source activation"""
+        dev = self.cls(*self.args)
+        self.assertTrue(dev.selfTest(), "Device self-test failed.")
+        
+        # should start off
+        self.assertEqual(dev.power.value, 0)
+        
+        # turn on 3 sources at the same time (which are possible)
+        dev.power.value = dev.power.range[1]
+        em = dev.emissions.value
+        em[0] = 0.5
+        em[2] = 0.7
+        em[6] = 0.95
+        dev.emissions.value = em
+        self.assertGreater(dev.emissions.value[0], 0)        
+        
+        # turn on yellow source => all the other ones should be shut
+        em[4] = 1
+        dev.emissions.value = em
+        self.assertEqual(dev.emissions.value, [0, 0, 0, 0, 1, 0, 0])
+        
         dev.terminate()
 
     def test_cycle(self):
