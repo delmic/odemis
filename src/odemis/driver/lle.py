@@ -43,7 +43,12 @@ class LLE(model.Emitter):
         _noinit (boolean): for internal use only, don't try to initialise the device 
         """
         # start with this opening the port: if it fails, we are done
-        self._serial = self.openSerialPort(port)
+        if port is None:
+            # for FakeLLE only
+            self._serial = None
+            port = ""
+        else:
+            self._serial = self.openSerialPort(port)
         
         # to acquire before sending anything on the serial port
         self._ser_access = threading.Lock()
@@ -396,6 +401,10 @@ class FakeLLE(LLE):
     Note: you still need a serial port (but nothing will be sent to it)
     Pretends to connect but actually just print the commands sent.
     """
+    
+    def __init__(self, name, role, port, **kwargs):
+        LLE.__init__(self, name, role, None, **kwargs)
+    
     def _sendCommand(self, com):
         assert(len(com) <= 10) # commands cannot be long
         logging.debug("Sending: %s", str(com).encode('hex_codec'))
