@@ -891,7 +891,8 @@ class StageRedStone(model.Actuator):
         self.position._value = pos
         self.position.notify(self.position.value)
 
-    def getSerialDriver(self, name):
+    @staticmethod
+    def getSerialDriver(name):
         """
         return (string): the name of the serial driver used for the given port
         """
