@@ -8,16 +8,36 @@ Python (v2.7)
 See the doc/INSTALL.txt document for the complete installation procedure.
 
 = Basic usage =
+Launch the "Odemis" program, or type on a terminal:
+odemis-start
+On the first time, it will ask for the password. Eventually the GUI (Graphical
+User Interface) will appear.
+
+It is not usually necessary, but if you want, to fully stop odemis (GUI and back-end), type:
+odemis-stop
+
+= Advanced usage =
 odemisd is the command line interface to start and manage the Odemis backend. It
 should be started first.
 
-Run as "odemisd ...", with ... replaced by the correct arguments.
-See "odemisd --help" for information.
+Run as "odemisd ...", with ... replaced by the correct arguments. For all the 
+possible commands see:
+odemisd --help
+
 For example:
-PYTHONPATH=./src/:../Pyro4/src/ ./src/odemis/odemisd/main.py --daemonize --log-level=2 src/odemis/odemisd/test/optical-sim.odm.yaml
+odemisd --daemonize --log-level=2 src/odemis/odemisd/test/optical-sim.odm.yaml
+
+
 
 To use the command line interface use:
-PYTHONPATH=./src/:../Pyro4/src/ ./src/odemis/cli/main.py --help
+odemis-cli --help
+
+To see the list of components:
+odemis-cli --list
+
+For example, to set the emission values for the light engine "Spectra", type:
+odemis-cli --set-attr Spectra emissions "0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0"
+
 
 = License =
 GPLv2, see the LICENSE.txt file for the complete license.

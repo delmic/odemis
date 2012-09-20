@@ -569,7 +569,8 @@ def main(args):
                          help="List the properties of a component")
     dm_grpe.add_argument("--set-attr", "-s", dest="setattr", nargs=3, action='append',
                          metavar=("<component>", "<attribute>", "<value>"),
-                         help="Set the attribute of a component (lists are delimited by commas)")
+                         help="Set the attribute of a component (lists are delimited by commas,"
+                         " dictionary keys are delimited by colon)")
     dm_grpe.add_argument("--move", "-m", dest="move", nargs=3, action='append',
                          metavar=("<component>", "<axis>", "<distance>"),
                          help=u"move the axis by the amount of µm.")
