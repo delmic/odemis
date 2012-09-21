@@ -92,7 +92,7 @@ class TestLLE(unittest.TestCase):
     def test_cycle(self):
         """
         Test each emission source for 2 seconds at maximum intensity and then 1s
-        at 50%.
+        at 30%.
         """
         dev = self.cls(*self.args)
         em = dev.emissions.value
@@ -105,8 +105,9 @@ class TestLLE(unittest.TestCase):
             print "Turning on wavelength %g" % dev.spectra.value[i][2]
             em[i] = 1
             dev.emissions.value = em
-            time.sleep(2)
-            em[i] = 0.5
+            time.sleep(1)
+            em[i] = 0.3
+            dev.emissions.value = em
             time.sleep(1)
             em[i] = 0
             dev.emissions.value = em

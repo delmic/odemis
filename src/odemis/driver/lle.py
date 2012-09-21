@@ -21,6 +21,7 @@ import os
 import serial
 import sys
 import threading
+import time
 
 class LLE(model.Emitter):
     '''
@@ -53,6 +54,9 @@ class LLE(model.Emitter):
         # to acquire before sending anything on the serial port
         self._ser_access = threading.Lock()
         
+        # Init the LLE
+        self._initDevice()
+        
         if _noinit:
             return
         
@@ -60,9 +64,6 @@ class LLE(model.Emitter):
         
         # Test the LLE answers back
         current_temp = self.GetTemperature()
-        
-        # Init the LLE
-        self._initDevice()
         
         self.shape = (1)
         self._max_power = 100
@@ -125,7 +126,9 @@ class LLE(model.Emitter):
         """
         assert(len(com) <= 10) # commands cannot be long
         logging.debug("Sending: %s", str(com).encode('hex_codec'))
+        # TODO handle IOError (in case the cable is disconnected)
         self._serial.write(com)
+        
         
     def _readResponse(self, length):
         """
@@ -141,10 +144,10 @@ class LLE(model.Emitter):
             char = self._serial.read()
             if not char:
                 # TODO: try to reinitialise the device (it might have been turned on/off)
-                raise IOError("Device timeout after receiving %s.", str(response).encode('hex_codec'))
+                raise IOError("Device timeout after receiving '%s'." % str(response).encode('hex_codec'))
             response.append(char)
             
-        logging.debug("Received: %s", response)
+        logging.debug("Received: %s", str(response).encode('hex_codec'))
         return response
         
     def _initDevice(self):
@@ -155,7 +158,8 @@ class LLE(model.Emitter):
             # from the documentation:
             self._sendCommand(b"\x57\x02\xff\x50") # Set GPIO0-3 as open drain output
             self._sendCommand(b"\x57\x03\xab\x50") # Set GPI05-7 push-pull out, GPIO4 open drain out
-
+        time.sleep(1) # wait the device catches up
+            
     def _setDeviceManual(self):
         """
         Reset the device to the manual mode
@@ -203,13 +207,13 @@ class LLE(model.Emitter):
             self._sendCommand(com)
     
     # map of source number to bit & address for source intensity setting
-    source2BitAddr = { 0: (3, 0x18),
-                       1: (2, 0x18),
-                       2: (1, 0x18),
-                       3: (0, 0x18),
+    source2BitAddr = { 0: (3, 0x18), # Red
+                       1: (2, 0x18), # Green
+                       2: (1, 0x18), # Cyan
+                       3: (0, 0x18), # UV
                        4: (2, 0x18), # Yellow is the same source as Green
-                       5: (1, 0x1A),
-                       6: (0, 0x1A)
+                       5: (0, 0x1A), # Blue
+                       6: (1, 0x1A), # Teal
                       }
     def _setSourceIntensity(self, source, intensity):
         """
@@ -256,20 +260,37 @@ class LLE(model.Emitter):
         self.temperature.notify(self.temperature.value)
         logging.debug("LLE temp is %g", temp)
     
+    def _getIntensityGY(self, intensities):
+        if intensities[4] > 0:
+            # Yellow has precedence over green
+            return intensities[4]
+        else:
+            return intensities[1]
+    
     def _updateIntensities(self):
         """
         Update the sources setting of the hardware, if necessary
         """
-        toTurnOn = set()
         need_update = False
-        for i in range(7):
+        for i in range(len(self._intensities)):
             if self._prev_intensities[i] != self._intensities[i]:
                 need_update = True
-                if self._intensities[i] > self._max_power/255.:
-                    toTurnOn.add(i)  
+                # Green and Yellow share the same source => do it later    
+                if i in [1, 4]:
+                    continue
                 self._setSourceIntensity(i, int(round(self._intensities[i] * 255. / self._max_power)))
         
+        # special for Green/Yellow: merge them
+        prev_gy = self._getIntensityGY(self._prev_intensities)
+        gy = self._getIntensityGY(self._intensities)
+        if prev_gy != gy:
+            self._setSourceIntensity(1, int(round(gy * 255. / self._max_power)))
+        
         if need_update:
+            toTurnOn = set()
+            for i in range(len(self._intensities)):
+                if self._intensities[i] > self._max_power/255.:
+                    toTurnOn.add(i)
             self._enableSources(toTurnOn)
             
         self._prev_intensities = list(self._intensities)
@@ -284,6 +305,8 @@ class LLE(model.Emitter):
         """
         intensities (list of 7 floats [0..1]): intensity of each source
         """ 
+        if len(intensities) != len(self._intensities):
+            raise TypeError("Emission must be an array of %d floats." % len(self._intensities))
         # Green (1) and Yellow (4) can only be activated independently
         # => force it, with yellow taking precedence
         if intensities[4] > 0.0:
@@ -297,7 +320,8 @@ class LLE(model.Emitter):
         
         # set the actual values
         for i in range(7):
-            self._intensities[i] = intensities[i] * self.power.value
+            intensity = max(0, min(1, intensities[i]))
+            self._intensities[i] = intensity * self.power.value
         self._updateIntensities()
         return intensities
         
@@ -346,6 +370,7 @@ class LLE(model.Emitter):
         found = []  # (list of 2-tuple): name, args (port, axes(channel -> CL?)
         for p in ports:
             try:
+                logging.debug("Trying port %s", p)
                 dev = LLE(None, None, p, _noinit=True)
             except serial.SerialException:
                 # not possible to use this port? next one!
@@ -355,7 +380,7 @@ class LLE(model.Emitter):
             # The LLE only answers back for the temperature
             try:
                 temp = dev.GetTemperature()
-                if temp < 250: # avoid 255 => only 1111's, which is bad sign
+                if 0 < temp and temp < 250: # avoid 0 and 255 => only 000's or 1111's, which is bad sign
                     found.append(("LLE", {"port": p}))
             except:
                 continue
@@ -390,7 +415,7 @@ class LLE(model.Emitter):
             bytesize = serial.EIGHTBITS,
             parity = serial.PARITY_NONE,
             stopbits = serial.STOPBITS_ONE,
-            timeout = 0.3 #s
+            timeout = 1 #s
         )
         
         return ser 
