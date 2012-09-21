@@ -50,13 +50,15 @@ class LLE(model.Emitter):
             port = ""
         else:
             self._serial = self.openSerialPort(port)
+        self._port = port
         
         # to acquire before sending anything on the serial port
         self._ser_access = threading.Lock()
         
         # Init the LLE
         self._initDevice()
-        
+
+        self._try_recover = False
         if _noinit:
             return
         
@@ -64,6 +66,7 @@ class LLE(model.Emitter):
         
         # Test the LLE answers back
         current_temp = self.GetTemperature()
+        self._try_recover = True
         
         self.shape = (1)
         self._max_power = 100
@@ -126,8 +129,15 @@ class LLE(model.Emitter):
         """
         assert(len(com) <= 10) # commands cannot be long
         logging.debug("Sending: %s", str(com).encode('hex_codec'))
-        # TODO handle IOError (in case the cable is disconnected)
-        self._serial.write(com)
+        while True:
+            try:
+                self._serial.write(com)
+                break
+            except IOError:
+                if self._try_recover:
+                    self._tryRecover()
+                else:
+                    raise
         
         
     def _readResponse(self, length):
@@ -143,8 +153,12 @@ class LLE(model.Emitter):
         while len(response) < length:
             char = self._serial.read()
             if not char:
-                # TODO: try to reinitialise the device (it might have been turned on/off)
-                raise IOError("Device timeout after receiving '%s'." % str(response).encode('hex_codec'))
+                if self._try_recover:
+                    self._tryRecover()
+                    # TODO resend the question
+                    return b"\x00" * length
+                else:
+                    raise IOError("Device timeout after receiving '%s'." % str(response).encode('hex_codec'))
             response.append(char)
             
         logging.debug("Received: %s", str(response).encode('hex_codec'))
@@ -158,8 +172,66 @@ class LLE(model.Emitter):
             # from the documentation:
             self._sendCommand(b"\x57\x02\xff\x50") # Set GPIO0-3 as open drain output
             self._sendCommand(b"\x57\x03\xab\x50") # Set GPI05-7 push-pull out, GPIO4 open drain out
+            # empty the serial port
+            for i in range(100):
+                char = self._serial.read()
+                if not char:
+                    break
+            if char:
+                raise IOError("Device keep sending unknown data")
         time.sleep(1) # wait the device catches up
-            
+    
+    def _tryRecover(self):
+        # no other access to the serial port should be done
+        # so _ser_access should already be acquired
+        
+        # Retry to open the serial port (in case it was unplugged)
+        while True:
+            try:
+                self._serial.close()
+                self._serial = None
+            except:
+                pass
+            try:
+                logging.debug("retrying to open port %s", self._port)
+                self._serial = self.openSerialPort(self._port)
+                self._serial.write(b"\x57\x02\xff\x50")
+            except IOError:
+                time.sleep(2)
+            except Exception:
+                logging.exception("Unexpected error while trying to recover device")
+                raise
+            else:
+                break
+        
+        # Now it managed to write, let's see if we manage to read
+        while True:
+            try:
+                logging.debug("retrying to communicate with device on port %s", self._port)
+                self._serial.write(b"\x57\x02\xff\x50") # init
+                self._serial.write(b"\x57\x03\xab\x50") 
+                time.sleep(1)
+                self._serial.write(b"\x57\x02\xff\x50") # temp
+                resp = bytearray()
+                for i in range(2):
+                    char = self._serial.read()
+                    if not char:
+                        raise IOError()
+                    resp.append(char)
+                if resp not in [b"\x00\x00", b"\xff\xff"]:
+                    break # it's look good
+            except IOError:
+                time.sleep(2)
+        
+        # it now should be accessible again
+        self._serial.write(b"\x57\x02\xff\x50") # init
+        self._serial.write(b"\x57\x03\xab\x50")
+        self._prev_intensities = [None] * 7 # => will update for sure
+        self._ser_access.release() # because it will try to write on the port
+        self._updateIntensities() # reset the sources
+        self._ser_access.acquire()
+        logging.info("Recovered device on port %s", self._port)
+                
     def _setDeviceManual(self):
         """
         Reset the device to the manual mode
@@ -332,6 +404,7 @@ class LLE(model.Emitter):
             self._temp_timer = None
         
         self._setDeviceManual()
+        self._serial.close()
         
     def selfTest(self):
         """
