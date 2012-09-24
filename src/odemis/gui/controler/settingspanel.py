@@ -39,8 +39,6 @@ from odemis.model import getVAs, NotApplicableError, VigilantAttributeBase, \
     OutOfBoundError
 
 
-MAIN_FRAME = None
-
 # Utility functions
 
 def resolution_from_range(va, conf):
