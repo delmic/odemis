@@ -29,6 +29,28 @@ else:
     PORT = "/dev/ttyUSB0" #"/dev/ttyLLE"
 
 
+class TestFakeLLE(unittest.TestCase):
+    """Ensures that FakeLLE also keeps working"""
+
+    cls = lle.FakeLLE
+    args = ("test", "light", PORT)
+    
+    def test_simple(self):
+        dev = self.cls(*self.args)
+        self.assertTrue(dev.selfTest(), "Device self-test failed.")
+        
+        # should start off
+        self.assertEqual(dev.power.value, 0)
+        
+        # turn on green (1) to 50%
+        dev.power.value = dev.power.range[1]
+        em = dev.emissions.value
+        em[1] = 0.5
+        dev.emissions.value = em
+        self.assertGreater(dev.emissions.value[1], 0)
+              
+        dev.terminate()  
+    
 class TestLLE(unittest.TestCase):
 
     cls = lle.LLE # use FakeLLE if no hardware
