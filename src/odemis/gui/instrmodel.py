@@ -285,6 +285,19 @@ class MicroscopeGUI(object):
         for e in microscope.emitters:
             if e.role == "light":
                 self.light = e
+                # pick a nice value to turn on the light
+                if self.light.power.value > 0:
+                    self._light_power_on = self.light.power.value
+                else:
+                    try:
+                        self._light_power_on = max(self.light.power.range)
+                    except (AttributeError, model.NotApplicableError):
+                        try:
+                            self._light_power_on = max(self.light.power.choices)
+                        except (AttributeError, model.NotApplicableError):
+                            self._light_power_on = 1
+                            logging.warning("Unknown value to turn on the light")
+
             elif e.role == "e-beam":
                 self.ebeam = e
         if not self.light and not self.ebeam:
@@ -300,42 +313,139 @@ class MicroscopeGUI(object):
         self.stage.stop()
         self.opt_focus.stop()
         logging.info("stopped motion on every axes")
-    # streams:
-    #    + list of raw images that compose the whole view (ordered by time)
-    #    + colouration + contrast + brightness + name + ...
-    #    + InstrumentalImage corresponding to the tiling of all the raw images
-    # streams can be add, removed, listed.
-    # stage : to move the sample
-    # focus_a, focus_b...: actuators whose name is associated to a specific action in the GUI
-    # microscope: links to the real microscope component provided by the backend
-    #
 
-    # each canvas gets a set of streams to display
+    def opticalTurnOn(self):
+        # the image acquisition from the camera is handled solely by the streams
+        if self.light:
+            self.light.power.value = self._light_power_on
     
+    def opticalTurnOff(self):
+        """
+        Turn off the optical path. All the streams using it should be already
+        deactivated.
+        """
+        if self.light:
+            if self.light.power.value > 0:
+                # save the value only if it makes sense
+                self._light_power_on = self.light.power.value
+            self.light.power.value = 0
+    
+    def emTurnOn(self):
+        raise NotImplementedError("Does not know how to switch on e-beam")
+    
+    def emTurnOff(self):
+        raise NotImplementedError("Does not know how to switch off e-beam")
+    
+    # stream controller:
+    # create the default streams when a part of the microscope is turned on, and
+    #  create a corresponding stream entry in the panel. (when part is turned
+    #  off, stream stays)
+    # ensures the right "Add XXX stream" entries are available in the "Add stream"
+    #   button
+    # then stream entries directly update the VA's 
+    # on stream remove: contacted to remove the stream from the layers and the 
+    #   list
+    # if incorrect settings (e.g., dye with excitation wavelength incompatible 
+    #  with the hardware): adds a warning message to the stream entry
+    # on microscope off: pause (set .updated to False) every stream which uses
+    #  this microscope
+    # TODO: how to prevent the user from turning on camera/light again from the
+    #   stream entry when the microscope is off? => either stream entry "update"
+    #   icon is disabled/enable (decided by the stream controller), or the event
+    #   handler checks first that the appropriate microscope is On or Off.  
+    
+    
+    # TODO dye database
+    # name (for the user only)
+    # excitation wl (used to control the hardware)
+    # emission wl (used to control the hardware)
+    # ?official full excitation/emission spectra? (for user only)
+    
+    # TODO who's in charge of switching the active stream which share the same 
+    #   detector? => maybe a special controller, or the stream controller?
+    
+    
+    # viewport controller (to be merged with stream controller?)
+    # Creates the 4 microscope views at init, with the right names, depending on
+    #   the available microscope hardware.
+    # (The 4 viewports canvas are already created, the main interface connect 
+    #   them to the view, by number)
+    # In charge of switching between 2x2 layout and 1 layout. 
+    # In charge of updating the focus
+    # In charge of updating the view thumbnails???
+    # In charge of ensuring they all have same zoom and center position
+    # In charge of applying the toolbar actions on the right viewport
+    # in charge of changing the "hair-cross" display
+    
+    
+    # TODO microscopeview contain a tree of streams (not a list)
+    
+    # StreamTree:
+    # object which contains a set of streams, and how theyr are merged to appear
+    # as one image. It's a tree which has one stream per leaf and one merge 
+    # operation per node.
+    # method to obtain the actual looking into a wx.bitmap (according to the
+    #  position of the view)
+    # method to list all the raw images (=> for saving as a file)
+    
+    # Note about image acquisition:
+    # when image acquisition window appears:
+    # * current view is used a template for StreamTree
+    # * current settings are read and converted according to the current preset
+    # * live-acquisition is stopped in them main viewports => instead it is used to update the preview window 
+    # Then the user can
+    # * change StreamTree (different stream, different merge operations): independent of live view
+    # * change stream settings (brightness/contrast/tint) => also affects the steams in the live view 
+    # * change settings to the one in live view, or reset all of them to the preset, or put a separate value (without affecting the live-view settings)
+    #   => we need to be able to freeze/unfreeze widgets interfacing the VA's
+    # During image acquisition:
+    # * everything stays frozen
+    # * streams (detector/emitter) can get activated/deactivated in any order
     
 # almost every public attribute of the model object is exported as a VA, in order
 # to have the GUI automatically modify and update it. 
-    
+
 class Stream(object):
+    WARNING_EXCITATION_NOT_OPT="""The excitation wavelength selected cannot be 
+    optimally generated by the hardware."""
+    WARNING_EXCITATION_IMPOSSIBLE="""The excitation wavelength selected cannot be 
+    generated by the hardware."""
+    WARNING_EMISSION_NOT_OPT="""The emission wavelength selected cannot be 
+    optimally detected by the hardware."""
+    WARNING_EMISSION_IMPOSSIBLE="""The emission wavelength selected cannot be 
+    detected by the hardware."""
+    
     """
-    Represents a stream: the data from a detector with a given emitter active
+    Represents a stream: the data coming from a detector's dataflow, couples
+     with a given emitter active 
+    (or several emitters, if a subclass implements it)
     Basically it handles acquiring the data from the hardware and renders it as
-    an InstrumentalImage with the given image transformation .
+    an InstrumentalImage with the given image transformation.
+    
+    This is an abstract class, unless the emitter doesn't need any configuration
+    (always on, with the right settings).
     """
-    def __init__(self, name, detector, dataflow):
+    def __init__(self, name, detector, dataflow, emitter):
         """
         name (string): user-friendly name of this stream
         detector (Detector): the detector which has the dataflow
-        dataflow (Dataflow): the dataflow from which to get the data 
+        dataflow (Dataflow): the dataflow from which to get the data
+        emitter (Emitter): the emitter 
         """
         self.name = VigilantAttribute(name)
+        # this should not be accessed directly
         self._detector = detector
-        self._dataflow = dataflow # this should not be accessed directly
+        self._dataflow = dataflow
+        self._emitter = emitter
         self.raw = [] # list of DataArray received and used to generate the image
         # the most important attribute
         self.image = VigilantAttribute(InstrumentalImage(None, None, None))
         
-        # whether
+        # TODO should maybe to 2 methods activate/deactivate to explicitly 
+        # start/stop acquisition, and one VA "updated" to stated that the user
+        # want this stream updated (as often as possible while other streams are
+        # also updated)
+        self.updated = model.BooleanVA(False) # Whether the user wants the stream to be updated
         self.active = model.BooleanVA(False)
         self.active.subscribe(self.onActive)
         
@@ -348,9 +458,35 @@ class Stream(object):
         self.auto_bc.subscribe(self.onBrightnessContrast)
         self.contrast.subscribe(self.onBrightnessContrast)
         self.brightness.subscribe(self.onBrightnessContrast)
+        
+        # list of warnings to display to the user
+        # TODO should be a set
+        self.warnings = model.ListVA([]) # should only contains WARNING_*
 
+    def _removeWarnings(self, warnings):
+        """
+        Remove all the given warnings, if they are present
+        warnings (set of WARNING_*): the warnings to remove
+        """
+        new_warnings = set(self.warnings.value) - set(warnings)
+        self.warnings.value = list(new_warnings)
+        
+    def _addWarning(self, warning):
+        """
+        Add a warning if not already present
+        warning (WARNING_*)
+        """
+        new_warnings = set(self.warnings.value).add(warning)
+        self.warnings.value = list(new_warnings)
+        
     def onActive(self, active):
         # Normally is called only the value _changes_
+ 
+        # TODO how to turn on the emitter/white light? => one subclass per stream type?
+        # TODO how to turn off the other lights when not used? => Do we need to 
+        # distinguish between "really physically active" and "being updated from
+        # time to time" (the former implying the latter)
+        
         if active:
             self._dataflow.subscribe(self.onNewImage)
         else:
@@ -405,6 +541,32 @@ class Stream(object):
         self.raw[0] = data
         self._updateImage()
 
+def BrightfieldStream(Stream):
+    """
+    Stream containing images obtained via optical brightfield illumination.
+    It basically knows how to select white light and disable any filter.
+    """
+    
+    def onActive(self, active):
+        if active:
+            self._setLightExcitation()
+            # TODO do we need to have a special command to disable filter??
+            #  or should it be disabled automatically by the other streams not using it?
+#            self._setFilterEmission()
+        Stream.onActive(self, active)
+    
+#    def _setFilterEmission(self):
+#        if not self._filter.band.readonly:
+#            raise NotImplementedError("Do not know how to change filter band")
+        
+                
+    def _setLightExcitation(self):
+        wl = self.excitation.value
+        # TODO how to select white light???
+        # Turn on all the sources? If so, we need to change the LLE driver to 
+        # detect such a case and select the maximum number of sources that can
+        # be activated at the same time. 
+        
 def FluoStream(Stream):
     """
     Stream containing images obtained via epi-fluorescence.
@@ -412,20 +574,19 @@ def FluoStream(Stream):
     and how to taint the image.
     """
     
-    def __init__(self, name, detector, dataflow, light, filter):
+    def __init__(self, name, detector, dataflow, emitter, filter):
         """
         name (string): user-friendly name of this stream
         detector (Detector): the detector which has the dataflow
         dataflow (Dataflow): the dataflow from which to get the data
-        light (Light): the HwComponent to modify the light excitation
+        emitter (Light): the HwComponent to modify the light excitation
         filter (Filter): the HwComponent to modify the emission light filtering
         """
-        Stream.__init__(name, detector, dataflow)
-        self._light = light
+        Stream.__init__(name, detector, dataflow, emitter)
         self._filter = filter
         
         # This is what is displayed to the user
-        # TODO use the current value of the light and filter
+        # TODO what should be nice default value of the light and filter?
         self.excitation = model.FloatContinuous(488e-9, unit="m")
         self.excitation.subscribe(self.onExcitation)
         self.emission = model.FloatContinuous(507e-9, unit="m") 
@@ -433,11 +594,10 @@ def FluoStream(Stream):
         
         # colouration of the image
         defaultTint = util.conversion.wave2rgb(self.emission.value)
-        self.tint = VigilantAttribute(defaultTint, unit="RGB")  
-        
-        # Only update Emission or Excitation only if the stream is active
-        
+        self.tint = VigilantAttribute(defaultTint, unit="RGB")
+         
     def onActive(self, active):
+        # TODO update Emission or Excitation only if the stream is active
         if active:
             self._setLightExcitation()
             self._setFilterEmission()
@@ -463,16 +623,16 @@ def FluoStream(Stream):
                 if l < wl and wl < h:
                     fitting = True
                     break
+            self._removeWarnings([Stream.WARNING_EMISSION_IMPOSSIBLE,
+                                  Stream.WARNING_EMISSION_NOT_OPT])
             if not fitting:
                 log.warning("Emission wavelength %s doesn't fit the filter", 
                             readable_str(wl, "m"))
+                self._addWarning(Stream.WARNING_EMISSION_IMPOSSIBLE)
+                # TODO detect no optimal situation (within 10% band of border?)
             return
+        raise NotImplementedError("Do not know how to change filter band")
         
-        # TODO: improve fitting algorithm!
-        # at least, we need to decide a way to select the band
-        # choices on the VA?
-        pass
-    
     def _setLightExcitation(self):
         wl = self.excitation.value 
         def fitting(wl, spec):
@@ -492,13 +652,21 @@ def FluoStream(Stream):
             
         spectra = self._light.spectra.value
         # arg_max with fitting function as key 
-        i = spectra.index(max(spectra, key=lambda x: fitting(wl, x)))
+        best = max(spectra, key=lambda x: fitting(wl, x))
+        i = spectra.index(best)
         
         # create an emissions with only one source active
         emissions = [0] * len(spectra)
         emissions[i] = 1
         self._light.emissions.value = emissions
-
+        
+        # set warnings if necessary
+        self._removeWarnings([Stream.WARNING_EXCITATION_IMPOSSIBLE,
+                              Stream.WARNING_EXCITATION_NOT_OPT])
+        if wl < best[0] or wl > best[4]: # outside of band
+            self._addWarning(Stream.WARNING_EXCITATION_IMPOSSIBLE)
+        elif wl < best[1] or wl > best[3]: # outside of main 50% band
+            self._addWarning(Stream.WARNING_EXCITATION_NOT_OPT)
 
 class MicroscopeView(object):
     """
