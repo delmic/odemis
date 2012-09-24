@@ -18,6 +18,7 @@ from odemis import __version__, model
 from odemis.gui import main_xrc
 from odemis.gui.controler.acquisition import AcquisitionController
 from odemis.gui.controler.settingspanel import SettingsSideBar
+from odemis.gui.controler.viewpanel import ViewSideBar
 from odemis.gui.instrmodel import OpticalBackendConnected, InstrumentalImage
 from odemis.gui.log import log, create_gui_logger
 from odemis.gui.xmlh import odemis_get_resources
@@ -211,6 +212,7 @@ class OdemisGUIApp(wx.App):
 
 
             self.settings_controler = SettingsSideBar(self.main_frame, model.getMicroscope())
+            self.view_controler = ViewSideBar(self.main_frame)
 
             #print_microscope_tree(microscope)
 

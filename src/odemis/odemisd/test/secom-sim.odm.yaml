@@ -1,26 +1,26 @@
 SimOptical: {
     class: Microscope,
     role: brightfield,
-    emitters: [Spectra, "Nikon Super Duper", "MultiBand Fixed Filter", EBeam],
+    emitters: [Light, "Nikon Super Duper", "MultiBand Fixed Filter", EBeam],
     detectors: ["Andor SimCam"],
     actuators: ["FakeRedStoneStage", "SEM-Optical Alignment", "OpticalZ actuator"],
 }
 
-#Light: {
-#    class: simulated.Light,
-#    role: brightlight,
-#    affects: ["Andor SimCam"],
-#    properties: {
-#        power: 100 # W
-#    }
-#}
-
-Spectra: {
-    class: lle.FakeLLE,
+Light: {
+    class: simulated.Light,
     role: brightlight,
-    init: {port: "/dev/ttyUSB0"},
     affects: ["Andor SimCam"],
+    properties: {
+        power: 100 # W
+    }
 }
+
+#Spectra: {
+#    class: lle.FakeLLE,
+#    role: brightlight,
+#    init: {port: "/dev/ttyUSB0"},
+#    affects: ["Andor SimCam"],
+#}
 
 EBeam: {
     class: simulated.EBeam,
