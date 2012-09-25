@@ -47,16 +47,21 @@ class xrcfr_main(wx.Frame):
         self.tab_btn_live = xrc.XRCCTRL(self, "tab_btn_live")
         self.tab_btn_gallery = xrc.XRCCTRL(self, "tab_btn_gallery")
         self.pnl_tab_live = xrc.XRCCTRL(self, "pnl_tab_live")
+        self.btn_view_all = xrc.XRCCTRL(self, "btn_view_all")
+        self.btn_view_tl = xrc.XRCCTRL(self, "btn_view_tl")
+        self.btn_view_tr = xrc.XRCCTRL(self, "btn_view_tr")
+        self.btn_view_bl = xrc.XRCCTRL(self, "btn_view_bl")
+        self.btn_view_br = xrc.XRCCTRL(self, "btn_view_br")
+        self.pnl_view_tl = xrc.XRCCTRL(self, "pnl_view_tl")
         self.pnl_view_tr = xrc.XRCCTRL(self, "pnl_view_tr")
         self.pnl_view_bl = xrc.XRCCTRL(self, "pnl_view_bl")
         self.pnl_view_br = xrc.XRCCTRL(self, "pnl_view_br")
-        self.pnl_view_tl = xrc.XRCCTRL(self, "pnl_view_tl")
         self.btn_toggle_opt = xrc.XRCCTRL(self, "btn_toggle_opt")
         self.btn_toggle_sem = xrc.XRCCTRL(self, "btn_toggle_sem")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
         self.fpb_settings = xrc.XRCCTRL(self, "fpb_settings")
-        self.fp_optical_settings = xrc.XRCCTRL(self, "fp_optical_settings")
         self.fp_sem_settings = xrc.XRCCTRL(self, "fp_sem_settings")
+        self.fp_optical_settings = xrc.XRCCTRL(self, "fp_optical_settings")
         self.pnl_stream = xrc.XRCCTRL(self, "pnl_stream")
         self.fp_annotations = xrc.XRCCTRL(self, "fp_annotations")
         self.btn_aquire = xrc.XRCCTRL(self, "btn_aquire")
@@ -77,7 +82,7 @@ def __init_resources():
     wx.FileSystem.AddHandler(wx.MemoryFSHandler())
 
     main_xrc = '''\
-<?xml version="1.0" ?><resource version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
+<?xml version="1.0" ?><resource class="wxStaticBitmap" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
   <object class="wxFrame" name="fr_main">
     <object class="wxMenuBar">
       <object class="wxMenu">
@@ -223,67 +228,195 @@ def __init_resources():
         <object class="wxPanel" name="pnl_tab_live">
           <object class="wxBoxSizer">
             <object class="sizeritem">
-              <object class="wxPanel" name="pnl_left">
+              <object class="wxPanel">
+                <object class="wxBoxSizer">
+                  <orient>wxVERTICAL</orient>
+                  <object class="spacer">
+                    <option>1</option>
+                    <flag>wxEXPAND</flag>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxGridSizer">
+                      <object class="sizeritem">
+                        <object class="wxStaticText">
+                          <label>view</label>
+                          <fg>#BFBFBF</fg>
+                        </object>
+                        <flag>wxRIGHT|wxALIGN_RIGHT</flag>
+                        <border>5</border>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="ImageTextToggleButton" name="btn_view_all">
+                          <size>96,80</size>
+                          <bitmap>img_preview_block_png</bitmap>
+                          <hover>img_preview_block_a_png</hover>
+                          <selected>img_preview_block_a_png</selected>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="wxStaticText">
+                          <label>view</label>
+                          <fg>#BFBFBF</fg>
+                        </object>
+                        <flag>wxRIGHT|wxALIGN_RIGHT</flag>
+                        <border>5</border>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="ImageTextToggleButton" name="btn_view_tl">
+                          <size>96,80</size>
+                          <bitmap>img_preview_block_png</bitmap>
+                          <hover>img_preview_block_a_png</hover>
+                          <selected>img_preview_block_a_png</selected>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="wxStaticText">
+                          <label>view</label>
+                          <fg>#BFBFBF</fg>
+                        </object>
+                        <flag>wxRIGHT|wxALIGN_RIGHT</flag>
+                        <border>5</border>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="ImageTextToggleButton" name="btn_view_tr">
+                          <size>96,80</size>
+                          <bitmap>img_preview_block_png</bitmap>
+                          <hover>img_preview_block_a_png</hover>
+                          <selected>img_preview_block_a_png</selected>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="wxStaticText">
+                          <label>view</label>
+                          <fg>#BFBFBF</fg>
+                        </object>
+                        <flag>wxRIGHT|wxALIGN_RIGHT</flag>
+                        <border>5</border>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="ImageTextToggleButton" name="btn_view_bl">
+                          <size>96,80</size>
+                          <bitmap>img_preview_block_png</bitmap>
+                          <hover>img_preview_block_a_png</hover>
+                          <selected>img_preview_block_a_png</selected>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="wxStaticText">
+                          <label>view</label>
+                          <fg>#BFBFBF</fg>
+                        </object>
+                        <flag>wxRIGHT|wxALIGN_RIGHT</flag>
+                        <border>5</border>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="ImageTextToggleButton" name="btn_view_br">
+                          <size>96,80</size>
+                          <bitmap>img_preview_block_png</bitmap>
+                          <hover>img_preview_block_a_png</hover>
+                          <selected>img_preview_block_a_png</selected>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                      </object>
+                      <cols>2</cols>
+                      <rows>5</rows>
+                      <vgap>20</vgap>
+                      <hgap>0</hgap>
+                    </object>
+                    <flag>wxBOTTOM</flag>
+                    <border>50</border>
+                  </object>
+                </object>
                 <size>200,-1</size>
                 <bg>#333333</bg>
               </object>
               <flag>wxEXPAND</flag>
             </object>
             <object class="sizeritem">
-              <object class="wxGridSizer">
+              <object class="wxBoxSizer">
                 <object class="sizeritem">
-                  <object class="DblMicroscopePanel" name="pnl_view_tr">
-                    <size>400,-1</size>
-                    <fg>#BFBFBF</fg>
-                    <bg>#000000</bg>
-                    <hidden>1</hidden>
-                    <XRCED>
-                      <assign_var>1</assign_var>
-                    </XRCED>
+                  <object class="wxBoxSizer">
+                    <object class="sizeritem">
+                      <object class="DblMicroscopePanel" name="pnl_view_tl">
+                        <size>400,-1</size>
+                        <fg>#BFBFBF</fg>
+                        <bg>#000000</bg>
+                        <XRCED>
+                          <assign_var>1</assign_var>
+                        </XRCED>
+                      </object>
+                      <option>1</option>
+                      <flag>wxEXPAND</flag>
+                      <ratio>1</ratio>
+                    </object>
+                    <object class="sizeritem">
+                      <object class="DblMicroscopePanel" name="pnl_view_tr">
+                        <size>400,-1</size>
+                        <fg>#BFBFBF</fg>
+                        <bg>#000000</bg>
+                        <XRCED>
+                          <assign_var>1</assign_var>
+                        </XRCED>
+                      </object>
+                      <option>1</option>
+                      <flag>wxEXPAND</flag>
+                      <ratio>1</ratio>
+                    </object>
+                    <orient>wxHORIZONTAL</orient>
                   </object>
+                  <option>1</option>
                   <flag>wxEXPAND</flag>
-                  <minsize>300,300</minsize>
+                  <ratio>1</ratio>
                 </object>
                 <object class="sizeritem">
-                  <object class="DblMicroscopePanel" name="pnl_view_bl">
-                    <size>400,-1</size>
-                    <fg>#BFBFBF</fg>
-                    <bg>#000000</bg>
-                    <hidden>1</hidden>
-                    <XRCED>
-                      <assign_var>1</assign_var>
-                    </XRCED>
+                  <object class="wxBoxSizer">
+                    <object class="sizeritem">
+                      <object class="DblMicroscopePanel" name="pnl_view_bl">
+                        <size>400,-1</size>
+                        <fg>#BFBFBF</fg>
+                        <bg>#000000</bg>
+                        <XRCED>
+                          <assign_var>1</assign_var>
+                        </XRCED>
+                      </object>
+                      <option>1</option>
+                      <flag>wxEXPAND</flag>
+                      <ratio>1</ratio>
+                    </object>
+                    <object class="sizeritem">
+                      <object class="DblMicroscopePanel" name="pnl_view_br">
+                        <size>400,-1</size>
+                        <fg>#BFBFBF</fg>
+                        <bg>#000000</bg>
+                        <XRCED>
+                          <assign_var>1</assign_var>
+                        </XRCED>
+                      </object>
+                      <option>1</option>
+                      <flag>wxEXPAND</flag>
+                      <ratio>1</ratio>
+                    </object>
+                    <orient>wxHORIZONTAL</orient>
                   </object>
+                  <option>1</option>
                   <flag>wxEXPAND</flag>
-                  <minsize>300,300</minsize>
+                  <ratio>1</ratio>
                 </object>
-                <object class="sizeritem">
-                  <object class="DblMicroscopePanel" name="pnl_view_br">
-                    <size>400,-1</size>
-                    <fg>#BFBFBF</fg>
-                    <bg>#000000</bg>
-                    <hidden>1</hidden>
-                    <XRCED>
-                      <assign_var>1</assign_var>
-                    </XRCED>
-                  </object>
-                  <flag>wxEXPAND</flag>
-                  <minsize>300,300</minsize>
-                </object>
-                <cols>2</cols>
-                <rows>2</rows>
-              </object>
-              <option>1</option>
-              <flag>wxEXPAND</flag>
-            </object>
-            <object class="sizeritem">
-              <object class="DblMicroscopePanel" name="pnl_view_tl">
-                <size>400,-1</size>
-                <fg>#BFBFBF</fg>
-                <bg>#000000</bg>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
+                <orient>wxVERTICAL</orient>
               </object>
               <option>1</option>
               <flag>wxEXPAND</flag>
@@ -398,16 +531,16 @@ def __init_resources():
                         <orient>wxVERTICAL</orient>
                         <object class="sizeritem">
                           <object class="FoldPanelBar" name="fpb_settings">
-                            <object class="FoldPanelItem" name="fp_optical_settings">
-                              <label>OPTICAL SETTINGS</label>
+                            <object class="FoldPanelItem" name="fp_sem_settings">
+                              <label>SEM SETTINGS</label>
                               <fg>#1A1A1A</fg>
                               <bg>#555555</bg>
                               <XRCED>
                                 <assign_var>1</assign_var>
                               </XRCED>
                             </object>
-                            <object class="FoldPanelItem" name="fp_sem_settings">
-                              <label>SEM SETTINGS</label>
+                            <object class="FoldPanelItem" name="fp_optical_settings">
+                              <label>OPTICAL SETTINGS</label>
                               <fg>#1A1A1A</fg>
                               <bg>#555555</bg>
                               <XRCED>
@@ -809,6 +942,52 @@ N\xf8M3\xd7\xb6\xed"fN\x11B\x9cv\xb9\\\xff\xbcu\xdb\xb6\x8b\xd9\xd9\xd9\
 \xfc\x0d\x00>\x9f\xef\x9a\xe8\xe8\xf6\xee\xdd\xaf\xba\xc6\x9f\xe0\xdf\x9e\
 r\x1e~\xb8\xcd\\\xfe\x8c\x19rfA\x81l\xcf_\xff\x0f\xd2Ic=\xea9\x94\xbd\x00\
 \x00\x00\x00IEND\xaeB`\x82'''
+
+    img_preview_block_png = '''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00`\x00\x00\x00P\x08\x06\x00\x00\x00\xe6\
+\xe2p\x95\x00\x00\x00\x06bKGD\x00\xff\x00\xff\x00\xff\xa0\xbd\xa7\x93\x00\
+\x00\x00\x09pHYs\x00\x00\x0b\x13\x00\x00\x0b\x13\x01\x00\x9a\x9c\x18\x00\
+\x00\x00\x07tIME\x07\xdc\x08\x07\x081\x0c\xc5w\x1f\xad\x00\x00\x00\x19t\
+EXtComment\x00Created with GIMPW\x81\x0e\x17\x00\x00\x00\x93IDATx\xda\xed\
+\xd11\x11\x00 \x10\x03A\x1e?\xf1/\xe4\x05\x81\x07\x98\x81f\xafO\x93\xad\
+\xee^C\xc7%\xa9\x9b\xfdt\xe1\xdf\x00\x00\x00 \x00\x00\x04\x00\x80\x00\x00\
+\x10\x00\x00\x02\x00@\x00\x00\x08\x00\x00\x01\x00 \x00\x00\x04\x00\x80\x00\
+\x00\x10\x00\x00\x02\x00@\x00\x00\x08\x00\x00\x01\x00 \x00\x00\x04\x00\x80\
+\x00\x00\x10\x00\x00\x02\x00@\x00\x00\x08\x00\x00\x01\x00 \x00\x00\x04\x00\
+\x80\x00\x00\x10\x00\x00\x02\x00@\x00\x00\x08\x00\x00\x00.\x00\x00@\x00\
+\x00\x08\x00\x00\x01\x00 \x00\x00\x04\x00\x80\xde\xb4\x01\xbb\xaa\x04\xa0\
+L\xc5\x27\xa8\x00\x00\x00\x00IEND\xaeB`\x82'''
+
+    img_preview_block_a_png = '''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00`\x00\x00\x00P\x08\x06\x00\x00\x00\xe6\
+\xe2p\x95\x00\x00\x00\x06bKGD\x00\xff\x00\xff\x00\xff\xa0\xbd\xa7\x93\x00\
+\x00\x00\x09pHYs\x00\x00\x0b\x13\x00\x00\x0b\x13\x01\x00\x9a\x9c\x18\x00\
+\x00\x00\x07tIME\x07\xdc\x08\x07\x08..\xddMP\xd7\x00\x00\x00\x19tEXtCom\
+ment\x00Created with GIMPW\x81\x0e\x17\x00\x00\x01\xafIDATx\xda\xed\xdb\
+\xcdKTq\x18\x86\xe1g",\xccEE\xa2\x10\x9a\xf0$L\x93\x1f\x0b\x17\xe2\xff\xdf\
+VP\xf3{zh#FP\x11\x06)\x1a\xd4fV\x92\xa63\xe7\xcc\xdb\xe2\xbe\xb7\xe7\xf7\
+n\xde\xeb\x9ca\xce\xe2t\x92\xfc\x16\x0d\x9d\xed\xce(\xf3\x0fXam\x00\x00\
+\x00\x00\x01\x00\x00\x01\x00\x00\x01\x00\x00\x01\x00\x00\x01\x00\x00\x01\
+\x00\x00\x01\x00\x00\x01\x00\x00\x01\x00\x00\x01\xf0\x96d\x19\x80\xda\xb6\
+\x92\xf4\x00\xa8\xfd\x15y\x9f\xa4\x0b@-\xc2v\x92\x05\x00\xea\x9a\x90t\x94\
+d\x1e\x80Z\x84\x83$\xb3\x00\xd45)\xa9\x9fd\x06\x80\xba\xa6$}H2\x0d@-\xc2\
+a\x92g\x00\xd4\xf5\\\xd2q\x92\xa7\x00\xd4\xf5B\xd2n\x92)\x00\xeaz)i?\xc9\
+\x13\x00\xea\x9a\x93\xb4\x97d\x12\x80\xba^I\xdaL\xf2\x18\x80\xba\xba\x03\
+\x84G\x92\xd4\xe1+\xc9\xb2v%\xad\xf1\x04\xd4\xb5$\xe9\x1d\x00\xb5=\x04\xa0\
+\xaeMI\xeb\x00\xd4\xb4%i\xc3\xf6\x15\x00\xe3oG\xd2\xba\xed+\xfe\x86\x8e\
+\xbf\xfe`\xf9\x97\xbc\x07\x8c\xbfHZ\xb5}\xc1\x9b\xf0\xf8\xfb(i\xc5\xf6\xf9\
+\xf5\x0b\x00\xb4\xdf\xa7\xc1\x9d\xff\xf3o\x17\x01h\xb7\xcf\x92\xba\xb6\
+\xdct\x00\x80\xf6\xfa.\xa9g\xfb\xec\xb6C\x00\xb4\xb7\xfc\xd7\xb6\xbf\xfd\
+\xeb \x00\xcdw&i\xd1\xf6\xd7\xbb\x1c\x06\xa0\xd9.$\xbd\xb1\xfd\xe5\xae\x03\
+\x004\xbb\xfcE\xdb\xa7\xf7\x19\x02\xa0\x99~IZ\xb2}r\xdfA\x00\x9aY~\xcfv\
+\x86\x19\x06`\xf4\xde\xda\xee\x0f;\x0c\xc0\x88\xd9>\x1ee\x1e\x80\xe2\x00\
+\x00\x00\x00\x02\x00\x00\x02\x00\x00\x02\x00\x00\x02\x00\x00\x02\x00\x00\
+\x02\x00\x00\x02\x00\x00\x02\x00\x00\x02\x00\x00j\xa9?\xb0:d\xa9\x0c\x19\
+\xcc\xc4\x00\x00\x00\x00IEND\xaeB`\x82'''
 
     img_btn_press_png = '''\
 \x89PNG\x0d
@@ -1600,6 +1779,8 @@ s\xdd\xdf}\xbe\x8d\xe1\x00\x80)\xe8?\xe6\xaa*@\xdd7\xae\x9d\x00\x00\x00\
     wx.MemoryFSHandler.AddFile('XRC/main/img_tab_hover_png', img_tab_hover_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_tab_active_png', img_tab_active_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_logo_h30_png', img_logo_h30_png)
+    wx.MemoryFSHandler.AddFile('XRC/main/img_preview_block_png', img_preview_block_png)
+    wx.MemoryFSHandler.AddFile('XRC/main/img_preview_block_a_png', img_preview_block_a_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_btn_press_png', img_btn_press_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_btn_press_h_png', img_btn_press_h_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_btn_press_on_a_png', img_btn_press_on_a_png)

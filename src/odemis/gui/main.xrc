@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<resource version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
+<resource class="wxStaticBitmap" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
   <object class="wxFrame" name="fr_main">
     <object class="wxMenuBar">
       <object class="wxMenu">
@@ -145,67 +145,195 @@
         <object class="wxPanel" name="pnl_tab_live">
           <object class="wxBoxSizer">
             <object class="sizeritem">
-              <object class="wxPanel" name="pnl_left">
+              <object class="wxPanel">
+                <object class="wxBoxSizer">
+                  <orient>wxVERTICAL</orient>
+                  <object class="spacer">
+                    <option>1</option>
+                    <flag>wxEXPAND</flag>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxGridSizer">
+                      <object class="sizeritem">
+                        <object class="wxStaticText">
+                          <label>view</label>
+                          <fg>#BFBFBF</fg>
+                        </object>
+                        <flag>wxRIGHT|wxALIGN_RIGHT</flag>
+                        <border>5</border>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="ImageTextToggleButton" name="btn_view_all">
+                          <size>96,80</size>
+                          <bitmap>img/preview_block.png</bitmap>
+                          <hover>img/preview_block_a.png</hover>
+                          <selected>img/preview_block_a.png</selected>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="wxStaticText">
+                          <label>view</label>
+                          <fg>#BFBFBF</fg>
+                        </object>
+                        <flag>wxRIGHT|wxALIGN_RIGHT</flag>
+                        <border>5</border>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="ImageTextToggleButton" name="btn_view_tl">
+                          <size>96,80</size>
+                          <bitmap>img/preview_block.png</bitmap>
+                          <hover>img/preview_block_a.png</hover>
+                          <selected>img/preview_block_a.png</selected>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="wxStaticText">
+                          <label>view</label>
+                          <fg>#BFBFBF</fg>
+                        </object>
+                        <flag>wxRIGHT|wxALIGN_RIGHT</flag>
+                        <border>5</border>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="ImageTextToggleButton" name="btn_view_tr">
+                          <size>96,80</size>
+                          <bitmap>img/preview_block.png</bitmap>
+                          <hover>img/preview_block_a.png</hover>
+                          <selected>img/preview_block_a.png</selected>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="wxStaticText">
+                          <label>view</label>
+                          <fg>#BFBFBF</fg>
+                        </object>
+                        <flag>wxRIGHT|wxALIGN_RIGHT</flag>
+                        <border>5</border>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="ImageTextToggleButton" name="btn_view_bl">
+                          <size>96,80</size>
+                          <bitmap>img/preview_block.png</bitmap>
+                          <hover>img/preview_block_a.png</hover>
+                          <selected>img/preview_block_a.png</selected>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="wxStaticText">
+                          <label>view</label>
+                          <fg>#BFBFBF</fg>
+                        </object>
+                        <flag>wxRIGHT|wxALIGN_RIGHT</flag>
+                        <border>5</border>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="ImageTextToggleButton" name="btn_view_br">
+                          <size>96,80</size>
+                          <bitmap>img/preview_block.png</bitmap>
+                          <hover>img/preview_block_a.png</hover>
+                          <selected>img/preview_block_a.png</selected>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                      </object>
+                      <cols>2</cols>
+                      <rows>5</rows>
+                      <vgap>20</vgap>
+                      <hgap>0</hgap>
+                    </object>
+                    <flag>wxBOTTOM</flag>
+                    <border>50</border>
+                  </object>
+                </object>
                 <size>200,-1</size>
                 <bg>#333333</bg>
               </object>
               <flag>wxEXPAND</flag>
             </object>
             <object class="sizeritem">
-              <object class="wxGridSizer">
+              <object class="wxBoxSizer">
                 <object class="sizeritem">
-                  <object class="DblMicroscopePanel" name="pnl_view_tr">
-                    <size>400,-1</size>
-                    <fg>#BFBFBF</fg>
-                    <bg>#000000</bg>
-                    <hidden>1</hidden>
-                    <XRCED>
-                      <assign_var>1</assign_var>
-                    </XRCED>
+                  <object class="wxBoxSizer">
+                    <object class="sizeritem">
+                      <object class="DblMicroscopePanel" name="pnl_view_tl">
+                        <size>400,-1</size>
+                        <fg>#BFBFBF</fg>
+                        <bg>#000000</bg>
+                        <XRCED>
+                          <assign_var>1</assign_var>
+                        </XRCED>
+                      </object>
+                      <option>1</option>
+                      <flag>wxEXPAND</flag>
+                      <ratio>1</ratio>
+                    </object>
+                    <object class="sizeritem">
+                      <object class="DblMicroscopePanel" name="pnl_view_tr">
+                        <size>400,-1</size>
+                        <fg>#BFBFBF</fg>
+                        <bg>#000000</bg>
+                        <XRCED>
+                          <assign_var>1</assign_var>
+                        </XRCED>
+                      </object>
+                      <option>1</option>
+                      <flag>wxEXPAND</flag>
+                      <ratio>1</ratio>
+                    </object>
+                    <orient>wxHORIZONTAL</orient>
                   </object>
+                  <option>1</option>
                   <flag>wxEXPAND</flag>
-                  <minsize>300,300</minsize>
+                  <ratio>1</ratio>
                 </object>
                 <object class="sizeritem">
-                  <object class="DblMicroscopePanel" name="pnl_view_bl">
-                    <size>400,-1</size>
-                    <fg>#BFBFBF</fg>
-                    <bg>#000000</bg>
-                    <hidden>1</hidden>
-                    <XRCED>
-                      <assign_var>1</assign_var>
-                    </XRCED>
+                  <object class="wxBoxSizer">
+                    <object class="sizeritem">
+                      <object class="DblMicroscopePanel" name="pnl_view_bl">
+                        <size>400,-1</size>
+                        <fg>#BFBFBF</fg>
+                        <bg>#000000</bg>
+                        <XRCED>
+                          <assign_var>1</assign_var>
+                        </XRCED>
+                      </object>
+                      <option>1</option>
+                      <flag>wxEXPAND</flag>
+                      <ratio>1</ratio>
+                    </object>
+                    <object class="sizeritem">
+                      <object class="DblMicroscopePanel" name="pnl_view_br">
+                        <size>400,-1</size>
+                        <fg>#BFBFBF</fg>
+                        <bg>#000000</bg>
+                        <XRCED>
+                          <assign_var>1</assign_var>
+                        </XRCED>
+                      </object>
+                      <option>1</option>
+                      <flag>wxEXPAND</flag>
+                      <ratio>1</ratio>
+                    </object>
+                    <orient>wxHORIZONTAL</orient>
                   </object>
+                  <option>1</option>
                   <flag>wxEXPAND</flag>
-                  <minsize>300,300</minsize>
+                  <ratio>1</ratio>
                 </object>
-                <object class="sizeritem">
-                  <object class="DblMicroscopePanel" name="pnl_view_br">
-                    <size>400,-1</size>
-                    <fg>#BFBFBF</fg>
-                    <bg>#000000</bg>
-                    <hidden>1</hidden>
-                    <XRCED>
-                      <assign_var>1</assign_var>
-                    </XRCED>
-                  </object>
-                  <flag>wxEXPAND</flag>
-                  <minsize>300,300</minsize>
-                </object>
-                <cols>2</cols>
-                <rows>2</rows>
-              </object>
-              <option>1</option>
-              <flag>wxEXPAND</flag>
-            </object>
-            <object class="sizeritem">
-              <object class="DblMicroscopePanel" name="pnl_view_tl">
-                <size>400,-1</size>
-                <fg>#BFBFBF</fg>
-                <bg>#000000</bg>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
+                <orient>wxVERTICAL</orient>
               </object>
               <option>1</option>
               <flag>wxEXPAND</flag>
@@ -320,16 +448,16 @@
                         <orient>wxVERTICAL</orient>
                         <object class="sizeritem">
                           <object class="FoldPanelBar" name="fpb_settings">
-                            <object class="FoldPanelItem" name="fp_optical_settings">
-                              <label>OPTICAL SETTINGS</label>
+                            <object class="FoldPanelItem" name="fp_sem_settings">
+                              <label>SEM SETTINGS</label>
                               <fg>#1A1A1A</fg>
                               <bg>#555555</bg>
                               <XRCED>
                                 <assign_var>1</assign_var>
                               </XRCED>
                             </object>
-                            <object class="FoldPanelItem" name="fp_sem_settings">
-                              <label>SEM SETTINGS</label>
+                            <object class="FoldPanelItem" name="fp_optical_settings">
+                              <label>OPTICAL SETTINGS</label>
                               <fg>#1A1A1A</fg>
                               <bg>#555555</bg>
                               <XRCED>

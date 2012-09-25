@@ -99,6 +99,11 @@ class ImageButton(GenBitmapButton):
         self.bmpHover = None
         self.hovering = False
 
+        # FIXME: REMOVE AFTER TESTING
+        from odemis.gui.img.data import getarr_downBitmap
+        # Overlay image
+        self.overlay = getarr_downBitmap()
+
         self.Bind(wx.EVT_ENTER_WINDOW, self.OnEnter)
         self.Bind(wx.EVT_LEAVE_WINDOW, self.OnLeave)
 
