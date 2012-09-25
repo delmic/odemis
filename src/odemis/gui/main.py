@@ -19,6 +19,7 @@ from odemis.gui import main_xrc
 from odemis.gui.controler.acquisition import AcquisitionController
 from odemis.gui.controler.settingspanel import SettingsSideBar
 from odemis.gui.controler.viewpanel import ViewSideBar
+from odemis.gui.controler.tabs import TabButtonControl
 from odemis.gui.instrmodel import OpticalBackendConnected, InstrumentalImage
 from odemis.gui.log import log, create_gui_logger
 from odemis.gui.xmlh import odemis_get_resources
@@ -113,14 +114,12 @@ class OdemisGUIApp(wx.App):
             #self.main_frame.SetPosition((0, 0))
 
 
-            self.tabs = [(self.main_frame.tab_btn_live,
-                            self.main_frame.pnl_tab_live),
-                         (self.main_frame.tab_btn_gallery,
-                            self.main_frame.pnl_tab_gallery),
-                        ]
-
-            for btn, _ in self.tabs:
-                btn.Bind(wx.EVT_LEFT_DOWN, self.OnTabClick)
+            self.tabs = TabButtonControl(self.main_frame,
+                                         [(self.main_frame.tab_btn_live,
+                                           self.main_frame.pnl_tab_live),
+                                          (self.main_frame.tab_btn_gallery,
+                                           self.main_frame.pnl_tab_gallery),
+                                         ])
 
             # Do a final layout of the fold panel bar
             #wx.CallAfter(self.main_frame.fpb_settings.FitBar)
@@ -236,28 +235,6 @@ class OdemisGUIApp(wx.App):
     def _module_path(self):
         encoding = sys.getfilesystemencoding()
         return os.path.dirname(unicode(__file__, encoding))
-
-    def OnTabClick(self, evt):
-
-        button = evt.GetEventObject()
-
-        if button.GetToggle():
-            return
-
-        self.main_frame.Freeze()
-
-        for btn, tab in self.tabs:
-            btn.SetToggle(False)
-            if button == btn:
-                tab.Show()
-            else:
-                tab.Hide()
-
-        self.main_frame.Layout()
-
-        self.main_frame.Thaw()
-
-        evt.Skip()
 
     def OnScopePanelFocus(self, evt):
         """ Un-focus all panels
