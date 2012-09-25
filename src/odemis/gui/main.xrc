@@ -163,7 +163,7 @@
                         <border>5</border>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextToggleButton" name="btn_view_all">
+                        <object class="ViewButton" name="btn_view_all">
                           <size>96,80</size>
                           <bitmap>img/preview_block.png</bitmap>
                           <hover>img/preview_block_a.png</hover>
@@ -182,7 +182,7 @@
                         <border>5</border>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextToggleButton" name="btn_view_tl">
+                        <object class="ViewButton" name="btn_view_tl">
                           <size>96,80</size>
                           <bitmap>img/preview_block.png</bitmap>
                           <hover>img/preview_block_a.png</hover>
@@ -201,7 +201,7 @@
                         <border>5</border>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextToggleButton" name="btn_view_tr">
+                        <object class="ViewButton" name="btn_view_tr">
                           <size>96,80</size>
                           <bitmap>img/preview_block.png</bitmap>
                           <hover>img/preview_block_a.png</hover>
@@ -220,7 +220,7 @@
                         <border>5</border>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextToggleButton" name="btn_view_bl">
+                        <object class="ViewButton" name="btn_view_bl">
                           <size>96,80</size>
                           <bitmap>img/preview_block.png</bitmap>
                           <hover>img/preview_block_a.png</hover>
@@ -239,7 +239,7 @@
                         <border>5</border>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextToggleButton" name="btn_view_br">
+                        <object class="ViewButton" name="btn_view_br">
                           <size>96,80</size>
                           <bitmap>img/preview_block.png</bitmap>
                           <hover>img/preview_block_a.png</hover>

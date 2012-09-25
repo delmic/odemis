@@ -99,11 +99,6 @@ class ImageButton(GenBitmapButton):
         self.bmpHover = None
         self.hovering = False
 
-        # FIXME: REMOVE AFTER TESTING
-        from odemis.gui.img.data import getarr_downBitmap
-        # Overlay image
-        self.overlay = getarr_downBitmap()
-
         self.Bind(wx.EVT_ENTER_WINDOW, self.OnEnter)
         self.Bind(wx.EVT_LEAVE_WINDOW, self.OnLeave)
 
@@ -546,6 +541,17 @@ class ImageTextToggleButton(GenBitmapTextToggleButton):
         else:
             self.faceDnClr = self.GetParent().GetBackgroundColour()
 
+class ViewButton(ImageTextToggleButton):
+
+    def OnLeftDown(self, event):
+        if not self.IsEnabled() or not self.up:
+            return
+        self.saveUp = self.up
+        self.up = not self.up
+        self.CaptureMouse()
+        self.SetFocus()
+        self.Refresh()
+
 class TabButton(ImageTextToggleButton):
 
     def OnLeftDown(self, event):
@@ -556,6 +562,7 @@ class TabButton(ImageTextToggleButton):
         self.CaptureMouse()
         self.SetFocus()
         self.Refresh()
+
 
 class GraphicRadioButton(ImageTextToggleButton):
 

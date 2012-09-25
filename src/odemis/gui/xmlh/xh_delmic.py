@@ -347,6 +347,8 @@ class ImageTextToggleButtonHandler(xrc.XmlResourceHandler):
         self.AddStyle('wxALIGN_RIGHT', wx.ALIGN_RIGHT)
         self.AddStyle('wxALIGN_CENTRE', wx.ALIGN_CENTRE)
 
+        self.klass = btns.ImageTextToggleButton
+
     def CanHandle(self, node):
         return self.IsOfClass(
             node, 'ImageTextToggleButton')
@@ -359,14 +361,14 @@ class ImageTextToggleButtonHandler(xrc.XmlResourceHandler):
         if self.GetParamNode("bitmap"):
             bmp = self.GetBitmap("bitmap")
 
-        w = btns.ImageTextToggleButton(self.GetParentAsWindow(),
-                                       self.GetID(),
-                                       bmp,
-                                       pos=self.GetPosition(),
-                                       size=self.GetSize(),
-                                       style=self.GetStyle(),
-                                       label=self.GetText('label'),
-                                       label_delta=self.GetLong('delta'))
+        w = self.klass(self.GetParentAsWindow(),
+                       self.GetID(),
+                       bmp,
+                       pos=self.GetPosition(),
+                       size=self.GetSize(),
+                       style=self.GetStyle(),
+                       label=self.GetText('label'),
+                       label_delta=self.GetLong('delta'))
 
         if self.GetParamNode("selected"):
             bmp = self.GetBitmap("selected")
@@ -387,59 +389,24 @@ class ImageTextToggleButtonHandler(xrc.XmlResourceHandler):
         self.SetupWindow(w)
         return w
 
-class TabButtonButtonHandler(xrc.XmlResourceHandler):
+class TabButtonHandler(ImageTextToggleButtonHandler):
 
     def __init__(self):
-        xrc.XmlResourceHandler.__init__(self)
-        # Standard styles
-        self.AddWindowStyles()
-        # Custom styles
-        self.AddStyle('wxALIGN_LEFT', wx.ALIGN_LEFT)
-        self.AddStyle('wxALIGN_RIGHT', wx.ALIGN_RIGHT)
-        self.AddStyle('wxALIGN_CENTRE', wx.ALIGN_CENTRE)
+        ImageTextToggleButtonHandler.__init__(self)
+        self.klass = btns.TabButton
 
     def CanHandle(self, node):
-        return self.IsOfClass(
-            node, 'TabButton')
+        return self.IsOfClass(node, 'TabButton')
 
-    # Process XML parameters and create the object
-    def DoCreateResource(self):
-        assert self.GetInstance() is None
 
-        bmp = wx.NullBitmap
-        if self.GetParamNode("bitmap"):
-            bmp = self.GetBitmap("bitmap")
+class ViewButtonHandler(ImageTextToggleButtonHandler):
 
-        w = btns.TabButton(self.GetParentAsWindow(),
-                                       self.GetID(),
-                                       bmp,
-                                       pos=self.GetPosition(),
-                                       size=self.GetSize(),
-                                       style=self.GetStyle(),
-                                       label=self.GetText('label'),
-                                       label_delta=self.GetLong('delta'))
+    def __init__(self):
+        ImageTextToggleButtonHandler.__init__(self)
+        self.klass = btns.ViewButton
 
-        if self.GetParamNode("selected"):
-            bmp = self.GetBitmap("selected")
-            w.SetBitmapSelected(bmp)
-
-        if self.GetParamNode("hover"):
-            bmp = self.GetBitmap("hover")
-            w.SetBitmapHover(bmp)
-
-        if self.GetParamNode("focus"):
-            bmp = self.GetBitmap("focus")
-            w.SetBitmapFocus(bmp)
-
-        if self.GetParamNode("disabled"):
-            bmp = self.GetBitmap("disabled")
-            w.SetBitmapDisabled(bmp)
-
-        if self.GetBool('default'):
-            w.SetToggle(True)
-
-        self.SetupWindow(w)
-        return w
+    def CanHandle(self, node):
+        return self.IsOfClass(node, 'ViewButton')
 
 class PopupImageButtonHandler(xrc.XmlResourceHandler):
 
@@ -609,7 +576,8 @@ HANDLER_CLASS_LIST = [
                       ImageTextToggleButtonHandler,
                       PopupImageButtonHandler,
                       SuggestTextCtrlHandler,
-                      TabButtonButtonHandler,
+                      TabButtonHandler,
+                      ViewButtonHandler,
                       UnitFloatCtrlHandler,
                       UnitIntegerCtrlHandler,
                       ]

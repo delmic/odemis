@@ -20,12 +20,12 @@ class xrcfr_main(wx.Frame):
 #!XRCED:begin-block:xrcfr_main.PreCreate
     def PreCreate(self, pre):
         """ This function is called during the class's initialization.
-        
+
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
         pass
-        
+
 #!XRCED:end-block:xrcfr_main.PreCreate
 
     def __init__(self, parent):
@@ -246,7 +246,7 @@ def __init_resources():
                         <border>5</border>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextToggleButton" name="btn_view_all">
+                        <object class="ViewButton" name="btn_view_all">
                           <size>96,80</size>
                           <bitmap>img_preview_block_png</bitmap>
                           <hover>img_preview_block_a_png</hover>
@@ -265,7 +265,7 @@ def __init_resources():
                         <border>5</border>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextToggleButton" name="btn_view_tl">
+                        <object class="ViewButton" name="btn_view_tl">
                           <size>96,80</size>
                           <bitmap>img_preview_block_png</bitmap>
                           <hover>img_preview_block_a_png</hover>
@@ -284,7 +284,7 @@ def __init_resources():
                         <border>5</border>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextToggleButton" name="btn_view_tr">
+                        <object class="ViewButton" name="btn_view_tr">
                           <size>96,80</size>
                           <bitmap>img_preview_block_png</bitmap>
                           <hover>img_preview_block_a_png</hover>
@@ -303,7 +303,7 @@ def __init_resources():
                         <border>5</border>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextToggleButton" name="btn_view_bl">
+                        <object class="ViewButton" name="btn_view_bl">
                           <size>96,80</size>
                           <bitmap>img_preview_block_png</bitmap>
                           <hover>img_preview_block_a_png</hover>
@@ -322,7 +322,7 @@ def __init_resources():
                         <border>5</border>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextToggleButton" name="btn_view_br">
+                        <object class="ViewButton" name="btn_view_br">
                           <size>96,80</size>
                           <bitmap>img_preview_block_png</bitmap>
                           <hover>img_preview_block_a_png</hover>
