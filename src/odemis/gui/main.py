@@ -19,7 +19,7 @@ from odemis.gui import main_xrc
 from odemis.gui.controler.acquisition import AcquisitionController
 from odemis.gui.controler.settingspanel import SettingsSideBar
 from odemis.gui.controler.viewpanel import ViewSideBar
-from odemis.gui.controler.tabs import TabButtonControl
+from odemis.gui.controler.tabs import TabBar
 from odemis.gui.instrmodel import OpticalBackendConnected, InstrumentalImage
 from odemis.gui.log import log, create_gui_logger
 from odemis.gui.xmlh import odemis_get_resources
@@ -114,12 +114,12 @@ class OdemisGUIApp(wx.App):
             #self.main_frame.SetPosition((0, 0))
 
 
-            self.tabs = TabButtonControl(self.main_frame,
-                                         [(self.main_frame.tab_btn_live,
-                                           self.main_frame.pnl_tab_live),
-                                          (self.main_frame.tab_btn_gallery,
-                                           self.main_frame.pnl_tab_gallery),
-                                         ])
+            self.tabs = TabBar(self.main_frame,
+                               [(self.main_frame.tab_btn_live,
+                                 self.main_frame.pnl_tab_live),
+                                (self.main_frame.tab_btn_gallery,
+                                 self.main_frame.pnl_tab_gallery),
+                               ])
 
             # Do a final layout of the fold panel bar
             #wx.CallAfter(self.main_frame.fpb_settings.FitBar)
