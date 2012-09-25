@@ -65,7 +65,11 @@ class LLE(model.Emitter):
         model.Emitter.__init__(self, name, role, **kwargs)
         
         # Test the LLE answers back
-        current_temp = self.GetTemperature()
+        try:
+            current_temp = self.GetTemperature()
+        except IOError:
+            logging.exception("Device not responding on port %s", port)
+            raise
         self._try_recover = True
         
         self.shape = (1)
@@ -172,14 +176,10 @@ class LLE(model.Emitter):
             # from the documentation:
             self._sendCommand(b"\x57\x02\xff\x50") # Set GPIO0-3 as open drain output
             self._sendCommand(b"\x57\x03\xab\x50") # Set GPI05-7 push-pull out, GPIO4 open drain out
-            # empty the serial port
-            for i in range(100):
-                char = self._serial.read()
-                if not char:
-                    break
-            if char:
+            # empty the serial port (and also wait for the device to initialise)
+            garbage = self._serial.read(100)
+            if len(garbage) == 100:
                 raise IOError("Device keep sending unknown data")
-        time.sleep(1) # wait the device catches up
     
     def _tryRecover(self):
         # no other access to the serial port should be done
@@ -403,8 +403,10 @@ class LLE(model.Emitter):
             self._temp_timer.cancel()
             self._temp_timer = None
         
-        self._setDeviceManual()
-        self._serial.close()
+        if self._serial:
+            self._setDeviceManual()
+            self._serial.close()
+            self._serial = None
         
     def selfTest(self):
         """
@@ -502,6 +504,9 @@ class FakeLLE(LLE):
     
     def __init__(self, name, role, port, **kwargs):
         LLE.__init__(self, name, role, None, **kwargs)
+    
+    def _initDevice(self):
+        pass
     
     def _sendCommand(self, com):
         assert(len(com) <= 10) # commands cannot be long
