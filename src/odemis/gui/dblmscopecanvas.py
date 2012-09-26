@@ -59,9 +59,9 @@ class DblMicroscopeCanvas(DraggableCanvas):
             pass
 
         self.Bind(wx.EVT_MOUSEWHEEL, self.OnWheel)
-        
+
         # TODO: If it's too resource consuming, which might want to create just our own thread
-        # FIXME: "stop all axes" should also cancel the next timer  
+        # FIXME: "stop all axes" should also cancel the next timer
         self._moveFocusLock = threading.Lock()
         self._moveFocusDistance = 0
         self._moveFocusTimer = wx.PyTimer(self.moveFocus)
@@ -93,7 +93,7 @@ class DblMicroscopeCanvas(DraggableCanvas):
     def onExtraAxisMove(self, axis, shift):
         """
         called when the extra dimensions are modified (right drag)
-        axis (0<int): the axis modified 
+        axis (0<int): the axis modified
             0 => right vertical
             1 => right horizontal
         shift (int): relative amount of pixel moved
@@ -107,12 +107,22 @@ class DblMicroscopeCanvas(DraggableCanvas):
             # negative == go up == closer from the sample
             val = 0.1e-6 * shift # m
             assert(abs(val) < 0.01) # never move by 1 cm
-            
+
             self.queueMoveFocus(val)
+
+    def get_screenshot(self):
+        bitmap = wx.EmptyBitmap(*self.ClientSize)
+
+        memory = wx.MemoryDC()
+        memory.SelectObject(bitmap)
+        #set pen, do drawing.
+        memory.SelectObject(wx.NullBitmap)
+
+        return wx.ImageFromBitmap(bitmap)
 
     def queueMoveFocus(self, shift, period = 0.1):
         """
-        Move the focus, but at most every period, to avoid accumulating 
+        Move the focus, but at most every period, to avoid accumulating
         many slow small moves.
         shift (float): distance of the focus move
         period (second): maximum time to wait before it will be moved
@@ -120,7 +130,7 @@ class DblMicroscopeCanvas(DraggableCanvas):
         # update the complete move to do
         with self._moveFocusLock:
             self._moveFocusDistance += shift
-        
+
         # start the timer if not yet started
         if not self._moveFocusTimer.IsRunning():
             self._moveFocusTimer.Start(period * 1000.0, oneShot=True)

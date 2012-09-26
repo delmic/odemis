@@ -1,18 +1,25 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-'''
+"""
 @author: Rinze de Laat
 
 Copyright © 2012 Rinze de Laat, Éric Piel, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 2 of the License, or (at your option) any later version.
+Odemis is free software: you can redistribute it and/or modify it under the
+terms of the GNU General Public License as published by the Free Software
+Foundation, either version 2 of the License, or (at your option) any later
+version.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
-'''
+You should have received a copy of the GNU General Public License along with
+Odemis. If not, see http://www.gnu.org/licenses/.
+
+"""
 
 from odemis import __version__, model
 from odemis.gui import main_xrc
@@ -55,7 +62,8 @@ class OdemisGUIApp(wx.App):
         wx.App.outputWindowClass = OdemisOutputWindow
 
         # Constructor of the parent class
-        # ONLY CALL IT AT THE END OF :py:method:`__init__` BECAUSE OnInit will be called
+        # ONLY CALL IT AT THE END OF :py:method:`__init__` BECAUSE OnInit will
+        # be called
         # and it needs the attributes defined in this constructor!
         wx.App.__init__(self, redirect=True)
 
@@ -140,8 +148,9 @@ class OdemisGUIApp(wx.App):
 
 
             from odemis.gui.comp.stream import FixedStreamPanelEntry
+            # TODO should pass a stream
             fp = FixedStreamPanelEntry(self.main_frame.pnl_stream,
-                                       stream=self.secom_model, # TODO should pass a stream
+                                       stream=self.secom_model,
                                        label="Bright field Stream")
             self.main_frame.pnl_stream.add_stream(fp)
 
@@ -184,10 +193,6 @@ class OdemisGUIApp(wx.App):
 
             self.main_frame.SetAcceleratorTable(accel_tbl)
 
-            # wx.EVT_MENU(self.main_frame, self.main_frame.menu_item_debug.GetId(), self.on_debug)
-            # wx.EVT_MENU(self.main_frame, self.main_frame.menu_item_error.GetId(), self.on_send_report)
-            # wx.EVT_MENU(self.main_frame, self.main_frame.menu_item_activate.GetId(), self.on_activate)
-            # wx.EVT_MENU(self.main_frame, self.main_frame.menu_item_update.GetId(), elit.updater.Updater.check_for_update)
 
             # Keep track of focus
             self.scope_panels = [self.main_frame.pnl_view_tl,
@@ -197,7 +202,8 @@ class OdemisGUIApp(wx.App):
 
             for scope_panel in self.scope_panels:
                 scope_panel.Bind(wx.EVT_CHILD_FOCUS, self.OnScopePanelFocus)
-            self.scope_panels[0].SetFocus(True) # to ensure at least one panel has the focus
+            # to ensure at least one panel has the focus
+            self.scope_panels[0].SetFocus(True)
 
             self.main_frame.Bind(wx.EVT_CLOSE, self.on_close_window)
 
@@ -210,19 +216,24 @@ class OdemisGUIApp(wx.App):
 #                self.goto_debug_mode()
 
 
-            self.settings_controler = SettingsSideBar(self.main_frame, model.getMicroscope())
+            self.settings_controler = SettingsSideBar(self.main_frame,
+                                                      model.getMicroscope())
             self.view_controler = ViewSideBar(self.main_frame)
+            #self.view_controler.select_view(2)
 
             #print_microscope_tree(microscope)
 
             self.acquisition_controller = AcquisitionController(self.main_frame)
 
             # Main on/off buttons => only optical for now
-            # FIXME: special _bitmap_ toggle button doesn't seem to generate EVT_TOGGLEBUTTON
-#            self.main_frame.btn_toggle_opt.Bind(wx.EVT_TOGGLEBUTTON, self.on_toggle_opt)
-            self.main_frame.btn_toggle_opt.Bind(wx.EVT_BUTTON, self.on_toggle_opt)
+            # FIXME: special _bitmap_ toggle button doesn't seem to generate
+            # EVT_TOGGLEBUTTON
+            # self.main_frame.btn_toggle_opt.Bind(wx.EVT_TOGGLEBUTTON,
+            #                                     self.on_toggle_opt)
+            self.main_frame.btn_toggle_opt.Bind(wx.EVT_BUTTON,
+                                                self.on_toggle_opt)
 
-        except Exception:
+        except Exception:  #pylint: disable=W0703
             self.excepthook(*sys.exc_info())
             #raise
 
@@ -251,7 +262,8 @@ class OdemisGUIApp(wx.App):
         """ Open the two files for example """
         try:
             pos = self.secom_model.stage_pos.value
-            name1 = os.path.join(os.path.dirname(__file__), "1-optical-rot7.png")
+            name1 = os.path.join(os.path.dirname(__file__),
+                                 "1-optical-rot7.png")
             im1 = InstrumentalImage(wx.Image(name1), 7.14286e-7, pos)
 
             pos = (pos[0] + 2e-6, pos[1] - 1e-5)
@@ -318,7 +330,8 @@ class OdemisGUIApp(wx.App):
         InspectionTool().Show()
 
     def on_debug(self, evt=None): #pylint: disable=W0613
-        """ Show or hides the log text field according to the debug menu item. """
+        """ Show or hides the log text field according to the debug menu item.
+        """
         self.main_frame.pnl_log.Show(self.main_frame.menu_item_debug.IsChecked())
         self.main_frame.Layout()
 
@@ -356,16 +369,12 @@ class OdemisOutputWindow(object):
             print_catch_logger.error("[CAP] %s" % txt.strip())
 
 def installThreadExcepthook():
-    """ `Workaround for sys.excepthook thread bug <http://spyced.blogspot.com/2007/06/workaround-for-sysexcepthook-bug.html>`_
+    """ Workaround for sys.excepthook thread bug
+    http://spyced.blogspot.com/2007/06/workaround-for-sysexcepthook-bug.html
 
-        Call once from ``__main__`` before creating any threads.
-        If using psyco, call
+    Call once from ``__main__`` before creating any threads.
+    If using psyco, call
 
-        .. code-block:: python
-
-            psyco.cannotcompile(threading.Thread.run)
-
-        since this replaces a new-style class method.
     """
     init_old = threading.Thread.__init__
     def init(self, *args, **kwargs):

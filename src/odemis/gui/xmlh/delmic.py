@@ -2,7 +2,7 @@
 '''
 Created:      2012-5-15
 
-@author: Rinze de Laat 
+@author: Rinze de Laat
 
 Copyright © 2012 Rinze de Laat, Delmic
 
@@ -231,8 +231,40 @@ c.setParamClass('disabled', params.ParamBitmap)
 
 c.addEvents('EVT_BUTTON')
 component.Manager.register(c)
-component.Manager.addXmlHandler(xh_delmic.TabButtonButtonHandler)
+component.Manager.addXmlHandler(xh_delmic.TabButtonHandler)
 component.Manager.setMenu(c, 'button', 'Delmic tab button', 'TabButton', 20)
+component.Manager.setTool(c, 'Controls', pos=(1, 1))
+
+### ViewButton
+
+c = component.Component('ViewButton', ['control', 'tool'],
+              ['pos', 'size', 'default', 'label', 'delta',
+               'bitmap', 'hover', 'selected', 'focus', 'disabled'],
+              image=images.TreeBitmapButton.GetImage())
+c.addStyles('wxALIGN_LEFT', 'wxALIGN_RIGHT', 'wxALIGN_CENTRE')
+
+c.setParamClass('delta', params.ParamInt)
+
+c.setParamClass('default', params.ParamBool)
+c.setSpecial('bitmap',  attribute.BitmapAttribute)
+
+c.setSpecial('hover',  attribute.BitmapAttribute)
+c.setParamClass('hover', params.ParamBitmap)
+
+c.setSpecial('selected',  attribute.BitmapAttribute)
+c.setParamClass('selected', params.ParamBitmap)
+
+c.setSpecial('focus',  attribute.BitmapAttribute)
+c.setParamClass('focus', params.ParamBitmap)
+
+c.setSpecial('disabled',  attribute.BitmapAttribute)
+c.setParamClass('disabled', params.ParamBitmap)
+
+
+c.addEvents('EVT_BUTTON')
+component.Manager.register(c)
+component.Manager.addXmlHandler(xh_delmic.ViewButtonHandler)
+component.Manager.setMenu(c, 'button', 'Delmic view button', 'ViewButton', 20)
 component.Manager.setTool(c, 'Controls', pos=(1, 1))
 
 ### PopupImageButton

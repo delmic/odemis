@@ -112,6 +112,9 @@ class DblMicroscopePanel(wx.Panel):
 
         self.Bind(wx.EVT_SIZE, self.OnSize)
 
+    def get_screenshot(self):
+        return self.canvas.get_screenshot()
+
     def _set_subscriptions(self):
         """ Set all needed subscriptions to VigilantAttributes """
         self.viewmodel.mpp.subscribe(self.avOnMPP, True)  #pylint: disable=E1101
