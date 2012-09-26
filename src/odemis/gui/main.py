@@ -129,7 +129,6 @@ class OdemisGUIApp(wx.App):
                                  self.main_frame.pnl_tab_gallery),
                                ])
 
-
             # Do a final layout of the fold panel bar
             #wx.CallAfter(self.main_frame.fpb_settings.FitBar)
 

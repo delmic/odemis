@@ -543,6 +543,18 @@ class ImageTextToggleButton(GenBitmapTextToggleButton):
 
 class ViewButton(ImageTextToggleButton):
 
+    def __init__(self, *args, **kwargs):
+        ImageTextToggleButton.__init__(self, *args, **kwargs)
+
+        self.overlay = None
+
+        overlay_border = 5
+
+        width, height = self.GetSize()
+
+        self.overlay_width = width - overlay_border * 2
+        self.overlay_height = height - overlay_border * 2
+
     def OnLeftDown(self, event):
         if not self.IsEnabled() or not self.up:
             return
@@ -551,6 +563,26 @@ class ViewButton(ImageTextToggleButton):
         self.CaptureMouse()
         self.SetFocus()
         self.Refresh()
+
+    def set_overlay(self, overlay_image):
+        log.warn("Setting overlay")
+
+        overlay_image.Rescale(70,
+                              70,
+                              wx.IMAGE_QUALITY_HIGH)
+
+        from odemis.gui.img.data import getarr_downImage
+        overlay_image = getarr_downImage()
+
+        self.overlay = wx.BitmapFromImage(overlay_image)
+
+    def DrawLabel(self, dc, width, height, dx=0, dy=0):
+        ImageTextToggleButton.DrawLabel(self, dc, width, height, dx, dy)
+
+        if self.overlay is not None:
+            log.warn("Painting overlay")
+            dc.DrawBitmap(self.overlay, 0, 0, True)
+
 
 class TabButton(ImageTextToggleButton):
 

@@ -37,13 +37,17 @@ class TabBar(object):
         for btn, _ in self.btns_n_tabs:
             btn.Bind(wx.EVT_BUTTON, self.OnClick)
 
+        btn, tab =self.btns_n_tabs[0]
+        btn.SetToggle(True)
+        tab.Show()
+
     def _reset_buttons(self, btn=None):
         log.debug("Resetting tab buttons")
         for button in [b for b, _ in self.btns_n_tabs if b != btn]:
             button.SetToggle(False)
 
     def OnClick(self, evt):
-        log.debug("Tab click")
+        log.debug("Tab button click")
 
         evt_btn = evt.GetEventObject()
 
