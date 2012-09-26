@@ -26,11 +26,10 @@ from odemis import model
 from odemis.gui import util
 from odemis.gui.log import log
 from odemis.gui.util.img import DataArray2wxImage
+from odemis.gui.util.units import readable_str
 from odemis.model import VigilantAttribute, MD_POS, MD_PIXEL_SIZE, \
     MD_SENSOR_PIXEL_SIZE
 import logging
-import wx
-from odemis.gui.util.units import readable_str
 
 
 
@@ -314,6 +313,7 @@ class MicroscopeGUI(object):
         self.opt_focus.stop()
         logging.info("stopped motion on every axes")
 
+    # TODO handle also "pause" state => opticalPause()? Or opticalSetState(ON/OFF/PAUSE)?
     def opticalTurnOn(self):
         # the image acquisition from the camera is handled solely by the streams
         if self.light:
@@ -354,6 +354,8 @@ class MicroscopeGUI(object):
     #   icon is disabled/enable (decided by the stream controller), or the event
     #   handler checks first that the appropriate microscope is On or Off.  
     
+    # TODO who's in charge of switching the active stream which share the same 
+    #   detector? => maybe a special controller, or the stream controller?
     
     # TODO dye database
     # name (for the user only)
@@ -361,8 +363,6 @@ class MicroscopeGUI(object):
     # emission wl (used to control the hardware)
     # ?official full excitation/emission spectra? (for user only)
     
-    # TODO who's in charge of switching the active stream which share the same 
-    #   detector? => maybe a special controller, or the stream controller?
     
     
     # viewport controller (to be merged with stream controller?)
@@ -379,14 +379,7 @@ class MicroscopeGUI(object):
     
     
     # TODO microscopeview contain a tree of streams (not a list)
-    
-    # StreamTree:
-    # object which contains a set of streams, and how theyr are merged to appear
-    # as one image. It's a tree which has one stream per leaf and one merge 
-    # operation per node.
-    # method to obtain the actual looking into a wx.bitmap (according to the
-    #  position of the view)
-    # method to list all the raw images (=> for saving as a file)
+
     
     # Note about image acquisition:
     # when image acquisition window appears:
@@ -491,10 +484,9 @@ class Stream(object):
             self._dataflow.subscribe(self.onNewImage)
         else:
             self._dataflow.unsubscribe(self.onNewImage)
-
-    # TODO: see if really necessary: because __del__ prevents GC to work
-    def __del__(self):
-        self.active.value = False
+            
+    # No __del__: subscription should be automatically stopped when the object
+    # disappears, and the user should stop the update first anyway. 
 
     def _updateImage(self, tint=(255, 255, 255)):
         """
@@ -671,15 +663,15 @@ def FluoStream(Stream):
 class MicroscopeView(object):
     """
     Represents a view from a microscope, and ways to alter it.
-    Basically, its input is a list of streams with merging functions, and can
-    request stage and focus move.
+    Basically, its "input" is a StreamTree, and can request stage and focus move.
     """
     def __init__(self, stage, focus0=None, focus1=None):
         """
         stage (Actuator): actuator with two axes: x and y
         focus0 (Actuator): actuator with one axis: z. Can be None
         focus1 (Actuator): actuator with one axis: z. Can be None
-        Focuses 0 and 1 are modified when changing focus along X and Y axis.
+        Focuses 0 and 1 are modified when changing focus respectively along the 
+           X and Y axis.
         """
         self._stage = stage
         self._focus = [focus0, focus1]
@@ -697,10 +689,10 @@ class MicroscopeView(object):
         # ordered list of streams to display
         # TODO might need to be more complex object, such as a tree with 
         # leaves as stream and fork as merge functions
-        self.streams = model.ListVA([])
+        self.streams = VigilantAttribute(StreamTree())
         
         # a thumbnail version of what is displayed
-        self.thumbnail = model.VigilantAttribute(InstrumentalImage(None, None, None))
+        self.thumbnail = VigilantAttribute(InstrumentalImage(None, None, None))
     
     def moveStage(self):
         """
@@ -728,5 +720,88 @@ class MicroscopeView(object):
         self.view_pos = model.ListVA((pos["x"], pos["y"]), unit="m")
     
     
+class StreamTree(object):
+    """
+    Object which contains a set of streams, and how they are merged to appear
+    as one image. It's a tree which has one stream per leaf and one merge 
+    operation per node. => recursive structure (= A tree is just a node with 
+    a merge method and a list of subnodes, either streamtree as well, or stream)
+    """
     
+    def __init__(self, operator=None, streams=None, **kwargs):
+        """
+        operator (callable): a function that takes a list of InstrumentalImage in the 
+            same order as the streams are given, and the additional arguments and
+            returns one InstrumentalImage.
+            By default operator is an average function.   
+        streams (list of Streams or StreamTree): a list of streams, or StreamTrees.
+            If a StreamTree is provided, its outlook is first computed and then
+            passed as an InstrumentalImage.
+        kwargs: any argument to be given to the operator function
+        """
+        self.operator = operator or StreamTree.Average
+        
+        streams = streams or []
+        assert(isinstance(streams, list))
+        for s in streams:
+            assert(isinstance(s, (Stream, StreamTree)))
+        self.streams = streams
+        
+        self.kwargs = kwargs
+        
+    
+    def getStreams(self):
+        """
+        Return the set of streams used to compose the picture. IOW, the leaves
+        of the tree.
+        """
+        leaves = set()
+        for s in self.streams:
+            if isinstance(s, Stream):
+                leaves.add(s)
+            elif isinstance(s, StreamTree):
+                leaves += s.getStreams()
+    
+        return leaves
+    
+    def getImage(self):
+        """
+        Returns an InstrumentalImage composed of all the current stream images.
+        Precisely, it returns the output of a call to operator.
+        """
+        # TODO: probably not so useful function, need to see what canvas
+        #  it will likely need as argument a wx.Bitmap, and view rectangle 
+        #  that will define where to save the result
+        
+        # create the arguments list for operator
+        images = []
+        for s in self.streams:
+            if isinstance(s, Stream):
+                images.append(s.image.value)
+            elif isinstance(s, StreamTree):
+                images.append(s.getImage())
+        
+        return self.operator(images, **self.kwargs)
+        
+    def getRawImages(self):
+        """
+        Returns a list of all the raw images used to create the final image
+        """
+        # TODO not sure if a list is enough, we might need to return more
+        # information about how the image was built (operator, args...)
+        lraw = []
+        for s in self.getStreams():
+            lraw.extend(s.raw)
+
+        return lraw
+    
+    @staticmethod
+    def Average(images):
+        """
+        mix the given images into a big image so that each pixel is the average of each
+         pixel (separate operation for each colour channel).
+        """
+        # TODO (once the operator callable is clearly defined)
+        raise NotImplementedError()
+     
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:
