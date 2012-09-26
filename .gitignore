@@ -39,5 +39,6 @@ odemis.sublime-workspace
 *.mo
 
 #Machine dependant
+cli
 launch_daemon
 xrced

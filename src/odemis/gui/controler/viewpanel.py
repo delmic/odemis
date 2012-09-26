@@ -41,6 +41,9 @@ class ViewSideBar(object):
 
         self._view_selector = ViewSelector(main_frame)
 
+    def select_view(self, view_num):
+        self._view_selector.select_view(view_num)
+
 class ViewSelector(object):
     """ This class controls the view panels and the view selector buttons and
     labels associated with them.
@@ -58,37 +61,98 @@ class ViewSelector(object):
                       (main_frame.btn_view_br, main_frame.pnl_view_br)]
 
         for btn, _ in self.views:
-            btn.Bind(wx.EVT_LEFT_DOWN, self.OnClick)
+            btn.Bind(wx.EVT_BUTTON, self.OnClick)
 
-    def _reset_buttons(self, btn=None):
-        log.debug("Resetting tab buttons")
-        for button in [b for b, _ in self.views if b != btn]:
+        self.show_all()
+
+    def select_view(self, view_num):
+        """ Selects the view witht the provided number.
+
+        view_num 0 activates the 2x2 view.
+        """
+
+        if not 0 <= view_num < len(self.views):
+            raise ValueError("Illegal view number %s" % view_num)
+
+        self._reset()
+        btn, view = self.views[view_num]
+
+        self.main_frame.Freeze()
+
+        if view:
+            for v in [v for _, v in self.views if v is not None and v != view]:
+                v.Hide()
+
+            view.SetFocus(True)
+            view.Show()
+        else:
+            for v in [v for _, v in self.views if v]:
+                v.Show()
+
+        btn.SetToggle(True)
+
+        self.main_frame.Thaw()
+
+
+    def _reset(self, btn=None):
+        """ Hide all views and remove any focus, and unset any navigation
+        button except possibly the one provided as a parameter.
+        """
+
+        log.debug("Resetting views")
+        for button, view in [(b, v) for b, v in self.views if b != btn]:
             button.SetToggle(False)
+            if view:
+                view.SetFocus(False)
+                view.Hide()
+
+    def show_all(self):
+        """ This method will show all views and set the appropriate navigation
+        button.
+        """
+
+        log.debug("Showing all views")
+
+        self.main_frame.pnl_tab_live.Freeze()
+
+        for btn, view in self.views:
+            if view:
+                view.Show()
+                btn.SetToggle(False)
+            else:
+                btn.SetToggle(True)
+
+        self.main_frame.pnl_tab_live.Layout()
+        self.main_frame.pnl_tab_live.Thaw()
 
 
     def OnClick(self, evt):
+        """ Navigation button click event handler
+
+        Show the related view(s) and sets the focus if needed.
+        """
+
+        log.debug("View button click")
+
         evt_btn = evt.GetEventObject()
 
-        self.main_frame.Freeze()
-        self._reset_buttons(evt_btn)
+        if evt_btn == self.views[0][0]:
+            self.show_all()
+            # The event does not need to be 'skipped' because
+            # the button will be toggled in the method we called.
+        else:
 
-        for btn, view in self.views:
-            if evt_btn == btn:
-                # If no view is associated, show them all
-                if view is None:
-                    for v in [v for _, v in self.views if v]:
-                        v.Show()
-                    # Everything is shown, no further processing required
-                    break
-                else:
-                    view.SetFocus(True)
-                    view.Show()
-            else:
-                if view is not None:
-                    view.SetFocus(False)
-                    view.Hide()
+            self._reset(evt_btn)
 
-        self.main_frame.pnl_tab_live.Layout()
-        self.main_frame.Thaw()
+            self.main_frame.pnl_tab_live.Freeze()
 
-        evt.Skip()
+            for view in [v for b, v in self.views if b == evt_btn]:
+                view.SetFocus(True)
+                view.Show()
+                b.set_overlay(view.get_screenshot())
+
+            self.main_frame.pnl_tab_live.Layout()
+            self.main_frame.pnl_tab_live.Thaw()
+
+            # Skip the event, so the botton will toggle
+            evt.Skip()
