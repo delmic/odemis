@@ -752,7 +752,7 @@ class StreamPanel(wx.Panel):
         self.btn_add_stream = None
 
         self.entries = []
-        self.menu_actions = collections.OrderedDict()
+        self.menu_actions = collections.OrderedDict() # title => callback
 
         # the Create step is done later by XRC.
         self.PostCreate(pre)
@@ -912,25 +912,33 @@ class StreamPanel(wx.Panel):
         return None
 
     def set_actions(self, actions):
-        self.menu_actions = collections.OrderedDict(
-                                                sorted(actions.items(),
-                                                key=lambda t: t[0]))
+        """
+        Set the action menu
+        actions (collections.OrderedDict(string, callable)): dict of title => callback, ordered
+          as it will appear
+        """
+        self.menu_actions = actions
         self.btn_add_stream.set_choices(self.menu_actions.keys())
 
     def get_actions(self):
         return self.menu_actions
 
-    def add_actions(self, actions):
-        """ Add one or more actions """
-        self.menu_actions = dict(self.menu_actions.items() + actions.items())
-        self.menu_actions = collections.OrderedDict(
-                                            sorted(self.menu_actions.items(),
-                                            key=lambda t: t[0]))
+    def add_action(self, title, callback):
+        """
+        Add an action to the menu. It's added at the end of the list. If an 
+        action with the same title exists, it is replaced.
+        title (string): Text displayed in the menu
+        callback (callable): function to call when the action is selected
+        """
+        self.menu_actions[title] = callback
         self.btn_add_stream.set_choices(self.menu_actions.keys())
 
-    def remove_action(self, action):
-
-        if self.menu_actions.has_key(action):
-            del self.menu_actions[action]
+    def remove_action(self, title):
+        """
+        Remove the given action, if it exists. Otherwise does nothing
+        title (string): name of the action to remove
+        """
+        if title in self.menu_actions:
+            del self.menu_actions[title]
             self.btn_add_stream.set_choices(self.menu_actions.keys())
 

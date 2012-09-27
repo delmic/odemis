@@ -258,8 +258,10 @@ class MicroscopeGUI(object):
         self.stage = None
         self.focus = None # actuator to change the camera focus 
         self.light = None
+        self.light_filter = None # emission light filter for fluorescence microscopy
         self.ebeam = None
-        self.sed = None
+        self.sed = None # secondary electron detector
+        self.bsd = None # back-scatter electron detector
         
         for d in microscope.detectors:
             if d.role == "ccd":
@@ -296,14 +298,15 @@ class MicroscopeGUI(object):
                         except (AttributeError, model.NotApplicableError):
                             self._light_power_on = 1
                             logging.warning("Unknown value to turn on the light")
-
+            elif e.role == "filter":
+                self.light_filter = e
             elif e.role == "e-beam":
                 self.ebeam = e
         if not self.light and not self.ebeam:
             raise Exception("no emitter found in the microscope")
 
-        self.streams = [] # list of streams available (handled by StreamController)
-        self.views = [] # list of MicroscopeViews available (handled by ViewController)
+        self.streams = set() # streams available (handled by StreamController)
+        self.views = set() # MicroscopeViews available (handled by ViewController)
         
     def stopMotion(self):
         """
@@ -336,23 +339,7 @@ class MicroscopeGUI(object):
     def emTurnOff(self):
         raise NotImplementedError("Does not know how to switch off e-beam")
     
-    # stream controller:
-    # create the default streams when a part of the microscope is turned on, and
-    #  create a corresponding stream entry in the panel. (when part is turned
-    #  off, stream stays)
-    # ensures the right "Add XXX stream" entries are available in the "Add stream"
-    #   button
-    # then stream entries directly update the VA's 
-    # on stream remove: contacted to remove the stream from the layers and the 
-    #   list
-    # if incorrect settings (e.g., dye with excitation wavelength incompatible 
-    #  with the hardware): adds a warning message to the stream entry
-    # on microscope off: pause (set .updated to False) every stream which uses
-    #  this microscope
-    # TODO: how to prevent the user from turning on camera/light again from the
-    #   stream entry when the microscope is off? => either stream entry "update"
-    #   icon is disabled/enable (decided by the stream controller), or the event
-    #   handler checks first that the appropriate microscope is On or Off.  
+
     
     # TODO who's in charge of switching the active stream which share the same 
     #   detector? => maybe a special controller, or the stream controller?
@@ -474,13 +461,18 @@ class Stream(object):
         
     def onActive(self, active):
         # Normally is called only the value _changes_
+
+        # TODO: check that updated is true
+        # and automatically deactivate when updated goes to false?
+            
  
-        # TODO how to turn on the emitter/white light? => one subclass per stream type?
         # TODO how to turn off the other lights when not used? => Do we need to 
         # distinguish between "really physically active" and "being updated from
         # time to time" (the former implying the latter)
         
         if active:
+            if not self.updated.value:
+                log.warning("Trying to activate stream while it's not supposed to update")
             self._dataflow.subscribe(self.onNewImage)
         else:
             self._dataflow.unsubscribe(self.onNewImage)
@@ -533,7 +525,20 @@ class Stream(object):
         self.raw[0] = data
         self._updateImage()
 
-def BrightfieldStream(Stream):
+class SEMStream(Stream):
+    """
+    Stream containing images obtained via Scanning electron microscope.
+    It basically knows how to activate the scanning electron and the detector.
+    """
+    
+    def onActive(self, active):
+        if active:
+            # TODO if can blank => unblank
+            pass
+        Stream.onActive(self, active)
+    
+
+class BrightfieldStream(Stream):
     """
     Stream containing images obtained via optical brightfield illumination.
     It basically knows how to select white light and disable any filter.
@@ -553,13 +558,15 @@ def BrightfieldStream(Stream):
         
                 
     def _setLightExcitation(self):
-        wl = self.excitation.value
         # TODO how to select white light???
-        # Turn on all the sources? If so, we need to change the LLE driver to 
-        # detect such a case and select the maximum number of sources that can
-        # be activated at the same time. 
+        # Turn on all the sources? Does this always mean white?
+        # At least we should set a warning if the final emission range is quite
+        # different from the normal white spectrum
+        em = [1 for e in self._emitter.emissions.value]
+        self._emitter.emissions.value = em
         
-def FluoStream(Stream):
+        
+class FluoStream(Stream):
     """
     Stream containing images obtained via epi-fluorescence.
     It basically knows how to select the right emission/filtered wavelengths, 
@@ -642,7 +649,7 @@ def FluoStream(Stream):
                 return float("inf")
             return 1. / distance
             
-        spectra = self._light.spectra.value
+        spectra = self._emitter.spectra.value
         # arg_max with fitting function as key 
         best = max(spectra, key=lambda x: fitting(wl, x))
         i = spectra.index(best)
@@ -650,11 +657,13 @@ def FluoStream(Stream):
         # create an emissions with only one source active
         emissions = [0] * len(spectra)
         emissions[i] = 1
-        self._light.emissions.value = emissions
+        self._emitter.emissions.value = emissions
         
         # set warnings if necessary
         self._removeWarnings([Stream.WARNING_EXCITATION_IMPOSSIBLE,
                               Stream.WARNING_EXCITATION_NOT_OPT])
+        # TODO if the band is too wide (e.g., white), it should also have a warning
+        # TODO if the light can only be changed manually, display a warning
         if wl < best[0] or wl > best[4]: # outside of band
             self._addWarning(Stream.WARNING_EXCITATION_IMPOSSIBLE)
         elif wl < best[1] or wl > best[3]: # outside of main 50% band

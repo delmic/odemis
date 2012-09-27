@@ -191,7 +191,7 @@ class FoldPanelBarTestCase(unittest.TestCase):
                                                 label="Brightfield")
             self.frm.stream_panel.add_stream(fixed_entry)
 
-        self.frm.stream_panel.add_actions({"Brightfield": brightfield_callback})
+        self.frm.stream_panel.add_action("Brightfield", brightfield_callback)
 
         brightfield_callback()
         loop()
@@ -205,7 +205,7 @@ class FoldPanelBarTestCase(unittest.TestCase):
                                            label="SEM:EDT")
             self.frm.stream_panel.add_stream(fixed_entry)
 
-        self.frm.stream_panel.add_actions({"SEM:EDT": sem_callback})
+        self.frm.stream_panel.add_action("SEM:EDT", sem_callback)
 
         sem_callback()
         loop()
@@ -226,7 +226,7 @@ class FoldPanelBarTestCase(unittest.TestCase):
                                                  label="Custom")
             self.frm.stream_panel.add_stream(custom_entry)
 
-        self.frm.stream_panel.add_actions({"Custom": custom_callback})
+        self.frm.stream_panel.add_action("Custom", custom_callback)
 
         # Clear remainging streams
         wx.MilliSleep(SLEEP_TIME)
