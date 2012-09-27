@@ -102,12 +102,16 @@ class TestLLE(unittest.TestCase):
         em[2] = 0.7
         em[6] = 0.95
         dev.emissions.value = em
-        self.assertGreater(dev.emissions.value[0], 0)        
+        self.assertEqual(dev.emissions.value, em)
         
-        # turn on yellow source => all the other ones should be shut
+        # turn on yellow source very strong => all the other ones should be shut
         em[4] = 1
         dev.emissions.value = em
         self.assertEqual(dev.emissions.value, [0, 0, 0, 0, 1, 0, 0])
+        
+        # turn on all the sources => at least one should be on
+        dev.emissions.value = [1 for e in em]
+        self.assertTrue(any(dev.emissions.value))
         
         dev.terminate()
 
@@ -128,11 +132,14 @@ class TestLLE(unittest.TestCase):
             em[i] = 1
             dev.emissions.value = em
             time.sleep(1)
+            self.assertEqual(dev.emissions.value, em)
             em[i] = 0.3
             dev.emissions.value = em
             time.sleep(1)
+            self.assertEqual(dev.emissions.value, em)
             em[i] = 0
             dev.emissions.value = em
+            self.assertEqual(dev.emissions.value, em)
             
         dev.terminate()
 

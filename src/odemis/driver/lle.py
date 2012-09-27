@@ -379,16 +379,29 @@ class LLE(model.Emitter):
         """ 
         if len(intensities) != len(self._intensities):
             raise TypeError("Emission must be an array of %d floats." % len(self._intensities))
+    
+        # TODO need to do better for selection
         # Green (1) and Yellow (4) can only be activated independently
-        # => force it, with yellow taking precedence
-        if intensities[4] > 0.0:
-            yellow = intensities[4]
-            intensities = [0.] * 7 # new object
-            intensities[4] = yellow
-        elif intensities[1] > 0.0:
-            green = intensities[1]
-            intensities = [0.] * 7 # new object
-            intensities[1] = green
+        # If only one of them selected: easy
+        # If only other selected: easy
+        # If only green and yellow: pick the strongest
+        # If mix: if the max of GY > max other => pick G or Y, other pick others 
+        intensities = list(intensities) # duplicate
+        max_gy = max([intensities[i] for i in [1, 4]])
+        max_others = max([intensities[i] for i in [0, 2, 3, 5, 6]])
+        if max_gy <= max_others:
+            # we pick others => G/Y becomes 0
+            intensities[1] = 0
+            intensities[4] = 0
+        else:
+            # We pick G/Y (the strongest of them)
+            to_cancel = [0, 2, 3, 5, 6]
+            if intensities[1] > intensities[4]: # green it is
+                to_cancel.append(4)
+            else: # yellow it is
+                to_cancel.append(1)
+            for i in to_cancel:
+                intensities[i] = 0 
         
         # set the actual values
         for i in range(7):
