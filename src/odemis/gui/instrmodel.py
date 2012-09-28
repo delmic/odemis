@@ -242,6 +242,11 @@ class InstrumentalImage(object):
 
 
 # THE FUTURE：
+
+STATE_OFF = 0
+STATE_ON = 1
+STATE_PAUSE = 2
+
 class MicroscopeGUI(object):
     """
     Represent a microscope directly for a graphical user interface.
@@ -276,7 +281,7 @@ class MicroscopeGUI(object):
                 self.stage = a
                 # TODO: viewports should subscribe to the stage
             elif a.role == "focus":
-                self.opt_focus = a
+                self.focus = a
         if not self.stage:
             raise Exception("no stage found in the microscope")
         # it's not an error to not have focus
@@ -305,41 +310,48 @@ class MicroscopeGUI(object):
         if not self.light and not self.ebeam:
             raise Exception("no emitter found in the microscope")
 
-        self.streams = set() # streams available (handled by StreamController)
+        self.streams = set() # Streams available (handled by StreamController)
         self.views = set() # MicroscopeViews available (handled by ViewController)
         
+        self.opticalState = model.IntEnumerated(STATE_OFF, 
+                                choices=[STATE_OFF, STATE_ON, STATE_PAUSE])
+        self.opticalState.subscribe(self.onOpticalState)
+        self.emState = model.IntEnumerated(STATE_OFF, 
+                                choices=[STATE_OFF, STATE_ON, STATE_PAUSE])
+        self.emState.subscribe(self.onEMState)
+                
     def stopMotion(self):
         """
         Stops immediately every axis
         """
         self.stage.stop()
-        self.opt_focus.stop()
+        self.focus.stop()
         logging.info("stopped motion on every axes")
 
-    # TODO handle also "pause" state => opticalPause()? Or opticalSetState(ON/OFF/PAUSE)?
-    def opticalTurnOn(self):
-        # the image acquisition from the camera is handled solely by the streams
-        if self.light:
-            self.light.power.value = self._light_power_on
+    def onOpticalState(self, state):
+        # only called when it changes
+        if state == STATE_OFF or state == STATE_PAUSE:
+            # Turn off the optical path. All the streams using it should be already
+            # deactivated.
+            if self.light:
+                if self.light.power.value > 0:
+                    # save the value only if it makes sense
+                    self._light_power_on = self.light.power.value
+                self.light.power.value = 0
+        elif state == STATE_ON:
+            # the image acquisition from the camera is handled solely by the streams
+            if self.light:
+                self.light.power.value = self._light_power_on
     
-    def opticalTurnOff(self):
-        """
-        Turn off the optical path. All the streams using it should be already
-        deactivated.
-        """
-        if self.light:
-            if self.light.power.value > 0:
-                # save the value only if it makes sense
-                self._light_power_on = self.light.power.value
-            self.light.power.value = 0
-    
-    def emTurnOn(self):
-        raise NotImplementedError("Does not know how to switch on e-beam")
-    
-    def emTurnOff(self):
-        raise NotImplementedError("Does not know how to switch off e-beam")
-    
-
+    def onEMState(self, state):
+        if state == STATE_OFF:
+            # TODO turn off really the ebeam and detector
+            pass
+        elif state == STATE_PAUSE:
+            # TODO blank the ebeam 
+            pass
+        elif state == STATE_ON:
+            raise NotImplementedError("Does not know how to switch on e-beam")
     
     # TODO who's in charge of switching the active stream which share the same 
     #   detector? => maybe a special controller, or the stream controller?
@@ -365,8 +377,6 @@ class MicroscopeGUI(object):
     # in charge of changing the "hair-cross" display
     
     
-    # TODO microscopeview contain a tree of streams (not a list)
-
     
     # Note about image acquisition:
     # when image acquisition window appears:
@@ -412,7 +422,7 @@ class Stream(object):
         dataflow (Dataflow): the dataflow from which to get the data
         emitter (Emitter): the emitter 
         """
-        self.name = VigilantAttribute(name)
+        self.name = model.StringVA(name)
         # this should not be accessed directly
         self._detector = detector
         self._dataflow = dataflow
@@ -581,14 +591,18 @@ class FluoStream(Stream):
         emitter (Light): the HwComponent to modify the light excitation
         filter (Filter): the HwComponent to modify the emission light filtering
         """
-        Stream.__init__(name, detector, dataflow, emitter)
+        Stream.__init__(self, name, detector, dataflow, emitter)
         self._filter = filter
         
         # This is what is displayed to the user
         # TODO what should be nice default value of the light and filter?
-        self.excitation = model.FloatContinuous(488e-9, unit="m")
+        exc_range = [min([s[0] for s in emitter.spectra.value]),
+                     max([s[4] for s in emitter.spectra.value])]
+        self.excitation = model.FloatContinuous(488e-9, range=exc_range, unit="m")
         self.excitation.subscribe(self.onExcitation)
-        self.emission = model.FloatContinuous(507e-9, unit="m") 
+        em_range = [min([s[0] for s in filter.band.value]),
+                    max([s[1] for s in filter.band.value])]
+        self.emission = model.FloatContinuous(507e-9, range=em_range, unit="m") 
         self.emission.subscribe(self.onEmission)
         
         # colouration of the image
@@ -669,6 +683,26 @@ class FluoStream(Stream):
         elif wl < best[1] or wl > best[3]: # outside of main 50% band
             self._addWarning(Stream.WARNING_EXCITATION_NOT_OPT)
 
+class EmptyStream(Stream):
+    """
+    A fake stream, which receives no data. Only for testing purposes.
+    """
+    
+    def __init__(self, name):
+        Stream.__init__(self, name, None, None, None)
+        
+        # For imitating also a FluoStream
+        self.excitation = model.FloatContinuous(488e-9, range=[200e-9, 1000e-9], unit="m")
+        self.emission = model.FloatContinuous(507e-9, range=[200e-9, 1000e-9], unit="m") 
+        defaultTint = util.conversion.wave2rgb(self.emission.value)
+        self.tint = VigilantAttribute(defaultTint, unit="RGB")
+
+    def _updateImage(self, tint=(255, 255, 255)):
+        pass
+    
+    def onActive(self, active):
+        pass
+    
 class MicroscopeView(object):
     """
     Represents a view from a microscope, and ways to alter it.

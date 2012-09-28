@@ -17,7 +17,7 @@ SimOptical: {
 
 Spectra: {
     class: lle.FakeLLE,
-    role: brightlight,
+    role: light,
     init: {port: "/dev/ttyUSB0"},
     affects: ["Andor SimCam"],
 }

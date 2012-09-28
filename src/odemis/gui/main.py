@@ -22,11 +22,12 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
 from odemis import __version__, model
-from odemis.gui import main_xrc
+from odemis.gui import main_xrc, instrmodel
 from odemis.gui.controler.acquisition import AcquisitionController
 from odemis.gui.controler.settingspanel import SettingsSideBar
-from odemis.gui.controler.viewpanel import ViewSideBar
+from odemis.gui.controler.stream import StreamController
 from odemis.gui.controler.tabs import TabBar
+from odemis.gui.controler.viewpanel import ViewSideBar
 from odemis.gui.instrmodel import OpticalBackendConnected, InstrumentalImage
 from odemis.gui.log import log, create_gui_logger
 from odemis.gui.xmlh import odemis_get_resources
@@ -74,7 +75,8 @@ class OdemisGUIApp(wx.App):
 
         try:
             self.microscope = model.getMicroscope()
-            self.secom_model = OpticalBackendConnected(self.microscope)
+            self.interface_model = instrmodel.MicroscopeGUI(self.microscope) 
+            self.secom_model = OpticalBackendConnected(self.microscope) # XXX remove
         except (IOError, Pyro4.errors.CommunicationError), e:
             log.exception("oei")
             msg = ("The Odemis GUI could not connect to the Odemis Daemon:\n\n"
@@ -129,30 +131,10 @@ class OdemisGUIApp(wx.App):
                                  self.main_frame.pnl_tab_gallery),
                                ])
 
+            # FIXME (eric): why is this commented? If not needed => remove
             # Do a final layout of the fold panel bar
             #wx.CallAfter(self.main_frame.fpb_settings.FitBar)
 
-#            ##################################################
-#            # TEST CODE
-#            ##################################################
-#            def dodo(evt):
-#                from odemis.gui.comp.stream import CustomStreamPanelEntry
-#                # fp = FixedStreamPanelEntry(self.main_frame.pnl_stream,
-#                #                            label="First Fixed Stream")
-#                fp = CustomStreamPanelEntry(self.main_frame.pnl_stream,
-#                                            label="Custom Stream")
-#                self.main_frame.pnl_stream.add_stream(fp)
-#
-#            self.main_frame.btn_aquire.Bind(wx.EVT_BUTTON, dodo)
-
-
-
-            from odemis.gui.comp.stream import FixedStreamPanelEntry
-            # TODO should pass a stream
-            fp = FixedStreamPanelEntry(self.main_frame.pnl_stream,
-                                       stream=self.secom_model,
-                                       label="Bright field Stream")
-            self.main_frame.pnl_stream.add_stream(fp)
 
             # Menu events
 
@@ -217,13 +199,22 @@ class OdemisGUIApp(wx.App):
 
 
             self.settings_controler = SettingsSideBar(self.main_frame,
-                                                      model.getMicroscope())
+                                                      self.microscope) # TODO use interface_model
             self.view_controler = ViewSideBar(self.main_frame)
             #self.view_controler.select_view(2)
 
             #print_microscope_tree(microscope)
 
-            self.acquisition_controller = AcquisitionController(self.main_frame)
+            self.stream_controller = StreamController(self.interface_model,
+                                                      self.main_frame.pnl_stream)
+#            from odemis.gui.comp.stream import FixedStreamPanelEntry
+#            # TODO should pass a stream
+#            fp = FixedStreamPanelEntry(self.main_frame.pnl_stream,
+#                                       stream=self.secom_model,
+#                                       label="Bright field Stream")
+#            self.main_frame.pnl_stream.add_stream(fp)
+#
+#            self.acquisition_controller = AcquisitionController(self.main_frame)
 
             # Main on/off buttons => only optical for now
             # FIXME: special _bitmap_ toggle button doesn't seem to generate
@@ -258,6 +249,7 @@ class OdemisGUIApp(wx.App):
             scope_panel.SetFocus(False)
 
 
+    # TODO update to MicroscopeGUI (self.interface_model)
     def on_load_example1(self, e):
         """ Open the two files for example """
         try:
@@ -302,17 +294,17 @@ class OdemisGUIApp(wx.App):
         pass
 
     def on_stop_axes(self, evt):
-        if self.secom_model is None:
+        if self.interface_model:
+            self.interface_model.stopMotion()
+        else:
             evt.Skip()
 
-        self.secom_model.stopMotion()
-
     def on_toggle_opt(self, event):
-        if self.secom_model:
+        if self.interface_model:
             if event.isDown: # if ToggleEvent, could use isChecked()
-                self.secom_model.turnOn()
+                self.interface_model.opticalState.value = instrmodel.STATE_ON
             else:
-                self.secom_model.turnOff()
+                self.interface_model.opticalState.value = instrmodel.STATE_OFF
 
     def on_about(self, evt):
         message = ("%s\nVersion %s.\n\n%s.\nLicensed under the %s." %

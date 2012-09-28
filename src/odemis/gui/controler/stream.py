@@ -22,6 +22,7 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
 from odemis.gui import instrmodel, comp
+from odemis.gui.instrmodel import STATE_OFF, STATE_PAUSE, STATE_ON
 
 
 # stream controller:
@@ -30,7 +31,6 @@ from odemis.gui import instrmodel, comp
 #  off, stream stays)
 # ensures the right "Add XXX stream" entries are available in the "Add stream"
 #   button
-# then stream entries directly update the VA's 
 # on stream remove: contacted to remove the stream from the layers and the 
 #   list
 # on microscope off: pause (set .updated to False) every stream which uses
@@ -39,6 +39,7 @@ from odemis.gui import instrmodel, comp
 #   stream entry when the microscope is off? => either stream entry "update"
 #   icon is disabled/enable (decided by the stream controller), or the event
 #   handler checks first that the appropriate microscope is On or Off.
+# the stream entries directly update the VA's 
 
 
 # all the stream types related to optical
@@ -60,14 +61,18 @@ class StreamController(object):
         '''
         self._microscope = microscope
         self._spanel = spanel
+        # TODO probably need a lock to access it correctly
         self._streams_to_restart = set() # streams to be restarted when turning on again
     
-        # TODO create the right action for the add button
+        # TODO remove the actions when microscope goes off
         self._createAddStreamActions()
     
         # On the first time, we'll create the streams, to be nice to the user
         self._opticalWasTurnedOn = False
         self._semWasTurnedOn = False 
+        
+        microscope.opticalState.subscribe(self.onOpticalState)
+        microscope.emState.subscribe(self.onEMState)
     
     def _createAddStreamActions(self):
         """
@@ -106,7 +111,7 @@ class StreamController(object):
         
         stream = instrmodel.FluoStream(name,
                   self._microscope.ccd, self._microscope.ccd.data,
-                  self._microscope.light)
+                  self._microscope.light, self._microscope.light_filter)
         self._microscope.streams.add(stream)
         stream.updated.value = True
         
@@ -143,38 +148,32 @@ class StreamController(object):
         entry = comp.stream.FixedStreamPanelEntry(self._spanel, stream)
         self._spanel.add_stream(entry)
         return entry
-        
-    def opticalTurnOn(self):
-        if not self._opticalWasTurnedOn:
-            self._opticalWasTurnedOn = True
-            self.addBrightfield()
-            # TODO need to hide if the view is not the right one
-    
-        self._startStreams(OPTICAL_STREAMS)
-    
-    def opticalPause(self):
-        self._pauseStreams(OPTICAL_STREAMS)
-        
-    def opticalTurnOff(self):
-        self.opticalPause()
-    
-    def emTurnOn(self):
-        if not self._semWasTurnedOn:
-            self._semWasTurnedOn = True
-            if self._microscope.sed:
-                s = self.addSEMSED()
-            # TODO need to hide if the view is not the right one
-    
-        self._startStreams(OPTICAL_STREAMS)
-    
-    def emPause(self):
-        self._pauseStreams(EM_STREAMS)
-        #TODO pause related streams
 
-    def emTurnOff(self):
-        self.emPause()
+    def onOpticalState(self, state):
+        # only called when it changes
+        if state == STATE_OFF or state == STATE_PAUSE:
+            self._pauseStreams(OPTICAL_STREAMS)
+        elif state == STATE_ON:
+            if not self._opticalWasTurnedOn:
+                self._opticalWasTurnedOn = True
+                self.addBrightfield()
+                # TODO need to hide if the view is not the right one
+        
+            self._startStreams(OPTICAL_STREAMS)
     
+    def onEMState(self, state):
+        if state == STATE_OFF or state == STATE_PAUSE:
+            self._pauseStreams(EM_STREAMS)
+        elif state == STATE_ON:
+            if not self._semWasTurnedOn:
+                self._semWasTurnedOn = True
+                if self._microscope.sed:
+                    self.addSEMSED()
+                # TODO need to hide if the view is not the right one
+        
+            self._startStreams(OPTICAL_STREAMS)
 
+        
     def _pauseStreams(self, classes):
         """
         Pause (deactivate and stop updating) all the streams of the given class
@@ -185,6 +184,8 @@ class StreamController(object):
                     self._streams_to_restart.add(s)
                     s.active.value = False
                     s.updated.value = False
+                    # TODO also disable entry "update" button?
+            
 
     def _startStreams(self, classes):
         """
@@ -199,9 +200,15 @@ class StreamController(object):
         # (so far, magical) stream scheduler?
 
     
+    def removeStream(self, stream):
+        """
+        Removes a stream. 
+        stream (Stream): the stream to remove
+        Note: the stream entry is to be destroyed separately via the spanel
+        It's ok to call if the stream has already been removed 
+        """
+        self._streams_to_restart.discard(stream)
+        self._microscope.streams.discard(stream)
+        stream.active.value = False
+        stream.updated.value = False
         
-        
-        
-
-    
-      
