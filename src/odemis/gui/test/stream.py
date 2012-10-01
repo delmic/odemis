@@ -35,7 +35,7 @@ if os.getcwd().endswith('test'):
 # Sleep timer in milliseconds
 SLEEP_TIME = 100
 # If manual is set to True, the window will be kept open at the end
-MANUAL = True
+MANUAL = False
 # Open an inspection window after running the tests if MANUAL is set
 INSPECT = False
 

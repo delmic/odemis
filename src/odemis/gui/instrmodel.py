@@ -439,7 +439,8 @@ class Stream(object):
         self.active = model.BooleanVA(False)
         self.active.subscribe(self.onActive)
         
-        self._depth = self._detector.shape[2] # used for B/C adjustment
+        if self._detector:
+            self._depth = self._detector.shape[2] # used for B/C adjustment
         self.auto_bc = model.BooleanVA(True) # whether to use auto brightness & contrast
         # these 2 are only used if auto_bc is False
         self.contrast = model.FloatContinuous(0, range=[-100, 100]) # ratio, contrast if no auto
