@@ -66,7 +66,7 @@ class ViewSelector(object):
         self.show_all()
 
     def select_view(self, view_num):
-        """ Selects the view witht the provided number.
+        """ Selects the view with the provided number.
 
         view_num 0 activates the 2x2 view.
         """
@@ -154,5 +154,5 @@ class ViewSelector(object):
             self.main_frame.pnl_tab_live.Layout()
             self.main_frame.pnl_tab_live.Thaw()
 
-            # Skip the event, so the botton will toggle
+            # Skip the event, so the button will toggle
             evt.Skip()

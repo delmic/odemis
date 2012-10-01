@@ -534,7 +534,7 @@ class StreamPanel(object):
         self.panel = strm_panel
 
 class SettingsSideBar(object):
-    """ The main controller class for the settigns panel in the live view.
+    """ The main controller class for the settings panel in the live view.
 
     This class can be used to set, get and otherwise manipulate the content
     of the setting panel.

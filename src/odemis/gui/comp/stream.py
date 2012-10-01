@@ -43,6 +43,7 @@ from .foldpanelbar import FoldPanelItem
 from .slider import UnitIntegerSlider
 from odemis.gui.util.conversion import wave2hex
 from odemis.gui.img.data import getemptyBitmap
+from odemis.gui import instrmodel
 
 TEST_STREAM_LST = ["Aap", u"nöot", "noot", "mies", "kees", "vuur",
                   "quantummechnica", "Repelsteeltje", "", "XXX", "a", "aa",
@@ -847,22 +848,39 @@ class StreamPanel(wx.Panel):
     def get_size(self):
         return len(self.entries)
 
+    # the order in which the streams are displayed
+    STREAM_ORDER=[instrmodel.SEMStream,
+                  instrmodel.BrightfieldStream,
+                  instrmodel.FluoStream]
+    def _get_stream_order(self, stream):
+        """
+        Gives the "order" of the given stream, as defined in STREAM_ORDER.
+        stream (Stream): a stream
+        returns (0<= int): the order 
+        """
+        for i, c in enumerate(self.STREAM_ORDER):
+            if isinstance(stream, c):
+                return i
+
+        log.warning("Stream of unknown order type %s", stream.__class__.__name__)
+        return len(self.STREAM_ORDER)
+        
     def add_stream(self, stream_panel_entry):
         """ This method adds a stream entry to the panel, after the appropriate
-        position has been determined.
+        position has been determined. 
         """
-
-        if isinstance(stream_panel_entry, FixedStreamPanelEntry):
-            ins_pos = 0
-        elif isinstance(stream_panel_entry, CustomStreamPanelEntry):
-            fe = [e for e in self.entries
-                    if isinstance(e, FixedStreamPanelEntry)]
-            ins_pos = len(fe)
-        else:
-            raise ValueError("Wrong stream panel entry type")
-
+        # Insert the entry in the order of STREAM_ORDER. If there are already 
+        # streams with the same type, insert after them.
+        ins_pos = 0
+        order_s = self._get_stream_order(stream_panel_entry.stream)
+        for e in self.entries:
+            order_e = self._get_stream_order(e.stream)
+            if order_s < order_e:
+                break
+            ins_pos += 1
+        
         log.debug("Inserting %s at position %s",
-                  stream_panel_entry.__class__.__name__,
+                  stream_panel_entry.stream.__class__.__name__,
                   ins_pos)
 
         stream_panel_entry.finalize()
@@ -911,12 +929,12 @@ class StreamPanel(wx.Panel):
             else:
                 self.txt_no_stream.Hide()
 
-    def get_stream_position(self, stream_obj):
+    def get_stream_position(self, stream_entry):
         """ Return the position of the given stream entry, with the top position
         being 0.
         """
-        for i, stream in enumerate(self.entries):
-            if stream == stream_obj:
+        for i, e in enumerate(self.entries):
+            if e == stream_entry:
                 return i
 
         return None

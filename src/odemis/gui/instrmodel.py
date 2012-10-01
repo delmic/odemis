@@ -311,7 +311,7 @@ class MicroscopeGUI(object):
             raise Exception("no emitter found in the microscope")
 
         self.streams = set() # Streams available (handled by StreamController)
-        self.views = set() # MicroscopeViews available (handled by ViewController)
+        self.views = [] # MicroscopeViews available, order matters (handled by ViewController)
         
         self.opticalState = model.IntEnumerated(STATE_OFF, 
                                 choices=[STATE_OFF, STATE_ON, STATE_PAUSE])
@@ -684,25 +684,6 @@ class FluoStream(Stream):
         elif wl < best[1] or wl > best[3]: # outside of main 50% band
             self._addWarning(Stream.WARNING_EXCITATION_NOT_OPT)
 
-class EmptyStream(Stream):
-    """
-    A fake stream, which receives no data. Only for testing purposes.
-    """
-    
-    def __init__(self, name):
-        Stream.__init__(self, name, None, None, None)
-        
-        # For imitating also a FluoStream
-        self.excitation = model.FloatContinuous(488e-9, range=[200e-9, 1000e-9], unit="m")
-        self.emission = model.FloatContinuous(507e-9, range=[200e-9, 1000e-9], unit="m") 
-        defaultTint = util.conversion.wave2rgb(self.emission.value)
-        self.tint = VigilantAttribute(defaultTint, unit="RGB")
-
-    def _updateImage(self, tint=(255, 255, 255)):
-        pass
-    
-    def onActive(self, active):
-        pass
     
 class MicroscopeView(object):
     """
@@ -738,7 +719,7 @@ class MicroscopeView(object):
         # a thumbnail version of what is displayed
         self.thumbnail = VigilantAttribute(InstrumentalImage(None, None, None))
     
-    def moveStage(self):
+    def moveStageToView(self):
         """
         move the stage to the current view_pos
         return: a future (that allows to know when the move is finished)

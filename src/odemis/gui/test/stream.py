@@ -17,8 +17,10 @@ You should have received a copy of the GNU General Public License along with Ode
 # Test module for Odemis' stream module in gui.comp
 #===============================================================================
 
-from odemis.gui import instrmodel
+from odemis import model
+from odemis.gui import instrmodel, util
 from odemis.gui.comp.stream import FixedStreamPanelEntry, CustomStreamPanelEntry
+from odemis.gui.instrmodel import Stream
 from odemis.gui.xmlh import odemis_get_test_resources
 from wx.lib.inspection import InspectionTool
 import odemis.gui.test.test_gui
@@ -30,6 +32,56 @@ if os.getcwd().endswith('test'):
     os.chdir('../..')
     print "Working directory changed to", os.getcwd()
 
+
+class FakeBrightfieldStream(instrmodel.BrightfieldStream):
+    """
+    A fake stream, which receives no data. Only for testing purposes.
+    """
+    
+    def __init__(self, name):
+        Stream.__init__(self, name, None, None, None)
+        
+    def _updateImage(self, tint=(255, 255, 255)):
+        pass
+    
+    def onActive(self, active):
+        pass
+
+
+class FakeSEMStream(instrmodel.SEMStream):
+    """
+    A fake stream, which receives no data. Only for testing purposes.
+    """
+    
+    def __init__(self, name):
+        Stream.__init__(self, name, None, None, None)
+        
+    def _updateImage(self, tint=(255, 255, 255)):
+        pass
+    
+    def onActive(self, active):
+        pass
+
+    
+class FakeFluoStream(instrmodel.FluoStream):
+    """
+    A fake stream, which receives no data. Only for testing purposes.
+    """
+    
+    def __init__(self, name):
+        Stream.__init__(self, name, None, None, None)
+        
+        # For imitating also a FluoStream
+        self.excitation = model.FloatContinuous(488e-9, range=[200e-9, 1000e-9], unit="m")
+        self.emission = model.FloatContinuous(507e-9, range=[200e-9, 1000e-9], unit="m") 
+        defaultTint = util.conversion.wave2rgb(self.emission.value)
+        self.tint = model.VigilantAttribute(defaultTint, unit="RGB")
+
+    def _updateImage(self, tint=(255, 255, 255)):
+        pass
+    
+    def onActive(self, active):
+        pass
 
 
 # Sleep timer in milliseconds
@@ -115,7 +167,7 @@ class FoldPanelBarTestCase(unittest.TestCase):
 
         # Add an editable entry
         wx.MilliSleep(SLEEP_TIME)
-        fake_cstream = instrmodel.EmptyStream("First Custom Stream")
+        fake_cstream = FakeFluoStream("First Custom Stream")
         custom_entry = CustomStreamPanelEntry(self.frm.stream_panel,
                                               stream=fake_cstream)
         self.frm.stream_panel.add_stream(custom_entry)
@@ -128,7 +180,7 @@ class FoldPanelBarTestCase(unittest.TestCase):
 
         # Add a fixed stream
         wx.MilliSleep(SLEEP_TIME)
-        fake_fstream1 = instrmodel.EmptyStream("First Fixed Stream")
+        fake_fstream1 = FakeSEMStream("First Fixed Stream")
         fixed_entry = FixedStreamPanelEntry(self.frm.stream_panel,
                                            stream=fake_fstream1)
         self.frm.stream_panel.add_stream(fixed_entry)
@@ -144,7 +196,7 @@ class FoldPanelBarTestCase(unittest.TestCase):
 
         # Add a fixed stream
         wx.MilliSleep(SLEEP_TIME)
-        fake_fstream2 = instrmodel.EmptyStream("Second Fixed Stream")
+        fake_fstream2 = FakeSEMStream("Second Fixed Stream")
         fixed_entry = FixedStreamPanelEntry(self.frm.stream_panel,
                                            stream=fake_fstream2)
         self.frm.stream_panel.add_stream(fixed_entry)
@@ -153,7 +205,7 @@ class FoldPanelBarTestCase(unittest.TestCase):
         self.assertEqual(self.frm.stream_panel.get_size(), 3)
         self.assertEqual(
             self.frm.stream_panel.get_stream_position(fixed_entry),
-            0)
+            1)
         self.assertEqual(
             self.frm.stream_panel.get_stream_position(custom_entry),
             2)
@@ -192,7 +244,7 @@ class FoldPanelBarTestCase(unittest.TestCase):
 
         # Add a callback/name combo to the add button
         def brightfield_callback():
-            fake_stream = instrmodel.EmptyStream("Brightfield")
+            fake_stream = FakeBrightfieldStream("Brightfield")
             fixed_entry = FixedStreamPanelEntry(self.frm.stream_panel,
                                                 stream=fake_stream)
             self.frm.stream_panel.add_stream(fixed_entry)
@@ -207,7 +259,7 @@ class FoldPanelBarTestCase(unittest.TestCase):
 
         # Add another callback/name combo to the add button
         def sem_callback():
-            fake_stream = instrmodel.EmptyStream("SEM:EDT")
+            fake_stream = FakeSEMStream("SEM:EDT")
             fixed_entry = FixedStreamPanelEntry(self.frm.stream_panel,
                                            stream=fake_stream)
             self.frm.stream_panel.add_stream(fixed_entry)
@@ -229,7 +281,7 @@ class FoldPanelBarTestCase(unittest.TestCase):
 
         # Add another callback/name combo to the add button
         def custom_callback():
-            fake_stream = instrmodel.EmptyStream("Custom")
+            fake_stream = FakeFluoStream("Custom")
             custom_entry = CustomStreamPanelEntry(self.frm.stream_panel,
                                                  stream=fake_stream)
             self.frm.stream_panel.add_stream(custom_entry)
