@@ -56,7 +56,7 @@ class StreamController(object):
 
     def __init__(self, microscope, spanel):
         '''
-        microscope (MicroscopeGUI): the representation of the microscope hardware
+        microscope (MicroscopeGUI): the representation of the microscope GUI
         spanel (StreamPanel): an empty stream panel
         '''
         self._microscope = microscope

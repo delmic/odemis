@@ -44,6 +44,9 @@ class ViewSideBar(object):
     def select_view(self, view_num):
         self._view_selector.select_view(view_num)
 
+    # TODO merge with viewselector
+    # TODO use microscopeGUI: display .stream and modify currentView/viewLayout 
+
 class ViewSelector(object):
     """ This class controls the view panels and the view selector buttons and
     labels associated with them.

@@ -30,6 +30,7 @@ from odemis.gui.util.units import readable_str
 from odemis.model import VigilantAttribute, MD_POS, MD_PIXEL_SIZE, \
     MD_SENSOR_PIXEL_SIZE
 import logging
+import time
 
 
 
@@ -243,9 +244,15 @@ class InstrumentalImage(object):
 
 # THE FUTURE：
 
+# The different states of a microscope
 STATE_OFF = 0
 STATE_ON = 1
 STATE_PAUSE = 2
+
+# The different types of view layouts
+VIEW_LAYOUT_ONE = 0 # one big view
+VIEW_LAYOUT_22 = 1 # 2x2 layout
+VIEW_LAYOUT_FULLSCREEN = 2 # Fullscreen view (not yet supported)
 
 class MicroscopeGUI(object):
     """
@@ -312,7 +319,11 @@ class MicroscopeGUI(object):
 
         self.streams = set() # Streams available (handled by StreamController)
         self.views = [] # MicroscopeViews available, order matters (handled by ViewController)
-        
+        self.currentView = VigilantAttribute(None) # The MicroscopeView currently focused
+        # the view layout
+        self.viewLayout = model.IntEnumerated(VIEW_LAYOUT_ONE, 
+                  choices= [VIEW_LAYOUT_ONE, VIEW_LAYOUT_22, VIEW_LAYOUT_FULLSCREEN])
+         
         self.opticalState = model.IntEnumerated(STATE_OFF, 
                                 choices=[STATE_OFF, STATE_ON, STATE_PAUSE])
         self.opticalState.subscribe(self.onOpticalState)
@@ -370,7 +381,7 @@ class MicroscopeGUI(object):
     # (The 4 viewports canvas are already created, the main interface connect 
     #   them to the view, by number)
     # In charge of switching between 2x2 layout and 1 layout. 
-    # In charge of updating the focus
+    # In charge of updating the view focus
     # In charge of updating the view thumbnails???
     # In charge of ensuring they all have same zoom and center position
     # In charge of applying the toolbar actions on the right viewport
@@ -569,7 +580,7 @@ class BrightfieldStream(Stream):
         
                 
     def _setLightExcitation(self):
-        # TODO how to select white light???
+        # TODO how to select white light??? We need a brightlight hardware?
         # Turn on all the sources? Does this always mean white?
         # At least we should set a warning if the final emission range is quite
         # different from the normal white spectrum
@@ -689,6 +700,11 @@ class MicroscopeView(object):
     """
     Represents a view from a microscope, and ways to alter it.
     Basically, its "input" is a StreamTree, and can request stage and focus move.
+    It never computes itself the composited image from all the streams. It's up
+    to other objects (e.g., the canvas) to ask the StreamTree for its latest
+    image (the main goal of this scheme is to avoid computation when not needed).
+    Similarly, the thumbnail is never automatically recomputed, but other
+    objects can update it.  
     """
     def __init__(self, stage, focus0=None, focus1=None):
         """
@@ -711,10 +727,15 @@ class MicroscopeView(object):
         pos = self.stage_pos.value
         self.view_pos = model.ListVA((pos["x"], pos["y"]), unit="m")
     
-        # ordered list of streams to display
-        # TODO might need to be more complex object, such as a tree with 
-        # leaves as stream and fork as merge functions
-        self.streams = VigilantAttribute(StreamTree())
+        # Streams to display
+        self.streams = StreamTree() # use addStream/removeStream for simple modifications
+        # TODO do we need a special method to update the merge ratio/operator?
+        # or maybe a VA for the main merge ratio?
+        
+        # Last time the image of the view was changed. It's actually mostly
+        # a trick to allow other parts of the GUI to know when the (theoretical)
+        # composited image has changed.
+        self.lastUpdate = model.FloatVA(time.time(), unit="s")
         
         # a thumbnail version of what is displayed
         self.thumbnail = VigilantAttribute(InstrumentalImage(None, None, None))
@@ -744,7 +765,53 @@ class MicroscopeView(object):
         #  => might require cleverness
         self.view_pos = model.ListVA((pos["x"], pos["y"]), unit="m")
     
+    def addStream(self, stream):
+        """
+        Add a stream to the view. It takes care of updating the StreamTree 
+        according to the type of stream.
+        stream (Stream): stream to add
+        Raises:
+            KeyError if the stream is already present
+        """
+        # check if the stream is already present
+        if stream in self.streams.getStreams():
+            raise KeyError("Stream %s is already present.", stream.name)
+        
+        # Find out where the stream should go in the streamTree
+        # FIXME: manage sub-trees, with different merge operations
+        # For now we just add it to the list of streams, with the only merge operation possible
+        self.streams.streams.append[stream]
+        
+        # subscribe to the stream's image
+        stream.image.subscribe(self._onNewImage)
+        
+        # let everyone know that the view has changed
+        self.lastUpdate.value = time.time()
+        
+    def removeStream(self, stream):
+        """
+        Remove a stream from the view. It takes care of updating the StreamTree.
+        stream (Stream): stream to remove
+        Raises:
+            KeyError if the stream is already present
+        """
+        # Stop listening to the stream changes
+        stream.image.unsubscribe(self._onNewImage)
+        
+        # remove stream for the StreamTree()
+        # TODO handle more complex trees
+        self.streams.streams.remove[stream]
+        
+        # let everyone know that the view has changed
+        self.lastUpdate.value = time.time()
     
+    def _onNewImage(self, im):
+        """
+        Called when one stream has its image updated
+        """
+        # just let everyone that the composited image has changed
+        self.lastUpdate.value = time.time()
+        
 class StreamTree(object):
     """
     Object which contains a set of streams, and how they are merged to appear
