@@ -54,12 +54,12 @@ class StreamController(object):
     microscope is turned on/off.
     '''
 
-    def __init__(self, microscope, spanel):
+    def __init__(self, micgui, spanel):
         '''
         microscope (MicroscopeGUI): the representation of the microscope GUI
         spanel (StreamPanel): an empty stream panel
         '''
-        self._microscope = microscope
+        self._microscope = micgui
         self._spanel = spanel
         # TODO probably need a lock to access it correctly
         self._streams_to_restart = set() # streams to be restarted when turning on again
@@ -71,8 +71,8 @@ class StreamController(object):
         self._opticalWasTurnedOn = False
         self._semWasTurnedOn = False 
         
-        microscope.opticalState.subscribe(self.onOpticalState)
-        microscope.emState.subscribe(self.onEMState)
+        micgui.opticalState.subscribe(self.onOpticalState)
+        micgui.emState.subscribe(self.onEMState)
     
     def _createAddStreamActions(self):
         """

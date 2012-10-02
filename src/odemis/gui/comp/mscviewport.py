@@ -26,18 +26,18 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 import wx
 
-from .util import units
-from .log import log
+from ..util import units
+from ..log import log
 
-from .dblmscopecanvas import DblMicroscopeCanvas
-from .dblmscopeviewmodel import DblMscopeViewModel
-from .comp.scalewindow import ScaleWindow
-from .comp.slider import Slider
-from .img.data import getico_blending_optBitmap, getico_blending_semBitmap
-from .microscopeview import MicroscopeEmptyView, MicroscopeOpticalView, \
+from ..dblmscopecanvas import DblMicroscopeCanvas
+from ..dblmscopeviewmodel import DblMscopeViewModel
+from .scalewindow import ScaleWindow
+from .slider import Slider
+from ..img.data import getico_blending_optBitmap, getico_blending_semBitmap
+from ..microscopeview import MicroscopeEmptyView, MicroscopeOpticalView, \
     MicroscopeSEView
 
-class DblMicroscopePanel(wx.Panel):
+class MicroscopeViewport(wx.Panel):
     """
     A draggable, flicker-free window class adapted to show pictures of two
     microscope simultaneously.
@@ -45,7 +45,8 @@ class DblMicroscopePanel(wx.Panel):
     """
     def __init__(self, *args, **kwargs):
         wx.Panel.__init__(self, *args, **kwargs)
-
+        # subscribe to each microscopeview lastupdate, and call canvas.shouldUpdateDrawing())
+        
         # Keep track of this panel's pseudo focus
         self._has_focus = False
 

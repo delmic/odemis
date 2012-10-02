@@ -397,12 +397,12 @@ component.Manager.addXmlHandler(xh_delmic.UnitFloatCtrlHandler)
 component.Manager.setMenu(c, 'control', 'Delmic unit Float text ctrl', 'UnitFloatCtrl', 1)
 component.Manager.setTool(c, 'Controls', pos=(0, 2))
 
-### gui.dblmscopepanel.DblMicroscopePanel
+### gui.dblmscopepanel.MicroscopeViewport
 
-c = component.Container('DblMicroscopePanel', ['window', 'top_level', 'control'],
+c = component.Container('MicroscopeViewport', ['window', 'top_level', 'control'],
               ['pos', 'size'],
               image=images.TreePanel.GetImage())
 c.addStyles('wxTAB_TRAVERSAL')
 component.Manager.register(c)
-component.Manager.addXmlHandler(xh_delmic.DblMicroscopePanelXmlHandler)
-component.Manager.setMenu(c, 'ROOT', 'Delmic Micros Panel', 'DblMicroscopePanel', 10)
+component.Manager.addXmlHandler(xh_delmic.MicroscopeViewportXmlHandler)
+component.Manager.setMenu(c, 'ROOT', 'Delmic Msc Viewport', 'MicroscopeViewport', 10)

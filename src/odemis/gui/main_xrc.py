@@ -351,7 +351,7 @@ def __init_resources():
                 <object class="sizeritem">
                   <object class="wxBoxSizer">
                     <object class="sizeritem">
-                      <object class="DblMicroscopePanel" name="pnl_view_tl">
+                      <object class="MicroscopeViewport" name="pnl_view_tl">
                         <size>400,-1</size>
                         <fg>#BFBFBF</fg>
                         <bg>#000000</bg>
@@ -364,7 +364,7 @@ def __init_resources():
                       <ratio>1</ratio>
                     </object>
                     <object class="sizeritem">
-                      <object class="DblMicroscopePanel" name="pnl_view_tr">
+                      <object class="MicroscopeViewport" name="pnl_view_tr">
                         <size>400,-1</size>
                         <fg>#BFBFBF</fg>
                         <bg>#000000</bg>
@@ -385,7 +385,7 @@ def __init_resources():
                 <object class="sizeritem">
                   <object class="wxBoxSizer">
                     <object class="sizeritem">
-                      <object class="DblMicroscopePanel" name="pnl_view_bl">
+                      <object class="MicroscopeViewport" name="pnl_view_bl">
                         <size>400,-1</size>
                         <fg>#BFBFBF</fg>
                         <bg>#000000</bg>
@@ -398,7 +398,7 @@ def __init_resources():
                       <ratio>1</ratio>
                     </object>
                     <object class="sizeritem">
-                      <object class="DblMicroscopePanel" name="pnl_view_br">
+                      <object class="MicroscopeViewport" name="pnl_view_br">
                         <size>400,-1</size>
                         <fg>#BFBFBF</fg>
                         <bg>#000000</bg>

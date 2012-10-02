@@ -29,35 +29,25 @@ import odemis.gui
 from odemis.gui.log import log
 
 
-class ViewSideBar(object):
-    """ The main controller class for the view panel in the live view.
-
-    This class can be used to set, get and otherwise manipulate the content
-    of the setting panel.
-    """
-
-    def __init__(self, main_frame):
-        self._main_frame = main_frame
-
-        self._view_selector = ViewSelector(main_frame)
-
-    def select_view(self, view_num):
-        self._view_selector.select_view(view_num)
 
     # TODO merge with viewselector
     # TODO use microscopeGUI: display .stream and modify currentView/viewLayout 
 
 class ViewSelector(object):
-    """ This class controls the view panels and the view selector buttons and
-    labels associated with them.
+    """
+    This class controls the view selector buttons and labels associated with them.
     """
 
-    def __init__(self, main_frame):
+    def __init__(self, micgui, main_frame):
+        """
+        micgui (MicroscopeGUI): the representation of the microscope GUI
+        main_frame: (wx.Frame): the frame which contains the 4 viewports
+        """
+        self._main_frame = main_frame
 
-        self.main_frame = main_frame
-
-        # View panels
-        self.views = [(main_frame.btn_view_all, None),
+        # TODO: should create buttons 
+        # btn -> viewports
+        self.viewports = [(main_frame.btn_view_all, None),
                       (main_frame.btn_view_tl, main_frame.pnl_view_tl),
                       (main_frame.btn_view_tr, main_frame.pnl_view_tr),
                       (main_frame.btn_view_bl, main_frame.pnl_view_bl),
@@ -65,8 +55,6 @@ class ViewSelector(object):
 
         for btn, _ in self.views:
             btn.Bind(wx.EVT_BUTTON, self.OnClick)
-
-        self.show_all()
 
     def select_view(self, view_num):
         """ Selects the view with the provided number.
@@ -114,19 +102,6 @@ class ViewSelector(object):
         button.
         """
 
-        log.debug("Showing all views")
-
-        self.main_frame.pnl_tab_live.Freeze()
-
-        for btn, view in self.views:
-            if view:
-                view.Show()
-                btn.SetToggle(False)
-            else:
-                btn.SetToggle(True)
-
-        self.main_frame.pnl_tab_live.Layout()
-        self.main_frame.pnl_tab_live.Thaw()
 
 
     def OnClick(self, evt):
@@ -140,22 +115,14 @@ class ViewSelector(object):
         evt_btn = evt.GetEventObject()
 
         if evt_btn == self.views[0][0]:
-            self.show_all()
+            self.show_all() # XXX
             # The event does not need to be 'skipped' because
             # the button will be toggled in the method we called.
         else:
 
             self._reset(evt_btn)
-
-            self.main_frame.pnl_tab_live.Freeze()
-
             for view in [v for b, v in self.views if b == evt_btn]:
-                view.SetFocus(True)
-                view.Show()
                 b.set_overlay(view.get_screenshot())
-
-            self.main_frame.pnl_tab_live.Layout()
-            self.main_frame.pnl_tab_live.Thaw()
 
             # Skip the event, so the button will toggle
             evt.Skip()

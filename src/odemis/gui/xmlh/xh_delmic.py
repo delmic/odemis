@@ -34,7 +34,7 @@ import odemis.gui.comp.foldpanelbar as fpb
 import odemis.gui.comp.stream as strm
 import odemis.gui.comp.buttons as btns
 import odemis.gui.comp.text as txt
-import odemis.gui.dblmscopepanel as mscp
+import odemis.gui.comp.mscviewport as mscp
 
 ##################################
 # Fold Panel Bar related Handlers
@@ -540,7 +540,7 @@ class UnitFloatCtrlHandler(xrc.XmlResourceHandler):
 # Canvas Handlers
 ##################################
 
-class DblMicroscopePanelXmlHandler(xrc.XmlResourceHandler):
+class MicroscopeViewportXmlHandler(xrc.XmlResourceHandler):
     def __init__(self):
         xrc.XmlResourceHandler.__init__(self)
         # Specify the styles recognized by objects of this type
@@ -549,14 +549,14 @@ class DblMicroscopePanelXmlHandler(xrc.XmlResourceHandler):
 
     # This method and the next one are required for XmlResourceHandlers
     def CanHandle(self, node):
-        capable = self.IsOfClass(node, "DblMicroscopePanel")
+        capable = self.IsOfClass(node, "MicroscopeViewport")
         return capable
 
     def DoCreateResource(self):
         assert self.GetInstance() is None
 
         # Now create the object
-        panel = mscp.DblMicroscopePanel(self.GetParentAsWindow(),
+        panel = mscp.MicroscopeViewport(self.GetParentAsWindow(),
                                         id=self.GetID(),
                                         pos=self.GetPosition(),
                                         size=self.GetSize(),
@@ -566,7 +566,7 @@ class DblMicroscopePanelXmlHandler(xrc.XmlResourceHandler):
 
 HANDLER_CLASS_LIST = [
                       CustomStreamPanelEntryXmlHandler,
-                      DblMicroscopePanelXmlHandler,
+                      MicroscopeViewportXmlHandler,
                       FixedStreamPanelEntryXmlHandler,
                       FoldPanelBarXmlHandler,
                       FoldPanelItemXmlHandler,

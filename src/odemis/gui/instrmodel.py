@@ -321,7 +321,8 @@ class MicroscopeGUI(object):
         self.views = [] # MicroscopeViews available, order matters (handled by ViewController)
         self.currentView = VigilantAttribute(None) # The MicroscopeView currently focused
         # the view layout
-        self.viewLayout = model.IntEnumerated(VIEW_LAYOUT_ONE, 
+        # TODO maybe start with just one view 
+        self.viewLayout = model.IntEnumerated(VIEW_LAYOUT_22, 
                   choices= [VIEW_LAYOUT_ONE, VIEW_LAYOUT_22, VIEW_LAYOUT_FULLSCREEN])
          
         self.opticalState = model.IntEnumerated(STATE_OFF, 
@@ -706,14 +707,16 @@ class MicroscopeView(object):
     Similarly, the thumbnail is never automatically recomputed, but other
     objects can update it.  
     """
-    def __init__(self, stage, focus0=None, focus1=None):
+    def __init__(self, name, stage, focus0=None, focus1=None):
         """
+        name (string): user-friendly name of the view
         stage (Actuator): actuator with two axes: x and y
         focus0 (Actuator): actuator with one axis: z. Can be None
         focus1 (Actuator): actuator with one axis: z. Can be None
         Focuses 0 and 1 are modified when changing focus respectively along the 
            X and Y axis.
         """
+        self.name = model.StringVA(name)
         self._stage = stage
         self._focus = [focus0, focus1]
         
