@@ -30,7 +30,6 @@ from odemis.gui.log import log
 
 
 
-    # TODO merge with viewselector
     # TODO use microscopeGUI: display .stream and modify currentView/viewLayout 
 
 class ViewSelector(object):
@@ -43,47 +42,26 @@ class ViewSelector(object):
         micgui (MicroscopeGUI): the representation of the microscope GUI
         main_frame: (wx.Frame): the frame which contains the 4 viewports
         """
+        self._microscope = micgui
         self._main_frame = main_frame
 
-        # TODO: should create buttons 
+        # TODO: should create buttons according to micgui views
         # btn -> viewports
-        self.viewports = [(main_frame.btn_view_all, None),
-                      (main_frame.btn_view_tl, main_frame.pnl_view_tl),
-                      (main_frame.btn_view_tr, main_frame.pnl_view_tr),
-                      (main_frame.btn_view_bl, main_frame.pnl_view_bl),
-                      (main_frame.btn_view_br, main_frame.pnl_view_br)]
+        self.buttons = {main_frame.btn_view_all: None, # 2x2 layout
+                          main_frame.btn_view_tl: main_frame.pnl_view_tl,
+                          main_frame.btn_view_tr: main_frame.pnl_view_tr,
+                          main_frame.btn_view_bl: main_frame.pnl_view_bl,
+                          main_frame.btn_view_br: main_frame.pnl_view_br}
 
-        for btn, _ in self.views:
+        for btn in self.buttons:
             btn.Bind(wx.EVT_BUTTON, self.OnClick)
 
-    def select_view(self, view_num):
-        """ Selects the view with the provided number.
+        # subscribe to layout and view changes
+        self._microscope.viewLayout.subscribe(self._onViewLayout, init=True)
+        self._microscope.currentView.subscribe(self._onView, init=True)
+        # TODO 
 
-        view_num 0 activates the 2x2 view.
-        """
-
-        if not 0 <= view_num < len(self.views):
-            raise ValueError("Illegal view number %s" % view_num)
-
-        self._reset()
-        btn, view = self.views[view_num]
-
-        self.main_frame.Freeze()
-
-        if view:
-            for v in [v for _, v in self.views if v is not None and v != view]:
-                v.Hide()
-
-            view.SetFocus(True)
-            view.Show()
-        else:
-            for v in [v for _, v in self.views if v]:
-                v.Show()
-
-        btn.SetToggle(True)
-
-        self.main_frame.Thaw()
-
+        #TODO subscribe to thumbnails
 
     def _reset(self, btn=None):
         """ Hide all views and remove any focus, and unset any navigation
@@ -96,13 +74,6 @@ class ViewSelector(object):
             if view:
                 view.SetFocus(False)
                 view.Hide()
-
-    def show_all(self):
-        """ This method will show all views and set the appropriate navigation
-        button.
-        """
-
-
 
     def OnClick(self, evt):
         """ Navigation button click event handler

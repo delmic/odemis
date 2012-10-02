@@ -96,7 +96,10 @@ class StreamController(object):
         # SED
         if self._microscope.ebeam and self._microscope.sed:
             self._spanel.add_action("Secondary electrons", self.addSEMSED)
-            
+    
+    
+    # TODO automatically add new stream to the current view
+    
     def addFluo(self):
         """
         Creates a new fluorescence stream and entry into the stream panel

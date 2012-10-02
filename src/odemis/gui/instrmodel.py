@@ -31,6 +31,7 @@ from odemis.model import VigilantAttribute, MD_POS, MD_PIXEL_SIZE, \
     MD_SENSOR_PIXEL_SIZE
 import logging
 import time
+from odemis.model._vattributes import FloatContinuous
 
 
 
@@ -707,7 +708,13 @@ class MicroscopeView(object):
     Similarly, the thumbnail is never automatically recomputed, but other
     objects can update it.  
     """
-    def __init__(self, name, stage, focus0=None, focus1=None):
+    
+    # TODO we need to differenciate views according to what they should be showing
+    # to the user (in terms of streams):
+    #  * inherit (with nothing inside each subclass)
+    #  * special attribute with list of streams classes this view is for.
+    
+    def __init__(self, name, stage, focus0=None, focus1=None, stream_classes=None):
         """
         name (string): user-friendly name of the view
         stage (Actuator): actuator with two axes: x and y
@@ -715,8 +722,11 @@ class MicroscopeView(object):
         focus1 (Actuator): actuator with one axis: z. Can be None
         Focuses 0 and 1 are modified when changing focus respectively along the 
            X and Y axis.
+        stream_classes (None, or list of classes): all subclasses that the streams
+          in this view can show (restriction is not technical, only for the user) 
         """
         self.name = model.StringVA(name)
+        self.stream_classes = stream_classes or [Stream] 
         self._stage = stage
         self._focus = [focus0, focus1]
         
@@ -729,11 +739,17 @@ class MicroscopeView(object):
         # TODO: we might need to have it on the MicroscopeGUI, if all the viewports must display the same location
         pos = self.stage_pos.value
         self.view_pos = model.ListVA((pos["x"], pos["y"]), unit="m")
+        
+        # current density (meter per pixel, ~ scale/zoom level)
+        self.mpp = PositiveVA(10e-6, unit="m/px") # (10um/px => ~large view of the sample)
     
+        # how much one image is displayed on the other one
+        self.merge_ratio = FloatContinuous(0.3, range=[0, 1], unit="")
+        self.merge_ratio.subscribe(self._onMergeRatio)
+        
         # Streams to display
-        self.streams = StreamTree() # use addStream/removeStream for simple modifications
-        # TODO do we need a special method to update the merge ratio/operator?
-        # or maybe a VA for the main merge ratio?
+        # Note: use addStream/removeStream for simple modifications
+        self.streams = StreamTree(kwargs={"merge": self.merge_ratio.value}) 
         
         # Last time the image of the view was changed. It's actually mostly
         # a trick to allow other parts of the GUI to know when the (theoretical)
@@ -742,6 +758,9 @@ class MicroscopeView(object):
         
         # a thumbnail version of what is displayed
         self.thumbnail = VigilantAttribute(InstrumentalImage(None, None, None))
+        
+        # TODO list of annotations to display
+        self.crosshair = model.BooleanVA(True)
     
     def moveStageToView(self):
         """
@@ -814,6 +833,17 @@ class MicroscopeView(object):
         """
         # just let everyone that the composited image has changed
         self.lastUpdate.value = time.time()
+
+    def _onMergeRatio(self, ratio):
+        """
+        Called when the merge ratio is modified
+        """
+        # This actually modifies the root operator of the stream tree
+        # It has effect only if the operator can do something with the "merge" argument
+        self.streams.kwargs["merge"] = ratio
+        
+        # just let everyone that the composited image has changed
+        self.lastUpdate.value = time.time()
         
 class StreamTree(object):
     """
@@ -823,7 +853,7 @@ class StreamTree(object):
     a merge method and a list of subnodes, either streamtree as well, or stream)
     """
     
-    def __init__(self, operator=None, streams=None, **kwargs):
+    def __init__(self, operator=None, streams=None, kwargs):
         """
         operator (callable): a function that takes a list of InstrumentalImage in the 
             same order as the streams are given, and the additional arguments and
@@ -898,5 +928,13 @@ class StreamTree(object):
         """
         # TODO (once the operator callable is clearly defined)
         raise NotImplementedError()
-     
+
+class PositiveVA(VigilantAttribute):
+    """
+    VigilantAttribute with special validation for only allowing positive values (float>0)
+    """
+    def _check(self, value):
+        assert(0.0 < value)
+        
+        
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:

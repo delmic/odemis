@@ -37,16 +37,86 @@ class ViewController(object):
         self._microscope = micgui
         self._main_frame = main_frame
         
-        # TODO create the (default) views and set currentView
-        
-        
         # list of all the viewports (widgets that show the views)
         self._viewports = [main_frame.pnl_view_tl, main_frame.pnl_view_tr,
                            main_frame.pnl_view_bl, main_frame.pnl_view_br]
         
+        # TODO create the (default) views and set currentView
+        self._createViews()
+        
         # subscribe to layout and view changes
         self._microscope.viewLayout.subscribe(self.onViewLayout, init=True)
         self._microscope.currentView.subscribe(self.onView, init=True)
+        
+    def _createViews(self):
+        """
+        Create the different views displayed, according to the current microscope.
+        To be executed only once, at initialisation.
+        """
+        # If SEM only: all SEM 
+        if self._microscope.ebeam and not self._microscope.light:
+            i = 1
+            for v in self._viewports:
+                view = instrmodel.MicroscopeView("SEM %d" % i,
+                         self._microscope.stage,
+                         focus0=None, # TODO: SEM focus
+                         stream_classes=[instrmodel.SEMStream]
+                         )
+                v.setView(view)
+                i += 1
+        
+        # If Optical only: all Optical
+        # TODO: first one is brightfield only?
+        elif not self._microscope.ebeam and self._microscope.light:
+            i = 1
+            for v in self._viewports:
+                view = instrmodel.MicroscopeView("Optical %d" % i,
+                         self._microscope.stage,
+                         focus0=self._microscope.focus,
+                         stream_classes=[instrmodel.BrightfieldStream, instrmodel.FluoStream]
+                         )
+                v.setView(view)
+                i += 1
+        
+        # If both SEM and Optical: SEM/Optical/2x combined 
+        elif self._microscope.ebeam and self._microscope.light:
+            view = instrmodel.MicroscopeView("SEM" % i,
+                     self._microscope.stage,
+                     focus0=None, # TODO: SEM focus
+                     stream_classes=[instrmodel.SEMStream]
+                     )
+            v.setView(view)
+            self._viewports[0].setView(view)
+            view = instrmodel.MicroscopeView("Optical" % i,
+                     self._microscope.stage,
+                     focus0=self._microscope.focus,
+                     stream_classes=[instrmodel.BrightfieldStream, instrmodel.FluoStream]
+                     )
+            self._viewports[1].setView(view)
+            view = instrmodel.MicroscopeView("Combined 1",
+                     self._microscope.stage,
+                     focus0=self._microscope.focus,
+                     focus1=None, # TODO: SEM focus
+                     )
+            self._viewports[2].setView(view)
+            view = instrmodel.MicroscopeView("Combined 2",
+                     self._microscope.stage,
+                     focus0=self._microscope.focus,
+                     focus1=None, # TODO: SEM focus
+                     )
+            self._viewports[3].setView(view)
+        else:
+            log.warning("No known microscope configuration, creating 4 generic views")
+            i = 1
+            for v in self._viewports:
+                view = instrmodel.MicroscopeView("View %d" % i,
+                         self._microscope.stage,
+                         focus0=self._microscope.focus
+                         )
+                v.setView(view)
+                i += 1
+        
+        # TODO: if chamber camera: br is just chamber
         
         
     def onView(self, view):

@@ -44,87 +44,18 @@ class MicroscopeViewport(wx.Panel):
 
     """
     def __init__(self, *args, **kwargs):
+        """
+        Note: This is not fully initialised until setView() has been called
+        """
         wx.Panel.__init__(self, *args, **kwargs)
-        # subscribe to each microscopeview lastupdate, and call canvas.shouldUpdateDrawing())
         
         # Keep track of this panel's pseudo focus
         self._has_focus = False
 
-        self.viewmodel = DblMscopeViewModel()
+        self.view = None # the MicroscopeView that this viewport is displaying (=model)
         self.legend_panel = wx.Panel(self)
         # put here so MicroscopeOpticalView will pick up on it
         self.legend_panel.SetForegroundColour("#BBBBBB")
-
-        try:
-            self.secom_model = wx.GetApp().secom_model
-            self.viewmodel.opt_focus = self.secom_model.opt_focus
-        except AttributeError:
-            msg = "Could not find SECOM model"
-            log.error(msg)
-            return
-
-        # Select the default views
-        #self.ChangeView(0, self.views[1].name)
-        #self.ChangeView(1, self.views[2].name)
-        #FIXME: this is a BIG shortcut => need streams
-
-        self.opt_view = MicroscopeOpticalView(self.legend_panel, self.secom_model, self.viewmodel)
-        self.sem_view = MicroscopeSEView(self.legend_panel, self.secom_model, self.viewmodel)
-
-        # Create all sub widgets used by this wx.Panel
-        self._build_windows()
-
-        self.sem_view.Show(self.viewmodel.images[0])
-        self.opt_view.Show(self.viewmodel.images[1])
-
-        # Control for the selection before AddView(), which needs them
-        #self.viewComboLeft = wx.ComboBox(self, style=wx.CB_READONLY, size=(140, -1))
-        #self.viewComboRight = wx.ComboBox(self, style=wx.CB_READONLY, size=(140, -1))
-
-        #self.Bind(wx.EVT_COMBOBOX, self.OnComboLeft, self.viewComboLeft)
-        #self.Bind(wx.EVT_COMBOBOX, self.OnComboRight, self.viewComboRight)
-
-
-#        self.views = []
-#        emptyView = MicroscopeEmptyView()
-        # display : left and right view
-        self.displays = []
-        #[(emptyView, self.viewComboLeft, self.imageSizerBLeft),
-        #                 (emptyView, self.viewComboRight, self.imageSizerBRight)]
-
-        # TODO change to use streams: set of streams visible in this panel
-        # can be called only with display ready
-#        self.AddView(emptyView)
-#        self.AddView(MicroscopeOpticalView(self, self.secom_model, self.viewmodel))
-#        self.AddView(MicroscopeSEView(self, self.secom_model, self.viewmodel))
-
-
-
-        # sync microscope stage with the view
-        self.viewmodel.center.value = self.secom_model.stage_pos.value
-
-
-        self.Bind(wx.EVT_CHILD_FOCUS, self.OnChildFocus)
-
-        self._set_subscriptions()
-
-        self.ShowBlendingSlider(True)
-#        self.ShowBlendingSlider(self.canvas.ImageCount() > 0)
-
-        self.Bind(wx.EVT_SIZE, self.OnSize)
-
-    def get_screenshot(self):
-        return self.canvas.get_screenshot()
-
-    def _set_subscriptions(self):
-        """ Set all needed subscriptions to VigilantAttributes """
-        self.viewmodel.mpp.subscribe(self.avOnMPP, True)  #pylint: disable=E1101
-        self.viewmodel.center.subscribe(self.onViewCenter)
-        self.viewmodel.merge_ratio.subscribe(self.avOnMergeRatio, True) #pylint: disable=E1101
-
-
-    def _build_windows(self):
-        """ Construct and lay out all sub windows of this panel """
 
         self.canvas = DblMicroscopeCanvas(self)
 
@@ -135,28 +66,13 @@ class MicroscopeViewport(wx.Panel):
         self.SetBackgroundColour("#1A1A1A")
         self.SetForegroundColour("#BBBBBB")
 
-        ###################################
-        # Standard legend widgets
-        ###################################
 
         ##### Scale window
-
-
         self.legend_panel.SetBackgroundColour("#1A1A1A")
         self.legend_panel.SetForegroundColour(self.GetForegroundColour())
 
         self.scaleDisplay = ScaleWindow(self.legend_panel)
         self.scaleDisplay.SetFont(font)
-
-
-        #### Values
-
-        # self.magni_label = wx.StaticText(self.legend_panel, wx.ID_ANY, "10x 10x")
-        # self.magni_label.SetToolTipString("Magnification Optic Electron")
-        # self.volta_label = wx.StaticText(self.legend_panel, wx.ID_ANY, "66 kV")
-        # self.volta_label.SetToolTipString("Voltage")
-        # self.dwell_label = wx.StaticText(self.legend_panel, wx.ID_ANY, "666 μs")
-        # self.dwell_label.SetToolTipString("Dwell")
 
         # Merge icons will be grabbed from gui.img.data
         ##### Merge slider
@@ -263,6 +179,37 @@ class MicroscopeViewport(wx.Panel):
         self.SetSizerAndFit(mainSizer)
         self.SetAutoLayout(True)
 
+        self.Bind(wx.EVT_CHILD_FOCUS, self.OnChildFocus)
+        self.Bind(wx.EVT_SIZE, self.OnSize)
+        
+
+    def setView(self, view):
+        """
+        Set the view that this viewport is displaying/representing
+        """
+        # This is a kind of kludge, as it'd be best to have the viewport created
+        # after the view, but they are created independently via xrc. 
+        self.view = view
+        
+        # Center to current view position, with current mpp
+        
+        # set/subscribe merge ratio
+        self.ShowBlendingSlider(True) # FIXME: only if required by the view
+        
+        # set/subscribe crosshair
+        
+        
+        # TODO: shall this be handled directly by the canvas (or a subclass of it)?
+        # subscribe to changes lastUpdate
+        view.lastUpdate.subscribe(self._onViewImageUpdate, init=True)
+        
+        
+        
+
+    # TODO: remove => should be handled by .thumbnail of view        
+    def get_screenshot(self):
+        return self.canvas.get_screenshot()
+
 
     ################################################
     ## Panel control
@@ -302,11 +249,8 @@ class MicroscopeViewport(wx.Panel):
 
     ## END Event handling
 
-    def OnComboLeft(self, event):
-        self.ChangeView(0, event.GetString())
-
-    def OnComboRight(self, event):
-        self.ChangeView(1, event.GetString())
+    def _onViewImageUpdate(self, t):
+        self.canvas.ShouldUpdateDrawing()
 
     def OnSlider(self, event):
         """
@@ -330,7 +274,7 @@ class MicroscopeViewport(wx.Panel):
 
     def avOnMPP(self, mpp):
         self.scaleDisplay.SetMPP(mpp)
-        self.UpdateHFW()
+        # the MicroscopeView will send an event that the view has to be redrawn
 
     def OnSize(self, event):
         event.Skip() # process also by the parent
@@ -341,68 +285,6 @@ class MicroscopeViewport(wx.Panel):
         hfw = self.viewmodel.mpp.value * self.GetClientSize()[0]
         label = "HFW: %sm" % units.to_string_si_prefix(hfw)
         self.hfwDisplay.SetLabel(label)
-
-    def AddView(self, view):
-        self.views.append(view)
-
-        # update the combo boxes
-        for d in self.displays:
-            d[1].Append(view.name)
-
-    def ChangeView(self, display, viewName):
-        """
-        Select a view and update the legend with it
-        If selecting a view already displayed on the other side, it will swap them
-        If less than 2 non-empty views => slider is disabled
-        display: index of the display to update
-        viewName (string): the name of the view
-        combo: the combobox which has to be updated
-        sizer: the sizer containing the controls
-        """
-#        FIXME: this is broken, and never to be used again!!
-        # find the view
-        view = None
-        for v in self.views:
-            if v.name == viewName:
-                view = v
-                break
-        if not view:
-            raise LookupError("Unknown view " + viewName)
-
-        (prevView, combo, sizer) = self.displays[display]
-        oppDisplay = 1 - display
-        (oppView, oppCombo, oppSizer) = self.displays[oppDisplay]
-
-        needSwap = ((oppView == view) and not isinstance(view, MicroscopeEmptyView))
-
-        # Remove old view(s)
-        prevView.Hide(combo, sizer)
-        if needSwap:
-            oppView.Hide(oppCombo, oppSizer)
-            oppView = prevView
-
-        # Show new view
-        view.Show(combo, sizer, self.viewmodel.images[display])
-        self.displays[display] = (view, combo, sizer)
-        if needSwap:
-            oppView.Show(oppCombo, oppSizer, self.viewmodel.images[oppDisplay])
-            self.displays[oppDisplay] = (oppView, oppCombo, oppSizer)
-
-        # Remove slider if not 2 views
-        if isinstance(view, MicroscopeEmptyView) or isinstance(oppView, MicroscopeEmptyView):
-            self.blendingSlider.Hide()
-        else:
-            self.blendingSlider.Show()
-
-        # TODO: find out if that's the nice behaviour, or should just keep it?
-        if needSwap:
-            self.viewmodel.merge_ratio.value = (1.0 -  self.viewmodel.merge_ratio.value)
-
-        assert(self.displays[0] != self.displays[1] or
-               isinstance(self.displays[0], MicroscopeEmptyView))
-
-
-
 
 
 

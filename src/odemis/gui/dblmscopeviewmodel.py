@@ -26,6 +26,8 @@ from .instrmodel import InstrumentalImage
 from odemis.gui.img.data import gettest_patternImage
 from odemis.model import VigilantAttribute
 
+# TODO this module should be deletable => replaced by MicroscopeView
+
 class DblMscopeViewModel(object):
     """
     Data model of a view from 2 microscopes
