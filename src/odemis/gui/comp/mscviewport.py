@@ -30,12 +30,9 @@ from ..util import units
 from ..log import log
 
 from ..dblmscopecanvas import DblMicroscopeCanvas
-from ..dblmscopeviewmodel import DblMscopeViewModel
 from .scalewindow import ScaleWindow
 from .slider import Slider
 from ..img.data import getico_blending_optBitmap, getico_blending_semBitmap
-from ..microscopeview import MicroscopeEmptyView, MicroscopeOpticalView, \
-    MicroscopeSEView
 
 class MicroscopeViewport(wx.Panel):
     """
@@ -49,15 +46,10 @@ class MicroscopeViewport(wx.Panel):
         """
         wx.Panel.__init__(self, *args, **kwargs)
         
+        self.view = None # the MicroscopeView that this viewport is displaying (=model)
+        
         # Keep track of this panel's pseudo focus
         self._has_focus = False
-
-        self.view = None # the MicroscopeView that this viewport is displaying (=model)
-        self.legend_panel = wx.Panel(self)
-        # put here so MicroscopeOpticalView will pick up on it
-        self.legend_panel.SetForegroundColour("#BBBBBB")
-
-        self.canvas = DblMicroscopeCanvas(self)
 
         font = wx.Font(8, wx.FONTFAMILY_DEFAULT,
                           wx.FONTSTYLE_NORMAL,
@@ -66,9 +58,12 @@ class MicroscopeViewport(wx.Panel):
         self.SetBackgroundColour("#1A1A1A")
         self.SetForegroundColour("#BBBBBB")
 
-
+        # main widget
+        self.canvas = DblMicroscopeCanvas(self)
+        
         ##### Scale window
-        self.legend_panel.SetBackgroundColour("#1A1A1A")
+        self.legend_panel = wx.Panel(self)
+        self.legend_panel.SetBackgroundColour(self.GetBackgroundColour())
         self.legend_panel.SetForegroundColour(self.GetForegroundColour())
 
         self.scaleDisplay = ScaleWindow(self.legend_panel)
@@ -76,22 +71,22 @@ class MicroscopeViewport(wx.Panel):
 
         # Merge icons will be grabbed from gui.img.data
         ##### Merge slider
-
-        self.blendingSlider = Slider(self.legend_panel,
+        # TODO should be possible to use VAConnector
+        self.mergeSlider = Slider(self.legend_panel,
                     wx.ID_ANY,
                     50,
                     (0, 100),
                     size=(100, 12),
                     style=wx.SL_HORIZONTAL | wx.SL_AUTOTICKS | wx.SL_TICKS)
 
-        self.blendingSlider.SetBackgroundColour(self.legend_panel.GetBackgroundColour())
-        self.blendingSlider.SetForegroundColour("#4d4d4d")
-        #self.blendingSlider.SetLineSize(50)
+        self.mergeSlider.SetBackgroundColour(self.legend_panel.GetBackgroundColour())
+        self.mergeSlider.SetForegroundColour("#4d4d4d")
+        #self.mergeSlider.SetLineSize(50)
 
         self.bmpIconOpt = wx.StaticBitmap(self.legend_panel, wx.ID_ANY, getico_blending_optBitmap())
         self.bmpIconSem = wx.StaticBitmap(self.legend_panel, wx.ID_ANY, getico_blending_semBitmap())
 
-        self.blendingSlider.Bind(wx.EVT_LEFT_UP, self.OnSlider)
+        self.mergeSlider.Bind(wx.EVT_LEFT_UP, self.OnSlider)
 
         ###################################
         # Optional legend widgets
@@ -119,15 +114,9 @@ class MicroscopeViewport(wx.Panel):
 
         labelSizer = wx.BoxSizer(wx.HORIZONTAL)
 
-        for c in self.opt_view.legend_controls:
-            labelSizer.Add(c, flag=wx.RIGHT, border=20)
+#        for c in self.opt_view.legend_controls:
+#            labelSizer.Add(c, flag=wx.RIGHT, border=20)
 
-        # labelSizer.Add(self.magni_label, flag=wx.RIGHT, border=20)
-        # labelSizer.Add(self.volta_label, flag=wx.RIGHT, border=20)
-        # labelSizer.Add(self.dwell_label, flag=wx.RIGHT, border=20)
-
-        # midColSizer = wx.BoxSizer(wx.VERTICAL)
-        # midColSizer.Add(labelSizer, flag=wx.ALIGN_CENTER_VERTICAL)
 
         #  | Icon | Slider | Icon |
         # +-------
@@ -136,7 +125,7 @@ class MicroscopeViewport(wx.Panel):
         self.sliderSizer = wx.BoxSizer(wx.HORIZONTAL)
 
         self.sliderSizer.Add(self.bmpIconOpt, flag=wx.RIGHT, border=3)
-        self.sliderSizer.Add(self.blendingSlider, flag=wx.EXPAND)
+        self.sliderSizer.Add(self.mergeSlider, flag=wx.EXPAND)
         self.sliderSizer.Add(self.bmpIconSem, flag=wx.LEFT, border=3)
 
         # rightColSizer = wx.BoxSizer(wx.VERTICAL)
@@ -186,53 +175,34 @@ class MicroscopeViewport(wx.Panel):
     def setView(self, view):
         """
         Set the view that this viewport is displaying/representing
+        Can be called only once, at initialisation.
         """
         # This is a kind of kludge, as it'd be best to have the viewport created
         # after the view, but they are created independently via xrc. 
+        assert(self.view is None)
+        
         self.view = view
         
-        # Center to current view position, with current mpp
+        # TODO Center to current view position, with current mpp
+        view.mpp.subscribe(self._onMPP, init=True)
         
         # set/subscribe merge ratio
-        self.ShowBlendingSlider(True) # FIXME: only if required by the view
+        view.merge_ratio.subscribe(self._onMergeRatio, init=True)
+        self.ShowMergeSlider(True) # FIXME: only if required by the view
         
-        # set/subscribe crosshair
+        # canvas handles also directly some of the view properties
+        self.canvas.setView(view)
         
-        
-        # TODO: shall this be handled directly by the canvas (or a subclass of it)?
-        # subscribe to changes lastUpdate
-        view.lastUpdate.subscribe(self._onViewImageUpdate, init=True)
-        
-        
-        
-
-    # TODO: remove => should be handled by .thumbnail of view        
-    def get_screenshot(self):
-        return self.canvas.get_screenshot()
-
-
     ################################################
     ## Panel control
     ################################################
 
-    def ShowBlendingSlider(self, show):
+    def ShowMergeSlider(self, show):
         # print self.sliderSizer.GetMinSize()
         # print self.sliderSizer.GetSize()
         self.bmpIconOpt.Show(show)
-        self.blendingSlider.Show(show)
+        self.mergeSlider.Show(show)
         self.bmpIconSem.Show(show)
-
-
-    ## END Panel control
-
-
-    ################################################
-    ## Event handling
-    ################################################
-
-    def OnChildFocus(self, evt):
-        self.SetFocus(True)
-        evt.Skip()
 
     def HasFocus(self, *args, **kwargs):
         return self._has_focus == True
@@ -246,46 +216,70 @@ class MicroscopeViewport(wx.Panel):
         else:
             self.SetBackgroundColour("#000000")
 
+    def UpdateHFW(self):
+        """ Optional. Physical width of the display"""
+        if self.view is None:
+            return
+        hfw = self.view.mpp.value * self.GetClientSize()[0]
+        label = "HFW: %sm" % units.to_string_si_prefix(hfw)
+        self.hfwDisplay.SetLabel(label)
 
-    ## END Event handling
+    ## END Panel control
 
-    def _onViewImageUpdate(self, t):
-        self.canvas.ShouldUpdateDrawing()
+    ################################################
+    ## VA handling
+    ################################################
+    
+    def _onMergeRatio(self, val):
+        # round is important because int can cause unstable value
+        # int(0.58*100) = 57
+        self.mergeSlider.SetValue(round(val * 100))
+        
+    
+    # TODO need to subscribe to view_center, or done by canvas and delete this? 
+    # We link only one way the position:
+    #  * if the user moves the view => moves the stage to the same position
+    #  * if the stage moves by itself, keep the view at the same place
+    #    (and the acquired images will not be centred anymore)
+    def _onViewCenter(self, pos):
+        if self.view is None:
+            return
+        
+#        self.view.stage_pos.value = pos
+        self.view.view_pos.value = pos
+        self.view.moveStageToView()
+
+    def _onMPP(self, mpp):
+        self.scaleDisplay.SetMPP(mpp)
+        # the MicroscopeView will send an event that the view has to be redrawn
+        
+    ################################################
+    ## GUI Event handling
+    ################################################
+
+    def OnChildFocus(self, evt):
+        # TODO need to do this:
+#        if self.view:
+#            self._microscope.currentView.value = self.view
+        # instead of this:
+        self.SetFocus(True)
+        
+        evt.Skip()
 
     def OnSlider(self, event):
         """
         Merge ratio slider
         """
-        self.viewmodel.merge_ratio.value = self.blendingSlider.GetValue() / 100.0
+        if self.view is None:
+            return
+        
+        self.view.merge_ratio.value = self.mergeSlider.GetValue() / 100.0
         event.Skip()
-
-    def avOnMergeRatio(self, val):
-        # round is important because int can cause unstable value
-        # int(0.58*100) = 57
-        self.blendingSlider.SetValue(round(val * 100))
-
-
-    # We link only one way the position:
-    #  * if the user moves the view => moves the stage to the same position
-    #  * if the stage moves by itself, keep the view at the same place
-    #    (and the acquired images will not be centred anymore)
-    def onViewCenter(self, pos):
-        self.secom_model.stage_pos.value = pos
-
-    def avOnMPP(self, mpp):
-        self.scaleDisplay.SetMPP(mpp)
-        # the MicroscopeView will send an event that the view has to be redrawn
 
     def OnSize(self, event):
         event.Skip() # process also by the parent
         self.UpdateHFW()
 
-    def UpdateHFW(self):
-        """ Optional. Physical width of the display"""
-        hfw = self.viewmodel.mpp.value * self.GetClientSize()[0]
-        label = "HFW: %sm" % units.to_string_si_prefix(hfw)
-        self.hfwDisplay.SetLabel(label)
-
-
+    ## END Event handling
 
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:

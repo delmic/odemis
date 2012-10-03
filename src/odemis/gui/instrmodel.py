@@ -744,6 +744,7 @@ class MicroscopeView(object):
         self.mpp = PositiveVA(10e-6, unit="m/px") # (10um/px => ~large view of the sample)
 
         # how much one image is displayed on the other one
+        # TODO rinze had added a non-notifying add_value. Needed?!!
         self.merge_ratio = FloatContinuous(0.3, range=[0, 1], unit="")
         self.merge_ratio.subscribe(self._onMergeRatio)
 
@@ -757,7 +758,7 @@ class MicroscopeView(object):
         self.lastUpdate = model.FloatVA(time.time(), unit="s")
 
         # a thumbnail version of what is displayed
-        self.thumbnail = VigilantAttribute(InstrumentalImage(None, None, None))
+        self.thumbnail = VigilantAttribute(None) # contains a wx.Image
 
         # TODO list of annotations to display
         self.crosshair = model.BooleanVA(True)

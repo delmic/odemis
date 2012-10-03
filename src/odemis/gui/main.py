@@ -27,7 +27,8 @@ from odemis.gui.controler.acquisition import AcquisitionController
 from odemis.gui.controler.settingspanel import SettingsSideBar
 from odemis.gui.controler.stream import StreamController
 from odemis.gui.controler.tabs import TabBar
-#from odemis.gui.controler.viewpanel import ViewSideBar
+from odemis.gui.controler.viewpanel import ViewSelector
+from odemis.gui.controler.views import ViewController
 from odemis.gui.instrmodel import OpticalBackendConnected, InstrumentalImage
 from odemis.gui.log import log, create_gui_logger
 from odemis.gui.xmlh import odemis_get_resources
@@ -38,6 +39,7 @@ import sys
 import threading
 import traceback
 import wx
+#from odemis.gui.controler.viewpanel import ViewSideBar
 
 
 
@@ -200,13 +202,17 @@ class OdemisGUIApp(wx.App):
 
             self.settings_controler = SettingsSideBar(self.main_frame,
                                                       self.microscope) # TODO use interface_model
-            #self.view_controler = ViewSideBar(self.main_frame)
-            #self.view_controler.select_view(2)
 
             #print_microscope_tree(microscope)
 
             self.stream_controller = StreamController(self.interface_model,
                                                       self.main_frame.pnl_stream)
+            self.view_controller = ViewController(self.interface_model,
+                                                      self.main_frame)
+            self.view_selector = ViewSelector(self.interface_model,
+                                              self.main_frame)
+            
+            
 #            from odemis.gui.comp.stream import FixedStreamPanelEntry
 #            # TODO should pass a stream
 #            fp = FixedStreamPanelEntry(self.main_frame.pnl_stream,

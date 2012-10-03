@@ -564,17 +564,25 @@ class ViewButton(ImageTextToggleButton):
         self.SetFocus()
         self.Refresh()
 
-    def set_overlay(self, overlay_image):
+    def set_overlay(self, image):
+        """
+        Changes the image (preview) of the button
+        image (wx.Image or None): new image. If None, a stock image is used
+        """
         log.warn("Setting overlay")
 
-        overlay_image.Rescale(70,
-                              70,
-                              wx.IMAGE_QUALITY_HIGH)
-
-        from odemis.gui.img.data import getarr_downImage
-        overlay_image = getarr_downImage()
-
-        self.overlay = wx.BitmapFromImage(overlay_image)
+        if image is None:
+            from odemis.gui.img.data import getarr_downImage
+            small_image = getarr_downImage()
+        else:
+            # FIXME: what's the right size?
+            # was 70, 70... but let's avoid constants
+            small_image = image.Scale(self.overlay_width,
+                                      self.overlay_height,
+                                      wx.IMAGE_QUALITY_HIGH)
+            
+        self.overlay = wx.BitmapFromImage(small_image)
+        self.Refresh()
 
     def DrawLabel(self, dc, width, height, dx=0, dy=0):
         ImageTextToggleButton.DrawLabel(self, dc, width, height, dx, dy)

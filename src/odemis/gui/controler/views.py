@@ -45,9 +45,13 @@ class ViewController(object):
         self._createViews()
         
         # subscribe to layout and view changes
-        self._microscope.viewLayout.subscribe(self.onViewLayout, init=True)
-        self._microscope.currentView.subscribe(self.onView, init=True)
+        self._microscope.viewLayout.subscribe(self._onViewLayout, init=True)
+        self._microscope.currentView.subscribe(self._onView, init=True)
         
+        # TODO when microscope get turned on (=state changes to on for the first time),
+        # set the default visible streams to different values for each view
+        # eg: if only SEM, and both BSD and SED => first 2 views have just one of them
+         
     def _createViews(self):
         """
         Create the different views displayed, according to the current microscope.
@@ -64,7 +68,7 @@ class ViewController(object):
                          )
                 v.setView(view)
                 i += 1
-        
+            self._microscope.currentView.value = self._viewports[0].view
         # If Optical only: all Optical
         # TODO: first one is brightfield only?
         elif not self._microscope.ebeam and self._microscope.light:
@@ -77,17 +81,16 @@ class ViewController(object):
                          )
                 v.setView(view)
                 i += 1
-        
+            self._microscope.currentView.value = self._viewports[0].view
         # If both SEM and Optical: SEM/Optical/2x combined 
         elif self._microscope.ebeam and self._microscope.light:
-            view = instrmodel.MicroscopeView("SEM" % i,
+            view = instrmodel.MicroscopeView("SEM",
                      self._microscope.stage,
                      focus0=None, # TODO: SEM focus
                      stream_classes=[instrmodel.SEMStream]
                      )
-            v.setView(view)
             self._viewports[0].setView(view)
-            view = instrmodel.MicroscopeView("Optical" % i,
+            view = instrmodel.MicroscopeView("Optical",
                      self._microscope.stage,
                      focus0=self._microscope.focus,
                      stream_classes=[instrmodel.BrightfieldStream, instrmodel.FluoStream]
@@ -105,6 +108,7 @@ class ViewController(object):
                      focus1=None, # TODO: SEM focus
                      )
             self._viewports[3].setView(view)
+            self._microscope.currentView.value = self._viewports[1].view # starts with optical
         else:
             log.warning("No known microscope configuration, creating 4 generic views")
             i = 1
@@ -115,11 +119,12 @@ class ViewController(object):
                          )
                 v.setView(view)
                 i += 1
+            self._microscope.currentView.value = self._viewports[0].view
         
-        # TODO: if chamber camera: br is just chamber
+        # TODO: if chamber camera: br is just chamber, and it's the currentView
         
         
-    def onView(self, view):
+    def _onView(self, view):
         """
         Called when another view is focused
         """ 
@@ -133,7 +138,7 @@ class ViewController(object):
         self._main_frame.pnl_tab_live.Layout() # FIXME needed?
         self._main_frame.pnl_tab_live.Thaw()
         
-    def onViewLayout(self, layout):
+    def _onViewLayout(self, layout):
         """
         Called when the view layout of the GUI must be changed
         """

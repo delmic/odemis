@@ -38,33 +38,17 @@ class DblMicroscopeCanvas(DraggableCanvas):
     """
     def __init__(self, *args, **kwargs):
         DraggableCanvas.__init__(self, *args, **kwargs)
-
-        parent = args[0]
-        try:
-            self.viewmodel = parent.viewmodel
-            # meter per "world unit"
-            # for conversion between "world pos" in the canvas and a real unit
-            # mpp == mpwu => 1 world coord == 1 px => scale == 1
-            self.mpwu = self.viewmodel.mpp.value  #m/wu
-            # Should not be changed!
-
-            self.viewmodel.mpp.subscribe(self.avOnMPP)
-            self.viewmodel.center.subscribe(self.onViewCenter, True)
-            # not necessary to call at init: other image will do it as well anyway
-            self.viewmodel.images[0].subscribe(self.avOnImage)
-            self.viewmodel.images[1].subscribe(self.avOnImage, True)
-            self.viewmodel.merge_ratio.subscribe(self.avOnMergeRatio, True)
-            self.viewmodel.crosshair.subscribe(self.avOnCrossHair, True)
-        except AttributeError:
-            pass
+        self.view = None
 
         self.Bind(wx.EVT_MOUSEWHEEL, self.OnWheel)
 
         # TODO: If it's too resource consuming, which might want to create just our own thread
         # FIXME: "stop all axes" should also cancel the next timer
         self._moveFocusLock = threading.Lock()
-        self._moveFocusDistance = 0
-        self._moveFocusTimer = wx.PyTimer(self.moveFocus)
+        self._moveFocusDistance = [0, 0]
+        # TODO deduplicate!
+        self._moveFocus0Timer = wx.PyTimer(self._moveFocus0)
+        self._moveFocus1Timer = wx.PyTimer(self._moveFocus1)
 
 #        self.WorldOverlays.append(CrossHairOverlay("Blue", CROSSHAIR_SIZE, (-10,-10))) # debug
 #        self.WorldOverlays.append(CrossHairOverlay("Red", CROSSHAIR_SIZE, (10,10))) # debug
@@ -72,6 +56,45 @@ class DblMicroscopeCanvas(DraggableCanvas):
         #self.SetImage(0, gettest_patternImage(), (0.0, 0.0), 0.5)
         #self.SetImage(1, gettest_patternImage(), (0.0, 0.0), 0.5)
 
+    def setView(self, view):
+        """
+        Set the view that this canvas is displaying/representing
+        Can be called only once, at initialisation.
+        """
+        # This is a kind of kludge, see mscviewport.MicroscopeViewport for details 
+        assert(self.view is None)
+        
+        self.view = view
+
+        # meter per "world unit"
+        # for conversion between "world pos" in the canvas and a real unit
+        # mpp == mpwu => 1 world coord == 1 px => scale == 1
+        self.mpwu = self.view.mpp.value  #m/wu
+        # Should not be changed! 
+        # FIXME!!
+
+        self.view.mpp.subscribe(self._onMPP)
+        self.view.crosshair.subscribe(self._onCrossHair, init=True)
+        self.view.view_pos.subscribe(self._onViewCenter, init=True)
+        
+        # any image changes
+        view.lastUpdate.subscribe(self._onViewImageUpdate, init=True)
+    
+    def _onViewImageUpdate(self, t):
+        self.ShouldUpdateDrawing()
+        # TODO canvas should update thumbnail from time to time
+        # => override 
+
+    def get_screenshot(self):
+        bitmap = wx.EmptyBitmap(*self.ClientSize)
+
+        memory = wx.MemoryDC()
+        memory.SelectObject(bitmap)
+        #set pen, do drawing.
+        memory.SelectObject(wx.NullBitmap)
+
+        return wx.ImageFromBitmap(bitmap)
+        
     def onViewCenter(self, value):
         """
         An external component asks us to move the view
@@ -84,6 +107,7 @@ class DblMicroscopeCanvas(DraggableCanvas):
         Update the position of the buffer on the world
         pos (2-tuple float): the world coordinates of the center of the buffer
         """
+        # FIXME
         DraggableCanvas.ReCenterBuffer(self, pos)
 
         new_pos = self.world_pos_requested
@@ -94,55 +118,54 @@ class DblMicroscopeCanvas(DraggableCanvas):
         """
         called when the extra dimensions are modified (right drag)
         axis (0<int): the axis modified
-            0 => right vertical
-            1 => right horizontal
+            0 => X
+            1 => Y
         shift (int): relative amount of pixel moved
             >0: toward up/right
         """
-        # we link axis 1 (up/down) to optical focus
-        if axis == 1 and self.viewmodel.opt_focus:
+        focus = [self.view.focus0, self.view.focus1][axis]
+        if focus is not None:
             # conversion: 1 unit => 0.1 μm (so a whole screen, ~44000u, is a couple of mm)
             # TODO this should be adjusted by the lens magnification:
             # the higher the magnification, the smaller is the change (=> proportional ?)
             # negative == go up == closer from the sample
             val = 0.1e-6 * shift # m
-            assert(abs(val) < 0.01) # never move by 1 cm
+            assert(abs(val) < 0.01) # a move of 1 cm is a clear sign of bug
 
-            self.queueMoveFocus(val)
+            self.queueMoveFocus(axis, val)
 
-    def get_screenshot(self):
-        bitmap = wx.EmptyBitmap(*self.ClientSize)
-
-        memory = wx.MemoryDC()
-        memory.SelectObject(bitmap)
-        #set pen, do drawing.
-        memory.SelectObject(wx.NullBitmap)
-
-        return wx.ImageFromBitmap(bitmap)
-
-    def queueMoveFocus(self, shift, period = 0.1):
+    def queueMoveFocus(self, axis, shift, period = 0.1):
         """
         Move the focus, but at most every period, to avoid accumulating
         many slow small moves.
+        axis (0,1): axis/focus number
         shift (float): distance of the focus move
         period (second): maximum time to wait before it will be moved
         """
         # update the complete move to do
         with self._moveFocusLock:
-            self._moveFocusDistance += shift
+            self._moveFocusDistance[axis] += shift
 
         # start the timer if not yet started
-        if not self._moveFocusTimer.IsRunning():
-            self._moveFocusTimer.Start(period * 1000.0, oneShot=True)
+        timer = [self._moveFocus0Timer, self._moveFocus1Timer][axis]
+        if not timer.IsRunning():
+            timer.Start(period * 1000.0, oneShot=True)
 
-    def moveFocus(self):
+    def _moveFocus0(self):
         with self._moveFocusLock:
-            shift = self._moveFocusDistance
-            self._moveFocusDistance = 0
-        log.debug("Moving focus by %f μm", shift * 1e6)
-        self.viewmodel.opt_focus.moveRel({"z": shift})
+            shift = self._moveFocusDistance[0]
+            self._moveFocusDistance[0] = 0
+        log.debug("Moving focus0 by %f μm", shift * 1e6)
+        self.view.focus0.moveRel({"z": shift})
 
-    def avOnCrossHair(self, activated):
+    def _moveFocus1(self):
+        with self._moveFocusLock:
+            shift = self._moveFocusDistance[1]
+            self._moveFocusDistance[1] = 0
+        log.debug("Moving focus1 by %f μm", shift * 1e6)
+        self.view.focus1.moveRel({"z": shift})
+
+    def _onCrossHair(self, activated):
         """
         Activate or disable the display of a cross in the middle of the view
         activated = true if the cross should be displayed
@@ -164,10 +187,6 @@ class DblMicroscopeCanvas(DraggableCanvas):
                 self.ViewOverlays.remove(ch)
                 self.Refresh(eraseBackground=False)
 
-    def avOnMergeRatio(self, val):
-        self.merge_ratio = val
-        self.ShouldUpdateDrawing()
-
     def Zoom(self, inc):
         """
         Zoom by the given factor
@@ -175,13 +194,14 @@ class DblMicroscopeCanvas(DraggableCanvas):
         ex:  # 1 => *2 ; -1 => /2; 2 => *4...
         """
         scale = 2.0 ** inc
-        self.viewmodel.mpp.value /= scale
+        self.view.mpp.value /= scale
 
-    def avOnMPP(self, mpp):
+    def _onMPP(self, mpp):
         self.scale = self.mpwu / mpp
         self.ShouldUpdateDrawing()
 
     def avOnImage(self, image):
+        # FIXME: use stream.getImage
         for i in range(len(self.Images)):
             iim = self.viewmodel.images[i].value
             if iim.image:
@@ -202,7 +222,9 @@ class DblMicroscopeCanvas(DraggableCanvas):
             change *= 0.2 # softer
 
         if event.CmdDown(): # = Ctrl on Linux/Win or Cmd on Mac
-            self.viewmodel.merge_ratio.add_value(change * 0.1)
+            ratio = self.view.merge_ratio.value + (change * 0.1) 
+            ratio = sorted(self.view.merge_ratio.range + (ratio,))[1] # clamp
+            self.view.merge_ratio.value = ratio
         else:
             self.Zoom(change)
 
