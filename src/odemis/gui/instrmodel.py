@@ -45,7 +45,7 @@ class SECOMModel(object):
         self.stage_pos = VigilantAttribute((0, 0), setter=self.avOnStagePos) # m,m
 
         # FIXME: maybe could go into (sub)classes like OpticalEmitter, SEDetector...
-        self.optical_emt_wavelength = VigilantAttribute(488, unit="nm") 
+        self.optical_emt_wavelength = VigilantAttribute(488, unit="nm")
         self.optical_det_wavelength = VigilantAttribute(507, unit="nm")
         self.optical_det_exposure_time = VigilantAttribute(1.0) # s
         self.optical_det_image = VigilantAttribute(InstrumentalImage(None, None, None))
@@ -116,11 +116,11 @@ class OpticalBackendConnected(SECOMModel):
         # self._onPhysicalStagePos(self.stage.position.value)
         # just setting the raw value should be fine
         self.stage_pos.value = self.prev_pos
-        
+
         # direct linking
         self.optical_det_exposure_time = self.camera.exposureTime
         self.optical_depth = self.camera.shape[2]
-        
+
         # get notified when brightness/contrast is updated
         self.optical_auto_bc.subscribe(self.onBrightnessContrast)
         self.optical_contrast.subscribe(self.onBrightnessContrast)
@@ -129,7 +129,7 @@ class OpticalBackendConnected(SECOMModel):
     def turnOn(self):
         # TODO turn on the light
         self.camera.data.subscribe(self.onNewCameraImage)
-        
+
     def turnOff(self):
         # TODO turn of the light
         # TODO forbid move in this mode (or just forbid move in the canvas if no stream?)
@@ -142,13 +142,13 @@ class OpticalBackendConnected(SECOMModel):
     def onBrightnessContrast(self, unused):
         # called whenever brightness/contrast changes
         # => needs to recompute the image (but not too often, so we do it in a timer)
-        
+
         # is there any image to update?
         if self.optical_det_raw is None:
             return
         # TODO: in timer
         self.onNewCameraImage(None, self.optical_det_raw)
-        
+
     def onNewCameraImage(self, dataflow, data):
         if self.optical_auto_bc.value:
             brightness = None
@@ -222,16 +222,16 @@ class InstrumentalImage(object):
     Contains an RGB bitmap and meta-data about where it is taken
     """
     # It'd be best to have it as a subclass of wx.Image, but wxPython has many
-    # functions which return a wx.Image. We'd need to "override" them as well. 
+    # functions which return a wx.Image. We'd need to "override" them as well.
 
     def __init__(self, im, mpp, center, rotation=0.0):
         """
         im (None or wx.Image)
         mpp (None or float>0): meters per pixel
         center (None or 2-tuple float): position (in meters) of the center of the image
-        rotation (float): rotation in degrees (i.e., 180 = upside-down) 
-        Note: When displayed, the scaling, translation, and rotation have to be 
-        applied "independently": scaling doesn't affect the translation, and 
+        rotation (float): rotation in degrees (i.e., 180 = upside-down)
+        Note: When displayed, the scaling, translation, and rotation have to be
+        applied "independently": scaling doesn't affect the translation, and
         rotation is applied from the center of the image.
         """
         self.image = im
@@ -258,9 +258,9 @@ VIEW_LAYOUT_FULLSCREEN = 2 # Fullscreen view (not yet supported)
 class MicroscopeGUI(object):
     """
     Represent a microscope directly for a graphical user interface.
-    Provides direct reference to the HwComponents and 
+    Provides direct reference to the HwComponents and
     """
-    
+
     def __init__(self, microscope):
         """
         microscope (model.Microscope): the root of the HwComponent tree provided by the back-end
@@ -269,13 +269,13 @@ class MicroscopeGUI(object):
         # These are either HwComponents or None (if not available)
         self.ccd = None
         self.stage = None
-        self.focus = None # actuator to change the camera focus 
+        self.focus = None # actuator to change the camera focus
         self.light = None
         self.light_filter = None # emission light filter for fluorescence microscopy
         self.ebeam = None
         self.sed = None # secondary electron detector
         self.bsd = None # back-scatter electron detector
-        
+
         for d in microscope.detectors:
             if d.role == "ccd":
                 self.ccd = d
@@ -322,17 +322,17 @@ class MicroscopeGUI(object):
         self.views = [] # MicroscopeViews available, order matters (handled by ViewController)
         self.currentView = VigilantAttribute(None) # The MicroscopeView currently focused
         # the view layout
-        # TODO maybe start with just one view 
-        self.viewLayout = model.IntEnumerated(VIEW_LAYOUT_22, 
+        # TODO maybe start with just one view
+        self.viewLayout = model.IntEnumerated(VIEW_LAYOUT_22,
                   choices= [VIEW_LAYOUT_ONE, VIEW_LAYOUT_22, VIEW_LAYOUT_FULLSCREEN])
-         
-        self.opticalState = model.IntEnumerated(STATE_OFF, 
+
+        self.opticalState = model.IntEnumerated(STATE_OFF,
                                 choices=[STATE_OFF, STATE_ON, STATE_PAUSE])
         self.opticalState.subscribe(self.onOpticalState)
-        self.emState = model.IntEnumerated(STATE_OFF, 
+        self.emState = model.IntEnumerated(STATE_OFF,
                                 choices=[STATE_OFF, STATE_ON, STATE_PAUSE])
         self.emState.subscribe(self.onEMState)
-                
+
     def stopMotion(self):
         """
         Stops immediately every axis
@@ -355,76 +355,76 @@ class MicroscopeGUI(object):
             # the image acquisition from the camera is handled solely by the streams
             if self.light:
                 self.light.power.value = self._light_power_on
-    
+
     def onEMState(self, state):
         if state == STATE_OFF:
             # TODO turn off really the ebeam and detector
             pass
         elif state == STATE_PAUSE:
-            # TODO blank the ebeam 
+            # TODO blank the ebeam
             pass
         elif state == STATE_ON:
             raise NotImplementedError("Does not know how to switch on e-beam")
-    
-    # TODO who's in charge of switching the active stream which share the same 
+
+    # TODO who's in charge of switching the active stream which share the same
     #   detector? => maybe a special controller, or the stream controller?
-    
+
     # TODO dye database
     # name (for the user only)
     # excitation wl (used to control the hardware)
     # emission wl (used to control the hardware)
     # ?official full excitation/emission spectra? (for user only)
-    
-    
-    
+
+
+
     # viewport controller (to be merged with stream controller?)
     # Creates the 4 microscope views at init, with the right names, depending on
     #   the available microscope hardware.
-    # (The 4 viewports canvas are already created, the main interface connect 
+    # (The 4 viewports canvas are already created, the main interface connect
     #   them to the view, by number)
-    # In charge of switching between 2x2 layout and 1 layout. 
+    # In charge of switching between 2x2 layout and 1 layout.
     # In charge of updating the view focus
     # In charge of updating the view thumbnails???
     # In charge of ensuring they all have same zoom and center position
     # In charge of applying the toolbar actions on the right viewport
     # in charge of changing the "hair-cross" display
-    
-    
-    
+
+
+
     # Note about image acquisition:
     # when image acquisition window appears:
     # * current view is used a template for StreamTree
     # * current settings are read and converted according to the current preset
-    # * live-acquisition is stopped in them main viewports => instead it is used to update the preview window 
+    # * live-acquisition is stopped in them main viewports => instead it is used to update the preview window
     # Then the user can
     # * change StreamTree (different stream, different merge operations): independent of live view
-    # * change stream settings (brightness/contrast/tint) => also affects the steams in the live view 
+    # * change stream settings (brightness/contrast/tint) => also affects the steams in the live view
     # * change settings to the one in live view, or reset all of them to the preset, or put a separate value (without affecting the live-view settings)
     #   => we need to be able to freeze/unfreeze widgets interfacing the VA's
     # During image acquisition:
     # * everything stays frozen
     # * streams (detector/emitter) can get activated/deactivated in any order
-    
+
 # almost every public attribute of the model object is exported as a VA, in order
-# to have the GUI automatically modify and update it. 
+# to have the GUI automatically modify and update it.
 
 class Stream(object):
-    WARNING_EXCITATION_NOT_OPT="""The excitation wavelength selected cannot be 
+    WARNING_EXCITATION_NOT_OPT="""The excitation wavelength selected cannot be
     optimally generated by the hardware."""
-    WARNING_EXCITATION_IMPOSSIBLE="""The excitation wavelength selected cannot be 
+    WARNING_EXCITATION_IMPOSSIBLE="""The excitation wavelength selected cannot be
     generated by the hardware."""
-    WARNING_EMISSION_NOT_OPT="""The emission wavelength selected cannot be 
+    WARNING_EMISSION_NOT_OPT="""The emission wavelength selected cannot be
     optimally detected by the hardware."""
-    WARNING_EMISSION_IMPOSSIBLE="""The emission wavelength selected cannot be 
+    WARNING_EMISSION_IMPOSSIBLE="""The emission wavelength selected cannot be
     detected by the hardware."""
-    
+
     """
     Represents a stream: the data coming from a detector's dataflow, couples
-     with a given emitter active 
+     with a given emitter active
     (or several emitters, if a subclass implements it)
     Basically it handles acquiring the data from the hardware and renders it as
     an InstrumentalImage with the given image transformation.
-    
+
     This is an abstract class, unless the emitter doesn't need any configuration
     (always on, with the right settings).
     """
@@ -433,7 +433,7 @@ class Stream(object):
         name (string): user-friendly name of this stream
         detector (Detector): the detector which has the dataflow
         dataflow (Dataflow): the dataflow from which to get the data
-        emitter (Emitter): the emitter 
+        emitter (Emitter): the emitter
         """
         self.name = model.StringVA(name)
         # this should not be accessed directly
@@ -443,15 +443,15 @@ class Stream(object):
         self.raw = [] # list of DataArray received and used to generate the image
         # the most important attribute
         self.image = VigilantAttribute(InstrumentalImage(None, None, None))
-        
-        # TODO should maybe to 2 methods activate/deactivate to explicitly 
+
+        # TODO should maybe to 2 methods activate/deactivate to explicitly
         # start/stop acquisition, and one VA "updated" to stated that the user
         # want this stream updated (as often as possible while other streams are
         # also updated)
         self.updated = model.BooleanVA(False) # Whether the user wants the stream to be updated
         self.active = model.BooleanVA(False)
         self.active.subscribe(self.onActive)
-        
+
         if self._detector:
             self._depth = self._detector.shape[2] # used for B/C adjustment
         self.auto_bc = model.BooleanVA(True) # whether to use auto brightness & contrast
@@ -462,7 +462,7 @@ class Stream(object):
         self.auto_bc.subscribe(self.onBrightnessContrast)
         self.contrast.subscribe(self.onBrightnessContrast)
         self.brightness.subscribe(self.onBrightnessContrast)
-        
+
         # list of warnings to display to the user
         # TODO should be a set
         self.warnings = model.ListVA([]) # should only contains WARNING_*
@@ -474,7 +474,7 @@ class Stream(object):
         """
         new_warnings = set(self.warnings.value) - set(warnings)
         self.warnings.value = list(new_warnings)
-        
+
     def _addWarning(self, warning):
         """
         Add a warning if not already present
@@ -482,27 +482,27 @@ class Stream(object):
         """
         new_warnings = set(self.warnings.value).add(warning)
         self.warnings.value = list(new_warnings)
-        
+
     def onActive(self, active):
         # Normally is called only the value _changes_
 
         # TODO: check that updated is true
         # and automatically deactivate when updated goes to false?
-            
- 
-        # TODO how to turn off the other lights when not used? => Do we need to 
+
+
+        # TODO how to turn off the other lights when not used? => Do we need to
         # distinguish between "really physically active" and "being updated from
         # time to time" (the former implying the latter)
-        
+
         if active:
             if not self.updated.value:
                 log.warning("Trying to activate stream while it's not supposed to update")
             self._dataflow.subscribe(self.onNewImage)
         else:
             self._dataflow.unsubscribe(self.onNewImage)
-            
+
     # No __del__: subscription should be automatically stopped when the object
-    # disappears, and the user should stop the update first anyway. 
+    # disappears, and the user should stop the update first anyway.
 
     def _updateImage(self, tint=(255, 255, 255)):
         """
@@ -516,7 +516,7 @@ class Stream(object):
         else:
             brightness = self.brightness.value / 100.
             contrast = self.contrast.value / 100.
-        
+
         im = DataArray2wxImage(data, self._depth, brightness, contrast, tint)
         im.InitAlpha() # it's a different buffer so useless to do it in numpy
 
@@ -534,17 +534,17 @@ class Stream(object):
             mpp = data.metadata[MD_SENSOR_PIXEL_SIZE][0] / 10.
 
         self.image.value = InstrumentalImage(im, mpp, pos)
-        
+
     def onBrightnessContrast(self, unused):
         # called whenever brightness/contrast changes
         # => needs to recompute the image (but not too often, so we do it in a timer)
-        
+
         # is there any image to update?
         if not len(self.raw):
             return
         # TODO: in timer
         self._updateImage()
-        
+
     def onNewImage(self, dataflow, data):
         self.raw[0] = data
         self._updateImage()
@@ -554,20 +554,20 @@ class SEMStream(Stream):
     Stream containing images obtained via Scanning electron microscope.
     It basically knows how to activate the scanning electron and the detector.
     """
-    
+
     def onActive(self, active):
         if active:
             # TODO if can blank => unblank
             pass
         Stream.onActive(self, active)
-    
+
 
 class BrightfieldStream(Stream):
     """
     Stream containing images obtained via optical brightfield illumination.
     It basically knows how to select white light and disable any filter.
     """
-    
+
     def onActive(self, active):
         if active:
             self._setLightExcitation()
@@ -575,12 +575,12 @@ class BrightfieldStream(Stream):
             #  or should it be disabled automatically by the other streams not using it?
 #            self._setFilterEmission()
         Stream.onActive(self, active)
-    
+
 #    def _setFilterEmission(self):
 #        if not self._filter.band.readonly:
 #            raise NotImplementedError("Do not know how to change filter band")
-        
-                
+
+
     def _setLightExcitation(self):
         # TODO how to select white light??? We need a brightlight hardware?
         # Turn on all the sources? Does this always mean white?
@@ -588,15 +588,15 @@ class BrightfieldStream(Stream):
         # different from the normal white spectrum
         em = [1 for e in self._emitter.emissions.value]
         self._emitter.emissions.value = em
-        
-        
+
+
 class FluoStream(Stream):
     """
     Stream containing images obtained via epi-fluorescence.
-    It basically knows how to select the right emission/filtered wavelengths, 
+    It basically knows how to select the right emission/filtered wavelengths,
     and how to taint the image.
     """
-    
+
     def __init__(self, name, detector, dataflow, emitter, filter):
         """
         name (string): user-friendly name of this stream
@@ -607,7 +607,7 @@ class FluoStream(Stream):
         """
         Stream.__init__(self, name, detector, dataflow, emitter)
         self._filter = filter
-        
+
         # This is what is displayed to the user
         # TODO what should be nice default value of the light and filter?
         exc_range = [min([s[0] for s in emitter.spectra.value]),
@@ -616,13 +616,13 @@ class FluoStream(Stream):
         self.excitation.subscribe(self.onExcitation)
         em_range = [min([s[0] for s in filter.band.value]),
                     max([s[1] for s in filter.band.value])]
-        self.emission = model.FloatContinuous(507e-9, range=em_range, unit="m") 
+        self.emission = model.FloatContinuous(507e-9, range=em_range, unit="m")
         self.emission.subscribe(self.onEmission)
-        
+
         # colouration of the image
         defaultTint = util.conversion.wave2rgb(self.emission.value)
         self.tint = VigilantAttribute(defaultTint, unit="RGB")
-         
+
     def onActive(self, active):
         # TODO update Emission or Excitation only if the stream is active
         if active:
@@ -632,15 +632,15 @@ class FluoStream(Stream):
 
     def _updateImage(self):
         Stream._updateImage(self, self.tint.value)
-      
+
     def onExcitation(self, value):
         if self.active.value:
             self._setLightExcitation()
-    
+
     def onEmission(self, value):
         if self.active.value:
             self._setFilterEmission()
-            
+
     def _setFilterEmission(self):
         wl = self.emission.value
         if self._filter.band.readonly:
@@ -653,15 +653,15 @@ class FluoStream(Stream):
             self._removeWarnings([Stream.WARNING_EMISSION_IMPOSSIBLE,
                                   Stream.WARNING_EMISSION_NOT_OPT])
             if not fitting:
-                log.warning("Emission wavelength %s doesn't fit the filter", 
+                log.warning("Emission wavelength %s doesn't fit the filter",
                             readable_str(wl, "m"))
                 self._addWarning(Stream.WARNING_EMISSION_IMPOSSIBLE)
                 # TODO detect no optimal situation (within 10% band of border?)
             return
         raise NotImplementedError("Do not know how to change filter band")
-        
+
     def _setLightExcitation(self):
-        wl = self.excitation.value 
+        wl = self.excitation.value
         def fitting(wl, spec):
             """
             returns a big number if spec fits to wl
@@ -671,22 +671,22 @@ class FluoStream(Stream):
             # is it included?
             if spec[0] > wl or wl < spec[4]:
                 return 0
-            
+
             distance = abs(wl - spec[2]) # distance to 100%
             if distance == 0:
                 return float("inf")
             return 1. / distance
-            
+
         spectra = self._emitter.spectra.value
-        # arg_max with fitting function as key 
+        # arg_max with fitting function as key
         best = max(spectra, key=lambda x: fitting(wl, x))
         i = spectra.index(best)
-        
+
         # create an emissions with only one source active
         emissions = [0] * len(spectra)
         emissions[i] = 1
         self._emitter.emissions.value = emissions
-        
+
         # set warnings if necessary
         self._removeWarnings([Stream.WARNING_EXCITATION_IMPOSSIBLE,
                               Stream.WARNING_EXCITATION_NOT_OPT])
@@ -697,7 +697,7 @@ class FluoStream(Stream):
         elif wl < best[1] or wl > best[3]: # outside of main 50% band
             self._addWarning(Stream.WARNING_EXCITATION_NOT_OPT)
 
-    
+
 class MicroscopeView(object):
     """
     Represents a view from a microscope, and ways to alter it.
@@ -706,62 +706,62 @@ class MicroscopeView(object):
     to other objects (e.g., the canvas) to ask the StreamTree for its latest
     image (the main goal of this scheme is to avoid computation when not needed).
     Similarly, the thumbnail is never automatically recomputed, but other
-    objects can update it.  
+    objects can update it.
     """
-    
+
     # TODO we need to differenciate views according to what they should be showing
     # to the user (in terms of streams):
     #  * inherit (with nothing inside each subclass)
     #  * special attribute with list of streams classes this view is for.
-    
+
     def __init__(self, name, stage, focus0=None, focus1=None, stream_classes=None):
         """
         name (string): user-friendly name of the view
         stage (Actuator): actuator with two axes: x and y
         focus0 (Actuator): actuator with one axis: z. Can be None
         focus1 (Actuator): actuator with one axis: z. Can be None
-        Focuses 0 and 1 are modified when changing focus respectively along the 
+        Focuses 0 and 1 are modified when changing focus respectively along the
            X and Y axis.
         stream_classes (None, or list of classes): all subclasses that the streams
-          in this view can show (restriction is not technical, only for the user) 
+          in this view can show (restriction is not technical, only for the user)
         """
         self.name = model.StringVA(name)
-        self.stream_classes = stream_classes or [Stream] 
+        self.stream_classes = stream_classes or [Stream]
         self._stage = stage
         self._focus = [focus0, focus1]
-        
+
         # The real stage position, to be modified via moveStage()
         # TODO: shall we provide a VA as a simplified view of the stage.position which can move?
         self.stage_pos = stage.position
         stage.position.subscribe(self.onStagePos)
-        
+
         # the current center of the view, which might be different from the stage
         # TODO: we might need to have it on the MicroscopeGUI, if all the viewports must display the same location
         pos = self.stage_pos.value
         self.view_pos = model.ListVA((pos["x"], pos["y"]), unit="m")
-        
+
         # current density (meter per pixel, ~ scale/zoom level)
         self.mpp = PositiveVA(10e-6, unit="m/px") # (10um/px => ~large view of the sample)
-    
+
         # how much one image is displayed on the other one
         self.merge_ratio = FloatContinuous(0.3, range=[0, 1], unit="")
         self.merge_ratio.subscribe(self._onMergeRatio)
-        
+
         # Streams to display
         # Note: use addStream/removeStream for simple modifications
-        self.streams = StreamTree(kwargs={"merge": self.merge_ratio.value}) 
-        
+        self.streams = StreamTree(kwargs={"merge": self.merge_ratio.value})
+
         # Last time the image of the view was changed. It's actually mostly
         # a trick to allow other parts of the GUI to know when the (theoretical)
         # composited image has changed.
         self.lastUpdate = model.FloatVA(time.time(), unit="s")
-        
+
         # a thumbnail version of what is displayed
         self.thumbnail = VigilantAttribute(InstrumentalImage(None, None, None))
-        
+
         # TODO list of annotations to display
         self.crosshair = model.BooleanVA(True)
-    
+
     def moveStageToView(self):
         """
         move the stage to the current view_pos
@@ -786,10 +786,10 @@ class MicroscopeView(object):
         # TODO: avoid it to move the view when the user is dragging the view
         #  => might require cleverness
         self.view_pos = model.ListVA((pos["x"], pos["y"]), unit="m")
-    
+
     def addStream(self, stream):
         """
-        Add a stream to the view. It takes care of updating the StreamTree 
+        Add a stream to the view. It takes care of updating the StreamTree
         according to the type of stream.
         stream (Stream): stream to add
         Raises:
@@ -798,18 +798,18 @@ class MicroscopeView(object):
         # check if the stream is already present
         if stream in self.streams.getStreams():
             raise KeyError("Stream %s is already present.", stream.name)
-        
+
         # Find out where the stream should go in the streamTree
         # FIXME: manage sub-trees, with different merge operations
         # For now we just add it to the list of streams, with the only merge operation possible
         self.streams.streams.append[stream]
-        
+
         # subscribe to the stream's image
         stream.image.subscribe(self._onNewImage)
-        
+
         # let everyone know that the view has changed
         self.lastUpdate.value = time.time()
-        
+
     def removeStream(self, stream):
         """
         Remove a stream from the view. It takes care of updating the StreamTree.
@@ -819,14 +819,14 @@ class MicroscopeView(object):
         """
         # Stop listening to the stream changes
         stream.image.unsubscribe(self._onNewImage)
-        
+
         # remove stream for the StreamTree()
         # TODO handle more complex trees
         self.streams.streams.remove[stream]
-        
+
         # let everyone know that the view has changed
         self.lastUpdate.value = time.time()
-    
+
     def _onNewImage(self, im):
         """
         Called when one stream has its image updated
@@ -841,40 +841,40 @@ class MicroscopeView(object):
         # This actually modifies the root operator of the stream tree
         # It has effect only if the operator can do something with the "merge" argument
         self.streams.kwargs["merge"] = ratio
-        
+
         # just let everyone that the composited image has changed
         self.lastUpdate.value = time.time()
-        
+
 class StreamTree(object):
     """
     Object which contains a set of streams, and how they are merged to appear
-    as one image. It's a tree which has one stream per leaf and one merge 
-    operation per node. => recursive structure (= A tree is just a node with 
+    as one image. It's a tree which has one stream per leaf and one merge
+    operation per node. => recursive structure (= A tree is just a node with
     a merge method and a list of subnodes, either streamtree as well, or stream)
     """
-    
-    def __init__(self, operator=None, streams=None, kwargs):
+
+    def __init__(self, operator=None, streams=None, **kwargs):
         """
-        operator (callable): a function that takes a list of InstrumentalImage in the 
+        operator (callable): a function that takes a list of InstrumentalImage in the
             same order as the streams are given, and the additional arguments and
             returns one InstrumentalImage.
-            By default operator is an average function.   
+            By default operator is an average function.
         streams (list of Streams or StreamTree): a list of streams, or StreamTrees.
             If a StreamTree is provided, its outlook is first computed and then
             passed as an InstrumentalImage.
         kwargs: any argument to be given to the operator function
         """
         self.operator = operator or StreamTree.Average
-        
+
         streams = streams or []
         assert(isinstance(streams, list))
         for s in streams:
             assert(isinstance(s, (Stream, StreamTree)))
         self.streams = streams
-        
+
         self.kwargs = kwargs
-        
-    
+
+
     def getStreams(self):
         """
         Return the set of streams used to compose the picture. IOW, the leaves
@@ -886,18 +886,18 @@ class StreamTree(object):
                 leaves.add(s)
             elif isinstance(s, StreamTree):
                 leaves += s.getStreams()
-    
+
         return leaves
-    
+
     def getImage(self):
         """
         Returns an InstrumentalImage composed of all the current stream images.
         Precisely, it returns the output of a call to operator.
         """
         # TODO: probably not so useful function, need to see what canvas
-        #  it will likely need as argument a wx.Bitmap, and view rectangle 
+        #  it will likely need as argument a wx.Bitmap, and view rectangle
         #  that will define where to save the result
-        
+
         # create the arguments list for operator
         images = []
         for s in self.streams:
@@ -905,9 +905,9 @@ class StreamTree(object):
                 images.append(s.image.value)
             elif isinstance(s, StreamTree):
                 images.append(s.getImage())
-        
+
         return self.operator(images, **self.kwargs)
-        
+
     def getRawImages(self):
         """
         Returns a list of all the raw images used to create the final image
@@ -919,7 +919,7 @@ class StreamTree(object):
             lraw.extend(s.raw)
 
         return lraw
-    
+
     @staticmethod
     def Average(images):
         """
@@ -935,6 +935,6 @@ class PositiveVA(VigilantAttribute):
     """
     def _check(self, value):
         assert(0.0 < value)
-        
-        
+
+
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:
