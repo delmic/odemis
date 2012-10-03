@@ -27,7 +27,7 @@ from odemis.gui.controler.acquisition import AcquisitionController
 from odemis.gui.controler.settingspanel import SettingsSideBar
 from odemis.gui.controler.stream import StreamController
 from odemis.gui.controler.tabs import TabBar
-from odemis.gui.controler.viewpanel import ViewSideBar
+#from odemis.gui.controler.viewpanel import ViewSideBar
 from odemis.gui.instrmodel import OpticalBackendConnected, InstrumentalImage
 from odemis.gui.log import log, create_gui_logger
 from odemis.gui.xmlh import odemis_get_resources
@@ -75,7 +75,7 @@ class OdemisGUIApp(wx.App):
 
         try:
             self.microscope = model.getMicroscope()
-            self.interface_model = instrmodel.MicroscopeGUI(self.microscope) 
+            self.interface_model = instrmodel.MicroscopeGUI(self.microscope)
             self.secom_model = OpticalBackendConnected(self.microscope) # XXX remove
         except (IOError, Pyro4.errors.CommunicationError), e:
             log.exception("oei")
@@ -200,7 +200,7 @@ class OdemisGUIApp(wx.App):
 
             self.settings_controler = SettingsSideBar(self.main_frame,
                                                       self.microscope) # TODO use interface_model
-            self.view_controler = ViewSideBar(self.main_frame)
+            #self.view_controler = ViewSideBar(self.main_frame)
             #self.view_controler.select_view(2)
 
             #print_microscope_tree(microscope)
