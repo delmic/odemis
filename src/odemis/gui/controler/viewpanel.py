@@ -52,7 +52,7 @@ class ViewSelector(object):
         # TODO buttons should have the name of the view as label next to the image
 
         # subscribe to layout and view changes
-        self._microscope.viewLayout.subscribe(self._onViewLayout, init=True)
+        self._microscope.viewLayout.subscribe(self._onView, init=True)
         self._microscope.currentView.subscribe(self._onView, init=True)
 
         # subscribe to thumbnails
@@ -72,6 +72,10 @@ class ViewSelector(object):
         
         # subscribe to change of name
         for btn, vp in self.buttons.items():
+            if not vp: # 2x2 layout 
+                btn.SetLabel("All") # TODO: is it good name?
+                continue
+            
             def onName(name):
                 # FIXME: for now the buttons have a separate label next to them
                 # probably need a way to link these labels to the button
@@ -82,7 +86,7 @@ class ViewSelector(object):
         
     def toggleButtonForView(self, view):
         """
-        Toggle the button which represents the view
+        Toggle the button which represents the view and untoggle the other ones
         view (MicroscopeView or None): the view, or None if the first button 
           (2x2) is to be toggled
         Note: it does _not_ change the view
@@ -92,6 +96,10 @@ class ViewSelector(object):
             if (vp is None and view is None) or (vp and vp.view == view):
                 b.SetToggle(True)
             else:
+                if vp:
+                    log.debug("untoggling button of view %s", vp.view.name.value)
+                else:
+                    log.debug("untoggling button of view All")
                 b.SetToggle(False)
     
     def _update22Thumbnail(self, im):
@@ -125,26 +133,19 @@ class ViewSelector(object):
         
     def _onView(self, view):
         """
-        Called when another view is focused
+        Called when another view is focused, or viewlayout is changed
         """
+        # TODO when changing from 2x2 to a view non focused, it will be called
+        # twice in row. => optimise to not do it twice
+        
         # if layout is 2x2 => do nothing (first button is selected by _onViewLayout)
         if self._microscope.viewLayout.value == instrmodel.VIEW_LAYOUT_22:
-            return
+            # otherwise (layout is 2x2) => select the first button
+            self.toggleButtonForView(None)
+        else:
+            # otherwise (layout is 1) => select the right button
+            self.toggleButtonForView(view)
         
-        # otherwise (layout is 1) => select the right button
-        self.toggleButtonForView(view)
-        
-    def _onViewLayout(self, layout):
-        """
-        Called when the view layout of the GUI must be changed
-        """
-        # if layout is 1 => do nothing (button is selected by _onView)
-        if layout == instrmodel.VIEW_LAYOUT_ONE:
-            return
-        
-        # otherwise (layout is 2x2) => select the first button
-        self.toggleButtonForView(None)
-
     def OnClick(self, evt):
         """
         Navigation button click event handler

@@ -307,8 +307,11 @@ class StreamPanelEntry(wx.PyPanel):
         # TODO need to let the currently focused view know (via view controller?)
         if self._expander._btn_vis.GetToggle():
             log.debug("Showing stream '%s'", self.stream.name.value)
+            # FIXME how to get the ref?
+            #self.micgui.currentView.value.addStream(self.stream)
         else:
             log.debug("Hiding stream '%s'", self.stream.name.value)
+            #self.micgui.currentView.value.removeStream(self.stream)
 
     def on_play(self, evt):
         if self._expander._btn_play.GetToggle():
@@ -743,7 +746,17 @@ class CustomStreamPanelEntry(StreamPanelEntry): #pylint: disable=R0901
 
 
 class StreamPanel(wx.Panel):
-    """The whole panel containing stream entries and a button to add more streams
+    """
+    The whole panel containing stream entries and a button to add more streams
+    There are multiple levels of visibility of a stream entry:
+     * the stream entry is shown in the panel and has the visible icon on:
+        The current view is compatible with the stream and has it in its list
+        of streams. 
+     * the stream entry is shown in the panel and has the visible icon off:
+        The current view is compatible with the stream, but the stream is not
+        in its list of streams
+     * the stream entry is not present in the panel (hidden):
+        The current view is not compatible with the stream 
     """
 
     DEFAULT_BORDER = 2
@@ -753,6 +766,7 @@ class StreamPanel(wx.Panel):
         pre = wx.PrePanel()
 
         self._sz = None
+        self._microscope = None # MicroscopeGUI
         self.txt_no_stream = None
         self.btn_add_stream = None
 
@@ -786,12 +800,37 @@ class StreamPanel(wx.Panel):
         self._sz.Add(self.btn_add_stream, flag=wx.ALL, border=5)
 
         self._set_warning()
+        
 
         #FIXME: dropdown not working atm
         #self.btn_add_stream.Bind(wx.EVT_LISTBOX, self.on_add_stream)
         self.btn_add_stream.Bind(wx.EVT_BUTTON, self.on_add_stream)
 
         self.FitStreams()
+
+    def setMicroscope(self, microscope):
+        self._microscope = microscope
+        
+        self._microscope.currentView.subscribe(self._onView, init=True)
+
+    # === VA handlers
+        
+    def _onView(self, view):
+        """
+        Called when the current view changes
+        """
+        if not view:
+            return
+        
+        # FIXME
+        # hide/show the stream panel entries which are compatible with the view
+        # (listed in view.stream_classes)
+        
+        # update the "visible" icon of each stream panel entry to match the list
+        # of streams in the view
+        # (listed in view.streams.getStreams())
+        
+
 
     # === Event Handlers
 
@@ -852,6 +891,8 @@ class StreamPanel(wx.Panel):
     STREAM_ORDER=[instrmodel.SEMStream,
                   instrmodel.BrightfieldStream,
                   instrmodel.FluoStream]
+    # TODO maybe should be provided after init by the controller (like key of
+    # sorted()), to separate the GUI from the model ?
     def _get_stream_order(self, stream):
         """
         Gives the "order" of the given stream, as defined in STREAM_ORDER.

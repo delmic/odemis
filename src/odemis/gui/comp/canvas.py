@@ -25,13 +25,14 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 
+from odemis.gui.log import log
 import ctypes
 import math
 import os
+import threading
 import time
 import wx
 
-from odemis.gui.log import log
 
 # A class for smooth, flicker-less display of anything on a window, with drag
 # and zoom capability a bit like:
@@ -321,6 +322,9 @@ class DraggableCanvas(wx.Panel):
         """
         Update the position of the buffer on the world
         pos (2-tuple float): the world coordinates of the center of the buffer
+        Warning: always call from the main GUI thread. So if you're not sure
+         in which thread you are, do:
+         wx.CallAfter(canvas.ReCenterBuffer, pos)
         """
         if self.world_pos_requested == pos:
             return
@@ -335,11 +339,16 @@ class DraggableCanvas(wx.Panel):
         """
         Schedule the update of the buffer
         period (second): maximum time to wait before it will be updated
+        Warning: always call from the main GUI thread. So if you're not sure
+         in which thread you are, do:
+         wx.CallAfter(canvas.ShouldUpdateDrawing)
         """
         if not self.DrawTimer.IsRunning():
             self.DrawTimer.Start(period * 1000.0, oneShot=True)
 
     def OnDrawTimer(self):
+        # FIXME: make sure we are called from the main thread only
+        log.debug("Drawing timer in thread %s", threading.current_thread().name)
         self.UpdateDrawing()
 
     def UpdateDrawing(self):

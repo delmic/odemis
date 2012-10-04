@@ -224,7 +224,7 @@ class InstrumentalImage(object):
     # It'd be best to have it as a subclass of wx.Image, but wxPython has many
     # functions which return a wx.Image. We'd need to "override" them as well.
 
-    def __init__(self, im, mpp, center, rotation=0.0):
+    def __init__(self, im, mpp=None, center=None, rotation=0.0):
         """
         im (None or wx.Image)
         mpp (None or float>0): meters per pixel
@@ -442,7 +442,7 @@ class Stream(object):
         self._emitter = emitter
         self.raw = [] # list of DataArray received and used to generate the image
         # the most important attribute
-        self.image = VigilantAttribute(InstrumentalImage(None, None, None))
+        self.image = VigilantAttribute(InstrumentalImage(None))
 
         # TODO should maybe to 2 methods activate/deactivate to explicitly
         # start/stop acquisition, and one VA "updated" to stated that the user
@@ -722,18 +722,19 @@ class MicroscopeView(object):
         focus1 (Actuator): actuator with one axis: z. Can be None
         Focuses 0 and 1 are modified when changing focus respectively along the
            X and Y axis.
-        stream_classes (None, or list of classes): all subclasses that the streams
+        stream_classes (None, or tuple of classes): all subclasses that the streams
           in this view can show (restriction is not technical, only for the user)
         """
         self.name = model.StringVA(name)
-        self.stream_classes = stream_classes or [Stream]
+        self.stream_classes = stream_classes or (Stream,)
         self._stage = stage
         self._focus = [focus0, focus1]
 
-        # The real stage position, to be modified via moveStage()
+        # The real stage position, to be modified via moveStageToView()
+        # it's a direct access from the stage, so looks like a dict of axes
         # TODO: shall we provide a VA as a simplified view of the stage.position which can move?
         self.stage_pos = stage.position
-        stage.position.subscribe(self.onStagePos)
+#        stage.position.subscribe(self.onStagePos)
 
         # the current center of the view, which might be different from the stage
         # TODO: we might need to have it on the MicroscopeGUI, if all the viewports must display the same location
@@ -748,7 +749,7 @@ class MicroscopeView(object):
         self.merge_ratio = FloatContinuous(0.3, range=[0, 1], unit="")
         self.merge_ratio.subscribe(self._onMergeRatio)
 
-        # Streams to display
+        # Streams to display (can be considered in most cases a implementation detail)
         # Note: use addStream/removeStream for simple modifications
         self.streams = StreamTree(kwargs={"merge": self.merge_ratio.value})
 
@@ -767,6 +768,7 @@ class MicroscopeView(object):
         """
         move the stage to the current view_pos
         return: a future (that allows to know when the move is finished)
+        Note: once the move is finished stage_pos will be updated (by the back-end)
         """
         pos = self.view_pos.value
         # TODO: a way to know if it can do absolute move? => .capabilities!
@@ -781,13 +783,21 @@ class MicroscopeView(object):
         move = {"x": pos[0] - prev_pos["x"], "y": pos[1] - prev_pos["y"]}
         return self._stage.moveRel(move)
 
-    def onStagePos(self, pos):
-        # we want to recenter the viewports whenever the stage moves
-        # Not sure whether that's really the right way to do it though...
-        # TODO: avoid it to move the view when the user is dragging the view
-        #  => might require cleverness
-        self.view_pos = model.ListVA((pos["x"], pos["y"]), unit="m")
+#    def onStagePos(self, pos):
+#        # we want to recenter the viewports whenever the stage moves
+#        # Not sure whether that's really the right way to do it though...
+#        # TODO: avoid it to move the view when the user is dragging the view
+#        #  => might require cleverness
+#        self.view_pos = model.ListVA((pos["x"], pos["y"]), unit="m")
 
+    def getStreams(self):
+        """
+        returns (list of Stream): list of streams that are displayed in the view
+        Do not modify directly, use addStream(), and removeStream().
+        Note: use .streams for getting the raw StreamTree
+        """
+        return self.streams.getStreams()
+        
     def addStream(self, stream):
         """
         Add a stream to the view. It takes care of updating the StreamTree
@@ -800,10 +810,13 @@ class MicroscopeView(object):
         if stream in self.streams.getStreams():
             raise KeyError("Stream %s is already present.", stream.name)
 
+        if not isinstance(stream, self.stream_classes):
+            log.warning("Adding incompatible stream %s to view %s", stream.name.value, self.name.value)
+
         # Find out where the stream should go in the streamTree
         # FIXME: manage sub-trees, with different merge operations
         # For now we just add it to the list of streams, with the only merge operation possible
-        self.streams.streams.append[stream]
+        self.streams.streams.append(stream)
 
         # subscribe to the stream's image
         stream.image.subscribe(self._onNewImage)
@@ -823,7 +836,7 @@ class MicroscopeView(object):
 
         # remove stream for the StreamTree()
         # TODO handle more complex trees
-        self.streams.streams.remove[stream]
+        self.streams.streams.remove(stream)
 
         # let everyone know that the view has changed
         self.lastUpdate.value = time.time()

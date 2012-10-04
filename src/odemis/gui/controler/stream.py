@@ -61,6 +61,8 @@ class StreamController(object):
         '''
         self._microscope = micgui
         self._spanel = spanel
+        self._spanel.setMicroscope(self._microscope)
+        
         # TODO probably need a lock to access it correctly
         self._streams_to_restart = set() # streams to be restarted when turning on again
     
@@ -71,9 +73,10 @@ class StreamController(object):
         self._opticalWasTurnedOn = False
         self._semWasTurnedOn = False 
         
-        micgui.opticalState.subscribe(self.onOpticalState)
-        micgui.emState.subscribe(self.onEMState)
-    
+        self._microscope.opticalState.subscribe(self.onOpticalState)
+        self._microscope.emState.subscribe(self.onEMState)
+        
+        
     def _createAddStreamActions(self):
         """
         Create the possible "add stream" actions according to the current 
@@ -89,7 +92,7 @@ class StreamController(object):
             #  => multiple source? filter?
             self._spanel.add_action("Filtered colour", self.addFluo)
         
-        # Brightfield
+        # Bright-field
         if self._microscope.light and self._microscope.ccd:
             self._spanel.add_action("Bright-field", self.addBrightfield)
 
@@ -97,8 +100,6 @@ class StreamController(object):
         if self._microscope.ebeam and self._microscope.sed:
             self._spanel.add_action("Secondary electrons", self.addSEMSED)
     
-    
-    # TODO automatically add new stream to the current view
     
     def addFluo(self):
         """
@@ -117,6 +118,7 @@ class StreamController(object):
                   self._microscope.light, self._microscope.light_filter)
         self._microscope.streams.add(stream)
         stream.updated.value = True
+        self._microscope.currentView.value.addStream(stream)
         
         entry = comp.stream.CustomStreamPanelEntry(self._spanel, stream)
         self._spanel.add_stream(entry)
@@ -132,7 +134,8 @@ class StreamController(object):
                   self._microscope.light)
         self._microscope.streams.add(stream)
         stream.updated.value = True
-        
+        self._microscope.currentView.value.addStream(stream)
+                
         entry = comp.stream.FixedStreamPanelEntry(self._spanel, stream)
         self._spanel.add_stream(entry)
         return entry
@@ -147,7 +150,8 @@ class StreamController(object):
                   self._microscope.ebeam)
         self._microscope.streams.add(stream)
         stream.updated.value = True
-        
+        self._microscope.currentView.value.addStream(stream)
+
         entry = comp.stream.FixedStreamPanelEntry(self._spanel, stream)
         self._spanel.add_stream(entry)
         return entry
@@ -202,7 +206,7 @@ class StreamController(object):
         # TODO how to activate the stream? Is it done automatically by the
         # (so far, magical) stream scheduler?
 
-    
+        
     def removeStream(self, stream):
         """
         Removes a stream. 

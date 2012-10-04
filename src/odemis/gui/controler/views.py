@@ -34,6 +34,9 @@ class ViewController(object):
         micgui (MicroscopeGUI): the representation of the microscope GUI
         main_frame: (wx.Frame): the frame which contains the 4 viewports
         '''
+        # This doesn't not need any stream to work. It's important as streams
+        # will be created later on.
+        
         self._microscope = micgui
         self._main_frame = main_frame
         
@@ -41,7 +44,7 @@ class ViewController(object):
         self._viewports = [main_frame.pnl_view_tl, main_frame.pnl_view_tr,
                            main_frame.pnl_view_bl, main_frame.pnl_view_br]
         
-        # TODO create the (default) views and set currentView
+        # create the (default) views and set currentView
         self._createViews()
         
         # subscribe to layout and view changes
@@ -63,10 +66,10 @@ class ViewController(object):
             for v in self._viewports:
                 view = instrmodel.MicroscopeView("SEM %d" % i,
                          self._microscope.stage,
-                         focus0=None, # TODO: SEM focus
-                         stream_classes=[instrmodel.SEMStream]
+                         focus0=None, # TODO: SEM focus or focus1?
+                         stream_classes=(instrmodel.SEMStream,)
                          )
-                v.setView(view)
+                v.setView(view, self._microscope)
                 i += 1
             self._microscope.currentView.value = self._viewports[0].view
         # If Optical only: all Optical
@@ -77,9 +80,9 @@ class ViewController(object):
                 view = instrmodel.MicroscopeView("Optical %d" % i,
                          self._microscope.stage,
                          focus0=self._microscope.focus,
-                         stream_classes=[instrmodel.BrightfieldStream, instrmodel.FluoStream]
+                         stream_classes=(instrmodel.BrightfieldStream, instrmodel.FluoStream)
                          )
-                v.setView(view)
+                v.setView(view, self._microscope)
                 i += 1
             self._microscope.currentView.value = self._viewports[0].view
         # If both SEM and Optical: SEM/Optical/2x combined 
@@ -87,27 +90,27 @@ class ViewController(object):
             view = instrmodel.MicroscopeView("SEM",
                      self._microscope.stage,
                      focus0=None, # TODO: SEM focus
-                     stream_classes=[instrmodel.SEMStream]
+                     stream_classes=(instrmodel.SEMStream, )
                      )
-            self._viewports[0].setView(view)
+            self._viewports[0].setView(view, self._microscope)
             view = instrmodel.MicroscopeView("Optical",
                      self._microscope.stage,
                      focus0=self._microscope.focus,
-                     stream_classes=[instrmodel.BrightfieldStream, instrmodel.FluoStream]
+                     stream_classes=(instrmodel.BrightfieldStream, instrmodel.FluoStream)
                      )
-            self._viewports[1].setView(view)
+            self._viewports[1].setView(view, self._microscope)
             view = instrmodel.MicroscopeView("Combined 1",
                      self._microscope.stage,
                      focus0=self._microscope.focus,
                      focus1=None, # TODO: SEM focus
                      )
-            self._viewports[2].setView(view)
+            self._viewports[2].setView(view, self._microscope)
             view = instrmodel.MicroscopeView("Combined 2",
                      self._microscope.stage,
                      focus0=self._microscope.focus,
                      focus1=None, # TODO: SEM focus
                      )
-            self._viewports[3].setView(view)
+            self._viewports[3].setView(view, self._microscope)
             self._microscope.currentView.value = self._viewports[1].view # starts with optical
         else:
             log.warning("No known microscope configuration, creating 4 generic views")
@@ -117,7 +120,7 @@ class ViewController(object):
                          self._microscope.stage,
                          focus0=self._microscope.focus
                          )
-                v.setView(view)
+                v.setView(view, self._microscope)
                 i += 1
             self._microscope.currentView.value = self._viewports[0].view
         

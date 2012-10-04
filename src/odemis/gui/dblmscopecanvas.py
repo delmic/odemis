@@ -17,11 +17,10 @@ You should have received a copy of the GNU General Public License along with Ode
 '''
 
 from .comp.canvas import DraggableCanvas, WorldToBufferPoint
-from .img.data import gettest_patternImage
 from odemis.gui.log import log
 import threading
+import time
 import wx
-
 
 
 CROSSHAIR_COLOR = wx.GREEN
@@ -49,6 +48,10 @@ class DblMicroscopeCanvas(DraggableCanvas):
         # TODO deduplicate!
         self._moveFocus0Timer = wx.PyTimer(self._moveFocus0)
         self._moveFocus1Timer = wx.PyTimer(self._moveFocus1)
+        
+        # for thumbnail update (might need a timer, instead of a minimum period
+        self._lastThumbnailUpdate = 0
+        self._thumbnailUpdatePeriod = 2 # s, minimal period before updating again 
 
 #        self.WorldOverlays.append(CrossHairOverlay("Blue", CROSSHAIR_SIZE, (-10,-10))) # debug
 #        self.WorldOverlays.append(CrossHairOverlay("Red", CROSSHAIR_SIZE, (10,10))) # debug
@@ -71,48 +74,136 @@ class DblMicroscopeCanvas(DraggableCanvas):
         # mpp == mpwu => 1 world coord == 1 px => scale == 1
         self.mpwu = self.view.mpp.value  #m/wu
         # Should not be changed! 
-        # FIXME!!
+        # FIXME!! => have a PhyscicalCanvas which directly use physical units
 
         self.view.mpp.subscribe(self._onMPP)
         self.view.crosshair.subscribe(self._onCrossHair, init=True)
-        self.view.view_pos.subscribe(self._onViewCenter, init=True)
+
+        # TODO subscribe to view_pos to synchronize with the other views  
+        # TODO subscribe to stage_pos as well/instead.
+        self.view.stage_pos.subscribe(self._onStagePos, init=True)
         
         # any image changes
         view.lastUpdate.subscribe(self._onViewImageUpdate, init=True)
     
+    
+    def _convertStreamsToImages(self, tree):
+        """
+        Temporary function to convert the StreamTree to 2 images as the canvas 
+          currently expects.
+        tree (StreamTree): the stream tree to convert
+        """
+        # the stream tree can have less, or more than 2 images
+        for i, s in enumerate(tree.streams[0:2]):
+            if not s:
+                # should not happen, but let's not completely fail on this
+                log.error("StreamTree has a None stream")
+                continue
+            
+            iim = s.image.value
+            if iim and iim.image:
+                scale = float(iim.mpp) / self.mpwu
+                pos = (iim.center[0] / self.mpwu, iim.center[1] / self.mpwu)
+                self.SetImage(i, iim.image, pos, scale)
+            else:
+                #TODO it seems there is a problem, we had： that should be better, but we don't do it for now, to detect when to reset mpp
+                self.SetImage(i, None) # removes the image
+    
     def _onViewImageUpdate(self, t):
-        self.ShouldUpdateDrawing()
-        # TODO canvas should update thumbnail from time to time
-        # => override 
-
-    def get_screenshot(self):
-        bitmap = wx.EmptyBitmap(*self.ClientSize)
-
-        memory = wx.MemoryDC()
-        memory.SelectObject(bitmap)
-        #set pen, do drawing.
-        memory.SelectObject(wx.NullBitmap)
-
-        return wx.ImageFromBitmap(bitmap)
+        # TODO use the real streamtree functions
+        self._convertStreamsToImages(self.view.streams)
+        wx.CallAfter(self.ShouldUpdateDrawing)
         
-    def onViewCenter(self, value):
+        # TODO canvas should update thumbnail from time to time
+        # => override UpdateDrawing() and if not updated for some time, copy dc ?
+
+    def UpdateDrawing(self):
+        # override just in order to detect when it's just finished redrawn
+        
+        # TODO detect that the canvas is not visible, and so should no/less frequently
+        # be updated? 
+        super(DblMicroscopeCanvas, self).UpdateDrawing()
+        
+        if not self.view:
+            return
+        now = time.time()
+        if (self._lastThumbnailUpdate + self._thumbnailUpdatePeriod) < now:
+            self._updateThumbnail()
+            self._lastThumbnailUpdate = now
+        
+    def _updateThumbnail(self):
+        # new bitmap to copy the DC
+        bitmap = wx.EmptyBitmap(*self.ClientSize)
+        dc = wx.MemoryDC()
+        dc.SelectObject(bitmap)
+        
+        # simplified version of OnPaint()
+        margin = ((self.buffer_size[0] - self.ClientSize[0])/2,
+                  (self.buffer_size[1] - self.ClientSize[1])/2)
+
+        dc.BlitPointSize((0, 0), self.ClientSize, self._dcBuffer, margin)
+
+        # close the DC, to be sure the bitmap can be used safely 
+        del dc
+
+        self.view.thumbnail.value = wx.ImageFromBitmap(bitmap)
+        
+    def _onStagePos(self, value):
         """
-        An external component asks us to move the view
+        When the stage is moved: recenter the view
+        value: dict with "x" and "y" entries containing meters
         """
-        pos = (value[0] / self.mpwu, value[1] / self.mpwu)
-        self.ReCenterBuffer(pos)
+        # this can be caused by any viewport which has requested to recenter the buffer 
+        pos = (value["x"] / self.mpwu, value["y"] / self.mpwu)
+        # self.ReCenterBuffer(pos)
+        # skip ourself, to avoid asking the stage to move to (almost) the same position
+        wx.CallAfter(super(DblMicroscopeCanvas, self).ReCenterBuffer, pos)
 
     def ReCenterBuffer(self, pos):
         """
         Update the position of the buffer on the world
-        pos (2-tuple float): the world coordinates of the center of the buffer
+        pos (2-tuple float): the coordinates of the center of the buffer in fake units
         """
-        # FIXME
-        DraggableCanvas.ReCenterBuffer(self, pos)
+        super(DblMicroscopeCanvas, self).ReCenterBuffer(pos)
 
+        # TODO check it works fine
+        if not self.view:
+            return
         new_pos = self.world_pos_requested
         physical_pos = (new_pos[0] * self.mpwu, new_pos[1] * self.mpwu)
-        self.viewmodel.center.value = physical_pos
+        self.view.view_pos.value = physical_pos # this should be done even when dragging
+        
+        self.view.moveStageToView()
+        # stage_pos will be updated once the move is completed
+
+    def _onMPP(self, mpp):
+        """
+        Called when the view.mpp is updated
+        """ 
+        self.scale = self.mpwu / mpp
+        wx.CallAfter(self.ShouldUpdateDrawing)
+
+    def Zoom(self, inc):
+        """
+        Zoom by the given factor
+        inc (float): scale the current view by 2^inc
+        ex:  # 1 => *2 ; -1 => /2; 2 => *4...
+        """
+        scale = 2.0 ** inc
+        self.view.mpp.value /= scale # this will call _onMPP()
+        
+    # Zoom/merge management
+    def OnWheel(self, event):
+        change = event.GetWheelRotation() / event.GetWheelDelta()
+        if event.ShiftDown():
+            change *= 0.2 # softer
+
+        if event.CmdDown(): # = Ctrl on Linux/Win or Cmd on Mac
+            ratio = self.view.merge_ratio.value + (change * 0.1) 
+            ratio = sorted(self.view.merge_ratio.range + (ratio,))[1] # clamp
+            self.view.merge_ratio.value = ratio
+        else:
+            self.Zoom(change)
 
     def onExtraAxisMove(self, axis, shift):
         """
@@ -187,46 +278,6 @@ class DblMicroscopeCanvas(DraggableCanvas):
                 self.ViewOverlays.remove(ch)
                 self.Refresh(eraseBackground=False)
 
-    def Zoom(self, inc):
-        """
-        Zoom by the given factor
-        inc (float): scale the current view by 2^inc
-        ex:  # 1 => *2 ; -1 => /2; 2 => *4...
-        """
-        scale = 2.0 ** inc
-        self.view.mpp.value /= scale
-
-    def _onMPP(self, mpp):
-        self.scale = self.mpwu / mpp
-        self.ShouldUpdateDrawing()
-
-    def avOnImage(self, image):
-        # FIXME: use stream.getImage
-        for i in range(len(self.Images)):
-            iim = self.viewmodel.images[i].value
-            if iim.image:
-                scale = float(iim.mpp) / self.mpwu
-                pos = (iim.center[0] / self.mpwu, iim.center[1] / self.mpwu)
-                #pos = iim.center
-                self.SetImage(i, iim.image, pos, scale)
-                #self.ReCenterBuffer(pos)
-            else:
-                #TODO： that should be better, but we don't do it for now, to detect when to reset mpp
-                #self.SetImage(i, None) # removes the image
-                pass
-
-    # Zoom/merge management
-    def OnWheel(self, event):
-        change = event.GetWheelRotation() / event.GetWheelDelta()
-        if event.ShiftDown():
-            change *= 0.2 # softer
-
-        if event.CmdDown(): # = Ctrl on Linux/Win or Cmd on Mac
-            ratio = self.view.merge_ratio.value + (change * 0.1) 
-            ratio = sorted(self.view.merge_ratio.range + (ratio,))[1] # clamp
-            self.view.merge_ratio.value = ratio
-        else:
-            self.Zoom(change)
 
 ### Here come all the classes for drawing overlays
 class CrossHairOverlay(object):

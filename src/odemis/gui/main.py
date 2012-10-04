@@ -205,10 +205,13 @@ class OdemisGUIApp(wx.App):
 
             #print_microscope_tree(microscope)
 
-            self.stream_controller = StreamController(self.interface_model,
-                                                      self.main_frame.pnl_stream)
+            # Order matters!
+            # First we create the views, then the streams
             self.view_controller = ViewController(self.interface_model,
                                                       self.main_frame)
+            self.stream_controller = StreamController(self.interface_model,
+                                                      self.main_frame.pnl_stream)
+            
             self.view_selector = ViewSelector(self.interface_model,
                                               self.main_frame)
             

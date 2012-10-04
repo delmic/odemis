@@ -47,6 +47,7 @@ class MicroscopeViewport(wx.Panel):
         wx.Panel.__init__(self, *args, **kwargs)
         
         self.view = None # the MicroscopeView that this viewport is displaying (=model)
+        self._microscope = None
         
         # Keep track of this panel's pseudo focus
         self._has_focus = False
@@ -172,9 +173,11 @@ class MicroscopeViewport(wx.Panel):
         self.Bind(wx.EVT_SIZE, self.OnSize)
         
 
-    def setView(self, view):
+    def setView(self, view, microscope):
         """
         Set the view that this viewport is displaying/representing
+        view (MicroscopeView)
+        microscope (MicroscopeGUI)
         Can be called only once, at initialisation.
         """
         # This is a kind of kludge, as it'd be best to have the viewport created
@@ -182,6 +185,7 @@ class MicroscopeViewport(wx.Panel):
         assert(self.view is None)
         
         self.view = view
+        self._microscope = microscope
         
         # TODO Center to current view position, with current mpp
         view.mpp.subscribe(self._onMPP, init=True)
@@ -258,11 +262,9 @@ class MicroscopeViewport(wx.Panel):
     ################################################
 
     def OnChildFocus(self, evt):
-        # TODO need to do this:
-#        if self.view:
-#            self._microscope.currentView.value = self.view
-        # instead of this:
-        self.SetFocus(True)
+        if self.view and self._microscope:
+            # This will take care of doing everything necessary
+            self._microscope.currentView.value = self.view
         
         evt.Skip()
 
