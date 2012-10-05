@@ -29,7 +29,7 @@ from odemis.gui.controller.stream import StreamController
 from odemis.gui.controller.tabs import TabBar
 from odemis.gui.controller.viewpanel import ViewSelector
 from odemis.gui.controller.views import ViewController
-from odemis.gui.instrmodel import OpticalBackendConnected, InstrumentalImage
+from odemis.gui.instrmodel import InstrumentalImage
 from odemis.gui.log import log, create_gui_logger
 from odemis.gui.xmlh import odemis_get_resources
 import Pyro4.errors
@@ -74,10 +74,9 @@ class OdemisGUIApp(wx.App):
         try:
             self.microscope = model.getMicroscope()
             self.interface_model = instrmodel.MicroscopeGUI(self.microscope)
-            self.secom_model = OpticalBackendConnected(self.microscope) # XXX remove
         except (IOError, Pyro4.errors.CommunicationError), e:
-            log.exception("oei")
-            msg = ("The Odemis GUI could not connect to the Odemis Daemon:\n\n"
+            log.exception("Failed to connect to back-end")
+            msg = ("The Odemis GUI could not connect to the Odemis back-end:\n\n"
                    "{0}\n\n"
                    "Launch GUI anyway?").format(e)
 
@@ -173,18 +172,6 @@ class OdemisGUIApp(wx.App):
 
             self.main_frame.SetAcceleratorTable(accel_tbl)
 
-
-            # Keep track of focus
-            self.scope_panels = [self.main_frame.pnl_view_tl,
-                                 self.main_frame.pnl_view_tr,
-                                 self.main_frame.pnl_view_bl,
-                                 self.main_frame.pnl_view_br]
-
-            for scope_panel in self.scope_panels:
-                scope_panel.Bind(wx.EVT_CHILD_FOCUS, self.OnScopePanelFocus)
-            # to ensure at least one panel has the focus
-            self.scope_panels[0].SetFocus(True)
-
             self.main_frame.Bind(wx.EVT_CLOSE, self.on_close_window)
 
             self.main_frame.Maximize()
@@ -237,18 +224,8 @@ class OdemisGUIApp(wx.App):
         encoding = sys.getfilesystemencoding()
         return os.path.dirname(unicode(__file__, encoding))
 
-    def OnScopePanelFocus(self, evt):
-        """ Un-focus all panels
-        When the user tries to focus a scope panel, the event will first pass
-        through here, so this is where we unfocus all panels, after which
-        the event moves on and focusses the desired panel.
-        """
-        evt.Skip()
-        for scope_panel in self.scope_panels:
-            scope_panel.SetFocus(False)
-
-
     # TODO update to MicroscopeGUI (self.interface_model)
+    # => create special streams?
     def on_load_example1(self, e):
         """ Open the two files for example """
         try:
@@ -332,7 +309,8 @@ class OdemisGUIApp(wx.App):
         logging.info("Exiting Odemis")
 
         # Put cleanup actions here (like disconnect from odemisd)
-        self.secom_model.turnOff()
+        self.interface_model.opticalState.value = instrmodel.STATE_OFF
+        self.interface_model.emState.value = instrmodel.STATE_OFF
 
         #self.dlg_startup.Destroy()
         self.main_frame.Destroy()
