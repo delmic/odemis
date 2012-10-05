@@ -478,7 +478,6 @@ def acquire(comp_name, dataflow_names, filename):
             return 129
         dataflows.append(df)
 
-    # TODO support multiple dataflows with multiple pages in the file
     images = []
     for df in dataflows:
         try:
@@ -495,7 +494,7 @@ def acquire(comp_name, dataflow_names, filename):
             logging.error("Failed to acquire image from component '%s'", comp_name)
             return 127
 
-    tiff.export(images[0], filename)
+    tiff.export(filename, images)
     return 0
 
 def live_display(comp_name, df_name):

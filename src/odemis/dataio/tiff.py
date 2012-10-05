@@ -14,11 +14,12 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
+from libtiff import TIFF
 from odemis import model
 from osgeo import gdal_array
-from libtiff import TIFF
 import Image
 import gdal
+import libtiff
 import time
 
 # User-friendly name
@@ -33,14 +34,6 @@ DATagToTiffTag = {model.MD_SW_VERSION: ("TIFFTAG_SOFTWARE", str),
                   model.MD_HW_NAME: ("TIFFTAG_HOSTCOMPUTER", str),
                   model.MD_ACQ_DATE: ("TIFFTAG_DATETIME", lambda x: time.strftime("%a, %d %b %Y %H:%M:%S +0000", time.gmtime(x)))
                   }
-#TIFFTAG_DOCUMENTNAME
-#TIFFTAG_IMAGEDESCRIPTION
-#TIFFTAG_ARTIST
-#TIFFTAG_COPYRIGHT
-#TIFFTAG_XRESOLUTION
-#TIFFTAG_YRESOLUTION
-#TIFFTAG_RESOLUTIONUNIT
-# TODO how to put our own tags?
 
 # Export part
 # GDAL Python API is documented here: http://gdal.org/python/
@@ -100,41 +93,122 @@ def _saveAsTiffPIL(array, filename):
     pil_im.save(filename, "TIFF")
 
 
-# TODO support thumbnails: http://www.libtiff.org/man/thumbnail.1.html
-def _saveAsTiffLT(data, filename):
+# For tags, see convert.py of libtiff.py which has some specific for microscopy
+# Or use the LSM format (from Carl Zeiss)?
+
+DATagToLibTiffTag = {model.MD_SW_VERSION: ("SOFTWARE", str),
+                  model.MD_HW_NAME: ("HOSTCOMPUTER", str),
+                  model.MD_ACQ_DATE: ("DATETIME", lambda x: time.strftime("%a, %d %b %Y %H:%M:%S +0000", time.gmtime(x)))
+                  }
+#TIFFTAG_DOCUMENTNAME
+#TIFFTAG_IMAGEDESCRIPTION
+#TIFFTAG_ARTIST
+#TIFFTAG_COPYRIGHT
+#TIFFTAG_XRESOLUTION
+#TIFFTAG_YRESOLUTION
+#TIFFTAG_RESOLUTIONUNIT
+# TODO how to put our own tags? => use ome xml in ImageDescription?
+
+def _saveAsTiffLT(filename, data, thumbnail):
     """
     Saves a DataArray as a TIFF file.
-    data (ndarray): 2D data of int or float
     filename (string): name of the file to save
+    data (ndarray): 2D data of int or float
     """
-    tif = TIFF.open(filename, mode='w')
-    tif.write_image(data)
+    _saveAsMultiTiffLT(filename, [data], thumbnail)
 
-def _saveAsMultiTiffLT(ldata, filename):
+def _saveAsMultiTiffLT(filename, ldata, thumbnail):
     """
     Saves a list of DataArray as a multiple-page TIFF file.
-    ldata (list of ndarray): list of 2D data of int or float. Should have at least one array
     filename (string): name of the file to save
+    ldata (list of ndarray): list of 2D data of int or float. Should have at least one array
     """
     tif = TIFF.open(filename, mode='w')
 
-    for data in ldata:    
-        tif.write_image(data)
+    if thumbnail is not None:
+        # save the thumbnail just as the first image
+        tif.SetField("ImageDescription", "Composited image")
 
-# TODO interface must support thumbnail export as well
-def export(data, filename):
+        # FIXME:
+        # libtiff has a bug: it thinks that RGB image are organised as
+        # 3xMxN, while normally in numpy, it's MxNx3. (cf scipy.imread) 
+        # So we need to swap the axes
+        if len(thumbnail.shape) == 3:
+            thumbnail = thumbnail.swapaxes(2,0).swapaxes(2,1) # a new view
+        
+        # write_rgb makes it clever to detect RGB vs. Greyscale
+        tif.write_image(thumbnail, compression="lzw", write_rgb=True)
+        
+        # TODO also save it as thumbnail of the image (in limited size)
+        # see  http://www.libtiff.org/man/thumbnail.1.html
+        
+        # It seems that libtiff.py doesn't support yet SubIFD's so it's not 
+        # going to fly
+        
+        
+        # from http://stackoverflow.com/questions/11959617/in-a-tiff-create-a-sub-ifd-with-thumbnail-libtiff
+#        //Define the number of sub-IFDs you are going to write
+#        //(assuming here that we are only writing one thumbnail for the image):
+#        int number_of_sub_IFDs = 1;
+#        toff_t sub_IFDs_offsets[1] = { 0UL };
+#        
+#        //set the TIFFTAG_SUBIFD field:
+#        if(!TIFFSetField(created_TIFF, TIFFTAG_SUBIFD, number_of_sub_IFDs, 
+#            sub_IFDs_offsets))
+#        {
+#            //there was an error setting the field
+#        }
+#        
+#        //Write your main image raster data to the TIFF (using whatever means you need,
+#        //such as TIFFWriteRawStrip, TIFFWriteEncodedStrip, TIFFWriteEncodedTile, etc.)
+#        //...
+#        
+#        //Write your main IFD like so:
+#        TIFFWriteDirectory(created_TIFF);
+#        
+#        //Now here is the trick: like the comment in the libtiff source states, the 
+#        //next n directories written will be sub-IFDs of the main IFD (where n is 
+#        //number_of_sub_IFDs specified when you set the TIFFTAG_SUBIFD field)
+#        
+#        //Set up your sub-IFD
+#        if(!TIFFSetField(created_TIFF, TIFFTAG_SUBFILETYPE, FILETYPE_REDUCEDIMAGE))
+#        {
+#            //there was an error setting the field
+#        }
+#        
+#        //set the rest of the required tags here, as well as any extras you would like
+#        //(remember, these refer to the thumbnail, not the main image)
+#        //...
+#        
+#        //Write this sub-IFD:
+#        TIFFWriteDirectory(created_TIFF);
+        
+    for data in ldata:
+        # Save metadata (before the image)
+        for key, val in data.metadata.items():
+            if key in DATagToLibTiffTag:
+                tag, converter = DATagToLibTiffTag[key]
+                tif.SetField(tag, converter(val))
+
+        tif.write_image(data, compression="lzw")
+
+def export(filename, data, thumbnail=None):
     '''
     Write a TIFF file with the given image and metadata
+    filename (string): filename of the file to create (including path)
     data (list of model.DataArray, or model.DataArray): the data to export, 
         must be 2D of int or float. Metadata is taken directly from the data 
         object. If it's a list, a multiple page file is created.
-    filename (string): filename of the file to create (including path)
+    thumbnail (None or numpy.array): Image used as thumbnail for the file. Can be of any
+      (reasonable) size. Must be either 2D array (greyscale) or 3D with last 
+      dimension of length 3 (RGB). If the exporter doesn't support it, it will
+      be dropped silently.
     '''
     if isinstance(data, list):
-        _saveAsMultiTiffLT(data, filename)
+        _saveAsMultiTiffLT(filename, data, thumbnail)
     else:
         # TODO should probably not enforce it: respect duck typing
         assert(isinstance(data, model.DataArray))
-        _saveAsTiffLT(data, filename)
+        _saveAsTiffLT(filename, data, thumbnail)
     
     

@@ -33,7 +33,7 @@ class TestTiffIO(unittest.TestCase):
         data = model.DataArray(numpy.zeros(shape, dtype))
 
         # export
-        tiff.export(data, FILENAME)
+        tiff.export(FILENAME, data)
         
         # check it's here
         st = os.stat(FILENAME) # this test also that the file is created
@@ -55,7 +55,7 @@ class TestTiffIO(unittest.TestCase):
             ldata.append(model.DataArray(numpy.zeros(shape, dtype)))
 
         # export
-        tiff.export(ldata, FILENAME)
+        tiff.export(FILENAME, ldata)
         
         # check it's here
         st = os.stat(FILENAME) # this test also that the file is created
@@ -70,6 +70,41 @@ class TestTiffIO(unittest.TestCase):
             
         os.remove(FILENAME)
 
+    def testExportThumbnail(self):
+        # create a simple greyscale image
+        shape = (512, 512)
+        dtype = numpy.uint16
+        ldata = []
+        num = 2
+        for i in range(num):
+            ldata.append(model.DataArray(numpy.zeros(shape, dtype)))
+
+        # thumbnail : small RGB completly red
+        tshape = (shape[0]/8, shape[1]/8, 3)
+        tdtype = numpy.uint8
+        thumbnail = numpy.zeros(tshape, tdtype)
+        thumbnail[:, :, 0] += 255 # red
+        
+        # export
+        tiff.export(FILENAME, ldata, thumbnail)
+        
+        # check it's here
+        st = os.stat(FILENAME) # this test also that the file is created
+        self.assertGreater(st.st_size, 0)
+        im = Image.open(FILENAME)
+        self.assertEqual(im.format, "TIFF")
+        
+        # first page should be thumbnail
+        im.seek(0)
+        self.assertEqual(im.size, tshape[0:2])
+        
+        # check the number of pages
+        for i in range(num):
+            im.seek(i+1)
+            self.assertEqual(im.size, shape)
+            
+        os.remove(FILENAME)
+        
 if __name__ == "__main__":
     #import sys;sys.argv = ['', 'Test.testName']
     unittest.main()
