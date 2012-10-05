@@ -25,7 +25,7 @@ from odemis import __version__, model
 from odemis.gui import main_xrc, instrmodel
 from odemis.gui.controller.acquisition import AcquisitionController
 from odemis.gui.controller.settingspanel import SettingsSideBar
-from odemis.gui.controller.stream import StreamController
+from odemis.gui.controller.streams import StreamController
 from odemis.gui.controller.tabs import TabBar
 from odemis.gui.controller.viewpanel import ViewSelector
 from odemis.gui.controller.views import ViewController
