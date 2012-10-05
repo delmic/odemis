@@ -200,8 +200,8 @@ class OdemisGUIApp(wx.App):
 #                self.goto_debug_mode()
 
 
-            self.settings_controler = SettingsSideBar(self.main_frame,
-                                                      self.microscope) # TODO use interface_model
+            self.settings_controler = SettingsSideBar(self.interface_model,
+                                                      self.main_frame)
 
             #print_microscope_tree(microscope)
 

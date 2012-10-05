@@ -540,8 +540,9 @@ class SettingsSideBar(object):
     of the setting panel.
     """
 
-    def __init__(self, main_frame, microscope):
+    def __init__(self, livegui, main_frame):
         self._main_frame = main_frame
+        self._livegui = livegui
 
         self._stream_panel = StreamPanel(main_frame.pnl_stream)
         self._sem_panel = SemSettingsPanel(
@@ -552,13 +553,12 @@ class SettingsSideBar(object):
                                     "No optical microscope found")
 
         # Query Odemis daemon (Should move this to separate thread)
-        for comp in microscope.detectors:
-            if comp.role == 'ccd':
-                self.add_ccd(comp)
+        if livegui.ccd:
+            self.add_ccd(livegui.ccd)
+        # TODO allow to change light.power
 
-        for comp in microscope.emitters:
-            if comp.role == 'e-beam':
-                self.add_ebeam(comp)
+        if livegui.ebeam:
+            self.add_ebeam(livegui.ebeam)
 
     # Optical microscope settings
     def add_ccd(self, comp):
