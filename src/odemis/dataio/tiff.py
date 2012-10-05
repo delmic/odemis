@@ -16,6 +16,7 @@ You should have received a copy of the GNU General Public License along with Ode
 '''
 from libtiff import TIFF
 from odemis import model
+from odemis import __version__
 from osgeo import gdal_array
 import Image
 import gdal
@@ -96,17 +97,23 @@ def _saveAsTiffPIL(array, filename):
 # For tags, see convert.py of libtiff.py which has some specific for microscopy
 # Or use the LSM format (from Carl Zeiss)?
 
-DATagToLibTiffTag = {model.MD_SW_VERSION: ("SOFTWARE", str),
-                  model.MD_HW_NAME: ("HOSTCOMPUTER", str),
-                  model.MD_ACQ_DATE: ("DATETIME", lambda x: time.strftime("%a, %d %b %Y %H:%M:%S +0000", time.gmtime(x)))
+DATagToLibTiffTag = {model.MD_SW_VERSION: ("SOFTWARE", 
+                        lambda x: __version__.shortname + " " + str(x)),
+                  model.MD_HW_NAME: ("MAKE", str), # Scanner manufacturer   
+                  model.MD_HW_VERSION: ("MODEL", str), # Scanner name
+                  model.MD_ACQ_DATE: ("DATETIME", lambda x: time.strftime("%Y:%m:%d %H:%M:%S", time.gmtime(x)))
                   }
 #TIFFTAG_DOCUMENTNAME
-#TIFFTAG_IMAGEDESCRIPTION
 #TIFFTAG_ARTIST
 #TIFFTAG_COPYRIGHT
+# MODEL
+# MAKE
+# XPOSITION
+# YPOSITION
 #TIFFTAG_XRESOLUTION
 #TIFFTAG_YRESOLUTION
 #TIFFTAG_RESOLUTIONUNIT
+#TIFFTAG_IMAGEDESCRIPTION
 # TODO how to put our own tags? => use ome xml in ImageDescription?
 
 def _saveAsTiffLT(filename, data, thumbnail):
