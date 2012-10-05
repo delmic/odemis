@@ -218,13 +218,18 @@ class CustomExpander(Expander):
         self._label_ctrl.SetChoices(TEST_STREAM_LST)
         self._label_ctrl.SetBackgroundColour(self.Parent.GetBackgroundColour())
         self._label_ctrl.SetForegroundColour("#2FA7D4")
+        
         # TODO make sure it changes the value of stream.name when it is updated
-
+        self._label_ctrl.Bind(wx.EVT_TEXT_ENTER, self._onLabelChange)
+        
         self._sz.Remove(1)
         self._sz.Insert(1, self._label_ctrl, 1,
                         wx.RIGHT | wx.ALIGN_CENTRE_VERTICAL, 8)
         
-
+    # GUI event handlers
+    def _onLabelChange(self, evt):
+        self._stream.name.value = self._label_ctrl.GetValue()
+        
 class StreamPanelEntry(wx.PyPanel):
     """ The StreamPanelEntry super class, a special case collapsible pane.
 
