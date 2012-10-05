@@ -16,6 +16,7 @@ You should have received a copy of the GNU General Public License along with Ode
 '''
 
 from odemis.gui.log import log
+from odemis.gui.util import img
 import os
 import re
 import subprocess
@@ -29,11 +30,13 @@ import wx
 # focused, and block any change of settings during acquisition.
 
 class AcquisitionController(object):
-    def __init__(self, main_frame):
+    def __init__(self, micgui, main_frame):
         """
-        main_frame (wx.Frame): the main GUI frame, which we will control
+        micgui (MicroscopeGUI): the representation of the microscope GUI
+        main_frame: (wx.Frame): the frame which contains the 4 viewports
         """
-        self._frame = main_frame
+        self._microscope = micgui
+        self._main_frame = main_frame
         self._anim_thread = None 
         
         # nice default paths
@@ -43,13 +46,13 @@ class AcquisitionController(object):
         self._acquisition_folder = self._snapshot_folder
         
         # Link snapshot menu to snapshot action
-        wx.EVT_MENU(self._frame,
-            self._frame.menu_item_qacquire.GetId(),
+        wx.EVT_MENU(self._main_frame,
+            self._main_frame.menu_item_qacquire.GetId(),
             self.start_snapshot_viewport)
         
         # Link "acquire image" button to image acquisition
         # TODO: for now it's just snapshot, but should be linked to the acquisition window
-        self._frame.btn_aquire.Bind(wx.EVT_BUTTON, self.start_snapshot_viewport)
+        self._main_frame.btn_aquire.Bind(wx.EVT_BUTTON, self.start_snapshot_viewport)
         
         # find the names of the active (=connected) screens
         # it's slow, so do it only at init (=expect not to change screen during acquisition)
@@ -81,36 +84,39 @@ class AcquisitionController(object):
                             filename)
             return
         
-        # TODO: how to get the viewports list without explicitly naming them?
-        # find the current focused viewport
-        scope_panels = [self._frame.pnl_view_tl,
-                        self._frame.pnl_view_tr,
-                        self._frame.pnl_view_bl,
-                        self._frame.pnl_view_br]
-        panel = scope_panels[0] # default to first one
-        for p in scope_panels:
-            if panel.HasFocus():
-                panel = p
-                break
+        # get currently focused view
+        view = self._microscope.currentView.value
+        if not view:
+            log.warning("Failed to take snapshot, no view is selected")
+            return
         
-        # get actual viewport image, for thumbnail/preview 
-        
-        # for each stream seen in the viewport
-            # get the raw data
-            # add metadata on the way the stream is displayed 
-        
+        streams = view.getStreams()
+        if len(streams) == 0:
+            log.warning("Failed to take snapshot, no stream visible in view %s", view.name.value)
+            return
+
         self.start_snapshot_animation()
         
-        # FIXME: this is a very simplified version until we introduce full support for streams
-        data = panel.opt_view.datamodel.optical_det_raw
-        if data is None:
-            # Try harder
-            log.warning("Failed to get the last raw image, will acquire a new one")
-            df = panel.secom_model.camera.data
-            data = df.get()
-             
+        # let's try to get a thumbnail
+        if view.thumbnail.value is None:
+            thumbnail = None
+        else:
+            # need to convert from wx.Image to ndimage
+            thumbnail = img.wxImage2NDImage(view.thumbnail.value, keep_alpha=False)
+        
+        # for each stream seen in the viewport
+        raw_images = []
+        for s in streams:
+            data = s.raw # list of raw images for this stream (with metadata)
+            if len(data) == 0:
+                log.warning("Failed to get the last raw image of stream %s, will acquire a new one", s.name.value)
+                # FIXME: ask the stream to get activated and return an image
+                # it's the only one which know precisely how to configure detector and emitters
+                data = [s._dataflow.get()]
+            raw_images.extend(data)
+        
         # record everything to a file
-        exporter.export(data, filename)
+        exporter.export(filename, raw_images, thumbnail)
         log.info("Snapshot saved as file '%s'.", filename)
     
     def start_snapshot_animation(self):

@@ -3,7 +3,7 @@ Created on 19 Sep 2012
 
 @author: piel
 '''
-from odemis.gui.util.img import DataArray2wxImage
+from odemis.gui.util.img import DataArray2wxImage, wxImage2NDImage
 import numpy
 import unittest
 import wx
@@ -151,7 +151,17 @@ class TestDataArray2wxImage(unittest.TestCase):
         self.assertGreater(pixelg, pixel0)
         self.assertGreater(pixel1, pixelg)
                 
+class TestWxImage2NDImage(unittest.TestCase):
     
+    def test_simple(self):
+        shape = (32, 32)
+        wximage = wx.EmptyImage(*shape) # black RGB
+        ndimage = wxImage2NDImage(wximage)
+        self.assertEqual(ndimage.shape[0:2], shape)
+        self.assertEqual(ndimage.shape[2], 3) # RGB
+        self.assertTrue((ndimage[0,0] == [0, 0, 0]).all())
+    
+    # TODO alpha channel
 
 if __name__ == "__main__":
     #import sys;sys.argv = ['', 'Test.test']

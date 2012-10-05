@@ -216,14 +216,8 @@ class OdemisGUIApp(wx.App):
                                               self.main_frame)
             
             
-#            from odemis.gui.comp.stream import FixedStreamPanelEntry
-#            # TODO should pass a stream
-#            fp = FixedStreamPanelEntry(self.main_frame.pnl_stream,
-#                                       stream=self.secom_model,
-#                                       label="Bright field Stream")
-#            self.main_frame.pnl_stream.add_stream(fp)
-#
-#            self.acquisition_controller = AcquisitionController(self.main_frame)
+            self.acquisition_controller = AcquisitionController(self.interface_model,
+                                                                self.main_frame)
 
             # Main on/off buttons => only optical for now
             # FIXME: special _bitmap_ toggle button doesn't seem to generate

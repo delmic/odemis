@@ -104,3 +104,20 @@ def DataArray2wxImage(data, depth=None, brightness=None, contrast=None, tint=(25
         numpy.multiply(drescaled, btint / 255., out=rgb[:,:,2])
 
     return wx.ImageFromBuffer(*size, dataBuffer=rgb) # 0 copy
+
+
+def wxImage2NDImage(image, keep_alpha=True):
+    """
+    Converts a wx.Image into a numpy array.
+    image (wx.Image): the image to convert of shape MxN
+    keep_alpha (boolean): keep the alpha channel when converted 
+    returns (nd.array): a numpy array of shape MxNx3 (RGB) or MxNx4 (RGBA) 
+    Note: Alpha not supported.
+    """
+    if keep_alpha and image.HasAlpha():
+        shape = image.Width, image.Height, 4
+        raise NotImplementedError()
+    else:
+        shape = image.Width, image.Height, 3
+
+    return numpy.ndarray(buffer=image.DataBuffer, shape=shape, dtype=numpy.uint8) 
