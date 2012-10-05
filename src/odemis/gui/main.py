@@ -23,12 +23,12 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from odemis import __version__, model
 from odemis.gui import main_xrc, instrmodel
-from odemis.gui.controler.acquisition import AcquisitionController
-from odemis.gui.controler.settingspanel import SettingsSideBar
-from odemis.gui.controler.stream import StreamController
-from odemis.gui.controler.tabs import TabBar
-from odemis.gui.controler.viewpanel import ViewSelector
-from odemis.gui.controler.views import ViewController
+from odemis.gui.controller.acquisition import AcquisitionController
+from odemis.gui.controller.settingspanel import SettingsSideBar
+from odemis.gui.controller.stream import StreamController
+from odemis.gui.controller.tabs import TabBar
+from odemis.gui.controller.viewpanel import ViewSelector
+from odemis.gui.controller.views import ViewController
 from odemis.gui.instrmodel import OpticalBackendConnected, InstrumentalImage
 from odemis.gui.log import log, create_gui_logger
 from odemis.gui.xmlh import odemis_get_resources
@@ -39,10 +39,6 @@ import sys
 import threading
 import traceback
 import wx
-#from odemis.gui.controler.viewpanel import ViewSideBar
-
-
-
 
 
 
@@ -200,7 +196,7 @@ class OdemisGUIApp(wx.App):
 #                self.goto_debug_mode()
 
 
-            self.settings_controler = SettingsSideBar(self.interface_model,
+            self.settings_controller = SettingsSideBar(self.interface_model,
                                                       self.main_frame)
 
             #print_microscope_tree(microscope)

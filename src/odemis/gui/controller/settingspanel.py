@@ -528,11 +528,6 @@ class SemSettingsPanel(SettingsPanel):
 class OpticalSettingsPanel(SettingsPanel):
     pass
 
-class StreamPanel(object):
-
-    def __init__(self, strm_panel):
-        self.panel = strm_panel
-
 class SettingsSideBar(object):
     """ The main controller class for the settings panel in the live view.
 
@@ -544,7 +539,6 @@ class SettingsSideBar(object):
         self._main_frame = main_frame
         self._livegui = livegui
 
-        self._stream_panel = StreamPanel(main_frame.pnl_stream)
         self._sem_panel = SemSettingsPanel(
                                     main_frame.fp_sem_settings,
                                     "No SEM found")

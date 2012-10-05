@@ -569,13 +569,14 @@ class ViewButton(ImageTextToggleButton):
         Changes the image (preview) of the button
         image (wx.Image or None): new image. If None, a stock image is used
         """
-        log.warn("Setting overlay")
+        log.debug("Setting overlay")
 
         if image is None:
             from odemis.gui.img.data import getarr_downImage
-            small_image = getarr_downImage()
+            small_image = getarr_downImage() # FIXME: better default image, or just black
         else:
             # FIXME: what's the right size?
+            # FIXME: not all the thumbnails have the right aspect ratio => truncate
             # was 70, 70... but let's avoid constants
             small_image = image.Scale(self.overlay_width,
                                       self.overlay_height,
@@ -588,7 +589,7 @@ class ViewButton(ImageTextToggleButton):
         ImageTextToggleButton.DrawLabel(self, dc, width, height, dx, dy)
 
         if self.overlay is not None:
-            log.warn("Painting overlay")
+            log.debug("Painting overlay")
             dc.DrawBitmap(self.overlay, 0, 0, True)
 
 

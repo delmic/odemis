@@ -121,6 +121,8 @@ class ViewSelector(object):
             im = self.buttons[btn].view.thumbnail.value
             if im is None:
                 continue # stays black
+            
+            # FIXME: not all the thumbnails have the right aspect ratio cf set_overlay
             # Rescale to fit
             sim = im.Scale(size[0], size[1], wx.IMAGE_QUALITY_HIGH)
             # compute placement
