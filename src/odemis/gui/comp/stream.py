@@ -149,15 +149,12 @@ class Expander(wx.PyControl):
         # Remove the hover effect
         self._btn_color.OnLeave(evt)
 
-        dlg = wx.ColourDialog(self)
+        # set default colour to the current value
+        cldata = wx.ColourData()
+        cldata.SetColour(wx.Colour(*self._stream.tint.value))
         
-        dlg.ColourData.SetColour(wx.Colour(*self._stream.tint.value)) # FIXME seems to not work??
-        # DEBUG
-        data = dlg.GetColourData()
-        colour = wx.Colour(*self._stream.tint.value)
-        data.SetColour(colour)
-         
-
+        dlg = wx.ColourDialog(self, cldata)
+        
         if dlg.ShowModal() == wx.ID_OK:
             colour = dlg.ColourData.GetColour().Get() # convert to a 3-tuple
             log.debug("Colour %r selected", colour)
