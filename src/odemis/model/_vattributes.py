@@ -522,6 +522,7 @@ class ListVA(VigilantAttribute):
         if not isinstance(value, collections.Iterable):
             raise InvalidTypeError("Value '%r' is not a list." % value)
         # TODO we need to also detect whenever this list is modified
+        # or at least force the value to be a tuple (= read-only)
 
 
 class BooleanVA(VigilantAttribute):

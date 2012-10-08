@@ -30,7 +30,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 import collections
 
 import wx
-import wx.combo
 import wx.lib.newevent
 
 import odemis.gui.img.data as img
@@ -263,13 +262,14 @@ class StreamPanelEntry(wx.PyPanel):
 
     expander_class = FixedExpander
 
-    def __init__(self, parent, stream, wid=wx.ID_ANY, 
+    def __init__(self, parent, stream, livegui, wid=wx.ID_ANY, 
                  pos=wx.DefaultPosition, size=wx.DefaultSize,
                  style=wx.CP_DEFAULT_STYLE, agwStyle=0,
                  validator=wx.DefaultValidator, name="CollapsiblePane",
                  collapsed=True):
         """
         stream (Stream): the data model to be displayed (and modified by the user)
+        livegui (MicroscopeGUI): the microscope GUI, where there is currentView
         """
 
         wx.PyPanel.__init__(self, parent, wid, pos, size, style, name)
@@ -277,6 +277,7 @@ class StreamPanelEntry(wx.PyPanel):
         self.SetBackgroundColour("#4D4D4D")
         self.SetForegroundColour("#DDDDDD")
         self.stream = stream
+        self._livegui = livegui
         self._collapsed = True
         self._agwStyle = agwStyle | wx.CP_NO_TLW_RESIZE #|wx.CP_GTK_EXPANDER
 
@@ -302,6 +303,13 @@ class StreamPanelEntry(wx.PyPanel):
     def on_remove(self, evt):
         log.debug("Removing stream panel '%s'", self.stream.name.value)
         fpb_item = self.Parent
+        
+        # generate EVT_STREAM_REMOVE 
+        event = stream_remove_event(entry=self)
+        wx.PostEvent(fpb_item, event)
+        
+        # remove ourself from the panel
+        # TODO: do this in the panel handler?
         self.Destroy()
         fpb_item.Layout()
 
@@ -310,10 +318,10 @@ class StreamPanelEntry(wx.PyPanel):
         if self._expander._btn_vis.GetToggle():
             log.debug("Showing stream '%s'", self.stream.name.value)
             # FIXME how to get the ref?
-            #self.micgui.currentView.value.addStream(self.stream)
+            self._livegui.currentView.value.addStream(self.stream)
         else:
             log.debug("Hiding stream '%s'", self.stream.name.value)
-            #self.micgui.currentView.value.removeStream(self.stream)
+            self._livegui.currentView.value.removeStream(self.stream)
 
     def on_play(self, evt):
         if self._expander._btn_play.GetToggle():
@@ -324,6 +332,14 @@ class StreamPanelEntry(wx.PyPanel):
 
     # END ==== Event Handlers
 
+    def setVisible(self, visible):
+        """
+        Set the "visible" toggle button. 
+        Note: it does not add/remove it to the current view.
+        """
+        # TODO: check that we don't call on_visibility()
+        self._expander._btn_vis.SetToggle(visible)
+        
     def collapse(self, collapse=True):
         """ Collapses or expands the pane window.
         """
@@ -810,8 +826,9 @@ class StreamPanel(wx.Panel):
 
         self.FitStreams()
 
-    def setMicroscope(self, microscope):
+    def setMicroscope(self, microscope, stream_controller):
         self._microscope = microscope
+        self._stream_controller = stream_controller
         
         self._microscope.currentView.subscribe(self._onView, init=True)
 
@@ -824,22 +841,24 @@ class StreamPanel(wx.Panel):
         if not view:
             return
         
-        # FIXME
         # hide/show the stream panel entries which are compatible with the view
-        # (listed in view.stream_classes)
+        allowed_classes = view.stream_classes
+        for e in self.entries:
+            e.Show(isinstance(e.stream, allowed_classes)) 
+        
+        #self.Refresh()
+        self.FitStreams()
         
         # update the "visible" icon of each stream panel entry to match the list
         # of streams in the view
-        # (listed in view.streams.getStreams())
+        visible_streams = view.streams.getStreams()
+        for e in self.entries:
+            e.setVisible(e.stream in visible_streams)
         
-
-
     # === Event Handlers
 
     def on_add_stream(self, evt):
         # TODO: call the action of the menu
-#        csp = CustomStreamPanelEntry(self, label="Custom Stream")
-#        self.add_stream(csp)
 
         if "Filtered colour" in self.menu_actions:
             action = self.menu_actions["Filtered colour"]
@@ -848,11 +867,6 @@ class StreamPanel(wx.Panel):
             log.info("Don't know how to add a stream, need to implement a real menu")
         # evt_obj = evt.GetEventObject()
         # stream_name = evt_obj.GetStringSelection()
-
-        # if self.menu_actions.has_key(stream_name):
-        #     self.menu_actions[stream_name]()
-        # else:
-        #     raise KeyError("Stream named '%s' not found!", evt.data)
 
     def on_stream_remove(self, evt):
         eo = evt.GetEventObject()
@@ -947,40 +961,42 @@ class StreamPanel(wx.Panel):
         #self.Refresh()
         self.FitStreams()
 
-    def hide_stream(self, stream_pos):
-        self.entries[stream_pos].Hide()
-        self.Refresh()
-        self.FitStreams()
 
-    def remove_stream(self, stream_pos):
-        stream_obj = self.entries.pop(stream_pos)
-        wx.CallAfter(stream_obj.Destroy)
-        self._set_warning()
+    # FIXME it seems it's never called because the event is never generated 
+    def remove_stream(self, evt):
+        log.debug("StreamPanel received remove event %r", evt)
+        stream = evt.entry.stream
+        
+        # delete stream
+        self._stream_controller.removeStream(stream)
 
-    def clear(self):
-        for dummy in range(len(self.entries)):
-            self.remove_stream(0)
+        # removes the entry
+        self.entries.remove(evt.entry)
+        wx.CallAfter(evt.entry.Destroy)
         self._set_warning()
+        
+        
+#    def clear(self):
+#        for dummy in range(len(self.entries)):
+#            self.remove_stream(0)
+#        self._set_warning()
 
     def _set_warning(self):
         """ Display a warning text when no streams are present, or show it
         otherwise.
         """
         if self.txt_no_stream is not None:
-            if self.is_empty() :
-                self.txt_no_stream.Show()
-            else:
-                self.txt_no_stream.Hide()
+            self.txt_no_stream.Show(self.is_empty())
 
-    def get_stream_position(self, stream_entry):
-        """ Return the position of the given stream entry, with the top position
-        being 0.
-        """
-        for i, e in enumerate(self.entries):
-            if e == stream_entry:
-                return i
-
-        return None
+#    def get_stream_position(self, stream_entry):
+#        """ Return the position of the given stream entry, with the top position
+#        being 0.
+#        """
+#        for i, e in enumerate(self.entries):
+#            if e == stream_entry:
+#                return i
+#
+#        return None
 
     def set_actions(self, actions):
         """

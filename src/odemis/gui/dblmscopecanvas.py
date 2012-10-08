@@ -87,14 +87,14 @@ class DblMicroscopeCanvas(DraggableCanvas):
         view.lastUpdate.subscribe(self._onViewImageUpdate, init=True)
     
     
-    def _convertStreamsToImages(self, tree):
+    def _convertStreamsToImages(self):
         """
         Temporary function to convert the StreamTree to 2 images as the canvas 
           currently expects.
-        tree (StreamTree): the stream tree to convert
         """
+        streams = self.view.streams.streams
         # the stream tree can have less, or more than 2 images
-        for i, s in enumerate(tree.streams[0:2]):
+        for i, s in enumerate(streams[0:2]):
             if not s:
                 # should not happen, but let's not completely fail on this
                 log.error("StreamTree has a None stream")
@@ -111,8 +111,9 @@ class DblMicroscopeCanvas(DraggableCanvas):
     
     def _onViewImageUpdate(self, t):
         # TODO use the real streamtree functions
-        self._convertStreamsToImages(self.view.streams)
-        wx.CallAfter(self.ShouldUpdateDrawing)
+        #wx.CallAfter(self.ShouldUpdateDrawing)
+        # for now we call a conversion layer
+        wx.CallAfter(self._convertStreamsToImages)
         
         # TODO canvas should update thumbnail from time to time
         # => override UpdateDrawing() and if not updated for some time, copy dc ?

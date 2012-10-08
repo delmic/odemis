@@ -440,7 +440,10 @@ class Stream(object):
         self._detector = detector
         self._dataflow = dataflow
         self._emitter = emitter
-        self.raw = [] # list of DataArray received and used to generate the image
+        
+        # list of DataArray received and used to generate the image
+        # every time it's modified, image is also modified
+        self.raw = [] 
         # the most important attribute
         self.image = VigilantAttribute(InstrumentalImage(None))
 
@@ -451,6 +454,9 @@ class Stream(object):
         self.updated = model.BooleanVA(False) # Whether the user wants the stream to be updated
         self.active = model.BooleanVA(False)
         self.active.subscribe(self.onActive)
+        # TODO do we also need a set of incompatible streams? When any of the 
+        # incompatible stream is active, this stream cannot be active
+        
 
         if self._detector:
             self._depth = self._detector.shape[2] # used for B/C adjustment
@@ -480,7 +486,8 @@ class Stream(object):
         Add a warning if not already present
         warning (WARNING_*)
         """
-        new_warnings = set(self.warnings.value).add(warning)
+        # Surprisingly set([1]).add(2) returns None
+        new_warnings = set(self.warnings.value) | set(warning)
         self.warnings.value = list(new_warnings)
 
     def onActive(self, active):
@@ -488,11 +495,6 @@ class Stream(object):
 
         # TODO: check that updated is true
         # and automatically deactivate when updated goes to false?
-
-
-        # TODO how to turn off the other lights when not used? => Do we need to
-        # distinguish between "really physically active" and "being updated from
-        # time to time" (the former implying the latter)
 
         if active:
             if not self.updated.value:
@@ -546,7 +548,11 @@ class Stream(object):
         self._updateImage()
 
     def onNewImage(self, dataflow, data):
-        self.raw[0] = data
+        # For now, raw images are pretty simple: we only have one
+        # (in the future, we could keep the old ones which are not fully overlapped
+        if len(self.raw) > 0:
+            self.raw.pop()
+        self.raw.insert(0, data)
         self._updateImage()
 
 class SEMStream(Stream):
@@ -643,22 +649,26 @@ class FluoStream(Stream):
 
     def _setFilterEmission(self):
         wl = self.emission.value
-        if self._filter.band.readonly:
-            # we can only check that it's correct
-            fitting = False
-            for l, h in self._filter.band.value:
-                if l < wl and wl < h:
-                    fitting = True
-                    break
-            self._removeWarnings([Stream.WARNING_EMISSION_IMPOSSIBLE,
-                                  Stream.WARNING_EMISSION_NOT_OPT])
-            if not fitting:
-                log.warning("Emission wavelength %s doesn't fit the filter",
-                            readable_str(wl, "m"))
-                self._addWarning(Stream.WARNING_EMISSION_IMPOSSIBLE)
-                # TODO detect no optimal situation (within 10% band of border?)
-            return
-        raise NotImplementedError("Do not know how to change filter band")
+        # TODO: we need a way to know if the HwComponent can change automatically 
+        # or only manually. For now we suppose it's manual
+        
+        # Changed manually: we can only check that it's correct
+        fitting = False
+        for l, h in self._filter.band.value:
+            if l < wl and wl < h:
+                fitting = True
+                break
+        self._removeWarnings([Stream.WARNING_EMISSION_IMPOSSIBLE,
+                              Stream.WARNING_EMISSION_NOT_OPT])
+        if not fitting:
+            log.warning("Emission wavelength %s doesn't fit the filter",
+                        readable_str(wl, "m"))
+            self._addWarning(Stream.WARNING_EMISSION_IMPOSSIBLE)
+            # TODO detect no optimal situation (within 10% band of border?)
+        return
+    
+        # changed automatically
+#        raise NotImplementedError("Do not know how to change filter band")
 
     def _setLightExcitation(self):
         wl = self.excitation.value
@@ -686,7 +696,9 @@ class FluoStream(Stream):
         emissions = [0] * len(spectra)
         emissions[i] = 1
         self._emitter.emissions.value = emissions
-
+        
+        
+        # TODO read back self._emitter.emissions.value to get the actual value
         # set warnings if necessary
         self._removeWarnings([Stream.WARNING_EXCITATION_IMPOSSIBLE,
                               Stream.WARNING_EXCITATION_NOT_OPT])
@@ -803,12 +815,11 @@ class MicroscopeView(object):
         Add a stream to the view. It takes care of updating the StreamTree
         according to the type of stream.
         stream (Stream): stream to add
-        Raises:
-            KeyError if the stream is already present
+        If the stream is already present, nothing happens
         """
         # check if the stream is already present
         if stream in self.streams.getStreams():
-            raise KeyError("Stream %s is already present.", stream.name)
+            return
 
         if not isinstance(stream, self.stream_classes):
             log.warning("Adding incompatible stream %s to view %s", stream.name.value, self.name.value)
@@ -828,9 +839,12 @@ class MicroscopeView(object):
         """
         Remove a stream from the view. It takes care of updating the StreamTree.
         stream (Stream): stream to remove
-        Raises:
-            KeyError if the stream is already present
+        If the stream is not present, nothing happens
         """
+        # check if the stream is already removed
+        if not stream in self.streams.getStreams():
+            return
+        
         # Stop listening to the stream changes
         stream.image.unsubscribe(self._onNewImage)
 

@@ -94,6 +94,7 @@ class LightFilter(model.HwComponent):
             if low > max_val or high > max_val:
                 raise ValueError("Band contains very high values for light wavelength, ensure the value is in meters: %r.", band)
         
+        # not readonly to allow the user to change manually the filter
         self.band = model.ListVA(band, unit="m")
         
         # TODO: MD_OUT_WL or MD_IN_WL depending on affect
