@@ -298,70 +298,6 @@ class StreamPanelEntry(wx.PyPanel):
         if not collapsed:
             self.collapse(collapsed)
 
-    # ==== Event Handlers
-
-    def on_remove(self, evt):
-        log.debug("Removing stream panel '%s'", self.stream.name.value)
-        fpb_item = self.Parent
-        
-        # generate EVT_STREAM_REMOVE 
-        event = stream_remove_event(entry=self)
-        wx.PostEvent(fpb_item, event)
-        
-        # remove ourself from the panel
-        # TODO: do this in the panel handler?
-        self.Destroy()
-        fpb_item.Layout()
-
-    def on_visibility(self, evt):
-        # TODO need to let the currently focused view know (via view controller?)
-        if self._expander._btn_vis.GetToggle():
-            log.debug("Showing stream '%s'", self.stream.name.value)
-            # FIXME how to get the ref?
-            self._livegui.currentView.value.addStream(self.stream)
-        else:
-            log.debug("Hiding stream '%s'", self.stream.name.value)
-            self._livegui.currentView.value.removeStream(self.stream)
-
-    def on_play(self, evt):
-        if self._expander._btn_play.GetToggle():
-            log.debug("Activating stream '%s'", self.stream.name.value)
-        else:
-            log.debug("Pausing stream '%s'", self.stream.name.value)
-        self.stream.updated.value = self._expander._btn_play.GetToggle()
-
-    # END ==== Event Handlers
-
-    def setVisible(self, visible):
-        """
-        Set the "visible" toggle button. 
-        Note: it does not add/remove it to the current view.
-        """
-        # TODO: check that we don't call on_visibility()
-        self._expander._btn_vis.SetToggle(visible)
-        
-    def collapse(self, collapse=True):
-        """ Collapses or expands the pane window.
-        """
-
-        if self._collapsed == collapse:
-            return
-
-        self.Freeze()
-
-        # update our state
-        self._panel.Show(not collapse)
-        self._collapsed = collapse
-
-        wx.CallAfter(self.Parent.FitStreams)
-
-        self.Thaw()
-
-        # update button label
-        # NB: this must be done after updating our "state"
-        #self._expander.SetLabel(self._label)
-
-        #self.on_status_change(self.GetBestSize())
 
     def finalize(self):
         """ This method builds all the child controls
@@ -528,15 +464,143 @@ class StreamPanelEntry(wx.PyPanel):
                           flag=wx.ALIGN_CENTRE_VERTICAL | wx.RIGHT,
                           border=10)
     
+    def set_expander_button(self, button):
+        """ Assign a new expander button to the stream panel.
+        """
+
+        if self._expander:
+            self._sz.Replace(self._expander, button)
+            self.Unbind(wx.EVT_BUTTON, self._expander)
+            self._expander.Destroy()
+
+        self._expander = button
+        self.SetLabel(button.GetLabel())
+        self.Bind(wx.EVT_BUTTON, self.on_button, self._expander)
+
+        if self._panel:
+            self._expander.MoveBeforeInTabOrder(self._panel)
+        self.Layout()
+
+    # API
     
+    def Layout(self, *args, **kwargs):
+        """ Layout the StreamPanelEntry. """
+
+        if not self._expander or not self._panel or not self._sz:
+            return False     # we need to complete the creation first!
+
+        oursz = self.GetSize()
+
+        # move & resize the button and the static line
+        self._sz.SetDimension(0, 0, oursz.GetWidth(),
+                              self._sz.GetMinSize().GetHeight())
+        self._sz.Layout()
+
+        if not self._collapsed:
+            # move & resize the container window
+            yoffset = self._sz.GetSize().GetHeight()
+            self._panel.SetDimensions(0, yoffset, oursz.x, oursz.y - yoffset)
+
+            # this is very important to make the pane window layout show
+            # correctly
+            self._panel.Show()
+            self._panel.Layout()
+
+        return True
+
+    def DoGetBestSize(self, *args, **kwargs):
+        """ Gets the size which best suits the window: for a control, it would
+        be the minimal size which doesn't truncate the control, for a panel -
+        the same size as it would have after a call to `Fit()`.
+        """
+
+        # do not use GetSize() but rather GetMinSize() since it calculates
+        # the required space of the sizer
+        sz = self._sz.GetMinSize()
+
+        # when expanded, we need more space
+        if not self._collapsed:
+            pbs = self._panel.GetBestSize()
+            sz.width = max(sz.GetWidth(), pbs.x)
+            sz.height = sz.y + pbs.y
+
+        return sz
+
+    def Destroy(self, *args, **kwargs):
+        """
+        Delete the widget from the GUI
+        """
+        fpb_item = self.Parent
+        wx.PyPanel.Destroy(self, *args, **kwargs)
+        fpb_item._fitStreams()
+
+    
+    def setVisible(self, visible):
+        """
+        Set the "visible" toggle button. 
+        Note: it does not add/remove it to the current view.
+        """
+        # TODO: check that we don't call on_visibility()
+        self._expander._btn_vis.SetToggle(visible)
+        
+    def collapse(self, collapse=True):
+        """ Collapses or expands the pane window.
+        """
+
+        if self._collapsed == collapse:
+            return
+
+        self.Freeze()
+
+        # update our state
+        self._panel.Show(not collapse)
+        self._collapsed = collapse
+
+        wx.CallAfter(self.Parent._fitStreams)
+
+        self.Thaw()
     
     # VA subscriptions: reflect the changes on the stream to the GUI 
     def onUpdatedChanged(self, updated):
         self._expander._btn_play.SetToggle(self.stream.updated.value)
 
+    # TODO need to subscribe to brightness/contrast, wavelengthes, tint...
 
     # GUI events: update the stream when the user changes the values
+
+    def on_remove(self, evt):
+        log.debug("Removing stream panel '%s'", self.stream.name.value)
+#        fpb_item = self.Parent
         
+        # generate EVT_STREAM_REMOVE 
+        event = stream_remove_event(entry=self)
+        wx.PostEvent(self, event)
+        
+        # remove ourself from the panel
+        # TODO: do this in the panel handler?
+#        self.Destroy()
+#        fpb_item.Layout()
+
+    def on_visibility(self, evt):
+        # TODO need to let the currently focused view know (via view controller?)
+        view = self._livegui.currentView.value
+        if self._expander._btn_vis.GetToggle():
+            log.debug("Showing stream '%s'", self.stream.name.value)
+            # FIXME how to get the ref?
+            if view:
+                view.addStream(self.stream)
+        else:
+            log.debug("Hiding stream '%s'", self.stream.name.value)
+            if view:
+                view.removeStream(self.stream)
+
+    def on_play(self, evt):
+        if self._expander._btn_play.GetToggle():
+            log.debug("Activating stream '%s'", self.stream.name.value)
+        else:
+            log.debug("Pausing stream '%s'", self.stream.name.value)
+        self.stream.updated.value = self._expander._btn_play.GetToggle()
+
     def on_toggle_autocontrast(self, evt):
         enabled = self._btn_auto_contrast.GetToggle()
         # disable the manual controls if it's on
@@ -552,6 +616,7 @@ class StreamPanelEntry(wx.PyPanel):
         key = evt.GetKeyCode()
 
         if key in (wx.WXK_UP, wx.WXK_DOWN):
+            # FIXME
             # self._sld_brightness.SetValue(self._txt_brightness.GetValue())
             # self._stream.optical_brightness.value = self._txt_brightness.GetValue()
             pass
@@ -647,33 +712,6 @@ class StreamPanelEntry(wx.PyPanel):
         #ev = wx.CollapsiblePaneEvent(self, self.GetId(), self._collapsed)
         #self.GetEventHandler().ProcessEvent(ev)
 
-    def get_panel(self):
-        """ Returns a reference to the pane window. Use the returned `wx.Window`
-        as the parent of widgets to make them part of the collapsible area.
-        """
-        return self._panel
-
-    def set_expander_button(self, button):
-        """ Assign a new expander button to the stream panel.
-        """
-
-        if self._expander:
-            self._sz.Replace(self._expander, button)
-            self.Unbind(wx.EVT_BUTTON, self._expander)
-            self._expander.Destroy()
-
-        self._expander = button
-        self.SetLabel(button.GetLabel())
-        self.Bind(wx.EVT_BUTTON, self.on_button, self._expander)
-
-        if self._panel:
-            self._expander.MoveBeforeInTabOrder(self._panel)
-        self.Layout()
-
-
-    def get_button(self):
-        """ Returns the button associated with StreamPanelEntry. """
-        return self._expander
 
     def on_draw_expander(self, event):
         """ Handles the ``wx.EVT_PAINT`` event for the stream panel.
@@ -686,60 +724,7 @@ class StreamPanelEntry(wx.PyPanel):
 
         self._expander.OnDrawExpander(dc)
 
-    def Layout(self, *args, **kwargs):
-        """ Layout the StreamPanelEntry. """
 
-        if not self._expander or not self._panel or not self._sz:
-            return False     # we need to complete the creation first!
-
-        oursz = self.GetSize()
-
-        # move & resize the button and the static line
-        self._sz.SetDimension(0, 0, oursz.GetWidth(),
-                              self._sz.GetMinSize().GetHeight())
-        self._sz.Layout()
-
-        if not self._collapsed:
-            # move & resize the container window
-            yoffset = self._sz.GetSize().GetHeight()
-            self._panel.SetDimensions(0, yoffset, oursz.x, oursz.y - yoffset)
-
-            # this is very important to make the pane window layout show
-            # correctly
-            self._panel.Show()
-            self._panel.Layout()
-
-        return True
-
-    def DoGetBestSize(self, *args, **kwargs):
-        """ Gets the size which best suits the window: for a control, it would
-        be the minimal size which doesn't truncate the control, for a panel -
-        the same size as it would have after a call to `Fit()`.
-        """
-
-        # do not use GetSize() but rather GetMinSize() since it calculates
-        # the required space of the sizer
-        sz = self._sz.GetMinSize()
-
-        # when expanded, we need more space
-        if not self._collapsed:
-            pbs = self._panel.GetBestSize()
-            sz.width = max(sz.GetWidth(), pbs.x)
-            sz.height = sz.y + pbs.y
-
-        return sz
-
-    def Destroy(self, *args, **kwargs):
-        """
-        Delete the widget from the GUI
-        """
-        fpb_item = self.Parent
-        wx.PyPanel.Destroy(self, *args, **kwargs)
-        fpb_item.FitStreams()
-
-    # def Layout(self):
-    #     pcp.PyCollapsiblePane.Layout(self)
-    #     #self._panel.SetBackgroundColour(self.GetBackgroundColour())
 
 
 class FixedStreamPanelEntry(StreamPanelEntry): #pylint: disable=R0901
@@ -824,7 +809,7 @@ class StreamPanel(wx.Panel):
         #self.btn_add_stream.Bind(wx.EVT_LISTBOX, self.on_add_stream)
         self.btn_add_stream.Bind(wx.EVT_BUTTON, self.on_add_stream)
 
-        self.FitStreams()
+        self._fitStreams()
 
     def setMicroscope(self, microscope, stream_controller):
         self._microscope = microscope
@@ -832,6 +817,43 @@ class StreamPanel(wx.Panel):
         
         self._microscope.currentView.subscribe(self._onView, init=True)
 
+    
+    # internal methods
+    def _fitStreams(self):
+        h = self._sz.GetMinSize().GetHeight()
+
+        log.debug("Setting StreamPanel height to %s", h)
+        self.SetSize((-1, h))
+
+        # The panel size is cached in the _PanelSize attribute.
+        # Make sure it's updated by calling ResizePanel
+
+        p = self.Parent
+
+        while not isinstance(p, FoldPanelItem):
+            p = p.Parent
+
+        p._refresh()
+
+    # the order in which the streams are displayed
+    STREAM_ORDER=[instrmodel.SEMStream,
+                  instrmodel.BrightfieldStream,
+                  instrmodel.FluoStream]
+    # TODO maybe should be provided after init by the controller (like key of
+    # sorted()), to separate the GUI from the model ?
+    def _get_stream_order(self, stream):
+        """
+        Gives the "order" of the given stream, as defined in STREAM_ORDER.
+        stream (Stream): a stream
+        returns (0<= int): the order 
+        """
+        for i, c in enumerate(self.STREAM_ORDER):
+            if isinstance(stream, c):
+                return i
+
+        log.warning("Stream of unknown order type %s", stream.__class__.__name__)
+        return len(self.STREAM_ORDER)
+        
     # === VA handlers
         
     def _onView(self, view):
@@ -845,9 +867,8 @@ class StreamPanel(wx.Panel):
         allowed_classes = view.stream_classes
         for e in self.entries:
             e.Show(isinstance(e.stream, allowed_classes)) 
-        
         #self.Refresh()
-        self.FitStreams()
+        self._fitStreams()
         
         # update the "visible" icon of each stream panel entry to match the list
         # of streams in the view
@@ -869,33 +890,22 @@ class StreamPanel(wx.Panel):
         # stream_name = evt_obj.GetStringSelection()
 
     def on_stream_remove(self, evt):
-        eo = evt.GetEventObject()
-        wx.CallAfter(eo.Destroy)
+        log.debug("StreamPanel received remove event %r", evt)
+        # delete entry
+        self.remove_stream(evt.entry)
+        
+        # delete stream
+        stream = evt.entry.stream
+        self._stream_controller.removeStream(stream)
 
-    def FitStreams(self):
-
-        h = self._sz.GetMinSize().GetHeight()
-
-        log.debug("Setting StreamPanel height to %s", h)
-        self.SetSize((-1, h))
-
-        # The panel size is cached in the _PanelSize attribute.
-        # Make sure it's updated by calling ResizePanel
-
-        p = self.Parent
-
-        while not isinstance(p, FoldPanelItem):
-            p = p.Parent
-
-        p._refresh()
-
+    # === API of the stream panel
     def show_add_button(self):
         self.btn_add_stream.Show()
-        self.FitStreams()
+        self._fitStreams()
 
     def hide_add_button(self):
         self.btn_add_stream.Hide()
-        self.FitStreams()
+        self._fitStreams()
 
     def is_empty(self):
         return len(self.entries) == 0
@@ -903,33 +913,16 @@ class StreamPanel(wx.Panel):
     def get_size(self):
         return len(self.entries)
 
-    # the order in which the streams are displayed
-    STREAM_ORDER=[instrmodel.SEMStream,
-                  instrmodel.BrightfieldStream,
-                  instrmodel.FluoStream]
-    # TODO maybe should be provided after init by the controller (like key of
-    # sorted()), to separate the GUI from the model ?
-    def _get_stream_order(self, stream):
+    def add_stream(self, entry):
         """
-        Gives the "order" of the given stream, as defined in STREAM_ORDER.
-        stream (Stream): a stream
-        returns (0<= int): the order 
-        """
-        for i, c in enumerate(self.STREAM_ORDER):
-            if isinstance(stream, c):
-                return i
-
-        log.warning("Stream of unknown order type %s", stream.__class__.__name__)
-        return len(self.STREAM_ORDER)
-        
-    def add_stream(self, stream_panel_entry):
-        """ This method adds a stream entry to the panel, after the appropriate
-        position has been determined. 
+        This method adds a stream entry to the panel. The appropriate
+        position is automatically determined. 
+        entry (StreamPanelEntry): an entry (representing a specific stream)
         """
         # Insert the entry in the order of STREAM_ORDER. If there are already 
         # streams with the same type, insert after them.
         ins_pos = 0
-        order_s = self._get_stream_order(stream_panel_entry.stream)
+        order_s = self._get_stream_order(entry.stream)
         for e in self.entries:
             order_e = self._get_stream_order(e.stream)
             if order_s < order_e:
@@ -937,12 +930,12 @@ class StreamPanel(wx.Panel):
             ins_pos += 1
         
         log.debug("Inserting %s at position %s",
-                  stream_panel_entry.stream.__class__.__name__,
+                  entry.stream.__class__.__name__,
                   ins_pos)
 
-        stream_panel_entry.finalize()
+        entry.finalize()
 
-        self.entries.insert(ins_pos, stream_panel_entry)
+        self.entries.insert(ins_pos, entry)
 
         self._set_warning()
 
@@ -950,37 +943,25 @@ class StreamPanel(wx.Panel):
             self._sz = wx.BoxSizer(wx.VERTICAL)
             self.SetSizer(self._sz)
 
-        self._sz.InsertWindow(ins_pos, stream_panel_entry,
+        self._sz.InsertWindow(ins_pos, entry,
                               flag=self.DEFAULT_STYLE,
                               border=self.DEFAULT_BORDER)
 
-        stream_panel_entry.Bind(EVT_STREAM_REMOVE, self.on_stream_remove)
+        entry.Bind(EVT_STREAM_REMOVE, self.on_stream_remove)
 
-        stream_panel_entry.Layout()
-
-        #self.Refresh()
-        self.FitStreams()
+        entry.Layout()
+        self._fitStreams()
 
 
-    # FIXME it seems it's never called because the event is never generated 
-    def remove_stream(self, evt):
-        log.debug("StreamPanel received remove event %r", evt)
-        stream = evt.entry.stream
-        
-        # delete stream
-        self._stream_controller.removeStream(stream)
-
-        # removes the entry
-        self.entries.remove(evt.entry)
-        wx.CallAfter(evt.entry.Destroy)
+    def remove_stream(self, entry):
+        """
+        Removes a stream entry
+        Deletion of the actual stream must be done separately.
+        """
+        self.entries.remove(entry)
+        wx.CallAfter(entry.Destroy)
         self._set_warning()
         
-        
-#    def clear(self):
-#        for dummy in range(len(self.entries)):
-#            self.remove_stream(0)
-#        self._set_warning()
-
     def _set_warning(self):
         """ Display a warning text when no streams are present, or show it
         otherwise.
@@ -988,24 +969,14 @@ class StreamPanel(wx.Panel):
         if self.txt_no_stream is not None:
             self.txt_no_stream.Show(self.is_empty())
 
-#    def get_stream_position(self, stream_entry):
-#        """ Return the position of the given stream entry, with the top position
-#        being 0.
+#    def set_actions(self, actions):
 #        """
-#        for i, e in enumerate(self.entries):
-#            if e == stream_entry:
-#                return i
-#
-#        return None
-
-    def set_actions(self, actions):
-        """
-        Set the action menu
-        actions (collections.OrderedDict(string, callable)): dict of title => callback,
-          ordered as it will appear
-        """
-        self.menu_actions = actions
-        self.btn_add_stream.set_choices(self.menu_actions.keys())
+#        Set the action menu
+#        actions (collections.OrderedDict(string, callable)): dict of title => callback,
+#          ordered as it will appear
+#        """
+#        self.menu_actions = actions
+#        self.btn_add_stream.set_choices(self.menu_actions.keys())
 
     def get_actions(self):
         return self.menu_actions

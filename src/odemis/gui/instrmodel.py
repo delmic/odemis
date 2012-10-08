@@ -726,7 +726,7 @@ class MicroscopeView(object):
     #  * inherit (with nothing inside each subclass)
     #  * special attribute with list of streams classes this view is for.
 
-    def __init__(self, name, stage, focus0=None, focus1=None, stream_classes=None):
+    def __init__(self, name, stage=None, focus0=None, focus1=None, stream_classes=None):
         """
         name (string): user-friendly name of the view
         stage (Actuator): actuator with two axes: x and y
@@ -744,14 +744,14 @@ class MicroscopeView(object):
 
         # The real stage position, to be modified via moveStageToView()
         # it's a direct access from the stage, so looks like a dict of axes
-        # TODO: shall we provide a VA as a simplified view of the stage.position which can move?
-        self.stage_pos = stage.position
-#        stage.position.subscribe(self.onStagePos)
-
-        # the current center of the view, which might be different from the stage
-        # TODO: we might need to have it on the MicroscopeGUI, if all the viewports must display the same location
-        pos = self.stage_pos.value
-        self.view_pos = model.ListVA((pos["x"], pos["y"]), unit="m")
+        if stage:
+            self.stage_pos = stage.position
+            # stage.position.subscribe(self.onStagePos)
+    
+            # the current center of the view, which might be different from the stage
+            # TODO: we might need to have it on the MicroscopeGUI, if all the viewports must display the same location
+            pos = self.stage_pos.value
+            self.view_pos = model.ListVA((pos["x"], pos["y"]), unit="m")
 
         # current density (meter per pixel, ~ scale/zoom level)
         self.mpp = PositiveVA(10e-6, unit="m/px") # (10um/px => ~large view of the sample)

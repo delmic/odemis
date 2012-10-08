@@ -84,6 +84,14 @@ class FakeFluoStream(instrmodel.FluoStream):
         pass
 
 
+class FakeMicroscopeGUI(object):
+    """
+    Imitates a MicroscopeGUI wrt stream entry: it just needs a currentView
+    """
+    def __init__(self):
+        fview = instrmodel.MicroscopeView("fakeview") 
+        self.currentView = model.VigilantAttribute(fview)
+        
 # Sleep timer in milliseconds
 SLEEP_TIME = 100
 # If manual is set to True, the window will be kept open at the end
@@ -153,6 +161,9 @@ class FoldPanelBarTestCase(unittest.TestCase):
         loop()
         wx.MilliSleep(SLEEP_TIME)
 
+        livegui = FakeMicroscopeGUI()
+        self.frm.stream_panel.setMicroscope(livegui, None)
+        
         # Hide the Stream add button
         self.assertEqual(self.frm.stream_panel.btn_add_stream.IsShown(), True)
         wx.MilliSleep(SLEEP_TIME)
@@ -169,64 +180,68 @@ class FoldPanelBarTestCase(unittest.TestCase):
         wx.MilliSleep(SLEEP_TIME)
         fake_cstream = FakeFluoStream("First Custom Stream")
         custom_entry = CustomStreamPanelEntry(self.frm.stream_panel,
-                                              stream=fake_cstream)
+                                              fake_cstream, livegui)
         self.frm.stream_panel.add_stream(custom_entry)
         loop()
 
         self.assertEqual(self.frm.stream_panel.get_size(), 1)
         self.assertEqual(
-            self.frm.stream_panel.get_stream_position(custom_entry),
+            self.frm.stream_panel.entries.index(custom_entry),
             0)
 
         # Add a fixed stream
         wx.MilliSleep(SLEEP_TIME)
         fake_fstream1 = FakeSEMStream("First Fixed Stream")
         fixed_entry = FixedStreamPanelEntry(self.frm.stream_panel,
-                                           stream=fake_fstream1)
+                                           fake_fstream1, livegui)
         self.frm.stream_panel.add_stream(fixed_entry)
         loop()
 
         self.assertEqual(self.frm.stream_panel.get_size(), 2)
         self.assertEqual(
-            self.frm.stream_panel.get_stream_position(fixed_entry),
+            self.frm.stream_panel.entries.index(fixed_entry),
             0)
         self.assertEqual(
-            self.frm.stream_panel.get_stream_position(custom_entry),
+            self.frm.stream_panel.entries.index(custom_entry),
             1)
 
         # Add a fixed stream
         wx.MilliSleep(SLEEP_TIME)
         fake_fstream2 = FakeSEMStream("Second Fixed Stream")
-        fixed_entry = FixedStreamPanelEntry(self.frm.stream_panel,
-                                           stream=fake_fstream2)
-        self.frm.stream_panel.add_stream(fixed_entry)
+        fixed_entry2 = FixedStreamPanelEntry(self.frm.stream_panel,
+                                           fake_fstream2, livegui)
+        self.frm.stream_panel.add_stream(fixed_entry2)
         loop()
 
         self.assertEqual(self.frm.stream_panel.get_size(), 3)
         self.assertEqual(
-            self.frm.stream_panel.get_stream_position(fixed_entry),
+            self.frm.stream_panel.entries.index(fixed_entry2),
             1)
         self.assertEqual(
-            self.frm.stream_panel.get_stream_position(custom_entry),
+            self.frm.stream_panel.entries.index(custom_entry),
             2)
 
-        # Hide first stream
+        # Hide first stream by changing to a view that only show SEM streams
         wx.MilliSleep(SLEEP_TIME)
-        self.frm.stream_panel.hide_stream(0)
+        semview = instrmodel.MicroscopeView("SEM view", stream_classes=(instrmodel.SEMStream,))
+#        self.frm.stream_panel.hide_stream(0)
+        livegui.currentView.value = semview
         loop()
         self.assertEqual(self.frm.stream_panel.get_size(), 3)
+        self.assertFalse(custom_entry.IsShown())
 
-        # Delete other fixes stream
-
+        # Delete the second fixed stream
         wx.MilliSleep(SLEEP_TIME)
-        self.frm.stream_panel.remove_stream(1)
+        self.frm.stream_panel.remove_stream(fixed_entry2)
         loop()
 
         self.assertEqual(self.frm.stream_panel.get_size(), 2)
 
         # Clear remainging streams
         wx.MilliSleep(SLEEP_TIME)
-        self.frm.stream_panel.clear()
+        # internal access to avoid reseting the whole window
+        for e in list(self.frm.stream_panel.entries):
+            self.frm.stream_panel.remove_stream(e)
         loop()
 
         self.assertEqual(self.frm.stream_panel.get_size(), 0)
@@ -235,7 +250,10 @@ class FoldPanelBarTestCase(unittest.TestCase):
 
         loop()
         wx.MilliSleep(SLEEP_TIME)
-
+        
+        livegui = FakeMicroscopeGUI()
+        self.frm.stream_panel.setMicroscope(livegui, None)
+        
         self.assertEqual(self.frm.stream_panel.btn_add_stream.IsShown(), True)
 
 
@@ -246,7 +264,7 @@ class FoldPanelBarTestCase(unittest.TestCase):
         def brightfield_callback():
             fake_stream = FakeBrightfieldStream("Brightfield")
             fixed_entry = FixedStreamPanelEntry(self.frm.stream_panel,
-                                                stream=fake_stream)
+                                                fake_stream, livegui)
             self.frm.stream_panel.add_stream(fixed_entry)
 
         self.frm.stream_panel.add_action("Brightfield", brightfield_callback)
@@ -261,7 +279,7 @@ class FoldPanelBarTestCase(unittest.TestCase):
         def sem_callback():
             fake_stream = FakeSEMStream("SEM:EDT")
             fixed_entry = FixedStreamPanelEntry(self.frm.stream_panel,
-                                           stream=fake_stream)
+                                           fake_stream, livegui)
             self.frm.stream_panel.add_stream(fixed_entry)
 
         self.frm.stream_panel.add_action("SEM:EDT", sem_callback)
@@ -283,14 +301,16 @@ class FoldPanelBarTestCase(unittest.TestCase):
         def custom_callback():
             fake_stream = FakeFluoStream("Custom")
             custom_entry = CustomStreamPanelEntry(self.frm.stream_panel,
-                                                 stream=fake_stream)
+                                                 fake_stream, livegui)
             self.frm.stream_panel.add_stream(custom_entry)
 
         self.frm.stream_panel.add_action("Custom", custom_callback)
 
         # Clear remainging streams
         wx.MilliSleep(SLEEP_TIME)
-        self.frm.stream_panel.clear()
+        # internal access to avoid reseting the whole window
+        for e in list(self.frm.stream_panel.entries):
+            self.frm.stream_panel.remove_stream(e)
         loop()
 
 if __name__ == "__main__":
