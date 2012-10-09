@@ -82,7 +82,7 @@ def __init_resources():
     wx.FileSystem.AddHandler(wx.MemoryFSHandler())
 
     main_xrc = '''\
-<?xml version="1.0" ?><resource class="wxStaticBitmap" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
+<?xml version="1.0" ?><resource class="ViewButton" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
   <object class="wxFrame" name="fr_main">
     <object class="wxMenuBar">
       <object class="wxMenu">
@@ -247,7 +247,6 @@ def __init_resources():
                       </object>
                       <object class="sizeritem">
                         <object class="ViewButton" name="btn_view_all">
-                          <size>96,80</size>
                           <bitmap>img_preview_block_png</bitmap>
                           <hover>img_preview_block_a_png</hover>
                           <selected>img_preview_block_a_png</selected>
@@ -264,9 +263,9 @@ def __init_resources():
                         <flag>wxRIGHT|wxALIGN_RIGHT</flag>
                         <border>5</border>
                       </object>
+                      
                       <object class="sizeritem">
                         <object class="ViewButton" name="btn_view_tl">
-                          <size>96,80</size>
                           <bitmap>img_preview_block_png</bitmap>
                           <hover>img_preview_block_a_png</hover>
                           <selected>img_preview_block_a_png</selected>
@@ -285,7 +284,6 @@ def __init_resources():
                       </object>
                       <object class="sizeritem">
                         <object class="ViewButton" name="btn_view_tr">
-                          <size>96,80</size>
                           <bitmap>img_preview_block_png</bitmap>
                           <hover>img_preview_block_a_png</hover>
                           <selected>img_preview_block_a_png</selected>
@@ -304,7 +302,6 @@ def __init_resources():
                       </object>
                       <object class="sizeritem">
                         <object class="ViewButton" name="btn_view_bl">
-                          <size>96,80</size>
                           <bitmap>img_preview_block_png</bitmap>
                           <hover>img_preview_block_a_png</hover>
                           <selected>img_preview_block_a_png</selected>
@@ -323,7 +320,6 @@ def __init_resources():
                       </object>
                       <object class="sizeritem">
                         <object class="ViewButton" name="btn_view_br">
-                          <size>96,80</size>
                           <bitmap>img_preview_block_png</bitmap>
                           <hover>img_preview_block_a_png</hover>
                           <selected>img_preview_block_a_png</selected>

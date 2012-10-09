@@ -20,6 +20,7 @@ You should have received a copy of the GNU General Public License along with Ode
 # and xmlh/xh_delmic.py modules are available (e.g. through a symbolic link)
 # in XRCED's plugin directory.
 
+
 import wx
 
 from wx.lib.buttons import GenBitmapButton, GenBitmapToggleButton, \
@@ -75,7 +76,7 @@ class ImageButton(GenBitmapButton):
         size = args[4] if len(args) >= 5 else kwargs.get('size', None)
 
         if bmp:
-            if size:
+            if size and size != (-1, -1):
                 args = list(args)
                 # Resize and replace original bmp
                 if len(args) >= 3:
@@ -186,7 +187,7 @@ class ImageTextButton(GenBitmapTextButton):
         size = args[4] if len(args) >= 5 else kwargs.get('size', None)
 
         if bmp:
-            if size:
+            if size and size != (-1, -1):
                 args = list(args)
                 # Resize and replace original bmp
                 if len(args) >= 3:
@@ -317,7 +318,7 @@ class ImageToggleButton(GenBitmapToggleButton):  #pylint: disable=R0901
         size = args[4] if len(args) >= 5 else kwargs.get('size', None)
 
         if bmp:
-            if size:
+            if size and size != (-1, -1):
                 args = list(args)
                 # Resize and replace original bmp
                 if len(args) >= 3:
@@ -433,7 +434,7 @@ class ImageTextToggleButton(GenBitmapTextToggleButton):
         size = args[4] if len(args) >= 5 else kwargs.get('size', None)
 
         if bmp:
-            if size:
+            if size and size != (-1, -1):
                 args = list(args)
                 # Resize and replace original bmp
                 if len(args) >= 3:
@@ -578,10 +579,34 @@ class ViewButton(ImageTextToggleButton):
             # FIXME: what's the right size?
             # FIXME: not all the thumbnails have the right aspect ratio => truncate
             # was 70, 70... but let's avoid constants
-            small_image = image.Scale(self.overlay_width,
-                                      self.overlay_height,
+
+            # NOTE: The next values are cast to float, because they are going to
+            # be used to calculate ratios and the default behaviour for Python
+            # 2.x it to floor integer divisions. Another way of dealing with
+            # this, is to use the "from __future__ import division" statement
+            # which will make integer division result in a float value. The
+            # advantage of this approach is that the code will be compatible
+            # with Python 3.x
+            img_w, img_h = [float(v) for v in image.GetSize()]
+
+            log.warn("Image size is %s %s ", img_w, img_h)
+            log.warn("Button size is %s %s ", self.overlay_width, self.overlay_height)
+
+            log.warn("Width ratio %s", img_w / self.overlay_width)
+            log.warn("Height ratio %s", img_h / self.overlay_height)
+
+            if img_w / self.overlay_width < img_h / self.overlay_height:
+                img_h = int(img_h * (self.overlay_width / img_w))
+                img_w = self.overlay_width
+            else:
+                img_w = int(img_w * (self.overlay_height / img_h))
+                img_h = self.overlay_height
+
+            log.warn("New size %s %s", img_w, img_h)
+            small_image = image.Scale(img_w,
+                                      img_h,
                                       wx.IMAGE_QUALITY_HIGH)
-            
+
         self.overlay = wx.BitmapFromImage(small_image)
         self.Refresh()
 
@@ -589,7 +614,7 @@ class ViewButton(ImageTextToggleButton):
         ImageTextToggleButton.DrawLabel(self, dc, width, height, dx, dy)
 
         if self.overlay is not None:
-            log.debug("Painting overlay")
+            #log.debug("Painting overlay")
             dc.DrawBitmap(self.overlay, 0, 0, True)
 
 

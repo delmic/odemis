@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<resource class="wxStaticBitmap" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
+<resource class="ViewButton" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
   <object class="wxFrame" name="fr_main">
     <object class="wxMenuBar">
       <object class="wxMenu">
@@ -164,7 +164,6 @@
                       </object>
                       <object class="sizeritem">
                         <object class="ViewButton" name="btn_view_all">
-                          <size>96,80</size>
                           <bitmap>img/preview_block.png</bitmap>
                           <hover>img/preview_block_a.png</hover>
                           <selected>img/preview_block_a.png</selected>
@@ -181,9 +180,9 @@
                         <flag>wxRIGHT|wxALIGN_RIGHT</flag>
                         <border>5</border>
                       </object>
+                      
                       <object class="sizeritem">
                         <object class="ViewButton" name="btn_view_tl">
-                          <size>96,80</size>
                           <bitmap>img/preview_block.png</bitmap>
                           <hover>img/preview_block_a.png</hover>
                           <selected>img/preview_block_a.png</selected>
@@ -202,7 +201,6 @@
                       </object>
                       <object class="sizeritem">
                         <object class="ViewButton" name="btn_view_tr">
-                          <size>96,80</size>
                           <bitmap>img/preview_block.png</bitmap>
                           <hover>img/preview_block_a.png</hover>
                           <selected>img/preview_block_a.png</selected>
@@ -221,7 +219,6 @@
                       </object>
                       <object class="sizeritem">
                         <object class="ViewButton" name="btn_view_bl">
-                          <size>96,80</size>
                           <bitmap>img/preview_block.png</bitmap>
                           <hover>img/preview_block_a.png</hover>
                           <selected>img/preview_block_a.png</selected>
@@ -240,7 +237,6 @@
                       </object>
                       <object class="sizeritem">
                         <object class="ViewButton" name="btn_view_br">
-                          <size>96,80</size>
                           <bitmap>img/preview_block.png</bitmap>
                           <hover>img/preview_block_a.png</hover>
                           <selected>img/preview_block_a.png</selected>
