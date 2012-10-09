@@ -253,6 +253,7 @@ class DraggableCanvas(wx.Panel):
         im (wx.Image): the image, or None to remove the current image
         pos (2-tuple of float): position of the center of the image (in world unit)
         scale (float): scaling of the image
+        Note: call ShouldUpdateDrawing() to actually get the image redrawn afterwards
         """
         assert(0 <= index <= 1)
 
@@ -265,7 +266,6 @@ class DraggableCanvas(wx.Panel):
         if not im.HasAlpha():
             im.InitAlpha()
         self.Images[index] = im
-        self.ShouldUpdateDrawing()
 
     def ImageCount(self):
         """ Return the number of images stored within the canvas """

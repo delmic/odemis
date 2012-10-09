@@ -843,12 +843,24 @@ class AndorCam3(model.DigitalCamera):
         self.Command(u"AcquisitionStart")
         readout_time = size[0] * size[1] * self._metadata[model.MD_READOUT_TIME] # s
         while not self.acquire_must_stop.is_set():
-            # XXX check if need to update settings first
+            # FIXME: if the resolution changed, we need to change the buffers to 
+            # fit the new size
             
             metadata = dict(self._metadata) # duplicate
             metadata[model.MD_ACQ_DATE] = time.time() # time at the beginning
+            
+            # first we wait ourselves the typical time (which might be very long)
+            # while detecting requests for stop
+            must_stop = self.acquire_must_stop.wait(exposure_time + readout_time)
+            if must_stop:
+                break
+            
+            # then wait a bounded time to ensure the image is acquired
             try:
-                pbuffer, buffersize = self.WaitBuffer(exposure_time + readout_time + 1)
+                pbuffer, buffersize = self.WaitBuffer(1)
+                # Maybe the must_stop flag has been set while we were waiting
+                if self.acquire_must_stop.is_set():
+                    break
             except ATError as (errno, strerr):
                 # sometimes there is timeout, don't completely give up
                 # Note: seems to happen when time between two waitbuffer() is too long
@@ -873,7 +885,6 @@ class AndorCam3(model.DigitalCamera):
             cbuffer = buffers.pop(0)
             assert(addressof(pbuffer.contents) == addressof(cbuffer))
             
-            metadata[model.MD_SENSOR_TEMP] = self._metadata[model.MD_SENSOR_TEMP]
             array = self._buffer_as_array(cbuffer, size, metadata)
             
             # Next buffer. We cannot reuse the buffer because we don't know if
@@ -905,6 +916,7 @@ class AndorCam3(model.DigitalCamera):
         """
         assert not self.acquire_must_stop.is_set()
         self.acquire_must_stop.set()
+        logging.debug("Asked acquisition thread to stop")
         # TODO check that acquisitionstop actually stops the waitbuffer()
         # FIXME: it seems calling AcquisitionStop here cause the thread to go crazy
         # => need to find a way to stop the acquisition even if it's very long
@@ -916,9 +928,13 @@ class AndorCam3(model.DigitalCamera):
         Waits until the end acquisition of a flow of images. Calling from the
          acquisition callback is not permitted (it would cause a dead-lock).
         """
-        # "while" is mostly to not wait if it's already finished 
-        while self.acquire_must_stop.is_set():
-            self.acquire_thread.join() # XXX timeout for safety? 
+        # "if" is to not wait if it's already finished 
+        if self.acquire_must_stop.is_set():
+            self.acquire_thread.join(10) # 10s timeout for safety
+            if self.acquire_thread.isAlive():
+                raise OSError("Failed to stop the acquisition thread")
+        else:
+            logging.debug("Not waiting for acquisition thread to stop as it was already stopped")
     
     def terminate(self):
         """

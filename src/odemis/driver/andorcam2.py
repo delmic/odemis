@@ -1228,6 +1228,10 @@ class AndorCam2(model.DigitalCamera):
             cbuffer = self._allocate_buffer(size)
             try:
                 self.WaitForAcquisition(duration + 1)
+                # if the must_stop flag has been set while we were waiting
+                if self.acquire_must_stop.is_set():
+                    break
+                
                 # it might have acquired _several_ images in the time to process
                 # one image. In this case we discard all but the last one.
                 self.atcore.GetMostRecentImage16(cbuffer, size[0] * size[1])

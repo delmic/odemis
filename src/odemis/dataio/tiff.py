@@ -20,7 +20,6 @@ from odemis import __version__
 from osgeo import gdal_array
 import Image
 import gdal
-import libtiff
 import time
 
 # User-friendly name
