@@ -126,7 +126,7 @@ class Expander(wx.PyControl):
         if hasattr(stream, "tint"):
             self._btn_color = ColourButton(self, -1,
                                            bitmap=getemptyBitmap(),
-                                           size=(18,18),
+                                           size=(18, 18),
                                            colour=stream.tint.value,
                                            background_parent=parent,
                                            use_hover=True)
@@ -143,7 +143,7 @@ class Expander(wx.PyControl):
     def onStreamTint(self, colour):
         """ Update the colour button to reflect the provided colour """
         self._btn_color.set_colour(colour)
-    
+
     def on_color_click(self, evt):
         # Remove the hover effect
         self._btn_color.OnLeave(evt)
@@ -151,15 +151,15 @@ class Expander(wx.PyControl):
         # set default colour to the current value
         cldata = wx.ColourData()
         cldata.SetColour(wx.Colour(*self._stream.tint.value))
-        
+
         dlg = wx.ColourDialog(self, cldata)
-        
+
         if dlg.ShowModal() == wx.ID_OK:
-            colour = dlg.ColourData.GetColour().Get() # convert to a 3-tuple
+            colour = dlg.ColourData.GetColour().Get()  # convert to a 3-tuple
             log.debug("Colour %r selected", colour)
             # this will automatically update the button's colour
             self._stream.tint.value = colour
-            
+
     def DoGetBestSize(self, *args, **kwargs):
         """ Return the best size, which is the width of the parent and the
         height or the content (determined through the sizer).
@@ -217,18 +217,18 @@ class CustomExpander(Expander):
         self._label_ctrl.SetChoices(TEST_STREAM_LST)
         self._label_ctrl.SetBackgroundColour(self.Parent.GetBackgroundColour())
         self._label_ctrl.SetForegroundColour("#2FA7D4")
-        
+
         # TODO make sure it changes the value of stream.name when it is updated
         self._label_ctrl.Bind(wx.EVT_TEXT_ENTER, self._onLabelChange)
-        
+
         self._sz.Remove(1)
         self._sz.Insert(1, self._label_ctrl, 1,
                         wx.RIGHT | wx.ALIGN_CENTRE_VERTICAL, 8)
-        
+
     # GUI event handlers
     def _onLabelChange(self, evt):
         self._stream.name.value = self._label_ctrl.GetValue()
-        
+
 class StreamPanelEntry(wx.PyPanel):
     """ The StreamPanelEntry super class, a special case collapsible pane.
 
@@ -262,7 +262,7 @@ class StreamPanelEntry(wx.PyPanel):
 
     expander_class = FixedExpander
 
-    def __init__(self, parent, stream, livegui, wid=wx.ID_ANY, 
+    def __init__(self, parent, stream, livegui, wid=wx.ID_ANY,
                  pos=wx.DefaultPosition, size=wx.DefaultSize,
                  style=wx.CP_DEFAULT_STYLE, agwStyle=0,
                  validator=wx.DefaultValidator, name="CollapsiblePane",
@@ -279,7 +279,7 @@ class StreamPanelEntry(wx.PyPanel):
         self.stream = stream
         self._livegui = livegui
         self._collapsed = True
-        self._agwStyle = agwStyle | wx.CP_NO_TLW_RESIZE #|wx.CP_GTK_EXPANDER
+        self._agwStyle = agwStyle | wx.CP_NO_TLW_RESIZE  # |wx.CP_GTK_EXPANDER
 
 
         self._panel = wx.Panel(self, style=wx.TAB_TRAVERSAL | wx.NO_BORDER)
@@ -348,7 +348,7 @@ class StreamPanelEntry(wx.PyPanel):
                               self._panel,
                               value=self.stream.brightness.value,
                               val_range=self.stream.brightness.range,
-                              t_size=(40,-1),
+                              t_size=(40, -1),
                               unit="",
                               name="brightness_slider")
 
@@ -364,7 +364,7 @@ class StreamPanelEntry(wx.PyPanel):
                              self._panel,
                              value=self.stream.contrast.value,
                              val_range=self.stream.contrast.range,
-                             t_size=(40,-1),
+                             t_size=(40, -1),
                              unit="",
                              name="contrast_slider")
 
@@ -384,8 +384,8 @@ class StreamPanelEntry(wx.PyPanel):
         self.setVisible(self.stream in self._livegui.currentView.value.getStreams())
 
         # Panel controls
-        # TODO reuse VigilantAttributeConnector, or at least refactor 
-        
+        # TODO reuse VigilantAttributeConnector, or at least refactor
+
         self._sld_brightness.Bind(wx.EVT_MOTION, self.on_brightness_slide)
         self._sld_brightness.Bind(wx.EVT_LEFT_UP, self.on_brightness_slide)
         # self._txt_brightness.Bind(wx.EVT_TEXT_ENTER, self.on_brightness_entered)
@@ -399,25 +399,25 @@ class StreamPanelEntry(wx.PyPanel):
         self._btn_auto_contrast.Bind(wx.EVT_BUTTON, self.on_toggle_autocontrast)
 
         self._btn_auto_contrast.SetToggle(self.stream.auto_bc.value)
-        self.on_toggle_autocontrast(None) # to ensure the controls are disabled if necessary
+        self.on_toggle_autocontrast(None)  # to ensure the controls are disabled if necessary
 
 
         if hasattr(self.stream, "excitation"):
-            # Warning: stream.excitation is in m, we present everything in nm 
+            # Warning: stream.excitation is in m, we present everything in nm
             lbl_excitation = wx.StaticText(self._panel, -1, "excitation:")
             self._gbs.Add(lbl_excitation, (3, 0),
                           flag=wx.LEFT | wx.ALIGN_CENTRE_VERTICAL, border=34)
-    
+
             # TODO use the range of the VA
-            self._txt_excitation = UnitIntegerCtrl(self._panel, -1, 
+            self._txt_excitation = UnitIntegerCtrl(self._panel, -1,
                     int(round(self.stream.excitation.value * 1e9)),
                     style=wx.NO_BORDER,
                     size=(50, -1), min_val=200, max_val=1000, unit='nm')
             self._txt_excitation.SetForegroundColour("#2FA7D4")
             self._txt_excitation.SetBackgroundColour(self.GetBackgroundColour())
-    
+
             self._txt_excitation.Bind(wx.EVT_TEXT, self.on_excitation_text)
-    
+
             self._gbs.Add(self._txt_excitation, (3, 1),
                           flag=wx.ALIGN_CENTRE_VERTICAL | wx.RIGHT,
                           border=10)
@@ -425,15 +425,15 @@ class StreamPanelEntry(wx.PyPanel):
             # to show the wavelength
             self._btn_excitation = ColourButton(self._panel, -1,
                                 bitmap=getemptyBitmap(),
-                                size=(18,18),
+                                size=(18, 18),
                                 colour=wave2rgb(self.stream.excitation.value),
                                 background_parent=self._panel)
             self._btn_excitation.SetToolTipString("Wavelength colour")
-    
+
             self._gbs.Add(self._btn_excitation, (3, 2),
                           flag=wx.ALIGN_CENTRE_VERTICAL | wx.RIGHT,
                           border=10)
-            
+
             # TODO also a label for warnings
 
 
@@ -441,31 +441,31 @@ class StreamPanelEntry(wx.PyPanel):
             lbl_emission = wx.StaticText(self._panel, -1, "emission:")
             self._gbs.Add(lbl_emission, (4, 0),
                           flag=wx.LEFT | wx.ALIGN_CENTRE_VERTICAL, border=34)
-    
-            self._txt_emission = UnitIntegerCtrl(self._panel, -1, 
+
+            self._txt_emission = UnitIntegerCtrl(self._panel, -1,
                     int(round(self.stream.emission.value * 1e9)),
                     style=wx.NO_BORDER,
                     size=(50, -1), min_val=200, max_val=1000, unit='nm')
             self._txt_emission.SetForegroundColour("#2FA7D4")
             self._txt_emission.SetBackgroundColour(self.GetBackgroundColour())
-    
+
             self._txt_emission.Bind(wx.EVT_TEXT, self.on_emission_text)
-    
+
             self._gbs.Add(self._txt_emission, (4, 1),
                           flag=wx.ALIGN_CENTRE_VERTICAL | wx.RIGHT,
                           border=10)
-    
+
             self._btn_emission = ColourButton(self._panel, -1,
                                               bitmap=getemptyBitmap(),
-                                              size=(18,18),
+                                              size=(18, 18),
                                               colour=wave2rgb(self.stream.emission.value),
                                               background_parent=self._panel)
             self._btn_emission.SetToolTipString("Wavelength colour")
-    
+
             self._gbs.Add(self._btn_emission, (4, 2),
                           flag=wx.ALIGN_CENTRE_VERTICAL | wx.RIGHT,
                           border=10)
-    
+
     def set_expander_button(self, button):
         """ Assign a new expander button to the stream panel.
         """
@@ -484,12 +484,12 @@ class StreamPanelEntry(wx.PyPanel):
         self.Layout()
 
     # API
-    
+
     def Layout(self, *args, **kwargs):
         """ Layout the StreamPanelEntry. """
 
         if not self._expander or not self._panel or not self._sz:
-            return False     # we need to complete the creation first!
+            return False  # we need to complete the creation first!
 
         oursz = self.GetSize()
 
@@ -536,7 +536,7 @@ class StreamPanelEntry(wx.PyPanel):
         wx.PyPanel.Destroy(self, *args, **kwargs)
         fpb_item._fitStreams()
 
-    
+
     def setVisible(self, visible):
         """
         Set the "visible" toggle button. 
@@ -544,7 +544,7 @@ class StreamPanelEntry(wx.PyPanel):
         """
         # TODO: check that we don't call on_visibility()
         self._expander._btn_vis.SetToggle(visible)
-        
+
     def collapse(self, collapse=True):
         """ Collapses or expands the pane window.
         """
@@ -561,8 +561,8 @@ class StreamPanelEntry(wx.PyPanel):
         wx.CallAfter(self.Parent._fitStreams)
 
         self.Thaw()
-    
-    # VA subscriptions: reflect the changes on the stream to the GUI 
+
+    # VA subscriptions: reflect the changes on the stream to the GUI
     def onUpdatedChanged(self, updated):
         self._expander._btn_play.SetToggle(self.stream.updated.value)
 
@@ -573,11 +573,11 @@ class StreamPanelEntry(wx.PyPanel):
     def on_remove(self, evt):
         log.debug("Removing stream panel '%s'", self.stream.name.value)
 #        fpb_item = self.Parent
-        
-        # generate EVT_STREAM_REMOVE 
+
+        # generate EVT_STREAM_REMOVE
         event = stream_remove_event(entry=self)
         wx.PostEvent(self, event)
-        
+
         # remove ourself from the panel
         # TODO: do this in the panel handler?
 #        self.Destroy()
@@ -627,8 +627,8 @@ class StreamPanelEntry(wx.PyPanel):
 
     # TODO just change the stream. the slider should automatically follow the stream
     def on_brightness_entered(self, evt):
-        #self._sld_brightness.SetValue(int(self._txt_brightness.GetValue()))
-        #self.stream.brightness.value = self._txt_brightness.GetValue()
+        # self._sld_brightness.SetValue(int(self._txt_brightness.GetValue()))
+        # self.stream.brightness.value = self._txt_brightness.GetValue()
         evt.Skip()
 
     def on_brightness_slide(self, evt):
@@ -638,8 +638,8 @@ class StreamPanelEntry(wx.PyPanel):
         evt.Skip()
 
     def on_contrast_entered(self, evt):
-        #self._sld_contrast.SetValue(int(self._txt_contrast.GetValue()))
-        #self._stream.optical_contrast.value = self._txt_contrast.GetValue()
+        # self._sld_contrast.SetValue(int(self._txt_contrast.GetValue()))
+        # self._stream.optical_contrast.value = self._txt_contrast.GetValue()
         evt.Skip()
 
     def on_contrast_slide(self, evt):
@@ -662,23 +662,23 @@ class StreamPanelEntry(wx.PyPanel):
         log.debug("Excitation changed")
         obj = evt.GetEventObject()
         self.stream.excitation.value = obj.GetValue() * 1e-9
-        
+
         colour = wave2rgb(self.stream.excitation.value)
         log.debug("Changing colour to %s", colour)
         self._btn_excitation.set_colour(colour)
-        
+
     def on_emission_text(self, evt):
         log.debug("Emission changed")
         obj = evt.GetEventObject()
         self.stream.emission.value = obj.GetValue() * 1e-9
-        
+
         colour = wave2rgb(self.stream.emission.value)
         log.debug("Changing colour to %s", colour)
         self._btn_emission.set_colour(colour)
 
         # changing emission should also change the tint
         self.stream.tint.value = colour
-        
+
     def OnToggle(self, evt):
         """ Toggle the StreamPanelEntry
 
@@ -690,8 +690,8 @@ class StreamPanelEntry(wx.PyPanel):
         if evt.GetX() > w * 0.85:
             self.collapse(not self._collapsed)
             # this change was generated by the user - send the event
-            #ev = wx.CollapsiblePaneEvent(self, self.GetId(), self._collapsed)
-            #self.GetEventHandler().ProcessEvent(ev)
+            # ev = wx.CollapsiblePaneEvent(self, self.GetId(), self._collapsed)
+            # self.GetEventHandler().ProcessEvent(ev)
 
         evt.Skip()
 
@@ -711,8 +711,8 @@ class StreamPanelEntry(wx.PyPanel):
         self.collapse(not self._collapsed)
 
         # this change was generated by the user - send the event
-        #ev = wx.CollapsiblePaneEvent(self, self.GetId(), self._collapsed)
-        #self.GetEventHandler().ProcessEvent(ev)
+        # ev = wx.CollapsiblePaneEvent(self, self.GetId(), self._collapsed)
+        # self.GetEventHandler().ProcessEvent(ev)
 
 
     def on_draw_expander(self, event):
@@ -729,7 +729,7 @@ class StreamPanelEntry(wx.PyPanel):
 
 
 
-class FixedStreamPanelEntry(StreamPanelEntry): #pylint: disable=R0901
+class FixedStreamPanelEntry(StreamPanelEntry):  # pylint: disable=R0901
     """ A pre-defined stream panel """
 
     expander_class = FixedExpander
@@ -740,7 +740,7 @@ class FixedStreamPanelEntry(StreamPanelEntry): #pylint: disable=R0901
     def finalize(self):
         StreamPanelEntry.finalize(self)
 
-class CustomStreamPanelEntry(StreamPanelEntry): #pylint: disable=R0901
+class CustomStreamPanelEntry(StreamPanelEntry):  # pylint: disable=R0901
     """ A stream panel which can be altered by the user """
 
     expander_class = CustomExpander
@@ -771,12 +771,12 @@ class StreamPanel(wx.Panel):
         pre = wx.PrePanel()
 
         self._sz = None
-        self._microscope = None # MicroscopeGUI
+        self._microscope = None  # MicroscopeGUI
         self.txt_no_stream = None
         self.btn_add_stream = None
 
         self.entries = []
-        self.menu_actions = collections.OrderedDict() # title => callback
+        self.menu_actions = collections.OrderedDict()  # title => callback
 
         # the Create step is done later by XRC.
         self.PostCreate(pre)
@@ -792,7 +792,7 @@ class StreamPanel(wx.Panel):
 
         msg = "No stream available as both SEM and optical paths are off."
 
-        #log.debug("Point size %s" % self.GetFont().GetPointSize())
+        # log.debug("Point size %s" % self.GetFont().GetPointSize())
 
         self.txt_no_stream = wx.StaticText(self, -1, msg)
         self._sz.Add(self.txt_no_stream, 0, wx.ALL | wx.ALIGN_CENTER, 10)
@@ -805,10 +805,10 @@ class StreamPanel(wx.Panel):
         self._sz.Add(self.btn_add_stream, flag=wx.ALL, border=5)
 
         self._set_warning()
-        
 
-        #FIXME: dropdown not working atm
-        #self.btn_add_stream.Bind(wx.EVT_LISTBOX, self.on_add_stream)
+
+        # FIXME: dropdown not working atm
+        # self.btn_add_stream.Bind(wx.EVT_LISTBOX, self.on_add_stream)
         self.btn_add_stream.Bind(wx.EVT_BUTTON, self.on_add_stream)
 
         self._fitStreams()
@@ -816,10 +816,10 @@ class StreamPanel(wx.Panel):
     def setMicroscope(self, microscope, stream_controller):
         self._microscope = microscope
         self._stream_controller = stream_controller
-        
+
         self._microscope.currentView.subscribe(self._onView, init=True)
 
-    
+
     # internal methods
     def _fitStreams(self):
         h = self._sz.GetMinSize().GetHeight()
@@ -838,7 +838,7 @@ class StreamPanel(wx.Panel):
         p._refresh()
 
     # the order in which the streams are displayed
-    STREAM_ORDER=[instrmodel.SEMStream,
+    STREAM_ORDER = [instrmodel.SEMStream,
                   instrmodel.BrightfieldStream,
                   instrmodel.FluoStream]
     # TODO maybe should be provided after init by the controller (like key of
@@ -855,29 +855,29 @@ class StreamPanel(wx.Panel):
 
         log.warning("Stream of unknown order type %s", stream.__class__.__name__)
         return len(self.STREAM_ORDER)
-        
+
     # === VA handlers
-        
+
     def _onView(self, view):
         """
         Called when the current view changes
         """
         if not view:
             return
-        
+
         # hide/show the stream panel entries which are compatible with the view
         allowed_classes = view.stream_classes
         for e in self.entries:
-            e.Show(isinstance(e.stream, allowed_classes)) 
-        #self.Refresh()
+            e.Show(isinstance(e.stream, allowed_classes))
+        # self.Refresh()
         self._fitStreams()
-        
+
         # update the "visible" icon of each stream panel entry to match the list
         # of streams in the view
         visible_streams = view.streams.getStreams()
         for e in self.entries:
             e.setVisible(e.stream in visible_streams)
-        
+
     # === Event Handlers
 
     def on_add_stream(self, evt):
@@ -895,7 +895,7 @@ class StreamPanel(wx.Panel):
         log.debug("StreamPanel received remove event %r", evt)
         # delete entry
         self.remove_stream(evt.entry)
-        
+
         # delete stream
         stream = evt.entry.stream
         self._stream_controller.removeStream(stream)
@@ -921,7 +921,7 @@ class StreamPanel(wx.Panel):
         position is automatically determined. 
         entry (StreamPanelEntry): an entry (representing a specific stream)
         """
-        # Insert the entry in the order of STREAM_ORDER. If there are already 
+        # Insert the entry in the order of STREAM_ORDER. If there are already
         # streams with the same type, insert after them.
         ins_pos = 0
         order_s = self._get_stream_order(entry.stream)
@@ -930,7 +930,7 @@ class StreamPanel(wx.Panel):
             if order_s < order_e:
                 break
             ins_pos += 1
-        
+
         log.debug("Inserting %s at position %s",
                   entry.stream.__class__.__name__,
                   ins_pos)
@@ -963,7 +963,7 @@ class StreamPanel(wx.Panel):
         self.entries.remove(entry)
         wx.CallAfter(entry.Destroy)
         self._set_warning()
-        
+
     def _set_warning(self):
         """ Display a warning text when no streams are present, or show it
         otherwise.
@@ -989,7 +989,7 @@ class StreamPanel(wx.Panel):
     #  * if there can be only one stream of this type, and it's already present => disabled
     # So maybe action comes also with a check_enabled callable which is called
     #   every time the menu is displayed and return (boolean) whether it should
-    #   be disabled 
+    #   be disabled
     def add_action(self, title, callback):
         """
         Add an action to the menu. It's added at the end of the list. If an 
