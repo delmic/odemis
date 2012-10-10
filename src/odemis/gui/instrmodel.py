@@ -708,6 +708,27 @@ class FluoStream(Stream):
         elif wl < best[1] or wl > best[3]: # outside of main 50% band
             self._addWarning(Stream.WARNING_EXCITATION_NOT_OPT)
 
+class StaticStream(Stream):
+    """
+    Stream containing one static image.
+    For test and static images.
+    """
+    def __init__(self, name, image):
+        """
+        Note: parameters are different from the base class.
+        image (InstrumentalImage): image to display
+        """
+        Stream.__init__(self, name, None, None, None)
+        self.image = VigilantAttribute(image)
+        
+    def onActive(self, active):
+        # don't do anything
+        pass
+    
+    def onBrightnessContrast(self, unused):
+        # TODO use original image as raw, and update the image
+        pass
+
 
 class MicroscopeView(object):
     """
@@ -750,7 +771,10 @@ class MicroscopeView(object):
             # the current center of the view, which might be different from the stage
             # TODO: we might need to have it on the MicroscopeGUI, if all the viewports must display the same location
             pos = self.stage_pos.value
-            self.view_pos = model.ListVA((pos["x"], pos["y"]), unit="m")
+            view_pos_init = (pos["x"], pos["y"])
+        else:
+            view_pos_init = (0, 0)
+        self.view_pos = model.ListVA(view_pos_init, unit="m")
 
         # current density (meter per pixel, ~ scale/zoom level)
         self.mpp = PositiveVA(10e-6, unit="m/px") # (10um/px => ~large view of the sample)
@@ -784,6 +808,8 @@ class MicroscopeView(object):
         return: a future (that allows to know when the move is finished)
         Note: once the move is finished stage_pos will be updated (by the back-end)
         """
+        if not self._stage:
+            return
         pos = self.view_pos.value
         # TODO: a way to know if it can do absolute move? => .capabilities!
 #        if hasattr(self.stage, "moveAbs"):
@@ -835,8 +861,9 @@ class MicroscopeView(object):
         # subscribe to the stream's image
         stream.image.subscribe(self._onNewImage)
 
-        # let everyone know that the view has changed
-        self.lastUpdate.value = time.time()
+        # if the stream already has an image, update now
+        if stream.image.value and stream.image.value.image:
+            self._onNewImage(stream.image.value)
 
     def removeStream(self, stream):
         """
@@ -854,7 +881,7 @@ class MicroscopeView(object):
             
             # remove stream from the StreamTree()
             # TODO handle more complex trees
-            self.streams.streams.discard(stream)
+            self.streams.streams.remove(stream)
 
         # let everyone know that the view has changed
         self.lastUpdate.value = time.time()
@@ -862,6 +889,7 @@ class MicroscopeView(object):
     def _onNewImage(self, im):
         """
         Called when one stream has its image updated
+        im (InstrumentalImage)
         """
         # if it's the first image ever, set mpp to the mpp of the image
         if not self._has_received_image and im.mpp:

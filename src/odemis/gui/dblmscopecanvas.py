@@ -81,7 +81,8 @@ class DblMicroscopeCanvas(DraggableCanvas):
 
         # TODO subscribe to view_pos to synchronize with the other views  
         # TODO subscribe to stage_pos as well/instead.
-        self.view.stage_pos.subscribe(self._onStagePos, init=True)
+        if hasattr(self.view, "stage_pos"):
+            self.view.stage_pos.subscribe(self._onStagePos, init=True)
         
         # any image changes
         view.lastUpdate.subscribe(self._onViewImageUpdate, init=True)
