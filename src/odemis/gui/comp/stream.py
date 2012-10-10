@@ -40,7 +40,7 @@ from .buttons import ImageButton, ImageToggleButton, \
 from .text import SuggestTextCtrl, UnitIntegerCtrl
 from .foldpanelbar import FoldPanelItem
 from .slider import UnitIntegerSlider
-from odemis.gui.util.conversion import wave2hex
+from odemis.gui.util.conversion import wave2rgb
 from odemis.gui.img.data import getemptyBitmap
 from odemis.gui import instrmodel
 
@@ -426,7 +426,7 @@ class StreamPanelEntry(wx.PyPanel):
             self._btn_excitation = ColourButton(self._panel, -1,
                                 bitmap=getemptyBitmap(),
                                 size=(18,18),
-                                colour=wave2hex(self.stream.excitation.value),
+                                colour=wave2rgb(self.stream.excitation.value),
                                 background_parent=self._panel)
             self._btn_excitation.SetToolTipString("Wavelength colour")
     
@@ -458,7 +458,7 @@ class StreamPanelEntry(wx.PyPanel):
             self._btn_emission = ColourButton(self._panel, -1,
                                               bitmap=getemptyBitmap(),
                                               size=(18,18),
-                                              colour=wave2hex(self.stream.emission.value),
+                                              colour=wave2rgb(self.stream.emission.value),
                                               background_parent=self._panel)
             self._btn_emission.SetToolTipString("Wavelength colour")
     
@@ -663,7 +663,7 @@ class StreamPanelEntry(wx.PyPanel):
         obj = evt.GetEventObject()
         self.stream.excitation.value = obj.GetValue() * 1e-9
         
-        colour = wave2hex(self.stream.excitation.value)
+        colour = wave2rgb(self.stream.excitation.value)
         log.debug("Changing colour to %s", colour)
         self._btn_excitation.set_colour(colour)
         
@@ -672,7 +672,7 @@ class StreamPanelEntry(wx.PyPanel):
         obj = evt.GetEventObject()
         self.stream.emission.value = obj.GetValue() * 1e-9
         
-        colour = wave2hex(self.stream.emission.value)
+        colour = wave2rgb(self.stream.emission.value)
         log.debug("Changing colour to %s", colour)
         self._btn_emission.set_colour(colour)
 
