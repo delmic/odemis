@@ -16,10 +16,12 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
-from odemis.driver import andorcam3
 from abs_cam_test import VirtualTestCam, VirtualStaticTestCam
+from odemis.driver import andorcam3
+import logging
 import unittest
 
+logging.getLogger().setLevel(logging.DEBUG)
 
 class StaticTestAndorCam3(VirtualStaticTestCam, unittest.TestCase):
     camera_type = andorcam3.AndorCam3

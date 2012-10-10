@@ -56,9 +56,11 @@ class ImageWindowApp(wx.App):
         self.AppName = "Odemis CLI"
         self.frame = wx.Frame(None, title=title, size=size)
  
-        self.frame.Bind(wx.EVT_KEY_DOWN, self.OnKey)
-        self.frame.Bind(wx.EVT_KEY_UP, self.OnKey) # EVT_CHAR and EVT_KEY_DOWN seems to not work in Ubuntu
         self.panel = wx.Panel(self.frame)
+        self.panel.Bind(wx.EVT_KEY_DOWN, self.OnKey)
+        # just in case panel doesn't have the focus: also on the frame
+        # (but it seems in Linux (GTK) frames don't receive key events anyway
+        self.frame.Bind(wx.EVT_KEY_DOWN, self.OnKey) 
         
         self.img = wx.EmptyImage(*size, clear=True)
         self.imageCtrl = wx.StaticBitmap(self.panel, wx.ID_ANY, wx.BitmapFromImage(self.img))

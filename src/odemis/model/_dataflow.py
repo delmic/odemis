@@ -129,6 +129,7 @@ class DataFlowBase(object):
         with self._lock:
             count_before = len(self._listeners)
             self._listeners.add(WeakMethod(listener))
+            logging.debug("Listener %r subscribed, now %d subscribers", listener, count_before + 1)
             if count_before == 0:
                 self.start_generate()
         
@@ -137,6 +138,7 @@ class DataFlowBase(object):
             count_before = len(self._listeners)
             self._listeners.discard(WeakMethod(listener))
             count_after = len(self._listeners)
+            logging.debug("Listener %r unsubscribed, now %d subscribers", listener, count_after)
             if count_before > 0 and count_after == 0:
                 self.stop_generate()
     
@@ -167,10 +169,11 @@ class DataFlowBase(object):
         """
         assert(isinstance(data, numpy.ndarray))
         
-        # to allow modify the set while calling
-        with self._lock:
-            snapshot_listeners = self._listeners.copy()
+        # Never take the lock here, to avoid the case where stop_generate() waits
+        # for one last notify
         
+        # to allow modify the set while calling
+        snapshot_listeners = self._listeners.copy()
         for l in snapshot_listeners: 
             try:
                 l(self, data)
@@ -300,12 +303,14 @@ class DataFlow(DataFlowBase):
                 assert callable(listener)
                 self._listeners.add(WeakMethod(listener))
 
+            logging.debug("Listener %r subscribed, now %d subscribers", listener, count_before + 1)
             if count_before == 0:
                 self.start_generate()
             
     @oneway
     def unsubscribe(self, listener):
         with self._lock:
+            count_before = self._count_listeners()
             if isinstance(listener, basestring):
                 # remove string from listeners  
                 self._remote_listeners.discard(listener)
@@ -314,7 +319,8 @@ class DataFlow(DataFlowBase):
                 self._listeners.discard(WeakMethod(listener))
     
             count_after = self._count_listeners()
-            if count_after == 0:
+            logging.debug("Listener %r unsubscribed, now %d subscribers", listener, count_after)
+            if count_before > 0 and count_after == 0:
                 self.stop_generate()
         
     def notify(self, data):
@@ -457,9 +463,11 @@ class SubscribeProxyThread(threading.Thread):
                 message = self._commands.recv()
                 if message == "SUB":
                     self.data.setsockopt(zmq.SUBSCRIBE, '')
+                    logging.debug("Subscribed to remote dataflow %s", self.uri)
                     self._commands.send("SUBD")
                 elif message == "UNSUB":
                     self.data.setsockopt(zmq.UNSUBSCRIBE, '')
+                    logging.debug("Unsubscribed to remote dataflow %s", self.uri)
                     # no confirmation (async)
                 elif message == "STOP":
                     self._commands.close()

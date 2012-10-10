@@ -380,6 +380,8 @@ class StreamPanelEntry(wx.PyPanel):
         self._expander._btn_vis.Bind(wx.EVT_BUTTON, self.on_visibility)
         self._expander._btn_play.Bind(wx.EVT_BUTTON, self.on_play)
         self.stream.updated.subscribe(self.onUpdatedChanged, init=True)
+        # initialise _btn_play
+        self.setVisible(self.stream in self._livegui.currentView.value.getStreams())
 
         # Panel controls
         # TODO reuse VigilantAttributeConnector, or at least refactor 

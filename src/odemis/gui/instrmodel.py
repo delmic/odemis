@@ -491,16 +491,14 @@ class Stream(object):
         self.warnings.value = list(new_warnings)
 
     def onActive(self, active):
-        # Normally is called only the value _changes_
-
-        # TODO: check that updated is true
-        # and automatically deactivate when updated goes to false?
-
+        # Called only the value _changes_
         if active:
+            log.debug("Subscribing to dataflow of component %s", self._detector.name)
             if not self.updated.value:
                 log.warning("Trying to activate stream while it's not supposed to update")
             self._dataflow.subscribe(self.onNewImage)
         else:
+            log.debug("Unsubscribing from dataflow of component %s", self._detector.name)
             self._dataflow.unsubscribe(self.onNewImage)
 
     # No __del__: subscription should be automatically stopped when the object
@@ -859,6 +857,8 @@ class MicroscopeView(object):
         """
         Called when one stream has its image updated
         """
+        # TODO: if it's the first image ever, set mpp to the mpp of the image
+        
         # just let everyone that the composited image has changed
         self.lastUpdate.value = time.time()
 

@@ -108,16 +108,22 @@ class DblMicroscopeCanvas(DraggableCanvas):
             else:
                 #TODO it seems there is a problem, we had： that should be better, but we don't do it for now, to detect when to reset mpp
                 self.SetImage(i, None) # removes the image
+        
+        # all the image not present in the stream are removed (set to None)
+        if len(streams) < 2:
+            for i in range(len(streams), 2):
+                self.SetImage(i, None) # removes the image
+                
+        # set merge_ratio 
+        self.merge_ratio = self.view.streams.kwargs.get("merge", 0.5)
     
     def _onViewImageUpdate(self, t):
         # TODO use the real streamtree functions
-        #wx.CallAfter(self.ShouldUpdateDrawing)
         # for now we call a conversion layer
-        wx.CallAfter(self._convertStreamsToImages)
+        self._convertStreamsToImages()
+        log.debug("Will update drawing for new image")
+        wx.CallAfter(self.ShouldUpdateDrawing)
         
-        # TODO canvas should update thumbnail from time to time
-        # => override UpdateDrawing() and if not updated for some time, copy dc ?
-
     def UpdateDrawing(self):
         # override just in order to detect when it's just finished redrawn
         

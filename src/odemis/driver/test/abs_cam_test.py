@@ -123,7 +123,8 @@ class VirtualTestCam(object):
         self.assertEqual(im.shape, self.size)
         self.assertGreaterEqual(duration, exposure, "Error execution took %f s, less than exposure time %d." % (duration, exposure))
         self.assertIn(model.MD_EXP_TIME, im.metadata)
-    
+
+#    @unittest.skip("simple")
     def test_acquire_flow(self):
         exposure = 0.1
         self.camera.exposureTime.value = exposure
@@ -139,6 +140,7 @@ class VirtualTestCam(object):
         
         self.assertEqual(self.left, 0)
 
+#    @unittest.skip("simple")
     def test_data_flow_with_va(self):
         exposure = 1.0 # long enough to be sure we can change VAs before the end
         self.camera.exposureTime.value = exposure
@@ -220,6 +222,27 @@ class VirtualTestCam(object):
         
         self.assertEqual(self.left, 0)
         self.assertEqual(self.left2, 0)
+
+#    @unittest.skip("simple")
+    def test_df_alternate_sub_unsub(self):
+        """
+        Test the dataflow on a quick cycle subscribing/unsubscribing
+        Andorcam3 had a real bug causing deadlock in this scenario
+        """ 
+        exposure = 0.1 # 
+        number = 5
+        self.camera.exposureTime.value = exposure
+        
+        self.left = 10000 + number # don't unsubscribe automatically
+        
+        for i in range(number):
+            self.camera.data.subscribe(self.receive_image)
+        
+            time.sleep(1 + exposure) # make sure we received at least one image
+            self.camera.data.unsubscribe(self.receive_image)
+
+        # if it has acquired a least 5 pictures we are already happy
+        self.assertLessEqual(self.left, 10000)
 
     def receive_image(self, dataflow, image):
         """
