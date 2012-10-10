@@ -231,19 +231,19 @@ def __init_resources():
               <object class="wxPanel">
                 <object class="wxBoxSizer">
                   <orient>wxVERTICAL</orient>
+                  
                   <object class="spacer">
                     <option>1</option>
                     <flag>wxEXPAND</flag>
                   </object>
                   <object class="sizeritem">
-                    <object class="wxGridSizer">
+                    <object class="wxFlexGridSizer">
                       <object class="sizeritem">
                         <object class="wxStaticText">
                           <label>view</label>
                           <fg>#BFBFBF</fg>
                         </object>
-                        <flag>wxRIGHT|wxALIGN_RIGHT</flag>
-                        <border>5</border>
+                        <flag>wxALIGN_RIGHT</flag>
                       </object>
                       <object class="sizeritem">
                         <object class="ViewButton" name="btn_view_all">
@@ -254,16 +254,16 @@ def __init_resources():
                             <assign_var>1</assign_var>
                           </XRCED>
                         </object>
+                        <flag>wxRIGHT</flag>
+                        <border>5</border>
                       </object>
                       <object class="sizeritem">
                         <object class="wxStaticText">
                           <label>view</label>
                           <fg>#BFBFBF</fg>
                         </object>
-                        <flag>wxRIGHT|wxALIGN_RIGHT</flag>
-                        <border>5</border>
+                        <flag>wxALIGN_RIGHT</flag>
                       </object>
-                      
                       <object class="sizeritem">
                         <object class="ViewButton" name="btn_view_tl">
                           <bitmap>img_preview_block_png</bitmap>
@@ -279,8 +279,7 @@ def __init_resources():
                           <label>view</label>
                           <fg>#BFBFBF</fg>
                         </object>
-                        <flag>wxRIGHT|wxALIGN_RIGHT</flag>
-                        <border>5</border>
+                        <flag>wxALIGN_RIGHT</flag>
                       </object>
                       <object class="sizeritem">
                         <object class="ViewButton" name="btn_view_tr">
@@ -297,8 +296,7 @@ def __init_resources():
                           <label>view</label>
                           <fg>#BFBFBF</fg>
                         </object>
-                        <flag>wxRIGHT|wxALIGN_RIGHT</flag>
-                        <border>5</border>
+                        <flag>wxALIGN_RIGHT</flag>
                       </object>
                       <object class="sizeritem">
                         <object class="ViewButton" name="btn_view_bl">
@@ -315,8 +313,7 @@ def __init_resources():
                           <label>view</label>
                           <fg>#BFBFBF</fg>
                         </object>
-                        <flag>wxRIGHT|wxALIGN_RIGHT</flag>
-                        <border>5</border>
+                        <flag>wxALIGN_RIGHT</flag>
                       </object>
                       <object class="sizeritem">
                         <object class="ViewButton" name="btn_view_br">
@@ -331,9 +328,16 @@ def __init_resources():
                       <cols>2</cols>
                       <rows>5</rows>
                       <vgap>20</vgap>
-                      <hgap>0</hgap>
+                      <hgap>5</hgap>
+                      <growablecols>0</growablecols>
+                      <growablerows>0</growablerows>
+                      <growablerows>1</growablerows>
+                      <growablerows>2</growablerows>
+                      <growablerows>3</growablerows>
+                      <growablerows>4</growablerows>
                     </object>
-                    <flag>wxBOTTOM</flag>
+                    <option>0</option>
+                    <flag>wxBOTTOM|wxEXPAND</flag>
                     <border>50</border>
                   </object>
                 </object>
