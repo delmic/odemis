@@ -111,7 +111,7 @@ class ViewSelector(object):
         # Create an image from the 4 thumbnails in a 2x2 layout with small border
         btn_all = self._main_frame.btn_view_all
         border_width = 2 # px
-        size = btn_all.overlay_width, btn_all.overlay_height
+        size = max(1, btn_all.overlay_width), max(1, btn_all.overlay_height)
         
         # new black image of 2 times the size + border size *2
         im_22 = wx.EmptyImage((size[0] + border_width) * 2, (size[1] + border_width) * 2)
