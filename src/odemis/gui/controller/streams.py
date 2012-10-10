@@ -259,15 +259,13 @@ class StreamController(object):
         self._streams_to_restart.discard(stream)
         self._livegui.streams.discard(stream)
 
+        # don't schedule any more
         stream.active.value = False
         stream.updated.value = False
-        
-        # don't schedule any more
         if stream in self._scheduler_subscriptions:
             callback = self._scheduler_subscriptions.pop(stream)
             stream.updated.unsubscribe(callback)
         
-        # TODO: shall we delegate this to the view controller?
-        # FIXME: need lock to modify views? 
+        # Remove from the views 
         for v in self._livegui.views:
             v.removeStream(stream)

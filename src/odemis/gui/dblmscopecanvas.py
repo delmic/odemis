@@ -186,7 +186,7 @@ class DblMicroscopeCanvas(DraggableCanvas):
     def _onMPP(self, mpp):
         """
         Called when the view.mpp is updated
-        """ 
+        """
         self.scale = self.mpwu / mpp
         wx.CallAfter(self.ShouldUpdateDrawing)
 

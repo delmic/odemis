@@ -29,9 +29,10 @@ from odemis.gui.util.img import DataArray2wxImage
 from odemis.gui.util.units import readable_str
 from odemis.model import VigilantAttribute, MD_POS, MD_PIXEL_SIZE, \
     MD_SENSOR_PIXEL_SIZE
-import logging
-import time
 from odemis.model._vattributes import FloatContinuous
+import logging
+import threading
+import time
 
 
 
@@ -762,11 +763,14 @@ class MicroscopeView(object):
         # Streams to display (can be considered in most cases a implementation detail)
         # Note: use addStream/removeStream for simple modifications
         self.streams = StreamTree(kwargs={"merge": self.merge_ratio.value})
+        # Only modify with this lock acquired:
+        self._streams_lock = threading.Lock() 
 
         # Last time the image of the view was changed. It's actually mostly
         # a trick to allow other parts of the GUI to know when the (theoretical)
         # composited image has changed.
         self.lastUpdate = model.FloatVA(time.time(), unit="s")
+        self._has_received_image = False # last initialisation is done on the first image received 
 
         # a thumbnail version of what is displayed
         self.thumbnail = VigilantAttribute(None) # contains a wx.Image
@@ -825,7 +829,8 @@ class MicroscopeView(object):
         # Find out where the stream should go in the streamTree
         # FIXME: manage sub-trees, with different merge operations
         # For now we just add it to the list of streams, with the only merge operation possible
-        self.streams.streams.append(stream)
+        with self._streams_lock:
+            self.streams.streams.append(stream)
 
         # subscribe to the stream's image
         stream.image.subscribe(self._onNewImage)
@@ -839,16 +844,17 @@ class MicroscopeView(object):
         stream (Stream): stream to remove
         If the stream is not present, nothing happens
         """
-        # check if the stream is already removed
-        if not stream in self.streams.getStreams():
-            return
-        
         # Stop listening to the stream changes
         stream.image.unsubscribe(self._onNewImage)
-
-        # remove stream for the StreamTree()
-        # TODO handle more complex trees
-        self.streams.streams.remove(stream)
+        
+        with self._streams_lock:
+            # check if the stream is already removed
+            if not stream in self.streams.getStreams():
+                return
+            
+            # remove stream from the StreamTree()
+            # TODO handle more complex trees
+            self.streams.streams.discard(stream)
 
         # let everyone know that the view has changed
         self.lastUpdate.value = time.time()
@@ -857,7 +863,10 @@ class MicroscopeView(object):
         """
         Called when one stream has its image updated
         """
-        # TODO: if it's the first image ever, set mpp to the mpp of the image
+        # if it's the first image ever, set mpp to the mpp of the image
+        if not self._has_received_image and im.mpp:
+            self.mpp.value = im.mpp
+            self._has_received_image = True
         
         # just let everyone that the composited image has changed
         self.lastUpdate.value = time.time()
@@ -868,7 +877,8 @@ class MicroscopeView(object):
         """
         # This actually modifies the root operator of the stream tree
         # It has effect only if the operator can do something with the "merge" argument
-        self.streams.kwargs["merge"] = ratio
+        with self._streams_lock:
+            self.streams.kwargs["merge"] = ratio
 
         # just let everyone that the composited image has changed
         self.lastUpdate.value = time.time()
