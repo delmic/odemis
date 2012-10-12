@@ -163,12 +163,21 @@ class Controller(object):
 #        self.accel_max = max_accel
         
         # FIXME 0x7000204 seems specific to E-861. need different initialisation per controller
-        self.speed_max = float(self.GetParameter(1, 0x7000204)) / self.move_calibration # m/s
-        # Note: the E-861 claims max 0.015 m/s but actually never goes above 0.004 m/s
-        self._speed = dict([(a, self.speed_max/2) for a in axes]) # m/s
-        # (max m/s²) = (max step/s²) / (step/m)
-        self.accel_max = float(self.GetParameter(1, 0x7000205)) / self.move_calibration # m/s²
-        self._accel = dict([(a, self.accel_max/2) for a in axes]) # m/s² (both acceleration and deceleration)
+        # Even the old firmware don't seem to support it
+        try:
+            self.speed_max = float(self.GetParameter(1, 0x7000204)) / self.move_calibration # m/s
+            # Note: the E-861 claims max 0.015 m/s but actually never goes above 0.004 m/s
+            # (max m/s²) = (max step/s²) / (step/m)
+            self.accel_max = float(self.GetParameter(1, 0x7000205)) / self.move_calibration # m/s²
+        except (IOError, ValueError) as err:
+            # TODO detect better that it's just a problem of sending unsupported command/value
+            # Put default (large values)
+            logging.debug("Using default speed and acceleration value after error '%s'", err)
+            self.speed_max = 0.01 # m/s
+            self.accel_max = 0.001 # m/s²
+        
+        self._speed = dict([(a, self.speed_max) for a in axes]) # m/s
+        self._accel = dict([(a, self.accel_max) for a in axes]) # m/s² (both acceleration and deceleration)
         self._prev_speed_accel = (dict(), dict()) 
     
     def _sendOrderCommand(self, com):
@@ -196,7 +205,8 @@ class Controller(object):
         lines = []
         while char:
             if char == "\n":
-                if len(line) > 0 and line[-1] == " ": # multiline: " \n"
+                if (len(line) > 0 and line[-1] == " " and  # multiline: "... \n" 
+                    not re.match(r"0 \d+ ", line)):   # excepted empty line "0 1 \n"
                     lines.append(line[:-1]) # don't include the space
                     line = ""
                 else:
@@ -333,7 +343,11 @@ class Controller(object):
         assert(0 <= param)
         
         answer = self._sendQueryCommand("SPA? %d %d\n" % (axis, param))
-        value = answer.split("=")[1]
+        try:
+            value = answer.split("=")[1]
+        except IndexError:
+            # no "=" => means the parameter is unknown
+            raise ValueError("Parameter %d %d unknown" % (axis, param))
         return value
 
     def GetRecoderConfig(self):
@@ -844,6 +858,8 @@ class Controller(object):
                 if not axes:
                     logging.info("Found controller %d with no axis", i)
                 else:
+                    version = ctrl.GetIdentification()
+                    logging.info("Found controller %d with ID '%s'.", i, version) 
                     present[i] = axes
             except IOError:
                 pass
@@ -852,15 +868,16 @@ class Controller(object):
         return present
     
     @staticmethod
-    def openSerialPort(port):
+    def openSerialPort(port, baudrate=38400):
         """
         Opens the given serial port the right way for the PI-E861.
         port (string): the name of the serial port (e.g., /dev/ttyUSB0)
+        baudrate (int): baudrate to use, default is the recommended 38400
         return (serial): the opened serial port
         """
         ser = serial.Serial(
             port = port,
-            baudrate = 38400,
+            baudrate = baudrate,
             bytesize = serial.EIGHTBITS,
             parity = serial.PARITY_NONE,
             stopbits = serial.STOPBITS_ONE,
@@ -874,7 +891,7 @@ class Bus(model.Actuator):
     """
     Represent a chain of PI controller over a serial port
     """
-    def __init__(self, name, role, port, axes, **kwargs):
+    def __init__(self, name, role, port, axes, baudrate=38400, **kwargs):
         """
         port (string): name of the serial port to connect to the controllers
         axes (dict string=> 3-tuple(1<=int<=16, 1<=int, boolean): the configuration
@@ -882,11 +899,12 @@ class Bus(model.Actuator):
          channel, and whether it's closed-loop (absolute positioning) or not.
          Note that even if it's made of several controllers, each controller is 
          _not_ seen as a child from the odemis model point of view.
+        baudrate (int): baudrate of the serial port (default is the recommended 38400)
         """
         # this set ._axes and ._ranges
         model.Actuator.__init__(self, name, role, axes=axes.keys(), **kwargs)
         
-        ser = Controller.openSerialPort(port)
+        ser = Controller.openSerialPort(port, baudrate)
 
         # Prepare initialisation by grouping axes from the same controller
         ac_to_axis = {} # address, channel -> axis name
