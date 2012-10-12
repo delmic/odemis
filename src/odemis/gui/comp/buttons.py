@@ -599,8 +599,8 @@ class ViewButton(ImageTextToggleButton):
         #     self._calc_overlay_size()
 
         if image is None:
-            from odemis.gui.img.data import getarr_downImage
-            small_image = getarr_downImage() # FIXME: better default image, or just black
+            # black image
+            small_image = wx.EmptyImage(self.overlay_width, self.overlay_height)
         else:
             # FIXME: what's the right size?
             # FIXME: not all the thumbnails have the right aspect ratio => truncate

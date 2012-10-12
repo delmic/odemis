@@ -53,7 +53,7 @@ class ViewSelector(object):
                         main_frame.btn_view_bl:
                             ViewportLabel(main_frame.pnl_view_bl, main_frame.lbl_view_bl),
                         main_frame.btn_view_br:
-                            ViewportLabel(main_frame.pnl_view_br, main_frame.pnl_view_br)}
+                            ViewportLabel(main_frame.pnl_view_br, main_frame.lbl_view_br)}
 
         for btn in self.buttons:
             btn.Bind(wx.EVT_BUTTON, self.OnClick)
@@ -86,8 +86,6 @@ class ViewSelector(object):
                 continue
 
             def onName(name):
-                # FIXME: for now the buttons have a separate label next to them
-                # probably need a way to link these labels to the button
                 vl.lbl.SetLabel(name)
 
             vl.vp.view.name.subscribe(onName, init=True)
@@ -121,22 +119,25 @@ class ViewSelector(object):
         btn_all = self._main_frame.btn_view_all
         border_width = 2 # px
         size = max(1, btn_all.overlay_width), max(1, btn_all.overlay_height)
-        # new black image of 2 times the size + border size *2
-        im_22 = wx.EmptyImage((size[0] + border_width) * 2, (size[1] + border_width) * 2)
+        size_sub = max(1, (size[0] - border_width) / 2), max(1, (size[1] - border_width) / 2)
+        # starts with an empty image with the border colour everywhere
+        im_22 = wx.EmptyImage(*size, clear=False)
+        im_22.SetRGBRect(wx.Rect(0, 0, *size), *btn_all.GetBackgroundColour().Get())
 
         for i, btn in enumerate([self._main_frame.btn_view_tl, self._main_frame.btn_view_tr,
                                  self._main_frame.btn_view_bl, self._main_frame.btn_view_br]):
             im = self.buttons[btn].vp.view.thumbnail.value
             if im is None:
-                continue # stays black
-
-            # FIXME: not all the thumbnails have the right aspect ratio cf set_overlay
-            # Rescale to fit
-            sim = im.Scale(size[0], size[1], wx.IMAGE_QUALITY_HIGH)
+                # black image
+                sim = wx.EmptyImage(*size_sub)
+            else:
+                # FIXME: not all the thumbnails have the right aspect ratio cf set_overlay
+                # Rescale to fit
+                sim = im.Scale(size_sub[0], size_sub[1], wx.IMAGE_QUALITY_HIGH)
             # compute placement
             y, x = divmod(i, 2)
             # copy im in the right place
-            im_22.Paste(sim, x * (size[0] + border_width), y * (size[1] + border_width))
+            im_22.Paste(sim, x * (size_sub[0] + border_width), y * (size_sub[1] + border_width))
 
         # set_overlay will rescale to the correct button size
         btn_all.set_overlay(im_22)

@@ -132,13 +132,22 @@ class ViewController(object):
         Called when another view is focused
         """ 
         log.debug("Changing focus to view %s", view.name.value)
-        self._main_frame.pnl_tab_live.Freeze() # FIXME needed?
+        layout = self._microscope.viewLayout.value
+        
+        self._main_frame.pnl_tab_live.Freeze()
         for v in self._viewports:
             if v.view == view:
                 v.SetFocus(True)
+                if layout == instrmodel.VIEW_LAYOUT_ONE:
+                    v.Show()
             else:
                 v.SetFocus(False)
-        self._main_frame.pnl_tab_live.Layout() # FIXME needed?
+                if layout == instrmodel.VIEW_LAYOUT_ONE:
+                    v.Hide()
+
+        if layout == instrmodel.VIEW_LAYOUT_ONE:
+            self._main_frame.pnl_tab_live.Layout()  # resize the viewport
+            
         self._main_frame.pnl_tab_live.Thaw()
         
     def _onViewLayout(self, layout):
@@ -146,30 +155,27 @@ class ViewController(object):
         Called when the view layout of the GUI must be changed
         """
         # only called when changed
+        self._main_frame.pnl_tab_live.Freeze()
+        
         if layout == instrmodel.VIEW_LAYOUT_ONE:
-            self._main_frame.pnl_tab_live.Freeze()
             log.debug("Showing only one view")
-
+            # TODO resize all the viewports now, so that there is no flickering
+            # when just changing view 
             for v in self._viewports:
                 if v.view == self._microscope.currentView.value:
                     v.Show()
                 else:
                     v.Hide()
 
-            self._main_frame.pnl_tab_live.Layout()
-            self._main_frame.pnl_tab_live.Thaw()
         elif layout == instrmodel.VIEW_LAYOUT_22:
             log.debug("Showing all views")
-    
-            self._main_frame.pnl_tab_live.Freeze()
-    
             for v in self._viewports:
                 v.Show()
     
-            self._main_frame.pnl_tab_live.Layout()
-            self._main_frame.pnl_tab_live.Thaw()
         elif layout == instrmodel.VIEW_LAYOUT_FULLSCREEN:
             raise NotImplementedError()
         else:
             raise NotImplementedError()
         
+        self._main_frame.pnl_tab_live.Layout()  # resize the viewports
+        self._main_frame.pnl_tab_live.Thaw()
