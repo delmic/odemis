@@ -590,16 +590,14 @@ class ViewButton(ImageTextToggleButton):
         log.debug("Setting overlay")
 
         # Calculate the needed height
-        if image:
-            img_w, img_h = [float(v) for v in image.GetSize()]
-            width, height = self.GetSize()
-            # ratio = self.GetSize()[0] - self.pointer_offset - self.overlay_border * 2
-            self.SetBestSize((width, height * 0.5))
-            self.Parent.Layout()
-            self._calc_overlay_size()
+        # if image:
+        #     img_w, img_h = [float(v) for v in image.GetSize()]
+        #     width, height = self.GetSize()
+        #     # ratio = self.GetSize()[0] - self.pointer_offset - self.overlay_border * 2
+        #     self.SetBestSize((width, height * 0.5))
+        #     self.Parent.Layout()
+        #     self._calc_overlay_size()
 
-
-        return
         if image is None:
             from odemis.gui.img.data import getarr_downImage
             small_image = getarr_downImage() # FIXME: better default image, or just black
@@ -625,18 +623,11 @@ class ViewButton(ImageTextToggleButton):
             if img_w / self.overlay_width < img_h / self.overlay_height:
                 img_w = int(img_w * (self.overlay_height / img_h))
                 img_h = self.overlay_height
-                self.overlay_x = (self.overlay_width - img_w) / 2
-                self.overlay_x += self.overlay_border
-                self.overlay_y = self.overlay_border
             else:
                 img_h = int(img_h * (self.overlay_width / img_w))
                 img_w = self.overlay_width
-                self.overlay_x = self.overlay_border
-                self.overlay_y = (self.overlay_height - img_h) / 2
-                self.overlay_y += self.overlay_border
 
             log.debug("New image size is %s %s", img_w, img_h)
-            log.debug("Image offset is %s %s ", self.overlay_x, self.overlay_y)
             small_image = image.Scale(img_w,
                                       img_h,
                                       wx.IMAGE_QUALITY_HIGH)
@@ -650,8 +641,8 @@ class ViewButton(ImageTextToggleButton):
         if self.overlay_image is not None:
             #log.debug("Painting overlay")
             dc.DrawBitmap(self.overlay_image,
-                          self.overlay_x,
-                          self.overlay_y,
+                          self.overlay_border,
+                          self.overlay_border,
                           True)
 
 
