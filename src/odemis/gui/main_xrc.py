@@ -82,7 +82,7 @@ def __init_resources():
     wx.FileSystem.AddHandler(wx.MemoryFSHandler())
 
     main_xrc = '''\
-<?xml version="1.0" ?><resource class="ViewButton" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
+<?xml version="1.0" ?><resource class="odemis.gui.comp.stream.StreamPanel(wxPanel)" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
   <object class="wxFrame" name="fr_main">
     <object class="wxMenuBar">
       <object class="wxMenu">
@@ -231,7 +231,6 @@ def __init_resources():
               <object class="wxPanel">
                 <object class="wxBoxSizer">
                   <orient>wxVERTICAL</orient>
-                  
                   <object class="spacer">
                     <option>1</option>
                     <flag>wxEXPAND</flag>
@@ -548,16 +547,16 @@ def __init_resources():
                               </XRCED>
                             </object>
                             <object class="FoldPanelItem">
-                              <object class="wxPanel" name="pnl_stream" subclass="odemis.gui.comp.stream.StreamPanel">
+                              <label>STREAMS</label>
+                              <fg>#1A1A1A</fg>
+                              <bg>#555555</bg>
+                              <object class="StreamPanel" name="pnl_stream">
                                 <fg>#7F7F7F</fg>
                                 <bg>#333333</bg>
                                 <XRCED>
                                   <assign_var>1</assign_var>
                                 </XRCED>
                               </object>
-                              <label>STREAMS</label>
-                              <fg>#1A1A1A</fg>
-                              <bg>#555555</bg>
                             </object>
                             <object class="FoldPanelItem" name="fp_annotations">
                               <label>ANNOTATIONS</label>
