@@ -1226,8 +1226,16 @@ class AndorCam2(model.DigitalCamera):
             metadata = dict(self._metadata) # duplicate
             metadata[model.MD_ACQ_DATE] = time.time() # time at the beginning
             cbuffer = self._allocate_buffer(size)
+            
+            # first we wait ourselves the typical time (which might be very long)
+            # while detecting requests for stop
+            must_stop = self.acquire_must_stop.wait(duration)
+            if must_stop:
+                break
+            
+            # then wait a bounded time to ensure the image is acquired
             try:
-                self.WaitForAcquisition(duration + 1)
+                self.WaitForAcquisition(1)
                 # if the must_stop flag has been set while we were waiting
                 if self.acquire_must_stop.is_set():
                     break
@@ -1298,10 +1306,11 @@ class AndorCam2(model.DigitalCamera):
         Waits until the end acquisition of a flow of images. Calling from the
          acquisition callback is not permitted (it would cause a dead-lock).
         """
-        # "while" is mostly to not wait if it's already finished 
-        while self.acquire_must_stop.is_set():
-            # join() already checks that we are not the current_thread()
-            self.acquire_thread.join() # XXX timeout for safety? 
+        # "if" is to not wait if it's already finished 
+        if self.acquire_must_stop.is_set():
+            self.acquire_thread.join(10) # 10s timeout for safety
+            if self.acquire_thread.isAlive():
+                raise OSError("Failed to stop the acquisition thread")
     
     def terminate(self):
         """

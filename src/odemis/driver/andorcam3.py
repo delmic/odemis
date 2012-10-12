@@ -933,8 +933,6 @@ class AndorCam3(model.DigitalCamera):
             self.acquire_thread.join(10) # 10s timeout for safety
             if self.acquire_thread.isAlive():
                 raise OSError("Failed to stop the acquisition thread")
-        else:
-            logging.debug("Not waiting for acquisition thread to stop as it was already stopped")
     
     def terminate(self):
         """
