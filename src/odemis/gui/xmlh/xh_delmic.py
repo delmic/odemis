@@ -193,6 +193,32 @@ class FoldPanelItemXmlHandler(xrc.XmlResourceHandler):
             parent.add_item(w)
             return w
 
+class StreamPanelXmlHandler(xrc.XmlResourceHandler):
+    def __init__(self):
+        xrc.XmlResourceHandler.__init__(self)
+        # Standard styles
+        self.AddWindowStyles()
+        # Custom styles
+
+    def CanHandle(self, node):
+        return self.IsOfClass(node, 'StreamPanel')
+
+
+    # Process XML parameters and create the object
+    def DoCreateResource(self):
+
+        if self.GetClass() == 'StreamPanel':
+            #print "Creating FoldpanelItem"
+            parent = self.GetParentAsWindow()
+            w = strm.StreamPanel(parent,
+                                 self.GetID(),
+                                 self.GetPosition(),
+                                 self.GetSize(),
+                                 self.GetStyle())
+            self.SetupWindow(w)
+            parent.add_item(w)
+            return w
+
 ################################
 # ImageButton sub class handlers
 ################################
@@ -566,7 +592,6 @@ class MicroscopeViewportXmlHandler(xrc.XmlResourceHandler):
 
 HANDLER_CLASS_LIST = [
                       CustomStreamPanelEntryXmlHandler,
-                      MicroscopeViewportXmlHandler,
                       FixedStreamPanelEntryXmlHandler,
                       FoldPanelBarXmlHandler,
                       FoldPanelItemXmlHandler,
@@ -574,11 +599,13 @@ HANDLER_CLASS_LIST = [
                       ImageButtonHandler,
                       ImageTextButtonHandler,
                       ImageTextToggleButtonHandler,
+                      MicroscopeViewportXmlHandler,
                       PopupImageButtonHandler,
+                      StreamPanelXmlHandler,
                       SuggestTextCtrlHandler,
                       TabButtonHandler,
-                      ViewButtonHandler,
                       UnitFloatCtrlHandler,
                       UnitIntegerCtrlHandler,
+                      ViewButtonHandler,
                       ]
 

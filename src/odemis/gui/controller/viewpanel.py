@@ -24,6 +24,8 @@ from odemis.gui import instrmodel
 from odemis.gui.log import log
 import wx
 
+from collections import namedtuple
+
 
 class ViewSelector(object):
     """
@@ -39,12 +41,19 @@ class ViewSelector(object):
         self._main_frame = main_frame
 
         # TODO: should create buttons according to micgui views
-        # btn -> viewports
-        self.buttons = {main_frame.btn_view_all: None, # 2x2 layout
-                          main_frame.btn_view_tl: main_frame.pnl_view_tl,
-                          main_frame.btn_view_tr: main_frame.pnl_view_tr,
-                          main_frame.btn_view_bl: main_frame.pnl_view_bl,
-                          main_frame.btn_view_br: main_frame.pnl_view_br}
+        # btn -> (viewport, label)
+        ViewportLabel = namedtuple('ViewportLabel', ['vp', 'lbl'])
+
+        self.buttons = {main_frame.btn_view_all:
+                            ViewportLabel(None, main_frame.lbl_view_all), # 2x2 layout
+                        main_frame.btn_view_tl:
+                            ViewportLabel(main_frame.pnl_view_tl, main_frame.lbl_view_tl),
+                        main_frame.btn_view_tr:
+                            ViewportLabel(main_frame.pnl_view_tr, main_frame.lbl_view_tr),
+                        main_frame.btn_view_bl:
+                            ViewportLabel(main_frame.pnl_view_bl, main_frame.lbl_view_bl),
+                        main_frame.btn_view_br:
+                            ViewportLabel(main_frame.pnl_view_br, main_frame.pnl_view_br)}
 
         for btn in self.buttons:
             btn.Bind(wx.EVT_BUTTON, self.OnClick)
@@ -61,47 +70,47 @@ class ViewSelector(object):
                     self._main_frame.btn_view_bl, self._main_frame.btn_view_br]:
             def onThumbnail(im):
                 btn.set_overlay(im)
-            
-            self.buttons[btn].view.thumbnail.subscribe(onThumbnail, init=True)
+
+            self.buttons[btn].vp.view.thumbnail.subscribe(onThumbnail, init=True)
             # keep ref of the functions so that they are not dropped
             self._subscriptions.append(onThumbnail)
-            
+
             # also subscribe for updating the 2x2 button
-            self.buttons[btn].view.thumbnail.subscribe(self._update22Thumbnail)
+            self.buttons[btn].vp.view.thumbnail.subscribe(self._update22Thumbnail)
         self._update22Thumbnail(None)
-        
+
         # subscribe to change of name
-        for btn, vp in self.buttons.items():
-            if not vp: # 2x2 layout 
-                btn.SetLabel("All") # TODO: is it good name?
+        for btn, vl in self.buttons.items():
+            if vl.vp is None: # 2x2 layout
+                vl.lbl.SetLabel("All") # TODO: is it good name?
                 continue
-            
+
             def onName(name):
                 # FIXME: for now the buttons have a separate label next to them
                 # probably need a way to link these labels to the button
-                btn.SetLabel(name)
-            
-            vp.view.name.subscribe(onName, init=True)
+                vl.lbl.SetLabel(name)
+
+            vl.vp.view.name.subscribe(onName, init=True)
             self._subscriptions.append(onName)
-        
+
     def toggleButtonForView(self, view):
         """
         Toggle the button which represents the view and untoggle the other ones
-        view (MicroscopeView or None): the view, or None if the first button 
+        view (MicroscopeView or None): the view, or None if the first button
           (2x2) is to be toggled
         Note: it does _not_ change the view
         """
-        for b, vp in self.buttons.items():
+        for b, vl in self.buttons.items():
             # 2x2 => vp is None / 1 => vp exists and vp.view is the view
-            if (vp is None and view is None) or (vp and vp.view == view):
+            if (vl.vp is None and view is None) or (vl.vp and vl.vp.view == view):
                 b.SetToggle(True)
             else:
-                if vp:
-                    log.debug("untoggling button of view %s", vp.view.name.value)
+                if vl.vp:
+                    log.debug("untoggling button of view %s", vl.vp.view.name.value)
                 else:
                     log.debug("untoggling button of view All")
                 b.SetToggle(False)
-    
+
     def _update22Thumbnail(self, im):
         """
         Called when any thumbnail is changed, to recompute the 2x2 thumbnail of
@@ -112,34 +121,33 @@ class ViewSelector(object):
         btn_all = self._main_frame.btn_view_all
         border_width = 2 # px
         size = max(1, btn_all.overlay_width), max(1, btn_all.overlay_height)
-        
         # new black image of 2 times the size + border size *2
         im_22 = wx.EmptyImage((size[0] + border_width) * 2, (size[1] + border_width) * 2)
-        
+
         for i, btn in enumerate([self._main_frame.btn_view_tl, self._main_frame.btn_view_tr,
                                  self._main_frame.btn_view_bl, self._main_frame.btn_view_br]):
-            im = self.buttons[btn].view.thumbnail.value
+            im = self.buttons[btn].vp.view.thumbnail.value
             if im is None:
                 continue # stays black
-            
+
             # FIXME: not all the thumbnails have the right aspect ratio cf set_overlay
             # Rescale to fit
             sim = im.Scale(size[0], size[1], wx.IMAGE_QUALITY_HIGH)
             # compute placement
-            x, y = divmod(i, 2)
+            y, x = divmod(i, 2)
             # copy im in the right place
             im_22.Paste(sim, x * (size[0] + border_width), y * (size[1] + border_width))
-        
+
         # set_overlay will rescale to the correct button size
         btn_all.set_overlay(im_22)
-        
+
     def _onView(self, view):
         """
         Called when another view is focused, or viewlayout is changed
         """
         # TODO when changing from 2x2 to a view non focused, it will be called
         # twice in row. => optimise to not do it twice
-        
+
         # if layout is 2x2 => do nothing (first button is selected by _onViewLayout)
         if self._microscope.viewLayout.value == instrmodel.VIEW_LAYOUT_22:
             # otherwise (layout is 2x2) => select the first button
@@ -147,7 +155,7 @@ class ViewSelector(object):
         else:
             # otherwise (layout is 1) => select the right button
             self.toggleButtonForView(view)
-        
+
     def OnClick(self, evt):
         """
         Navigation button click event handler
@@ -155,11 +163,11 @@ class ViewSelector(object):
         Show the related view(s) and sets the focus if needed.
         """
         log.debug("View button click")
-        # The event does not need to be 'skipped' because 
+        # The event does not need to be 'skipped' because
         # the button will be toggled when the event for value change is received.
 
         btn = evt.GetEventObject()
-        viewport = self.buttons[btn]
+        viewport = self.buttons[btn].vp
 
         if viewport is None:
             # 2x2 button

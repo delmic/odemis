@@ -28,6 +28,14 @@ TRACE('*** creating xh_delmic components')
 
 ### StreamPanel
 
+c = component.Container('StreamPanel',
+    ['window', 'top_level', 'control'],
+    ['pos', 'size', 'label', 'collapsed'])
+component.Manager.register(c)
+component.Manager.addXmlHandler(xh_delmic.StreamPanelXmlHandler)
+component.Manager.setMenu(c, 'TOP_LEVEL', 'Delmic stream panel', 'StreamPanel', 3)
+component.Manager.setMenu(c, 'ROOT', 'Delmic stream panel', 'StreamPanel', 3)
+
 c = component.Container('FixedStreamPanelEntry',
     ['window', 'top_level', 'control'],
     ['pos', 'size', 'label', 'collapsed'])

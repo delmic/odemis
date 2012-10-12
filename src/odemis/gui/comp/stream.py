@@ -255,9 +255,9 @@ class StreamPanelEntry(wx.PyPanel):
     Most of the component's construction is done in the finalize() method, so
     we can allow for a delay. This is necessary when construction the component
     through an XML handler.
-    
+
     It tries to represent the stream object as well as possible, so do not shows
-    controls if the vigilant attributes are not there. 
+    controls if the vigilant attributes are not there.
     """
 
     expander_class = FixedExpander
@@ -539,7 +539,7 @@ class StreamPanelEntry(wx.PyPanel):
 
     def setVisible(self, visible):
         """
-        Set the "visible" toggle button. 
+        Set the "visible" toggle button.
         Note: it does not add/remove it to the current view.
         """
         # TODO: check that we don't call on_visibility()
@@ -756,39 +756,27 @@ class StreamPanel(wx.Panel):
     There are multiple levels of visibility of a stream entry:
      * the stream entry is shown in the panel and has the visible icon on:
         The current view is compatible with the stream and has it in its list
-        of streams. 
+        of streams.
      * the stream entry is shown in the panel and has the visible icon off:
         The current view is compatible with the stream, but the stream is not
         in its list of streams
      * the stream entry is not present in the panel (hidden):
-        The current view is not compatible with the stream 
+        The current view is not compatible with the stream
     """
 
     DEFAULT_BORDER = 2
     DEFAULT_STYLE = wx.BOTTOM | wx.EXPAND
 
-    def __init__(self):
-        pre = wx.PrePanel()
+    def __init__(self, *args, **kwargs):
+        wx.Panel.__init__(self, *args, **kwargs)
 
-        self._sz = None
-        self._microscope = None  # MicroscopeGUI
-        self.txt_no_stream = None
-        self.btn_add_stream = None
+        self._microscope = None # MicroscopeGUI
 
         self.entries = []
         self.menu_actions = collections.OrderedDict()  # title => callback
 
-        # the Create step is done later by XRC.
-        self.PostCreate(pre)
-        self.Bind(wx.EVT_WINDOW_CREATE, self.OnCreate)
-
-    def OnCreate(self, evt):
-        self.Unbind(wx.EVT_WINDOW_CREATE)
-        log.debug("Creating StreamPanel")
-
-        if self._sz is None:
-            self._sz = wx.BoxSizer(wx.VERTICAL)
-            self.SetSizer(self._sz)
+        self._sz = wx.BoxSizer(wx.VERTICAL)
+        self.SetSizer(self._sz)
 
         msg = "No stream available as both SEM and optical paths are off."
 
@@ -805,7 +793,6 @@ class StreamPanel(wx.Panel):
         self._sz.Add(self.btn_add_stream, flag=wx.ALL, border=5)
 
         self._set_warning()
-
 
         # FIXME: dropdown not working atm
         # self.btn_add_stream.Bind(wx.EVT_LISTBOX, self.on_add_stream)
@@ -839,15 +826,15 @@ class StreamPanel(wx.Panel):
 
     # the order in which the streams are displayed
     STREAM_ORDER = [instrmodel.SEMStream,
-                  instrmodel.BrightfieldStream,
-                  instrmodel.FluoStream]
+                    instrmodel.BrightfieldStream,
+                    instrmodel.FluoStream]
     # TODO maybe should be provided after init by the controller (like key of
     # sorted()), to separate the GUI from the model ?
     def _get_stream_order(self, stream):
         """
         Gives the "order" of the given stream, as defined in STREAM_ORDER.
         stream (Stream): a stream
-        returns (0<= int): the order 
+        returns (0<= int): the order
         """
         for i, c in enumerate(self.STREAM_ORDER):
             if isinstance(stream, c):
@@ -918,7 +905,7 @@ class StreamPanel(wx.Panel):
     def add_stream(self, entry):
         """
         This method adds a stream entry to the panel. The appropriate
-        position is automatically determined. 
+        position is automatically determined.
         entry (StreamPanelEntry): an entry (representing a specific stream)
         """
         # Insert the entry in the order of STREAM_ORDER. If there are already
@@ -992,7 +979,7 @@ class StreamPanel(wx.Panel):
     #   be disabled
     def add_action(self, title, callback):
         """
-        Add an action to the menu. It's added at the end of the list. If an 
+        Add an action to the menu. It's added at the end of the list. If an
         action with the same title exists, it is replaced.
         title (string): Text displayed in the menu
         callback (callable): function to call when the action is selected

@@ -47,10 +47,15 @@ class xrcfr_main(wx.Frame):
         self.tab_btn_live = xrc.XRCCTRL(self, "tab_btn_live")
         self.tab_btn_gallery = xrc.XRCCTRL(self, "tab_btn_gallery")
         self.pnl_tab_live = xrc.XRCCTRL(self, "pnl_tab_live")
+        self.lbl_view_all = xrc.XRCCTRL(self, "lbl_view_all")
         self.btn_view_all = xrc.XRCCTRL(self, "btn_view_all")
+        self.lbl_view_tl = xrc.XRCCTRL(self, "lbl_view_tl")
         self.btn_view_tl = xrc.XRCCTRL(self, "btn_view_tl")
+        self.lbl_view_tr = xrc.XRCCTRL(self, "lbl_view_tr")
         self.btn_view_tr = xrc.XRCCTRL(self, "btn_view_tr")
+        self.lbl_view_bl = xrc.XRCCTRL(self, "lbl_view_bl")
         self.btn_view_bl = xrc.XRCCTRL(self, "btn_view_bl")
+        self.lbl_view_br = xrc.XRCCTRL(self, "lbl_view_br")
         self.btn_view_br = xrc.XRCCTRL(self, "btn_view_br")
         self.pnl_view_tl = xrc.XRCCTRL(self, "pnl_view_tl")
         self.pnl_view_tr = xrc.XRCCTRL(self, "pnl_view_tr")
@@ -82,7 +87,7 @@ def __init_resources():
     wx.FileSystem.AddHandler(wx.MemoryFSHandler())
 
     main_xrc = '''\
-<?xml version="1.0" ?><resource class="ViewButton" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
+<?xml version="1.0" ?><resource class="odemis.gui.comp.stream.StreamPanel(wxPanel)" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
   <object class="wxFrame" name="fr_main">
     <object class="wxMenuBar">
       <object class="wxMenu">
@@ -231,7 +236,6 @@ def __init_resources():
               <object class="wxPanel">
                 <object class="wxBoxSizer">
                   <orient>wxVERTICAL</orient>
-                  
                   <object class="spacer">
                     <option>1</option>
                     <flag>wxEXPAND</flag>
@@ -239,9 +243,12 @@ def __init_resources():
                   <object class="sizeritem">
                     <object class="wxFlexGridSizer">
                       <object class="sizeritem">
-                        <object class="wxStaticText">
+                        <object class="wxStaticText" name="lbl_view_all">
                           <label>view</label>
                           <fg>#BFBFBF</fg>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
                         </object>
                         <flag>wxALIGN_RIGHT</flag>
                       </object>
@@ -258,9 +265,12 @@ def __init_resources():
                         <border>5</border>
                       </object>
                       <object class="sizeritem">
-                        <object class="wxStaticText">
+                        <object class="wxStaticText" name="lbl_view_tl">
                           <label>view</label>
                           <fg>#BFBFBF</fg>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
                         </object>
                         <flag>wxALIGN_RIGHT</flag>
                       </object>
@@ -275,9 +285,12 @@ def __init_resources():
                         </object>
                       </object>
                       <object class="sizeritem">
-                        <object class="wxStaticText">
+                        <object class="wxStaticText" name="lbl_view_tr">
                           <label>view</label>
                           <fg>#BFBFBF</fg>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
                         </object>
                         <flag>wxALIGN_RIGHT</flag>
                       </object>
@@ -292,9 +305,12 @@ def __init_resources():
                         </object>
                       </object>
                       <object class="sizeritem">
-                        <object class="wxStaticText">
+                        <object class="wxStaticText" name="lbl_view_bl">
                           <label>view</label>
                           <fg>#BFBFBF</fg>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
                         </object>
                         <flag>wxALIGN_RIGHT</flag>
                       </object>
@@ -309,9 +325,12 @@ def __init_resources():
                         </object>
                       </object>
                       <object class="sizeritem">
-                        <object class="wxStaticText">
+                        <object class="wxStaticText" name="lbl_view_br">
                           <label>view</label>
                           <fg>#BFBFBF</fg>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
                         </object>
                         <flag>wxALIGN_RIGHT</flag>
                       </object>
@@ -548,16 +567,16 @@ def __init_resources():
                               </XRCED>
                             </object>
                             <object class="FoldPanelItem">
-                              <object class="wxPanel" name="pnl_stream" subclass="odemis.gui.comp.stream.StreamPanel">
+                              <label>STREAMS</label>
+                              <fg>#1A1A1A</fg>
+                              <bg>#555555</bg>
+                              <object class="StreamPanel" name="pnl_stream">
                                 <fg>#7F7F7F</fg>
                                 <bg>#333333</bg>
                                 <XRCED>
                                   <assign_var>1</assign_var>
                                 </XRCED>
                               </object>
-                              <label>STREAMS</label>
-                              <fg>#1A1A1A</fg>
-                              <bg>#555555</bg>
                             </object>
                             <object class="FoldPanelItem" name="fp_annotations">
                               <label>ANNOTATIONS</label>
