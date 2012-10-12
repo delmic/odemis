@@ -24,6 +24,8 @@ from odemis.gui import instrmodel
 from odemis.gui.log import log
 import wx
 
+from collections import namedtuple
+
 
 class ViewSelector(object):
     """
@@ -39,12 +41,19 @@ class ViewSelector(object):
         self._main_frame = main_frame
 
         # TODO: should create buttons according to micgui views
-        # btn -> viewports
-        self.buttons = {main_frame.btn_view_all: None, # 2x2 layout
-                        main_frame.btn_view_tl: main_frame.pnl_view_tl,
-                        main_frame.btn_view_tr: main_frame.pnl_view_tr,
-                        main_frame.btn_view_bl: main_frame.pnl_view_bl,
-                        main_frame.btn_view_br: main_frame.pnl_view_br}
+        # btn -> (viewport, label)
+        ViewportLabel = namedtuple('ViewportLabel', ['vp', 'lbl'])
+
+        self.buttons = {main_frame.btn_view_all:
+                            ViewportLabel(None, main_frame.lbl_view_all), # 2x2 layout
+                        main_frame.btn_view_tl:
+                            ViewportLabel(main_frame.pnl_view_tl, main_frame.lbl_view_tl),
+                        main_frame.btn_view_tr:
+                            ViewportLabel(main_frame.pnl_view_tr, main_frame.lbl_view_tr),
+                        main_frame.btn_view_bl:
+                            ViewportLabel(main_frame.pnl_view_bl, main_frame.lbl_view_bl),
+                        main_frame.btn_view_br:
+                            ViewportLabel(main_frame.pnl_view_br, main_frame.pnl_view_br)}
 
         for btn in self.buttons:
             btn.Bind(wx.EVT_BUTTON, self.OnClick)
@@ -62,26 +71,26 @@ class ViewSelector(object):
             def onThumbnail(im):
                 btn.set_overlay(im)
 
-            self.buttons[btn].view.thumbnail.subscribe(onThumbnail, init=True)
+            self.buttons[btn].vp.view.thumbnail.subscribe(onThumbnail, init=True)
             # keep ref of the functions so that they are not dropped
             self._subscriptions.append(onThumbnail)
 
             # also subscribe for updating the 2x2 button
-            self.buttons[btn].view.thumbnail.subscribe(self._update22Thumbnail)
+            self.buttons[btn].vp.view.thumbnail.subscribe(self._update22Thumbnail)
         self._update22Thumbnail(None)
 
         # subscribe to change of name
-        for btn, vp in self.buttons.items():
-            if not vp: # 2x2 layout
-                btn.SetLabel("All") # TODO: is it good name?
+        for btn, vl in self.buttons.items():
+            if vl.vp is None: # 2x2 layout
+                vl.lbl.SetLabel("All") # TODO: is it good name?
                 continue
 
             def onName(name):
                 # FIXME: for now the buttons have a separate label next to them
                 # probably need a way to link these labels to the button
-                btn.SetLabel(name)
+                vl.lbl.SetLabel(name)
 
-            vp.view.name.subscribe(onName, init=True)
+            vl.vp.view.name.subscribe(onName, init=True)
             self._subscriptions.append(onName)
 
     def toggleButtonForView(self, view):
@@ -91,13 +100,13 @@ class ViewSelector(object):
           (2x2) is to be toggled
         Note: it does _not_ change the view
         """
-        for b, vp in self.buttons.items():
+        for b, vl in self.buttons.items():
             # 2x2 => vp is None / 1 => vp exists and vp.view is the view
-            if (vp is None and view is None) or (vp and vp.view == view):
+            if (vl.vp is None and view is None) or (vl.vp and vl.vp.view == view):
                 b.SetToggle(True)
             else:
-                if vp:
-                    log.debug("untoggling button of view %s", vp.view.name.value)
+                if vl.vp:
+                    log.debug("untoggling button of view %s", vl.vp.view.name.value)
                 else:
                     log.debug("untoggling button of view All")
                 b.SetToggle(False)
@@ -118,7 +127,7 @@ class ViewSelector(object):
 
         for i, btn in enumerate([self._main_frame.btn_view_tl, self._main_frame.btn_view_tr,
                                  self._main_frame.btn_view_bl, self._main_frame.btn_view_br]):
-            im = self.buttons[btn].view.thumbnail.value
+            im = self.buttons[btn].vp.view.thumbnail.value
             if im is None:
                 continue # stays black
 
@@ -159,7 +168,7 @@ class ViewSelector(object):
         # the button will be toggled when the event for value change is received.
 
         btn = evt.GetEventObject()
-        viewport = self.buttons[btn]
+        viewport = self.buttons[btn].vp
 
         if viewport is None:
             # 2x2 button

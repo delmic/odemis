@@ -47,10 +47,15 @@ class xrcfr_main(wx.Frame):
         self.tab_btn_live = xrc.XRCCTRL(self, "tab_btn_live")
         self.tab_btn_gallery = xrc.XRCCTRL(self, "tab_btn_gallery")
         self.pnl_tab_live = xrc.XRCCTRL(self, "pnl_tab_live")
+        self.lbl_view_all = xrc.XRCCTRL(self, "lbl_view_all")
         self.btn_view_all = xrc.XRCCTRL(self, "btn_view_all")
+        self.lbl_view_tl = xrc.XRCCTRL(self, "lbl_view_tl")
         self.btn_view_tl = xrc.XRCCTRL(self, "btn_view_tl")
+        self.lbl_view_tr = xrc.XRCCTRL(self, "lbl_view_tr")
         self.btn_view_tr = xrc.XRCCTRL(self, "btn_view_tr")
+        self.lbl_view_bl = xrc.XRCCTRL(self, "lbl_view_bl")
         self.btn_view_bl = xrc.XRCCTRL(self, "btn_view_bl")
+        self.lbl_view_br = xrc.XRCCTRL(self, "lbl_view_br")
         self.btn_view_br = xrc.XRCCTRL(self, "btn_view_br")
         self.pnl_view_tl = xrc.XRCCTRL(self, "pnl_view_tl")
         self.pnl_view_tr = xrc.XRCCTRL(self, "pnl_view_tr")
@@ -238,9 +243,12 @@ def __init_resources():
                   <object class="sizeritem">
                     <object class="wxFlexGridSizer">
                       <object class="sizeritem">
-                        <object class="wxStaticText">
+                        <object class="wxStaticText" name="lbl_view_all">
                           <label>view</label>
                           <fg>#BFBFBF</fg>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
                         </object>
                         <flag>wxALIGN_RIGHT</flag>
                       </object>
@@ -257,9 +265,12 @@ def __init_resources():
                         <border>5</border>
                       </object>
                       <object class="sizeritem">
-                        <object class="wxStaticText">
+                        <object class="wxStaticText" name="lbl_view_tl">
                           <label>view</label>
                           <fg>#BFBFBF</fg>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
                         </object>
                         <flag>wxALIGN_RIGHT</flag>
                       </object>
@@ -274,9 +285,12 @@ def __init_resources():
                         </object>
                       </object>
                       <object class="sizeritem">
-                        <object class="wxStaticText">
+                        <object class="wxStaticText" name="lbl_view_tr">
                           <label>view</label>
                           <fg>#BFBFBF</fg>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
                         </object>
                         <flag>wxALIGN_RIGHT</flag>
                       </object>
@@ -291,9 +305,12 @@ def __init_resources():
                         </object>
                       </object>
                       <object class="sizeritem">
-                        <object class="wxStaticText">
+                        <object class="wxStaticText" name="lbl_view_bl">
                           <label>view</label>
                           <fg>#BFBFBF</fg>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
                         </object>
                         <flag>wxALIGN_RIGHT</flag>
                       </object>
@@ -308,9 +325,12 @@ def __init_resources():
                         </object>
                       </object>
                       <object class="sizeritem">
-                        <object class="wxStaticText">
+                        <object class="wxStaticText" name="lbl_view_br">
                           <label>view</label>
                           <fg>#BFBFBF</fg>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
                         </object>
                         <flag>wxALIGN_RIGHT</flag>
                       </object>

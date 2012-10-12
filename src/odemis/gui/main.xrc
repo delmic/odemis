@@ -155,9 +155,12 @@
                   <object class="sizeritem">
                     <object class="wxFlexGridSizer">
                       <object class="sizeritem">
-                        <object class="wxStaticText">
+                        <object class="wxStaticText" name="lbl_view_all">
                           <label>view</label>
                           <fg>#BFBFBF</fg>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
                         </object>
                         <flag>wxALIGN_RIGHT</flag>
                       </object>
@@ -174,9 +177,12 @@
                         <border>5</border>
                       </object>
                       <object class="sizeritem">
-                        <object class="wxStaticText">
+                        <object class="wxStaticText" name="lbl_view_tl">
                           <label>view</label>
                           <fg>#BFBFBF</fg>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
                         </object>
                         <flag>wxALIGN_RIGHT</flag>
                       </object>
@@ -191,9 +197,12 @@
                         </object>
                       </object>
                       <object class="sizeritem">
-                        <object class="wxStaticText">
+                        <object class="wxStaticText" name="lbl_view_tr">
                           <label>view</label>
                           <fg>#BFBFBF</fg>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
                         </object>
                         <flag>wxALIGN_RIGHT</flag>
                       </object>
@@ -208,9 +217,12 @@
                         </object>
                       </object>
                       <object class="sizeritem">
-                        <object class="wxStaticText">
+                        <object class="wxStaticText" name="lbl_view_bl">
                           <label>view</label>
                           <fg>#BFBFBF</fg>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
                         </object>
                         <flag>wxALIGN_RIGHT</flag>
                       </object>
@@ -225,9 +237,12 @@
                         </object>
                       </object>
                       <object class="sizeritem">
-                        <object class="wxStaticText">
+                        <object class="wxStaticText" name="lbl_view_br">
                           <label>view</label>
                           <fg>#BFBFBF</fg>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
                         </object>
                         <flag>wxALIGN_RIGHT</flag>
                       </object>
