@@ -46,6 +46,33 @@ choice.)
     sudo ln -s <path to odemis root dir>/gui/xmlh/delmic.py
 
 
+= Installing comedilib 0.10.1 =
+git clone git://comedi.org/git/comedi/comedilib.git
+sudo apt-get install autoconf libltdl-dev flex byacc python-dev swig
+cd comedilib
+./autogen.sh
+./configure
+make -j
+sudo make install
+
+= Installing comedi_calibrate =
+git clone git://comedi.org/git/comedi/comedi_calibrate.git
+sudo apt-get install libboost-dev libboost-program-options-dev libgsl0-dev
+cd comedi_calibrate
+./autogen.sh
+./configure
+make -j
+sudo make install
+
+For the NI PCI 6251
+sudo comedi_soft_calibrate -f /dev/comedi0
+
+= Installing pycomedi =
+git clone git://tremily.us/pycomedi.git
+sudo apt-get install python-comediliblib comedi-dev python-nose cython
+cd pycomedi
+sudo python setup.py install
+
 = Installing Odemis =
 
 Download the source code:
