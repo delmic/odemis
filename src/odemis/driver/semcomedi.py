@@ -14,7 +14,10 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
-from odemis import model
+from odemis import model, __version__
+import comedi
+import logging
+import pycomedi.device
 
 # This is a module to drive a FEI Scanning electron microscope via the so-called
 # "external X/Y" line. It uses a DA-conversion and acquisition (DAQ) card on the
@@ -49,26 +52,94 @@ class SEMComedi(model.HwComponent):
         children (dict string->kwargs): parameters setting for the children.
             Known children are "scanner", "detector0", "detector1"...
             They will be provided back in the .children roattribute
-        device (string): name of the Comedi device (ex: "pci-6251")
+        device (string): name of the /dev comedi  device (ex: "/dev/comedi0")
         Raise an exception if the device cannot be opened
         '''
-        # TODO is the device name better like dev style? /dev/comedi0?
+        # TODO is the device name better like Comedi board name style? "pci-6251"?
+        self._device_name = device
         
         # we will fill the set of children with Components later in ._children 
         model.HwComponent.__init__(self, name, role, children=None, **kwargs)
         
+#        try:
+#            self.device = pycomedi.device.Device(device)
+#            self.device.open()
+#        except pycomedi.PyComediError:
+#            raise ValueError("Failed to open DAQ device '%s'", device)
+#        
+#        self._metadata = {model.MD_HW_NAME: self.getHwName()}
 #        self._swVersion = "%s (driver %s)" % (__version__.version, self.getSwVersion()) 
 #        self._metadata[model.MD_SW_VERSION] = self._swVersion
-#        self._hwVersion = self.getHwVersion()
+##        self._hwVersion = self.getHwVersion()
 #        self._metadata[model.MD_HW_VERSION] = self._hwVersion
-    
+            
+        
     
     # There are two temperature sensors:
     # * One on the board itself (TODO how to access it with Comedi?)
     # * One on the SCB-68. From the manual, the temperature sensor outputs
-    #   10 mV/°C and has an accuracy of ±1 °C
+    #   10 mV/°C and has an accuracy of ±1 °C => T = 100 * Vt
+    # sudo ./cmd -f /dev/comedi0 -s 0 -c 0 -a 2 -n 1 -N 1 -p
 
         
     def getSwVersion(self):
-        # cf cat /proc/comedi
-        pass
+        """
+        Returns (string): displayable string showing the driver version
+        """
+        driver = self.device.get_driver_name()
+        dversion = '.'.join(str(x) for x in self.device.get_version())
+        return "%s v%s" % driver, dversion
+    
+    def getHwName(self):
+        """
+        Returns (string): displayable string showing whatever can be found out 
+          about the actual hardware.
+        """
+        return self.device.get_board_name()
+
+    def getTemperatureSCB(self):
+        """
+        returns (-300<float<300): temperature in °C reported by the Shielded
+          Connector Block (which must be set to temperature sensor differential)
+        """
+        # On the SCB-68. From the manual, the temperature sensor outputs on 
+        # AI0+/AI0- 10 mV/°C and has an accuracy of ±1 °C => T = 100 * Vt
+        
+        device = comedi.comedi_open(self._device_name)
+        ai_subdevice = comedi.comedi_find_subdevice_by_type(device,
+                                        comedi.COMEDI_SUBD_AI, 0)
+        channel = 0
+        
+        # Get AI0 in differential
+        range = comedi.comedi_find_range(device, ai_subdevice, channel,
+                                        comedi.UNIT_volt, 0, 10)
+        if range == -1:
+            logging.warning("Couldn't find a fitting range")
+            range = 0
+            
+        result, data = comedi.comedi_data_read(device, ai_subdevice, channel, range,
+                                    comedi.AREF_DIFF)
+        if result == -1:
+            logging.error("Failed to read temperature")
+            raise IOError("Failed to read data")
+        
+        # convert to volt
+        maxdata = comedi.comedi_get_maxdata(device, ai_subdevice, channel)
+        range_info = comedi.comedi_get_range(device, ai_subdevice, channel, range)
+        pvalue = comedi.comedi_to_phys(data, range_info, maxdata)
+        return pvalue * 100.0
+        
+        
+#        # Get AI0 in differential
+#        ai_subdevice = self.device.find_subdevice_by_type(
+#                                        pycomedi.constant.SUBDEVICE_TYPE.ai)
+#        channel_temp = ai_subdevice.channel(
+#            index=0, factory=pycomedi.channel.AnalogChannel, range=range, 
+#            aref=pycomedi.constant.AREF.diff)
+#        
+#        # the device is soft calibrated, and pycomedi doesn't support converters
+#        # for soft calibrated devices nor the simple to_phys version.
+#        
+#        data = c.data_read()
+#        converter = c.get_converter()
+#        physical_data = converter.to_physical(data)
