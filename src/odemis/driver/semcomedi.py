@@ -127,7 +127,36 @@ class SEMComedi(model.HwComponent):
         maxdata = comedi.comedi_get_maxdata(device, ai_subdevice, channel)
         range_info = comedi.comedi_get_range(device, ai_subdevice, channel, range)
         pvalue = comedi.comedi_to_phys(data, range_info, maxdata)
-        return pvalue * 100.0
+        
+        temp = pvalue * 100.0
+        
+        # convert using calibration
+        # This will only work if the device is soft_calibrated, and calibration has been done
+        path = comedi.comedi_get_default_calibration_path(device)
+        if path is None:
+            logging.error("Failed to read calibration information")
+            return
+        
+        calibration = comedi.comedi_parse_calibration_file(path)
+        if calibration is None:
+            logging.error("Failed to read calibration information")
+            return
+
+        poly = comedi.comedi_polynomial_t()
+        result = comedi.comedi_get_softcal_converter(
+            ai_subdevice, channel,
+            range,
+            comedi.COMEDI_TO_PHYSICAL,
+            calibration,
+            poly)
+        if result == -1:
+            logging.error("Failed to read calibration information")
+            return
+        pvalue_cal = comedi.comedi_to_physical(data, poly)
+
+        temp_cal = pvalue_cal * 100.0
+        
+        return temp, temp_cal
         
         
 #        # Get AI0 in differential
