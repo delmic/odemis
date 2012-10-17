@@ -17,7 +17,6 @@ You should have received a copy of the GNU General Public License along with Ode
 from odemis import model, __version__
 import comedi
 import logging
-import pycomedi.device
 
 # This is a module to drive a FEI Scanning electron microscope via the so-called
 # "external X/Y" line. It uses a DA-conversion and acquisition (DAQ) card on the
@@ -39,6 +38,21 @@ import pycomedi.device
 # BSD : AI2/AI GND = pins 65/64
 # SCB-68 Temperature Sensor differential : AI0+/AI0- = AI0/AI8 = pins 68/34 (by jumper)
 # 
+# Note about using comedi in Python:
+# There are two available bindings for comedi in Python: python-comedilib
+# (provided with comedi) and pycomedi.  python-comedilib provides just a direct
+# mapping of the C functions. It's quite verbose because every name starts with
+# comedi_, and not object oriented. You can directly the C documentation. The
+# only thing to know is that parameters which are a simple type and used as output
+# (e.g., int *, double *) are not passed as parameters but directly returned as
+# output. However structures must be first allocated and then given as input
+# parameter.
+# pycomedi is object-oriented. It tries to be less verbose but fails a bit
+# because each object is in a separate module. At least it handles call errors
+# as exceptions. It also has some non implemented parts, for example to_phys,
+# from_phys are not available and to_physical, from_physical only work if the
+# device is hardware calibrated, it's not (yet?) implemented for software
+# calibrated devices. For now there is no documentation but some examples.
 
 class SEMComedi(model.HwComponent):
     '''
@@ -61,19 +75,27 @@ class SEMComedi(model.HwComponent):
         # we will fill the set of children with Components later in ._children 
         model.HwComponent.__init__(self, name, role, children=None, **kwargs)
         
-#        try:
-#            self.device = pycomedi.device.Device(device)
-#            self.device.open()
-#        except pycomedi.PyComediError:
-#            raise ValueError("Failed to open DAQ device '%s'", device)
-#        
-#        self._metadata = {model.MD_HW_NAME: self.getHwName()}
-#        self._swVersion = "%s (driver %s)" % (__version__.version, self.getSwVersion()) 
-#        self._metadata[model.MD_SW_VERSION] = self._swVersion
-##        self._hwVersion = self.getHwVersion()
-#        self._metadata[model.MD_HW_VERSION] = self._hwVersion
-            
+        self._device = comedi.comedi_open(self._device_name)
+        if self._device is None:
+            raise ValueError("Failed to open DAQ device '%s'", device)
         
+        self._ai_subdevice = comedi.comedi_find_subdevice_by_type(self._device,
+                                            comedi.COMEDI_SUBD_AI, 0)
+        if self._ai_subdevice < 0:
+            raise ValueError("Failed to open AI subdevice")
+        
+        self._metadata = {model.MD_HW_NAME: self.getHwName()}
+        self._swVersion = "%s (driver %s)" % (__version__.version, self.getSwVersion()) 
+        self._metadata[model.MD_SW_VERSION] = self._swVersion
+#        self._hwVersion = self.getHwVersion()
+        self._metadata[model.MD_HW_VERSION] = self._hwVersion
+            
+        self._init_calibration()
+        
+        # converters: dict (3-tuple int->number callable(number)):
+        # subdevice, channel, range -> converter from value to value
+        self._convert_to_phys = {}
+        self._convert_from_phys = {}
     
     # There are two temperature sensors:
     # * One on the board itself (TODO how to access it with Comedi?)
@@ -81,22 +103,128 @@ class SEMComedi(model.HwComponent):
     #   10 mV/°C and has an accuracy of ±1 °C => T = 100 * Vt
     # sudo ./cmd -f /dev/comedi0 -s 0 -c 0 -a 2 -n 1 -N 1 -p
 
+    def _init_calibration(self):
+        """
+        Load the calibration file if possible.
+        Necessary for _get_converter to work.
+        """
+        self._calibration = None  # means not calibrated
+        
+        # This will only work if the device is soft_calibrated, and calibration has been done
+        path = comedi.comedi_get_default_calibration_path(self._device)
+        if path is None:
+            logging.warning("Failed to read calibration information")
+            return
+        
+        self._calibration = comedi.comedi_parse_calibration_file(path)
+        if self._calibration is None:
+            # TODO: only do a warning if the device has any soft-cal subdevice
+            logging.warning("Failed to read calibration information, you might " 
+                            "want to calibrate your device with:\n"
+                            "sudo comedi_soft_calibrate -f /dev/comedi0\n"
+                            "or\n"
+                            "sudo comedi_calibrate -f /dev/comedi0")
+            return
+        
+        # TODO: do the hardware calibrated devices need to have the file loaded?
+        # see comedi_apply_calibration() => probably not, but need to call this
+        # function when we read from different channel.
         
     def getSwVersion(self):
         """
         Returns (string): displayable string showing the driver version
         """
-        driver = self.device.get_driver_name()
-        dversion = '.'.join(str(x) for x in self.device.get_version())
-        return "%s v%s" % driver, dversion
+        driver = comedi.comedi_get_driver_name(self._device)
+        version = comedi.comedi_get_version_code(self._device)
+        lversion = []
+        for i in range(3):
+            lversion.insert(0, version & 0xff)  # grab lowest 8 bits
+            version >>= 8  # shift over 8 bits
+        sversion = '.'.join(str(x) for x in lversion)
+        return "%s v%s" % driver, sversion
     
     def getHwName(self):
         """
         Returns (string): displayable string showing whatever can be found out 
           about the actual hardware.
         """
-        return self.device.get_board_name()
+        return comedi.comedi_get_board_name(self._device)
 
+
+    def _get_converter(self, subdevice, channel, range, direction):
+        """
+        Finds the best converter available for the given conditions
+        subdevice (int): the subdevice index
+        channel (int): the channel index
+        range (int): the range index
+        direction (enum): comedi.COMEDI_TO_PHYSICAL or comedi.COMEDI_FROM_PHYSICAL
+        return a callable number -> number
+        """
+        assert(direction in [comedi.COMEDI_TO_PHYSICAL, comedi.COMEDI_FROM_PHYSICAL])
+        
+        # 3 possibilities:
+        # * the device is hard-calibrated -> simple converter from get_hardcal_converter
+        # * the device is soft-calibrated -> polynomial converter from  get_softcal_converter
+        # * the device is not calibrated -> linear approximation converter
+        poly = None
+        flags = comedi.comedi_get_subdevice_flags(self._device, subdevice)
+        if not flags & comedi.SDF_SOFT_CALIBRATED:
+            # hardware-calibrated
+            poly = comedi.comedi_polynomial_t()
+            result = comedi.comedi_get_hardcal_converter(self._device,
+                              subdevice, channel, range, direction, poly)
+            if result < 0:
+                logging.warning("Failed to get converter from calibration")
+                poly = None
+        elif self._calibration:
+            # soft-calibrated
+            poly = comedi.comedi_polynomial_t()
+            result = comedi.comedi_get_softcal_converter(subdevice, channel,
+                              range, direction, self._calibration, poly)
+            if result < 0:
+                logging.warning("Failed to get converter from calibration")
+                poly = None
+        
+        if poly is None:
+            # not calibrated
+            logging.debug("creating a non calibrated converter for s%dc%dr%d",
+                          subdevice, channel, range)
+            maxdata = comedi.comedi_get_maxdata(self._device, subdevice, channel)
+            range_info = comedi.comedi_get_range(self._device, subdevice, 
+                                                 channel, range)
+            if direction == comedi.COMEDI_TO_PHYSICAL:
+                return lambda d: comedi.comedi_to_phys(d, range_info, maxdata)
+            else:
+                return lambda d: comedi.comedi_from_phys(d, range_info, maxdata)
+        else:
+            # calibrated: return polynomial-based converter
+            logging.debug("creating a calibrated converter for s%dc%dr%d",
+                          subdevice, channel, range)
+            if direction == comedi.COMEDI_TO_PHYSICAL:
+                return lambda d: comedi.comedi_to_physical(d, poly)
+            else:
+                return lambda d: comedi.comedi_from_physical(d, poly)
+    
+
+    def _to_phys(self, subdevice, channel, range, value):
+        """
+        Converts a raw value to the physical value, using the best converter 
+          available.
+        subdevice (int): the subdevice index
+        channel (int): the channel index
+        range (int): the range index
+        value (int): the value to convert
+        return (float): value in physical unit
+        """
+        # get the cached converter, or create a new one
+        try:
+            converter = self._convert_to_phys[subdevice, channel, range]
+        except KeyError:
+            converter = self._get_converter(subdevice, channel, range, comedi.COMEDI_TO_PHYSICAL)
+            self._convert_to_phys[subdevice, channel, range] = converter
+        
+        return converter(value)
+        
     def getTemperatureSCB(self):
         """
         returns (-300<float<300): temperature in °C reported by the Shielded
@@ -105,70 +233,29 @@ class SEMComedi(model.HwComponent):
         # On the SCB-68. From the manual, the temperature sensor outputs on 
         # AI0+/AI0- 10 mV/°C and has an accuracy of ±1 °C => T = 100 * Vt
         
-        device = comedi.comedi_open(self._device_name)
-        ai_subdevice = comedi.comedi_find_subdevice_by_type(device,
-                                        comedi.COMEDI_SUBD_AI, 0)
         channel = 0
         
-        # Get AI0 in differential
-        range = comedi.comedi_find_range(device, ai_subdevice, channel,
-                                        comedi.UNIT_volt, 0, 10)
-        if range == -1:
-            logging.warning("Couldn't find a fitting range")
+        # TODO: selecting a range should be done only once, at initialisation
+        # Get AI0 in differential, with values going between 0 and 1V
+        range = comedi.comedi_find_range(self._device, self._ai_subdevice, channel,
+                                        comedi.UNIT_volt, 0, 1)
+        if range < 0:
+            logging.warning("Couldn't find a fitting range, using a random one")
             range = 0
-            
-        result, data = comedi.comedi_data_read(device, ai_subdevice, channel, range,
-                                    comedi.AREF_DIFF)
-        if result == -1:
+        
+        range_info = comedi.comedi_get_range(self._device, self._ai_subdevice, channel, range)
+        logging.debug("Reading temperature with range %g-%g V", range_info.min, range_info.max)
+
+        
+        # read the raw value
+        result, data = comedi.comedi_data_read(self._device, self._ai_subdevice,
+                            channel, range, comedi.AREF_DIFF)
+        if result < 0:
             logging.error("Failed to read temperature")
             raise IOError("Failed to read data")
         
-        # convert to volt
-        maxdata = comedi.comedi_get_maxdata(device, ai_subdevice, channel)
-        range_info = comedi.comedi_get_range(device, ai_subdevice, channel, range)
-        pvalue = comedi.comedi_to_phys(data, range_info, maxdata)
-        
-        temp = pvalue * 100.0
-        
         # convert using calibration
-        # This will only work if the device is soft_calibrated, and calibration has been done
-        path = comedi.comedi_get_default_calibration_path(device)
-        if path is None:
-            logging.error("Failed to read calibration information")
-            return
+        pvalue = self._to_phys(self._ai_subdevice, channel, range, data)
+        temp = pvalue * 100.0
+        return temp
         
-        calibration = comedi.comedi_parse_calibration_file(path)
-        if calibration is None:
-            logging.error("Failed to read calibration information")
-            return
-
-        poly = comedi.comedi_polynomial_t()
-        result = comedi.comedi_get_softcal_converter(
-            ai_subdevice, channel,
-            range,
-            comedi.COMEDI_TO_PHYSICAL,
-            calibration,
-            poly)
-        if result == -1:
-            logging.error("Failed to read calibration information")
-            return
-        pvalue_cal = comedi.comedi_to_physical(data, poly)
-
-        temp_cal = pvalue_cal * 100.0
-        
-        return temp, temp_cal
-        
-        
-#        # Get AI0 in differential
-#        ai_subdevice = self.device.find_subdevice_by_type(
-#                                        pycomedi.constant.SUBDEVICE_TYPE.ai)
-#        channel_temp = ai_subdevice.channel(
-#            index=0, factory=pycomedi.channel.AnalogChannel, range=range, 
-#            aref=pycomedi.constant.AREF.diff)
-#        
-#        # the device is soft calibrated, and pycomedi doesn't support converters
-#        # for soft calibrated devices nor the simple to_phys version.
-#        
-#        data = c.data_read()
-#        converter = c.get_converter()
-#        physical_data = converter.to_physical(data)
