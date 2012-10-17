@@ -16,6 +16,7 @@ You should have received a copy of the GNU General Public License along with Ode
 '''
 from odemis import model, __version__
 import comedi
+import glob
 import logging
 
 # This is a module to drive a FEI Scanning electron microscope via the so-called
@@ -141,7 +142,7 @@ class SEMComedi(model.HwComponent):
             lversion.insert(0, version & 0xff)  # grab lowest 8 bits
             version >>= 8  # shift over 8 bits
         sversion = '.'.join(str(x) for x in lversion)
-        return "%s v%s" % driver, sversion
+        return "%s v%s" % (driver, sversion)
     
     def getHwName(self):
         """
@@ -244,7 +245,7 @@ class SEMComedi(model.HwComponent):
             range = 0
         
         range_info = comedi.comedi_get_range(self._device, self._ai_subdevice, channel, range)
-        logging.debug("Reading temperature with range %g-%g V", range_info.min, range_info.max)
+        logging.debug("Reading temperature with range %g->%g V", range_info.min, range_info.max)
 
         
         # read the raw value
@@ -258,4 +259,60 @@ class SEMComedi(model.HwComponent):
         pvalue = self._to_phys(self._ai_subdevice, channel, range, data)
         temp = pvalue * 100.0
         return temp
+    
+    
+    def terminate(self):
+        """
+        Must be called at the end of the usage. Can be called multiple times,
+        but the component shouldn't be used afterward.
+        """
+        if self._calibration:
+            comedi.comedi_cleanup_calibration(self._calibration)
+            self._calibration = None
+        if self._device:
+            comedi.comedi_close(self._device)
+            self._device = None
+            
+    @staticmethod
+    def scan():
+        """
+        List all the available comedi devices compatible with the need for SEM.
+        return (list of 2-tuple: name (string), kwargs (dict))
+        """
+        names = glob.glob('/dev/comedi?') # should not catch /dev/comedi0_subd*
+
+        found = []
+        for n in names:
+            device = comedi.comedi_open(n)
+            if device is None:
+                continue
+            try:
+                logging.debug("Checking comedi device '%s'", n)
+                
+                # Should have at least one analog input and an analog output with 2 channels
+                ai_subdevice = comedi.comedi_find_subdevice_by_type(device,
+                                                comedi.COMEDI_SUBD_AI, 0)
+                if ai_subdevice < 0:
+                    continue
+                number_ai = comedi.comedi_get_n_channels(device, ai_subdevice)
+                if number_ai < 1:
+                    continue
+                ao_subdevice = comedi.comedi_find_subdevice_by_type(device,
+                                                comedi.COMEDI_SUBD_AO, 0)
+                if ao_subdevice < 0:
+                    continue
+                number_ao = comedi.comedi_get_n_channels(device, ao_subdevice)
+                if number_ao < 2:
+                    continue
+                
+                # TODO if not enough channels, should try to look for more subdevices
+                
+                name = "SEM/" + comedi.comedi_get_board_name(device)
+                kwargs = {"device": n}
+                found.append((name, kwargs))
+                
+            finally:
+                comedi.comedi_close(device)
         
+        return found
+    
