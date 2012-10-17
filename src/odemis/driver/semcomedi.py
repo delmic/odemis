@@ -90,7 +90,9 @@ class SEMComedi(model.HwComponent):
         self._metadata[model.MD_SW_VERSION] = self._swVersion
 #        self._hwVersion = self.getHwVersion()
         self._metadata[model.MD_HW_VERSION] = self._hwVersion
-            
+        
+        # detect when values are strange
+        comedi.comedi_set_global_oor_behavior(comedi.COMEDI_OOR_NAN)
         self._init_calibration()
         
         # converters: dict (3-tuple int->number callable(number)):
@@ -225,6 +227,26 @@ class SEMComedi(model.HwComponent):
             self._convert_to_phys[subdevice, channel, range] = converter
         
         return converter(value)
+
+
+    def _from_phys(self, subdevice, channel, range, value):
+        """
+        Converts a physical value to raw, using the best converter available.
+        subdevice (int): the subdevice index
+        channel (int): the channel index
+        range (int): the range index
+        value (float): the value to convert
+        return (int): value in raw data 
+        """
+        # get the cached converter, or create a new one
+        try:
+            converter = self._convert_from_phys[subdevice, channel, range]
+        except KeyError:
+            converter = self._get_converter(subdevice, channel, range, comedi.COMEDI_FROM_PHYSICAL)
+            self._convert_from_phys[subdevice, channel, range] = converter
+        
+        return converter(value)
+
         
     def getTemperatureSCB(self):
         """
