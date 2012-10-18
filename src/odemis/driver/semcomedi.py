@@ -18,6 +18,8 @@ from odemis import model, __version__
 import comedi
 import glob
 import logging
+import numpy
+import os
 
 # This is a module to drive a FEI Scanning electron microscope via the so-called
 # "external X/Y" line. It uses a DA-conversion and acquisition (DAQ) card on the
@@ -185,6 +187,9 @@ class SEMComedi(model.HwComponent):
             result = comedi.comedi_get_softcal_converter(subdevice, channel,
                               range, direction, self._calibration, poly)
             if result < 0:
+                # It's quite possible that it fails if asking for opposite
+                # direction than the calibration polynomial, if the polynomial
+                # has a order > 1 (e.g., AI on NI PCI 6251).  
                 logging.warning("Failed to get converter from calibration")
                 poly = None
         
@@ -282,7 +287,107 @@ class SEMComedi(model.HwComponent):
         temp = pvalue * 100.0
         return temp
     
-    
+    def _get_dtype(self, subdevice):
+        """
+        Return the appropriate numpy.dtype for the given subdevice
+        """
+        flags = comedi.comedi_get_subdevice_flags(self._device, subdevice)
+        if flags & comedi.SDF_LSAMPL:
+            return numpy.uint32
+        else: 
+            return numpy.uint16
+        
+    def get_data(self, channel, period, size):
+        """
+        read n data from the given analog input channel
+        channel (int): channel
+        period (float): sampling period in s
+        size (0<int): number of data to read
+        return (numpy.array with shape=size and dtype=float) 
+        Note: this is only for testing, and will go away in the final version
+        """
+        #construct a comedi command
+        
+        period_ns = int(round(period * 1e9))  # in nanoseconds
+        chans = [1]
+        best_range = comedi.comedi_find_range(self._device, self._ai_subdevice, channel,
+                                        comedi.UNIT_volt, 0, 5)
+        ranges = [best_range] 
+        aref =[comedi.AREF_GROUND]
+        nchans = len(chans) #number of channels
+        
+        clist = comedi.chanlist(nchans) #create a chanlist of length nchans
+        for i in range(nchans):
+            clist[i] = comedi.cr_pack(chans[i], ranges[i], aref[i])
+        
+        logging.debug("Generating a new command for %d scans", size)
+        cmd = comedi.comedi_cmd_struct()
+        ret = comedi.comedi_get_cmd_generic_timed(self._device, self._ai_subdevice,
+                                                  cmd, nchans, period_ns)
+        if ret < 0:
+            raise IOError("comedi_get_cmd_generic failed")
+        
+        cmd.chanlist = clist # adjust for our particular context
+        cmd.chanlist_len = nchans
+        cmd.scan_end_arg = nchans
+        if cmd.stop_src == comedi.TRIG_COUNT:
+            cmd.stop_arg = size
+            # FIXME what if not?!
+        
+        # clean up the command
+        rc = comedi.comedi_command_test(self._device, cmd)
+        if rc < 0:
+            raise IOError("comedi_command_test failed")
+        # on the second time, it should report 0, meaning "perfect"
+        rc = comedi.comedi_command_test(self._device, cmd)
+        if rc < 0:
+            raise IOError("comedi_command_test failed")
+        elif rc != 0:
+            raise IOError("failed to prepare command")
+
+        # run the command
+        logging.debug("Going to start the command")
+        ret = comedi.comedi_command(self._device, cmd)
+        if ret < 0:
+            raise IOError("comedi_command failed")
+        
+        fd = comedi.comedi_fileno(self._device)
+        if fd <= 0:
+            raise IOError("Error obtaining Comedi device file descriptor")
+        
+        shape = (size, nchans)
+        dtype = self._get_dtype(self._ai_subdevice)
+        buf_size = dtype.itemsize * shape[0] * shape[1]
+        
+        logging.debug("Going to read %d bytes", buf_size)
+        # TODO: can this handle faults? 
+        buf = numpy.fromfile(fd, dtype=dtype, count=buf_size)
+        # reshape
+        array = numpy.ndarray(shape=shape, dtype=dtype, buffer=buf)
+        
+#        BUFSZ = 10000
+#        while True:
+#            data = os.read(fd, BUFSZ)
+#            #print "len(data) = ", len(data)
+#            if len(data) == 0:
+#                break
+#            n = len(data)/2 # 2 bytes per 'H'
+        
+        logging.debug("Converting raw data to physical: %s", array)
+        
+        # convert data to physical
+        parray = numpy.empty(shape=array.shape, dtype=numpy.double)
+        # TODO: need to support multiple dim
+        converter = self._get_converter(self._ai_subdevice, chans[0], ranges[0],
+                                        comedi.COMEDI_TO_PHYSICAL)
+        for i,d in enumerate(array):
+            parray[i] = converter(d)
+        
+        return parray
+        
+        
+        # TODO: be able to stop while reading, using comedi_cancel()
+            
     def terminate(self):
         """
         Must be called at the end of the usage. Can be called multiple times,
