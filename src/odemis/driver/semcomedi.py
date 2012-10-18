@@ -19,6 +19,7 @@ import comedi
 import glob
 import logging
 import numpy
+import ctypes
 import os
 
 # This is a module to drive a FEI Scanning electron microscope via the so-called
@@ -45,11 +46,11 @@ import os
 # There are two available bindings for comedi in Python: python-comedilib
 # (provided with comedi) and pycomedi.  python-comedilib provides just a direct
 # mapping of the C functions. It's quite verbose because every name starts with
-# comedi_, and not object oriented. You can directly the C documentation. The
+# comedi_, and not object oriented. You can directly use the C documentation. The
 # only thing to know is that parameters which are a simple type and used as output
 # (e.g., int *, double *) are not passed as parameters but directly returned as
 # output. However structures must be first allocated and then given as input
-# parameter.
+# parameter. See comedi_wrap.doc for parameters.
 # pycomedi is object-oriented. It tries to be less verbose but fails a bit
 # because each object is in a separate module. At least it handles call errors
 # as exceptions. It also has some non implemented parts, for example to_phys,
@@ -293,9 +294,9 @@ class SEMComedi(model.HwComponent):
         """
         flags = comedi.comedi_get_subdevice_flags(self._device, subdevice)
         if flags & comedi.SDF_LSAMPL:
-            return numpy.uint32
+            return numpy.uint32()
         else: 
-            return numpy.uint16
+            return numpy.uint16()
         
     def get_data(self, channel, period, size):
         """
@@ -309,7 +310,7 @@ class SEMComedi(model.HwComponent):
         #construct a comedi command
         
         period_ns = int(round(period * 1e9))  # in nanoseconds
-        chans = [1]
+        chans = [channel]
         best_range = comedi.comedi_find_range(self._device, self._ai_subdevice, channel,
                                         comedi.UNIT_volt, 0, 5)
         ranges = [best_range] 
@@ -354,6 +355,7 @@ class SEMComedi(model.HwComponent):
         fd = comedi.comedi_fileno(self._device)
         if fd <= 0:
             raise IOError("Error obtaining Comedi device file descriptor")
+        f = os.fdopen(fd, 'r+')
         
         shape = (size, nchans)
         dtype = self._get_dtype(self._ai_subdevice)
@@ -361,9 +363,7 @@ class SEMComedi(model.HwComponent):
         
         logging.debug("Going to read %d bytes", buf_size)
         # TODO: can this handle faults? 
-        buf = numpy.fromfile(fd, dtype=dtype, count=buf_size)
-        # reshape
-        array = numpy.ndarray(shape=shape, dtype=dtype, buffer=buf)
+        buf = numpy.fromfile(f, dtype=dtype, count=buf_size)
         
 #        BUFSZ = 10000
 #        while True:
@@ -373,15 +373,25 @@ class SEMComedi(model.HwComponent):
 #                break
 #            n = len(data)/2 # 2 bytes per 'H'
         
-        logging.debug("Converting raw data to physical: %s", array)
+        logging.debug("Converting raw data to physical: %s", buf)
         
         # convert data to physical
-        parray = numpy.empty(shape=array.shape, dtype=numpy.double)
-        # TODO: need to support multiple dim
+        parray = numpy.empty(shape=buf.shape, dtype=numpy.double)
         converter = self._get_converter(self._ai_subdevice, chans[0], ranges[0],
                                         comedi.COMEDI_TO_PHYSICAL)
-        for i,d in enumerate(array):
-            parray[i] = converter(d)
+        # converter needs lsampl (uint32). So for lsampl devices, it's pretty
+        # straightforward, just a matter of convincing SWIG that a numpy.uint32
+        # is a unsigned int. For sampl devices, everything need to be converted.
+        
+        # make it seen as a ctype buffer of unsigned int (that swig accepts)
+        # TODO: maybe a buffer() is enough?
+        cbuf = buf.ctypes.data_as(ctypes.POINTER(ctypes.c_uint32))
+        # TODO: for sampl devices: really convert
+        for i in range(buf.shape[0]):
+            # TODO: maybe could be speed-up by something like vectorize()/map()?
+            parray[i] = converter(cbuf[i])
+        # reshape 
+        parray.shape = shape # FIXME: check that the order/stride is correct
         
         return parray
         
