@@ -95,6 +95,11 @@ class SEMComedi(model.HwComponent):
         if self._ai_subdevice < 0:
             raise ValueError("Failed to open AI subdevice")
         
+        self._ao_subdevice = comedi.comedi_find_subdevice_by_type(self._device,
+                                            comedi.COMEDI_SUBD_AO, 0)
+        if self._ao_subdevice < 0:
+            raise ValueError("Failed to open AO subdevice")
+        
         self._metadata = {model.MD_HW_NAME: self.getHwName()}
         self._swVersion = "%s (driver %s)" % (__version__.version, self.getSwVersion()) 
         self._metadata[model.MD_SW_VERSION] = self._swVersion
@@ -303,9 +308,9 @@ class SEMComedi(model.HwComponent):
         if flags == -1:
             raise IOError("Failed to get subdevice %d flags", subdevice)
         if flags & comedi.SDF_LSAMPL:
-            return numpy.uint32()
+            return numpy.uint32
         else: 
-            return numpy.uint16()
+            return numpy.uint16
         
     def get_data(self, channel, period, size):
         """
@@ -325,12 +330,13 @@ class SEMComedi(model.HwComponent):
         ranges = [best_range] 
         aref =[comedi.AREF_GROUND]
         nchans = len(chans) #number of channels
+        nscans = size
         
         clist = comedi.chanlist(nchans) #create a chanlist of length nchans
         for i in range(nchans):
             clist[i] = comedi.cr_pack(chans[i], ranges[i], aref[i])
         
-        logging.debug("Generating a new command for %d scans", size)
+        logging.debug("Generating a new command for %d scans", nscans)
         cmd = comedi.comedi_cmd_struct()
         ret = comedi.comedi_get_cmd_generic_timed(self._device, self._ai_subdevice,
                                                   cmd, nchans, period_ns)
@@ -341,7 +347,7 @@ class SEMComedi(model.HwComponent):
         cmd.chanlist_len = nchans
         cmd.scan_end_arg = nchans
         cmd.stop_src = comedi.TRIG_COUNT
-        cmd.stop_arg = size
+        cmd.stop_arg = nscans
         
         # clean up the command
         rc = comedi.comedi_command_test(self._device, cmd)
@@ -360,11 +366,11 @@ class SEMComedi(model.HwComponent):
         if ret < 0:
             raise IOError("comedi_command failed")
 
-        shape = (size, nchans)
+        shape = (nscans, nchans)
         dtype = self._get_dtype(self._ai_subdevice)
-        buf_size = dtype.itemsize * shape[0] * shape[1]
+        nbytes = dtype.itemsize * shape[0] * shape[1]
         
-        logging.debug("Going to read %d bytes", buf_size)
+        logging.debug("Going to read %d bytes", nbytes)
         # TODO: can this handle faults? 
         buf = numpy.fromfile(self._file, dtype=dtype, count=(shape[0] * shape[1]))
         
@@ -379,6 +385,9 @@ class SEMComedi(model.HwComponent):
 #                break
 #            n = len(data)/2 # 2 bytes per 'H'
         
+        if buf.size != (shape[0] * shape[1]):
+            logging.warning("Got %d values instead of the %d expected", buf.size, shape[0] * shape[1])
+        
         logging.debug("Converting raw data to physical: %s", buf)
         
         # convert data to physical
@@ -389,7 +398,7 @@ class SEMComedi(model.HwComponent):
         # straightforward, just a matter of convincing SWIG that a numpy.uint32
         # is a unsigned int. For sampl devices, everything need to be converted.
         
-        if dtype.itemsize == 4:
+        if dtype().itemsize == 4:
             logging.debug("Using casting to access the raw data")
             # can just force-cast to a ctype buffer of unsigned int (that swig accepts)
             cbuf = buf.ctypes.data_as(ctypes.POINTER(ctypes.c_uint32))
@@ -408,7 +417,90 @@ class SEMComedi(model.HwComponent):
         
         
         # TODO: be able to stop while reading, using comedi_cancel()
-            
+    
+    
+    def write_data(self, channel, period, data):
+        """
+        write n data on the given analog input channel
+        channel (int): channel
+        period (float): sampling period in s
+        data (numpy.ndarray of float): one dimension array to write (physical values)
+        Note: this is only for testing, and will go away in the final version
+        """
+        #construct a comedi command
+        
+        period_ns = int(round(period * 1e9))  # in nanoseconds
+        chans = [channel]
+        best_range = comedi.comedi_find_range(self._device, self._ao_subdevice, 
+                              channel, comedi.UNIT_volt, 0, 10)
+        ranges = [best_range] 
+        aref = [comedi.AREF_GROUND]
+        nchans = len(chans) #number of channels
+        
+        clist = comedi.chanlist(nchans) #create a chanlist of length nchans
+        for i in range(nchans):
+            clist[i] = comedi.cr_pack(chans[i], ranges[i], aref[i])
+        
+        nscans = data.shape[0]
+        logging.debug("Generating a new command for %d scans", nscans)
+        cmd = comedi.comedi_cmd_struct()
+        ret = comedi.comedi_get_cmd_generic_timed(self._device, self._ao_subdevice,
+                                                  cmd, nchans, period_ns)
+        if ret < 0:
+            raise IOError("comedi_get_cmd_generic failed")
+        
+        cmd.chanlist = clist # adjust for our particular context
+        cmd.chanlist_len = nchans
+        cmd.scan_end_arg = nchans
+        cmd.stop_src = comedi.TRIG_COUNT
+        cmd.stop_arg = nscans
+        
+        # clean up the command
+        rc = comedi.comedi_command_test(self._device, cmd)
+        if rc < 0:
+            raise IOError("comedi_command_test failed")
+        # on the second time, it should report 0, meaning "perfect"
+        rc = comedi.comedi_command_test(self._device, cmd)
+        if rc < 0:
+            raise IOError("comedi_command_test failed")
+        elif rc != 0:
+            raise IOError("failed to prepare command")
+
+        
+        # convert physical values to raw data
+        # Note: on this device, as probably many others, conversion is linear.
+        # So it might be much more efficient to generate raw data directly
+        dtype = self._get_dtype(self._ao_subdevice)
+        buf = numpy.empty(shape=data.shape, dtype=dtype)
+        converter = self._get_converter(self._ao_subdevice, chans[0], ranges[0],
+                                        comedi.COMEDI_FROM_PHYSICAL)
+        # TODO: check if it's possible to avoid multiple type conversion in the call
+        for i in range(data.shape[0]):
+            buf[i] = converter(data[i])
+        
+        logging.debug("Converted physical value to raw data: %s", buf)
+
+
+
+        # TODO: might need to first write the device buffer size
+        # run the command
+        logging.debug("Going to start the command")
+        ret = comedi.comedi_command(self._device, cmd)
+        if ret < 0:
+            raise IOError("comedi_command failed")
+
+
+        
+        logging.debug("Going to write %d bytes", buf.nbytes)
+        # TODO: can this handle faults? 
+        buf.tofile(self._file)
+        self._file.flush()
+        
+        # FIXME: needed?
+        # Need to check for SDF_RUNNING, SDF_BUSY?
+        #ret = comedi.comedi_cancel(self._device, self._ao_subdevice)
+        
+      
     def terminate(self):
         """
         Must be called at the end of the usage. Can be called multiple times,
