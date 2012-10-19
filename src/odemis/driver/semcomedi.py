@@ -6,7 +6,7 @@ Created on 15 Oct 2012
 
 Copyright © 2012 Éric Piel, Delmic
 
-This file is part of Open Odemis.
+This file is part of Odemis.
 
 Odemis is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 2 of the License, or (at your option) any later version.
 
@@ -21,6 +21,8 @@ import logging
 import numpy
 import ctypes
 import os
+
+#logging.getLogger().setLevel(logging.DEBUG)
 
 # This is a module to drive a FEI Scanning electron microscope via the so-called
 # "external X/Y" line. It uses a DA-conversion and acquisition (DAQ) card on the
@@ -82,6 +84,11 @@ class SEMComedi(model.HwComponent):
         self._device = comedi.comedi_open(self._device_name)
         if self._device is None:
             raise ValueError("Failed to open DAQ device '%s'", device)
+            
+        self._fileno = comedi.comedi_fileno(self._device)
+        if self._fileno <= 0:
+            raise IOError("Error obtaining Comedi device file descriptor")
+        self._file = os.fdopen(self._fileno, 'r+')
         
         self._ai_subdevice = comedi.comedi_find_subdevice_by_type(self._device,
                                             comedi.COMEDI_SUBD_AI, 0)
@@ -293,6 +300,8 @@ class SEMComedi(model.HwComponent):
         Return the appropriate numpy.dtype for the given subdevice
         """
         flags = comedi.comedi_get_subdevice_flags(self._device, subdevice)
+        if flags == -1:
+            raise IOError("Failed to get subdevice %d flags", subdevice)
         if flags & comedi.SDF_LSAMPL:
             return numpy.uint32()
         else: 
@@ -312,7 +321,7 @@ class SEMComedi(model.HwComponent):
         period_ns = int(round(period * 1e9))  # in nanoseconds
         chans = [channel]
         best_range = comedi.comedi_find_range(self._device, self._ai_subdevice, channel,
-                                        comedi.UNIT_volt, 0, 5)
+                                        comedi.UNIT_volt, 0, 10)
         ranges = [best_range] 
         aref =[comedi.AREF_GROUND]
         nchans = len(chans) #number of channels
@@ -331,9 +340,8 @@ class SEMComedi(model.HwComponent):
         cmd.chanlist = clist # adjust for our particular context
         cmd.chanlist_len = nchans
         cmd.scan_end_arg = nchans
-        if cmd.stop_src == comedi.TRIG_COUNT:
-            cmd.stop_arg = size
-            # FIXME what if not?!
+        cmd.stop_src = comedi.TRIG_COUNT
+        cmd.stop_arg = size
         
         # clean up the command
         rc = comedi.comedi_command_test(self._device, cmd)
@@ -351,19 +359,17 @@ class SEMComedi(model.HwComponent):
         ret = comedi.comedi_command(self._device, cmd)
         if ret < 0:
             raise IOError("comedi_command failed")
-        
-        fd = comedi.comedi_fileno(self._device)
-        if fd <= 0:
-            raise IOError("Error obtaining Comedi device file descriptor")
-        f = os.fdopen(fd, 'r+')
-        
+
         shape = (size, nchans)
         dtype = self._get_dtype(self._ai_subdevice)
         buf_size = dtype.itemsize * shape[0] * shape[1]
         
         logging.debug("Going to read %d bytes", buf_size)
         # TODO: can this handle faults? 
-        buf = numpy.fromfile(f, dtype=dtype, count=buf_size)
+        buf = numpy.fromfile(self._file, dtype=dtype, count=(shape[0] * shape[1]))
+        
+        # FIXME: needed?
+        ret = comedi.comedi_cancel(self._device, self._ai_subdevice)
         
 #        BUFSZ = 10000
 #        while True:
@@ -383,13 +389,18 @@ class SEMComedi(model.HwComponent):
         # straightforward, just a matter of convincing SWIG that a numpy.uint32
         # is a unsigned int. For sampl devices, everything need to be converted.
         
-        # make it seen as a ctype buffer of unsigned int (that swig accepts)
-        # TODO: maybe a buffer() is enough?
-        cbuf = buf.ctypes.data_as(ctypes.POINTER(ctypes.c_uint32))
-        # TODO: for sampl devices: really convert
-        for i in range(buf.shape[0]):
-            # TODO: maybe could be speed-up by something like vectorize()/map()?
-            parray[i] = converter(cbuf[i])
+        if dtype.itemsize == 4:
+            logging.debug("Using casting to access the raw data")
+            # can just force-cast to a ctype buffer of unsigned int (that swig accepts)
+            cbuf = buf.ctypes.data_as(ctypes.POINTER(ctypes.c_uint32))
+                # TODO: maybe could be speed-up by something like vectorize()/map()?
+            for i in range(buf.shape[0]):
+                parray[i] = converter(cbuf[i])
+        else:
+            # Needs real conversion
+            logging.debug("Using full conversion to provide the raw data")
+            for i in range(buf.shape[0]):
+                parray[i] = converter(int(buf[i]))
         # reshape 
         parray.shape = shape # FIXME: check that the order/stride is correct
         
