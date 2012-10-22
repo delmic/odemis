@@ -308,9 +308,9 @@ class SEMComedi(model.HwComponent):
         if flags == -1:
             raise IOError("Failed to get subdevice %d flags", subdevice)
         if flags & comedi.SDF_LSAMPL:
-            return numpy.uint32
+            return numpy.dtype(numpy.uint32)
         else: 
-            return numpy.uint16
+            return numpy.dtype(numpy.uint16)
         
     def get_data(self, channel, period, size):
         """
@@ -398,7 +398,7 @@ class SEMComedi(model.HwComponent):
         # straightforward, just a matter of convincing SWIG that a numpy.uint32
         # is a unsigned int. For sampl devices, everything need to be converted.
         
-        if dtype().itemsize == 4:
+        if dtype.itemsize == 4:
             logging.debug("Using casting to access the raw data")
             # can just force-cast to a ctype buffer of unsigned int (that swig accepts)
             cbuf = buf.ctypes.data_as(ctypes.POINTER(ctypes.c_uint32))
