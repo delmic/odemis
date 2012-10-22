@@ -320,12 +320,21 @@ class MicroscopeGUI(object):
             raise Exception("no emitter found in the microscope")
 
         self.streams = set() # Streams available (handled by StreamController)
-        self.views = [] # MicroscopeViews available, order matters (handled by ViewController)
+        # MicroscopeViews available, (handled by ViewController)
+        # The Viewcontroller cares about position (top left, etc), MicroscopeGUI
+        # cares about what's what.
+        self.views = {
+            "sem_view": None,
+            "opt_view": None,
+            "combo1_view": None,
+            "combo2_view": None,
+        }
+
         self.currentView = VigilantAttribute(None) # The MicroscopeView currently focused
         # the view layout
         # TODO maybe start with just one view
         self.viewLayout = model.IntEnumerated(VIEW_LAYOUT_22,
-                  choices= [VIEW_LAYOUT_ONE, VIEW_LAYOUT_22, VIEW_LAYOUT_FULLSCREEN])
+                  choices=[VIEW_LAYOUT_ONE, VIEW_LAYOUT_22, VIEW_LAYOUT_FULLSCREEN])
 
         self.opticalState = model.IntEnumerated(STATE_OFF,
                                 choices=[STATE_OFF, STATE_ON, STATE_PAUSE])
@@ -333,6 +342,40 @@ class MicroscopeGUI(object):
         self.emState = model.IntEnumerated(STATE_OFF,
                                 choices=[STATE_OFF, STATE_ON, STATE_PAUSE])
         self.emState.subscribe(self.onEMState)
+
+    # Getters and Setters
+
+    @property
+    def optical_view(self):
+        return self.views["opt_view"]
+
+    @optical_view.setter #pylint: disable=E1101
+    def optical_view(self, value): #pylint: disable=E0102
+        self.views["opt_view"] = value
+
+    @property
+    def sem_view(self):
+        return self.views["sem_view"]
+
+    @sem_view.setter #pylint: disable=E1101
+    def sem_view(self, value): #pylint: disable=E0102
+        self.views["sem_view"] = value
+
+    @property
+    def combo1_view(self):
+        return self.views["combo1_view"]
+
+    @combo1_view.setter #pylint: disable=E1101
+    def combo1_view(self, value): #pylint: disable=E0102
+        self.views["combo1_view"] = value
+
+    @property
+    def combo2_view(self):
+        return self.views["combo2_view"]
+
+    @combo2_view.setter #pylint: disable=E1101
+    def combo2_view(self, value): #pylint: disable=E0102
+        self.views["combo2_view"] = value
 
     def stopMotion(self):
         """
@@ -441,10 +484,10 @@ class Stream(object):
         self._detector = detector
         self._dataflow = dataflow
         self._emitter = emitter
-        
+
         # list of DataArray received and used to generate the image
         # every time it's modified, image is also modified
-        self.raw = [] 
+        self.raw = []
         # the most important attribute
         self.image = VigilantAttribute(InstrumentalImage(None))
 
@@ -455,9 +498,9 @@ class Stream(object):
         self.updated = model.BooleanVA(False) # Whether the user wants the stream to be updated
         self.active = model.BooleanVA(False)
         self.active.subscribe(self.onActive)
-        # TODO do we also need a set of incompatible streams? When any of the 
+        # TODO do we also need a set of incompatible streams? When any of the
         # incompatible stream is active, this stream cannot be active
-        
+
 
         if self._detector:
             self._depth = self._detector.shape[2] # used for B/C adjustment
@@ -648,9 +691,9 @@ class FluoStream(Stream):
 
     def _setFilterEmission(self):
         wl = self.emission.value
-        # TODO: we need a way to know if the HwComponent can change automatically 
+        # TODO: we need a way to know if the HwComponent can change automatically
         # or only manually. For now we suppose it's manual
-        
+
         # Changed manually: we can only check that it's correct
         fitting = False
         for l, h in self._filter.band.value:
@@ -665,7 +708,7 @@ class FluoStream(Stream):
             self._addWarning(Stream.WARNING_EMISSION_IMPOSSIBLE)
             # TODO detect no optimal situation (within 10% band of border?)
         return
-    
+
         # changed automatically
 #        raise NotImplementedError("Do not know how to change filter band")
 
@@ -695,8 +738,8 @@ class FluoStream(Stream):
         emissions = [0] * len(spectra)
         emissions[i] = 1
         self._emitter.emissions.value = emissions
-        
-        
+
+
         # TODO read back self._emitter.emissions.value to get the actual value
         # set warnings if necessary
         self._removeWarnings([Stream.WARNING_EXCITATION_IMPOSSIBLE,
@@ -720,11 +763,11 @@ class StaticStream(Stream):
         """
         Stream.__init__(self, name, None, None, None)
         self.image = VigilantAttribute(image)
-        
+
     def onActive(self, active):
         # don't do anything
         pass
-    
+
     def onBrightnessContrast(self, unused):
         # TODO use original image as raw, and update the image
         pass
@@ -767,7 +810,7 @@ class MicroscopeView(object):
         if stage:
             self.stage_pos = stage.position
             # stage.position.subscribe(self.onStagePos)
-    
+
             # the current center of the view, which might be different from the stage
             # TODO: we might need to have it on the MicroscopeGUI, if all the viewports must display the same location
             pos = self.stage_pos.value
@@ -788,13 +831,13 @@ class MicroscopeView(object):
         # Note: use addStream/removeStream for simple modifications
         self.streams = StreamTree(kwargs={"merge": self.merge_ratio.value})
         # Only modify with this lock acquired:
-        self._streams_lock = threading.Lock() 
+        self._streams_lock = threading.Lock()
 
         # Last time the image of the view was changed. It's actually mostly
         # a trick to allow other parts of the GUI to know when the (theoretical)
         # composited image has changed.
         self.lastUpdate = model.FloatVA(time.time(), unit="s")
-        self._has_received_image = False # last initialisation is done on the first image received 
+        self._has_received_image = False # last initialisation is done on the first image received
 
         # a thumbnail version of what is displayed
         self.thumbnail = VigilantAttribute(None) # contains a wx.Image
@@ -837,7 +880,7 @@ class MicroscopeView(object):
         Note: use .streams for getting the raw StreamTree
         """
         return self.streams.getStreams()
-        
+
     def addStream(self, stream):
         """
         Add a stream to the view. It takes care of updating the StreamTree
@@ -873,12 +916,12 @@ class MicroscopeView(object):
         """
         # Stop listening to the stream changes
         stream.image.unsubscribe(self._onNewImage)
-        
+
         with self._streams_lock:
             # check if the stream is already removed
             if not stream in self.streams.getStreams():
                 return
-            
+
             # remove stream from the StreamTree()
             # TODO handle more complex trees
             self.streams.streams.remove(stream)
@@ -895,7 +938,7 @@ class MicroscopeView(object):
         if not self._has_received_image and im.mpp:
             self.mpp.value = im.mpp
             self._has_received_image = True
-        
+
         # just let everyone that the composited image has changed
         self.lastUpdate.value = time.time()
 
