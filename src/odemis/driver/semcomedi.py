@@ -517,12 +517,9 @@ class SEMComedi(model.HwComponent):
         logging.debug("Converted physical value to raw data: %s", buf)
         
         # preload the buffer with enough data first
-        #preload_size = comedi.comedi_get_buffer_size(self._device, self._ao_subdevice) / buf.itemsize
-        preload_size = 4
+        preload_size = comedi.comedi_get_buffer_size(self._device, self._ao_subdevice) / buf.itemsize
         logging.debug("Going to preload %d bytes", buf[:preload_size].nbytes)
         buf[:preload_size].tofile(self._file)
-#        inttrig = threading.Thread(target=self._writer_thread)
-#        inttrig.start()
         logging.debug("Going to flush")
         self._file.flush()
         #d._file.write(buf[:preload_size].tostring())
@@ -530,8 +527,8 @@ class SEMComedi(model.HwComponent):
         # run the command
         logging.debug("Going to start the command")
         
+        start_time = time.time()
         rc = comedi.comedi_internal_trigger(self._device, self._ao_subdevice, 0)
-#        rc = self._run_inttrig(self._ao_subdevice, 0)
         if rc < 0:
             raise IOError("comedi_internal_trigger failed")
         
@@ -543,10 +540,11 @@ class SEMComedi(model.HwComponent):
         # According to https://groups.google.com/forum/?fromgroups=#!topic/comedi_list/yr2U179x8VI
         # To finish a write fully, we need to do a cancel().
         # Wait until SDF_RUNNING is gone, then cancel() to reset SDF_BUSY
-        timeout = nscans * period * 1.10 + 1 # s = expected time + 10% + 1s
-        end = time.time() + timeout
+        expected = nscans * period
+        time.sleep(time.time() - expected)
+        end_time = start_time + expected * 1.10 + 1 # s = expected time + 10% + 1s
         had_timeout = True
-        while time.time() < end:
+        while time.time() < end_time:
             flags = comedi.comedi_get_subdevice_flags(self._device, self._ao_subdevice)
             if flags == -1:
                 raise IOError("Failed to get subdevice %d flags" % self._ao_subdevice)
@@ -554,15 +552,13 @@ class SEMComedi(model.HwComponent):
                 had_timeout = False
                 break
             time.sleep(0.001)
-            print "flags:", flags
             
         rc = comedi.comedi_cancel(self._device, self._ao_subdevice)
         if rc < 0:
-             logging.warning("Failed to cancel command on AO, might be impossible to write more data.")
+            logging.warning("Failed to cancel command on AO, might be impossible to write more data.")
         if had_timeout:
-            raise IOError("Write command stopped due to timeout after %g s" % timeout)
+            raise IOError("Write command stopped due to timeout after %g s" % (time.time() - start_time))
 
-    
     def terminate(self):
         """
         Must be called at the end of the usage. Can be called multiple times,
