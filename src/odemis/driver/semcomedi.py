@@ -564,6 +564,35 @@ class SEMComedi(model.HwComponent):
         if had_timeout:
             raise IOError("Write command stopped due to timeout after %g s" % (time.time() - start_time))
 
+    @staticmethod
+    def _generate_scan_array(shape, limits):
+        """
+        Generate an array of the values to send to scan a 2D area, using linear
+        interpolation between the limits.
+        shape (list of 2 int): X/Y resolution of the scanning area
+        limits (ndarray of 2*2 int/float): lower/upper physical bounds of the area
+            first dim is the X (0)/Y(1), second dim is min(0)/max(1)
+            ex: limits[0,1] is the max value on the X dimension
+        returns (ndarray of shape[0] x shape[1] x 2 x int/float): the X/Y values
+            for each points of the array. The type is the same as the limits.
+        """
+        # prepare an array of the right type
+        dtype = limits.dtype
+        scan = numpy.empty(shape + [2], dtype=dtype, order='C')
+        
+        # TODO see if meshgrid is faster (it needs to be in C order!) 
+        
+        # fill the X dimension
+        scanx = scan[:,:,0].swapaxes(0,1) # just a view to have X as last dim
+        scanx[:,:] = numpy.linspace(limits[0,0], limits[0,1], shape[0])
+        # fill the Y dimension
+        scan[:,:,1] = numpy.linspace(limits[1,0], limits[1,1], shape[1])
+        
+        # TODO: insert margin time by using dwell time and margin time to 
+        # duplicate first point of each row.
+         
+        return scan
+    
     def terminate(self):
         """
         Must be called at the end of the usage. Can be called multiple times,
