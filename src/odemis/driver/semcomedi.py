@@ -435,37 +435,38 @@ class SEMComedi(model.HwComponent):
         insn.data = data.cast()
         return comedi.comedi_do_insn(self._device, insn)
     
-    def write_data(self, channel, period, data):
+    def write_data(self, channels, period, data):
         """
-        write n data on the given analog input channel
-        channel (int): channel
+        write n data on the given analog output channels
+        channels (list of int): channels to write (in same the order as data) 
         period (float): sampling period in s
-        data (numpy.ndarray of float): one dimension array to write (physical values)
+        data (numpy.ndarray of float): two dimension array to write (physical values)
+          first dimension is along the time, second is along the channels
         Note: this is only for testing, and will go away in the final version
         """
         #construct a comedi command
         
-        period_ns = int(round(period * 1e9))  # in nanoseconds
-        chans = [channel]
-        data_lim = (data.min(), data.max())
-        best_range = comedi.comedi_find_range(self._device, self._ao_subdevice, 
-                              channel, comedi.UNIT_volt, data_lim[0], data_lim[1])
-        if best_range < 0:
-            # TODO: get maximum range possible (and share as a roattribute?)
-            logging.error("%s", comedi.comedi_strerror(comedi.comedi_errno()))
-            raise IOError("Data range between %g and %g V is too high for hardware." %
-                          (data_lim[0], data_lim[1]))
-        
-        ranges = [best_range] 
-        aref = [comedi.AREF_GROUND]
-        nchans = len(chans) #number of channels
-        
-        clist = comedi.chanlist(nchans) #create a chanlist of length nchans
-        for i in range(nchans):
-            clist[i] = comedi.cr_pack(chans[i], ranges[i], aref[i])
-        
+        nchans = data.shape[1]
         nscans = data.shape[0]
+        assert len(channels) == nchans
+        
+        # create a chanlist
+        ranges = []
+        clist = comedi.chanlist(nchans)
+        for i, channel in enumerate(channels):
+            data_lim = (data[:,i].min(), data[:,i].max())
+            best_range = comedi.comedi_find_range(self._device, self._ao_subdevice, 
+                                  channel, comedi.UNIT_volt, data_lim[0], data_lim[1])
+            if best_range < 0:
+                logging.error("%s", comedi.comedi_strerror(comedi.comedi_errno()))
+ 
+                raise IOError("Data range between %g and %g V is too high for hardware." %
+                              (data_lim[0], data_lim[1]))
+            ranges[i] = best_range
+            clist[i] = comedi.cr_pack(channel, best_range, comedi.AREF_GROUND)
+        
         logging.debug("Generating a new command for %d scans", nscans)
+        period_ns = int(round(period * 1e9))  # in nanoseconds
         cmd = comedi.comedi_cmd_struct()
         rc = comedi.comedi_get_cmd_generic_timed(self._device, self._ao_subdevice,
                                                   cmd, nchans, period_ns)
@@ -473,11 +474,9 @@ class SEMComedi(model.HwComponent):
             raise IOError("comedi_get_cmd_generic failed")
         
         cmd.chanlist = clist
-        print cmd.scan_begin_src, cmd.scan_begin_arg, comedi.TRIG_TIMER
         # the following are not necessary, already set by get_cmd_generic_timed
         #cmd.chanlist_len = nchans
         #cmd.scan_end_arg = nchans
-        print cmd.start_src, cmd.start_arg, comedi.TRIG_INT, comedi.TRIG_NOW
         # start_src: to only start when we send an interupt (should not be fully necessary)
         cmd.start_src = comedi.TRIG_INT
         cmd.start_arg = 0
@@ -504,20 +503,26 @@ class SEMComedi(model.HwComponent):
             raise IOError("comedi_command failed")
 
         # convert physical values to raw data
-        # Note: on this device, as probably many others, conversion is linear.
+        # Note: on the NI 6251, as probably many other devices, conversion is linear.
         # So it might be much more efficient to generate raw data directly
         dtype = self._get_dtype(self._ao_subdevice)
-        buf = numpy.empty(shape=data.shape, dtype=dtype)
-        converter = self._get_converter(self._ao_subdevice, chans[0], ranges[0],
-                                        comedi.COMEDI_FROM_PHYSICAL)
+        # forcing the order is not necessary but just to ensure good performance
+        buf = numpy.empty(shape=data.shape, dtype=dtype, order='C')
+        converters = []
+        for i, c in enumerate(channels):
+            converters[i] = self._get_converter(self._ao_subdevice, c, ranges[i],
+                                                comedi.COMEDI_FROM_PHYSICAL)
         # TODO: check if it's possible to avoid multiple type conversion in the call
-        for i in range(data.shape[0]):
-            buf[i] = converter(data[i])
+        for i, v in numpy.ndenumerate(data):
+            buf[i] = converters[i[0]](v)
+        # flatten the array
+        buf = numpy.reshape(buf, nscans * nchans, order='C')
         
         logging.debug("Converted physical value to raw data: %s", buf)
         
         # preload the buffer with enough data first
-        preload_size = comedi.comedi_get_buffer_size(self._device, self._ao_subdevice) / buf.itemsize
+        dev_buf_size = comedi.comedi_get_buffer_size(self._device, self._ao_subdevice)
+        preload_size = dev_buf_size / buf.itemsize
         logging.debug("Going to preload %d bytes", buf[:preload_size].nbytes)
         buf[:preload_size].tofile(self._file)
         logging.debug("Going to flush")
@@ -540,7 +545,7 @@ class SEMComedi(model.HwComponent):
         # According to https://groups.google.com/forum/?fromgroups=#!topic/comedi_list/yr2U179x8VI
         # To finish a write fully, we need to do a cancel().
         # Wait until SDF_RUNNING is gone, then cancel() to reset SDF_BUSY
-        expected = nscans * period
+        expected = buf.size * period
         time.sleep(time.time() - expected)
         end_time = start_time + expected * 1.10 + 1 # s = expected time + 10% + 1s
         had_timeout = True
@@ -623,7 +628,7 @@ class SEMComedi(model.HwComponent):
 #logging.getLogger().setLevel(logging.DEBUG)
 #comedi.comedi_loglevel(3)
 #d = SEMComedi("a", "", None, "/dev/comedi0")
-#a = numpy.array([1,2,3,4], dtype=float)
-#d.write_data(0, 0.01, a)
+#a = numpy.array([[1],[2],[3],[4]], dtype=float)
+#d.write_data([0], 0.01, a)
 #d.get_data(0, 0.01, 3)
 
