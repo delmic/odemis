@@ -291,7 +291,7 @@ class ImageTextButton(GenBitmapTextButton):
         dc.DrawText(label, pos_x, (height - th) / 2 + dy + self.padding_y)      # draw the text
 
     def InitColours(self):
-        GenBitmapButton.InitColours(self)
+        GenBitmapTextButton.InitColours(self)
         if self.background_parent:
             self.faceDnClr = self.background_parent.GetBackgroundColour()
         else:
@@ -735,7 +735,6 @@ class PopupImageButton(ImageTextButton):
         ImageTextButton.__init__(self, *args, **kwargs)
         self.choices = None
         self.Bind(wx.EVT_BUTTON, self.show_menu)
-
 
     def set_choices(self, choices):
         self.choices = choices

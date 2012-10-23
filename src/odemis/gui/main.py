@@ -178,10 +178,6 @@ class OdemisGUIApp(wx.App):
             self.main_frame.Show()
             #self.main_frame.Raise()
             #self.main_frame.Refresh()
-#
-#            if log.level == logging.DEBUG:
-#                self.goto_debug_mode()
-
 
             self.settings_controller = SettingsSideBar(self.interface_model,
                                                       self.main_frame)
@@ -194,11 +190,11 @@ class OdemisGUIApp(wx.App):
                                                       self.main_frame)
             self.stream_controller = StreamController(self.interface_model,
                                                       self.main_frame.pnl_stream)
-            
+
             self.view_selector = ViewSelector(self.interface_model,
                                               self.main_frame)
-            
-            
+
+
             self.acquisition_controller = AcquisitionController(self.interface_model,
                                                                 self.main_frame)
 
@@ -207,6 +203,7 @@ class OdemisGUIApp(wx.App):
             # EVT_TOGGLEBUTTON
             # self.main_frame.btn_toggle_opt.Bind(wx.EVT_TOGGLEBUTTON,
             #                                     self.on_toggle_opt)
+            # FIXME: Move to a control
             self.main_frame.btn_toggle_opt.Bind(wx.EVT_BUTTON,
                                                 self.on_toggle_opt)
 

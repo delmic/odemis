@@ -175,8 +175,8 @@ class OpticalBackendConnected(SECOMModel):
             # Hopefully it'll be within the same magnitude
             mpp = data.metadata[MD_SENSOR_PIXEL_SIZE][0] / 60 # XXX
 
-#        h = hpy() # memory profiler
-#        print h.heap()
+        # h = hpy() # memory profiler
+        # print h.heap()
         self.optical_det_image.value = InstrumentalImage(im, mpp, pos)
 
     def _onPhysicalStagePos(self, pos):
@@ -190,11 +190,11 @@ class OpticalBackendConnected(SECOMModel):
     def avOnStagePos(self, val):
         move = {}
         # TODO: a way to know if it can do absolute move? => .capabilities!
-#        if hasattr(self.stage, "moveAbs"):
-#            # absolute
-#            move = {"x": val[0], "y": val[1]}
-#            self.stage.moveAbs(move)
-#        else:
+        # if hasattr(self.stage, "moveAbs"):
+        #     # absolute
+        #     move = {"x": val[0], "y": val[1]}
+        #     self.stage.moveAbs(move)
+        # else:
 
         # relative
         move = {"x": val[0] - self.prev_pos[0], "y": val[1] - self.prev_pos[1]}
@@ -387,16 +387,17 @@ class MicroscopeGUI(object):
 
     def onOpticalState(self, state):
         # only called when it changes
-        if state == STATE_OFF or state == STATE_PAUSE:
-            # Turn off the optical path. All the streams using it should be already
-            # deactivated.
+        if state in (STATE_OFF, STATE_PAUSE):
+            # Turn off the optical path. All the streams using it should be
+            # already deactivated.
             if self.light:
                 if self.light.power.value > 0:
                     # save the value only if it makes sense
                     self._light_power_on = self.light.power.value
                 self.light.power.value = 0
         elif state == STATE_ON:
-            # the image acquisition from the camera is handled solely by the streams
+            # the image acquisition from the camera is handled solely by the
+            # streams
             if self.light:
                 self.light.power.value = self._light_power_on
 
