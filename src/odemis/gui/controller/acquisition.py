@@ -32,39 +32,39 @@ import wx
 class AcquisitionController(object):
     def __init__(self, micgui, main_frame):
         """
-        micgui (MicroscopeGUI): the representation of the microscope GUI
+        micgui (GUIMicroscope): the representation of the microscope GUI
         main_frame: (wx.Frame): the frame which contains the 4 viewports
         """
         self._microscope = micgui
         self._main_frame = main_frame
-        self._anim_thread = None 
-        
+        self._anim_thread = None
+
         # nice default paths
         # Snapshots: always the "Pictures" user folder
         self._snapshot_folder = AcquisitionController.get_picture_folder()
         # High-res: last folder selected, and default to same as snapshot
         self._acquisition_folder = self._snapshot_folder
-        
+
         # Link snapshot menu to snapshot action
         wx.EVT_MENU(self._main_frame,
             self._main_frame.menu_item_qacquire.GetId(),
             self.start_snapshot_viewport)
-        
+
         # Link "acquire image" button to image acquisition
         # TODO: for now it's just snapshot, but should be linked to the acquisition window
         self._main_frame.btn_aquire.Bind(wx.EVT_BUTTON, self.start_snapshot_viewport)
-        
+
         # find the names of the active (=connected) screens
         # it's slow, so do it only at init (=expect not to change screen during acquisition)
         self._outputs = self.get_display_outputs()
-        
+
     def start_snapshot_viewport(self, event):
         """
         wrapper to run snapshot_viewport in a separate thread as it can take time
         """
         thread = threading.Thread(target=self.snapshot_viewport)
         thread.start()
-        
+
     def snapshot_viewport(self):
         """
         Save a snapshot of the raw image from the focused viewport on the filesystem.
@@ -83,27 +83,27 @@ class AcquisitionController(object):
             log.warning("File '%s' for snapshot already exists, cancelling snapshot",
                             filename)
             return
-        
+
         # get currently focused view
-        view = self._microscope.currentView.value
+        view = self._microscope.focussedView.value
         if not view:
             log.warning("Failed to take snapshot, no view is selected")
             return
-        
+
         streams = view.getStreams()
         if len(streams) == 0:
             log.warning("Failed to take snapshot, no stream visible in view %s", view.name.value)
             return
 
         self.start_snapshot_animation()
-        
+
         # let's try to get a thumbnail
         if view.thumbnail.value is None:
             thumbnail = None
         else:
             # need to convert from wx.Image to ndimage
             thumbnail = img.wxImage2NDImage(view.thumbnail.value, keep_alpha=False)
-        
+
         # for each stream seen in the viewport
         raw_images = []
         for s in streams:
@@ -114,11 +114,11 @@ class AcquisitionController(object):
                 # it's the only one which know precisely how to configure detector and emitters
                 data = [s._dataflow.get()]
             raw_images.extend(data)
-        
+
         # record everything to a file
         exporter.export(filename, raw_images, thumbnail)
         log.info("Snapshot saved as file '%s'.", filename)
-    
+
     def start_snapshot_animation(self):
         """
         Starts an animation to indicate that a snapshot is taken
@@ -127,19 +127,19 @@ class AcquisitionController(object):
         # if there is already a thread: let it know to restart
         if self._anim_thread and self._anim_thread.is_alive():
             return
-        
+
         # otherwise start a new animation thread
         self._anim_thread = threading.Thread(target=self.snapshot_animation, name="snapshot animation")
         self._anim_thread.start()
-    
+
     def snapshot_animation(self, duration=0.6):
         """
         Change the brightness of all the screens to very high, and slowly decrease it back to original value (1.0)
         duration (0<float): duration in second of the animation
         """
         assert (0 < duration)
-        brightness_orig = 1.0 # TODO: read the previous brightness 
-        
+        brightness_orig = 1.0 # TODO: read the previous brightness
+
         # start with very bright and slowly decrease to 1.0
         try:
             brightness_max = 10.0
@@ -174,7 +174,7 @@ class AcquisitionController(object):
         # only pick the "connected" outputs
         ret = re.findall("^(\\w+) connected ", xrandr_out, re.MULTILINE)
         return ret
-        
+
     @staticmethod
     def set_output_brightness(outputs, brightness):
         """
@@ -194,10 +194,10 @@ class AcquisitionController(object):
         args = ["xrandr"]
         for o in outputs:
             args += ["--output", o, "--brightness", "%f" % brightness]
-        
+
         log.debug("Calling: %s", " ".join(args))
         subprocess.check_call(args)
-    
+
     @staticmethod
     def get_picture_folder():
         """
@@ -222,13 +222,12 @@ class AcquisitionController(object):
             # drop to default
         else:
             log.warning("Platform not supported for picture folder")
-        
-        
+
+
         # fall-back to HOME
         folder = os.path.expanduser("~")
         if os.path.isdir(folder):
             return folder
-        
+
         # last resort: current working directory should always be existing
         return os.getcwd()
-        

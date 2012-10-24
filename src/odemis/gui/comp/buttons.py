@@ -574,7 +574,9 @@ class ViewButton(ImageTextToggleButton):
         self.overlay_height = height - self.overlay_border * 2
 
     def OnLeftDown(self, event):
+
         if not self.IsEnabled() or not self.up:
+            log.debug("ViewButton already active")
             return
         self.saveUp = self.up
         self.up = not self.up

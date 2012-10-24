@@ -231,6 +231,7 @@ class InstrumentalImage(object):
         mpp (None or float>0): meters per pixel
         center (None or 2-tuple float): position (in meters) of the center of the image
         rotation (float): rotation in degrees (i.e., 180 = upside-down)
+
         Note: When displayed, the scaling, translation, and rotation have to be
         applied "independently": scaling doesn't affect the translation, and
         rotation is applied from the center of the image.
@@ -256,7 +257,7 @@ VIEW_LAYOUT_ONE = 0 # one big view
 VIEW_LAYOUT_22 = 1 # 2x2 layout
 VIEW_LAYOUT_FULLSCREEN = 2 # Fullscreen view (not yet supported)
 
-class MicroscopeGUI(object):
+class GUIMicroscope(object):
     """
     Represent a microscope directly for a graphical user interface.
     Provides direct reference to the HwComponents and
@@ -264,7 +265,8 @@ class MicroscopeGUI(object):
 
     def __init__(self, microscope):
         """
-        microscope (model.Microscope): the root of the HwComponent tree provided by the back-end
+        microscope (model.Microscope): the root of the HwComponent tree provided
+                                       by the back-end
         """
         self.microscope = microscope
         # These are either HwComponents or None (if not available)
@@ -321,7 +323,7 @@ class MicroscopeGUI(object):
 
         self.streams = set() # Streams available (handled by StreamController)
         # MicroscopeViews available, (handled by ViewController)
-        # The Viewcontroller cares about position (top left, etc), MicroscopeGUI
+        # The Viewcontroller cares about position (top left, etc), GUIMicroscope
         # cares about what's what.
         self.views = {
             "sem_view": None,
@@ -330,11 +332,14 @@ class MicroscopeGUI(object):
             "combo2_view": None,
         }
 
-        self.currentView = VigilantAttribute(None) # The MicroscopeView currently focused
+        # The MicroscopeView currently focused
+        self.focussedView = VigilantAttribute(None)
         # the view layout
         # TODO maybe start with just one view
         self.viewLayout = model.IntEnumerated(VIEW_LAYOUT_22,
-                  choices=[VIEW_LAYOUT_ONE, VIEW_LAYOUT_22, VIEW_LAYOUT_FULLSCREEN])
+                                              choices=[VIEW_LAYOUT_ONE,
+                                                       VIEW_LAYOUT_22,
+                                                       VIEW_LAYOUT_FULLSCREEN])
 
         self.opticalState = model.IntEnumerated(STATE_OFF,
                                 choices=[STATE_OFF, STATE_ON, STATE_PAUSE])
@@ -813,7 +818,7 @@ class MicroscopeView(object):
             # stage.position.subscribe(self.onStagePos)
 
             # the current center of the view, which might be different from the stage
-            # TODO: we might need to have it on the MicroscopeGUI, if all the viewports must display the same location
+            # TODO: we might need to have it on the GUIMicroscope, if all the viewports must display the same location
             pos = self.stage_pos.value
             view_pos_init = (pos["x"], pos["y"])
         else:

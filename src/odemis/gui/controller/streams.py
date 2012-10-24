@@ -56,7 +56,7 @@ class StreamController(object):
 
     def __init__(self, livegui, spanel):
         """
-        microscope (MicroscopeGUI): the representation of the microscope GUI
+        microscope (GUIMicroscope): the representation of the microscope GUI
         spanel (StreamPanel): an empty stream panel
         """
         self._livegui = livegui
@@ -146,7 +146,7 @@ class StreamController(object):
         returns the entry created
         """
         self._livegui.streams.add(stream)
-        self._livegui.currentView.value.addStream(stream)
+        self._livegui.focussedView.value.addStream(stream)
 
         # TODO create a StreamScheduler
         # call it like self._scheduler.addStream(stream)

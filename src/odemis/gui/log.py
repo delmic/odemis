@@ -1,17 +1,22 @@
 #-*- coding: utf-8 -*-
-'''
+"""
 @author: Rinze de Laat
 
 Copyright © 2012 Rinze de Laat, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 2 of the License, or (at your option) any later version.
+Odemis is free software: you can redistribute it and/or modify it under the
+terms of the GNU General Public License as published by the Free Software
+Foundation, either version 2 of the License, or (at your option) any later
+version.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
-'''
+You should have received a copy of the GNU General Public License along with
+Odemis. If not, see http://www.gnu.org/licenses/. """
 
 import logging
 import os.path
@@ -24,13 +29,13 @@ LOG_FILE = "odemis-gui.log"
 LOG_LINES = 500
 log = None
 
-CRITICAL = 50
-FATAL = CRITICAL
-ERROR = 40
-WARNING = 30
-WARN = WARNING
-INFO = 20
-DEBUG = 10
+# CRITICAL = 50
+# FATAL = CRITICAL
+# ERROR = 40
+# WARNING = 30
+# WARN = WARNING
+# INFO = 20
+DEBUG = logging.DEBUG
 NOTSET = 0
 
 _current_level = DEBUG
@@ -48,7 +53,7 @@ def get_logger():
     return l
 
 def create_gui_logger(log_field):
-    gui_format = logging.Formatter('%(asctime)s - %(message)s', '%H:%M:%S')
+    gui_format = logging.Formatter('%(asctime)s - %(module)s - %(message)s', '%H:%M:%S')
     text_field_handler = TextFieldHandler()
     text_field_handler.setTextField(log_field)
     text_field_handler.setFormatter(gui_format)
