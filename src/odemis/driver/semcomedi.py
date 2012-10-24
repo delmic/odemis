@@ -15,7 +15,8 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from odemis import model, __version__
-import comedi
+#pylint: disable=E1101
+import odemis.driver.comedi_simple as comedi
 import glob
 import logging
 import numpy
@@ -70,7 +71,6 @@ class SEMComedi(model.HwComponent):
     area and receiving the data from the detector of a SEM via Comedi.
     '''
 
-
     def __init__(self, name, role, children, device, **kwargs):
         '''
         children (dict string->kwargs): parameters setting for the children.
@@ -85,24 +85,20 @@ class SEMComedi(model.HwComponent):
         # we will fill the set of children with Components later in ._children 
         model.HwComponent.__init__(self, name, role, children=None, **kwargs)
         
-        self._device = comedi.comedi_open(self._device_name)
-        if self._device is None:
+        try:
+            self._device = comedi.open(self._device_name)
+            self._fileno = comedi.fileno(self._device)
+            self._file = os.fdopen(self._fileno, 'r+')
+        except comedi.ComediError:
             raise ValueError("Failed to open DAQ device '%s'", device)
-            
-        self._fileno = comedi.comedi_fileno(self._device)
-        if self._fileno <= 0:
-            raise IOError("Error obtaining Comedi device file descriptor")
-        self._file = os.fdopen(self._fileno, 'r+')
         
-        self._ai_subdevice = comedi.comedi_find_subdevice_by_type(self._device,
-                                            comedi.COMEDI_SUBD_AI, 0)
-        if self._ai_subdevice < 0:
-            raise ValueError("Failed to open AI subdevice")
-        
-        self._ao_subdevice = comedi.comedi_find_subdevice_by_type(self._device,
-                                            comedi.COMEDI_SUBD_AO, 0)
-        if self._ao_subdevice < 0:
-            raise ValueError("Failed to open AO subdevice")
+        try:
+            self._ai_subdevice = comedi.find_subdevice_by_type(self._device,
+                                            comedi.SUBD_AI, 0)
+            self._ao_subdevice = comedi.find_subdevice_by_type(self._device,
+                                            comedi.SUBD_AO, 0)
+        except comedi.ComediError:
+            raise ValueError("Failed to find both input and output on DAQ device '%s'", device)
         
         self._metadata = {model.MD_HW_NAME: self.getHwName()}
         self._swVersion = "%s (driver %s)" % (__version__.version, self.getSwVersion()) 
@@ -111,7 +107,7 @@ class SEMComedi(model.HwComponent):
         self._metadata[model.MD_HW_VERSION] = self._hwVersion
         
         # detect when values are strange
-        comedi.comedi_set_global_oor_behavior(comedi.COMEDI_OOR_NAN)
+        comedi.set_global_oor_behavior(comedi.OOR_NAN)
         self._init_calibration()
         
         # converters: dict (3-tuple int->number callable(number)):
@@ -133,10 +129,10 @@ class SEMComedi(model.HwComponent):
         self._calibration = None  # means not calibrated
         
         # is any subdevice soft-calibrated?
-        nsubd = comedi.comedi_get_n_subdevices(self._device)
+        nsubd = comedi.get_n_subdevices(self._device)
         is_soft_calibrated = False
         for i in range(nsubd):
-            flags = comedi.comedi_get_subdevice_flags(self._device, i)
+            flags = comedi.get_subdevice_flags(self._device, i)
             if flags & comedi.SDF_SOFT_CALIBRATED:
                 is_soft_calibrated = True
                 break
@@ -151,13 +147,10 @@ class SEMComedi(model.HwComponent):
         
         
         # Only works if the device is soft-calibrated, and has been calibrated
-        path = comedi.comedi_get_default_calibration_path(self._device)
-        if path is None:
-            logging.warning("Failed to read calibration information")
-            return
-        
-        self._calibration = comedi.comedi_parse_calibration_file(path)
-        if self._calibration is None:
+        try:
+            path = comedi.get_default_calibration_path(self._device)
+            self._calibration = comedi.parse_calibration_file(path)
+        except comedi.ComediError:
             logging.warning("Failed to read calibration information, you might " 
                             "want to calibrate your device with:\n"
                             "sudo comedi_soft_calibrate -f %s\n",
@@ -168,8 +161,8 @@ class SEMComedi(model.HwComponent):
         """
         Returns (string): displayable string showing the driver version
         """
-        driver = comedi.comedi_get_driver_name(self._device)
-        version = comedi.comedi_get_version_code(self._device)
+        driver = comedi.get_driver_name(self._device)
+        version = comedi.get_version_code(self._device)
         lversion = []
         for i in range(3):
             lversion.insert(0, version & 0xff)  # grab lowest 8 bits
@@ -182,7 +175,7 @@ class SEMComedi(model.HwComponent):
         Returns (string): displayable string showing whatever can be found out 
           about the actual hardware.
         """
-        return comedi.comedi_get_board_name(self._device)
+        return comedi.get_board_name(self._device)
 
 
     def _get_converter(self, subdevice, channel, range, direction):
@@ -194,28 +187,29 @@ class SEMComedi(model.HwComponent):
         direction (enum): comedi.COMEDI_TO_PHYSICAL or comedi.COMEDI_FROM_PHYSICAL
         return a callable number -> number
         """
-        assert(direction in [comedi.COMEDI_TO_PHYSICAL, comedi.COMEDI_FROM_PHYSICAL])
+        assert(direction in [comedi.TO_PHYSICAL, comedi.FROM_PHYSICAL])
         
         # 3 possibilities:
         # * the device is hard-calibrated -> simple converter from get_hardcal_converter
         # * the device is soft-calibrated -> polynomial converter from  get_softcal_converter
         # * the device is not calibrated -> linear approximation converter
         poly = None
-        flags = comedi.comedi_get_subdevice_flags(self._device, subdevice)
+        flags = comedi.get_subdevice_flags(self._device, subdevice)
         if not flags & comedi.SDF_SOFT_CALIBRATED:
             # hardware-calibrated
-            poly = comedi.comedi_polynomial_t()
-            result = comedi.comedi_get_hardcal_converter(self._device,
+            poly = comedi.polynomial_t()
+            result = comedi.get_hardcal_converter(self._device,
                               subdevice, channel, range, direction, poly)
             if result < 0:
-                logging.warning("Failed to get converter from calibration")
+                logging.error("Failed to get converter for hardware calibrated device")
                 poly = None
         elif self._calibration:
             # soft-calibrated
-            poly = comedi.comedi_polynomial_t()
-            result = comedi.comedi_get_softcal_converter(subdevice, channel,
+            poly = comedi.polynomial_t()
+            try:
+                result = comedi.get_softcal_converter(subdevice, channel,
                               range, direction, self._calibration, poly)
-            if result < 0:
+            except comedi.ComediError:
                 # It's quite possible that it fails if asking for opposite
                 # direction than the calibration polynomial, if the polynomial
                 # has a order > 1 (e.g., AI on NI PCI 6251).  
@@ -226,21 +220,21 @@ class SEMComedi(model.HwComponent):
             # not calibrated
             logging.debug("creating a non calibrated converter for s%dc%dr%d",
                           subdevice, channel, range)
-            maxdata = comedi.comedi_get_maxdata(self._device, subdevice, channel)
-            range_info = comedi.comedi_get_range(self._device, subdevice, 
+            maxdata = comedi.get_maxdata(self._device, subdevice, channel)
+            range_info = comedi.get_range(self._device, subdevice, 
                                                  channel, range)
-            if direction == comedi.COMEDI_TO_PHYSICAL:
-                return lambda d: comedi.comedi_to_phys(d, range_info, maxdata)
+            if direction == comedi.TO_PHYSICAL:
+                return lambda d: comedi.to_phys(d, range_info, maxdata)
             else:
-                return lambda d: comedi.comedi_from_phys(d, range_info, maxdata)
+                return lambda d: comedi.from_phys(d, range_info, maxdata)
         else:
             # calibrated: return polynomial-based converter
             logging.debug("creating a calibrated converter for s%dc%dr%d",
                           subdevice, channel, range)
-            if direction == comedi.COMEDI_TO_PHYSICAL:
-                return lambda d: comedi.comedi_to_physical(d, poly)
+            if direction == comedi.TO_PHYSICAL:
+                return lambda d: comedi.to_physical(d, poly)
             else:
-                return lambda d: comedi.comedi_from_physical(d, poly)
+                return lambda d: comedi.from_physical(d, poly)
     
 
     def _to_phys(self, subdevice, channel, range, value):
@@ -257,7 +251,7 @@ class SEMComedi(model.HwComponent):
         try:
             converter = self._convert_to_phys[subdevice, channel, range]
         except KeyError:
-            converter = self._get_converter(subdevice, channel, range, comedi.COMEDI_TO_PHYSICAL)
+            converter = self._get_converter(subdevice, channel, range, comedi.TO_PHYSICAL)
             self._convert_to_phys[subdevice, channel, range] = converter
         
         return converter(value)
@@ -276,7 +270,7 @@ class SEMComedi(model.HwComponent):
         try:
             converter = self._convert_from_phys[subdevice, channel, range]
         except KeyError:
-            converter = self._get_converter(subdevice, channel, range, comedi.COMEDI_FROM_PHYSICAL)
+            converter = self._get_converter(subdevice, channel, range, comedi.FROM_PHYSICAL)
             self._convert_from_phys[subdevice, channel, range] = converter
         
         return converter(value)
@@ -294,22 +288,20 @@ class SEMComedi(model.HwComponent):
         
         # TODO: selecting a range should be done only once, at initialisation
         # Get AI0 in differential, with values going between 0 and 1V
-        range = comedi.comedi_find_range(self._device, self._ai_subdevice, channel,
+        try:
+            range = comedi.find_range(self._device, self._ai_subdevice, channel,
                                         comedi.UNIT_volt, 0, 1)
-        if range < 0:
+        except comedi.ComediError:
             logging.warning("Couldn't find a fitting range, using a random one")
             range = 0
         
-        range_info = comedi.comedi_get_range(self._device, self._ai_subdevice, channel, range)
+        range_info = comedi.get_range(self._device, self._ai_subdevice, channel, range)
         logging.debug("Reading temperature with range %g->%g V", range_info.min, range_info.max)
 
         
         # read the raw value
-        rc, data = comedi.comedi_data_read(self._device, self._ai_subdevice,
+        data = comedi.data_read(self._device, self._ai_subdevice,
                             channel, range, comedi.AREF_DIFF)
-        if rc < 0:
-            logging.error("Failed to read temperature")
-            raise IOError("Failed to read data")
         
         # convert using calibration
         pvalue = self._to_phys(self._ai_subdevice, channel, range, data)
@@ -320,9 +312,7 @@ class SEMComedi(model.HwComponent):
         """
         Return the appropriate numpy.dtype for the given subdevice
         """
-        flags = comedi.comedi_get_subdevice_flags(self._device, subdevice)
-        if flags == -1:
-            raise IOError("Failed to get subdevice %d flags" % subdevice)
+        flags = comedi.get_subdevice_flags(self._device, subdevice)
         if flags & comedi.SDF_LSAMPL:
             return numpy.dtype(numpy.uint32)
         else: 
@@ -341,7 +331,7 @@ class SEMComedi(model.HwComponent):
         
         period_ns = int(round(period * 1e9))  # in nanoseconds
         chans = [channel]
-        best_range = comedi.comedi_find_range(self._device, self._ai_subdevice, channel,
+        best_range = comedi.find_range(self._device, self._ai_subdevice, channel,
                                         comedi.UNIT_volt, 0, 10)
         ranges = [best_range] 
         aref =[comedi.AREF_GROUND]
@@ -353,11 +343,9 @@ class SEMComedi(model.HwComponent):
             clist[i] = comedi.cr_pack(chans[i], ranges[i], aref[i])
         
         logging.debug("Generating a new command for %d scans", nscans)
-        cmd = comedi.comedi_cmd_struct()
-        ret = comedi.comedi_get_cmd_generic_timed(self._device, self._ai_subdevice,
+        cmd = comedi.cmd_struct()
+        comedi.get_cmd_generic_timed(self._device, self._ai_subdevice,
                                                   cmd, nchans, period_ns)
-        if ret < 0:
-            raise IOError("comedi_get_cmd_generic failed")
         
         cmd.chanlist = clist # adjust for our particular context
         cmd.chanlist_len = nchans
@@ -366,21 +354,16 @@ class SEMComedi(model.HwComponent):
         cmd.stop_arg = nscans
         
         # clean up the command
-        rc = comedi.comedi_command_test(self._device, cmd)
-        if rc < 0:
-            raise IOError("comedi_command_test failed")
-        # on the second time, it should report 0, meaning "perfect"
-        rc = comedi.comedi_command_test(self._device, cmd)
-        if rc < 0:
-            raise IOError("comedi_command_test failed")
-        elif rc != 0:
-            raise IOError("failed to prepare command")
+        rc = comedi.command_test(self._device, cmd)
+        if rc != 0:
+            # on the second time, it should report 0, meaning "perfect"
+            rc = comedi.command_test(self._device, cmd)
+            if rc != 0:
+                raise IOError("failed to prepare command")
 
         # run the command
         logging.debug("Going to start the command")
-        ret = comedi.comedi_command(self._device, cmd)
-        if ret < 0:
-            raise IOError("comedi_command failed")
+        comedi.command(self._device, cmd)
 
         shape = (nscans, nchans)
         dtype = self._get_dtype(self._ai_subdevice)
@@ -391,7 +374,7 @@ class SEMComedi(model.HwComponent):
         buf = numpy.fromfile(self._file, dtype=dtype, count=(shape[0] * shape[1]))
         
         # FIXME: needed? (probably not)
-        rc = comedi.comedi_cancel(self._device, self._ai_subdevice)
+        comedi.cancel(self._device, self._ai_subdevice)
         
 #        BUFSZ = 10000
 #        while True:
@@ -409,7 +392,7 @@ class SEMComedi(model.HwComponent):
         # convert data to physical
         parray = numpy.empty(shape=buf.shape, dtype=numpy.double)
         converter = self._get_converter(self._ai_subdevice, chans[0], ranges[0],
-                                        comedi.COMEDI_TO_PHYSICAL)
+                                        comedi.TO_PHYSICAL)
         # converter needs lsampl (uint32). So for lsampl devices, it's pretty
         # straightforward, just a matter of convincing SWIG that a numpy.uint32
         # is a unsigned int. For sampl devices, everything need to be converted.
@@ -438,14 +421,14 @@ class SEMComedi(model.HwComponent):
         """
         This is the same as calling comedi_internal_trigger(), so just for trying
         to use instructions."""
-        insn = comedi.comedi_insn_struct()
+        insn = comedi.insn_struct()
         insn.subdev = subdevice
         insn.insn = comedi.INSN_INTTRIG
         insn.n = 1
         data = comedi.lsampl_array(insn.n)
         data[0] = num
         insn.data = data.cast()
-        return comedi.comedi_do_insn(self._device, insn)
+        return comedi.do_insn(self._device, insn)
     
     def write_data(self, channels, period, data):
         """
@@ -467,23 +450,22 @@ class SEMComedi(model.HwComponent):
         clist = comedi.chanlist(nchans)
         for i, channel in enumerate(channels):
             data_lim = (data[:,i].min(), data[:,i].max())
-            best_range = comedi.comedi_find_range(self._device, self._ao_subdevice, 
+            try:
+                best_range = comedi.find_range(self._device, self._ao_subdevice, 
                                   channel, comedi.UNIT_volt, data_lim[0], data_lim[1])
-            if best_range < 0:
-                logging.error("%s", comedi.comedi_strerror(comedi.comedi_errno()))
- 
-                raise IOError("Data range between %g and %g V is too high for hardware." %
+            except comedi.ComediError:
+                logging.exception("Data range between %g and %g V is too high for hardware." %
                               (data_lim[0], data_lim[1]))
+                raise
+            
             ranges.append(best_range)
             clist[i] = comedi.cr_pack(channel, best_range, comedi.AREF_GROUND)
         
         logging.debug("Generating a new command for %d scans", nscans)
         period_ns = int(round(period * 1e9))  # in nanoseconds
-        cmd = comedi.comedi_cmd_struct()
-        rc = comedi.comedi_get_cmd_generic_timed(self._device, self._ao_subdevice,
+        cmd = comedi.cmd_struct()
+        comedi.get_cmd_generic_timed(self._device, self._ao_subdevice,
                                                   cmd, nchans, period_ns)
-        if rc < 0:
-            raise IOError("comedi_get_cmd_generic failed")
         
         cmd.chanlist = clist
         # the following are not necessary, already set by get_cmd_generic_timed
@@ -498,21 +480,16 @@ class SEMComedi(model.HwComponent):
         cmd.stop_arg = nscans
         
         # clean up the command
-        rc = comedi.comedi_command_test(self._device, cmd)
-        if rc < 0:
-            raise IOError("comedi_command_test failed")
-        # on the second time, it should report 0, meaning "perfect"
-        rc = comedi.comedi_command_test(self._device, cmd)
-        if rc < 0:
-            raise IOError("comedi_command_test failed")
-        elif rc != 0:
-            raise IOError("failed to prepare command")
+        rc = comedi.command_test(self._device, cmd)
+        if rc != 0:
+            # on the second time, it should report 0, meaning "perfect"
+            rc = comedi.command_test(self._device, cmd)
+            if rc != 0:
+                raise IOError("failed to prepare command")
 
         # readying the subdevice with the command (needs to be done before
         # writing anything to the device
-        rc = comedi.comedi_command(self._device, cmd)
-        if rc < 0:
-            raise IOError("comedi_command failed")
+        comedi.command(self._device, cmd)
 
         # convert physical values to raw data
         # Note: on the NI 6251, as probably many other devices, conversion is linear.
@@ -523,7 +500,7 @@ class SEMComedi(model.HwComponent):
         converters = []
         for i, c in enumerate(channels):
             converters.append(self._get_converter(self._ao_subdevice, c, ranges[i],
-                                                comedi.COMEDI_FROM_PHYSICAL)
+                                                comedi.FROM_PHYSICAL)
                               )
         # TODO: check if it's possible to avoid multiple type conversion in the call
         for i, v in numpy.ndenumerate(data):
@@ -534,7 +511,7 @@ class SEMComedi(model.HwComponent):
         logging.debug("Converted physical value to raw data: %s", buf)
         
         # preload the buffer with enough data first
-        dev_buf_size = comedi.comedi_get_buffer_size(self._device, self._ao_subdevice)
+        dev_buf_size = comedi.get_buffer_size(self._device, self._ao_subdevice)
         preload_size = dev_buf_size / buf.itemsize
         logging.debug("Going to preload %d bytes", buf[:preload_size].nbytes)
         buf[:preload_size].tofile(self._file)
@@ -546,9 +523,7 @@ class SEMComedi(model.HwComponent):
         logging.debug("Going to start the command")
         
         start_time = time.time()
-        rc = comedi.comedi_internal_trigger(self._device, self._ao_subdevice, 0)
-        if rc < 0:
-            raise IOError("comedi_internal_trigger failed")
+        comedi.internal_trigger(self._device, self._ao_subdevice, 0)
         
         logging.debug("Going to write %d bytes more", buf[preload_size:].nbytes)
         # TODO: can this handle faults? 
@@ -566,17 +541,13 @@ class SEMComedi(model.HwComponent):
         end_time = start_time + expected * 1.10 + 1 # s = expected time + 10% + 1s
         had_timeout = True
         while time.time() < end_time:
-            flags = comedi.comedi_get_subdevice_flags(self._device, self._ao_subdevice)
-            if flags == -1:
-                raise IOError("Failed to get subdevice %d flags" % self._ao_subdevice)
+            flags = comedi.get_subdevice_flags(self._device, self._ao_subdevice)
             if not (flags & comedi.SDF_RUNNING):
                 had_timeout = False
                 break
             time.sleep(0.001)
             
-        rc = comedi.comedi_cancel(self._device, self._ao_subdevice)
-        if rc < 0:
-            logging.warning("Failed to cancel command on AO, might be impossible to write more data.")
+        comedi.cancel(self._device, self._ao_subdevice)
         if had_timeout:
             raise IOError("Write command stopped due to timeout after %g s" % (time.time() - start_time))
 
@@ -619,10 +590,10 @@ class SEMComedi(model.HwComponent):
         but the component shouldn't be used afterward.
         """
         if self._calibration:
-            comedi.comedi_cleanup_calibration(self._calibration)
+            comedi.cleanup_calibration(self._calibration)
             self._calibration = None
         if self._device:
-            comedi.comedi_close(self._device)
+            comedi.close(self._device)
             self._device = None
             
     @staticmethod
@@ -635,36 +606,35 @@ class SEMComedi(model.HwComponent):
 
         found = []
         for n in names:
-            device = comedi.comedi_open(n)
-            if device is None:
-                continue
+            try:
+                device = comedi.open(n)
+            except comedi.ComediError:
+                    continue
             try:
                 logging.debug("Checking comedi device '%s'", n)
                 
                 # Should have at least one analog input and an analog output with 2 channels
-                ai_subdevice = comedi.comedi_find_subdevice_by_type(device,
-                                                comedi.COMEDI_SUBD_AI, 0)
-                if ai_subdevice < 0:
+                try:
+                    ai_subdevice = comedi.find_subdevice_by_type(device,
+                                                    comedi.SUBD_AI, 0)
+                    ao_subdevice = comedi.find_subdevice_by_type(device,
+                                                    comedi.SUBD_AO, 0)
+                except comedi.ComediError:
                     continue
-                number_ai = comedi.comedi_get_n_channels(device, ai_subdevice)
-                if number_ai < 1:
-                    continue
-                ao_subdevice = comedi.comedi_find_subdevice_by_type(device,
-                                                comedi.COMEDI_SUBD_AO, 0)
-                if ao_subdevice < 0:
-                    continue
-                number_ao = comedi.comedi_get_n_channels(device, ao_subdevice)
-                if number_ao < 2:
+                    
+                if comedi.get_n_channels(device, ai_subdevice) < 1:
+                        continue
+                if comedi.get_n_channels(device, ao_subdevice) < 2:
                     continue
                 
                 # TODO if not enough channels, should try to look for more subdevices
                 
-                name = "SEM/" + comedi.comedi_get_board_name(device)
+                name = "SEM/" + comedi.get_board_name(device)
                 kwargs = {"device": n}
                 found.append((name, kwargs))
                 
             finally:
-                comedi.comedi_close(device)
+                comedi.close(device)
         
         return found
 
