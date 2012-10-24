@@ -132,7 +132,25 @@ class SEMComedi(model.HwComponent):
         """
         self._calibration = None  # means not calibrated
         
-        # This will only work if the device is soft_calibrated, and calibration has been done
+        # is any subdevice soft-calibrated?
+        nsubd = comedi.comedi_get_n_subdevices(self._device)
+        is_soft_calibrated = False
+        for i in range(nsubd):
+            flags = comedi.comedi_get_subdevice_flags(self._device, i)
+            if flags & comedi.SDF_SOFT_CALIBRATED:
+                is_soft_calibrated = True
+                break
+        
+        if not is_soft_calibrated:
+            # nothing more to do
+            # TODO: do we still need to check comedi_calibrate has been called?
+            # TODO: do the hardware calibrated devices need to have the file loaded?
+            # see comedi_apply_calibration() => probably not, but need to call this
+            # function when we read from different channel.
+            return
+        
+        
+        # Only works if the device is soft-calibrated, and has been calibrated
         path = comedi.comedi_get_default_calibration_path(self._device)
         if path is None:
             logging.warning("Failed to read calibration information")
@@ -140,17 +158,10 @@ class SEMComedi(model.HwComponent):
         
         self._calibration = comedi.comedi_parse_calibration_file(path)
         if self._calibration is None:
-            # TODO: only do a warning if the device has any soft-cal subdevice
             logging.warning("Failed to read calibration information, you might " 
                             "want to calibrate your device with:\n"
-                            "sudo comedi_soft_calibrate -f /dev/comedi0\n"
-                            "or\n"
-                            "sudo comedi_calibrate -f /dev/comedi0")
-            return
-        
-        # TODO: do the hardware calibrated devices need to have the file loaded?
-        # see comedi_apply_calibration() => probably not, but need to call this
-        # function when we read from different channel.
+                            "sudo comedi_soft_calibrate -f %s\n",
+                            self._device_name)
         
     def getSwVersion(self):
         """
