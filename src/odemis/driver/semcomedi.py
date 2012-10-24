@@ -163,6 +163,7 @@ class SEMComedi(model.HwComponent):
                             "sudo comedi_soft_calibrate -f %s\n",
                             self._device_name)
         
+        
     def getSwVersion(self):
         """
         Returns (string): displayable string showing the driver version
@@ -473,7 +474,7 @@ class SEMComedi(model.HwComponent):
  
                 raise IOError("Data range between %g and %g V is too high for hardware." %
                               (data_lim[0], data_lim[1]))
-            ranges[i] = best_range
+            ranges.append(best_range)
             clist[i] = comedi.cr_pack(channel, best_range, comedi.AREF_GROUND)
         
         logging.debug("Generating a new command for %d scans", nscans)
@@ -521,11 +522,12 @@ class SEMComedi(model.HwComponent):
         buf = numpy.empty(shape=data.shape, dtype=dtype, order='C')
         converters = []
         for i, c in enumerate(channels):
-            converters[i] = self._get_converter(self._ao_subdevice, c, ranges[i],
+            converters.append(self._get_converter(self._ao_subdevice, c, ranges[i],
                                                 comedi.COMEDI_FROM_PHYSICAL)
+                              )
         # TODO: check if it's possible to avoid multiple type conversion in the call
         for i, v in numpy.ndenumerate(data):
-            buf[i] = converters[i[0]](v)
+            buf[i] = converters[i[1]](v)
         # flatten the array
         buf = numpy.reshape(buf, nscans * nchans, order='C')
         
@@ -551,13 +553,16 @@ class SEMComedi(model.HwComponent):
         logging.debug("Going to write %d bytes more", buf[preload_size:].nbytes)
         # TODO: can this handle faults? 
         buf[preload_size:].tofile(self._file)
+        logging.debug("Going to flush")
         self._file.flush()
         
         # According to https://groups.google.com/forum/?fromgroups=#!topic/comedi_list/yr2U179x8VI
         # To finish a write fully, we need to do a cancel().
         # Wait until SDF_RUNNING is gone, then cancel() to reset SDF_BUSY
-        expected = buf.size * period
-        time.sleep(time.time() - expected)
+        expected = nscans * period
+        left = start_time + expected - time.time()
+        logging.debug("Waiting %g s for the write to finish", left)
+        time.sleep(left)
         end_time = start_time + expected * 1.10 + 1 # s = expected time + 10% + 1s
         had_timeout = True
         while time.time() < end_time:
@@ -584,8 +589,9 @@ class SEMComedi(model.HwComponent):
         limits (ndarray of 2*2 int/float): lower/upper physical bounds of the area
             first dim is the X (0)/Y(1), second dim is min(0)/max(1)
             ex: limits[0,1] is the max value on the X dimension
-        returns (ndarray of shape[0] x shape[1] x 2 x int/float): the X/Y values
-            for each points of the array. The type is the same as the limits.
+        returns (2D ndarray of (shape[0] x shape[1]) x 2 of int/float): the X/Y
+            values for each points of the array, with Y scanned fast, and X 
+            slowly. The type is the same as the limits.
         """
         # prepare an array of the right type
         dtype = limits.dtype
@@ -602,6 +608,9 @@ class SEMComedi(model.HwComponent):
         # TODO: insert margin time by using dwell time and margin time to 
         # duplicate first point of each row.
          
+        # reshape the array to a full flat scan values (the C order should make
+        # sure that the array is fully continuous
+        scan.shape = [shape[0] * shape[1], 2]
         return scan
     
     def terminate(self):
@@ -670,5 +679,9 @@ class SEMComedi(model.HwComponent):
 #d = SEMComedi("a", "", None, "/dev/comedi0")
 #a = numpy.array([[1],[2],[3],[4]], dtype=float)
 #d.write_data([0], 0.01, a)
+#limits = numpy.array([[-5, 5], [-7, 7]], dtype=float)
+#s = d._generate_scan_array([300, 300], limits)
+#d.write_data([0, 1], 100e-6, s)
+
 #d.get_data(0, 0.01, 3)
 
