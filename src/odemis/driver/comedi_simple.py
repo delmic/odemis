@@ -21,7 +21,9 @@ The main adjustments are:
  * functions raise a ComediError exception on error 
 """
 
-import comedi as _comedi
+# first, add everything from comedi as is
+from comedi import *
+
 import inspect
 import logging
 from functools import partial
@@ -34,8 +36,8 @@ class ComediError(Exception):
         return "returned %r -> (%d) %s" % self.args
 
 def _raise_comedi_error(rc):
-    errno = _comedi.comedi_errno()
-    raise ComediError(rc, errno, _comedi.comedi_strerror(errno))
+    errno = comedi_errno()
+    raise ComediError(rc, errno, comedi_strerror(errno))
 
 def _default_function_wrapper(comedi_f, *args):
     """
@@ -65,6 +67,7 @@ _function_wrappers = {
                      "data_read_delayed": _data_read_wrapper,
                      }
 def _wrap():
+    import comedi as _comedi
     global_dict = globals()
     
     for name in dir(_comedi):
@@ -72,8 +75,6 @@ def _wrap():
             continue
         
         value = getattr(_comedi, name)
-        # add everything from comedi
-        global_dict[name] = value
         
         # wrap every function starting with "comedi_"
         if name.startswith('comedi_'):
@@ -103,4 +104,5 @@ def _wrap():
                 continue
             global_dict[shortname] = value
             
+# also wrap all comedi functions/constants that can be wrap
 _wrap()
