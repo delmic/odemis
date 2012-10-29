@@ -56,6 +56,15 @@ In open-loop, the controller has 2 ways to move the actuators:
      "40 volts corresponds to a motion of approx. 3.3μm"
      "20 volts corresponds to a motion of approx. 1μm"
 
+As an exception, the C-867 only supports officially closed-loop. However, there
+is a "testing" command, SMO, that allows to move in open-loop by simulating the input
+to the PID controller. PI assured us that as long as the stage used can reach 
+the limit without getting damaged, it is safe. It's pretty straightforwards to
+use the command. The voltage defines the speed (and direction) of the move. The
+voltage should be set to 0 again when the position desired is reached. 3V is 
+approximately the minimum to move, and 10V is the maximum. Voltage is more or 
+less linear between -32766 and 32766 -> -10 and 10V.
+
 In closed-loop, it's all automagical.
 
 The recommended maximum step frequency is 800 Hz. 
@@ -135,11 +144,13 @@ class Controller(object):
                 # for now we don't handle closed-loop anyway...
                 raise NotImplementedError("Closed-loop support not yet implemented")
             else:
-                if self._model == MODEL_C867: # only support closed-loop mode
-                    raise LookupError("Axis %d of controller %d does not support open-loop mode" % (a, address))
                 # that should be the default, but for safety we force it
                 self.SetServo(a, False)
-                self.SetStepAmplitude(a, 55) # maximum is best
+                if self._model == MODEL_C867: # only has testing command SMO
+                    logging.warning("This controller model only supports imprecise open-loop mode.")
+                    self._initOLViaPID()
+                else:
+                    self.SetStepAmplitude(a, 55) # maximum is best
                 self._position[a] = 0
         
         self._try_recover = True # full feature only after init 
@@ -151,20 +162,21 @@ class Controller(object):
         
         # actually set just before a move
         # The max using closed-loop info seem purely arbitrary
-        # (max m/s) = (max step/s) / (step/m)
         
-        # FIXME: how to use the closed-loop version? 
+#        # FIXME: how to use the closed-loop version? 
 #        max_vel = float(self.GetParameter(1, 0xA)) # in unit/s
 #        num_unit = float(self.GetParameter(1, 0xE))
 #        den_unit = float(self.GetParameter(1, 0xF))
 #        max_accel = float(self.GetParameter(1, 0x4A)) # in unit/s²
-#        print max_vel, max_accel, num_unit, den_unit
-#        self.speed_max = max_vel
-#        self.accel_max = max_accel
+#        # seems like unit = num_unit/den_unit mm
+#        # and it should be initialised using PIStages.dat
+#        self.speed_max = max_vel * 1e3 * (num_unit/den_unit)
+#        self.accel_max = max_accel * 1e3 * (num_unit/den_unit)
         
         # FIXME 0x7000204 seems specific to E-861. need different initialisation per controller
         # Even the old firmware don't seem to support it
         try:
+            # (max m/s) = (max step/s) / (step/m)
             self.speed_max = float(self.GetParameter(1, 0x7000204)) / self.move_calibration # m/s
             # Note: the E-861 claims max 0.015 m/s but actually never goes above 0.004 m/s
             # (max m/s²) = (max step/s²) / (step/m)
@@ -172,6 +184,7 @@ class Controller(object):
         except (IOError, ValueError) as err:
             # TODO detect better that it's just a problem of sending unsupported command/value
             # Put default (large values)
+            self.GetErrorNum() # reset error
             logging.debug("Using default speed and acceleration value after error '%s'", err)
             self.speed_max = 0.01 # m/s
             self.accel_max = 0.001 # m/s²
@@ -179,6 +192,34 @@ class Controller(object):
         self._speed = dict([(a, self.speed_max) for a in axes]) # m/s
         self._accel = dict([(a, self.accel_max) for a in axes]) # m/s² (both acceleration and deceleration)
         self._prev_speed_accel = (dict(), dict()) 
+    
+    
+    def _initOLViaPID(self):
+        """
+        Initialise the controller to move using the SMO command. 
+        """
+        # Get maximum motor output parameter (0x9) allowed
+        # Because some type of stages cannot bear as much as the full maximum 
+        # The maximum output voltage is calculated following this formula:
+        # 200 Vpp*Maximum motor output/32767
+        self._max_motor_out = int(self.GetParameter(1, 0x9))
+        self._min_motor_out = int((3. / 10.) * 32767) # min 3V
+        assert(self._max_motor_out > self._min_motor_out)
+        
+        # Set up a macro that will do the job
+        # To be called like "MAC START OLSTEP 16000 500"
+        # First param is voltage between -32766 and 32766
+        # Second param is delay in ms
+        # Note: it seems it doesn't work to have a third param is the axis
+        mac = "MAC BEG OLSTEP\n" \
+              "%(n)d SMO 1 $1\n" \
+              "%(n)d DEL $2\n"   \
+              "%(n)d SMO 1 0\n"  \
+              "%(n)d MAC END\n" % {"n": self.address}
+        self._sendOrderCommand(mac)
+
+        # change the moveRel method to one PID aware
+        self._moveRelOL = self._moveRelOLViaPID
     
     def _sendOrderCommand(self, com):
         """
@@ -595,6 +636,22 @@ class Controller(object):
         assert(value > 0)
         self._sendOrderCommand("ODC %d %.5g\n" % (axis, value))
 
+
+    def OLMovePID(self, axis, voltage, time):
+        """
+        Moves an axis for a number of steps. Can be done only with servo off.
+        axis (1<int<16): axis number
+        voltage (-32766<=int<=32766): voltage for the PID control. <0 to go towards
+          the negative direction. 32766 is 10V
+        time (0<int): time in ms.
+        """
+        # Uses MAC OLSTEP, based on SMO
+        assert(axis == 1) # seems not possible to have 3 parameters?!
+        assert(-32766 <= voltage and voltage <= 32766)
+        assert(time > 0)
+        self._sendOrderCommand("MAC START OLSTEP %d %d\n" % (voltage, time))        
+        
+        
 #Abs (with sensor = closed-loop):
 #MOV (Set Target Position)
 #MVR (Set Target Relative To Current Position)
@@ -671,8 +728,8 @@ class Controller(object):
         assert((0 < accel) and (accel <= self.accel_max))
         assert(axis in self._channels)
         self._accel[axis] = accel
-    
-    def _updateSpeedAccel(self, axis):
+
+    def _updateCLSpeedAccel(self, axis):
         """
         Update the speed and acceleration values for the given axis. 
         It's only done if necessary, and only for the current closed- or open-
@@ -682,53 +739,121 @@ class Controller(object):
         prev_speed = self._prev_speed_accel[0].get(axis, None)
         new_speed = self._speed[axis]
         if prev_speed != new_speed:
-            if self._hasServo[axis]:
-                raise NotImplementedError("No closed-loop support")
-            else:
-                steps_ps = self.convertSpeedToDevice(new_speed)
-                self.SetOLVelocity(axis, steps_ps)
+            raise NotImplementedError("No closed-loop support")
             self._prev_speed_accel[0][axis] = new_speed
         
         prev_accel = self._prev_speed_accel[1].get(axis, None)
         new_accel = self._accel[axis]
         if prev_accel != new_accel:
-            if self._hasServo[axis]:
-                raise NotImplementedError("No closed-loop support")
-            else:
-                steps_pss = self.convertAccelToDevice(new_accel)
-                self.SetOLAcceleration(axis, steps_pss)
-                self.SetOLDeceleration(axis, steps_pss)
-            self._prev_speed_accel[1][axis] = new_accel       
+            raise NotImplementedError("No closed-loop support")
+            self._prev_speed_accel[1][axis] = new_accel
+    
+    def _updateOLSpeedAccel(self, axis):
+        """
+        Update the speed and acceleration values for the given axis. 
+        It's only done if necessary, and only for the current closed- or open-
+        loop mode.
+        axis (1<=int<=16): the axis
+        """
+        prev_speed = self._prev_speed_accel[0].get(axis, None)
+        new_speed = self._speed[axis]
+        if prev_speed != new_speed:
+            steps_ps = self.convertSpeedToDevice(new_speed)
+            self.SetOLVelocity(axis, steps_ps)
+            self._prev_speed_accel[0][axis] = new_speed
         
+        prev_accel = self._prev_speed_accel[1].get(axis, None)
+        new_accel = self._accel[axis]
+        if prev_accel != new_accel:
+            steps_pss = self.convertAccelToDevice(new_accel)
+            self.SetOLAcceleration(axis, steps_pss)
+            self.SetOLDeceleration(axis, steps_pss)
+            self._prev_speed_accel[1][axis] = new_accel       
+    
+    def _moveRelCL(self, axis, distance):
+        """
+        See moveRel
+        """
+        self._updateCLSpeedAccel(axis)
+        # closed-loop
+        raise NotImplementedError("No closed-loop support")
+        # call MVR
+            
+        return distance
+
+    def _moveRelOLStep(self, axis, distance):
+        """
+        See moveRel
+        """
+        self._updateOLSpeedAccel(axis)
+        steps = self.convertDistanceToDevice(distance)
+        if steps == 0: # if distance is too small, report it
+            return 0
+        
+        self.OLMoveStep(axis, steps)
+        # TODO use OLAnalogDriving for very small moves (< 5um)?
+        return distance
+
+    def _moveRelOLViaPID(self, axis, distance):
+        """
+        See moveRel
+        """
+        speed = self._speed[axis]
+        v, t = self.convertDistanceSpeedToPIDControl(distance, speed)
+        if t == 0: # if distance is too small, report it
+            return 0
+        
+        self.OLMovePID(axis, v, t)
+        return distance
+
+    _moveRelOL = _moveRelOLStep
+     
     def moveRel(self, axis, distance):
         """
-        Move on a given axis for a given pulse length, will repeat the steps if
-        it requires more than one step. It's asynchronous: the method might return
-        before the move is complete.
+        Move on a given axis for a given distance.
+        It's asynchronous: the method might return before the move is complete.
         axis (1<=int<=16): the axis
         distance (float): the distance of move in m (can be negative)
         returns (float): approximate distance actually moved
         """
         assert(axis in self._channels)
         
-        self._updateSpeedAccel(axis)
-        
-        # open-loop and closed-loop use different commands
         if self._hasServo[axis]:
-            # closed-loop
-            raise NotImplementedError("No closed-loop support")
-            # call MVR
+            distance = self._moveRelCL(axis, distance)
         else:
-            steps = self.convertDistanceToDevice(distance)
-            if steps == 0: # if distance is too small, report it
-                return 0
+            distance = self._moveRelOL(axis, distance) 
             
-            self.OLMoveStep(axis, steps)
-            # TODO use OLAnalogDriving for very small moves (< 5um)?
-            
-            self._position[axis] += distance
-        
+        self._position[axis] += distance
         return distance
+    
+    def convertDistanceSpeedToPIDControl(self, distance, speed):
+        """
+        converts meters and speed to the units for this device (~V, ms) in
+        open-loop via PID control.
+        distance (float): meters (can be negative)
+        speed (0<float): meters/s (can be negative)
+        return (2 tuple: int, 0<int): PID control (in device unit, duration
+        """
+        # FIXME: We assume that the max voltage is the maximum speed and that
+        # it's linear down to 0 -> 0 m/s.
+        vpms = self._max_motor_out / self.speed_max # uV/(m/s) 
+        voltage_u = round(int(speed * vpms)) # uV
+        # clamp it to the possible values
+        voltage_u = min(max(self._min_motor_out, voltage_u), self._max_motor_out)
+        act_speed = voltage_u / vpms # m/s
+        
+        if distance < 0:
+            voltage_u = -voltage_u
+        
+        time = abs(distance) / act_speed #s
+        time_ms = int(round(time * 1000)) # ms
+        if time_ms < 1:
+            return 0, 0
+        
+        # TODO: we could report the "actual distance", but as everything is so
+        # approximate, the original distance is as likely actual as the value of
+        # time_ms * voltage / vpms
+        return voltage_u, time_ms
     
     def convertDistanceToDevice(self, distance):
         """
