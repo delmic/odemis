@@ -21,25 +21,25 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 
+import logging
+import os.path
+import sys
+import threading
+import traceback
+
+import wx
+import Pyro4.errors
+
 from odemis import __version__, model
 from odemis.gui import main_xrc, instrmodel
 from odemis.gui.controller.acquisition import AcquisitionController
 from odemis.gui.controller.settingspanel import SettingsSideBar
 from odemis.gui.controller.streams import StreamController
 from odemis.gui.controller.tabs import TabBar
-from odemis.gui.controller.viewpanel import ViewSelector
-from odemis.gui.controller.views import ViewController
+from odemis.gui.controller.views import ViewController, ViewSelector
 from odemis.gui.instrmodel import InstrumentalImage
 from odemis.gui.log import log, create_gui_logger
 from odemis.gui.xmlh import odemis_get_resources
-import Pyro4.errors
-import logging
-import os.path
-import sys
-import threading
-import traceback
-import wx
-
 
 
 class OdemisGUIApp(wx.App):
@@ -73,7 +73,7 @@ class OdemisGUIApp(wx.App):
 
         try:
             self.microscope = model.getMicroscope()
-            self.interface_model = instrmodel.MicroscopeGUI(self.microscope)
+            self.interface_model = instrmodel.GUIMicroscope(self.microscope)
         except (IOError, Pyro4.errors.CommunicationError), e:
             log.exception("Failed to connect to back-end")
             msg = ("The Odemis GUI could not connect to the Odemis back-end:\n\n"
@@ -178,10 +178,6 @@ class OdemisGUIApp(wx.App):
             self.main_frame.Show()
             #self.main_frame.Raise()
             #self.main_frame.Refresh()
-#
-#            if log.level == logging.DEBUG:
-#                self.goto_debug_mode()
-
 
             self.settings_controller = SettingsSideBar(self.interface_model,
                                                       self.main_frame)
@@ -194,11 +190,11 @@ class OdemisGUIApp(wx.App):
                                                       self.main_frame)
             self.stream_controller = StreamController(self.interface_model,
                                                       self.main_frame.pnl_stream)
-            
+
             self.view_selector = ViewSelector(self.interface_model,
                                               self.main_frame)
-            
-            
+
+
             self.acquisition_controller = AcquisitionController(self.interface_model,
                                                                 self.main_frame)
 
@@ -207,6 +203,7 @@ class OdemisGUIApp(wx.App):
             # EVT_TOGGLEBUTTON
             # self.main_frame.btn_toggle_opt.Bind(wx.EVT_TOGGLEBUTTON,
             #                                     self.on_toggle_opt)
+            # FIXME: Move to a control
             self.main_frame.btn_toggle_opt.Bind(wx.EVT_BUTTON,
                                                 self.on_toggle_opt)
 
@@ -224,7 +221,7 @@ class OdemisGUIApp(wx.App):
         encoding = sys.getfilesystemencoding()
         return os.path.dirname(unicode(__file__, encoding))
 
-    # TODO update to MicroscopeGUI (self.interface_model)
+    # TODO update to GUIMicroscope (self.interface_model)
     # => create special streams?
     def on_load_example1(self, e):
         """ Open the two files for example """

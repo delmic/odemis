@@ -269,7 +269,7 @@ class StreamPanelEntry(wx.PyPanel):
                  collapsed=True):
         """
         stream (Stream): the data model to be displayed (and modified by the user)
-        livegui (MicroscopeGUI): the microscope GUI, where there is currentView
+        livegui (GUIMicroscope): the microscope GUI, where there is focussedView
         """
 
         wx.PyPanel.__init__(self, parent, wid, pos, size, style, name)
@@ -381,7 +381,7 @@ class StreamPanelEntry(wx.PyPanel):
         self._expander._btn_play.Bind(wx.EVT_BUTTON, self.on_play)
         self.stream.updated.subscribe(self.onUpdatedChanged, init=True)
         # initialise _btn_play
-        self.setVisible(self.stream in self._livegui.currentView.value.getStreams())
+        self.setVisible(self.stream in self._livegui.focussedView.value.getStreams())
 
         # Panel controls
         # TODO reuse VigilantAttributeConnector, or at least refactor
@@ -585,7 +585,7 @@ class StreamPanelEntry(wx.PyPanel):
 
     def on_visibility(self, evt):
         # TODO need to let the currently focused view know (via view controller?)
-        view = self._livegui.currentView.value
+        view = self._livegui.focussedView.value
         if self._expander._btn_vis.GetToggle():
             log.debug("Showing stream '%s'", self.stream.name.value)
             # FIXME how to get the ref?
@@ -770,7 +770,7 @@ class StreamPanel(wx.Panel):
     def __init__(self, *args, **kwargs):
         wx.Panel.__init__(self, *args, **kwargs)
 
-        self._microscope = None # MicroscopeGUI
+        self._microscope = None # GUIMicroscope
 
         self.entries = []
         self.menu_actions = collections.OrderedDict()  # title => callback
@@ -804,7 +804,7 @@ class StreamPanel(wx.Panel):
         self._microscope = microscope
         self._stream_controller = stream_controller
 
-        self._microscope.currentView.subscribe(self._onView, init=True)
+        self._microscope.focussedView.subscribe(self._onView, init=True)
 
 
     # internal methods

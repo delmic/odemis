@@ -31,7 +31,7 @@ from odemis.gui.instrmodel import STATE_OFF, STATE_PAUSE, STATE_ON
 #  off, stream stays)
 # ensures the right "Add XXX stream" entries are available in the "Add stream"
 #   button
-# on stream remove: contacted to remove the stream from the layers and the 
+# on stream remove: contacted to remove the stream from the layers and the
 #   list
 # on microscope off: pause (set .updated to False) every stream which uses
 #  this microscope
@@ -39,7 +39,7 @@ from odemis.gui.instrmodel import STATE_OFF, STATE_PAUSE, STATE_ON
 #   stream entry when the microscope is off? => either stream entry "update"
 #   icon is disabled/enable (decided by the stream controller), or the event
 #   handler checks first that the appropriate microscope is On or Off.
-# the stream entries directly update the VA's 
+# the stream entries directly update the VA's
 
 
 # all the stream types related to optical
@@ -48,50 +48,50 @@ OPTICAL_STREAMS = (instrmodel.FluoStream, instrmodel.BrightfieldStream)
 EM_STREAMS = (instrmodel.SEMStream)
 
 class StreamController(object):
-    '''
+    """
     Manages the insertion/suppression of streams (with their corresponding
-    entries in the panel), and the de/activation of the streams when the 
+    entries in the panel), and the de/activation of the streams when the
     microscope is turned on/off.
-    '''
+    """
 
     def __init__(self, livegui, spanel):
-        '''
-        microscope (MicroscopeGUI): the representation of the microscope GUI
+        """
+        microscope (GUIMicroscope): the representation of the microscope GUI
         spanel (StreamPanel): an empty stream panel
-        '''
+        """
         self._livegui = livegui
         self._spanel = spanel
         self._spanel.setMicroscope(self._livegui, self)
         self._scheduler_subscriptions = {} # stream -> callable
-        
+
         # TODO probably need a lock to access it correctly
         self._streams_to_restart = set() # streams to be restarted when turning on again
-    
+
         # TODO remove the actions when microscope goes off
         self._createAddStreamActions()
-    
+
         # On the first time, we'll create the streams, to be nice to the user
         self._opticalWasTurnedOn = False
-        self._semWasTurnedOn = False 
-        
+        self._semWasTurnedOn = False
+
         self._livegui.opticalState.subscribe(self.onOpticalState)
         self._livegui.emState.subscribe(self.onEMState)
-        
+
     def _createAddStreamActions(self):
         """
-        Create the possible "add stream" actions according to the current 
+        Create the possible "add stream" actions according to the current
         microscope.
         To be executed only once, at initialisation.
         """
         # Basically one action per type of stream
-        
+
         # First: Fluorescent stream (for dyes)
         if (self._livegui.light and self._livegui.light_filter
             and self._livegui.ccd):
             # TODO: how to know it's _fluorescent_ microscope?
             #  => multiple source? filter?
             self._spanel.add_action("Filtered colour", self.addFluo)
-        
+
         # Bright-field
         if self._livegui.light and self._livegui.ccd:
             self._spanel.add_action("Bright-field", self.addBrightfield)
@@ -99,8 +99,8 @@ class StreamController(object):
         # SED
         if self._livegui.ebeam and self._livegui.sed:
             self._spanel.add_action("Secondary electrons", self.addSEMSED)
-    
-    
+
+
     def addFluo(self):
         """
         Creates a new fluorescence stream and entry into the stream panel
@@ -112,12 +112,12 @@ class StreamController(object):
             name = "Filtered colour %d" % i
             if not name in existing_names:
                 break
-        
+
         stream = instrmodel.FluoStream(name,
                   self._livegui.ccd, self._livegui.ccd.data,
                   self._livegui.light, self._livegui.light_filter)
         return self._addStream(stream, comp.stream.CustomStreamPanelEntry)
-        
+
     def addBrightfield(self):
         """
         Creates a new brightfield stream and entry into the stream panel
@@ -127,7 +127,7 @@ class StreamController(object):
                   self._livegui.ccd, self._livegui.ccd.data,
                   self._livegui.light)
         return self._addStream(stream, comp.stream.FixedStreamPanelEntry)
-    
+
     def addSEMSED(self):
         """
         Creates a new SED stream and entry into the stream panel
@@ -146,8 +146,8 @@ class StreamController(object):
         returns the entry created
         """
         self._livegui.streams.add(stream)
-        self._livegui.currentView.value.addStream(stream)
-        
+        self._livegui.focussedView.value.addStream(stream)
+
         # TODO create a StreamScheduler
         # call it like self._scheduler.addStream(stream)
         # create an adapted subscriber for the scheduler
@@ -158,10 +158,10 @@ class StreamController(object):
 
         # show the stream right now
         stream.updated.value = True
-        
+
         entry = entry_cls(self._spanel, stream, self._livegui)
         self._spanel.add_stream(entry)
-        return entry        
+        return entry
 
     def _onStreamUpdate(self, stream, updated):
         """
@@ -171,21 +171,21 @@ class StreamController(object):
         # * "updated" streams are the streams to be scheduled
         # * a stream becomes "active" when it's currently acquiring
         # * when a stream is just set to be "updated" (by the user) it should
-        #   be scheduled as soon as possible 
-        
+        #   be scheduled as soon as possible
+
         # Two versions:
         # * Manual: incompatible streams are forced non-updated
         # * Automatic: incompatible streams are switched active from time to time
-        
+
         # TODO there are two difficulties:
         # * know which streams are incompatible with each other. Only compatible
         #   streams can be acquiring concurrently. As an approximation, it is
-        #   safe to assume every stream is incompatible with every other one. 
+        #   safe to assume every stream is incompatible with every other one.
         # * in automatic mode only) detect when we can switch to a next stream
         #   => current stream should have acquired at least one picture, and
         #   it should not be changed too often due to overhead in hardware
         #   configuration changes.
-        
+
         # For now we do very basic scheduling: manual, considering that every
         # stream is incompatible
 
@@ -199,7 +199,7 @@ class StreamController(object):
                     s.updated.value = False
             # activate this stream
             stream.active.value = True
-    
+
     def onOpticalState(self, state):
         # only called when it changes
         if state == STATE_OFF or state == STATE_PAUSE:
@@ -209,9 +209,9 @@ class StreamController(object):
                 self._opticalWasTurnedOn = True
                 self.addBrightfield()
                 # TODO need to hide if the view is not the right one
-        
+
             self._startStreams(OPTICAL_STREAMS)
-    
+
     def onEMState(self, state):
         if state == STATE_OFF or state == STATE_PAUSE:
             self._pauseStreams(EM_STREAMS)
@@ -221,10 +221,10 @@ class StreamController(object):
                 if self._livegui.sed:
                     self.addSEMSED()
                 # TODO need to hide if the view is not the right one
-        
+
             self._startStreams(OPTICAL_STREAMS)
 
-        
+
     def _pauseStreams(self, classes):
         """
         Pause (deactivate and stop updating) all the streams of the given class
@@ -236,7 +236,7 @@ class StreamController(object):
                     s.active.value = False
                     s.updated.value = False
                     # TODO also disable entry "update" button?
-            
+
 
     def _startStreams(self, classes):
         """
@@ -248,13 +248,13 @@ class StreamController(object):
                 s.updated.value = True
                 # it will be activated by the stream scheduler
 
-        
+
     def removeStream(self, stream):
         """
-        Removes a stream. 
+        Removes a stream.
         stream (Stream): the stream to remove
         Note: the stream entry is to be destroyed separately via the spanel
-        It's ok to call if the stream has already been removed 
+        It's ok to call if the stream has already been removed
         """
         self._streams_to_restart.discard(stream)
         self._livegui.streams.discard(stream)
@@ -265,7 +265,7 @@ class StreamController(object):
         if stream in self._scheduler_subscriptions:
             callback = self._scheduler_subscriptions.pop(stream)
             stream.updated.unsubscribe(callback)
-        
-        # Remove from the views 
+
+        # Remove from the views
         for v in self._livegui.views:
             v.removeStream(stream)

@@ -27,21 +27,21 @@ def loop():
     app = wx.GetApp()
     if app is None:
         return
-    
+
     while True:
         wx.CallAfter(app.ExitMainLoop)
         app.MainLoop()
         if not app.Pending():
             break
-        
+
 class FakeMicroscopeGUI(object):
     """
-    Imitates a MicroscopeGUI wrt stream entry: it just needs a currentView
+    Imitates a GUIMicroscope wrt stream entry: it just needs a focussedView
     """
     def __init__(self):
-        fview = instrmodel.MicroscopeView("fakeview") 
-        self.currentView = model.VigilantAttribute(fview)
-        
+        fview = instrmodel.MicroscopeView("fakeview")
+        self.focussedView = model.VigilantAttribute(fview)
+
 class TestDblMicroscopeCanvas(unittest.TestCase):
 
     def setUp(self):
@@ -50,12 +50,12 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
         self.view = instrmodel.MicroscopeView("fake view")
         self.canvas = DblMicroscopeCanvas(self.frame)
         self.canvas.setView(self.view)
-        
+
         self.frame.SetSize((124, 124))
         loop()
         self.frame.Show(True)
         loop()
-        
+
     def tearDown(self):
         self.frame.Destroy()
         self.app.MainLoop()
@@ -69,16 +69,16 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
         self.assertTrue(len(self.canvas.ViewOverlays) == 1)
         crosshair.value = False
         self.assertTrue(len(self.canvas.ViewOverlays) == 0)
-        
+
     def test_BasicDisplay(self):
         """
         Draws a view with two streams, one with a red pixel with a low density
          and one with a blue pixel at a high density.
-        """ 
+        """
         mpp = 0.0001
         self.view.mpp.value = mpp
         self.assertEqual(mpp, self.view.mpp.value)
-        
+
         # add images
         im1 = wx.EmptyImage(11, 11, clear=True)
         px1_cent = (5,5)
@@ -91,19 +91,19 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
         stream2 = instrmodel.StaticStream("s2", InstrumentalImage(im2, mpp, (200 * mpp, 200 * mpp)))
         self.view.addStream(stream1)
         self.view.addStream(stream2)
-        
-        # reset the mpp of the view, as it's automatically set to the first image 
+
+        # reset the mpp of the view, as it's automatically set to the first image
         self.view.mpp.value = mpp
-        
+
         # for now it fails: depending on shift (sometimes everything is shifted by -1,-1)
         shift = (0,0) # 63,63 ; 100, 100 work
 #        self.canvas.ShiftView(shift)
-        
+
         # merge the images
         ratio = 0.5
         self.view.merge_ratio.value = ratio
         self.assertEqual(ratio, self.view.merge_ratio.value)
-        
+
         loop()
         # it's supposed to update in less than 1s
         time.sleep(1)
@@ -116,7 +116,7 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
 #                px = GetRGB(resultIm, i, j)
 #                if px != (0,0,0):
 #                    print px, i, j
-        
+
         px1 = GetRGB(resultIm, resultIm.Width/2 + shift[0], resultIm.Height/2 + shift[1])
         self.assertEqual(px1, (127, 0, 0))
         px2 = GetRGB(resultIm, resultIm.Width/2 + 200 + shift[0], resultIm.Height/2 + 200 + shift[1])
@@ -127,7 +127,7 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
         loop()
         time.sleep(1)
         loop()
-        
+
         resultIm = GetImageFromBuffer(self.canvas)
         px2 = GetRGB(resultIm, resultIm.Width/2 + 200 + shift[0], resultIm.Height/2 + 200 + shift[1])
         self.assertEqual(px2, (0, 0, 255))
@@ -137,7 +137,7 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
         mpp = 0.0001
         self.view.mpp.value = mpp
         self.assertEqual(mpp, self.view.mpp.value)
-        
+
         # add images
         im1 = wx.EmptyImage(11, 11, clear=True)
         px1_cent = (5,5)
@@ -152,15 +152,15 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
         # view might set its mpp to the mpp of first image => reset it
         self.view.mpp.value = mpp
         self.assertEqual(mpp, self.view.mpp.value)
-        
+
         shift = (100,100)
         self.canvas.ShiftView(shift)
-        
+
         # merge the images
         ratio = 0.5
         self.view.merge_ratio.value = ratio
         self.assertEqual(ratio, self.view.merge_ratio.value)
-        
+
         loop()
         # it's supposed to update in less than 1s
         time.sleep(1)
@@ -168,18 +168,18 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
 
         # copy the buffer into a nice image here
         resultIm = GetImageFromBuffer(self.canvas)
-        
+
         px1 = GetRGB(resultIm, resultIm.Width/2 + shift[0], resultIm.Height/2 + shift[1])
         self.assertEqual(px1, (127, 0, 0))
         px2 = GetRGB(resultIm, resultIm.Width/2 + 200 + shift[0], resultIm.Height/2 + 200 + shift[1])
         self.assertEqual(px2, (0, 0, 255))
-        
+
 #    @unittest.skip("simple")
     def test_ZoomMove(self):
         mpp = 0.0001
         self.view.mpp.value = mpp
         self.assertEqual(mpp, self.view.mpp.value)
-        
+
         # add images
         im1 = wx.EmptyImage(11, 11, clear=True)
         px1_cent = (5,5)
@@ -188,7 +188,7 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
         self.view.addStream(stream1)
         # view might set its mpp to the mpp of first image => reset it
         self.view.mpp.value = mpp
-        
+
         shift = (10,10)
         self.canvas.ShiftView(shift)
 
@@ -196,8 +196,8 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
         time.sleep(1)
         loop()
         resultIm = GetImageFromBuffer(self.canvas)
-        
-        px1 = GetRGB(resultIm, 
+
+        px1 = GetRGB(resultIm,
                      self.canvas.buffer_size[0]/2 + 10,
                      self.canvas.buffer_size[1]/2 + 10)
         self.assertEqual(px1, (255, 0, 0))
@@ -209,16 +209,16 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
         time.sleep(1)
         loop()
         resultIm = GetImageFromBuffer(self.canvas)
-        
-        px1 = GetRGB(resultIm, 
+
+        px1 = GetRGB(resultIm,
              self.canvas.buffer_size[0]/2 + 40,
              self.canvas.buffer_size[1]/2 + 40)
         self.assertEqual(px1, (255, 0, 0))
 
-        
+
 if __name__ == "__main__":
     unittest.main()
-    
+
 
 def GetRGB(im, x, y):
     # TODO use DC.GetPixel()
@@ -234,5 +234,5 @@ def GetImageFromBuffer(canvas):
     resultDC.BlitPointSize((0,0), canvas.buffer_size,canvas._dcBuffer, (0,0))
     resultDC.SelectObject(wx.NullBitmap)
     return wx.ImageFromBitmap(resultBmp)
-    
+
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:

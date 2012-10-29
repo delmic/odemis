@@ -39,15 +39,16 @@ class MicroscopeViewport(wx.Panel):
     """
     A panel that shows a microscope view and its legend below it.
     """
+
     def __init__(self, *args, **kwargs):
         """
         Note: This is not fully initialised until setView() has been called
         """
         wx.Panel.__init__(self, *args, **kwargs)
-        
-        self.view = None # the MicroscopeView that this viewport is displaying (=model)
-        self._microscope = None
-        
+
+        self.mic_view = None # the MicroscopeView that this viewport is displaying
+        self._microscope_gui = None
+
         # Keep track of this panel's pseudo focus
         self._has_focus = False
 
@@ -60,7 +61,7 @@ class MicroscopeViewport(wx.Panel):
 
         # main widget
         self.canvas = DblMicroscopeCanvas(self)
-        
+
         ##### Scale window
         self.legend_panel = wx.Panel(self)
         self.legend_panel.SetBackgroundColour(self.GetBackgroundColour())
@@ -86,7 +87,13 @@ class MicroscopeViewport(wx.Panel):
         self.bmpIconOpt = wx.StaticBitmap(self.legend_panel, wx.ID_ANY, getico_blending_optBitmap())
         self.bmpIconSem = wx.StaticBitmap(self.legend_panel, wx.ID_ANY, getico_blending_semBitmap())
 
+        # Make sure that mouse clicks on the icons set the correct focus
+        self.bmpIconOpt.Bind(wx.EVT_LEFT_DOWN, self.OnChildFocus)
+        self.bmpIconSem.Bind(wx.EVT_LEFT_DOWN, self.OnChildFocus)
+
         self.mergeSlider.Bind(wx.EVT_LEFT_UP, self.OnSlider)
+        # Dragging the slider should set the focus to the right view
+        self.mergeSlider.Bind(wx.EVT_LEFT_DOWN, self.OnChildFocus)
 
         ###################################
         # Optional legend widgets
@@ -170,37 +177,43 @@ class MicroscopeViewport(wx.Panel):
 
         self.Bind(wx.EVT_CHILD_FOCUS, self.OnChildFocus)
         self.Bind(wx.EVT_SIZE, self.OnSize)
-        
 
-    def setView(self, view, microscope):
+
+    def setView(self, mic_view, microscope_gui):
         """
-        Set the view that this viewport is displaying/representing
-        view (MicroscopeView)
-        microscope (MicroscopeGUI)
-        Can be called only once, at initialisation.
+        Set the microscope view that this viewport is displaying/representing
+        Should be called only once, at initialisation.
+
+        mic_view       -- MicroscopeView
+        microscope_gui -- GUIMicroscope
         """
+
         # This is a kind of kludge, as it'd be best to have the viewport created
-        # after the view, but they are created independently via xrc. 
-        assert(self.view is None)
-        
-        self.view = view
-        self._microscope = microscope
-        
+        # after the microscope view, but they are created independently via xrc.
+        assert(self.mic_view is None)
+
+        self.mic_view = mic_view
+        self._microscope_gui = microscope_gui
+
         # TODO Center to current view position, with current mpp
-        view.mpp.subscribe(self._onMPP, init=True)
-        
+        mic_view.mpp.subscribe(self._onMPP, init=True)
+
         # set/subscribe merge ratio
-        view.merge_ratio.subscribe(self._onMergeRatio, init=True)
+        mic_view.merge_ratio.subscribe(self._onMergeRatio, init=True)
         self.ShowMergeSlider(True) # FIXME: only if required by the view
-        
+
         # canvas handles also directly some of the view properties
-        self.canvas.setView(view)
-        
+        self.canvas.setView(mic_view)
+
+    def getView(self):
+        return self.mic_view
+
     ################################################
     ## Panel control
     ################################################
 
     def ShowMergeSlider(self, show):
+        """ Show or hide the merge slider """
         # print self.sliderSizer.GetMinSize()
         # print self.sliderSizer.GetSize()
         self.bmpIconOpt.Show(show)
@@ -211,69 +224,75 @@ class MicroscopeViewport(wx.Panel):
         return self._has_focus == True
 
     def SetFocus(self, focus):   #pylint: disable=W0221
+        """ Set the focus on the viewport according to the focus parameter.
+        focus:  A boolean value.
+        """
+
+        log.debug(["Removing focus from %s", "Setting focus to %s"][focus], id(self))
+
         #wx.Panel.SetFocus(self)
         self._has_focus = focus
 
+        # TODO: move hard coded colours to a separate file
         if focus:
             self.SetBackgroundColour("#127BA6")
         else:
             self.SetBackgroundColour("#000000")
 
-    def UpdateHFW(self):
+    def UpdateHFWLabel(self):
         """ Optional. Physical width of the display"""
-        if self.view is None:
-            return
-        hfw = self.view.mpp.value * self.GetClientSize()[0]
-        label = "HFW: %sm" % units.to_string_si_prefix(hfw)
-        self.hfwDisplay.SetLabel(label)
+        if self.mic_view:
+            hfw = self.mic_view.mpp.value * self.GetClientSize()[0]
+            label = "HFW: %sm" % units.to_string_si_prefix(hfw)
+            self.hfwDisplay.SetLabel(label)
 
     ## END Panel control
 
     ################################################
     ## VA handling
     ################################################
-    
+
     def _onMergeRatio(self, val):
         # round is important because int can cause unstable value
         # int(0.58*100) = 57
         self.mergeSlider.SetValue(round(val * 100))
-        
-    
-    # TODO need to subscribe to view_center, or done by canvas and delete this? 
+
+
+    # TODO need to subscribe to view_center, or done by canvas and delete this?
     # We link only one way the position:
     #  * if the user moves the view => moves the stage to the same position
     #  * if the stage moves by itself, keep the view at the same place
     #    (and the acquired images will not be centred anymore)
     def _onViewCenter(self, pos):
-        if self.view is None:
+        if self.mic_view is None:
             return
-        
-#        self.view.stage_pos.value = pos
-        self.view.view_pos.value = pos
-        self.view.moveStageToView()
+
+#        self.mic_view.stage_pos.value = pos
+        self.mic_view.view_pos.value = pos
+        self.mic_view.moveStageToView()
 
     def _onMPP(self, mpp):
         self.scaleDisplay.SetMPP(mpp)
         # the MicroscopeView will send an event that the view has to be redrawn
-        
-    
+
+
     # FIXME integrate these methods from microscopeview
     # Probably can do with some refactoring for VAConnector
     # It might need to go to a separate class for legend handling
     # in particular, in the future we want to be able to allow the user to pick
-    # what is displayed in the legend. 
-    
+    # what is displayed in the legend.
+
     def __init2__(self):
         self.LegendMag = wx.StaticText(parent)
         self.LegendMag.SetToolTipString("Magnification")
         self.legend_controls.append(self.LegendMag)
-        
+
         self.LegendWl = wx.StaticText(parent)
         self.LegendWl.SetToolTipString("Wavelength")
         self.LegendET = wx.StaticText(parent)
         self.LegendET.SetToolTipString("Exposure Time")
         self.legend_controls += [self.LegendWl, self.LegendET]
-        
+
 #        self.LegendDwell = wx.StaticText(parent)
 #        self.LegendSpot = wx.StaticText(parent)
 #        self.LegendHV = wx.StaticText(parent)
@@ -289,7 +308,7 @@ class MicroscopeViewport(wx.Panel):
         datamodel.optical_emt_wavelength.subscribe(self.avWavelength)
         datamodel.optical_det_wavelength.subscribe(self.avWavelength, True)
         datamodel.optical_det_exposure_time.subscribe(self.avExposureTime, True)
-    
+
     @call_after
     def avMPP(self, unused):
         # TODO: shall we use the real density of the screen?
@@ -310,7 +329,7 @@ class MicroscopeViewport(wx.Panel):
 
         self.LegendMag.SetLabel(label)
         self.Parent.Layout()
-        
+
     @call_after
     def avWavelength(self, value):
         # need to know both wavelengthes, so just look into the values
@@ -327,7 +346,7 @@ class MicroscopeViewport(wx.Panel):
         label = unicode("%0.2f s" % (value))
         self.LegendET.SetLabel(label)
         self.Parent.Layout()
-    
+
     @call_after
     def avDwellTime(self, value):
         label = "Dwell: %ss" % units.to_string_si_prefix(value)
@@ -342,31 +361,37 @@ class MicroscopeViewport(wx.Panel):
     def avHV(self, value):
         label = "HV: %sV" % units.to_string_si_prefix(value)
         self.LegendHV.SetLabel(label)
-    
+
     ################################################
     ## GUI Event handling
     ################################################
 
     def OnChildFocus(self, evt):
-        if self.view and self._microscope:
+        """ When one of it's child widgets is clicked, this viewport should be
+        considered as having the focus.
+        """
+
+        if self.mic_view and self._microscope_gui:
             # This will take care of doing everything necessary
-            self._microscope.currentView.value = self.view
-        
+            # Remember, the notify method of the vigilant attribute will
+            # only fire if the values changes.
+            self._microscope_gui.focussedView.value = self.mic_view
+
         evt.Skip()
 
     def OnSlider(self, event):
         """
         Merge ratio slider
         """
-        if self.view is None:
+        if self.mic_view is None:
             return
-        
-        self.view.merge_ratio.value = self.mergeSlider.GetValue() / 100.0
+
+        self.mic_view.merge_ratio.value = self.mergeSlider.GetValue() / 100.0
         event.Skip()
 
     def OnSize(self, event):
         event.Skip() # process also by the parent
-        self.UpdateHFW()
+        self.UpdateHFWLabel()
 
     ## END Event handling
 

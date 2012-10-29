@@ -216,6 +216,8 @@ class StreamPanelXmlHandler(xrc.XmlResourceHandler):
                                  self.GetSize(),
                                  self.GetStyle())
             self.SetupWindow(w)
+            # 'Dirty' fix for the hard coded 'add stream' child button
+            w.btn_add_stream.SetBackgroundColour(w.GetBackgroundColour())
             parent.add_item(w)
             return w
 

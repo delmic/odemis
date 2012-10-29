@@ -1,6 +1,6 @@
 #-*- coding: utf-8 -*-
-'''
-@author: Rinze de Laat 
+"""
+@author: Rinze de Laat
 
 Copyright © 2012 Rinze de Laat, Delmic
 
@@ -11,7 +11,7 @@ Odemis is free software: you can redistribute it and/or modify it under the term
 Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
-'''
+"""
 
 #===============================================================================
 # Test module for Odemis' stream module in gui.comp
@@ -37,13 +37,13 @@ class FakeBrightfieldStream(instrmodel.BrightfieldStream):
     """
     A fake stream, which receives no data. Only for testing purposes.
     """
-    
+
     def __init__(self, name):
         Stream.__init__(self, name, None, None, None)
-        
+
     def _updateImage(self, tint=(255, 255, 255)):
         pass
-    
+
     def onActive(self, active):
         pass
 
@@ -52,46 +52,46 @@ class FakeSEMStream(instrmodel.SEMStream):
     """
     A fake stream, which receives no data. Only for testing purposes.
     """
-    
+
     def __init__(self, name):
         Stream.__init__(self, name, None, None, None)
-        
+
     def _updateImage(self, tint=(255, 255, 255)):
         pass
-    
+
     def onActive(self, active):
         pass
 
-    
+
 class FakeFluoStream(instrmodel.FluoStream):
     """
     A fake stream, which receives no data. Only for testing purposes.
     """
-    
+
     def __init__(self, name):
         Stream.__init__(self, name, None, None, None)
-        
+
         # For imitating also a FluoStream
         self.excitation = model.FloatContinuous(488e-9, range=[200e-9, 1000e-9], unit="m")
-        self.emission = model.FloatContinuous(507e-9, range=[200e-9, 1000e-9], unit="m") 
+        self.emission = model.FloatContinuous(507e-9, range=[200e-9, 1000e-9], unit="m")
         defaultTint = util.conversion.wave2rgb(self.emission.value)
         self.tint = model.VigilantAttribute(defaultTint, unit="RGB")
 
     def _updateImage(self, tint=(255, 255, 255)):
         pass
-    
+
     def onActive(self, active):
         pass
 
 
 class FakeMicroscopeGUI(object):
     """
-    Imitates a MicroscopeGUI wrt stream entry: it just needs a currentView
+    Imitates a GUIMicroscope wrt stream entry: it just needs a focussedView
     """
     def __init__(self):
-        fview = instrmodel.MicroscopeView("fakeview") 
-        self.currentView = model.VigilantAttribute(fview)
-        
+        fview = instrmodel.MicroscopeView("fakeview")
+        self.focussedView = model.VigilantAttribute(fview)
+
 # Sleep timer in milliseconds
 SLEEP_TIME = 100
 # If manual is set to True, the window will be kept open at the end
@@ -163,7 +163,7 @@ class FoldPanelBarTestCase(unittest.TestCase):
 
         livegui = FakeMicroscopeGUI()
         self.frm.stream_panel.setMicroscope(livegui, None)
-        
+
         # Hide the Stream add button
         self.assertEqual(self.frm.stream_panel.btn_add_stream.IsShown(), True)
         wx.MilliSleep(SLEEP_TIME)
@@ -225,7 +225,7 @@ class FoldPanelBarTestCase(unittest.TestCase):
         wx.MilliSleep(SLEEP_TIME)
         semview = instrmodel.MicroscopeView("SEM view", stream_classes=(instrmodel.SEMStream,))
 #        self.frm.stream_panel.hide_stream(0)
-        livegui.currentView.value = semview
+        livegui.focussedView.value = semview
         loop()
         self.assertEqual(self.frm.stream_panel.get_size(), 3)
         self.assertFalse(custom_entry.IsShown())
@@ -250,10 +250,10 @@ class FoldPanelBarTestCase(unittest.TestCase):
 
         loop()
         wx.MilliSleep(SLEEP_TIME)
-        
+
         livegui = FakeMicroscopeGUI()
         self.frm.stream_panel.setMicroscope(livegui, None)
-        
+
         self.assertEqual(self.frm.stream_panel.btn_add_stream.IsShown(), True)
 
 
