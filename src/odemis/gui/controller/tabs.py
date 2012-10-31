@@ -36,8 +36,10 @@ class TabBar(object):
 
         for btn, _ in self.btns_n_tabs:
             btn.Bind(wx.EVT_BUTTON, self.OnClick)
+            btn.Bind(wx.EVT_KEY_UP, self.OnKeyUp)
 
-        btn, tab =self.btns_n_tabs[0]
+
+        btn, tab = self.btns_n_tabs[0]
         btn.SetToggle(True)
         tab.Show()
 
@@ -45,6 +47,22 @@ class TabBar(object):
         log.debug("Resetting tab buttons")
         for button in [b for b, _ in self.btns_n_tabs if b != btn]:
             button.SetToggle(False)
+
+    def OnKeyUp(self, evt):
+        evt_btn = evt.GetEventObject()
+
+        if evt_btn.hasFocus and evt.GetKeyCode() == ord(" "):
+            self._reset_buttons(evt_btn)
+            self.main_frame.Freeze()
+
+            for btn, tab in self.btns_n_tabs:
+                if evt_btn == btn:
+                    tab.Show()
+                else:
+                    tab.Hide()
+
+            self.main_frame.Layout()
+            self.main_frame.Thaw()
 
     def OnClick(self, evt):
         log.debug("Tab button click")
