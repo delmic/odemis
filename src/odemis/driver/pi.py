@@ -516,7 +516,7 @@ class PIRedStone(object):
         timeout = 5 #s
         end = time.time() + timeout
         while self.isMoving(axis):
-            if time.time() <= end:
+            if time.time() >= end:
                 raise IOError("Timeout while waiting for end of motion")
             time.sleep(0.005)
     
