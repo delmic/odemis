@@ -304,7 +304,7 @@ class SettingsPanel(object):
         """
         self._clear()
         # Create label
-        lbl_ctrl = wx.StaticText(self.panel, -1, "%s:" % label)
+        lbl_ctrl = wx.StaticText(self.panel, -1, "%s" % label)
         self._sizer.Add(lbl_ctrl, (self.num_entries, 0), flag=wx.ALL, border=5)
 
         value_ctrl = None
@@ -359,7 +359,7 @@ class SettingsPanel(object):
         # Format label
         label = conf.get('label', self._label_to_human(label))
         # Add the label to the panel
-        lbl_ctrl = wx.StaticText(self.panel, -1, "%s:" % label)
+        lbl_ctrl = wx.StaticText(self.panel, -1, "%s" % label)
         self._sizer.Add(lbl_ctrl, (self.num_entries, 0), flag=wx.ALL, border=5)
 
         # the Vigilant Attribute Connector connects the wx control to the
@@ -462,7 +462,7 @@ class SettingsPanel(object):
                 mouse wheel events"""
                 pass
 
-            print new_ctrl.Bind(wx.EVT_MOUSEWHEEL, _eat_event)
+            new_ctrl.Bind(wx.EVT_MOUSEWHEEL, _eat_event)
 
             # Set choices
             for choice, formatted in zip(choices, choices_formatted):
