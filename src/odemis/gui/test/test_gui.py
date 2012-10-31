@@ -91,6 +91,7 @@ class xrctext_frame(wx.Frame):
 
         # Define variables for the controls, bind event handlers
         self.txt_suggest = xrc.XRCCTRL(self, "txt_suggest")
+        self.txt_odcbox = xrc.XRCCTRL(self, "txt_odcbox")
 
 
 
@@ -301,11 +302,13 @@ def __init_resources():
   <object class="wxFrame" name="text_frame">
     <object class="wxPanel">
       <object class="wxBoxSizer">
-        <orient>wxVERTICAL</orient>
         <object class="sizeritem">
           <object class="SuggestTextCtrl" name="txt_suggest">
             <size>200,-1</size>
             <value>suggest text field</value>
+            <fg>#1E90FF</fg>
+            <bg>#A52A2A</bg>
+            <style>wxBORDER_NONE</style>
             <XRCED>
               <assign_var>1</assign_var>
             </XRCED>
@@ -321,6 +324,9 @@ def __init_resources():
             <min>-10</min>
             <max>10</max>
             <unit>cm</unit>
+            <fg>#1E90FF</fg>
+            <bg>#A52A2A</bg>
+            <style>wxBORDER_NONE</style>
           </object>
           <flag>wxALL|wxALIGN_CENTRE</flag>
           <border>10</border>
@@ -332,6 +338,9 @@ def __init_resources():
             <min>-10</min>
             <max>10</max>
             <unit>μm</unit>
+            <fg>#1E90FF</fg>
+            <bg>#A52A2A</bg>
+            <style>wxBORDER_NONE</style>
           </object>
           <flag>wxALL|wxALIGN_CENTRE</flag>
           <border>10</border>
@@ -341,6 +350,29 @@ def __init_resources():
             <size>200,-1</size>
             <value>4.44</value>
             <unit>kg</unit>
+            <fg>#1E90FF</fg>
+            <bg>#A52A2A</bg>
+            <style>wxBORDER_NONE</style>
+          </object>
+          <flag>wxALL|wxALIGN_CENTRE</flag>
+          <border>10</border>
+        </object>
+        <orient>wxVERTICAL</orient>
+        <object class="sizeritem">
+          <object class="wxOwnerDrawnComboBox" name="txt_odcbox">
+            <size>200,14</size>
+            <content>
+              <item>aap</item>
+              <item>noot</item>
+              <item>mies</item>
+            </content>
+            <selection>1</selection>
+            <fg>#1E90FF</fg>
+            <bg>#A52A2A</bg>
+            <style>wxBORDER_NONE|wxCB_READONLY</style>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
           </object>
           <flag>wxALL|wxALIGN_CENTRE</flag>
           <border>10</border>

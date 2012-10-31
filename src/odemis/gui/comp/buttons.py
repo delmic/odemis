@@ -558,6 +558,7 @@ class ViewButton(ImageTextToggleButton):
         # The image to use as an overlay. It needs to be set using the
         # `set_overlay` method.
         self.overlay_image = None
+        self.overlay_bitmap = None
 
         # The number of pixels from the right that need to be kept clear so the
         # 'arrow pointer' is visible.
@@ -589,7 +590,7 @@ class ViewButton(ImageTextToggleButton):
         Changes the image (preview) of the button
         image (wx.Image or None): new image. If None, a stock image is used
         """
-        log.debug("Setting overlay")
+        log.debug("Setting overlay with image %s", image)
 
         # Calculate the needed height
         # if image:
@@ -602,7 +603,12 @@ class ViewButton(ImageTextToggleButton):
 
         if image is None:
             # black image
-            small_image = wx.EmptyImage(self.overlay_width, self.overlay_height)
+            self.overlay_image = wx.EmptyImage(self.overlay_width, self.overlay_height)
+            # self.overlay_image.SetRGBRect(wx.Rect(0,
+            #                                       0,
+            #                                       self.overlay_width,
+            #                                       self.overlay_height),
+            #                              *self.GetBackgroundColour().Get())
         else:
             # FIXME: what's the right size?
             # FIXME: not all the thumbnails have the right aspect ratio => truncate
@@ -630,19 +636,19 @@ class ViewButton(ImageTextToggleButton):
                 img_w = self.overlay_width
 
             log.debug("New image size is %s %s", img_w, img_h)
-            small_image = image.Scale(img_w,
+            self.overlay_image = image.Scale(img_w,
                                       img_h,
                                       wx.IMAGE_QUALITY_HIGH)
 
-        self.overlay_image = wx.BitmapFromImage(small_image)
+        self.overlay_bitmap = wx.BitmapFromImage(self.overlay_image)
         self.Refresh()
 
     def DrawLabel(self, dc, width, height, dx=0, dy=0):
         ImageTextToggleButton.DrawLabel(self, dc, width, height, dx, dy)
 
-        if self.overlay_image is not None:
+        if self.overlay_bitmap is not None:
             #log.debug("Painting overlay")
-            dc.DrawBitmap(self.overlay_image,
+            dc.DrawBitmap(self.overlay_bitmap,
                           self.overlay_border,
                           self.overlay_border,
                           True)
