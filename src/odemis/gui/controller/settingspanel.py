@@ -204,7 +204,7 @@ class SettingsPanel(object):
 
         self.panel.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_DIS)
         self._sizer.Add(wx.StaticText(self.panel, -1, default_msg),
-                        (0, 1), flag=wx.ALL, border=5)
+                        (0, 1))
         self.panel.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR)
 
         self.panel.SetSizer(self._sizer)
