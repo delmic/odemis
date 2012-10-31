@@ -180,7 +180,7 @@ class OdemisGUIApp(wx.App):
             #self.main_frame.Refresh()
 
             self.settings_controller = SettingsSideBar(self.interface_model,
-                                                      self.main_frame)
+                                                       self.main_frame)
 
             #print_microscope_tree(microscope)
 

@@ -68,6 +68,7 @@ class GraphicalRadioButtonControl(wx.Panel):
 
             sizer.Add(btn, flag=wx.RIGHT, border=5)
             btn.Bind(wx.EVT_BUTTON, self.OnClick)
+            btn.Bind(wx.EVT_KEY_UP, self.OnKeyUp)
 
         if self.units:
             lbl = wx.StaticText(self, -1, self.units)
@@ -93,9 +94,18 @@ class GraphicalRadioButtonControl(wx.Panel):
             if btn.GetToggle():
                 return btn.value
 
+    def OnKeyUp(self, evt):
+        btn = evt.GetEventObject()
+        if btn.hasFocus and evt.GetKeyCode() == ord(" "):
+            self._reset_buttons(btn)
+            btn.up = False
+            btn.Notify()
+            btn.Refresh()
+
     def OnClick(self, evt):
         btn = evt.GetEventObject()
         self._reset_buttons(btn)
         #if not btn.GetToggle():
         evt.Skip()
+
 

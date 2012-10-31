@@ -35,6 +35,7 @@ from .scalewindow import ScaleWindow
 from .slider import Slider
 from ..img.data import getico_blending_optBitmap, getico_blending_semBitmap
 
+
 class MicroscopeViewport(wx.Panel):
     """
     A panel that shows a microscope view and its legend below it.
@@ -182,14 +183,15 @@ class MicroscopeViewport(wx.Panel):
     def setView(self, mic_view, microscope_gui):
         """
         Set the microscope view that this viewport is displaying/representing
-        Should be called only once, at initialisation.
+        *Important*: Should be called only once, at initialisation.
 
         mic_view       -- MicroscopeView
         microscope_gui -- GUIMicroscope
         """
 
-        # This is a kind of kludge, as it'd be best to have the viewport created
-        # after the microscope view, but they are created independently via xrc.
+        # This is a kind of a kludge, as it'd be best to have the viewport
+        # created after the microscope view, but they are created independently
+        # via XRC.
         assert(self.mic_view is None)
 
         self.mic_view = mic_view
