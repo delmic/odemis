@@ -460,6 +460,13 @@ class SettingsPanel(object):
             new_ctrl.SetButtonBitmaps(getbtn_downBitmap(),
                                       pushButtonBg=False)
 
+            def _eat_event(evt):
+                """ Quick and dirty empty function used to 'eat'
+                mouse wheel events"""
+                pass
+
+            print new_ctrl.Bind(wx.EVT_MOUSE_EVENTS, _eat_event)
+
             # Set choices
             for choice, formatted in zip(choices, choices_formatted):
                 new_ctrl.Append(u"%s %s" % (formatted, unit), choice)
