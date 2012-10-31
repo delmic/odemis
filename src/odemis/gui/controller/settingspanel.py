@@ -407,9 +407,6 @@ class SettingsPanel(object):
                                              new_ctrl,
                                              new_ctrl.SetValue,
                                              wx.EVT_COMMAND_ENTER)
-                                             # TODO: left_up not needed?
-                                             #wx.EVT_LEFT_UP)
-
 
         elif control_type == odemis.gui.CONTROL_INT:
             new_ctrl = text.UnitIntegerCtrl(self.panel,
@@ -465,7 +462,7 @@ class SettingsPanel(object):
                 mouse wheel events"""
                 pass
 
-            print new_ctrl.Bind(wx.EVT_MOUSE_EVENTS, _eat_event)
+            print new_ctrl.Bind(wx.EVT_MOUSEWHEEL, _eat_event)
 
             # Set choices
             for choice, formatted in zip(choices, choices_formatted):
