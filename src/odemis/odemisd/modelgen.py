@@ -21,6 +21,10 @@ import itertools
 import logging
 import re
 import yaml
+#TODO use JSON instead of YAML (pro: json parser is part of python, and it should
+# be possible to detect duplicate names with object_pairs_hook, 
+# con: every string must be quoted)
+# see: json.JSONDecoder(object_pairs_hook=(lambda x: print(x))).decode('{"bar":1, "bar": 2}')
 
 class ParseError(Exception):
     pass
