@@ -24,6 +24,7 @@ import collections
 import re
 
 import wx
+import wx.combo
 
 import odemis.gui
 import odemis.gui.comp.text as text
@@ -35,6 +36,7 @@ from odemis.gui.comp.radio import GraphicalRadioButtonControl
 from odemis.gui.comp.slider import UnitIntegerSlider, UnitFloatSlider
 from odemis.gui.log import log
 from odemis.gui.util import call_after_wrapper
+from odemis.gui.img.data import getbtn_downBitmap
 from odemis.model import getVAs, NotApplicableError, VigilantAttributeBase, \
     OutOfBoundError
 
@@ -202,7 +204,7 @@ class SettingsPanel(object):
 
         self.panel.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_DIS)
         self._sizer.Add(wx.StaticText(self.panel, -1, default_msg),
-                        (0, 1), flag=wx.ALL, border=5)
+                        (0, 1))
         self.panel.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR)
 
         self.panel.SetSizer(self._sizer)
@@ -302,7 +304,7 @@ class SettingsPanel(object):
         """
         self._clear()
         # Create label
-        lbl_ctrl = wx.StaticText(self.panel, -1, "%s:" % label)
+        lbl_ctrl = wx.StaticText(self.panel, -1, "%s" % label)
         self._sizer.Add(lbl_ctrl, (self.num_entries, 0), flag=wx.ALL, border=5)
 
         value_ctrl = None
@@ -336,11 +338,11 @@ class SettingsPanel(object):
 
         if choices:
             if format and all([isinstance(c, (int, float)) for c in choices]):
-                choice_labels, prefix = utun.si_scale_list(choices)
-                choice_labels = [u"%g" % c for c in choice_labels]
+                choices_formatted, prefix = utun.si_scale_list(choices)
+                choices_formatted = [u"%g" % c for c in choices_formatted]
                 unit = prefix + unit
             else:
-                choice_labels = [choice_to_str(c) for c in choices]
+                choices_formatted = [choice_to_str(c) for c in choices]
 
         # Get the defined type of control or assign a default one
         control_type = conf.get('control_type',
@@ -357,7 +359,7 @@ class SettingsPanel(object):
         # Format label
         label = conf.get('label', self._label_to_human(label))
         # Add the label to the panel
-        lbl_ctrl = wx.StaticText(self.panel, -1, "%s:" % label)
+        lbl_ctrl = wx.StaticText(self.panel, -1, "%s" % label)
         self._sizer.Add(lbl_ctrl, (self.num_entries, 0), flag=wx.ALL, border=5)
 
         # the Vigilant Attribute Connector connects the wx control to the
@@ -405,9 +407,6 @@ class SettingsPanel(object):
                                              new_ctrl,
                                              new_ctrl.SetValue,
                                              wx.EVT_COMMAND_ENTER)
-                                             # TODO: left_up not needed?
-                                             #wx.EVT_LEFT_UP)
-
 
         elif control_type == odemis.gui.CONTROL_INT:
             new_ctrl = text.UnitIntegerCtrl(self.panel,
@@ -431,7 +430,7 @@ class SettingsPanel(object):
                                                    size=(-1, 16),
                                                    choices=choices,
                                                    style=wx.NO_BORDER,
-                                                   labels=choice_labels,
+                                                   labels=choices_formatted,
                                                    units=unit)
             vac = VigilantAttributeConnector(value,
                                              new_ctrl,
@@ -440,48 +439,61 @@ class SettingsPanel(object):
 
         elif control_type == odemis.gui.CONTROL_COMBO:
 
-            new_ctrl = wx.ComboBox(self.panel, -1, pos=(0, 0), size=(100, 16),
-                                    style=wx.NO_BORDER |
-                                          wx.CB_DROPDOWN |
-                                          wx.TE_PROCESS_ENTER|
-                                          wx.CB_READONLY)
+            new_ctrl = wx.combo.OwnerDrawnComboBox(self.panel,
+                                                   -1,
+                                                   value='',
+                                                   pos=(0, 0),
+                                                   size=(100, 16),
+                                                   style=wx.NO_BORDER |
+                                                         wx.CB_DROPDOWN |
+                                                         wx.TE_PROCESS_ENTER |
+                                                         wx.CB_READONLY)
 
 
-            def _getvalue_wrapper(self):
-                def wrapper():
-                    if self.GetSelection() != wx.NOT_FOUND:
-                        data = self.GetClientData(self.GetSelection())
-                        return data
-                    return None
-                return wrapper
-
-            new_ctrl.GetValue = _getvalue_wrapper(new_ctrl)
-
-            def _setvalue_wrapper(self):
-                def wrapper(value):
-                    for i in range(self.Count):
-                        if self.GetClientData(i) == value:
-                            self.SetSelection(i)
-                            break
-                        print "????????????????", self.GetClientData(i), value
-                return wrapper
-
-            new_ctrl.SetValue = _setvalue_wrapper(new_ctrl)
-
-            #str_choices = [choice_to_str(choice, unit) for choice in choices]
-            #new_ctrl.AutoComplete(str_choices)
-
-            for choice, label in zip(choices, choice_labels):
-                new_ctrl.Append(u"%s %s" % (label, unit), choice)
-
+            # Set colours
             new_ctrl.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_EDIT)
             new_ctrl.SetBackgroundColour(self.panel.GetBackgroundColour())
 
-            def _get_subfunc(unit):
-                def subfunc(v):
-                    log.warn(v)
-                    new_ctrl.SetValue(u"%s %s" % (choice_to_str(v), unit))
-                return subfunc
+            new_ctrl.SetButtonBitmaps(getbtn_downBitmap(),
+                                      pushButtonBg=False)
+
+            def _eat_event(evt):
+                """ Quick and dirty empty function used to 'eat'
+                mouse wheel events"""
+                pass
+
+            new_ctrl.Bind(wx.EVT_MOUSEWHEEL, _eat_event)
+
+            # Set choices
+            for choice, formatted in zip(choices, choices_formatted):
+                new_ctrl.Append(u"%s %s" % (formatted, unit), choice)
+
+            def _getvalue_wrapper(ctrl, func):
+                def wrapper():
+                    value = func()
+                    for i in range(ctrl.Count):
+                        if ctrl.Items[i] == value:
+                            log.debug("Getting ComboBox value to %s",
+                                      ctrl.GetClientData(i))
+                            return ctrl.GetClientData(i)
+                return wrapper
+
+            new_ctrl.GetValue = _getvalue_wrapper(new_ctrl, new_ctrl.GetValue)
+
+
+            # A small wrapper function makes sure that the value can
+            # be set by passing the actual value (As opposed to the text label)
+            def _setvalue_wrapper(ctrl, func):
+                def wrapper(value):
+                    for i in range(ctrl.Count):
+                        if ctrl.GetClientData(i) == value:
+                            log.debug("Setting ComboBox value to %s",
+                                      ctrl.Items[i])
+                            return func(ctrl.Items[i])
+                    log.warning("No matching label found for value %s!", value)
+                return wrapper
+
+            new_ctrl.SetValue = _setvalue_wrapper(new_ctrl, new_ctrl.SetValue)
 
             vac = VigilantAttributeConnector(
                     value,

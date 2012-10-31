@@ -301,6 +301,21 @@ getbtn_contrastImage = btn_contrast.GetImage
 getbtn_contrastBitmap = btn_contrast.GetBitmap
 
 #----------------------------------------------------------------------
+btn_down = PyEmbeddedImage(
+    "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAABmJLR0QA/wD/AP+gvaeTAAAA"
+    "CXBIWXMAAAsTAAALEwEAmpwYAAAAB3RJTUUH3AofDRspCL7pOQAAABl0RVh0Q29tbWVudABD"
+    "cmVhdGVkIHdpdGggR0lNUFeBDhcAAACwSURBVDjL3ZMxCoQwEEVfFkGtg2Araut0gvcXvIU3"
+    "SGcjOGarBUNcmxQLG/hNePMyIROzLIsnYWXrupIk8N6nCVQ1TXCe5487uAq2bWOeZ/Z9j0Bj"
+    "DOM4Utd1sP9SVT4pyxIRAcB7H6RtW6qq4sqraihQVay1dF0XnGKtpe/7qFhVyY7jiNptmgbn"
+    "HM458jxHRLjjoitcIyIURcEwDBhj+MY9vsI0TQA8Mf8wSKmf6Q1TeZ/C121tRwAAAABJRU5E"
+    "rkJggg==")
+index.append('btn_down')
+catalog['btn_down'] = btn_down
+getbtn_downData = btn_down.GetData
+getbtn_downImage = btn_down.GetImage
+getbtn_downBitmap = btn_down.GetBitmap
+
+#----------------------------------------------------------------------
 btn_opt_a = PyEmbeddedImage(
     "iVBORw0KGgoAAAANSUhEUgAAAFwAAAAvCAYAAABuWa03AAAAGXRFWHRTb2Z0d2FyZQBBZG9i"
     "ZSBJbWFnZVJlYWR5ccllPAAAAvFJREFUeNrsm8tu2kAUhg9g7vfrAhCrikiwYMXLVOozZFup"

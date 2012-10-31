@@ -257,7 +257,7 @@ class ViewSelector(object):
 
             # also subscribe for updating the 2x2 button
             self.buttons[btn].vp.mic_view.thumbnail.subscribe(self._update22Thumbnail)
-        self._update22Thumbnail(None)
+        #self._update22Thumbnail(None)
 
         # subscribe to change of name
         for btn, view_label in self.buttons.items():
@@ -273,7 +273,7 @@ class ViewSelector(object):
 
         # Select the overview by default
         # Fixme: should be related to the layout in GUIMicroscope and/or the
-        # focussed viewport
+        # focussed viewport. ('None' selects the overview button)
         self.toggleButtonForView(None)
 
     def toggleButtonForView(self, mic_view):
@@ -297,7 +297,7 @@ class ViewSelector(object):
     def _update22Thumbnail(self, im):
         """
         Called when any thumbnail is changed, to recompute the 2x2 thumbnail of
-         the first button.
+        the first button.
         im (unused)
         """
         # Create an image from the 4 thumbnails in a 2x2 layout with small border
@@ -311,18 +311,23 @@ class ViewSelector(object):
 
         for i, btn in enumerate([self._main_frame.btn_view_tl, self._main_frame.btn_view_tr,
                                  self._main_frame.btn_view_bl, self._main_frame.btn_view_br]):
-            im = self.buttons[btn].vp.mic_view.thumbnail.value
-            if im is None:
-                # black image
-                sim = wx.EmptyImage(*size_sub)
-            else:
+
+            #im = self.buttons[btn].vp.mic_view.thumbnail.value
+            im = btn.overlay_image
+            if im:
                 # FIXME: not all the thumbnails have the right aspect ratio cf set_overlay
                 # Rescale to fit
-                sim = im.Scale(size_sub[0], size_sub[1], wx.IMAGE_QUALITY_HIGH)
-            # compute placement
-            y, x = divmod(i, 2)
-            # copy im in the right place
-            im_22.Paste(sim, x * (size_sub[0] + border_width), y * (size_sub[1] + border_width))
+                sim = im.Scale(im.Width / 2, im.Height / 2, wx.IMAGE_QUALITY_HIGH)
+
+                # compute placement
+                y, x = divmod(i, 2)
+                # copy im in the right place
+                im_22.Paste(sim, x * (size_sub[0] + border_width), y * (size_sub[1] + border_width))
+            else:
+                # black image
+                pass #sim = wx.EmptyImage(*size_sub)
+
+
 
         # set_overlay will rescale to the correct button size
         btn_all.set_overlay(im_22)
