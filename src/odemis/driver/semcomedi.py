@@ -15,14 +15,15 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from odemis import model, __version__
-#pylint: disable=E1101
-import odemis.driver.comedi_simple as comedi
+import ctypes
 import glob
 import logging
 import numpy
-import ctypes
+import odemis.driver.comedi_simple as comedi
 import os
+import threading
 import time
+#pylint: disable=E1101
 
 #logging.getLogger().setLevel(logging.DEBUG)
 
@@ -318,38 +319,46 @@ class SEMComedi(model.HwComponent):
         else: 
             return numpy.dtype(numpy.uint16)
         
-    def get_data(self, channel, period, size):
+    def get_data(self, channels, period, size):
         """
         read n data from the given analog input channel
-        channel (int): channel
+        channels (list of int): channels 
         period (float): sampling period in s
         size (0<int): number of data to read
-        return (numpy.array with shape=size and dtype=float) 
+        return (numpy.array with shape=(size, len(channels)) and dtype=float) 
         Note: this is only for testing, and will go away in the final version
         """
         #construct a comedi command
         
-        period_ns = int(round(period * 1e9))  # in nanoseconds
-        chans = [channel]
-        best_range = comedi.find_range(self._device, self._ai_subdevice, channel,
-                                        comedi.UNIT_volt, 0, 10)
-        ranges = [best_range] 
-        aref =[comedi.AREF_GROUND]
-        nchans = len(chans) #number of channels
+        nchans = len(channels) #number of channels
+        aref = [comedi.AREF_GROUND] * nchans
         nscans = size
         
-        clist = comedi.chanlist(nchans) #create a chanlist of length nchans
-        for i in range(nchans):
-            clist[i] = comedi.cr_pack(chans[i], ranges[i], aref[i])
+        ranges = []
+        clist = comedi.chanlist(nchans)
+        for i, channel in enumerate(channels):
+            data_lim = (-10, 10)
+            try:
+                best_range = comedi.find_range(self._device, self._ai_subdevice, 
+                                  channel, comedi.UNIT_volt, data_lim[0], data_lim[1])
+            except comedi.ComediError:
+                logging.exception("Data range between %g and %g V is too high for hardware." %
+                              (data_lim[0], data_lim[1]))
+                raise
+            
+            ranges.append(best_range)
+            clist[i] = comedi.cr_pack(channel, best_range, aref[i])
         
         logging.debug("Generating a new command for %d scans", nscans)
+        
+        period_ns = int(round(period * 1e9))  # in nanoseconds
         cmd = comedi.cmd_struct()
         comedi.get_cmd_generic_timed(self._device, self._ai_subdevice,
                                                   cmd, nchans, period_ns)
         
         cmd.chanlist = clist # adjust for our particular context
-        cmd.chanlist_len = nchans
-        cmd.scan_end_arg = nchans
+#        cmd.chanlist_len = nchans
+#        cmd.scan_end_arg = nchans
         cmd.stop_src = comedi.TRIG_COUNT
         cmd.stop_arg = nscans
         
@@ -385,32 +394,36 @@ class SEMComedi(model.HwComponent):
 #            n = len(data)/2 # 2 bytes per 'H'
         
         if buf.size != (shape[0] * shape[1]):
-            logging.warning("Got %d values instead of the %d expected", buf.size, shape[0] * shape[1])
+            raise IOError("Failed to read all the values from the %d expected", shape[0] * shape[1])
+        buf.shape = shape # FIXME: check that the order/stride is correct
         
         logging.debug("Converting raw data to physical: %s", buf)
         
-        # convert data to physical
-        parray = numpy.empty(shape=buf.shape, dtype=numpy.double)
-        converter = self._get_converter(self._ai_subdevice, chans[0], ranges[0],
-                                        comedi.TO_PHYSICAL)
+        # convert data to physical values
+        # TODO convert the data while reading, to save time
+        # TODO we probably prefer to have each channel as a separate array
+        parray = numpy.empty(shape=shape, dtype=numpy.double)
+        converters = []
+        for i, c in enumerate(channels):
+            converters.append(self._get_converter(self._ai_subdevice,
+                                 c, ranges[i], comedi.TO_PHYSICAL))
+
         # converter needs lsampl (uint32). So for lsampl devices, it's pretty
         # straightforward, just a matter of convincing SWIG that a numpy.uint32
         # is a unsigned int. For sampl devices, everything need to be converted.
-        
         if dtype.itemsize == 4:
             logging.debug("Using casting to access the raw data")
             # can just force-cast to a ctype buffer of unsigned int (that swig accepts)
-            cbuf = buf.ctypes.data_as(ctypes.POINTER(ctypes.c_uint32))
-                # TODO: maybe could be speed-up by something like vectorize()/map()?
+            cbuf = numpy.ctypeslib.as_ctypes(buf)
+            # TODO: maybe could be speed-up by something like vectorize()/map()?
             for i in range(buf.shape[0]):
-                parray[i] = converter(cbuf[i])
+                for j in range(buf.shape[1]):
+                    parray[i,j] = converters[j](cbuf[i][j])
         else:
             # Needs real conversion
             logging.debug("Using full conversion to provide the raw data")
-            for i in range(buf.shape[0]):
-                parray[i] = converter(int(buf[i]))
-        # reshape 
-        parray.shape = shape # FIXME: check that the order/stride is correct
+            for i, v in numpy.ndenumerate(buf):
+                parray[i] = converters[i[1]](int(v))
         
         return parray
         
@@ -471,7 +484,7 @@ class SEMComedi(model.HwComponent):
         # the following are not necessary, already set by get_cmd_generic_timed
         #cmd.chanlist_len = nchans
         #cmd.scan_end_arg = nchans
-        # start_src: to only start when we send an interupt (should not be fully necessary)
+        # start_src: to only start when we send an interrupt (necessary, to fill the buffer before starting)
         cmd.start_src = comedi.TRIG_INT
         cmd.start_arg = 0
 #        cmd.start_src = comedi.TRIG_NOW
@@ -551,8 +564,219 @@ class SEMComedi(model.HwComponent):
         if had_timeout:
             raise IOError("Write command stopped due to timeout after %g s" % (time.time() - start_time))
 
+
+
+    def write_read_data(self, wchannels, rchannels, period, data):
+        """
+        write data on the given analog output channels and read the same amount 
+         synchronously on the given analog input channels
+        wchannels (list of int): channels to write (in same the order as data)
+        rchannels (list of int): channels to write (in same the order as data)
+        period (float): sampling period in s (time between two writes on the same
+         channel)
+        data (numpy.ndarray of float): two dimension array to write (physical values)
+          first dimension is along the time, second is along the channels
+        return (numpy.array with shape=(data.shape[0], len(rchannels)) and dtype=float)
+            the data read converted to physical value (volt)
+        """
+        #construct a comedi command
+        
+        nscans = data.shape[0]
+        nwchans = data.shape[1]
+        nrchans = len(rchannels)
+        assert len(wchannels) == nwchans
+        
+        # create a command for writing
+        wranges = []
+        clist = comedi.chanlist(nwchans)
+        for i, channel in enumerate(wchannels):
+            data_lim = (data[:,i].min(), data[:,i].max())
+            try:
+                best_range = comedi.find_range(self._device, self._ao_subdevice, 
+                                  channel, comedi.UNIT_volt, data_lim[0], data_lim[1])
+            except comedi.ComediError:
+                logging.exception("Data range between %g and %g V is too high for hardware." %
+                              (data_lim[0], data_lim[1]))
+                raise
+            
+            wranges.append(best_range)
+            clist[i] = comedi.cr_pack(channel, best_range, comedi.AREF_GROUND)
+        
+        logging.debug("Generating a new write command for %d scans", nscans)
+        period_ns = int(round(period * 1e9))  # in nanoseconds
+        wcmd = comedi.cmd_struct()
+        comedi.get_cmd_generic_timed(self._device, self._ao_subdevice,
+                                                  wcmd, nwchans, period_ns)
+        
+        wcmd.chanlist = clist
+        wcmd.start_src = comedi.TRIG_INT
+        wcmd.start_arg = 0
+        wcmd.stop_src = comedi.TRIG_COUNT
+        wcmd.stop_arg = nscans
+        
+        # clean up the command
+        rc = comedi.command_test(self._device, wcmd)
+        if rc != 0:
+            # on the second time, it should report 0, meaning "perfect"
+            rc = comedi.command_test(self._device, wcmd)
+            if rc != 0:
+                raise IOError("failed to prepare command")
+
+
+
+        # create a command for reading
+        # TODO add parameter to select the range and ref for each rchannel
+        rranges = []
+        clist = comedi.chanlist(nrchans)
+        for i, channel in enumerate(rchannels):
+            data_lim = (-10, 10)
+            try:
+                best_range = comedi.find_range(self._device, self._ai_subdevice, 
+                                  channel, comedi.UNIT_volt, data_lim[0], data_lim[1])
+            except comedi.ComediError:
+                logging.exception("Data range between %g and %g V is too high for hardware." %
+                              (data_lim[0], data_lim[1]))
+                raise
+            
+            rranges.append(best_range)
+            clist[i] = comedi.cr_pack(channel, best_range, comedi.AREF_GROUND)
+
+        logging.debug("Generating a new read command for %d scans", nscans)
+        rcmd = comedi.cmd_struct()
+        comedi.get_cmd_generic_timed(self._device, self._ai_subdevice,
+                                                  rcmd, nrchans, period_ns)
+        
+        rcmd.chanlist = clist
+        rcmd.start_src = comedi.TRIG_INT # start synchronously with the write
+        rcmd.start_arg = 0
+        rcmd.stop_src = comedi.TRIG_COUNT
+        rcmd.stop_arg = nscans
+
+
+        # readying the subdevice with the command (needs to be done before
+        # writing anything to the device
+        comedi.command(self._device, wcmd)
+        comedi.command(self._device, rcmd)
+        
+
+        # TODO do this outside of the method (=> data should already be raw)
+        # convert physical values to raw data
+        # Note: on the NI 6251, as probably many other devices, conversion is linear.
+        # So it might be much more efficient to generate raw data directly
+        wdtype = self._get_dtype(self._ao_subdevice)
+        # forcing the order is not necessary but just to ensure good performance
+        wbuf = numpy.empty(shape=data.shape, dtype=wdtype, order='C')
+        converters = []
+        for i, c in enumerate(wchannels):
+            converters.append(self._get_converter(self._ao_subdevice,
+                                          c, wranges[i], comedi.FROM_PHYSICAL))
+        # TODO: check if it's possible to avoid multiple type conversion in the call
+        for i, v in numpy.ndenumerate(data):
+            wbuf[i] = converters[i[1]](v)
+        # flatten the array
+        wbuf = numpy.reshape(wbuf, nscans * nwchans, order='C')
+        
+        logging.debug("Converted physical value to raw data: %s", wbuf)
+        
+        # prepare read buffer info        
+        rshape = (nscans, nrchans)
+        rdtype = self._get_dtype(self._ai_subdevice)
+        
+        # preload the buffer with enough data first
+        dev_buf_size = comedi.get_buffer_size(self._device, self._ao_subdevice)
+        preload_size = dev_buf_size / wbuf.itemsize
+        logging.debug("Going to preload %d bytes", wbuf[:preload_size].nbytes)
+        wbuf[:preload_size].tofile(self._file)
+        self._file.flush()
+
+        # start reader thread
+        self._rbuf = None
+        rthread = threading.Thread(target=self.read_from_device, 
+                                   args=(rdtype, rshape[0] * rshape[1]))
+        rthread.start()
+        
+        # run the commands
+        logging.debug("Going to start the command")
+        
+        start_time = time.time()
+        comedi.internal_trigger(self._device, self._ao_subdevice, 0)
+        
+        logging.debug("Going to write %d bytes more", wbuf[preload_size:].nbytes)
+        # TODO: can this handle faults? 
+        wbuf[preload_size:].tofile(self._file)
+        logging.debug("Going to flush")
+        self._file.flush()
+        
+        
+        # According to https://groups.google.com/forum/?fromgroups=#!topic/comedi_list/yr2U179x8VI
+        # To finish a write fully, we need to do a cancel().
+        # Wait until SDF_RUNNING is gone, then cancel() to reset SDF_BUSY
+        expected = nscans * period
+        left = start_time + expected - time.time()
+        logging.debug("Waiting %g s for the write to finish", left)
+        time.sleep(left)
+        end_time = start_time + expected * 1.10 + 1 # s = expected time + 10% + 1s
+        had_timeout = True
+        while time.time() < end_time:
+            flags = comedi.get_subdevice_flags(self._device, self._ao_subdevice)
+            if not (flags & comedi.SDF_RUNNING):
+                had_timeout = False
+                break
+            time.sleep(0.001)
+            
+        comedi.cancel(self._device, self._ao_subdevice)
+        if had_timeout:
+            raise IOError("Write command stopped due to timeout after %g s" % (time.time() - start_time))
+
+        rthread.join(1) # very short timeout as it should finish at the same time as the output
+        if rthread.isAlive():
+            comedi.cancel(self._device, self._ai_subdevice)
+        
+        # the result should be in self._rbuf
+        if self._rbuf is None or self._rbuf.size != (rshape[0] * rshape[1]):
+            raise IOError("Failed to read all the values from the %d expected", rshape[0] * rshape[1])
+        self._rbuf.shape = rshape # FIXME: check that the order/stride is correct
+        
+        logging.debug("Converting raw data to physical: %s", self._rbuf)
+        
+        # convert data to physical values
+        # TODO convert the data while reading, to save time
+        # TODO we probably prefer to have each channel as a separate array
+        parray = numpy.empty(shape=rshape, dtype=numpy.double)
+        converters = []
+        for i, c in enumerate(rchannels):
+            converters.append(self._get_converter(self._ai_subdevice,
+                                          c, rranges[i], comedi.TO_PHYSICAL))
+
+        # converter needs lsampl (uint32). So for lsampl devices, it's pretty
+        # straightforward, just a matter of convincing SWIG that a numpy.uint32
+        # is a unsigned int. For sampl devices, everything need to be converted.
+        if rdtype.itemsize == 4:
+            logging.debug("Using casting to access the raw data")
+            # can just force-cast to a ctype buffer of unsigned int (that swig accepts)
+            cbuf = numpy.ctypeslib.as_ctypes(self._rbuf)
+            # TODO: maybe could be speed-up by something like vectorize()/map()?
+            for i in range(self._rbuf.shape[0]):
+                for j in range(self._rbuf.shape[1]):
+                    parray[i,j] = converters[j](cbuf[i][j])
+        else:
+            # Needs real conversion
+            logging.debug("Using full conversion to provide the raw data")
+            for i, v in numpy.ndenumerate(self._rbuf):
+                parray[i] = converters[i[1]](int(v))
+        
+        return parray
+
+
+    def read_from_device(self, dtype, count):
+        """To be called in a separate thread"""
+        nbytes = dtype.itemsize * count
+        logging.debug("Going to read %d bytes", nbytes)
+        self._rbuf = numpy.fromfile(self._file, dtype=dtype, count=count)
+        
+        
     @staticmethod
-    def _generate_scan_array(shape, limits):
+    def _generate_scan_array(shape, limits, margin=0):
         """
         Generate an array of the values to send to scan a 2D area, using linear
         interpolation between the limits.
@@ -560,13 +784,16 @@ class SEMComedi(model.HwComponent):
         limits (ndarray of 2*2 int/float): lower/upper physical bounds of the area
             first dim is the X (0)/Y(1), second dim is min(0)/max(1)
             ex: limits[0,1] is the max value on the X dimension
-        returns (2D ndarray of (shape[0] x shape[1]) x 2 of int/float): the X/Y
+        margin (0<=int): number of additional pixels to add at the begginning of
+            each scanned line
+        returns (2D ndarray of (shape[0] x (shape[1] + margin)) x 2 of int/float): the X/Y
             values for each points of the array, with Y scanned fast, and X 
             slowly. The type is the same as the limits.
         """
         # prepare an array of the right type
         dtype = limits.dtype
-        scan = numpy.empty(shape + [2], dtype=dtype, order='C')
+        full_shape = (shape[0], shape[1] + margin, 2)
+        scan = numpy.empty(full_shape, dtype=dtype, order='C')
         
         # TODO see if meshgrid is faster (it needs to be in C order!) 
         
@@ -574,15 +801,20 @@ class SEMComedi(model.HwComponent):
         scanx = scan[:,:,0].swapaxes(0,1) # just a view to have X as last dim
         scanx[:,:] = numpy.linspace(limits[0,0], limits[0,1], shape[0])
         # fill the Y dimension
-        scan[:,:,1] = numpy.linspace(limits[1,0], limits[1,1], shape[1])
+        scan[:,margin:,1] = numpy.linspace(limits[1,0], limits[1,1], shape[1])
         
-        # TODO: insert margin time by using dwell time and margin time to 
-        # duplicate first point of each row.
-         
+        # fill the margin with the first pixel
+        if margin:
+            fp = scan[:,margin,1:numpy.newaxis] # first pixel + add dimension
+            scan[:,:margin,1] = fp.take([0] * margin, axis=1) # a view of "margin" times 
+        
         # reshape the array to a full flat scan values (the C order should make
         # sure that the array is fully continuous
-        scan.shape = [shape[0] * shape[1], 2]
+        scan.shape = [full_shape[0] * full_shape[1], 2]
         return scan
+    
+    
+    
     
     def terminate(self):
         """
@@ -647,11 +879,10 @@ class SEMComedi(model.HwComponent):
 #logging.getLogger().setLevel(logging.DEBUG)
 #comedi.comedi_loglevel(3)
 #d = SEMComedi("a", "", None, "/dev/comedi0")
-#a = numpy.array([[1],[2],[3],[4]], dtype=float)
-#d.write_data([0], 0.01, a)
+#r = d.get_data([0], 0.01, 3)
+#w = numpy.array([[1],[2],[3],[4]], dtype=float)
+#d.write_data([0], 0.01, w)
 #limits = numpy.array([[-5, 5], [-7, 7]], dtype=float)
-#s = d._generate_scan_array([300, 300], limits)
+#s = SEMComedi._generate_scan_array([300, 300], limits)
 #d.write_data([0, 1], 100e-6, s)
-
-#d.get_data(0, 0.01, 3)
 
