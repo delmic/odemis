@@ -15,11 +15,11 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from libtiff import TIFF
-from odemis import model
-from odemis import __version__
+from odemis import __version__, model
 from osgeo import gdal_array
 import Image
 import gdal
+import numpy
 import time
 
 # User-friendly name
@@ -140,7 +140,7 @@ def _saveAsMultiTiffLT(filename, ldata, thumbnail):
         # 3xMxN, while normally in numpy, it's MxNx3. (cf scipy.imread) 
         # So we need to swap the axes
         if len(thumbnail.shape) == 3:
-            thumbnail = thumbnail.swapaxes(2,0).swapaxes(2,1) # a new view
+            thumbnail = numpy.rollaxis(thumbnail, 2) # a new view
         
         # write_rgb makes it clever to detect RGB vs. Greyscale
         tif.write_image(thumbnail, compression="lzw", write_rgb=True)
