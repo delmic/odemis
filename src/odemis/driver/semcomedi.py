@@ -98,6 +98,16 @@ class SEMComedi(model.HwComponent):
                                             comedi.SUBD_AI, 0)
             self._ao_subdevice = comedi.find_subdevice_by_type(self._device,
                                             comedi.SUBD_AO, 0)
+            # TODO: check that it's conform with the number of detector children
+            # and the max channel number
+            nchan = comedi.get_n_channels(self._device, self._ai_subdevice)
+            if nchan < 1:
+                raise IOError("DAQ device '%s' has only %d input channels", nchan)
+            # TODO check it's at least as big as the max channel number of the 
+            # scanner child
+            nchan = comedi.get_n_channels(self._device, self._ao_subdevice) 
+            if nchan < 2:
+                raise IOError("DAQ device '%s' has only %d output channels", nchan)
         except comedi.ComediError:
             raise ValueError("Failed to find both input and output on DAQ device '%s'", device)
         
@@ -115,6 +125,15 @@ class SEMComedi(model.HwComponent):
         # subdevice, channel, range -> converter from value to value
         self._convert_to_phys = {}
         self._convert_from_phys = {}
+
+        self._min_ai_periods, self._min_ao_periods = self._get_min_periods()
+        # On the NI-6251, according to the doc:
+        # AI is 1MHz (aggregate) (or 1.25MHz with only one channel)
+        # AO is 2.86/2.0 MHz for one/two channels
+        # => that's more or less what we get from comedi
+        
+        # TODO update the children with this information
+
     
     # There are two temperature sensors:
     # * One on the board itself (TODO how to access it with Comedi?)
@@ -156,7 +175,44 @@ class SEMComedi(model.HwComponent):
                             "want to calibrate your device with:\n"
                             "sudo comedi_soft_calibrate -f %s\n",
                             self._device_name)
+    
+    def _get_min_periods(self):
+        """
+        Read the minimum scan periods for the AI and AO subdevices
+        return (2-tuple (list of float, list of float)): AI period for each number
+         of channel, and AO period for each number of channels (times are in
+         seconds). 
+        """
+        min_ai_periods = []
+        nchans = comedi.get_n_channels(self._device, self._ai_subdevice)
+        for n in range(1, nchans + 1):
+            min_ai_periods.append(self._get_min_period(self._ai_subdevice, n))
+            
+        min_ao_periods = []
+        nchans = comedi.get_n_channels(self._device, self._ao_subdevice)
+        for n in range(1, nchans + 1):
+            min_ao_periods.append(self._get_min_period(self._ao_subdevice, n))
         
+        return min_ai_periods, min_ao_periods
+    
+    def _get_min_period(self, subdevice, nchannels):
+        """
+        subdevice (int): subdevice ID
+        nchannels (0< int): number of channels to be accessed simultaneously
+        returns (float): min scan period for the given subdevice with the given
+        amount of channels  
+        """
+        # we create a timed command for the given parameters with a very short
+        # period (1 ns) and see what period we actually get back. 
+        cmd = comedi.cmd_struct()
+        comedi.get_cmd_generic_timed(self._device, subdevice, cmd, nchannels, 1)
+        
+        if cmd.scan_begin_src != comedi.TRIG_TIMER:
+            logging.warning("Failed to find minimum period for subdevice %d with %d channels",
+                            subdevice, nchannels)
+            return None
+        period = cmd.scan_begin_arg / 1e9
+        return period
         
     def getSwVersion(self):
         """
@@ -855,7 +911,7 @@ class SEMComedi(model.HwComponent):
                     continue
                     
                 if comedi.get_n_channels(device, ai_subdevice) < 1:
-                        continue
+                    continue
                 if comedi.get_n_channels(device, ao_subdevice) < 2:
                     continue
                 
@@ -879,10 +935,11 @@ class SEMComedi(model.HwComponent):
 #logging.getLogger().setLevel(logging.DEBUG)
 #comedi.comedi_loglevel(3)
 #d = SEMComedi("a", "", None, "/dev/comedi0")
-#r = d.get_data([0], 0.01, 3)
+#r = d.get_data([0, 1], 0.01, 3)
 #w = numpy.array([[1],[2],[3],[4]], dtype=float)
 #d.write_data([0], 0.01, w)
 #limits = numpy.array([[-5, 5], [-7, 7]], dtype=float)
-#s = SEMComedi._generate_scan_array([300, 300], limits)
+#s = SEMComedi._generate_scan_array([300, 300], limits, 2)
 #d.write_data([0, 1], 100e-6, s)
+#d.write_read_data([0, 1], [5, 6], 10e-6, s)
 
