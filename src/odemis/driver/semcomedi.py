@@ -332,7 +332,83 @@ class SEMComedi(model.HwComponent):
         
         return converter(value)
 
+    def _array_to_phys(self, subdevice, channels, ranges, data):
+        """
+        Converts an array containing raw values to physical
+        subdevice (int): the subdevice index
+        channel (list of int): the channel index for each value of the last dim 
+        ranges (list of int): the range index for each value of the last dim
+        data (numpy.ndarray): the array to convert, its last dimension must be the
+          same as the channels and ranges. dtype should be uint (of any size)
+        return (numpy.ndarray of the same shape as data, dtype=double): physical values
+        """
+        array = numpy.empty(shape=data.shape, dtype=numpy.double)
+        converters = []
+        for i, c in enumerate(channels):
+            converters.append(self._get_converter(subdevice, c, ranges[i],
+                                                  comedi.TO_PHYSICAL))
+
+        # converter needs lsampl (uint32). So for lsampl devices, it's pretty
+        # straightforward, just a matter of convincing SWIG that a numpy.uint32
+        # is a uint32. For sampl devices, everything needs to be converted.
         
+        # Note: it should be possible to access always the values as ctypes
+        # using data.ctypes.strides and  
+        # cbuf = data.ctypes.data_as(ctypes.POINTER(ctypes.c_uint32))
+        # but ctypes.addressof(cbuf) != data.ctypes.data
+        # which is a sign of copy (bad)
+        try:
+            flat_data = numpy.reshape(data, numpy.prod(data.shape))
+            cbuf = numpy.ctypeslib.as_ctypes(flat_data)
+        except TypeError:
+            # strided array
+            cbuf = None
+        
+        if data.dtype.char == 'L' and cbuf is not None:
+            logging.debug("Using casting to access the raw data")
+            # can just force-cast to a ctype buffer of unsigned int (that swig accepts)
+            # TODO: maybe could be speed-up by something like vectorize()/map()?
+            flat_array = numpy.reshape(array, numpy.prod(data.shape))
+            nchans = len(channels)
+            for i in range(flat_data.size/nchans):
+                for j in range(nchans):
+                    flat_array[nchans * i + j] = converters[j](cbuf[nchans * i + j])
+        else:
+            # Needs real conversion
+            logging.debug("Using full conversion to provide the raw data")
+            for i, v in numpy.ndenumerate(data):
+                array[i] = converters[i[-1]](int(v))
+        
+        return array
+
+    def _array_from_phys(self, subdevice, channels, ranges, data):
+        """
+        Converts an array containing physical values to raw
+        subdevice (int): the subdevice index
+        channel (list of int): the channel index for each value of the last dim 
+        ranges (list of int): the range index for each value of the last dim
+        data (numpy.ndarray): the array to convert, its last dimension must be the
+          same as the channels and ranges
+        return (numpy.ndarray of the same shape as data): raw values, the dtype
+          fits the subdevice
+        """
+        dtype = self._get_dtype(subdevice)
+        # forcing the order is not necessary but just to ensure good performance
+        buf = numpy.empty(shape=data.shape, dtype=dtype, order='C')
+        
+        # prepare the converters
+        converters = []
+        for i, c in enumerate(channels):
+            converters.append(self._get_converter(subdevice, c, ranges[i],
+                                                  comedi.FROM_PHYSICAL))
+        
+        # TODO: check if it's possible to avoid multiple type conversion in the call
+        
+        for i, v in numpy.ndenumerate(data):
+            buf[i] = converters[i[-1]](v)
+        
+        return buf
+            
     def getTemperatureSCB(self):
         """
         returns (-300<float<300): temperature in °C reported by the Shielded
@@ -486,6 +562,20 @@ class SEMComedi(model.HwComponent):
         
         # TODO: be able to stop while reading, using comedi_cancel()
     
+    def _prepare_command(self, cmd):
+        """
+        Prepare a command for the comedi device (try to make it fits the device
+          capabilities)
+        raise IOError if the command cannot be prepared
+        """
+        # that's the official way: give it twice to command_test
+        rc = comedi.command_test(self._device, cmd)
+        if rc != 0:
+            # on the second time, it should report 0, meaning "perfect"
+            rc = comedi.command_test(self._device, cmd)
+            if rc != 0:
+                raise IOError("failed to prepare command")
+    
     def _run_inttrig(self, subdevice, num):
         """
         This is the same as calling comedi_internal_trigger(), so just for trying
@@ -621,9 +711,7 @@ class SEMComedi(model.HwComponent):
         if had_timeout:
             raise IOError("Write command stopped due to timeout after %g s" % (time.time() - start_time))
 
-
-
-    def write_read_data(self, wchannels, rchannels, period, data):
+    def write_read_data_phys(self, wchannels, rchannels, period, data):
         """
         write data on the given analog output channels and read the same amount 
          synchronously on the given analog input channels
@@ -633,19 +721,16 @@ class SEMComedi(model.HwComponent):
          channel)
         data (numpy.ndarray of float): two dimension array to write (physical values)
           first dimension is along the time, second is along the channels
-        return (numpy.array with shape=(data.shape[0], len(rchannels)) and dtype=float)
-            the data read converted to physical value (volt)
+        return (list of 1D numpy.array with shape=data.shape[0] and dtype=float)
+            the data read converted to physical value (volt) for each channel
         """
-        #construct a comedi command
-        
         nscans = data.shape[0]
         nwchans = data.shape[1]
         nrchans = len(rchannels)
         assert len(wchannels) == nwchans
         
-        # create a command for writing
+        # pick nice ranges according to the data to write
         wranges = []
-        clist = comedi.chanlist(nwchans)
         for i, channel in enumerate(wchannels):
             data_lim = (data[:,i].min(), data[:,i].max())
             try:
@@ -657,37 +742,15 @@ class SEMComedi(model.HwComponent):
                 raise
             
             wranges.append(best_range)
-            clist[i] = comedi.cr_pack(channel, best_range, comedi.AREF_GROUND)
-        
-        logging.debug("Generating a new write command for %d scans", nscans)
-        period_ns = int(round(period * 1e9))  # in nanoseconds
-        wcmd = comedi.cmd_struct()
-        comedi.get_cmd_generic_timed(self._device, self._ao_subdevice,
-                                                  wcmd, nwchans, period_ns)
-        
-        wcmd.chanlist = clist
-#        wcmd.start_src = comedi.TRIG_INT
-#        wcmd.start_arg = 0
-        # from PyComedi docs
-        wcmd.start_src = comedi.TRIG_EXT
-        wcmd.start_arg = comedi.NI_CDIO_SCAN_BEGIN_SRC_AI_START # generated on AI start 
-        wcmd.stop_src = comedi.TRIG_COUNT
-        wcmd.stop_arg = nscans
-        
-        # clean up the command
-        rc = comedi.command_test(self._device, wcmd)
-        if rc != 0:
-            # on the second time, it should report 0, meaning "perfect"
-            rc = comedi.command_test(self._device, wcmd)
-            if rc != 0:
-                raise IOError("failed to prepare command")
+
+        # convert physical values to raw data
+        # Note: on the NI 6251, as probably many other devices, conversion is linear.
+        # So it might be much more efficient to generate raw data directly
+        wbuf = self._array_from_phys(self._ao_subdevice, wchannels, wranges, data)
 
 
-
-        # create a command for reading
         # TODO add parameter to select the range and ref for each rchannel
         rranges = []
-        clist = comedi.chanlist(nrchans)
         for i, channel in enumerate(rchannels):
             data_lim = (-10, 10)
             try:
@@ -699,68 +762,108 @@ class SEMComedi(model.HwComponent):
                 raise
             
             rranges.append(best_range)
-            clist[i] = comedi.cr_pack(channel, best_range, comedi.AREF_GROUND)
 
+        # write and read the raw data
+        rbuf = self.write_read_data_raw(wchannels, wranges, rchannels, rranges, period, wbuf)
+        
+        # convert data to physical values
+        logging.debug("Converting raw data to physical: %s", self._rbuf)
+        # TODO convert the data while reading, to save time
+        # TODO do not convert the margin data
+        # Allocate a separate memory block per channel as they'll later be used
+        # completely separately
+        parrays = []
+        for i, c in enumerate(rchannels):
+            parrays[i] = self._array_to_phys(self._ai_device, c, rranges[i], rbuf[:,i])
+
+        return parrays
+
+    def write_read_data_raw(self, wchannels, wranges, rchannels, rranges, period, data):
+        """
+        write data on the given analog output channels and read the same amount 
+         synchronously on the given analog input channels
+        wchannels (list of int): channels to write (in same the order as data)
+        wranges (list of int): ranges of each write channel
+        rchannels (list of int): channels to read (in same the order as data)
+        rranges (list of int): ranges of each read channel
+        period (float): sampling period in s (time between two writes on the same
+         channel)
+        data (numpy.ndarray of float): two dimension array to write (raw values)
+          first dimension is along the time, second is along the channels
+        return (2D numpy.array with shape=data.shape and dtype=float)
+            the data read (raw) for each channel
+        """
+        #construct a comedi command
+        nscans = data.shape[0]
+        nwchans = data.shape[1]
+        nrchans = len(rchannels)
+        
+        # create a command for writing
+        logging.debug("Generating a new write command for %d scans", nscans)
+        period_ns = int(round(period * 1e9))  # in nanoseconds
+        wcmd = comedi.cmd_struct()
+        comedi.get_cmd_generic_timed(self._device, self._ao_subdevice,
+                                                  wcmd, nwchans, period_ns)
+        clist = comedi.chanlist(nwchans)
+        for i in range(nwchans):
+            clist[i] = comedi.cr_pack(wchannels[i], wranges[i], comedi.AREF_GROUND)
+        wcmd.chanlist = clist
+#        wcmd.start_src = comedi.TRIG_INT
+#        wcmd.start_arg = 0
+        # from PyComedi docs
+        wcmd.start_src = comedi.TRIG_EXT
+        wcmd.start_arg = comedi.NI_CDIO_SCAN_BEGIN_SRC_AI_START # generated on AI start 
+        wcmd.stop_src = comedi.TRIG_COUNT
+        wcmd.stop_arg = nscans
+        self._prepare_command(wcmd)
+
+        # create a command for reading
         logging.debug("Generating a new read command for %d scans", nscans)
         rcmd = comedi.cmd_struct()
         comedi.get_cmd_generic_timed(self._device, self._ai_subdevice,
                                                   rcmd, nrchans, period_ns)
-        
+        clist = comedi.chanlist(nrchans)
+        for i in range(nrchans):
+            clist[i] = comedi.cr_pack(rchannels[i], rranges[i], comedi.AREF_GROUND)
         rcmd.chanlist = clist
         rcmd.start_src = comedi.TRIG_INT # start synchronously with the write
         rcmd.start_arg = 0
         rcmd.stop_src = comedi.TRIG_COUNT
         rcmd.stop_arg = nscans
+        self._prepare_command(rcmd)        
 
         # Checks the periods are the same
         assert(rcmd.scan_begin_arg == wcmd.scan_begin_arg) 
         # TODO: if periods are different => pick the closest period that works for both
 
         # readying the subdevice with the command (needs to be done before
-        # writing anything to the device
+        # writing anything to the device)
         comedi.command(self._device, wcmd)
         comedi.command(self._device, rcmd)
         
-
-        # TODO do this outside of the method (=> data should already be raw)
-        # convert physical values to raw data
-        # Note: on the NI 6251, as probably many other devices, conversion is linear.
-        # So it might be much more efficient to generate raw data directly
-        wdtype = self._get_dtype(self._ao_subdevice)
-        # forcing the order is not necessary but just to ensure good performance
-        wbuf = numpy.empty(shape=data.shape, dtype=wdtype, order='C')
-        converters = []
-        for i, c in enumerate(wchannels):
-            converters.append(self._get_converter(self._ao_subdevice,
-                                          c, wranges[i], comedi.FROM_PHYSICAL))
-        # TODO: check if it's possible to avoid multiple type conversion in the call
-        for i, v in numpy.ndenumerate(data):
-            wbuf[i] = converters[i[1]](v)
         # flatten the array
-        wbuf = numpy.reshape(wbuf, nscans * nwchans, order='C')
-        
-        logging.debug("Converted physical value to raw data: %s", wbuf)
-        
-        # prepare read buffer info        
-        rshape = (nscans, nrchans)
-        rdtype = self._get_dtype(self._ai_subdevice)
+        wbuf = numpy.reshape(data, nscans * nwchans, order='C')
+        logging.debug("Going to write raw data: %s", wbuf)
         
         # preload the buffer with enough data first
         dev_buf_size = comedi.get_buffer_size(self._device, self._ao_subdevice)
         preload_size = dev_buf_size / wbuf.itemsize
         logging.debug("Going to preload %d bytes", wbuf[:preload_size].nbytes)
         wbuf[:preload_size].tofile(self._file)
-        self._file.flush()
+        self._file.flush() # it can block here if we preload too much
 
+        # prepare read buffer info        
+        rshape = (nscans, nrchans)
+        rdtype = self._get_dtype(self._ai_subdevice)
+        
         # start reader thread
-        self._rbuf = None
+        self._rbuf = None # FIXME: so ugly!!!
         rthread = threading.Thread(target=self.read_from_device, 
                                    args=(rdtype, rshape[0] * rshape[1]))
         rthread.start()
         
         # run the commands
         logging.debug("Going to start the command")
-        
         start_time = time.time()
         # FIXME: trigger needed on AO?! It's supposed to be waiting for NI_CDIO_SCAN_BEGIN_SRC_AI_START
         comedi.internal_trigger(self._device, self._ao_subdevice, 0)
@@ -771,7 +874,6 @@ class SEMComedi(model.HwComponent):
         wbuf[preload_size:].tofile(self._file)
         logging.debug("Going to flush")
         self._file.flush()
-        
         
         # According to https://groups.google.com/forum/?fromgroups=#!topic/comedi_list/yr2U179x8VI
         # To finish a write fully, we need to do a cancel().
@@ -802,36 +904,8 @@ class SEMComedi(model.HwComponent):
         if self._rbuf is None or self._rbuf.size != (rshape[0] * rshape[1]):
             raise IOError("Failed to read all the values from the %d expected", rshape[0] * rshape[1])
         self._rbuf.shape = rshape # FIXME: check that the order/stride is correct
-        
-        logging.debug("Converting raw data to physical: %s", self._rbuf)
-        
-        # convert data to physical values
-        # TODO convert the data while reading, to save time
-        # TODO we probably prefer to have each channel as a separate array
-        parray = numpy.empty(shape=rshape, dtype=numpy.double)
-        converters = []
-        for i, c in enumerate(rchannels):
-            converters.append(self._get_converter(self._ai_subdevice,
-                                          c, rranges[i], comedi.TO_PHYSICAL))
-
-        # converter needs lsampl (uint32). So for lsampl devices, it's pretty
-        # straightforward, just a matter of convincing SWIG that a numpy.uint32
-        # is a unsigned int. For sampl devices, everything need to be converted.
-        if rdtype.itemsize == 4:
-            logging.debug("Using casting to access the raw data")
-            # can just force-cast to a ctype buffer of unsigned int (that swig accepts)
-            cbuf = numpy.ctypeslib.as_ctypes(self._rbuf)
-            # TODO: maybe could be speed-up by something like vectorize()/map()?
-            for i in range(self._rbuf.shape[0]):
-                for j in range(self._rbuf.shape[1]):
-                    parray[i,j] = converters[j](cbuf[i][j])
-        else:
-            # Needs real conversion
-            logging.debug("Using full conversion to provide the raw data")
-            for i, v in numpy.ndenumerate(self._rbuf):
-                parray[i] = converters[i[1]](int(v))
-        
-        return parray
+    
+        return self._rbuf
 
 
     def read_from_device(self, dtype, count):
@@ -879,8 +953,18 @@ class SEMComedi(model.HwComponent):
         scan.shape = [full_shape[0] * full_shape[1], 2]
         return scan
     
-    
-    
+    @staticmethod
+    def _scan_result_to_array(data, shape, margin=0):
+        """
+        Converts a linear array resulting from a scan to a 2D array
+        data (1D ndarray): the linear array, of shape=shape[0]*(shape[1] + margin)
+        shape (2-tuple of int): shape of the array
+        margin (0<=int): number of pixels at the beginning of each line to skip
+        """
+        # reshape to a 2D array with margin
+        rectangle = numpy.reshape(data, (shape[0], shape[1] + margin))
+        # trim margin
+        return rectangle[:, margin:]  
     
     def terminate(self):
         """
