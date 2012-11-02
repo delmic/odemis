@@ -606,7 +606,8 @@ class SEMComedi(model.HwComponent):
         expected = nscans * period
         left = start_time + expected - time.time()
         logging.debug("Waiting %g s for the write to finish", left)
-        time.sleep(left)
+        if left > 0:
+            time.sleep(left)
         end_time = start_time + expected * 1.10 + 1 # s = expected time + 10% + 1s
         had_timeout = True
         while time.time() < end_time:
@@ -665,8 +666,11 @@ class SEMComedi(model.HwComponent):
                                                   wcmd, nwchans, period_ns)
         
         wcmd.chanlist = clist
-        wcmd.start_src = comedi.TRIG_INT
-        wcmd.start_arg = 0
+#        wcmd.start_src = comedi.TRIG_INT
+#        wcmd.start_arg = 0
+        # from PyComedi docs
+        wcmd.start_src = comedi.TRIG_EXT
+        wcmd.start_arg = comedi.NI_CDIO_SCAN_BEGIN_SRC_AI_START # generated on AI start 
         wcmd.stop_src = comedi.TRIG_COUNT
         wcmd.stop_arg = nscans
         
@@ -708,6 +712,9 @@ class SEMComedi(model.HwComponent):
         rcmd.stop_src = comedi.TRIG_COUNT
         rcmd.stop_arg = nscans
 
+        # Checks the periods are the same
+        assert(rcmd.scan_begin_arg == wcmd.scan_begin_arg) 
+        # TODO: if periods are different => pick the closest period that works for both
 
         # readying the subdevice with the command (needs to be done before
         # writing anything to the device
@@ -755,7 +762,9 @@ class SEMComedi(model.HwComponent):
         logging.debug("Going to start the command")
         
         start_time = time.time()
+        # FIXME: trigger needed on AO?! It's supposed to be waiting for NI_CDIO_SCAN_BEGIN_SRC_AI_START
         comedi.internal_trigger(self._device, self._ao_subdevice, 0)
+        comedi.internal_trigger(self._device, self._ai_subdevice, 0)
         
         logging.debug("Going to write %d bytes more", wbuf[preload_size:].nbytes)
         # TODO: can this handle faults? 
@@ -770,7 +779,8 @@ class SEMComedi(model.HwComponent):
         expected = nscans * period
         left = start_time + expected - time.time()
         logging.debug("Waiting %g s for the write to finish", left)
-        time.sleep(left)
+        if left > 0:
+            time.sleep(left)
         end_time = start_time + expected * 1.10 + 1 # s = expected time + 10% + 1s
         had_timeout = True
         while time.time() < end_time:
@@ -941,5 +951,4 @@ class SEMComedi(model.HwComponent):
 #limits = numpy.array([[-5, 5], [-7, 7]], dtype=float)
 #s = SEMComedi._generate_scan_array([300, 300], limits, 2)
 #d.write_data([0, 1], 100e-6, s)
-#d.write_read_data([0, 1], [5, 6], 10e-6, s)
-
+#r = d.write_read_data([0, 1], [5, 6], 10e-6, s)
