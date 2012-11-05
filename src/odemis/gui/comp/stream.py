@@ -420,7 +420,7 @@ class StreamPanelEntry(wx.PyPanel):
 
             self._gbs.Add(self._txt_excitation, (3, 1),
                           flag=wx.ALIGN_CENTRE_VERTICAL | wx.RIGHT,
-                          border=10)
+                          border=18)
             # TODO: is button a good choice? the user cannot click it, it's just
             # to show the wavelength
             self._btn_excitation = ColourButton(self._panel, -1,
@@ -432,7 +432,7 @@ class StreamPanelEntry(wx.PyPanel):
 
             self._gbs.Add(self._btn_excitation, (3, 2),
                           flag=wx.ALIGN_CENTRE_VERTICAL | wx.RIGHT,
-                          border=10)
+                          border=18)
 
             # TODO also a label for warnings
 
@@ -788,7 +788,7 @@ class StreamPanel(wx.Panel):
         self.btn_add_stream = PopupImageButton(self, -1,
                                                bitmap=img.getstream_addBitmap(),
                                                label="ADD STREAM",
-                                               style=wx.ALIGN_CENTER)
+                                               style=wx.ALIGN_RIGHT)
         self.btn_add_stream.SetBitmaps(img.getstream_add_hBitmap())
         self._sz.Add(self.btn_add_stream, flag=wx.ALL, border=5)
 
