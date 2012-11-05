@@ -147,26 +147,16 @@
             <object class="sizeritem">
               <object class="FoldPanelBar" name="fpb">
                 <object class="FoldPanelItem">
-                  <object class="wxPanel" name="stream_panel" subclass="odemis.gui.comp.stream.StreamPanel">
-                    <fg>#7F7F7F</fg>
-                    <bg>#333333</bg>
-                    <font>
-                      <size>9</size>
-                      <style>normal</style>
-                      <weight>normal</weight>
-                      <underlined>0</underlined>
-                      <family>default</family>
-                      <face>Ubuntu</face>
-                      <encoding>UTF-8</encoding>
-                    </font>
-                    <XRCED>
-                      <assign_var>1</assign_var>
-                    </XRCED>
-                  </object>
+                  
                   <label>STREAMS</label>
                   <XRCED>
                     <assign_var>1</assign_var>
                   </XRCED>
+                  <object class="StreamPanel" name="stream_panel">
+                    <XRCED>
+                      <assign_var>1</assign_var>
+                    </XRCED>
+                  </object>
                 </object>
                 <spacing>0</spacing>
                 <leftspacing>0</leftspacing>

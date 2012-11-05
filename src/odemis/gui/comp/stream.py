@@ -420,7 +420,7 @@ class StreamPanelEntry(wx.PyPanel):
 
             self._gbs.Add(self._txt_excitation, (3, 1),
                           flag=wx.ALIGN_CENTRE_VERTICAL | wx.RIGHT,
-                          border=10)
+                          border=18)
             # TODO: is button a good choice? the user cannot click it, it's just
             # to show the wavelength
             self._btn_excitation = ColourButton(self._panel, -1,
@@ -432,7 +432,7 @@ class StreamPanelEntry(wx.PyPanel):
 
             self._gbs.Add(self._btn_excitation, (3, 2),
                           flag=wx.ALIGN_CENTRE_VERTICAL | wx.RIGHT,
-                          border=10)
+                          border=18)
 
             # TODO also a label for warnings
 
@@ -789,13 +789,14 @@ class StreamPanel(wx.Panel):
                                                bitmap=img.getstream_addBitmap(),
                                                label="ADD STREAM",
                                                style=wx.ALIGN_CENTER)
+
         self.btn_add_stream.SetBitmaps(img.getstream_add_hBitmap())
         self._sz.Add(self.btn_add_stream, flag=wx.ALL, border=5)
 
         self._set_warning()
 
         # FIXME: dropdown not working atm
-        # self.btn_add_stream.Bind(wx.EVT_LISTBOX, self.on_add_stream)
+        #self.btn_add_stream.Bind(wx.EVT_LISTBOX, self.on_add_stream)
         self.btn_add_stream.Bind(wx.EVT_BUTTON, self.on_add_stream)
 
         self._fitStreams()
@@ -807,7 +808,7 @@ class StreamPanel(wx.Panel):
         self._microscope.focussedView.subscribe(self._onView, init=True)
 
 
-    # internal methods
+    # internal methods TODO: is this still needed? Doesn't seem to do much
     def _fitStreams(self):
         h = self._sz.GetMinSize().GetHeight()
 
@@ -828,6 +829,7 @@ class StreamPanel(wx.Panel):
     STREAM_ORDER = [instrmodel.SEMStream,
                     instrmodel.BrightfieldStream,
                     instrmodel.FluoStream]
+
     # TODO maybe should be provided after init by the controller (like key of
     # sorted()), to separate the GUI from the model ?
     def _get_stream_order(self, stream):
@@ -871,8 +873,9 @@ class StreamPanel(wx.Panel):
         # TODO: call the action of the menu
 
         if "Filtered colour" in self.menu_actions:
-            action = self.menu_actions["Filtered colour"]
-            action()
+            evt.Skip()
+            #action = self.menu_actions["Filtered colour"]
+            #action()
         else:
             log.info("Don't know how to add a stream, need to implement a real menu")
         # evt_obj = evt.GetEventObject()
@@ -984,6 +987,7 @@ class StreamPanel(wx.Panel):
         title (string): Text displayed in the menu
         callback (callable): function to call when the action is selected
         """
+        log.debug("Adding %s action to stream panel", title)
         self.menu_actions[title] = callback
         self.btn_add_stream.set_choices(self.menu_actions.keys())
 
@@ -993,6 +997,7 @@ class StreamPanel(wx.Panel):
         title (string): name of the action to remove
         """
         if title in self.menu_actions:
+            log.debug("Removing %s action from stream panel", title)
             del self.menu_actions[title]
             self.btn_add_stream.set_choices(self.menu_actions.keys())
 

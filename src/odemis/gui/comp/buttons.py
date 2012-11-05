@@ -750,50 +750,26 @@ class PopupImageButton(ImageTextButton):
     def show_menu(self, evt):
 
         if not self.choices:
+            log.debug("*NOT* Showing PopupImageButton menu, no choices")
             return
 
-        class MenuPopup(wx.PopupTransientWindow):
-            def __init__(self, parent, style):
-                wx.PopupTransientWindow.__init__(self, parent, style)
-                self.lb = wx.ListBox(self, -1)
+        log.debug("Showing PopupImageButton menu")
 
-                sz = self.lb.GetBestSize()
+        menu = wx.Menu()
 
-                width = parent.GetSize().GetWidth() - 20
-                height = sz.height + 10
+        for label in self.choices:
+            item_id = wx.NewId()
+            menu.Append(item_id, label)
+            self.Bind(wx.EVT_MENU, self.on_action_select, id=item_id)
 
-                #sz.width -= wx.SystemSettings_GetMetric(wx.SYS_VSCROLL_X)
-                self.lb.SetBackgroundColour("#DDDDDD")
-                self.lb.SetSize((width, height))
-                self.SetSize((width, height - 2))
+        self.PopupMenu(menu, (0, self.GetSize().GetHeight()))
+        menu.Destroy()
 
-                self.Bind(wx.EVT_LISTBOX, self.on_select)
+        # Fore the roll-over effect to go away
+        if self.bmpHover:
+            self.hovering = False
+            self.Refresh()
 
-            def on_select(self, evt):
-                evt.Skip()
-                self.Dismiss()
-                self.OnDismiss()
-
-            def ProcessLeftDown(self, evt):
-                return False
-
-            def OnDismiss(self):
-                self.GetParent().hovering = False
-                self.GetParent().Refresh()
-
-            def SetChoices(self, choices):
-                self.lb.Set(choices)
-
-        win = MenuPopup(self, wx.SIMPLE_BORDER)
-        win.SetChoices(self.choices)
-
-        # Show the popup right below or above the button
-        # depending on available screen space...
-        btn = evt.GetEventObject()
-        pos = btn.ClientToScreen((10, -5))
-        sz = btn.GetSize()
-        win.Position(pos, (0, sz[1]))
-
-        win.Popup()
-
+    def on_action_select(self, evt):
+        print "pwe"
 

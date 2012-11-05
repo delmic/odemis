@@ -244,7 +244,7 @@ class Slider(wx.PyPanel):
 
 
 class NumberSlider(Slider):
-    """ A Slider with an extra linkes text field showing the current value """
+    """ A Slider with an extra linked text field showing the current value """
 
     def __init__(self, parent, id=wx.ID_ANY, value=0.0, val_range=(0.0, 1.0),
                  size=(-1, -1), pos=wx.DefaultPosition, style=wx.NO_BORDER,

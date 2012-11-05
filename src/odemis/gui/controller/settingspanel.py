@@ -200,6 +200,7 @@ class SettingsPanel(object):
         self.panel.SetBackgroundColour(odemis.gui.BACKGROUND_COLOUR)
         self.panel.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR)
 
+        self._main_sizer = wx.BoxSizer()
         self._sizer = wx.GridBagSizer()
 
         self.panel.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_DIS)
@@ -207,13 +208,20 @@ class SettingsPanel(object):
                         (0, 1))
         self.panel.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR)
 
-        self.panel.SetSizer(self._sizer)
+        self.panel.SetSizer(self._main_sizer)
+        self._main_sizer.Add(self._sizer, proportion=1,
+                                          flag=wx.RIGHT|wx.EXPAND,
+                                          border=10)
+
         self.fb_panel.add_item(self.panel)
 
         self._sizer.AddGrowableCol(1)
 
         self.num_entries = 0
         self.entries = []
+
+        #self.panel.SetSize((380, -1))
+        #print self.panel.Refresh()
 
     def _clear(self):
         # Remove default 'no content' label
@@ -519,7 +527,7 @@ class SettingsPanel(object):
 
 
         self._sizer.Add(new_ctrl, (self.num_entries, 1),
-                        flag=wx.ALL|wx.EXPAND, border=5)
+                        flag=wx.ALL|wx.EXPAND, border=10)
 
         self.num_entries += 1
         self.entries.append(vac)
