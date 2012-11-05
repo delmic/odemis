@@ -93,6 +93,7 @@ def DataArray2wxImage(data, depth=None, brightness=None, contrast=None, tint=(25
     # Tint (colouration)
     if tint == (255, 255, 255):
         # fast path when no tint
+        # TODO: try numpy.tile(drescaled, 3)
         rgb[:,:,0] = drescaled # 1 copy
         rgb[:,:,1] = drescaled # 1 copy
         rgb[:,:,2] = drescaled # 1 copy

@@ -48,6 +48,11 @@ The controller accepts several baud rate. We choose 38400 (DIP=01) as it's fast
 and it seems accepted by every version. Other settings are 8 data, 1 stop, 
 no parity.
 
+The controller can save in memory the configuration for a specific stage.
+The configuration database is available in a file called pistages2.dat. The
+PIMikroMove Windows program allows to load it, but by default doesn't copy it to
+the non-volatile memory, so it will be reset after a reboot of the controller, 
+unless WPA has been called for the parameters (password is "100").
 
 In open-loop, the controller has 2 ways to move the actuators:
  * Nanostepping: high-speed, and long distance
@@ -63,11 +68,11 @@ the limit without getting damaged, it is safe. It's pretty straightforwards to
 use the command. The voltage defines the speed (and direction) of the move. The
 voltage should be set to 0 again when the position desired is reached. 3V is 
 approximately the minimum to move, and 10V is the maximum. Voltage is more or 
-less linear between -32766 and 32766 -> -10 and 10V.
+less linear between -32766 and 32766 -> -10 and 10V. 
 
 In closed-loop, it's all automagical.
 
-The recommended maximum step frequency is 800 Hz. 
+The recommended maximum step frequency is 800 Hz.
 
 The architecture of the driver relies on three main classes:
  * Controller: represent one controller with one or several axes (E-861 has only one)
@@ -186,8 +191,8 @@ class Controller(object):
             # Put default (large values)
             self.GetErrorNum() # reset error
             logging.debug("Using default speed and acceleration value after error '%s'", err)
-            self.speed_max = 0.01 # m/s
-            self.accel_max = 0.001 # m/s²
+            self.speed_max = 0.5 # m/s
+            self.accel_max = 0.01 # m/s²
         
         self._speed = dict([(a, self.speed_max) for a in axes]) # m/s
         self._accel = dict([(a, self.accel_max) for a in axes]) # m/s² (both acceleration and deceleration)
@@ -203,8 +208,19 @@ class Controller(object):
         # The maximum output voltage is calculated following this formula:
         # 200 Vpp*Maximum motor output/32767
         self._max_motor_out = int(self.GetParameter(1, 0x9))
-        self._min_motor_out = int((3. / 10.) * 32767) # min 3V
+        # official approx. min is 3V, but from test, it can go down to 1.5V
+        self._min_motor_out = int((2. / 10.) * 32767) 
         assert(self._max_motor_out > self._min_motor_out)
+        
+        # From measurement, at 1.8V (slowest), it goes at ~0.023 m/s
+        # at 6V (fastest), it goes at ~0.3 m/s
+        
+        # We simplify to a linear conversion, making sure that the min voltage
+        # is approximately the min speed. It will tend to overshoot if the speed
+        # is higher than the min speed and there is no load on the actuator.
+        # So it's recommended to use it always at the min speed (0.023 m/s), 
+        # which also gives the best precision. 
+        self._vpms = self._min_motor_out / 0.023 # uV/(m/s)
         
         # Set up a macro that will do the job
         # To be called like "MAC START OLSTEP 16000 500"
@@ -218,8 +234,18 @@ class Controller(object):
               "%(n)d MAC END\n" % {"n": self.address}
         self._sendOrderCommand(mac)
 
-        # change the moveRel method to one PID aware
+        # TODO: try a macro like this for short moves:
+        mac = "MAC BEG OLSTEP0\n" \
+              "%(n)d SMO 1 $1\n" \
+              "%(n)d HLP?\n"   \
+              "%(n)d SMO 1 0\n"  \
+              "%(n)d MAC END\n" % {"n": self.address}
+        #self._sendOrderCommand(mac)
+
+
+        # change the moveRel and isMoving methods to PID-aware versions
         self._moveRelOL = self._moveRelOLViaPID
+        self.isMoving = self._isMovingViaPID
     
     def _sendOrderCommand(self, com):
         """
@@ -347,6 +373,14 @@ class Controller(object):
         #GCS version, can be 1.0 (for GCS 1.0) or 2.0 (for GCS 2.0)
         return self._sendQueryCommand("CSV?\n")
     
+    def GetStageName(self):
+        """
+        return (str) the name of the stage for which the controller is configured.
+        Note that the actual stage might be different.
+        """
+        #parameter 0x3c
+        return self.GetParameter(1, 0x3C)
+        
     def GetAxes(self):
         """
         returns (set of int): all the available axes
@@ -355,7 +389,7 @@ class Controller(object):
         #SAI? ALL: list all axes (included disabled ones)
         answer = self._sendQueryCommand("SAI? ALL\n")
         # TODO check it works with multiple axes
-        # FIXME: apparently it can be a string (see TVI?)
+        # FIXME: the name of the axis can be a string of up to 8 char (see TVI)
         axes = set([int(a) for a in answer.split(" ")])
         return axes
     
@@ -432,6 +466,7 @@ class Controller(object):
     def GetMotionStatus(self):
         """
         returns (set of int): the set of moving axes
+        Note: it seems the controller doesn't report moves when using OL via PID
         """
         # "\x05" (Request Motion Status)
         # hexadecimal number bitmap of which axis is moving => 0 if everything is stopped
@@ -447,7 +482,22 @@ class Controller(object):
             i += 1
             bitmap = bitmap >> 1
         return mv_axes
-
+    
+    def isAxisMovingOLViaPID(self, axis):
+        """
+        axis (1<int<16): axis number
+        returns (boolean): True moving axes for the axes controlled via PID
+        """
+        # "SMO?" (Get Control Value)
+        # Reports the speed set. If it's 0, it's not moving, otherwise, it is.
+        assert(not self._hasServo[axis])
+        answer = self._sendQueryCommand("SMO? %d\n" % axis)
+        value = answer.split("=")[1]
+        if value == "0":
+            return False
+        else:
+            return True
+    
     def GetStatus(self):
         #SRG? = "\x04" (Query Status Register Value)
         #SRG? 1 1
@@ -649,6 +699,7 @@ class Controller(object):
         assert(axis == 1) # seems not possible to have 3 parameters?!
         assert(-32766 <= voltage and voltage <= 32766)
         assert(time > 0)
+        # a delay of 0 means actually 2**16
         self._sendOrderCommand("MAC START OLSTEP %d %d\n" % (voltage, time))        
         
         
@@ -800,7 +851,7 @@ class Controller(object):
         """
         speed = self._speed[axis]
         v, t = self.convertDistanceSpeedToPIDControl(distance, speed)
-        if t == 0: # if distance is too small, report it
+        if v == 0: # if distance is too small, report it
             return 0
         
         self.OLMovePID(axis, v, t)
@@ -834,25 +885,29 @@ class Controller(object):
         speed (0<float): meters/s (can be negative)
         return (2 tuple: int, 0<int): PID control (in device unit, duration
         """
-        # FIXME: We assume that the max voltage is the maximum speed and that
-        # it's linear down to 0 -> 0 m/s.
-        vpms = self._max_motor_out / self.speed_max # uV/(m/s) 
-        voltage_u = round(int(speed * vpms)) # uV
+        min_speed = self._min_motor_out / self._vpms # m/s
+        
+        voltage_u = round(int(speed * self._vpms)) # uV
         # clamp it to the possible values
         voltage_u = min(max(self._min_motor_out, voltage_u), self._max_motor_out)
-        act_speed = voltage_u / vpms # m/s
-        
-        if distance < 0:
-            voltage_u = -voltage_u
-        
+        act_speed = voltage_u / self._vpms # m/s
+
         time = abs(distance) / act_speed #s
         time_ms = int(round(time * 1000)) # ms
-        if time_ms < 1:
+        if time_ms < 10 and act_speed > min_speed:
+            # small distance => try with the minimum speed to have a better precision
+            return self.convertDistanceSpeedToPIDControl(distance, min_speed)
+        elif time_ms < 1:
+            # no hope
+            # TODO: see if a special macro without delay would move a very little bit
             return 0, 0
         
         # TODO: we could report the "actual distance", but as everything is so
         # approximate, the original distance is as likely actual as the value of
         # time_ms * voltage / vpms
+        
+        if distance < 0:
+            voltage_u = -voltage_u
         return voltage_u, time_ms
     
     def convertDistanceToDevice(self, distance):
@@ -893,6 +948,23 @@ class Controller(object):
         
         return not axes.isdisjoint(self.GetMotionStatus())
     
+    def _isMovingViaPID(self, axes=None):
+        """
+        Replacement method for isMoving() when the OL moves are done using OLViaPID
+        """
+        if axes is None:
+            axes = self._channels
+        else:
+            assert axes.issubset(self._channels)
+        
+        # TOOD: support multiple channels
+        assert(len(self._channels) == 1)
+        axis = list(self._channels)[0]
+        if self._hasServo[axis]:
+            return not axes.isdisjoint(self.GetMotionStatus())
+        else:
+            return self.isAxisMovingOLViaPID(axis)
+            
     def stopMotion(self):
         """
         Stop the motion on all axes immediately
@@ -910,7 +982,7 @@ class Controller(object):
         timeout = 5 #s
         end = time.time() + timeout
         while self.isMoving(axes):
-            if time.time() <= end:
+            if time.time() >= end:
                 raise IOError("Timeout while waiting for end of motion")
             time.sleep(0.005)
     
@@ -1082,7 +1154,7 @@ class Bus(model.Actuator):
         self._swVersion = "%s (serial driver: %s)" % (__version__.version, self.getSerialDriver(port))
         hwversions = []
         for axis, (ctrl, channel) in self._axis_to_cc.items():
-            hwversions.append("'%s': %s (GCS %s)" % (axis, ctrl.GetIdentification(), ctrl.GetSyntaxVersion()))
+            hwversions.append("'%s': %s (GCS %s) for %s" % (axis, ctrl.GetIdentification(), ctrl.GetSyntaxVersion(), ctrl.GetStageName()))
         self._hwVersion = ", ".join(hwversions)
     
         # to acquire before sending anything on the serial port
