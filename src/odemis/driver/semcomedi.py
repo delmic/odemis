@@ -241,7 +241,7 @@ class SEMComedi(model.HwComponent):
         return comedi.get_board_name(self._device)
 
 
-    def _get_converter(self, subdevice, channel, range, direction):
+    def _get_converter_actual(self, subdevice, channel, range, direction):
         """
         Finds the best converter available for the given conditions
         subdevice (int): the subdevice index
@@ -299,7 +299,24 @@ class SEMComedi(model.HwComponent):
             else:
                 return lambda d: comedi.from_physical(d, poly)
     
-
+    def _get_converter(self, subdevice, channel, range, direction):
+        """
+        Finds the best converter available for the given conditions
+        subdevice (int): the subdevice index
+        channel (int): the channel index
+        range (int): the range index
+        direction (enum): comedi.COMEDI_TO_PHYSICAL or comedi.COMEDI_FROM_PHYSICAL
+        return a callable number -> number
+        """
+        # get the cached converter, or create a new one
+        try:
+            converter = self._convert_to_phys[subdevice, channel, range]
+        except KeyError:
+            converter = self._get_converter_actual(subdevice, channel, range, direction)
+            self._convert_to_phys[subdevice, channel, range] = converter
+        
+        return converter
+        
     def _to_phys(self, subdevice, channel, range, value):
         """
         Converts a raw value to the physical value, using the best converter 
@@ -310,15 +327,8 @@ class SEMComedi(model.HwComponent):
         value (int): the value to convert
         return (float): value in physical unit
         """
-        # get the cached converter, or create a new one
-        try:
-            converter = self._convert_to_phys[subdevice, channel, range]
-        except KeyError:
-            converter = self._get_converter(subdevice, channel, range, comedi.TO_PHYSICAL)
-            self._convert_to_phys[subdevice, channel, range] = converter
-        
+        converter = self._get_converter(subdevice, channel, range, comedi.TO_PHYSICAL)
         return converter(value)
-
 
     def _from_phys(self, subdevice, channel, range, value):
         """
@@ -329,13 +339,7 @@ class SEMComedi(model.HwComponent):
         value (float): the value to convert
         return (int): value in raw data 
         """
-        # get the cached converter, or create a new one
-        try:
-            converter = self._convert_from_phys[subdevice, channel, range]
-        except KeyError:
-            converter = self._get_converter(subdevice, channel, range, comedi.FROM_PHYSICAL)
-            self._convert_from_phys[subdevice, channel, range] = converter
-        
+        converter = self._get_converter(subdevice, channel, range, comedi.FROM_PHYSICAL)
         return converter(value)
 
     def _array_to_phys(self, subdevice, channels, ranges, data):
@@ -348,6 +352,8 @@ class SEMComedi(model.HwComponent):
           same as the channels and ranges. dtype should be uint (of any size)
         return (numpy.ndarray of the same shape as data, dtype=double): physical values
         """
+        # FIXME: this is very slow (2us/element), might need to go into numba, 
+        # cython, C, or be avoided.
         array = numpy.empty(shape=data.shape, dtype=numpy.double)
         converters = []
         for i, c in enumerate(channels):
@@ -398,6 +404,8 @@ class SEMComedi(model.HwComponent):
         return (numpy.ndarray of the same shape as data): raw values, the dtype
           fits the subdevice
         """
+        # FIXME: this is very slow (2us/element), might need to go into numba, 
+        # cython, C, or be avoided.
         dtype = self._get_dtype(subdevice)
         # forcing the order is not necessary but just to ensure good performance
         buf = numpy.empty(shape=data.shape, dtype=dtype, order='C')
