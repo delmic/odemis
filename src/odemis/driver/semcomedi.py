@@ -66,6 +66,8 @@ import time
 # device is hardware calibrated, it's not (yet?) implemented for software
 # calibrated devices. For now there is no documentation but some examples.
 
+NI_TRIG_AI_START1 = 18 # Trigger number for AI Start1 (= beginning of a command) 
+
 class SEMComedi(model.HwComponent):
     '''
     A generic HwComponent which provides children for controlling the scanning
@@ -89,7 +91,11 @@ class SEMComedi(model.HwComponent):
         try:
             self._device = comedi.open(self._device_name)
             self._fileno = comedi.fileno(self._device)
-            self._file = os.fdopen(self._fileno, 'r+')
+            # they are pointing to the same "file", but must be different objects
+            # to be able to read and write simultaneously.
+            # Closing any of them will close the device as well
+            self._rfile = os.fdopen(self._fileno, 'r+')
+            self._wfile = os.fdopen(self._fileno, 'r+')
         except comedi.ComediError:
             raise ValueError("Failed to open DAQ device '%s'", device)
         
@@ -512,7 +518,7 @@ class SEMComedi(model.HwComponent):
         
         logging.debug("Going to read %d bytes", nbytes)
         # TODO: can this handle faults? 
-        buf = numpy.fromfile(self._file, dtype=dtype, count=(shape[0] * shape[1]))
+        buf = numpy.fromfile(self._rfile, dtype=dtype, count=(shape[0] * shape[1]))
         
         # FIXME: needed? (probably not)
         comedi.cancel(self._device, self._ai_subdevice)
@@ -673,10 +679,10 @@ class SEMComedi(model.HwComponent):
         dev_buf_size = comedi.get_buffer_size(self._device, self._ao_subdevice)
         preload_size = dev_buf_size / buf.itemsize
         logging.debug("Going to preload %d bytes", buf[:preload_size].nbytes)
-        buf[:preload_size].tofile(self._file)
+        buf[:preload_size].tofile(self._wfile)
         logging.debug("Going to flush")
-        self._file.flush()
-        #d._file.write(buf[:preload_size].tostring())
+        self._wfile.flush()
+        #d._wfile.write(buf[:preload_size].tostring())
 
         # run the command
         logging.debug("Going to start the command")
@@ -686,9 +692,9 @@ class SEMComedi(model.HwComponent):
         
         logging.debug("Going to write %d bytes more", buf[preload_size:].nbytes)
         # TODO: can this handle faults? 
-        buf[preload_size:].tofile(self._file)
+        buf[preload_size:].tofile(self._wfile)
         logging.debug("Going to flush")
-        self._file.flush()
+        self._wfile.flush()
         
         # According to https://groups.google.com/forum/?fromgroups=#!topic/comedi_list/yr2U179x8VI
         # To finish a write fully, we need to do a cancel().
@@ -813,7 +819,7 @@ class SEMComedi(model.HwComponent):
 #        wcmd.start_arg = 0
         # from PyComedi docs
         wcmd.start_src = comedi.TRIG_EXT
-        wcmd.start_arg = comedi.NI_CDIO_SCAN_BEGIN_SRC_AI_START # generated on AI start 
+        wcmd.start_arg = NI_TRIG_AI_START1 # when the AI starts reading 
         wcmd.stop_src = comedi.TRIG_COUNT
         wcmd.stop_arg = nscans
         self._prepare_command(wcmd)
@@ -845,46 +851,93 @@ class SEMComedi(model.HwComponent):
         # flatten the array
         wbuf = numpy.reshape(data, nscans * nwchans, order='C')
         logging.debug("Going to write raw data: %s", wbuf)
-        
-        # preload the buffer with enough data first
-        dev_buf_size = comedi.get_buffer_size(self._device, self._ao_subdevice)
-        preload_size = dev_buf_size / wbuf.itemsize
-        logging.debug("Going to preload %d bytes", wbuf[:preload_size].nbytes)
-        wbuf[:preload_size].tofile(self._file)
-        self._file.flush() # it can block here if we preload too much
+        self._init_write_to_file(wbuf)
 
         # prepare read buffer info        
         rshape = (nscans, nrchans)
         rdtype = self._get_dtype(self._ai_subdevice)
-        
-        # start reader thread
-        self._rbuf = None # FIXME: so ugly!!!
-        rthread = threading.Thread(target=self.read_from_device, 
-                                   args=(rdtype, rshape[0] * rshape[1]))
-        rthread.start()
+        self._init_read_from_file()
         
         # run the commands
         logging.debug("Going to start the command")
-        start_time = time.time()
-        # FIXME: trigger needed on AO?! It's supposed to be waiting for NI_CDIO_SCAN_BEGIN_SRC_AI_START
+        # AO is waiting for AI/Start1, so not sure why internal trigger needed,
+        # but it is. Maybe just to let Comedi know that the command has started
         comedi.internal_trigger(self._device, self._ao_subdevice, 0)
         comedi.internal_trigger(self._device, self._ai_subdevice, 0)
+        self._read_from_file(rdtype, rshape[0] * rshape[1])
+        self._write_to_file()
+
+        self._wait_write_to_file(nscans * period)
+        rbuf = self._wait_read_from_file()
+        rbuf.shape = rshape # FIXME: check that the order/stride is correct
+        return rbuf
+
+
+    def _init_read_from_file(self):
+        pass
+    
+    def _read_from_file(self, dtype, count):
+        # start reader thread
+        self._rbuf = None # FIXME: so ugly!!!
+        self._rcount = count
+        self._rthread = threading.Thread(target=self._read_from_file_thread,
+                                   args=(dtype, count))
+        self._rthread.start()
+    
+    def _read_from_file_thread(self, dtype, count):
+        """To be called in a separate thread"""
+        nbytes = dtype.itemsize * count
+        logging.debug("Going to read %d bytes", nbytes)
+        self._rbuf = numpy.fromfile(self._rfile, dtype=dtype, count=count)
+    
+    def _wait_read_from_file(self):
+        """
+        Call it after the wait_write
+        """
+        self._rthread.join(1) # very short timeout as it should finish at the same time as the output
+        if self._rthread.isAlive():
+            comedi.cancel(self._device, self._ai_subdevice)
         
-        logging.debug("Going to write %d bytes more", wbuf[preload_size:].nbytes)
+        # the result should be in self._rbuf
+        if self._rbuf is None or self._rbuf.size != self._rcount:
+            raise IOError("Failed to read all the values from the %d expected" % (self._rcount, ))
+    
+        return self._rbuf
+    
+    
+    
+    def _init_write_to_file(self, buf):
+        self._wbuf = buf
+        # preload the buffer with enough data first
+        dev_buf_size = comedi.get_buffer_size(self._device, self._ao_subdevice)
+        self._preload_size = dev_buf_size / self._wbuf.itemsize
+        logging.debug("Going to preload %d bytes", self._wbuf[:self._preload_size].nbytes)
+        self._wbuf[:self._preload_size].tofile(self._wfile)
+        self._wfile.flush() # it can block here if we preload too much
+    
+    def _write_to_file(self):
+        self._start_time = time.time()
+        self._wthread = threading.Thread(target=self._write_to_file_thread)
+        self._wthread.start()    
+    
+    def _write_to_file_thread(self):
+        """To be called in a separate thread"""
+        logging.debug("Going to write %d bytes more", self._wbuf[self._preload_size:].nbytes)
         # TODO: can this handle faults? 
-        wbuf[preload_size:].tofile(self._file)
+        self._wbuf[self._preload_size:].tofile(self._wfile)
         logging.debug("Going to flush")
-        self._file.flush()
+        self._wfile.flush()
         
+    def _wait_write_to_file(self, duration):
         # According to https://groups.google.com/forum/?fromgroups=#!topic/comedi_list/yr2U179x8VI
         # To finish a write fully, we need to do a cancel().
         # Wait until SDF_RUNNING is gone, then cancel() to reset SDF_BUSY
-        expected = nscans * period
-        left = start_time + expected - time.time()
+        left = self._start_time + duration - time.time()
         logging.debug("Waiting %g s for the write to finish", left)
         if left > 0:
-            time.sleep(left)
-        end_time = start_time + expected * 1.10 + 1 # s = expected time + 10% + 1s
+            self._wthread.join(left)
+#            time.sleep(left)
+        end_time = self._start_time + duration * 1.10 + 1 # s = expected time + 10% + 1s
         had_timeout = True
         while time.time() < end_time:
             flags = comedi.get_subdevice_flags(self._device, self._ao_subdevice)
@@ -892,29 +945,12 @@ class SEMComedi(model.HwComponent):
                 had_timeout = False
                 break
             time.sleep(0.001)
-            
+        
         comedi.cancel(self._device, self._ao_subdevice)
         if had_timeout:
-            raise IOError("Write command stopped due to timeout after %g s" % (time.time() - start_time))
+            raise IOError("Write command stopped due to timeout after %g s" % (time.time() - self._start_time))
 
-        rthread.join(1) # very short timeout as it should finish at the same time as the output
-        if rthread.isAlive():
-            comedi.cancel(self._device, self._ai_subdevice)
-        
-        # the result should be in self._rbuf
-        if self._rbuf is None or self._rbuf.size != (rshape[0] * rshape[1]):
-            raise IOError("Failed to read all the values from the %d expected", rshape[0] * rshape[1])
-        self._rbuf.shape = rshape # FIXME: check that the order/stride is correct
     
-        return self._rbuf
-
-
-    def read_from_device(self, dtype, count):
-        """To be called in a separate thread"""
-        nbytes = dtype.itemsize * count
-        logging.debug("Going to read %d bytes", nbytes)
-        self._rbuf = numpy.fromfile(self._file, dtype=dtype, count=count)
-        
         
     @staticmethod
     def _generate_scan_array(shape, limits, margin=0):
@@ -1034,6 +1070,7 @@ class SEMComedi(model.HwComponent):
 #w = numpy.array([[1],[2],[3],[4]], dtype=float)
 #d.write_data([0], 0.01, w)
 #scanned = [300, 300]
+#scanned = [1000, 1000]
 #limits = numpy.array([[-5, 5], [-7, 7]], dtype=float)
 #margin = 2
 #s = SEMComedi._generate_scan_array(scanned, limits, margin)
