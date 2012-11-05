@@ -774,7 +774,8 @@ class SEMComedi(model.HwComponent):
         # completely separately
         parrays = []
         for i, c in enumerate(rchannels):
-            parrays[i] = self._array_to_phys(self._ai_device, c, rranges[i], rbuf[:,i])
+            parrays.append(self._array_to_phys(self._ai_subdevice,
+                                   [c], [rranges[i]], rbuf[:,i,numpy.newaxis]))
 
         return parrays
 
@@ -945,8 +946,8 @@ class SEMComedi(model.HwComponent):
         
         # fill the margin with the first pixel
         if margin:
-            fp = scan[:,margin,1:numpy.newaxis] # first pixel + add dimension
-            scan[:,:margin,1] = fp.take([0] * margin, axis=1) # a view of "margin" times 
+            fp = scan[:,margin,1,numpy.newaxis] # first pixel + add dimension
+            fp.take([0] * margin, axis=1, out=scan[:,:margin,1]) # a copy of "margin" times 
         
         # reshape the array to a full flat scan values (the C order should make
         # sure that the array is fully continuous
@@ -1032,7 +1033,13 @@ class SEMComedi(model.HwComponent):
 #r = d.get_data([0, 1], 0.01, 3)
 #w = numpy.array([[1],[2],[3],[4]], dtype=float)
 #d.write_data([0], 0.01, w)
+#scanned = [300, 300]
 #limits = numpy.array([[-5, 5], [-7, 7]], dtype=float)
-#s = SEMComedi._generate_scan_array([300, 300], limits, 2)
+#margin = 2
+#s = SEMComedi._generate_scan_array(scanned, limits, margin)
 #d.write_data([0, 1], 100e-6, s)
-#r = d.write_read_data([0, 1], [5, 6], 10e-6, s)
+#r = d.write_read_data_phys([0, 1], [5, 6], 10e-6, s)
+#v=[]
+#for a in r:
+#    v.append(d._scan_result_to_array(a, scanned, margin))
+
