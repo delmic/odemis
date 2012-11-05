@@ -807,7 +807,7 @@ class StreamPanel(wx.Panel):
         self._microscope.focussedView.subscribe(self._onView, init=True)
 
 
-    # internal methods
+    # internal methods TODO: is this still needed? Doesn't seem to do much
     def _fitStreams(self):
         h = self._sz.GetMinSize().GetHeight()
 
