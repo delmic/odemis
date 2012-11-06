@@ -18,11 +18,13 @@ from odemis import model, __version__
 import ctypes
 import glob
 import logging
+import math
 import numpy
 import odemis.driver.comedi_simple as comedi
 import os
 import threading
 import time
+import weakref
 #pylint: disable=E1101
 
 #logging.getLogger().setLevel(logging.DEBUG)
@@ -86,7 +88,7 @@ class SEMComedi(model.HwComponent):
         self._device_name = device
         
         # we will fill the set of children with Components later in ._children 
-        model.HwComponent.__init__(self, name, role, children=None, **kwargs)
+        model.HwComponent.__init__(self, name, role, **kwargs)
         
         try:
             self._device = comedi.open(self._device_name)
@@ -97,26 +99,24 @@ class SEMComedi(model.HwComponent):
             self._rfile = os.fdopen(self._fileno, 'r+')
             self._wfile = os.fdopen(self._fileno, 'r+')
         except comedi.ComediError:
-            raise ValueError("Failed to open DAQ device '%s'", device)
+            raise ValueError("Failed to open DAQ device '%s'" % device)
         
         try:
             self._ai_subdevice = comedi.find_subdevice_by_type(self._device,
                                             comedi.SUBD_AI, 0)
             self._ao_subdevice = comedi.find_subdevice_by_type(self._device,
                                             comedi.SUBD_AO, 0)
-            # TODO: check that it's conform with the number of detector children
-            # and the max channel number
+            # The detector children will do more thorough checks
             nchan = comedi.get_n_channels(self._device, self._ai_subdevice)
             if nchan < 1:
                 raise IOError("DAQ device '%s' has only %d input channels", nchan)
-            # TODO check it's at least as big as the max channel number of the 
-            # scanner child
+            # The scanner child will do more thorough checks
             nchan = comedi.get_n_channels(self._device, self._ao_subdevice) 
             if nchan < 2:
                 raise IOError("DAQ device '%s' has only %d output channels", nchan)
         except comedi.ComediError:
-            raise ValueError("Failed to find both input and output on DAQ device '%s'", device)
-        
+            raise ValueError("Failed to find both input and output on DAQ device '%s'" % device)
+
         self._metadata = {model.MD_HW_NAME: self.getHwName()}
         self._swVersion = "%s (driver %s)" % (__version__.version, self.getSwVersion()) 
         self._metadata[model.MD_SW_VERSION] = self._swVersion
@@ -138,8 +138,24 @@ class SEMComedi(model.HwComponent):
         # AO is 2.86/2.0 MHz for one/two channels
         # => that's more or less what we get from comedi
         
-        # TODO update the children with this information
-
+        # create the scanner child "scanner"
+        try:
+            kwargs = children["scanner"]
+        except KeyError:
+            raise KeyError("SEMComedi device '%s' was not given a 'scanner' child" % device)
+        self._scanner = Scanner(parent=self, **kwargs)
+        self.children.add(self._scanner)
+        
+        # create the detector children "detectorN"
+        self._detectors = {} # string (name) -> component
+        for name, kwargs in children.items():
+            if name.startswith("detector"):
+                self._detector[name] = Detector(parent=self, **kwargs)
+                self.children.add(self._detector[name])
+        
+        if not self._detectors:
+            raise KeyError("SEMComedi device '%s' was not given any 'detectorN' child" % device)
+        
     
     # There are two temperature sensors:
     # * One on the board itself (TODO how to access it with Comedi?)
@@ -1066,6 +1082,192 @@ class SEMComedi(model.HwComponent):
         return found
 
 
+class Scanner(model.Emitter):
+    """
+    Represents the e-beam scanner
+    """
+    def __init__(self, name, role, parent, channels, settle_time, **kwargs):
+        """
+        channels (2-tuple of (0<=int)): output channels for X/Y to drive
+        settle_time (0<=float<=1e-3): time in s for the signal to settle after
+          each scan line
+        """
+        if len(channels) != 2:
+            raise ValueError("E-beam scanner '%s' needs 2 channels" % (name,))
+        if not (0 > settle_time or settle_time > 1e-3):
+            # a larger value is a sign that the user mistook in units
+            raise ValueError("Settle time of %g s for e-beam scanner '%s' is too long" 
+                             % (settle_time, name))
+        
+        # TODO: should the limits be configurable, or it's always 5V?
+        # lower/upper physical bounds of the area
+        # first dim is the X/Y, second dim is min/max.
+        self._limits = [[0, 5], [0, 5]] # V
+        
+        nchan = comedi.get_n_channels(parent._device, parent._ao_subdevice)
+        if nchan < max(channels):
+            raise ValueError("Requested channels %r on device '%s' which has only %d output channels" 
+                             % (channels, parent._device_name, nchan))
+        
+        
+        # It will set up ._shape and .parent
+        model.Emitter.__init__(self, name, role, parent, **kwargs)
+        
+        # In theory the shape depends on the X/Y ranges, the actual ranges that
+        # can be used and the maxdata. For simplicity we just fix it to 2048
+        # which is probably sufficient for most usages and almost always reachable
+        # shapeX = (diff_limitsX / diff_bestrangeX) * maxdataX
+        self._shape = (2048, 2048)
+        self._resolution = [256, 256] # small resolution to get a fast display
+        # need to be before binning, as it is modified when changing binning         
+        self.resolution = model.ResolutionVA(self._resolution, [(1, 1), self._shape], 
+                                             setter=self.setResolution)
+        
+        # TODO: introduce .transformation, which is a 3x3 matrix that allows 
+        # to specify the translation, rotation, and scaling applied to get the
+        # conversion from coordinates to physical units.
+        
+        # min dwell time depends both on output and input minimun period
+        # max is purely arbitrary 
+        range_dwell = (min(parent._min_ai_period, parent._min_ao_period), 1) # s
+        assert range_dwell[0] <= range_dwell[1]
+        self._dwell_time = range_dwell[0]
+        self.dwellTime = model.FloatContinuous(self._dwell_time, range_dwell,
+                                                  unit="s", setter=self.setDwellTime)
+
+        self._prev_settings = [None, None] # resolution, dwellTime
+        self._scan_array = None # last scan array computed
+    
+    def get_scan_data(self):
+        """
+        Returns all the data as it has to be written the device to generate a 
+          scan.
+        returns: array (2D numpy.ndarray), period (0<=float), margin (0<=int):
+          array is of shape Nx2: N is the number of pixels. dtype is fitting the
+             device raw data
+          period: time between a pixel in s
+          margin: amount of fake pixels inserted at the beginning of each Y line
+            to allow for the settling time
+        Note: it only recomputes the scanning array if the settings have changed
+        """
+        margin = int(math.ceil(self._settle_time / self._dwell_time))
+        
+        prev_resolution, prev_dwell_time = self._prev_settings
+        if prev_resolution != self._resolution:
+            # need to recompute the scanning array
+            scan_phys = self._generate_scan_array(self._resolution, margin)
+            
+            # Compute the best ranges for each channel
+            ranges = []
+            for i, channel in enumerate(self._channels):
+#                data_lim = (scan_phys[:,i].min(), scan_phys[:,i].max())
+                data_lim = self._limits[i]
+                try:
+                    best_range = comedi.find_range(self._device, self._ao_subdevice, 
+                                      channel, comedi.UNIT_volt, data_lim[0], data_lim[1])
+                    ranges.append(best_range)
+                except comedi.ComediError:
+                    logging.exception("Data range between %g and %g V is too high for hardware." %
+                                  (data_lim[0], data_lim[1]))
+                    raise
+            
+            self._scan_array = self.parent._array_from_phys(self.parent._ao_subdevice,
+                                            self._channels, ranges, scan_phys)
+            
+        self._prev_settings = [self._resolution, self._dwell_time]
+        
+        return self._scan_array, self._dwell_time, margin
+          
+    def _generate_scan_array(self, shape, margin):
+        """
+        Generate an array of the values to send to scan a 2D area, using linear
+        interpolation between the limits. It's basically a saw-tooth curve on 
+        the Y dimension and a linear increase on the X dimension.
+        shape (list of 2 int): X/Y resolution of the scanning area
+        margin (0<=int): number of additional pixels to add at the begginning of
+            each scanned line
+        returns (2D ndarray of (shape[0] x (shape[1] + margin)) x 2): the X/Y
+            values for each points of the array, with Y scanned fast, and X 
+            slowly. The type is numpy.double.
+        """
+        # prepare an array of the right type
+        full_shape = (shape[0], shape[1] + margin, 2)
+        scan = numpy.empty(full_shape, dtype=numpy.double, order='C')
+        
+        # TODO see if meshgrid is faster (it needs to be in C order!) 
+        
+        # fill the X dimension
+        scanx = scan[:,:,0].swapaxes(0,1) # just a view to have X as last dim
+        scanx[:,:] = numpy.linspace(self._limits[0][0], self._limits[0][1], shape[0])
+        # fill the Y dimension
+        scan[:,margin:,1] = numpy.linspace(self._limits[1][0], self._limits[1][1], shape[1])
+        
+        # fill the margin with the first pixel
+        if margin:
+            fp = scan[:,margin,1,numpy.newaxis] # first pixel + add dimension
+            fp.take([0] * margin, axis=1, out=scan[:,:margin,1]) # a copy of "margin" times 
+        
+        # reshape the array to a full flat scan values (the C order should make
+        # sure that the array is fully continuous
+        scan.shape = [full_shape[0] * full_shape[1], 2]
+        return scan
+    
+    
+class Detector(model.Detector):
+    """
+    Represents a detector activated by the e-beam. E.g., secondary electron 
+    detector, backscatter detector.  
+    """
+    def __init__(self, name, role, parent, channel, **kwargs):
+        """
+        channel (0<= int): input channel from which to read
+        Note: parent should have a child "scanner" alredy initialised
+        """ 
+        # It will set up ._shape and .parent
+        model.Detector.__init__(self, name, role, parent, **kwargs)
+        self.channel = channel
+        nchan = comedi.get_n_channels(parent._device, parent._ai_subdevice)
+        if nchan < channel:
+            raise ValueError("Requested channel %d on device '%s' which has only %d input channels" 
+                             % (channel, parent._device_name, nchan))
+        self._scanner = parent._scanner 
+        
+        # The closest to the actual precision of the device 
+        self._maxdata = comedi.get_maxdata(self._device, parent._ai_subdevice, channel)
+        self._shape = self._scanner.shape + (self._maxdata,)
+        self.data = SEMDataFlow(self, parent) 
+
+class SEMDataFlow(model.DataFlow):
+    def __init__(self, detector, sem):
+        """
+        detector (semcomedi.Detector): the detector that the dataflow corresponds to
+        sem (semcomedi.SEMComedi): the SEM
+        """
+        model.DataFlow.__init__(self)
+        self.component = weakref.proxy(detector)
+        self._sem = weakref.proxy(sem)
+        
+    # start/stop_generate are _never_ called simultaneously (thread-safe)
+    def start_generate(self):
+        try:
+            # TODO specify if phys or raw, or maybe always raw and notify is
+            # in charge of converting if we want phys
+            self._sem.start_acquire(self.component.channel, self.notify)
+        except ReferenceError:
+            # sem/component has been deleted, it's all fine, we'll be GC'd soon
+            pass
+    
+    def stop_generate(self):
+        try:
+            self._sem.stop_acquire(self.component.channel)
+            # Note that after that acquisition might still go on for a short time
+        except ReferenceError:
+            # sem/component has been deleted, it's all fine, we'll be GC'd soon
+            pass
+            
+    def notify(self, data):
+        model.DataFlow.notify(self, data)
+        
 # For testing
 #from odemis.driver.semcomedi import SEMComedi
 #import numpy

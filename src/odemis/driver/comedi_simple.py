@@ -104,5 +104,5 @@ def _wrap():
                 continue
             global_dict[shortname] = value
             
-# also wrap all comedi functions/constants that can be wrap
+# wrap all comedi functions/constants that can be wrapped
 _wrap()
