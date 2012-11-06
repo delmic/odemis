@@ -25,15 +25,15 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 import wx
 
+import odemis.gui.img.data as img
 from odemis.gui.comp.buttons import GraphicRadioButton
-from img.data import getbtn_smlBitmap, getbtn_sml_hBitmap, getbtn_sml_aBitmap
 from log import log
 
 class GraphicalRadioButtonControl(wx.Panel):
 
     def __init__(self, *args, **kwargs)    :
 
-        self.bnt_width = kwargs.pop("bnt_width", 48)
+        self.bnt_width = kwargs.pop("bnt_width", 32)
 
         self.choices = kwargs.pop("choices", [])
         self.buttons = []
@@ -51,7 +51,7 @@ class GraphicalRadioButtonControl(wx.Panel):
         for choice, label in zip(self.choices, self.labels):
             btn = GraphicRadioButton(self,
                                      -1,
-                                     getbtn_smlBitmap(),
+                                     img.getbtn_32x16Bitmap(),
                                      value=choice,
                                      size=(self.bnt_width, 16),
                                      style=wx.ALIGN_CENTER,
@@ -60,9 +60,9 @@ class GraphicalRadioButtonControl(wx.Panel):
 
             btn.SetForegroundColour("#000000")
 
-            btn.SetBitmaps(getbtn_sml_hBitmap(),
-                           getbtn_sml_aBitmap(),
-                           getbtn_sml_aBitmap())
+            btn.SetBitmaps(img.getbtn_32x16_hBitmap(),
+                           img.getbtn_32x16_aBitmap(),
+                           img.getbtn_32x16_aBitmap())
 
             self.buttons.append(btn)
 
