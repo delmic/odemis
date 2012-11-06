@@ -33,7 +33,7 @@ class GraphicalRadioButtonControl(wx.Panel):
 
     def __init__(self, *args, **kwargs)    :
 
-        self.bnt_width = kwargs.pop("bnt_width", 32)
+        #self.bnt_width = kwargs.pop("bnt_width", 32)
 
         self.choices = kwargs.pop("choices", [])
         self.buttons = []
@@ -53,12 +53,12 @@ class GraphicalRadioButtonControl(wx.Panel):
                                      -1,
                                      img.getbtn_32x16Bitmap(),
                                      value=choice,
-                                     size=(self.bnt_width, 16),
+                                     #size=(self.bnt_width, 16),
                                      style=wx.ALIGN_CENTER,
                                      label=label,
                                      label_delta=1)
 
-            btn.SetForegroundColour("#000000")
+            btn.SetForegroundColour("#111111")
 
             btn.SetBitmaps(img.getbtn_32x16_hBitmap(),
                            img.getbtn_32x16_aBitmap(),
