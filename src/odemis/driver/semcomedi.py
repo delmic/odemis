@@ -1038,6 +1038,8 @@ class SEMComedi(model.HwComponent):
         if self._device:
             comedi.close(self._device)
             self._device = None
+    
+    # TODO selfTest() which tries to read some data
             
     @staticmethod
     def scan():
@@ -1071,6 +1073,7 @@ class SEMComedi(model.HwComponent):
                     continue
                 
                 # TODO if not enough channels, should try to look for more subdevices
+                # TODO: create also the args for the children
                 
                 name = "SEM/" + comedi.get_board_name(device)
                 kwargs = {"device": n}
