@@ -16,6 +16,7 @@ You should have received a copy of the GNU General Public License along with Ode
 '''
 from odemis import model, __version__
 import ctypes
+import gc
 import glob
 import logging
 import math
@@ -542,7 +543,7 @@ class SEMComedi(model.HwComponent):
         rbuf.shape = shape # FIXME: check that the order/stride is correct
         
         # convert data to physical values
-        logging.debug("Converting raw data to physical: %s", self._rbuf)
+        logging.debug("Converting raw data to physical: %s", rbuf)
         # TODO convert the data while reading, to save time
         # TODO do not convert the margin data
         # Allocate a separate memory block per channel as they'll later be used
@@ -758,7 +759,7 @@ class SEMComedi(model.HwComponent):
         rbuf = self.write_read_data_raw(wchannels, wranges, rchannels, rranges, period, wbuf)
         
         # convert data to physical values
-        logging.debug("Converting raw data to physical: %s", self._rbuf)
+        logging.debug("Converting raw data to physical: %s", rbuf)
         # TODO convert the data while reading, to save time
         # TODO do not convert the margin data
         # Allocate a separate memory block per channel as they'll later be used
@@ -949,6 +950,119 @@ class SEMComedi(model.HwComponent):
         # trim margin
         return rectangle[:, margin:]  
     
+    def start_acquire(self, channel, callback):
+        """
+        Start acquiring images on the given input channel.
+        channel (0<=int): input channel from which to acquire an image
+        callback (callable): function to callback with every acquired image
+        Note: The acquisition parameters are defined by the scanner. Acquisition
+        might already be going on for another channel, in which case the channel
+        will be added on the next acquisition.
+        raises KeyError if the channel is already being acquired.
+        """
+        # to be thread-safe (simultaneous calls to start/stop_acquire())
+        with self._acquisition_data_lock:
+            if channel in self._acquisitions:
+                raise KeyError("Channel %d already set up for acquisition.", channel)
+               
+            self._acquisitions[channel] = callback
+            
+            self._wait_acquisition_stopped() # only wait if acquisition thread is stopping
+            if not self._acquisition_thread or not self._acquisition_thread.isAlive():
+                # Set up thread
+                self._acquisition_thread = threading.Thread(target=self._acquisition_run,
+                                                    name="SEM acquisition thread")
+                self._acquisition_thread.start()
+    
+    def stop_acquire(self, channel):
+        """
+        Stop acquiring images on the given channel.
+        channel (0<=int): input channel from which to acquire an image
+        Note: acquisition might still go on on other channels
+        """
+        with self._acquisition_data_lock:
+            del self._acquisitions[channel]
+            if not self._acquisitions:
+                # Nothing to acquire => stop the thread (almost) immediately
+                self._req_stop_acquisition()
+    
+    def _req_stop_acquisition(self):
+        """
+        Request the acquisition thread to stop
+        """
+        self._acquisition_must_stop.set()
+        try:
+            # make sure it stops quickly
+            comedi.cancel(self._device, self._ai_subdevice)
+            comedi.cancel(self._device, self._ao_subdevice)
+        except comedi.ComediError:
+            pass
+    
+    def _wait_acquisition_stopped(self):
+        """
+        Waits until the acquisition thread is fully finished _iif_ it was requested
+        to stop.
+        """
+        # "if" is to not wait if it's already finished 
+        if self._acquisition_must_stop.is_set():
+            self._acquisition_thread.join(10) # 10s timeout for safety
+            if self._acquisition_thread.isAlive():
+                raise OSError("Failed to stop the acquisition thread")
+            self._acquisition_thread = None
+        
+    def _acquisition_run(self):
+        """
+        Acquire images until asked to stop
+        Note: to be run in a separate thread
+        """
+        while not self._acquisition_must_stop.is_set():
+            # get the channels to acquire
+            with self._acquisition_data_lock:
+                rchannels = self._acquisitions.keys()
+            if not rchannels:
+                # another way to quit
+                break
+            
+            # TODO need more clever way to pick the range. Either
+            # * allow the user to select the range
+            # * auto-adapt the range according the min/max of the previous acquisition 
+            rranges = [0 for c in rchannels]
+            
+            # get the scan values (automatically updated to the latest needs)
+            scan, period, margin, wchannels, wranges = self._scanner.get_scan_data()
+            resolution = self._scanner.resolution.value # FIXME: could be incoherent from get_scan_data
+            
+            # write and read the raw data
+            rbuf = self.write_read_data_raw(wchannels, wranges, rchannels, rranges, period, scan)
+        
+            # convert data to physical values
+            logging.debug("Converting raw data to physical: %s", rbuf)
+            # TODO convert the data while reading, to save time, or do not convert at all
+            # TODO do not convert the margin data
+            
+            # the channels to acquire might have change, only send to the one
+            # still interested
+            with self._acquisition_data_lock:
+                acq = dict(self._acquisitions) # duplicate
+            for i, c in enumerate(rchannels):
+                if c not in acq:
+                    continue
+                callback = acq[c]
+                pbuf = self._array_to_phys(self._ai_subdevice,
+                                       [c], [rranges[i]], rbuf[:,i,numpy.newaxis])
+                # Convert to a nice 2D DataArray
+                parray = self._scan_result_to_array(pbuf, resolution, margin)
+                metadata = {} # FIXME
+                darray = model.DataArray(parray, metadata)
+                callback(darray)
+            
+            # force the GC to non-used buffers, for some reason, without this
+            # the GC runs only after we've managed to fill up the memory
+            gc.collect()
+    
+        logging.debug("Acquisition thread closed")
+        self._acquisition_must_stop.clear()      
+    
     def terminate(self):
         """
         Must be called at the end of the usage. Can be called multiple times,
@@ -1081,7 +1195,7 @@ class Scanner(model.Emitter):
                              % (settle_time, name))
         
         
-        self._channels = channels
+        self.channels = channels
         nchan = comedi.get_n_channels(parent._device, parent._ao_subdevice)
         if nchan < max(channels):
             raise ValueError("Requested channels %r on device '%s' which has only %d output channels" 
@@ -1116,8 +1230,7 @@ class Scanner(model.Emitter):
         # max dwell time is purely arbitrary
         range_dwell = (min_dwell_time, 1) # s
         assert range_dwell[0] <= range_dwell[1]
-        self.dwellTime = model.FloatContinuous(range_dwell[0], range_dwell,
-                                                  unit="s")
+        self.dwellTime = model.FloatContinuous(range_dwell[0], range_dwell, unit="s")
 
         self._prev_settings = [None, None] # resolution, dwellTime
         self._scan_array = None # last scan array computed
@@ -1126,12 +1239,15 @@ class Scanner(model.Emitter):
         """
         Returns all the data as it has to be written the device to generate a 
           scan.
-        returns: array (2D numpy.ndarray), period (0<=float), margin (0<=int):
+        returns: array (2D numpy.ndarray), period (0<=float), margin (0<=int),
+                 channels (list of ints), ranges (list of float):
           array is of shape Nx2: N is the number of pixels. dtype is fitting the
              device raw data
           period: time between a pixel in s
           margin: amount of fake pixels inserted at the beginning of each Y line
             to allow for the settling time
+          channels: the output channel to use
+          ranges: the range index of each output channel
         Note: it only recomputes the scanning array if the settings have changed
         """
         dwell_time = self.dwellTime.value
@@ -1148,7 +1264,7 @@ class Scanner(model.Emitter):
             
             # Compute the best ranges for each channel
             ranges = []
-            for i, channel in enumerate(self._channels):
+            for i, channel in enumerate(self.channels):
 #                data_lim = (scan_phys[:,i].min(), scan_phys[:,i].max())
                 data_lim = self._limits[i]
                 try:
@@ -1162,10 +1278,10 @@ class Scanner(model.Emitter):
                     raise
             
             self._scan_array = self.parent._array_from_phys(self.parent._ao_subdevice,
-                                            self._channels, ranges, scan_phys)
+                                            self.channels, ranges, scan_phys)
             
         self._prev_settings = [resolution, dwell_time]
-        return self._scan_array, dwell_time, margin
+        return self._scan_array, dwell_time, margin, self._channels, ranges
           
     def _generate_scan_array(self, shape, margin):
         """
