@@ -13,6 +13,12 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
+
+from odemis.driver import semcomedi
+import comedi
+import logging
+import unittest
+
 """
 If you don't have a real DAQ comedi device, you can create one that can still 
 pass all the tests by doing this:
@@ -22,12 +28,8 @@ sudo chmod a+rw /dev/comedi0
 sudo comedi_config /dev/comedi0 comedi_test 1000000,1000000
 """
 
-
-from odemis.driver import semcomedi
-import logging
-import unittest
-
-logging.getLogger().setLevel(logging.INFO)
+logging.getLogger().setLevel(logging.DEBUG)
+comedi.comedi_loglevel(3)
 
 # arguments used for the creation of basic components
 CONFIG_SED = {"name": "sed", "role": "sed", "channel":5}

@@ -141,7 +141,7 @@ class SEMComedi(model.HwComponent):
         # create the scanner child "scanner"
         try:
             kwargs = children["scanner"]
-        except KeyError:
+        except (KeyError, TypeError):
             raise KeyError("SEMComedi device '%s' was not given a 'scanner' child" % device)
         # min dwell time is the worst of output and input minimun period
         nrchannels = len([n for n in children if n.startswith("detector")])
@@ -208,12 +208,12 @@ class SEMComedi(model.HwComponent):
          of channel, and AO period for each number of channels (times are in
          seconds). 
         """
-        min_ai_periods = []
+        min_ai_periods = [0] # 0 channel == as fast as you like
         nchans = comedi.get_n_channels(self._device, self._ai_subdevice)
         for n in range(1, nchans + 1):
             min_ai_periods.append(self._get_min_period(self._ai_subdevice, n))
             
-        min_ao_periods = []
+        min_ao_periods = [0]
         nchans = comedi.get_n_channels(self._device, self._ao_subdevice)
         for n in range(1, nchans + 1):
             min_ao_periods.append(self._get_min_period(self._ao_subdevice, n))
@@ -1300,7 +1300,10 @@ class SEMDataFlow(model.DataFlow):
 #import comedi
 #logging.getLogger().setLevel(logging.DEBUG)
 #comedi.comedi_loglevel(3)
-#d = SEMComedi("a", "", None, "/dev/comedi0")
+#CONFIG_SED = {"name": "sed", "role": "sed", "channel":5}
+#CONFIG_SCANNER = {"name": "scanner", "role": "ebeam", "channels": [0,1], "settle_time": 10e-6} 
+#CONFIG_SEM = {"name": "sem", "role": "sem", "device": "/dev/comedi0", "children": {"detector0": CONFIG_SED, "scanner": CONFIG_SCANNER} }
+#d = SEMComedi(**CONFIG_SEM)
 #r = d.get_data([0, 1], 0.01, 3)
 #w = numpy.array([[1],[2],[3],[4]], dtype=float)
 #d.write_data([0], 0.01, w)
