@@ -1045,9 +1045,15 @@ class SEMComedi(model.HwComponent):
         if self._device:
             comedi.close(self._device)
             self._device = None
+            
+            # Probably going to fail as they point to the same "file"
+            # If we don't do it here, it will be done automatically on garbage
+            # collection, which will give a IOError that looks almost random.  
             try:
-                # probably going to fail as they point to the same file
                 self._rfile.close()
+            except IOError:
+                pass
+            try:
                 self._wfile.close()
             except IOError:
                 pass
