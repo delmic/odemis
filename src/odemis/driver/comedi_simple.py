@@ -60,11 +60,21 @@ def _data_read_wrapper(comedi_f, *args):
         _raise_comedi_error(rc)
     return data
 
+def _void_wrapper(comedi_f, *args):
+    """
+    calls a comedi function which returns nothing
+    """
+    # in Python, returning nothing is like return None, so we need a special 
+    # wrapper to differentiate the cases
+    comedi_f(*args)
+    
 # str -> callable: function name -> wrapper (function, *args)
 # callable == None will result in no wrapper
 _function_wrappers = {
                      "data_read": _data_read_wrapper,
                      "data_read_delayed": _data_read_wrapper,
+                     "cleanup_calibration": _void_wrapper,
+                     "perror": _void_wrapper,
                      }
 def _wrap():
     import comedi as _comedi
