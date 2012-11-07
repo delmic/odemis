@@ -13,6 +13,16 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
+"""
+If you don't have a real DAQ comedi device, you can create one that can still 
+pass all the tests by doing this:
+sudo modprobe comedi comedi_num_legacy_minors=4
+sudo modprobe comedi_test
+sudo chmod a+rw /dev/comedi0
+sudo comedi_config /dev/comedi0 comedi_test 1000000,1000000
+"""
+
+
 from odemis.driver import semcomedi
 import logging
 import unittest
@@ -33,14 +43,14 @@ class TestSEM(unittest.TestCase):
         """
         Doesn't even try to acquire an image, just create and delete components
         """
-        sem = semcomedi.SEMComedi(CONFIG_SEM)
+        sem = semcomedi.SEMComedi(**CONFIG_SEM)
         self.assertEqual(len(sem.children), 2)
         
         for child in sem.children:
             if child.name ==  CONFIG_SED["name"]:
                 sed = child
             elif child.name ==  CONFIG_SCANNER["name"]:
-                scanner = child 
+                scanner = child
         
         self.assertEqual(len(scanner.resolution.value), 2)
         
@@ -55,6 +65,12 @@ class TestSEM(unittest.TestCase):
             print "opening ", name
             sem = semcomedi.SEMComedi("test", "sem", **kwargs)
             self.assertTrue(sem.selfTest(), "SEM self test failed.")
-            
+    
+    def test_error(self):
+        wrong_config = dict(CONFIG_SEM)
+        wrong_config["device"] = "/dev/comdeeeee"
+        self.assertRaises(Exception, semcomedi.SEMComedi, None, wrong_config)
+        
+        
 if __name__ == "__main__":
     unittest.main()

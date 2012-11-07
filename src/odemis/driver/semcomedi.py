@@ -96,8 +96,8 @@ class SEMComedi(model.HwComponent):
             # they are pointing to the same "file", but must be different objects
             # to be able to read and write simultaneously.
             # Closing any of them will close the device as well
-            self._rfile = os.fdopen(self._fileno, 'r+')
-            self._wfile = os.fdopen(self._fileno, 'r+')
+            self._rfile = os.fdopen(self._fileno, 'r+', 0) # 0 == no buffer
+            self._wfile = os.fdopen(self._fileno, 'r+', 0)
         except comedi.ComediError:
             raise ValueError("Failed to open DAQ device '%s'" % device)
         
@@ -136,22 +136,25 @@ class SEMComedi(model.HwComponent):
         # On the NI-6251, according to the doc:
         # AI is 1MHz (aggregate) (or 1.25MHz with only one channel)
         # AO is 2.86/2.0 MHz for one/two channels
-        # => that's more or less what we get from comedi
+        # => that's more or less what we get from comedi :-)
         
         # create the scanner child "scanner"
         try:
             kwargs = children["scanner"]
         except KeyError:
             raise KeyError("SEMComedi device '%s' was not given a 'scanner' child" % device)
-        self._scanner = Scanner(parent=self, **kwargs)
+        # min dwell time is the worst of output and input minimun period
+        nrchannels = len([n for n in children if n.startswith("detector")])
+        min_period = max(self._min_ai_periods[nrchannels], self._min_ao_periods[2]) 
+        self._scanner = Scanner(parent=self, min_dwell_time=min_period, **kwargs)
         self.children.add(self._scanner)
         
         # create the detector children "detectorN"
         self._detectors = {} # string (name) -> component
         for name, kwargs in children.items():
             if name.startswith("detector"):
-                self._detector[name] = Detector(parent=self, **kwargs)
-                self.children.add(self._detector[name])
+                self._detectors[name] = Detector(parent=self, **kwargs)
+                self.children.add(self._detectors[name])
         
         if not self._detectors:
             raise KeyError("SEMComedi device '%s' was not given any 'detectorN' child" % device)
@@ -227,12 +230,16 @@ class SEMComedi(model.HwComponent):
         # we create a timed command for the given parameters with a very short
         # period (1 ns) and see what period we actually get back. 
         cmd = comedi.cmd_struct()
-        comedi.get_cmd_generic_timed(self._device, subdevice, cmd, nchannels, 1)
+        try:
+            comedi.get_cmd_generic_timed(self._device, subdevice, cmd, nchannels, 1)
+        except comedi.ComediError:
+            # happens with the comedi_test driver
+            pass
         
         if cmd.scan_begin_src != comedi.TRIG_TIMER:
             logging.warning("Failed to find minimum period for subdevice %d with %d channels",
                             subdevice, nchannels)
-            return None
+            return 0
         period = cmd.scan_begin_arg / 1e9
         return period
         
@@ -1038,6 +1045,12 @@ class SEMComedi(model.HwComponent):
         if self._device:
             comedi.close(self._device)
             self._device = None
+            try:
+                # probably going to fail as they point to the same file
+                self._rfile.close()
+                self._wfile.close()
+            except IOError:
+                pass
     
     # TODO selfTest() which tries to read some data
             
@@ -1072,11 +1085,16 @@ class SEMComedi(model.HwComponent):
                 if comedi.get_n_channels(device, ao_subdevice) < 2:
                     continue
                 
-                # TODO if not enough channels, should try to look for more subdevices
-                # TODO: create also the args for the children
+                # create the args for the children
+                kwargs_d0 = {"name": "detector0", "role":"detector",
+                             "channel": 0}
+                # TODO settle_time as the min_period for AO?
+                kwargs_s = {"name": "scanner", "role":"ebeam", 
+                            "channels": [0, 1], "settle_time": 0}
                 
                 name = "SEM/" + comedi.get_board_name(device)
-                kwargs = {"device": n}
+                kwargs = {"device": n, 
+                          "children": {"detector0": kwargs_d0, "scanner": kwargs_s}}
                 found.append((name, kwargs))
                 
             finally:
@@ -1089,15 +1107,21 @@ class Scanner(model.Emitter):
     """
     Represents the e-beam scanner
     """
-    def __init__(self, name, role, parent, channels, settle_time, **kwargs):
+    def __init__(self, name, role, parent, channels, settle_time, min_dwell_time, **kwargs):
         """
         channels (2-tuple of (0<=int)): output channels for X/Y to drive
         settle_time (0<=float<=1e-3): time in s for the signal to settle after
           each scan line
+        min_dwell_time (0<=float): minimum dwell time in s. Provided by 
+          the parent.
         """
         if len(channels) != 2:
             raise ValueError("E-beam scanner '%s' needs 2 channels" % (name,))
-        if not (0 > settle_time or settle_time > 1e-3):
+        
+        if settle_time < 0:
+            raise ValueError("Settle time of %g s for e-beam scanner '%s' is negative" 
+                             % (settle_time, name))
+        elif settle_time > 1e-3:
             # a larger value is a sign that the user mistook in units
             raise ValueError("Settle time of %g s for e-beam scanner '%s' is too long" 
                              % (settle_time, name))
@@ -1114,29 +1138,25 @@ class Scanner(model.Emitter):
         
         
         # It will set up ._shape and .parent
-        model.Emitter.__init__(self, name, role, parent, **kwargs)
+        model.Emitter.__init__(self, name, role, parent=parent, **kwargs)
         
         # In theory the shape depends on the X/Y ranges, the actual ranges that
         # can be used and the maxdata. For simplicity we just fix it to 2048
         # which is probably sufficient for most usages and almost always reachable
         # shapeX = (diff_limitsX / diff_bestrangeX) * maxdataX
         self._shape = (2048, 2048)
-        self._resolution = [256, 256] # small resolution to get a fast display
-        # need to be before binning, as it is modified when changing binning         
-        self.resolution = model.ResolutionVA(self._resolution, [(1, 1), self._shape], 
-                                             setter=self.setResolution)
+        resolution = [256, 256] # small resolution to get a fast display
+        self.resolution = model.ResolutionVA(resolution, [(1, 1), self._shape])
         
         # TODO: introduce .transformation, which is a 3x3 matrix that allows 
         # to specify the translation, rotation, and scaling applied to get the
         # conversion from coordinates to physical units.
         
-        # min dwell time depends both on output and input minimun period
-        # max is purely arbitrary 
-        range_dwell = (min(parent._min_ai_period, parent._min_ao_period), 1) # s
+        # max dwell time is purely arbitrary
+        range_dwell = (min_dwell_time, 1) # s
         assert range_dwell[0] <= range_dwell[1]
-        self._dwell_time = range_dwell[0]
-        self.dwellTime = model.FloatContinuous(self._dwell_time, range_dwell,
-                                                  unit="s", setter=self.setDwellTime)
+        self.dwellTime = model.FloatContinuous(range_dwell[0], range_dwell,
+                                                  unit="s")
 
         self._prev_settings = [None, None] # resolution, dwellTime
         self._scan_array = None # last scan array computed
@@ -1153,12 +1173,14 @@ class Scanner(model.Emitter):
             to allow for the settling time
         Note: it only recomputes the scanning array if the settings have changed
         """
-        margin = int(math.ceil(self._settle_time / self._dwell_time))
+        dwell_time = self.dwellTime.value
+        margin = int(math.ceil(self._settle_time / dwell_time))
         
         prev_resolution, prev_dwell_time = self._prev_settings
-        if prev_resolution != self._resolution:
+        resolution = self.resolution.value
+        if prev_resolution != resolution:
             # need to recompute the scanning array
-            scan_phys = self._generate_scan_array(self._resolution, margin)
+            scan_phys = self._generate_scan_array(resolution, margin)
             
             # Compute the best ranges for each channel
             ranges = []
@@ -1177,9 +1199,8 @@ class Scanner(model.Emitter):
             self._scan_array = self.parent._array_from_phys(self.parent._ao_subdevice,
                                             self._channels, ranges, scan_phys)
             
-        self._prev_settings = [self._resolution, self._dwell_time]
-        
-        return self._scan_array, self._dwell_time, margin
+        self._prev_settings = [resolution, dwell_time]
+        return self._scan_array, dwell_time, margin
           
     def _generate_scan_array(self, shape, margin):
         """
@@ -1216,6 +1237,7 @@ class Scanner(model.Emitter):
         return scan
     
     
+    
 class Detector(model.Detector):
     """
     Represents a detector activated by the e-beam. E.g., secondary electron 
@@ -1227,7 +1249,7 @@ class Detector(model.Detector):
         Note: parent should have a child "scanner" alredy initialised
         """ 
         # It will set up ._shape and .parent
-        model.Detector.__init__(self, name, role, parent, **kwargs)
+        model.Detector.__init__(self, name, role, parent=parent, **kwargs)
         self.channel = channel
         nchan = comedi.get_n_channels(parent._device, parent._ai_subdevice)
         if nchan < channel:
@@ -1236,7 +1258,7 @@ class Detector(model.Detector):
         self._scanner = parent._scanner 
         
         # The closest to the actual precision of the device 
-        self._maxdata = comedi.get_maxdata(self._device, parent._ai_subdevice, channel)
+        self._maxdata = comedi.get_maxdata(parent._device, parent._ai_subdevice, channel)
         self._shape = self._scanner.shape + (self._maxdata,)
         self.data = SEMDataFlow(self, parent) 
 
