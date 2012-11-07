@@ -33,7 +33,8 @@ comedi.comedi_loglevel(3)
 
 # arguments used for the creation of basic components
 CONFIG_SED = {"name": "sed", "role": "sed", "channel":5}
-CONFIG_SCANNER = {"name": "scanner", "role": "ebeam", "channels": [0,1], "settle_time": 10e-6} 
+CONFIG_SCANNER = {"name": "scanner", "role": "ebeam", "limits": [[0, 5], [0, 5]],
+                  "channels": [0,1], "settle_time": 10e-6} 
 CONFIG_SEM = {"name": "sem", "role": "sem", "device": "/dev/comedi0", 
               "children": {"detector0": CONFIG_SED, "scanner": CONFIG_SCANNER}
               }
