@@ -139,6 +139,12 @@ class SEMComedi(model.HwComponent):
         # AO is 2.86/2.0 MHz for one/two channels
         # => that's more or less what we get from comedi :-)
         
+        # acquisition thread setup
+        self._acquisition_data_lock = threading.Lock()
+        self._acquisition_must_stop = threading.Event()
+        self._acquisition_thread = None
+        self._acquisitions = {} # int (input channel) -> callable (callback)
+        
         # create the scanner child "scanner"
         try:
             kwargs = children["scanner"]
@@ -266,7 +272,19 @@ class SEMComedi(model.HwComponent):
         """
         return comedi.get_board_name(self._device)
 
-
+    
+    def getMetadata(self):
+        return self._metadata
+    
+    def updateMetadata(self, md):
+        """
+        Update the metadata associated with every image acquired to these
+        new values. It's accumulative, so previous metadata values will be kept
+        if they are not given.
+        md (dict string -> value): the metadata
+        """
+        self._metadata.update(md)
+    
     def _get_converter_actual(self, subdevice, channel, range, direction):
         """
         Finds the best converter available for the given conditions
@@ -826,7 +844,9 @@ class SEMComedi(model.HwComponent):
         self._prepare_command(rcmd)
 
         # Checks the periods are the same
-        assert(rcmd.scan_begin_arg == wcmd.scan_begin_arg) 
+        assert(rcmd.scan_begin_arg == wcmd.scan_begin_arg)
+        if rcmd.scan_begin_arg != period_ns:
+            logging.warning("Asked dwell time of %g s, but got %g s", period, rcmd.scan_begin_arg / 1e9)
         # TODO: if periods are different => pick the closest period that works for both
 
         # readying the subdevice with the command (needs to be done before
@@ -1032,6 +1052,10 @@ class SEMComedi(model.HwComponent):
             scan, period, margin, wchannels, wranges = self._scanner.get_scan_data()
             resolution = self._scanner.resolution.value # FIXME: could be incoherent from get_scan_data
             
+            metadata = dict(self._metadata) # duplicate
+            metadata[model.MD_ACQ_DATE] = time.time() # time at the beginning
+            metadata[model.MD_DWELL_TIME] = period 
+            
             # write and read the raw data
             rbuf = self.write_read_data_raw(wchannels, wranges, rchannels, rranges, period, scan)
         
@@ -1052,7 +1076,6 @@ class SEMComedi(model.HwComponent):
                                        [c], [rranges[i]], rbuf[:,i,numpy.newaxis])
                 # Convert to a nice 2D DataArray
                 parray = self._scan_result_to_array(pbuf, resolution, margin)
-                metadata = {} # FIXME
                 darray = model.DataArray(parray, metadata)
                 callback(darray)
             
@@ -1193,7 +1216,7 @@ class Scanner(model.Emitter):
             # a larger value is a sign that the user mistook in units
             raise ValueError("Settle time of %g s for e-beam scanner '%s' is too long" 
                              % (settle_time, name))
-        
+        self._settle_time = settle_time
         
         self.channels = channels
         nchan = comedi.get_n_channels(parent._device, parent._ao_subdevice)
@@ -1279,9 +1302,10 @@ class Scanner(model.Emitter):
             
             self._scan_array = self.parent._array_from_phys(self.parent._ao_subdevice,
                                             self.channels, ranges, scan_phys)
+            self._ranges = ranges
             
         self._prev_settings = [resolution, dwell_time]
-        return self._scan_array, dwell_time, margin, self._channels, ranges
+        return self._scan_array, dwell_time, margin, self.channels, self._ranges
           
     def _generate_scan_array(self, shape, margin):
         """

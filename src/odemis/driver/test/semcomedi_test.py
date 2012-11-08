@@ -14,9 +14,11 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 
+from odemis import model
 from odemis.driver import semcomedi
 import comedi
 import logging
+import time
 import unittest
 
 """
@@ -39,27 +41,11 @@ CONFIG_SEM = {"name": "sem", "role": "sem", "device": "/dev/comedi0",
               "children": {"detector0": CONFIG_SED, "scanner": CONFIG_SCANNER}
               }
 
-class TestSEM(unittest.TestCase):
 
-
-    def test_creation(self):
-        """
-        Doesn't even try to acquire an image, just create and delete components
-        """
-        sem = semcomedi.SEMComedi(**CONFIG_SEM)
-        self.assertEqual(len(sem.children), 2)
-        
-        for child in sem.children:
-            if child.name ==  CONFIG_SED["name"]:
-                sed = child
-            elif child.name ==  CONFIG_SCANNER["name"]:
-                scanner = child
-        
-        self.assertEqual(len(scanner.resolution.value), 2)
-        
-        self.assertTrue(sem.selfTest(), "SEM self test failed.")
-        sem.terminate()
-        
+class TestSEMStatic(unittest.TestCase):
+    """
+    Tests which don't need a SEM component ready
+    """
     def test_scan(self):
         devices = semcomedi.SEMComedi.scan()
         self.assertGreater(len(devices), 0)
@@ -68,12 +54,103 @@ class TestSEM(unittest.TestCase):
             print "opening ", name
             sem = semcomedi.SEMComedi("test", "sem", **kwargs)
             self.assertTrue(sem.selfTest(), "SEM self test failed.")
+        
+    def test_creation(self):
+        """
+        Doesn't even try to acquire an image, just create and delete components
+        """
+        sem = semcomedi.SEMComedi(**CONFIG_SEM)
+        self.assertEqual(len(sem.children), 2)
+        
+        for child in sem.children:
+            if child.name == CONFIG_SED["name"]:
+                sed = child
+            elif child.name == CONFIG_SCANNER["name"]:
+                scanner = child
+        
+        self.assertEqual(len(scanner.resolution.value), 2)
+        self.assertIsInstance(sed.data, model.DataFlow)
+        
+        self.assertTrue(sem.selfTest(), "SEM self test failed.")
+        sem.terminate()
     
     def test_error(self):
         wrong_config = dict(CONFIG_SEM)
         wrong_config["device"] = "/dev/comdeeeee"
         self.assertRaises(Exception, semcomedi.SEMComedi, None, wrong_config)
+    
+
+class TestSEM(unittest.TestCase):
+    """
+    Tests which can share one SEM device
+    """
+    @classmethod
+    def setUpClass(cls):
+        cls.sem = semcomedi.SEMComedi(**CONFIG_SEM)
         
+        for child in cls.sem.children:
+            if child.name == CONFIG_SED["name"]:
+                cls.sed = child
+            elif child.name == CONFIG_SCANNER["name"]:
+                cls.scanner = child
+
+    @classmethod
+    def tearUpClass(cls):
+        cls.sem.terminate()
+
+    def setUp(self):
+        # reset resolution and dwellTime
+        self.scanner.resolution.value = [256, 256]
+        self.size = tuple(self.scanner.resolution.value)
+        self.scanner.dwellTime.value = self.scanner.dwellTime.range[0]
+        self.acq_dates = (set(), set()) # 2 sets of dates, one for each receiver
+           
+    def tearUp(self):
+#        print gc.get_referrers(self.camera)
+#        gc.collect()
+        pass
         
+    def test_acquire(self):
+        dwell = 10e-6 # s
+        self.scanner.dwellTime.value = dwell
+        expected_duration = self.size[0] * self.size[1] * dwell
+        
+        start = time.time()
+        im = self.sed.data.get()
+        duration = time.time() - start
+
+        self.assertEqual(im.shape, self.size)
+        self.assertGreaterEqual(duration, expected_duration, "Error execution took %f s, less than exposure time %d." % (duration, expected_duration))
+        self.assertIn(model.MD_DWELL_TIME, im.metadata)
+    
+    def test_acquire_flow(self):
+        dwell = 10e-6 # s
+        self.scanner.dwellTime.value = dwell
+        resolution = self.scanner.resolution.value
+        expected_duration = resolution[0] * resolution[1] * dwell
+        
+        number = 5
+        self.left = number
+        self.sed.data.subscribe(self.receive_image)
+        for i in range(number):
+            # end early if it's already finished
+            if self.left == 0:
+                break
+            time.sleep(2 + expected_duration) # 2s per image should be more than enough in any case
+        
+        self.assertEqual(self.left, 0)
+    
+    def receive_image(self, dataflow, image):
+        """
+        callback for df of test_acquire_flow()
+        """
+        self.assertEqual(image.shape, self.size)
+        self.assertIn(model.MD_DWELL_TIME, image.metadata)
+        self.acq_dates[0].add(image.metadata[model.MD_ACQ_DATE])
+#        print "Received an image"
+        self.left -= 1
+        if self.left <= 0:
+            dataflow.unsubscribe(self.receive_image)
+            
 if __name__ == "__main__":
     unittest.main()
