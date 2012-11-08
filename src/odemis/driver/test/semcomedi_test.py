@@ -35,13 +35,17 @@ comedi.comedi_loglevel(3)
 
 # arguments used for the creation of basic components
 CONFIG_SED = {"name": "sed", "role": "sed", "channel":5}
+CONFIG_BSD = {"name": "bsd", "role": "bsd", "channel":6}
 CONFIG_SCANNER = {"name": "scanner", "role": "ebeam", "limits": [[0, 5], [0, 5]],
                   "channels": [0,1], "settle_time": 10e-6} 
 CONFIG_SEM = {"name": "sem", "role": "sem", "device": "/dev/comedi0", 
               "children": {"detector0": CONFIG_SED, "scanner": CONFIG_SCANNER}
               }
 
-
+CONFIG_SEM2 = {"name": "sem", "role": "sem", "device": "/dev/comedi0", 
+              "children": {"detector0": CONFIG_SED, "detector1": CONFIG_BSD, "scanner": CONFIG_SCANNER}
+              }
+#@unittest.skip("simple")
 class TestSEMStatic(unittest.TestCase):
     """
     Tests which don't need a SEM component ready
@@ -79,7 +83,7 @@ class TestSEMStatic(unittest.TestCase):
         wrong_config["device"] = "/dev/comdeeeee"
         self.assertRaises(Exception, semcomedi.SEMComedi, None, wrong_config)
     
-
+#@unittest.skip("simple")
 class TestSEM(unittest.TestCase):
     """
     Tests which can share one SEM device
@@ -126,10 +130,8 @@ class TestSEM(unittest.TestCase):
     
 #    @unittest.skip("simple")
     def test_acquire_flow(self):
-        dwell = 10e-6 # s
-        self.scanner.dwellTime.value = dwell
-        resolution = self.scanner.resolution.value
-        expected_duration = resolution[0] * resolution[1] * dwell
+        dwell = self.scanner.dwellTime.value
+        expected_duration = self.size[0] * self.size[1] * dwell
         
         number = 5
         self.left = number
@@ -141,6 +143,38 @@ class TestSEM(unittest.TestCase):
             time.sleep(2 + expected_duration) # 2s per image should be more than enough in any case
         
         self.assertEqual(self.left, 0)
+
+#    @unittest.skip("simple")
+    def test_acquire_with_va(self):
+        """
+        Change some settings before and while acquiring
+        """
+        dwell = self.scanner.dwellTime.range[0] * 2
+        self.scanner.dwellTime.value = dwell
+#        self.scanner.resolution.value = self.scanner.resolution.range[1] # test big image
+        self.scanner.resolution.value = [512,512]
+        self.size = tuple(self.scanner.resolution.value)
+        expected_duration = self.size[0] * self.size[1] * dwell
+        
+        number = 3
+        self.left = number
+        self.sed.data.subscribe(self.receive_image)
+        
+#        # change the attribute
+#        time.sleep(expected_duration)
+#        dwell = self.scanner.dwellTime.range[0]
+#        self.scanner.dwellTime.value = dwell
+#        expected_duration = self.size[0] * self.size[1] * dwell
+                
+        # should just not raise any exception
+        for i in range(number):
+            # end early if it's already finished
+            if self.left == 0:
+                break
+            time.sleep(2 + expected_duration) # 2s per image should be more than enough in any case
+        
+        self.assertEqual(self.left, 0)
+
     
     def receive_image(self, dataflow, image):
         """
@@ -153,6 +187,88 @@ class TestSEM(unittest.TestCase):
         self.left -= 1
         if self.left <= 0:
             dataflow.unsubscribe(self.receive_image)
-            
+
+#@unittest.skip("simple")
+class TestSEM2(unittest.TestCase):
+    """
+    Tests which can share one SEM device with 2 detectors
+    """
+    @classmethod
+    def setUpClass(cls):
+        cls.sem = semcomedi.SEMComedi(**CONFIG_SEM2)
+        
+        for child in cls.sem.children:
+            if child.name == CONFIG_SED["name"]:
+                cls.sed = child
+            elif child.name == CONFIG_BSD["name"]:
+                cls.bsd = child
+            elif child.name == CONFIG_SCANNER["name"]:
+                cls.scanner = child
+
+    @classmethod
+    def tearUpClass(cls):
+        cls.sem.terminate()
+
+    def setUp(self):
+        # reset resolution and dwellTime
+        self.scanner.resolution.value = [256, 256]
+        self.size = tuple(self.scanner.resolution.value)
+        self.scanner.dwellTime.value = self.scanner.dwellTime.range[0]
+        self.acq_dates = (set(), set()) # 2 sets of dates, one for each receiver
+           
+    def tearUp(self):
+        pass
+
+#    @unittest.skip("simple")
+    def test_acquire_two_flows(self):
+        dwell = self.scanner.dwellTime.value
+        expected_duration = self.size[0] * self.size[1] * dwell
+        number, number2 = 3, 5
+        
+        self.left = number
+        self.sed.data.subscribe(self.receive_image)
+        
+        time.sleep(expected_duration) # make sure we'll start asynchronously
+        self.left2 = number2
+        self.bsd.data.subscribe(self.receive_image2)
+        
+        for i in range(number + number2):
+            # end early if it's already finished
+            if self.left == 0 and self.left2 == 0:
+                break
+            time.sleep(2 + expected_duration) # 2s per image should be more than enough in any case
+        
+        # check that at least some images were acquired simultaneously
+        common_dates = self.acq_dates[0] & self.acq_dates[1]
+        self.assertGreater(len(common_dates), 0, "No common dates between %r and %r" %
+                           (self.acq_dates[0], self.acq_dates[1]))
+        
+        self.assertEqual(self.left, 0)
+        self.assertEqual(self.left2, 0)
+    
+    def receive_image(self, dataflow, image):
+        """
+        callback for df of test_acquire_flow()
+        """
+        self.assertEqual(image.shape, self.size)
+        self.assertIn(model.MD_DWELL_TIME, image.metadata)
+        self.acq_dates[0].add(image.metadata[model.MD_ACQ_DATE])
+#        print "Received an image"
+        self.left -= 1
+        if self.left <= 0:
+            dataflow.unsubscribe(self.receive_image)
+
+    def receive_image2(self, dataflow, image):
+        """
+        callback for df of test_acquire_flow()
+        """
+        self.assertEqual(image.shape, self.size)
+        self.assertIn(model.MD_DWELL_TIME, image.metadata)
+        self.acq_dates[1].add(image.metadata[model.MD_ACQ_DATE])
+#        print "Received an image"
+        self.left2 -= 1
+        if self.left2 <= 0:
+            dataflow.unsubscribe(self.receive_image2)
+
 if __name__ == "__main__":
     unittest.main()

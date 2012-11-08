@@ -169,7 +169,9 @@ class SEMComedi(model.HwComponent):
         
         if not self._detectors:
             raise KeyError("SEMComedi device '%s' was not given any 'detectorN' child" % device)
-        
+        rchannels = set([d.channel for d in self._detectors.values()])
+        if len(rchannels) != len(self._detectors):
+            raise ValueError("SEMComedi device '%s' was given multiple detectors with the same channel" % device)
     
     # There are two temperature sensors:
     # * One on the board itself (TODO how to access it with Comedi?)
@@ -346,6 +348,7 @@ class SEMComedi(model.HwComponent):
             maxdata = comedi.get_maxdata(self._device, subdevice, channel)
             range_info = comedi.get_range(self._device, subdevice, 
                                                  channel, range)
+            #FIXME need to use partial, otherwise the context is thrown-away
             if direction == comedi.TO_PHYSICAL:
                 return lambda d: comedi.to_phys(d, range_info, maxdata)
             else:
@@ -357,6 +360,9 @@ class SEMComedi(model.HwComponent):
             if direction == comedi.TO_PHYSICAL:
                 return lambda d: comedi.to_physical(d, poly)
             else:
+                if poly.order >= 1:
+                    logging.info("polynomial of order %d, linear conversion would be imprecise",
+                                 poly.order)
                 return lambda d: comedi.from_physical(d, poly)
     
     def _get_converter(self, subdevice, channel, range, direction):
@@ -964,12 +970,12 @@ class SEMComedi(model.HwComponent):
             comedi.cancel(self._device, self._ai_subdevice)
         
         # the result should be in self._rbuf
-        if self._rbuf is None or self._rbuf.size != self._rcount:
-            raise IOError("Failed to read all the values from the %d expected" % (self._rcount, ))
+        if self._rbuf is None:
+            raise IOError("Failed to read all the %d expected values" % (self._rcount, ))
+        elif self._rbuf.size != self._rcount:
+            raise IOError("Read only %d values from the %d expected" % (self._rbuf.size, self._rcount))
     
         return self._rbuf
-    
-    
     
     def _init_write_to_file(self, buf):
         self._wbuf = buf
@@ -1017,7 +1023,7 @@ class SEMComedi(model.HwComponent):
 
     
     @staticmethod
-    def _scan_result_to_array(data, shape, margin=0):
+    def _scan_result_to_array(data, shape, margin):
         """
         Converts a linear array resulting from a scan to a 2D array
         data (1D ndarray): the linear array, of shape=shape[0]*(shape[1] + margin)
@@ -1091,7 +1097,8 @@ class SEMComedi(model.HwComponent):
         
     def _acquisition_run(self):
         """
-        Acquire images until asked to stop
+        Acquire images until asked to stop. Sends the raw acquired data to the
+          callbacks.
         Note: to be run in a separate thread
         """
         while not self._acquisition_must_stop.is_set():
@@ -1108,8 +1115,7 @@ class SEMComedi(model.HwComponent):
             rranges = [0 for c in rchannels]
             
             # get the scan values (automatically updated to the latest needs)
-            scan, period, margin, wchannels, wranges = self._scanner.get_scan_data()
-            resolution = self._scanner.resolution.value # FIXME: could be incoherent from get_scan_data
+            scan, period, resolution, margin, wchannels, wranges = self._scanner.get_scan_data()
             
             metadata = dict(self._metadata) # duplicate
             metadata[model.MD_ACQ_DATE] = time.time() # time at the beginning
@@ -1131,10 +1137,9 @@ class SEMComedi(model.HwComponent):
                 if c not in acq:
                     continue
                 callback = acq[c]
-                pbuf = self._array_to_phys(self._ai_subdevice,
-                                       [c], [rranges[i]], rbuf[:,i,numpy.newaxis])
+
                 # Convert to a nice 2D DataArray
-                parray = self._scan_result_to_array(pbuf, resolution, margin)
+                parray = self._scan_result_to_array(rbuf[:,i,numpy.newaxis], resolution, margin)
                 darray = model.DataArray(parray, metadata)
                 callback(darray)
             
@@ -1154,6 +1159,9 @@ class SEMComedi(model.HwComponent):
             comedi.cleanup_calibration(self._calibration)
             self._calibration = None
         if self._device:
+            # stop the acquisition thread if it's still running
+            self._req_stop_acquisition()
+            
             comedi.close(self._device)
             self._device = None
             
@@ -1308,6 +1316,9 @@ class Scanner(model.Emitter):
                 raise ValueError("Data range between %g and %g V is too high for hardware." %
                                  (data_lim[0], data_lim[1]))
         
+        # TODO: only set this to True if the order of the convertion polynomial <=1
+        self._can_generate_raw_directly = True
+        
         # It will set up ._shape and .parent
         model.Emitter.__init__(self, name, role, parent=parent, **kwargs)
         
@@ -1328,81 +1339,118 @@ class Scanner(model.Emitter):
         assert range_dwell[0] <= range_dwell[1]
         self.dwellTime = model.FloatContinuous(range_dwell[0], range_dwell, unit="s")
 
-        self._prev_settings = [None, None] # resolution, dwellTime
+        self._prev_settings = [None, None, None] # resolution, margin, dwellTime
         self._scan_array = None # last scan array computed
     
     def get_scan_data(self):
         """
         Returns all the data as it has to be written the device to generate a 
           scan.
-        returns: array (2D numpy.ndarray), period (0<=float), margin (0<=int),
-                 channels (list of ints), ranges (list of float):
+        returns: array (2D numpy.ndarray), period (0<=float), shape (2-tuple int),
+                 margin (0<=int), channels (list of ints), ranges (list of float):
           array is of shape Nx2: N is the number of pixels. dtype is fitting the
              device raw data
           period: time between a pixel in s
+          shape: X/Y dimension of the scanned image (e.g., the resolution)
           margin: amount of fake pixels inserted at the beginning of each Y line
             to allow for the settling time
           channels: the output channel to use
           ranges: the range index of each output channel
         Note: it only recomputes the scanning array if the settings have changed
+        Note: it's not thread-safe!
         """
         dwell_time = self.dwellTime.value
+        resolution = self.resolution.value
         margin = int(math.ceil(self._settle_time / dwell_time))
         
-        prev_resolution, prev_dwell_time = self._prev_settings
-        resolution = self.resolution.value
-        if prev_resolution != resolution:
-            # TODO: if the conversion polynom is order <= 1, it's as precise and
-            # much faster to generate directly the raw data.
-            
+        prev_resolution, prev_margin, prev_dwell_time = self._prev_settings
+        if prev_resolution != resolution or margin != prev_margin:
+            # TODO: if only margin changes, just duplicate the margin columns
             # need to recompute the scanning array
-            scan_phys = self._generate_scan_array(resolution, margin)
+            self._update_raw_scan_array(resolution, margin)
+            
+        self._prev_settings = [resolution, margin, dwell_time]
+        return self._scan_array, dwell_time, resolution, margin, self.channels, self._ranges
+
+    def _update_raw_scan_array(self, shape, margin):
+        """
+        Update the raw array of values to send to scan the 2D area.
+        shape (list of 2 int): X/Y resolution of the scanning area
+        margin (0<=int): number of additional pixels to add at the begginning of
+            each scanned line
+        returns nothing, but update ._scan_array and ._ranges.
+        """
+        
+        # TODO: if the conversion polynom is order <= 1, it's as precise and
+        # much faster to generate directly the raw data.
+        if self._can_generate_raw_directly:
+            # Compute the best ranges for each channel
+            ranges = []
+            for i, channel in enumerate(self.channels):
+                data_lim = self._limits[i]
+                best_range = comedi.find_range(self.parent._device,
+                                               self.parent._ao_subdevice, 
+                                  channel, comedi.UNIT_volt, data_lim[0], data_lim[1])
+                ranges.append(best_range)
+            self._ranges = ranges
+            
+            # computes the limits in raw values
+            limits = self.parent._array_from_phys(self.parent._ao_subdevice,
+                                                  self.channels, ranges, 
+                                                  numpy.array(self._limits, dtype=numpy.double))
+#            dtype = self.parent._get_dtype(self.parent._ao_subdevice)
+#            limits = numpy.empty((2,2), dtype=dtype)
+#            for i, c in enumerate(self.channels):
+#                r = ranges[i]
+#                for j in range(2):
+#                    v = self._limits[i][j]
+#                    limits[i,j] = self.parent._from_phys(self.parent._ao_subdevice,
+#                                                         c, r, v)
+            scan_raw = self._generate_scan_array(shape, limits, margin)
+            self._scan_array = scan_raw
+        else:
+            limits = numpy.array(self._limits, dtype=numpy.double)
+            scan_phys = self._generate_scan_array(shape, limits, margin)
             
             # Compute the best ranges for each channel
             ranges = []
             for i, channel in enumerate(self.channels):
-#                data_lim = (scan_phys[:,i].min(), scan_phys[:,i].max())
-                data_lim = self._limits[i]
-                try:
-                    best_range = comedi.find_range(self.parent._device,
-                                                   self.parent._ao_subdevice, 
-                                      channel, comedi.UNIT_volt, data_lim[0], data_lim[1])
-                    ranges.append(best_range)
-                except comedi.ComediError:
-                    logging.exception("Data range between %g and %g V is too high for hardware." %
-                                  (data_lim[0], data_lim[1]))
-                    raise
+                data_lim = (scan_phys[:,i].min(), scan_phys[:,i].max())
+                best_range = comedi.find_range(self.parent._device,
+                                               self.parent._ao_subdevice, 
+                                  channel, comedi.UNIT_volt, data_lim[0], data_lim[1])
+                ranges.append(best_range)
+            self._ranges = ranges
             
             self._scan_array = self.parent._array_from_phys(self.parent._ao_subdevice,
                                             self.channels, ranges, scan_phys)
-            self._ranges = ranges
             
-        self._prev_settings = [resolution, dwell_time]
-        return self._scan_array, dwell_time, margin, self.channels, self._ranges
-          
-    def _generate_scan_array(self, shape, margin):
+        
+    @staticmethod
+    def _generate_scan_array(shape, limits, margin):
         """
         Generate an array of the values to send to scan a 2D area, using linear
         interpolation between the limits. It's basically a saw-tooth curve on 
         the Y dimension and a linear increase on the X dimension.
         shape (list of 2 int): X/Y resolution of the scanning area
+        limits (2x2 ndarray): the min/max limits of X/Y
         margin (0<=int): number of additional pixels to add at the begginning of
             each scanned line
         returns (2D ndarray of (shape[0] x (shape[1] + margin)) x 2): the X/Y
             values for each points of the array, with Y scanned fast, and X 
-            slowly. The type is numpy.double.
+            slowly. The type is the same one as the limits.
         """
         # prepare an array of the right type
         full_shape = (shape[0], shape[1] + margin, 2)
-        scan = numpy.empty(full_shape, dtype=numpy.double, order='C')
+        scan = numpy.empty(full_shape, dtype=limits.dtype, order='C')
         
         # TODO see if meshgrid is faster (it needs to be in C order!) 
         
         # fill the X dimension
         scanx = scan[:,:,0].swapaxes(0,1) # just a view to have X as last dim
-        scanx[:,:] = numpy.linspace(self._limits[0][0], self._limits[0][1], shape[0])
+        scanx[:,:] = numpy.linspace(limits[0,0], limits[0,1], shape[0])
         # fill the Y dimension
-        scan[:,margin:,1] = numpy.linspace(self._limits[1][0], self._limits[1][1], shape[1])
+        scan[:,margin:,1] = numpy.linspace(limits[1,0], limits[1,1], shape[1])
         
         # fill the margin with the first pixel
         if margin:
@@ -1469,6 +1517,12 @@ class SEMDataFlow(model.DataFlow):
             pass
             
     def notify(self, data):
+        # TODO: fast way to convert to physical values (and if possible keep
+        # integers as output
+        # converting to physical value would look a bit like this:
+        # the ranges could be save in the metadata.
+#        parray = self._array_to_phys(self_sem._ai_subdevice,
+#                                       [self.component.channel], [rranges], data)
         model.DataFlow.notify(self, data)
         
 # For testing
