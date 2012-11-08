@@ -109,7 +109,8 @@ class TestSEM(unittest.TestCase):
 #        print gc.get_referrers(self.camera)
 #        gc.collect()
         pass
-        
+    
+#    @unittest.skip("simple")
     def test_acquire(self):
         dwell = 10e-6 # s
         self.scanner.dwellTime.value = dwell
@@ -123,6 +124,7 @@ class TestSEM(unittest.TestCase):
         self.assertGreaterEqual(duration, expected_duration, "Error execution took %f s, less than exposure time %d." % (duration, expected_duration))
         self.assertIn(model.MD_DWELL_TIME, im.metadata)
     
+#    @unittest.skip("simple")
     def test_acquire_flow(self):
         dwell = 10e-6 # s
         self.scanner.dwellTime.value = dwell

@@ -123,6 +123,8 @@ class SEMComedi(model.HwComponent):
         self._metadata[model.MD_SW_VERSION] = self._swVersion
 #        self._hwVersion = self.getHwVersion()
         self._metadata[model.MD_HW_VERSION] = self._hwVersion
+
+        self._check_test_device()
         
         # detect when values are strange
         comedi.set_global_oor_behavior(comedi.OOR_NAN)
@@ -209,6 +211,20 @@ class SEMComedi(model.HwComponent):
                             "want to calibrate your device with:\n"
                             "sudo comedi_soft_calibrate -f %s\n",
                             self._device_name)
+    
+    def _check_test_device(self):
+        """
+        Check whether a real device is connected or comedi_test
+        In case of comedi_test, we "patch" the class to pretend to have a real
+        device, although the driver is very limited.
+        """
+        driver = comedi.get_driver_name(self._device)
+        if driver == "comedi_test":
+            self._test = True
+            self.write_read_data_raw = self.fake_write_read_data_raw
+            logging.info("Driver %s detected, going to use fake behaviour", driver)
+        else:
+            self._test = False
     
     def _get_min_periods(self):
         """
@@ -431,7 +447,7 @@ class SEMComedi(model.HwComponent):
                     flat_array[nchans * i + j] = converters[j](cbuf[nchans * i + j])
         else:
             # Needs real conversion
-            logging.debug("Using full conversion to provide the raw data")
+            logging.debug("Using full conversion of the raw data")
             for i, v in numpy.ndenumerate(data):
                 array[i] = converters[i[-1]](int(v))
         
@@ -587,7 +603,7 @@ class SEMComedi(model.HwComponent):
             # on the second time, it should report 0, meaning "perfect"
             rc = comedi.command_test(self._device, cmd)
             if rc != 0:
-                raise IOError("failed to prepare command")
+                raise IOError("failed to prepare command (%d)" % rc)
     
     def _run_inttrig(self, subdevice, num):
         """
@@ -788,7 +804,51 @@ class SEMComedi(model.HwComponent):
                                    [c], [rranges[i]], rbuf[:,i,numpy.newaxis]))
 
         return parrays
+    def fake_write_read_data_raw(self, wchannels, wranges, rchannels, rranges, period, data):
+        """
+        Imitates write_read_data_raw() but just read data, for the comedi_test driver
+        """
+        nscans = data.shape[0]
+        nwchans = data.shape[1]
+        nrchans = len(rchannels)
+        period_ns = int(round(period * 1e9))  # in nanoseconds
+                
+        logging.debug("Generating a new read command for %d scans", nscans)
+        rcmd = comedi.cmd_struct()
+        comedi.get_cmd_generic_timed(self._device, self._ai_subdevice,
+                                                  rcmd, nrchans, period_ns)
+        clist = comedi.chanlist(nrchans)
+        for i in range(nrchans):
+            clist[i] = comedi.cr_pack(rchannels[i], rranges[i], comedi.AREF_GROUND)
+        rcmd.chanlist = clist
+        rcmd.stop_src = comedi.TRIG_COUNT
+        rcmd.stop_arg = nscans
+        self._prepare_command(rcmd)
 
+        # Checks the periods are the same
+        if rcmd.scan_begin_arg != period_ns:
+            logging.warning("Asked dwell time of %g s, but got %g s", period, rcmd.scan_begin_arg / 1e9)
+
+        
+        # flatten the array
+        wbuf = numpy.reshape(data, nscans * nwchans, order='C')
+        logging.debug("Not going to write raw data: %s", wbuf)
+
+        # prepare read buffer info        
+        rshape = (nscans, nrchans)
+        rdtype = self._get_dtype(self._ai_subdevice)
+        self._init_read_from_file()
+        
+        # run the commands
+        logging.debug("Going to start the command")
+        comedi.command(self._device, rcmd)
+        # AO is waiting for AI/Start1, so not sure why internal trigger needed,
+        # but it is. Maybe just to let Comedi know that the command has started
+        self._read_from_file(rdtype, rshape[0] * rshape[1])
+        rbuf = self._wait_read_from_file()
+        rbuf.shape = rshape # FIXME: check that the order/stride is correct
+        return rbuf
+    
     def write_read_data_raw(self, wchannels, wranges, rchannels, rranges, period, data):
         """
         write data on the given analog output channels and read the same amount 
@@ -804,14 +864,13 @@ class SEMComedi(model.HwComponent):
         return (2D numpy.array with shape=data.shape and dtype=float)
             the data read (raw) for each channel
         """
-        #construct a comedi command
         nscans = data.shape[0]
         nwchans = data.shape[1]
         nrchans = len(rchannels)
+        period_ns = int(round(period * 1e9))  # in nanoseconds
         
         # create a command for writing
         logging.debug("Generating a new write command for %d scans", nscans)
-        period_ns = int(round(period * 1e9))  # in nanoseconds
         wcmd = comedi.cmd_struct()
         comedi.get_cmd_generic_timed(self._device, self._ao_subdevice,
                                                   wcmd, nwchans, period_ns)
@@ -1170,15 +1229,29 @@ class SEMComedi(model.HwComponent):
                 # create the args for the children
                 kwargs_d0 = {"name": "detector0", "role":"detector",
                              "channel": 0}
-                # TODO settle_time as the min_period for AO?
+
                 wchannels = [0, 1]
                 limits = []
                 for c in wchannels:
                     # TODO check every range, not just the first one
                     range_info = comedi.get_range(device, ao_subdevice, c, 0)
                     limits.append([range_info.min, range_info.max])
+                
+                # find min_period for AO, as settle_time
+                cmd = comedi.cmd_struct()
+                try:
+                    comedi.get_cmd_generic_timed(device, ao_subdevice, cmd, len(wchannels), 1)
+                except comedi.ComediError:
+                    #continue
+                    cmd.scan_begin_arg = 0
+        
+#                if cmd.scan_begin_src != comedi.TRIG_TIMER:
+#                    continue # no timer => impossible to use the device
+                min_ao_period = cmd.scan_begin_arg / 1e9
+
                 kwargs_s = {"name": "scanner", "role":"ebeam", 
-                            "limits": limits, "channels": wchannels, "settle_time": 0}
+                            "limits": limits, "channels": wchannels,
+                            "settle_time": min_ao_period}
                 
                 name = "SEM/" + comedi.get_board_name(device)
                 kwargs = {"device": n, 
