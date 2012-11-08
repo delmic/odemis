@@ -152,7 +152,7 @@ class TestSEM(unittest.TestCase):
         dwell = self.scanner.dwellTime.range[0] * 2
         self.scanner.dwellTime.value = dwell
 #        self.scanner.resolution.value = self.scanner.resolution.range[1] # test big image
-        self.scanner.resolution.value = [512,512]
+        self.scanner.resolution.value = [960,512] # FIXME: comedi_test cannot bear more
         self.size = tuple(self.scanner.resolution.value)
         expected_duration = self.size[0] * self.size[1] * dwell
         
@@ -160,11 +160,11 @@ class TestSEM(unittest.TestCase):
         self.left = number
         self.sed.data.subscribe(self.receive_image)
         
-#        # change the attribute
-#        time.sleep(expected_duration)
-#        dwell = self.scanner.dwellTime.range[0]
-#        self.scanner.dwellTime.value = dwell
-#        expected_duration = self.size[0] * self.size[1] * dwell
+        # change the attribute
+        time.sleep(expected_duration)
+        dwell = self.scanner.dwellTime.range[0]
+        self.scanner.dwellTime.value = dwell
+        expected_duration = self.size[0] * self.size[1] * dwell
                 
         # should just not raise any exception
         for i in range(number):
