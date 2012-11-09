@@ -15,6 +15,7 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from odemis import model
+import gc
 import logging
 
 
@@ -63,6 +64,8 @@ class MetadataUpdater(model.Component):
 #                elif a.role == "light":
 #                    # update the emitted light wavelength
 #                    self.observeLight(a, d)
+                else:
+                    logging.debug("not observing %s which affects %s", a.name, d.name)
     
     def _getAffecting(self, affected):
         """

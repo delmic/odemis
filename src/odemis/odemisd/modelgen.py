@@ -232,9 +232,9 @@ class Instantiator(object):
                 comp = self.root_container.instantiate(class_comp, args)
             else:
                 comp = class_comp(**args)
-        except Exception, exc:
+        except Exception:
             logging.error("Error while instantiating component %s.", name)
-            raise exc
+            raise
         
         # Add all the children to our list of components. Useful only if child 
         # created by delegation, but can't hurt to add them all.

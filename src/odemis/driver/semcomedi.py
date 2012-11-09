@@ -60,7 +60,7 @@ import weakref
 # (e.g., int *, double *) are not passed as parameters but directly returned as
 # output. However structures must be first allocated and then given as input
 # parameter. See comedi_wrap.doc for parameters. It also uses special "unbounded
-# arrays" for the instructions and sampl arrays, which are very unconvenient to 
+# arrays" for the instructions and sampl arrays, which are very inconvenient to 
 # manipulate. To create a structure, you need to create an object with the name
 # of the structure, plus _struct. 
 # pycomedi is object-oriented. It tries to be less verbose but fails a bit
@@ -78,7 +78,7 @@ class SEMComedi(model.HwComponent):
     area and receiving the data from the detector of a SEM via Comedi.
     '''
 
-    def __init__(self, name, role, children, device, **kwargs):
+    def __init__(self, name, role, children, device, daemon=None, **kwargs):
         '''
         children (dict string->kwargs): parameters setting for the children.
             Known children are "scanner", "detector0", "detector1"...
@@ -90,7 +90,7 @@ class SEMComedi(model.HwComponent):
         self._device_name = device
         
         # we will fill the set of children with Components later in ._children 
-        model.HwComponent.__init__(self, name, role, **kwargs)
+        model.HwComponent.__init__(self, name, role, daemon=daemon, **kwargs)
         
         try:
             self._device = comedi.open(self._device_name)
@@ -158,14 +158,14 @@ class SEMComedi(model.HwComponent):
         # min dwell time is the worst of output and input minimun period
         nrchannels = len([n for n in children if n.startswith("detector")])
         min_period = max(self._min_ai_periods[nrchannels], self._min_ao_periods[2]) 
-        self._scanner = Scanner(parent=self, min_dwell_time=min_period, **kwargs)
+        self._scanner = Scanner(parent=self, min_dwell_time=min_period, daemon=daemon, **kwargs)
         self.children.add(self._scanner)
         
         # create the detector children "detectorN"
         self._detectors = {} # string (name) -> component
         for name, kwargs in children.items():
             if name.startswith("detector"):
-                self._detectors[name] = Detector(parent=self, **kwargs)
+                self._detectors[name] = Detector(parent=self, daemon=daemon, **kwargs)
                 self.children.add(self._detectors[name])
         
         if not self._detectors:
@@ -1507,7 +1507,7 @@ class SEMDataFlow(model.DataFlow):
         sem (semcomedi.SEMComedi): the SEM
         """
         model.DataFlow.__init__(self)
-        self.component = detector
+        self.component = weakref.ref(detector)
         self._sem = weakref.proxy(sem)
         
     # start/stop_generate are _never_ called simultaneously (thread-safe)
@@ -1515,14 +1515,14 @@ class SEMDataFlow(model.DataFlow):
         try:
             # TODO specify if phys or raw, or maybe always raw and notify is
             # in charge of converting if we want phys
-            self._sem.start_acquire(self.component, self.notify)
+            self._sem.start_acquire(self.component(), self.notify)
         except ReferenceError:
             # sem/component has been deleted, it's all fine, we'll be GC'd soon
             pass
     
     def stop_generate(self):
         try:
-            self._sem.stop_acquire(self.component)
+            self._sem.stop_acquire(self.component())
             # Note that after that acquisition might still go on for a short time
         except ReferenceError:
             # sem/component has been deleted, it's all fine, we'll be GC'd soon
@@ -1536,29 +1536,3 @@ class SEMDataFlow(model.DataFlow):
 #        parray = self._array_to_phys(self_sem._ai_subdevice,
 #                                       [self.component.channel], [rranges], data)
         model.DataFlow.notify(self, data)
-        
-# For testing
-#from odemis.driver.semcomedi import SEMComedi
-#import numpy
-#import logging
-#import comedi
-#logging.getLogger().setLevel(logging.DEBUG)
-#comedi.comedi_loglevel(3)
-#CONFIG_SED = {"name": "sed", "role": "sed", "channel":5}
-#CONFIG_SCANNER = {"name": "scanner", "role": "ebeam", "channels": [0,1], "limits": [[0, 5], [0, 5]], "settle_time": 10e-6} 
-#CONFIG_SEM = {"name": "sem", "role": "sem", "device": "/dev/comedi0", "children": {"detector0": CONFIG_SED, "scanner": CONFIG_SCANNER} }
-#d = SEMComedi(**CONFIG_SEM)
-#r = d.get_data([0, 1], 0.01, 3)
-#w = numpy.array([[1],[2],[3],[4]], dtype=float)
-#d.write_data([0], 0.01, w)
-#scanned = [300, 300]
-#scanned = [1000, 1000]
-#limits = numpy.array([[-5, 5], [-7, 7]], dtype=float)
-#margin = 2
-#s = SEMComedi._generate_scan_array(scanned, limits, margin)
-#d.write_data([0, 1], 100e-6, s)
-#r = d.write_read_data_phys([0, 1], [5, 6], 10e-6, s)
-#v=[]
-#for a in r:
-#    v.append(d._scan_result_to_array(a, scanned, margin))
-
