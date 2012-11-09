@@ -151,10 +151,10 @@ class TestSEM(unittest.TestCase):
         """
         dwell = self.scanner.dwellTime.range[0] * 2
         self.scanner.dwellTime.value = dwell
-#        self.scanner.resolution.value = self.scanner.resolution.range[1] # test big image
-        self.scanner.resolution.value = [960,512] # FIXME: comedi_test cannot bear more
+        self.scanner.resolution.value = self.scanner.resolution.range[1] # test big image
         self.size = tuple(self.scanner.resolution.value)
         expected_duration = self.size[0] * self.size[1] * dwell
+        print expected_duration
         
         number = 3
         self.left = number

@@ -97,8 +97,8 @@ class SEMComedi(model.HwComponent):
             # they are pointing to the same "file", but must be different objects
             # to be able to read and write simultaneously.
             # Closing any of them will close the device as well
-            self._rfile = os.fdopen(self._fileno, 'r+', 0) # 0 == no buffer
-            self._wfile = os.fdopen(self._fileno, 'r+', 0)
+            self._rfile = os.fdopen(self._fileno, 'r+') 
+            self._wfile = os.fdopen(self._fileno, 'r+')
         except comedi.ComediError:
             raise ValueError("Failed to open DAQ device '%s'" % device)
         
@@ -348,22 +348,22 @@ class SEMComedi(model.HwComponent):
             maxdata = comedi.get_maxdata(self._device, subdevice, channel)
             range_info = comedi.get_range(self._device, subdevice, 
                                                  channel, range)
-            #FIXME need to use partial, otherwise the context is thrown-away
+            # using default parameter to copy values into local-scope
             if direction == comedi.TO_PHYSICAL:
-                return lambda d: comedi.to_phys(d, range_info, maxdata)
+                return lambda d, r=range_info, m=maxdata: comedi.to_phys(d, r, m)
             else:
-                return lambda d: comedi.from_phys(d, range_info, maxdata)
+                return lambda d, r=range_info, m=maxdata: comedi.from_phys(d, r, m)
         else:
             # calibrated: return polynomial-based converter
             logging.debug("creating a calibrated converter for s%dc%dr%d",
                           subdevice, channel, range)
             if direction == comedi.TO_PHYSICAL:
-                return lambda d: comedi.to_physical(d, poly)
+                return lambda d, p=poly: comedi.to_physical(d, p)
             else:
                 if poly.order >= 1:
                     logging.info("polynomial of order %d, linear conversion would be imprecise",
                                  poly.order)
-                return lambda d: comedi.from_physical(d, poly)
+                return lambda d, p=poly: comedi.from_physical(d, p)
     
     def _get_converter(self, subdevice, channel, range, direction):
         """
@@ -579,7 +579,8 @@ class SEMComedi(model.HwComponent):
         comedi.command(self._device, rcmd)
         self._read_from_file(dtype, shape[0] * shape[1])
         
-        rbuf = self._wait_read_from_file()
+        timeout = (nscans * period) * 1.10 + 1 # s   == expected time + 10% + 1s
+        rbuf = self._wait_read_from_file(timeout)
         rbuf.shape = shape # FIXME: check that the order/stride is correct
         
         # convert data to physical values
@@ -838,7 +839,6 @@ class SEMComedi(model.HwComponent):
         
         # flatten the array
         wbuf = numpy.reshape(data, nscans * nwchans, order='C')
-        logging.debug("Not going to write raw data: %s", wbuf)
 
         # prepare read buffer info        
         rshape = (nscans, nrchans)
@@ -846,12 +846,14 @@ class SEMComedi(model.HwComponent):
         self._init_read_from_file()
         
         # run the commands
-        logging.debug("Going to start the command")
         comedi.command(self._device, rcmd)
         # AO is waiting for AI/Start1, so not sure why internal trigger needed,
         # but it is. Maybe just to let Comedi know that the command has started
         self._read_from_file(rdtype, rshape[0] * rshape[1])
-        rbuf = self._wait_read_from_file()
+        
+        timeout = (nscans * period) * 1.10 + 1 # s   == expected time + 10% + 1s
+        logging.debug("Waiting %g s for the acquisition to finish", timeout)
+        rbuf = self._wait_read_from_file(timeout)
         rbuf.shape = rshape # FIXME: check that the order/stride is correct
         return rbuf
     
@@ -876,7 +878,7 @@ class SEMComedi(model.HwComponent):
         period_ns = int(round(period * 1e9))  # in nanoseconds
         
         # create a command for writing
-        logging.debug("Generating a new write command for %d scans", nscans)
+        logging.debug("Generating new write and read commands for %d scans", nscans)
         wcmd = comedi.cmd_struct()
         comedi.get_cmd_generic_timed(self._device, self._ao_subdevice,
                                                   wcmd, nwchans, period_ns)
@@ -894,7 +896,6 @@ class SEMComedi(model.HwComponent):
         self._prepare_command(wcmd)
 
         # create a command for reading
-        logging.debug("Generating a new read command for %d scans", nscans)
         rcmd = comedi.cmd_struct()
         comedi.get_cmd_generic_timed(self._device, self._ai_subdevice,
                                                   rcmd, nrchans, period_ns)
@@ -921,7 +922,6 @@ class SEMComedi(model.HwComponent):
         
         # flatten the array
         wbuf = numpy.reshape(data, nscans * nwchans, order='C')
-        logging.debug("Going to write raw data: %s", wbuf)
         self._init_write_to_file(wbuf)
 
         # prepare read buffer info        
@@ -930,7 +930,6 @@ class SEMComedi(model.HwComponent):
         self._init_read_from_file()
         
         # run the commands
-        logging.debug("Going to start the command")
         # AO is waiting for AI/Start1, so not sure why internal trigger needed,
         # but it is. Maybe just to let Comedi know that the command has started
         comedi.internal_trigger(self._device, self._ao_subdevice, 0)
@@ -938,8 +937,10 @@ class SEMComedi(model.HwComponent):
         self._read_from_file(rdtype, rshape[0] * rshape[1])
         self._write_to_file()
 
-        self._wait_write_to_file(nscans * period)
-        rbuf = self._wait_read_from_file()
+        timeout = (nscans * period) * 1.10 + 1 # s   == expected time + 10% + 1s
+        logging.debug("Waiting %g s for the acquisition to finish", timeout)
+        self._wait_write_to_file(timeout)
+        rbuf = self._wait_read_from_file(timeout)
         rbuf.shape = rshape # FIXME: check that the order/stride is correct
         return rbuf
 
@@ -957,15 +958,13 @@ class SEMComedi(model.HwComponent):
     
     def _read_from_file_thread(self, dtype, count):
         """To be called in a separate thread"""
-        nbytes = dtype.itemsize * count
-        logging.debug("Going to read %d bytes", nbytes)
         self._rbuf = numpy.fromfile(self._rfile, dtype=dtype, count=count)
     
-    def _wait_read_from_file(self):
+    def _wait_read_from_file(self, timeout):
         """
         Call it after the wait_write
         """
-        self._rthread.join(1) # very short timeout as it should finish at the same time as the output
+        self._rthread.join(timeout)
         if self._rthread.isAlive():
             comedi.cancel(self._device, self._ai_subdevice)
         
@@ -987,40 +986,30 @@ class SEMComedi(model.HwComponent):
         self._wfile.flush() # it can block here if we preload too much
     
     def _write_to_file(self):
-        self._start_time = time.time()
         self._wthread = threading.Thread(target=self._write_to_file_thread)
         self._wthread.start()    
     
     def _write_to_file_thread(self):
         """To be called in a separate thread"""
-        logging.debug("Going to write %d bytes more", self._wbuf[self._preload_size:].nbytes)
         # TODO: can this handle faults? 
         self._wbuf[self._preload_size:].tofile(self._wfile)
-        logging.debug("Going to flush")
         self._wfile.flush()
         
-    def _wait_write_to_file(self, duration):
-        # According to https://groups.google.com/forum/?fromgroups=#!topic/comedi_list/yr2U179x8VI
-        # To finish a write fully, we need to do a cancel().
-        # Wait until SDF_RUNNING is gone, then cancel() to reset SDF_BUSY
-        left = self._start_time + duration - time.time()
-        logging.debug("Waiting %g s for the write to finish", left)
-        if left > 0:
-            self._wthread.join(left)
-#            time.sleep(left)
-        end_time = self._start_time + duration * 1.10 + 1 # s = expected time + 10% + 1s
-        had_timeout = True
-        while time.time() < end_time:
-            flags = comedi.get_subdevice_flags(self._device, self._ao_subdevice)
-            if not (flags & comedi.SDF_RUNNING):
-                had_timeout = False
-                break
-            time.sleep(0.001)
-        
-        comedi.cancel(self._device, self._ao_subdevice)
-        if had_timeout:
-            raise IOError("Write command stopped due to timeout after %g s" % (time.time() - self._start_time))
-
+    def _wait_write_to_file(self, timeout):
+        try:
+            self._wthread.join(timeout)
+            if self._wthread.isAlive():
+                # try to see why
+                flags = comedi.get_subdevice_flags(self._device, self._ao_subdevice)
+                if flags & comedi.SDF_RUNNING:
+                    raise IOError("Write timeout while device is still generating data")
+                else:
+                    raise IOError("Write timeout while device is idle")
+        finally:
+            # According to https://groups.google.com/forum/?fromgroups=#!topic/comedi_list/yr2U179x8VI
+            # To finish a write fully, we need to do a cancel().
+            # Wait until SDF_RUNNING is gone, then cancel() to reset SDF_BUSY
+            comedi.cancel(self._device, self._ao_subdevice)
     
     @staticmethod
     def _scan_result_to_array(data, shape, margin):
@@ -1124,8 +1113,7 @@ class SEMComedi(model.HwComponent):
             # write and read the raw data
             rbuf = self.write_read_data_raw(wchannels, wranges, rchannels, rranges, period, scan)
         
-            # convert data to physical values
-            logging.debug("Converting raw data to physical: %s", rbuf)
+            #logging.debug("Converting raw data to physical: %s", rbuf)
             # TODO convert the data while reading, to save time, or do not convert at all
             # TODO do not convert the margin data
             
@@ -1235,8 +1223,7 @@ class SEMComedi(model.HwComponent):
                 
                 
                 # create the args for the children
-                kwargs_d0 = {"name": "detector0", "role":"detector",
-                             "channel": 0}
+                kwargs_d0 = {"name": "detector0", "role":"detector", "channel": 0}
 
                 wchannels = [0, 1]
                 limits = []
@@ -1380,7 +1367,6 @@ class Scanner(model.Emitter):
             each scanned line
         returns nothing, but update ._scan_array and ._ranges.
         """
-        
         # TODO: if the conversion polynom is order <= 1, it's as precise and
         # much faster to generate directly the raw data.
         if self._can_generate_raw_directly:
@@ -1398,14 +1384,7 @@ class Scanner(model.Emitter):
             limits = self.parent._array_from_phys(self.parent._ao_subdevice,
                                                   self.channels, ranges, 
                                                   numpy.array(self._limits, dtype=numpy.double))
-#            dtype = self.parent._get_dtype(self.parent._ao_subdevice)
-#            limits = numpy.empty((2,2), dtype=dtype)
-#            for i, c in enumerate(self.channels):
-#                r = ranges[i]
-#                for j in range(2):
-#                    v = self._limits[i][j]
-#                    limits[i,j] = self.parent._from_phys(self.parent._ao_subdevice,
-#                                                         c, r, v)
+
             scan_raw = self._generate_scan_array(shape, limits, margin)
             self._scan_array = scan_raw
         else:
