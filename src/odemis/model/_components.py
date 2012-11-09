@@ -493,9 +493,11 @@ class Emitter(HwComponent):
         if children:
             raise ArgumentError("Emitter components cannot have children.")
 
-        # TODO remotable
-        self.shape = None # must be initialised by the sub-class
+        self._shape = (0) # must be initialised by the sub-class
 
+    @roattribute
+    def shape(self):
+        return self._shape
 
 class CombinedActuator(Actuator):
     """
@@ -503,8 +505,6 @@ class CombinedActuator(Actuator):
      = a set of axes that can be moved and optionally report their position.
     """
 
-    # TODO: this is not finished, just a copy paste from a RedStone which could
-    # be extended to a really combined actuator
     def __init__(self, name, role, children, axes_map, **kwargs):
         """
         name (string)
