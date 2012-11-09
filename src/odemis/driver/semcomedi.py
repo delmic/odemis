@@ -15,6 +15,7 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from odemis import model, __version__
+from odemis.model._core import roattribute
 import ctypes
 import gc
 import glob
@@ -145,7 +146,7 @@ class SEMComedi(model.HwComponent):
         self._acquisition_data_lock = threading.Lock()
         self._acquisition_must_stop = threading.Event()
         self._acquisition_thread = None
-        self._acquisitions = {} # int (input channel) -> callable (callback)
+        self._acquisitions = {} # detector -> callable (callback)
         
         # create the scanner child "scanner"
         try:
@@ -360,7 +361,7 @@ class SEMComedi(model.HwComponent):
             if direction == comedi.TO_PHYSICAL:
                 return lambda d, p=poly: comedi.to_physical(d, p)
             else:
-                if poly.order >= 1:
+                if poly.order > 1:
                     logging.info("polynomial of order %d, linear conversion would be imprecise",
                                  poly.order)
                 return lambda d, p=poly: comedi.from_physical(d, p)
@@ -1024,22 +1025,22 @@ class SEMComedi(model.HwComponent):
         # trim margin
         return rectangle[:, margin:]  
     
-    def start_acquire(self, channel, callback):
+    def start_acquire(self, detector, callback):
         """
-        Start acquiring images on the given input channel.
-        channel (0<=int): input channel from which to acquire an image
+        Start acquiring images on the given detector (i.e., input channel).
+        detector (Detector): detector from which to acquire an image
         callback (callable): function to callback with every acquired image
         Note: The acquisition parameters are defined by the scanner. Acquisition
-        might already be going on for another channel, in which case the channel
+        might already be going on for another detector, in which case the detector
         will be added on the next acquisition.
-        raises KeyError if the channel is already being acquired.
+        raises KeyError if the detector is already being acquired.
         """
         # to be thread-safe (simultaneous calls to start/stop_acquire())
         with self._acquisition_data_lock:
-            if channel in self._acquisitions:
-                raise KeyError("Channel %d already set up for acquisition.", channel)
+            if detector in self._acquisitions:
+                raise KeyError("Channel %d already set up for acquisition.", detector.channel)
                
-            self._acquisitions[channel] = callback
+            self._acquisitions[detector] = callback
             
             self._wait_acquisition_stopped() # only wait if acquisition thread is stopping
             if not self._acquisition_thread or not self._acquisition_thread.isAlive():
@@ -1048,14 +1049,14 @@ class SEMComedi(model.HwComponent):
                                                     name="SEM acquisition thread")
                 self._acquisition_thread.start()
     
-    def stop_acquire(self, channel):
+    def stop_acquire(self, detector):
         """
         Stop acquiring images on the given channel.
-        channel (0<=int): input channel from which to acquire an image
+        detector (Detector): detector from which to acquire an image
         Note: acquisition might still go on on other channels
         """
         with self._acquisition_data_lock:
-            del self._acquisitions[channel]
+            del self._acquisitions[detector]
             if not self._acquisitions:
                 # Nothing to acquire => stop the thread (almost) immediately
                 self._req_stop_acquisition()
@@ -1093,15 +1094,13 @@ class SEMComedi(model.HwComponent):
         while not self._acquisition_must_stop.is_set():
             # get the channels to acquire
             with self._acquisition_data_lock:
-                rchannels = self._acquisitions.keys()
-            if not rchannels:
+                detectors = self._acquisitions.keys()
+            if not detectors:
                 # another way to quit
                 break
             
-            # TODO need more clever way to pick the range. Either
-            # * allow the user to select the range
-            # * auto-adapt the range according the min/max of the previous acquisition 
-            rranges = [0 for c in rchannels]
+            rchannels = [d.channel for d in detectors] 
+            rranges = [d._range for d in detectors]
             
             # get the scan values (automatically updated to the latest needs)
             scan, period, resolution, margin, wchannels, wranges = self._scanner.get_scan_data()
@@ -1117,14 +1116,18 @@ class SEMComedi(model.HwComponent):
             # TODO convert the data while reading, to save time, or do not convert at all
             # TODO do not convert the margin data
             
-            # the channels to acquire might have change, only send to the one
+            # the channels to acquire might have changed, only send to the one
             # still interested
             with self._acquisition_data_lock:
                 acq = dict(self._acquisitions) # duplicate
             for i, c in enumerate(rchannels):
-                if c not in acq:
+                callback = None
+                for d, cb in acq.items():
+                    if d.channel == c:
+                        callback = cb
+                        break
+                if callback is None: # unsubscribed
                     continue
-                callback = acq[c]
 
                 # Convert to a nice 2D DataArray
                 parray = self._scan_result_to_array(rbuf[:,i,numpy.newaxis], resolution, margin)
@@ -1222,9 +1225,13 @@ class SEMComedi(model.HwComponent):
                     continue
                 
                 
-                # create the args for the children
-                kwargs_d0 = {"name": "detector0", "role":"detector", "channel": 0}
+                # create the args for one detector
+                range_info = comedi.get_range(device, ai_subdevice, 0, 0)
+                limits = [range_info.min, range_info.max]
+                kwargs_d0 = {"name": "detector0", "role":"detector",
+                             "channel": 0, "limits": limits}
 
+                # create the args for the scanner
                 wchannels = [0, 1]
                 limits = []
                 for c in wchannels:
@@ -1286,7 +1293,7 @@ class Scanner(model.Emitter):
                              % (settle_time, name))
         self._settle_time = settle_time
         
-        self.channels = channels
+        self._channels = channels
         nchan = comedi.get_n_channels(parent._device, parent._ao_subdevice)
         if nchan < max(channels):
             raise ValueError("Requested channels %r on device '%s' which has only %d output channels" 
@@ -1328,6 +1335,14 @@ class Scanner(model.Emitter):
 
         self._prev_settings = [None, None, None] # resolution, margin, dwellTime
         self._scan_array = None # last scan array computed
+        
+    @roattribute
+    def channels(self):
+        return self._channels
+    
+    @roattribute
+    def settleTime(self):
+        return self._settle_time
     
     def get_scan_data(self):
         """
@@ -1357,7 +1372,7 @@ class Scanner(model.Emitter):
             self._update_raw_scan_array(resolution, margin)
             
         self._prev_settings = [resolution, margin, dwell_time]
-        return self._scan_array, dwell_time, resolution, margin, self.channels, self._ranges
+        return self._scan_array, dwell_time, resolution, margin, self._channels, self._ranges
 
     def _update_raw_scan_array(self, shape, margin):
         """
@@ -1372,7 +1387,7 @@ class Scanner(model.Emitter):
         if self._can_generate_raw_directly:
             # Compute the best ranges for each channel
             ranges = []
-            for i, channel in enumerate(self.channels):
+            for i, channel in enumerate(self._channels):
                 data_lim = self._limits[i]
                 best_range = comedi.find_range(self.parent._device,
                                                self.parent._ao_subdevice, 
@@ -1382,7 +1397,7 @@ class Scanner(model.Emitter):
             
             # computes the limits in raw values
             limits = self.parent._array_from_phys(self.parent._ao_subdevice,
-                                                  self.channels, ranges, 
+                                                  self._channels, ranges, 
                                                   numpy.array(self._limits, dtype=numpy.double))
 
             scan_raw = self._generate_scan_array(shape, limits, margin)
@@ -1393,7 +1408,7 @@ class Scanner(model.Emitter):
             
             # Compute the best ranges for each channel
             ranges = []
-            for i, channel in enumerate(self.channels):
+            for i, channel in enumerate(self._channels):
                 data_lim = (scan_phys[:,i].min(), scan_phys[:,i].max())
                 best_range = comedi.find_range(self.parent._device,
                                                self.parent._ao_subdevice, 
@@ -1402,7 +1417,7 @@ class Scanner(model.Emitter):
             self._ranges = ranges
             
             self._scan_array = self.parent._array_from_phys(self.parent._ao_subdevice,
-                                            self.channels, ranges, scan_phys)
+                                            self._channels, ranges, scan_phys)
             
         
     @staticmethod
@@ -1448,24 +1463,42 @@ class Detector(model.Detector):
     Represents a detector activated by the e-beam. E.g., secondary electron 
     detector, backscatter detector.  
     """
-    def __init__(self, name, role, parent, channel, **kwargs):
+    def __init__(self, name, role, parent, channel, limits, **kwargs):
         """
         channel (0<= int): input channel from which to read
+        limits (2-tuple of number): min/max voltage to acquire (in V)
         Note: parent should have a child "scanner" alredy initialised
         """ 
         # It will set up ._shape and .parent
         model.Detector.__init__(self, name, role, parent=parent, **kwargs)
-        self.channel = channel
+        self._channel = channel
         nchan = comedi.get_n_channels(parent._device, parent._ai_subdevice)
         if nchan < channel:
             raise ValueError("Requested channel %d on device '%s' which has only %d input channels" 
                              % (channel, parent._device_name, nchan))
-        self._scanner = parent._scanner 
+        self._scanner = parent._scanner
+        
+        # TODO allow limits to be None, meaning take the biggest range available
+        self._limits = limits
+        # find the range
+        try:
+            best_range = comedi.find_range(parent._device, parent._ai_subdevice, 
+                                           channel, comedi.UNIT_volt,
+                                           limits[0], limits[1])
+        except comedi.ComediError:
+                raise ValueError("Data range between %g and %g V is too high for hardware." %
+                                 (limits[0], limits[1]))
+        self._range = best_range
         
         # The closest to the actual precision of the device 
-        self._maxdata = comedi.get_maxdata(parent._device, parent._ai_subdevice, channel)
+        self._maxdata = comedi.get_maxdata(parent._device, parent._ai_subdevice,
+                                           channel)
         self._shape = self._scanner.shape + (self._maxdata,)
-        self.data = SEMDataFlow(self, parent) 
+        self.data = SEMDataFlow(self, parent)
+        
+    @roattribute
+    def channel(self):
+        return self._channel
 
 class SEMDataFlow(model.DataFlow):
     def __init__(self, detector, sem):
@@ -1474,7 +1507,7 @@ class SEMDataFlow(model.DataFlow):
         sem (semcomedi.SEMComedi): the SEM
         """
         model.DataFlow.__init__(self)
-        self.component = weakref.proxy(detector)
+        self.component = detector
         self._sem = weakref.proxy(sem)
         
     # start/stop_generate are _never_ called simultaneously (thread-safe)
@@ -1482,14 +1515,14 @@ class SEMDataFlow(model.DataFlow):
         try:
             # TODO specify if phys or raw, or maybe always raw and notify is
             # in charge of converting if we want phys
-            self._sem.start_acquire(self.component.channel, self.notify)
+            self._sem.start_acquire(self.component, self.notify)
         except ReferenceError:
             # sem/component has been deleted, it's all fine, we'll be GC'd soon
             pass
     
     def stop_generate(self):
         try:
-            self._sem.stop_acquire(self.component.channel)
+            self._sem.stop_acquire(self.component)
             # Note that after that acquisition might still go on for a short time
         except ReferenceError:
             # sem/component has been deleted, it's all fine, we'll be GC'd soon

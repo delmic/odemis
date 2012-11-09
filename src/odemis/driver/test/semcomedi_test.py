@@ -34,8 +34,8 @@ logging.getLogger().setLevel(logging.DEBUG)
 comedi.comedi_loglevel(3)
 
 # arguments used for the creation of basic components
-CONFIG_SED = {"name": "sed", "role": "sed", "channel":5}
-CONFIG_BSD = {"name": "bsd", "role": "bsd", "channel":6}
+CONFIG_SED = {"name": "sed", "role": "sed", "channel":5, "limits": [-3, 3]}
+CONFIG_BSD = {"name": "bsd", "role": "bsd", "channel":6, "limits": [-0.1, 0.2]}
 CONFIG_SCANNER = {"name": "scanner", "role": "ebeam", "limits": [[0, 5], [0, 5]],
                   "channels": [0,1], "settle_time": 10e-6} 
 CONFIG_SEM = {"name": "sem", "role": "sem", "device": "/dev/comedi0", 
