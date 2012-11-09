@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<resource version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
+<resource class="PopupImageButton" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
   <object class="wxFrame" name="fpb_frame">
     <object class="wxBoxSizer">
       <object class="sizeritem">
@@ -147,7 +147,6 @@
             <object class="sizeritem">
               <object class="FoldPanelBar" name="fpb">
                 <object class="FoldPanelItem">
-                  
                   <label>STREAMS</label>
                   <XRCED>
                     <assign_var>1</assign_var>
@@ -256,6 +255,42 @@
             <XRCED>
               <assign_var>1</assign_var>
             </XRCED>
+          </object>
+          <flag>wxALL|wxALIGN_CENTRE</flag>
+          <border>10</border>
+        </object>
+        <object class="sizeritem">
+          <object class="ImageTextToggleButton">
+            <label>amaai</label>
+            <bitmap>../img/btn_64x48.png</bitmap>
+            <hover>../img/btn_64x48_h.png</hover>
+            <selected>../img/btn_64x48_a.png</selected>
+            <fg>#1A1A1A</fg>
+            <style>wxALIGN_CENTRE</style>
+          </object>
+          <flag>wxALL|wxALIGN_CENTRE</flag>
+          <border>10</border>
+        </object>
+        <object class="sizeritem">
+          <object class="ImageTextToggleButton">
+            <label>amaai</label>
+            <bitmap>../img/btn_64x24.png</bitmap>
+            <hover>../img/btn_64x24_h.png</hover>
+            <selected>../img/btn_64x24_a.png</selected>
+            <fg>#1A1A1A</fg>
+            <style>wxALIGN_CENTRE</style>
+          </object>
+          <flag>wxALL|wxALIGN_CENTRE</flag>
+          <border>10</border>
+        </object>
+        <object class="sizeritem">
+          <object class="ImageTextToggleButton">
+            <label>allez</label>
+            <bitmap>../img/btn_64x16.png</bitmap>
+            <hover>../img/btn_64x16_h.png</hover>
+            <selected>../img/btn_64x16_a.png</selected>
+            <fg>#1A1A1A</fg>
+            <style>wxALIGN_CENTRE</style>
           </object>
           <flag>wxALL|wxALIGN_CENTRE</flag>
           <border>10</border>

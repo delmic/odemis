@@ -29,6 +29,7 @@ import wx.combo
 import odemis.gui
 import odemis.gui.comp.text as text
 import odemis.gui.util.units as utun
+import odemis.gui.img.data as img
 
 from ..comp.foldpanelbar import FoldPanelItem
 from odemis.gui import util
@@ -36,7 +37,6 @@ from odemis.gui.comp.radio import GraphicalRadioButtonControl
 from odemis.gui.comp.slider import UnitIntegerSlider, UnitFloatSlider
 from odemis.gui.log import log
 from odemis.gui.util import call_after_wrapper
-from odemis.gui.img.data import getbtn_downBitmap
 from odemis.model import getVAs, NotApplicableError, VigilantAttributeBase, \
     OutOfBoundError
 
@@ -462,7 +462,7 @@ class SettingsPanel(object):
             new_ctrl.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_EDIT)
             new_ctrl.SetBackgroundColour(self.panel.GetBackgroundColour())
 
-            new_ctrl.SetButtonBitmaps(getbtn_downBitmap(),
+            new_ctrl.SetButtonBitmaps(img.getbtn_downBitmap(),
                                       pushButtonBg=False)
 
             def _eat_event(evt):
