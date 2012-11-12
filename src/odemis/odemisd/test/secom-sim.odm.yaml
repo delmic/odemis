@@ -49,10 +49,12 @@ Spectra: {
         channels: [0, 1],
         limits: [[0, 5], [0, 5]],  # V
         settle_time: 10.e-6, # s
+        hfw_nomag: 10.e-3, # m
     },
     properties: {
         resolution: [512, 512], # px
         dwellTime: 10.e-6, # s
+        magnification: 1000, # (ratio)
     },
 #    affects: ["SEM ExtXY", "Andor SimCam"] # affects the CCD in case of cathodoluminescence
 }

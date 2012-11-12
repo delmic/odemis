@@ -1253,7 +1253,7 @@ class SEMComedi(model.HwComponent):
 
                 kwargs_s = {"name": "scanner", "role":"ebeam", 
                             "limits": limits, "channels": wchannels,
-                            "settle_time": min_ao_period}
+                            "settle_time": min_ao_period, "hfw_nomag": 10e-3}
                 
                 name = "SEM/" + comedi.get_board_name(device)
                 kwargs = {"device": n, 
@@ -1270,7 +1270,8 @@ class Scanner(model.Emitter):
     """
     Represents the e-beam scanner
     """
-    def __init__(self, name, role, parent, channels, limits, settle_time, min_dwell_time, **kwargs):
+    def __init__(self, name, role, parent, channels, limits, settle_time, 
+                 min_dwell_time, hfw_nomag, **kwargs):
         """
         channels (2-tuple of (0<=int)): output channels for X/Y to drive
         limits (2x2 array of float): lower/upper bounds of the scan area in V.
@@ -1280,6 +1281,8 @@ class Scanner(model.Emitter):
           each scan line
         min_dwell_time (0<=float): minimum dwell time in s. Provided by 
           the parent.
+        pixel_size_no_mag (0<float<=1): (theoritical) distance between horizontal borders 
+          (lower/upper limit in X) if magnification is 1 (in m)
         """
         if len(channels) != 2:
             raise ValueError("E-beam scanner '%s' needs 2 channels" % (name,))
@@ -1323,6 +1326,7 @@ class Scanner(model.Emitter):
         self._shape = (2048, 2048)
         resolution = [256, 256] # small resolution to get a fast display
         self.resolution = model.ResolutionVA(resolution, [(1, 1), self._shape])
+        self.resolution.subscribe(self._onResolution)
         
         # TODO: introduce .transformation, which is a 3x3 matrix that allows 
         # to specify the translation, rotation, and scaling applied to get the
@@ -1332,6 +1336,18 @@ class Scanner(model.Emitter):
         range_dwell = (min_dwell_time, 1) # s
         assert range_dwell[0] <= range_dwell[1]
         self.dwellTime = model.FloatContinuous(range_dwell[0], range_dwell, unit="s")
+
+        # next two values are just to determine the pixel size
+        # Distance between borders if magnification = 1. It should be found out
+        # via calibration. We assume that image is square, i.e., VFW = HFW
+        if hfw_nomag <= 0 or hfw_nomag > 1:
+            raise ValueError("hfw_nomag is %g m, while it should be between 0 and 1 m." 
+                             % hfw_nomag)
+        self._hfw_nomag = hfw_nomag # m
+        
+        # Allow the user to modify the value, to copy it from the SEM software
+        self.magnification = model.FloatContinuous(1e3, range=[1, 1e9], unit="")
+        self.magnification.subscribe(self._onMagnification, init=True)
 
         self._prev_settings = [None, None, None] # resolution, margin, dwellTime
         self._scan_array = None # last scan array computed
@@ -1343,6 +1359,26 @@ class Scanner(model.Emitter):
     @roattribute
     def settleTime(self):
         return self._settle_time
+    
+    @roattribute
+    def HFWNoMag(self):
+        return self._hfw_nomag
+    
+    def _onMagnification(self, mag):
+        self._updatePixelSize()
+        
+    def _onResolution(self, res):
+        self._updatePixelSize()
+    
+    def _updatePixelSize(self):
+        """
+        Update the pixel size using the resolution, HFW_NoMag and magnification
+        """
+        # This is correct as long as there is not region of interest/transformation
+        mag = self.magnification.value
+        res = self.resolution.value
+        pxs = [self.HFWNoMag / (res[0] * mag), self.HFWNoMag / (res[1] * mag)]
+        self.parent._metadata[model.MD_PIXEL_SIZE] = pxs
     
     def get_scan_data(self):
         """
