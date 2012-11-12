@@ -43,17 +43,19 @@ _current_level = DEBUG
 def set_level(level=NOTSET):
     log.setLevel(level)
 
+# TODO: better call it init_logger() and call it only at the beginning of main
+# The rest of the code should just use logging instead of log.
 def get_logger():
     logging.basicConfig(format=" - %(levelname)s \t%(message)s")
     l = logging.getLogger()
     l.setLevel(_current_level)
     l.handlers[0].setFormatter(
-      logging.Formatter("%(asctime)s [%(levelname)s] %(message)s", "%H:%M:%S"))
+      logging.Formatter("%(asctime)s (%(module)s) %(levelname)s: %(message)s"))
 
     return l
 
 def create_gui_logger(log_field):
-    gui_format = logging.Formatter('%(asctime)s - %(module)s - %(message)s', '%H:%M:%S')
+    gui_format = logging.Formatter('%(asctime)s (%(module)s) %(levelname)s: %(message)s', '%H:%M:%S')
     text_field_handler = TextFieldHandler()
     text_field_handler.setTextField(log_field)
     text_field_handler.setFormatter(gui_format)
@@ -71,9 +73,7 @@ def create_gui_logger(log_field):
     # Maximum number of (rotated) log files
     max_logfile_count = 1
     # Formatting string for logging messages to file
-    file_format = logging.Formatter(("%(asctime)s - "
-                                     "%(levelname)s\t%(module)s(%(lineno)d):  "
-                                     "%(message)s"), '%Y-%m-%d %H:%M:%S')
+    file_format = logging.Formatter("%(asctime)s (%(module)s(%(lineno)d)) %(levelname)s: %(message)s")
 
     file_handler = RotatingFileHandler(logfile_path, 'a',
                                        max_logfile_size,

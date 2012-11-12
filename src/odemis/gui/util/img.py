@@ -21,10 +21,10 @@ details.
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
-from odemis.gui.log import log
 import numpy
 import scipy
 import wx
+import logging
 
 # various functions to convert and modify images (DataArray and wxImage)
 
@@ -50,7 +50,7 @@ def DataArray2wxImage(data, depth=None, brightness=None, contrast=None, tint=(25
         drescaled = scipy.misc.bytescale(data)
     elif brightness == 0 and contrast == 0:
         assert(depth is not None)
-        log.info("Applying brightness and contrast 0 with depth = %d", depth)
+        logging.info("Applying brightness and contrast 0 with depth = %d", depth)
         if depth == 256:
             drescaled = data
         else:
@@ -60,7 +60,7 @@ def DataArray2wxImage(data, depth=None, brightness=None, contrast=None, tint=(25
         assert(depth is not None)
         assert(contrast is not None)
         assert(brightness is not None)
-        log.info("Applying brightness %f and contrast %f with depth = %d", brightness, contrast, depth)
+        logging.info("Applying brightness %f and contrast %f with depth = %d", brightness, contrast, depth)
         # see http://docs.opencv.org/doc/tutorials/core/basic_linear_transform/basic_linear_transform.html
         # and http://pippin.gimp.org/image-processing/chap_point.html
         # contrast is typically between 1/(depth/2) -> depth/2: = (depth/2)^our_contrast 

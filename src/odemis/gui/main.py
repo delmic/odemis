@@ -26,19 +26,17 @@ import os.path
 import sys
 import threading
 import traceback
-
 import wx
 import Pyro4.errors
 
 from odemis import __version__, model
-from odemis.gui import main_xrc, instrmodel
+from odemis.gui import main_xrc, instrmodel, log
 from odemis.gui.controller.acquisition import AcquisitionController
 from odemis.gui.controller.settingspanel import SettingsSideBar
 from odemis.gui.controller.streams import StreamController
 from odemis.gui.controller.tabs import TabBar
 from odemis.gui.controller.views import ViewController, ViewSelector
 from odemis.gui.instrmodel import InstrumentalImage
-from odemis.gui.log import log, create_gui_logger
 from odemis.gui.xmlh import odemis_get_resources
 
 
@@ -75,7 +73,7 @@ class OdemisGUIApp(wx.App):
             self.microscope = model.getMicroscope()
             self.interface_model = instrmodel.GUIMicroscope(self.microscope)
         except (IOError, Pyro4.errors.CommunicationError), e:
-            log.exception("Failed to connect to back-end")
+            logging.exception("Failed to connect to back-end")
             msg = ("The Odemis GUI could not connect to the Odemis back-end:\n\n"
                    "{0}\n\n"
                    "Launch GUI anyway?").format(e)
@@ -91,17 +89,12 @@ class OdemisGUIApp(wx.App):
 
         #self.main_frame.Bind(wx.EVT_CHAR, self.on_key)
 
-        self.init_logger()
+        log.create_gui_logger(self.main_frame.txt_log)
+        logging.info("Starting Odemis GUI")
         self.init_gui()
 
         # Application successfully launched
         return True
-
-    def init_logger(self):
-        """ Initialize logging functionality """
-        create_gui_logger(self.main_frame.txt_log)
-        log.info("Starting Odemis GUI")
-
 
     def init_gui(self):
         """ This method binds events to menu items and initializes
@@ -115,7 +108,7 @@ class OdemisGUIApp(wx.App):
                                             wx.BITMAP_TYPE_ANY)
             self.main_frame.SetIcons(ib)
 
-            #log.debug("Setting frame size to %sx%s", w, h)
+            #logging.debug("Setting frame size to %sx%s", w, h)
 
             #self.main_frame.SetSize((w, h))
             #self.main_frame.SetPosition((0, 0))
@@ -238,7 +231,7 @@ class OdemisGUIApp(wx.App):
             self.secom_model.sem_det_image.value = im2
             self.secom_model.optical_det_image.value = im1
         except e:
-            log.exception("Failed to load example")
+            logging.exception("Failed to load example")
 
     def on_load_example2(self, e):
         """ Open the two files for example """
@@ -254,7 +247,7 @@ class OdemisGUIApp(wx.App):
             self.secom_model.sem_det_image.value = im2
             self.secom_model.optical_det_image.value = im1
         except e:
-            log.exception("Failed to load example")
+            logging.exception("Failed to load example")
 
     def goto_debug_mode(self):
         """ This method sets the application into debug mode, setting the
@@ -317,7 +310,7 @@ class OdemisGUIApp(wx.App):
         """ Method to intercept unexpected errors that are not caught
         anywhere else and redirects them to the logger. """
         exc = traceback.format_exception(type, value, trace)
-        log.error("".join(exc))
+        logging.error("".join(exc))
 
         # When an exception occurs, automatically got to debug mode.
         if not isinstance(value, NotImplementedError):
