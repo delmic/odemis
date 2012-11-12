@@ -54,7 +54,7 @@ Spectra: {
     properties: {
         resolution: [512, 512], # px
         dwellTime: 10.e-6, # s
-        magnification: 1000, # (ratio)
+        magnification: 1.e+3, # (ratio)
     },
 #    affects: ["SEM ExtXY", "Andor SimCam"] # affects the CCD in case of cathodoluminescence
 }

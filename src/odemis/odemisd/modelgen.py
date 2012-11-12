@@ -21,10 +21,9 @@ import itertools
 import logging
 import re
 import yaml
-#TODO use JSON instead of YAML (pro: json parser is part of python, and it should
-# be possible to detect duplicate names with object_pairs_hook, 
-# con: every string must be quoted)
-# see: json.JSONDecoder(object_pairs_hook=(lambda x: print(x))).decode('{"bar":1, "bar": 2}')
+# There is a standard JSON parser, but JSON doesn't allow comments (and wants
+# {} around the whole file and "" around each string). In addition, the standard
+# parser doesn't report where the error is situated in the file.  
 
 class ParseError(Exception):
     pass
@@ -54,7 +53,7 @@ def get_instantiation_model(inst_file):
             # display the line
             inst_file.seek(0)
             line = list(itertools.islice(inst_file, mark.line, mark.line + 1))[0]
-            logging.error("%s", line)
+            logging.error("%s", line.rstrip("\n"))
             # display the column
             logging.error(" " * mark.column + "^")
         raise ParseError("Syntax error in microscope instantiation file.")
@@ -157,6 +156,11 @@ class Instantiator(object):
                 "file: component '%s' has no role specified." % name)
         init["role"] = attr["role"]
         
+        class_name = attr.get("class", None)
+        if self.dry_run and not class_name == "Microscope":
+            # mock class
+            init["_vas"] = attr.get("properties", {}).keys()
+        
         # create recursively the children
         if "children" in init:
             raise SemanticError("Error in microscope instantiation "
@@ -221,7 +225,6 @@ class Instantiator(object):
             # mock class for everything but Microscope (because it is safe)
             args["_realcls"] = class_comp
             class_comp = model.MockComponent
-            args["_vas"] = attr.get("properties", {}).keys()
             
         try:
             if self.create_sub_containers and self.is_leaf(name):
