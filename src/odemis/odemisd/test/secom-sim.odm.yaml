@@ -1,8 +1,8 @@
-SimOptical: {
+SimSECOM: {
     class: Microscope,
     role: brightfield,
-    emitters: [Spectra, "Nikon Super Duper", "MultiBand Fixed Filter", EBeam],
-    detectors: ["Andor SimCam"],
+    emitters: [Spectra, "Nikon Super Duper", "MultiBand Fixed Filter", "EBeam ExtXY"],
+    detectors: ["Andor SimCam", "SED ExtXY"],
     actuators: ["FakeRedStoneStage", "SEM-Optical Alignment", "OpticalZ actuator"],
 }
 
@@ -18,13 +18,54 @@ SimOptical: {
 Spectra: {
     class: lle.FakeLLE,
     role: light,
-    init: {port: "/dev/ttyUSB0"},
+    init: {port: "/dev/ttyLLE"},
     affects: ["Andor SimCam"],
 }
 
-EBeam: {
-    class: simulated.EBeam,
+# This is a very simple SEM simulator, without detector
+#EBeam: {
+#    class: simulated.EBeam,
+#    role: e-beam,
+#}
+
+# Can simulate a SEM connected to a DAQ board by using the comedi_test driver:
+# sudo modprobe comedi comedi_num_legacy_minors=4
+# sudo modprobe comedi_test
+# sudo chmod a+rw /dev/comedi0
+# sudo comedi_config /dev/comedi0 comedi_test 1000000,1000000
+
+"SEM ExtXY": {
+    class: semcomedi.SEMComedi,
+    role: sem,
+    init: {device: "/dev/comedi0"},
+    # more detectors can be added, if necessary
+    children: {scanner: "EBeam ExtXY", detector0: "SED ExtXY"}
+}
+
+"EBeam ExtXY": {
+    # Internal child of Quanta ExtXY, so no class
     role: e-beam,
+    init: {
+        channels: [0, 1],
+        limits: [[0, 5], [0, 5]],  # V
+        settle_time: 10.e-6, # s
+        hfw_nomag: 10.e-3, # m
+    },
+    properties: {
+        resolution: [512, 512], # px
+        dwellTime: 10.e-6, # s
+        magnification: 1.e+3, # (ratio)
+    },
+#    affects: ["SEM ExtXY", "Andor SimCam"] # affects the CCD in case of cathodoluminescence
+}
+
+"SED ExtXY": { # aka ETD
+    # Internal child of Quanta ExtXY, so no class
+    role: se-detector,
+    init: {
+        channel: 0, # 0-> sawtooth waves, 1-> square waves
+        limits: [-3, 3] # V
+    },
 }
 
 "Nikon Super Duper": {

@@ -15,7 +15,6 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from odemis.gui.util.img import DataArray2wxImage
-import numpy
 import wx
 
 class VideoDisplayer(object):

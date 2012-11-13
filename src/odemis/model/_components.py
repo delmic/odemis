@@ -705,7 +705,8 @@ class MockComponent(HwComponent):
             # we don't care of child_name as it's only for internal use in the real component
 
             if isinstance(child_args, dict): # delegation
-                child = MockComponent(**child_args)
+                # the real class is unknown, so just give a generic one
+                child = MockComponent(_realcls=HwComponent, **child_args)
             else: # explicit creation (already done)
                 child = child_args
 

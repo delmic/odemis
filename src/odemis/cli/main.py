@@ -484,15 +484,24 @@ def acquire(comp_name, dataflow_names, filename):
             image = df.get()
             images.append(image)
             logging.info("Acquired an image of dimension %r.", image.shape)
-            dim = (image.shape[0] * image.metadata[model.MD_PIXEL_SIZE][0],
-                   image.shape[1] * image.metadata[model.MD_PIXEL_SIZE][1])
-            logging.info("Physical dimension of image is %fx%f m.", dim[0], dim[1])
-            dim_sens = (image.shape[0] * image.metadata[model.MD_SENSOR_PIXEL_SIZE][0],
-                        image.shape[1] * image.metadata[model.MD_SENSOR_PIXEL_SIZE][1])
-            logging.info("Physical dimension of sensor is %fx%f m.", dim_sens[0], dim_sens[1])
         except:
-            logging.error("Failed to acquire image from component '%s'", comp_name)
+            logging.exception("Failed to acquire image from component '%s'", comp_name)
             return 127
+        
+        try:
+            if model.MD_PIXEL_SIZE in image.metadata:
+                pxs =  image.metadata[model.MD_PIXEL_SIZE]
+                dim = (image.shape[0] * pxs[0], image.shape[1] * pxs[1])
+                logging.info("Physical dimension of image is %fx%f m.", dim[0], dim[1])
+            else:
+                logging.warning("Physical dimension of image is unknown.")
+                
+            if model.MD_SENSOR_PIXEL_SIZE in image.metadata:
+                spxs =  image.metadata[model.MD_PIXEL_SIZE]
+                dim_sens = (image.shape[0] * spxs[0], image.shape[1] * spxs[1])
+                logging.info("Physical dimension of sensor is %fx%f m.", dim_sens[0], dim_sens[1])
+        except:
+            logging.exception("Failed to read image information")
 
     tiff.export(filename, images)
     return 0
@@ -598,10 +607,10 @@ def main(args):
         parser.error("log-level must be positive.")
     loglev_names = [logging.WARNING, logging.INFO, logging.DEBUG]
     loglev = loglev_names[min(len(loglev_names) - 1, options.loglev)]
-    logging.getLogger().setLevel(loglev)
 
     # change the log format to be more descriptive
     handler = logging.StreamHandler()
+    logging.getLogger().setLevel(loglev)
     handler.setFormatter(logging.Formatter('%(asctime)s (%(module)s) %(levelname)s: %(message)s'))
     logging.getLogger().addHandler(handler)
 

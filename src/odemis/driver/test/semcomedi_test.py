@@ -16,8 +16,11 @@ You should have received a copy of the GNU General Public License along with Ode
 
 from odemis import model
 from odemis.driver import semcomedi
+import Pyro4
 import comedi
 import logging
+import os
+import pickle
 import time
 import unittest
 
@@ -34,10 +37,10 @@ logging.getLogger().setLevel(logging.DEBUG)
 comedi.comedi_loglevel(3)
 
 # arguments used for the creation of basic components
-CONFIG_SED = {"name": "sed", "role": "sed", "channel":5}
-CONFIG_BSD = {"name": "bsd", "role": "bsd", "channel":6}
+CONFIG_SED = {"name": "sed", "role": "sed", "channel":5, "limits": [-3, 3]}
+CONFIG_BSD = {"name": "bsd", "role": "bsd", "channel":6, "limits": [-0.1, 0.2]}
 CONFIG_SCANNER = {"name": "scanner", "role": "ebeam", "limits": [[0, 5], [0, 5]],
-                  "channels": [0,1], "settle_time": 10e-6} 
+                  "channels": [0,1], "settle_time": 10e-6, "hfw_nomag": 10e-3} 
 CONFIG_SEM = {"name": "sem", "role": "sem", "device": "/dev/comedi0", 
               "children": {"detector0": CONFIG_SED, "scanner": CONFIG_SCANNER}
               }
@@ -82,6 +85,23 @@ class TestSEMStatic(unittest.TestCase):
         wrong_config = dict(CONFIG_SEM)
         wrong_config["device"] = "/dev/comdeeeee"
         self.assertRaises(Exception, semcomedi.SEMComedi, None, wrong_config)
+    
+    def test_pickle(self):
+        try:
+            os.remove("test")
+        except OSError:
+            pass
+        daemon = Pyro4.Daemon(unixsocket="test")
+        
+        sem = semcomedi.SEMComedi(daemon=daemon, **CONFIG_SEM)
+                
+        dump = pickle.dumps(sem, pickle.HIGHEST_PROTOCOL)
+#        print "dump size is", len(dump)
+        sem_unpickled = pickle.loads(dump)
+        self.assertEqual(len(sem_unpickled.children), 2)
+        sem.terminate()
+
+    
     
 #@unittest.skip("simple")
 class TestSEM(unittest.TestCase):
@@ -151,10 +171,10 @@ class TestSEM(unittest.TestCase):
         """
         dwell = self.scanner.dwellTime.range[0] * 2
         self.scanner.dwellTime.value = dwell
-#        self.scanner.resolution.value = self.scanner.resolution.range[1] # test big image
-        self.scanner.resolution.value = [960,512] # FIXME: comedi_test cannot bear more
+        self.scanner.resolution.value = self.scanner.resolution.range[1] # test big image
         self.size = tuple(self.scanner.resolution.value)
         expected_duration = self.size[0] * self.size[1] * dwell
+        print expected_duration
         
         number = 3
         self.left = number
@@ -272,3 +292,30 @@ class TestSEM2(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# For testing
+#from odemis.driver.semcomedi import SEMComedi
+#import numpy
+#import logging
+#import comedi
+#logging.getLogger().setLevel(logging.DEBUG)
+#comedi.comedi_loglevel(3)
+#CONFIG_SED = {"name": "sed", "role": "sed", "channel":5}
+#CONFIG_SCANNER = {"name": "scanner", "role": "ebeam", "channels": [0,1], "limits": [[0, 5], [0, 5]], "settle_time": 10e-6} 
+#CONFIG_SEM = {"name": "sem", "role": "sem", "device": "/dev/comedi0", "children": {"detector0": CONFIG_SED, "scanner": CONFIG_SCANNER} }
+#d = SEMComedi(**CONFIG_SEM)
+#r = d.get_data([0, 1], 0.01, 3)
+#w = numpy.array([[1],[2],[3],[4]], dtype=float)
+#d.write_data([0], 0.01, w)
+#scanned = [300, 300]
+#scanned = [1000, 1000]
+#limits = numpy.array([[-5, 5], [-7, 7]], dtype=float)
+#margin = 2
+#s = SEMComedi._generate_scan_array(scanned, limits, margin)
+#d.write_data([0, 1], 100e-6, s)
+#r = d.write_read_data_phys([0, 1], [5, 6], 10e-6, s)
+#v=[]
+#for a in r:
+#    v.append(d._scan_result_to_array(a, scanned, margin))
+
