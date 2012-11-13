@@ -103,7 +103,7 @@ class SerializerTest(unittest.TestCase):
             pass
         daemon = Pyro4.Daemon(unixsocket="test")
         childc = FamilyValueComponent("child", 43, daemon=daemon)
-        parentc = FamilyValueComponent("parent", 42, children=[childc], daemon=daemon)
+        parentc = FamilyValueComponent("parent", 42, children={"one": childc}, daemon=daemon)
         childc.parent = parentc
 #        childc.parent = None
         
@@ -597,7 +597,7 @@ def ServerLoop(socket_name):
     component = MyComponent("mycomp", daemon)
 #    component = SimpleComponent("simpcomp", daemon=daemon)
     childc = FamilyValueComponent("child", 43, daemon=daemon)
-    parentc = FamilyValueComponent("parent", 42, parent=None, children=[childc], daemon=daemon)
+    parentc = FamilyValueComponent("parent", 42, parent=None, children={"one": childc}, daemon=daemon)
     childc.parent = parentc
     daemon.requestLoop()
     component.terminate()

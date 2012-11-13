@@ -101,8 +101,8 @@ class Component(ComponentBase):
         """
         name (string): unique name used to identify the component
         parent (Component): the parent of this component, that will be in .parent
-        children (set of Component): the children of this component, that will
-            be in .children
+        children (dict str -> Component): the children of this component, that will
+            be in .children. Objects not instance of Component are skipped
         daemon (Pyro4.daemon): daemon via which the object will be registered.
             default=None => not registered
         """
@@ -114,8 +114,9 @@ class Component(ComponentBase):
         self._parent = None
         self.parent = parent
         if children is None:
-            children = set()
-        self._children = set(children)
+            children = {}
+        # Do not add non-Component, so that it's compatible with passing a kwargs
+        self._children = set([c for c in children.values() if isinstance(c, ComponentBase)])
         # TODO update .parent of children?
 
     def _getproxystate(self):
@@ -365,10 +366,8 @@ class Detector(HwComponent):
     """
     __metaclass__ = ABCMeta
 
-    def __init__(self, name, role, children=None, **kwargs):
+    def __init__(self, name, role, **kwargs):
         HwComponent.__init__(self, name, role, **kwargs)
-        if children:
-            raise ArgumentError("Detector components cannot have children.")
 
         # To be overridden
         self._shape = (0) # maximum value of each dimension of the detector. A CCD camera 2560x1920 with 12 bits intensity has a 3D shape (2560,1920,2048).
@@ -387,8 +386,8 @@ class DigitalCamera(Detector):
     """
     __metaclass__ = ABCMeta
 
-    def __init__(self, name, role, children=None, **kwargs):
-        Detector.__init__(self, name, role, children, **kwargs)
+    def __init__(self, name, role, **kwargs):
+        Detector.__init__(self, name, role, **kwargs)
 
         # To be overridden by a VA
         self.binning = None # how many CCD pixels are merged (in each dimension) to form one pixel on the image.
@@ -403,7 +402,7 @@ class Actuator(HwComponent):
     """
     __metaclass__ = ABCMeta
 
-    def __init__(self, name, role, axes=None, inverted=None, ranges=None, children=None, **kwargs):
+    def __init__(self, name, role, axes=None, inverted=None, ranges=None, **kwargs):
         """
         axes (set of string): set of the names of the axes
         inverted (set of string): sub-set of axes with the name of all axes which
@@ -411,8 +410,6 @@ class Actuator(HwComponent):
         ranges (dict string -> 2-tuple of float): name of the axis to min, max position
         """
         HwComponent.__init__(self, name, role, **kwargs)
-        if children:
-            raise ArgumentError("Actuator %s cannot have children.", name)
         if axes is None:
             axes = []
         self._axes = frozenset(axes)
@@ -488,10 +485,8 @@ class Emitter(HwComponent):
     """
     __metaclass__ = ABCMeta
 
-    def __init__(self, name, role, children=None, **kwargs):
+    def __init__(self, name, role, **kwargs):
         HwComponent.__init__(self, name, role, **kwargs)
-        if children:
-            raise ArgumentError("Emitter components cannot have children.")
 
         self._shape = (0) # must be initialised by the sub-class
 
@@ -518,7 +513,7 @@ class CombinedActuator(Actuator):
         if set(children.keys()) != set(axes_map.keys()):
             raise ArgumentError("CombinedActuator needs the same keys in children and axes_map")
 
-        # this set ._axes and ._ranges
+        # this set ._axes and ._ranges (_children is an empty set)
         Actuator.__init__(self, name, role, axes=children.keys(), **kwargs)
 
         self._axis_to_child = {} # axis name => (Actuator, axis name)
@@ -684,7 +679,7 @@ class MockComponent(HwComponent):
         """
         HwComponent.__init__(self, name, role, daemon=daemon)
         if len(kwargs) > 0:
-            logging.debug("Component '%s' got init arguments '%r'", name, kwargs)
+            logging.debug("Component '%s' got init arguments %r", name, kwargs)
 
         # Special handling of actuators, for CombinedActuator
         # Can not be generic for every roattribute, as we don't know what to put as value
@@ -699,7 +694,7 @@ class MockComponent(HwComponent):
                 self.__dict__[va] = _vattributes.VigilantAttribute(None)
 
         if not children:
-            return
+            children = {}
 
         for child_name, child_args in children.items():
             # we don't care of child_name as it's only for internal use in the real component
