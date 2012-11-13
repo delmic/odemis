@@ -760,6 +760,11 @@ class ResolutionVA(VigilantAttribute, Continuous):
             raise OutOfBoundError("Trying to assign value '%s' outside of the range %s-%s." %
                         (str(value), str(self._range[0]), str(self._range[1])))
 
-
-
+    def _set_value(self, value):
+        # force tuple
+        value = tuple(value)
+        VigilantAttribute._set_value(self, value)
+    # need to overwrite the whole property   
+    value = property(VigilantAttribute._get_value, _set_value, VigilantAttribute._del_value, "The actual value")
+    
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:

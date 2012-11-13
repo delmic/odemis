@@ -1324,7 +1324,7 @@ class Scanner(model.Emitter):
         # which is probably sufficient for most usages and almost always reachable
         # shapeX = (diff_limitsX / diff_bestrangeX) * maxdataX
         self._shape = (2048, 2048)
-        resolution = [256, 256] # small resolution to get a fast display
+        resolution = (256, 256) # small resolution to get a fast display
         self.resolution = model.ResolutionVA(resolution, [(1, 1), self._shape])
         self.resolution.subscribe(self._onResolution)
         
