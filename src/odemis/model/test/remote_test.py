@@ -35,7 +35,7 @@ import unittest
 #gc.set_debug(gc.DEBUG_LEAK | gc.DEBUG_STATS)
 
 # Use processes or threads? Threads are easier to debug, but less real
-USE_THREADS = True
+USE_THREADS = False
 
 #@unittest.skip("simple")
 class ContainerTest(unittest.TestCase):
