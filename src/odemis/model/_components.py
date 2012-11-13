@@ -701,7 +701,7 @@ class MockComponent(HwComponent):
 
             if isinstance(child_args, dict): # delegation
                 # the real class is unknown, so just give a generic one
-                child = MockComponent(_realcls=HwComponent, **child_args)
+                child = MockComponent(_realcls=HwComponent, daemon=daemon, **child_args)
             else: # explicit creation (already done)
                 child = child_args
 
