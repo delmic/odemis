@@ -879,7 +879,8 @@ class SEMComedi(model.HwComponent):
         period_ns = int(round(period * 1e9))  # in nanoseconds
         
         # create a command for writing
-        logging.debug("Generating new write and read commands for %d scans", nscans)
+        logging.debug("Generating new write and read commands for %d scans on "
+                      "channels %r/%r", nscans, wchannels, rchannels)
         wcmd = comedi.cmd_struct()
         comedi.get_cmd_generic_timed(self._device, self._ao_subdevice,
                                                   wcmd, nwchans, period_ns)
