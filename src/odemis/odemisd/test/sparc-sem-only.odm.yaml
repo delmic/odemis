@@ -9,7 +9,7 @@ SPARC: {
 }
 
 # Quanta SEM driven via external X/Y connection, using a DAQ board
-"Quanta ExtXY": {
+"SEM ExtXY": {
     class: semcomedi.SEMComedi,
     role: none,
     init: {device: "/dev/comedi0"},
