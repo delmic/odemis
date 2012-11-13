@@ -42,12 +42,12 @@ class MetadataUpdater(model.Component):
         self._components = components
         
         model.Component.__init__(self, name, **kwargs)
-        
-        # For each detector
-        # Find other components that affects it (according to their role)
+
+        # For each component
+        # For each detector it affects 
         # Subscribe to the changes of the attributes that matter
-        for d in microscope.detectors:
-            for a in self._getAffecting(d):
+        for a in self._components:
+            for d in (microscope.detectors & a.affects):
                 if a.role == "stage":
                     # update the image position
                     self.observeStage(a, d)
@@ -66,20 +66,7 @@ class MetadataUpdater(model.Component):
 #                    self.observeLight(a, d)
                 else:
                     logging.debug("not observing %s which affects %s", a.name, d.name)
-    
-    def _getAffecting(self, affected):
-        """
-        Returns all the components that affect a given component
-        affected (Component): component that is affected
-        returns (list of Components): the components affecting "affected"
-        """
-        affectings = []
-        for c in self._components:
-            if affected in c.affects:
-                affectings.append(c)
-        
-        return affectings
-    
+
     def observeStage(self, stage, detector):
         # we need to keep the information on the detector to update
         def updateStagePos(pos):
@@ -90,6 +77,8 @@ class MetadataUpdater(model.Component):
             x = pos.get("x", 0)
             y = pos.get("y", 0)
             md = {model.MD_POS: (x, y)}
+            # FIXME check the scope of detector
+            logging.debug("Updating position for detector %s", detector.name)
             detector.updateMetadata(md)
         
         stage.position.subscribe(updateStagePos)
@@ -116,6 +105,7 @@ class MetadataUpdater(model.Component):
             except AttributeError:
                 binning = 1
             mag = float(lens.magnification.value)
+            # FIXME check the scope of captor_mpp (is it copied?)
             mpp = (captor_mpp[0] * binning / mag, captor_mpp[1] * binning / mag) 
             md = {model.MD_PIXEL_SIZE: mpp}
             detector.updateMetadata(md)
