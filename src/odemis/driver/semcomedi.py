@@ -153,12 +153,9 @@ class SEMComedi(model.HwComponent):
             kwargs = children["scanner"]
         except (KeyError, TypeError):
             raise KeyError("SEMComedi device '%s' was not given a 'scanner' child" % device)
-        # TODO: min dwell time should be just for one input channel, and adapt if
-        # more than one channel is read simultaneously
-        # min dwell time is the worst of output and input minimun period
-        nrchannels = len([n for n in children if n.startswith("detector")])
-        min_period = max(self._min_ai_periods[nrchannels], self._min_ao_periods[2]) 
-        self._scanner = Scanner(parent=self, min_dwell_time=min_period, daemon=daemon, **kwargs)
+        # init detector with the right length for find_closest_dwell_time 
+        self._detectors = dict([(n, None) for n in children if n.startswith("detector")])
+        self._scanner = Scanner(parent=self, daemon=daemon, **kwargs)
         self.children.add(self._scanner)
         
         # create the detector children "detectorN"
@@ -613,6 +610,46 @@ class SEMComedi(model.HwComponent):
             if rc != 0:
                 raise IOError("failed to prepare command (%d)" % rc)
     
+    def find_closest_dwell_time(self, period):
+        """
+        Returns the closest dwell time _longer_ than the given time compatible
+          with the device.
+        period (float): dwell time requested (in s)
+        returns (0<float): a value slightly smaller, or larger than the period (in s)
+        raises:
+            ValueError if no compatible dwell time can be found
+        Note: the dwell time is computed assuming all the detectors are active
+           simultaneously.
+        """ 
+        # TODO: min dwell time should be just for one input channel, and adapt if
+        # more than one channel is read simultaneously => pass nrchans?
+        
+        nwchans = 2 # always
+        nrchans = len(self._detectors) # one channel per detector
+        period_ns = int(period * 1e9)  # in nanoseconds
+        
+        # should be finding it in 2 steps in normal cases
+        for i in range(10):
+            rcmd = comedi.cmd_struct()
+            comedi.get_cmd_generic_timed(self._device, self._ai_subdevice,
+                                                      rcmd, nrchans, period_ns)
+            wcmd = comedi.cmd_struct()
+            if self._test:
+                wcmd.scan_begin_arg = rcmd.scan_begin_arg
+            else:
+                comedi.get_cmd_generic_timed(self._device, self._ao_subdevice,
+                                                      wcmd, nwchans, period_ns)
+            # scan_begin_arg contains a possible period for the subdevice 
+            if rcmd.scan_begin_arg == wcmd.scan_begin_arg:
+                return rcmd.scan_begin_arg / 1e9
+            
+            # try again with the longest of both periods
+            period_ns = max(rcmd.scan_begin_arg, wcmd.scan_begin_arg)
+        
+        # no compatible dwell time found
+        raise ValueError("No compatible dwell time found for %g s." % period)
+                
+        
     def _run_inttrig(self, subdevice, num):
         """
         This is the same as calling comedi_internal_trigger(), so just for trying
@@ -1287,7 +1324,7 @@ class Scanner(model.Emitter):
     Represents the e-beam scanner
     """
     def __init__(self, name, role, parent, channels, limits, settle_time, 
-                 min_dwell_time, hfw_nomag, **kwargs):
+                 hfw_nomag, **kwargs):
         """
         channels (2-tuple of (0<=int)): output channels for X/Y to drive
         limits (2x2 array of float): lower/upper bounds of the scan area in V.
@@ -1295,11 +1332,14 @@ class Scanner(model.Emitter):
           voltage for the max value of X. 
         settle_time (0<=float<=1e-3): time in s for the signal to settle after
           each scan line
-        min_dwell_time (0<=float): minimum dwell time in s. Provided by 
-          the parent.
         pixel_size_no_mag (0<float<=1): (theoritical) distance between horizontal borders 
           (lower/upper limit in X) if magnification is 1 (in m)
         """
+        # TODO: do oversampling when possible (= take multiple samples in a raw
+        # of each pixel and average their value). Should be maximum ~5smpl/px and
+        # adapt automatically down to 1 smpl/px if the dwell time is close from
+        # HW limit.
+        
         if len(channels) != 2:
             raise ValueError("E-beam scanner '%s' needs 2 channels" % (name,))
         
@@ -1349,9 +1389,9 @@ class Scanner(model.Emitter):
         # conversion from coordinates to physical units.
         
         # max dwell time is purely arbitrary
-        range_dwell = (min_dwell_time, 1) # s
-        assert range_dwell[0] <= range_dwell[1]
-        self.dwellTime = model.FloatContinuous(range_dwell[0], range_dwell, unit="s")
+        range_dwell = (parent.find_closest_dwell_time(0), 1) # s
+        self.dwellTime = model.FloatContinuous(range_dwell[0], range_dwell, 
+                                               unit="s", setter=self._setDwellTime)
 
         # next two values are just to determine the pixel size
         # Distance between borders if magnification = 1. It should be found out
@@ -1395,6 +1435,9 @@ class Scanner(model.Emitter):
         res = self.resolution.value
         pxs = [self.HFWNoMag / (res[0] * mag), self.HFWNoMag / (res[1] * mag)]
         self.parent._metadata[model.MD_PIXEL_SIZE] = pxs
+    
+    def _setDwellTime(self, value):
+        return self.parent.find_closest_dwell_time(value)
     
     # TODO get_resting_point_data() -> to get the data to write when not scanning
     # returns: array (1x2 numpy.ndarray), channels (list of ints), ranges (list of float)
