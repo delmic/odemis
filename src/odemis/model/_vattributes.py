@@ -573,7 +573,7 @@ class Continuous(object):
                                    % (str(new_range[0]), str(new_range[1])))
         if hasattr(self, "value"):
             if self.value < new_range[0] or self.value > new_range[1]:
-                raise OutOfBoundError("Current value '%s' is outside of the range %s-%s." %
+                raise OutOfBoundError("Current value '%s' is outside of the range %s→%s." %
                             (str(self.value), str(new_range[0]), str(new_range[1])))
         self._range = tuple(new_range)
 
@@ -594,7 +594,7 @@ class Continuous(object):
             OutOfBoundError if the value is not within the authorised range
         """
         if value < self._range[0] or value > self._range[1]:
-            raise OutOfBoundError("Trying to assign value '%s' outside of the range %s-%s." %
+            raise OutOfBoundError("Trying to assign value '%s' outside of the range %s→%s." %
                         (str(value), str(self._range[0]), str(self._range[1])))
 
 class Enumerated(object):
@@ -710,7 +710,7 @@ class MultiSpeedVA(VigilantAttribute, Continuous):
         for axis, v in value.items():
             # It has to be within the range, but also > 0
             if v <= 0 or v < self._range[0] or v > self._range[1]:
-                raise OutOfBoundError("Trying to assign axis '%s' value '%s' outside of the range %s-%s." %
+                raise OutOfBoundError("Trying to assign axis '%s' value '%s' outside of the range %s→%s." %
                             (str(axis), str(value), str(self._range[0]), str(self._range[1])))
 
 class ResolutionVA(VigilantAttribute, Continuous):
@@ -721,7 +721,7 @@ class ResolutionVA(VigilantAttribute, Continuous):
     be automatically adapted to a bigger one allowed.
     """
 
-    def __init__(self, value=(1,1), range=[], unit="px", **kwargs):
+    def __init__(self, value, range, unit="px", **kwargs):
         """
         range (2x (2-tuple of int)): minimum and maximum size in each dimension
         """
@@ -740,7 +740,7 @@ class ResolutionVA(VigilantAttribute, Continuous):
         if hasattr(self, "value"):
             if (self.value[0] < new_range[0][0] or self.value[0] > new_range[1][0] or
                 self.value[1] < new_range[0][1] or self.value[1] > new_range[1][1]):
-                raise OutOfBoundError("Current value '%s' is outside of the range %s-%s." %
+                raise OutOfBoundError("Current value '%s' is outside of the range %s→%s." %
                             (str(self.value), str(new_range[0]), str(new_range[1])))
         self._range = tuple(new_range)
 
@@ -757,7 +757,7 @@ class ResolutionVA(VigilantAttribute, Continuous):
 
         if (value[0] < self._range[0][0] or value[0] > self._range[1][0] or
             value[1] < self._range[0][1] or value[1] > self._range[1][1]):
-            raise OutOfBoundError("Trying to assign value '%s' outside of the range %s-%s." %
+            raise OutOfBoundError("Trying to assign value '%s' outside of the range %s→%s." %
                         (str(value), str(self._range[0]), str(self._range[1])))
 
     def _set_value(self, value):
