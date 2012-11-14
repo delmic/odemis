@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<resource class="odemis.gui.comp.stream.StreamPanel(wxPanel)" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
+<resource class="ImageTextToggleButton" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
   <object class="wxFrame" name="fr_main">
     <object class="wxMenuBar">
       <object class="wxMenu">
@@ -361,7 +361,7 @@
                         <orient>wxHORIZONTAL</orient>
                         <object class="sizeritem">
                           <object class="ImageTextToggleButton" name="btn_toggle_press">
-                            <size>92,-1</size>
+                            <size>92,48</size>
                             <label>0 kPa</label>
                             <delta>1</delta>
                             <bitmap>img/btn_press.png</bitmap>
@@ -385,7 +385,7 @@
                         </object>
                         <object class="sizeritem">
                           <object class="ImageTextToggleButton" name="btn_toggle_opt">
-                            <size>92,-1</size>
+                            <size>92,48</size>
                             <label>OPTICAL</label>
                             <delta>1</delta>
                             <bitmap>img/btn_opt.png</bitmap>
@@ -411,8 +411,8 @@
                         </object>
                         <object class="sizeritem">
                           <object class="ImageTextToggleButton" name="btn_toggle_sem">
-                            <size>92,-1</size>
-                            <label>SEM     </label>
+                            <size>92,48</size>
+                            <label>SEM      </label>
                             <delta>1</delta>
                             <bitmap>img/btn_sem.png</bitmap>
                             <hover>img/btn_sem_h.png</hover>
@@ -440,7 +440,7 @@
                         </object>
                         <object class="sizeritem">
                           <object class="PopupImageButton" name="btn_toggle_pause">
-                            <size>51,-1</size>
+                            <size>50,48</size>
                             <default>1</default>
                             <bitmap>img/btn_pause.png</bitmap>
                             <hover>img/btn_pause_h.png</hover>
