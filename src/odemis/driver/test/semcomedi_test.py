@@ -295,27 +295,33 @@ if __name__ == "__main__":
 
 
 # For testing
-#from odemis.driver.semcomedi import SEMComedi
+#import odemis.driver.semcomedi as semcomedi 
 #import numpy
 #import logging
 #import comedi
 #logging.getLogger().setLevel(logging.DEBUG)
 #comedi.comedi_loglevel(3)
-#CONFIG_SED = {"name": "sed", "role": "sed", "channel":5}
-#CONFIG_SCANNER = {"name": "scanner", "role": "ebeam", "channels": [0,1], "limits": [[0, 5], [0, 5]], "settle_time": 10e-6} 
+#CONFIG_SED = {"name": "sed", "role": "sed", "channel":5, "limits": [-3, 3]}
+#CONFIG_SCANNER = {"name": "scanner", "role": "ebeam", "limits": [[0, 5], [0, 5]], "channels": [0,1], "settle_time": 10e-6, "hfw_nomag": 10e-3} 
 #CONFIG_SEM = {"name": "sem", "role": "sem", "device": "/dev/comedi0", "children": {"detector0": CONFIG_SED, "scanner": CONFIG_SCANNER} }
-#d = SEMComedi(**CONFIG_SEM)
-#r = d.get_data([0, 1], 0.01, 3)
+#d = semcomedi.SEMComedi(**CONFIG_SEM)
+#r = d._get_data([0, 1], 0.01, 3)
 #w = numpy.array([[1],[2],[3],[4]], dtype=float)
 #d.write_data([0], 0.01, w)
 #scanned = [300, 300]
 #scanned = [1000, 1000]
-#limits = numpy.array([[-5, 5], [-7, 7]], dtype=float)
+#limits = numpy.array([[0, 5], [0, 5]], dtype=float)
 #margin = 2
-#s = SEMComedi._generate_scan_array(scanned, limits, margin)
-#d.write_data([0, 1], 100e-6, s)
-#r = d.write_read_data_phys([0, 1], [5, 6], 10e-6, s)
+#s = semcomedi.Scanner._generate_scan_array(scanned, limits, margin)
+##d.write_data([0, 1], 100e-6, s)
+#r = d.write_read_data_phys([0, 1], [5, 6], 10e-6, s,async=False)
 #v=[]
 #for a in r:
 #    v.append(d._scan_result_to_array(a, scanned, margin))
-
+#
+#import pylab
+#pylab.plot(r[0])
+#pylab.show()
+#
+#pylab.plot(rr[:,0])
+#pylab.imshow(v[0])

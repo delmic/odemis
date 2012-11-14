@@ -812,6 +812,7 @@ class SEMComedi(model.HwComponent):
                                    [c], [rranges[i]], rbuf[:,i,numpy.newaxis]))
 
         return parrays
+    
     def fake_write_read_data_raw(self, wchannels, wranges, rchannels, rranges, period, data):
         """
         Imitates write_read_data_raw() but just read data, for the comedi_test driver
@@ -877,6 +878,7 @@ class SEMComedi(model.HwComponent):
         nwchans = data.shape[1]
         nrchans = len(rchannels)
         period_ns = int(round(period * 1e9))  # in nanoseconds
+        expected_time = nscans * period # s
         
         # create a command for writing
         logging.debug("Generating new write and read commands for %d scans on "
@@ -936,10 +938,11 @@ class SEMComedi(model.HwComponent):
         # but it is. Maybe just to let Comedi know that the command has started
         comedi.internal_trigger(self._device, self._ao_subdevice, 0)
         comedi.internal_trigger(self._device, self._ai_subdevice, 0)
+        start_time = time.time()
         self._read_from_file(rdtype, rshape[0] * rshape[1])
-        self._write_to_file()
+        self._write_to_file(start_time + expected_time)
 
-        timeout = (nscans * period) * 1.10 + 1 # s   == expected time + 10% + 1s
+        timeout = expected_time * 1.10 + 1 # s   == expected time + 10% + 1s
         logging.debug("Waiting %g s for the acquisition to finish", timeout)
         self._wait_write_to_file(timeout)
         rbuf = self._wait_read_from_file(timeout)
@@ -964,11 +967,14 @@ class SEMComedi(model.HwComponent):
     
     def _wait_read_from_file(self, timeout):
         """
-        Call it after the wait_write
+        Call it after the wait_read
         """
         self._rthread.join(timeout)
         if self._rthread.isAlive():
-            comedi.cancel(self._device, self._ai_subdevice)
+            logging.warning("Reading thread is still running after %g s", timeout)
+        # if thread is stuck, it might help, 
+        # if not, it ensures the device really does nothing more
+        comedi.cancel(self._device, self._ai_subdevice)
         
         # the result should be in self._rbuf
         if self._rbuf is None:
@@ -987,15 +993,24 @@ class SEMComedi(model.HwComponent):
         self._wbuf[:self._preload_size].tofile(self._wfile)
         self._wfile.flush() # it can block here if we preload too much
     
-    def _write_to_file(self):
-        self._wthread = threading.Thread(target=self._write_to_file_thread)
-        self._wthread.start()    
+    def _write_to_file(self, expected_end):
+        self._wthread = threading.Thread(target=self._write_to_file_thread, args=(expected_end,))
+        self._wthread.start()
     
-    def _write_to_file_thread(self):
+    def _write_to_file_thread(self, expected_end):
         """To be called in a separate thread"""
         # TODO: can this handle faults? 
         self._wbuf[self._preload_size:].tofile(self._wfile)
         self._wfile.flush()
+        
+        # Wait until the buffer is fully emptied to state the output is over 
+        while comedi.get_subdevice_flags(self._device, self._ao_subdevice) & comedi.SDF_RUNNING:
+            # sleep longer if the end is far away
+            left = expected_end - time.time()
+            if left > 0.1:
+                time.sleep(left / 2)
+            else:
+                time.sleep(0.01)
         
     def _wait_write_to_file(self, timeout):
         try:
@@ -1381,22 +1396,24 @@ class Scanner(model.Emitter):
         pxs = [self.HFWNoMag / (res[0] * mag), self.HFWNoMag / (res[1] * mag)]
         self.parent._metadata[model.MD_PIXEL_SIZE] = pxs
     
+    # TODO get_resting_point_data() -> to get the data to write when not scanning
+    # returns: array (1x2 numpy.ndarray), channels (list of ints), ranges (list of float)
     def get_scan_data(self):
         """
         Returns all the data as it has to be written the device to generate a 
           scan.
         returns: array (2D numpy.ndarray), period (0<=float), shape (2-tuple int),
-                 margin (0<=int), channels (list of ints), ranges (list of float):
+                 margin (0<=int), channels (list of int), ranges (list of int):
           array is of shape Nx2: N is the number of pixels. dtype is fitting the
              device raw data
           period: time between a pixel in s
           shape: X/Y dimension of the scanned image (e.g., the resolution)
           margin: amount of fake pixels inserted at the beginning of each Y line
             to allow for the settling time
-          channels: the output channel to use
+          channels: the output channels to use
           ranges: the range index of each output channel
         Note: it only recomputes the scanning array if the settings have changed
-        Note: it's not thread-safe!
+        Note: it's not thread-safe, you must ensure no simulaneous calls.
         """
         dwell_time = self.dwellTime.value
         resolution = self.resolution.value
