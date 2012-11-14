@@ -4,7 +4,7 @@ How to install Odemis
 = Installing the dependencies =
 
 You need Ubuntu 12.04 (x86 - 32 bits).
-sudo apt-get install python-imaging python-yaml python-gdal python-serial python-zmq python-concurrent.futures python-scipy python-decorator cgroup-bin python-libtiff
+sudo apt-get install python-imaging python-yaml python-gdal python-serial python-zmq python-concurrent.futures python-scipy python-decorator cgroup-bin python-libtiff python-comedilib
 
 wxPython 2.9 is also required, but it has to be built form source as described
 in the following section.
@@ -45,8 +45,23 @@ choice.)
     sudo ln -s <path to odemis root dir>/gui/xmlh/xh_delmic.py
     sudo ln -s <path to odemis root dir>/gui/xmlh/delmic.py
 
+= Installing Comedi =
+Used to access the DAQ board to connect to the SEM. The version of comedi
+provided in Ubuntu 12.04 is version 0.8. It should work, but if not you can also
+try to upgrade to 0.10. See below for the instructions. The driver is only
+tested on the NI PCI 6251, and will only work on a NI board or the simulator
+(adaptation for other boards should be light, as long as Comedi support
+synchronous input/output).
 
-= Installing comedilib 0.10.1 =
+Once Comedi is installed. You need to calibrate the DAQ board (about once per year).
+
+For the NI PCI 6251:
+sudo comedi_soft_calibrate -f /dev/comedi0
+
+For some other boards, which are calibrated in hardware, you need to do:
+sudo comedi_calibrate -f /dev/comedi0
+
+== Installing comedilib 0.10.1 ==
 git clone git://comedi.org/git/comedi/comedilib.git
 sudo apt-get install autoconf libltdl-dev flex byacc python-dev swig
 cd comedilib
@@ -55,7 +70,7 @@ cd comedilib
 make -j
 sudo make install
 
-= Installing comedi_calibrate =
+== Installing comedi_calibrate ==
 git clone git://comedi.org/git/comedi/comedi_calibrate.git
 sudo apt-get install libboost-dev libboost-program-options-dev libgsl0-dev
 cd comedi_calibrate
@@ -64,14 +79,18 @@ cd comedi_calibrate
 make -j
 sudo make install
 
-For the NI PCI 6251
-sudo comedi_soft_calibrate -f /dev/comedi0
-
-= Installing pycomedi =
+== Installing pycomedi ==
 git clone git://tremily.us/pycomedi.git
-sudo apt-get install python-comediliblib comedi-dev python-nose cython
+sudo apt-get install python-comedilib comedi-dev python-nose cython
 cd pycomedi
 sudo python setup.py install
+
+== Loading the comedi simulator driver ==
+Needs to be done after every boot.
+sudo modprobe comedi comedi_num_legacy_minors=4
+sudo modprobe comedi_test
+sudo comedi_config /dev/comedi0 comedi_test 1000000,1000000
+
 
 = Installing Odemis =
 
@@ -161,7 +180,8 @@ On old versions of Linux (before 3.2.7), you need to create a file
 SUBSYSTEMS=="usb", ATTRS{idProduct}=="1008", ATTRS{idVendor}=="1a72", RUN+="/sbin/modprobe -q ftdi-sio product=0x1008 vendor=0x1a72"
 
 = Configuring the instantiation file =
-This file describes the available hardware for Odemis. Basically, it list for each
-hardware, which driver to use and the parameters required. See the back-end
-specification for precise syntax and example files.
+This file describes the available hardware for Odemis. Basically, it lists for each
+hardware, which driver to use and the parameters required. It's following the 
+YAML format (similar to JSON). See the back-end specification for precise syntax
+and example files.
 

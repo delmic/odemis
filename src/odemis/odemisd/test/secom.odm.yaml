@@ -1,6 +1,6 @@
 SECOM: {
     class: Microscope,
-    role: brightfield,
+    role: secom,
     emitters: [Spectra, "Nikon Super Duper", "MultiBand Fixed Filter", "EBeam ExtXY"],
     detectors: [Clara, "SED ExtXY"],
     actuators: ["Redstone Stage", "SEM-Optical Alignment", "OpticalZ actuator"],
@@ -14,9 +14,9 @@ Spectra: {
 }
 
 # Quanta SEM driven via external X/Y connection, using a DAQ board
-"Quanta ExtXY": {
+"SEM ExtXY": {
     class: semcomedi.SEMComedi,
-    role: sem,
+    role: none,
     init: {device: "/dev/comedi0"},
     # more detectors can be added, if necessary
     children: {scanner: "EBeam ExtXY", detector0: "SED ExtXY"}
@@ -40,7 +40,7 @@ Spectra: {
         dwellTime: 10.e-6, # s
         magnification: 1000, # (ratio)
     },
-    affects: ["SEM ExtXY", Clara] # affects the CCD in case of cathodoluminescence
+    affects: ["SED ExtXY", Clara] # affects the CCD in case of cathodoluminescence
 }
 
 # Must be connected on AI 5/AI GND
@@ -86,7 +86,7 @@ Clara: {
 "Redstone Stage": {
     class: pi.StageRedStone,
     role: stage,
-    affects: [Clara],
+    affects: [Clara, "EBeam ExtXY"],
     init: {
         port: /dev/ttyS0, # serial port on the board
         # port: /dev/ttyPIRS, # USB serial port
@@ -134,7 +134,7 @@ Clara: {
 
 PIGCS: {
     class: pigcs.Bus,
-    role: AlignAndFocus,
+    role: none,
     init: {
         port: "/dev/ttyPIE",
         axes: {"l": [1, 1, False], "r": [2, 1, False], "z": [3, 1, False]} # axis -> controller, channel, closed-loop?

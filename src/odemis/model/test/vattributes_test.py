@@ -175,6 +175,28 @@ class VigilantAttributeTest(unittest.TestCase):
         
         self.assertTrue(self.called == 1)
 
+    def test_resolution(self):
+        va = model.ResolutionVA((10,10), ((1,1), (100, 150)))
+        self.assertEqual(va.value, (10,10))
+        self.assertEqual(va.range, ((1,1), (100, 150)))
+        
+        # must convert anything to a tuple
+        va.value = [11, 150]
+        self.assertEqual(va.value, (11, 150))
+
+        # must not accept resolutions outside of the range
+        try:
+            va.value = (80, 160)
+            self.fail("Assigning value not in range should not be allowed.")
+        except model.OutOfBoundError:
+            pass # as it should be
+        
+        try:
+            va.value = (10,10,10)
+            self.fail("Assigning a 3-tuple to a resolution should not be allowed.")
+        except model.InvalidTypeError:
+            pass # as it should be
+
     def test_weakref(self):
         """
         checks that even if an object has a method subscribed to a property,

@@ -140,7 +140,7 @@ class AndorCam3(model.DigitalCamera):
     It also provide low-level methods corresponding to the SDK functions.
     """
     
-    def __init__(self, name, role, children=None, device=None, **kwargs):
+    def __init__(self, name, role, device=None, **kwargs):
         """
         Initialises the device
         device (None or int): number of the device to open, as defined by Andor, cd scan()
@@ -148,7 +148,7 @@ class AndorCam3(model.DigitalCamera):
         Raises:
           ATError if the device cannot be opened.
         """
-        model.DigitalCamera.__init__(self, name, role, children, **kwargs)
+        model.DigitalCamera.__init__(self, name, role, **kwargs)
         
         if os.name == "nt":
             # FIXME That's not gonna fly... need to put this into ATDLL

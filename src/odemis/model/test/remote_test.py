@@ -31,7 +31,11 @@ import threading
 import time
 import unittest
 
+
 #gc.set_debug(gc.DEBUG_LEAK | gc.DEBUG_STATS)
+
+# Use processes or threads? Threads are easier to debug, but less real
+USE_THREADS = False
 
 #@unittest.skip("simple")
 class ContainerTest(unittest.TestCase):
@@ -103,7 +107,7 @@ class SerializerTest(unittest.TestCase):
             pass
         daemon = Pyro4.Daemon(unixsocket="test")
         childc = FamilyValueComponent("child", 43, daemon=daemon)
-        parentc = FamilyValueComponent("parent", 42, children=[childc], daemon=daemon)
+        parentc = FamilyValueComponent("parent", 42, children={"one": childc}, daemon=daemon)
         childc.parent = parentc
 #        childc.parent = None
         
@@ -113,9 +117,27 @@ class SerializerTest(unittest.TestCase):
         self.assertEqual(parentc_unpickled.value, 42)
         
 
+    def test_mock(self):
+        try:
+            os.remove("test")
+        except OSError:
+            pass
+        daemon = Pyro4.Daemon(unixsocket="test")
+        CONFIG_SED = {"name": "sed", "role": "sed", "channel":5, "limits": [-3, 3]}
+        CONFIG_SCANNER = {"name": "scanner", "role": "ebeam", "limits": [[0, 5], [0, 5]]} 
+        CONFIG_SEM = {"name": "sem", "role": "sem", "device": "/dev/comedi0", 
+              "children": {"detector0": CONFIG_SED, "scanner": CONFIG_SCANNER}
+              }
+        sem = model.MockComponent(daemon=daemon, _realcls=model.HwComponent, **CONFIG_SEM)
+                
+        dump = pickle.dumps(sem, pickle.HIGHEST_PROTOCOL)
+#        print "dump size is", len(dump)
+        sem_unpickled = pickle.loads(dump)
+        self.assertEqual(len(sem_unpickled.children), 2)
+        sem.terminate()
+
     
-    
-#@unittest.skip("simple")
+@unittest.skip("simple")
 class ProxyOfProxyTest(unittest.TestCase):
 # Test sharing a shared component from the client
 
@@ -247,7 +269,7 @@ class ProxyOfProxyTest(unittest.TestCase):
         self.data_arrays_sent = data[0][0]
         self.assertGreaterEqual(self.data_arrays_sent, self.count)
 
-#@unittest.skip("simple")
+@unittest.skip("simple")
 class RemoteTest(unittest.TestCase):
     """
     Test the Component, DataFlow, and VAs when shared remotely.
@@ -257,8 +279,10 @@ class RemoteTest(unittest.TestCase):
     
     def setUp(self):
         # Use Thread for debug:
-#        self.server = Thread(target=ServerLoop, args=(self.container_name,))
-        self.server = Process(target=ServerLoop, args=(self.container_name,))
+        if USE_THREADS:
+            self.server = Thread(target=ServerLoop, args=(self.container_name,))
+        else:
+            self.server = Process(target=ServerLoop, args=(self.container_name,))
         self.server.start()
         time.sleep(0.1) # give it some time to start
 
@@ -597,7 +621,7 @@ def ServerLoop(socket_name):
     component = MyComponent("mycomp", daemon)
 #    component = SimpleComponent("simpcomp", daemon=daemon)
     childc = FamilyValueComponent("child", 43, daemon=daemon)
-    parentc = FamilyValueComponent("parent", 42, parent=None, children=[childc], daemon=daemon)
+    parentc = FamilyValueComponent("parent", 42, parent=None, children={"one": childc}, daemon=daemon)
     childc.parent = parentc
     daemon.requestLoop()
     component.terminate()

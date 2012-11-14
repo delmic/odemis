@@ -1,6 +1,6 @@
 SimSECOM: {
     class: Microscope,
-    role: brightfield,
+    role: secom,
     emitters: [Spectra, "Nikon Super Duper", "MultiBand Fixed Filter", "EBeam ExtXY"],
     detectors: ["Andor SimCam", "SED ExtXY"],
     actuators: ["FakeRedStoneStage", "SEM-Optical Alignment", "OpticalZ actuator"],
@@ -36,7 +36,7 @@ Spectra: {
 
 "SEM ExtXY": {
     class: semcomedi.SEMComedi,
-    role: sem,
+    role: none,
     init: {device: "/dev/comedi0"},
     # more detectors can be added, if necessary
     children: {scanner: "EBeam ExtXY", detector0: "SED ExtXY"}
@@ -56,7 +56,7 @@ Spectra: {
         dwellTime: 10.e-6, # s
         magnification: 1.e+3, # (ratio)
     },
-#    affects: ["SEM ExtXY", "Andor SimCam"] # affects the CCD in case of cathodoluminescence
+    affects: ["SED ExtXY", "Andor SimCam"] # affects the CCD in case of cathodoluminescence
 }
 
 "SED ExtXY": { # aka ETD
@@ -92,7 +92,7 @@ Spectra: {
     class: simulated.Stage2D,
     role: stage,
     init: {axes: [x, y]},
-    affects: ["Andor SimCam"],
+    affects: ["Andor SimCam", "EBeam ExtXY"],
     properties: {
         speed: {x: 0.1, y: 0.1} #m/s
     }
@@ -128,7 +128,7 @@ Spectra: {
 
 FakePIGCS: {
     class: simulated.Stage2D,
-    role: AlignAndFocus,
+    role: none,
     init: {axes: ["l", "r", "z"]},
 }
 

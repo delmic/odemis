@@ -1,0 +1,2 @@
+# force the comedi devices to be accessible to odemis
+KERNEL=="comedi[0-9]*", MODE="660", GROUP="odemis"
