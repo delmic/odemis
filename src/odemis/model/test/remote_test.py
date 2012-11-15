@@ -17,13 +17,14 @@ You should have received a copy of the GNU General Public License along with Ode
 '''
 from concurrent import futures
 from concurrent.futures.thread import ThreadPoolExecutor
+from multiprocessing.process import Process
+from odemis import model
 from odemis.model import roattribute, oneway, isasync
 from odemis.model._vattributes import VigilantAttributeBase
-from multiprocessing.process import Process
 from threading import Thread
 import Pyro4
 import gc
-from odemis import model
+import logging
 import numpy
 import os
 import pickle
@@ -31,7 +32,7 @@ import threading
 import time
 import unittest
 
-
+#logging.getLogger().setLevel(logging.DEBUG)
 #gc.set_debug(gc.DEBUG_LEAK | gc.DEBUG_STATS)
 
 # Use processes or threads? Threads are easier to debug, but less real
@@ -137,7 +138,7 @@ class SerializerTest(unittest.TestCase):
         sem.terminate()
 
     
-@unittest.skip("simple")
+#@unittest.skip("simple")
 class ProxyOfProxyTest(unittest.TestCase):
 # Test sharing a shared component from the client
 
@@ -269,7 +270,7 @@ class ProxyOfProxyTest(unittest.TestCase):
         self.data_arrays_sent = data[0][0]
         self.assertGreaterEqual(self.data_arrays_sent, self.count)
 
-@unittest.skip("simple")
+#@unittest.skip("simple")
 class RemoteTest(unittest.TestCase):
     """
     Test the Component, DataFlow, and VAs when shared remotely.
@@ -459,6 +460,7 @@ class RemoteTest(unittest.TestCase):
         comp = rdaemon.getObject("mycomp")
 
         self.count = 0
+        self.expected_shape = (2048, 2048)
         self.data_arrays_sent = 0
         comp.data.reset()
         
@@ -470,13 +472,43 @@ class RemoteTest(unittest.TestCase):
         
         time.sleep(0.1)
         self.assertEqual(count_end, self.count)
+        self.assertGreaterEqual(count_end, 1)
+        
+        self.count = 0
+        self.data_arrays_sent = 0
+        comp.data.reset()
 
+        comp.stopServer()
+        time.sleep(0.1) # give it some time to terminate
+    
+    def test_dataflow_strided(self):
+        # test that strided array can be passed (even if less efficient)
+        rdaemon = Pyro4.Proxy("PYRO:Pyro.Daemon@./u:"+self.container_name)
+        comp = rdaemon.getObject("mycomp")
+
+        self.count = 0
+        self.data_arrays_sent = 0
+        self.expected_shape = (2048, 2045)
+        comp.cut.value = 3
+        comp.data.reset()
+        
+        comp.data.subscribe(self.receive_data)
+        time.sleep(0.5)
+        comp.data.unsubscribe(self.receive_data)
+        comp.cut.value = 0 # put it back
+        count_end = self.count
+        print "received %d strided arrays over %d" % (self.count, self.data_arrays_sent)
+        
+        time.sleep(0.1)
+        self.assertEqual(count_end, self.count)
+        self.assertGreaterEqual(count_end, 1)
+        
         comp.stopServer()
         time.sleep(0.1) # give it some time to terminate
     
     def receive_data(self, dataflow, data):
         self.count += 1
-        self.assertEqual(data.shape, (2048, 2048))
+        self.assertEqual(data.shape, self.expected_shape)
         self.data_arrays_sent = data[0][0]
         self.assertGreaterEqual(self.data_arrays_sent, self.count)
 
@@ -672,6 +704,11 @@ class MyComponent(model.Component):
         self.prop = model.IntVA(42)
         self.cont = model.FloatContinuous(2.0, [-1, 3.4], unit="C")
         self.enum = model.StringEnumerated("a", set(["a", "c", "bfds"]))
+        self.cut = model.IntVA(0, setter=self._setCut)
+    
+    def _setCut(self, value):
+        self.data.cut = value
+        return self.data.cut
     
     @roattribute
     def my_value(self):
@@ -771,11 +808,12 @@ class FakeDataFlow(model.DataFlow):
         self._stop = threading.Event()
         self._thread = None
         self.count = 0
+        self.cut = 0 # to test non stride arrays
     
     def _create_one(self, shape, bpp, index):
         array = numpy.zeros(shape, dtype=("uint%d" % bpp)).view(model.DataArray)
         array[index % shape[0],:] = 255
-        return array
+        return array[:, self.cut:]
     
     def reset(self):
         self.count = 0
