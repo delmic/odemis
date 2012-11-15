@@ -94,11 +94,6 @@ class SEMComedi(model.HwComponent):
         try:
             self._device = comedi.open(self._device_name)
             self._fileno = comedi.fileno(self._device)
-            # they are pointing to the same "file", but must be different objects
-            # to be able to read and write simultaneously.
-            # Closing any of them will close the device as well
-            self._rfile = os.fdopen(self._fileno, 'r+') 
-            self._wfile = os.fdopen(self._fileno, 'r+')
         except comedi.ComediError:
             raise ValueError("Failed to open DAQ device '%s'" % device)
         
@@ -118,6 +113,9 @@ class SEMComedi(model.HwComponent):
         except comedi.ComediError:
             raise ValueError("Failed to find both input and output on DAQ device '%s'" % device)
 
+        self._reader = Reader(self)
+        self._writer = Writer(self)
+        
         self._metadata = {model.MD_HW_NAME: self.getHwName()}
         self._swVersion = "%s (driver %s)" % (__version__.version, self.getSwVersion()) 
         self._metadata[model.MD_SW_VERSION] = self._swVersion
@@ -566,18 +564,16 @@ class SEMComedi(model.HwComponent):
         rcmd.stop_arg = nscans
         self._prepare_command(rcmd)
 
-
         shape = (nscans, nchans)
-        dtype = self._get_dtype(self._ai_subdevice)
-        self._init_read_from_file()
+        self._reader.prepare(shape[0] * shape[1], nscans * period)
         
         # run the commands
         logging.debug("Going to start the command")
         comedi.command(self._device, rcmd)
-        self._read_from_file(dtype, shape[0] * shape[1])
+        self._reader.run()
         
         timeout = (nscans * period) * 1.10 + 1 # s   == expected time + 10% + 1s
-        rbuf = self._wait_read_from_file(timeout)
+        rbuf = self._reader.wait(timeout)
         rbuf.shape = shape # FIXME: check that the order/stride is correct
         
         # convert data to physical values
@@ -857,6 +853,7 @@ class SEMComedi(model.HwComponent):
         nwchans = data.shape[1]
         nrchans = len(rchannels)
         period_ns = int(round(period * 1e9))  # in nanoseconds
+        expected_time = nscans * period # s
                 
         logging.debug("Generating a new read command for %d scans", nscans)
         rcmd = comedi.cmd_struct()
@@ -880,18 +877,17 @@ class SEMComedi(model.HwComponent):
 
         # prepare read buffer info        
         rshape = (nscans, nrchans)
-        rdtype = self._get_dtype(self._ai_subdevice)
-        self._init_read_from_file()
+        self._reader.prepare(rshape[0] * rshape[1], expected_time)
         
         # run the commands
         comedi.command(self._device, rcmd)
         # AO is waiting for AI/Start1, so not sure why internal trigger needed,
         # but it is. Maybe just to let Comedi know that the command has started
-        self._read_from_file(rdtype, rshape[0] * rshape[1])
+        self._reader.run()
         
-        timeout = (nscans * period) * 1.10 + 1 # s   == expected time + 10% + 1s
+        timeout = expected_time * 1.10 + 1 # s   == expected time + 10% + 1s
         logging.debug("Waiting %g s for the acquisition to finish", timeout)
-        rbuf = self._wait_read_from_file(timeout)
+        rbuf = self._reader.wait(timeout)
         rbuf.shape = rshape # FIXME: check that the order/stride is correct
         return rbuf
     
@@ -962,108 +958,28 @@ class SEMComedi(model.HwComponent):
         
         # flatten the array
         wbuf = numpy.reshape(data, nscans * nwchans, order='C')
-        self._init_write_to_file(wbuf)
+        self._writer.prepare(wbuf, expected_time)
 
         # prepare read buffer info        
         rshape = (nscans, nrchans)
-        rdtype = self._get_dtype(self._ai_subdevice)
-        self._init_read_from_file()
+        self._reader.prepare(rshape[0] * rshape[1], expected_time)
         
         # run the commands
         # AO is waiting for AI/Start1, so not sure why internal trigger needed,
         # but it is. Maybe just to let Comedi know that the command has started
         comedi.internal_trigger(self._device, self._ao_subdevice, 0)
         comedi.internal_trigger(self._device, self._ai_subdevice, 0)
-        start_time = time.time()
-        self._read_from_file(rdtype, rshape[0] * rshape[1])
-        self._write_to_file(start_time + expected_time)
+        self._reader.run()
+        self._writer.run()
 
         timeout = expected_time * 1.10 + 1 # s   == expected time + 10% + 1s
         logging.debug("Waiting %g s for the acquisition to finish", timeout)
-        self._wait_write_to_file(timeout)
-        rbuf = self._wait_read_from_file(timeout)
+        self._writer.wait(timeout)
+        rbuf = self._reader.wait(timeout)
         rbuf.shape = rshape # FIXME: check that the order/stride is correct
         return rbuf
 
 
-    def _init_read_from_file(self):
-        pass
-    
-    def _read_from_file(self, dtype, count):
-        # start reader thread
-        self._rbuf = None # FIXME: so ugly!!!
-        self._rcount = count
-        self._rthread = threading.Thread(target=self._read_from_file_thread,
-                                   args=(dtype, count))
-        self._rthread.start()
-    
-    def _read_from_file_thread(self, dtype, count):
-        """To be called in a separate thread"""
-        self._rbuf = numpy.fromfile(self._rfile, dtype=dtype, count=count)
-    
-    def _wait_read_from_file(self, timeout):
-        """
-        Call it after the wait_read
-        """
-        self._rthread.join(timeout)
-        if self._rthread.isAlive():
-            logging.warning("Reading thread is still running after %g s", timeout)
-        # if thread is stuck, it might help, 
-        # if not, it ensures the device really does nothing more
-        comedi.cancel(self._device, self._ai_subdevice)
-        
-        # the result should be in self._rbuf
-        if self._rbuf is None:
-            raise IOError("Failed to read all the %d expected values" % (self._rcount, ))
-        elif self._rbuf.size != self._rcount:
-            raise IOError("Read only %d values from the %d expected" % (self._rbuf.size, self._rcount))
-    
-        return self._rbuf
-    
-    def _init_write_to_file(self, buf):
-        self._wbuf = buf
-        # preload the buffer with enough data first
-        dev_buf_size = comedi.get_buffer_size(self._device, self._ao_subdevice)
-        self._preload_size = dev_buf_size / self._wbuf.itemsize
-        logging.debug("Going to preload %d bytes", self._wbuf[:self._preload_size].nbytes)
-        self._wbuf[:self._preload_size].tofile(self._wfile)
-        self._wfile.flush() # it can block here if we preload too much
-    
-    def _write_to_file(self, expected_end):
-        self._wthread = threading.Thread(target=self._write_to_file_thread, args=(expected_end,))
-        self._wthread.start()
-    
-    def _write_to_file_thread(self, expected_end):
-        """To be called in a separate thread"""
-        # TODO: can this handle faults? 
-        self._wbuf[self._preload_size:].tofile(self._wfile)
-        self._wfile.flush()
-        
-        # Wait until the buffer is fully emptied to state the output is over 
-        while comedi.get_subdevice_flags(self._device, self._ao_subdevice) & comedi.SDF_RUNNING:
-            # sleep longer if the end is far away
-            left = expected_end - time.time()
-            if left > 0.1:
-                time.sleep(left / 2)
-            else:
-                time.sleep(0.01)
-        
-    def _wait_write_to_file(self, timeout):
-        try:
-            self._wthread.join(timeout)
-            if self._wthread.isAlive():
-                # try to see why
-                flags = comedi.get_subdevice_flags(self._device, self._ao_subdevice)
-                if flags & comedi.SDF_RUNNING:
-                    raise IOError("Write timeout while device is still generating data")
-                else:
-                    raise IOError("Write timeout while device is idle")
-        finally:
-            # According to https://groups.google.com/forum/?fromgroups=#!topic/comedi_list/yr2U179x8VI
-            # To finish a write fully, we need to do a cancel().
-            # Wait until SDF_RUNNING is gone, then cancel() to reset SDF_BUSY
-            comedi.cancel(self._device, self._ao_subdevice)
-    
     @staticmethod
     def _scan_result_to_array(data, shape, margin):
         """
@@ -1118,12 +1034,8 @@ class SEMComedi(model.HwComponent):
         Request the acquisition thread to stop
         """
         self._acquisition_must_stop.set()
-        try:
-            # make sure it stops quickly
-            comedi.cancel(self._device, self._ai_subdevice)
-            comedi.cancel(self._device, self._ao_subdevice)
-        except comedi.ComediError:
-            pass
+        self._reader.cancel()
+        self._writer.cancel()
     
     def _wait_acquisition_stopped(self):
         """
@@ -1135,7 +1047,6 @@ class SEMComedi(model.HwComponent):
             self._acquisition_thread.join(10) # 10s timeout for safety
             if self._acquisition_thread.isAlive():
                 raise OSError("Failed to stop the acquisition thread")
-            self._acquisition_thread = None
         
     def _acquisition_run(self):
         """
@@ -1216,18 +1127,10 @@ class SEMComedi(model.HwComponent):
             
             comedi.close(self._device)
             self._device = None
-            
-            # Probably going to fail as they point to the same "file"
-            # If we don't do it here, it will be done automatically on garbage
-            # collection, which will give a IOError that looks almost random.  
-            try:
-                self._rfile.close()
-            except IOError:
-                pass
-            try:
-                self._wfile.close()
-            except IOError:
-                pass
+
+            # need to be done explicitely to catch exceptions            
+            self._reader.close()
+            self._writer.close()
     
     # TODO selfTest() which tries to read some data
     def selfTest(self):
@@ -1326,6 +1229,217 @@ class SEMComedi(model.HwComponent):
         
         return found
 
+
+
+class Accesser(object):
+    """
+    Abstract class to access the device either for input or output
+    Each acquisition should be done by calling in order prepare(), run(), and wait() 
+    """
+
+    def __init__(self, parent):
+        """
+        parent (SEMComedi)
+        """
+        self.parent = parent
+        self._device = parent._device # the device id to pass to comedi
+        
+        # they are pointing to the same "file", but must be different objects
+        # to be able to read and write simultaneously.
+        # Closing any of them will close the device as well
+        # TODO: try buffer = 0
+        self.file = os.fdopen(parent._fileno, 'rb+', 0)
+
+    def close(self):
+        """
+        To be called before deleting it
+        """
+        # Probably going to fail as they point to the same "file" as the device
+        # If we don't do it explicitly, it will be done automatically on garbage
+        # collection, which will give a IOError that looks almost random.  
+        try:
+            self.file.close()
+        except IOError:
+            pass
+        
+    def prepare(self):
+        pass
+    
+    def run(self):
+        pass
+    
+    def wait(self, timeout=None):
+        pass
+    
+    def cancel(self):
+        pass
+
+class Reader(Accesser):
+    def __init__(self, parent):
+        Accesser.__init__(self, parent)
+        self._subdevice = parent._ai_subdevice
+        
+        self.dtype = parent._get_dtype(self._subdevice)
+        self.buf = None
+        self.thread = None
+        self.count = None
+        self.duration = None
+    
+    def prepare(self, count, duration):
+        """
+        dtype: type of values to read
+        count: number of values to read
+        duration: expected total duration it will take (in s)
+        """
+        self.count = count
+        self.duration = duration
+        if self.thread and self.thread.isAlive():
+            logging.warning("Preparing a new acquisition while previous one is not over")
+        self.thread = threading.Thread(name="SEMComedi reader", target=self._thread)
+        self.file.seek(0)
+    
+    def run(self):
+        # start reader thread
+        self.thread.start()
+    
+    def _thread(self):
+        """To be called in a separate thread"""
+        try:
+            self.buf = numpy.fromfile(self.file, dtype=self.dtype, count=self.count)
+        except IOError:
+            # might be due to a cancel
+            logging.debug("Read ended before the end")
+    
+    def wait(self, timeout=None):
+        """
+        timeout
+        """
+        timeout = timeout or self.period
+         
+        self.thread.join(timeout)
+        if self.thread.isAlive():
+            logging.warning("Reading thread is still running after %g s", timeout)
+        self.cancel()
+        
+        # the result should be in self._rbuf
+        if self.buf is None:
+            raise IOError("Failed to read all the %d expected values" % self.count)
+        elif self.buf.size != self.count:
+            raise IOError("Read only %d values from the %d expected" % (self.buf.size, self.count))
+    
+        return self.buf
+
+    def cancel(self):
+        try:
+            comedi.cancel(self._device, self._subdevice)
+        except comedi.ComediError:
+            logging.debug("Failed to cancel read")
+        
+        # if the thread is stopped, it's all fine
+        if not self.thread or not self.thread.isAlive():
+            return
+        
+        # apparently, to manage to stop a current read, you need to give a new
+        # command of few reads (e.g., 1 read), on any channel
+        # TODO check if it needs to be of the right channels 
+        try:
+            cmd = comedi.cmd_struct()
+            comedi.get_cmd_generic_timed(self._device, self._subdevice, cmd, 1, 0)
+            clist = comedi.chanlist(1)
+            clist[0] = comedi.cr_pack(0, 0, comedi.AREF_GROUND)
+            cmd.chanlist = clist
+            cmd.stop_src = comedi.TRIG_COUNT
+            cmd.stop_arg = 1
+            comedi.command(self._device, cmd)
+        except comedi.ComediError:
+            logging.debug("Failed to give read command of 1 element")
+        
+        self.thread.join(1) # wait maximum 1 s
+        try:
+            comedi.cancel(self._device, self._subdevice)
+        except comedi.ComediError:
+            logging.debug("Failed to cancel read")
+        
+        if self.thread.isAlive():
+            logging.warning("failed to cancel fully the reading thread")
+        
+class Writer(Accesser):
+    def __init__(self, parent):
+        Accesser.__init__(self, parent)
+        self._subdevice = parent._ao_subdevice
+                
+        self.buf = None
+        self.thread = None
+        self.duration = None
+        self._expected_end = None
+        self._preload_size = None
+    
+    def prepare(self, buf, duration):
+        """
+        buf (numpy.ndarray): 1 dimension array to write
+        duration: expected total duration it will take (in s)
+        """
+        self.duration = duration
+        self.buf = buf
+        self.file.seek(0)
+        # preload the buffer with enough data first
+        dev_buf_size = comedi.get_buffer_size(self._device, self._subdevice)
+        self._preload_size = dev_buf_size / buf.itemsize
+        logging.debug("Going to preload %d bytes", buf[:self._preload_size].nbytes)
+        buf[:self._preload_size].tofile(self.file)
+        self.file.flush() # it can block here if we preload too much
+        
+        self.thread = threading.Thread(name="SEMComedi writer", target=self._thread)
+    
+    def run(self):
+        self._expected_end = time.time() + self.duration 
+        self.thread.start()
+    
+    def _thread(self):
+        """
+        Ends once the output is fully over 
+        """
+        # TODO: can this handle faults?
+        try: 
+            self.buf[self._preload_size:].tofile(self.file)
+            self.file.flush()
+        except IOError:
+            # might be due to a cancel
+            logging.debug("Write ended before the end")
+            return
+        
+        # Wait until the buffer is fully emptied to state the output is over 
+        while (comedi.get_subdevice_flags(self._device, self._subdevice)
+               & comedi.SDF_RUNNING):
+            # sleep longer if the end is far away
+            left = self._expected_end - time.time()
+            if left > 0.1:
+                time.sleep(left / 2)
+            else:
+                time.sleep(0.01)
+        
+    def wait(self, timeout=None):
+        timeout = timeout or self.duration
+        try:
+            self.thread.join(timeout)
+            if self.thread.isAlive():
+                # try to see why
+                flags = comedi.get_subdevice_flags(self._device, self._subdevice)
+                if flags & comedi.SDF_RUNNING:
+                    raise IOError("Write timeout while device is still generating data")
+                else:
+                    raise IOError("Write timeout while device is idle")
+        finally:
+            # According to https://groups.google.com/forum/?fromgroups=#!topic/comedi_list/yr2U179x8VI
+            # To finish a write fully, we need to do a cancel().
+            # Wait until SDF_RUNNING is gone, then cancel() to reset SDF_BUSY
+            comedi.cancel(self._device, self._subdevice)
+
+    def cancel(self):    
+        try:
+            comedi.cancel(self._device, self._subdevice)
+        except comedi.ComediError:
+            logging.debug("Failed to cancel write")
 
 class Scanner(model.Emitter):
     """
