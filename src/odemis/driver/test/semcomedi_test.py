@@ -314,7 +314,7 @@ if __name__ == "__main__":
 #margin = 2
 #s = semcomedi.Scanner._generate_scan_array(scanned, limits, margin)
 ##d.write_data([0, 1], 100e-6, s)
-#r = d.write_read_data_phys([0, 1], [5, 6], 10e-6, s,async=False)
+#r = d.write_read_data_phys([0, 1], [5, 6], 10e-6, s)
 #v=[]
 #for a in r:
 #    v.append(d._scan_result_to_array(a, scanned, margin))

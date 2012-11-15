@@ -16,7 +16,6 @@ You should have received a copy of the GNU General Public License along with Ode
 '''
 from odemis import model, __version__
 from odemis.model._core import roattribute
-import ctypes
 import gc
 import glob
 import logging
@@ -1144,55 +1143,64 @@ class SEMComedi(model.HwComponent):
           callbacks.
         Note: to be run in a separate thread
         """
-        while not self._acquisition_must_stop.is_set():
-            # get the channels to acquire
-            with self._acquisition_data_lock:
-                detectors = self._acquisitions.keys()
-            if not detectors:
-                # another way to quit
-                break
-            
-            rchannels = [d.channel for d in detectors] 
-            rranges = [d._range for d in detectors]
-            
-            # get the scan values (automatically updated to the latest needs)
-            scan, period, resolution, margin, wchannels, wranges = self._scanner.get_scan_data()
-            
-            metadata = dict(self._metadata) # duplicate
-            metadata[model.MD_ACQ_DATE] = time.time() # time at the beginning
-            metadata[model.MD_DWELL_TIME] = period 
-            
-            # write and read the raw data
-            rbuf = self.write_read_data_raw(wchannels, wranges, rchannels, rranges, period, scan)
-        
-            #logging.debug("Converting raw data to physical: %s", rbuf)
-            # TODO convert the data while reading, to save time, or do not convert at all
-            # TODO do not convert the margin data
-            
-            # the channels to acquire might have changed, only send to the one
-            # still interested
-            with self._acquisition_data_lock:
-                acq = dict(self._acquisitions) # duplicate
-            for i, c in enumerate(rchannels):
-                callback = None
-                for d, cb in acq.items():
-                    if d.channel == c:
-                        callback = cb
-                        break
-                if callback is None: # unsubscribed
+        try:
+            while not self._acquisition_must_stop.is_set():
+                # get the channels to acquire
+                with self._acquisition_data_lock:
+                    detectors = self._acquisitions.keys()
+                if not detectors:
+                    # another way to quit
+                    break
+                
+                rchannels = [d.channel for d in detectors] 
+                rranges = [d._range for d in detectors]
+                
+                # get the scan values (automatically updated to the latest needs)
+                scan, period, resolution, margin, wchannels, wranges = self._scanner.get_scan_data()
+                
+                metadata = dict(self._metadata) # duplicate
+                metadata[model.MD_ACQ_DATE] = time.time() # time at the beginning
+                metadata[model.MD_DWELL_TIME] = period 
+                
+                # write and read the raw data
+                try:
+                    rbuf = self.write_read_data_raw(wchannels, wranges, rchannels, rranges, period, scan)
+                except IOError:
+                    # could be genuine or just due to cancellation
+                    if self._acquisition_must_stop.is_set():
+                        return
+                    logging.exception("Acquisition failed, will retry")
                     continue
-
-                # Convert to a nice 2D DataArray
-                parray = self._scan_result_to_array(rbuf[:,i,numpy.newaxis], resolution, margin)
-                darray = model.DataArray(parray, metadata)
-                callback(darray)
             
-            # force the GC to non-used buffers, for some reason, without this
-            # the GC runs only after we've managed to fill up the memory
-            gc.collect()
+                #logging.debug("Converting raw data to physical: %s", rbuf)
+                # TODO convert the data while reading, to save time, or do not convert at all
+                # TODO do not convert the margin data
+                
+                # the channels to acquire might have changed, only send to the one
+                # still interested
+                with self._acquisition_data_lock:
+                    acq = dict(self._acquisitions) # duplicate
+                for i, c in enumerate(rchannels):
+                    callback = None
+                    for d, cb in acq.items():
+                        if d.channel == c:
+                            callback = cb
+                            break
+                    if callback is None: # unsubscribed
+                        continue
     
-        logging.debug("Acquisition thread closed")
-        self._acquisition_must_stop.clear()      
+                    # Convert to a nice 2D DataArray
+                    parray = self._scan_result_to_array(rbuf[:,i,numpy.newaxis], resolution, margin)
+                    darray = model.DataArray(parray, metadata)
+                    callback(darray)
+                
+                # force the GC to non-used buffers, for some reason, without this
+                # the GC runs only after we've managed to fill up the memory
+                gc.collect()
+
+        finally:
+            logging.debug("Acquisition thread closed")
+            self._acquisition_must_stop.clear()      
     
     def terminate(self):
         """
@@ -1590,7 +1598,7 @@ class Detector(model.Detector):
         # The closest to the actual precision of the device 
         self._maxdata = comedi.get_maxdata(parent._device, parent._ai_subdevice,
                                            channel)
-        self._shape = self._scanner.shape + (self._maxdata,)
+        self._shape = (self._maxdata,) # only one point
         self.data = SEMDataFlow(self, parent)
         
     @roattribute
