@@ -15,6 +15,7 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from odemis.gui.util.img import DataArray2wxImage
+import logging
 import wx
 
 class VideoDisplayer(object):
@@ -51,6 +52,7 @@ class VideoDisplayer(object):
     
 class ImageWindowApp(wx.App):
     def __init__(self, title="Image", size=(640,480)):
+        print size
         wx.App.__init__(self, redirect=False)
         self.AppName = "Odemis CLI"
         self.frame = wx.Frame(None, title=title, size=size)
@@ -68,6 +70,7 @@ class ImageWindowApp(wx.App):
         self.frame.Show()
     
     def update_view(self):
+        logging.debug("Received a new image of %d x %d", *self.img.GetSize())
         self.frame.Size = self.img.GetSize()
         self.imageCtrl.SetBitmap(wx.BitmapFromImage(self.img))
     
