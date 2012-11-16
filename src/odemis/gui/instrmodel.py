@@ -284,8 +284,10 @@ class GUIMicroscope(object):
                 self.ccd = d
             elif d.role == "se-detector":
                 self.sed = d
-        if not self.ccd and not self.sed:
-            raise Exception("no camera nor SE-detector found in the microscope")
+            elif d.role == "bs-detector":
+                self.bsd = d
+        if not self.ccd and not self.sed and not self.bsd:
+            raise Exception("no camera nor electron detector found in the microscope")
 
         for a in microscope.actuators:
             if a.role == "stage":
@@ -509,7 +511,7 @@ class Stream(object):
 
 
         if self._detector:
-            self._depth = self._detector.shape[2] # used for B/C adjustment
+            self._depth = self._detector.shape[-1] # used for B/C adjustment
         self.auto_bc = model.BooleanVA(True) # whether to use auto brightness & contrast
         # these 2 are only used if auto_bc is False
         self.contrast = model.FloatContinuous(0, range=[-100, 100]) # ratio, contrast if no auto

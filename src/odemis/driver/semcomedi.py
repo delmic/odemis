@@ -1529,7 +1529,7 @@ class Scanner(model.Emitter):
 
         self._prev_settings = [None, None, None] # resolution, margin, dwellTime
         self._scan_array = None # last scan array computed
-        
+    
     @roattribute
     def channels(self):
         return self._channels
@@ -1560,6 +1560,10 @@ class Scanner(model.Emitter):
     
     def _setDwellTime(self, value):
         return self.parent.find_closest_dwell_time(value)
+
+    def updateMetadata(self, md):
+        # we share metadata with our parent
+        self.parent.updateMetadata(md)
     
     # TODO get_resting_point_data() -> to get the data to write when not scanning
     # returns: array (1x2 numpy.ndarray), channels (list of ints), ranges (list of float)
@@ -1718,6 +1722,10 @@ class Detector(model.Detector):
     @roattribute
     def channel(self):
         return self._channel
+
+    def updateMetadata(self, md):
+        # we share metadata with our parent
+        self.parent.updateMetadata(md)
 
 class SEMDataFlow(model.DataFlow):
     def __init__(self, detector, sem):

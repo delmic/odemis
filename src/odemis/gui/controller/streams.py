@@ -222,7 +222,7 @@ class StreamController(object):
                     self.addSEMSED()
                 # TODO need to hide if the view is not the right one
 
-            self._startStreams(OPTICAL_STREAMS)
+            self._startStreams(EM_STREAMS)
 
 
     def _pauseStreams(self, classes):

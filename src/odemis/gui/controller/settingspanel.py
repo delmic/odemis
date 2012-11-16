@@ -135,7 +135,7 @@ SETTINGS = {
                 "dwellTime":
                 {
                     "control_type": odemis.gui.CONTROL_SLIDER,
-                    "range": (0.01, 3.00),
+                    "range": (1e-9, 1),
                     "scale": "cubic",
                     "type": "float",
                 },
