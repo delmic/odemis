@@ -248,7 +248,7 @@ class ViewSelector(object):
         self._subscriptions = [] # list of functions
         for btn in [self._main_frame.btn_view_tl, self._main_frame.btn_view_tr,
                     self._main_frame.btn_view_bl, self._main_frame.btn_view_br]:
-            def onThumbnail(im):
+            def onThumbnail(im, btn=btn): # save btn in scope
                 btn.set_overlay(im)
 
             self.buttons[btn].vp.mic_view.thumbnail.subscribe(onThumbnail, init=True)
@@ -265,7 +265,7 @@ class ViewSelector(object):
                 view_label.lbl.SetLabel("Overview")
                 continue
 
-            def onName(name):
+            def onName(name, view_label=view_label): # save view_label
                 view_label.lbl.SetLabel(name)
 
             view_label.vp.mic_view.name.subscribe(onName, init=True)
