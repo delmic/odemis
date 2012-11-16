@@ -199,6 +199,8 @@ class OdemisGUIApp(wx.App):
             # FIXME: Move to a control
             self.main_frame.btn_toggle_opt.Bind(wx.EVT_BUTTON,
                                                 self.on_toggle_opt)
+            self.main_frame.btn_toggle_sem.Bind(wx.EVT_BUTTON,
+                                                self.on_toggle_sem)
 
         except Exception:  #pylint: disable=W0703
             self.excepthook(*sys.exc_info())
@@ -271,6 +273,13 @@ class OdemisGUIApp(wx.App):
                 self.interface_model.opticalState.value = instrmodel.STATE_ON
             else:
                 self.interface_model.opticalState.value = instrmodel.STATE_OFF
+                
+    def on_toggle_sem(self, event):
+        if self.interface_model:
+            if event.isDown: # if ToggleEvent, could use isChecked()
+                self.interface_model.emState.value = instrmodel.STATE_ON
+            else:
+                self.interface_model.emState.value = instrmodel.STATE_OFF
 
     def on_about(self, evt):
         message = ("%s\nVersion %s.\n\n%s.\nLicensed under the %s." %
