@@ -587,7 +587,7 @@ class SettingsSideBar(object):
             self._optical_panel.add_value(name, value, conf)
 
     def add_ebeam(self, comp):
-#        self._sem_panel.add_label("SEM", comp.name)
+        self._sem_panel.add_label("SEM", comp.name)
 
         vigil_attrs = getVAs(comp)
         for name, value in vigil_attrs.items():

@@ -786,13 +786,14 @@ class StreamPanel(wx.Panel):
         self._sz.Add(self.txt_no_stream, 0, wx.ALL | wx.ALIGN_CENTER, 10)
 
         self.btn_add_stream = PopupImageButton(self, -1,
-                                               bitmap=img.getbtn_medBitmap(),
+                                               bitmap=img.getstream_addBitmap(),
                                                label="ADD STREAM",
                                                style=wx.ALIGN_CENTER)
 
-        self.btn_add_stream.SetBitmaps(img.getbtn_med_hBitmap(),
-                                       img.getbtn_med_aBitmap())
-        self._sz.Add(self.btn_add_stream, flag=wx.ALL, border=5)
+        self.btn_add_stream.SetForegroundColour("#999999")
+        self.btn_add_stream.SetBitmaps(img.getstream_add_hBitmap(),
+                                       img.getstream_add_aBitmap())
+        self._sz.Add(self.btn_add_stream, flag=wx.ALL, border=10)
 
         self._set_warning()
 
@@ -962,15 +963,6 @@ class StreamPanel(wx.Panel):
         if self.txt_no_stream is not None:
             self.txt_no_stream.Show(self.is_empty())
 
-#    def set_actions(self, actions):
-#        """
-#        Set the action menu
-#        actions (collections.OrderedDict(string, callable)): dict of title => callback,
-#          ordered as it will appear
-#        """
-#        self.menu_actions = actions
-#        self.btn_add_stream.set_choices(self.menu_actions.keys())
-
     def get_actions(self):
         return self.menu_actions
 
@@ -978,9 +970,9 @@ class StreamPanel(wx.Panel):
     #  * if microscope if off/pause => disabled
     #  * if focused view is not about this type of stream => disabled
     #  * if there can be only one stream of this type, and it's already present => disabled
-    # So maybe action comes also with a check_enabled callable which is called
-    #   every time the menu is displayed and return (boolean) whether it should
-    #   be disabled
+    # TODO: Add 'check_enabled' functions to the 'add_choice' method call that
+    # determine whether the choice should be enabled or disabled (by returning
+    # True or False)
     def add_action(self, title, callback):
         """
         Add an action to the menu. It's added at the end of the list. If an
@@ -990,7 +982,7 @@ class StreamPanel(wx.Panel):
         """
         log.debug("Adding %s action to stream panel", title)
         self.menu_actions[title] = callback
-        self.btn_add_stream.set_choices(self.menu_actions.keys())
+        self.btn_add_stream.add_choice(title, callback)
 
     def remove_action(self, title):
         """
@@ -1000,5 +992,5 @@ class StreamPanel(wx.Panel):
         if title in self.menu_actions:
             log.debug("Removing %s action from stream panel", title)
             del self.menu_actions[title]
-            self.btn_add_stream.set_choices(self.menu_actions.keys())
+            self.btn_add_stream.set_choices(self.menu_actions)
 

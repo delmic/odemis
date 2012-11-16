@@ -16,34 +16,6 @@ def get_resources():
 
 
 
-class xrcfpb_frame(wx.Frame):
-#!XRCED:begin-block:xrcfpb_frame.PreCreate
-    def PreCreate(self, pre):
-        """ This function is called during the class's initialization.
-        
-        Override it for custom setup before the window is created usually to
-        set additional window styles using SetWindowStyle() and SetExtraStyle().
-        """
-        pass
-        
-#!XRCED:end-block:xrcfpb_frame.PreCreate
-
-    def __init__(self, parent):
-        # Two stage creation (see http://wiki.wxpython.org/index.cgi/TwoStageCreation)
-        pre = wx.PreFrame()
-        self.PreCreate(pre)
-        get_resources().LoadOnFrame(pre, parent, "fpb_frame")
-        self.PostCreate(pre)
-
-        # Define variables for the controls, bind event handlers
-        self.scrwin = xrc.XRCCTRL(self, "scrwin")
-        self.fpb = xrc.XRCCTRL(self, "fpb")
-        self.panel_1 = xrc.XRCCTRL(self, "panel_1")
-        self.panel_2 = xrc.XRCCTRL(self, "panel_2")
-        self.panel_3 = xrc.XRCCTRL(self, "panel_3")
-
-
-
 class xrcstream_frame(wx.Frame):
 #!XRCED:begin-block:xrcstream_frame.PreCreate
     def PreCreate(self, pre):
@@ -95,6 +67,30 @@ class xrctext_frame(wx.Frame):
 
 
 
+class xrcbutton_frame(wx.Frame):
+#!XRCED:begin-block:xrcbutton_frame.PreCreate
+    def PreCreate(self, pre):
+        """ This function is called during the class's initialization.
+        
+        Override it for custom setup before the window is created usually to
+        set additional window styles using SetWindowStyle() and SetExtraStyle().
+        """
+        pass
+        
+#!XRCED:end-block:xrcbutton_frame.PreCreate
+
+    def __init__(self, parent):
+        # Two stage creation (see http://wiki.wxpython.org/index.cgi/TwoStageCreation)
+        pre = wx.PreFrame()
+        self.PreCreate(pre)
+        get_resources().LoadOnFrame(pre, parent, "button_frame")
+        self.PostCreate(pre)
+
+        # Define variables for the controls, bind event handlers
+        self.button_panel = xrc.XRCCTRL(self, "button_panel")
+
+
+
 
 
 # ------------------------ Resource data ----------------------
@@ -106,144 +102,7 @@ def __init_resources():
     wx.FileSystem.AddHandler(wx.MemoryFSHandler())
 
     test_gui_xrc = '''\
-<?xml version="1.0" ?><resource class="PopupImageButton" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
-  <object class="wxFrame" name="fpb_frame">
-    <object class="wxBoxSizer">
-      <object class="sizeritem">
-        <object class="wxScrolledWindow" name="scrwin">
-          <object class="wxBoxSizer">
-            <orient>wxVERTICAL</orient>
-            <object class="sizeritem">
-              <object class="FoldPanelBar" name="fpb">
-                <object class="FoldPanelItem" name="panel_1">
-                  <object class="wxStaticText">
-                    <label>LABEL</label>
-                  </object>
-                  <object class="wxStaticText">
-                    <label>LABEL</label>
-                  </object>
-                  <label>Test Panel 1</label>
-                  <fg>#1A1A1A</fg>
-                  <bg>#666666</bg>
-                  <font>
-                    <size>13</size>
-                    <style>normal</style>
-                    <weight>normal</weight>
-                    <underlined>0</underlined>
-                    <family>default</family>
-                    <face>Ubuntu</face>
-                    <encoding>UTF-8</encoding>
-                  </font>
-                  <XRCED>
-                    <assign_var>1</assign_var>
-                  </XRCED>
-                </object>
-                <object class="FoldPanelItem" name="panel_2">
-                  <object class="wxStaticText">
-                    <label>LABEL</label>
-                  </object>
-                  <object class="wxStaticText">
-                    <label>LABEL</label>
-                  </object>
-                  <object class="wxStaticText">
-                    <label>LABEL</label>
-                  </object>
-                  <object class="wxStaticText">
-                    <label>LABEL</label>
-                  </object>
-                  <object class="wxStaticText">
-                    <label>LABEL</label>
-                  </object>
-                  <object class="wxStaticText">
-                    <label>LABEL</label>
-                  </object>
-                  <object class="wxStaticText">
-                    <label>LABEL</label>
-                  </object>
-                  <object class="wxStaticText">
-                    <label>LABEL</label>
-                  </object>
-                  <object class="wxStaticText">
-                    <label>LABEL</label>
-                  </object>
-                  <object class="wxStaticText">
-                    <label>LABEL</label>
-                  </object>
-                  <label>Test Panel 2</label>
-                  <collapsed>1</collapsed>
-                  <fg>#1A1A1A</fg>
-                  <bg>#666666</bg>
-                  <font>
-                    <size>13</size>
-                    <style>normal</style>
-                    <weight>normal</weight>
-                    <underlined>0</underlined>
-                    <family>default</family>
-                    <face>Ubuntu</face>
-                    <encoding>UTF-8</encoding>
-                  </font>
-                  <XRCED>
-                    <assign_var>1</assign_var>
-                  </XRCED>
-                </object>
-                <object class="FoldPanelItem" name="panel_3">
-                  <object class="wxStaticText">
-                    <label>LABEL</label>
-                  </object>
-                  <object class="wxStaticText">
-                    <label>LABEL</label>
-                  </object>
-                  <object class="wxStaticText">
-                    <label>LABEL</label>
-                  </object>
-                  <object class="wxStaticText">
-                    <label>LABEL</label>
-                  </object>
-                  <object class="wxStaticText">
-                    <label>LABEL</label>
-                  </object>
-                  <object class="wxStaticText">
-                    <label>LABEL</label>
-                  </object>
-                  <label>Test Panel 3</label>
-                  <fg>#1A1A1A</fg>
-                  <bg>#666666</bg>
-                  <font>
-                    <size>13</size>
-                    <style>normal</style>
-                    <weight>normal</weight>
-                    <underlined>0</underlined>
-                    <family>default</family>
-                    <face>Ubuntu</face>
-                    <encoding>UTF-8</encoding>
-                  </font>
-                  <XRCED>
-                    <assign_var>1</assign_var>
-                  </XRCED>
-                </object>
-                <spacing>0</spacing>
-                <bg>#1E90FF</bg>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-              <flag>wxEXPAND</flag>
-            </object>
-          </object>
-          <bg>#A52A2A</bg>
-          <XRCED>
-            <assign_var>1</assign_var>
-          </XRCED>
-        </object>
-        <option>1</option>
-        <flag>wxEXPAND</flag>
-        <minsize>100,100</minsize>
-      </object>
-      <orient>wxVERTICAL</orient>
-    </object>
-    <title>Fold Panel Bar Test Frame</title>
-    <bg>#666666</bg>
-  </object>
+<?xml version="1.0" ?><resource class="ImageTextToggleButton" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
   <object class="wxFrame" name="stream_frame">
     <object class="wxBoxSizer">
       <orient>wxVERTICAL</orient>
@@ -405,6 +264,19 @@ def __init_resources():
       </object>
       <fg>#E6E6FA</fg>
       <bg>#A52A2A</bg>
+    </object>
+    <size>400,400</size>
+  </object>
+  <object class="wxFrame" name="button_frame">
+    <object class="wxPanel" name="button_panel">
+      <object class="wxBoxSizer">
+        <orient>wxVERTICAL</orient>
+      </object>
+      <fg>#E6E6FA</fg>
+      <bg>#A52A2A</bg>
+      <XRCED>
+        <assign_var>1</assign_var>
+      </XRCED>
     </object>
     <size>400,400</size>
   </object>
@@ -786,21 +658,21 @@ T\xc9i\xda\xe9\x82\xd3\x93g\xf2\xcf\x8c\x9d\x95\x9d}~.\xf9\xdc`\xdb\xa2\
 \x0fO\xe4| (\xffh\xf9\xb1\xf5S\xd0\xa7\xfb\x93\x19\x93\x93\xff\x04\x03\
 \x98\xf3\xfcc3-\xdb\x00\x00\x00 cHRM\x00\x00z%\x00\x00\x80\x83\x00\x00\xf9\
 \xff\x00\x00\x80\xe9\x00\x00u0\x00\x00\xea`\x00\x00:\x98\x00\x00\x17o\x92\
-_\xc5F\x00\x00\x01<IDATx\xda\xec\x99\xb1j\xc3@\x10D\xe7tk\xc3\x095\xe6d\
-8\xe4\xce\xea\xa4?J\x15\xf0O\x18\x12\x12\x92\xff\x08\xb8\xcag\xb9\x8b\x08\
-\xb85\x16\x02\xeb6]\xf07hgj5\xfb4;s\x27\xb9\xbe\xef\xd7\x00\xde\x00<\x03\
-\xd8\xc1\x86~\x00\x9c\x00|\xcaj\xb5\xfa(\xcb\xf2XU\x15D\x04\xce\xb9EO\xae\
-\xaa\xb8\xdf\xef\xbb\xeb\xf5\xfar\xbb\xdd\xbc\xd4u}\xd8\xef\xf7h\x9a\x06\
-!\x04\x14E\xb1h\x009g\x8c\xe3\x88a\x18p>\x9f\x0f\xd2\xb6\xed\xb6\xeb:\xd4\
-um\xc9\x01\xd8l6p\xcem%\xa5\x84\x18#D\xe4\xff\x81\xa5KD\x10cDJ\x09\x12B\
-\x80\xf7\xde\xc4\xe0\x8f\xf2\xde#\x84\x00y\xb4\x86E\x150.QU\xb3o_U\x09\x80\
-\x00\xcc\x03\xb0\xdc\x00\x0cA\xae\x00\x01\x10\x80\xa8*r\xcet\x00\x01\x18\
-\x05\xc0\xcbP\xce\xd9l\x06\xe4\x9c\x19\x82\x0cA\x02\xe0
-\xb0\x06Y\x83\xe6k\x90-\xc0Ob\xca\x0c`\x06\xb0\x06\x8d\xae\x00C\x10\xfc\
-/`\xdb\x01l\x01f\x003\x80\xe7\x00\x9e\x03\xe8\x00\xdb\x0e\xb8\xa8\xea\xd6\
-\xa8\x03.\xa2\xaa_\xaaz4
-\xe0$\xd34\xbd\xcf\xf3\xbc\xf6\xde?\x01HFf\xff\x9d\xe7\xf9{\x9a\xa6\xd7\
-\xbf\x01\x00\x9fq[\xee\xe1\xf8\xad\x0c\x00\x00\x00\x00IEND\xaeB`\x82'''
+_\xc5F\x00\x00\x01:IDATx\xda\xecX1N\xc3@\x10\x9c;\xafb;E\xe4\xe6\x14\xa4\
+8\x9d_\xe1\xa7P\xf1\x0c$\x10\x08\xfe\x81\x94*/3\x12\xc6\xbdm\xc9\xbe[\xaa\
+\xa0\x14\xf0\x81\xecL}\xcd\xce\xcd\xce\xcc\x9dk\x9af\x03\xe0\x05\xc0\x03\
+\x80\x03l\xe0\x13\xc0\x09\xc0\xbb\x88\xc8[Y\x96\x8f\xdb\xed\x16"\x02\xe7\
+\xdcMO\xae\xaaX\xd7\xf50\x8e\xe3\xd34M\x99k\xdb\xf6\xbb\xae\xeb\xb0\xdf\
+\xefQ\x14\x85\x09\x02\xe6yF\xdf\xf7\xe8\xban\x90\xe3\xf1\x18\x9a\xa6AUU\
+\x96\x14\x80\xddn\x07\xe7\\\x90\x10\xc2\xef\xf0\x97\x03\xb7\x0e\x11AUU\x08\
+!@\xf2<\x87\xf7\xde\xc4\xe0\xd7\xf0\xde#\xcfsx\x007/\xfb\xbfp\x99\xd9\xc3\
+8DU\xcd\xc9\xff\xda\x10\xc5\x8a\xf1Q\x01\xff)\x80\x04\x90\x00\x9a\xa0i\x13\
+d\x0f0\xbf\x02)%\xa4\x94L\x12\x90R\xe2
+p\x05X\x85i\x82\xb6M\xd0\xbc\x02\x98\x02\xaajv\x05\xf8\x18"\x01$\x80\x04\
+\xf0?\xc0|\x0c\xb2\x09\xb2\x09\xb2\x092\x05\xf8\x1f\xc0"D\x02H\x00c\x90\
+U\x98)\xc0\x1e`U\x01\x83\xaa\x06\xa3
+\x18\xbc\xaa~X\xbd}U=\xc9\xb2,\xaf1\xc6M\x96e\xf7\x00\xee\x8c\xcc\xfe\x15\
+c</\xcb\xf2\xfc3\x00\xf5R8\xbf\xb55\xc1\x18\x00\x00\x00\x00IEND\xaeB`\x82'''
 
     ___img_btn_64x24_png = '''\
 \x89PNG\x0d
@@ -1173,21 +1045,19 @@ T\xc9i\xda\xe9\x82\xd3\x93g\xf2\xcf\x8c\x9d\x95\x9d}~.\xf9\xdc`\xdb\xa2\
 \x0fO\xe4| (\xffh\xf9\xb1\xf5S\xd0\xa7\xfb\x93\x19\x93\x93\xff\x04\x03\
 \x98\xf3\xfcc3-\xdb\x00\x00\x00 cHRM\x00\x00z%\x00\x00\x80\x83\x00\x00\xf9\
 \xff\x00\x00\x80\xe9\x00\x00u0\x00\x00\xea`\x00\x00:\x98\x00\x00\x17o\x92\
-_\xc5F\x00\x00\x01 IDATx\xda\xec\x98=j\xc3@\x10\x85\x9f\xa4\x91\x85\x84\
-\x0b\xb1\xb6`\x91\xabm\xed\x1b\xa5
-\xf8\x12\x86\x84\x84\xf8\x1e\x01W\xb9\x96\xaa\x88\x80[#\xab\xd8\x99IeW\
->\x81g_\xbd\xcd|\xef\xcd\x0f\x9b\xedv\xbb\x05\x80\x0f\x00\xaf\x006\xb0\xa1\
-_\x00\x27\x00G*\xcb\xf2\xabi\x9a\xc3r\xb9\x04\x11!\xcb\xb2\xa7\xae\\U\x11\
-c\xdc\\.\x97\xb7i\x9a
-Z\xaf\xd7\xfb\x10\x02\xfa\xbeG]\xd7&\x00\\\xafW\x8c\xe3\x88a\x18\xf6\x14\
-B\xe8\xb6\xdb-V\xab\x95\xa5\x04\xa0m[\x00\xe8\xc8{\x0f\xe7\x1c\x88\xe8\xfe\
-\xe0\xd9EDp\xce\xc1{\x0f\xaa\xaa
-y\x9eCD`Iy\x9e\xa3\xaa*\xd0\xcdu\x0b\xce?L\x83\x88\x98s\xff&\x11I\x00H\
-D\xc0\xccv\x01X\xeeU\x0513b\x8c&\x010s\x9a\x01i\x06\xa4\x04$\x00i\x0d\xda\
-^\x83\xaaj\xb6\x05\xeew\x80\xd5\x16`\xe6\x94\x00R\xd5\xb3\xaavF\x01\x9c\
-ID\xbeE\xe4\xf0\xec_a\x8f\xdc\x17\x91\x13\xcd\xf3\xfc\x19c\\\x14E\xf1\x02\
-\xc0\x1b\xa9\xff\x8f\x99\xe6y~\xff\x07\x00\x00\xff\xff\x03\x00\xa5\x8e\
-\xd7\x85\x04tA\x00\x00\x00\x00IEND\xaeB`\x82'''
+_\xc5F\x00\x00\x01\x16IDATx\xda\xec\x94Aj\xc3P\x0cDG\x95\xf88^\x04\x1b\xbe\
+M!\xc9*\xb9\x84\xaf\xd2U\x8f\x11hii\xefQ\xc8\xaa\x27s\xa18{\xc7|,\xfd.J\
+\xb3\xe9\x0d"\x0fh\xa7\x8d\x9ef\x86\x0e\x87C\x00\xf0\x02\xe0\x11\xc0\x06\
+>\xf4\x05\xe0\x04\xe0]D\xe4m\xb5Z\x1d\xcb\xb2\x84\x88\x80\x88n\xfa\xf2\x9c\
+3\xe6y\xde\x8c\xe3\xf8t\xb9\\\x98\xba\xae\x1b\xb6\xdbm\xd3\xb6-\x8a\xa2\
+p\x01`\x9a&\x0c\xc3\x80\xbe\xef\xcf\xb2\xdb\xed\x9a\xfd~\x8f\xba\xae\xc1\
+\xcc.\x00\xa8*\xd6\xeb5\x88\xa8\x91\x18#\xaa\xaa\x023_\x17n]\xcc\x8c\xaa\
+\xaa\x10c\x84\x84\x10@D03x\x12\x11!\x84\x00\xc99\xe3o\xbc)\xe7\xfc\x0b\xc0\
+\xdb\xf7\xff\x01\xf0\xf8\xfd+\x003s\xeb\x003[" \xaa
+Uu\x09@U\x97\x0e\x103s\xeb\x003[Jp)\xc1\xc5\x01\xdeKp\x89\x80\xf7\x08x\
+\x07p\x07\xe0\x0c\xbf:\x8b\x99}\x98\xd9\xd1\xa9\x03N\x92Rz\x9d\xe790\xf3\
+\x03\x80{\x27\xb7\xab\xeagJ\xe9\xf9\x07\x00\x00\xff\xff\x03\x00Q~\xd2\xbc\
+\xb7\x8at\x10\x00\x00\x00\x00IEND\xaeB`\x82'''
 
     ___img_btn_64x16_png = '''\
 \x89PNG\x0d
@@ -1557,18 +1427,19 @@ T\xc9i\xda\xe9\x82\xd3\x93g\xf2\xcf\x8c\x9d\x95\x9d}~.\xf9\xdc`\xdb\xa2\
 \x0fO\xe4| (\xffh\xf9\xb1\xf5S\xd0\xa7\xfb\x93\x19\x93\x93\xff\x04\x03\
 \x98\xf3\xfcc3-\xdb\x00\x00\x00 cHRM\x00\x00z%\x00\x00\x80\x83\x00\x00\xf9\
 \xff\x00\x00\x80\xe9\x00\x00u0\x00\x00\xea`\x00\x00:\x98\x00\x00\x17o\x92\
-_\xc5F\x00\x00\x01\x08IDATx\xda\xec\x96=j\xc40\x10\x85\x9f\xe5A\xb0\xa8\
-\xb1\xf0\x0f1[\xa94\xbeQ\xaa\xc0^b!!!\xb9G`\xab\xbd\x96\xab\xe0\xc0\xd6\
-\xc2*fF)B\xba=\x81\x95w\x83\xf7\xcd\xbc\x99W\xcd\xf3l\x01\xbc\x02x\x02p\
-D\x19\xfa\x02p\x01\xf0AD\xf4\xee\x9c;;\xe7@D0\xc6\xec\xda\xb9\xaa\x82\x99\
-\x8f1\xc6\xe7\x18cM]\xd7\x9dB\x08\x18\xc7\x11\x87\xc3\xa1\x08\x00\xdb\xb6\
-a]W,\xcbr\xa2\x10B?M\x13\xda\xb6\x05\x11\xa1\xaa\xaa]\x03\xc89\x83\x99\xd1\
-4\x0d\x00\xf44\x0c\x03\xbc\xf70\xc6@U\x8b8\x00\xc6\x18x\xef1\x0c\x03\xc8\
-Z\x0b\x00\x10\x11\x94&k-HU\x8b4\xffw\x0fHD\x8a\x05 "\xbf\x00\x98\xb9\\\x00\
-\xc5G\x80\x99\x8b\xdd\x00f\xfe\x8f\x00\xe5\x9c\x8b\xf9\xff\xf7J\x111\xf3\
-\x8d\x99\xfbB#p#U\xfd\x14\x91\xf3\xde+\xf0\xbd\xe9\xab\xea\x85RJo\xccl\xeb\
-\xba~\x04\xf0P\x88\xffo\x11\xb9\xa6\x94^~\x00\x00\x00\xff\xff\x03\x00TP\
-\x92\\v\xb1\xb9\x87\x00\x00\x00\x00IEND\xaeB`\x82'''
+_\xc5F\x00\x00\x00\xf5IDATx\xda\xec\x95AJ\xc4@\x10E\xd1M\x93\x04:\x84\x86\
+\x06az\x97\\"Wq\xe51\x06\x14E\xef!\xcc\xca\x93e@\xec}\xd2\x84T\x97\x8bA\
+\xf0\x0c\x96\xff\x06\xef\xf1\x15M\xd3\xe4\x00<\x03x\x00p\x82\x8e\\\x01\
+\\\x00\xbcYk\xedk\xdb\xb6\xe7\xae\xeb`\x8c\x01\x11\xfdir\x11\x013\x9f\xd6\
+u}\xdc\xb6\xcd\xd0<\xcf_)\xa5\x18cD\xd34*\x04\x94R\x90s\xc6\xb2,\xd9\xa6\
+\x94\xe28\x8e\x18\x86AS\x03\xd0\xf7=\x00D\x1bB\x80\xf7\x1eD\x84Z\xab\x8a\
+\x03@D\xf0\xde#\x84\x00\xeb\x9cS\x05\xff[\x82s\x0e\xb6\xd6\xaa\x0e\xfe\x27\
+\xb5\xd6\x9b\x00f\xd6+\x80\x99\xd5
+`\xe6\x9b\x80\xe38\xf4
+\xf8\x9f\x80\xf6\x09\x88\x88\xda/ "\xb0\xcc\x9c\x999*m@\xb6"\xf2."g\xa5\
+\x0d\xb8\xd8R\xca\xcb\xbe\xef\xce\x18s\x0f\xe0N\x09\xfb\x273\x94R\x9e\xbe\
+\x01\x00\x00\xff\xff\x03\x00`\x13\x90\x9e\x13\xad3\xa7\x00\x00\x00\x00I\
+END\xaeB`\x82'''
 
     wx.MemoryFSHandler.AddFile('XRC/test_gui/test_gui_xrc', test_gui_xrc)
     wx.MemoryFSHandler.AddFile('XRC/test_gui/___img_btn_64x48_png', ___img_btn_64x48_png)

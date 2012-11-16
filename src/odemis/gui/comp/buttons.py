@@ -58,6 +58,17 @@ class ImageButton(GenBitmapButton):
         """ If the background_parent keyword argument is provided, it will be
         used to determine the background colour of the button. Otherwise, the
         direct parent will be used.
+
+        parent (wx.Window): parent window
+        id (int):           optional id
+        bitmap (wx.Bitmap): default button face
+        pos ((x, y)):       button position
+        size ((w, h)):      button size
+
+        background_parent=: any parent higher up in the hierarchy from which to
+                            pick the background colour.
+        label_delta (int):  the number of pixel to move button text down and to
+                            the right when it is pressed
         """
         if kwargs.has_key('style'):
             kwargs['style'] |= wx.NO_BORDER
@@ -141,7 +152,7 @@ class ImageButton(GenBitmapButton):
             dx = dy = self.labelDelta
 
         hasMask = bmp.GetMask() != None
-        dc.DrawBitmap(bmp, (width - bw) / 2 + dx, (height - bh) / 2 + dy, hasMask)
+        dc.DrawBitmap(bmp, (width - bw) / 2, (height - bh) / 2, hasMask)
 
     def InitColours(self):
         GenBitmapButton.InitColours(self)
@@ -166,11 +177,24 @@ class ImageTextButton(GenBitmapTextButton):
     """
     # The displacement of the button content when it is pressed down, in pixels
     labelDelta = 1
+
+    # THe x and y padding in pixels.
     padding_x = 8
     padding_y = 1
 
     def __init__(self, *args, **kwargs):
+        """
+        parent (wx.Window): parent window
+        id (int):           optional id
+        bitmap (wx.Bitmap): default button face
+        pos ((x, y)):       button position
+        size ((w, h)):      button size
 
+        background_parent=: any parent higher up in the hierarchy from which to
+                            pick the background colour.
+        label_delta (int):  the number of pixel to move button text down and to
+                            the right when it is pressed
+        """
         kwargs['style'] = kwargs.get('style', 0) | wx.NO_BORDER
 
         self.labelDelta = kwargs.pop('label_delta', 0)
@@ -304,7 +328,18 @@ class ImageToggleButton(GenBitmapToggleButton):  #pylint: disable=R0901
     labelDelta = 0
 
     def __init__(self, *args, **kwargs):
+        """
+        parent (wx.Window): parent window
+        id (int):           optional id
+        bitmap (wx.Bitmap): default button face
+        pos ((x, y)):       button position
+        size ((w, h)):      button size
 
+        background_parent=: any parent higher up in the hierarchy from which to
+                            pick the background colour.
+        label_delta (int):  the number of pixel to move button text down and to
+                            the right when it is pressed
+        """
         kwargs['style'] = wx.NO_BORDER
         self.labelDelta = kwargs.pop('label_delta', 0)
         self.background_parent = kwargs.pop('background_parent', None)
@@ -354,9 +389,13 @@ class ImageToggleButton(GenBitmapToggleButton):  #pylint: disable=R0901
         if bmp_sel:
             bmp_sel = resize_bmp(self.GetSize(), bmp_sel)
             self.SetBitmapSelected(bmp_sel)
+
         if bmp_sel_h:
             bmp_sel_h = resize_bmp(self.GetSize(), bmp_sel_h)
             self.SetBitmapSelectedHover(bmp_sel_h)
+        elif bmp_sel:
+            bmp_sel = resize_bmp(self.GetSize(), bmp_sel)
+            self.SetBitmapSelectedHover(bmp_sel)
 
     def GetBitmapHover(self):
         return self.bmpHover
@@ -398,10 +437,7 @@ class ImageToggleButton(GenBitmapToggleButton):  #pylint: disable=R0901
         if not self.up:
             dx = dy = self.labelDelta
         hasMask = bmp.GetMask() != None
-        dc.DrawBitmap(bmp,
-                      (width - bw) / 2 + dx,
-                      (height - bh) / 2 + dy,
-                      hasMask)
+        dc.DrawBitmap(bmp, (width - bw) / 2, (height - bh) / 2, hasMask)
 
     def InitColours(self):
         GenBitmapButton.InitColours(self)
@@ -419,6 +455,18 @@ class ImageTextToggleButton(GenBitmapTextToggleButton):
     padding_y = 1
 
     def __init__(self, *args, **kwargs):
+        """
+        parent (wx.Window): parent window
+        id (int):           optional id
+        bitmap (wx.Bitmap): default button face
+        pos ((x, y)):       button position
+        size ((w, h)):      button size
+
+        background_parent=: any parent higher up in the hierarchy from which to
+                            pick the background colour.
+        label_delta (int):  the number of pixel to move button text down and to
+                            the right when it is pressed
+        """
 
         kwargs['style'] = kwargs.get('style', 0) | wx.NO_BORDER
 
@@ -523,7 +571,6 @@ class ImageTextToggleButton(GenBitmapTextToggleButton):
 
         pos_x = (width - bw) / 2 + dx
         if bmp is not None:
-            #dc.DrawBitmap(bmp, (width - bw) / 2 + dx, (height - bh) / 2 + dy, hasMask)
             dc.DrawBitmap(bmp, (width - bw) / 2, (height - bh) / 2, hasMask)
 
         if self.HasFlag(wx.ALIGN_CENTER):
@@ -741,11 +788,30 @@ class PopupImageButton(ImageTextButton):
 
     def __init__(self, *args, **kwargs):
         ImageTextButton.__init__(self, *args, **kwargs)
-        self.choices = None
+        self.choices = {}
+        self.menu = wx.Menu()
         self.Bind(wx.EVT_BUTTON, self.show_menu)
 
     def set_choices(self, choices):
-        self.choices = choices
+        for label, callback in choices.items():
+            self.add_choice(label, callback)
+
+    def add_choice(self, label, callback, check_enabled=None):
+        """
+        label (str):              Name to be shown in the menu
+        callback (callable):      Function/method to run upon selection
+        check_enabled (callable): Function/method that returns True if the
+                                  menu item should be enabled.
+        """
+
+        menu_id = wx.NewId()
+        menu_item = wx.MenuItem(self.menu, menu_id, label)
+        self.menu.Bind(wx.EVT_MENU, self.on_action_select, id=menu_id)
+        self.choices[label] = (menu_item, callback, check_enabled)
+        self.menu.AppendItem(menu_item)
+
+    def remove_choice(self, label):
+        del self.choices[label]
 
     def show_menu(self, evt):
 
@@ -755,21 +821,20 @@ class PopupImageButton(ImageTextButton):
 
         log.debug("Showing PopupImageButton menu")
 
-        menu = wx.Menu()
+        for _, (menu_item, _, check_enabled) in self.choices.items():
+            menu_item.Enable(check_enabled() if check_enabled else True)
 
-        for label in self.choices:
-            item_id = wx.NewId()
-            menu.Append(item_id, label)
-            self.Bind(wx.EVT_MENU, self.on_action_select, id=item_id)
+        self.PopupMenu(self.menu, (0, self.GetSize().GetHeight()))
 
-        self.PopupMenu(menu, (0, self.GetSize().GetHeight()))
-        menu.Destroy()
-
-        # Fore the roll-over effect to go away
+        # Force the roll-over effect to go away
         if self.bmpHover:
             self.hovering = False
             self.Refresh()
 
     def on_action_select(self, evt):
-        print "pwe"
+        event_id = evt.GetId()
 
+        for label, (menu_item, callback, _) in self.choices.items():
+            if menu_item.GetId() == event_id:
+                log.debug("Performing %s callback", label)
+                callback()
