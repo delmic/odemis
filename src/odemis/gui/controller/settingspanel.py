@@ -18,6 +18,11 @@ PARTICULAR PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 
+### Purpose ###
+
+This module contains classes to control the settings controls in the right
+setting column of the user interface.
+
 """
 
 import collections

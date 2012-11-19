@@ -982,7 +982,10 @@ class StreamPanel(wx.Panel):
         """
         log.debug("Adding %s action to stream panel", title)
         self.menu_actions[title] = callback
-        self.btn_add_stream.add_choice(title, callback)
+        def neus():
+            print "Hallo"
+            return False
+        self.btn_add_stream.add_choice(title, callback, neus)
 
     def remove_action(self, title):
         """
