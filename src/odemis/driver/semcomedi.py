@@ -14,6 +14,7 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
+from numpy.core import umath
 from odemis import model, __version__
 from odemis.model._core import roattribute
 import gc
@@ -50,6 +51,16 @@ import weakref
 # BSD : AI2/AI GND = pins 65/64
 # SCB-68 Temperature Sensor differential : AI0+/AI0- = AI0/AI8 = pins 68/34 (by jumper)
 # 
+# Over-sampling consists in measuring the value multiple times for the same pixel.
+# It is followed by "decimation", which aggregates the data back into just one 
+# pixel (the simplest and most usual technique being averaging).  
+# For SEM, this is necessary to acquire good quality picture as otherwise the
+# sampling is done only during a very short period. This is the purpose of 
+# increasing the dwell time: to have a longer period to allow multiple samples
+# to be acquired. It can be done either by keeping the e-beam on the same place
+# and taking multiple samples, or moving the e-beam around the pixel (in which
+# it's exactly equivalent to reducing the image resolution). 
+#
 # Note about using comedi in Python:
 # There are two available bindings for comedi in Python: python-comedilib
 # (provided with comedi) and pycomedi.  python-comedilib provides just a direct
@@ -133,6 +144,7 @@ class SEMComedi(model.HwComponent):
         self._convert_to_phys = {}
         self._convert_from_phys = {}
 
+        # TODO only look for 2 output channels and len(detectors) input channels
         self._min_ai_periods, self._min_ao_periods = self._get_min_periods()
         # On the NI-6251, according to the doc:
         # AI is 1MHz (aggregate) (or 1.25MHz with only one channel)
@@ -644,7 +656,77 @@ class SEMComedi(model.HwComponent):
         # no compatible dwell time found
         raise ValueError("No compatible dwell time found for %g s." % period)
                 
+    
+    def get_best_oversampling_rate(self, period, max_osr=100):
+        """
+        Returns the closest dwell time _longer_ than the given time compatible
+          with the output device and the highest over-sampling rate compatible 
+          with the input device.
+        period (float): dwell time requested (in s)
+        max (1<=int): maximum over-sampling rate returned
+        returns (2-tuple: period (0<float), osr (1<=int)):
+         period: a value slightly smaller, or larger than the period (in s)
+         osr: a ratio indicating how many times faster runs the input clock
+        raises:
+            ValueError if no compatible dwell time can be found
+        Note: the dwell time is computed assuming all the detectors are active
+           simultaneously.
+        """
+        # TODO: until we support decimation during the read, an osr > 100 is
+        # too big due to requiring 100 more memory.
+        # TODO: min dwell time should be just for one input channel, and adapt if
+        # more than one channel is read simultaneously => pass nrchans?
+        assert(max_osr >= 1)
+        nwchans = 2 # always
+        nrchans = len(self._detectors) # one channel per detector
+        period_ns = int(period * 1e9)  # in nanoseconds
+     
+        # let's find a compatible minimum dwell time for the output device   
+        wcmd = comedi.cmd_struct()
+        if self._test:
+            wcmd.scan_begin_arg = period_ns
+        else:
+            comedi.get_cmd_generic_timed(self._device, self._ao_subdevice,
+                                                  wcmd, nwchans, period_ns)
+        period_ns = float(wcmd.scan_begin_arg)
         
+        # the best osr we can get for this dwell time
+        min_rperiod_ns = self._min_ai_periods[nrchans] * 1e9
+        rperiod_ns = max(period_ns, min_rperiod_ns)
+        max_osr = min(max_osr, int(math.ceil(rperiod_ns / min_rperiod_ns)))
+        
+        # try to find a two periods which are exact multiples
+        # start with the best osr, and at worse down to 1
+        rcmd = comedi.cmd_struct()
+        for osr in range(max_osr, 1, -1): # 1 is not included
+            # read period from the orignal dwell time
+            rperiod_ns = int(math.ceil(period_ns / osr))
+            comedi.get_cmd_generic_timed(self._device, self._ai_subdevice,
+                                                      rcmd, nrchans, rperiod_ns)
+            if rcmd.scan_begin_arg != rperiod_ns:
+                continue
+            
+            # write period is OSR * read period
+            wperiod_ns = rperiod_ns * osr
+            if not self._test:
+                wcmd = comedi.cmd_struct()
+                comedi.get_cmd_generic_timed(self._device, self._ao_subdevice,
+                                                  wcmd, nwchans, wperiod_ns)
+                if wcmd.scan_begin_arg != wperiod_ns:
+                    continue
+            
+            # found something good!
+            logging.debug("Found over-sampling rate: %g x %d = %g", rperiod_ns, osr, wperiod_ns)
+            period = wperiod_ns / 1e9
+            return period, osr
+            
+        if max_osr >= 2:
+            logging.debug("Failed to find compatible over-sampling rate for dwell time of %g s", period)
+            
+        # at least osr = 1 ought to work
+        period_ns = self.find_closest_dwell_time(period)
+        return period_ns, 1
+    
     def _run_inttrig(self, subdevice, num):
         """
         This is the same as calling comedi_internal_trigger(), so just for trying
@@ -780,7 +862,7 @@ class SEMComedi(model.HwComponent):
         if had_timeout:
             raise IOError("Write command stopped due to timeout after %g s" % (time.time() - start_time))
 
-    def write_read_data_phys(self, wchannels, rchannels, period, data):
+    def write_read_data_phys(self, wchannels, rchannels, period, osr, data):
         """
         write data on the given analog output channels and read the same amount 
          synchronously on the given analog input channels
@@ -788,6 +870,7 @@ class SEMComedi(model.HwComponent):
         rchannels (list of int): channels to write (in same the order as data)
         period (float): sampling period in s (time between two writes on the same
          channel)
+        osr (1<=int): over-sampling rate, how many input samples should be acquired by pixel
         data (numpy.ndarray of float): two dimension array to write (physical values)
           first dimension is along the time, second is along the channels
         return (list of 1D numpy.array with shape=data.shape[0] and dtype=float)
@@ -830,7 +913,7 @@ class SEMComedi(model.HwComponent):
             rranges.append(best_range)
 
         # write and read the raw data
-        rbuf = self.write_read_data_raw(wchannels, wranges, rchannels, rranges, period, wbuf)
+        rbuf = self.write_read_data_raw(wchannels, wranges, rchannels, rranges, period, osr, wbuf)
         
         # convert data to physical values
         logging.debug("Converting raw data to physical: %s", rbuf)
@@ -845,39 +928,41 @@ class SEMComedi(model.HwComponent):
 
         return parrays
     
-    def fake_write_read_data_raw(self, wchannels, wranges, rchannels, rranges, period, data):
+    def fake_write_read_data_raw(self, wchannels, wranges, rchannels, rranges, period, osr, data):
         """
         Imitates write_read_data_raw() but just read data, for the comedi_test driver
         """
-        nscans = data.shape[0]
+        nwscans = data.shape[0]
         nwchans = data.shape[1]
+        nrscans = nwscans * osr
         nrchans = len(rchannels)
-        period_ns = int(round(period * 1e9))  # in nanoseconds
-        expected_time = nscans * period # s
-                
-        logging.debug("Generating a new read command for %d scans", nscans)
+        rperiod_ns = int(round(period * 1e9) / osr)  # in nanoseconds
+        expected_time = nwscans * period # s
+        
+        logging.debug("Generating a new read command for %d scans", nrscans)
         rcmd = comedi.cmd_struct()
         comedi.get_cmd_generic_timed(self._device, self._ai_subdevice,
-                                                  rcmd, nrchans, period_ns)
+                                                  rcmd, nrchans, rperiod_ns)
         clist = comedi.chanlist(nrchans)
         for i in range(nrchans):
             clist[i] = comedi.cr_pack(rchannels[i], rranges[i], comedi.AREF_GROUND)
         rcmd.chanlist = clist
         rcmd.stop_src = comedi.TRIG_COUNT
-        rcmd.stop_arg = nscans
+        rcmd.stop_arg = nrscans
         self._prepare_command(rcmd)
 
         # Checks the periods are the same
-        if rcmd.scan_begin_arg != period_ns:
-            logging.warning("Asked dwell time of %g s, but got %g s", period, rcmd.scan_begin_arg / 1e9)
+        if rcmd.scan_begin_arg != rperiod_ns:
+            logging.warning("Asked dwell time of %g s, but got %g s", 
+                            rperiod_ns/1e9, rcmd.scan_begin_arg / 1e9)
 
         
         # flatten the array
-        wbuf = numpy.reshape(data, nscans * nwchans, order='C')
+        wbuf = numpy.reshape(data, nwscans * nwchans, order='C')
 
         # prepare read buffer info        
-        rshape = (nscans, nrchans)
-        self._reader.prepare(rshape[0] * rshape[1], expected_time)
+        rshape = (nwscans, osr, nrchans)
+        self._reader.prepare(numpy.prod(rshape), expected_time)
         
         # run the commands
         comedi.command(self._device, rcmd)
@@ -891,7 +976,7 @@ class SEMComedi(model.HwComponent):
         rbuf.shape = rshape # FIXME: check that the order/stride is correct
         return rbuf
     
-    def write_read_data_raw(self, wchannels, wranges, rchannels, rranges, period, data):
+    def write_read_data_raw(self, wchannels, wranges, rchannels, rranges, period, osr, data):
         """
         write data on the given analog output channels and read the same amount 
          synchronously on the given analog input channels
@@ -901,20 +986,24 @@ class SEMComedi(model.HwComponent):
         rranges (list of int): ranges of each read channel
         period (float): sampling period in s (time between two writes on the same
          channel)
+        osr: over-sampling rate, how many input samples should be acquired by pixel
         data (numpy.ndarray of float): two dimension array to write (raw values)
           first dimension is along the time, second is along the channels
         return (2D numpy.array with shape=data.shape and dtype=float)
             the data read (raw) for each channel
         """
-        nscans = data.shape[0]
+        # We write at the given period, and read osr samples for each pixel
+        nwscans = data.shape[0]
         nwchans = data.shape[1]
+        nrscans = nwscans * osr
         nrchans = len(rchannels)
         period_ns = int(round(period * 1e9))  # in nanoseconds
-        expected_time = nscans * period # s
+        rperiod_ns = int(round(period * 1e9) / osr)  # in nanoseconds
+        expected_time = nwscans * period # s
         
         # create a command for writing
         logging.debug("Generating new write and read commands for %d scans on "
-                      "channels %r/%r", nscans, wchannels, rchannels)
+                      "channels %r/%r", nwscans, wchannels, rchannels)
         wcmd = comedi.cmd_struct()
         comedi.get_cmd_generic_timed(self._device, self._ao_subdevice,
                                                   wcmd, nwchans, period_ns)
@@ -928,13 +1017,13 @@ class SEMComedi(model.HwComponent):
         wcmd.start_src = comedi.TRIG_EXT
         wcmd.start_arg = NI_TRIG_AI_START1 # when the AI starts reading 
         wcmd.stop_src = comedi.TRIG_COUNT
-        wcmd.stop_arg = nscans
+        wcmd.stop_arg = nwscans
         self._prepare_command(wcmd)
 
-        # create a command for reading
+        # create a command for reading, with a period osr times smaller than the write
         rcmd = comedi.cmd_struct()
         comedi.get_cmd_generic_timed(self._device, self._ai_subdevice,
-                                                  rcmd, nrchans, period_ns)
+                                                  rcmd, nrchans, rperiod_ns)
         clist = comedi.chanlist(nrchans)
         for i in range(nrchans):
             clist[i] = comedi.cr_pack(rchannels[i], rranges[i], comedi.AREF_GROUND)
@@ -942,13 +1031,13 @@ class SEMComedi(model.HwComponent):
         rcmd.start_src = comedi.TRIG_INT # start synchronously with the write
         rcmd.start_arg = 0
         rcmd.stop_src = comedi.TRIG_COUNT
-        rcmd.stop_arg = nscans
+        rcmd.stop_arg = nrscans
         self._prepare_command(rcmd)
 
         # Checks the periods are the same
-        assert(rcmd.scan_begin_arg == wcmd.scan_begin_arg)
-        if rcmd.scan_begin_arg != period_ns:
-            logging.warning("Asked dwell time of %g s, but got %g s", period, rcmd.scan_begin_arg / 1e9)
+        assert((rcmd.scan_begin_arg * osr) == wcmd.scan_begin_arg)
+        if wcmd.scan_begin_arg != period_ns:
+            logging.warning("Asked dwell time of %g s, but got %g s", period, wcmd.scan_begin_arg / 1e9)
         # TODO: if periods are different => pick the closest period that works for both
 
         # readying the subdevice with the command (needs to be done before
@@ -957,12 +1046,12 @@ class SEMComedi(model.HwComponent):
         comedi.command(self._device, rcmd)
         
         # flatten the array
-        wbuf = numpy.reshape(data, nscans * nwchans, order='C')
+        wbuf = numpy.reshape(data, nwscans * nwchans, order='C')
         self._writer.prepare(wbuf, expected_time)
 
         # prepare read buffer info        
-        rshape = (nscans, nrchans)
-        self._reader.prepare(rshape[0] * rshape[1], expected_time)
+        rshape = (nwscans, osr, nrchans)
+        self._reader.prepare(numpy.prod(rshape), expected_time)
         
         # run the commands
         # AO is waiting for AI/Start1, so not sure why internal trigger needed,
@@ -981,18 +1070,48 @@ class SEMComedi(model.HwComponent):
 
 
     @staticmethod
-    def _scan_result_to_array(data, shape, margin):
+    def _scan_result_to_array(data, shape, margin, osr):
         """
         Converts a linear array resulting from a scan to a 2D array
-        data (1D ndarray): the linear array, of shape=shape[0]*(shape[1] + margin)
-        shape (2-tuple of int): shape of the array
+        data (1D ndarray): the linear array, of shape=shape[0]*(shape[1] + margin) * osr
+        shape (2-tuple of int): shape of the output array
         margin (0<=int): number of pixels at the beginning of each line to skip
+        osr (1<=int<2**16): over-sampling rate, how many input samples should be acquired by pixel
+            if osr is above 1, the average value is computed.
+        returns (2D ndarray): dtype is same as data
         """
         # reshape to a 2D array with margin
-        rectangle = numpy.reshape(data, (shape[0], shape[1] + margin))
+        rectangle = numpy.reshape(data, (shape[0], shape[1] + margin, osr))
         # trim margin
-        return rectangle[:, margin:]  
-    
+        tr_rect = rectangle[:, margin:]
+        if osr == 1:
+            # only one sample per pixel => we are done
+            return tr_rect[:,:,0] 
+        elif False:
+            # compute the average
+            # mean returns by defaul float64, but we want uint. 
+            # dtype forces the accumulation type, which is then converted to
+            # the final dtype and divided. So the final dtype must fit the
+            # accumulation (which obviously cannot be the original dtype).
+            # So it's worthless to use the out parameter.
+            # TODO: fix numpy so that if both dtype and out are given and
+            # out.dtype is != dtype => use temp array of type dtype.
+            average = numpy.mean(tr_rect, axis=2)
+            return average.astype(data.dtype)
+        else:
+            # inspired by _mean() from numpy, but save the accumulated value in 
+            # a separate array of a big enough dtype.
+            if data.dtype == numpy.uint16:
+                #assert(osr <= 2**16) # if we reach this, we have other problems with memory size first 
+                idtype = numpy.uint32
+            else:
+                # numpy.uint32
+                idtype = numpy.uint64
+            acc = umath.add.reduce(tr_rect, axis=2, dtype=idtype)
+            average = numpy.empty(shape, dtype=data.dtype)
+            umath.true_divide(acc, osr, out=average, casting='unsafe', subok=False)
+            return average
+            
     def start_acquire(self, detector, callback):
         """
         Start acquiring images on the given detector (i.e., input channel).
@@ -1067,15 +1186,17 @@ class SEMComedi(model.HwComponent):
                 rranges = [d._range for d in detectors]
                 
                 # get the scan values (automatically updated to the latest needs)
-                scan, period, resolution, margin, wchannels, wranges = self._scanner.get_scan_data()
+                scan, period, resolution, margin, wchannels, wranges, osr = self._scanner.get_scan_data()
                 
                 metadata = dict(self._metadata) # duplicate
                 metadata[model.MD_ACQ_DATE] = time.time() # time at the beginning
-                metadata[model.MD_DWELL_TIME] = period 
+                metadata[model.MD_DWELL_TIME] = period
+                # FIXME: store oversampling?
                 
                 # write and read the raw data
                 try:
-                    rbuf = self.write_read_data_raw(wchannels, wranges, rchannels, rranges, period, scan)
+                    rbuf = self.write_read_data_raw(wchannels, wranges, rchannels,
+                                                    rranges, period, osr, scan)
                 except IOError:
                     # could be genuine or just due to cancellation
                     if self._acquisition_must_stop.is_set():
@@ -1101,7 +1222,7 @@ class SEMComedi(model.HwComponent):
                         continue
     
                     # Convert to a nice 2D DataArray
-                    parray = self._scan_result_to_array(rbuf[:,i,numpy.newaxis], resolution, margin)
+                    parray = self._scan_result_to_array(rbuf[...,i], resolution, margin, osr)
                     darray = model.DataArray(parray, metadata)
                     callback(darray)
                 
@@ -1306,6 +1427,11 @@ class Reader(Accesser):
         """To be called in a separate thread"""
         try:
             self.buf = numpy.fromfile(self.file, dtype=self.dtype, count=self.count)
+            # TODO: in case of oversampling, we should average while reading
+            # => no need to keep everything in memory (osr > 100 can easily happen)
+            # => overlap acquisition and computation
+            # We'd need to be aware of the margin, to not run computation on it
+            # and allow to have non strided array afterwards
         except IOError:
             # might be due to a cancel
             logging.debug("Read ended before the end")
@@ -1526,6 +1652,10 @@ class Scanner(model.Emitter):
         # Allow the user to modify the value, to copy it from the SEM software
         self.magnification = model.FloatContinuous(1e3, range=[1, 1e9], unit="")
         self.magnification.subscribe(self._onMagnification, init=True)
+        
+        # TODO: This is just for testing, once it's working, it should be always
+        # activated 
+        self.oversampling = model.BooleanVA(True)
 
         self._prev_settings = [None, None, None] # resolution, margin, dwellTime
         self._scan_array = None # last scan array computed
@@ -1572,7 +1702,8 @@ class Scanner(model.Emitter):
         Returns all the data as it has to be written the device to generate a 
           scan.
         returns: array (2D numpy.ndarray), period (0<=float), shape (2-tuple int),
-                 margin (0<=int), channels (list of int), ranges (list of int):
+                 margin (0<=int), channels (list of int), ranges (list of int)
+                 osr (1<=int):
           array is of shape Nx2: N is the number of pixels. dtype is fitting the
              device raw data
           period: time between a pixel in s
@@ -1581,11 +1712,16 @@ class Scanner(model.Emitter):
             to allow for the settling time
           channels: the output channels to use
           ranges: the range index of each output channel
+          osr: over-sampling rate, how many input samples should be acquired by pixel 
         Note: it only recomputes the scanning array if the settings have changed
         Note: it's not thread-safe, you must ensure no simulaneous calls.
         """
         dwell_time = self.dwellTime.value
         resolution = self.resolution.value
+        if self.oversampling.value: # TODO: only update if dwell time changes (or oversampling)
+            dwell_time, osr = self.parent.get_best_oversampling_rate(dwell_time)
+        else:
+            osr = 1
         margin = int(math.ceil(self._settle_time / dwell_time))
         
         prev_resolution, prev_margin, prev_dwell_time = self._prev_settings
@@ -1595,7 +1731,7 @@ class Scanner(model.Emitter):
             self._update_raw_scan_array(resolution, margin)
             
         self._prev_settings = [resolution, margin, dwell_time]
-        return self._scan_array, dwell_time, resolution, margin, self._channels, self._ranges
+        return self._scan_array, dwell_time, resolution, margin, self._channels, self._ranges, osr
 
     def _update_raw_scan_array(self, shape, margin):
         """
@@ -1671,8 +1807,8 @@ class Scanner(model.Emitter):
         
         # fill the margin with the first pixel
         if margin:
-            fp = scan[:,margin,1,numpy.newaxis] # first pixel + add dimension
-            fp.take([0] * margin, axis=1, out=scan[:,:margin,1]) # a copy of "margin" times 
+            fp = scan[:,margin,1]
+            scan[:,:margin,1].T[:] = fp # use the transpose, as the broadcast rule is to extand on the row
         
         # reshape the array to a full flat scan values (the C order should make
         # sure that the array is fully continuous
