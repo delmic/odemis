@@ -48,6 +48,7 @@ CONFIG_SEM = {"name": "sem", "role": "sem", "device": "/dev/comedi0",
 CONFIG_SEM2 = {"name": "sem", "role": "sem", "device": "/dev/comedi0", 
               "children": {"detector0": CONFIG_SED, "detector1": CONFIG_BSD, "scanner": CONFIG_SCANNER}
               }
+
 #@unittest.skip("simple")
 class TestSEMStatic(unittest.TestCase):
     """
@@ -124,8 +125,8 @@ class TestSEM(unittest.TestCase):
 
     def setUp(self):
         # reset resolution and dwellTime
-        self.scanner.resolution.value = [256, 256]
-        self.size = tuple(self.scanner.resolution.value)
+        self.scanner.resolution.value = (256, 256)
+        self.size = self.scanner.resolution.value
         self.scanner.dwellTime.value = self.scanner.dwellTime.range[0]
         self.acq_dates = (set(), set()) # 2 sets of dates, one for each receiver
            
@@ -134,11 +135,17 @@ class TestSEM(unittest.TestCase):
 #        gc.collect()
         pass
     
+    def compute_expected_duration(self):
+        dwell = self.scanner.dwellTime.value
+        settle =  self.scanner.settleTime
+        size = self.scanner.resolution.value
+        return size[0] * size[1] * dwell + size[0] * settle
+    
 #    @unittest.skip("simple")
     def test_acquire(self):
         dwell = 10e-6 # s
         self.scanner.dwellTime.value = dwell
-        expected_duration = self.size[0] * self.size[1] * dwell
+        expected_duration = self.compute_expected_duration()
         
         start = time.time()
         im = self.sed.data.get()
@@ -150,8 +157,7 @@ class TestSEM(unittest.TestCase):
     
 #    @unittest.skip("simple")
     def test_acquire_flow(self):
-        dwell = self.scanner.dwellTime.value
-        expected_duration = self.size[0] * self.size[1] * dwell
+        expected_duration = self.compute_expected_duration()
         
         number = 5
         self.left = number
@@ -173,8 +179,7 @@ class TestSEM(unittest.TestCase):
         self.scanner.dwellTime.value = dwell
         self.scanner.resolution.value = self.scanner.resolution.range[1] # test big image
         self.size = tuple(self.scanner.resolution.value)
-        expected_duration = self.size[0] * self.size[1] * dwell
-        print expected_duration
+        expected_duration = self.compute_expected_duration()
         
         number = 3
         self.left = number
@@ -184,7 +189,7 @@ class TestSEM(unittest.TestCase):
         time.sleep(expected_duration)
         dwell = self.scanner.dwellTime.range[0]
         self.scanner.dwellTime.value = dwell
-        expected_duration = self.size[0] * self.size[1] * dwell
+        expected_duration = self.compute_expected_duration()
                 
         # should just not raise any exception
         for i in range(number):
@@ -195,7 +200,27 @@ class TestSEM(unittest.TestCase):
         
         self.assertEqual(self.left, 0)
 
-    
+#    @unittest.skip("simple")
+    def test_df_alternate_sub_unsub(self):
+        """
+        Test the dataflow on a quick cycle subscribing/unsubscribing
+        Andorcam3 had a real bug causing deadlock in this scenario
+        """ 
+        self.scanner.dwellTime.value = 100e-6
+        number = 3
+        expected_duration = self.compute_expected_duration()
+        
+        self.left = 10000 + number # don't unsubscribe automatically
+        
+        for i in range(number):
+            self.sed.data.subscribe(self.receive_image)
+            time.sleep(1 + expected_duration) # make sure we received at least one image
+            self.sed.data.unsubscribe(self.receive_image)
+
+        # if it has acquired a least 5 pictures we are already happy
+        self.assertLessEqual(self.left, 10000)
+        
+        
     def receive_image(self, dataflow, image):
         """
         callback for df of test_acquire_flow()
@@ -295,27 +320,48 @@ if __name__ == "__main__":
 
 
 # For testing
-#from odemis.driver.semcomedi import SEMComedi
+#def receive(dataflow, data):
+#    print "received image of ", data.shape
+#
+#import odemis.driver.semcomedi as semcomedi 
 #import numpy
 #import logging
-#import comedi
+#import odemis.driver.comedi_simple as comedi
+#import time
 #logging.getLogger().setLevel(logging.DEBUG)
-#comedi.comedi_loglevel(3)
-#CONFIG_SED = {"name": "sed", "role": "sed", "channel":5}
-#CONFIG_SCANNER = {"name": "scanner", "role": "ebeam", "channels": [0,1], "limits": [[0, 5], [0, 5]], "settle_time": 10e-6} 
+#comedi.loglevel(3)
+#CONFIG_SED = {"name": "sed", "role": "sed", "channel":5, "limits": [-3, 3]}
+#CONFIG_SCANNER = {"name": "scanner", "role": "ebeam", "limits": [[0, 5], [0, 5]], "channels": [0,1], "settle_time": 10e-6, "hfw_nomag": 10e-3} 
 #CONFIG_SEM = {"name": "sem", "role": "sem", "device": "/dev/comedi0", "children": {"detector0": CONFIG_SED, "scanner": CONFIG_SCANNER} }
-#d = SEMComedi(**CONFIG_SEM)
-#r = d.get_data([0, 1], 0.01, 3)
+#d = semcomedi.SEMComedi(**CONFIG_SEM)
+#sr = d._scanner
+#sr.dwellTime.value = 10e-6
+#dr = d._detectors["detector0"]
+#dr.data.subscribe(receive)
+#time.sleep(5)
+#dr.data.unsubscribe(receive)
+#time.sleep(1)
+#dr.data.subscribe(receive)
+#time.sleep(2)
+#dr.data.unsubscribe(receive)
+#
+#r = d._get_data([0, 1], 0.01, 3)
 #w = numpy.array([[1],[2],[3],[4]], dtype=float)
 #d.write_data([0], 0.01, w)
 #scanned = [300, 300]
 #scanned = [1000, 1000]
-#limits = numpy.array([[-5, 5], [-7, 7]], dtype=float)
+#limits = numpy.array([[0, 5], [0, 5]], dtype=float)
 #margin = 2
-#s = SEMComedi._generate_scan_array(scanned, limits, margin)
-#d.write_data([0, 1], 100e-6, s)
+#s = semcomedi.Scanner._generate_scan_array(scanned, limits, margin)
+##d.write_data([0, 1], 100e-6, s)
 #r = d.write_read_data_phys([0, 1], [5, 6], 10e-6, s)
 #v=[]
 #for a in r:
 #    v.append(d._scan_result_to_array(a, scanned, margin))
-
+#
+#import pylab
+#pylab.plot(r[0])
+#pylab.show()
+#
+#pylab.plot(rr[:,0])
+#pylab.imshow(v[0])

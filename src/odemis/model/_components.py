@@ -372,8 +372,11 @@ class Detector(HwComponent):
         HwComponent.__init__(self, name, role, **kwargs)
 
         # To be overridden
-        self._shape = (0) # maximum value of each dimension of the detector. A CCD camera 2560x1920 with 12 bits intensity has a 3D shape (2560,1920,2048).
-        self.pixelSize = None # VA representing the size of a pixel (in meters). More precisely it should be the average distance between the centres of two pixels.
+        
+        # Maximum value of each dimension of the detector (including the 
+        # intensity). A CCD camera 2560x1920 with 12 bits intensity has a 3D
+        # shape (2560,1920,2048).
+        self._shape = (0,)  
         self.data = None # Data-flow coming from this detector.
         # normally a detector doesn't affect anything
 
@@ -392,8 +395,9 @@ class DigitalCamera(Detector):
         Detector.__init__(self, name, role, **kwargs)
 
         # To be overridden by a VA
+        self.pixelSize = None # (len(dim)-1 * float) size of a pixel (in meters). More precisely it should be the average distance between the centres of two pixels.
         self.binning = None # how many CCD pixels are merged (in each dimension) to form one pixel on the image.
-        self.resolution = None # (2-tuple of int): number of pixels in the image generated for each dimension. If it's smaller than the full resolution of the captor, it's centred.
+        self.resolution = None # (len(dim)-1 * int): number of pixels in the image generated for each dimension. If it's smaller than the full resolution of the captor, it's centred.
         self.exposureTime = None # (float): time in second for the exposure for one image.
 
 

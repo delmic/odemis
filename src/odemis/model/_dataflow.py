@@ -330,7 +330,13 @@ class DataFlow(DataFlowBase):
             dformat = {"dtype": str(data.dtype), "shape": data.shape}
             self.pipe.send_pyobj(dformat, zmq.SNDMORE)
             self.pipe.send_pyobj(data.metadata, zmq.SNDMORE)
-            self.pipe.send(numpy.getbuffer(data), copy=False)
+            try:
+                self.pipe.send(numpy.getbuffer(data), copy=False)
+            except TypeError:
+                # not all buffers can be sent zero-copy (e.g., has strides)
+                # try harder by copying (which removes the strides)
+                logging.debug("Failed to send data with zero-copy")
+                self.pipe.send(numpy.getbuffer(data.copy()), copy=False)
         
         # publish locally
         DataFlowBase.notify(self, data)

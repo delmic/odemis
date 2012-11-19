@@ -533,8 +533,20 @@ def live_display(comp_name, df_name):
         return 129
 
     print "Press 'Q' to quit"
+    # try to guess the size of the first image that will come
+    try:
+        size = component.resolution.value
+        # check it's a 2-tuple, mostly to detect if it's a RemoteMethod, which
+        # means it doesn't exists. 
+        if not isinstance(size, (tuple, list)) or len(size) != 2:
+            raise ValueError
+    except (AttributeError, ValueError):
+        # pick something not too stupid
+        size = (512, 512)
+        # TODO: try to use resolution on the emitter that affects this detector
+        # (if it exists) 
+        
     # create a window
-    size = component.resolution.value
     window = VideoDisplayer("Live from %s.%s" % (comp_name, df_name), size)
 
         # update the picture and wait
