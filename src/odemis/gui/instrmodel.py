@@ -411,15 +411,33 @@ class GUIMicroscope(object):
     def onEMState(self, state):
         if state == STATE_OFF:
             # TODO turn off really the ebeam and detector
-            pass
+            if self.ebeam:
+                try:
+                    # TODO save the previous value
+                    # blank the ebeam
+                    self.ebeam.energy.value = 0
+                except:
+                    # Too bad. let's just do nothing then.
+                    logging.debug("Ebeam doesn't support setting energy to 0")
         elif state == STATE_PAUSE:
-            # TODO blank the ebeam
-            pass
+            if self.ebeam:
+                try:
+                    # TODO save the previous value
+                    # blank the ebeam
+                    self.ebeam.energy.value = 0
+                except:
+                    # Too bad. let's just do nothing then.
+                    logging.debug("Ebeam doesn't support setting energy to 0")
+                 
         elif state == STATE_ON:
-            raise NotImplementedError("Does not know how to switch on e-beam")
-
-    # TODO who's in charge of switching the active stream which share the same
-    #   detector? => maybe a special controller, or the stream controller?
+            # TODO anything else to turn on?
+            if self.ebeam:
+                try:
+                    # TODO use the previous value
+                    self.ebeam.energy.value = self.ebeam.energy.choices[1]
+                except:
+                    # Too bad. let's just do nothing then (and hope it's on)
+                    logging.debug("Ebeam doesn't support setting energy")
 
     # TODO dye database
     # name (for the user only)
