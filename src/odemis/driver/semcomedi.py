@@ -29,8 +29,6 @@ import time
 import weakref
 #pylint: disable=E1101
 
-#logging.getLogger().setLevel(logging.DEBUG)
-
 # This is a module to drive a FEI Scanning electron microscope via the so-called
 # "external X/Y" line. It uses a DA-conversion and acquisition (DAQ) card on the
 # computer side to control the X/Y position of the electron beam (e-beam), while
@@ -130,8 +128,7 @@ class SEMComedi(model.HwComponent):
         self._metadata = {model.MD_HW_NAME: self.getHwName()}
         self._swVersion = "%s (driver %s)" % (__version__.version, self.getSwVersion()) 
         self._metadata[model.MD_SW_VERSION] = self._swVersion
-#        self._hwVersion = self.getHwVersion()
-        self._metadata[model.MD_HW_VERSION] = self._hwVersion
+        self._metadata[model.MD_HW_VERSION] = self._hwVersion # unknown
 
         self._check_test_device()
         
@@ -590,8 +587,6 @@ class SEMComedi(model.HwComponent):
         
         # convert data to physical values
         logging.debug("Converting raw data to physical: %s", rbuf)
-        # TODO convert the data while reading, to save time
-        # TODO do not convert the margin data
         # Allocate a separate memory block per channel as they'll later be used
         # completely separately
         parrays = []
@@ -600,8 +595,6 @@ class SEMComedi(model.HwComponent):
                                    [c], [rranges[i]], rbuf[:,i,numpy.newaxis]))
 
         return parrays
-        
-        # TODO: be able to stop while reading, using comedi_cancel()
     
     def _prepare_command(self, cmd):
         """
@@ -656,14 +649,13 @@ class SEMComedi(model.HwComponent):
         # no compatible dwell time found
         raise ValueError("No compatible dwell time found for %g s." % period)
                 
-    
-    def get_best_oversampling_rate(self, period, max_osr=100):
+    def find_best_oversampling_rate(self, period, max_osr=100):
         """
         Returns the closest dwell time _longer_ than the given time compatible
           with the output device and the highest over-sampling rate compatible 
           with the input device.
         period (float): dwell time requested (in s)
-        max (1<=int): maximum over-sampling rate returned
+        max_osr (1<=int): maximum over-sampling rate returned
         returns (2-tuple: period (0<float), osr (1<=int)):
          period: a value slightly smaller, or larger than the period (in s)
          osr: a ratio indicating how many times faster runs the input clock
@@ -673,7 +665,7 @@ class SEMComedi(model.HwComponent):
            simultaneously.
         """
         # TODO: until we support decimation during the read, an osr > 100 is
-        # too big due to requiring 100 more memory.
+        # too big due to requiring 100 times more memory.
         # TODO: min dwell time should be just for one input channel, and adapt if
         # more than one channel is read simultaneously => pass nrchans?
         assert(max_osr >= 1)
@@ -698,7 +690,8 @@ class SEMComedi(model.HwComponent):
         # try to find a two periods which are exact multiples
         # start with the best osr, and at worse down to 1
         rcmd = comedi.cmd_struct()
-        for osr in range(max_osr, 1, -1): # 1 is not included
+        wcmd = comedi.cmd_struct()
+        for osr in range(max_osr, 1, -1): # 1 is _not_ included
             # read period from the orignal dwell time
             rperiod_ns = int(math.ceil(period_ns / osr))
             comedi.get_cmd_generic_timed(self._device, self._ai_subdevice,
@@ -709,7 +702,8 @@ class SEMComedi(model.HwComponent):
             # write period is OSR * read period
             wperiod_ns = rperiod_ns * osr
             if not self._test:
-                wcmd = comedi.cmd_struct()
+                # TODO use command_test(), and check for return value 4 to know
+                # if time was changed. That should be a bit faster.
                 comedi.get_cmd_generic_timed(self._device, self._ao_subdevice,
                                                   wcmd, nwchans, wperiod_ns)
                 if wcmd.scan_begin_arg != wperiod_ns:
@@ -726,19 +720,6 @@ class SEMComedi(model.HwComponent):
         # at least osr = 1 ought to work
         period_ns = self.find_closest_dwell_time(period)
         return period_ns, 1
-    
-    def _run_inttrig(self, subdevice, num):
-        """
-        This is the same as calling comedi_internal_trigger(), so just for trying
-        to use instructions."""
-        insn = comedi.insn_struct()
-        insn.subdev = subdevice
-        insn.insn = comedi.INSN_INTTRIG
-        insn.n = 1
-        data = comedi.lsampl_array(insn.n)
-        data[0] = num
-        insn.data = data.cast()
-        return comedi.do_insn(self._device, insn)
     
     def write_data(self, channels, period, data):
         """
@@ -827,7 +808,6 @@ class SEMComedi(model.HwComponent):
         buf[:preload_size].tofile(self._wfile)
         logging.debug("Going to flush")
         self._wfile.flush()
-        #d._wfile.write(buf[:preload_size].tostring())
 
         # run the command
         logging.debug("Going to start the command")
@@ -836,7 +816,6 @@ class SEMComedi(model.HwComponent):
         comedi.internal_trigger(self._device, self._ao_subdevice, 0)
         
         logging.debug("Going to write %d bytes more", buf[preload_size:].nbytes)
-        # TODO: can this handle faults? 
         buf[preload_size:].tofile(self._wfile)
         logging.debug("Going to flush")
         self._wfile.flush()
@@ -917,8 +896,6 @@ class SEMComedi(model.HwComponent):
         
         # convert data to physical values
         logging.debug("Converting raw data to physical: %s", rbuf)
-        # TODO convert the data while reading, to save time
-        # TODO do not convert the margin data
         # Allocate a separate memory block per channel as they'll later be used
         # completely separately
         parrays = []
@@ -956,7 +933,6 @@ class SEMComedi(model.HwComponent):
             logging.warning("Asked dwell time of %g s, but got %g s", 
                             rperiod_ns/1e9, rcmd.scan_begin_arg / 1e9)
 
-        
         # flatten the array
         wbuf = numpy.reshape(data, nwscans * nwchans, order='C')
 
@@ -966,8 +942,6 @@ class SEMComedi(model.HwComponent):
         
         # run the commands
         comedi.command(self._device, rcmd)
-        # AO is waiting for AI/Start1, so not sure why internal trigger needed,
-        # but it is. Maybe just to let Comedi know that the command has started
         self._reader.run()
         
         timeout = expected_time * 1.10 + 1 # s   == expected time + 10% + 1s
@@ -1013,7 +987,7 @@ class SEMComedi(model.HwComponent):
         wcmd.chanlist = clist
 #        wcmd.start_src = comedi.TRIG_INT
 #        wcmd.start_arg = 0
-        # from PyComedi docs
+        # from PyComedi docs: should improve synchronisation
         wcmd.start_src = comedi.TRIG_EXT
         wcmd.start_arg = NI_TRIG_AI_START1 # when the AI starts reading 
         wcmd.stop_src = comedi.TRIG_COUNT
@@ -1038,7 +1012,6 @@ class SEMComedi(model.HwComponent):
         assert((rcmd.scan_begin_arg * osr) == wcmd.scan_begin_arg)
         if wcmd.scan_begin_arg != period_ns:
             logging.warning("Asked dwell time of %g s, but got %g s", period, wcmd.scan_begin_arg / 1e9)
-        # TODO: if periods are different => pick the closest period that works for both
 
         # readying the subdevice with the command (needs to be done before
         # writing anything to the device)
@@ -1055,7 +1028,7 @@ class SEMComedi(model.HwComponent):
         
         # run the commands
         # AO is waiting for AI/Start1, so not sure why internal trigger needed,
-        # but it is. Maybe just to let Comedi know that the command has started
+        # but it is. Maybe just to let Comedi know that the command has started.
         comedi.internal_trigger(self._device, self._ao_subdevice, 0)
         comedi.internal_trigger(self._device, self._ai_subdevice, 0)
         self._reader.run()
@@ -1080,6 +1053,7 @@ class SEMComedi(model.HwComponent):
             if osr is above 1, the average value is computed.
         returns (2D ndarray): dtype is same as data
         """
+        assert(osr >= 1)
         # reshape to a 2D array with margin
         rectangle = numpy.reshape(data, (shape[0], shape[1] + margin, osr))
         # trim margin
@@ -1087,17 +1061,6 @@ class SEMComedi(model.HwComponent):
         if osr == 1:
             # only one sample per pixel => we are done
             return tr_rect[:,:,0] 
-        elif False:
-            # compute the average
-            # mean returns by defaul float64, but we want uint. 
-            # dtype forces the accumulation type, which is then converted to
-            # the final dtype and divided. So the final dtype must fit the
-            # accumulation (which obviously cannot be the original dtype).
-            # So it's worthless to use the out parameter.
-            # TODO: fix numpy so that if both dtype and out are given and
-            # out.dtype is != dtype => use temp array of type dtype.
-            average = numpy.mean(tr_rect, axis=2)
-            return average.astype(data.dtype)
         else:
             # inspired by _mean() from numpy, but save the accumulated value in 
             # a separate array of a big enough dtype.
@@ -1191,17 +1154,18 @@ class SEMComedi(model.HwComponent):
                 metadata = dict(self._metadata) # duplicate
                 metadata[model.MD_ACQ_DATE] = time.time() # time at the beginning
                 metadata[model.MD_DWELL_TIME] = period
-                # FIXME: store oversampling?
+                metadata[model.MD_SAMPLES_PER_PIXEL] = osr
                 
                 # write and read the raw data
                 try:
                     rbuf = self.write_read_data_raw(wchannels, wranges, rchannels,
                                                     rranges, period, osr, scan)
-                except IOError:
+                except (IOError, comedi.ComediError):
                     # could be genuine or just due to cancellation
                     if self._acquisition_must_stop.is_set():
                         return
                     logging.exception("Acquisition failed, will retry")
+                    # TODO: fail after many retries in a row
                     continue
             
                 #logging.debug("Converting raw data to physical: %s", rbuf)
@@ -1332,6 +1296,7 @@ class SEMComedi(model.HwComponent):
                     #continue
                     cmd.scan_begin_arg = 0
         
+                # Check disabled, to allow comedi_test to be compatible
 #                if cmd.scan_begin_src != comedi.TRIG_TIMER:
 #                    continue # no timer => impossible to use the device
                 min_ao_period = cmd.scan_begin_arg / 1e9
@@ -1368,8 +1333,7 @@ class Accesser(object):
         # they are pointing to the same "file", but must be different objects
         # to be able to read and write simultaneously.
         # Closing any of them will close the device as well
-        # TODO: try buffer = 0
-        self.file = os.fdopen(parent._fileno, 'rb+', 0)
+        self.file = os.fdopen(parent._fileno, 'rb+', 0) # buffer = 0 => flush should be not necessary
 
     def close(self):
         """
@@ -1447,7 +1411,7 @@ class Reader(Accesser):
             logging.warning("Reading thread is still running after %g s", timeout)
         self.cancel()
         
-        # the result should be in self._rbuf
+        # the result should be in self.buf
         if self.buf is None:
             raise IOError("Failed to read all the %d expected values" % self.count)
         elif self.buf.size != self.count:
@@ -1467,7 +1431,6 @@ class Reader(Accesser):
         
         # apparently, to manage to stop a current read, you need to give a new
         # command of few reads (e.g., 1 read), on any channel
-        # TODO check if it needs to be of the right channels 
         try:
             cmd = comedi.cmd_struct()
             comedi.get_cmd_generic_timed(self._device, self._subdevice, cmd, 1, 0)
@@ -1525,7 +1488,6 @@ class Writer(Accesser):
         """
         Ends once the output is fully over 
         """
-        # TODO: can this handle faults?
         try: 
             self.buf[self._preload_size:].tofile(self.file)
             self.file.flush()
@@ -1580,7 +1542,7 @@ class Scanner(model.Emitter):
           voltage for the max value of X. 
         settle_time (0<=float<=1e-3): time in s for the signal to settle after
           each scan line
-        pixel_size_no_mag (0<float<=1): (theoritical) distance between horizontal borders 
+        hfw_nomag (0<float<=1): (theoritical) distance between horizontal borders 
           (lower/upper limit in X) if magnification is 1 (in m)
         """
         # TODO: do oversampling when possible (= take multiple samples in a raw
@@ -1611,7 +1573,7 @@ class Scanner(model.Emitter):
         for i, channel in enumerate(channels):
             data_lim = self._limits[i]
             try:
-                r = comedi.find_range(parent._device, parent._ao_subdevice, 
+                comedi.find_range(parent._device, parent._ao_subdevice, 
                                   channel, comedi.UNIT_volt, data_lim[0], data_lim[1])
             except comedi.ComediError:
                 raise ValueError("Data range between %g and %g V is too high for hardware." %
@@ -1680,7 +1642,7 @@ class Scanner(model.Emitter):
     
     def _updatePixelSize(self):
         """
-        Update the pixel size using the resolution, HFW_NoMag and magnification
+        Update the pixel size using the resolution, HFWNoMag and magnification
         """
         # This is correct as long as there is not region of interest/transformation
         mag = self.magnification.value
@@ -1719,7 +1681,7 @@ class Scanner(model.Emitter):
         dwell_time = self.dwellTime.value
         resolution = self.resolution.value
         if self.oversampling.value: # TODO: only update if dwell time changes (or oversampling)
-            dwell_time, osr = self.parent.get_best_oversampling_rate(dwell_time)
+            dwell_time, osr = self.parent.find_best_oversampling_rate(dwell_time)
         else:
             osr = 1
         margin = int(math.ceil(self._settle_time / dwell_time))
@@ -1805,13 +1767,14 @@ class Scanner(model.Emitter):
         # fill the Y dimension
         scan[:,margin:,1] = numpy.linspace(limits[1,0], limits[1,1], shape[1])
         
-        # fill the margin with the first pixel
+        # fill the margin with the first pixel (X dimension is already filled)
         if margin:
             fp = scan[:,margin,1]
-            scan[:,:margin,1].T[:] = fp # use the transpose, as the broadcast rule is to extand on the row
+            # use the transpose, as the broadcast rule is to extend on the row
+            scan[:,:margin,1].T[:] = fp
         
         # reshape the array to a full flat scan values (the C order should make
-        # sure that the array is fully continuous
+        # sure that the array is fully continuous)
         scan.shape = [full_shape[0] * full_shape[1], 2]
         return scan
     
@@ -1898,4 +1861,5 @@ class SEMDataFlow(model.DataFlow):
         # the ranges could be save in the metadata.
 #        parray = self._array_to_phys(self_sem._ai_subdevice,
 #                                       [self.component.channel], [rranges], data)
+        # For now, the data seems linear enough that we don't care.
         model.DataFlow.notify(self, data)
