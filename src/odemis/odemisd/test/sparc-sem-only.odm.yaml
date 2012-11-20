@@ -22,10 +22,10 @@ SPARC: {
 # Y -> AO 1
 # Ground -> AO GND
 "EBeam ExtXY": {
-    # Internal child of Quanta ExtXY, so no class
+    # Internal child of SEM ExtXY, so no class
     role: e-beam,
     init: {
-        channels: [0, 1],
+        channels: [1, 0],
         limits: [[0, 5], [0, 5]],  # V
         settle_time: 10.e-6, # s
         hfw_nomag: 10.e-3, # m
