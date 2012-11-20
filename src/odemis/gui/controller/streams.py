@@ -77,6 +77,12 @@ class StreamController(object):
         self._livegui.opticalState.subscribe(self.onOpticalState)
         self._livegui.emState.subscribe(self.onEMState)
 
+    def optical_was_turned_on(self):
+        return self._opticalWasTurnedOn
+
+    def sem_was_turned_on(self):
+        return self._semWasTurnedOn
+
     def _createAddStreamActions(self):
         """
         Create the possible "add stream" actions according to the current
@@ -90,15 +96,21 @@ class StreamController(object):
             and self._livegui.ccd):
             # TODO: how to know it's _fluorescent_ microscope?
             #  => multiple source? filter?
-            self._spanel.add_action("Filtered colour", self.addFluo)
+            self._spanel.add_action("Filtered colour",
+                                    self.addFluo,
+                                    self.optical_was_turned_on)
 
         # Bright-field
         if self._livegui.light and self._livegui.ccd:
-            self._spanel.add_action("Bright-field", self.addBrightfield)
+            self._spanel.add_action("Bright-field",
+                                    self.addBrightfield,
+                                    self.optical_was_turned_on)
 
         # SED
         if self._livegui.ebeam and self._livegui.sed:
-            self._spanel.add_action("Secondary electrons", self.addSEMSED)
+            self._spanel.add_action("Secondary electrons",
+                                    self.addSEMSED,
+                                    self.sem_was_turned_on)
 
 
     def addFluo(self):
@@ -267,5 +279,5 @@ class StreamController(object):
             stream.updated.unsubscribe(callback)
 
         # Remove from the views
-        for v in self._livegui.views:
+        for v in [v for v in self._livegui.views.itervalues()]:
             v.removeStream(stream)

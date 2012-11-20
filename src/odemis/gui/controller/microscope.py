@@ -20,7 +20,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 
-# from odemis.gui.log import log
 # from odemis.gui.util import img
 # import os
 # import re
@@ -28,23 +27,49 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 # import sys
 # import threading
 # import time
-# import wx
 
+import wx
+
+import odemis.gui.instrmodel as instrmodel
+from odemis.gui.log import log
 
 class MicroscopeController(object):
     """ This controller class controls the main microscope buttons and allow
     querying of various status attributes.
     """
-    def __init__(self, main_frame):
+    def __init__(self, interface_model, main_frame):
         """
+        interface_model: GUIMicroscope
         main_frame: (wx.Frame): the frame which contains the 4 viewports
         """
+        self.interface_model = interface_model
+
         # Microscope buttons
 
         self.btn_pressure = main_frame.btn_toggle_press
         self.btn_optical = main_frame.btn_toggle_opt
         self.btn_sem = main_frame.btn_toggle_sem
         self.btn_pause = main_frame.btn_toggle_pause
+
+        self.btn_optical.Bind(wx.EVT_BUTTON, self.on_toggle_optical)
+
+    # Event handlers
+
+    def on_toggle_optical(self, event):
+        log.debug("Optical toggle button pressed")
+        if self.interface_model:
+            if event.isDown:
+                self.interface_model.opticalState.value = instrmodel.STATE_ON
+            else:
+                self.interface_model.opticalState.value = instrmodel.STATE_OFF
+
+    def on_toggle_sem(self, event):
+        log.debug("SEM toggle button pressed")
+        if self.interface_model:
+            if event.isDown:
+                self.interface_model.opticalState.value = instrmodel.STATE_ON
+            else:
+                self.interface_model.opticalState.value = instrmodel.STATE_OFF
 
     # Status checking methods
 
@@ -71,3 +96,4 @@ class MicroscopeController(object):
 
     def is_pauzed(self):
         return self.btn_pause.IsEnabled() and self.btn_pause.GetToggle()
+

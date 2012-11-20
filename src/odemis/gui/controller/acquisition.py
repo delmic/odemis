@@ -28,15 +28,17 @@ of microscope images.
 
 """
 
-from odemis.gui.log import log
-from odemis.gui.util import img
 import os
 import re
 import subprocess
 import sys
 import threading
 import time
+
 import wx
+
+from odemis.gui.log import log
+from odemis.gui.util import img
 
 
 class AcquisitionController(object):
@@ -66,11 +68,18 @@ class AcquisitionController(object):
 
         # Link "acquire image" button to image acquisition
         # TODO: for now it's just snapshot, but should be linked to the acquisition window
-        self._main_frame.btn_aquire.Bind(wx.EVT_BUTTON, self.start_snapshot_viewport)
+        self._main_frame.btn_acquire.Bind(wx.EVT_BUTTON, self.open_acquisition_dialog)
 
         # find the names of the active (=connected) screens
         # it's slow, so do it only at init (=expect not to change screen during acquisition)
         self._outputs = self.get_display_outputs()
+
+    def open_acquisition_dialog(self, evt):
+        from odemis.gui import main_xrc
+        self._acq_dialog = main_xrc.xrcfr_acq(self._main_frame)
+        self._acq_dialog.Maximize()
+
+        self._acq_dialog.Show()
 
     def start_snapshot_viewport(self, event):
         """

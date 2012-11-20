@@ -973,7 +973,7 @@ class StreamPanel(wx.Panel):
     # TODO: Add 'check_enabled' functions to the 'add_choice' method call that
     # determine whether the choice should be enabled or disabled (by returning
     # True or False)
-    def add_action(self, title, callback):
+    def add_action(self, title, callback, check_enabled=None):
         """
         Add an action to the menu. It's added at the end of the list. If an
         action with the same title exists, it is replaced.
@@ -982,10 +982,7 @@ class StreamPanel(wx.Panel):
         """
         log.debug("Adding %s action to stream panel", title)
         self.menu_actions[title] = callback
-        def neus():
-            print "Hallo"
-            return False
-        self.btn_add_stream.add_choice(title, callback, neus)
+        self.btn_add_stream.add_choice(title, callback, check_enabled)
 
     def remove_action(self, title):
         """

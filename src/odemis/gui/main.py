@@ -32,6 +32,7 @@ import Pyro4.errors
 from odemis import __version__, model
 from odemis.gui import main_xrc, instrmodel, log
 from odemis.gui.controller.acquisition import AcquisitionController
+from odemis.gui.controller.microscope import MicroscopeController
 from odemis.gui.controller.settingspanel import SettingsSideBar
 from odemis.gui.controller.streams import StreamController
 from odemis.gui.controller.tabs import TabBar
@@ -191,14 +192,17 @@ class OdemisGUIApp(wx.App):
             self.acquisition_controller = AcquisitionController(self.interface_model,
                                                                 self.main_frame)
 
+            self.microscope_controller = MicroscopeController(self.interface_model,
+                                                              self.main_frame)
+
             # Main on/off buttons => only optical for now
             # FIXME: special _bitmap_ toggle button doesn't seem to generate
             # EVT_TOGGLEBUTTON
             # self.main_frame.btn_toggle_opt.Bind(wx.EVT_TOGGLEBUTTON,
             #                                     self.on_toggle_opt)
             # FIXME: Move to a control
-            self.main_frame.btn_toggle_opt.Bind(wx.EVT_BUTTON,
-                                                self.on_toggle_opt)
+            # self.main_frame.btn_toggle_opt.Bind(wx.EVT_BUTTON,
+            #                                     self.on_toggle_opt)
 
         except Exception:  #pylint: disable=W0703
             self.excepthook(*sys.exc_info())
@@ -264,13 +268,6 @@ class OdemisGUIApp(wx.App):
             self.interface_model.stopMotion()
         else:
             evt.Skip()
-
-    def on_toggle_opt(self, event):
-        if self.interface_model:
-            if event.isDown: # if ToggleEvent, could use isChecked()
-                self.interface_model.opticalState.value = instrmodel.STATE_ON
-            else:
-                self.interface_model.opticalState.value = instrmodel.STATE_OFF
 
     def on_about(self, evt):
         message = ("%s\nVersion %s.\n\n%s.\nLicensed under the %s." %
