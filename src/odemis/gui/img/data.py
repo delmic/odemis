@@ -2018,7 +2018,7 @@ getbtn_64x48Image = btn_64x48.GetImage
 getbtn_64x48Bitmap = btn_64x48.GetBitmap
 
 #----------------------------------------------------------------------
-btn_aquire_image_a = PyEmbeddedImage(
+btn_acquire_image_a = PyEmbeddedImage(
     "iVBORw0KGgoAAAANSUhEUgAAAX4AAAAvCAYAAADkf6EaAAAABmJLR0QAAAAAAAD5Q7t/AAAA"
     "CXBIWXMAAAsTAAALEwEAmpwYAAAAB3RJTUUH3AcSDjsJruhPZgAABZZJREFUeNrt3V1sU2Uc"
     "x/Hf6ekLK9vYRse64IaiE7YlmxhdQF2CIxJL1AsDGk0wGi/ElxtNUBO50RgwvsQYFTEhkWhC"
@@ -2048,14 +2048,14 @@ btn_aquire_image_a = PyEmbeddedImage(
     "AGAigl+Jwc8MGQDI/eDP8sldAMD1WfKP+1o9AICJktTjZ0gAYAoU/APfwMV0TgDI/dwfPJ1T"
     "Qdm2n2EBgJyu+IMJwW+tkW1vZFQAIJeD31ojSaYkRduOHnLfsqBZDkeppPyBGwBg8gtK2q9Y"
     "33Pd332+jeEAgCnoP+aqKkDdN66dAAAAAElFTkSuQmCC")
-index.append('btn_aquire_image_a')
-catalog['btn_aquire_image_a'] = btn_aquire_image_a
-getbtn_aquire_image_aData = btn_aquire_image_a.GetData
-getbtn_aquire_image_aImage = btn_aquire_image_a.GetImage
-getbtn_aquire_image_aBitmap = btn_aquire_image_a.GetBitmap
+index.append('btn_acquire_image_a')
+catalog['btn_acquire_image_a'] = btn_acquire_image_a
+getbtn_acquire_image_aData = btn_acquire_image_a.GetData
+getbtn_acquire_image_aImage = btn_acquire_image_a.GetImage
+getbtn_acquire_image_aBitmap = btn_acquire_image_a.GetBitmap
 
 #----------------------------------------------------------------------
-btn_aquire_image_h = PyEmbeddedImage(
+btn_acquire_image_h = PyEmbeddedImage(
     "iVBORw0KGgoAAAANSUhEUgAAAX4AAAAvCAYAAADkf6EaAAAABmJLR0QAAAAAAAD5Q7t/AAAA"
     "CXBIWXMAAAsTAAALEwEAmpwYAAAAB3RJTUUH3AcSDjsFp14DTQAABQNJREFUeNrt3U1skwUc"
     "x/Hf0z5t127D7oWtRhgILDCGwyyZaIg4RpyORONFEi4GTsyDCcZ4MOFmCAdjDBhNTByioiEe"
@@ -2082,14 +2082,14 @@ btn_aquire_image_h = PyEmbeddedImage(
     "h7sAMKca//6zg9p/dpCjCwBzM/i5OgYAiir4efQBABRd42dWDgBFFvw0fgCg8QMAaPwAABo/"
     "AIDGDwCY88HP5ZwAUJyNPywpxOEAgIIWvjv4d0j6mGMCAAVthyRNf71Vl6R2SYem3xEAAAXT"
     "8g9Jar+0e3vX3Y1fkrpv/wAAHgCX9rzuaLt/AMoBw8Fjj7+MAAAAAElFTkSuQmCC")
-index.append('btn_aquire_image_h')
-catalog['btn_aquire_image_h'] = btn_aquire_image_h
-getbtn_aquire_image_hData = btn_aquire_image_h.GetData
-getbtn_aquire_image_hImage = btn_aquire_image_h.GetImage
-getbtn_aquire_image_hBitmap = btn_aquire_image_h.GetBitmap
+index.append('btn_acquire_image_h')
+catalog['btn_acquire_image_h'] = btn_acquire_image_h
+getbtn_acquire_image_hData = btn_acquire_image_h.GetData
+getbtn_acquire_image_hImage = btn_acquire_image_h.GetImage
+getbtn_acquire_image_hBitmap = btn_acquire_image_h.GetBitmap
 
 #----------------------------------------------------------------------
-btn_aquire_image = PyEmbeddedImage(
+btn_acquire_image = PyEmbeddedImage(
     "iVBORw0KGgoAAAANSUhEUgAAAX4AAAAvCAYAAADkf6EaAAAABmJLR0QAAAAAAAD5Q7t/AAAA"
     "CXBIWXMAAAsTAAALEwEAmpwYAAAAB3RJTUUH3AcSDjsLQOYuSgAABNZJREFUeNrt3H9olHUA"
     "x/HPPfdju/OkbS53ZdrUVlv7IVkmopCeEW1KFBJhFChBSf8ERWDpP1GkEVQQEYOohCCsQAxm"
@@ -2116,11 +2116,11 @@ btn_aquire_image = PyEmbeddedImage(
     "JRb8TPUAAI0fAEDjBwDQ+AEANH4AQMEHv0XwA0DJNf5hST6GAwCK2vC/g3+7pM8YEwAoatsl"
     "yS5J0Z6fesof8B+TdLsk75UPAKA4Wv4RSS8HPt/2HcMBACXob7P7w3vpYzukAAAAAElFTkSu"
     "QmCC")
-index.append('btn_aquire_image')
-catalog['btn_aquire_image'] = btn_aquire_image
-getbtn_aquire_imageData = btn_aquire_image.GetData
-getbtn_aquire_imageImage = btn_aquire_image.GetImage
-getbtn_aquire_imageBitmap = btn_aquire_image.GetBitmap
+index.append('btn_acquire_image')
+catalog['btn_acquire_image'] = btn_acquire_image
+getbtn_acquire_imageData = btn_acquire_image.GetData
+getbtn_acquire_imageImage = btn_acquire_image.GetImage
+getbtn_acquire_imageBitmap = btn_acquire_image.GetBitmap
 
 #----------------------------------------------------------------------
 btn_big_a = PyEmbeddedImage(

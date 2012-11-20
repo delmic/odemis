@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-'''
+"""
 Created on 22 Aug 2012
 
 @author: Éric Piel
@@ -8,28 +8,44 @@ Copyright © 2012 Éric Piel, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 2 of the License, or (at your option) any later version.
+Odemis is free software: you can redistribute it and/or modify it under the
+terms of the GNU General Public License as published by the Free Software
+Foundation, either version 2 of the License, or (at your option) any later
+version.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
-'''
+You should have received a copy of the GNU General Public License along with
+Odemis. If not, see http://www.gnu.org/licenses/.
 
-from odemis.gui.log import log
-from odemis.gui.util import img
+
+### Purpose ###
+
+This module contains classes to control the actions related to the acquisition
+of microscope images.
+
+"""
+
 import os
 import re
 import subprocess
 import sys
 import threading
 import time
+
 import wx
 
-# controller to handle snapshot and high-res image acquisition in a "global"
-# context. In particular, it needs to be aware of which viewport is currently
-# focused, and block any change of settings during acquisition.
+from odemis.gui.log import log
+from odemis.gui.util import img
+
 
 class AcquisitionController(object):
+    """ controller to handle snapshot and high-res image acquisition in a "global"
+    context. In particular, it needs to be aware of which viewport is currently
+    focused, and block any change of settings during acquisition.
+    """
     def __init__(self, micgui, main_frame):
         """
         micgui (GUIMicroscope): the representation of the microscope GUI
@@ -52,11 +68,18 @@ class AcquisitionController(object):
 
         # Link "acquire image" button to image acquisition
         # TODO: for now it's just snapshot, but should be linked to the acquisition window
-        self._main_frame.btn_aquire.Bind(wx.EVT_BUTTON, self.start_snapshot_viewport)
+        self._main_frame.btn_acquire.Bind(wx.EVT_BUTTON, self.open_acquisition_dialog)
 
         # find the names of the active (=connected) screens
         # it's slow, so do it only at init (=expect not to change screen during acquisition)
         self._outputs = self.get_display_outputs()
+
+    def open_acquisition_dialog(self, evt):
+        from odemis.gui import main_xrc
+        self._acq_dialog = main_xrc.xrcfr_acq(self._main_frame)
+        self._acq_dialog.Maximize()
+
+        self._acq_dialog.Show()
 
     def start_snapshot_viewport(self, event):
         """

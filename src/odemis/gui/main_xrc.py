@@ -61,18 +61,52 @@ class xrcfr_main(wx.Frame):
         self.pnl_view_tr = xrc.XRCCTRL(self, "pnl_view_tr")
         self.pnl_view_bl = xrc.XRCCTRL(self, "pnl_view_bl")
         self.pnl_view_br = xrc.XRCCTRL(self, "pnl_view_br")
+        self.btn_toggle_press = xrc.XRCCTRL(self, "btn_toggle_press")
         self.btn_toggle_opt = xrc.XRCCTRL(self, "btn_toggle_opt")
         self.btn_toggle_sem = xrc.XRCCTRL(self, "btn_toggle_sem")
+        self.btn_toggle_pause = xrc.XRCCTRL(self, "btn_toggle_pause")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
         self.fpb_settings = xrc.XRCCTRL(self, "fpb_settings")
         self.fp_sem_settings = xrc.XRCCTRL(self, "fp_sem_settings")
         self.fp_optical_settings = xrc.XRCCTRL(self, "fp_optical_settings")
         self.pnl_stream = xrc.XRCCTRL(self, "pnl_stream")
         self.fp_annotations = xrc.XRCCTRL(self, "fp_annotations")
-        self.btn_aquire = xrc.XRCCTRL(self, "btn_aquire")
+        self.btn_acquire = xrc.XRCCTRL(self, "btn_acquire")
         self.pnl_tab_gallery = xrc.XRCCTRL(self, "pnl_tab_gallery")
         self.pnl_log = xrc.XRCCTRL(self, "pnl_log")
         self.txt_log = xrc.XRCCTRL(self, "txt_log")
+
+
+
+class xrcfr_acq(wx.Dialog):
+#!XRCED:begin-block:xrcfr_acq.PreCreate
+    def PreCreate(self, pre):
+        """ This function is called during the class's initialization.
+        
+        Override it for custom setup before the window is created usually to
+        set additional window styles using SetWindowStyle() and SetExtraStyle().
+        """
+        pass
+        
+#!XRCED:end-block:xrcfr_acq.PreCreate
+
+    def __init__(self, parent):
+        # Two stage creation (see http://wiki.wxpython.org/index.cgi/TwoStageCreation)
+        pre = wx.PreDialog()
+        self.PreCreate(pre)
+        get_resources().LoadOnDialog(pre, parent, "fr_acq")
+        self.PostCreate(pre)
+
+        # Define variables for the controls, bind event handlers
+        self.pnl_img = xrc.XRCCTRL(self, "pnl_img")
+        self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
+        self.fpb_settings = xrc.XRCCTRL(self, "fpb_settings")
+        self.fp_sem_settings = xrc.XRCCTRL(self, "fp_sem_settings")
+        self.fp_optical_settings = xrc.XRCCTRL(self, "fp_optical_settings")
+        self.pnl_stream = xrc.XRCCTRL(self, "pnl_stream")
+        self.gauge_acq = xrc.XRCCTRL(self, "gauge_acq")
+        self.lbl_time = xrc.XRCCTRL(self, "lbl_time")
+        self.btn_acquire = xrc.XRCCTRL(self, "btn_acquire")
 
 
 
@@ -87,7 +121,7 @@ def __init_resources():
     wx.FileSystem.AddHandler(wx.MemoryFSHandler())
 
     main_xrc = '''\
-<?xml version="1.0" ?><resource class="ImageTextToggleButton" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
+<?xml version="1.0" ?><resource class="PopupImageButton" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
   <object class="wxFrame" name="fr_main">
     <object class="wxMenuBar">
       <object class="wxMenu">
@@ -467,6 +501,9 @@ def __init_resources():
                             </font>
                             <hidden>1</hidden>
                             <style>wxALIGN_RIGHT</style>
+                            <XRCED>
+                              <assign_var>1</assign_var>
+                            </XRCED>
                           </object>
                           <flag>wxTOP|wxBOTTOM|wxLEFT|wxEXPAND</flag>
                           <border>10</border>
@@ -534,6 +571,9 @@ def __init_resources():
                             <hover>img_btn_pause_h_png</hover>
                             <selected>img_btn_pause_a_png</selected>
                             <fg>#1A1A1A</fg>
+                            <XRCED>
+                              <assign_var>1</assign_var>
+                            </XRCED>
                           </object>
                           <flag>wxTOP|wxBOTTOM|wxRIGHT</flag>
                           <border>10</border>
@@ -615,13 +655,13 @@ def __init_resources():
                       <object class="wxBoxSizer">
                         <orient>wxVERTICAL</orient>
                         <object class="sizeritem">
-                          <object class="ImageTextButton" name="btn_aquire">
+                          <object class="ImageTextButton" name="btn_acquire">
                             <size>382,-1</size>
                             <label>ACQUIRE IMAGE</label>
                             <delta>1</delta>
-                            <bitmap>img_btn_aquire_image_png</bitmap>
-                            <hover>img_btn_aquire_image_h_png</hover>
-                            <selected>img_btn_aquire_image_a_png</selected>
+                            <bitmap>img_btn_acquire_image_png</bitmap>
+                            <hover>img_btn_acquire_image_h_png</hover>
+                            <selected>img_btn_acquire_image_a_png</selected>
                             <fg>#E5E5E5</fg>
                             <font>
                               <size>14</size>
@@ -750,6 +790,198 @@ def __init_resources():
       <face>Ubuntu</face>
       <encoding>UTF-8</encoding>
     </font>
+  </object>
+  <object class="wxDialog" name="fr_acq">
+    <object class="wxFlexGridSizer">
+      <cols>2</cols>
+      <rows>2</rows>
+      <growablecols>0</growablecols>
+      <growablerows>0</growablerows>
+      
+      <object class="sizeritem">
+        <object class="wxPanel" name="pnl_img">
+          <bg>#1A1A1A</bg>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
+        <flag>wxEXPAND</flag>
+      </object>
+      <object class="sizeritem">
+        <object class="wxPanel" name="pnl_right">
+          <object class="wxBoxSizer">
+            <object class="sizeritem">
+              <object class="wxPanel" name="main_buttons">
+                <object class="wxBoxSizer">
+                  <orient>wxHORIZONTAL</orient>
+                
+                  
+                  
+                  
+                  
+                </object>
+                <size>400,-1</size>
+                <bg>#4D4D4D</bg>
+              </object>
+              <flag>wxEXPAND</flag>
+            </object>
+            <object class="sizeritem">
+              <object class="wxScrolledWindow" name="scr_win_right">
+                <object class="wxBoxSizer">
+                  <orient>wxVERTICAL</orient>
+                  <object class="sizeritem">
+                    <object class="FoldPanelBar" name="fpb_settings">
+                      <object class="FoldPanelItem" name="fp_sem_settings">
+                        <label>SEM SETTINGS</label>
+                        <fg>#1A1A1A</fg>
+                        <bg>#555555</bg>
+                        <XRCED>
+                          <assign_var>1</assign_var>
+                        </XRCED>
+                      </object>
+                      <object class="FoldPanelItem" name="fp_optical_settings">
+                        <label>OPTICAL SETTINGS</label>
+                        <fg>#1A1A1A</fg>
+                        <bg>#555555</bg>
+                        <XRCED>
+                          <assign_var>1</assign_var>
+                        </XRCED>
+                      </object>
+                      <object class="FoldPanelItem">
+                        <label>STREAMS</label>
+                        <fg>#1A1A1A</fg>
+                        <bg>#555555</bg>
+                        <object class="StreamPanel" name="pnl_stream">
+                          <fg>#7F7F7F</fg>
+                          <bg>#333333</bg>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                      </object>
+                      
+                      <spacing>0</spacing>
+                      <leftspacing>0</leftspacing>
+                      <rightspacing>0</rightspacing>
+                      <bg>#333333</bg>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <flag>wxEXPAND</flag>
+                  </object>
+                </object>
+                <size>400,-1</size>
+                <bg>#333333</bg>
+                <style>wxVSCROLL</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <option>1</option>
+              <flag>wxEXPAND</flag>
+              <minsize>400,400</minsize>
+            </object>
+            <object class="sizeritem">
+              <object class="wxPanel">
+                <object class="wxBoxSizer">
+                  <orient>wxVERTICAL</orient>
+                
+                </object>
+                <bg>#4D4D4D</bg>
+              </object>
+              <flag>wxEXPAND</flag>
+            </object>
+            <orient>wxVERTICAL</orient>
+          </object>
+          <size>400,-1</size>
+          <bg>#333333</bg>
+          <style>wxBORDER_NONE</style>
+        </object>
+        <option>-1</option>
+        <flag>wxEXPAND</flag>
+      </object>
+      <object class="sizeritem">
+        <object class="wxPanel">
+          <object class="wxBoxSizer">
+            <orient>wxHORIZONTAL</orient>
+            <object class="sizeritem">
+              <object class="wxGauge" name="gauge_acq">
+                <size>-1,10</size>
+                <range>100</range>
+                <value>50</value>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <option>1</option>
+              <flag>wxALL|wxEXPAND</flag>
+              <border>32</border>
+            </object>
+            <object class="sizeritem">
+              <object class="wxStaticText" name="lbl_time">
+                <label>9999 s</label>
+                <fg>#DDDDDD</fg>
+                <font>
+                  <size>14</size>
+                  <style>normal</style>
+                  <weight>normal</weight>
+                  <underlined>0</underlined>
+                  <family>default</family>
+                  <face>Ubuntu</face>
+                  <encoding>UTF-8</encoding>
+                </font>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxTOP|wxBOTTOM|wxRIGHT|wxALIGN_RIGHT</flag>
+              <border>30</border>
+            </object>
+          </object>
+          <size>-1,60</size>
+          <bg>#4D4D4D</bg>
+        </object>
+        <flag>wxEXPAND</flag>
+      </object>
+      <object class="sizeritem">
+        <object class="wxPanel">
+          <object class="wxBoxSizer">
+            <orient>wxVERTICAL</orient>
+            <object class="sizeritem">
+              <object class="ImageTextButton" name="btn_acquire">
+                <size>382,-1</size>
+                <label>START</label>
+                <delta>1</delta>
+                <bitmap>img_btn_acquire_image_png</bitmap>
+                <hover>img_btn_acquire_image_h_png</hover>
+                <selected>img_btn_acquire_image_a_png</selected>
+                <fg>#E5E5E5</fg>
+                <font>
+                  <size>14</size>
+                  <style>normal</style>
+                  <weight>normal</weight>
+                  <underlined>0</underlined>
+                  <family>default</family>
+                  <face>Ubuntu</face>
+                  <encoding>UTF-8</encoding>
+                </font>
+                <style>wxALIGN_CENTRE</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxALL</flag>
+              <border>10</border>
+            </object>
+          </object>
+          <bg>#444444</bg>
+        </object>
+        <flag>wxEXPAND</flag>
+      </object>
+    </object>
+    <title>Image Acquisition</title>
+    <style>wxDEFAULT_DIALOG_STYLE|wxRESIZE_BORDER</style>
   </object>
 </resource>'''
 
@@ -1529,7 +1761,7 @@ f\xe6Z\x01\x10\x86L\x8b\x19 X\x18v\xbb]O\x1f@\x98\xf0\x1b\xcc\xb5X"\xe1\
 ^\x87\x15E\xb9\xa7\xcf\xee8\xc3\xf0Mu\xff\xa4\x18\x9e\x04\x18\x00\x85r\
 ^\xb4\x1b!j\xed\x00\x00\x00\x00IEND\xaeB`\x82'''
 
-    img_btn_aquire_image_png = '''\
+    img_btn_acquire_image_png = '''\
 \x89PNG\x0d
 \x1a
 \x00\x00\x00\x0dIHDR\x00\x00\x01~\x00\x00\x00/\x08\x06\x00\x00\x00\xe4\
@@ -1591,7 +1823,7 @@ j\xfc\xed\xdd\x83j\xef\x1edt\x01\xa0p\x83\x9f\x87\xa1\x00\xa0\xa4\x82\x9f\
 \x1d\xc3\x01\x00%\xe8o\xb3\xfb\xc3{\xe9c;\xa4\x00\x00\x00\x00IEND\xaeB`\
 \x82'''
 
-    img_btn_aquire_image_h_png = '''\
+    img_btn_acquire_image_h_png = '''\
 \x89PNG\x0d
 \x1a
 \x00\x00\x00\x0dIHDR\x00\x00\x01~\x00\x00\x00/\x08\x06\x00\x00\x00\xe4\
@@ -1654,7 +1886,7 @@ E\x16\xfc4~\x00\xa0\xf1\x03\x00h\xfc\x00\x00\x1a?\x00\x80\xc6\x0f\x00\x98\
 \xbc\xeeh\xbb\x00\xca\x01\xc3\xc1c\x8f\xbf\x8c\x00\x00\x00\x00IEND\xae\
 B`\x82'''
 
-    img_btn_aquire_image_a_png = '''\
+    img_btn_acquire_image_a_png = '''\
 \x89PNG\x0d
 \x1a
 \x00\x00\x00\x0dIHDR\x00\x00\x01~\x00\x00\x00/\x08\x06\x00\x00\x00\xe4\
@@ -1743,8 +1975,8 @@ s\xdd\xdf}\xbe\x8d\xe1\x00\x80)\xe8?\xe6\xaa*@\xdd7\xae\x9d\x00\x00\x00\
     wx.MemoryFSHandler.AddFile('XRC/main/img_btn_pause_png', img_btn_pause_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_btn_pause_h_png', img_btn_pause_h_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_btn_pause_a_png', img_btn_pause_a_png)
-    wx.MemoryFSHandler.AddFile('XRC/main/img_btn_aquire_image_png', img_btn_aquire_image_png)
-    wx.MemoryFSHandler.AddFile('XRC/main/img_btn_aquire_image_h_png', img_btn_aquire_image_h_png)
-    wx.MemoryFSHandler.AddFile('XRC/main/img_btn_aquire_image_a_png', img_btn_aquire_image_a_png)
+    wx.MemoryFSHandler.AddFile('XRC/main/img_btn_acquire_image_png', img_btn_acquire_image_png)
+    wx.MemoryFSHandler.AddFile('XRC/main/img_btn_acquire_image_h_png', img_btn_acquire_image_h_png)
+    wx.MemoryFSHandler.AddFile('XRC/main/img_btn_acquire_image_a_png', img_btn_acquire_image_a_png)
     __res.Load('memory:XRC/main/main_xrc')
 
