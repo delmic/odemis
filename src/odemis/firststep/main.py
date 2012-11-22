@@ -151,9 +151,33 @@ class FirstStepApp(wx.App):
                         
                     btn.Bind(wx.EVT_BUTTON, btn_action)
 
+            # Binding keys on the panel (seems the one that works)
+            self.main_frame.pnl_main.Bind(wx.EVT_KEY_DOWN, self.on_key)
+
         except Exception:  #pylint: disable=W0703
             self.excepthook(*sys.exc_info())
 
+    # WXK -> (args for mic_mgr.step)
+    key_bindings = {
+                    wx.WXK_LEFT: ("x", -1),
+                    wx.WXK_RIGHT: ("x", 1),
+                    wx.WXK_DOWN: ("y", -1),
+                    wx.WXK_UP: ("y", 1),
+                    wx.WXK_PAGEDOWN: ("z", -1),
+                    wx.WXK_PAGEUP: ("z", 1),
+                    wx.WXK_NUMPAD_LEFT: ("r", -1),
+                    wx.WXK_NUMPAD_RIGHT: ("r", 1),
+                    wx.WXK_NUMPAD_DOWN: ("l", -1),
+                    wx.WXK_NUMPAD_UP: ("l", 1),
+                    }
+    def on_key(self, event):
+        key = event.GetKeyCode()
+        if key in self.key_bindings:
+            self.mic_mgr.step(*self.key_bindings[key])
+            
+        # everything else we don't process
+        event.Skip()
+    
     def _module_path(self):
         encoding = sys.getfilesystemencoding()
         return os.path.dirname(unicode(__file__, encoding))

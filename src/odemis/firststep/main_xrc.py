@@ -41,18 +41,6 @@ class xrcfr_main(wx.Frame):
         self.menu_item_about = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_about"))
         self.btn_view_all = xrc.XRCCTRL(self, "btn_view_all")
         self.pnl_tab_live = xrc.XRCCTRL(self, "pnl_tab_live")
-        self.lbl_view_all = xrc.XRCCTRL(self, "lbl_view_all")
-        self.btn_view_all = xrc.XRCCTRL(self, "btn_view_all")
-        self.lbl_view_tl = xrc.XRCCTRL(self, "lbl_view_tl")
-        self.btn_view_tl = xrc.XRCCTRL(self, "btn_view_tl")
-        self.lbl_view_tr = xrc.XRCCTRL(self, "lbl_view_tr")
-        self.btn_view_tr = xrc.XRCCTRL(self, "btn_view_tr")
-        self.lbl_view_bl = xrc.XRCCTRL(self, "lbl_view_bl")
-        self.btn_view_bl = xrc.XRCCTRL(self, "btn_view_bl")
-        self.lbl_view_br = xrc.XRCCTRL(self, "lbl_view_br")
-        self.btn_view_br = xrc.XRCCTRL(self, "btn_view_br")
-        self.btn_view_all = xrc.XRCCTRL(self, "btn_view_all")
-        self.main_buttons = xrc.XRCCTRL(self, "main_buttons")
 
 
 
@@ -101,153 +89,6 @@ def __init_resources():
     <object class="wxBoxSizer" name="btn_view_all">
       <object class="sizeritem">
         <object class="wxPanel" name="pnl_tab_live">
-          <object class="wxBoxSizer">
-            <object class="sizeritem">
-              <object class="wxPanel">
-                <object class="wxBoxSizer">
-                  <orient>wxVERTICAL</orient>
-                  <object class="spacer">
-                    <option>1</option>
-                    <flag>wxEXPAND</flag>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="wxFlexGridSizer">
-                      <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_view_all">
-                          <label>view</label>
-                          <fg>#BFBFBF</fg>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <flag>wxALIGN_RIGHT</flag>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="ViewButton" name="btn_view_all">
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <flag>wxRIGHT</flag>
-                        <border>5</border>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_view_tl">
-                          <label>view</label>
-                          <fg>#BFBFBF</fg>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <flag>wxALIGN_RIGHT</flag>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="ViewButton" name="btn_view_tl">
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_view_tr">
-                          <label>view</label>
-                          <fg>#BFBFBF</fg>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <flag>wxALIGN_RIGHT</flag>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="ViewButton" name="btn_view_tr">
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_view_bl">
-                          <label>view</label>
-                          <fg>#BFBFBF</fg>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <flag>wxALIGN_RIGHT</flag>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="ViewButton" name="btn_view_bl">
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_view_br">
-                          <label>view</label>
-                          <fg>#BFBFBF</fg>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <flag>wxALIGN_RIGHT</flag>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="ViewButton" name="btn_view_br">
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                      </object>
-                      <cols>2</cols>
-                      <rows>5</rows>
-                      <vgap>20</vgap>
-                      <hgap>5</hgap>
-                      <growablecols>0</growablecols>
-                      <growablerows>0</growablerows>
-                      <growablerows>1</growablerows>
-                      <growablerows>2</growablerows>
-                      <growablerows>3</growablerows>
-                      <growablerows>4</growablerows>
-                    </object>
-                    <option>0</option>
-                    <flag>wxBOTTOM|wxEXPAND</flag>
-                    <border>50</border>
-                  </object>
-                </object>
-                <size>200,-1</size>
-                <bg>#333333</bg>
-              </object>
-              <flag>wxEXPAND</flag>
-            </object>
-            
-            <object class="sizeritem">
-              <object class="wxPanel" name="btn_view_all">
-                <object class="wxBoxSizer">
-                  <object class="sizeritem">
-                    <object class="wxPanel" name="main_buttons">
-                      <object class="wxBoxSizer">
-                        <object class="sizeritem">
-                          <flag>wxTOP|wxBOTTOM|wxRIGHT</flag>
-                          <border>10</border>
-                        </object>
-                        <orient>wxHORIZONTAL</orient>
-                      </object>
-                      <size>400,-1</size>
-                      <bg>#4D4D4D</bg>
-                    </object>
-                    <flag>wxEXPAND</flag>
-                  </object>
-                  <orient>wxVERTICAL</orient>
-                </object>
-                <size>400,-1</size>
-                <bg>#333333</bg>
-                <style>wxBORDER_NONE</style>
-              </object>
-              <flag>wxEXPAND</flag>
-            </object>
-            <orient>wxHORIZONTAL</orient>
-          </object>
           <bg>#333333</bg>
           <XRCED>
             <assign_var>1</assign_var>
@@ -271,7 +112,6 @@ def __init_resources():
       <encoding>UTF-8</encoding>
     </font>
   </object>
-
 </resource>'''
 
     wx.MemoryFSHandler.AddFile('XRC/main/main_xrc', main_xrc)
