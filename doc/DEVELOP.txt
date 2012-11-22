@@ -116,3 +116,5 @@ and send us the patch for inclusion in the next version of Odemis.
 
 = Adding a feature to the Graphical User Interface =
 
+To edit the interface, you should use XRCed, by typing this (with the right paths):
+PYTHONPATH=./src/:../Pyro4/src/:/usr/local/lib/python2.7/dist-packages/wx-2.9.4-gtk2/wx/tools python src/odemis/gui/launch_xrced.py
