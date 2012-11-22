@@ -59,13 +59,13 @@ class MicroscopeMgr(object):
             logging.info("no alignment actuators found in the microscope")
 
         # str -> VA: name (as the name of the attribute) -> step size (m)
-        self.stepsize = {"stage": model.FloatContinuous(1e-6, [1e-8, 1e-3]),
+        self.stepsizes = {"stage": model.FloatContinuous(1e-6, [1e-8, 1e-3]),
                          "focus": model.FloatContinuous(1e-7, [1e-8, 1e-4]),
                          "aligner": model.FloatContinuous(1e-6, [1e-8, 1e-3])}
 
         # str -> str: axis name ("x") -> actuator name ("stage")
         self.axis_to_actuator = {}
-        for an in self.stepsize:
+        for an in self.stepsizes:
             a = getattr(self, an)
             if a:
                 for axis in a.axes:
@@ -96,9 +96,9 @@ class MicroscopeMgr(object):
 
     def step(self, axis, factor, sync=False):
         """
-        Moves a given axis by a one step (of stepsize).
+        Moves a given axis by a one step (of stepsizes).
         axis (str): name of the axis to move
-        factor (float): amount to which multiply the stepsize. -1 makes it goes 
+        factor (float): amount to which multiply the stepsizes. -1 makes it goes 
           one step backward.
         sync (boolean): wait until the move is over before returning
         raises:
@@ -109,7 +109,7 @@ class MicroscopeMgr(object):
         if a is None:
             logging.debug("Trying to move axis %s of '%s' which is not connected", axis, an)
     
-        ss = factor * self.stepsize[an].value
+        ss = factor * self.stepsizes[an].value
         
         if abs(ss) > 10e-3:
             # more than a cm is too dangerous

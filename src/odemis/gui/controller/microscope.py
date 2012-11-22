@@ -19,15 +19,6 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
-
-# from odemis.gui.util import img
-# import os
-# import re
-# import subprocess
-# import sys
-# import threading
-# import time
-
 import wx
 
 import odemis.gui.instrmodel as instrmodel
@@ -76,7 +67,7 @@ class MicroscopeController(object):
                 self.interface_model.emState.value = instrmodel.STATE_OFF
 
     # Status checking methods
-
+    # TODO: only use MicroscopeGUI object for that
     def is_pressurizing(self):
         """ For now it returns if the pressure button is on, but later it
         probably should check if the button is on *and* if the desired pressure

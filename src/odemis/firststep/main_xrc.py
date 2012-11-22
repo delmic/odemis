@@ -16,8 +16,8 @@ def get_resources():
 
 
 
-class xrcbtn_view_all(wx.Frame):
-#!XRCED:begin-block:xrcbtn_view_all.PreCreate
+class xrcfr_main(wx.Frame):
+#!XRCED:begin-block:xrcfr_main.PreCreate
     def PreCreate(self, pre):
         """ This function is called during the class's initialization.
         
@@ -26,13 +26,13 @@ class xrcbtn_view_all(wx.Frame):
         """
         pass
         
-#!XRCED:end-block:xrcbtn_view_all.PreCreate
+#!XRCED:end-block:xrcfr_main.PreCreate
 
     def __init__(self, parent):
         # Two stage creation (see http://wiki.wxpython.org/index.cgi/TwoStageCreation)
         pre = wx.PreFrame()
         self.PreCreate(pre)
-        get_resources().LoadOnFrame(pre, parent, "btn_view_all")
+        get_resources().LoadOnFrame(pre, parent, "fr_main")
         self.PostCreate(pre)
 
         # Define variables for the controls, bind event handlers
@@ -68,7 +68,7 @@ def __init_resources():
 
     main_xrc = '''\
 <?xml version="1.0" ?><resource class="wxMenuItem" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
-  <object class="wxFrame" name="btn_view_all">
+  <object class="wxFrame" name="fr_main">
     <object class="wxMenuBar">
       <object class="wxMenu">
         <object class="wxMenuItem" name="menu_item_halt">

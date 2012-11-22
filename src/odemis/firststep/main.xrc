@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <resource class="wxMenuItem" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
-  <object class="wxFrame" name="btn_view_all">
+  <object class="wxFrame" name="fr_main">
     <object class="wxMenuBar">
       <object class="wxMenu">
         <object class="wxMenuItem" name="menu_item_halt">

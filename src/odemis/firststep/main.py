@@ -40,13 +40,15 @@ class FirstStepApp(wx.App):
     def __init__(self):
         # Replace the standard 'get_resources' with our augmented one, that
         # can handle more control types. See the xhandler package for more info.
-        main_xrc.get_resources = odemis_get_resources
-
+        # FIXME
+        #main_xrc.get_resources = odemis_get_resources
+        self.mic_mgr = None
+        
         # Constructor of the parent class
         # ONLY CALL IT AT THE END OF :py:method:`__init__` BECAUSE OnInit will
         # be called
         # and it needs the attributes defined in this constructor!
-        wx.App.__init__(self, redirect=True)
+        wx.App.__init__(self, redirect=False)
 
     def OnInit(self):
         """ Application initialization, automatically run from the :wx:`App`
@@ -54,8 +56,8 @@ class FirstStepApp(wx.App):
         """
 
         try:
-            self.microscope = model.getMicroscope()
-            self.mic_mgr = instrmodel.MicroscopeMgr(self.microscope)
+            microscope = model.getMicroscope()
+            self.mic_mgr = instrmodel.MicroscopeMgr(microscope)
         except (IOError, Pyro4.errors.CommunicationError), e:
             logging.exception("Failed to connect to back-end")
             msg = ("FirstStep could not connect to the Odemis back-end:\n\n"
@@ -121,15 +123,36 @@ class FirstStepApp(wx.App):
             #self.main_frame.Raise()
             #self.main_frame.Refresh()
 
-            # Need to bind buttons?
+#            # example of calls
+#            self.mic_mgr.stepsizes["stage"].value = 2e-6
+#            self.mic_mgr.stepsizes["focus"].value = 2e-6
+#            self.mic_mgr.stepsizes["aligner"].value = 2e-6
+#
+#            self.mic_mgr.step("x", 10)
+#            self.mic_mgr.step("l", -1)
+            
+            # TODO: bind buttons
+            for an, ss in self.mic_mgr.stepsizes.items():
+                slider_name = "slider_" + an
+                slider = getattr(self.main_frame, slider_name)
+                # TODO configure slider according to AV
+                print ss.ranges
+                value = ss.value * 1e6
+                ss.value  = value / 1e6
+            
+            for axis in self.mic_mgr.axis_to_actuator:
+                for suffix, factor in {"bm":-10, "m":-1, "p":1, "bp":10}.items():
+                    # something like "btn_x_bp"
+                    btn_name = "btn_" + axis + "_" + suffix
+                    btn = getattr(self.main_frame, btn_name)
+                    
+                    def btn_action(axis=axis, factor=factor):
+                        self.mic_mgr.step(axis, factor)
+                        
+                    btn.Bind(wx.EVT_BUTTON, btn_action)
 
         except Exception:  #pylint: disable=W0703
             self.excepthook(*sys.exc_info())
-
-    def init_config(self):
-        """ Initialize GUI configuration """
-        # TODO: Process GUI configuration here
-        pass
 
     def _module_path(self):
         encoding = sys.getfilesystemencoding()
@@ -138,7 +161,7 @@ class FirstStepApp(wx.App):
     def on_stop_axes(self, evt):
         if self.mic_mgr:
             self.mic_mgr.stopMotion()
-        else:
+        elif evt:
             evt.Skip()
 
     def on_about(self, evt):
@@ -148,7 +171,7 @@ class FirstStepApp(wx.App):
                     __version__.copyright,
                     __version__.license))
         dlg = wx.MessageDialog(self.main_frame, message,
-                               "About " + __version__.shortname, wx.OK)
+                               "About FirstStep", wx.OK) # TODO use main_frame.title
         dlg.ShowModal() # blocking
         dlg.Destroy()
 
