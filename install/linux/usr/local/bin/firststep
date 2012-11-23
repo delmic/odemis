@@ -1,0 +1,42 @@
+#!/bin/bash
+# Start the simple FirstStep GUI
+
+. /etc/odemis.conf
+
+export PYTHONPATH
+
+# start the backend if not available
+odemis-cli --check
+status=$?
+if [ $status -ne 0 ]; then
+    # backend not responding or dead
+    if [ $status -gt 2 ]; then
+        echo "Warning: failed to check status of back-end"
+    fi
+    
+    # start a new one, with just actuators
+    echo -n "Starting actuator-only back-end.."
+    # use background mode to be sure it won't be killed at the end
+    odemisd --daemonize --log-level=2 --log-target "$LOGFILE" "$MODELFS" &
+    status=$?
+    if [ $status -ne 0 ]; then
+        echo " failed"
+        exit 1
+    fi    
+    
+    echo -n ". "
+    sleep 1
+    
+    # Check (and synchronise)
+    if odemis-cli --check; then
+        echo "done"
+    else
+        echo "failed"
+        grep -E "(ERROR|Exception)" "$LOGFILE" | tail -n 30
+	echo "For more log message see file $LOGFILE"
+	read -p "Press [Enter] to quit..."
+        exit 1
+    fi
+fi
+
+python2.7 $ODEMISPATH/$FIRSTSTEP "$@"
