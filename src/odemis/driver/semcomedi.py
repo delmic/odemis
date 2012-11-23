@@ -1372,7 +1372,6 @@ class Reader(Accesser):
     
     def prepare(self, count, duration):
         """
-        dtype: type of values to read
         count: number of values to read
         duration: expected total duration it will take (in s)
         """
@@ -1402,7 +1401,7 @@ class Reader(Accesser):
     
     def wait(self, timeout=None):
         """
-        timeout
+        timeout (float): maximum number of seconds to wait for the read to finish
         """
         timeout = timeout or self.period
          
@@ -1451,7 +1450,119 @@ class Reader(Accesser):
         
         if self.thread.isAlive():
             logging.warning("failed to cancel fully the reading thread")
+
+class DecimatingReader(Reader):
+    """
+    A reader that decimate (i.e., compute the mean) of the input while reading
+      the file. Note that the prepare() method has a different signature. 
+    """
+    
+    def prepare(self, duration, shape, nchans, margin, osr):
+        """
+        duration: expected total duration it will take (in s)
+        shape (2-tuple of int): shape of the _output_ array (margin included)
+        nchans (1<=int): number of channels recorded
+        margin (0<=int): number of pixels at the beginning of each line to skip
+        osr (1<=int<2**16): over-sampling rate, how many input samples should be acquired by pixel
+            if osr is above 1, the average value is computed.
+        """
+        self.shape = shape
+        self.margin = margin
+        self.osr = osr
+        self.nchans = nchans
         
+        count = numpy.prod(shape) * nchans * osr
+        Reader.prepare(self, count, duration)
+        
+    def _thread(self):
+        """To be called in a separate thread"""
+        # Find a good buffer size
+        MAX_BUFSZ = 4 * 2**20 # max 4 MB ~ same as device buffer
+        # try to fit all
+        bufsz = self.count * self.dtype.itemsize
+        if bufsz > MAX_BUFSZ:
+            # try to fit a whole line
+            bufsz = self.shape[1] * self.nchans * self.osr * self.dtype.itemsize
+        
+        if bufsz > MAX_BUFSZ or True: # DEBUG XXX
+            # try to fit a pixel
+            bufsz = self.nchans * self.dtype.itemsize * self.osr
+        
+        if bufsz > MAX_BUFSZ:
+            logging.info("Going to read very large buffer of %f MB.", bufsz/2.**20)
+        
+        # allocate one full buffer per channel
+        self.buf = []
+        for i in range(self.nchans):
+            self.buf.append(numpy.empty(self.shape, dtype=self.dtype))
+        
+        # find a good intermediate dtype for computing the sum of all points
+        maxval = 2**(self.dtype.itemsize * 8) * self.osr   
+        if maxval < 2**32:
+            idtype = numpy.uint32
+        elif maxval < 2**64:
+            idtype = numpy.uint64
+        else:
+            logging.debug("Going to use lossy intermediate type in order to support values up to %d", maxval)
+            idtype = numpy.float64 # might accumulate errors
+
+        nreceived = 0 
+        x, y = 0, 0
+        while True:
+            #ret = c.comedi_poll(dev,subdevice)
+            #print "poll ret = ", ret
+            try:
+                data = os.read(self.parent._fileno, bufsz)
+            except IOError:
+                # might be due to a cancel
+                logging.debug("Read ended before the end")
+                # TODO: resize the buffers to the amount of data read
+                return
+            #print "len(data) = ", len(data)
+            if len(data) == 0:
+                break
+            n = len(data) / (self.dtype.itemsize * self.nchans)
+            
+            # zero-copy conversion from string to numpy array
+            a = numpy.asarray(memoryview(data))
+            a.dtype = self.dtype
+            a.shape = (n, self.nchans)
+
+            # compute the position
+            # TODO object which tracks position with n and give either raw and
+            # decimated array. Object has 3 subtypes
+            # per pixel:
+            assert(n == 1)
+            x, y = divmod(nreceived, self.shape[0])
+            out = []
+            # remove the margin
+            if y < self.margin:
+                tr = numpy.ndarray(shape=(0,0,self.nchans))
+                for i in range(self.nchans):
+                    out.append(numpy.ndarray(shape=(0,0)))
+            else:
+                tr = a
+                tr.shape = (1, 1, self.nchans) 
+                for b in self.buf:
+                    out.append(b[x:x+1, y:y+1]) # a slice of 1x1 px
+            
+            
+            # decimate into each buffer
+            for i in range(self.nchans):
+                datac = tr[:,:,i]
+                # TODO if osr == 1 => copy
+                # TODO move to own _decimate function            
+                
+                # inspired by _mean() from numpy, but save the accumulated value in 
+                # a separate array of a big enough dtype.
+                acc = umath.add.reduce(datac, axis=2, dtype=idtype)
+                umath.true_divide(acc, self.osr, out=out[i], casting='unsafe', subok=False)
+            
+            nreceived += n
+        
+        logging.debug("Read over, after %d pixels", nreceived)
+    
+
 class Writer(Accesser):
     def __init__(self, parent):
         Accesser.__init__(self, parent)
