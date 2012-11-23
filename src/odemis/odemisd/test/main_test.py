@@ -37,8 +37,7 @@ class TestCommandLine(unittest.TestCase):
         configs_pass = ["optical-sim.odm.yaml",
            "example-optical-odemisd-config.odm.yaml",
            "example-combined-actuator.odm.yaml",
-           "secom-sim.odm.yaml",
-           #"example-secom-odemisd-config.odm.yaml", # not all components exist yet
+           "example-secom.odm.yaml",
            ]
 
         i = 0

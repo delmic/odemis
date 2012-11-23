@@ -1,0 +1,88 @@
+SimOptical: {
+    class: Microscope,
+    role: brightfield,
+    emitters: [Spectra, "Nikon Super Duper", "MultiBand Fixed Filter"],
+    detectors: ["Andor SimCam"],
+    actuators: ["FakeRedStoneStage", "SEM-Optical Alignment", "OpticalZ actuator"],
+}
+
+#Light: {
+#    class: simulated.Light,
+#    role: brightlight,
+#    affects: ["Andor SimCam"],
+#    properties: {
+#        power: 100 # W
+#    }
+#}
+
+Spectra: {
+    class: lle.FakeLLE,
+    role: brightlight,
+    init: {port: "/dev/ttyUSB0"},
+    affects: ["Andor SimCam"],
+}
+
+"Nikon Super Duper": {
+    class: static.OpticalLens,
+    role: lens,
+    init: {mag: 10.0}, # ratio
+    affects: ["Andor SimCam"]
+}
+
+"MultiBand Fixed Filter": {
+    class: static.LightFilter,
+    role: filter,
+    init: {band: [[430.e-9, 480.e-9], [520.e-9, 600.e-9]]}, # m,m
+    affects: ["Andor SimCam"]
+}
+
+"Andor SimCam": {
+    class: andorcam3.AndorCam3,
+    role: ccd,
+    init: {device: 1} # 1 is almost always SimCam
+}
+
+"FakeRedStoneStage": {
+    class: simulated.Stage2D,
+    role: stage,
+    init: {axes: [x, y]},
+    affects: ["Andor SimCam"],
+    properties: {
+        speed: {x: 0.1, y: 0.1} #m/s
+    }
+}
+
+# Use 2 CombinedActuators to separate the axes of the PIGCS over different roles
+"SEM-Optical Alignment": {
+    class: CombinedActuator,
+    role: align,
+    affects: ["Andor SimCam"],
+    children: {"l": FakePIGCS, "r": FakePIGCS},
+    init: {
+        axes_map: {"l": "l", "r": "r"},
+        inverted: ["r"]
+    },
+    properties: {
+        speed: {'l': 0.1, 'r': 0.1} #m/s
+    }
+}
+
+"OpticalZ actuator": {
+    class: CombinedActuator,
+    role: focus,
+    affects: ["Andor SimCam"],
+    children: {"z": FakePIGCS},
+    init: {
+        axes_map: {"z": "z"}
+    },
+    properties: {
+        speed: {'z': 0.1} #m/s
+    }
+}
+
+FakePIGCS: {
+    class: simulated.Stage2D,
+    role: AlignAndFocus,
+    init: {axes: ["l", "r", "z"]},
+}
+
