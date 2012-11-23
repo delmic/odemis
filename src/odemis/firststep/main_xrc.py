@@ -40,7 +40,7 @@ class xrcfr_main(wx.Frame):
         self.menu_item_quit = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_quit"))
         self.menu_item_about = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_about"))
         self.btn_view_all = xrc.XRCCTRL(self, "btn_view_all")
-        self.pnl_tab_live = xrc.XRCCTRL(self, "pnl_tab_live")
+        self.pnl_main = xrc.XRCCTRL(self, "pnl_main")
 
 
 
@@ -88,7 +88,7 @@ def __init_resources():
     </object>
     <object class="wxBoxSizer" name="btn_view_all">
       <object class="sizeritem">
-        <object class="wxPanel" name="pnl_tab_live">
+        <object class="wxPanel" name="pnl_main">
           <bg>#333333</bg>
           <XRCED>
             <assign_var>1</assign_var>

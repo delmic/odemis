@@ -169,6 +169,11 @@ class FirstStepApp(wx.App):
                     wx.WXK_NUMPAD_RIGHT: ("r", 1),
                     wx.WXK_NUMPAD_DOWN: ("l", -1),
                     wx.WXK_NUMPAD_UP: ("l", 1),
+                    # same but with NumLock
+                    wx.WXK_NUMPAD4: ("r", -1),
+                    wx.WXK_NUMPAD6: ("r", 1),
+                    wx.WXK_NUMPAD2: ("l", -1),
+                    wx.WXK_NUMPAD8: ("l", 1),
                     }
     def on_key(self, event):
         key = event.GetKeyCode()
