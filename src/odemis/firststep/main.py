@@ -30,7 +30,7 @@ import Pyro4.errors
 
 from odemis import __version__, model
 from odemis.firststep import main_xrc, instrmodel
-from odemis.gui.xmlh import odemis_get_resources
+from odemis.gui.xmlh import odemis_get_firststep_resources
 
 
 class FirstStepApp(wx.App):
@@ -41,9 +41,9 @@ class FirstStepApp(wx.App):
         # Replace the standard 'get_resources' with our augmented one, that
         # can handle more control types. See the xhandler package for more info.
         # FIXME
-        #main_xrc.get_resources = odemis_get_resources
+        main_xrc.get_resources = odemis_get_firststep_resources
         self.mic_mgr = None
-        
+
         # Constructor of the parent class
         # ONLY CALL IT AT THE END OF :py:method:`__init__` BECAUSE OnInit will
         # be called
@@ -130,25 +130,25 @@ class FirstStepApp(wx.App):
 #
 #            self.mic_mgr.step("x", 10)
 #            self.mic_mgr.step("l", -1)
-            
+
             # TODO: bind buttons
             for an, ss in self.mic_mgr.stepsizes.items():
                 slider_name = "slider_" + an
-                slider = getattr(self.main_frame, slider_name)
-                # TODO configure slider according to AV
-                print ss.ranges
-                value = ss.value * 1e6
-                ss.value  = value / 1e6
-            
+                # slider = getattr(self.main_frame, slider_name)
+                # # TODO configure slider according to AV
+                # print ss.ranges
+                # value = ss.value * 1e6
+                # ss.value  = value / 1e6
+
             for axis in self.mic_mgr.axis_to_actuator:
                 for suffix, factor in {"bm":-10, "m":-1, "p":1, "bp":10}.items():
                     # something like "btn_x_bp"
                     btn_name = "btn_" + axis + "_" + suffix
                     btn = getattr(self.main_frame, btn_name)
-                    
+
                     def btn_action(axis=axis, factor=factor):
                         self.mic_mgr.step(axis, factor)
-                        
+
                     btn.Bind(wx.EVT_BUTTON, btn_action)
 
             # Binding keys on the panel (seems the one that works)
@@ -179,10 +179,10 @@ class FirstStepApp(wx.App):
         key = event.GetKeyCode()
         if key in self.key_bindings:
             self.mic_mgr.step(*self.key_bindings[key])
-            
+
         # everything else we don't process
         event.Skip()
-    
+
     def _module_path(self):
         encoding = sys.getfilesystemencoding()
         return os.path.dirname(unicode(__file__, encoding))
@@ -208,7 +208,7 @@ class FirstStepApp(wx.App):
         """ This method cleans up and closes the GUI. """
 
         logging.info("Exiting FirstStep")
-        
+
         self.on_stop_axes(None)
 
         self.main_frame.Destroy()

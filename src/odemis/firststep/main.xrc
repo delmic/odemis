@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<resource class="wxMenuItem" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
+<resource class="wxButton" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
   <object class="wxFrame" name="fr_main">
     <object class="wxMenuBar">
       <object class="wxMenu">
@@ -30,15 +30,618 @@
         <label>Help</label>
       </object>
     </object>
-    <object class="wxBoxSizer" name="btn_view_all">
+    <object class="wxBoxSizer">
       <object class="sizeritem">
         <object class="wxPanel" name="pnl_main">
+          <object class="wxGridSizer">
+            <rows>2</rows>
+            <cols>2</cols>
+            <object class="sizeritem">
+              <object class="wxPanel" name="pnl_tl">
+                <object class="wxGridBagSizer">
+                  <object class="sizeritem">
+                    <object class="wxStaticText" name="lbl_py">
+                      <label>+Y</label>
+                      <fg>#E5E5E5</fg>
+                      <font>
+                        <size>16</size>
+                        <style>normal</style>
+                        <weight>bold</weight>
+                        <underlined>0</underlined>
+                        <family>default</family>
+                        <face>Ubuntu</face>
+                        <encoding>UTF-8</encoding>
+                      </font>
+                    </object>
+                    <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
+                    <border>5</border>
+                    <cellpos>1,3</cellpos>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxStaticText" name="lbl_my">
+                      <label>-Y</label>
+                      <fg>#E5E5E5</fg>
+                      <font>
+                        <size>16</size>
+                        <style>normal</style>
+                        <weight>bold</weight>
+                        <underlined>0</underlined>
+                        <family>default</family>
+                        <face>Ubuntu</face>
+                        <encoding>UTF-8</encoding>
+                      </font>
+                    </object>
+                    <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
+                    <border>5</border>
+                    <cellpos>7,3</cellpos>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxStaticText" name="lbl_px">
+                      <label>+X</label>
+                      <fg>#E5E5E5</fg>
+                      <font>
+                        <size>16</size>
+                        <style>normal</style>
+                        <weight>bold</weight>
+                        <underlined>0</underlined>
+                        <family>default</family>
+                        <face>Ubuntu</face>
+                        <encoding>UTF-8</encoding>
+                      </font>
+                    </object>
+                    <flag>wxLEFT|wxRIGHT|wxALIGN_CENTRE_VERTICAL</flag>
+                    <border>5</border>
+                    <cellpos>4,6</cellpos>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxStaticText" name="lbl_mx">
+                      <label>-X</label>
+                      <fg>#E5E5E5</fg>
+                      <font>
+                        <size>16</size>
+                        <style>normal</style>
+                        <weight>bold</weight>
+                        <underlined>0</underlined>
+                        <family>default</family>
+                        <face>Ubuntu</face>
+                        <encoding>UTF-8</encoding>
+                      </font>
+                    </object>
+                    <flag>wxLEFT|wxRIGHT|wxALIGN_CENTRE_VERTICAL</flag>
+                    <border>5</border>
+                    <cellpos>4,0</cellpos>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxButton" name="btn_y_bp">
+                      <size>40,40</size>
+                      <label>▴</label>
+                      <font>
+                        <size>16</size>
+                        <style>normal</style>
+                        <weight>bold</weight>
+                        <underlined>0</underlined>
+                        <family>default</family>
+                        <face>Ubuntu</face>
+                        <encoding>UTF-8</encoding>
+                      </font>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <cellpos>2,3</cellpos>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxButton" name="btn_y_p">
+                      <size>40,40</size>
+                      <label>▵</label>
+                      <font>
+                        <size>16</size>
+                        <style>normal</style>
+                        <weight>bold</weight>
+                        <underlined>0</underlined>
+                        <family>default</family>
+                        <face>Ubuntu</face>
+                        <encoding>UTF-8</encoding>
+                      </font>
+                    </object>
+                    <cellpos>3,3</cellpos>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxButton" name="btn_y_m">
+                      <size>40,40</size>
+                      <label>▿</label>
+                      <font>
+                        <size>16</size>
+                        <style>normal</style>
+                        <weight>bold</weight>
+                        <underlined>0</underlined>
+                        <family>default</family>
+                        <face>Ubuntu</face>
+                        <encoding>UTF-8</encoding>
+                      </font>
+                    </object>
+                    <cellpos>5,3</cellpos>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxButton" name="btn_y_bm">
+                      <size>40,40</size>
+                      <label>▾</label>
+                      <font>
+                        <size>16</size>
+                        <style>normal</style>
+                        <weight>bold</weight>
+                        <underlined>0</underlined>
+                        <family>default</family>
+                        <face>Ubuntu</face>
+                        <encoding>UTF-8</encoding>
+                      </font>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <cellpos>6,3</cellpos>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxButton" name="btn_x_bm">
+                      <size>40,40</size>
+                      <label>◂</label>
+                      <font>
+                        <size>16</size>
+                        <style>normal</style>
+                        <weight>bold</weight>
+                        <underlined>0</underlined>
+                        <family>default</family>
+                        <face>Ubuntu</face>
+                        <encoding>UTF-8</encoding>
+                      </font>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <cellpos>4,1</cellpos>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxButton" name="btn_x_m">
+                      <size>40,40</size>
+                      <label>◃</label>
+                      <font>
+                        <size>16</size>
+                        <style>normal</style>
+                        <weight>bold</weight>
+                        <underlined>0</underlined>
+                        <family>default</family>
+                        <face>Ubuntu</face>
+                        <encoding>UTF-8</encoding>
+                      </font>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <cellpos>4,2</cellpos>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxButton" name="btn_x_p">
+                      <size>40,40</size>
+                      <label>▹</label>
+                      <font>
+                        <size>16</size>
+                        <style>normal</style>
+                        <weight>bold</weight>
+                        <underlined>0</underlined>
+                        <family>default</family>
+                        <face>Ubuntu</face>
+                        <encoding>UTF-8</encoding>
+                      </font>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <cellpos>4,4</cellpos>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxButton" name="btn_x_bp">
+                      <size>40,40</size>
+                      <label>▸</label>
+                      <font>
+                        <size>16</size>
+                        <style>normal</style>
+                        <weight>bold</weight>
+                        <underlined>0</underlined>
+                        <family>default</family>
+                        <face>Ubuntu</face>
+                        <encoding>UTF-8</encoding>
+                      </font>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <cellpos>4,5</cellpos>
+                  </object>
+                  <vgap>5</vgap>
+                  <hgap>5</hgap>
+                </object>
+                <bg>#444444</bg>
+              </object>
+              <flag>wxEXPAND</flag>
+            </object>
+            <object class="sizeritem">
+              <object class="wxPanel" name="pnl_tr">
+                <bg>#333333</bg>
+                <object class="wxGridBagSizer">
+                  <object class="sizeritem">
+                    <object class="wxStaticText" name="lbl_pz">
+                      <label>+Z</label>
+                      <fg>#E5E5E5</fg>
+                      <font>
+                        <size>16</size>
+                        <style>normal</style>
+                        <weight>bold</weight>
+                        <underlined>0</underlined>
+                        <family>default</family>
+                        <face>Ubuntu</face>
+                        <encoding>UTF-8</encoding>
+                      </font>
+                    </object>
+                    <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
+                    <border>5</border>
+                    <cellpos>1,0</cellpos>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxStaticText" name="lbl_mz">
+                      <label>-Z</label>
+                      <fg>#E5E5E5</fg>
+                      <font>
+                        <size>16</size>
+                        <style>normal</style>
+                        <weight>bold</weight>
+                        <underlined>0</underlined>
+                        <family>default</family>
+                        <face>Ubuntu</face>
+                        <encoding>UTF-8</encoding>
+                      </font>
+                    </object>
+                    <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
+                    <border>5</border>
+                    <cellpos>7,0</cellpos>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxButton" name="btn_z_bp">
+                      <size>40,40</size>
+                      <label>▴</label>
+                      <font>
+                        <size>16</size>
+                        <style>normal</style>
+                        <weight>bold</weight>
+                        <underlined>0</underlined>
+                        <family>default</family>
+                        <face>Ubuntu</face>
+                        <encoding>UTF-8</encoding>
+                      </font>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <flag>wxALIGN_CENTRE</flag>
+                    <cellpos>2,0</cellpos>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxButton" name="btn_z_p">
+                      <size>40,40</size>
+                      <label>▵</label>
+                      <font>
+                        <size>16</size>
+                        <style>normal</style>
+                        <weight>bold</weight>
+                        <underlined>0</underlined>
+                        <family>default</family>
+                        <face>Ubuntu</face>
+                        <encoding>UTF-8</encoding>
+                      </font>
+                    </object>
+                    <flag>wxALIGN_CENTRE</flag>
+                    <cellpos>3,0</cellpos>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxPanel">
+                      <size>40,40</size>
+                      <bg>#333333</bg>
+                    </object>
+                    <cellpos>4,0</cellpos>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxButton" name="btn_z_m">
+                      <size>40,40</size>
+                      <label>▿</label>
+                      <font>
+                        <size>16</size>
+                        <style>normal</style>
+                        <weight>bold</weight>
+                        <underlined>0</underlined>
+                        <family>default</family>
+                        <face>Ubuntu</face>
+                        <encoding>UTF-8</encoding>
+                      </font>
+                    </object>
+                    <flag>wxALIGN_CENTRE</flag>
+                    <cellpos>5,0</cellpos>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxButton" name="btn_z_bm">
+                      <size>40,40</size>
+                      <label>▾</label>
+                      <font>
+                        <size>16</size>
+                        <style>normal</style>
+                        <weight>bold</weight>
+                        <underlined>0</underlined>
+                        <family>default</family>
+                        <face>Ubuntu</face>
+                        <encoding>UTF-8</encoding>
+                      </font>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <flag>wxALIGN_CENTRE</flag>
+                    <cellpos>6,0</cellpos>
+                  </object>
+                  <vgap>5</vgap>
+                  <hgap>5</hgap>
+                  <growablecols>0</growablecols>
+                </object>
+              </object>
+              <flag>wxEXPAND</flag>
+            </object>
+            <object class="sizeritem">
+              <object class="wxPanel" name="pnl_bl">
+                <bg>#333333</bg>
+                <object class="wxGridBagSizer">
+                  <object class="sizeritem">
+                    <object class="wxStaticText" name="lbl_pl">
+                      <label>+L</label>
+                      <fg>#E5E5E5</fg>
+                      <font>
+                        <size>16</size>
+                        <style>normal</style>
+                        <weight>bold</weight>
+                        <underlined>0</underlined>
+                        <family>default</family>
+                        <face>Ubuntu</face>
+                        <encoding>UTF-8</encoding>
+                      </font>
+                    </object>
+                    <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
+                    <border>5</border>
+                    <cellpos>1,3</cellpos>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxStaticText" name="lbl_ml">
+                      <label>-L</label>
+                      <fg>#E5E5E5</fg>
+                      <font>
+                        <size>16</size>
+                        <style>normal</style>
+                        <weight>bold</weight>
+                        <underlined>0</underlined>
+                        <family>default</family>
+                        <face>Ubuntu</face>
+                        <encoding>UTF-8</encoding>
+                      </font>
+                    </object>
+                    <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
+                    <border>5</border>
+                    <cellpos>7,3</cellpos>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxStaticText" name="lbl_pr">
+                      <label>+R</label>
+                      <fg>#E5E5E5</fg>
+                      <font>
+                        <size>16</size>
+                        <style>normal</style>
+                        <weight>bold</weight>
+                        <underlined>0</underlined>
+                        <family>default</family>
+                        <face>Ubuntu</face>
+                        <encoding>UTF-8</encoding>
+                      </font>
+                    </object>
+                    <flag>wxLEFT|wxRIGHT|wxALIGN_CENTRE_VERTICAL</flag>
+                    <border>5</border>
+                    <cellpos>4,6</cellpos>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxStaticText" name="lbl_mr">
+                      <label>-R</label>
+                      <fg>#E5E5E5</fg>
+                      <font>
+                        <size>16</size>
+                        <style>normal</style>
+                        <weight>bold</weight>
+                        <underlined>0</underlined>
+                        <family>default</family>
+                        <face>Ubuntu</face>
+                        <encoding>UTF-8</encoding>
+                      </font>
+                    </object>
+                    <flag>wxLEFT|wxRIGHT|wxALIGN_CENTRE_VERTICAL</flag>
+                    <border>5</border>
+                    <cellpos>4,0</cellpos>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxButton" name="btn_l_bp">
+                      <size>40,40</size>
+                      <label>▴</label>
+                      <font>
+                        <size>16</size>
+                        <style>normal</style>
+                        <weight>bold</weight>
+                        <underlined>0</underlined>
+                        <family>default</family>
+                        <face>Ubuntu</face>
+                        <encoding>UTF-8</encoding>
+                      </font>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <cellpos>2,3</cellpos>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxButton" name="btn_l_p">
+                      <size>40,40</size>
+                      <label>▵</label>
+                      <font>
+                        <size>16</size>
+                        <style>normal</style>
+                        <weight>bold</weight>
+                        <underlined>0</underlined>
+                        <family>default</family>
+                        <face>Ubuntu</face>
+                        <encoding>UTF-8</encoding>
+                      </font>
+                    </object>
+                    <cellpos>3,3</cellpos>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxButton" name="btn_l_m">
+                      <size>40,40</size>
+                      <label>▿</label>
+                      <font>
+                        <size>16</size>
+                        <style>normal</style>
+                        <weight>bold</weight>
+                        <underlined>0</underlined>
+                        <family>default</family>
+                        <face>Ubuntu</face>
+                        <encoding>UTF-8</encoding>
+                      </font>
+                    </object>
+                    <cellpos>5,3</cellpos>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxButton" name="btn_l_bm">
+                      <size>40,40</size>
+                      <label>▾</label>
+                      <font>
+                        <size>16</size>
+                        <style>normal</style>
+                        <weight>bold</weight>
+                        <underlined>0</underlined>
+                        <family>default</family>
+                        <face>Ubuntu</face>
+                        <encoding>UTF-8</encoding>
+                      </font>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <cellpos>6,3</cellpos>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxButton" name="btn_r_bm">
+                      <size>40,40</size>
+                      <label>◂</label>
+                      <font>
+                        <size>16</size>
+                        <style>normal</style>
+                        <weight>bold</weight>
+                        <underlined>0</underlined>
+                        <family>default</family>
+                        <face>Ubuntu</face>
+                        <encoding>UTF-8</encoding>
+                      </font>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <cellpos>4,1</cellpos>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxButton" name="btn_r_m">
+                      <size>40,40</size>
+                      <label>◃</label>
+                      <font>
+                        <size>16</size>
+                        <style>normal</style>
+                        <weight>bold</weight>
+                        <underlined>0</underlined>
+                        <family>default</family>
+                        <face>Ubuntu</face>
+                        <encoding>UTF-8</encoding>
+                      </font>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <cellpos>4,2</cellpos>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxButton" name="btn_r_p">
+                      <size>40,40</size>
+                      <label>▹</label>
+                      <font>
+                        <size>16</size>
+                        <style>normal</style>
+                        <weight>bold</weight>
+                        <underlined>0</underlined>
+                        <family>default</family>
+                        <face>Ubuntu</face>
+                        <encoding>UTF-8</encoding>
+                      </font>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <cellpos>4,4</cellpos>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxButton" name="btn_r_bp">
+                      <size>40,40</size>
+                      <label>▸</label>
+                      <font>
+                        <size>16</size>
+                        <style>normal</style>
+                        <weight>bold</weight>
+                        <underlined>0</underlined>
+                        <family>default</family>
+                        <face>Ubuntu</face>
+                        <encoding>UTF-8</encoding>
+                      </font>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <cellpos>4,5</cellpos>
+                  </object>
+                  <vgap>5</vgap>
+                  <hgap>5</hgap>
+                </object>
+              </object>
+              <flag>wxEXPAND</flag>
+            </object>
+            <object class="sizeritem">
+              <object class="wxPanel" name="pnl_br">
+                <object class="wxBoxSizer">
+                  <orient>wxVERTICAL</orient>
+                  <object class="sizeritem">
+                    <object class="wxStaticBitmap">
+                      <bitmap>../gui/img/logo_h30.png</bitmap>
+                    </object>
+                    <option>1</option>
+                    <flag>wxALIGN_CENTRE|wxALIGN_CENTRE_VERTICAL</flag>
+                  </object>
+                </object>
+                <bg>#DDDDDD</bg>
+              </object>
+              <flag>wxEXPAND</flag>
+            </object>
+          </object>
           <bg>#333333</bg>
           <XRCED>
             <assign_var>1</assign_var>
           </XRCED>
         </object>
-        <option>1</option>
         <flag>wxEXPAND</flag>
       </object>
       <orient>wxVERTICAL</orient>
