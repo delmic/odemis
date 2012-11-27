@@ -48,12 +48,13 @@ class Slider(wx.PyPanel):
                        then a default size is chosen.
         @param style:  use wx.Panel styles
         @param name:   Window name.
-        @param scale:  linear (default) or
+        @param scale:  linear (default) or 'cubic'
         """
 
         wx.PyPanel.__init__(self, parent, id, pos, size, style, name)
 
         self.current_value = value
+
         self.value_range = val_range
 
         self.range_span = float(val_range[1] - val_range[0])
@@ -85,13 +86,14 @@ class Slider(wx.PyPanel):
         self.Bind(wx.EVT_LEFT_UP, self.OnLeftUp)
         self.Bind(wx.EVT_SIZE, self.OnSize)
 
+
     @staticmethod
     def _cubic_val_to_perc(r0, r1, v):
         """ Transform the value v into a fraction [0..1] of the [r0..r1] range
         using an inverse cube
         """
         assert(r0 < r1)
-        p = abs((v - r0) / (r1 - r0))
+        p = abs(float(v - r0) / (r1 - r0))
         p = p**(1/3.0)
         return p
 
@@ -219,14 +221,18 @@ class Slider(wx.PyPanel):
                                        prcnt)
 
     def SetValue(self, value):
+        log.debug("Setting slider value")
         if value < self.value_range[0]:
+            log.warn("Value lower than minimum!")
             self.current_value = self.value_range[0]
         elif value > self.value_range[1]:
+            log.warn("Value higher than maximum!")
             self.current_value = self.value_range[1]
         else:
             self.current_value = value
 
         self.pointerPos = self._val_to_pixel()
+        print "bah"
 
         self.Refresh()
 
@@ -332,3 +338,4 @@ class UnitFloatSlider(NumberSlider):
             kwargs['accuracy'] = 2
 
         NumberSlider.__init__(self, *args, **kwargs)
+
