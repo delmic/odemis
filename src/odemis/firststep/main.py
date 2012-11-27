@@ -96,16 +96,22 @@ class FirstStepApp(wx.App):
 
             # Menu events
             wx.EVT_MENU(self.main_frame,
+                        self.main_frame.menu_item_halt.GetId(),
+                        self.on_stop_axes)
+
+            wx.EVT_MENU(self.main_frame,
                         self.main_frame.menu_item_quit.GetId(),
                         self.on_close_window)
+
+            wx.EVT_MENU(self.main_frame,
+                        self.main_frame.menu_item_inspect.GetId(),
+                        self.on_inspect)
 
             wx.EVT_MENU(self.main_frame,
                         self.main_frame.menu_item_about.GetId(),
                         self.on_about)
 
-            wx.EVT_MENU(self.main_frame,
-                        self.main_frame.menu_item_halt.GetId(),
-                        self.on_stop_axes)
+
 
 
             # The escape accelerator has to be added manually, because for some
@@ -134,7 +140,7 @@ class FirstStepApp(wx.App):
             # TODO: bind buttons
             for an, ss in self.mic_mgr.stepsizes.items():
                 slider_name = "slider_" + an
-                # slider = getattr(self.main_frame, slider_name)
+                slider = getattr(self.main_frame, slider_name)
                 # # TODO configure slider according to AV
                 # print ss.ranges
                 # value = ss.value * 1e6
@@ -192,6 +198,10 @@ class FirstStepApp(wx.App):
             self.mic_mgr.stopMotion()
         elif evt:
             evt.Skip()
+
+    def on_inspect(self, evt):
+        from wx.lib.inspection import InspectionTool
+        InspectionTool().Show()
 
     def on_about(self, evt):
         message = ("%s\nVersion %s.\n\n%s.\nLicensed under the %s." %

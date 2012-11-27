@@ -38,17 +38,27 @@ class xrcfr_main(wx.Frame):
         # Define variables for the controls, bind event handlers
         self.menu_item_halt = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_halt"))
         self.menu_item_quit = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_quit"))
+        self.menu_item_inspect = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_inspect"))
         self.menu_item_about = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_about"))
         self.pnl_main = xrc.XRCCTRL(self, "pnl_main")
+        self.slider_stage = xrc.XRCCTRL(self, "slider_stage")
         self.btn_y_bp = xrc.XRCCTRL(self, "btn_y_bp")
+        self.btn_y_p = xrc.XRCCTRL(self, "btn_y_p")
+        self.btn_y_m = xrc.XRCCTRL(self, "btn_y_m")
         self.btn_y_bm = xrc.XRCCTRL(self, "btn_y_bm")
         self.btn_x_bm = xrc.XRCCTRL(self, "btn_x_bm")
         self.btn_x_m = xrc.XRCCTRL(self, "btn_x_m")
         self.btn_x_p = xrc.XRCCTRL(self, "btn_x_p")
         self.btn_x_bp = xrc.XRCCTRL(self, "btn_x_bp")
+        self.slider_focus = xrc.XRCCTRL(self, "slider_focus")
         self.btn_z_bp = xrc.XRCCTRL(self, "btn_z_bp")
+        self.btn_z_p = xrc.XRCCTRL(self, "btn_z_p")
+        self.btn_z_m = xrc.XRCCTRL(self, "btn_z_m")
         self.btn_z_bm = xrc.XRCCTRL(self, "btn_z_bm")
+        self.slider_aligner = xrc.XRCCTRL(self, "slider_aligner")
         self.btn_l_bp = xrc.XRCCTRL(self, "btn_l_bp")
+        self.btn_l_p = xrc.XRCCTRL(self, "btn_l_p")
+        self.btn_l_m = xrc.XRCCTRL(self, "btn_l_m")
         self.btn_l_bm = xrc.XRCCTRL(self, "btn_l_bm")
         self.btn_r_bm = xrc.XRCCTRL(self, "btn_r_bm")
         self.btn_r_m = xrc.XRCCTRL(self, "btn_r_m")
@@ -90,6 +100,12 @@ def __init_resources():
         <label>File</label>
       </object>
       <object class="wxMenu">
+        <object class="wxMenuItem" name="menu_item_inspect">
+          <label>Inspect GUI</label>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
         <object class="wxMenuItem" name="menu_item_about">
           <label>About</label>
           <XRCED>
@@ -108,6 +124,22 @@ def __init_resources():
             <object class="sizeritem">
               <object class="wxPanel" name="pnl_tl">
                 <object class="wxGridBagSizer">
+                  <object class="sizeritem">
+                    <object class="UnitIntegerSlider" name="slider_stage">
+                      <value>120</value>
+                      <min>0</min>
+                      <max>240</max>
+                      <unit>μm</unit>
+                      <scale>cubic</scale>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <flag>wxTOP|wxLEFT|wxRIGHT|wxEXPAND</flag>
+                    <border>15</border>
+                    <cellpos>0,0</cellpos>
+                    <cellspan>0,7</cellspan>
+                  </object>
                   <object class="sizeritem">
                     <object class="wxStaticText" name="lbl_py">
                       <label>+Y</label>
@@ -212,6 +244,9 @@ def __init_resources():
                         <face>Ubuntu</face>
                         <encoding>UTF-8</encoding>
                       </font>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
                     </object>
                     <cellpos>3,3</cellpos>
                   </object>
@@ -228,6 +263,9 @@ def __init_resources():
                         <face>Ubuntu</face>
                         <encoding>UTF-8</encoding>
                       </font>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
                     </object>
                     <cellpos>5,3</cellpos>
                   </object>
@@ -326,17 +364,33 @@ def __init_resources():
                     </object>
                     <cellpos>4,5</cellpos>
                   </object>
-                  <vgap>5</vgap>
-                  <hgap>5</hgap>
+                  <vgap>7</vgap>
+                  <hgap>7</hgap>
                 </object>
+                <fg>#E5E5E5</fg>
                 <bg>#444444</bg>
               </object>
               <flag>wxEXPAND</flag>
             </object>
             <object class="sizeritem">
               <object class="wxPanel" name="pnl_tr">
-                <bg>#333333</bg>
                 <object class="wxGridBagSizer">
+                  <object class="sizeritem">
+                    <object class="UnitIntegerSlider" name="slider_focus">
+                      <value>120</value>
+                      <min>0</min>
+                      <max>240</max>
+                      <unit>μm</unit>
+                      <scale>cubic</scale>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <flag>wxTOP|wxLEFT|wxRIGHT|wxEXPAND</flag>
+                    <border>15</border>
+                    <cellpos>0,0</cellpos>
+                    <cellspan>0,0</cellspan>
+                  </object>
                   <object class="sizeritem">
                     <object class="wxStaticText" name="lbl_pz">
                       <label>+Z</label>
@@ -406,6 +460,9 @@ def __init_resources():
                         <face>Ubuntu</face>
                         <encoding>UTF-8</encoding>
                       </font>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
                     </object>
                     <flag>wxALIGN_CENTRE</flag>
                     <cellpos>3,0</cellpos>
@@ -430,6 +487,9 @@ def __init_resources():
                         <face>Ubuntu</face>
                         <encoding>UTF-8</encoding>
                       </font>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
                     </object>
                     <flag>wxALIGN_CENTRE</flag>
                     <cellpos>5,0</cellpos>
@@ -458,13 +518,30 @@ def __init_resources():
                   <hgap>5</hgap>
                   <growablecols>0</growablecols>
                 </object>
+                <fg>#E5E5E5</fg>
+                <bg>#333333</bg>
               </object>
               <flag>wxEXPAND</flag>
             </object>
             <object class="sizeritem">
               <object class="wxPanel" name="pnl_bl">
-                <bg>#333333</bg>
                 <object class="wxGridBagSizer">
+                  <object class="sizeritem">
+                    <object class="UnitIntegerSlider" name="slider_aligner">
+                      <value>120</value>
+                      <min>0</min>
+                      <max>240</max>
+                      <unit>μm</unit>
+                      <scale>cubic</scale>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <flag>wxTOP|wxLEFT|wxRIGHT|wxEXPAND</flag>
+                    <border>15</border>
+                    <cellpos>0,0</cellpos>
+                    <cellspan>0,7</cellspan>
+                  </object>
                   <object class="sizeritem">
                     <object class="wxStaticText" name="lbl_pl">
                       <label>+L</label>
@@ -569,6 +646,9 @@ def __init_resources():
                         <face>Ubuntu</face>
                         <encoding>UTF-8</encoding>
                       </font>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
                     </object>
                     <cellpos>3,3</cellpos>
                   </object>
@@ -585,6 +665,9 @@ def __init_resources():
                         <face>Ubuntu</face>
                         <encoding>UTF-8</encoding>
                       </font>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
                     </object>
                     <cellpos>5,3</cellpos>
                   </object>
@@ -686,6 +769,8 @@ def __init_resources():
                   <vgap>5</vgap>
                   <hgap>5</hgap>
                 </object>
+                <fg>#E5E5E5</fg>
+                <bg>#333333</bg>
               </object>
               <flag>wxEXPAND</flag>
             </object>
