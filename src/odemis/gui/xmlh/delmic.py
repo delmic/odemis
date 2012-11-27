@@ -364,7 +364,7 @@ c.addStyles('wxTE_NO_VSCROLL',
 c.setParamClass('value', params.ParamMultilineText)
 c.setParamClass('min', params.ParamInt)
 c.setParamClass('max', params.ParamInt)
-c.setParamClass('unit', params.MetaParamText(80))
+c.setParamClass('unit', params.MetaParamText(10))
 c.addEvents('EVT_TEXT', 'EVT_TEXT_ENTER', 'EVT_TEXT_URL', 'EVT_TEXT_MAXLEN')
 component.Manager.register(c)
 component.Manager.addXmlHandler(xh_delmic.UnitIntegerCtrlHandler)
@@ -395,6 +395,7 @@ c.addStyles('wxTE_NO_VSCROLL',
             'wxTE_LINEWRAP',
             'wxTE_CHARWRAP',
             'wxTE_WORDWRAP')
+# Note: there is no ParamtFloat class
 c.setParamClass('value', params.ParamMultilineText)
 c.setParamClass('min', params.ParamInt)
 c.setParamClass('max', params.ParamInt)
@@ -414,3 +415,45 @@ c.addStyles('wxTAB_TRAVERSAL')
 component.Manager.register(c)
 component.Manager.addXmlHandler(xh_delmic.MicroscopeViewportXmlHandler)
 component.Manager.setMenu(c, 'ROOT', 'Delmic Msc Viewport', 'MicroscopeViewport', 10)
+
+
+### UnitFloatSlider
+
+class ParamScale(params.RadioBox):
+    choices = {'Linear': 'linear', 'Cubic': 'cubic'}
+    default = 'linear'
+
+c = component.Component('UnitFloatSlider', ['control','tool'],
+              ['pos', 'size', 'value', 'min', 'max', 'unit', 'scale', 'text_size'],
+              image=images.TreeTextCtrl.GetImage())
+
+c.setParamClass('value', params.ParamText)
+c.setParamClass('min', params.ParamInt)
+c.setParamClass('max', params.ParamInt)
+c.setParamClass('unit', params.MetaParamText(80))
+c.setParamClass('scale', ParamScale)
+c.setParamClass('text_size', params.ParamPosSize)
+
+component.Manager.register(c)
+component.Manager.addXmlHandler(xh_delmic.UnitFloatSliderHandler)
+component.Manager.setMenu(c, 'control', 'Delmic unit Float slide ctrl', 'UnitFloatSlider', 1)
+component.Manager.setTool(c, 'Controls', pos=(0, 2))
+
+
+### UnitIntegerSlider
+
+c = component.Component('UnitIntegerSlider', ['control','tool'],
+              ['pos', 'size', 'value', 'min', 'max', 'unit', 'scale', 'text_size'],
+              image=images.TreeTextCtrl.GetImage())
+
+c.setParamClass('value', params.ParamText)
+c.setParamClass('min', params.ParamInt)
+c.setParamClass('max', params.ParamInt)
+c.setParamClass('unit', params.MetaParamText(80))
+c.setParamClass('scale', ParamScale)
+c.setParamClass('text_size', params.ParamPosSize)
+
+component.Manager.register(c)
+component.Manager.addXmlHandler(xh_delmic.UnitIntegerSliderHandler)
+component.Manager.setMenu(c, 'control', 'Delmic unit Integer slide ctrl', 'UnitIntegerSlider', 1)
+component.Manager.setTool(c, 'Controls', pos=(0, 2))

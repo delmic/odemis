@@ -26,6 +26,8 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 #
 # This module is used both by Odemis' GUI and XRCED.
 
+import ast
+
 import wx
 import wx.lib.buttons
 import wx.xrc as xrc
@@ -35,6 +37,7 @@ import odemis.gui.comp.stream as strm
 import odemis.gui.comp.buttons as btns
 import odemis.gui.comp.text as txt
 import odemis.gui.comp.mscviewport as mscp
+import odemis.gui.comp.slider as slide
 
 ##################################
 # Fold Panel Bar related Handlers
@@ -592,6 +595,86 @@ class MicroscopeViewportXmlHandler(xrc.XmlResourceHandler):
         self.SetupWindow(panel)
         return panel
 
+##################################
+# Sliders
+##################################
+
+class UnitIntegerSliderHandler(xrc.XmlResourceHandler):
+    def __init__(self):
+        xrc.XmlResourceHandler.__init__(self)
+        # Specify the styles recognized by objects of this type
+        self.AddWindowStyles()
+
+    # This method and the next one are required for XmlResourceHandlers
+    def CanHandle(self, node):
+        capable = self.IsOfClass(node, "UnitIntegerSlider")
+        return capable
+
+    def DoCreateResource(self):
+        assert self.GetInstance() is None
+
+        # parent, id=wx.ID_ANY, value=0.0, val_range=(0.0, 1.0),
+        #          size=(-1, -1), pos=wx.DefaultPosition, style=wx.NO_BORDER,
+        #          name="Slider", scale=None, t_class=NumberTextCtrl,
+        #          t_size=(50, -1), unit="", accuracy=0):
+
+        val = int(self.GetText('value') or 0)
+        rng = (self.GetLong('min'), self.GetLong('max'))
+        text_size = ast.literal_eval(self.GetText('text_size') or "50, -1")
+
+        if rng[0] == rng[1]:
+            rng = (rng[0], rng[1] + 1)
+
+        # Now create the object
+        slider = slide.UnitIntegerSlider(self.GetParentAsWindow(),
+                                        id=self.GetID(),
+                                        pos=self.GetPosition(),
+                                        size=self.GetSize(),
+                                        style=self.GetStyle(),
+                                        value=val,
+                                        unit=self.GetText('unit'),
+                                        val_range=rng,
+                                        scale=self.GetText('scale'),
+                                        t_size = text_size)
+        self.SetupWindow(slider)
+        return slider
+
+class UnitFloatSliderHandler(xrc.XmlResourceHandler):
+    def __init__(self):
+        xrc.XmlResourceHandler.__init__(self)
+        # Specify the styles recognized by objects of this type
+        self.AddWindowStyles()
+
+    # This method and the next one are required for XmlResourceHandlers
+    def CanHandle(self, node):
+        capable = self.IsOfClass(node, "UnitFloatSlider")
+        return capable
+
+    def DoCreateResource(self):
+        assert self.GetInstance() is None
+
+        val = float(self.GetText('value') or 0.0)
+        rng = (self.GetLong('min'), self.GetLong('max'))
+        text_size = ast.literal_eval(self.GetText('text_size') or "50, -1")
+
+        if rng[0] == rng[1]:
+            rng = (rng[0], rng[1] + 1.0)
+
+        # Now create the object
+        slider = slide.UnitFloatSlider(self.GetParentAsWindow(),
+                                       id=self.GetID(),
+                                       pos=self.GetPosition(),
+                                       size=self.GetSize(),
+                                       style=self.GetStyle(),
+                                       value=val,
+                                       unit=self.GetText('unit'),
+                                       val_range=rng,
+                                       scale=self.GetText('scale'),
+                                       t_size=text_size)
+
+        self.SetupWindow(slider)
+        return slider
+
 HANDLER_CLASS_LIST = [
                       CustomStreamPanelEntryXmlHandler,
                       FixedStreamPanelEntryXmlHandler,
@@ -607,7 +690,9 @@ HANDLER_CLASS_LIST = [
                       SuggestTextCtrlHandler,
                       TabButtonHandler,
                       UnitFloatCtrlHandler,
+                      UnitFloatSliderHandler,
                       UnitIntegerCtrlHandler,
+                      UnitIntegerSliderHandler,
                       ViewButtonHandler,
                       ]
 
