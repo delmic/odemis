@@ -47,9 +47,9 @@
                 <object class="wxGridBagSizer">
                   <object class="sizeritem">
                     <object class="UnitFloatSlider" name="slider_stage">
-                      <value>120</value>
-                      <min>0</min>
-                      <max>240</max>
+                      <value>100</value>
+                      <min>0.01</min>
+                      <max>1000</max>
                       <unit>μm</unit>
                       <scale>cubic</scale>
                       <XRCED>
@@ -298,9 +298,9 @@
                 <object class="wxGridBagSizer">
                   <object class="sizeritem">
                     <object class="UnitFloatSlider" name="slider_focus">
-                      <value>120</value>
-                      <min>0</min>
-                      <max>240</max>
+                      <value>10</value>
+                      <min>0.01</min>
+                      <max>100</max>
                       <unit>μm</unit>
                       <scale>cubic</scale>
                       <XRCED>
@@ -449,9 +449,9 @@
                 <object class="wxGridBagSizer">
                   <object class="sizeritem">
                     <object class="UnitFloatSlider" name="slider_aligner">
-                      <value>120</value>
-                      <min>0</min>
-                      <max>240</max>
+                      <value>100</value>
+                      <min>0.01</min>
+                      <max>1000</max>
                       <unit>μm</unit>
                       <scale>cubic</scale>
                       <XRCED>

@@ -27,17 +27,18 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 # This module is used both by Odemis' GUI and XRCED.
 
 import ast
-
+import logging
+import odemis.gui.comp.buttons as btns
+import odemis.gui.comp.foldpanelbar as fpb
+import odemis.gui.comp.mscviewport as mscp
+import odemis.gui.comp.slider as slide
+import odemis.gui.comp.stream as strm
+import odemis.gui.comp.text as txt
 import wx
 import wx.lib.buttons
 import wx.xrc as xrc
 
-import odemis.gui.comp.foldpanelbar as fpb
-import odemis.gui.comp.stream as strm
-import odemis.gui.comp.buttons as btns
-import odemis.gui.comp.text as txt
-import odemis.gui.comp.mscviewport as mscp
-import odemis.gui.comp.slider as slide
+
 
 ##################################
 # Fold Panel Bar related Handlers
@@ -650,14 +651,28 @@ class UnitFloatSliderHandler(xrc.XmlResourceHandler):
         capable = self.IsOfClass(node, "UnitFloatSlider")
         return capable
 
+    def GetFloat(self, param, defaultv=0):
+        # there is a bug in wxWidgets, which doesn't export GetFloat
+        # => recreate in Python
+        # self, String param, long defaultv=0
+        
+        string = self.GetParamValue(param)
+
+        try:
+            value = float(string)
+        except ValueError:
+            logging.error("Float param incorrect %s", string)
+        return value
+
     def DoCreateResource(self):
         assert self.GetInstance() is None
 
-        val = float(self.GetText('value') or 0.0)
-        rng = (self.GetLong('min'), self.GetLong('max'))
+        val = self.GetFloat('value')
+        rng = (self.GetFloat('min'), self.GetFloat('max'))
         text_size = ast.literal_eval(self.GetText('text_size') or "50, -1")
 
         if rng[0] == rng[1]:
+            logging.warning("Incorrect range between %r and %r", rng[0], rng[1])
             rng = (rng[0], rng[1] + 1.0)
 
         # Now create the object

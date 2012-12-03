@@ -20,15 +20,17 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 
+from .text import NumberTextCtrl, UnitFloatCtrl, UnitIntegerCtrl
+from odemis.gui.img.data import getsliderBitmap, getslider_disBitmap
+from odemis.gui.log import log
+from wx.lib.agw.aui.aui_utilities import StepColour
+import logging
+import math
+import odemis.gui
 import wx
 
-from wx.lib.agw.aui.aui_utilities import StepColour
 
-import odemis.gui
 
-from odemis.gui.log import log
-from odemis.gui.img.data import getsliderBitmap, getslider_disBitmap
-from .text import NumberTextCtrl, UnitFloatCtrl, UnitIntegerCtrl
 
 
 class Slider(wx.PyPanel):
@@ -75,6 +77,9 @@ class Slider(wx.PyPanel):
         if scale == "cubic":
             self._percentage_to_val = self._cubic_perc_to_val
             self._val_to_percentage = self._cubic_val_to_perc
+        elif scale == "log":
+            self._percentage_to_val = self._log_perc_to_val
+            self._val_to_percentage = self._log_val_to_perc            
         else:
             self._percentage_to_val = lambda r0, r1, p: (r1 - r0) * p + r0
             self._val_to_percentage = lambda r0, r1, v: (float(v) - r0) / (r1 - r0)
@@ -86,7 +91,36 @@ class Slider(wx.PyPanel):
         self.Bind(wx.EVT_LEFT_UP, self.OnLeftUp)
         self.Bind(wx.EVT_SIZE, self.OnSize)
 
+    @staticmethod
+    def _log_val_to_perc(r0, r1, v):
+        """ Transform the value v into a fraction [0..1] of the [r0..r1] range
+        using a log
+        [r0..r1] should not contain 0 
+        ex: 1, 100, 10 -> 0.5
+        ex: -10, -0.1, -1 -> 0.5
+        """
+        if r0 < 0:
+            return -Slider._log_val_to_perc(-r1, -r0, -v)
+        
+        assert(r0 < r1)
+        assert(r0 > 0 and r1 > 0)
+        p = math.log(v/r0, r1/r0)
+        return p
 
+    @staticmethod
+    def _log_perc_to_val(r0, r1, p):
+        """ Transform the fraction p into a value with the range [r0..r1] using
+        an exponential.
+        """
+        if r0 < 0:
+            return -Slider._log_perc_to_val(-r1, -r0, p)
+        
+        assert(r0 < r1)
+        assert(r0 > 0 and r1 > 0)
+        logging.debug("r0, r1, p=%g,%g,%g", r0, r1, p)
+        v = r0 * ((r1/r0)**p)
+        return v
+    
     @staticmethod
     def _cubic_val_to_perc(r0, r1, v):
         """ Transform the value v into a fraction [0..1] of the [r0..r1] range
