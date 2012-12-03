@@ -20,17 +20,18 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
+from odemis import __version__, model
+from odemis.firststep import main_xrc, instrmodel
+from odemis.gui.util.widgets import VigilantAttributeConnector
+from odemis.gui.xmlh import odemis_get_firststep_resources
+import Pyro4.errors
 import logging
 import os.path
 import sys
 import threading
 import traceback
 import wx
-import Pyro4.errors
 
-from odemis import __version__, model
-from odemis.firststep import main_xrc, instrmodel
-from odemis.gui.xmlh import odemis_get_firststep_resources
 
 
 class FirstStepApp(wx.App):
@@ -138,13 +139,22 @@ class FirstStepApp(wx.App):
 #            self.mic_mgr.step("l", -1)
 
             # TODO: bind buttons
+            self.va_connectors = []
             for an, ss in self.mic_mgr.stepsizes.items():
                 slider_name = "slider_" + an
                 slider = getattr(self.main_frame, slider_name)
                 # # TODO configure slider according to AV
+                # slider as default argument in order to keep it in local context
+                def va2um(v, slider=slider):
+                    slider.SetValue(v * 1e6)
+                def um2va(slider=slider):
+                    value = slider.GetValue()
+                    return value / 1e6
+                # TODO set the correct ranges (min, max)
                 # print ss.ranges
-                # value = ss.value * 1e6
-                # ss.value  = value / 1e6
+                vac = VigilantAttributeConnector(ss, slider, va2um, um2va,
+                                             events=(wx.EVT_COMMAND_ENTER,))
+                self.va_connectors.append(vac)
 
             for axis in self.mic_mgr.axis_to_actuator:
                 for suffix, factor in {"bm":-10, "m":-1, "p":1, "bp":10}.items():
@@ -152,7 +162,7 @@ class FirstStepApp(wx.App):
                     btn_name = "btn_" + axis + "_" + suffix
                     btn = getattr(self.main_frame, btn_name)
 
-                    def btn_action(axis=axis, factor=factor):
+                    def btn_action(evt, axis=axis, factor=factor):
                         self.mic_mgr.step(axis, factor)
 
                     btn.Bind(wx.EVT_BUTTON, btn_action)

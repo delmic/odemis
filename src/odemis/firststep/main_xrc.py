@@ -125,7 +125,7 @@ def __init_resources():
               <object class="wxPanel" name="pnl_tl">
                 <object class="wxGridBagSizer">
                   <object class="sizeritem">
-                    <object class="UnitIntegerSlider" name="slider_stage">
+                    <object class="UnitFloatSlider" name="slider_stage">
                       <value>120</value>
                       <min>0</min>
                       <max>240</max>
@@ -376,9 +376,9 @@ def __init_resources():
               <object class="wxPanel" name="pnl_tr">
                 <object class="wxGridBagSizer">
                   <object class="sizeritem">
-                    <object class="UnitIntegerSlider" name="slider_focus">
+                    <object class="UnitFloatSlider" name="slider_focus">
                       <value>120</value>
-                      <min>0</min>
+                      <min>0.1</min>
                       <max>240</max>
                       <unit>μm</unit>
                       <scale>cubic</scale>
@@ -527,7 +527,7 @@ def __init_resources():
               <object class="wxPanel" name="pnl_bl">
                 <object class="wxGridBagSizer">
                   <object class="sizeritem">
-                    <object class="UnitIntegerSlider" name="slider_aligner">
+                    <object class="UnitFloatSlider" name="slider_aligner">
                       <value>120</value>
                       <min>0</min>
                       <max>240</max>
