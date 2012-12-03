@@ -289,7 +289,7 @@ class NumberSlider(Slider):
     def __init__(self, parent, id=wx.ID_ANY, value=0.0, val_range=(0.0, 1.0),
                  size=(-1, -1), pos=wx.DefaultPosition, style=wx.NO_BORDER,
                  name="Slider", scale=None, t_class=NumberTextCtrl,
-                 t_size=(50, -1), unit="", accuracy=0):
+                 t_size=(50, -1), unit="", accuracy=None):
         Slider.__init__(self, parent, id, value, val_range, size,
                         pos, style, name, scale)
 
@@ -367,9 +367,7 @@ class UnitFloatSlider(NumberSlider):
 
     def __init__(self, *args, **kwargs):
         kwargs['t_class'] = UnitFloatCtrl
-
-        if 'accuracy' not in kwargs:
-            kwargs['accuracy'] = 2
+        kwargs['accuracy'] = kwargs.get('accuracy', 3)
 
         NumberSlider.__init__(self, *args, **kwargs)
 

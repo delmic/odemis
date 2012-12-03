@@ -670,11 +670,15 @@ class UnitFloatSliderHandler(xrc.XmlResourceHandler):
         val = self.GetFloat('value')
         rng = (self.GetFloat('min'), self.GetFloat('max'))
         text_size = ast.literal_eval(self.GetText('text_size') or "50, -1")
-
+        
         if rng[0] == rng[1]:
             logging.warning("Incorrect range between %r and %r", rng[0], rng[1])
             rng = (rng[0], rng[1] + 1.0)
 
+        accuracy=self.GetLong('accuracy', -1)
+        if accuracy == -1:
+            accuracy = None
+            
         # Now create the object
         slider = slide.UnitFloatSlider(self.GetParentAsWindow(),
                                        id=self.GetID(),
@@ -685,6 +689,7 @@ class UnitFloatSliderHandler(xrc.XmlResourceHandler):
                                        unit=self.GetText('unit'),
                                        val_range=rng,
                                        scale=self.GetText('scale'),
+                                       accuracy=accuracy,
                                        t_size=text_size)
 
         self.SetupWindow(slider)
