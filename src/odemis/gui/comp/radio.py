@@ -27,7 +27,7 @@ import wx
 
 import odemis.gui.img.data as img
 from odemis.gui.comp.buttons import GraphicRadioButton
-from log import log
+from odemis.gui.log import log
 
 class GraphicalRadioButtonControl(wx.Panel):
 
