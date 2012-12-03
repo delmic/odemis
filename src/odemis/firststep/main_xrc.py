@@ -41,7 +41,12 @@ class xrcfr_main(wx.Frame):
         self.menu_item_inspect = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_inspect"))
         self.menu_item_about = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_about"))
         self.pnl_main = xrc.XRCCTRL(self, "pnl_main")
+        self.pnl_tl = xrc.XRCCTRL(self, "pnl_tl")
         self.slider_stage = xrc.XRCCTRL(self, "slider_stage")
+        self.lbl_py = xrc.XRCCTRL(self, "lbl_py")
+        self.lbl_my = xrc.XRCCTRL(self, "lbl_my")
+        self.lbl_px = xrc.XRCCTRL(self, "lbl_px")
+        self.lbl_mx = xrc.XRCCTRL(self, "lbl_mx")
         self.btn_y_bp = xrc.XRCCTRL(self, "btn_y_bp")
         self.btn_y_p = xrc.XRCCTRL(self, "btn_y_p")
         self.btn_y_m = xrc.XRCCTRL(self, "btn_y_m")
@@ -50,12 +55,20 @@ class xrcfr_main(wx.Frame):
         self.btn_x_m = xrc.XRCCTRL(self, "btn_x_m")
         self.btn_x_p = xrc.XRCCTRL(self, "btn_x_p")
         self.btn_x_bp = xrc.XRCCTRL(self, "btn_x_bp")
+        self.pnl_tr = xrc.XRCCTRL(self, "pnl_tr")
         self.slider_focus = xrc.XRCCTRL(self, "slider_focus")
+        self.lbl_pz = xrc.XRCCTRL(self, "lbl_pz")
+        self.lbl_mz = xrc.XRCCTRL(self, "lbl_mz")
         self.btn_z_bp = xrc.XRCCTRL(self, "btn_z_bp")
         self.btn_z_p = xrc.XRCCTRL(self, "btn_z_p")
         self.btn_z_m = xrc.XRCCTRL(self, "btn_z_m")
         self.btn_z_bm = xrc.XRCCTRL(self, "btn_z_bm")
+        self.pnl_bl = xrc.XRCCTRL(self, "pnl_bl")
         self.slider_aligner = xrc.XRCCTRL(self, "slider_aligner")
+        self.lbl_pl = xrc.XRCCTRL(self, "lbl_pl")
+        self.lbl_ml = xrc.XRCCTRL(self, "lbl_ml")
+        self.lbl_pr = xrc.XRCCTRL(self, "lbl_pr")
+        self.lbl_mr = xrc.XRCCTRL(self, "lbl_mr")
         self.btn_l_bp = xrc.XRCCTRL(self, "btn_l_bp")
         self.btn_l_p = xrc.XRCCTRL(self, "btn_l_p")
         self.btn_l_m = xrc.XRCCTRL(self, "btn_l_m")
@@ -64,6 +77,7 @@ class xrcfr_main(wx.Frame):
         self.btn_r_m = xrc.XRCCTRL(self, "btn_r_m")
         self.btn_r_p = xrc.XRCCTRL(self, "btn_r_p")
         self.btn_r_bp = xrc.XRCCTRL(self, "btn_r_bp")
+        self.pnl_br = xrc.XRCCTRL(self, "pnl_br")
 
 
 
@@ -126,9 +140,9 @@ def __init_resources():
                 <object class="wxGridBagSizer">
                   <object class="sizeritem">
                     <object class="UnitFloatSlider" name="slider_stage">
-                      <value>120</value>
-                      <min>0</min>
-                      <max>240</max>
+                      <value>100</value>
+                      <min>0.01</min>
+                      <max>1000</max>
                       <unit>μm</unit>
                       <scale>cubic</scale>
                       <XRCED>
@@ -377,9 +391,9 @@ def __init_resources():
                 <object class="wxGridBagSizer">
                   <object class="sizeritem">
                     <object class="UnitFloatSlider" name="slider_focus">
-                      <value>120</value>
-                      <min>0.1</min>
-                      <max>240</max>
+                      <value>10</value>
+                      <min>0.01</min>
+                      <max>100</max>
                       <unit>μm</unit>
                       <scale>cubic</scale>
                       <XRCED>
@@ -528,9 +542,9 @@ def __init_resources():
                 <object class="wxGridBagSizer">
                   <object class="sizeritem">
                     <object class="UnitFloatSlider" name="slider_aligner">
-                      <value>120</value>
-                      <min>0</min>
-                      <max>240</max>
+                      <value>100</value>
+                      <min>0.01</min>
+                      <max>1000</max>
                       <unit>μm</unit>
                       <scale>cubic</scale>
                       <XRCED>
