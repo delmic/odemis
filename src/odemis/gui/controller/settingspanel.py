@@ -25,25 +25,20 @@ setting column of the user interface.
 
 """
 
-import collections
-import re
-
-import wx
-import wx.combo
-
-import odemis.gui
-import odemis.gui.comp.text as text
-import odemis.gui.util.units as utun
-import odemis.gui.img.data as img
-
 from ..comp.foldpanelbar import FoldPanelItem
 from odemis.gui import util
 from odemis.gui.comp.radio import GraphicalRadioButtonControl
 from odemis.gui.comp.slider import UnitIntegerSlider, UnitFloatSlider
 from odemis.gui.log import log
-from odemis.gui.util import call_after_wrapper
-from odemis.model import getVAs, NotApplicableError, VigilantAttributeBase, \
-    OutOfBoundError
+from odemis.gui.util.widgets import VigilantAttributeConnector
+from odemis.model import getVAs, NotApplicableError, VigilantAttributeBase
+import collections
+import odemis.gui
+import odemis.gui.comp.text as text
+import odemis.gui.img.data as img
+import odemis.gui.util.units as utun
+import re
+import wx.combo
 
 
 # Utility functions
@@ -152,42 +147,6 @@ SETTINGS = {
             }
         }
 
-class VigilantAttributeConnector(object):
-    """ This class connects a vigilant attribute with a wxPython control,
-    making sure that the changes in one are automatically reflected in the
-    other.
-    """
-    def __init__(self, vigilattr, ctrl, sub_func, *change_events):
-        self.vigilattr = vigilattr
-        self.ctrl = ctrl
-        self.sub_func = call_after_wrapper(sub_func)
-        self.change_events = change_events
-
-        # Subscribe to the vigilant attribute and initialize
-
-        self.vigilattr.subscribe(self.sub_func, True)
-
-        for event in self.change_events:
-            self.ctrl.Bind(event, self._on_value_change)
-
-    def _on_value_change(self, evt):
-        """ This method is called when the value of the control is
-        changed.
-        """
-        try:
-            value = self.ctrl.GetValue()
-            log.warn("Assign value %s to vigilant attribute", value)
-            self.vigilattr.value = value
-        except OutOfBoundError, oobe:
-            log.error("Illegal value: %s", oobe)
-        finally:
-            evt.Skip()
-
-    def disconnect(self):
-        log.debug("Disconnecting VigilantAttributeConnector")
-        for event in self.change_events:
-            self.ctrl.Unbind(event, self._on_value_change)
-        self.vigilattr.unsubscribe(self.sub_func)
 
 class SettingsPanel(object):
     """ Settings base class which describes an indirect wrapper for
@@ -419,7 +378,7 @@ class SettingsPanel(object):
             vac = VigilantAttributeConnector(value,
                                              new_ctrl,
                                              new_ctrl.SetValue,
-                                             wx.EVT_COMMAND_ENTER)
+                                             events=wx.EVT_COMMAND_ENTER)
 
         elif control_type == odemis.gui.CONTROL_INT:
             new_ctrl = text.UnitIntegerCtrl(self.panel,
@@ -435,7 +394,7 @@ class SettingsPanel(object):
             vac = VigilantAttributeConnector(value,
                                              new_ctrl,
                                              new_ctrl.SetValueStr,
-                                             wx.EVT_TEXT_ENTER)
+                                             events=wx.EVT_TEXT_ENTER)
 
         elif control_type == odemis.gui.CONTROL_RADIO:
             new_ctrl = GraphicalRadioButtonControl(self.panel,
@@ -448,7 +407,7 @@ class SettingsPanel(object):
             vac = VigilantAttributeConnector(value,
                                              new_ctrl,
                                              new_ctrl.SetValue,
-                                             wx.EVT_BUTTON)
+                                             events=wx.EVT_BUTTON)
 
         elif control_type == odemis.gui.CONTROL_COMBO:
 
@@ -512,7 +471,7 @@ class SettingsPanel(object):
                     value,
                     new_ctrl,
                     new_ctrl.SetValue,
-                    wx.EVT_COMBOBOX, wx.EVT_TEXT_ENTER)
+                    events=(wx.EVT_COMBOBOX, wx.EVT_TEXT_ENTER))
 
 
         elif control_type == odemis.gui.CONTROL_FLT:

@@ -232,7 +232,7 @@ class Slider(wx.PyPanel):
             self.current_value = value
 
         self.pointerPos = self._val_to_pixel()
-        print "bah"
+#        print "bah"
 
         self.Refresh()
 
