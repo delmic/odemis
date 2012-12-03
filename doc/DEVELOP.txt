@@ -1,12 +1,12 @@
 How to extend Odemis
 
-Depending on how you want to extend Odemis, there are different ways to modify 
-it. First have a look at the first three sections, and then read the additional 
+Depending on how you want to extend Odemis, there are different ways to modify
+it. First have a look at the first three sections, and then read the additional
 sections depending on the goal you have.
 
-Please note that almost all source code is released under the GPLv2 license. 
-This means in very broad terms that any modification or extension you make to it 
-will have to either be kept internal or also be made freely available to anyone. 
+Please note that almost all source code is released under the GPLv2 license.
+This means in very broad terms that any modification or extension you make to it
+will have to either be kept internal or also be made freely available to anyone.
 See LICENSE.txt for the complete and official text of the license.
 
 Moreover, if you have a microscope from Delmic, the maintenance contract only
@@ -29,55 +29,55 @@ git clone git@github.com:pieleric/odemis.git
 
 Odemis is composed of three distinct layers:
 
- * The drivers: many independent modules which are each an adapter between a 
+ * The drivers: many independent modules which are each an adapter between a
    hardware component and the rest of Odemis, following a programming
    interface (with specificities for each type of the hardware).
    The code is found in the drivers/ directory.
 
- * The back-end: it is the core of Odemis and is in charge of connecting the 
-   various drivers together according to a configuration file. It provides a 
-   uniform view of the microscope (independently of the actual hardware 
+ * The back-end: it is the core of Odemis and is in charge of connecting the
+   various drivers together according to a configuration file. It provides a
+   uniform view of the microscope (independently of the actual hardware
    components) to the next layer.
    The code is found in the odemisd/ directory.
 
  * The user interface layer: it allows the user to manipulate the microscope and
    displays the acquired data. The usual user interface is the Graphical User
-   Interface (GUI) but there could be other user interface, such as simple 
+   Interface (GUI) but there could be other user interface, such as simple
    command line version.
-   The code is found in the directory corresponding to the interface. For the 
+   The code is found in the directory corresponding to the interface. For the
    GUI, the code is in the gui/ directory.
    Another user interface is the command-line interface (CLI). It allows basic
    manipulation of the microscope via a terminal, or in a script. The code is
    found in the cli/ directory.
-   
+
 Additionally, every directory contains a test/ directory which contains various
 Python test classes used to validate the behaviour of the program.
 
 
-= Supporting new hardware = 
+= Supporting new hardware =
 
-Add a module to the drivers/ directory following the interface for the specific 
-type of component (see the back-end specification). 
+Add a module to the drivers/ directory following the interface for the specific
+type of component (see the back-end specification).
 
 Add a test class to the test directory which instantiates the component and at
 least detects whether the component is connected or not (scan() and selfTest()
-methods) and does basic tasks (e.g., acquiring an image or moving an actuator). 
+methods) and does basic tasks (e.g., acquiring an image or moving an actuator).
 
-Update the configuration file for instantiating the microscope with the 
+Update the configuration file for instantiating the microscope with the
 parameters for your new driver.
 
 Commit your code using "git add ..." and "git commit -a".
 
-Optionally, send your extension to Delmic as a git patch or fork. 
+Optionally, send your extension to Delmic as a git patch or fork.
 
 
 = Automating the acquisition of data =
 
-There are several ways to automate the data acquisition. There are mostly a 
-trade-off between simplicity of development and complexity of the task to 
+There are several ways to automate the data acquisition. There are mostly a
+trade-off between simplicity of development and complexity of the task to
 automate.
 
-For the easiest tasks, a shell script calling the cli program might be the 
+For the easiest tasks, a shell script calling the cli program might be the
 most appropriate way. See the cli "--help" command for a list of all possible
 commands.
 
@@ -110,7 +110,7 @@ possible to run either odemisd (and the drivers, with the "--debug" parameter)
 or the GUI from Eclipse. You can then run in debug mode, place breakpoints,
 observe the value of variables and modify the code.
 
-Once the bug fixed, commit your code using "git add ..." and "git commit -a", 
+Once the bug fixed, commit your code using "git add ..." and "git commit -a",
 and send us the patch for inclusion in the next version of Odemis.
 
 
@@ -118,3 +118,17 @@ and send us the patch for inclusion in the next version of Odemis.
 
 To edit the interface, you should use XRCed, by typing this (with the right paths):
 PYTHONPATH=./src/:../Pyro4/src/:/usr/local/lib/python2.7/dist-packages/wx-2.9.4-gtk2/wx/tools python src/odemis/gui/launch_xrced.py
+
+= Generating Documentation =
+
+Note: The information here should probably be used to create a shell script
+that can install Sphinx and build/update the documentation with one simple
+command.
+
+#. Install the python documentation generator called Sphinx:
+   `sudo apt-get install python-sphinx`. Make sure it's version 1.1.3 or later.
+#. Run sphinx-quickstart to create a `conf.py`. Only needed when that file is
+   missing.
+#. Make sure odemis and Pyro are present in the Python path.
+#. Run  `sphinx-apidoc -f -o <path to odemis>/doc/code/_gen <path to odemis>/src/"
+#. Run `make html` from the <path to odemis>/doc/code directory.

@@ -41,3 +41,7 @@ odemis.sublime-workspace
 #Machine dependant
 launch_daemon
 xrced
+
+#HTML documentation files
+doc/code/_build
+doc/code/_gen
