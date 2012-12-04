@@ -317,7 +317,8 @@ class OdemisGUIApp(wx.App):
 
         #self.dlg_startup.Destroy()
         self.main_frame.Destroy()
-        self.http_proc.terminate()  #pylint: disable=E1101
+        if self.http_proc:
+            self.http_proc.terminate()  #pylint: disable=E1101
         sys.exit(0)
 
     def excepthook(self, type, value, trace): #pylint: disable=W0622
