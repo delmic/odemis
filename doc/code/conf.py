@@ -44,7 +44,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = u'Odemis'
-copyright = u'2012, Éric Piel & Rinze de Laat'
+copyright = u'2012, Delmic'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -113,7 +113,7 @@ html_theme = 'nature'
 
 # The name of an image file (relative to this directory) to place at the top
 # of the sidebar.
-#html_logo = None
+html_logo = "_static/logo.png"
 
 # The name of an image file (within the static path) to use as favicon of the
 # docs.  This file should be a Windows icon file (.ico) being 16x16 or 32x32
@@ -187,7 +187,7 @@ latex_elements = {
 # (source start file, target name, title, author, documentclass [howto/manual]).
 latex_documents = [
   ('index', 'Odemis.tex', u'Odemis Documentation',
-   u'Éric Piel \\& Rinze de Laat', 'manual'),
+   u'Delmic', 'manual'),
 ]
 
 # The name of an image file (relative to this directory) to place at the top of

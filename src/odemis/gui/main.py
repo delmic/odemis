@@ -41,6 +41,8 @@ from odemis.gui.instrmodel import InstrumentalImage
 from odemis.gui.xmlh import odemis_get_resources
 
 
+HTML_DOC = "doc/code/_build/html/index.html"
+
 class OdemisGUIApp(wx.App):
     """ This is Odemis' main GUI application class
     """
@@ -55,6 +57,9 @@ class OdemisGUIApp(wx.App):
 
         # Startup Dialog frame
         self.dlg_startup = None
+
+        # HTTP documentation http server process
+        self.http_proc = None
 
         # Output catcher using a helper class
         wx.App.outputWindowClass = OdemisOutputWindow
@@ -136,6 +141,13 @@ class OdemisGUIApp(wx.App):
             wx.EVT_MENU(self.main_frame,
                         self.main_frame.menu_item_debug.GetId(),
                         self.on_debug)
+
+            if os.path.exists(HTML_DOC):
+                self.main_frame.menu_item_htmldoc.Enable(True)
+
+            wx.EVT_MENU(self.main_frame,
+                        self.main_frame.menu_item_htmldoc.GetId(),
+                        self.on_htmldoc)
 
             wx.EVT_MENU(self.main_frame,
                         self.main_frame.menu_item_inspect.GetId(),
@@ -275,6 +287,18 @@ class OdemisGUIApp(wx.App):
         from wx.lib.inspection import InspectionTool
         InspectionTool().Show()
 
+    def on_htmldoc(self, evt):
+        import subprocess
+        self.http_proc = subprocess.Popen(["python", "-m", "SimpleHTTPServer"],
+                                           stderr=subprocess.STDOUT,
+                                           stdout=subprocess.PIPE,
+                                           cwd=os.path.dirname(HTML_DOC))
+        import webbrowser
+        webbrowser.open('http://localhost:8000')
+
+
+        #subprocess.call(('xdg-open', HTML_DOC))
+
     def on_debug(self, evt=None): #pylint: disable=W0613
         """ Show or hides the log text field according to the debug menu item.
         """
@@ -292,6 +316,7 @@ class OdemisGUIApp(wx.App):
 
         #self.dlg_startup.Destroy()
         self.main_frame.Destroy()
+        self.http_proc.terminate()  #pylint: disable=E1101
         sys.exit(0)
 
     def excepthook(self, type, value, trace): #pylint: disable=W0622

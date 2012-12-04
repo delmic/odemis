@@ -41,6 +41,7 @@ class xrcfr_main(wx.Frame):
         self.menu_item_load1 = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_load1"))
         self.menu_item_load2 = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_load2"))
         self.menu_item_quit = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_quit"))
+        self.menu_item_htmldoc = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_htmldoc"))
         self.menu_item_inspect = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_inspect"))
         self.menu_item_debug = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_debug"))
         self.menu_item_about = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_about"))
@@ -165,6 +166,13 @@ def __init_resources():
         </object>
       </object>
       <object class="wxMenu">
+        <object class="wxMenuItem" name="menu_item_htmldoc">
+          <label>HTML Documentation</label>
+          <enabled>0</enabled>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
         <object class="wxMenuItem" name="menu_item_inspect">
           <label>Inspect GUI</label>
           <XRCED>
@@ -976,7 +984,6 @@ def __init_resources():
     <icon>img_icon128_png</icon>
     <style>wxDEFAULT_DIALOG_STYLE|wxRESIZE_BORDER</style>
   </object>
-
 </resource>'''
 
     img_tab_inactive_png = '''\
