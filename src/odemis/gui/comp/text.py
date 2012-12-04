@@ -24,14 +24,15 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 
+from odemis.gui.log import log
+from odemis.gui.util import units
 import locale
-import sys
 import math
-
+import sys
 import wx
 import wx.lib.mixins.listctrl as listmix
 
-from odemis.gui.log import log
+
 
 # Locale is needed for correct string sorting
 locale.setlocale(locale.LC_ALL, "")
@@ -510,7 +511,7 @@ class NumberTextCtrl(wx.TextCtrl):
 
         key_inc = kwargs.pop('key_inc', True)
         self.step = kwargs.pop('step', 0)
-        self.accuracy = kwargs.pop('accuracy', 0)
+        self.accuracy = kwargs.pop('accuracy', None)
 
         # For the wx.EVT_TEXT_ENTER event to work, the TE_PROCESS_ENTER
         # style needs to be set, but setting it in XRC throws an error
@@ -713,11 +714,13 @@ class UnitNumberCtrl(NumberTextCtrl):
         # Call this so the value gets tested
         self.SetValue(val)
 
-        if self.accuracy:
-            frm = "%0." + str(self.accuracy) + "f %s"
-            str_val = frm % (val, self.unit)
+        if self.accuracy is not None:
+            v = units.round_significant(val, self.accuracy)
+            if v == int(v):
+                v = int(v) # avoids xxx.0
+            str_val = u"%s %s" % (v, self.unit)
         else:
-            str_val = "%s %s" % (val, self.unit)
+            str_val = u"%s %s" % (val, self.unit)
 
         # Set the final value, including formatting and units
         wx.TextCtrl.SetValue(self, str_val)
@@ -850,7 +853,7 @@ class FloatTextCtrl(NumberTextCtrl):
 
         kwargs['validator'] = FloatValidator(min_val, max_val, choices)
         kwargs['step'] = kwargs.get('step', 0.1)
-        kwargs['accuracy'] = kwargs.get('accuracy', 2) # decimal places
+        kwargs['accuracy'] = kwargs.get('accuracy', 3) # decimal places
 
         NumberTextCtrl.__init__(self, *args, **kwargs)
 
@@ -865,7 +868,7 @@ class UnitFloatCtrl(UnitNumberCtrl):
         if 'step' not in kwargs and (min_val != max_val):
             kwargs['step'] = _step_from_range(min_val, max_val)
 
-        kwargs['accuracy'] = kwargs.get('accuracy', 2) # decimal places
+        kwargs['accuracy'] = kwargs.get('accuracy', 3) # decimal places
 
         UnitNumberCtrl.__init__(self, *args, **kwargs)
 

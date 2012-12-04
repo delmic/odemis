@@ -22,15 +22,11 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from .text import NumberTextCtrl, UnitFloatCtrl, UnitIntegerCtrl
 from odemis.gui.img.data import getsliderBitmap, getslider_disBitmap
-from odemis.gui.log import log
 from wx.lib.agw.aui.aui_utilities import StepColour
 import logging
 import math
 import odemis.gui
 import wx
-
-
-
 
 
 class Slider(wx.PyPanel):
@@ -117,7 +113,6 @@ class Slider(wx.PyPanel):
         
         assert(r0 < r1)
         assert(r0 > 0 and r1 > 0)
-        logging.debug("r0, r1, p=%g,%g,%g", r0, r1, p)
         v = r0 * ((r1/r0)**p)
         return v
     
@@ -248,26 +243,22 @@ class Slider(wx.PyPanel):
 
     def _pixel_to_val(self):
         prcnt = float(self.pointerPos) / (self.GetWidth() - self.handle_width)
-        #return int((self.value_range[1] - self.value_range[0]) * prcnt + self.value_range[0])
-        #return (self.value_range[1] - self.value_range[0]) * prcnt + self.value_range[0]
         return self._percentage_to_val(self.value_range[0],
                                        self.value_range[1],
                                        prcnt)
 
     def SetValue(self, value):
-        log.debug("Setting slider value")
+        logging.debug("Setting slider value to %s", value)
         if value < self.value_range[0]:
-            log.warn("Value lower than minimum!")
+            logging.warn("Value lower than minimum!")
             self.current_value = self.value_range[0]
         elif value > self.value_range[1]:
-            log.warn("Value higher than maximum!")
+            logging.warn("Value higher than maximum!")
             self.current_value = self.value_range[1]
         else:
             self.current_value = value
 
         self.pointerPos = self._val_to_pixel()
-#        print "bah"
-
         self.Refresh()
 
     def GetWidth(self):
@@ -289,7 +280,7 @@ class NumberSlider(Slider):
     def __init__(self, parent, id=wx.ID_ANY, value=0.0, val_range=(0.0, 1.0),
                  size=(-1, -1), pos=wx.DefaultPosition, style=wx.NO_BORDER,
                  name="Slider", scale=None, t_class=NumberTextCtrl,
-                 t_size=(50, -1), unit="", accuracy=0):
+                 t_size=(50, -1), unit="", accuracy=None):
         Slider.__init__(self, parent, id, value, val_range, size,
                         pos, style, name, scale)
 
@@ -312,7 +303,7 @@ class NumberSlider(Slider):
             text_val = self.linked_field.GetValue()
 
             if self.GetValue() != text_val:
-                log.debug("Number changed, updating slider")
+                logging.debug("Number changed, updating slider to %s", text_val)
                 self.SetValue(text_val)
                 evt.Skip()
 
@@ -321,6 +312,10 @@ class NumberSlider(Slider):
         Slider.getPointerLimitPos(self, xPos)
         self._update_linked_field(self.current_value)
 
+    def SetValue(self, val):
+        """ Overridden method, so the linked field update could be added """
+        Slider.SetValue(self, val)
+        self._update_linked_field(val) 
 
     def _update_linked_field(self, value):
         """ Update any linked field to the same value as this slider
@@ -367,9 +362,7 @@ class UnitFloatSlider(NumberSlider):
 
     def __init__(self, *args, **kwargs):
         kwargs['t_class'] = UnitFloatCtrl
-
-        if 'accuracy' not in kwargs:
-            kwargs['accuracy'] = 2
+        kwargs['accuracy'] = kwargs.get('accuracy', 3)
 
         NumberSlider.__init__(self, *args, **kwargs)
 

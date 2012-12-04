@@ -49,7 +49,7 @@ CONFIG_SEM2 = {"name": "sem", "role": "sem", "device": "/dev/comedi0",
               "children": {"detector0": CONFIG_SED, "detector1": CONFIG_BSD, "scanner": CONFIG_SCANNER}
               }
 
-#@unittest.skip("simple")
+@unittest.skip("simple")
 class TestSEMStatic(unittest.TestCase):
     """
     Tests which don't need a SEM component ready
@@ -143,9 +143,25 @@ class TestSEM(unittest.TestCase):
     
 #    @unittest.skip("simple")
     def test_acquire(self):
-        dwell = 10e-6 # s
-        self.scanner.dwellTime.value = dwell
+        self.scanner.dwellTime.value = 10e-6 # s
         expected_duration = self.compute_expected_duration()
+        
+        start = time.time()
+        im = self.sed.data.get()
+        duration = time.time() - start
+
+        self.assertEqual(im.shape, self.size)
+        self.assertGreaterEqual(duration, expected_duration, "Error execution took %f s, less than exposure time %d." % (duration, expected_duration))
+        self.assertIn(model.MD_DWELL_TIME, im.metadata)
+
+#    @unittest.skip("simple")
+    def test_acquire_high_osr(self):
+        """
+        small resolution, but large osr, to force acquisition not by whole array
+        """
+        self.scanner.resolution.value = (256, 256)
+        self.scanner.dwellTime.value = self.scanner.dwellTime.range[0] * 1000
+        expected_duration = self.compute_expected_duration() # about 1 min
         
         start = time.time()
         im = self.sed.data.get()

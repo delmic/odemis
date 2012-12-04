@@ -144,7 +144,8 @@ def __init_resources():
                       <min>0.01</min>
                       <max>1000</max>
                       <unit>μm</unit>
-                      <scale>cubic</scale>
+                      <accuracy>2</accuracy>
+                      <scale>log</scale>
                       <XRCED>
                         <assign_var>1</assign_var>
                       </XRCED>
@@ -395,7 +396,8 @@ def __init_resources():
                       <min>0.01</min>
                       <max>100</max>
                       <unit>μm</unit>
-                      <scale>cubic</scale>
+                      <accuracy>2</accuracy>
+                      <scale>log</scale>
                       <XRCED>
                         <assign_var>1</assign_var>
                       </XRCED>
@@ -546,7 +548,8 @@ def __init_resources():
                       <min>0.01</min>
                       <max>1000</max>
                       <unit>μm</unit>
-                      <scale>cubic</scale>
+                      <accuracy>2</accuracy>
+                      <scale>log</scale>
                       <XRCED>
                         <assign_var>1</assign_var>
                       </XRCED>
