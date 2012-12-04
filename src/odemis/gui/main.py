@@ -41,7 +41,8 @@ from odemis.gui.instrmodel import InstrumentalImage
 from odemis.gui.xmlh import odemis_get_resources
 
 
-HTML_DOC = "doc/code/_build/html/index.html"
+HTML_DOC = os.path.join(os.path.dirname(__file__),
+                        "../../../doc/code/_build/html/index.html")
 
 class OdemisGUIApp(wx.App):
     """ This is Odemis' main GUI application class
