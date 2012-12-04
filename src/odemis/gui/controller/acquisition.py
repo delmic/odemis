@@ -124,32 +124,14 @@ class AcquisitionController(object):
 
     def open_acquisition_dialog(self, evt):
         from odemis.gui import main_xrc
-        from wx.lib.imageutils import grayOut
 
-        parent_size = self._main_frame.GetSize()
+        parent_size = [v * 0.66 for v in self._main_frame.GetSize()]
 
-        dim_frame = wx.Frame(self._main_frame, style=wx.BORDER_NONE)
-        dim_frame.SetBackgroundColour("#000000")
-        dim_frame.SetSize(parent_size)
-
-        dark_img = self.onTakeScreenShot()
-        grayOut(dark_img)
-
-
-
-        wx.StaticBitmap(dim_frame, wx.ID_ANY, wx.BitmapFromImage(dark_img))
-
-        dim_frame.Show()
-
-        parent_size = [v * 0.66 for v in parent_size]
-
-        self._acq_dialog = main_xrc.xrcfr_acq(dim_frame)
+        self._acq_dialog = main_xrc.xrcfr_acq(self._main_frame)
 
         self._acq_dialog.SetSize(parent_size)
         self._acq_dialog.Center()
         self._acq_dialog.ShowModal()
-
-        dim_frame.Destroy()
 
     def start_snapshot_viewport(self, event):
         """

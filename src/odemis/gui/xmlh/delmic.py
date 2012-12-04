@@ -30,7 +30,8 @@ TRACE('*** creating xh_delmic components')
 
 c = component.Container('StreamPanel',
     ['window', 'top_level', 'control'],
-    ['pos', 'size', 'label', 'collapsed'])
+    ['pos', 'size', 'label', 'add_button'])
+c.setParamClass('add_button', params.ParamBool)
 component.Manager.register(c)
 component.Manager.addXmlHandler(xh_delmic.StreamPanelXmlHandler)
 component.Manager.setMenu(c, 'TOP_LEVEL', 'Delmic stream panel', 'StreamPanel', 3)

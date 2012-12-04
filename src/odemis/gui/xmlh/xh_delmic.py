@@ -218,10 +218,12 @@ class StreamPanelXmlHandler(xrc.XmlResourceHandler):
                                  self.GetID(),
                                  self.GetPosition(),
                                  self.GetSize(),
-                                 self.GetStyle())
+                                 self.GetStyle(),
+                                 add_button=self.GetBool('add_button'))
             self.SetupWindow(w)
             # 'Dirty' fix for the hard coded 'add stream' child button
-            w.btn_add_stream.SetBackgroundColour(w.GetBackgroundColour())
+            if self.GetBool('add_button'):
+                w.btn_add_stream.SetBackgroundColour(w.GetBackgroundColour())
             parent.add_item(w)
             return w
 
@@ -655,7 +657,7 @@ class UnitFloatSliderHandler(xrc.XmlResourceHandler):
         # there is a bug in wxWidgets, which doesn't export GetFloat
         # => recreate in Python
         # self, String param, long defaultv=0
-        
+
         string = self.GetParamValue(param)
 
         try:
@@ -670,7 +672,7 @@ class UnitFloatSliderHandler(xrc.XmlResourceHandler):
         val = self.GetFloat('value')
         rng = (self.GetFloat('min'), self.GetFloat('max'))
         text_size = ast.literal_eval(self.GetText('text_size') or "50, -1")
-        
+
         if rng[0] == rng[1]:
             logging.warning("Incorrect range between %r and %r", rng[0], rng[1])
             rng = (rng[0], rng[1] + 1.0)
@@ -678,7 +680,7 @@ class UnitFloatSliderHandler(xrc.XmlResourceHandler):
         accuracy=self.GetLong('accuracy', -1)
         if accuracy == -1:
             accuracy = None
-            
+
         # Now create the object
         slider = slide.UnitFloatSlider(self.GetParentAsWindow(),
                                        id=self.GetID(),

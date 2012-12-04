@@ -768,6 +768,9 @@ class StreamPanel(wx.Panel):
     DEFAULT_STYLE = wx.BOTTOM | wx.EXPAND
 
     def __init__(self, *args, **kwargs):
+
+        add_btn = kwargs.pop('add_button', False)
+
         wx.Panel.__init__(self, *args, **kwargs)
 
         self._microscope = None # GUIMicroscope
@@ -785,21 +788,25 @@ class StreamPanel(wx.Panel):
         self.txt_no_stream = wx.StaticText(self, -1, msg)
         self._sz.Add(self.txt_no_stream, 0, wx.ALL | wx.ALIGN_CENTER, 10)
 
-        self.btn_add_stream = PopupImageButton(self, -1,
+        self.btn_add_stream = None
+
+        if add_btn:
+            self.btn_add_stream = PopupImageButton(
+                                               self, -1,
                                                bitmap=img.getstream_addBitmap(),
                                                label="ADD STREAM",
                                                style=wx.ALIGN_CENTER)
 
-        self.btn_add_stream.SetForegroundColour("#999999")
-        self.btn_add_stream.SetBitmaps(img.getstream_add_hBitmap(),
-                                       img.getstream_add_aBitmap())
-        self._sz.Add(self.btn_add_stream, flag=wx.ALL, border=10)
+            self.btn_add_stream.SetForegroundColour("#999999")
+            self.btn_add_stream.SetBitmaps(img.getstream_add_hBitmap(),
+                                           img.getstream_add_aBitmap())
+            self._sz.Add(self.btn_add_stream, flag=wx.ALL, border=10)
 
-        self._set_warning()
+            self._set_warning()
 
-        # FIXME: dropdown not working atm
-        #self.btn_add_stream.Bind(wx.EVT_LISTBOX, self.on_add_stream)
-        self.btn_add_stream.Bind(wx.EVT_BUTTON, self.on_add_stream)
+            # FIXME: dropdown not working atm
+            #self.btn_add_stream.Bind(wx.EVT_LISTBOX, self.on_add_stream)
+            self.btn_add_stream.Bind(wx.EVT_BUTTON, self.on_add_stream)
 
         self._fitStreams()
 
@@ -894,12 +901,14 @@ class StreamPanel(wx.Panel):
 
     # === API of the stream panel
     def show_add_button(self):
-        self.btn_add_stream.Show()
-        self._fitStreams()
+        if self.btn_add_stream:
+            self.btn_add_stream.Show()
+            self._fitStreams()
 
     def hide_add_button(self):
-        self.btn_add_stream.Hide()
-        self._fitStreams()
+        if self.btn_add_stream:
+            self.btn_add_stream.Hide()
+            self._fitStreams()
 
     def is_empty(self):
         return len(self.entries) == 0
@@ -980,9 +989,12 @@ class StreamPanel(wx.Panel):
         title (string): Text displayed in the menu
         callback (callable): function to call when the action is selected
         """
-        log.debug("Adding %s action to stream panel", title)
-        self.menu_actions[title] = callback
-        self.btn_add_stream.add_choice(title, callback, check_enabled)
+        if self.btn_add_stream is None:
+            log.error("No add button present!")
+        else:
+            log.debug("Adding %s action to stream panel", title)
+            self.menu_actions[title] = callback
+            self.btn_add_stream.add_choice(title, callback, check_enabled)
 
     def remove_action(self, title):
         """
