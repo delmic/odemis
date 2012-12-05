@@ -1,0 +1,4 @@
+# Force the Acton devices connected via serial connection to specific names, to ease detection
+
+# It seems all SpectraPro devices come with the same IDs:
+SUBSYSTEMS=="usb", ATTRS{idProduct}=="0100", ATTRS{idVendor}=="0647", KERNEL=="ttyUSB[0-9]*", SYMLINK="ttySP", GROUP="odemis"
