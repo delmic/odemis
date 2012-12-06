@@ -147,7 +147,6 @@ class LLE(model.Emitter):
     def _readResponse(self, length):
         """
         receive a response from the engine
-        com (string): command to send (including the \n if necessary)
         length (0<int): length of the response to receive
         return (bytearray of length == length): the response received (raw) 
         raises:
@@ -179,7 +178,7 @@ class LLE(model.Emitter):
             # empty the serial port (and also wait for the device to initialise)
             garbage = self._serial.read(100)
             if len(garbage) == 100:
-                raise IOError("Device keep sending unknown data")
+                raise IOError("Device keeps sending unknown data")
     
     def _tryRecover(self):
         # no other access to the serial port should be done
@@ -322,7 +321,7 @@ class LLE(model.Emitter):
         # with a resolution of 0.125 deg C.
         with self._ser_access:
             self._sendCommand(b"\x53\x91\x02\x50")
-            resp = bytearray(self._readResponse(2))
+            resp = self._readResponse(2)
         val = 0.125 * ((((resp[0] << 8) | resp[1]) >> 5) & 0x7ff)
         return val
     
