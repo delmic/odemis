@@ -14,6 +14,7 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
+from Pyro4.core import isasync
 from odemis import model, __version__
 import glob
 import logging
@@ -65,9 +66,13 @@ class SpectraPro(model.Actuator):
         port (string): name of the serial port to connect to.
         turret (None or 1<=int<=3): turret number set-up. If None, consider that
           the current turret known by the device is correct.
+        inverted (None): it is not allowed to invert the axes
         _noinit (boolean): for internal use only, don't try to initialise the device 
         """
         # TODO: allow to specify the currently installed turret? And change to it at init?
+        
+        if kwargs.get("inverted", None):
+            raise ValueError("Axis of spectrograph cannot be inverted")
         
         # start with this opening the port: if it fails, we are done
         self._serial = self.openSerialPort(port)
@@ -80,14 +85,12 @@ class SpectraPro(model.Actuator):
         if _noinit:
             return
         
-        model.Actuator.__init__(self, name, role, **kwargs)
-    
         self._initDevice()
         self._try_recover = True
         
         # according to the model determine how many gratings per turret
-        model = self.GetModel()
-        self.max_gratings = self.model2max_gratings.get(model, 3)
+        model_name = self.GetModel()
+        self.max_gratings = self.model2max_gratings.get(model_name, 3)
         
         if turret is not None:
             if turret < 1 or turret > self.max_gratings:
@@ -98,15 +101,46 @@ class SpectraPro(model.Actuator):
         else:
             self._turret = self.GetTurret()
     
+        # TODO: a more precise way to find the maximum wavelength (looking at the available gratings?)
+        # provides a ._axes and ._range
+        model.Actuator.__init__(self, name, role, axes=["wavelength"], 
+                                range={"wavelength": (0, 10e-6)}, **kwargs)
+    
         # set HW and SW version
         self._swVersion = "%s (serial driver: %s)" % (__version__.version, self.getSerialDriver(port))
-        self._hwVersion = "%s (s/n: %s)" % model, (self.GetSerialNumber() or "Unknown")
+        self._hwVersion = "%s (s/n: %s)" % model_name, (self.GetSerialNumber() or "Unknown")
         
         # One absolute axis: wavelength
         # One enumerated int: grating number (between 1 and 3: only the current turret)
         # if so, how to let know that the grating is done moving? Or should it be an axis with 3 positions? range is a dict instead of a 2-tuple  
         
-    
+        pos = {"wavelength": self.GetWavelength()}
+        # RO, as to modify it the client must use .moveRel() or .moveAbs()
+        self.position = model.VigilantAttribute(pos, unit="m", readonly=True)
+        
+        # for now, it's fixed (and it's unlikely to be useful to allow less than the max)
+        max_speed = 1000e-9/10 # about 1000 nm takes 10s => max speed in m/s
+        self.speed = model.MultiSpeedVA(max_speed, range=[max_speed, max_speed], unit="m/s",
+                                        readonly=True)
+
+        grating = self.GetGrating()
+        gchoices = self.GetGratingChoices()
+        # TODO: check a dict as choices is supported everywhere
+        self.grating = model.IntEnumerated(grating, choices=gchoices, unit="")
+        
+    # TODO call at the end of an action
+    def _updatePosition(self):
+        """
+        update the position VA
+        Note: it should not be called while holding the lock to the serial port
+        """
+        with self._ser_access:
+            pos = {"wavelength": self.GetWavelength()}
+        
+        # it's read-only, so we change it via _value
+        self.position._value = pos
+        self.position.notify(self.position.value)
+        
     # Low-level methods: to access the hardware (should be called with the lock acquired)
     
     def _sendOrder(self, com, timeout=1):
@@ -366,7 +400,47 @@ class SpectraPro(model.Actuator):
     
     # high-level methods (interface)
     
+    @isasync
+    def moveRel(self, shift):
+        """
+        Move the stage the defined values in m for each axis given.
+        shift dict(string-> float): name of the axis and shift in m
+        returns (Future): future that control the asynchronous move
+        """
+        for axis in shift:
+            if axis == "wavelength":
+                # cannot convert it directly to an absolute move, because
+                # several in a row must mean they accumulate
+                # FIXME 
+                pos = self.position[axis] + shift[axis]
+                return self.moveAbs({"wavelength":pos})
+            else:
+                raise LookupError("Axis '%s' doesn't exist", axis)
     
+    @isasync
+    def moveAbs(self, pos):
+        """
+        Move the stage the defined values in m for each axis given.
+        pos dict(string-> float): name of the axis and new position in m
+        returns (Future): future that control the asynchronous move
+        """
+        for axis in pos:
+            if axis == "wavelength":
+                # TODO add to action_mgr
+                pass
+            else:
+                raise LookupError("Axis '%s' doesn't exist", axis)
+    
+    
+    def stop(self):
+        """
+        stops the motion on all axes
+        Warning: this might stop the motion even of axes not managed (it stops
+        all the axes of all controller managed).
+        """
+        # TODO: see if it's possible to use ThreadPoolExecutor (or extend it?)
+        if self._action_mgr:
+            self._action_mgr.cancel_all() 
     
     def terminate(self):
         if self._serial:

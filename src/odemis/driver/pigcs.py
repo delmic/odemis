@@ -1175,10 +1175,6 @@ class Bus(model.Actuator):
         
         return self._applyInversionAbs(position)
     
-    # TODO needs to be triggered by end of action, or directly controller? 
-    # maybe whenever a controller updates it's position?
-    # How to avoid updating each axis one-by-one?
-    # Maybe we should just do it regularly as long as there are actions in the queue
     def _updatePosition(self):
         """
         update the position VA
