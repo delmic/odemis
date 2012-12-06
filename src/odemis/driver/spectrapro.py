@@ -22,6 +22,7 @@ import re
 import serial
 import sys
 import threading
+import time
 
 # This module drives the Acton SpectraPro spectrograph devices. It is tested with
 # the SpectraPro 2150i, but should work with many other devices as the commands
@@ -84,9 +85,14 @@ class SpectraPro(model.Actuator):
         self._initDevice()
         self._try_recover = True
         
+        # according to the model determine how many gratings per turret
+        model = self.GetModel()
+        self.max_gratings = self.model2max_gratings.get(model, 3)
+        
         if turret is not None:
-            if turret < 1 or turret > 3:
-                raise ValueError("Turret number given is %s, while expected a value between 1 and 3" % turret)
+            if turret < 1 or turret > self.max_gratings:
+                raise ValueError("Turret number given is %s, while expected a value between 1 and %d" %
+                                 (turret, self.max_gratings))
             self.SetTurret(turret)
             self._turret = turret
         else:
@@ -94,7 +100,7 @@ class SpectraPro(model.Actuator):
     
         # set HW and SW version
         self._swVersion = "%s (serial driver: %s)" % (__version__.version, self.getSerialDriver(port))
-        self._hwVersion = "%s (s/n: %s)" % self.GetModel(), (self.GetSerialNumber() or "Unknown")
+        self._hwVersion = "%s (s/n: %s)" % model, (self.GetSerialNumber() or "Unknown")
         
         # One absolute axis: wavelength
         # One enumerated int: grating number (between 1 and 3: only the current turret)
@@ -153,24 +159,51 @@ class SpectraPro(model.Actuator):
         while not response.endswith("\r\n"):
             char = self._serial.read()
             if not char:
-#                if self._try_recover:
-#                    self._tryRecover()
-#                else:
-                if True:
+                if self._try_recover:
+                    self._tryRecover()
+                else:
                     raise IOError("Device timeout after receiving '%s'." % response.encode('string_escape'))
-            response.append(char)
+            response += char
         
         logging.debug("Received: %s", response.encode('string_escape'))
         if response.endswith(" ok\r\n"):
             return response[:-5]
         else:
             # empty the serial port
+            self._serial.timeout = 1
             garbage = self._serial.read(100)
             if len(garbage) == 100:
                 raise IOError("Device keeps sending data")
             response += garbage
-            raise SPError("Sent '%' and received error: '%s'", com.encode('string_escape'), response.encode('string_escape'))
-            
+            raise SPError("Sent '%s' and received error: '%s'" % 
+                          (com.encode('string_escape'), response.encode('string_escape')))
+    
+    def _tryRecover(self):
+        # no other access to the serial port should be done
+        # so _ser_access should already be acquired
+        
+        # Retry to open the serial port (in case it was unplugged)
+        while True:
+            try:
+                self._serial.close()
+                self._serial = None
+            except:
+                pass
+            try:
+                logging.debug("retrying to open port %s", self._port)
+                self._serial = self.openSerialPort(self._port)
+            except IOError:
+                time.sleep(2)
+            except Exception:
+                logging.exception("Unexpected error while trying to recover device")
+                raise
+            else:
+                break
+
+        self._try_recover = False # to avoid recursion    
+        self._initDevice()
+        self._try_recover = True
+
     # default is 3, so no need to list models with 3 grating per turret
     model2max_gratings = {"SP-2-150i", 2}
     def _initDevice(self):
@@ -184,16 +217,13 @@ class SpectraPro(model.Actuator):
         try:
             r = self._sendQuery("no-echo")
         except SPError:
-            logging.info("Failed to disable echo, hoping the device has not echo anyway")
+            logging.info("Failed to disable echo, hopping the device has not echo anyway")
         
         # empty the serial port
+        self._serial.timeout = 1
         garbage = self._serial.read(100)
         if len(garbage) == 100:
             raise IOError("Device keeps sending data")
-        
-        # according to the model determine how many gratings per turret
-        model = self.GetModel()
-        self.max_gratings = self.model2max_gratings.get(model, 3)
     
     def GetTurret(self):
         """
