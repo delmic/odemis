@@ -543,7 +543,7 @@ class BooleanVA(VigilantAttribute):
 
 class Continuous(object):
     """
-    Adds the ability to a VA to specify a min and max.
+    Mixin which adds the ability to a VA to specify a min and max.
     It has an attribute range (2-tuple) min, max
     It checks that any value set is min <= val <= max
     """
@@ -574,7 +574,7 @@ class Continuous(object):
         if hasattr(self, "value"):
             if self.value < new_range[0] or self.value > new_range[1]:
                 raise OutOfBoundError("Current value '%s' is outside of the range %s→%s." %
-                            (str(self.value), str(new_range[0]), str(new_range[1])))
+                            (self.value, str(new_range[0]), str(new_range[1])))
         self._range = tuple(new_range)
 
     # To be called only by the owner of the object
@@ -599,14 +599,16 @@ class Continuous(object):
 
 class Enumerated(object):
     """
-    Adds the ability to a VA to specify a set of authorised values.
+    Mixin which adds the ability to a VA to specify a set of authorised values.
     It has an attribute choices which is of type set
-    It checks that any value set is among choice
+    It checks that any value set is among choices
     """
 
     def __init__(self, choices):
         """
-        choices (seq): all the possible value that can be assigned
+        choices (set or dict (value -> str)): all the possible value that can be
+         assigned, or if it's a dict all the values that can be assigned and a 
+         user-readable description of the values. 
         """
         self._set_choices(choices)
 
@@ -623,14 +625,16 @@ class Enumerated(object):
         return self._get_choices()
 
     def _set_choices(self, new_choices_raw):
-        try:
+        if isinstance(new_choices_raw, collections.Set):
             new_choices = frozenset(new_choices_raw)
-        except TypeError:
+        elif isinstance(new_choices_raw, dict):
+            new_choices = dict(new_choices_raw)
+        else:
             raise InvalidTypeError("Choices %s is not a set." % str(new_choices_raw))
         if hasattr(self, "value"):
             if not self.value in new_choices:
                 raise OutOfBoundError("Current value %s is not part of possible choices: %s." %
-                            (str(self.value), ", ".join(map(str, new_choices))))
+                            (self.value, ", ".join(map(str, new_choices))))
         self._choices = new_choices
 
     @choices.setter
