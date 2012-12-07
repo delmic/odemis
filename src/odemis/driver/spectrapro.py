@@ -105,12 +105,13 @@ class SpectraPro(model.Actuator):
     
         # TODO: a more precise way to find the maximum wavelength (looking at the available gratings?)
         # provides a ._axes and ._range
+        # TODO: what's the min? 200nm seems the actual min in reality, although wavelength is set to 0 by default !?
         model.Actuator.__init__(self, name, role, axes=["wavelength"], 
-                                range={"wavelength": (0, 10e-6)}, **kwargs)
+                                ranges={"wavelength": (0, 10e-6)}, **kwargs)
     
         # set HW and SW version
         self._swVersion = "%s (serial driver: %s)" % (__version__.version, self.getSerialDriver(port))
-        self._hwVersion = "%s (s/n: %s)" % model_name, (self.GetSerialNumber() or "Unknown")
+        self._hwVersion = "%s (s/n: %s)" % (model_name, (self.GetSerialNumber() or "Unknown"))
     
         # will take care of executing axis move asynchronously
         self._executor = CancellableThreadPoolExecutor(max_workers=1) # one task at a time
@@ -136,7 +137,9 @@ class SpectraPro(model.Actuator):
             if t != self._turret:
                 del gchoices[c]
         # TODO: check a dict as choices is supported everywhere
-        # TODO: report the grating with it's wavelength range
+        # TODO: report the grating with its wavelength range (possible to compute from groove density + blaze wl?)
+        # range also depends on the max grating angle (40°, CCD pixel size, CCD horizontal size, focal length,+ efficienty curve?) 
+        # cf http://www.roperscientific.de/gratingcalcmaster.html
         self.grating = model.IntEnumerated(grating, choices=gchoices, unit="", 
                                            setter=self._setGrating)
         
@@ -145,7 +148,7 @@ class SpectraPro(model.Actuator):
     def _sendOrder(self, *args, **kwargs):
         """
         Send a command which does not expect any report back (just OK)
-        com (str): command to send (including the \r if necessary)
+        com (str): command to send (non including the \r)
         raise
             SPError: if the command doesn't answer the expected OK.
             IOError: in case of timeout
@@ -156,7 +159,7 @@ class SpectraPro(model.Actuator):
     def _sendQuery(self, com, timeout=1):
         """
         Send a command which expects a report back (in addition to the OK)
-        com (str): command to send (including the \r if necessary)
+        com (str): command to send (non including the \r)
         timeout (0<float): maximum read timeout for the response
         return (str): the response received (without the ok) 
         raises:
@@ -174,6 +177,7 @@ class SpectraPro(model.Actuator):
         # \r\nAddress Error \r\nA=3F4F4445 PC=81444
         
         assert(len(com) > 1 and len(com) <= 100) # commands cannot be long
+        com += "\r"
         
         logging.debug("Sending: %s", com.encode('string_escape'))
         # send command until it succeeds
@@ -245,7 +249,7 @@ class SpectraPro(model.Actuator):
         self._try_recover = True
 
     # default is 3, so no need to list models with 3 grating per turret
-    model2max_gratings = {"SP-2-150i", 2}
+    model2max_gratings = {"SP-2-150i": 2}
     def _initDevice(self):
         # If no echo is desired, the command NO-ECHO will suppress the echo. The
         # command ECHO will return the SP-2150i to the default echo state.
@@ -308,7 +312,7 @@ class SpectraPro(model.Actuator):
 
         res = self._sendQuery("?gratings")
         gratings = {}
-        for line in res.split("\n"):
+        for line in res[:-1].split("\n"): # avoid the last \n to not make an empty last line
             m = self.RE_NOTINSTALLED.search(line)
             if m:
                 logging.debug("Decoded grating %s as not installed, skipping.", m.group(1))
@@ -316,6 +320,7 @@ class SpectraPro(model.Actuator):
             m = self.RE_GRATING.search(line)
             if not m:
                 logging.debug("Failed to decode grating description '%s'", line)
+                continue
             num = int(m.group(1))
             desc = m.group(2)
             # TODO: provide a nicer description, using RE_INSTALLED?
@@ -612,11 +617,11 @@ class CancellableThreadPoolExecutor(ThreadPoolExecutor):
     An extended ThreadPoolExecutor that can cancel all the jobs not yet started.
     """
     def __init__(self, *args, **kwargs):
-        ThreadPoolExecutor.__init__(*args, **kwargs)
+        ThreadPoolExecutor.__init__(self, *args, **kwargs)
         self._queue = collections.deque() # thread-safe queue of futures
     
     def submit(self, fn, *args, **kwargs):
-        f = ThreadPoolExecutor.submit(fn, *args, **kwargs)
+        f = ThreadPoolExecutor.submit(self, fn, *args, **kwargs)
         # add to the queue and track the task
         self._queue.append(f)
         f.add_done_callback(f)
@@ -649,5 +654,127 @@ class CancellableThreadPoolExecutor(ThreadPoolExecutor):
             except:
                 # the task raised an exception => we don't care
                 pass
-     
-     
+
+# Additional classes used for testing without the actual hardware
+class FakeSpectraPro(SpectraPro):
+    """
+    Same as SpectraPro but connects to the simulator. Only used for testing.
+    """
+    
+    @staticmethod
+    def scan(port=None):
+        return SpectraPro.scan(port) + [("fakesp", {"port":"fake"})]
+    
+    @staticmethod
+    def getSerialDriver(name):
+        """
+        return (string): the name of the serial driver used for the given port
+        """
+        return "fakesp"
+        
+    @staticmethod
+    def openSerialPort(port):
+        """
+        Opens the given serial port the right way for the SpectraPro.
+        port (string): the name of the serial port (e.g., /dev/ttyUSB0)
+        return (serial): the opened serial port
+        """
+        # according to doc:
+        # "port set-up is 9600 baud, 8 data bits, 1 stop bit and no parity"
+        ser = SPSimulator(
+            port = port,
+            baudrate = 9600,
+            bytesize = serial.EIGHTBITS,
+            parity = serial.PARITY_NONE,
+            stopbits = serial.STOPBITS_ONE,
+            timeout = 2 #s
+        )
+        
+        return ser 
+
+class SPSimulator(object):
+    """
+    Simulates a SpectraPro (+ serial port). Only used for testing.
+    Same interface as the serial port
+    """
+    def __init__(self, timeout=0, *args, **kwargs):
+        # we don't care about the actual parameters but timeout
+        self.timeout = timeout
+        
+        # internal values to simulate the device
+        self._turret = 1
+        self._grating = 1
+        self._wavelength = 0 # nm
+        self._output_buf = "" # what the commands sends back to the "host computer"
+        self._input_buf = "" # what we receive from the "host computer"
+        
+    def write(self, data):
+        self._input_buf += data
+        # process each commands separated by "\r"
+        commands = self._input_buf.split("\r")
+        self._input_buf = commands.pop() # last one is not complete yet
+        for c in commands:
+            self._processCommand(c)
+    
+    def read(self, size=1):
+        ret = self._output_buf[:size]
+        self._output_buf = self._output_buf[len(ret):]
+        
+        if len(ret) < size:
+            # simulate timeout
+            time.sleep(self.timeout)
+        return ret
+    
+    def close(self):
+        # using read or write will fail after that
+        del self._output_buf
+        del self._input_buf
+    
+    def _processCommand(self, com):
+        """
+        process the command, and put the result in the output buffer
+        com (str): command
+        """
+        out = None # None means error
+        if com == "?turret":
+            out = "%d" % self._turret
+        elif com == "?grating":
+            out = "%d" % self._grating
+        elif com == "?nm":
+            out = "%.2f nm" % self._wavelength
+        elif com == "model":
+            out = "SP-FAKE"
+        elif com == "serial":
+            out = "12345"
+        elif com == "no-echo":
+            out = "" # echo is always disabled anyway
+        elif com == "?gratings":
+            out = (" 1 300 g/mm BLZ=345 nm\r\n" +
+                   ">2 600 g/mm BLZ=89 nm\r\n" +
+                   " 3 1200 g/mm BLZ=700 nm\r\n" +
+                   " 4 Not Installed\r\n")
+        elif com.endswith("goto"):
+            m = re.match("(\d+.\d+) goto", com)
+            if m:
+                self._wavelength = float(m.group(1))
+                out = ""
+                time.sleep(1) # simulate long move
+        elif com.endswith("turret"):
+            m = re.match("(\d+) turret", com)
+            if m:
+                self._turret = int(m.group(1))
+                out = ""
+        elif com.endswith("grating"):
+            m = re.match("(\d+) grating", com)
+            if m:
+                self._grating = int(m.group(1))
+                out = ""
+                time.sleep(2) # simulate long move
+                
+        # add the response end
+        if out is None:
+            out = " %s? \r\n" % com
+        else:
+            out += " ok\r\n"
+        self._output_buf += out
+        
