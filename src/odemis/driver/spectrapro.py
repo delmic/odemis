@@ -291,6 +291,10 @@ class SpectraPro(model.Actuator):
         # TODO check that there is grating configured for this turret (using GetGratingChoices)
         self._sendOrder("%d turret" % t)
     
+    # regex to read the gratings
+    RE_NOTINSTALLED = re.compile("\D*(\d+)\s+Not Installed")
+    RE_INSTALLED = re.compile("\D*(\d+)\s+(\d+)\s*g/mm BLZ=\s*(\d+)\s*nm")
+    RE_GRATING = re.compile("\D*(\d+)\s+(.+)\r")
     def GetGratingChoices(self):
         """
         return (dict int -> string): grating number to description
@@ -299,18 +303,25 @@ class SpectraPro(model.Actuator):
         #  present grating is specified with an arrow.
         # Example output:
         # TODO
+        # From the spectrapro_300i_ll.c of fsc2, it seems the format is:
+        # non-digit*,digits=grating number,spaces,"Not Installed"\r\n
+        # non-digit*,digits=grating number,space+,digit+:g/mm,space*,"g/mm BLZ=", space*,digit+:blaze wl in nm,space*,"nm"\r\n
 
         # FIXME does the response include "\r\n"?
         res = self._sendQuery("?gratings")
         #TODO
         gratings = {}
         for line in res.split("\n"):
-            m = re.search(".(\n) (.*)", line)
+            m = self.RE_NOTINSTALLED.search(line)
+            if m:
+                logging.debug("Decoded grating %s as not installed, skipping.", m.group(1))
+                continue
+            m = self.RE_GRATING.search(line)
             if not m:
-                logging.debug("failed to decode grating description '%s'", line)
+                logging.debug("Failed to decode grating description '%s'", line)
             num = m.group(1)
             desc = m.group(2)
-            # TODO: skip gratings "Not installed"
+            # TODO: provide a nicer description, using RE_INSTALLED?
             gratings[num] = desc
         
         return gratings
