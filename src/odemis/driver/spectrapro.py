@@ -15,7 +15,9 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from Pyro4.core import isasync
+from concurrent.futures.thread import ThreadPoolExecutor
 from odemis import model, __version__
+import collections
 import glob
 import logging
 import os
@@ -109,6 +111,9 @@ class SpectraPro(model.Actuator):
         # set HW and SW version
         self._swVersion = "%s (serial driver: %s)" % (__version__.version, self.getSerialDriver(port))
         self._hwVersion = "%s (s/n: %s)" % model_name, (self.GetSerialNumber() or "Unknown")
+    
+        # will take care of executing axis move asynchronously
+        self._executor = CancellableThreadPoolExecutor(max_workers=1) # one task at a time
         
         # One absolute axis: wavelength
         # One enumerated int: grating number (between 1 and 3: only the current turret)
@@ -126,7 +131,9 @@ class SpectraPro(model.Actuator):
         grating = self.GetGrating()
         gchoices = self.GetGratingChoices()
         # TODO: check a dict as choices is supported everywhere
-        self.grating = model.IntEnumerated(grating, choices=gchoices, unit="")
+        self.grating = model.IntEnumerated(grating, choices=gchoices, unit="", 
+                                           setter=self._setGrating)
+        
         
     # TODO call at the end of an action
     def _updatePosition(self):
@@ -300,7 +307,7 @@ class SpectraPro(model.Actuator):
         for line in res.split("\n"):
             m = re.search(".(\n) (.*)", line)
             if not m:
-                logging.debug("failed to decode gratting description '%s'", line)
+                logging.debug("failed to decode grating description '%s'", line)
             num = m.group(1)
             desc = m.group(2)
             # TODO: skip gratings "Not installed"
@@ -400,6 +407,24 @@ class SpectraPro(model.Actuator):
     
     # high-level methods (interface)
     
+    def _setGrating(self, g):
+        """
+        Setter for the grating VA.
+        g (1<=int<=3): the new grating
+        returns the actual new grating
+        Warning: synchronous until the grating is finished (up to 20s)
+        """
+        try:
+            self.stop() # stop all wavelength changes (not meaningful anymore)
+            with self._ser_access:
+                self.SetGrating(g)
+        except:
+            # let's see what is the actual grating
+            g = self.GetGrating()
+        
+        return g
+    
+    
     @isasync
     def moveRel(self, shift):
         """
@@ -410,10 +435,9 @@ class SpectraPro(model.Actuator):
         for axis in shift:
             if axis == "wavelength":
                 # cannot convert it directly to an absolute move, because
-                # several in a row must mean they accumulate
-                # FIXME 
-                pos = self.position[axis] + shift[axis]
-                return self.moveAbs({"wavelength":pos})
+                # several in a row must mean they accumulate. So we queue a 
+                # special task.
+                self._executor.submit(self._doSetWavelengthRel, (shift[axis],))
             else:
                 raise LookupError("Axis '%s' doesn't exist", axis)
     
@@ -426,11 +450,25 @@ class SpectraPro(model.Actuator):
         """
         for axis in pos:
             if axis == "wavelength":
-                # TODO add to action_mgr
-                pass
+                self._executor.submit(self._doSetWavelengthAbs, (pos[axis],))
             else:
                 raise LookupError("Axis '%s' doesn't exist", axis)
     
+    
+    def _doSetWavelengthRel(self, shift):
+        """
+        Change the wavelength by a value
+        """
+        with self._ser_access:
+            pos = self.GetWavelength() + shift
+            self.SetWavelength(pos)
+        
+    def _doSetWavelengthAbs(self, pos):
+        """
+        Change the wavelength to a value
+        """
+        with self._ser_access:
+            self.SetWavelength(pos)
     
     def stop(self):
         """
@@ -438,11 +476,14 @@ class SpectraPro(model.Actuator):
         Warning: this might stop the motion even of axes not managed (it stops
         all the axes of all controller managed).
         """
-        # TODO: see if it's possible to use ThreadPoolExecutor (or extend it?)
-        if self._action_mgr:
-            self._action_mgr.cancel_all() 
+        self._executor.cancel() 
     
     def terminate(self):
+        if self._executor:
+            self.stop()
+            self._executor.shutdown(wait=False)
+            self._executor = None
+            
         if self._serial:
             self._serial.close()
             self._serial = None
@@ -453,15 +494,16 @@ class SpectraPro(model.Actuator):
         return (boolean): False if it detects any problem
         """
         try:
-            model = self.GetModel()
-            if not model.startswith("SP-"):
-                # accept it anyway
-                logging.warning("Device reports unexpected model '%s'", model)
-                
-            turret = self.GetTurret()
-            if not turret in (1,2,3):
-                return False
-            return True
+            with self._ser_access:
+                model = self.GetModel()
+                if not model.startswith("SP-"):
+                    # accept it anyway
+                    logging.warning("Device reports unexpected model '%s'", model)
+                    
+                turret = self.GetTurret()
+                if not turret in (1,2,3):
+                    return False
+                return True
         except:
             logging.exception("Selftest failed")
         
@@ -539,4 +581,49 @@ class SpectraPro(model.Actuator):
         )
         
         return ser 
-            
+
+
+class CancellableThreadPoolExecutor(ThreadPoolExecutor):
+    """
+    An extended ThreadPoolExecutor that can cancel all the jobs not yet started.
+    """
+    def __init__(self, *args, **kwargs):
+        ThreadPoolExecutor.__init__(*args, **kwargs)
+        self._queue = collections.deque() # thread-safe queue of futures
+    
+    def submit(self, fn, *args, **kwargs):
+        f = ThreadPoolExecutor.submit(fn, *args, **kwargs)
+        # add to the queue and track the task
+        self._queue.append(f)
+        f.add_done_callback(f)
+        return f
+        
+    def _on_done(self, future):
+        # task is over
+        self._queue.remove(future)
+     
+    def cancel(self):
+        """
+        Cancels all the tasks still in the work queue, if they can be cancelled
+        Returns when all the tasks have been cancelled or are done.
+        """
+        uncancellables = []
+        # cancel one task at a time until there is nothing in the queue
+        while True:
+            try:
+                # Start with the last one added as it's the most likely to be cancellable
+                f = self._queue.pop()
+            except IndexError:
+                break
+            if not f.cancel():
+                uncancellables.append(f)
+        
+        # wait for the non cancellable tasks to finish
+        for f in uncancellables:
+            try:
+                f.result()
+            except:
+                # the task raised an exception => we don't care
+                pass
+     
+     
