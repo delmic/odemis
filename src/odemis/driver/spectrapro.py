@@ -130,27 +130,19 @@ class SpectraPro(model.Actuator):
 
         grating = self.GetGrating()
         gchoices = self.GetGratingChoices()
+        # remove the choices which are not valid for the current turret
+        for c in gchoices:
+            t = 1 + (c - 1) // self.max_gratings
+            if t != self._turret:
+                del gchoices[c]
         # TODO: check a dict as choices is supported everywhere
+        # TODO: report the grating with it's wavelength range
         self.grating = model.IntEnumerated(grating, choices=gchoices, unit="", 
                                            setter=self._setGrating)
         
-        
-    # TODO call at the end of an action
-    def _updatePosition(self):
-        """
-        update the position VA
-        Note: it should not be called while holding the lock to the serial port
-        """
-        with self._ser_access:
-            pos = {"wavelength": self.GetWavelength()}
-        
-        # it's read-only, so we change it via _value
-        self.position._value = pos
-        self.position.notify(self.position.value)
-        
     # Low-level methods: to access the hardware (should be called with the lock acquired)
     
-    def _sendOrder(self, com, timeout=1):
+    def _sendOrder(self, *args, **kwargs):
         """
         Send a command which does not expect any report back (just OK)
         com (str): command to send (including the \r if necessary)
@@ -158,34 +150,33 @@ class SpectraPro(model.Actuator):
             SPError: if the command doesn't answer the expected OK.
             IOError: in case of timeout
         """
+        # same as a query but nothing to do with the response
+        self._sendQuery(*args, **kwargs)
+        
+    def _sendQuery(self, com, timeout=1):
+        """
+        Send a command which expects a report back (in addition to the OK)
+        com (str): command to send (including the \r if necessary)
+        timeout (0<float): maximum read timeout for the response
+        return (str): the response received (without the ok) 
+        raises:
+            SPError: if the command doesn't answer the expected OK.
+            IOError: in case of timeout
+        """
         # All commands or strings of commands must be terminated with a carriage
         # return (0D hex). The monochromator responds to a command when the
         # command has been completed by returning the characters " ok" followed by
         # carriage return and line feed (hex ASCII sequence 20 6F 6B 0D 0A).
-        
         # Examples of error answers:
         #MODEL\r
         # \x00X\xf0~\x00X\xf0~MODEL ? \r\n
         #?\r
         # \r\nAddress Error \r\nA=3F4F4445 PC=81444
         
-        res = self._sendQuery(com, timeout)
-        # nothing to do with the response
-        
-    def _sendQuery(self, com, timeout=1):
-        """
-        Send a command which expects a report back (in addition to the OK)
-        com (str): command to send (including the \r if necessary)
-        timeout (0<=float): maximum read timeout for the response
-        return (str): the response received (without the ok) 
-        raises:
-            SPError: if the command doesn't answer the expected OK.
-            IOError: in case of timeout
-        """
-        self._serial.timeout = timeout
-        
         assert(len(com) > 1 and len(com) <= 100) # commands cannot be long
+        
         logging.debug("Sending: %s", com.encode('string_escape'))
+        # send command until it succeeds
         while True:
             try:
                 self._serial.write(com)
@@ -196,28 +187,36 @@ class SpectraPro(model.Actuator):
                 else:
                     raise
         
+        # read response until timeout or known end of response
         response = ""
-        while not response.endswith("\r\n"):
+        timeend = time.time() + timeout
+        while ((time.time() <= timeend) and
+               not (response.endswith(" ok\r\n") or response.endswith("? \r\n"))):
+            self._serial.timeout = max(0.1, timeend - time.time())
             char = self._serial.read()
-            if not char:
-                if self._try_recover:
-                    self._tryRecover()
-                else:
-                    raise IOError("Device timeout after receiving '%s'." % response.encode('string_escape'))
+            if not char: # timeout
+                break
             response += char
         
         logging.debug("Received: %s", response.encode('string_escape'))
         if response.endswith(" ok\r\n"):
             return response[:-5]
         else:
-            # empty the serial port
-            self._serial.timeout = 1
-            garbage = self._serial.read(100)
-            if len(garbage) == 100:
-                raise IOError("Device keeps sending data")
-            response += garbage
-            raise SPError("Sent '%s' and received error: '%s'" % 
-                          (com.encode('string_escape'), response.encode('string_escape')))
+            # if the device hasn't answered anything, it might have been disconnected
+            if len(response) == 0:
+                if self._try_recover:
+                    self._tryRecover()
+                else:
+                    raise IOError("Device timeout after receiving '%s'." % response.encode('string_escape'))
+            else: # just non understood command
+                # empty the serial port
+                self._serial.timeout = 0.1
+                garbage = self._serial.read(100)
+                if len(garbage) == 100:
+                    raise IOError("Device keeps sending data")
+                response += garbage
+                raise SPError("Sent '%s' and received error: '%s'" % 
+                              (com.encode('string_escape'), response.encode('string_escape')))
     
     def _tryRecover(self):
         # no other access to the serial port should be done
@@ -261,7 +260,7 @@ class SpectraPro(model.Actuator):
             logging.info("Failed to disable echo, hopping the device has not echo anyway")
         
         # empty the serial port
-        self._serial.timeout = 1
+        self._serial.timeout = 0.1
         garbage = self._serial.read(100)
         if len(garbage) == 100:
             raise IOError("Device keeps sending data")
@@ -307,9 +306,7 @@ class SpectraPro(model.Actuator):
         # non-digit*,digits=grating number,spaces,"Not Installed"\r\n
         # non-digit*,digits=grating number,space+,digit+:g/mm,space*,"g/mm BLZ=", space*,digit+:blaze wl in nm,space*,"nm"\r\n
 
-        # FIXME does the response include "\r\n"?
         res = self._sendQuery("?gratings")
-        #TODO
         gratings = {}
         for line in res.split("\n"):
             m = self.RE_NOTINSTALLED.search(line)
@@ -319,7 +316,7 @@ class SpectraPro(model.Actuator):
             m = self.RE_GRATING.search(line)
             if not m:
                 logging.debug("Failed to decode grating description '%s'", line)
-            num = m.group(1)
+            num = int(m.group(1))
             desc = m.group(2)
             # TODO: provide a nicer description, using RE_INSTALLED?
             gratings[num] = desc
@@ -417,7 +414,19 @@ class SpectraPro(model.Actuator):
     
     
     # high-level methods (interface)
-    
+    # TODO call at the end of an action
+    def _updatePosition(self):
+        """
+        update the position VA
+        Note: it should not be called while holding _ser_access
+        """
+        with self._ser_access:
+            pos = {"wavelength": self.GetWavelength()}
+        
+        # it's read-only, so we change it via _value
+        self.position._value = pos
+        self.position.notify(self.position.value)
+        
     def _setGrating(self, g):
         """
         Setter for the grating VA.
@@ -433,6 +442,8 @@ class SpectraPro(model.Actuator):
             # let's see what is the actual grating
             g = self.GetGrating()
         
+        # after changing the grating, the wavelength might be different
+        self._updatePosition()
         return g
     
     
@@ -473,6 +484,7 @@ class SpectraPro(model.Actuator):
         with self._ser_access:
             pos = self.GetWavelength() + shift
             self.SetWavelength(pos)
+        self._updatePosition()
         
     def _doSetWavelengthAbs(self, pos):
         """
@@ -480,6 +492,7 @@ class SpectraPro(model.Actuator):
         """
         with self._ser_access:
             self.SetWavelength(pos)
+        self._updatePosition()
     
     def stop(self):
         """
