@@ -34,7 +34,9 @@ import odemis.gui.comp.mscviewport as mscp
 import odemis.gui.comp.slider as slide
 import odemis.gui.comp.stream as strm
 import odemis.gui.comp.text as txt
+import odemis.gui.img.data as img
 import wx
+import wx.combo
 import wx.lib.buttons
 import wx.xrc as xrc
 
@@ -677,7 +679,7 @@ class UnitFloatSliderHandler(xrc.XmlResourceHandler):
             logging.warning("Incorrect range between %r and %r", rng[0], rng[1])
             rng = (rng[0], rng[1] + 1.0)
 
-        accuracy=self.GetLong('accuracy', -1)
+        accuracy = self.GetLong('accuracy', -1)
         if accuracy == -1:
             accuracy = None
 
@@ -697,6 +699,45 @@ class UnitFloatSliderHandler(xrc.XmlResourceHandler):
         self.SetupWindow(slider)
         return slider
 
+####################################################################
+# OwnerDrawnComboBox Handlers
+#
+# This handler was needed because the one included with wxPython
+# and XRCed did not allow for the alteration of the down button.
+####################################################################
+
+class OwnerDrawnComboBoxHandler(xrc.XmlResourceHandler):
+    def __init__(self):
+        xrc.XmlResourceHandler.__init__(self)
+        # Specify the styles recognized by objects of this type
+        self.AddStyle("wxCB_SIMPLE", wx.CB_SIMPLE)
+        self.AddStyle("wxCB_DROPDOWN", wx.CB_DROPDOWN)
+        self.AddStyle("wxCB_READONLY", wx.CB_READONLY)
+        self.AddStyle("wxCB_SORT", wx.CB_SORT)
+        self.AddStyle("wxODCB_STD_CONTROL_PAINT", wx.combo.ODCB_STD_CONTROL_PAINT)
+        self.AddStyle("wxODCB_DCLICK_CYCLES", wx.combo.ODCB_DCLICK_CYCLES)
+        self.AddStyle("wxTE_PROCESS_ENTER", wx.TE_PROCESS_ENTER)
+
+        self.AddWindowStyles()
+
+    # This method and the next one are required for XmlResourceHandlers
+    def CanHandle(self, node):
+        capable = self.IsOfClass(node, "OwnerDrawnComboBox")
+        return capable
+
+    def DoCreateResource(self):
+        assert self.GetInstance() is None
+
+        # Now create the object
+        new_ctrl = wx.combo.OwnerDrawnComboBox(self.GetParentAsWindow(),
+                                            id=self.GetID(),
+                                            pos=self.GetPosition(),
+                                            size=self.GetSize(),
+                                            style=self.GetStyle())
+        new_ctrl.SetButtonBitmaps(img.getbtn_downBitmap(), pushButtonBg=False)
+        self.SetupWindow(new_ctrl)
+        return new_ctrl
+
 HANDLER_CLASS_LIST = [
                       CustomStreamPanelEntryXmlHandler,
                       FixedStreamPanelEntryXmlHandler,
@@ -707,6 +748,7 @@ HANDLER_CLASS_LIST = [
                       ImageTextButtonHandler,
                       ImageTextToggleButtonHandler,
                       MicroscopeViewportXmlHandler,
+                      OwnerDrawnComboBoxHandler,
                       PopupImageButtonHandler,
                       StreamPanelXmlHandler,
                       SuggestTextCtrlHandler,
