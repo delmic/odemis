@@ -339,15 +339,15 @@ class GUIMicroscope(object):
         # the view layout
         # TODO maybe start with just one view
         self.viewLayout = model.IntEnumerated(VIEW_LAYOUT_22,
-                                              choices=[VIEW_LAYOUT_ONE,
+                                              choices=set([VIEW_LAYOUT_ONE,
                                                        VIEW_LAYOUT_22,
-                                                       VIEW_LAYOUT_FULLSCREEN])
+                                                       VIEW_LAYOUT_FULLSCREEN]))
 
         self.opticalState = model.IntEnumerated(STATE_OFF,
-                                choices=[STATE_OFF, STATE_ON, STATE_PAUSE])
+                                choices=set([STATE_OFF, STATE_ON, STATE_PAUSE]))
         self.opticalState.subscribe(self.onOpticalState)
         self.emState = model.IntEnumerated(STATE_OFF,
-                                choices=[STATE_OFF, STATE_ON, STATE_PAUSE])
+                                choices=set([STATE_OFF, STATE_ON, STATE_PAUSE]))
         self.emState.subscribe(self.onEMState)
 
     # Getters and Setters
@@ -428,7 +428,7 @@ class GUIMicroscope(object):
                 except:
                     # Too bad. let's just do nothing then.
                     logging.debug("Ebeam doesn't support setting energy to 0")
-                 
+
         elif state == STATE_ON:
             # TODO anything else to turn on?
             if self.ebeam:
