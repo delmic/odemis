@@ -655,7 +655,7 @@ class SEMComedi(model.HwComponent):
         # no compatible dwell time found
         raise ValueError("No compatible dwell time found for %g s." % period)
                 
-    def find_best_oversampling_rate(self, period, max_osr=1000000):
+    def find_best_oversampling_rate(self, period, max_osr=100):
         """
         Returns the closest dwell time _longer_ than the given time compatible
           with the output device and the highest over-sampling rate compatible 
@@ -999,6 +999,8 @@ class SEMComedi(model.HwComponent):
         wcmd.stop_src = comedi.TRIG_COUNT
         wcmd.stop_arg = nwscans
         self._prepare_command(wcmd)
+        # on the NI 62xx, counter is same as input (2**24), so it should always be fine 
+        assert(wcmd.stop_arg == nwscans)  
 
         # create a command for reading, with a period osr times smaller than the write
         rcmd = comedi.cmd_struct()
@@ -1016,6 +1018,7 @@ class SEMComedi(model.HwComponent):
 
         # Checks the periods are the same
         assert((rcmd.scan_begin_arg * osr) == wcmd.scan_begin_arg)
+        assert(rcmd.stop_arg == nrscans) # FIXME: max rcmd.stop_arg is 2**24 => do multiple scans
         if wcmd.scan_begin_arg != period_ns:
             logging.warning("Asked dwell time of %g s, but got %g s", period, wcmd.scan_begin_arg / 1e9)
 
