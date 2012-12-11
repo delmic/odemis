@@ -30,7 +30,7 @@ logging.getLogger().setLevel(logging.INFO)
 if os.name == "nt":
     PORT = "COM1"
 else:
-    PORT = "/dev/ttyPIE" #"/dev/ttyUSB0"
+    PORT = "/dev/ttyPIGCS" #"/dev/ttyUSB0"
 
 CONFIG_BUS_BASIC = {"x":(1, 1, False)}
 CONFIG_BUS_TWO = {"x":(1, 1, False), "y":(2, 1, False)}  
