@@ -22,8 +22,8 @@ def GetRGB(im, x, y):
 class TestDataArray2wxImage(unittest.TestCase):
     def test_simple(self):
         # test with everything auto
-        size = (1024, 1024)
-        grey_img = numpy.zeros(size, dtype="uint16") + 1500 
+        size = (1024, 512)
+        grey_img = numpy.zeros(size[-1:-3:-1], dtype="uint16") + 1500 
         
         # one colour
         out = DataArray2wxImage(grey_img)
@@ -54,7 +54,7 @@ class TestDataArray2wxImage(unittest.TestCase):
         # first 8 bit => no change
         size = (1024, 1024)
         depth = 256
-        grey_img = numpy.zeros(size, dtype="uint8") + depth/2
+        grey_img = numpy.zeros(size[-1:-3:-1], dtype="uint8") + depth/2
         grey_img[0, 0] = 10
         grey_img[0, 1] = depth - 10
         
@@ -67,7 +67,7 @@ class TestDataArray2wxImage(unittest.TestCase):
         
         # 16 bits
         depth = 4096
-        grey_img = numpy.zeros(size, dtype="uint16") + depth/2 
+        grey_img = numpy.zeros(size[-1:-3:-1], dtype="uint16") + depth/2 
         grey_img[0, 0] = 100
         grey_img[0, 1] = depth - 100
         
@@ -82,7 +82,7 @@ class TestDataArray2wxImage(unittest.TestCase):
         """test with brightness and contrast to specific corner values"""
         size = (1024, 1024)
         depth = 4096
-        grey_img = numpy.zeros(size, dtype="uint16") + depth/2 
+        grey_img = numpy.zeros(size[-1:-3:-1], dtype="uint16") + depth/2 
         grey_img[0, 0] = 100
         grey_img[0, 1] = depth - 100
         
@@ -134,7 +134,7 @@ class TestDataArray2wxImage(unittest.TestCase):
         """test with tint"""
         size = (1024, 1024)
         depth = 4096
-        grey_img = numpy.zeros(size, dtype="uint16") + depth/2 
+        grey_img = numpy.zeros(size[-1:-3:-1], dtype="uint16") + depth/2 
         grey_img[0, 0] = 0
         grey_img[0, 1] = depth - 1
         
@@ -154,10 +154,10 @@ class TestDataArray2wxImage(unittest.TestCase):
 class TestWxImage2NDImage(unittest.TestCase):
     
     def test_simple(self):
-        shape = (32, 32)
-        wximage = wx.EmptyImage(*shape) # black RGB
+        size = (32, 64)
+        wximage = wx.EmptyImage(*size) # black RGB
         ndimage = wxImage2NDImage(wximage)
-        self.assertEqual(ndimage.shape[0:2], shape)
+        self.assertEqual(ndimage.shape[0:2], size[-1:-3:-1])
         self.assertEqual(ndimage.shape[2], 3) # RGB
         self.assertTrue((ndimage[0,0] == [0, 0, 0]).all())
     

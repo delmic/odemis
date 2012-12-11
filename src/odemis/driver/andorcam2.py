@@ -1124,10 +1124,11 @@ class AndorCam2(model.DigitalCamera):
     def _buffer_as_array(self, cbuffer, size, metadata=None):
         """
         Converts the buffer allocated for the image as an ndarray. zero-copy
+        size (2-tuple of int): width, height
         return an ndarray
         """
         p = cast(cbuffer, POINTER(c_uint16))
-        ndbuffer = numpy.ctypeslib.as_array(p, size)
+        ndbuffer = numpy.ctypeslib.as_array(p, (size[1], size[0])) # numpy shape is H, W 
         dataarray = model.DataArray(ndbuffer, metadata)
         return dataarray
         

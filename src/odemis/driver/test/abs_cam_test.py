@@ -97,7 +97,7 @@ class VirtualTestCam(object):
         im = self.camera.data.get()
         duration = time.time() - start
 
-        self.assertEqual(im.shape, self.size)
+        self.assertEqual(im.shape, self.size[-1:-3:-1])
         self.assertGreaterEqual(duration, exposure, "Error execution took %f s, less than exposure time %d." % (duration, exposure))
         self.assertIn(model.MD_EXP_TIME, im.metadata)
         
@@ -111,7 +111,7 @@ class VirtualTestCam(object):
         im = self.camera.data.get()
         duration = time.time() - start
 
-        self.assertEqual(im.shape, self.size)
+        self.assertEqual(im.shape, self.size[-1:-3:-1])
         self.assertGreaterEqual(duration, exposure, "Error execution took %f s, less than exposure time %d." % (duration, exposure))
         self.assertIn(model.MD_EXP_TIME, im.metadata)
         
@@ -120,7 +120,7 @@ class VirtualTestCam(object):
         im = self.camera.data.get()
         duration = time.time() - start
 
-        self.assertEqual(im.shape, self.size)
+        self.assertEqual(im.shape, self.size[-1:-3:-1])
         self.assertGreaterEqual(duration, exposure, "Error execution took %f s, less than exposure time %d." % (duration, exposure))
         self.assertIn(model.MD_EXP_TIME, im.metadata)
 
@@ -184,7 +184,7 @@ class VirtualTestCam(object):
         im = self.camera.data.get()
         duration = time.time() - start
 
-        self.assertEqual(im.shape, self.size)
+        self.assertEqual(im.shape, self.size[-1:-3:-1])
         self.assertGreaterEqual(duration, exposure/2, "Error execution took %f s, less than exposure time %d." % (duration, exposure))
         self.assertIn(model.MD_EXP_TIME, im.metadata)
         
@@ -248,7 +248,7 @@ class VirtualTestCam(object):
         """
         callback for df of test_acquire_flow()
         """
-        self.assertEqual(image.shape, self.size)
+        self.assertEqual(image.shape, self.size[-1:-3:-1])
         self.assertIn(model.MD_EXP_TIME, image.metadata)
         self.acq_dates[0].add(image.metadata[model.MD_ACQ_DATE])
 #        print "Received an image"
@@ -261,7 +261,7 @@ class VirtualTestCam(object):
         """
         callback for df of test_acquire_flow()
         """
-        self.assertEqual(image.shape, self.size)
+        self.assertEqual(image.shape, self.size[-1:-3:-1])
         self.assertIn(model.MD_EXP_TIME, image.metadata)
         self.acq_dates[1].add(image.metadata[model.MD_ACQ_DATE])
 #        print "Received an image in 2"
@@ -294,7 +294,7 @@ class VirtualTestCam(object):
         im = self.camera.acquireOne()
         duration = time.time() - start
     
-        self.assertEqual(im.shape, self.size) # TODO a small size diff is fine if bigger than requested
+        self.assertEqual(im.shape, self.size[-1:-3:-1]) # TODO a small size diff is fine if bigger than requested
         self.assertGreaterEqual(duration, exposure, "Error execution took %f s, less than exposure time %d." % (duration, exposure))
         self.assertIn(model.MD_EXP_TIME, im.metadata)
         
@@ -316,7 +316,7 @@ class VirtualTestCam(object):
         im = self.camera.data.get()
         duration = time.time() - start
 
-        self.assertEqual(im.shape, self.size)
+        self.assertEqual(im.shape, self.size[-1:-3:-1])
         self.assertGreaterEqual(duration, exposure, "Error execution took %f s, less than exposure time %d." % (duration, exposure))
         self.assertIn(model.MD_EXP_TIME, im.metadata)
         

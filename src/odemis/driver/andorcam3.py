@@ -750,20 +750,21 @@ class AndorCam3(model.DigitalCamera):
     def _buffer_as_array(self, cbuffer, size, metadata=None):
         """
         Converts the buffer allocated for the image as an ndarray. zero-copy
+        size (2-tuple of int): width, height
         return a DataArray (metadata not initialised)
         """
         # actual size of a line in bytes (not pixel)
         try:
-            stride = self.GetInt( u"AOIStride")
+            stride = self.GetInt(u"AOIStride")
         except ATError:
             # SimCam doesn't support stride
-            stride = self.GetInt( u"AOIWidth") * 2
+            stride = self.GetInt(u"AOIWidth") * 2
             
         p = cast(cbuffer, POINTER(c_uint16))
-        ndbuffer = numpy.ctypeslib.as_array(p, (stride / 2, size[1]))
+        ndbuffer = numpy.ctypeslib.as_array(p, (size[1], stride / 2)) # numpy shape is H, W 
         dataarray = model.DataArray(ndbuffer, metadata)
         # crop the array in case of stride (should not cause copy)
-        return dataarray[:size[0],:]
+        return dataarray[:,:size[0]]
         
     def acquireOne(self):
         """
