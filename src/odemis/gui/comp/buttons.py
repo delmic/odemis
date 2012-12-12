@@ -1,17 +1,28 @@
 #-*- coding: utf-8 -*-
-'''
-@author: Rinze de Laat
+"""
 
-Copyright © 2012 Rinze de Laat, Delmic
+:author: Rinze de Laat
+:copyright: © 2012 Rinze de Laat, Delmic
 
-This file is part of Odemis.
+.. license::
 
-Odemis is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 2 of the License, or (at your option) any later version.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+    This file is part of Odemis.
 
-You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
-'''
+    Odemis is free software: you can redistribute it and/or modify it under
+    the terms of the GNU General Public License as published by the Free
+    Software Foundation, either version 2 of the License, or (at your
+    option) any later version.
+
+    Odemis is distributed in the hope that it will be useful, but WITHOUT
+    ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+    FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
+    more details.
+
+    You should have received a copy of the GNU General Public License along
+    with Odemis. If not, see http://www.gnu.org/licenses/.
+
+"""
 
 # This module contains various custom button classes used throughout the odemis
 # project.
@@ -30,7 +41,12 @@ import odemis.gui.img.data as img
 from odemis.gui.log import log
 
 def resize_bmp(btn_size, bmp):
-    """ Resize the given image so it will match the size of the button """
+    """ Resize the bitmap image so it will match the given button size
+
+    :param btn_size: Size tuple (w, h)
+    :param bmp: Bitmap image (wx.Bitmap)
+    :rtype: wx.Bitmap
+    """
 
     if btn_size:
         btn_width, _ = btn_size
@@ -48,8 +64,8 @@ def resize_bmp(btn_size, bmp):
 class ImageButton(GenBitmapButton):
     """ Graphical button with hover effect.
 
-    The background colour is set to that of its parent, or to the background
-    colour of an explicitly defined window called background_parent.
+    The background colour is set to that of its direct parent, or to the
+    background colour of an explicitly defined window called background_parent.
     """
 
     labelDelta = 0
@@ -59,17 +75,21 @@ class ImageButton(GenBitmapButton):
         used to determine the background colour of the button. Otherwise, the
         direct parent will be used.
 
-        parent (wx.Window): parent window
-        id (int):           optional id
-        bitmap (wx.Bitmap): default button face
-        pos ((x, y)):       button position
-        size ((w, h)):      button size
+        :param parent: (wx.Window) parent window
+        :param id: (int) button id (optional)
+        :param bitmap: (wx.Bitmap) default button face. Use `SetBitmaps` to set
+                the other faces (e.g. hover, active)
+        :param pos: (int, int)) button position
+        :param size: (int, int) button size
+        :param background_parent: (wx.Window) any parent higher up in the
+                hierarchy from which to pick the background colour. (optional)
+        :param label_delta: (int) the number of pixels to move button text down
+                and to the right when it is pressed, to create an indentation
+                effect. (This is used by subclasses that allow text to be
+                displayed)
 
-        background_parent=: any parent higher up in the hierarchy from which to
-                            pick the background colour.
-        label_delta (int):  the number of pixel to move button text down and to
-                            the right when it is pressed
         """
+
         if kwargs.has_key('style'):
             kwargs['style'] |= wx.NO_BORDER
         else:
@@ -114,30 +134,42 @@ class ImageButton(GenBitmapButton):
         self.Bind(wx.EVT_ENTER_WINDOW, self.OnEnter)
         self.Bind(wx.EVT_LEAVE_WINDOW, self.OnLeave)
 
+    def SetBitmaps(self, bmp_h=None, bmp_sel=None):
+        """ This method sets additional bitmaps for hovering and selection """
+
+        if bmp_h:
+            bmp_h = resize_bmp(self.GetSize(), bmp_h)
+            self.SetBitmapHover(bmp_h)
+        if bmp_sel:
+            bmp_sel = resize_bmp(self.GetSize(), bmp_sel)
+            self.SetBitmapSelected(bmp_sel)
+
+    def SetBitmapHover(self, bitmap):
+        """ Set bitmap to display when the button is hovered over"""
+        self.bmpHover = bitmap
+
+    def GetBitmapHover(self):
+        """ Return the hover bitmap
+
+        :rtype: wx.Bitmap
+        """
+        return self.bmpHover
+
     def OnEnter(self, evt):
+        """ Event handler that fires when the mouse cursor enters the button """
         if self.bmpHover:
             self.hovering = True
             self.Refresh()
 
     def OnLeave(self, evt):
+        """ Event handler that fires when the mouse cursor leaves the button """
         if self.bmpHover:
             self.hovering = False
             self.Refresh()
 
-    def SetBitmaps(self, bmp_h=None):
-        """ This method sets additional bitmaps for hovering and selection """
-        if bmp_h:
-            bmp_h = resize_bmp(self.GetSize(), bmp_h)
-            self.SetBitmapHover(bmp_h)
-
-    def GetBitmapHover(self):
-        return self.bmpHover
-
-    def SetBitmapHover(self, bitmap):
-        """Set bitmap to display when the button is hovered over"""
-        self.bmpHover = bitmap
-
     def DrawLabel(self, dc, width, height, dx=0, dy=0):
+        """ Label drawing method called by the OnPaint event handler """
+
         bmp = self.bmpLabel
         if self.hovering and self.bmpHover:
             bmp = self.bmpHover
@@ -155,6 +187,7 @@ class ImageButton(GenBitmapButton):
         dc.DrawBitmap(bmp, (width - bw) / 2, (height - bh) / 2, hasMask)
 
     def InitColours(self):
+        """ Deprecated? """
         GenBitmapButton.InitColours(self)
         if self.background_parent:
             self.faceDnClr = self.background_parent.GetBackgroundColour()
@@ -162,13 +195,17 @@ class ImageButton(GenBitmapButton):
             self.faceDnClr = self.GetParent().GetBackgroundColour()
 
     def SetLabelDelta(self, delta):
+        """ Change the label delta value
+
+        :param delta: (int) number of pixels to move the text down and to the
+            right when the button is activated.
+        """
         self.labelDelta = delta
 
 class ImageTextButton(GenBitmapTextButton):
     """ Graphical button with text and hover effect.
 
-    rescale: if the rescale keyword argument is True and the button has a size,
-    the background image will be scaled to fit.
+
 
     The text can be align using the following styles:
     wx.ALIGN_LEFT, wx.ALIGN_CENTER, wx.ALIGN_RIGHT.
@@ -184,16 +221,20 @@ class ImageTextButton(GenBitmapTextButton):
 
     def __init__(self, *args, **kwargs):
         """
-        parent (wx.Window): parent window
-        id (int):           optional id
-        bitmap (wx.Bitmap): default button face
-        pos ((x, y)):       button position
-        size ((w, h)):      button size
-
-        background_parent=: any parent higher up in the hierarchy from which to
-                            pick the background colour.
-        label_delta (int):  the number of pixel to move button text down and to
-                            the right when it is pressed
+        :param parent: (wx.Window) parent window
+        :param id: (int) button id (optional)
+        :param bitmap: (wx.Bitmap) default button face. Use `SetBitmaps` to set
+                       the other faces (e.g. hover, active)
+        :param pos: (int, int)) button position
+        :param size: (int, int) button size
+        :param background_parent: (wx.Window) any parent higher up in the
+                hierarchy from which to pick the background colour. (optional)
+        :param label_delta: (int) the number of pixels to move button text down
+                and to the right when it is pressed, to create an indentation
+                effect. (This is used by subclasses that allow text to be
+                displayed)
+        :param rescale: (bool) if set to True and the button has a size, the
+                background image will be scaled to fit the button.
         """
         kwargs['style'] = kwargs.get('style', 0) | wx.NO_BORDER
 
@@ -235,7 +276,6 @@ class ImageTextButton(GenBitmapTextButton):
 
     def SetBitmaps(self, bmp_h=None, bmp_sel=None):
         """ This method sets additional bitmaps for hovering and selection """
-
         if bmp_h:
             bmp_h = resize_bmp(self.GetSize(), bmp_h)
             self.SetBitmapHover(bmp_h)
@@ -243,24 +283,31 @@ class ImageTextButton(GenBitmapTextButton):
             bmp_sel = resize_bmp(self.GetSize(), bmp_sel)
             self.SetBitmapSelected(bmp_sel)
 
-    def GetBitmapHover(self):
-        return self.bmpHover
-
     def SetBitmapHover(self, bitmap):
-        """Set bitmap to display when the button is hovered over"""
+        """ Set bitmap to display when the button is hovered over"""
         self.bmpHover = bitmap
 
+    def GetBitmapHover(self):
+        """ Return the hover bitmap
+
+        :rtype: wx.Bitmap
+        """
+        return self.bmpHover
+
     def OnEnter(self, evt):
+        """ Event handler that fires when the mouse cursor enters the button """
         if self.bmpHover:
             self.hovering = True
             self.Refresh()
 
     def OnLeave(self, evt):
+        """ Event handler that fires when the mouse cursor leaves the button """
         if self.bmpHover:
             self.hovering = False
             self.Refresh()
 
     def DrawLabel(self, dc, width, height, dx=0, dy=0):
+        """ Label drawing method called by the OnPaint event handler """
 
         bmp = self.bmpLabel
 
@@ -315,6 +362,7 @@ class ImageTextButton(GenBitmapTextButton):
         dc.DrawText(label, pos_x, (height - th) / 2 + dy + self.padding_y)      # draw the text
 
     def InitColours(self):
+        """ Deprecated? """
         GenBitmapTextButton.InitColours(self)
         if self.background_parent:
             self.faceDnClr = self.background_parent.GetBackgroundColour()
@@ -329,16 +377,20 @@ class ImageToggleButton(GenBitmapToggleButton):  #pylint: disable=R0901
 
     def __init__(self, *args, **kwargs):
         """
-        parent (wx.Window): parent window
-        id (int):           optional id
-        bitmap (wx.Bitmap): default button face
-        pos ((x, y)):       button position
-        size ((w, h)):      button size
+        :param parent: (wx.Window) parent window
+        :param id: (int) button id (optional)
+        :param bitmap: (wx.Bitmap) default button face. Use `SetBitmaps` to set
+                the other faces (e.g. hover, active)
+        :param pos: (int, int)) button position
+        :param size: (int, int) button size
 
-        background_parent=: any parent higher up in the hierarchy from which to
-                            pick the background colour.
-        label_delta (int):  the number of pixel to move button text down and to
-                            the right when it is pressed
+        :param background_parent: (wx.Window) any parent higher up in the
+                hierarchy from which to pick the background colour. (optional)
+        :param label_delta: (int) the number of pixels to move button text down
+                and to the right when it is pressed, to create an indentation
+                effect. (This is used by subclasses that allow text to be
+                displayed)
+
         """
         kwargs['style'] = wx.NO_BORDER
         self.labelDelta = kwargs.pop('label_delta', 0)
@@ -397,30 +449,44 @@ class ImageToggleButton(GenBitmapToggleButton):  #pylint: disable=R0901
             bmp_sel = resize_bmp(self.GetSize(), bmp_sel)
             self.SetBitmapSelectedHover(bmp_sel)
 
-    def GetBitmapHover(self):
-        return self.bmpHover
-
     def SetBitmapHover(self, bitmap):
-        """Set bitmap to display when the button is hovered over"""
+        """ Set bitmap to display when the button is hovered over"""
         self.bmpHover = bitmap
 
-    def GetBitmapSelectedHover(self):
-        return self.bmpSelectedHover
+    def GetBitmapHover(self):
+        """ Return the hover bitmap
+
+        :rtype: wx.Bitmap
+        """
+        return self.bmpHover
 
     def SetBitmapSelectedHover(self, bitmap):
+        """ Set bitmap to display when the button is hovered over while selected
+        """
         self.bmpSelectedHover = bitmap
 
+    def GetBitmapSelectedHover(self):
+        """ Return the hover-over-selected-button bitmap
+
+        :rtype: wx.Bitmap
+        """
+        return self.bmpSelectedHover
+
     def OnEnter(self, evt):
+        """ Event handler that fires when the mouse cursor enters the button """
         if self.bmpHover:
             self.hovering = True
             self.Refresh()
 
     def OnLeave(self, evt):
+        """ Event handler that fires when the mouse cursor leaves the button """
         if self.bmpHover:
             self.hovering = False
             self.Refresh()
 
     def DrawLabel(self, dc, width, height, dx=0, dy=0):
+        """ Label drawing method called by the OnPaint event handler """
+
         bmp = self.bmpLabel
         if self.hovering and self.bmpHover:
             bmp = self.bmpHover
@@ -440,6 +506,7 @@ class ImageToggleButton(GenBitmapToggleButton):  #pylint: disable=R0901
         dc.DrawBitmap(bmp, (width - bw) / 2, (height - bh) / 2, hasMask)
 
     def InitColours(self):
+        """ Deprecated?? """
         GenBitmapButton.InitColours(self)
         if self.background_parent:
             self.faceDnClr = self.background_parent.GetBackgroundColour()
@@ -456,16 +523,19 @@ class ImageTextToggleButton(GenBitmapTextToggleButton):
 
     def __init__(self, *args, **kwargs):
         """
-        parent (wx.Window): parent window
-        id (int):           optional id
-        bitmap (wx.Bitmap): default button face
-        pos ((x, y)):       button position
-        size ((w, h)):      button size
+        :param parent: (wx.Window) parent window
+        :param id: (int) button id (optional)
+        :param bitmap: (wx.Bitmap) default button face. Use `SetBitmaps` to set
+                the other faces (e.g. hover, active)
+        :param pos: (int, int)) button position
+        :param size: (int, int) button size
 
-        background_parent=: any parent higher up in the hierarchy from which to
-                            pick the background colour.
-        label_delta (int):  the number of pixel to move button text down and to
-                            the right when it is pressed
+        :param background_parent: (wx.Window) any parent higher up in the
+                hierarchy from which to pick the background colour. (optional)
+        :param label_delta: (int) the number of pixels to move button text down
+                and to the right when it is pressed, to create an indentation
+                effect. (This is used by subclasses that allow text to be
+                displayed)
         """
 
         kwargs['style'] = kwargs.get('style', 0) | wx.NO_BORDER
@@ -517,30 +587,45 @@ class ImageTextToggleButton(GenBitmapTextToggleButton):
             bmp_sel_h = resize_bmp(self.GetSize(), bmp_sel_h)
             self.SetBitmapSelectedHover(bmp_sel_h)
 
-    def GetBitmapHover(self):
-        return self.bmpHover
-
     def SetBitmapHover(self, bitmap):
-        """Set bitmap to display when the button is hovered over"""
+        """ Set bitmap to display when the button is hovered over"""
         self.bmpHover = bitmap
 
-    def GetBitmapSelectedHover(self):
-        return self.bmpSelectedHover
+    def GetBitmapHover(self):
+        """ Return the hover bitmap
+
+        :rtype: wx.Bitmap
+        """
+        return self.bmpHover
 
     def SetBitmapSelectedHover(self, bitmap):
+        """ Set bitmap to display when the button is hovered over while selected
+        """
         self.bmpSelectedHover = bitmap
 
+    def GetBitmapSelectedHover(self):
+        """ Return the hover-over-selected-button bitmap
+
+        :rtype: wx.Bitmap
+        """
+        return self.bmpSelectedHover
+
+
     def OnEnter(self, evt):
+        """ Event handler that fires when the mouse cursor enters the button """
         if self.bmpHover:
             self.hovering = True
             self.Refresh()
 
     def OnLeave(self, evt):
+        """ Event handler that fires when the mouse cursor leaves the button """
         if self.bmpHover:
             self.hovering = False
             self.Refresh()
 
     def DrawLabel(self, dc, width, height, dx=0, dy=0):
+        """ Label drawing method called by the OnPaint event handler """
+
         bmp = self.bmpLabel
         if bmp is not None:     # if the bitmap is used
             if self.hovering and self.bmpHover:
@@ -583,6 +668,7 @@ class ImageTextToggleButton(GenBitmapTextToggleButton):
         dc.DrawText(label, pos_x, (height - th) / 2 + dy + 1) # draw the text
 
     def InitColours(self):
+        """ Deprecated?? """
         GenBitmapButton.InitColours(self)
         if self.background_parent:
             self.faceDnClr = self.background_parent.GetBackgroundColour()
@@ -600,6 +686,21 @@ class ViewButton(ImageTextToggleButton):
     """
 
     def __init__(self, *args, **kwargs):
+        """
+        :param parent: (wx.Window) parent window
+        :param id: (int) button id (optional)
+        :param bitmap: (wx.Bitmap) default button face. Use `SetBitmaps` to set
+                the other faces (e.g. hover, active)
+        :param pos: (int, int)) button position
+        :param size: (int, int) button size
+
+        :param background_parent: (wx.Window) any parent higher up in the
+                hierarchy from which to pick the background colour. (optional)
+        :param label_delta: (int) the number of pixels to move button text down
+                and to the right when it is pressed, to create an indentation
+                effect. (This is used by subclasses that allow text to be
+                displayed)
+        """
         ImageTextToggleButton.__init__(self, *args, **kwargs)
 
         # The image to use as an overlay. It needs to be set using the
@@ -622,7 +723,9 @@ class ViewButton(ImageTextToggleButton):
         self.overlay_height = height - self.overlay_border * 2
 
     def OnLeftDown(self, event):
-
+        """ This event handler is fired on left mouse button events, but it
+        ignores those events if the button is already active.
+        """
         if not self.IsEnabled() or not self.up:
             log.debug("ViewButton already active")
             return
@@ -633,9 +736,10 @@ class ViewButton(ImageTextToggleButton):
         self.Refresh()
 
     def set_overlay(self, image):
-        """
-        Changes the image (preview) of the button
-        image (wx.Image or None): new image. If None, a stock image is used
+        """ Changes the preview image of the button
+
+        :param image: (wx.Image or None) Image to be displayed or a default
+                stock image.
         """
         log.debug("Setting overlay with image %s", image)
 
@@ -691,6 +795,7 @@ class ViewButton(ImageTextToggleButton):
         self.Refresh()
 
     def DrawLabel(self, dc, width, height, dx=0, dy=0):
+        """ Draw method called by the `OnPaint` event handler """
         ImageTextToggleButton.DrawLabel(self, dc, width, height, dx, dy)
 
         if self.overlay_bitmap is not None:
@@ -702,8 +807,12 @@ class ViewButton(ImageTextToggleButton):
 
 
 class TabButton(ImageTextToggleButton):
+    """ Simple graphical tab switching button """
 
     def OnLeftDown(self, event):
+        """ This event handler is fired on left mouse button events, but it
+        ignores those events if the button is already active.
+        """
         if not self.IsEnabled() or not self.up:
             return
         self.saveUp = self.up
@@ -714,6 +823,8 @@ class TabButton(ImageTextToggleButton):
 
 
 class GraphicRadioButton(ImageTextToggleButton):
+    """ Simple graphical button that can be used to construct radio button sets
+    """
 
     def __init__(self, *args, **kwargs):
         self.value = kwargs.pop('value')
@@ -722,6 +833,9 @@ class GraphicRadioButton(ImageTextToggleButton):
         ImageTextToggleButton.__init__(self, *args, **kwargs)
 
     def OnLeftDown(self, event):
+        """ This event handler is fired on left mouse button events, but it
+        ignores those events if the button is already active.
+        """
         if not self.IsEnabled() or not self.up:
             return
         self.saveUp = self.up
@@ -731,23 +845,23 @@ class GraphicRadioButton(ImageTextToggleButton):
         self.Refresh()
 
 class ColourButton(ImageButton):
-    """ An ImageButton that uses a single-colour bitmap
-    that will be dynamically generated, allowing it to change colour during the
-    buttons life time.
+    """ An ImageButton that has a single colour  background that can be altered.
     """
 
     # The default colour for the colour button
     DEFAULT_COLOR = "#88BA38"
 
     def __init__(self, *args, **kwargs):
-
         colour = kwargs.pop('colour', None)
         self.use_hover = kwargs.pop('use_hover', False)
         ImageButton.__init__(self, *args, **kwargs)
         self.set_colour(colour)
 
     def set_colour(self, colour=None):
-        """ Update the colour button to reflect the provided colour """
+        """ Change the background colour of the button.
+
+            :param colour: (string) Hex colour value (optional)
+        """
 
         self.colour = colour or self.DEFAULT_COLOR
 
@@ -782,10 +896,14 @@ class ColourButton(ImageButton):
         self.Refresh()
 
     def get_colour(self):
+        """ Get the current background colour of the button
+
+        :rtype: (string) Hex colour value
+        """
         return self.colour
 
 class PopupImageButton(ImageTextButton):
-
+    """ This class describes a grahical button with an associated popup menu """
     def __init__(self, *args, **kwargs):
         ImageTextButton.__init__(self, *args, **kwargs)
         self.choices = {}
@@ -793,15 +911,21 @@ class PopupImageButton(ImageTextButton):
         self.Bind(wx.EVT_BUTTON, self.show_menu)
 
     def set_choices(self, choices):
+        """ Set the choices available to the user
+
+        :param choices: [(string, function reference),..]
+        """
         for label, callback in choices.items():
             self.add_choice(label, callback)
 
     def add_choice(self, label, callback, check_enabled=None):
-        """
-        label (str):              Name to be shown in the menu
-        callback (callable):      Function/method to run upon selection
-        check_enabled (callable): Function/method that returns True if the
-                                  menu item should be enabled.
+        """ Add a labeled action to the popup button.
+
+        :param label: Name to be shown in the menu
+        :param callback: Function/method to run upon selection
+        :param check_enabled: Function/method that returns True if the
+            menu item should be enabled.
+
         """
 
         menu_id = wx.NewId()
@@ -811,9 +935,11 @@ class PopupImageButton(ImageTextButton):
         self.menu.AppendItem(menu_item)
 
     def remove_choice(self, label):
+        """ Remove the choice associated with the name `1abel` """
         del self.choices[label]
 
     def show_menu(self, evt):
+        """ Show the popup menu, when there are choices available. """
 
         if not self.choices:
             log.debug("*NOT* Showing PopupImageButton menu, no choices")
@@ -832,6 +958,7 @@ class PopupImageButton(ImageTextButton):
             self.Refresh()
 
     def on_action_select(self, evt):
+        """ When an action is selected, call the linked callback function """
         event_id = evt.GetId()
 
         for label, (menu_item, callback, _) in self.choices.items():
