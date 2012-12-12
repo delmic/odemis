@@ -727,6 +727,7 @@ class OwnerDrawnComboBoxHandler(xrc.XmlResourceHandler):
 
     def DoCreateResource(self):
         assert self.GetInstance() is None
+        print self.GetParamValue('content')
 
         # Now create the object
         new_ctrl = wx.combo.OwnerDrawnComboBox(self.GetParentAsWindow(),

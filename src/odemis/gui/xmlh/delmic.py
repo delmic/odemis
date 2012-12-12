@@ -463,7 +463,7 @@ component.Manager.setTool(c, 'Controls', pos=(0, 2))
 # image. (Which we implemented in the xh_delmic module in this package)
 
 c = component.Component('OwnerDrawnComboBox', ['control','tool'],
-              ['pos', 'size', 'content', 'selection', 'value'],
+              ['pos', 'size'],
               image=images.TreeComboBox.GetImage())
 c.addStyles('wxCB_SIMPLE', 'wxCB_DROPDOWN', 'wxCB_READONLY', 'wxCB_SORT',
             'wxODCB_STD_CONTROL_PAINT', 'wxODCB_DCLICK_CYCLES', 'wxTE_PROCESS_ENTER')

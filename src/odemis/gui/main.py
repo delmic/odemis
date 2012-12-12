@@ -40,7 +40,7 @@ from odemis.gui.controller.views import ViewController, ViewSelector
 from odemis.gui.instrmodel import InstrumentalImage
 from odemis.gui.xmlh import odemis_get_resources
 
-
+# FIXME: move to some sort of config file
 HTML_DOC = os.path.join(os.path.dirname(__file__),
                         "../../../doc/code/_build/html/index.html")
 

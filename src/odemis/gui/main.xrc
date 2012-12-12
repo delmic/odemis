@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<resource class="wxFrame" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
+<resource version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
   <object class="wxFrame" name="fr_main">
     <object class="wxMenuBar">
       <object class="wxMenu">
@@ -44,7 +44,7 @@
       </object>
       <object class="wxMenu">
         <object class="wxMenuItem" name="menu_item_htmldoc">
-          <label>HTML Documentation</label>
+          <label>API Reference</label>
           <enabled>0</enabled>
           <XRCED>
             <assign_var>1</assign_var>
@@ -75,7 +75,6 @@
       </object>
     </object>
     <object class="wxBoxSizer">
-      <orient>wxVERTICAL</orient>
       <object class="sizeritem">
         <object class="wxPanel" name="pnl_tab_buttons">
           <object class="wxBoxSizer">
@@ -663,6 +662,7 @@
         <flag>wxTOP|wxEXPAND</flag>
         <border>2</border>
       </object>
+      <orient>wxVERTICAL</orient>
     </object>
     <title>Odemis</title>
     <centered>1</centered>
@@ -698,10 +698,99 @@
             <object class="sizeritem">
               <object class="wxPanel" name="main_buttons">
                 <object class="wxBoxSizer">
-                  <orient>wxHORIZONTAL</orient>
+                  <orient>wxVERTICAL</orient>
+                  <object class="sizeritem">
+                    <object class="wxFlexGridSizer">
+                      <object class="sizeritem">
+                        <object class="wxStaticText">
+                          <label>Preset</label>
+                        </object>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="OwnerDrawnComboBox" name="cmb_presets">
+                          <size>-1,16</size>
+                          <fg>#2FA7D4</fg>
+                          <bg>#333333</bg>
+                          <style>wxBORDER_NONE|wxCB_DROPDOWN|wxCB_READONLY|wxTE_PROCESS_ENTER</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <flag>wxEXPAND</flag>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="wxStaticText">
+                          <label>Filename</label>
+                        </object>
+                        <flag>wxTOP</flag>
+                        <border>4</border>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="wxBoxSizer">
+                          <object class="sizeritem">
+                            <object class="wxTextCtrl" name="txt_filename">
+                              <size>-1,20</size>
+                              <value>Select a destination file</value>
+                              <fg>#2FA7D4</fg>
+                              <bg>#333333</bg>
+                              <style>wxBORDER_NONE|wxTE_READONLY</style>
+                              <XRCED>
+                                <assign_var>1</assign_var>
+                              </XRCED>
+                            </object>
+                            <option>1</option>
+                            <flag>wxEXPAND</flag>
+                          </object>
+                          <object class="sizeritem">
+                            <object class="ImageTextButton" name="btn_change_file">
+                              <label>change...</label>
+                              <delta>1</delta>
+                              <bitmap>img/btn_64x16.png</bitmap>
+                              <hover>img/btn_64x16_h.png</hover>
+                              <selected>img/btn_64x16_a.png</selected>
+                              <fg>#111111</fg>
+                              <tooltip>Change the filename and destination of the next scan</tooltip>
+                              <XRCED>
+                                <assign_var>1</assign_var>
+                              </XRCED>
+                            </object>
+                          </object>
+                          <orient>wxHORIZONTAL</orient>
+                        </object>
+                        <flag>wxEXPAND</flag>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="wxStaticText">
+                          <label>Destination</label>
+                        </object>
+                        <flag>wxTOP</flag>
+                        <border>2</border>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="wxTextCtrl" name="txt_destination">
+                          <size>200,20</size>
+                          <value>...</value>
+                          <fg>#BFBFBF</fg>
+                          <bg>#333333</bg>
+                          <style>wxBORDER_NONE|wxTE_READONLY</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                      </object>
+                      <cols>2</cols>
+                      <rows>3</rows>
+                      <vgap>5</vgap>
+                      <hgap>10</hgap>
+                      <growablecols>1</growablecols>
+                    </object>
+                    <flag>wxALL|wxEXPAND</flag>
+                    <border>10</border>
+                  </object>
                 </object>
                 <size>400,-1</size>
-                <bg>#4D4D4D</bg>
+                <fg>#DDDDDD</fg>
+                <bg>#333333</bg>
               </object>
               <flag>wxEXPAND</flag>
             </object>
@@ -794,11 +883,11 @@
               </object>
               <option>1</option>
               <flag>wxALL|wxEXPAND</flag>
-              <border>32</border>
+              <border>30</border>
             </object>
             <object class="sizeritem">
-              <object class="wxStaticText" name="lbl_time">
-                <label>9999 s</label>
+              <object class="wxStaticText" name="lbl_acqtimer">
+                <label>∞ s</label>
                 <fg>#DDDDDD</fg>
                 <font>
                   <size>14</size>
@@ -814,7 +903,7 @@
                 </XRCED>
               </object>
               <flag>wxTOP|wxBOTTOM|wxRIGHT|wxALIGN_RIGHT</flag>
-              <border>30</border>
+              <border>23</border>
             </object>
           </object>
           <size>-1,60</size>
@@ -825,18 +914,42 @@
       <object class="sizeritem">
         <object class="wxPanel">
           <object class="wxBoxSizer">
-            <orient>wxVERTICAL</orient>
             <object class="sizeritem">
-              <object class="ImageTextButton" name="btn_acquire">
-                <size>382,-1</size>
-                <label>START</label>
+              <object class="ImageTextButton" name="btn_cancel">
+                <label>cancel</label>
                 <delta>1</delta>
-                <bitmap>img/btn_acquire_image.png</bitmap>
-                <hover>img/btn_acquire_image_h.png</hover>
-                <selected>img/btn_acquire_image_a.png</selected>
-                <fg>#E5E5E5</fg>
+                <bitmap>img/btn_128x48.png</bitmap>
+                <hover>img/btn_128x48_h.png</hover>
+                <selected>img/btn_128x48_a.png</selected>
+                <fg>#1A1A1A</fg>
                 <font>
                   <size>14</size>
+                  <style>normal</style>
+                  <weight>normal</weight>
+                  <underlined>0</underlined>
+                  <family>default</family>
+                  <face>Ubuntu</face>
+                  <encoding>UTF-8</encoding>
+                </font>
+                <style>wxALIGN_CENTRE</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxTOP|wxBOTTOM|wxLEFT</flag>
+              <border>10</border>
+            </object>
+            <orient>wxHORIZONTAL</orient>
+            <object class="sizeritem">
+              <object class="ImageTextButton" name="btn_acquire">
+                <label>START</label>
+                <delta>1</delta>
+                <bitmap>img/btn_acq_img_sml.png</bitmap>
+                <hover>img/btn_acq_img_sml_h.png</hover>
+                <selected>img/btn_acq_img_sml_a.png</selected>
+                <fg>#E5E5E5</fg>
+                <font>
+                  <size>15</size>
                   <style>normal</style>
                   <weight>normal</weight>
                   <underlined>0</underlined>
@@ -859,7 +972,16 @@
       </object>
     </object>
     <title>Image Acquisition</title>
-    <icon>img/icon128.png</icon>
+    <bg>#000000</bg>
+    <font>
+      <size>9</size>
+      <style>normal</style>
+      <weight>normal</weight>
+      <underlined>0</underlined>
+      <family>default</family>
+      <face>Ubuntu</face>
+      <encoding>UTF-8</encoding>
+    </font>
     <style>wxDEFAULT_DIALOG_STYLE|wxRESIZE_BORDER</style>
   </object>
 </resource>
