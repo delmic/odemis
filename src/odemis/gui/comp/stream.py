@@ -27,22 +27,23 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 
+from .buttons import ImageButton, ImageToggleButton, ImageTextToggleButton, \
+    ColourButton, PopupImageButton
+from .foldpanelbar import FoldPanelItem
+from .slider import UnitIntegerSlider
+from .text import SuggestTextCtrl, UnitIntegerCtrl
+from odemis.gui import instrmodel
+from odemis.gui.img.data import getemptyBitmap
+from odemis.gui.log import log
+from odemis.gui.util.conversion import wave2rgb
 import collections
-
+import math
+import odemis.gui.img.data as img
 import wx
 import wx.lib.newevent
 
-import odemis.gui.img.data as img
 
-from odemis.gui.log import log
-from .buttons import ImageButton, ImageToggleButton, \
-    ImageTextToggleButton, ColourButton, PopupImageButton
-from .text import SuggestTextCtrl, UnitIntegerCtrl
-from .foldpanelbar import FoldPanelItem
-from .slider import UnitIntegerSlider
-from odemis.gui.util.conversion import wave2rgb
-from odemis.gui.img.data import getemptyBitmap
-from odemis.gui import instrmodel
+
 
 TEST_STREAM_LST = ["Aap", u"nöot", "noot", "mies", "kees", "vuur",
                   "quantummechnica", "Repelsteeltje", "", "XXX", "a", "aa",
@@ -412,7 +413,10 @@ class StreamPanelEntry(wx.PyPanel):
             self._txt_excitation = UnitIntegerCtrl(self._panel, -1,
                     int(round(self.stream.excitation.value * 1e9)),
                     style=wx.NO_BORDER,
-                    size=(50, -1), min_val=200, max_val=1000, unit='nm')
+                    size=(50, -1),
+                    min_val=int(math.ceil(self.stream.excitation.range[0] * 1e9)),
+                    max_val=int(self.stream.excitation.range[1] * 1e9),
+                    unit='nm')
             self._txt_excitation.SetForegroundColour("#2FA7D4")
             self._txt_excitation.SetBackgroundColour(self.GetBackgroundColour())
 
@@ -445,7 +449,10 @@ class StreamPanelEntry(wx.PyPanel):
             self._txt_emission = UnitIntegerCtrl(self._panel, -1,
                     int(round(self.stream.emission.value * 1e9)),
                     style=wx.NO_BORDER,
-                    size=(50, -1), min_val=200, max_val=1000, unit='nm')
+                    size=(50, -1), 
+                    min_val=int(math.ceil(self.stream.emission.range[0] * 1e9)),
+                    max_val=int(self.stream.emission.range[1] * 1e9),
+                    unit='nm')
             self._txt_emission.SetForegroundColour("#2FA7D4")
             self._txt_emission.SetBackgroundColour(self.GetBackgroundColour())
 
@@ -659,21 +666,27 @@ class StreamPanelEntry(wx.PyPanel):
         evt.Skip()
 
     def on_excitation_text(self, evt):
-        log.debug("Excitation changed")
+#        log.debug("Excitation changed")
         obj = evt.GetEventObject()
-        self.stream.excitation.value = obj.GetValue() * 1e-9
+        wl = (obj.GetValue() or 0) * 1e-9
+        # FIXME: need to turn the text red if the value is the smaller (bigger, maybe not necessary)
+        wl = sorted(self.stream.emission.range + (wl,))[1]
+        self.stream.excitation.value = wl
 
         colour = wave2rgb(self.stream.excitation.value)
-        log.debug("Changing colour to %s", colour)
+#        log.debug("Changing colour to %s", colour)
         self._btn_excitation.set_colour(colour)
 
     def on_emission_text(self, evt):
-        log.debug("Emission changed")
+#        log.debug("Emission changed")
         obj = evt.GetEventObject()
-        self.stream.emission.value = obj.GetValue() * 1e-9
+        wl = (obj.GetValue() or 0) * 1e-9
+        # FIXME: need to turn the text red if the value is the smaller (bigger, maybe not necessary)
+        wl = sorted(self.stream.emission.range + (wl,))[1]
+        self.stream.emission.value = wl 
 
         colour = wave2rgb(self.stream.emission.value)
-        log.debug("Changing colour to %s", colour)
+#        log.debug("Changing colour to %s", colour)
         self._btn_emission.set_colour(colour)
 
         # changing emission should also change the tint
