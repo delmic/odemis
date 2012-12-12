@@ -34,7 +34,7 @@ class Light(model.Emitter):
         model.Emitter.__init__(self, name, role, **kwargs)
         
         self.shape = (1)
-        self.power = model.FloatEnumerated(100, (0, 100), unit="W")
+        self.power = model.FloatEnumerated(100, set([0, 100]), unit="W")
         self.power.subscribe(self._updatePower)
         # just one band: white
         # emissions is list of 0 <= floats <= 1. Always 1.0: cannot lower it.
@@ -69,9 +69,9 @@ class EBeam(model.Emitter):
                                              setter=self.setResolution)
         
         self.dwellTime = model.FloatContinuous(1.0, [1e-9, 10], unit="s")
-        self.energy = model.FloatEnumerated(0, [0, 10e3, 20e3, 30e3], unit="eV",
+        self.energy = model.FloatEnumerated(0, set([0, 10e3, 20e3, 30e3]), unit="eV",
                                            setter=self.setEnergy)
-        self.spotSize = model.FloatEnumerated(1e-9, [1e-9, 1.5e-9, 2e-9, 2.5e-9, 3e-9], unit=u"m", # ~1nm
+        self.spotSize = model.FloatEnumerated(1e-9, set([1e-9, 1.5e-9, 2e-9, 2.5e-9, 3e-9]), unit=u"m", # ~1nm
                                            setter=self.setSpotSize)
     
     def getMetadata(self):
