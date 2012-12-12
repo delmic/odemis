@@ -17,6 +17,11 @@ import sys, os
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 sys.path.insert(0, os.path.abspath('../../src/'))
+sys.path.insert(0, os.path.abspath('.'))
+
+# Ensures that the `__init__` docstring is processed (and appended to the class'
+# docstring).
+autoclass_content = 'both'
 
 # -- General configuration -----------------------------------------------------
 
@@ -28,7 +33,8 @@ sys.path.insert(0, os.path.abspath('../../src/'))
 extensions = ['sphinx.ext.autodoc',
               'sphinx.ext.todo',
               'sphinx.ext.mathjax',
-              'sphinx.ext.viewcode']
+              'sphinx.ext.viewcode',
+              'license']
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -44,7 +50,9 @@ master_doc = 'index'
 
 # General information about the project.
 project = u'Odemis'
-copyright = u'2012, Delmic'
+import datetime
+
+copyright = u'2012-%s, Delmic' % datetime.datetime.now().year
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -77,7 +85,7 @@ add_function_parentheses = True
 
 # If true, the current module name will be prepended to all description
 # unit titles (such as .. function::).
-#add_module_names = True
+add_module_names = False
 
 # If true, sectionauthor and moduleauthor directives will be shown in the
 # output. They are ignored by default.
@@ -118,7 +126,7 @@ html_logo = "_static/logo.png"
 # The name of an image file (within the static path) to use as favicon of the
 # docs.  This file should be a Windows icon file (.ico) being 16x16 or 32x32
 # pixels large.
-#html_favicon = None
+html_favicon = "_static/odemis.ico"
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
@@ -243,3 +251,4 @@ texinfo_documents = [
 
 # How to display URL addresses: 'footnote', 'no', or 'inline'.
 #texinfo_show_urls = 'footnote'
+
