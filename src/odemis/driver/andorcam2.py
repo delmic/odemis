@@ -426,12 +426,12 @@ class AndorCam2(model.DigitalCamera):
         # For the Clara: 0 = conventional, 1 = Extended Near Infra-Red
         self._output_amp = 0 # less noise
         
-        ror_choices = sorted(self.GetReadoutRates())
+        ror_choices = set(self.GetReadoutRates())
         self._readout_rate = max(ror_choices) # default to fast acquisition
         self.readoutRate = model.FloatEnumerated(self._readout_rate, ror_choices,
                                                  unit="Hz", setter=self.setReadoutRate)
         
-        gain_choices = sorted(self.GetPreAmpGains())
+        gain_choices = set(self.GetPreAmpGains())
         self._gain = min(gain_choices) # default to high gain
         self.gain = model.FloatEnumerated(self._gain, gain_choices, unit="",
                                           setter=self.setGain)
@@ -910,7 +910,7 @@ class AndorCam2(model.DigitalCamera):
         """
         maxbinning = self.GetMaximumBinning(AndorV2DLL.RM_IMAGE)
         # be conservative by return the smallest of horizontal and vertical binning
-        return range(1, min(maxbinning)+1)
+        return set(range(1, min(maxbinning)+1))
         
     def setBinning(self, value):
         """
