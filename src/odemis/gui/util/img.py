@@ -43,7 +43,6 @@ def DataArray2wxImage(data, depth=None, brightness=None, contrast=None, tint=(25
     returns (wxImage): rgb (888) converted image with the same dimension
     """
     assert(len(data.shape) == 2) # => 2D with greyscale
-    size = data.shape[0:2]
     
     # fit it to 8 bits and update brightness and contrast at the same time 
     if brightness is None and contrast is None:
@@ -81,14 +80,14 @@ def DataArray2wxImage(data, depth=None, brightness=None, contrast=None, tint=(25
         d0 = b/a
         d255 = (b + depth)/a
         # bytescale: linear mapping cmin, cmax -> low, high; and then take the low byte (can overflow)
-        # TODO: do only clipping if useful: d0 >0 or d256 < depth
+        # TODO: do only clipping if useful: d0 >0 or d255 < depth
         drescaled = scipy.misc.bytescale(data.clip(d0, d255), cmin=d0, cmax=d255)
         
 
     # Now duplicate it 3 times to make it rgb (as a simple approximation of greyscale)
     # dstack doesn't work because it doesn't generate in C order (uses strides)
     # apparently this is as fast (or even a bit better):
-    rgb = numpy.empty(size + (3,), dtype="uint8") # 0 copy (1 malloc)
+    rgb = numpy.empty(data.shape + (3,), dtype="uint8", order='C') # 0 copy (1 malloc)
     
     # Tint (colouration)
     if tint == (255, 255, 255):
@@ -104,21 +103,22 @@ def DataArray2wxImage(data, depth=None, brightness=None, contrast=None, tint=(25
         numpy.multiply(drescaled, gtint / 255., out=rgb[:,:,1])
         numpy.multiply(drescaled, btint / 255., out=rgb[:,:,2])
 
+    size = data.shape[-1:-3:-1]
     return wx.ImageFromBuffer(*size, dataBuffer=rgb) # 0 copy
 
 
 def wxImage2NDImage(image, keep_alpha=True):
     """
     Converts a wx.Image into a numpy array.
-    image (wx.Image): the image to convert of shape MxN
+    image (wx.Image): the image to convert of size MxN
     keep_alpha (boolean): keep the alpha channel when converted 
-    returns (nd.array): a numpy array of shape MxNx3 (RGB) or MxNx4 (RGBA) 
+    returns (nd.array): a numpy array of shape NxMx3 (RGB) or NxMx4 (RGBA) 
     Note: Alpha not supported.
     """
     if keep_alpha and image.HasAlpha():
-        shape = image.Width, image.Height, 4
+        shape = image.Height, image.Width, 4
         raise NotImplementedError()
     else:
-        shape = image.Width, image.Height, 3
+        shape = image.Height, image.Width, 3
 
     return numpy.ndarray(buffer=image.DataBuffer, shape=shape, dtype=numpy.uint8) 

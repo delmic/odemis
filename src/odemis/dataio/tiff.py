@@ -22,6 +22,16 @@ import gdal
 import numpy
 import time
 
+# Note concerning the image format: it follows the numpy convention. The first
+# dimension is the height, and second one is the width. (This is so because
+# in memory the height is the slowest changing dimension, so it is first in C
+# order.)
+# So an image of W horizontal pixels, H vertical pixels, and 3 colours is an
+# array of shape (H, W, 3). It is recommended to have the image in memory in C
+# order (but that should not matter).
+# PIL and wxPython have images with the size expressed as (width, height), although
+# in memory it corresponds to the same representation.
+
 # User-friendly name
 FORMAT = "TIFF"
 # list of file-name extensions possible, the first one is the default when saving a file 
@@ -137,7 +147,7 @@ def _saveAsMultiTiffLT(filename, ldata, thumbnail):
 
         # FIXME:
         # libtiff has a bug: it thinks that RGB image are organised as
-        # 3xMxN, while normally in numpy, it's MxNx3. (cf scipy.imread) 
+        # 3xHxW, while normally in numpy, it's HxWx3. (cf scipy.imread)
         # So we need to swap the axes
         if len(thumbnail.shape) == 3:
             thumbnail = numpy.rollaxis(thumbnail, 2) # a new view
@@ -195,7 +205,7 @@ def _saveAsMultiTiffLT(filename, ldata, thumbnail):
             if key in DATagToLibTiffTag:
                 tag, converter = DATagToLibTiffTag[key]
                 tif.SetField(tag, converter(val))
-
+        
         tif.write_image(data, compression="lzw")
 
 def export(filename, data, thumbnail=None):

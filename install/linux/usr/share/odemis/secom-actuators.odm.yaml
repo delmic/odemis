@@ -60,7 +60,7 @@ PIGCS: {
     class: pigcs.Bus,
     role: none,
     init: {
-        port: "/dev/ttyPIE",
+        port: "/dev/ttyPIGCS",
         # axis -> controller, channel, closed-loop?
         axes: {"l": [1, 1, False], "r": [2, 1, False], "z": [3, 1, False],
                "x": [4, 1, False], "y": [5, 1, False]}

@@ -49,7 +49,7 @@ CONFIG_SEM2 = {"name": "sem", "role": "sem", "device": "/dev/comedi0",
               "children": {"detector0": CONFIG_SED, "detector1": CONFIG_BSD, "scanner": CONFIG_SCANNER}
               }
 
-@unittest.skip("simple")
+#@unittest.skip("simple")
 class TestSEMStatic(unittest.TestCase):
     """
     Tests which don't need a SEM component ready
@@ -125,7 +125,7 @@ class TestSEM(unittest.TestCase):
 
     def setUp(self):
         # reset resolution and dwellTime
-        self.scanner.resolution.value = (256, 256)
+        self.scanner.resolution.value = (512, 256)
         self.size = self.scanner.resolution.value
         self.scanner.dwellTime.value = self.scanner.dwellTime.range[0]
         self.acq_dates = (set(), set()) # 2 sets of dates, one for each receiver
@@ -139,7 +139,7 @@ class TestSEM(unittest.TestCase):
         dwell = self.scanner.dwellTime.value
         settle =  self.scanner.settleTime
         size = self.scanner.resolution.value
-        return size[0] * size[1] * dwell + size[0] * settle
+        return size[0] * size[1] * dwell + size[1] * settle
     
 #    @unittest.skip("simple")
     def test_acquire(self):
@@ -150,7 +150,7 @@ class TestSEM(unittest.TestCase):
         im = self.sed.data.get()
         duration = time.time() - start
 
-        self.assertEqual(im.shape, self.size)
+        self.assertEqual(im.shape, self.size[-1:-3:-1])
         self.assertGreaterEqual(duration, expected_duration, "Error execution took %f s, less than exposure time %d." % (duration, expected_duration))
         self.assertIn(model.MD_DWELL_TIME, im.metadata)
 
@@ -159,7 +159,8 @@ class TestSEM(unittest.TestCase):
         """
         small resolution, but large osr, to force acquisition not by whole array
         """
-        self.scanner.resolution.value = (256, 256)
+        self.scanner.resolution.value = (256, 200)
+        self.size = self.scanner.resolution.value
         self.scanner.dwellTime.value = self.scanner.dwellTime.range[0] * 1000
         expected_duration = self.compute_expected_duration() # about 1 min
         
@@ -167,7 +168,7 @@ class TestSEM(unittest.TestCase):
         im = self.sed.data.get()
         duration = time.time() - start
 
-        self.assertEqual(im.shape, self.size)
+        self.assertEqual(im.shape, self.size[-1:-3:-1])
         self.assertGreaterEqual(duration, expected_duration, "Error execution took %f s, less than exposure time %d." % (duration, expected_duration))
         self.assertIn(model.MD_DWELL_TIME, im.metadata)
     
@@ -194,7 +195,7 @@ class TestSEM(unittest.TestCase):
         dwell = self.scanner.dwellTime.range[0] * 2
         self.scanner.dwellTime.value = dwell
         self.scanner.resolution.value = self.scanner.resolution.range[1] # test big image
-        self.size = tuple(self.scanner.resolution.value)
+        self.size = self.scanner.resolution.value
         expected_duration = self.compute_expected_duration()
         
         number = 3
@@ -241,7 +242,7 @@ class TestSEM(unittest.TestCase):
         """
         callback for df of test_acquire_flow()
         """
-        self.assertEqual(image.shape, self.size)
+        self.assertEqual(image.shape, self.size[-1:-3:-1])
         self.assertIn(model.MD_DWELL_TIME, image.metadata)
         self.acq_dates[0].add(image.metadata[model.MD_ACQ_DATE])
 #        print "Received an image"
@@ -272,18 +273,23 @@ class TestSEM2(unittest.TestCase):
 
     def setUp(self):
         # reset resolution and dwellTime
-        self.scanner.resolution.value = [256, 256]
-        self.size = tuple(self.scanner.resolution.value)
+        self.scanner.resolution.value = (256, 200)
+        self.size = self.scanner.resolution.value
         self.scanner.dwellTime.value = self.scanner.dwellTime.range[0]
         self.acq_dates = (set(), set()) # 2 sets of dates, one for each receiver
-           
+               
     def tearUp(self):
         pass
 
+    def compute_expected_duration(self):
+        dwell = self.scanner.dwellTime.value
+        settle =  self.scanner.settleTime
+        size = self.scanner.resolution.value
+        return size[0] * size[1] * dwell + size[1] * settle
+    
 #    @unittest.skip("simple")
     def test_acquire_two_flows(self):
-        dwell = self.scanner.dwellTime.value
-        expected_duration = self.size[0] * self.size[1] * dwell
+        expected_duration = self.compute_expected_duration()
         number, number2 = 3, 5
         
         self.left = number
@@ -311,7 +317,7 @@ class TestSEM2(unittest.TestCase):
         """
         callback for df of test_acquire_flow()
         """
-        self.assertEqual(image.shape, self.size)
+        self.assertEqual(image.shape, self.size[-1:-3:-1])
         self.assertIn(model.MD_DWELL_TIME, image.metadata)
         self.acq_dates[0].add(image.metadata[model.MD_ACQ_DATE])
 #        print "Received an image"
@@ -323,7 +329,7 @@ class TestSEM2(unittest.TestCase):
         """
         callback for df of test_acquire_flow()
         """
-        self.assertEqual(image.shape, self.size)
+        self.assertEqual(image.shape, self.size[-1:-3:-1])
         self.assertIn(model.MD_DWELL_TIME, image.metadata)
         self.acq_dates[1].add(image.metadata[model.MD_ACQ_DATE])
 #        print "Received an image"

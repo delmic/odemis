@@ -44,10 +44,10 @@ class MetadataUpdater(model.Component):
         model.Component.__init__(self, name, **kwargs)
 
         # For each component
-        # For each detector it affects 
+        # For each component it affects 
         # Subscribe to the changes of the attributes that matter
         for a in self._components:
-            for d in (microscope.detectors & a.affects):
+            for d in a.affects:
                 if a.role == "stage":
                     # update the image position
                     self.observeStage(a, d)
@@ -67,8 +67,9 @@ class MetadataUpdater(model.Component):
                 else:
                     logging.debug("not observing %s which affects %s", a.name, d.name)
 
-    def observeStage(self, stage, detector):
+    def observeStage(self, stage, comp):
         # we need to keep the information on the detector to update
+        # a new function for each value of comp, so no need to duplicate the variable
         def updateStagePos(pos):
             # We need axes X and Y
             if not "x" in pos or not "y" in pos:
@@ -77,44 +78,42 @@ class MetadataUpdater(model.Component):
             x = pos.get("x", 0)
             y = pos.get("y", 0)
             md = {model.MD_POS: (x, y)}
-            # FIXME check the scope of detector
-            logging.debug("Updating position for detector %s", detector.name)
-            detector.updateMetadata(md)
+            logging.debug("Updating position for component %s", comp.name)
+            comp.updateMetadata(md)
         
         stage.position.subscribe(updateStagePos)
         updateStagePos(stage.position.value)
         self._onTerminate.append((stage.position.unsubscribe, (updateStagePos,)))
 
-    def observeLens(self, lens, detector):
-        if detector.role != "ccd":
-            logging.warning("Does not know what to do with a lens in front of a %s", detector.role)
+    def observeLens(self, lens, comp):
+        if comp.role != "ccd":
+            logging.warning("Does not know what to do with a lens in front of a %s", comp.role)
             return
         
         # Depends on the actual size of the ccd's density (should be constant)
-        captor_mpp = detector.pixelSize.value # m, m
+        captor_mpp = comp.pixelSize.value # m, m
         
         # update static information
         md = {model.MD_LENS_NAME: lens.hwVersion}
-        detector.updateMetadata(md)
+        comp.updateMetadata(md)
         
         # we need to keep the information on the detector to update
         def updatePixelDensity(unused):
             # the formula is very simple: actual MpP = CCD MpP * binning / Mag
             try:
-                binning = detector.binning.value
+                binning = comp.binning.value
             except AttributeError:
                 binning = 1
             mag = float(lens.magnification.value)
-            # FIXME check the scope of captor_mpp (is it copied?)
             mpp = (captor_mpp[0] * binning / mag, captor_mpp[1] * binning / mag) 
             md = {model.MD_PIXEL_SIZE: mpp}
-            detector.updateMetadata(md)
+            comp.updateMetadata(md)
         
         lens.magnification.subscribe(updatePixelDensity)
         self._onTerminate.append((lens.magnification.unsubscribe, (updatePixelDensity,)))
         try:
-            detector.binning.subscribe(updatePixelDensity)
-            self._onTerminate.append((detector.binning.unsubscribe, (updatePixelDensity,)))
+            comp.binning.subscribe(updatePixelDensity)
+            self._onTerminate.append((comp.binning.unsubscribe, (updatePixelDensity,)))
         except AttributeError:
             pass            
         updatePixelDensity(None) # update it right now

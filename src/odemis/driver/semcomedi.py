@@ -655,7 +655,7 @@ class SEMComedi(model.HwComponent):
         # no compatible dwell time found
         raise ValueError("No compatible dwell time found for %g s." % period)
                 
-    def find_best_oversampling_rate(self, period, max_osr=1000000):
+    def find_best_oversampling_rate(self, period, max_osr=100):
         """
         Returns the closest dwell time _longer_ than the given time compatible
           with the output device and the highest over-sampling rate compatible 
@@ -999,6 +999,8 @@ class SEMComedi(model.HwComponent):
         wcmd.stop_src = comedi.TRIG_COUNT
         wcmd.stop_arg = nwscans
         self._prepare_command(wcmd)
+        # on the NI 62xx, counter is same as input (2**24), so it should always be fine 
+        assert(wcmd.stop_arg == nwscans)  
 
         # create a command for reading, with a period osr times smaller than the write
         rcmd = comedi.cmd_struct()
@@ -1016,6 +1018,7 @@ class SEMComedi(model.HwComponent):
 
         # Checks the periods are the same
         assert((rcmd.scan_begin_arg * osr) == wcmd.scan_begin_arg)
+        assert(rcmd.stop_arg == nrscans) # FIXME: max rcmd.stop_arg is 2**24 => do multiple scans
         if wcmd.scan_begin_arg != period_ns:
             logging.warning("Asked dwell time of %g s, but got %g s", period, wcmd.scan_begin_arg / 1e9)
 
@@ -1154,7 +1157,7 @@ class SEMComedi(model.HwComponent):
                 rranges = [d._range for d in detectors]
                 
                 # get the scan values (automatically updated to the latest needs)
-                scan, period, resolution, margin, wchannels, wranges, osr = self._scanner.get_scan_data()
+                scan, period, shape, margin, wchannels, wranges, osr = self._scanner.get_scan_data()
                 
                 metadata = dict(self._metadata) # duplicate
                 metadata[model.MD_ACQ_DATE] = time.time() # time at the beginning
@@ -1166,7 +1169,7 @@ class SEMComedi(model.HwComponent):
 #                    rbuf = self.write_read_data_raw(wchannels, wranges, rchannels,
 #                                                    rranges, period, osr, scan)
                     rbuf = self.write_read_data_raw(wchannels, wranges, rchannels,
-                                                    rranges, period, resolution, margin, osr, scan)
+                                                    rranges, period, shape, margin, osr, scan)
                 except (IOError, comedi.ComediError):
                     # could be genuine or just due to cancellation
                     if self._acquisition_must_stop.is_set():
@@ -1200,7 +1203,7 @@ class SEMComedi(model.HwComponent):
                         continue
     
                     # Convert to a nice 2D DataArray
-#                    parray = self._scan_result_to_array(rbuf[...,i], resolution, margin, osr)
+#                    parray = self._scan_result_to_array(rbuf[...,i], shape, margin, osr)
                     parray = rbuf[i]
                     darray = model.DataArray(parray, metadata)
                     callback(darray)
@@ -1823,7 +1826,8 @@ class Scanner(model.Emitter):
     def __init__(self, name, role, parent, channels, limits, settle_time, 
                  hfw_nomag, **kwargs):
         """
-        channels (2-tuple of (0<=int)): output channels for X/Y to drive
+        channels (2-tuple of (0<=int)): output channels for X/Y to drive. X is
+          the fast scanned axis, Y is the slow scanned axis. 
         limits (2x2 array of float): lower/upper bounds of the scan area in V.
           first dim is the X/Y, second dim is min/max. Ex: limits[0][1] is the
           voltage for the max value of X. 
@@ -1849,14 +1853,16 @@ class Scanner(model.Emitter):
                              % (settle_time, name))
         self._settle_time = settle_time
         
-        self._channels = channels
+        # write channel as Y/X, for compatibility with numpy
+        self._channels = channels[-1:-3:-1]
         nchan = comedi.get_n_channels(parent._device, parent._ao_subdevice)
         if nchan < max(channels):
             raise ValueError("Requested channels %r on device '%s' which has only %d output channels" 
                              % (channels, parent._device_name, nchan))
         
+        # write limits as Y/X, for compatibility with numpy
         # check the limits are reachable
-        self._limits = limits
+        self._limits = limits[-1:-3:-1]
         for i, channel in enumerate(channels):
             data_lim = self._limits[i]
             try:
@@ -1876,7 +1882,7 @@ class Scanner(model.Emitter):
         # can be used and the maxdata. For simplicity we just fix it to 2048
         # which is probably sufficient for most usages and almost always reachable
         # shapeX = (diff_limitsX / diff_bestrangeX) * maxdataX
-        self._shape = (2048, 2048)
+        self._shape = (2048, 2048) 
         resolution = (256, 256) # small resolution to get a fast display
         self.resolution = model.ResolutionVA(resolution, [(1, 1), self._shape])
         self.resolution.subscribe(self._onResolution)
@@ -1956,7 +1962,7 @@ class Scanner(model.Emitter):
           array is of shape Nx2: N is the number of pixels. dtype is fitting the
              device raw data. shape = shape[0], shape[1] + margin
           period: time between a pixel in s
-          shape: X/Y dimension of the scanned image (e.g., the resolution)
+          shape: H,W dimension of the scanned image (e.g., the resolution in numpy order)
           margin: amount of fake pixels inserted at the beginning of each (Y) line
             to allow for the settling time
           channels: the output channels to use
@@ -1977,15 +1983,16 @@ class Scanner(model.Emitter):
         if prev_resolution != resolution or margin != prev_margin:
             # TODO: if only margin changes, just duplicate the margin columns
             # need to recompute the scanning array
-            self._update_raw_scan_array(resolution, margin)
+            self._update_raw_scan_array(resolution[-1:-3:-1], margin)
             
         self._prev_settings = [resolution, margin, dwell_time]
-        return self._scan_array, dwell_time, resolution, margin, self._channels, self._ranges, osr
+        return (self._scan_array, dwell_time, resolution[-1:-3:-1],
+                margin, self._channels, self._ranges, osr)
 
     def _update_raw_scan_array(self, shape, margin):
         """
         Update the raw array of values to send to scan the 2D area.
-        shape (list of 2 int): X/Y resolution of the scanning area
+        shape (list of 2 int): H/W=Y/X of the scanning area (slow, fast axis)
         margin (0<=int): number of additional pixels to add at the begginning of
             each scanned line
         returns nothing, but update ._scan_array and ._ranges.
@@ -2033,13 +2040,13 @@ class Scanner(model.Emitter):
         """
         Generate an array of the values to send to scan a 2D area, using linear
         interpolation between the limits. It's basically a saw-tooth curve on 
-        the Y dimension and a linear increase on the X dimension.
-        shape (list of 2 int): X/Y resolution of the scanning area
-        limits (2x2 ndarray): the min/max limits of X/Y
+        the W dimension and a linear increase on the H dimension.
+        shape (list of 2 int): H/W of the scanning area (slow, fast axis)
+        limits (2x2 ndarray): the min/max limits of W/H
         margin (0<=int): number of additional pixels to add at the begginning of
             each scanned line
-        returns (2D ndarray of (shape[0] x (shape[1] + margin)) x 2): the X/Y
-            values for each points of the array, with Y scanned fast, and X 
+        returns (2D ndarray of (shape[0] x (shape[1] + margin)) x 2): the H/W
+            values for each points of the array, with W scanned fast, and H 
             slowly. The type is the same one as the limits.
         """
         # prepare an array of the right type
