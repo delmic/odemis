@@ -259,7 +259,7 @@ class SpectraPro(model.Actuator):
         # command we've just sent.
         
         try:
-            r = self._sendQuery("no-echo")
+            r = self._sendOrder("no-echo")
         except SPError:
             logging.info("Failed to disable echo, hopping the device has not echo anyway")
         
@@ -296,8 +296,8 @@ class SpectraPro(model.Actuator):
     
     # regex to read the gratings
     RE_NOTINSTALLED = re.compile("\D*(\d+)\s+Not Installed")
-    RE_INSTALLED = re.compile("\D*(\d+)\s+(\d+)\s*g/mm BLZ=\s*(\d+)\s*nm")
-    RE_GRATING = re.compile("\D*(\d+)\s+(.+)\r")
+    RE_INSTALLED = re.compile("\D*(\d+)\s+(\d+)\s*g/mm BLZ=\s*(\d+)\s*(nm|NM)")
+    RE_GRATING = re.compile("\D*(\d+)\s+(.+\S)\s*\r")
     def GetGratingChoices(self):
         """
         return (dict int -> string): grating number to description
@@ -305,7 +305,7 @@ class SpectraPro(model.Actuator):
         # ?GRATINGS Returns the list of installed gratings with position groove density and blaze. The
         #  present grating is specified with an arrow.
         # Example output:
-        # TODO
+        #  \r\n 1  300 g/mm BLZ=  500NM \r\n\x1a2  300 g/mm BLZ=  750NM \r\n 3  Not Installed     \r\n 4  Not Installed     \r\n 5  Not Installed     \r\n 6  Not Installed     \r\n 7  Not Installed     \r\n 8  Not Installed     \r\n ok\r\n
         # From the spectrapro_300i_ll.c of fsc2, it seems the format is:
         # non-digit*,digits=grating number,spaces,"Not Installed"\r\n
         # non-digit*,digits=grating number,space+,digit+:g/mm,space*,"g/mm BLZ=", space*,digit+:blaze wl in nm,space*,"nm"\r\n
@@ -401,8 +401,9 @@ class SpectraPro(model.Actuator):
         Return (str): the model name
         """ 
         # MODEL Returns model number of the Acton SP series monochromator.
+        # returns something like ' SP-2-150i '
         res = self._sendQuery("model")
-        return res
+        return res.strip()
     
     def GetSerialNumber(self):
         """
@@ -413,7 +414,7 @@ class SpectraPro(model.Actuator):
         except SPError:
             logging.exception("Device doesn't support serial number query")
             return None
-        return res
+        return res.strip()
     
     # TODO diverter (mirror) functions: no diverter on SP-2??0i anyway.
     
@@ -464,7 +465,7 @@ class SpectraPro(model.Actuator):
                 # cannot convert it directly to an absolute move, because
                 # several in a row must mean they accumulate. So we queue a 
                 # special task.
-                self._executor.submit(self._doSetWavelengthRel, (shift[axis],))
+                return self._executor.submit(self._doSetWavelengthRel, (shift[axis],))
             else:
                 raise LookupError("Axis '%s' doesn't exist", axis)
     
@@ -477,7 +478,7 @@ class SpectraPro(model.Actuator):
         """
         for axis in pos:
             if axis == "wavelength":
-                self._executor.submit(self._doSetWavelengthAbs, (pos[axis],))
+                return self._executor.submit(self._doSetWavelengthAbs, (pos[axis],))
             else:
                 raise LookupError("Axis '%s' doesn't exist", axis)
     
@@ -569,7 +570,7 @@ class SpectraPro(model.Actuator):
                 if model.startswith("SP-"):
                     found.append((model, {"port": p}))
                 else:
-                    logging.info("Device on port '%s' responded correctly, but with unexpected model name '%s'.", port, model)
+                    logging.info("Device on port '%s' responded correctly, but with unexpected model name '%s'.", p, model)
             except:
                 continue
 
@@ -624,7 +625,7 @@ class CancellableThreadPoolExecutor(ThreadPoolExecutor):
         f = ThreadPoolExecutor.submit(self, fn, *args, **kwargs)
         # add to the queue and track the task
         self._queue.append(f)
-        f.add_done_callback(f)
+        f.add_done_callback(self._on_done)
         return f
         
     def _on_done(self, future):
@@ -749,10 +750,10 @@ class SPSimulator(object):
         elif com == "no-echo":
             out = "" # echo is always disabled anyway
         elif com == "?gratings":
-            out = (" 1 300 g/mm BLZ=345 nm\r\n" +
-                   ">2 600 g/mm BLZ=89 nm\r\n" +
-                   " 3 1200 g/mm BLZ=700 nm\r\n" +
-                   " 4 Not Installed\r\n")
+            out = (" 1 300 g/mm BLZ=  345NM \r\n" +
+                   ">2 600 g/mm BLZ=   89NM \r\n" +
+                   " 3 1200 g/mm BLZ= 700NM \r\n" +
+                   " 4 Not Installed    \r\n")
         elif com.endswith("goto"):
             m = re.match("(\d+.\d+) goto", com)
             if m:
@@ -775,6 +776,6 @@ class SPSimulator(object):
         if out is None:
             out = " %s? \r\n" % com
         else:
-            out += " ok\r\n"
+            out = " " + out + "  ok\r\n"
         self._output_buf += out
         
