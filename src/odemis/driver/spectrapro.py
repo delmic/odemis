@@ -118,7 +118,7 @@ class SpectraPro(model.Actuator):
         
         # One absolute axis: wavelength
         # One enumerated int: grating number (between 1 and 3: only the current turret)
-        # if so, how to let know that the grating is done moving? Or should it be an axis with 3 positions? range is a dict instead of a 2-tuple  
+        # TODO: how to let know that the grating is done moving? Or should it be an axis with 3 positions? range is a dict instead of a 2-tuple  
         
         pos = {"wavelength": self.GetWavelength()}
         # RO, as to modify it the client must use .moveRel() or .moveAbs()
@@ -136,7 +136,7 @@ class SpectraPro(model.Actuator):
             t = 1 + (c - 1) // self.max_gratings
             if t != self._turret:
                 del gchoices[c]
-        # TODO: check a dict as choices is supported everywhere
+
         # TODO: report the grating with its wavelength range (possible to compute from groove density + blaze wl?)
         # range also depends on the max grating angle (40°, CCD pixel size, CCD horizontal size, focal length,+ efficienty curve?) 
         # cf http://www.roperscientific.de/gratingcalcmaster.html
@@ -348,14 +348,17 @@ class SpectraPro(model.Actuator):
         g (1<=int<=9): the grating number to change to 
         The method is synchronous, it returns once the grating is selected. It
           might take up to 20 s.
-        Note: the gratting is dependant on turret number (and the self.max_gratting)!
+        Note: the grating is dependent on turret number (and the self.max_gratting)!
         Note: after changing the grating, the wavelength, might have changed
         """
         #GRATING Places specified grating in position to the [current] wavelength
+        # Note: it always reports ok, and doesn't change the grating if not
+        # installed or wrong value 
 
         assert(1 <= g and g <= (3 * self.max_gratings))
-        # TODO check that it's indeed synchronous
         # TODO check that the grating is configured
+        
+        # TODO
         self._sendOrder("%d grating" % g, timeout=20)
         
     def GetWavelength(self):
@@ -377,7 +380,7 @@ class SpectraPro(model.Actuator):
     def SetWavelength(self, wl):
         """
         Change the wavelength at the center
-        wl (0<=float<=1e-6): wavelength in meter
+        wl (0<=float<=3e-6): wavelength in meter
         returns when the move is complete
         The method is synchronous, it returns once the grating is selected. It
           might take up to 20 s.
@@ -389,12 +392,11 @@ class SpectraPro(model.Actuator):
         # 345.65 GOTO
         # Note: NM goes to the wavelength slowly (in order to perform a scan). 
         #  It shouldn't be needed for spectrometer
-
-        # TODO check that it indeed returns only when the move is complete
+        # Out of bound values are silently ignored by going to the min or max.
         
-        assert(0 <= wl and wl <= 1e-6)
+        assert(0 <= wl and wl <= 3e-6)
         # TODO: check that the value fit the grating configuration?
-        self._sendOrder("%.2f goto" % (wl * 1e9), timeout=20)
+        self._sendOrder("%.3f goto" % (wl * 1e9), timeout=20)
     
     def GetModel(self):
         """
@@ -622,6 +624,7 @@ class CancellableThreadPoolExecutor(ThreadPoolExecutor):
         self._queue = collections.deque() # thread-safe queue of futures
     
     def submit(self, fn, *args, **kwargs):
+        logging.debug("queuing action %s with arguments %s", fn, args)
         f = ThreadPoolExecutor.submit(self, fn, *args, **kwargs)
         # add to the queue and track the task
         self._queue.append(f)
