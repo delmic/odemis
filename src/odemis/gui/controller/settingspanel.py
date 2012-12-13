@@ -491,7 +491,7 @@ class SettingsPanel(object):
 
 
         self._sizer.Add(new_ctrl, (self.num_entries, 1),
-                        flag=wx.ALL|wx.EXPAND, border=10)
+                        flag=wx.ALL|wx.EXPAND, border=5)
 
         self.num_entries += 1
         self.entries.append(vac)

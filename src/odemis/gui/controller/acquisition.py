@@ -35,10 +35,14 @@ import sys
 import threading
 import time
 
+from os.path import expanduser
+
 import wx
 
 from odemis.gui.log import log
 from odemis.gui.util import img
+from odemis.gui.main_xrc import xrcfr_acq
+
 
 
 class AcquisitionController(object):
@@ -60,6 +64,8 @@ class AcquisitionController(object):
         self._snapshot_folder = AcquisitionController.get_picture_folder()
         # High-res: last folder selected, and default to same as snapshot
         self._acquisition_folder = self._snapshot_folder
+
+        # Event binding
 
         # Link snapshot menu to snapshot action
         wx.EVT_MENU(self._main_frame,
@@ -123,11 +129,10 @@ class AcquisitionController(object):
         return bmp.ConvertToImage()
 
     def open_acquisition_dialog(self, evt):
-        from odemis.gui import main_xrc
 
         parent_size = [v * 0.66 for v in self._main_frame.GetSize()]
 
-        self._acq_dialog = main_xrc.xrcfr_acq(self._main_frame)
+        self._acq_dialog = AcquisitionDialog(self._main_frame)
 
         self._acq_dialog.SetSize(parent_size)
         self._acq_dialog.Center()
@@ -306,3 +311,44 @@ class AcquisitionController(object):
 
         # last resort: current working directory should always be existing
         return os.getcwd()
+
+class AcquisitionDialog(xrcfr_acq):
+    """ Wrapper class responsible for additional initialization of the
+    Acquisition Dialog created in XRCed"""
+
+    def __init__(self, parent):
+        xrcfr_acq.__init__(self, parent)
+
+        self.cmb_presets.Append(u"high")
+        self.cmb_presets.Append(u"medium")
+        self.cmb_presets.Append(u"low")
+
+        self.cmb_presets.Select(0)
+
+        self.btn_cancel.Bind(wx.EVT_BUTTON, self.on_cancel)
+        self.btn_change_file.Bind(wx.EVT_BUTTON, self.on_change_file)
+
+
+    def on_change_file(self, evt):
+
+        dialog = wx.FileDialog(self,
+                            message="message",
+                            defaultDir=expanduser("~"),
+                            defaultFile="",
+                            style=wx.FD_SAVE|wx.FD_OVERWRITE_PROMPT)
+        # ,
+        #                     wildcard=FileSelectorDefaultWildcardStr,
+        #                     style=FD_DEFAULT_STYLE,
+        #                     pos=DefaultPosition,
+        #                     size=DefaultSize,
+        #                     name=FileDialogNameStr)
+
+
+        if dialog.ShowModal() == wx.ID_OK:
+            self.txt_filename.SetValue(dialog.GetFilename())
+            self.txt_destination.SetValue(dialog.GetDirectory())
+
+
+    def on_cancel(self, evt):
+        self.Close()
+        self.Destroy()

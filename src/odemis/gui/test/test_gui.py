@@ -118,6 +118,7 @@ def __init_resources():
                     <assign_var>1</assign_var>
                   </XRCED>
                   <object class="StreamPanel" name="stream_panel">
+                    <add_button>1</add_button>
                     <XRCED>
                       <assign_var>1</assign_var>
                     </XRCED>

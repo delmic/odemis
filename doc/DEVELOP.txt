@@ -127,8 +127,17 @@ command.
 
 #. Install the python documentation generator called Sphinx:
    `sudo apt-get install python-sphinx`. Make sure it's version 1.1.3 or later.
-#. Run sphinx-quickstart to create a `conf.py`. Only needed when that file is
-   missing.
+#. If `conf.py` is missing from odemis/doc/code, run `sphinx-quickstart` to
+   create it.
 #. Make sure odemis and Pyro are present in the Python path.
 #. Run  `sphinx-apidoc -f -o <path to odemis>/doc/code/_gen <path to odemis>/src/"
+   This will extract all doc strings from the source code and store them in .rst
+   files located at odemis/doc/code/_gen
 #. Run `make html` from the <path to odemis>/doc/code directory.
+   This command will transform the .rst files present in odemis/doc/code and
+   odemis/doc/code/_gen into html files. These files will be stored in
+   odemis/doc/code/_build.
+
+*Important note:* Hand-made documentation files should be stored in
+odemis/doc/code and odemis/doc/code/_gen should *onlly* contain automatically
+generated files!

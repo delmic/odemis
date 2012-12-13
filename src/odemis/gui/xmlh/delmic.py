@@ -26,38 +26,6 @@ import xh_delmic
 
 TRACE('*** creating xh_delmic components')
 
-### StreamPanel
-
-c = component.Container('StreamPanel',
-    ['window', 'top_level', 'control'],
-    ['pos', 'size', 'label', 'add_button'])
-c.setParamClass('add_button', params.ParamBool)
-component.Manager.register(c)
-component.Manager.addXmlHandler(xh_delmic.StreamPanelXmlHandler)
-component.Manager.setMenu(c, 'TOP_LEVEL', 'Delmic stream panel', 'StreamPanel', 3)
-component.Manager.setMenu(c, 'ROOT', 'Delmic stream panel', 'StreamPanel', 3)
-
-c = component.Container('FixedStreamPanelEntry',
-    ['window', 'top_level', 'control'],
-    ['pos', 'size', 'label', 'collapsed'])
-c.setParamClass('collapsed', params.ParamBool)
-c.addEvents('EVT_COMMAND_COLLPANE_CHANGED')
-component.Manager.register(c)
-component.Manager.addXmlHandler(xh_delmic.FixedStreamPanelEntryXmlHandler)
-component.Manager.setMenu(c, 'TOP_LEVEL', 'Delmic fixed stream entry', 'FixedStreamPanelEntry', 3)
-component.Manager.setMenu(c, 'ROOT', 'Delmic fixed stream', 'FixedStreamPanel', 3)
-
-c = component.Container('CustomStreamPanelEntry',
-    ['window', 'top_level', 'control'],
-    ['pos', 'size', 'label', 'collapsed'])
-c.setParamClass('collapsed', params.ParamBool)
-c.addEvents('EVT_COMMAND_COLLPANE_CHANGED')
-component.Manager.register(c)
-component.Manager.addXmlHandler(xh_delmic.CustomStreamPanelEntryXmlHandler)
-component.Manager.setMenu(c, 'TOP_LEVEL', 'Delmic custom stream entry', 'CustomStreamPanelEntry', 4)
-component.Manager.setMenu(c, 'ROOT', 'Delmic custom stream', 'CustomStreamPanel', 4)
-
-
 ##### FoldPanelBar #####
 
 c = component.Container('FoldPanelBar',
@@ -73,8 +41,7 @@ c.setParamClass('leftspacing', params.ParamIntNN)
 c.setParamClass('rightspacing', params.ParamIntNN)
 component.Manager.register(c)
 component.Manager.addXmlHandler(xh_delmic.FoldPanelBarXmlHandler)
-component.Manager.setMenu(c, 'bar', 'Delmic fold bar', 'FoldPanelBar', 1)
-
+component.Manager.setMenu(c, 'Delmic', 'Fold Panel Bar', 'FoldPanelBar', 1)
 
 c = component.Container('FoldPanelItem',
     ['window', 'top_level', 'control'],
@@ -84,9 +51,47 @@ c = component.Container('FoldPanelItem',
 #            'FPB_EXCLUSIVE_FOLD', 'FPB_HORIZONTAL', 'FPB_VERTICAL')
 component.Manager.register(c)
 component.Manager.addXmlHandler(xh_delmic.FoldPanelItemXmlHandler)
-component.Manager.setMenu(c, 'TOP_LEVEL', 'Delmic fold panel', 'FoldPanelItem', 2)
-component.Manager.setMenu(c, 'ROOT', 'Delmic fold panel', 'FoldPanelItem', 2)
-#component.Manager.setMenu(c, 'container', 'Delmic fold panel', 'FoldPanel', 10)
+component.Manager.setMenu(c, 'Delmic', 'Fold Panel Item', 'FoldPanelItem', 2)
+
+
+### StreamPanel
+
+c = component.Container('StreamPanel',
+    ['window', 'top_level', 'control'],
+    ['pos', 'size', 'label', 'add_button'])
+c.setParamClass('add_button', params.ParamBool)
+component.Manager.register(c)
+component.Manager.addXmlHandler(xh_delmic.StreamPanelXmlHandler)
+component.Manager.setMenu(c, 'Delmic', 'Stream Panel', 'StreamPanel', 3)
+
+c = component.Container('FixedStreamPanelEntry',
+    ['window', 'top_level', 'control'],
+    ['pos', 'size', 'label', 'collapsed'])
+c.setParamClass('collapsed', params.ParamBool)
+c.addEvents('EVT_COMMAND_COLLPANE_CHANGED')
+component.Manager.register(c)
+component.Manager.addXmlHandler(xh_delmic.FixedStreamPanelEntryXmlHandler)
+component.Manager.setMenu(c, 'Delmic', 'Fixed Stream', 'FixedStreamPanel', 4)
+
+c = component.Container('CustomStreamPanelEntry',
+    ['window', 'top_level', 'control'],
+    ['pos', 'size', 'label', 'collapsed'])
+c.setParamClass('collapsed', params.ParamBool)
+c.addEvents('EVT_COMMAND_COLLPANE_CHANGED')
+component.Manager.register(c)
+component.Manager.addXmlHandler(xh_delmic.CustomStreamPanelEntryXmlHandler)
+component.Manager.setMenu(c, 'Delmic', 'Custom Stream', 'CustomStreamPanel', 5)
+
+
+### gui.dblmscopepanel.MicroscopeViewport
+
+c = component.Container('MicroscopeViewport', ['window', 'top_level', 'control'],
+              ['pos', 'size'],
+              image=images.TreePanel.GetImage())
+c.addStyles('wxTAB_TRAVERSAL')
+component.Manager.register(c)
+component.Manager.addXmlHandler(xh_delmic.MicroscopeViewportXmlHandler)
+component.Manager.setMenu(c, 'Delmic', 'Microscope Viewport', 'MicroscopeViewport', 10)
 
 
 ### wx.lib.buttons.GenBitmapButton
@@ -112,7 +117,7 @@ c.setParamClass('disabled', params.ParamBitmap)
 c.addEvents('EVT_BUTTON')
 component.Manager.register(c)
 component.Manager.addXmlHandler(xh_delmic.GenBitmapButtonHandler)
-component.Manager.setMenu(c, 'button', 'generic bitmap button', 'wx.lib.buttons.GenBitmapButton', 20)
+component.Manager.setMenu(c, 'Delmic button', 'Generic Bitmap Button', 'wx.lib.buttons.GenBitmapButton', 1)
 component.Manager.setTool(c, 'Controls', pos=(1, 1))
 
 
@@ -144,7 +149,7 @@ c.setParamClass('disabled', params.ParamBitmap)
 c.addEvents('EVT_BUTTON')
 component.Manager.register(c)
 component.Manager.addXmlHandler(xh_delmic.ImageButtonHandler)
-component.Manager.setMenu(c, 'button', 'Delmic bitmap button', 'ImageButton', 20)
+component.Manager.setMenu(c, 'Delmic button', 'Bitmap Button', 'ImageButton', 2)
 component.Manager.setTool(c, 'Controls', pos=(1, 1))
 
 
@@ -177,7 +182,7 @@ c.setParamClass('disabled', params.ParamBitmap)
 c.addEvents('EVT_BUTTON')
 component.Manager.register(c)
 component.Manager.addXmlHandler(xh_delmic.ImageTextButtonHandler)
-component.Manager.setMenu(c, 'button', 'Delmic bitmap text button', 'ImageTextButton', 20)
+component.Manager.setMenu(c, 'Delmic button', 'Bitmap Text Button', 'ImageTextButton', 3)
 component.Manager.setTool(c, 'Controls', pos=(1, 1))
 
 ### ImageTextToggleButton
@@ -209,7 +214,7 @@ c.setParamClass('disabled', params.ParamBitmap)
 c.addEvents('EVT_BUTTON')
 component.Manager.register(c)
 component.Manager.addXmlHandler(xh_delmic.ImageTextToggleButtonHandler)
-component.Manager.setMenu(c, 'button', 'Delmic bitmap text toggle button', 'ImageTextToggleButton', 20)
+component.Manager.setMenu(c, 'Delmic button', 'Bitmap Text Toggle Button', 'ImageTextToggleButton', 4)
 component.Manager.setTool(c, 'Controls', pos=(1, 1))
 
 ### TabButton
@@ -241,7 +246,7 @@ c.setParamClass('disabled', params.ParamBitmap)
 c.addEvents('EVT_BUTTON')
 component.Manager.register(c)
 component.Manager.addXmlHandler(xh_delmic.TabButtonHandler)
-component.Manager.setMenu(c, 'button', 'Delmic tab button', 'TabButton', 20)
+component.Manager.setMenu(c, 'Delmic button', 'Tab Button', 'TabButton', 5)
 component.Manager.setTool(c, 'Controls', pos=(1, 1))
 
 ### ViewButton
@@ -273,7 +278,7 @@ c.setParamClass('disabled', params.ParamBitmap)
 c.addEvents('EVT_BUTTON')
 component.Manager.register(c)
 component.Manager.addXmlHandler(xh_delmic.ViewButtonHandler)
-component.Manager.setMenu(c, 'button', 'Delmic view button', 'ViewButton', 20)
+component.Manager.setMenu(c, 'Delmic button', 'View button', 'ViewButton', 6)
 component.Manager.setTool(c, 'Controls', pos=(1, 1))
 
 ### PopupImageButton
@@ -302,7 +307,7 @@ c.setParamClass('disabled', params.ParamBitmap)
 c.addEvents('EVT_BUTTON')
 component.Manager.register(c)
 component.Manager.addXmlHandler(xh_delmic.PopupImageButtonHandler)
-component.Manager.setMenu(c, 'button', 'Delmic popup bitmap button', 'PopupImageButton', 20)
+component.Manager.setMenu(c, 'Delmic button', 'Popup Button', 'PopupImageButton', 7)
 component.Manager.setTool(c, 'Controls', pos=(1, 1))
 
 
@@ -334,8 +339,8 @@ c.setParamClass('value', params.ParamMultilineText)
 c.addEvents('EVT_TEXT', 'EVT_TEXT_ENTER', 'EVT_TEXT_URL', 'EVT_TEXT_MAXLEN')
 component.Manager.register(c)
 component.Manager.addXmlHandler(xh_delmic.SuggestTextCtrlHandler)
-component.Manager.setMenu(c, 'control', 'Delmic suggest text ctrl', 'SuggestTextCtrl', 1)
-component.Manager.setTool(c, 'Controls', pos=(0,2))
+component.Manager.setMenu(c, 'Delmic control', 'Suggest Text', 'SuggestTextCtrl', 1)
+component.Manager.setTool(c, 'Controls', pos=(0, 2))
 
 
 ### UnitIntegerCtrl
@@ -369,7 +374,7 @@ c.setParamClass('unit', params.MetaParamText(10))
 c.addEvents('EVT_TEXT', 'EVT_TEXT_ENTER', 'EVT_TEXT_URL', 'EVT_TEXT_MAXLEN')
 component.Manager.register(c)
 component.Manager.addXmlHandler(xh_delmic.UnitIntegerCtrlHandler)
-component.Manager.setMenu(c, 'control', 'Delmic unit integer text ctrl', 'UnitIntegerCtrl', 1)
+component.Manager.setMenu(c, 'Delmic control', 'Integer Text', 'UnitIntegerCtrl', 1)
 component.Manager.setTool(c, 'Controls', pos=(0, 2))
 
 ### UnitFloatCtrl
@@ -404,18 +409,10 @@ c.setParamClass('unit', params.MetaParamText(80))
 c.addEvents('EVT_TEXT', 'EVT_TEXT_ENTER', 'EVT_TEXT_URL', 'EVT_TEXT_MAXLEN')
 component.Manager.register(c)
 component.Manager.addXmlHandler(xh_delmic.UnitFloatCtrlHandler)
-component.Manager.setMenu(c, 'control', 'Delmic unit Float text ctrl', 'UnitFloatCtrl', 1)
+component.Manager.setMenu(c, 'Delmic control', 'Float Text', 'UnitFloatCtrl', 1)
 component.Manager.setTool(c, 'Controls', pos=(0, 2))
 
-### gui.dblmscopepanel.MicroscopeViewport
 
-c = component.Container('MicroscopeViewport', ['window', 'top_level', 'control'],
-              ['pos', 'size'],
-              image=images.TreePanel.GetImage())
-c.addStyles('wxTAB_TRAVERSAL')
-component.Manager.register(c)
-component.Manager.addXmlHandler(xh_delmic.MicroscopeViewportXmlHandler)
-component.Manager.setMenu(c, 'ROOT', 'Delmic Msc Viewport', 'MicroscopeViewport', 10)
 
 
 ### UnitFloatSlider
@@ -437,7 +434,7 @@ c.setParamClass('text_size', params.ParamPosSize)
 
 component.Manager.register(c)
 component.Manager.addXmlHandler(xh_delmic.UnitFloatSliderHandler)
-component.Manager.setMenu(c, 'control', 'Delmic unit Float slide ctrl', 'UnitFloatSlider', 1)
+component.Manager.setMenu(c, 'Delmic control', 'Float Slider', 'UnitFloatSlider', 1)
 component.Manager.setTool(c, 'Controls', pos=(0, 2))
 
 
@@ -456,5 +453,22 @@ c.setParamClass('text_size', params.ParamPosSize)
 
 component.Manager.register(c)
 component.Manager.addXmlHandler(xh_delmic.UnitIntegerSliderHandler)
-component.Manager.setMenu(c, 'control', 'Delmic unit Integer slide ctrl', 'UnitIntegerSlider', 1)
+component.Manager.setMenu(c, 'Delmic control', 'Integer Slider', 'UnitIntegerSlider', 1)
 component.Manager.setTool(c, 'Controls', pos=(0, 2))
+
+
+### wxOwnerDrawnComboBox
+# This component is present in the default XRCed setup, but was added here
+# because the original did not allow for the setting of the down button
+# image. (Which we implemented in the xh_delmic module in this package)
+
+c = component.Component('OwnerDrawnComboBox', ['control','tool'],
+              ['pos', 'size'],
+              image=images.TreeComboBox.GetImage())
+c.addStyles('wxCB_SIMPLE', 'wxCB_DROPDOWN', 'wxCB_READONLY', 'wxCB_SORT',
+            'wxODCB_STD_CONTROL_PAINT', 'wxODCB_DCLICK_CYCLES', 'wxTE_PROCESS_ENTER')
+c.setSpecial('content',  attribute.ContentAttribute)
+c.addEvents('EVT_COMBOBOX', 'EVT_TEXT', 'EVT_TEXT_ENTER')
+component.Manager.register(c)
+component.Manager.addXmlHandler(xh_delmic.OwnerDrawnComboBoxHandler)
+component.Manager.setMenu(c, 'Delmic control', 'Owner-Drawn Combo Box', 'OwnerDrawnComboBox', 21)
