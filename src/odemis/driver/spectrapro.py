@@ -105,7 +105,7 @@ class SpectraPro(model.Actuator):
     
         # TODO: a more precise way to find the maximum wavelength (looking at the available gratings?)
         # provides a ._axes and ._range
-        # TODO: what's the min? 200nm seems the actual min in reality, although wavelength is set to 0 by default !?
+        # TODO: what's the min? 200nm seems the actual min working, although wavelength is set to 0 by default !?
         model.Actuator.__init__(self, name, role, axes=["wavelength"], 
                                 ranges={"wavelength": (0, 10e-6)}, **kwargs)
     
@@ -380,7 +380,7 @@ class SpectraPro(model.Actuator):
     def SetWavelength(self, wl):
         """
         Change the wavelength at the center
-        wl (0<=float<=3e-6): wavelength in meter
+        wl (0<=float<=10e-6): wavelength in meter
         returns when the move is complete
         The method is synchronous, it returns once the grating is selected. It
           might take up to 20 s.
@@ -394,7 +394,7 @@ class SpectraPro(model.Actuator):
         #  It shouldn't be needed for spectrometer
         # Out of bound values are silently ignored by going to the min or max.
         
-        assert(0 <= wl and wl <= 3e-6)
+        assert(0 <= wl and wl <= 10e-6)
         # TODO: check that the value fit the grating configuration?
         self._sendOrder("%.3f goto" % (wl * 1e9), timeout=20)
     
@@ -467,7 +467,7 @@ class SpectraPro(model.Actuator):
                 # cannot convert it directly to an absolute move, because
                 # several in a row must mean they accumulate. So we queue a 
                 # special task.
-                return self._executor.submit(self._doSetWavelengthRel, (shift[axis],))
+                return self._executor.submit(self._doSetWavelengthRel, shift[axis])
             else:
                 raise LookupError("Axis '%s' doesn't exist", axis)
     
@@ -480,7 +480,7 @@ class SpectraPro(model.Actuator):
         """
         for axis in pos:
             if axis == "wavelength":
-                return self._executor.submit(self._doSetWavelengthAbs, (pos[axis],))
+                return self._executor.submit(self._doSetWavelengthAbs, pos[axis])
             else:
                 raise LookupError("Axis '%s' doesn't exist", axis)
     
@@ -504,16 +504,16 @@ class SpectraPro(model.Actuator):
     
     def stop(self):
         """
-        stops the motion on all axes
-        Warning: this might stop the motion even of axes not managed (it stops
-        all the axes of all controller managed).
+        stops the motion
+        Warning: Only not yet-executed moves can be cancelled, this hardware
+          doesn't support stopping while a move is going on.  
         """
-        self._executor.cancel() 
+        self._executor.cancel()
     
     def terminate(self):
         if self._executor:
             self.stop()
-            self._executor.shutdown(wait=False)
+            self._executor.shutdown()
             self._executor = None
             
         if self._serial:
@@ -760,9 +760,11 @@ class SPSimulator(object):
         elif com.endswith("goto"):
             m = re.match("(\d+.\d+) goto", com)
             if m:
-                self._wavelength = float(m.group(1))
+                new_wl = max(0, min(float(m.group(1)), 5000)) # clamp value silently
+                move = abs(self._wavelength - new_wl)
+                self._wavelength = new_wl
                 out = ""
-                time.sleep(1) # simulate long move
+                time.sleep(move / 500) # simulate 500nm/s speed
         elif com.endswith("turret"):
             m = re.match("(\d+) turret", com)
             if m:

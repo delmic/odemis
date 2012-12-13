@@ -15,6 +15,8 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from odemis.driver import spectrapro
+from unittest.case import skip
+import futures
 import logging
 import os
 import time
@@ -27,7 +29,7 @@ if os.name == "nt":
 else:
     PORT = "/dev/ttySP" #"/dev/ttyUSB0"
 
-CLASS = spectrapro.SpectraPro # use FakeSpectraPro if not hardware present
+CLASS = spectrapro.FakeSpectraPro # use FakeSpectraPro if not hardware present
 KWARGS = {"name": "test", "role": "spectrograph", "port": PORT}
 
 #@unittest.skip("faster") 
@@ -56,6 +58,18 @@ class TestStatic(unittest.TestCase):
         self.assertTrue(sp.selfTest(), "self test failed.")
         sp.terminate()
     
+    @skip("simple")
+    def test_fake(self):
+        """
+        Just makes sure we don't (completely) break FakeSpectraPro after an update
+        """
+        sp = spectrapro.FakeSpectraPro(**KWARGS)
+        
+        self.assertGreater(len(sp.grating.choices), 0)
+        sp.moveAbs({"wavelength":300e-9})
+        
+        self.assertTrue(sp.selfTest(), "self test failed.")
+        sp.terminate()
     
 class TestSP(unittest.TestCase):
     """
@@ -64,22 +78,25 @@ class TestSP(unittest.TestCase):
     
     def setUp(self):
         self.sp = CLASS(**KWARGS)
+        self.orig_pos = dict(self.sp.position.value)
            
     def tearUp(self):
-        pass
+        # move back to the original position
+        f = self.sp.moveAbs(self.orig_pos)
+        f.result()
     
     def test_moverel(self):
         move = {'wavelength':1e-9} # +1nm => should be fast
-        self.sp.moveRel(move)
-        time.sleep(0.1) # wait for the move to finish
+        f = self.sp.moveRel(move)
+        f.result() # wait for the move to finish
+        self.assertGreater(self.sp.position.value["wavelength"], self.orig_pos["wavelength"])
     
     def test_moveabs(self):
         pos = dict(self.sp.position.value)
-        orig_pos = dict(pos)
-        pos["wavelength"] -= 1e-9  # -1nm => should be fast
-        self.sp.moveAbs(pos)
-        time.sleep(0.1) # wait for the move to finish
-        self.assertLess(self.sp.position.value["wavelength"], orig_pos["wavelength"])
+        pos["wavelength"] += 1e-9  # 1nm => should be fast
+        f = self.sp.moveAbs(pos)
+        f.result() # wait for the move to finish
+        self.assertGreater(self.sp.position.value["wavelength"], self.orig_pos["wavelength"])
     
     def test_grating(self):
         cg = self.sp.grating.value
@@ -103,56 +120,63 @@ class TestSP(unittest.TestCase):
         # For moves big enough, sync should always take more time than async
         delta = 0.0001 # s
 
-        orig_pos = dict(self.sp.position.value)
         # two big separate positions that should be always acceptable        
         pos_1 = {'wavelength':300e-9}
         pos_2 = {'wavelength':500e-9}
-        self.sp.moveAbs(pos_1)        
-        move = {'x':100e-6}
+        f = self.sp.moveAbs(pos_1)
+        f.result()
         start = time.time()
-        f = stage.moveRel(move)
+        f = self.sp.moveAbs(pos_2)
         dur_async = time.time() - start
         f.result()
         self.assertTrue(f.done())
         
-        move = {'x':-100e-6}
         start = time.time()
-        f = stage.moveRel(move)
-        f.result() # wait
+        f = self.sp.moveAbs(pos_1)
+        f.result()
         dur_sync = time.time() - start
         self.assertTrue(f.done())
         
         self.assertGreater(dur_sync, max(0, dur_async - delta), "Sync should take more time than async.")
         
-        move = {'x':100e-6}
-        f = stage.moveRel(move)
+        # test timeout
+        f = self.sp.moveRel(pos_2)
         # timeout = 0.001s should be too short for such a long move
-        self.assertRaises(futures.TimeoutError, f.result, timeout=0.001)    
-
-    def test_stop(self):
-        stage = pigcs.Bus("test", "stage", PORT, CONFIG_BUS_BASIC)
-        stage.stop()
+        self.assertRaises(futures.TimeoutError, f.result, timeout=0.001)
         
-        move = {'x':100e-6}
-        f = stage.moveRel(move)
-        stage.stop()
-        self.assertTrue(f.cancelled())
+    def test_stop(self):
+        self.sp.stop()
+        
+        # two big separate positions that should be always acceptable        
+        pos_1 = {'wavelength':300e-9}
+        pos_2 = {'wavelength':500e-9}
+        f = self.sp.moveAbs(pos_1)
+        f.result()
+        f = self.sp.moveAbs(pos_2)
+        self.sp.stop()
+        self.assertTrue(f.done() or f.cancelled()) # the current task cannot be cancelled on this hardware
     
     def test_queue(self):
         """
         Ask for several long moves in a row, and checks that nothing breaks
         """
-        stage = pigcs.Bus("test", "stage", PORT, CONFIG_BUS_BASIC)
-        move_forth = {'x':1e-3}
-        move_back = {'x':-1e-3}
-        stage.speed.value = {"x":1e-3} # => 1s per move
-        start = time.time()
-        expected_time = 4 * move_forth["x"] / stage.speed.value["x"]
-        f0 = stage.moveRel(move_forth)
-        f1 = stage.moveRel(move_back)
-        f2 = stage.moveRel(move_forth)
-        f3 = stage.moveRel(move_back)
+        pos_1 = {'wavelength':300e-9}
+        pos_2 = {'wavelength':500e-9}
         
+        # mesure how long it takes to do one move
+        f = self.sp.moveAbs(pos_1)
+        f.result()
+        start = time.time()
+        f = self.sp.moveAbs(pos_2)
+        dur = time.time() - start
+        
+        expected_time = (4 * dur) * 0.9 # a bit less (90%) to take care of randomness
+        start = time.time() 
+        f0 = self.sp.moveAbs(pos_1)
+        f1 = self.sp.moveAbs(pos_2)
+        f2 = self.sp.moveAbs(pos_1)
+        f3 = self.sp.moveAbs(pos_2)
+
         # intentionally skip some sync (it _should_ not matter)
 #        f0.result()
         f1.result()
@@ -163,31 +187,29 @@ class TestSP(unittest.TestCase):
         self.assertGreaterEqual(dur, expected_time)
     
     def test_cancel(self):
-        stage = pigcs.Bus("test", "stage", PORT, CONFIG_BUS_BASIC)
-        move_forth = {'x':1e-3}
-        move_back = {'x':-1e-3}
-        stage.speed.value = {"x":1e-3} # => 1s per move
-        # test cancel during action
-        f = stage.moveRel(move_forth)
-        time.sleep(0.01) # to make sure the action is being handled
-        self.assertTrue(f.running())
-        f.cancel()
-        self.assertTrue(f.cancelled())
+        pos_1 = {'wavelength':300e-9}
+        pos_2 = {'wavelength':500e-9}
+
+        f = self.sp.moveAbs(pos_1)
+        # cancel during action is not supported so don't try
+        f.result()
         self.assertTrue(f.done())
         
         # test cancel in queue
-        f1 = stage.moveRel(move_forth)
-        f2 = stage.moveRel(move_back)
+        f1 = self.sp.moveAbs(pos_2)
+        f2 = self.sp.moveAbs(pos_1)
         f2.cancel()
         self.assertFalse(f1.done())
+        time.sleep(0.02) # make sure the command is started
+        self.assertTrue(f1.running())
         self.assertTrue(f2.cancelled())
         self.assertTrue(f2.done())
         
         # test cancel after already cancelled
-        f.cancel()
-        self.assertTrue(f.cancelled())
-        self.assertTrue(f.done())
+        f2.cancel()
+        self.assertTrue(f2.cancelled())
+        self.assertTrue(f2.done())
         
-        
+        f1.result()
         
         
