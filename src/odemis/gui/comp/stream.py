@@ -34,9 +34,9 @@ from .slider import UnitIntegerSlider
 from .text import SuggestTextCtrl, UnitIntegerCtrl
 from odemis.gui import instrmodel
 from odemis.gui.img.data import getemptyBitmap
-from odemis.gui.log import log
 from odemis.gui.util.conversion import wave2rgb
 import collections
+import logging
 import math
 import odemis.gui.img.data as img
 import wx
@@ -157,7 +157,7 @@ class Expander(wx.PyControl):
 
         if dlg.ShowModal() == wx.ID_OK:
             colour = dlg.ColourData.GetColour().Get()  # convert to a 3-tuple
-            log.debug("Colour %r selected", colour)
+            logging.debug("Colour %r selected", colour)
             # this will automatically update the button's colour
             self._stream.tint.value = colour
 
@@ -578,7 +578,7 @@ class StreamPanelEntry(wx.PyPanel):
     # GUI events: update the stream when the user changes the values
 
     def on_remove(self, evt):
-        log.debug("Removing stream panel '%s'", self.stream.name.value)
+        logging.debug("Removing stream panel '%s'", self.stream.name.value)
 #        fpb_item = self.Parent
 
         # generate EVT_STREAM_REMOVE
@@ -594,20 +594,20 @@ class StreamPanelEntry(wx.PyPanel):
         # TODO need to let the currently focused view know (via view controller?)
         view = self._livegui.focussedView.value
         if self._expander._btn_vis.GetToggle():
-            log.debug("Showing stream '%s'", self.stream.name.value)
+            logging.debug("Showing stream '%s'", self.stream.name.value)
             # FIXME how to get the ref?
             if view:
                 view.addStream(self.stream)
         else:
-            log.debug("Hiding stream '%s'", self.stream.name.value)
+            logging.debug("Hiding stream '%s'", self.stream.name.value)
             if view:
                 view.removeStream(self.stream)
 
     def on_play(self, evt):
         if self._expander._btn_play.GetToggle():
-            log.debug("Activating stream '%s'", self.stream.name.value)
+            logging.debug("Activating stream '%s'", self.stream.name.value)
         else:
-            log.debug("Pausing stream '%s'", self.stream.name.value)
+            logging.debug("Pausing stream '%s'", self.stream.name.value)
         self.stream.updated.value = self._expander._btn_play.GetToggle()
 
     def on_toggle_autocontrast(self, evt):
@@ -666,7 +666,7 @@ class StreamPanelEntry(wx.PyPanel):
         evt.Skip()
 
     def on_excitation_text(self, evt):
-#        log.debug("Excitation changed")
+#        logging.debug("Excitation changed")
         obj = evt.GetEventObject()
         wl = (obj.GetValue() or 0) * 1e-9
         # FIXME: need to turn the text red if the value is the smaller (bigger, maybe not necessary)
@@ -674,11 +674,11 @@ class StreamPanelEntry(wx.PyPanel):
         self.stream.excitation.value = wl
 
         colour = wave2rgb(self.stream.excitation.value)
-#        log.debug("Changing colour to %s", colour)
+#        logging.debug("Changing colour to %s", colour)
         self._btn_excitation.set_colour(colour)
 
     def on_emission_text(self, evt):
-#        log.debug("Emission changed")
+#        logging.debug("Emission changed")
         obj = evt.GetEventObject()
         wl = (obj.GetValue() or 0) * 1e-9
         # FIXME: need to turn the text red if the value is the smaller (bigger, maybe not necessary)
@@ -686,7 +686,7 @@ class StreamPanelEntry(wx.PyPanel):
         self.stream.emission.value = wl 
 
         colour = wave2rgb(self.stream.emission.value)
-#        log.debug("Changing colour to %s", colour)
+#        logging.debug("Changing colour to %s", colour)
         self._btn_emission.set_colour(colour)
 
         # changing emission should also change the tint
@@ -796,7 +796,7 @@ class StreamPanel(wx.Panel):
 
         msg = "No stream available as both SEM and optical paths are off."
 
-        # log.debug("Point size %s" % self.GetFont().GetPointSize())
+        # logging.debug("Point size %s" % self.GetFont().GetPointSize())
 
         self.txt_no_stream = wx.StaticText(self, -1, msg)
         self._sz.Add(self.txt_no_stream, 0, wx.ALL | wx.ALIGN_CENTER, 10)
@@ -834,7 +834,7 @@ class StreamPanel(wx.Panel):
     def _fitStreams(self):
         h = self._sz.GetMinSize().GetHeight()
 
-        log.debug("Setting StreamPanel height to %s", h)
+        logging.debug("Setting StreamPanel height to %s", h)
         self.SetSize((-1, h))
 
         # The panel size is cached in the _PanelSize attribute.
@@ -864,7 +864,7 @@ class StreamPanel(wx.Panel):
             if isinstance(stream, c):
                 return i
 
-        log.warning("Stream of unknown order type %s", stream.__class__.__name__)
+        logging.warning("Stream of unknown order type %s", stream.__class__.__name__)
         return len(self.STREAM_ORDER)
 
     # === VA handlers
@@ -899,12 +899,12 @@ class StreamPanel(wx.Panel):
             #action = self.menu_actions["Filtered colour"]
             #action()
         else:
-            log.info("Don't know how to add a stream, need to implement a real menu")
+            logging.info("Don't know how to add a stream, need to implement a real menu")
         # evt_obj = evt.GetEventObject()
         # stream_name = evt_obj.GetStringSelection()
 
     def on_stream_remove(self, evt):
-        log.debug("StreamPanel received remove event %r", evt)
+        logging.debug("StreamPanel received remove event %r", evt)
         # delete entry
         self.remove_stream(evt.entry)
 
@@ -945,7 +945,7 @@ class StreamPanel(wx.Panel):
                 break
             ins_pos += 1
 
-        log.debug("Inserting %s at position %s",
+        logging.debug("Inserting %s at position %s",
                   entry.stream.__class__.__name__,
                   ins_pos)
 
@@ -966,6 +966,9 @@ class StreamPanel(wx.Panel):
         entry.Bind(EVT_STREAM_REMOVE, self.on_stream_remove)
 
         entry.Layout()
+        # hide the stream if the current view is not compatible
+        entry.Show(isinstance(entry.stream,
+                              self._microscope.focussedView.value.stream_classes))
         self._fitStreams()
 
 
@@ -1003,9 +1006,9 @@ class StreamPanel(wx.Panel):
         callback (callable): function to call when the action is selected
         """
         if self.btn_add_stream is None:
-            log.error("No add button present!")
+            logging.error("No add button present!")
         else:
-            log.debug("Adding %s action to stream panel", title)
+            logging.debug("Adding %s action to stream panel", title)
             self.menu_actions[title] = callback
             self.btn_add_stream.add_choice(title, callback, check_enabled)
 
@@ -1015,7 +1018,7 @@ class StreamPanel(wx.Panel):
         title (string): name of the action to remove
         """
         if title in self.menu_actions:
-            log.debug("Removing %s action from stream panel", title)
+            logging.debug("Removing %s action from stream panel", title)
             del self.menu_actions[title]
             self.btn_add_stream.set_choices(self.menu_actions)
 

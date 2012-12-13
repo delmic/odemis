@@ -23,6 +23,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 from odemis.gui import instrmodel, comp
 from odemis.gui.instrmodel import STATE_OFF, STATE_PAUSE, STATE_ON
+import logging
 
 
 # stream controller:
@@ -113,7 +114,7 @@ class StreamController(object):
                                     self.sem_was_turned_on)
 
 
-    def addFluo(self):
+    def addFluo(self, add_to_all_views=False):
         """
         Creates a new fluorescence stream and entry into the stream panel
         returns (StreamPanelEntry): the entry created
@@ -128,9 +129,9 @@ class StreamController(object):
         stream = instrmodel.FluoStream(name,
                   self._livegui.ccd, self._livegui.ccd.data,
                   self._livegui.light, self._livegui.light_filter)
-        return self._addStream(stream, comp.stream.CustomStreamPanelEntry)
+        return self._addStream(stream, comp.stream.CustomStreamPanelEntry, add_to_all_views)
 
-    def addBrightfield(self):
+    def addBrightfield(self, add_to_all_views=False):
         """
         Creates a new brightfield stream and entry into the stream panel
         returns (StreamPanelEntry): the entry created
@@ -138,9 +139,9 @@ class StreamController(object):
         stream = instrmodel.BrightfieldStream("Bright-field",
                   self._livegui.ccd, self._livegui.ccd.data,
                   self._livegui.light)
-        return self._addStream(stream, comp.stream.FixedStreamPanelEntry)
+        return self._addStream(stream, comp.stream.FixedStreamPanelEntry, add_to_all_views)
 
-    def addSEMSED(self):
+    def addSEMSED(self, add_to_all_views=False):
         """
         Creates a new SED stream and entry into the stream panel
         returns (StreamPanelEntry): the entry created
@@ -148,17 +149,27 @@ class StreamController(object):
         stream = instrmodel.SEMStream("Secondary electrons",
                   self._livegui.sed, self._livegui.sed.data,
                   self._livegui.ebeam)
-        return self._addStream(stream, comp.stream.FixedStreamPanelEntry)
+        return self._addStream(stream, comp.stream.FixedStreamPanelEntry, add_to_all_views)
 
-    def _addStream(self, stream, entry_cls):
+    def _addStream(self, stream, entry_cls, add_to_all_views=False):
         """
         Adds a stream.
         stream (Stream): the new stream to add
         entry_cls (class): the type of stream entry to create
+        add_to_all_views (boolean): if True, add the stream to all the compatible
+          views, otherwise add only to the current view
         returns the entry created
         """
         self._livegui.streams.add(stream)
-        self._livegui.focussedView.value.addStream(stream)
+        if add_to_all_views:
+            for n, v in self._livegui.views.items():
+                if isinstance(stream, v.stream_classes):
+                    v.addStream(stream)
+        else:
+            v = self._livegui.focussedView.value
+            if isinstance(stream, v.stream_classes):
+                logging.warning("Adding stream incompatible with the current view")
+            v.addStream(stream)
 
         # TODO create a StreamScheduler
         # call it like self._scheduler.addStream(stream)
@@ -219,8 +230,7 @@ class StreamController(object):
         elif state == STATE_ON:
             if not self._opticalWasTurnedOn:
                 self._opticalWasTurnedOn = True
-                self.addBrightfield()
-                # TODO need to hide if the view is not the right one
+                self.addBrightfield(add_to_all_views=True)
 
             self._startStreams(OPTICAL_STREAMS)
 
@@ -231,8 +241,7 @@ class StreamController(object):
             if not self._semWasTurnedOn:
                 self._semWasTurnedOn = True
                 if self._livegui.sed:
-                    self.addSEMSED()
-                # TODO need to hide if the view is not the right one
+                    self.addSEMSED(add_to_all_views=True)
 
             self._startStreams(EM_STREAMS)
 

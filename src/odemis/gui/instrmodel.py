@@ -695,7 +695,7 @@ class FluoStream(Stream):
 
         # colouration of the image
         defaultTint = util.conversion.wave2rgb(self.emission.value)
-        self.tint = VigilantAttribute(defaultTint, unit="RGB")
+        self.tint = model.ListVA(defaultTint, unit="RGB") # 3-tuple R,G,B
 
     def onActive(self, active):
         # TODO update Emission or Excitation only if the stream is active

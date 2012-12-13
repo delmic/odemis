@@ -415,11 +415,8 @@ def move(comp_name, axis_name, str_distance):
         return 129
 
     try:
-#        for i in range(1000): # FIXME seems to fail (all sent, but only 10 applied, then blocking in futures?)
-#            print i
-#            component.moveRel({axis_name: distance})
         move = component.moveRel({axis_name: distance})
-        move.result() # TODO: flag for sync? FIXME: it seems to fail sometimes if quiting before the end
+        move.result()
     except:
         logging.error("Failed to move axis %s of component %s", axis_name, comp_name)
         return 127
