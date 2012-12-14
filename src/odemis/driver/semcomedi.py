@@ -923,20 +923,6 @@ class SEMComedi(model.HwComponent):
         expected_time = nwscans * period # s
         
         logging.debug("Generating a new read command for %d scans", nrscans)
-        rcmd = comedi.cmd_struct()
-        comedi.get_cmd_generic_timed(self._device, self._ai_subdevice,
-                                                  rcmd, nrchans, rperiod_ns)
-        clist = comedi.chanlist(nrchans)
-        for i in range(nrchans):
-            clist[i] = comedi.cr_pack(rchannels[i], rranges[i], comedi.AREF_GROUND)
-        rcmd.chanlist = clist
-        rcmd.stop_src = comedi.TRIG_COUNT
-        rcmd.stop_arg = nrscans
-        self._prepare_command(rcmd)
-
-        # Checks the periods are the same
-        if rcmd.scan_begin_arg != rperiod_ns:
-            logging.warning("Asked dwell time of %g s, but got %g s", rperiod_ns/1e9, rcmd.scan_begin_arg / 1e9)
 
         # flatten the array
         wbuf = numpy.reshape(data, nwscans * nwchans)
@@ -944,14 +930,59 @@ class SEMComedi(model.HwComponent):
         # prepare read buffer info        
         self._reader.prepare(expected_time, shape, nrchans, margin, osr)
         
+        # create a command for reading, with a period osr times smaller than the write
+        self.setup_timed_command(self._ai_subdevice, rchannels, rranges, rperiod_ns,
+                    start_src=comedi.TRIG_NOW, # start immediately (trigger is not supported)
+                    stop_arg=nrscans)
+    
         # run the commands
-        comedi.command(self._device, rcmd)
         self._reader.run()
         
         timeout = expected_time * 1.10 + 1 # s   == expected time + 10% + 1s
         logging.debug("Waiting %g s for the acquisition to finish", timeout)
         rbuf = self._reader.wait(timeout)
         return rbuf
+    
+    def setup_timed_command(self, subdevice, channels, ranges, period_ns, 
+                            start_src=comedi.TRIG_INT, start_arg=0,
+                            stop_src=comedi.TRIG_COUNT, stop_arg=1):
+        """
+        Creates and sends a command to a subdevice.
+        subdevice (0<int): subdevice id
+        channels (list of int): channels of the command
+        ranges (list of int): ranges of each channel
+        period_ns (0<int): sampling period in ns (time between two convertions
+         on the same channel)
+        start_src, start_arg, stop_src, stop_arg: same meaning as the fields of
+          a command.
+        Raises:
+            IOError: if the device didn't accept the command at all.
+            ErrorValue: if the device didn't accept the command with precisely
+              the given argurments. The command is sent to the subdevice.
+        """
+        nchans = len(channels)
+        assert(0 < period_ns)
+        
+        # create a command
+        cmd = comedi.cmd_struct()
+        comedi.get_cmd_generic_timed(self._device, subdevice, cmd, nchans, period_ns)
+        clist = comedi.chanlist(nchans)
+        for i in range(nchans):
+            clist[i] = comedi.cr_pack(channels[i], ranges[i], comedi.AREF_GROUND)
+        cmd.chanlist = clist
+        cmd.start_src = start_src
+        cmd.start_arg = start_arg 
+        cmd.stop_src = stop_src
+        cmd.stop_arg = stop_arg
+        self._prepare_command(cmd)
+
+        if (cmd.scan_begin_arg != period_ns or cmd.start_arg != start_arg or
+            cmd.stop_arg != stop_arg):
+            raise ValueError("Failed to create the precise command")
+        
+        # send the command
+        comedi.command(self._device, cmd)
+
     
     def write_read_data_raw(self, wchannels, wranges, rchannels, rranges, 
                             period, shape, margin, osr, data):
@@ -976,7 +1007,6 @@ class SEMComedi(model.HwComponent):
         nwscans = data.shape[0]
         nwchans = data.shape[1]
         nrscans = nwscans * osr
-        nrchans = len(rchannels)
         period_ns = int(round(period * 1e9))  # in nanoseconds
         rperiod_ns = int(round(period * 1e9) / osr)  # in nanoseconds
         expected_time = nwscans * period # s
@@ -984,55 +1014,22 @@ class SEMComedi(model.HwComponent):
         # create a command for writing
         logging.debug("Generating new write and read commands for %d scans on "
                       "channels %r/%r", nwscans, wchannels, rchannels)
-        wcmd = comedi.cmd_struct()
-        comedi.get_cmd_generic_timed(self._device, self._ao_subdevice,
-                                                  wcmd, nwchans, period_ns)
-        clist = comedi.chanlist(nwchans)
-        for i in range(nwchans):
-            clist[i] = comedi.cr_pack(wchannels[i], wranges[i], comedi.AREF_GROUND)
-        wcmd.chanlist = clist
-#        wcmd.start_src = comedi.TRIG_INT
-#        wcmd.start_arg = 0
-        # from PyComedi docs: should improve synchronisation
-        wcmd.start_src = comedi.TRIG_EXT
-        wcmd.start_arg = NI_TRIG_AI_START1 # when the AI starts reading 
-        wcmd.stop_src = comedi.TRIG_COUNT
-        wcmd.stop_arg = nwscans
-        self._prepare_command(wcmd)
+        self.setup_timed_command(self._ao_subdevice, wchannels, wranges, period_ns,
+                    start_src = comedi.TRIG_EXT, # from PyComedi docs: should improve synchronisation
+                    start_arg = NI_TRIG_AI_START1, # when the AI starts reading
+                    stop_arg = nwscans)
         # on the NI 62xx, counter is same as input (2**24), so it should always be fine 
-        assert(wcmd.stop_arg == nwscans)  
 
         # create a command for reading, with a period osr times smaller than the write
-        rcmd = comedi.cmd_struct()
-        comedi.get_cmd_generic_timed(self._device, self._ai_subdevice,
-                                                  rcmd, nrchans, rperiod_ns)
-        clist = comedi.chanlist(nrchans)
-        for i in range(nrchans):
-            clist[i] = comedi.cr_pack(rchannels[i], rranges[i], comedi.AREF_GROUND)
-        rcmd.chanlist = clist
-        rcmd.start_src = comedi.TRIG_INT # start synchronously with the write
-        rcmd.start_arg = 0
-        rcmd.stop_src = comedi.TRIG_COUNT
-        rcmd.stop_arg = nrscans
-        self._prepare_command(rcmd)
+        self.setup_timed_command(self._ai_subdevice, rchannels, rranges, rperiod_ns,
+                    stop_arg = nrscans)
 
-        # Checks the periods are the same
-        assert((rcmd.scan_begin_arg * osr) == wcmd.scan_begin_arg)
-        assert(rcmd.stop_arg == nrscans) # FIXME: max rcmd.stop_arg is 2**24 => do multiple scans
-        if wcmd.scan_begin_arg != period_ns:
-            logging.warning("Asked dwell time of %g s, but got %g s", period, wcmd.scan_begin_arg / 1e9)
-
-        # readying the subdevice with the command (needs to be done before
-        # writing anything to the device)
-        comedi.command(self._device, wcmd)
-        comedi.command(self._device, rcmd)
-        
         # flatten the array
         wbuf = numpy.reshape(data, nwscans * nwchans)
         self._writer.prepare(wbuf, expected_time)
 
         # prepare read buffer info        
-        self._reader.prepare(expected_time, shape, nrchans, margin, osr)
+        self._reader.prepare(expected_time, shape, len(rchannels), margin, osr)
         
         # run the commands
         # AO is waiting for AI/Start1, so not sure why internal trigger needed,
@@ -1812,6 +1809,9 @@ class FakeWriter(Accesser):
     """
     def __init__(self, parent):
         self.duration = None
+    
+    def close(self):
+        pass
     
     def prepare(self, buf, duration):
         self.duration = duration
