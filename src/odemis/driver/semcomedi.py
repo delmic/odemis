@@ -312,7 +312,7 @@ class SEMComedi(model.HwComponent):
         bufsz = 50 * 2**20 # max 50 MB: big, but no risk to take too much memory
         
         #  * the maximum amount of samples the DAQ device can read in one shot
-        #    (on the NI 652x, it's 2**24 samples)
+        #    (on the NI 652x, it's 2**16 samples)
         try:
             # see how much the device is willing to accept by asking for the maximum
             cmd = comedi.cmd_struct()
@@ -1004,23 +1004,26 @@ class SEMComedi(model.HwComponent):
         rshape = (data.shape[0], data.shape[1] - margin)
         
         # find the best method to read that fit the buffer: /array, /line, or /pixel
-        wr_method = self._write_read_2d_array
         bufsz = nrscans * nrchans * self._reader.dtype.itemsize
-        if bufsz > self._max_bufsz:
-            # try to fit a whole line
-            wr_method = self._write_read_2d_line
-            bufsz = (rshape[1] + margin) * nrchans * osr * self._reader.dtype.itemsize
+        if bufsz < self._max_bufsz:
+            return self._write_read_2d_array(wchannels, wranges, rchannels, rranges, 
+                         period, margin, osr, data)
+            
+        # try to fit a couple of lines
+        linesz = (rshape[1] + margin) * nrchans * osr * self._reader.dtype.itemsize
+        if linesz < self._max_bufsz:
+            lines = self._max_bufsz // linesz
+            return self._write_read_2d_lines(wchannels, wranges, rchannels, rranges, 
+                         period, margin, osr, lines, data)
         
-        if bufsz > self._max_bufsz:
-            # fit a pixel
-            wr_method = self._write_read_2d_pixel
-            bufsz = nrchans * osr * self._reader.dtype.itemsize
-        
-        if bufsz > self._max_bufsz:
+        # fit a pixel
+        pixelsz = nrchans * osr * self._reader.dtype.itemsize
+        if pixelsz > self._max_bufsz:
             # probably's going to fail, but let's try...
             logging.warning("Going to try to read very large buffer of %f MB.", bufsz/2.**20)
         
-        return wr_method(wchannels, wranges, rchannels, rranges, 
+        # TODO: read several pixels at a time => need clever placement
+        return self._write_read_2d_pixel(wchannels, wranges, rchannels, rranges, 
                          period, margin, osr, data)
         
     
@@ -1074,14 +1077,14 @@ class SEMComedi(model.HwComponent):
             acc = umath.add.reduce(tr_rect, axis=2, dtype=adtype)
             umath.true_divide(acc, osr, out=oarray, casting='unsafe', subok=False)
 
-    def _write_read_2d_line(self, wchannels, wranges, rchannels, rranges, 
-                            period, margin, osr, data):
+    def _write_read_2d_lines(self, wchannels, wranges, rchannels, rranges, 
+                            period, margin, osr, maxlines, data):
         """
-        Implementation of write_read_2d_data_raw by reading the input data one
-          line at a time.
+        Implementation of write_read_2d_data_raw by reading the input data n
+          lines at a time.
         """
-        logging.debug("Reading one line at a time: %d samples/read",
-                      data.shape[1] * osr * len(rchannels))
+        logging.debug("Reading %d lines at a time: %d samples/read", maxlines,
+                      maxlines * data.shape[1] * osr * len(rchannels))
         rshape = (data.shape[0], data.shape[1] - margin)
         
         # allocate one full buffer per channel
@@ -1090,15 +1093,25 @@ class SEMComedi(model.HwComponent):
             buf.append(numpy.empty(rshape, dtype=self._reader.dtype))
         adtype = get_best_dtype_for_acc(self._reader.dtype, osr)
         
-        # read one line at a time
-        for x in range(data.shape[0]):
-            wdata = data[x,:,:] # just one line
+        # read "maxlines" lines at a time
+        x = 0
+        while x < data.shape[0]:
+            lines = min(data.shape[0] - x, maxlines)
+            logging.debug("Going to read %d lines", lines)
+            wdata = data[x:x+lines,:,:] # just a couple of lines
+            wdata = wdata.reshape(-1, wdata.shape[2]) # flatten X/Y
             rbuf = self._write_read_raw_one_cmd(wchannels, wranges, rchannels,
                                                 rranges, period, osr, wdata)
             
+            rectangle = rbuf.reshape((lines, data.shape[1] * osr, len(rchannels)))
             # decimate into each buffer
             for i, b in enumerate(buf):
-                self._scan_raw_to_line(rshape, margin, osr, x, rbuf[...,i], b, adtype)
+                for l in range(lines):
+                    self._scan_raw_to_line(rshape, margin, osr, x + l, rectangle[l,:,i], b, adtype)
+
+#            for i, b in enumerate(buf):
+#                self._scan_raw_to_line(rshape, margin, osr, x, rbuf[...,i], b, adtype)
+            x += lines
 
         return buf
     
@@ -1251,7 +1264,7 @@ class SEMComedi(model.HwComponent):
                     stop_arg = nrscans)
 
         # prepare to write the flattened buffer
-        wbuf = numpy.reshape(data, nwscans * nwchans)
+        wbuf = data.reshape((nwscans * nwchans,))
         self._writer.prepare(wbuf, expected_time)
 
         # prepare to read
@@ -1617,10 +1630,14 @@ class Reader(Accesser):
         """
         self.count = count
         self.duration = duration
+        self.buf = None
+        # TODO: creating a new thread for each command is pretty costly (~5ms)
+        # => we should reuse the existing thread.
         if self.thread and self.thread.isAlive():
             logging.warning("Preparing a new acquisition while previous one is not over")
         self.thread = threading.Thread(name="SEMComedi reader", target=self._thread)
         self.file.seek(0)
+        
     
     def run(self):
         # start reader thread
@@ -1643,7 +1660,7 @@ class Reader(Accesser):
         self.thread.join(timeout)
         if self.thread.isAlive():
             logging.warning("Reading thread is still running after %g s", timeout)
-        self.cancel()
+            self.cancel()
         
         # the result should be in self.buf
         if self.buf is None:
