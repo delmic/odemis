@@ -62,6 +62,7 @@ class TestSEMStatic(unittest.TestCase):
             print "opening ", name
             sem = semcomedi.SEMComedi("test", "sem", **kwargs)
             self.assertTrue(sem.selfTest(), "SEM self test failed.")
+            sem.terminate()
         
     def test_creation(self):
         """
