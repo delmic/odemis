@@ -14,6 +14,7 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
+from multiprocessing.pool import ThreadPool
 from numpy.core import umath
 from odemis import model, __version__
 from odemis.model._core import roattribute
@@ -21,6 +22,7 @@ import gc
 import glob
 import logging
 import math
+import multiprocessing
 import numpy
 import odemis.driver.comedi_simple as comedi
 import os
@@ -143,7 +145,7 @@ class SEMComedi(model.HwComponent):
         except comedi.ComediError:
             raise ValueError("Failed to find both input and output on DAQ device '%s'" % device)
 
-        self._reader = Reader(self)
+        self._reader = PoolReader(self)
 #        self._reader = DecimatingReader(self, bufsz=80000) # TODO try different sizes XXX DEBUG => None
         self._writer = Writer(self)
         
@@ -1109,8 +1111,6 @@ class SEMComedi(model.HwComponent):
                 for l in range(lines):
                     self._scan_raw_to_line(rshape, margin, osr, x + l, rectangle[l,:,i], b, adtype)
 
-#            for i, b in enumerate(buf):
-#                self._scan_raw_to_line(rshape, margin, osr, x, rbuf[...,i], b, adtype)
             x += lines
 
         return buf
@@ -1213,7 +1213,7 @@ class SEMComedi(model.HwComponent):
         self._reader.run()
         self._writer.run()
         
-        timeout = expected_time * 1.10 + 1 # s   == expected time + 10% + 1s
+        timeout = expected_time * 1.10 + 0.1 # s   == expected time + 10% + 0.1s
         logging.debug("Waiting %g s for the acquisition to finish", timeout)
         self._writer.wait(timeout)
         rbuf = self._reader.wait(timeout)
@@ -1250,7 +1250,11 @@ class SEMComedi(model.HwComponent):
         period_ns = int(round(period * 1e9))  # in nanoseconds
         rperiod_ns = int(round(period * 1e9) / osr)  # in nanoseconds
         expected_time = nwscans * period # s
+        if expected_time < 10e-3: # it takes about 10 ms to setup the reader/writer
+            logging.debug("Acquisition is so short (%f ms) that it will be far from optimal",
+                           expected_time * 1e3)
         
+        start = time.time()
         # create a command for writing
         logging.debug("Generating new write and read commands for %d scans on "
                       "channels %r/%r", nwscans, wchannels, rchannels)
@@ -1278,10 +1282,12 @@ class SEMComedi(model.HwComponent):
         self._reader.run()
         self._writer.run()
 
-        timeout = expected_time * 1.10 + 1 # s   == expected time + 10% + 1s
+        timeout = expected_time * 1.10 + 0.1 # s   == expected time + 10% + 0.1s
         logging.debug("Waiting %g s for the acquisition to finish", timeout)
         self._writer.wait(timeout)
         rbuf = self._reader.wait(timeout)
+        dur = time.time() - start
+        logging.debug("Acquisition took %f ms to run", dur * 1e3)
         # reshape to 2D
         rbuf.shape = (nrscans, nrchans)
         return rbuf
@@ -1703,6 +1709,92 @@ class Reader(Accesser):
         
         if self.thread.isAlive():
             logging.warning("failed to cancel fully the reading thread")
+
+class PoolReader(Reader):
+    def __init__(self, parent):
+        Reader.__init__(self, parent)
+        self.can_start = threading.Event()
+        self.acq_done = threading.Event()
+        self.pool = ThreadPool(processes=1)
+        self.result = None
+#        self.thread = threading.Thread(name="SEMComedi reader", target=self._thread)
+        self.thread.start()
+
+    def prepare(self, count, duration):
+        self.count = count
+        self.duration = duration
+        self.buf = None
+        if self.result and not self.result.ready():
+            logging.warning("Preparing a new acquisition while previous one is not over")
+        self.file.seek(0)
+    
+    def run(self):
+        self.result = self.pool.apply_async(self._thread)
+        
+    def _thread(self):
+        try:
+            self.buf = numpy.fromfile(self.file, dtype=self.dtype, count=self.count)
+        except IOError:
+            # might be due to a cancel
+            logging.debug("Read ended before the end")
+        except Exception:
+            logging.exception("Unknown exception in reader thread")
+        return self.buf
+    
+    def wait(self, timeout=None):
+        """
+        timeout (float): maximum number of seconds to wait for the read to finish
+        """
+        timeout = timeout or self.period
+        
+        try:
+            buf = self.result.get(timeout)
+        except multiprocessing.TimeoutError:
+            logging.warning("Reading thread is still running after %g s", timeout)
+            self.cancel()
+        
+        # the result should be in self.buf
+        if self.buf is None:
+            raise IOError("Failed to read all the %d expected values" % self.count)
+        elif self.buf.size != self.count:
+            raise IOError("Read only %d values from the %d expected" % (self.buf.size, self.count))
+    
+        # TODO report different exception if failed due to cancel, or device error
+        return self.buf
+
+    def cancel(self):
+        try:
+            comedi.cancel(self._device, self._subdevice)
+        except comedi.ComediError:
+            logging.debug("Failed to cancel read")
+        
+        # if the thread is stopped, it's all fine
+        if not self.can_start.is_set():
+            return
+        
+        # apparently, to manage to stop a current read, you need to give a new
+        # command of few reads (e.g., 1 read), on any channel
+        try:
+            cmd = comedi.cmd_struct()
+            comedi.get_cmd_generic_timed(self._device, self._subdevice, cmd, 1, 0)
+            clist = comedi.chanlist(1)
+            clist[0] = comedi.cr_pack(0, 0, comedi.AREF_GROUND)
+            cmd.chanlist = clist
+            cmd.stop_src = comedi.TRIG_COUNT
+            cmd.stop_arg = 1
+            comedi.command(self._device, cmd)
+        except comedi.ComediError:
+            logging.debug("Failed to give read command of 1 element")
+        
+        self.acq_done.wait(1) # wait maximum 1 s
+        try:
+            comedi.cancel(self._device, self._subdevice)
+        except comedi.ComediError:
+            logging.debug("Failed to cancel read")
+        
+        if self.can_start.is_set():
+            logging.warning("failed to cancel fully the reading thread")
+
 
 # TODO delete
 class DecimatingReader(Reader):
