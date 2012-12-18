@@ -83,7 +83,7 @@ class VigilantAttribute(VigilantAttributeBase):
     '''
     A VigilantAttribute represents a value (an object) with:
      * meta-information (min, max, unit, read-only...)
-     * observable behaviour (any one can ask to be notified when the value changes)
+     * observable behaviour (anyone can ask to be notified when the value changes)
     '''
 
     def __init__(self, initval, readonly=False, setter=None, max_discard=100, *args, **kwargs):
@@ -432,7 +432,7 @@ class SubscribeProxyThread(threading.Thread):
 
 
 def unregister_vigilant_attributes(self):
-    for name, value in inspect.getmembers(self, lambda x: isinstance(x, VigilantAttributeBase)):
+    for _, value in inspect.getmembers(self, lambda x: isinstance(x, VigilantAttributeBase)):
         value._unregister()
 
 def dump_vigilant_attributes(self):
@@ -461,7 +461,7 @@ def load_vigilant_attributes(self, vas):
 
 def VASerializer(self):
     """reduce function that automatically replaces Pyro objects by a Proxy"""
-    daemon=getattr(self,"_pyroDaemon",None)
+    daemon = getattr(self, "_pyroDaemon", None)
     if daemon:
         # only return a proxy if the object is a registered pyro object
         return (VigilantAttributeProxy, (daemon.uriFor(self),), self._getproxystate())
@@ -567,7 +567,7 @@ class Continuous(object):
         Override to do more checking on the range.
         """
         if len(new_range) != 2:
-                raise InvalidTypeError("Range '%s' is not a 2-tuple." % str(new_range))
+            raise InvalidTypeError("Range '%s' is not a 2-tuple." % str(new_range))
         if new_range[0] > new_range[1]:
             raise InvalidTypeError("Range min (%s) should be smaller than max (%s)."
                                    % (str(new_range[0]), str(new_range[1])))
@@ -607,15 +607,15 @@ class Enumerated(object):
     def __init__(self, choices):
         """
         choices (set or dict (value -> str)): all the possible value that can be
-         assigned, or if it's a dict all the values that can be assigned and a 
-         user-readable description of the values. 
+         assigned, or if it's a dict all the values that can be assigned and a
+         user-readable description of the values.
         """
         self._set_choices(choices)
 
     def _check(self, value):
         if not value in self._choices:
             raise OutOfBoundError("Value %s is not part of possible choices: %s." %
-                        (str(value), ", ".join(map(str, self._choices))))
+                        (str(value), ", ".join([str(c) for c in self._choices])))
 
     def _get_choices(self):
         return self._choices
@@ -634,7 +634,7 @@ class Enumerated(object):
         if hasattr(self, "value"):
             if not self.value in new_choices:
                 raise OutOfBoundError("Current value %s is not part of possible choices: %s." %
-                            (self.value, ", ".join(map(str, new_choices))))
+                            (self.value, ", ".join([str(c) for c in new_choices])))
         self._choices = new_choices
 
     @choices.setter
@@ -768,7 +768,7 @@ class ResolutionVA(VigilantAttribute, Continuous):
         # force tuple
         value = tuple(value)
         VigilantAttribute._set_value(self, value)
-    # need to overwrite the whole property   
+    # need to overwrite the whole property
     value = property(VigilantAttribute._get_value, _set_value, VigilantAttribute._del_value, "The actual value")
-    
+
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:
