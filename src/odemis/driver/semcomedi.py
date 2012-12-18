@@ -1901,7 +1901,6 @@ class Scanner(model.Emitter):
             
             self._scan_array = self.parent._array_from_phys(self.parent._ao_subdevice,
                                             self._channels, ranges, scan_phys)
-            
         
     @staticmethod
     def _generate_scan_array(shape, limits, margin):
@@ -1936,7 +1935,6 @@ class Scanner(model.Emitter):
             scan[:,:margin,1].T[:] = fp
         
         return scan
-    
     
     
 class Detector(model.Detector):

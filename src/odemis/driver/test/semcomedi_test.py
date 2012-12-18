@@ -21,6 +21,7 @@ import comedi
 import logging
 import os
 import pickle
+import threading
 import time
 import unittest
 
@@ -130,6 +131,7 @@ class TestSEM(unittest.TestCase):
         self.size = self.scanner.resolution.value
         self.scanner.dwellTime.value = self.scanner.dwellTime.range[0]
         self.acq_dates = (set(), set()) # 2 sets of dates, one for each receiver
+        self.acq_done = threading.Event()
            
     def tearUp(self):
 #        print gc.get_referrers(self.camera)
@@ -172,6 +174,34 @@ class TestSEM(unittest.TestCase):
         self.assertEqual(im.shape, self.size[-1:-3:-1])
         self.assertGreaterEqual(duration, expected_duration, "Error execution took %f s, less than exposure time %d." % (duration, expected_duration))
         self.assertIn(model.MD_DWELL_TIME, im.metadata)
+
+    def test_acquire_long_short(self):
+        """
+        test being able to cancel image acquisition if dwell time is too long
+        """
+        self.scanner.resolution.value = (256, 200)
+        self.size = self.scanner.resolution.value
+        self.scanner.dwellTime.value = self.scanner.dwellTime.range[0] * 100
+        expected_duration_l = self.compute_expected_duration() # about 5 s
+
+        self.left = 1
+        start = time.time()
+        
+        # acquire one long, and change to a short time
+        self.sed.data.subscribe(self.receive_image)
+        time.sleep(0.1) # make sure it has started
+        self.scanner.dwellTime.value = self.scanner.dwellTime.range[0] # shorten
+        expected_duration_s = self.compute_expected_duration()
+        # unsub/sub should always work, as long as there is only one subscriber
+        self.sed.data.unsubscribe(self.receive_image)
+        self.sed.data.subscribe(self.receive_image)
+        
+        self.acq_done.wait(2 + expected_duration_l * 1.1)
+        duration = time.time() - start
+
+        self.assertTrue(self.acq_done.is_set())
+        self.assertGreaterEqual(duration, expected_duration_s, "Error execution took %f s, less than exposure time %d." % (duration, expected_duration_s))
+        self.assertLess(duration, expected_duration_l, "Execution took %f s, as much as the long exposure time %d." % (duration, expected_duration_l))
     
 #    @unittest.skip("simple")
     def test_acquire_flow(self):
@@ -180,11 +210,8 @@ class TestSEM(unittest.TestCase):
         number = 5
         self.left = number
         self.sed.data.subscribe(self.receive_image)
-        for i in range(number):
-            # end early if it's already finished
-            if self.left == 0:
-                break
-            time.sleep(2 + expected_duration) # 2s per image should be more than enough in any case
+        
+        self.acq_done.wait(number * (2 + expected_duration * 1.1)) # 2s per image should be more than enough in any case
         
         self.assertEqual(self.left, 0)
 
@@ -209,12 +236,7 @@ class TestSEM(unittest.TestCase):
         self.scanner.dwellTime.value = dwell
         expected_duration = self.compute_expected_duration()
                 
-        # should just not raise any exception
-        for i in range(number):
-            # end early if it's already finished
-            if self.left == 0:
-                break
-            time.sleep(2 + expected_duration) # 2s per image should be more than enough in any case
+        self.acq_done.wait(number * (2 + expected_duration * 1.1)) # 2s per image should be more than enough in any case
         
         self.sed.data.unsubscribe(self.receive_image) # just in case it failed
         self.assertEqual(self.left, 0)
@@ -233,7 +255,7 @@ class TestSEM(unittest.TestCase):
         
         for i in range(number):
             self.sed.data.subscribe(self.receive_image)
-            time.sleep(1 + expected_duration) # make sure we received at least one image
+            time.sleep(expected_duration * 1.2) # make sure we received at least one image
             self.sed.data.unsubscribe(self.receive_image)
 
         # if it has acquired a least 5 pictures we are already happy
@@ -251,6 +273,7 @@ class TestSEM(unittest.TestCase):
         self.left -= 1
         if self.left <= 0:
             dataflow.unsubscribe(self.receive_image)
+            self.acq_done.set()
 
 #@unittest.skip("simple")
 class TestSEM2(unittest.TestCase):
@@ -305,7 +328,7 @@ class TestSEM2(unittest.TestCase):
             # end early if it's already finished
             if self.left == 0 and self.left2 == 0:
                 break
-            time.sleep(2 + expected_duration) # 2s per image should be more than enough in any case
+            time.sleep(2 + expected_duration * 1.1) # 2s per image should be more than enough in any case
         
         # check that at least some images were acquired simultaneously
         common_dates = self.acq_dates[0] & self.acq_dates[1]
