@@ -311,7 +311,7 @@ class SEMComedi(model.HwComponent):
         bufsz = 50 * 2**20 # max 50 MB: big, but no risk to take too much memory
         
         #  * the maximum amount of samples the DAQ device can read in one shot
-        #    (on the NI 652x, it's 2**16 samples)
+        #    (on the NI 652x, it's 2**24 samples)
         try:
             # see how much the device is willing to accept by asking for the maximum
             cmd = comedi.cmd_struct()
@@ -691,7 +691,7 @@ class SEMComedi(model.HwComponent):
         # no compatible dwell time found
         raise ValueError("No compatible dwell time found for %g s." % period)
                 
-    def find_best_oversampling_rate(self, period, max_osr=2**16):
+    def find_best_oversampling_rate(self, period, max_osr=2**24):
         """
         Returns the closest dwell time _longer_ than the given time compatible
           with the output device and the highest over-sampling rate compatible 
@@ -975,7 +975,6 @@ class SEMComedi(model.HwComponent):
         # send the command
         comedi.command(self._device, cmd)
 
-
     def write_read_2d_data_raw(self, wchannels, wranges, rchannels, rranges, 
                             period, margin, osr, data):
         """
@@ -996,20 +995,12 @@ class SEMComedi(model.HwComponent):
          and dtype=device type): the data read (raw) for each channel, after
          decimation.
         """
-        # We write at the given period, and read osr samples for each pixel
-        nwscans = data.shape[0] * data.shape[1]
-        nrscans = nwscans * osr
+        # We write at the given period, and read "osr" samples for each pixel
         nrchans = len(rchannels)
-        rshape = (data.shape[0], data.shape[1] - margin)
         
-        # find the best method to read that fit the buffer: /array, /line, or /pixel
-        bufsz = nrscans * nrchans * self._reader.dtype.itemsize
-        if bufsz < self._max_bufsz:
-            return self._write_read_2d_array(wchannels, wranges, rchannels, rranges, 
-                         period, margin, osr, data)
-            
+        # find the best method to read that fit the buffer: /lines, or /pixel
         # try to fit a couple of lines
-        linesz = (rshape[1] + margin) * nrchans * osr * self._reader.dtype.itemsize
+        linesz = data.shape[1] * nrchans * osr * self._reader.dtype.itemsize
         if linesz < self._max_bufsz:
             lines = self._max_bufsz // linesz
             return self._write_read_2d_lines(wchannels, wranges, rchannels, rranges, 
@@ -1018,64 +1009,14 @@ class SEMComedi(model.HwComponent):
         # fit a pixel
         pixelsz = nrchans * osr * self._reader.dtype.itemsize
         if pixelsz > self._max_bufsz:
-            # probably's going to fail, but let's try...
-            logging.warning("Going to try to read very large buffer of %f MB.", bufsz/2.**20)
+            # probably going to fail, but let's try...
+            logging.warning("Going to try to read very large buffer of %f MB.", pixelsz/2.**20)
         
         # TODO: read several pixels at a time => need clever placement
         return self._write_read_2d_pixel(wchannels, wranges, rchannels, rranges, 
                          period, margin, osr, data)
         
     
-    def _write_read_2d_array(self, wchannels, wranges, rchannels, rranges, 
-                            period, margin, osr, data):
-        """
-        Implementation of write_read_2d_data_raw by reading the input data in
-          one big shot (the whole array)
-        """
-        logging.debug("Reading whole array at a time: %d samples/read", 
-                      data.shape[0] * data.shape[1] * osr * len(rchannels))
-        rshape = (data.shape[0], data.shape[1] - margin)
-        
-        # write/read the data raw
-        wdata = data.reshape(-1, data.shape[2]) # flatten X/Y
-        rbuf = self._write_read_raw_one_cmd(wchannels, wranges, rchannels, rranges, 
-                            period, osr, wdata)
-            
-        # allocate one full buffer per channel
-        buf = []
-        for c in rchannels:
-            buf.append(numpy.empty(rshape, dtype=rbuf.dtype))
-        
-        # decimate the whole array  
-        for i, b in enumerate(buf):
-            self._scan_raw_to_array(rshape, margin, osr, rbuf[...,i], b)
-    
-        return buf
-    
-    @staticmethod
-    def _scan_raw_to_array(shape, margin, osr, data, oarray):
-        """
-        Converts a linear array resulting from a scan with oversampling to a 2D array
-        shape (2-tuple int): H,W dimension of the scanned image (margin not included)
-        margin (int): amount of useless pixels at the beginning of each line
-        osr (int): over-sampling rate
-        data (1D ndarray): the raw linear array (including oversampling), of one channel
-        oarray (2D ndarray): the output array, already allocated, of shape self.shape
-        """
-        # reshape to a 3D array with margin and sub-samples
-        rectangle = data.reshape((shape[0], shape[1] + margin, osr))
-        # trim margin
-        tr_rect = rectangle[:, margin:]
-        if osr == 1:
-            # only one sample per pixel => copy
-            oarray = tr_rect[:,:,0] 
-        else:
-            # inspired by _mean() from numpy, but save the accumulated value in 
-            # a separate array of a big enough dtype.
-            adtype = get_best_dtype_for_acc(data.dtype, osr)
-            acc = umath.add.reduce(tr_rect, axis=2, dtype=adtype)
-            umath.true_divide(acc, osr, out=oarray, casting='unsafe', subok=False)
-
     def _write_read_2d_lines(self, wchannels, wranges, rchannels, rranges, 
                             period, margin, osr, maxlines, data):
         """
@@ -1102,40 +1043,39 @@ class SEMComedi(model.HwComponent):
             rbuf = self._write_read_raw_one_cmd(wchannels, wranges, rchannels,
                                                 rranges, period, osr, wdata)
             
-            rectangle = rbuf.reshape((lines, data.shape[1] * osr, len(rchannels)))
             # decimate into each buffer
             for i, b in enumerate(buf):
-                for l in range(lines):
-                    self._scan_raw_to_line(rshape, margin, osr, x + l, rectangle[l,:,i], b, adtype)
+                self._scan_raw_to_lines(rshape, margin, osr, x, rbuf[...,i], b[x:x+lines,...], adtype)
 
             x += lines
 
         return buf
     
     @staticmethod
-    def _scan_raw_to_line(shape, margin, osr, x, data, oarray, adtype):
+    def _scan_raw_to_lines(shape, margin, osr, x, data, oarray, adtype):
         """
-        Converts a raw data corresponding of one line of the final 2D array
+        Converts a linear array resulting from a scan with oversampling to a 2D array
         shape (2-tuple int): H,W dimension of the scanned image (margin not included)
         margin (int): amount of useless pixels at the beginning of each line
         osr (int): over-sampling rate
         x (int): x position of the line in the output array
         data (1D ndarray): the raw linear array (including oversampling), of one channel
         oarray (2D ndarray): the output array, already allocated, of shape self.shape
+        adtype (dtype): intermediarry type to use for the accumulator
         """
-        # reshape to a 2D array: line with margin and sub-samples
-        line = data.reshape((shape[1] + margin, osr))
+        # reshape to a 3D array with margin and sub-samples
+        rectangle = data.reshape((-1, shape[1] + margin, osr))
         # trim margin
-        tr_line = line[margin:]
-        # no osr == 1 optimisation, because if we are reading per line it's 
-        # very likely due to a big osr.
-        
-        # inspired by _mean() from numpy, but save the accumulated value in 
-        # a separate array of a big enough dtype.
-        acc = umath.add.reduce(tr_line, axis=1, dtype=adtype)
-        umath.true_divide(acc, osr, out=oarray[x], casting='unsafe', subok=False)
-
-
+        tr_rect = rectangle[:, margin:]
+        if osr == 1:
+            # only one sample per pixel => copy
+            oarray = tr_rect[:,:,0]
+        else:
+            # inspired by _mean() from numpy, but save the accumulated value in 
+            # a separate array of a big enough dtype.
+            acc = umath.add.reduce(tr_rect, axis=2, dtype=adtype)
+            umath.true_divide(acc, osr, out=oarray, casting='unsafe', subok=False)
+    
     def _write_read_2d_pixel(self, wchannels, wranges, rchannels, rranges, 
                             period, margin, osr, data):
         """
