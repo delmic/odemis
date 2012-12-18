@@ -14,7 +14,6 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
-from multiprocessing.pool import ThreadPool
 from numpy.core import umath
 from odemis import model, __version__
 from odemis.model._core import roattribute
@@ -22,7 +21,6 @@ import gc
 import glob
 import logging
 import math
-import multiprocessing
 import numpy
 import odemis.driver.comedi_simple as comedi
 import os
@@ -146,7 +144,6 @@ class SEMComedi(model.HwComponent):
             raise ValueError("Failed to find both input and output on DAQ device '%s'" % device)
 
         self._reader = Reader(self)
-#        self._reader = DecimatingReader(self, bufsz=80000) # TODO try different sizes XXX DEBUG => None
         self._writer = Writer(self)
         
         self._metadata = {model.MD_HW_NAME: self.getHwName()}
@@ -1290,40 +1287,6 @@ class SEMComedi(model.HwComponent):
         return rbuf
 
 
-    # TODO: delete
-    @staticmethod
-    def _scan_result_to_array(data, shape, margin, osr):
-        """
-        Converts a linear array resulting from a scan to a 2D array
-        data (1D ndarray): the linear array, of shape=shape[0]*(shape[1] + margin) * osr
-        shape (2-tuple of int): shape of the output array
-        margin (0<=int): number of pixels at the beginning of each line to skip
-        osr (1<=int<2**16): over-sampling rate, how many input samples should be acquired by pixel
-            if osr is above 1, the average value is computed.
-        returns (2D ndarray): dtype is same as data
-        """
-        assert(osr >= 1)
-        # reshape to a 2D array with margin
-        rectangle = numpy.reshape(data, (shape[0], shape[1] + margin, osr))
-        # trim margin
-        tr_rect = rectangle[:, margin:]
-        if osr == 1:
-            # only one sample per pixel => we are done
-            return tr_rect[:,:,0] 
-        else:
-            # inspired by _mean() from numpy, but save the accumulated value in 
-            # a separate array of a big enough dtype.
-            if data.dtype == numpy.uint16:
-                #assert(osr <= 2**16) # if we reach this, we have other problems with memory size first 
-                idtype = numpy.uint32
-            else:
-                # numpy.uint32
-                idtype = numpy.uint64
-            acc = umath.add.reduce(tr_rect, axis=2, dtype=idtype)
-            average = numpy.empty(shape, dtype=data.dtype)
-            umath.true_divide(acc, osr, out=average, casting='unsafe', subok=False)
-            return average
-            
     def start_acquire(self, detector, callback):
         """
         Start acquiring images on the given detector (i.e., input channel).
@@ -1706,265 +1669,6 @@ class Reader(Accesser):
         
         if self.thread.isAlive():
             logging.warning("failed to cancel fully the reading thread")
-
-# TODO delete
-class DecimatingReader(Reader):
-    """
-    A reader that decimate (i.e., compute the mean) of the input while reading
-      the file. Note that the prepare() method has a different signature. 
-    """
-    def __init__(self, parent, bufsz=None):
-        """
-        bufsz (None or 1<=int): maximum buffer size (in bytes) when reading. If None, a 
-          good (=efficient) default value will be selected. Mostly used for debugging.
-        """
-        Accesser.__init__(self, parent)
-        self._subdevice = parent._ai_subdevice
-        
-        self.dtype = parent._get_dtype(self._subdevice)
-        self.thread = None
-        self.count = None
-        self.duration = None
-        
-        if bufsz is None:
-            # Find a good buffer size
-            self.max_bufsz = 5 * 2**20 # max 5 MB ~ same as device buffer
-            # TODO: pick a buffer which is big enough to contain samples for
-            # ~0.1 seconds at maximum sampling rate. Or same as device buffer?
-        else:
-            self.max_bufsz = bufsz
-        
-    def get_best_dtype_for_acc(self, count):
-        """
-        Computes the smallest dtype that allows to accumulate all the _count_ integers
-        count (int): number of values accumulated
-        returns (dtype): the best fitting dtype
-        """
-        maxval = 2**(self.dtype.itemsize * 8) * count
-        if maxval < 2**32:
-            idtype = numpy.uint32
-        elif maxval < 2**64:
-            idtype = numpy.uint64
-        else:
-            logging.debug("Going to use lossy intermediate type in order to support values up to %d", maxval)
-            idtype = numpy.float64 # might accumulate errors
-    
-        return idtype
-        
-    def prepare(self, duration, shape, nchans, margin, osr):
-        """
-        duration: expected total duration it will take (in s)
-        shape (2-tuple of int): shape of the _output_ array (margin removed)
-        nchans (1<=int): number of channels recorded
-        margin (0<=int): number of pixels at the beginning of each line to skip
-        osr (1<=int<2**16): over-sampling rate, how many input samples should be acquired by pixel
-            if osr is above 1, the average value is computed.
-        """
-        self.shape = shape
-        self.margin = margin
-        self.osr = osr
-        self.nchans = nchans
-        self.npreceived = 0 # px
-        self.nsreceived = 0 # samples
-        self.count = shape[0] * (shape[1] + margin) * nchans * osr # expected number of samples
-        self.duration = duration
-        # find best intermediate dtype for the decimation
-        self.idtype = self.get_best_dtype_for_acc(osr)
-        
-        # find the best method to read that fit the buffer: /array, /line, or /pixel
-        thread_method = self._thread_array
-        self.bufsz = self.count * self.dtype.itemsize
-        if self.bufsz > self.max_bufsz:
-            # try to fit a whole line
-            thread_method = self._thread_line
-            self.bufsz = (shape[1] + margin) * nchans * osr * self.dtype.itemsize
-        
-        if self.bufsz > self.max_bufsz:
-            # fit a pixel
-            thread_method = self._thread_pixel
-            self.bufsz = nchans * osr * self.dtype.itemsize
-        
-        if self.bufsz > self.max_bufsz:
-            logging.info("Going to read very large buffer of %f MB.", self.bufsz/2.**20)
-        
-        # allocate one full buffer per channel
-        self.buf = []
-        for i in range(self.nchans):
-            self.buf.append(numpy.empty(self.shape, dtype=self.dtype))
-        
-        if self.thread and self.thread.isAlive():
-            logging.warning("Preparing a new acquisition while previous one is not over")
-        self.thread = threading.Thread(name="SEMComedi reader", target=thread_method)
-        self.file.seek(0)
-    
-    def fromfile(self, fd, dtype, count):
-        """
-        Own implementation of fromfile, which read count values in one shot
-        returns (1D ndarray)
-        """
-        bufsz = count * dtype.itemsize
-        data = os.read(fd, bufsz)
-        if len(data) != bufsz:
-            raise IOError("Failed to acquire %d b (only got %d)" % (bufsz, len(data)))
-        
-        # zero-copy conversion from string to numpy array
-        rbuf = numpy.asarray(memoryview(data))
-        rbuf.dtype = self.dtype
-        return rbuf
-    
-    def _thread_array(self):
-        """To be called in a separate thread"""
-        logging.debug("Reading whole array at once: %d samples", self.count)
-        try:
-            rbuf = numpy.fromfile(self.file, dtype=self.dtype, count=self.count)
-        except IOError:
-            # might be due to a cancel
-            logging.debug("Read ended before the end")
-            return
-        
-        self.nsreceived = rbuf.size
-        if self.nsreceived != self.count:
-            # might be due to a cancel
-            return
-        
-        # reshape to separate channels, the lowest dimension
-        rbuf.shape = (self.count/self.nchans, self.nchans)
-        # decimate the whole array  
-        for i in range(self.nchans):
-            self._scan_raw_to_array(rbuf[...,i], self.buf[i])
-    
-    def _scan_raw_to_array(self, data, oarray):
-        """
-        Converts a linear array resulting from a scan to a 2D array
-        data (1D ndarray): the raw linear array (including oversampling), of one channel
-        oarray (2D ndarray): the output array, already allocated, of shape self.shape
-        """
-        # reshape to a 2D array with margin
-        rectangle = numpy.reshape(data, (self.shape[0], self.shape[1]+self.margin, self.osr))
-        # trim margin
-        tr_rect = rectangle[:, self.margin:]
-        if self.osr == 1:
-            # only one sample per pixel => copy
-            oarray = tr_rect[:,:,0] 
-        else:
-            # inspired by _mean() from numpy, but save the accumulated value in 
-            # a separate array of a big enough dtype.
-            acc = umath.add.reduce(tr_rect, axis=2, dtype=self.idtype)
-            umath.true_divide(acc, self.osr, out=oarray, casting='unsafe', subok=False)
-    
-    
-    def _thread_line(self):
-        """
-        Reads and decimate the arrays one line at a time
-        To be called in a separate thread
-        """
-        spa = self.bufsz/self.dtype.itemsize  # samples per acquisition
-        logging.debug("Reading one line at a time: %d samples/read", spa)
-        x = 0
-        while self.nsreceived < self.count:
-            try:
-                # TODO could use numpy? (only advantage in doing it raw is we _might_ save one copy)
-#                rbuf = self.fromfile(self.parent._fileno, dtype=self.dtype, count=spa)
-#                logging.debug("trying to read %d bytes, after %d px received", self.bufsz, self.npreceived)
-                rbuf = numpy.fromfile(self.file, dtype=self.dtype, count=spa)
-                if rbuf.size != spa:
-                    raise IOError()
-            except IOError:
-                # might be due to a cancel
-                logging.debug("Read ended before the end")
-                return
-            
-            # compute the position
-            self.nsreceived += rbuf.size
-            rbuf.shape = ((self.shape[1] + self.margin) * self.osr, self.nchans)
-            
-            # decimate into each buffer
-            for i in range(self.nchans):
-                self._scan_raw_to_line(rbuf[...,i], self.buf[i], x)
-            x += 1
-    
-    def _scan_raw_to_line(self, data, oarray, x):
-        """
-        Converts a raw data corresponding of one line of the final 2D array
-        data (1D ndarray): the raw linear array (including oversampling), of one channel
-        oarray (2D ndarray): the output array, already allocated, of shape self.shape
-        x (int): x position of the line in the output array
-        """
-        # reshape to a 2D array with margin
-        line = numpy.reshape(data, (self.shape[1]+self.margin, self.osr))
-        # trim margin
-        tr_line = line[self.margin:]
-        if self.osr == 1:
-            # only one sample per pixel => copy
-            # TODO: any use? if we do it per line, it's because osr is big
-            oarray[x] = tr_line[:,0] 
-        else:
-            # inspired by _mean() from numpy, but save the accumulated value in 
-            # a separate array of a big enough dtype.
-            acc = umath.add.reduce(tr_line, axis=1, dtype=self.idtype)
-            umath.true_divide(acc, self.osr, out=oarray[x], casting='unsafe', subok=False)
-    
-    def _thread_pixel(self):
-        """
-        Reads and decimate the arrays one pixel at a time
-        To be called in a separate thread
-        """
-        spa = self.bufsz/self.dtype.itemsize  # samples per acquisition
-        logging.debug("Reading one pixel at a time: %d samples/read", spa)
-        while self.nsreceived < self.count:
-            try:
-                # TODO could use numpy? (only advantage in doing it raw is we _might_ save one copy)
-#                rbuf = self.fromfile(self.parent._fileno, dtype=self.dtype, count=spa)
-#                logging.debug("trying to read %d bytes, after %d px received", self.bufsz, self.npreceived)
-                rbuf = numpy.fromfile(self.file, dtype=self.dtype, count=spa)
-                if rbuf.size != spa:
-                    raise IOError()
-            except IOError:
-                # might be due to a cancel
-                logging.debug("Read ended before the end")
-                return
-            
-            # compute the position
-            x, y = divmod(self.npreceived, self.shape[1] + self.margin)
-            y -= self.margin
-            self.nsreceived += rbuf.size
-            self.npreceived += 1
-            
-            if y >= 0: # don't care if it's in the margin
-                rbuf.shape = (self.osr, self.nchans)
-                # decimate into each buffer
-                for i in range(self.nchans):
-                    self._scan_raw_to_pixel(rbuf[...,i], self.buf[i], x, y)
-            
-    def _scan_raw_to_pixel(self, data, oarray, x, y):
-        """
-        Converts acquired data for one pixel resulting into the pixel for the a 2D array
-        data (1D ndarray): the raw data (including oversampling), of one channel
-        oarray (2D ndarray): the output array, already allocated, of shape self.shape
-        x (int): x position of the pixel in the output array
-        y (int): y position of the pixel in the output array
-        """
-        oarray[x,y] = numpy.sum(data, dtype=self.idtype) / self.osr
-    
-    
-    def wait(self, timeout=None):
-        """
-        timeout (float): maximum number of seconds to wait for the read to finish
-        """
-        timeout = timeout or self.period
-         
-        self.thread.join(timeout)
-        if self.thread.isAlive():
-            logging.warning("Reading thread is still running after %g s", timeout)
-        self.cancel()
-        
-        # the result should be in self.buf
-        if self.buf is None:
-            raise IOError("Failed to read all the %d expected values" % self.count)
-        elif self.nsreceived != self.count:
-            raise IOError("Read only %d values from the %d expected" % (self.nsreceived, self.count))
-    
-        return self.buf
 
 class Writer(Accesser):
     def __init__(self, parent):
