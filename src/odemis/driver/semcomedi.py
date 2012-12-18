@@ -204,6 +204,8 @@ class SEMComedi(model.HwComponent):
         if len(rchannels) != len(self._detectors):
             raise ValueError("SEMComedi device '%s' was given multiple detectors with the same channel" % device)
     
+        self.set_to_resting_position()
+        
     # There are two temperature sensors:
     # * One on the board itself (TODO how to access it with Comedi?)
     # * One on the SCB-68. From the manual, the temperature sensor outputs
@@ -590,7 +592,28 @@ class SEMComedi(model.HwComponent):
             return numpy.dtype(numpy.uint32)
         else: 
             return numpy.dtype(numpy.uint16)
+    
+    def set_to_resting_position(self):
+        """
+        Set the beam to a resting position. The best would be to blank the beam
+        but it's not controllable via the DAQ board.
+        """
+        pos, channels, ranges = self._scanner.get_resting_point_data()
+        if self._test:
+            return
         
+        # it seems there is a bug in NI driver that doesn't accept the minimu value: goes between 350 and 357 
+        # int(self._min_ao_periods[2] * 1e9) is changed to "800" that works
+        self.setup_timed_command(self._ao_subdevice, channels, ranges, 800)
+        
+        # we expect that both values can fit in the buffer
+        pos.tofile(self._writer.file)
+        self._writer.file.flush()
+
+        comedi.internal_trigger(self._device, self._ao_subdevice, 0)
+        time.sleep(0.001) # that should be more than enough
+        comedi.cancel(self._device, self._ao_subdevice)
+    
     def _get_data(self, channels, period, size):
         """
         read n data from the given analog input channel
@@ -1331,6 +1354,7 @@ class SEMComedi(model.HwComponent):
                 gc.collect()
 
         finally:
+            self.set_to_resting_position()
             logging.debug("Acquisition thread closed")
             self._acquisition_must_stop.clear()      
     
@@ -1823,6 +1847,32 @@ class Scanner(model.Emitter):
     
     # TODO get_resting_point_data() -> to get the data to write when not scanning
     # returns: array (1x2 numpy.ndarray), channels (list of ints), ranges (list of float)
+    
+    def get_resting_point_data(self):
+        """
+        Returns all the data needed to set the beam to a nice resting position
+        returns: array (1D numpy.ndarray), channels (list of int), ranges (list of int):
+            array is 2 raw values (X and Y positions)
+            channels: the output channels to use
+            ranges: the range index of each output channel
+        """
+        # Let's put it at the top-left, where the next acquisition will start.
+        # It has the advantage of not being in the center, so less noticable
+        # if there is an optical camera aligned.
+        pos = [self._limits[0][0], self._limits[1][0]] 
+        ranges = []
+        for i, channel in enumerate(self._channels):
+            best_range = comedi.find_range(self.parent._device,
+                                           self.parent._ao_subdevice,
+                              channel, comedi.UNIT_volt, pos[i], pos[i])
+            ranges.append(best_range)
+        
+        # computes the position in raw values
+        rpos = self.parent._array_from_phys(self.parent._ao_subdevice,
+                                              self._channels, ranges, 
+                                              numpy.array(pos, dtype=numpy.double))
+        return rpos, self._channels, ranges
+        
     def get_scan_data(self):
         """
         Returns all the data as it has to be written the device to generate a 
