@@ -99,7 +99,11 @@ def get_best_dtype_for_acc(idtype, count):
 
     return adtype
 
-
+class CancelledError(Exception):
+    """
+    Raised when trying to access the result of a task which was cancelled
+    """ 
+    pass
 
 class SEMComedi(model.HwComponent):
     '''
@@ -1159,9 +1163,6 @@ class SEMComedi(model.HwComponent):
         period_ns = int(round(period * 1e9))  # in nanoseconds
         rperiod_ns = int(round(period * 1e9) / osr)  # in nanoseconds
         expected_time = nwscans * period # s
-        if expected_time < 10e-3: # it takes about 10 ms to setup the reader/writer
-            logging.debug("Acquisition is so short (%f ms) that it will be far from optimal",
-                           expected_time * 1e3)
         
         # create a command for writing
         logging.debug("Generating new write and read commands for %d scans on "
@@ -1298,10 +1299,14 @@ class SEMComedi(model.HwComponent):
                         logging.exception("Acquisition failed, will retry")
                         time.sleep(1)
                         continue
+                except CancelledError:
+                    # either because must be stopped or settings updated
+                    logging.debug("Restarting acquisition after it was cancelled")
+                    continue
             
                 nfailures = 0
                 #logging.debug("Converting raw data to physical: %s", rbuf)
-                # TODO convert the data while reading, to save time, or do not convert at all
+                # TODO decimate/convert the data while reading, to save time, or do not convert at all
                 
                 # the channels to acquire might have changed, only send to the one
                 # still interested
@@ -1348,7 +1353,6 @@ class SEMComedi(model.HwComponent):
             self._reader.close()
             self._writer.close()
     
-    # TODO selfTest() which tries to read some data
     def selfTest(self):
         # let's see if we can get data from each channel, any data is good
         channels = []
@@ -1465,6 +1469,10 @@ class Accesser(object):
         # to be able to read and write simultaneously.
         # Closing any of them will close the device as well
         self.file = os.fdopen(parent._fileno, 'rb+', 0) # buffer = 0 => flush should be not necessary
+        self.cancelled = False
+        self.thread = None
+        self.duration = None
+        self.buf = None
 
     def close(self):
         """
@@ -1497,9 +1505,7 @@ class Reader(Accesser):
         
         self.dtype = parent._get_dtype(self._subdevice)
         self.buf = None
-        self.thread = None
         self.count = None
-        self.duration = None
     
     def prepare(self, count, duration):
         """
@@ -1508,15 +1514,12 @@ class Reader(Accesser):
         """
         self.count = count
         self.duration = duration
-        self.buf = None
-        # TODO: creating a new thread for each command is pretty costly (~5ms)
-        # => we should reuse the existing thread.
+        self.cancelled = False
         if self.thread and self.thread.isAlive():
             logging.warning("Preparing a new acquisition while previous one is not over")
         self.thread = threading.Thread(name="SEMComedi reader", target=self._thread)
         self.file.seek(0)
         
-    
     def run(self):
         # start reader thread
         self.thread.start()
@@ -1528,6 +1531,8 @@ class Reader(Accesser):
         except IOError:
             # might be due to a cancel
             logging.debug("Read ended before the end")
+        except:
+            logging.exception("Unhandled error in reading thread")
     
     def wait(self, timeout=None):
         """
@@ -1539,6 +1544,8 @@ class Reader(Accesser):
         if self.thread.isAlive():
             logging.warning("Reading thread is still running after %g s", timeout)
             self.cancel()
+        elif self.cancelled:
+            raise CancelledError("Reading thread was cancelled")
         
         # the result should be in self.buf
         if self.buf is None:
@@ -1546,12 +1553,12 @@ class Reader(Accesser):
         elif self.buf.size != self.count:
             raise IOError("Read only %d values from the %d expected" % (self.buf.size, self.count))
     
-        # TODO report different exception if failed due to cancel, or device error
         return self.buf
 
     def cancel(self):
         try:
             comedi.cancel(self._device, self._subdevice)
+            self.cancelled = True
         except comedi.ComediError:
             logging.debug("Failed to cancel read")
         
@@ -1587,9 +1594,6 @@ class Writer(Accesser):
         Accesser.__init__(self, parent)
         self._subdevice = parent._ao_subdevice
                 
-        self.buf = None
-        self.thread = None
-        self.duration = None
         self._expected_end = None
         self._preload_size = None
     
@@ -1600,7 +1604,9 @@ class Writer(Accesser):
         """
         self.duration = duration
         self.buf = buf
+        self.cancelled = False
         self.file.seek(0)
+        
         # preload the buffer with enough data first
         dev_buf_size = comedi.get_buffer_size(self._device, self._subdevice)
         self._preload_size = dev_buf_size / buf.itemsize
@@ -1618,23 +1624,24 @@ class Writer(Accesser):
         """
         Ends once the output is fully over 
         """
-        try: 
+        try:
             self.buf[self._preload_size:].tofile(self.file)
             self.file.flush()
         except IOError:
             # might be due to a cancel
             logging.debug("Write ended before the end")
-            return
+        except:
+            logging.exception("Unhandled error in reading thread")
         
         # Wait until the buffer is fully emptied to state the output is over 
         while (comedi.get_subdevice_flags(self._device, self._subdevice)
                & comedi.SDF_RUNNING):
             # sleep longer if the end is far away
             left = self._expected_end - time.time()
-            if left > 0.1:
+            if left > 0.01:
                 time.sleep(left / 2)
             else:
-                time.sleep(0.01)
+                time.sleep(0) # just yield
         
     def wait(self, timeout=None):
         timeout = timeout or self.duration
@@ -1647,6 +1654,9 @@ class Writer(Accesser):
                     raise IOError("Write timeout while device is still generating data")
                 else:
                     raise IOError("Write timeout while device is idle")
+            elif self.cancelled:
+                raise CancelledError("Reading thread was cancelled")
+
         finally:
             # According to https://groups.google.com/forum/?fromgroups=#!topic/comedi_list/yr2U179x8VI
             # To finish a write fully, we need to do a cancel().
@@ -1656,6 +1666,7 @@ class Writer(Accesser):
     def cancel(self):
         try:
             comedi.cancel(self._device, self._subdevice)
+            self.cancelled = True
         except comedi.ComediError:
             logging.debug("Failed to cancel write")
 
