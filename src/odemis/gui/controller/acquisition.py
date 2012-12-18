@@ -42,6 +42,7 @@ import wx
 from odemis.gui.log import log
 from odemis.gui.util import img
 from odemis.gui.main_xrc import xrcfr_acq
+from odemis.gui.controller.settingspanel import SettingsSideBar
 
 
 
@@ -132,7 +133,8 @@ class AcquisitionController(object):
 
         parent_size = [v * 0.66 for v in self._main_frame.GetSize()]
 
-        self._acq_dialog = AcquisitionDialog(self._main_frame)
+        self._acq_dialog = AcquisitionDialog(self._main_frame,
+                                             wx.GetApp().interface_model)
 
         self._acq_dialog.SetSize(parent_size)
         self._acq_dialog.Center()
@@ -316,7 +318,7 @@ class AcquisitionDialog(xrcfr_acq):
     """ Wrapper class responsible for additional initialization of the
     Acquisition Dialog created in XRCed"""
 
-    def __init__(self, parent):
+    def __init__(self, parent, interface_model):
         xrcfr_acq.__init__(self, parent)
 
         self.cmb_presets.Append(u"high")
@@ -324,6 +326,8 @@ class AcquisitionDialog(xrcfr_acq):
         self.cmb_presets.Append(u"low")
 
         self.cmb_presets.Select(0)
+
+        self.settings_controller = SettingsSideBar(interface_model, self)
 
         self.btn_cancel.Bind(wx.EVT_BUTTON, self.on_cancel)
         self.btn_change_file.Bind(wx.EVT_BUTTON, self.on_change_file)
