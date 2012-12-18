@@ -216,6 +216,7 @@ class TestSEM(unittest.TestCase):
                 break
             time.sleep(2 + expected_duration) # 2s per image should be more than enough in any case
         
+        self.sed.data.unsubscribe(self.receive_image) # just in case it failed
         self.assertEqual(self.left, 0)
 
 #    @unittest.skip("simple")

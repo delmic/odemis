@@ -1766,6 +1766,7 @@ class Scanner(model.Emitter):
         
         # max dwell time is purely arbitrary
         range_dwell = (parent.find_closest_dwell_time(0), 1) # s
+        self._osr = 1
         self.dwellTime = model.FloatContinuous(range_dwell[0], range_dwell, 
                                                unit="s", setter=self._setDwellTime)
 
@@ -1781,11 +1782,7 @@ class Scanner(model.Emitter):
         self.magnification = model.FloatContinuous(1e3, range=[1, 1e9], unit="")
         self.magnification.subscribe(self._onMagnification, init=True)
         
-        # TODO: This is just for testing, once it's working, it should be always
-        # activated 
-        self.oversampling = model.BooleanVA(True)
-
-        self._prev_settings = [None, None, None] # resolution, margin, dwellTime
+        self._prev_settings = [None, None, None] # resolution, dwellTime, margin
         self._scan_array = None # last scan array computed
     
     @roattribute
@@ -1817,7 +1814,8 @@ class Scanner(model.Emitter):
         self.parent._metadata[model.MD_PIXEL_SIZE] = pxs
     
     def _setDwellTime(self, value):
-        return self.parent.find_closest_dwell_time(value)
+        dt, self._osr = self.parent.find_best_oversampling_rate(value)
+        return dt
 
     def updateMetadata(self, md):
         # we share metadata with our parent
@@ -1846,21 +1844,18 @@ class Scanner(model.Emitter):
         """
         dwell_time = self.dwellTime.value
         resolution = self.resolution.value
-        if self.oversampling.value: # TODO: only update if dwell time changes (or oversampling)
-            dwell_time, osr = self.parent.find_best_oversampling_rate(dwell_time)
-        else:
-            osr = 1
         margin = int(math.ceil(self._settle_time / dwell_time))
         
-        prev_resolution, prev_margin, prev_dwell_time = self._prev_settings
+        prev_resolution, prev_dwell_time, prev_margin = self._prev_settings
+
         if prev_resolution != resolution or margin != prev_margin:
             # TODO: if only margin changes, just duplicate the margin columns
             # need to recompute the scanning array
             self._update_raw_scan_array(resolution[-1:-3:-1], margin)
             
-        self._prev_settings = [resolution, margin, dwell_time]
+        self._prev_settings = [resolution, dwell_time, margin]
         return (self._scan_array, dwell_time, resolution[-1:-3:-1],
-                margin, self._channels, self._ranges, osr)
+                margin, self._channels, self._ranges, self._osr)
 
     def _update_raw_scan_array(self, shape, margin):
         """
