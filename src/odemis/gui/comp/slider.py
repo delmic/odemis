@@ -75,7 +75,7 @@ class Slider(wx.PyPanel):
             self._val_to_percentage = self._cubic_val_to_perc
         elif scale == "log":
             self._percentage_to_val = self._log_perc_to_val
-            self._val_to_percentage = self._log_val_to_perc            
+            self._val_to_percentage = self._log_val_to_perc
         else:
             self._percentage_to_val = lambda r0, r1, p: (r1 - r0) * p + r0
             self._val_to_percentage = lambda r0, r1, v: (float(v) - r0) / (r1 - r0)
@@ -91,13 +91,13 @@ class Slider(wx.PyPanel):
     def _log_val_to_perc(r0, r1, v):
         """ Transform the value v into a fraction [0..1] of the [r0..r1] range
         using a log
-        [r0..r1] should not contain 0 
+        [r0..r1] should not contain 0
         ex: 1, 100, 10 -> 0.5
         ex: -10, -0.1, -1 -> 0.5
         """
         if r0 < 0:
             return -Slider._log_val_to_perc(-r1, -r0, -v)
-        
+
         assert(r0 < r1)
         assert(r0 > 0 and r1 > 0)
         p = math.log(v/r0, r1/r0)
@@ -110,12 +110,12 @@ class Slider(wx.PyPanel):
         """
         if r0 < 0:
             return -Slider._log_perc_to_val(-r1, -r0, p)
-        
+
         assert(r0 < r1)
         assert(r0 > 0 and r1 > 0)
         v = r0 * ((r1/r0)**p)
         return v
-    
+
     @staticmethod
     def _cubic_val_to_perc(r0, r1, v):
         """ Transform the value v into a fraction [0..1] of the [r0..r1] range
@@ -302,7 +302,14 @@ class NumberSlider(Slider):
         if not self.HasCapture():
             text_val = self.linked_field.GetValue()
 
-            if self.GetValue() != text_val:
+            # FIXME: (maybe?)
+            # Setting and retrieving float values with VigilantAttributeProxy
+            # objects resulted in very small differences in value making an
+            # inequality check useless.
+            # The problem probably resides with Pyro, that does something to
+            # the float values it's handed (like a cast?).
+
+            if abs(self.GetValue() - text_val) >  5.96189764224e-13:
                 logging.debug("Number changed, updating slider to %s", text_val)
                 self.SetValue(text_val)
                 evt.Skip()
@@ -315,7 +322,7 @@ class NumberSlider(Slider):
     def SetValue(self, val):
         """ Overridden method, so the linked field update could be added """
         Slider.SetValue(self, val)
-        self._update_linked_field(val) 
+        self._update_linked_field(val)
 
     def _update_linked_field(self, value):
         """ Update any linked field to the same value as this slider
