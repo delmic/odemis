@@ -771,14 +771,12 @@ class SEMComedi(model.HwComponent):
         Note: this is only for testing, and will go away in the final version
         """
         #construct a comedi command
-        
         nchans = data.shape[1]
         nscans = data.shape[0]
         assert len(channels) == nchans
         
         # create a chanlist
         ranges = []
-        clist = comedi.chanlist(nchans)
         for i, channel in enumerate(channels):
             data_lim = (data[:,i].min(), data[:,i].max())
             try:
@@ -790,38 +788,12 @@ class SEMComedi(model.HwComponent):
                 raise
             
             ranges.append(best_range)
-            clist[i] = comedi.cr_pack(channel, best_range, comedi.AREF_GROUND)
         
         logging.debug("Generating a new command for %d scans", nscans)
         period_ns = int(round(period * 1e9))  # in nanoseconds
-        cmd = comedi.cmd_struct()
-        comedi.get_cmd_generic_timed(self._device, self._ao_subdevice,
-                                                  cmd, nchans, period_ns)
+        self.setup_timed_command(self._ao_subdevice, channels, ranges, period_ns,
+                    stop_arg = nscans)
         
-        cmd.chanlist = clist
-        # the following are not necessary, already set by get_cmd_generic_timed
-        #cmd.chanlist_len = nchans
-        #cmd.scan_end_arg = nchans
-        # start_src: to only start when we send an interrupt (necessary, to fill the buffer before starting)
-        cmd.start_src = comedi.TRIG_INT
-        cmd.start_arg = 0
-#        cmd.start_src = comedi.TRIG_NOW
-#        cmd.start_arg = 0
-        cmd.stop_src = comedi.TRIG_COUNT
-        cmd.stop_arg = nscans
-        
-        # clean up the command
-        rc = comedi.command_test(self._device, cmd)
-        if rc != 0:
-            # on the second time, it should report 0, meaning "perfect"
-            rc = comedi.command_test(self._device, cmd)
-            if rc != 0:
-                raise IOError("failed to prepare command")
-
-        # readying the subdevice with the command (needs to be done before
-        # writing anything to the device
-        comedi.command(self._device, cmd)
-
         # convert physical values to raw data
         # Note: on the NI 6251, as probably many other devices, conversion is linear.
         # So it might be much more efficient to generate raw data directly
@@ -845,9 +817,9 @@ class SEMComedi(model.HwComponent):
         dev_buf_size = comedi.get_buffer_size(self._device, self._ao_subdevice)
         preload_size = dev_buf_size / buf.itemsize
         logging.debug("Going to preload %d bytes", buf[:preload_size].nbytes)
-        buf[:preload_size].tofile(self._wfile)
+        buf[:preload_size].tofile(self._writer.file)
         logging.debug("Going to flush")
-        self._wfile.flush()
+        self._writer.file.flush()
 
         # run the command
         logging.debug("Going to start the command")
@@ -856,9 +828,9 @@ class SEMComedi(model.HwComponent):
         comedi.internal_trigger(self._device, self._ao_subdevice, 0)
         
         logging.debug("Going to write %d bytes more", buf[preload_size:].nbytes)
-        buf[preload_size:].tofile(self._wfile)
+        buf[preload_size:].tofile(self._writer.file)
         logging.debug("Going to flush")
-        self._wfile.flush()
+        self._writer.file.flush()
         
         # According to https://groups.google.com/forum/?fromgroups=#!topic/comedi_list/yr2U179x8VI
         # To finish a write fully, we need to do a cancel().
