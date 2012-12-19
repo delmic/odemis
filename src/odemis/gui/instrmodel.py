@@ -261,6 +261,10 @@ VIEW_LAYOUT_FULLSCREEN = 2 # Fullscreen view (not yet supported)
 
 class GUIMicroscope(object):
     """
+    TODO: Rename, since the current name GUIMicroscope is confusing because
+    no actual gui controls are represented by or contained withing this class.
+    Suggested name: MicroscopeModel
+
     Represent a microscope directly for a graphical user interface.
     Provides direct reference to the HwComponents and
     """
