@@ -602,9 +602,10 @@ class SEMComedi(model.HwComponent):
         if self._test:
             return
         
-        # it seems there is a bug in NI driver that doesn't accept the minimu value: goes between 350 and 357 
-        # int(self._min_ao_periods[2] * 1e9) is changed to "800" that works
-        self.setup_timed_command(self._ao_subdevice, channels, ranges, 800)
+        # There is a bug in NI driver which thinks the minimun value is 357 but
+        # recommends 350 ns. A patch was sent to fix it.
+        # int(self._min_ao_periods[2] * 1e9) is changed to "500" that works
+        self.setup_timed_command(self._ao_subdevice, channels, ranges, 500)
         
         # we expect that both values can fit in the buffer
         pos.tofile(self._writer.file)
