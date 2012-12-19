@@ -6,7 +6,6 @@
 
 .. license::
 
-
     This file is part of Odemis.
 
     Odemis is free software: you can redistribute it and/or modify it under
