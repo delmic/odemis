@@ -16,32 +16,6 @@ def get_resources():
 
 
 
-class xrcstream_frame(wx.Frame):
-#!XRCED:begin-block:xrcstream_frame.PreCreate
-    def PreCreate(self, pre):
-        """ This function is called during the class's initialization.
-        
-        Override it for custom setup before the window is created usually to
-        set additional window styles using SetWindowStyle() and SetExtraStyle().
-        """
-        pass
-        
-#!XRCED:end-block:xrcstream_frame.PreCreate
-
-    def __init__(self, parent):
-        # Two stage creation (see http://wiki.wxpython.org/index.cgi/TwoStageCreation)
-        pre = wx.PreFrame()
-        self.PreCreate(pre)
-        get_resources().LoadOnFrame(pre, parent, "stream_frame")
-        self.PostCreate(pre)
-
-        # Define variables for the controls, bind event handlers
-        self.scrwin = xrc.XRCCTRL(self, "scrwin")
-        self.fpb = xrc.XRCCTRL(self, "fpb")
-        self.stream_panel = xrc.XRCCTRL(self, "stream_panel")
-
-
-
 class xrctext_frame(wx.Frame):
 #!XRCED:begin-block:xrctext_frame.PreCreate
     def PreCreate(self, pre):
@@ -62,6 +36,7 @@ class xrctext_frame(wx.Frame):
         self.PostCreate(pre)
 
         # Define variables for the controls, bind event handlers
+        self.text_panel = xrc.XRCCTRL(self, "text_panel")
         self.txt_suggest = xrc.XRCCTRL(self, "txt_suggest")
         self.txt_odcbox = xrc.XRCCTRL(self, "txt_odcbox")
 
@@ -91,6 +66,30 @@ class xrcbutton_frame(wx.Frame):
 
 
 
+class xrcslider_frame(wx.Frame):
+#!XRCED:begin-block:xrcslider_frame.PreCreate
+    def PreCreate(self, pre):
+        """ This function is called during the class's initialization.
+        
+        Override it for custom setup before the window is created usually to
+        set additional window styles using SetWindowStyle() and SetExtraStyle().
+        """
+        pass
+        
+#!XRCED:end-block:xrcslider_frame.PreCreate
+
+    def __init__(self, parent):
+        # Two stage creation (see http://wiki.wxpython.org/index.cgi/TwoStageCreation)
+        pre = wx.PreFrame()
+        self.PreCreate(pre)
+        get_resources().LoadOnFrame(pre, parent, "slider_frame")
+        self.PostCreate(pre)
+
+        # Define variables for the controls, bind event handlers
+        self.slider_panel = xrc.XRCCTRL(self, "slider_panel")
+
+
+
 
 
 # ------------------------ Resource data ----------------------
@@ -102,54 +101,9 @@ def __init_resources():
     wx.FileSystem.AddHandler(wx.MemoryFSHandler())
 
     test_gui_xrc = '''\
-<?xml version="1.0" ?><resource class="ImageTextToggleButton" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
-  <object class="wxFrame" name="stream_frame">
-    <object class="wxBoxSizer">
-      <orient>wxVERTICAL</orient>
-      <object class="sizeritem">
-        <object class="wxScrolledWindow" name="scrwin">
-          <object class="wxBoxSizer">
-            <orient>wxVERTICAL</orient>
-            <object class="sizeritem">
-              <object class="FoldPanelBar" name="fpb">
-                <object class="FoldPanelItem">
-                  <label>STREAMS</label>
-                  <XRCED>
-                    <assign_var>1</assign_var>
-                  </XRCED>
-                  <object class="StreamPanel" name="stream_panel">
-                    <add_button>1</add_button>
-                    <XRCED>
-                      <assign_var>1</assign_var>
-                    </XRCED>
-                  </object>
-                </object>
-                <spacing>0</spacing>
-                <leftspacing>0</leftspacing>
-                <rightspacing>0</rightspacing>
-                <bg>#4D4D4D</bg>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-              <flag>wxEXPAND</flag>
-            </object>
-          </object>
-          <bg>#A52A2A</bg>
-          <XRCED>
-            <assign_var>1</assign_var>
-          </XRCED>
-        </object>
-        <option>1</option>
-        <flag>wxEXPAND</flag>
-        <minsize>400,400</minsize>
-      </object>
-    </object>
-    <size>400,400</size>
-    <title>Stream panel test frame</title>
-  </object>
+<?xml version="1.0" ?><resource class="wxFrame" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
   <object class="wxFrame" name="text_frame">
-    <object class="wxPanel">
+    <object class="wxPanel" name="text_panel">
       <object class="wxBoxSizer">
         <object class="sizeritem">
           <object class="SuggestTextCtrl" name="txt_suggest">
@@ -265,11 +219,27 @@ def __init_resources():
       </object>
       <fg>#E6E6FA</fg>
       <bg>#A52A2A</bg>
+      <XRCED>
+        <assign_var>1</assign_var>
+      </XRCED>
     </object>
     <size>400,400</size>
   </object>
   <object class="wxFrame" name="button_frame">
     <object class="wxPanel" name="button_panel">
+      <object class="wxBoxSizer">
+        <orient>wxVERTICAL</orient>
+      </object>
+      <fg>#E6E6FA</fg>
+      <bg>#A52A2A</bg>
+      <XRCED>
+        <assign_var>1</assign_var>
+      </XRCED>
+    </object>
+    <size>400,400</size>
+  </object>
+  <object class="wxFrame" name="slider_frame">
+    <object class="wxPanel" name="slider_panel">
       <object class="wxBoxSizer">
         <orient>wxVERTICAL</orient>
       </object>

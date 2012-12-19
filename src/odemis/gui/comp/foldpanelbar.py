@@ -1,23 +1,25 @@
 # -*- coding: utf-8 -*-
 
 """
-@author: Rinze de Laat
 
-Copyright © 2012 Rinze de Laat, Delmic
+:author: Rinze de Laat
+:copyright: © 2012 Rinze de Laat, Delmic
 
-This file is part of Odemis.
+.. license::
 
-Odemis is free software: you can redistribute it and/or modify it under the
-terms of the GNU General Public License as published by the Free Software
-Foundation, either version 2 of the License, or (at your option) any later
-version.
+    This file is part of Odemis.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY
-WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
-PARTICULAR PURPOSE. See the GNU General Public License for more details.
+    Odemis is free software: you can redistribute it and/or modify it under the
+    terms of the GNU General Public License as published by the Free Software
+    Foundation, either version 2 of the License, or (at your option) any later
+    version.
 
-You should have received a copy of the GNU General Public License along with
-Odemis. If not, see http://www.gnu.org/licenses/.
+    Odemis is distributed in the hope that it will be useful, but WITHOUT ANY
+    WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+    PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License along with
+    Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 
@@ -39,6 +41,14 @@ EVT_CAPTIONBAR = wx.PyEventBinder(wxEVT_CAPTIONBAR, 0)
 
 
 class FoldPanelBar(wx.Panel):
+    """ This window can be be used as a vertical side bar which may contain
+    foldable sub panels created from the FoldPanelItem class.
+
+    For proper scrolling, this window should be placed inside a Sizer inside a
+    wx.ScrolledWindow.
+
+    """
+
     def __init__(self, parent, id= -1, pos=(0, 0), size=wx.DefaultSize,
                  style=wx.TAB_TRAVERSAL | wx.NO_BORDER):
 
@@ -106,6 +116,18 @@ class FoldPanelBar(wx.Panel):
 
 
 class FoldPanelItem(wx.Panel):
+    """ A foldable panel which should be placed inside a
+    :py:class:`FoldPanelBar` object.
+
+    This class uses a CaptionBar object as a clickable button which allows it
+    to hide and show its content.
+
+    The main layout mechanism used is a vertical BoxSizer. The adding and
+    removing of child elements should be done using the sub window mutation
+    methods.
+
+    """
+
     def __init__(self, parent, id=-1, pos=(0, 0), size=wx.DefaultSize,
                  style=wx.TAB_TRAVERSAL | wx.NO_BORDER, label="",
                  collapsed=False):
@@ -170,17 +192,20 @@ class FoldPanelItem(wx.Panel):
     ##############################
 
     def add_item(self, item):
+        """ Add a wx.Window or Sizer to the end of the panel """
         self._sizer.Add(item,
                         flag=wx.EXPAND|wx.BOTTOM,
                         border=1)
         self._refresh()
 
     def insert_item(self, item, pos):
+        """ Insert a wx.Window or Sizer into the panel at location `pos` """
         self._sizer.Insert(pos + 1, item,
                            flag=wx.EXPAND|wx.BOTTOM,
                            border=1)
 
     def remove_item(self, item):
+        """ Remove the given item from the panel """
         for child in self.GetChildren():
             if child == item:
                 child.Destroy()
@@ -188,6 +213,7 @@ class FoldPanelItem(wx.Panel):
                 return
 
     def remove_all(self):
+        """ Remove all child windows and sizers from the panel """
         for child in self.GetChildren():
             if not isinstance(child, CaptionBar):
                 child.Destroy()
@@ -195,6 +221,12 @@ class FoldPanelItem(wx.Panel):
 
     def children_to_sizer(self):
         """ Move all the children into the main sizer
+
+        This method is used by the XRC XML handler that constructs
+        :py:class:`FoldPanelItem`
+        objects, so the can just add children in the XRCed program, without
+        worrying or knowing about the main (private) sizer of this class.
+
         """
         for child in self.GetChildren():
             if not self._sizer.GetItem(child):
@@ -207,9 +239,16 @@ class FoldPanelItem(wx.Panel):
 
 
 class CaptionBar(wx.Window):
+    """ A small button like header window that displays the
+    :py:class:`FoldPanelItem`'s title and allows it to fold/unfold.
+
+    """
 
     def __init__(self, parent, caption, collapsed):
         """
+        :param parent: Parent window (FoldPanelItem)
+        :param caption: Header caption (str)
+        :param collapsed: Draw the CaptionBar collapsed or not (boolean)
 
         """
 
@@ -239,7 +278,6 @@ class CaptionBar(wx.Window):
         self.Bind(wx.EVT_PAINT, self.OnPaint)
         self.Bind(wx.EVT_MOUSE_EVENTS, self.OnMouseEvent)
         # self.Bind(wx.EVT_CHAR, self.OnChar)
-
 
 
     def set_caption(self, caption):
@@ -369,8 +407,6 @@ class CaptionBar(wx.Window):
             gf = gf + gstep
             bf = bf + bstep
 
-
-
     def OnMouseEvent(self, event):
         """ Mouse event handler """
         send_event = False
@@ -422,9 +458,10 @@ class CaptionBar(wx.Window):
 
 
 class CaptionBarEvent(wx.PyCommandEvent):
+    """ Custom event class containing extra data """
+
     def __init__(self, evtType):
         wx.PyCommandEvent.__init__(self, evtType)
-
 
     def GetFoldStatus(self):
         return not self._bar.IsCollapsed()
@@ -440,7 +477,7 @@ class CaptionBarEvent(wx.PyCommandEvent):
 
 
     def GetTag(self):
-        """ Returnsthe tag assigned to the selected L{CaptionBar}. """
+        """ Returns the tag assigned to the selected L{CaptionBar}. """
         return self._parent_foldbar
 
 

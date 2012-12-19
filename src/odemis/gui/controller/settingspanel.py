@@ -513,30 +513,32 @@ class OpticalSettingsPanel(SettingsPanel):
     pass
 
 class SettingsSideBar(object):
-    """ The main controller class for the settings panel in the live view.
+    """ The main controller class for the settings panel in the live view and
+    acquisition frame.
 
     This class can be used to set, get and otherwise manipulate the content
     of the setting panel.
     """
 
-    def __init__(self, livegui, main_frame):
-        self._main_frame = main_frame
-        self._livegui = livegui
+    def __init__(self, interface_model, parent_frame):
+        self._parent_frame = parent_frame
+        self._interface_model = interface_model
 
         self._sem_panel = SemSettingsPanel(
-                                    main_frame.fp_sem_settings,
+                                    parent_frame.fp_sem_settings,
                                     "No SEM found")
+
         self._optical_panel = OpticalSettingsPanel(
-                                    main_frame.fp_optical_settings,
+                                    parent_frame.fp_optical_settings,
                                     "No optical microscope found")
 
         # Query Odemis daemon (Should move this to separate thread)
-        if livegui.ccd:
-            self.add_ccd(livegui.ccd)
+        if interface_model.ccd:
+            self.add_ccd(interface_model.ccd)
         # TODO allow to change light.power
 
-        if livegui.ebeam:
-            self.add_ebeam(livegui.ebeam)
+        if interface_model.ebeam:
+            self.add_ebeam(interface_model.ebeam)
 
     # Optical microscope settings
     def add_ccd(self, comp):
