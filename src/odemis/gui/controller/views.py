@@ -21,6 +21,7 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
+from __future__ import division
 from collections import namedtuple
 
 import wx
@@ -304,7 +305,8 @@ class ViewSelector(object):
         btn_all = self._main_frame.btn_view_all
         border_width = 2 # px
         size = max(1, btn_all.overlay_width), max(1, btn_all.overlay_height)
-        size_sub = max(1, (size[0] - border_width) / 2), max(1, (size[1] - border_width) / 2)
+        size_sub = (max(1, (size[0] - border_width) // 2),
+                    max(1, (size[1] - border_width) // 2))
         # starts with an empty image with the border colour everywhere
         im_22 = wx.EmptyImage(*size, clear=False)
         im_22.SetRGBRect(wx.Rect(0, 0, *size), *btn_all.GetBackgroundColour().Get())
@@ -312,12 +314,21 @@ class ViewSelector(object):
         for i, btn in enumerate([self._main_frame.btn_view_tl, self._main_frame.btn_view_tr,
                                  self._main_frame.btn_view_bl, self._main_frame.btn_view_br]):
 
-            #im = self.buttons[btn].vp.mic_view.thumbnail.value
-            im = btn.overlay_image
+            im = self.buttons[btn].vp.mic_view.thumbnail.value
             if im:
-                # FIXME: not all the thumbnails have the right aspect ratio cf set_overlay
-                # Rescale to fit
-                sim = im.Scale(im.Width / 2, im.Height / 2, wx.IMAGE_QUALITY_HIGH)
+                # im doesn't have the same aspect ratio as the actual thumbnail
+                # => rescale and crop on the center
+                # Rescale to have the smallest axis as big as the thumbnail
+                rsize = list(size_sub)
+                if (size_sub[0] / im.Width) > (size_sub[1] / im.Height):
+                    rsize[1] = int(im.Height * (size_sub[0] / im.Width)) 
+                else:
+                    rsize[0] = int(im.Width * (size_sub[1] / im.Height))
+                sim = im.Scale(*rsize, quality=wx.IMAGE_QUALITY_HIGH)
+                
+                # crop to the right shape
+                lt = ((size_sub[0] - sim.Width)//2, (size_sub[1] - sim.Height)//2)
+                sim.Resize(size_sub, lt) 
 
                 # compute placement
                 y, x = divmod(i, 2)
@@ -325,9 +336,8 @@ class ViewSelector(object):
                 im_22.Paste(sim, x * (size_sub[0] + border_width), y * (size_sub[1] + border_width))
             else:
                 # black image
+                # Should never happen
                 pass #sim = wx.EmptyImage(*size_sub)
-
-
 
         # set_overlay will rescale to the correct button size
         btn_all.set_overlay(im_22)

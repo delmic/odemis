@@ -31,7 +31,7 @@
 # and xmlh/xh_delmic.py modules are available (e.g. through a symbolic link)
 # in XRCED's plugin directory.
 
-
+from __future__ import division
 import wx
 
 from wx.lib.buttons import GenBitmapButton, GenBitmapToggleButton, \
@@ -184,7 +184,7 @@ class ImageButton(GenBitmapButton):
             dx = dy = self.labelDelta
 
         hasMask = bmp.GetMask() != None
-        dc.DrawBitmap(bmp, (width - bw) / 2, (height - bh) / 2, hasMask)
+        dc.DrawBitmap(bmp, (width - bw) // 2, (height - bh) // 2, hasMask)
 
     def InitColours(self):
         """ Deprecated? """
@@ -346,20 +346,20 @@ class ImageTextButton(GenBitmapTextButton):
 
         # Calculate the x position for the given background bitmap
         # The bitmap will be center within the button.
-        pos_x = (width - bw) / 2 + dx
+        pos_x = (width - bw) // 2 + dx
         if bmp is not None:
             #Background bitmap is centered
-            dc.DrawBitmap(bmp, (width - bw) / 2, (height - bh) / 2, hasMask)
+            dc.DrawBitmap(bmp, (width - bw) // 2, (height - bh) // 2, hasMask)
 
 
         if self.HasFlag(wx.ALIGN_CENTER):
-            pos_x = pos_x + (bw - tw) / 2
+            pos_x = pos_x + (bw - tw) // 2
         elif self.HasFlag(wx.ALIGN_RIGHT):
             pos_x = pos_x + bw - tw - self.padding_x
         else:
             pos_x = pos_x + self.padding_x
 
-        dc.DrawText(label, pos_x, (height - th) / 2 + dy + self.padding_y)      # draw the text
+        dc.DrawText(label, pos_x, (height - th) // 2 + dy + self.padding_y)      # draw the text
 
     def InitColours(self):
         """ Deprecated? """
@@ -503,7 +503,7 @@ class ImageToggleButton(GenBitmapToggleButton):  #pylint: disable=R0901
         if not self.up:
             dx = dy = self.labelDelta
         hasMask = bmp.GetMask() != None
-        dc.DrawBitmap(bmp, (width - bw) / 2, (height - bh) / 2, hasMask)
+        dc.DrawBitmap(bmp, (width - bw) // 2, (height - bh) // 2, hasMask)
 
     def InitColours(self):
         """ Deprecated?? """
@@ -654,18 +654,18 @@ class ImageTextToggleButton(GenBitmapTextToggleButton):
         if not self.up:
             dx = dy = self.labelDelta
 
-        pos_x = (width - bw) / 2 + dx
+        pos_x = (width - bw) // 2 + dx
         if bmp is not None:
-            dc.DrawBitmap(bmp, (width - bw) / 2, (height - bh) / 2, hasMask)
+            dc.DrawBitmap(bmp, (width - bw) // 2, (height - bh) // 2, hasMask)
 
         if self.HasFlag(wx.ALIGN_CENTER):
-            pos_x = pos_x + (bw - tw) / 2
+            pos_x = pos_x + (bw - tw) // 2
         elif self.HasFlag(wx.ALIGN_RIGHT):
             pos_x = pos_x + bw - tw - self.padding_x
         else:
             pos_x = pos_x + self.padding_x
 
-        dc.DrawText(label, pos_x, (height - th) / 2 + dy + 1) # draw the text
+        dc.DrawText(label, pos_x, (height - th) // 2 + dy + 1) # draw the text
 
     def InitColours(self):
         """ Deprecated?? """
@@ -703,9 +703,6 @@ class ViewButton(ImageTextToggleButton):
         """
         ImageTextToggleButton.__init__(self, *args, **kwargs)
 
-        # The image to use as an overlay. It needs to be set using the
-        # `set_overlay` method.
-        self.overlay_image = None
         self.overlay_bitmap = None
 
         # The number of pixels from the right that need to be kept clear so the
@@ -717,7 +714,7 @@ class ViewButton(ImageTextToggleButton):
 
         self._calc_overlay_size()
 
-    def _calc_overlay_size(self, ):
+    def _calc_overlay_size(self):
         width, height = self.GetSize()
         self.overlay_width = width - self.overlay_border * 2 - self.pointer_offset
         self.overlay_height = height - self.overlay_border * 2
@@ -741,57 +738,26 @@ class ViewButton(ImageTextToggleButton):
         :param image: (wx.Image or None) Image to be displayed or a default
                 stock image.
         """
-        log.debug("Setting overlay with image %s", image)
-
-        # Calculate the needed height
-        # if image:
-        #     img_w, img_h = [float(v) for v in image.GetSize()]
-        #     width, height = self.GetSize()
-        #     # ratio = self.GetSize()[0] - self.pointer_offset - self.overlay_border * 2
-        #     self.SetBestSize((width, height * 0.5))
-        #     self.Parent.Layout()
-        #     self._calc_overlay_size()
-
-        if image is None:
-            # black image
-            self.overlay_image = wx.EmptyImage(self.overlay_width, self.overlay_height)
-            # self.overlay_image.SetRGBRect(wx.Rect(0,
-            #                                       0,
-            #                                       self.overlay_width,
-            #                                       self.overlay_height),
-            #                              *self.GetBackgroundColour().Get())
-        else:
-            # FIXME: what's the right size?
-            # FIXME: not all the thumbnails have the right aspect ratio => truncate
-            # was 70, 70... but let's avoid constants
-
-            # NOTE: The next values are cast to float, because they are going to
-            # be used to calculate ratios and the default behaviour for Python
-            # 2.x it to floor integer divisions. Another way of dealing with
-            # this, is to use the "from __future__ import division" statement
-            # which will make integer division result in a float value. The
-            # advantage of this approach is that the code will be compatible
-            # with Python 3.x
-            img_w, img_h = [float(v) for v in image.GetSize()]
-
-            log.debug("Image size is %s %s ", img_w, img_h)
-            log.debug("Button size is %s %s ",
-                      self.overlay_width,
-                      self.overlay_height)
-
-            if img_w / self.overlay_width < img_h / self.overlay_height:
-                img_w = int(img_w * (self.overlay_height / img_h))
-                img_h = self.overlay_height
+        size_tn = self.overlay_width, self.overlay_height
+        if image:
+            # image doesn't have the same aspect ratio as the actual thumbnail
+            # => rescale and crop on the center
+            # Rescale to have the smallest axis as big as the thumbnail
+            rsize = list(size_tn)
+            if (size_tn[0] / image.Width) > (size_tn[1] / image.Height):
+                rsize[1] = int(image.Height * (size_tn[0] / image.Width)) 
             else:
-                img_h = int(img_h * (self.overlay_width / img_w))
-                img_w = self.overlay_width
+                rsize[0] = int(image.Width * (size_tn[1] / image.Height))
+            sim = image.Scale(*rsize, quality=wx.IMAGE_QUALITY_HIGH)
+            
+            # crop to the right shape
+            lt = ((size_tn[0] - sim.Width)//2, (size_tn[1] - sim.Height)//2)
+            sim.Resize(size_tn, lt) 
+        else:
+            # black image
+            sim = wx.EmptyImage(*size_tn)
 
-            log.debug("New image size is %s %s", img_w, img_h)
-            self.overlay_image = image.Scale(img_w,
-                                      img_h,
-                                      wx.IMAGE_QUALITY_HIGH)
-
-        self.overlay_bitmap = wx.BitmapFromImage(self.overlay_image)
+        self.overlay_bitmap = wx.BitmapFromImage(sim)
         self.Refresh()
 
     def DrawLabel(self, dc, width, height, dx=0, dy=0):
