@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 
-""" This module contains classes describing various customized text fields used
-throughout Odemis.
+"""
 
 @author: Rinze de Laat
 
@@ -22,16 +21,22 @@ details.
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 
+Content:
+
+    This module contains classes describing various customized text fields used
+    throughout Odemis.
+
 """
 
-from odemis.gui.log import log
-from odemis.gui.util import units
 import locale
 import math
 import sys
+
 import wx
 import wx.lib.mixins.listctrl as listmix
 
+from odemis.gui.log import log
+from odemis.gui.util import units
 
 
 # Locale is needed for correct string sorting
