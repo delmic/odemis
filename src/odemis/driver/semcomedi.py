@@ -80,6 +80,31 @@ import weakref
 
 NI_TRIG_AI_START1 = 18 # Trigger number for AI Start1 (= beginning of a command) 
 
+# helper functions
+def get_best_dtype_for_acc(idtype, count):
+    """
+    Computes the smallest dtype that allows to accumulate all the _count_ integers
+    idtype (dtype): dtype of the input (the raw data that is accumulated)
+    count (int): number of values accumulated
+    returns (dtype): the best fitting dtype
+    """
+    maxval = 2**(idtype.itemsize * 8) * count
+    if maxval < 2**32:
+        adtype = numpy.uint32
+    elif maxval < 2**64:
+        adtype = numpy.uint64
+    else:
+        logging.debug("Going to use lossy intermediate type in order to support values up to %d", maxval)
+        adtype = numpy.float64 # might accumulate errors
+
+    return adtype
+
+class CancelledError(Exception):
+    """
+    Raised when trying to access the result of a task which was cancelled
+    """ 
+    pass
+
 class SEMComedi(model.HwComponent):
     '''
     A generic HwComponent which provides children for controlling the scanning
@@ -122,8 +147,7 @@ class SEMComedi(model.HwComponent):
         except comedi.ComediError:
             raise ValueError("Failed to find both input and output on DAQ device '%s'" % device)
 
-        #self._reader = Reader(self)
-        self._reader = DecimatingReader(self, bufsz=80000) # TODO try different sizes XXX DEBUG => None
+        self._reader = Reader(self)
         self._writer = Writer(self)
         
         self._metadata = {model.MD_HW_NAME: self.getHwName()}
@@ -148,6 +172,8 @@ class SEMComedi(model.HwComponent):
         # AI is 1MHz (aggregate) (or 1.25MHz with only one channel)
         # AO is 2.86/2.0 MHz for one/two channels
         # => that's more or less what we get from comedi :-)
+        
+        self._max_bufsz = self._get_max_buffer_size()
         
         # acquisition thread setup
         self._acquisition_data_lock = threading.Lock()
@@ -178,6 +204,8 @@ class SEMComedi(model.HwComponent):
         if len(rchannels) != len(self._detectors):
             raise ValueError("SEMComedi device '%s' was given multiple detectors with the same channel" % device)
     
+        self.set_to_resting_position()
+        
     # There are two temperature sensors:
     # * One on the board itself (TODO how to access it with Comedi?)
     # * One on the SCB-68. From the manual, the temperature sensor outputs
@@ -228,7 +256,7 @@ class SEMComedi(model.HwComponent):
         driver = comedi.get_driver_name(self._device)
         if driver == "comedi_test":
             self._test = True
-            self.write_read_data_raw = self.fake_write_read_data_raw
+            self._write_read_raw_one_cmd = self._fake_write_read_raw_one_cmd
             self._actual_writer = self._writer # keep a ref to avoid closing the file
             self._writer = FakeWriter(self) # does no write
             logging.info("Driver %s detected, going to use fake behaviour", driver)
@@ -276,7 +304,34 @@ class SEMComedi(model.HwComponent):
             return 0
         period = cmd.scan_begin_arg / 1e9
         return period
+    
+    def _get_max_buffer_size(self):
+        """
+        Returns the maximum buffer size for one read command. Reading more bytes
+          should be done in multiple commands.
+        returns (0 < int): size in bytes
+        """
+        # There are two limitations to the maximum buffer:
+        #  * the size in memory of the sample read (it can be huge if the 
+        #    oversampling rate is large) => restrict to << 4Gb
+        bufsz = 50 * 2**20 # max 50 MB: big, but no risk to take too much memory
         
+        #  * the maximum amount of samples the DAQ device can read in one shot
+        #    (on the NI 652x, it's 2**24 samples)
+        try:
+            # see how much the device is willing to accept by asking for the maximum
+            cmd = comedi.cmd_struct()
+            comedi.get_cmd_generic_timed(self._device, self._ai_subdevice, cmd, 1, 1)
+            cmd.stop_src = comedi.TRIG_COUNT
+            cmd.stop_arg = 0xffffffff # 32 bits
+            self._prepare_command(cmd)
+            bufsz = min(cmd.stop_arg, bufsz)
+        except comedi.ComediError:
+            # concider it can take the max
+            pass
+        
+        return bufsz
+    
     def getSwVersion(self):
         """
         Returns (string): displayable string showing the driver version
@@ -537,7 +592,29 @@ class SEMComedi(model.HwComponent):
             return numpy.dtype(numpy.uint32)
         else: 
             return numpy.dtype(numpy.uint16)
+    
+    def set_to_resting_position(self):
+        """
+        Set the beam to a resting position. The best would be to blank the beam
+        but it's not controllable via the DAQ board.
+        """
+        pos, channels, ranges = self._scanner.get_resting_point_data()
+        if self._test:
+            return
         
+        # There is a bug in NI driver which thinks the minimun value is 357 but
+        # recommends 350 ns. A patch was sent to fix it.
+        # int(self._min_ao_periods[2] * 1e9) is changed to "500" that works
+        self.setup_timed_command(self._ao_subdevice, channels, ranges, 500)
+        
+        # we expect that both values can fit in the buffer
+        pos.tofile(self._writer.file)
+        self._writer.file.flush()
+
+        comedi.internal_trigger(self._device, self._ao_subdevice, 0)
+        time.sleep(0.001) # that should be more than enough
+        comedi.cancel(self._device, self._ao_subdevice)
+    
     def _get_data(self, channels, period, size):
         """
         read n data from the given analog input channel
@@ -550,6 +627,7 @@ class SEMComedi(model.HwComponent):
         nchans = len(channels) #number of channels
         nscans = size
         period_ns = int(round(period * 1e9))  # in nanoseconds
+        expected_time = nscans * period # s
         
         rranges = []
         for i, channel in enumerate(channels):
@@ -563,31 +641,19 @@ class SEMComedi(model.HwComponent):
                 raise
             
             rranges.append(best_range)
-            
-        logging.debug("Generating a new read command for %d scans", nscans)
-        rcmd = comedi.cmd_struct()
-        comedi.get_cmd_generic_timed(self._device, self._ai_subdevice,
-                                                  rcmd, nchans, period_ns)
-        clist = comedi.chanlist(nchans)
-        for i in range(nchans):
-            clist[i] = comedi.cr_pack(channels[i], rranges[i], comedi.AREF_GROUND)
-        rcmd.chanlist = clist
-        rcmd.stop_src = comedi.TRIG_COUNT
-        rcmd.stop_arg = nscans
-        self._prepare_command(rcmd)
 
-        self._reader.prepare(nscans * period, (nscans, 1), nchans, 0, 1)
-#        shape = (nscans, nchans)
-        #self._reader.prepare(shape[0] * shape[1], nscans * period)
+        self._reader.prepare(nscans * nchans, expected_time)
         
         # run the commands
         logging.debug("Going to start the command")
-        comedi.command(self._device, rcmd)
+        self.setup_timed_command(self._ai_subdevice, channels, rranges, period_ns,
+                    start_src=comedi.TRIG_NOW, # start immediately
+                    stop_arg=nscans)
         self._reader.run()
         
         timeout = (nscans * period) * 1.10 + 1 # s   == expected time + 10% + 1s
         rbuf = self._reader.wait(timeout)
-#        rbuf.shape = shape # FIXME: check that the order/stride is correct
+        rbuf.shape = (nscans, nchans)
         
         # convert data to physical values
         logging.debug("Converting raw data to physical: %s", rbuf)
@@ -596,9 +662,7 @@ class SEMComedi(model.HwComponent):
         parrays = []
         for i, c in enumerate(channels):
             parrays.append(self._array_to_phys(self._ai_subdevice,
-                                   [c], [rranges[i]], rbuf[i]))
-#            parrays.append(self._array_to_phys(self._ai_subdevice,
-#                                   [c], [rranges[i]], rbuf[:,i,numpy.newaxis]))
+                                   [c], [rranges[i]], rbuf[:,i,numpy.newaxis]))
 
         return parrays
     
@@ -655,7 +719,7 @@ class SEMComedi(model.HwComponent):
         # no compatible dwell time found
         raise ValueError("No compatible dwell time found for %g s." % period)
                 
-    def find_best_oversampling_rate(self, period, max_osr=100):
+    def find_best_oversampling_rate(self, period, max_osr=2**24):
         """
         Returns the closest dwell time _longer_ than the given time compatible
           with the output device and the highest over-sampling rate compatible 
@@ -735,14 +799,12 @@ class SEMComedi(model.HwComponent):
         Note: this is only for testing, and will go away in the final version
         """
         #construct a comedi command
-        
         nchans = data.shape[1]
         nscans = data.shape[0]
         assert len(channels) == nchans
         
         # create a chanlist
         ranges = []
-        clist = comedi.chanlist(nchans)
         for i, channel in enumerate(channels):
             data_lim = (data[:,i].min(), data[:,i].max())
             try:
@@ -754,38 +816,12 @@ class SEMComedi(model.HwComponent):
                 raise
             
             ranges.append(best_range)
-            clist[i] = comedi.cr_pack(channel, best_range, comedi.AREF_GROUND)
         
         logging.debug("Generating a new command for %d scans", nscans)
         period_ns = int(round(period * 1e9))  # in nanoseconds
-        cmd = comedi.cmd_struct()
-        comedi.get_cmd_generic_timed(self._device, self._ao_subdevice,
-                                                  cmd, nchans, period_ns)
+        self.setup_timed_command(self._ao_subdevice, channels, ranges, period_ns,
+                    stop_arg = nscans)
         
-        cmd.chanlist = clist
-        # the following are not necessary, already set by get_cmd_generic_timed
-        #cmd.chanlist_len = nchans
-        #cmd.scan_end_arg = nchans
-        # start_src: to only start when we send an interrupt (necessary, to fill the buffer before starting)
-        cmd.start_src = comedi.TRIG_INT
-        cmd.start_arg = 0
-#        cmd.start_src = comedi.TRIG_NOW
-#        cmd.start_arg = 0
-        cmd.stop_src = comedi.TRIG_COUNT
-        cmd.stop_arg = nscans
-        
-        # clean up the command
-        rc = comedi.command_test(self._device, cmd)
-        if rc != 0:
-            # on the second time, it should report 0, meaning "perfect"
-            rc = comedi.command_test(self._device, cmd)
-            if rc != 0:
-                raise IOError("failed to prepare command")
-
-        # readying the subdevice with the command (needs to be done before
-        # writing anything to the device
-        comedi.command(self._device, cmd)
-
         # convert physical values to raw data
         # Note: on the NI 6251, as probably many other devices, conversion is linear.
         # So it might be much more efficient to generate raw data directly
@@ -809,9 +845,9 @@ class SEMComedi(model.HwComponent):
         dev_buf_size = comedi.get_buffer_size(self._device, self._ao_subdevice)
         preload_size = dev_buf_size / buf.itemsize
         logging.debug("Going to preload %d bytes", buf[:preload_size].nbytes)
-        buf[:preload_size].tofile(self._wfile)
+        buf[:preload_size].tofile(self._writer.file)
         logging.debug("Going to flush")
-        self._wfile.flush()
+        self._writer.file.flush()
 
         # run the command
         logging.debug("Going to start the command")
@@ -820,9 +856,9 @@ class SEMComedi(model.HwComponent):
         comedi.internal_trigger(self._device, self._ao_subdevice, 0)
         
         logging.debug("Going to write %d bytes more", buf[preload_size:].nbytes)
-        buf[preload_size:].tofile(self._wfile)
+        buf[preload_size:].tofile(self._writer.file)
         logging.debug("Going to flush")
-        self._wfile.flush()
+        self._writer.file.flush()
         
         # According to https://groups.google.com/forum/?fromgroups=#!topic/comedi_list/yr2U179x8VI
         # To finish a write fully, we need to do a cancel().
@@ -845,7 +881,8 @@ class SEMComedi(model.HwComponent):
         if had_timeout:
             raise IOError("Write command stopped due to timeout after %g s" % (time.time() - start_time))
 
-    def write_read_data_phys(self, wchannels, rchannels, period, osr, data):
+    def write_read_2d_data_phys(self, wchannels, rchannels, rranges, period,
+                                margin, osr, data):
         """
         write data on the given analog output channels and read the same amount 
          synchronously on the given analog input channels
@@ -859,6 +896,7 @@ class SEMComedi(model.HwComponent):
         return (list of 1D numpy.array with shape=data.shape[0] and dtype=float)
             the data read converted to physical value (volt) for each channel
         """
+        # XXX broken: need to update for new write_read_2d_data_raw()
         assert len(wchannels) == data.shape[1]
         
         # pick nice ranges according to the data to write
@@ -880,23 +918,9 @@ class SEMComedi(model.HwComponent):
         # So it might be much more efficient to generate raw data directly
         wbuf = self._array_from_phys(self._ao_subdevice, wchannels, wranges, data)
 
-
-        # TODO add parameter to select the range and ref for each rchannel
-        rranges = []
-        for i, channel in enumerate(rchannels):
-            data_lim = (-10, 10)
-            try:
-                best_range = comedi.find_range(self._device, self._ai_subdevice, 
-                                  channel, comedi.UNIT_volt, data_lim[0], data_lim[1])
-            except comedi.ComediError:
-                logging.exception("Data range between %g and %g V is too high for hardware." %
-                              (data_lim[0], data_lim[1]))
-                raise
-            
-            rranges.append(best_range)
-
         # write and read the raw data
-        rbuf = self.write_read_data_raw(wchannels, wranges, rchannels, rranges, period, osr, wbuf)
+        rbuf = self.write_read_2d_data_raw(wchannels, wranges, rchannels, rranges,
+                                           period, margin, osr, wbuf)
         
         # convert data to physical values
         logging.debug("Converting raw data to physical: %s", rbuf)
@@ -910,10 +934,196 @@ class SEMComedi(model.HwComponent):
 
         return parrays
     
-    def fake_write_read_data_raw(self, wchannels, wranges, rchannels, rranges, 
-                                 period, shape, margin, osr, data):
+    
+    def setup_timed_command(self, subdevice, channels, ranges, period_ns, 
+                            start_src=comedi.TRIG_INT, start_arg=0,
+                            stop_src=comedi.TRIG_COUNT, stop_arg=1):
         """
-        Imitates write_read_data_raw() but just read data, for the comedi_test driver
+        Creates and sends a command to a subdevice.
+        subdevice (0<int): subdevice id
+        channels (list of int): channels of the command
+        ranges (list of int): ranges of each channel
+        period_ns (0<int): sampling period in ns (time between two convertions
+         on the same channel)
+        start_src, start_arg, stop_src, stop_arg: same meaning as the fields of
+          a command.
+        Raises:
+            IOError: if the device didn't accept the command at all.
+            ErrorValue: if the device didn't accept the command with precisely
+              the given argurments. The command is sent to the subdevice.
+        """
+        nchans = len(channels)
+        assert(0 < period_ns)
+        
+        # create a command
+        cmd = comedi.cmd_struct()
+        comedi.get_cmd_generic_timed(self._device, subdevice, cmd, nchans, period_ns)
+        clist = comedi.chanlist(nchans)
+        for i in range(nchans):
+            clist[i] = comedi.cr_pack(channels[i], ranges[i], comedi.AREF_GROUND)
+        cmd.chanlist = clist
+        cmd.start_src = start_src
+        cmd.start_arg = start_arg 
+        cmd.stop_src = stop_src
+        cmd.stop_arg = stop_arg
+        self._prepare_command(cmd)
+
+        if (cmd.scan_begin_arg != period_ns or cmd.start_arg != start_arg or
+            cmd.stop_arg != stop_arg):
+            raise ValueError("Failed to create the precise command")
+        
+        # send the command
+        comedi.command(self._device, cmd)
+
+    def write_read_2d_data_raw(self, wchannels, wranges, rchannels, rranges, 
+                            period, margin, osr, data):
+        """
+        write data on the given analog output channels and read synchronously on
+         the given analog input channels and convert back to 2d array 
+        wchannels (list of int): channels to write (in same the order as data)
+        wranges (list of int): ranges of each write channel
+        rchannels (list of int): channels to read (in same the order as data)
+        rranges (list of int): ranges of each read channel
+        period (float): sampling period in s (time between two writes on the same
+         channel)
+        margin (0 <= int): number of additional pixels at the begginning of each line
+        osr: over-sampling rate, how many input samples should be acquired by pixel
+        data (3D numpy.ndarray of int): array to write (raw values)
+          first dimension is along the slow axis, second is along the fast axis,
+          third is along the channels
+        return (list of 2D numpy.array with shape=(data.shape[0], data.shape[1]-margin)
+         and dtype=device type): the data read (raw) for each channel, after
+         decimation.
+        """
+        # We write at the given period, and read "osr" samples for each pixel
+        nrchans = len(rchannels)
+        
+        # find the best method to read that fit the buffer: /lines, or /pixel
+        # try to fit a couple of lines
+        linesz = data.shape[1] * nrchans * osr * self._reader.dtype.itemsize
+        if linesz < self._max_bufsz:
+            lines = self._max_bufsz // linesz
+            return self._write_read_2d_lines(wchannels, wranges, rchannels, rranges, 
+                         period, margin, osr, lines, data)
+        
+        # fit a pixel
+        pixelsz = nrchans * osr * self._reader.dtype.itemsize
+        if pixelsz > self._max_bufsz:
+            # probably going to fail, but let's try...
+            logging.warning("Going to try to read very large buffer of %f MB.", pixelsz/2.**20)
+        
+        # TODO: read several pixels at a time => need clever placement
+        return self._write_read_2d_pixel(wchannels, wranges, rchannels, rranges, 
+                         period, margin, osr, data)
+        
+    
+    def _write_read_2d_lines(self, wchannels, wranges, rchannels, rranges, 
+                            period, margin, osr, maxlines, data):
+        """
+        Implementation of write_read_2d_data_raw by reading the input data n
+          lines at a time.
+        """
+        logging.debug("Reading %d lines at a time: %d samples/read", maxlines,
+                      maxlines * data.shape[1] * osr * len(rchannels))
+        rshape = (data.shape[0], data.shape[1] - margin)
+        
+        # allocate one full buffer per channel
+        buf = []
+        for c in rchannels:
+            buf.append(numpy.empty(rshape, dtype=self._reader.dtype))
+        adtype = get_best_dtype_for_acc(self._reader.dtype, osr)
+        
+        # read "maxlines" lines at a time
+        x = 0
+        while x < data.shape[0]:
+            lines = min(data.shape[0] - x, maxlines)
+            logging.debug("Going to read %d lines", lines)
+            wdata = data[x:x+lines,:,:] # just a couple of lines
+            wdata = wdata.reshape(-1, wdata.shape[2]) # flatten X/Y
+            rbuf = self._write_read_raw_one_cmd(wchannels, wranges, rchannels,
+                                                rranges, period, osr, wdata)
+            
+            # decimate into each buffer
+            for i, b in enumerate(buf):
+                self._scan_raw_to_lines(rshape, margin, osr, x, rbuf[...,i], b[x:x+lines,...], adtype)
+
+            x += lines
+
+        return buf
+    
+    @staticmethod
+    def _scan_raw_to_lines(shape, margin, osr, x, data, oarray, adtype):
+        """
+        Converts a linear array resulting from a scan with oversampling to a 2D array
+        shape (2-tuple int): H,W dimension of the scanned image (margin not included)
+        margin (int): amount of useless pixels at the beginning of each line
+        osr (int): over-sampling rate
+        x (int): x position of the line in the output array
+        data (1D ndarray): the raw linear array (including oversampling), of one channel
+        oarray (2D ndarray): the output array, already allocated, of shape self.shape
+        adtype (dtype): intermediarry type to use for the accumulator
+        """
+        # reshape to a 3D array with margin and sub-samples
+        rectangle = data.reshape((-1, shape[1] + margin, osr))
+        # trim margin
+        tr_rect = rectangle[:, margin:]
+        if osr == 1:
+            # only one sample per pixel => copy
+            oarray = tr_rect[:,:,0]
+        else:
+            # inspired by _mean() from numpy, but save the accumulated value in 
+            # a separate array of a big enough dtype.
+            acc = umath.add.reduce(tr_rect, axis=2, dtype=adtype)
+            umath.true_divide(acc, osr, out=oarray, casting='unsafe', subok=False)
+    
+    def _write_read_2d_pixel(self, wchannels, wranges, rchannels, rranges, 
+                            period, margin, osr, data):
+        """
+        Implementation of write_read_2d_data_raw by reading the input data one 
+          pixel at a time.
+        """ 
+        logging.debug("Reading one pixel at a time: %d samples/read", 
+                      osr * len(rchannels))
+        rshape = (data.shape[0], data.shape[1] - margin)
+        
+        # allocate one full buffer per channel
+        buf = []
+        for c in rchannels:
+            buf.append(numpy.empty(rshape, dtype=self._reader.dtype))
+        adtype = get_best_dtype_for_acc(self._reader.dtype, osr)
+        
+        # read one pixel at a time
+        for x, y in numpy.ndindex(data.shape[0], data.shape[1]):
+            wdata = data[x,y,:] # just one pixel
+            wdata.shape = (1, data.shape[2]) # reshape to 2D
+            rbuf = self._write_read_raw_one_cmd(wchannels, wranges, rchannels,
+                                                rranges, period, osr, wdata)
+            
+            # decimate into each buffer
+            for i, b in enumerate(buf):
+                self._scan_raw_to_pixel(rshape, margin, osr, x, y, rbuf[...,i], b, adtype)
+
+        return buf
+
+    @staticmethod
+    def _scan_raw_to_pixel(shape, margin, osr, x, y, data, oarray, adtype):
+        """
+        Converts acquired data for one pixel resulting into the pixel for the a 2D array
+        shape (2-tuple int): H,W dimension of the scanned image (margin not included)
+        margin (int): amount of useless pixels at the beginning of each line
+        osr (int): over-sampling rate
+        x (int): x position of the pixel in the output array
+        y (int): y position of the pixel in the output array
+        data (1D ndarray): the raw data (including oversampling), of one channel
+        oarray (2D ndarray): the output array, already allocated, of shape self.shape
+        """
+        oarray[x,y] = numpy.sum(data, dtype=adtype) / osr
+    
+    def _fake_write_read_raw_one_cmd(self, wchannels, wranges, rchannels, rranges, 
+                                 period, osr, data):
+        """
+        Imitates _write_read_raw_one_cmd() but works with the comedi_test driver,
+          just read data.
         """
         nwscans = data.shape[0]
         nwchans = data.shape[1]
@@ -923,54 +1133,51 @@ class SEMComedi(model.HwComponent):
         expected_time = nwscans * period # s
         
         logging.debug("Generating a new read command for %d scans", nrscans)
-        rcmd = comedi.cmd_struct()
-        comedi.get_cmd_generic_timed(self._device, self._ai_subdevice,
-                                                  rcmd, nrchans, rperiod_ns)
-        clist = comedi.chanlist(nrchans)
-        for i in range(nrchans):
-            clist[i] = comedi.cr_pack(rchannels[i], rranges[i], comedi.AREF_GROUND)
-        rcmd.chanlist = clist
-        rcmd.stop_src = comedi.TRIG_COUNT
-        rcmd.stop_arg = nrscans
-        self._prepare_command(rcmd)
-
-        # Checks the periods are the same
-        if rcmd.scan_begin_arg != rperiod_ns:
-            logging.warning("Asked dwell time of %g s, but got %g s", rperiod_ns/1e9, rcmd.scan_begin_arg / 1e9)
 
         # flatten the array
         wbuf = numpy.reshape(data, nwscans * nwchans)
+        self._writer.prepare(wbuf, expected_time)
 
         # prepare read buffer info        
-        self._reader.prepare(expected_time, shape, nrchans, margin, osr)
+        self._reader.prepare(nrscans * nrchans, expected_time)
         
+        # create a command for reading, with a period osr times smaller than the write
+        self.setup_timed_command(self._ai_subdevice, rchannels, rranges, rperiod_ns,
+                    start_src=comedi.TRIG_NOW, # start immediately (trigger is not supported)
+                    stop_arg=nrscans)
+    
         # run the commands
-        comedi.command(self._device, rcmd)
         self._reader.run()
+        self._writer.run()
         
-        timeout = expected_time * 1.10 + 1 # s   == expected time + 10% + 1s
+        timeout = expected_time * 1.10 + 0.1 # s   == expected time + 10% + 0.1s
         logging.debug("Waiting %g s for the acquisition to finish", timeout)
+        self._writer.wait(timeout)
         rbuf = self._reader.wait(timeout)
+        # reshape to 2D
+        rbuf.shape = (nrscans, nrchans)
         return rbuf
     
-    def write_read_data_raw(self, wchannels, wranges, rchannels, rranges, 
-                            period, shape, margin, osr, data):
+    def _write_read_raw_one_cmd(self, wchannels, wranges, rchannels, rranges, 
+                            period, osr, data):
         """
-        write data on the given analog output channels and read the same amount 
-         synchronously on the given analog input channels
+        write data on the given analog output channels and read synchronously
+          on the given analog input channels in one command
         wchannels (list of int): channels to write (in same the order as data)
         wranges (list of int): ranges of each write channel
         rchannels (list of int): channels to read (in same the order as data)
         rranges (list of int): ranges of each read channel
         period (float): sampling period in s (time between two writes on the same
          channel)
-        shape (2-tuple of int): shape of the actual array acquired (margin is not included)
-        margin (int): number of additional pixels at the begginning of each line
-        osr: over-sampling rate, how many input samples should be acquired by pixel
-        data (numpy.ndarray of float): two dimension array to write (raw values)
+        osr: over-sampling rate, how many input samples should be acquired per 
+          output sample 
+        data (2D numpy.ndarray of int): array to write (raw values)
           first dimension is along the time, second is along the channels
-        return (2D numpy.array with shape=data.shape and dtype=float)
-            the data read (raw) for each channel
+        return (2D numpy.array with dtype=device type)
+            the raw data read (first dimension is data.shape[0] * osr) for each
+            channel (as second dimension).
+        raises:
+            IOError: in case of timeout or cancellation
         """
         # We write at the given period, and read osr samples for each pixel
         nwscans = data.shape[0]
@@ -984,55 +1191,21 @@ class SEMComedi(model.HwComponent):
         # create a command for writing
         logging.debug("Generating new write and read commands for %d scans on "
                       "channels %r/%r", nwscans, wchannels, rchannels)
-        wcmd = comedi.cmd_struct()
-        comedi.get_cmd_generic_timed(self._device, self._ao_subdevice,
-                                                  wcmd, nwchans, period_ns)
-        clist = comedi.chanlist(nwchans)
-        for i in range(nwchans):
-            clist[i] = comedi.cr_pack(wchannels[i], wranges[i], comedi.AREF_GROUND)
-        wcmd.chanlist = clist
-#        wcmd.start_src = comedi.TRIG_INT
-#        wcmd.start_arg = 0
-        # from PyComedi docs: should improve synchronisation
-        wcmd.start_src = comedi.TRIG_EXT
-        wcmd.start_arg = NI_TRIG_AI_START1 # when the AI starts reading 
-        wcmd.stop_src = comedi.TRIG_COUNT
-        wcmd.stop_arg = nwscans
-        self._prepare_command(wcmd)
-        # on the NI 62xx, counter is same as input (2**24), so it should always be fine 
-        assert(wcmd.stop_arg == nwscans)  
+        self.setup_timed_command(self._ao_subdevice, wchannels, wranges, period_ns,
+                    start_src = comedi.TRIG_EXT, # from PyComedi docs: should improve synchronisation
+                    start_arg = NI_TRIG_AI_START1, # when the AI starts reading
+                    stop_arg = nwscans)
 
         # create a command for reading, with a period osr times smaller than the write
-        rcmd = comedi.cmd_struct()
-        comedi.get_cmd_generic_timed(self._device, self._ai_subdevice,
-                                                  rcmd, nrchans, rperiod_ns)
-        clist = comedi.chanlist(nrchans)
-        for i in range(nrchans):
-            clist[i] = comedi.cr_pack(rchannels[i], rranges[i], comedi.AREF_GROUND)
-        rcmd.chanlist = clist
-        rcmd.start_src = comedi.TRIG_INT # start synchronously with the write
-        rcmd.start_arg = 0
-        rcmd.stop_src = comedi.TRIG_COUNT
-        rcmd.stop_arg = nrscans
-        self._prepare_command(rcmd)
+        self.setup_timed_command(self._ai_subdevice, rchannels, rranges, rperiod_ns,
+                    stop_arg = nrscans)
 
-        # Checks the periods are the same
-        assert((rcmd.scan_begin_arg * osr) == wcmd.scan_begin_arg)
-        assert(rcmd.stop_arg == nrscans) # FIXME: max rcmd.stop_arg is 2**24 => do multiple scans
-        if wcmd.scan_begin_arg != period_ns:
-            logging.warning("Asked dwell time of %g s, but got %g s", period, wcmd.scan_begin_arg / 1e9)
-
-        # readying the subdevice with the command (needs to be done before
-        # writing anything to the device)
-        comedi.command(self._device, wcmd)
-        comedi.command(self._device, rcmd)
-        
-        # flatten the array
-        wbuf = numpy.reshape(data, nwscans * nwchans)
+        # prepare to write the flattened buffer
+        wbuf = data.reshape((nwscans * nwchans,))
         self._writer.prepare(wbuf, expected_time)
 
-        # prepare read buffer info        
-        self._reader.prepare(expected_time, shape, nrchans, margin, osr)
+        # prepare to read
+        self._reader.prepare(nrscans * nrchans, expected_time)
         
         # run the commands
         # AO is waiting for AI/Start1, so not sure why internal trigger needed,
@@ -1042,46 +1215,15 @@ class SEMComedi(model.HwComponent):
         self._reader.run()
         self._writer.run()
 
-        timeout = expected_time * 1.10 + 1 # s   == expected time + 10% + 1s
+        timeout = expected_time * 1.10 + 0.1 # s   == expected time + 10% + 0.1s
         logging.debug("Waiting %g s for the acquisition to finish", timeout)
-        self._writer.wait(timeout)
         rbuf = self._reader.wait(timeout)
+        self._writer.wait(timeout) # writer is faster, so there should be no wait
+        # reshape to 2D
+        rbuf.shape = (nrscans, nrchans)
         return rbuf
 
 
-    @staticmethod
-    def _scan_result_to_array(data, shape, margin, osr):
-        """
-        Converts a linear array resulting from a scan to a 2D array
-        data (1D ndarray): the linear array, of shape=shape[0]*(shape[1] + margin) * osr
-        shape (2-tuple of int): shape of the output array
-        margin (0<=int): number of pixels at the beginning of each line to skip
-        osr (1<=int<2**16): over-sampling rate, how many input samples should be acquired by pixel
-            if osr is above 1, the average value is computed.
-        returns (2D ndarray): dtype is same as data
-        """
-        assert(osr >= 1)
-        # reshape to a 2D array with margin
-        rectangle = numpy.reshape(data, (shape[0], shape[1] + margin, osr))
-        # trim margin
-        tr_rect = rectangle[:, margin:]
-        if osr == 1:
-            # only one sample per pixel => we are done
-            return tr_rect[:,:,0] 
-        else:
-            # inspired by _mean() from numpy, but save the accumulated value in 
-            # a separate array of a big enough dtype.
-            if data.dtype == numpy.uint16:
-                #assert(osr <= 2**16) # if we reach this, we have other problems with memory size first 
-                idtype = numpy.uint32
-            else:
-                # numpy.uint32
-                idtype = numpy.uint64
-            acc = umath.add.reduce(tr_rect, axis=2, dtype=idtype)
-            average = numpy.empty(shape, dtype=data.dtype)
-            umath.true_divide(acc, osr, out=average, casting='unsafe', subok=False)
-            return average
-            
     def start_acquire(self, detector, callback):
         """
         Start acquiring images on the given detector (i.e., input channel).
@@ -1166,10 +1308,8 @@ class SEMComedi(model.HwComponent):
                 
                 # write and read the raw data
                 try:
-#                    rbuf = self.write_read_data_raw(wchannels, wranges, rchannels,
-#                                                    rranges, period, osr, scan)
-                    rbuf = self.write_read_data_raw(wchannels, wranges, rchannels,
-                                                    rranges, period, shape, margin, osr, scan)
+                    rbuf = self.write_read_2d_data_raw(wchannels, wranges, rchannels,
+                                                    rranges, period, margin, osr, scan)
                 except (IOError, comedi.ComediError):
                     # could be genuine or just due to cancellation
                     if self._acquisition_must_stop.is_set():
@@ -1183,11 +1323,14 @@ class SEMComedi(model.HwComponent):
                         logging.exception("Acquisition failed, will retry")
                         time.sleep(1)
                         continue
+                except CancelledError:
+                    # either because must be stopped or settings updated
+                    logging.debug("Restarting acquisition after it was cancelled")
+                    continue
             
                 nfailures = 0
                 #logging.debug("Converting raw data to physical: %s", rbuf)
-                # TODO convert the data while reading, to save time, or do not convert at all
-                # TODO do not convert the margin data
+                # TODO decimate/convert the data while reading, to save time, or do not convert at all
                 
                 # the channels to acquire might have changed, only send to the one
                 # still interested
@@ -1203,7 +1346,6 @@ class SEMComedi(model.HwComponent):
                         continue
     
                     # Convert to a nice 2D DataArray
-#                    parray = self._scan_result_to_array(rbuf[...,i], shape, margin, osr)
                     parray = rbuf[i]
                     darray = model.DataArray(parray, metadata)
                     callback(darray)
@@ -1213,6 +1355,7 @@ class SEMComedi(model.HwComponent):
                 gc.collect()
 
         finally:
+            self.set_to_resting_position()
             logging.debug("Acquisition thread closed")
             self._acquisition_must_stop.clear()      
     
@@ -1235,7 +1378,6 @@ class SEMComedi(model.HwComponent):
             self._reader.close()
             self._writer.close()
     
-    # TODO selfTest() which tries to read some data
     def selfTest(self):
         # let's see if we can get data from each channel, any data is good
         channels = []
@@ -1352,6 +1494,10 @@ class Accesser(object):
         # to be able to read and write simultaneously.
         # Closing any of them will close the device as well
         self.file = os.fdopen(parent._fileno, 'rb+', 0) # buffer = 0 => flush should be not necessary
+        self.cancelled = False
+        self.thread = None
+        self.duration = None
+        self.buf = None
 
     def close(self):
         """
@@ -1384,9 +1530,7 @@ class Reader(Accesser):
         
         self.dtype = parent._get_dtype(self._subdevice)
         self.buf = None
-        self.thread = None
         self.count = None
-        self.duration = None
     
     def prepare(self, count, duration):
         """
@@ -1395,11 +1539,12 @@ class Reader(Accesser):
         """
         self.count = count
         self.duration = duration
+        self.cancelled = False
         if self.thread and self.thread.isAlive():
             logging.warning("Preparing a new acquisition while previous one is not over")
         self.thread = threading.Thread(name="SEMComedi reader", target=self._thread)
         self.file.seek(0)
-    
+        
     def run(self):
         # start reader thread
         self.thread.start()
@@ -1408,14 +1553,11 @@ class Reader(Accesser):
         """To be called in a separate thread"""
         try:
             self.buf = numpy.fromfile(self.file, dtype=self.dtype, count=self.count)
-            # TODO: in case of oversampling, we should average while reading
-            # => no need to keep everything in memory (osr > 100 can easily happen)
-            # => overlap acquisition and computation
-            # We'd need to be aware of the margin, to not run computation on it
-            # and allow to have non strided array afterwards
         except IOError:
             # might be due to a cancel
             logging.debug("Read ended before the end")
+        except:
+            logging.exception("Unhandled error in reading thread")
     
     def wait(self, timeout=None):
         """
@@ -1426,7 +1568,9 @@ class Reader(Accesser):
         self.thread.join(timeout)
         if self.thread.isAlive():
             logging.warning("Reading thread is still running after %g s", timeout)
-        self.cancel()
+            self.cancel()
+        elif self.cancelled:
+            raise CancelledError("Reading thread was cancelled")
         
         # the result should be in self.buf
         if self.buf is None:
@@ -1434,12 +1578,12 @@ class Reader(Accesser):
         elif self.buf.size != self.count:
             raise IOError("Read only %d values from the %d expected" % (self.buf.size, self.count))
     
-        # TODO decimate here, to get the same API as DecimatingReader
         return self.buf
 
     def cancel(self):
         try:
             comedi.cancel(self._device, self._subdevice)
+            self.cancelled = True
         except comedi.ComediError:
             logging.debug("Failed to cancel read")
         
@@ -1470,272 +1614,11 @@ class Reader(Accesser):
         if self.thread.isAlive():
             logging.warning("failed to cancel fully the reading thread")
 
-class DecimatingReader(Reader):
-    """
-    A reader that decimate (i.e., compute the mean) of the input while reading
-      the file. Note that the prepare() method has a different signature. 
-    """
-    def __init__(self, parent, bufsz=None):
-        """
-        bufsz (None or 1<=int): maximum buffer size (in bytes) when reading. If None, a 
-          good (=efficient) default value will be selected. Mostly used for debugging.
-        """
-        Accesser.__init__(self, parent)
-        self._subdevice = parent._ai_subdevice
-        
-        self.dtype = parent._get_dtype(self._subdevice)
-        self.thread = None
-        self.count = None
-        self.duration = None
-        
-        if bufsz is None:
-            # Find a good buffer size
-            self.max_bufsz = 5 * 2**20 # max 5 MB ~ same as device buffer
-            # TODO: pick a buffer which is big enough to contain samples for
-            # ~0.1 seconds at maximum sampling rate. Or same as device buffer?
-        else:
-            self.max_bufsz = bufsz
-        
-    def get_best_dtype_for_acc(self, count):
-        """
-        Computes the smallest dtype that allows to accumulate all the _count_ integers
-        count (int): number of values accumulated
-        returns (dtype): the best fitting dtype
-        """
-        maxval = 2**(self.dtype.itemsize * 8) * count
-        if maxval < 2**32:
-            idtype = numpy.uint32
-        elif maxval < 2**64:
-            idtype = numpy.uint64
-        else:
-            logging.debug("Going to use lossy intermediate type in order to support values up to %d", maxval)
-            idtype = numpy.float64 # might accumulate errors
-    
-        return idtype
-        
-    def prepare(self, duration, shape, nchans, margin, osr):
-        """
-        duration: expected total duration it will take (in s)
-        shape (2-tuple of int): shape of the _output_ array (margin removed)
-        nchans (1<=int): number of channels recorded
-        margin (0<=int): number of pixels at the beginning of each line to skip
-        osr (1<=int<2**16): over-sampling rate, how many input samples should be acquired by pixel
-            if osr is above 1, the average value is computed.
-        """
-        self.shape = shape
-        self.margin = margin
-        self.osr = osr
-        self.nchans = nchans
-        self.npreceived = 0 # px
-        self.nsreceived = 0 # samples
-        self.count = shape[0] * (shape[1] + margin) * nchans * osr # expected number of samples
-        self.duration = duration
-        # find best intermediate dtype for the decimation
-        self.idtype = self.get_best_dtype_for_acc(osr)
-        
-        # find the best method to read that fit the buffer: /array, /line, or /pixel
-        thread_method = self._thread_array
-        self.bufsz = self.count * self.dtype.itemsize
-        if self.bufsz > self.max_bufsz:
-            # try to fit a whole line
-            thread_method = self._thread_line
-            self.bufsz = (shape[1] + margin) * nchans * osr * self.dtype.itemsize
-        
-        if self.bufsz > self.max_bufsz:
-            # fit a pixel
-            thread_method = self._thread_pixel
-            self.bufsz = nchans * osr * self.dtype.itemsize
-        
-        if self.bufsz > self.max_bufsz:
-            logging.info("Going to read very large buffer of %f MB.", self.bufsz/2.**20)
-        
-        # allocate one full buffer per channel
-        self.buf = []
-        for i in range(self.nchans):
-            self.buf.append(numpy.empty(self.shape, dtype=self.dtype))
-        
-        if self.thread and self.thread.isAlive():
-            logging.warning("Preparing a new acquisition while previous one is not over")
-        self.thread = threading.Thread(name="SEMComedi reader", target=thread_method)
-        self.file.seek(0)
-    
-    def fromfile(self, fd, dtype, count):
-        """
-        Own implementation of fromfile, which read count values in one shot
-        returns (1D ndarray)
-        """
-        bufsz = count * dtype.itemsize
-        data = os.read(fd, bufsz)
-        if len(data) != bufsz:
-            raise IOError("Failed to acquire %d b (only got %d)" % (bufsz, len(data)))
-        
-        # zero-copy conversion from string to numpy array
-        rbuf = numpy.asarray(memoryview(data))
-        rbuf.dtype = self.dtype
-        return rbuf
-    
-    def _thread_array(self):
-        """To be called in a separate thread"""
-        logging.debug("Reading whole array at once: %d samples", self.count)
-        try:
-            rbuf = numpy.fromfile(self.file, dtype=self.dtype, count=self.count)
-        except IOError:
-            # might be due to a cancel
-            logging.debug("Read ended before the end")
-            return
-        
-        self.nsreceived = rbuf.size
-        if self.nsreceived != self.count:
-            # might be due to a cancel
-            return
-        
-        # reshape to separate channels, the lowest dimension
-        rbuf.shape = (self.count/self.nchans, self.nchans)
-        # decimate the whole array  
-        for i in range(self.nchans):
-            self._scan_raw_to_array(rbuf[...,i], self.buf[i])
-    
-    def _scan_raw_to_array(self, data, oarray):
-        """
-        Converts a linear array resulting from a scan to a 2D array
-        data (1D ndarray): the raw linear array (including oversampling), of one channel
-        oarray (2D ndarray): the output array, already allocated, of shape self.shape
-        """
-        # reshape to a 2D array with margin
-        rectangle = numpy.reshape(data, (self.shape[0], self.shape[1]+self.margin, self.osr))
-        # trim margin
-        tr_rect = rectangle[:, self.margin:]
-        if self.osr == 1:
-            # only one sample per pixel => copy
-            oarray = tr_rect[:,:,0] 
-        else:
-            # inspired by _mean() from numpy, but save the accumulated value in 
-            # a separate array of a big enough dtype.
-            acc = umath.add.reduce(tr_rect, axis=2, dtype=self.idtype)
-            umath.true_divide(acc, self.osr, out=oarray, casting='unsafe', subok=False)
-    
-    
-    def _thread_line(self):
-        """
-        Reads and decimate the arrays one line at a time
-        To be called in a separate thread
-        """
-        spa = self.bufsz/self.dtype.itemsize  # samples per acquisition
-        logging.debug("Reading one line at a time: %d samples/read", spa)
-        x = 0
-        while self.nsreceived < self.count:
-            try:
-                # TODO could use numpy? (only advantage in doing it raw is we _might_ save one copy)
-#                rbuf = self.fromfile(self.parent._fileno, dtype=self.dtype, count=spa)
-#                logging.debug("trying to read %d bytes, after %d px received", self.bufsz, self.npreceived)
-                rbuf = numpy.fromfile(self.file, dtype=self.dtype, count=spa)
-                if rbuf.size != spa:
-                    raise IOError()
-            except IOError:
-                # might be due to a cancel
-                logging.debug("Read ended before the end")
-                return
-            
-            # compute the position
-            self.nsreceived += rbuf.size
-            rbuf.shape = ((self.shape[1] + self.margin) * self.osr, self.nchans)
-            
-            # decimate into each buffer
-            for i in range(self.nchans):
-                self._scan_raw_to_line(rbuf[...,i], self.buf[i], x)
-            x += 1
-    
-    def _scan_raw_to_line(self, data, oarray, x):
-        """
-        Converts a raw data corresponding of one line of the final 2D array
-        data (1D ndarray): the raw linear array (including oversampling), of one channel
-        oarray (2D ndarray): the output array, already allocated, of shape self.shape
-        x (int): x position of the line in the output array
-        """
-        # reshape to a 2D array with margin
-        line = numpy.reshape(data, (self.shape[1]+self.margin, self.osr))
-        # trim margin
-        tr_line = line[self.margin:]
-        if self.osr == 1:
-            # only one sample per pixel => copy
-            # TODO: any use? if we do it per line, it's because osr is big
-            oarray[x] = tr_line[:,0] 
-        else:
-            # inspired by _mean() from numpy, but save the accumulated value in 
-            # a separate array of a big enough dtype.
-            acc = umath.add.reduce(tr_line, axis=1, dtype=self.idtype)
-            umath.true_divide(acc, self.osr, out=oarray[x], casting='unsafe', subok=False)
-    
-    def _thread_pixel(self):
-        """
-        Reads and decimate the arrays one pixel at a time
-        To be called in a separate thread
-        """
-        spa = self.bufsz/self.dtype.itemsize  # samples per acquisition
-        logging.debug("Reading one pixel at a time: %d samples/read", spa)
-        while self.nsreceived < self.count:
-            try:
-                # TODO could use numpy? (only advantage in doing it raw is we _might_ save one copy)
-#                rbuf = self.fromfile(self.parent._fileno, dtype=self.dtype, count=spa)
-#                logging.debug("trying to read %d bytes, after %d px received", self.bufsz, self.npreceived)
-                rbuf = numpy.fromfile(self.file, dtype=self.dtype, count=spa)
-                if rbuf.size != spa:
-                    raise IOError()
-            except IOError:
-                # might be due to a cancel
-                logging.debug("Read ended before the end")
-                return
-            
-            # compute the position
-            x, y = divmod(self.npreceived, self.shape[1] + self.margin)
-            y -= self.margin
-            self.nsreceived += rbuf.size
-            self.npreceived += 1
-            
-            if y >= 0: # don't care if it's in the margin
-                rbuf.shape = (self.osr, self.nchans)
-                # decimate into each buffer
-                for i in range(self.nchans):
-                    self._scan_raw_to_pixel(rbuf[...,i], self.buf[i], x, y)
-            
-    def _scan_raw_to_pixel(self, data, oarray, x, y):
-        """
-        Converts acquired data for one pixel resulting into the pixel for the a 2D array
-        data (1D ndarray): the raw data (including oversampling), of one channel
-        oarray (2D ndarray): the output array, already allocated, of shape self.shape
-        x (int): x position of the pixel in the output array
-        y (int): y position of the pixel in the output array
-        """
-        oarray[x,y] = numpy.sum(data, dtype=self.idtype) / self.osr
-    
-    
-    def wait(self, timeout=None):
-        """
-        timeout (float): maximum number of seconds to wait for the read to finish
-        """
-        timeout = timeout or self.period
-         
-        self.thread.join(timeout)
-        if self.thread.isAlive():
-            logging.warning("Reading thread is still running after %g s", timeout)
-        self.cancel()
-        
-        # the result should be in self.buf
-        if self.buf is None:
-            raise IOError("Failed to read all the %d expected values" % self.count)
-        elif self.nsreceived != self.count:
-            raise IOError("Read only %d values from the %d expected" % (self.nsreceived, self.count))
-    
-        return self.buf
-
 class Writer(Accesser):
     def __init__(self, parent):
         Accesser.__init__(self, parent)
         self._subdevice = parent._ao_subdevice
                 
-        self.buf = None
-        self.thread = None
-        self.duration = None
         self._expected_end = None
         self._preload_size = None
     
@@ -1746,7 +1629,9 @@ class Writer(Accesser):
         """
         self.duration = duration
         self.buf = buf
+        self.cancelled = False
         self.file.seek(0)
+        
         # preload the buffer with enough data first
         dev_buf_size = comedi.get_buffer_size(self._device, self._subdevice)
         self._preload_size = dev_buf_size / buf.itemsize
@@ -1764,23 +1649,24 @@ class Writer(Accesser):
         """
         Ends once the output is fully over 
         """
-        try: 
+        try:
             self.buf[self._preload_size:].tofile(self.file)
             self.file.flush()
         except IOError:
             # might be due to a cancel
             logging.debug("Write ended before the end")
-            return
+        except:
+            logging.exception("Unhandled error in reading thread")
         
         # Wait until the buffer is fully emptied to state the output is over 
         while (comedi.get_subdevice_flags(self._device, self._subdevice)
                & comedi.SDF_RUNNING):
             # sleep longer if the end is far away
             left = self._expected_end - time.time()
-            if left > 0.1:
+            if left > 0.01:
                 time.sleep(left / 2)
             else:
-                time.sleep(0.01)
+                time.sleep(0) # just yield
         
     def wait(self, timeout=None):
         timeout = timeout or self.duration
@@ -1793,6 +1679,9 @@ class Writer(Accesser):
                     raise IOError("Write timeout while device is still generating data")
                 else:
                     raise IOError("Write timeout while device is idle")
+            elif self.cancelled:
+                raise CancelledError("Reading thread was cancelled")
+
         finally:
             # According to https://groups.google.com/forum/?fromgroups=#!topic/comedi_list/yr2U179x8VI
             # To finish a write fully, we need to do a cancel().
@@ -1802,6 +1691,7 @@ class Writer(Accesser):
     def cancel(self):
         try:
             comedi.cancel(self._device, self._subdevice)
+            self.cancelled = True
         except comedi.ComediError:
             logging.debug("Failed to cancel write")
 
@@ -1812,12 +1702,20 @@ class FakeWriter(Accesser):
     """
     def __init__(self, parent):
         self.duration = None
+        self.must_stop = threading.Event()
+    
+    def close(self):
+        pass
     
     def prepare(self, buf, duration):
         self.duration = duration
+        self.must_stop.clear()
     
     def wait(self, timeout=None):
-        time.sleep(self.duration)
+        self.must_stop.wait(self.duration)
+    
+    def cancel(self):
+        self.must_stop.set()
 
 class Scanner(model.Emitter):
     """
@@ -1893,6 +1791,7 @@ class Scanner(model.Emitter):
         
         # max dwell time is purely arbitrary
         range_dwell = (parent.find_closest_dwell_time(0), 1) # s
+        self._osr = 1
         self.dwellTime = model.FloatContinuous(range_dwell[0], range_dwell, 
                                                unit="s", setter=self._setDwellTime)
 
@@ -1908,11 +1807,7 @@ class Scanner(model.Emitter):
         self.magnification = model.FloatContinuous(1e3, range=[1, 1e9], unit="")
         self.magnification.subscribe(self._onMagnification, init=True)
         
-        # TODO: This is just for testing, once it's working, it should be always
-        # activated 
-        self.oversampling = model.BooleanVA(True)
-
-        self._prev_settings = [None, None, None] # resolution, margin, dwellTime
+        self._prev_settings = [None, None, None] # resolution, dwellTime, margin
         self._scan_array = None # last scan array computed
     
     @roattribute
@@ -1944,7 +1839,8 @@ class Scanner(model.Emitter):
         self.parent._metadata[model.MD_PIXEL_SIZE] = pxs
     
     def _setDwellTime(self, value):
-        return self.parent.find_closest_dwell_time(value)
+        dt, self._osr = self.parent.find_best_oversampling_rate(value)
+        return dt
 
     def updateMetadata(self, md):
         # we share metadata with our parent
@@ -1952,15 +1848,41 @@ class Scanner(model.Emitter):
     
     # TODO get_resting_point_data() -> to get the data to write when not scanning
     # returns: array (1x2 numpy.ndarray), channels (list of ints), ranges (list of float)
+    
+    def get_resting_point_data(self):
+        """
+        Returns all the data needed to set the beam to a nice resting position
+        returns: array (1D numpy.ndarray), channels (list of int), ranges (list of int):
+            array is 2 raw values (X and Y positions)
+            channels: the output channels to use
+            ranges: the range index of each output channel
+        """
+        # Let's put it at the top-left, where the next acquisition will start.
+        # It has the advantage of not being in the center, so less noticable
+        # if there is an optical camera aligned.
+        pos = [self._limits[0][0], self._limits[1][0]] 
+        ranges = []
+        for i, channel in enumerate(self._channels):
+            best_range = comedi.find_range(self.parent._device,
+                                           self.parent._ao_subdevice,
+                              channel, comedi.UNIT_volt, pos[i], pos[i])
+            ranges.append(best_range)
+        
+        # computes the position in raw values
+        rpos = self.parent._array_from_phys(self.parent._ao_subdevice,
+                                              self._channels, ranges, 
+                                              numpy.array(pos, dtype=numpy.double))
+        return rpos, self._channels, ranges
+        
     def get_scan_data(self):
         """
         Returns all the data as it has to be written the device to generate a 
           scan.
-        returns: array (2D numpy.ndarray), period (0<=float), shape (2-tuple int),
+        returns: array (3D numpy.ndarray), period (0<=float), shape (2-tuple int),
                  margin (0<=int), channels (list of int), ranges (list of int)
                  osr (1<=int):
-          array is of shape Nx2: N is the number of pixels. dtype is fitting the
-             device raw data. shape = shape[0], shape[1] + margin
+          array is of shape HxWx2: H,W is the scanning area. dtype is fitting the
+             device raw data. .shape = shape[0], shape[1] + margin, 2
           period: time between a pixel in s
           shape: H,W dimension of the scanned image (e.g., the resolution in numpy order)
           margin: amount of fake pixels inserted at the beginning of each (Y) line
@@ -1973,21 +1895,18 @@ class Scanner(model.Emitter):
         """
         dwell_time = self.dwellTime.value
         resolution = self.resolution.value
-        if self.oversampling.value: # TODO: only update if dwell time changes (or oversampling)
-            dwell_time, osr = self.parent.find_best_oversampling_rate(dwell_time)
-        else:
-            osr = 1
         margin = int(math.ceil(self._settle_time / dwell_time))
         
-        prev_resolution, prev_margin, prev_dwell_time = self._prev_settings
+        prev_resolution, prev_dwell_time, prev_margin = self._prev_settings
+
         if prev_resolution != resolution or margin != prev_margin:
             # TODO: if only margin changes, just duplicate the margin columns
             # need to recompute the scanning array
             self._update_raw_scan_array(resolution[-1:-3:-1], margin)
             
-        self._prev_settings = [resolution, margin, dwell_time]
+        self._prev_settings = [resolution, dwell_time, margin]
         return (self._scan_array, dwell_time, resolution[-1:-3:-1],
-                margin, self._channels, self._ranges, osr)
+                margin, self._channels, self._ranges, self._osr)
 
     def _update_raw_scan_array(self, shape, margin):
         """
@@ -2033,7 +1952,6 @@ class Scanner(model.Emitter):
             
             self._scan_array = self.parent._array_from_phys(self.parent._ao_subdevice,
                                             self._channels, ranges, scan_phys)
-            
         
     @staticmethod
     def _generate_scan_array(shape, limits, margin):
@@ -2045,7 +1963,7 @@ class Scanner(model.Emitter):
         limits (2x2 ndarray): the min/max limits of W/H
         margin (0<=int): number of additional pixels to add at the begginning of
             each scanned line
-        returns (2D ndarray of (shape[0] x (shape[1] + margin)) x 2): the H/W
+        returns (3D ndarray of shape[0] x (shape[1] + margin) x 2): the H/W
             values for each points of the array, with W scanned fast, and H 
             slowly. The type is the same one as the limits.
         """
@@ -2067,11 +1985,7 @@ class Scanner(model.Emitter):
             # use the transpose, as the broadcast rule is to extend on the row
             scan[:,:margin,1].T[:] = fp
         
-        # reshape the array to a full flat scan values (the C order should make
-        # sure that the array is fully continuous)
-        scan.shape = [full_shape[0] * full_shape[1], 2]
         return scan
-    
     
     
 class Detector(model.Detector):
