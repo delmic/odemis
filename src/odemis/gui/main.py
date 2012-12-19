@@ -227,7 +227,7 @@ class OdemisGUIApp(wx.App):
     def on_load_example1(self, e):
         """ Open the two files for example """
         try:
-            pos = self.secom_model.stage_pos.value
+            pos = self.interface_model.focussedView.value.view_pos.value
             name1 = os.path.join(os.path.dirname(__file__),
                                  "1-optical-rot7.png")
             im1 = InstrumentalImage(wx.Image(name1), 7.14286e-7, pos)
@@ -236,15 +236,15 @@ class OdemisGUIApp(wx.App):
             name2 = os.path.join(os.path.dirname(__file__), "1-sem-bse.png")
             im2 = InstrumentalImage(wx.Image(name2), 4.54545e-7, pos)
 
-            self.secom_model.sem_det_image.value = im2
-            self.secom_model.optical_det_image.value = im1
+            self.stream_controller.addStatic("Fluorescence", im2)
+            self.stream_controller.addStatic("Secondary electrons", im1)
         except e:
             logging.exception("Failed to load example")
 
     def on_load_example2(self, e):
         """ Open the two files for example """
         try:
-            pos = self.secom_model.stage_pos.value
+            pos = self.interface_model.focussedView.value.view_pos.value
             name2 = os.path.join(os.path.dirname(__file__), "3-sem.png")
             im2 = InstrumentalImage(wx.Image(name2), 2.5e-07, pos)
 
@@ -252,8 +252,8 @@ class OdemisGUIApp(wx.App):
             name1 = os.path.join(os.path.dirname(__file__), "3-optical.png")
             im1 = InstrumentalImage(wx.Image(name1), 1.34e-07, pos)
 
-            self.secom_model.sem_det_image.value = im2
-            self.secom_model.optical_det_image.value = im1
+            self.stream_controller.addStatic("Fluorescence", im1)
+            self.stream_controller.addStatic("Secondary electrons", im2)
         except e:
             logging.exception("Failed to load example")
 

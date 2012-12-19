@@ -44,9 +44,9 @@ import logging
 
 
 # all the stream types related to optical
-OPTICAL_STREAMS = (instrmodel.FluoStream, instrmodel.BrightfieldStream)
+OPTICAL_STREAMS = (instrmodel.FluoStream, instrmodel.BrightfieldStream, instrmodel.StaticStream)
 # all the stream types related to electron microscope
-EM_STREAMS = (instrmodel.SEMStream)
+EM_STREAMS = (instrmodel.SEMStream, instrmodel.StaticStream)
 
 class StreamController(object):
     """
@@ -149,6 +149,15 @@ class StreamController(object):
         stream = instrmodel.SEMStream("Secondary electrons",
                   self._livegui.sed, self._livegui.sed.data,
                   self._livegui.ebeam)
+        return self._addStream(stream, comp.stream.FixedStreamPanelEntry, add_to_all_views)
+
+    def addStatic(self, name, image, add_to_all_views=False):
+        """
+        Creates a new static stream and entry into the stream panel
+        Note: only for debugging/testing
+        returns (StreamPanelEntry): the entry created
+        """
+        stream = instrmodel.StaticStream(name, image)
         return self._addStream(stream, comp.stream.FixedStreamPanelEntry, add_to_all_views)
 
     def _addStream(self, stream, entry_cls, add_to_all_views=False):

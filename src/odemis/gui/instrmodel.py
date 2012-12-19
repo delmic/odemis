@@ -370,12 +370,12 @@ class Stream(object):
         Add a warning if not already present
         warning (WARNING_*)
         """
-        # Surprisingly set([1]).add(2) returns None
+        # set([1]).add(2) returns None (because add() never returns anything)
         new_warnings = set(self.warnings.value) | set(warning)
         self.warnings.value = list(new_warnings)
 
     def onActive(self, active):
-        # Called only the value _changes_
+        # Called only when the value _changes_
         if active:
             log.debug("Subscribing to dataflow of component %s", self._detector.name)
             if not self.updated.value:
@@ -448,6 +448,7 @@ class SEMStream(Stream):
             # TODO if can blank => unblank
             pass
         Stream.onActive(self, active)
+
 
 
 class BrightfieldStream(Stream):
@@ -611,7 +612,6 @@ class StaticStream(Stream):
     def onBrightnessContrast(self, unused):
         # TODO use original image as raw, and update the image
         pass
-
 
 class MicroscopeView(object):
     """

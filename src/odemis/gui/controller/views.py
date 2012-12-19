@@ -23,11 +23,12 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 from collections import namedtuple
-
+from odemis.gui import instrmodel
+from odemis.gui.controller import streams
+from odemis.gui.log import log
 import wx
 
-from odemis.gui import instrmodel
-from odemis.gui.log import log
+
 
 
 class ViewController(object):
@@ -102,7 +103,7 @@ class ViewController(object):
             view = instrmodel.MicroscopeView("SEM",
                      self._microscope.stage,
                      focus0=None, # TODO: SEM focus
-                     stream_classes=(instrmodel.SEMStream, )
+                     stream_classes=streams.EM_STREAMS
                      )
             self._viewports[0].setView(view, self._microscope)
             self._microscope.sem_view = view
@@ -111,7 +112,7 @@ class ViewController(object):
             view = instrmodel.MicroscopeView("Optical",
                      self._microscope.stage,
                      focus0=self._microscope.focus,
-                     stream_classes=(instrmodel.BrightfieldStream, instrmodel.FluoStream)
+                     stream_classes=streams.OPTICAL_STREAMS
                      )
             self._viewports[1].setView(view, self._microscope)
             self._microscope.optical_view = view
