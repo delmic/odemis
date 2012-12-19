@@ -32,6 +32,8 @@ sudo modprobe comedi comedi_num_legacy_minors=4
 sudo modprobe comedi_test
 sudo chmod a+rw /dev/comedi0
 sudo comedi_config /dev/comedi0 comedi_test 1000000,1000000
+
+Be aware that comedi_test can crash easily while running those tests.
 """
 
 logging.getLogger().setLevel(logging.DEBUG)
