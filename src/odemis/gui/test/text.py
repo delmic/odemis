@@ -38,7 +38,7 @@ import odemis.gui.test.test_gui
 from odemis.gui.xmlh import odemis_get_test_resources
 
 SLEEP_TIME = 100 # Sleep timer in milliseconds
-MANUAL = False # If manual is set to True, the window will be kept open at the end
+MANUAL = True # If manual is set to True, the window will be kept open at the end
 INSPECT = False
 
 TEST_LST = ["Aap", u"nöot", "noot", "mies", "kees", "vuur", "quantummechnica",
@@ -91,71 +91,14 @@ class OwnerDrawnComboBoxTestCase(unittest.TestCase):
         if not MANUAL:
             wx.CallAfter(cls.app.Exit)
         else:
+            if INSPECT:
+                from wx.lib import inspection
+                inspection.InspectionTool().Show()
             cls.app.MainLoop()
 
     def test_setting_values(self):
-        odcb = self.app.test_frame.txt_odcbox
+        pass
 
-        # NOTE: something really weird is going on, since
-        # the OwnerDrawnComboBox seems to be of the base 'Control'
-        # class. It does not have Get/SetValue methods, but it does show
-        # the drop-down button and options. *MYSTERY*
-        #print odcb.__class__.__base__
-        print odcb.GetChildren()
-        #print "\n".join(dir(odcb))#.SetValue("mies")
-        from wx.lib import inspection
-        inspection.InspectionTool().Show()
-
-# class SuggestTestCase(unittest.TestCase):
-
-#     @classmethod
-#     def setUpClass(cls):
-#         cls.app = TestApp()
-#         loop()
-#         if INSPECT and MANUAL:
-#             from wx.lib import inspection
-#             inspection.InspectionTool().Show()
-
-#     @classmethod
-#     def tearDownClass(cls):
-#         if not MANUAL:
-#             wx.CallAfter(cls.app.Exit)
-#         else:
-#             cls.app.MainLoop()
-
-#     @classmethod
-#     def dump_win_tree(cls, window, indent=0):
-#         if not indent:
-#             print ""
-
-#         for child in window.GetChildren():
-#             print "."*indent, child.__class__.__name__
-#             cls.dump_win_tree(child, indent + 2)
-
-#     @classmethod
-#     def has_vertical_scrollbar(cls, window):
-#         """ Checks if the vertical scroll bar is present by comparing client and
-#             widget width
-#         """
-#         return window.GetClientSize().GetWidth() < window.GetSize().GetWidth()
-
-#     @classmethod
-#     def has_horizontal_scrollbar(cls, window):
-#         """ Checks if the horizontal scrollbar is present by comparing client and
-#             widget width
-#         """
-#         return window.GetClientSize().GetHeight() < window.GetSize().GetHeight()
-
-#     def test_suggest_text(self):
-#         # Not sure how to create a sensible test case with user input simulation
-#         # wxPython 2.9.4 has a new UIActionSimulator class that should
-#         # facilitate this, but getting 2.9 to work on Ubuntu is not a trivial
-#         # task at this point in time (July 2012), involving compiling the
-#         # enite package ourselves.
-#         pass
-
-#     def test_unit_integer_text(self):
-#         pass
 
 
 if __name__ == "__main__":
