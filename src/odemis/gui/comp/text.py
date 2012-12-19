@@ -28,6 +28,7 @@ Content:
 
 """
 
+import logging
 import locale
 import math
 import sys
@@ -35,7 +36,6 @@ import sys
 import wx
 import wx.lib.mixins.listctrl as listmix
 
-from odemis.gui.log import log
 from odemis.gui.util import units
 
 
@@ -413,7 +413,7 @@ class NumberValidator(wx.PyValidator):
 
         # Allow legal characters to reach the text control
         if chr(key) in self.legal:
-            log.debug("Processing key '%s'", key)
+            logging.log("Processing key '%s'", key)
 
             fld = self.GetWindow()
             val = fld.GetValue()
@@ -433,15 +433,15 @@ class NumberValidator(wx.PyValidator):
                 val = val.replace('..', '.')
                 val =val.replace(',,', ',') #pylint: disable=C0323
 
-            log.debug("Checking against %s", val)
+            logging.debug("Checking against %s", val)
 
             try:
                 if val != "-":
                     val = self._cast(val)
-                log.debug("Key accepted")
+                logging.debug("Key accepted")
                 event.Skip()
             except ValueError:
-                log.debug("Key rejected")
+                logging.debug("Key rejected")
                 return
 
         # 'Eat' the event by not Skipping it, thus preventing it.
@@ -460,7 +460,7 @@ class NumberValidator(wx.PyValidator):
 
         validated, _ = self.validate_value(val)
 
-        log.debug("Value {} is {}valid".format(val, "" if validated else "not"))
+        logging.debug("Value {} is {} valid".format(val, "" if validated else "not"))
 
         return validated
 
@@ -482,10 +482,10 @@ class NumberValidator(wx.PyValidator):
 
             if val is not None and val != "-" and self.min_val != self.max_val:
                 if self.min_val is not None and val < self.min_val:
-                    log.debug(msg.format(val, self.min_val, self.max_val))
+                    logging.debug(msg.format(val, self.min_val, self.max_val))
                     return False, self.min_val
                 if self.max_val is not None and val > self.max_val:
-                    log.debug(msg.format(val, self.min_val, self.max_val))
+                    logging.debug(msg.format(val, self.min_val, self.max_val))
                     return False, self.max_val
         return True, val
 
@@ -503,7 +503,7 @@ def _step_from_range(min_val, max_val):
         return step
     except ValueError:
         msg = "Error calculating step size for range [%s..%s]" % (min_val, max_val)
-        log.exception(msg)
+        logging.exception(msg)
 
 class NumberTextCtrl(wx.TextCtrl):
     """ A base text control specifically tailored to contain numerical data """
@@ -553,7 +553,7 @@ class NumberTextCtrl(wx.TextCtrl):
             if val is None or len(val) == 0:
                 return None
             else:
-                log.error("Illegal %s value %s", self.__class__.__name__, val)
+                logging.error("Illegal %s value %s", self.__class__.__name__, val)
                 wx.CallAfter(self.SetFocus)
                 return None
         return None
@@ -575,7 +575,7 @@ class NumberTextCtrl(wx.TextCtrl):
         """
         try:
             msg = "Setting value to '%s' for %s" % (val, self.__class__.__name__)
-            log.debug(msg)
+            logging.debug(msg)
             if val:
                 val = self.GetValidator()._cast(val)
             wx.TextCtrl.SetValue(self, unicode(val))
@@ -644,7 +644,7 @@ class NumberTextCtrl(wx.TextCtrl):
         if validated:
             self.SetValue(val)
         else:
-            log.warn("Invalid value %s", val)
+            logging.warn("Invalid value %s", val)
 
     def on_focus(self, evt):
         """ Remove the units from the displayed value on focus """
@@ -721,9 +721,7 @@ class UnitNumberCtrl(NumberTextCtrl):
 
         if self.accuracy is not None:
             v = units.round_significant(val, self.accuracy)
-            if v == int(v):
-                v = int(v) # avoids xxx.0
-            str_val = u"%s %s" % (v, self.unit)
+            str_val = u"{0:0.{1}f} {2}".format(v, self.accuracy, self.unit)
         else:
             str_val = u"%s %s" % (val, self.unit)
 
