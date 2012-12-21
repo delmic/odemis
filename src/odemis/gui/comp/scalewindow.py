@@ -173,20 +173,17 @@ class ScaleWindow(BufferedWindow):
     """
     def __init__(self, *args, **kwargs):
         BufferedWindow.__init__(self, *args, **kwargs)
-        #self.mpp = 0.00027 # a not too crazy number (my screen density)
         self.mpp = None # unknown
         self.MinSize = (120, 20) # we want at least a bit of space
         # This is called before the end of __init__()
-        self.va = self.GetDefaultAttributes()
-        self.nod = 4
-        self.shift = 0
+#        self.va = self.GetDefaultAttributes()
+        self.nod = 4 # heigh of the nods (the end of the scale)
         self.significant = 1 # significant numbers to keep in the length
-
 
         self.gap = 3 # gap between line and text
         self.background_col = self.Parent.GetBackgroundColour()
         self.foreground_col = self.Parent.GetForegroundColour()
-        self.line_wdith = 1
+        self.line_width = 1
 
         # OnSize called to make sure the buffer is initialized.
         self.OnSize(None)
@@ -205,13 +202,11 @@ class ScaleWindow(BufferedWindow):
         """
         Returns the size in pixel of the scale line and its actual size.
         The pixel size is always less than the width of the window minus margin
-        minus space for 8 characters
         dc (wx.DC)
         return 2-tuple (int, float): pixel size, actual size (meter)
         """
         size = self.GetClientSize()
-        maxWidth = size[0] - self.shift - dc.GetTextExtent(" 000mm")[0]
-        maxWidth = max(1, maxWidth)
+        maxWidth = max(5, size[0] - 3)
         maxActualWidth = maxWidth * self.mpp
         actualWidth = units.round_down_significant(maxActualWidth, self.significant)
         width = int(actualWidth / self.mpp)
@@ -220,9 +215,7 @@ class ScaleWindow(BufferedWindow):
     def Draw(self, dc):
         # return self.DrawGC(dc)
         nod = self.nod
-        shift = self.shift # to accommodate for the pen width
         vmiddle = self.GetClientSize()[1] / 2
-
 
         self.background_col = self.Parent.GetBackgroundColour()
         self.foreground_col = self.Parent.GetForegroundColour()
@@ -240,24 +233,24 @@ class ScaleWindow(BufferedWindow):
 
         length, actual = self.GetLineWidth(dc)
 
+        # Draw the text below
         charSize = dc.GetTextExtent("M")
         height = self.gap + charSize[1] + self.nod
-        main_line_y = vmiddle - (height /2) + nod
+        main_line_y = vmiddle - (height /2) + self.nod
 
-        dc.DrawText(units.to_string_si_prefix(actual) + "m",
-                    0,
-                    main_line_y + self.gap)
+        dc.DrawText(units.readable_str(actual, "m"),
+                    0, main_line_y + self.gap)
 
-        pen = wx.Pen(self.foreground_col, self.line_wdith)
-        pen.Cap = wx.CAP_PROJECTING
+        # Draw the scale itself
+        pen = wx.Pen(self.foreground_col, self.line_width)
+        pen.Cap = wx.CAP_PROJECTING # how to draw the border of the lines
         dc.SetPen(pen)
 
-
         # main line
-        lines = [(shift, main_line_y , shift + length, main_line_y )]
+        lines = [(0, main_line_y , length, main_line_y)]
         # nods at each end
-        lines += [(shift, main_line_y - nod, shift, main_line_y )]
-        lines += [(shift + length, main_line_y - nod, shift + length, main_line_y )]
+        lines += [(0, main_line_y - nod, 0, main_line_y)]
+        lines += [(length, main_line_y - nod, length, main_line_y)]
         dc.DrawLineList(lines)
 
     def DrawGC(self, dc):
