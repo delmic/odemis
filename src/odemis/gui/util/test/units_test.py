@@ -53,7 +53,7 @@ class TestUnits(unittest.TestCase):
 
     def test_to_string_si_prefix(self):
         #         (input) (expected output)
-        values = [((1,), "1 "),
+        values = [((1.0,), "1 "),
                   ((-1.234,), "-1.234 "),
                   ((-1234,), "-1.234 k"),
                   ((1600,), "1.6 k"),
@@ -66,6 +66,28 @@ class TestUnits(unittest.TestCase):
             o = units.to_string_si_prefix(*i)
             self.assertEquals(o, eo,
                               "%f is '%s' while expected '%s'" % (i[0], o, eo))
+            
+    def test_readable_str(self):
+        #         (input) (expected output)
+        values = [((1.0, None), "1"),
+                  ((1, None), "1"),
+                  ((-1.234, "m"), "-1.234 m"),
+                  ((-1234, "g"), "-1.234 kg"),
+                  ((160000, None), "160000"),
+                  ((-1600, ""), "-1.6 k"),
+                  ((0.0001236, None), "0.0001236"),
+                  ((0.0012, ""), "1.2 m"),
+                  ((200e-6, "m"), "200 µm"),
+                  ((0.0, "m"), "0 m"),
+                  (([1500, 1200, 150], None), "1500 x 1200 x 150"),
+                  (([0.0001236, 0.00014], "m"), "123.6 x 140 µm"),
+                  (([0.0001236, 12.0], "m"), "0.0001236 x 12 m"),
+                  ]
+        for (i, eo) in values:
+            o = units.readable_str(*i)
+            self.assertEquals(o, eo,
+                              "%s is '%s' while expected '%s'" % (i, o, eo))
+
 if __name__ == "__main__":
     unittest.main()
     

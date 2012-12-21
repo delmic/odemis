@@ -23,7 +23,7 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
-
+from __future__ import division
 import collections
 import math
 
@@ -68,10 +68,10 @@ def get_si_scale(x):
     if x == 0:
         return (1, "")
     
-    most_significant = int(math.floor(math.log10(abs(x))))
-    prefix_order = (most_significant / 3) * 3 # rounding to multiple of 3
+    most_significant = math.floor(math.log10(abs(x)))
+    prefix_order = (most_significant // 3) * 3 # rounding to multiple of 3
     prefix_order = max(-12, min(prefix_order, 9)) # clamping
-    return (10.0 ** prefix_order), SI_PREFIXES[prefix_order]
+    return (10 ** prefix_order), SI_PREFIXES[int(prefix_order)]
 
 def to_si_scale(x):
     """ Scale the given value x to the best fitting metric prefix.
@@ -83,7 +83,7 @@ def to_si_scale(x):
 def si_scale_list(values):
     """ Scales a list of numerical values using the same metrix scale """
     if values:
-        marker = max(values) or min(values)
+        marker = max(values)
         divisor, prefix = get_si_scale(marker)
         return [v / divisor for v in values], prefix
     return None, ""
@@ -95,19 +95,45 @@ def to_string_si_prefix(x):
     x (float): number
     return (string)
     """
-    return "%g %s" % to_si_scale(x)
+    value, prefix = to_si_scale(x)
+    return "%s %s" % (to_string_pretty(value), prefix)
+
+def to_string_pretty(x):
+    """
+    Convert a number to a string as int or float as most appropriate
+    """
+    if x == 0:
+        # don't consider this a float
+        return "0"
+     
+    if abs(x) < 1:
+        # just a float
+        return "%s" % x
+    
+    # so close from an int that it's very likely one?
+    if abs(x - round(x)) < 1e-5:
+        x = int(round(x)) # avoid the .0
+    return "%s" % x
 
 def readable_str(value, unit=None):
     """
     Convert a value with a unit into a displayable string for the user
-    value (any type): can be a number or a collection of number
+    value (number or list of number): value(s) to display
+    unit (None or string): unit of the values. If necessary a SI prefix will be
+      used to make the value more readable, unless None is given.
     return (string)
     """
-    unit = unit or u""
+    if unit is None:
+        # don't put SI scaling prefix
+        if isinstance(value, collections.Iterable):
+            return u" x ".join([to_string_pretty(v) for v in value])
+        else:
+            return to_string_pretty(value)
+        
     if isinstance(value, collections.Iterable):
-        val_str = u"%s%s" % (u" x ".join([to_string_si_prefix(v) for v in value]), unit)
+        values, prefix = si_scale_list(value)
+        return u"%s %s%s" % (u" x ".join([to_string_pretty(v) for v in values]), prefix, unit)
     else:
-        val_str = u"%s%s" % (to_string_si_prefix(value), unit)
+        return u"%s%s" % (to_string_si_prefix(value), unit)
 
-    return val_str
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:
