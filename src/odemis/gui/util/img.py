@@ -21,6 +21,7 @@ details.
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
+from __future__ import division
 import numpy
 import scipy
 import wx
@@ -30,7 +31,7 @@ import logging
 
 def DataArray2wxImage(data, depth=None, brightness=None, contrast=None, tint=(255, 255, 255)):
     """
-    data (DataArray of unsigned int): 2D image greyscale (unsigned float might work as well)
+    data (numpy.ndarray of unsigned int): 2D image greyscale (unsigned float might work as well)
     depth (None or 1<int): maximum value possibly encoded (12 bits => 4096)
         None => brightness and contrast auto
     brightness (None or -1<=float<=1): brightness change.
@@ -74,7 +75,7 @@ def DataArray2wxImage(data, depth=None, brightness=None, contrast=None, tint=(25
         # There are 2 ways to speed it up:
         # * lookup table (not tried)
         # * use the fact that it's a linear transform, like bytescale (that's what we do) => 30% speed-up 
-        hd = depth/2.0
+        hd = depth/2
         a = hd ** contrast
         b = hd * a - (hd + brightness * depth)
         d0 = b/a
@@ -99,9 +100,9 @@ def DataArray2wxImage(data, depth=None, brightness=None, contrast=None, tint=(25
     else:
         rtint, gtint, btint = tint
         # multiply by a float, cast back to type of out, and put into out array
-        numpy.multiply(drescaled, rtint / 255., out=rgb[:,:,0])
-        numpy.multiply(drescaled, gtint / 255., out=rgb[:,:,1])
-        numpy.multiply(drescaled, btint / 255., out=rgb[:,:,2])
+        numpy.multiply(drescaled, rtint / 255, out=rgb[:,:,0])
+        numpy.multiply(drescaled, gtint / 255, out=rgb[:,:,1])
+        numpy.multiply(drescaled, btint / 255, out=rgb[:,:,2])
 
     size = data.shape[-1:-3:-1]
     return wx.ImageFromBuffer(*size, dataBuffer=rgb) # 0 copy
@@ -112,8 +113,8 @@ def wxImage2NDImage(image, keep_alpha=True):
     Converts a wx.Image into a numpy array.
     image (wx.Image): the image to convert of size MxN
     keep_alpha (boolean): keep the alpha channel when converted 
-    returns (nd.array): a numpy array of shape NxMx3 (RGB) or NxMx4 (RGBA) 
-    Note: Alpha not supported.
+    returns (numpy.ndarray): a numpy array of shape NxMx3 (RGB) or NxMx4 (RGBA) 
+    Note: Alpha not yet supported.
     """
     if keep_alpha and image.HasAlpha():
         shape = image.Height, image.Width, 4
