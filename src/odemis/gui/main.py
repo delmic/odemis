@@ -222,8 +222,6 @@ class OdemisGUIApp(wx.App):
         encoding = sys.getfilesystemencoding()
         return os.path.dirname(unicode(__file__, encoding))
 
-    # TODO update to GUIMicroscope (self.interface_model)
-    # => create special streams?
     def on_load_example1(self, e):
         """ Open the two files for example """
         try:
@@ -324,12 +322,19 @@ class OdemisGUIApp(wx.App):
     def excepthook(self, type, value, trace): #pylint: disable=W0622
         """ Method to intercept unexpected errors that are not caught
         anywhere else and redirects them to the logger. """
-        exc = traceback.format_exception(type, value, trace)
-        logging.error("".join(exc))
-
-        # When an exception occurs, automatically got to debug mode.
-        if not isinstance(value, NotImplementedError):
-            self.goto_debug_mode()
+        # in case of error here, don't call again, it'd create infinite recurssion
+        sys.excepthook = sys.__excepthook__
+        
+        try:
+            exc = traceback.format_exception(type, value, trace)
+            logging.error("".join(exc))
+    
+            # When an exception occurs, automatically got to debug mode.
+            if not isinstance(value, NotImplementedError):
+                self.goto_debug_mode()
+        finally:
+            # put us back
+            sys.excepthook = self.excepthook
 
 class OdemisOutputWindow(object):
     """ Helper class which allows ``wx`` to display uncaught
