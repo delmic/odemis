@@ -26,52 +26,32 @@ import wx
 
 LOG_FILE = "odemis-gui.log"
 
-LOG_LINES = 500
-log = None
+LOG_LINES = 500 # maximum lines in the GUI logger
+log = logging.getLogger() # for compatibility only
 
-# CRITICAL = 50
-# FATAL = CRITICAL
-# ERROR = 40
-# WARNING = 30
-# WARN = WARNING
-# INFO = 20
-DEBUG = logging.DEBUG
-NOTSET = 0
 
-_current_level = DEBUG
-
-def set_level(level=NOTSET):
-    log.setLevel(level)
-
-# TODO: better call it init_logger() and call it only at the beginning of main
-# The rest of the code should just use logging instead of log.
-def get_logger():
+def init_logger():
+    """
+    Initializes the logger to some nice defaults
+    To be called only once, at the initialisation
+    """
     logging.basicConfig(format=" - %(levelname)s \t%(message)s")
     l = logging.getLogger()
-    l.setLevel(_current_level)
+    l.setLevel(logging.DEBUG) # TODO: only INFO, and let gui change to DEBUG if debug mode?
     l.handlers[0].setFormatter(
       logging.Formatter("%(asctime)s (%(module)s) %(levelname)s: %(message)s"))
 
-    return l
-
 def create_gui_logger(log_field):
-    gui_format = logging.Formatter('%(asctime)s (%(module)s) %(levelname)s: %(message)s', '%H:%M:%S')
-    text_field_handler = TextFieldHandler()
-    text_field_handler.setTextField(log_field)
-    text_field_handler.setFormatter(gui_format)
-    log.debug("Switching to GUI logger")
-    log.addHandler(text_field_handler)
-
-    for handler in log.handlers:
-        if not isinstance(handler, TextFieldHandler):
-            log.removeHandler(handler)
+    log = logging.getLogger()
+    
+    # Create file handler
 
     # Path to the log file
     logfile_path = os.path.join(os.path.expanduser("~"), LOG_FILE)
     # Maximum size of the log file before it's rotated
     max_logfile_size = 512**2
     # Maximum number of (rotated) log files
-    max_logfile_count = 1
+    max_logfile_count = 5
     # Formatting string for logging messages to file
     file_format = logging.Formatter("%(asctime)s (%(module)s(%(lineno)d)) %(levelname)s: %(message)s")
 
@@ -80,7 +60,26 @@ def create_gui_logger(log_field):
                                        max_logfile_count)
 
     file_handler.setFormatter(file_format)
-    log.addHandler(file_handler)
+    
+    # Create gui handler
+    gui_format = logging.Formatter('%(asctime)s (%(module)s) %(levelname)s: %(message)s', '%H:%M:%S')
+    text_field_handler = TextFieldHandler()
+    text_field_handler.setTextField(log_field)
+    text_field_handler.setFormatter(gui_format)
+    logging.debug("Switching to GUI logger")
+
+    # remove whatever handler was already there
+    for handler in log.handlers:
+        log.removeHandler(handler)
+    
+    try:
+        log.addHandler(text_field_handler)
+        log.addHandler(file_handler)
+    except:
+        # Use print here because log probably doesn't work
+        print("Failed to set-up logging handlers")
+        logging.exception("Failed to set-up logging handlers")
+        raise
 
 class TextFieldHandler(logging.Handler):
     """ Custom log handler, used to output log entries to a text field. """
@@ -123,8 +122,3 @@ class TextFieldHandler(logging.Handler):
         self.textfield.LineUp()
 
 
-def is_debug(self):
-    return True
-
-if log is None:
-    log = get_logger()

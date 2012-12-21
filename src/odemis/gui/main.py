@@ -234,8 +234,8 @@ class OdemisGUIApp(wx.App):
             name2 = os.path.join(os.path.dirname(__file__), "1-sem-bse.png")
             im2 = InstrumentalImage(wx.Image(name2), 4.54545e-7, pos)
 
-            self.stream_controller.addStatic("Fluorescence", im2)
-            self.stream_controller.addStatic("Secondary electrons", im1)
+            self.stream_controller.addStatic("Fluorescence", im1)
+            self.stream_controller.addStatic("Secondary electrons", im2)
         except e:
             logging.exception("Failed to load example")
 
@@ -344,8 +344,7 @@ class OdemisOutputWindow(object):
 
     def write(self, txt):
         if txt.strip() != "":
-            print_catch_logger = logging.getLogger()
-            print_catch_logger.error("[CAP] %s" % txt.strip())
+            logging.error("[CAP] %s" % txt.strip())
 
 def installThreadExcepthook():
     """ Workaround for sys.excepthook thread bug
@@ -370,6 +369,8 @@ def installThreadExcepthook():
     threading.Thread.__init__ = init
 
 def main():
+    log.init_logger()
+    
     # Create application
     app = OdemisGUIApp()
     # Change exception hook so unexpected exception

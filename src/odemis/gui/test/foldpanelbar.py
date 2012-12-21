@@ -17,17 +17,14 @@ You should have received a copy of the GNU General Public License along with Ode
 # Test module for Odemis' custom FoldPanelBar in gui.comp
 #===============================================================================
 
-from odemis.gui.log import log, set_level
-set_level(50)
-
+from odemis.gui.xmlh import odemis_get_test_resources
+from wx.lib.inspection import InspectionTool
+import logging
+import odemis.gui.test.test_gui
 import unittest
 import wx
-from wx.lib.inspection import InspectionTool
 
-
-import odemis.gui.test.test_gui
-
-from odemis.gui.xmlh import odemis_get_test_resources
+logging.getLogger().setLevel(logging.DEBUG)
 
 SLEEP_TIME = 100 # Sleep timer in milliseconds
 MANUAL = True # If manual is set to True, the window will be kept open at the end
