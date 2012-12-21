@@ -413,7 +413,7 @@ class NumberValidator(wx.PyValidator):
 
         # Allow legal characters to reach the text control
         if chr(key) in self.legal:
-            logging.log("Processing key '%s'", key)
+            logging.debug("Processing key '%s'", key)
 
             fld = self.GetWindow()
             val = fld.GetValue()
