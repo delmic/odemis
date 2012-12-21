@@ -628,11 +628,6 @@ class MicroscopeView(object):
     objects can update it.
     """
 
-    # TODO we need to differenciate views according to what they should be showing
-    # to the user (in terms of streams):
-    #  * inherit (with nothing inside each subclass)
-    #  * special attribute with list of streams classes this view is for.
-
     def __init__(self, name, stage=None, focus0=None, focus1=None, stream_classes=None):
         """
         name (string): user-friendly name of the view
@@ -667,13 +662,12 @@ class MicroscopeView(object):
         self.mpp = PositiveVA(10e-6, unit="m/px") # (10um/px => ~large view of the sample)
 
         # how much one image is displayed on the other one
-        # TODO rinze had added a non-notifying add_value. Needed?!!
         self.merge_ratio = FloatContinuous(0.3, range=[0, 1], unit="")
         self.merge_ratio.subscribe(self._onMergeRatio)
 
         # Streams to display (can be considered in most cases a implementation detail)
         # Note: use addStream/removeStream for simple modifications
-        self.streams = StreamTree(kwargs={"merge": self.merge_ratio.value})
+        self.streams = StreamTree(merge=self.merge_ratio.value)
         # Only modify with this lock acquired:
         self._streams_lock = threading.Lock()
 
