@@ -29,10 +29,10 @@ from ..comp.foldpanelbar import FoldPanelItem
 from odemis.gui import util
 from odemis.gui.comp.radio import GraphicalRadioButtonControl
 from odemis.gui.comp.slider import UnitIntegerSlider, UnitFloatSlider
-from odemis.gui.log import log
 from odemis.gui.util.widgets import VigilantAttributeConnector
 from odemis.model import getVAs, NotApplicableError, VigilantAttributeBase
 import collections
+import logging
 import odemis.gui
 import odemis.gui.comp.text as text
 import odemis.gui.img.data as img
@@ -48,7 +48,7 @@ def resolution_from_range(va, conf):
     that to construct a list of resolutions
     """
     try:
-        log.debug("Generating resolutions...")
+        logging.debug("Generating resolutions...")
         res = [max(va.range)]
 
         for dummy in range(3):
@@ -202,7 +202,7 @@ class SettingsPanel(object):
         attribute in the settings panel.
         """
         if not value:
-            log.warn("No value provided!")
+            logging.warn("No value provided!")
             return odemis.gui.CONTROL_NONE
 
         if value.readonly:
@@ -211,7 +211,7 @@ class SettingsPanel(object):
             try:
                 # This statement will raise an exception when no choices are
                 # present
-                log.debug("found choices %s", value.choices)
+                logging.debug("found choices %s", value.choices)
 
                 max_items = 5
                 max_len = 5
@@ -229,7 +229,7 @@ class SettingsPanel(object):
 
             try:
                 # An exception will be raised if no range attribute is found
-                log.debug("found range %s", value.range)
+                logging.debug("found range %s", value.range)
                 # TODO: if unit is "s" => scale=exp
                 if isinstance(value.value, (int, float)):
                     return odemis.gui.CONTROL_SLIDER
@@ -338,7 +338,7 @@ class SettingsPanel(object):
         # vigilatn attribute.
         vac = None
 
-        log.debug("Adding VA %s", label)
+        logging.debug("Adding VA %s", label)
         # Create the needed wxPython controls
         if control_type == odemis.gui.CONTROL_LABEL:
             # Read only value
@@ -445,7 +445,7 @@ class SettingsPanel(object):
                     value = func()
                     for i in range(ctrl.Count):
                         if ctrl.Items[i] == value:
-                            log.debug("Getting ComboBox value to %s",
+                            logging.debug("Getting ComboBox value to %s",
                                       ctrl.GetClientData(i))
                             return ctrl.GetClientData(i)
                 return wrapper
@@ -459,10 +459,10 @@ class SettingsPanel(object):
                 def wrapper(value):
                     for i in range(ctrl.Count):
                         if ctrl.GetClientData(i) == value:
-                            log.debug("Setting ComboBox value to %s",
+                            logging.debug("Setting ComboBox value to %s",
                                       ctrl.Items[i])
                             return func(ctrl.Items[i])
-                    log.warning("No matching label found for value %s!", value)
+                    logging.warning("No matching label found for value %s!", value)
                 return wrapper
 
             new_ctrl.SetValue = _setvalue_wrapper(new_ctrl, new_ctrl.SetValue)
@@ -498,11 +498,11 @@ class SettingsPanel(object):
         self.fb_panel.Parent.Layout()
 
 def set_on_notify(v):
-    log.warn("def")
+    logging.warn("def")
 
 def get_func(ctrl_func):
     def _listener(v):
-        log.warn("funcy")
+        logging.warn("funcy")
         ctrl_func(v)
     return _listener
 

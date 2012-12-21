@@ -23,9 +23,9 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 
+import logging
 import wx
 
-from odemis.gui.log import log
 
 class TabBar(object):
 
@@ -44,7 +44,7 @@ class TabBar(object):
         tab.Show()
 
     def _reset_buttons(self, btn=None):
-        log.debug("Resetting tab buttons")
+        logging.debug("Resetting tab buttons")
         for button in [b for b, _ in self.btns_n_tabs if b != btn]:
             button.SetToggle(False)
 
@@ -65,7 +65,7 @@ class TabBar(object):
             self.main_frame.Thaw()
 
     def OnClick(self, evt):
-        log.debug("Tab button click")
+        logging.debug("Tab button click")
 
         evt_btn = evt.GetEventObject()
 

@@ -19,10 +19,10 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
+import logging
+import odemis.gui.instrmodel as instrmodel
 import wx
 
-import odemis.gui.instrmodel as instrmodel
-from odemis.gui.log import log
 
 class MicroscopeController(object):
     """ This controller class controls the main microscope buttons and allow
@@ -51,7 +51,7 @@ class MicroscopeController(object):
     # Event handlers
 
     def on_toggle_optical(self, event):
-        log.debug("Optical toggle button pressed")
+        logging.debug("Optical toggle button pressed")
         if self.interface_model:
             if event.isDown:
                 self.interface_model.opticalState.value = instrmodel.STATE_ON
@@ -59,7 +59,7 @@ class MicroscopeController(object):
                 self.interface_model.opticalState.value = instrmodel.STATE_OFF
 
     def on_toggle_sem(self, event):
-        log.debug("SEM toggle button pressed")
+        logging.debug("SEM toggle button pressed")
         if self.interface_model:
             if event.isDown:
                 self.interface_model.emState.value = instrmodel.STATE_ON

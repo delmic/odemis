@@ -25,8 +25,8 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 
-from odemis.gui.log import log
 import ctypes
+import logging
 import math
 import os
 import threading
@@ -229,7 +229,7 @@ class DraggableCanvas(wx.Panel):
         # recompute the view
         new_pos = (self.world_pos_buffer[0] - shift[0] / self.scale,
                    self.world_pos_buffer[1] - shift[1] / self.scale)
-        log.debug("double click at %s", new_pos)
+        logging.debug("double click at %s", new_pos)
         self.ReCenterBuffer(new_pos)
 
     def onExtraAxisMove(self, axis, shift):
@@ -348,7 +348,7 @@ class DraggableCanvas(wx.Panel):
 
     def OnDrawTimer(self):
         # FIXME: make sure we are called from the main thread only
-        log.debug("Drawing timer in thread %s", threading.current_thread().name)
+        logging.debug("Drawing timer in thread %s", threading.current_thread().name)
         self.UpdateDrawing()
 
     def UpdateDrawing(self):
@@ -381,7 +381,7 @@ class DraggableCanvas(wx.Panel):
         overlays must have a Draw(dc, shift, scale) method
         """
         self.world_pos_buffer = self.world_pos_requested
-        #log.debug("New drawing at %s", self.world_pos_buffer)
+        #logging.debug("New drawing at %s", self.world_pos_buffer)
         dc.Clear()
         # set and reset the origin here because Blit in onPaint gets "confused" with values > 2048
         # centred on self.world_pos_buffer
@@ -429,11 +429,11 @@ class DraggableCanvas(wx.Panel):
             # Scaling to values smaller than 1.0 was throwing exceptions
             w, h = full_rect[2:4]
             if w >= 1 and h >= 1:
-                log.debug("Scaling to %s, %s", w, h)
+                logging.debug("Scaling to %s, %s", w, h)
                 ret = im.Scale(*full_rect[2:4])
                 tl = full_rect[0:2]
             else:
-                log.warn("Illegal image scale %s, %s", w, h)
+                logging.warn("Illegal image scale %s, %s", w, h)
                 return (None, None)
         elif total_scale > 1.0:
             # We could end-up with a lot of the up-scaling useless, so crop it
@@ -567,7 +567,7 @@ class DraggableCanvas(wx.Panel):
 
         t_now = time.time()
         fps = 1.0 / float(t_now - t_start)
-        #log.debug("Display speed: %s fps", fps)
+        #logging.debug("Display speed: %s fps", fps)
 
     def WorldToBufferPoint(self, pos):
         """ Converts a position from world coordinates to buffer coordinates using

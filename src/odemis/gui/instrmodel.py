@@ -24,7 +24,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from odemis import model
 from odemis.gui import util
-from odemis.gui.log import log
 from odemis.gui.util.img import DataArray2wxImage
 from odemis.gui.util.units import readable_str
 from odemis.model import VigilantAttribute, MD_POS, MD_PIXEL_SIZE, \
@@ -117,7 +116,7 @@ class GUIMicroscope(object):
             raise Exception("no stage found in the microscope")
         # it's not an error to not have focus
         if not self.focus:
-            log.info("no focus actuator found in the microscope")
+            logging.info("no focus actuator found in the microscope")
 
         for e in microscope.emitters:
             if e.role == "light":
@@ -381,12 +380,12 @@ class Stream(object):
     def onActive(self, active):
         # Called only when the value _changes_
         if active:
-            log.debug("Subscribing to dataflow of component %s", self._detector.name)
+            logging.debug("Subscribing to dataflow of component %s", self._detector.name)
             if not self.updated.value:
-                log.warning("Trying to activate stream while it's not supposed to update")
+                logging.warning("Trying to activate stream while it's not supposed to update")
             self._dataflow.subscribe(self.onNewImage)
         else:
-            log.debug("Unsubscribing from dataflow of component %s", self._detector.name)
+            logging.debug("Unsubscribing from dataflow of component %s", self._detector.name)
             self._dataflow.unsubscribe(self.onNewImage)
 
     # No __del__: subscription should be automatically stopped when the object
@@ -411,13 +410,13 @@ class Stream(object):
         try:
             pos = data.metadata[MD_POS]
         except KeyError:
-            log.warning("position of image unknown")
+            logging.warning("position of image unknown")
             pos = (0, 0)
 
         try:
             mpp = data.metadata[MD_PIXEL_SIZE][0]
         except KeyError:
-            log.warning("pixel density of image unknown")
+            logging.warning("pixel density of image unknown")
             # Hopefully it'll be within the same magnitude
             mpp = data.metadata[MD_SENSOR_PIXEL_SIZE][0] / 10.
 
@@ -548,7 +547,7 @@ class FluoStream(Stream):
         self._removeWarnings([Stream.WARNING_EMISSION_IMPOSSIBLE,
                               Stream.WARNING_EMISSION_NOT_OPT])
         if not fitting:
-            log.warning("Emission wavelength %s doesn't fit the filter",
+            logging.warning("Emission wavelength %s doesn't fit the filter",
                         readable_str(wl, "m"))
             self._addWarning(Stream.WARNING_EMISSION_IMPOSSIBLE)
             # TODO detect no optimal situation (within 10% band of border?)
@@ -731,7 +730,7 @@ class MicroscopeView(object):
             return
 
         if not isinstance(stream, self.stream_classes):
-            log.warning("Adding incompatible stream %s to view %s", stream.name.value, self.name.value)
+            logging.warning("Adding incompatible stream %s to view %s", stream.name.value, self.name.value)
 
         # Find out where the stream should go in the streamTree
         # FIXME: manage sub-trees, with different merge operations

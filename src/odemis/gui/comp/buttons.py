@@ -31,13 +31,12 @@
 # in XRCED's plugin directory.
 
 from __future__ import division
-import wx
-
 from wx.lib.buttons import GenBitmapButton, GenBitmapToggleButton, \
     GenBitmapTextToggleButton, GenBitmapTextButton
-
+import logging
 import odemis.gui.img.data as img
-from odemis.gui.log import log
+import wx
+
 
 def resize_bmp(btn_size, bmp):
     """ Resize the bitmap image so it will match the given button size
@@ -52,7 +51,7 @@ def resize_bmp(btn_size, bmp):
         img_width, img_height = bmp.GetSize()
 
         if btn_width > 0 and img_width != btn_width:
-            log.debug("Resizing button bmp from %s to %s",
+            logging.debug("Resizing button bmp from %s to %s",
                       bmp.GetSize(),
                       btn_size)
             new_img = bmp.ConvertToImage()
@@ -723,7 +722,7 @@ class ViewButton(ImageTextToggleButton):
         ignores those events if the button is already active.
         """
         if not self.IsEnabled() or not self.up:
-            log.debug("ViewButton already active")
+            logging.debug("ViewButton already active")
             return
         self.saveUp = self.up
         self.up = not self.up
@@ -764,7 +763,7 @@ class ViewButton(ImageTextToggleButton):
         ImageTextToggleButton.DrawLabel(self, dc, width, height, dx, dy)
 
         if self.overlay_bitmap is not None:
-            #log.debug("Painting overlay")
+            #logging.debug("Painting overlay")
             dc.DrawBitmap(self.overlay_bitmap,
                           self.overlay_border,
                           self.overlay_border,
@@ -907,10 +906,10 @@ class PopupImageButton(ImageTextButton):
         """ Show the popup menu, when there are choices available. """
 
         if not self.choices:
-            log.debug("*NOT* Showing PopupImageButton menu, no choices")
+            logging.debug("*NOT* Showing PopupImageButton menu, no choices")
             return
 
-        log.debug("Showing PopupImageButton menu")
+        logging.debug("Showing PopupImageButton menu")
 
         for _, (menu_item, _, check_enabled) in self.choices.items():
             menu_item.Enable(check_enabled() if check_enabled else True)
@@ -928,5 +927,5 @@ class PopupImageButton(ImageTextButton):
 
         for label, (menu_item, callback, _) in self.choices.items():
             if menu_item.GetId() == event_id:
-                log.debug("Performing %s callback", label)
+                logging.debug("Performing %s callback", label)
                 callback()

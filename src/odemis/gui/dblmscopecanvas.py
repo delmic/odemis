@@ -17,7 +17,7 @@ You should have received a copy of the GNU General Public License along with Ode
 '''
 
 from .comp.canvas import DraggableCanvas, WorldToBufferPoint
-from odemis.gui.log import log
+import logging
 import threading
 import time
 import wx
@@ -98,7 +98,7 @@ class DblMicroscopeCanvas(DraggableCanvas):
         for i, s in enumerate(streams[0:2]):
             if not s:
                 # should not happen, but let's not completely fail on this
-                log.error("StreamTree has a None stream")
+                logging.error("StreamTree has a None stream")
                 continue
             
             iim = s.image.value
@@ -122,7 +122,7 @@ class DblMicroscopeCanvas(DraggableCanvas):
         # TODO use the real streamtree functions
         # for now we call a conversion layer
         self._convertStreamsToImages()
-        log.debug("Will update drawing for new image")
+        logging.debug("Will update drawing for new image")
         wx.CallAfter(self.ShouldUpdateDrawing)
         
     def UpdateDrawing(self):
@@ -254,14 +254,14 @@ class DblMicroscopeCanvas(DraggableCanvas):
         with self._moveFocusLock:
             shift = self._moveFocusDistance[0]
             self._moveFocusDistance[0] = 0
-        log.debug("Moving focus0 by %f μm", shift * 1e6)
+        logging.debug("Moving focus0 by %f μm", shift * 1e6)
         self.view.focus0.moveRel({"z": shift})
 
     def _moveFocus1(self):
         with self._moveFocusLock:
             shift = self._moveFocusDistance[1]
             self._moveFocusDistance[1] = 0
-        log.debug("Moving focus1 by %f μm", shift * 1e6)
+        logging.debug("Moving focus1 by %f μm", shift * 1e6)
         self.view.focus1.moveRel({"z": shift})
 
     def _onCrossHair(self, activated):

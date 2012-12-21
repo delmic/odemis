@@ -23,11 +23,11 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 
+from odemis.gui.comp.buttons import GraphicRadioButton
+import logging
+import odemis.gui.img.data as img
 import wx
 
-import odemis.gui.img.data as img
-from odemis.gui.comp.buttons import GraphicRadioButton
-from odemis.gui.log import log
 
 class GraphicalRadioButtonControl(wx.Panel):
 
@@ -82,7 +82,7 @@ class GraphicalRadioButtonControl(wx.Panel):
             button.SetToggle(False)
 
     def SetValue(self, value):
-        log.debug("Set radio button control to %s", value)
+        logging.debug("Set radio button control to %s", value)
         self._reset_buttons()
 
         for i, btn in enumerate(self.buttons):

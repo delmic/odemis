@@ -25,7 +25,7 @@ from __future__ import division
 from collections import namedtuple
 from odemis.gui import instrmodel
 from odemis.gui.controller import streams
-from odemis.gui.log import log
+import logging
 import wx
 
 
@@ -98,7 +98,7 @@ class ViewController(object):
 
         # If both SEM and Optical: SEM/Optical/2x combined
         elif self._microscope.ebeam and self._microscope.light:
-            log.info("Creating combined SEM/Optical viewport layout")
+            logging.info("Creating combined SEM/Optical viewport layout")
 
             view = instrmodel.MicroscopeView("SEM",
                      self._microscope.stage,
@@ -139,7 +139,7 @@ class ViewController(object):
             self._microscope.focussedView.value = None
 
         else:
-            log.warning("No known microscope configuration, creating 4 generic views")
+            logging.warning("No known microscope configuration, creating 4 generic views")
             i = 1
             for viewport in self._viewports:
                 view = instrmodel.MicroscopeView("View %d" % i,
@@ -157,7 +157,7 @@ class ViewController(object):
         """
         Called when another view is focused
         """
-        log.debug("Changing focus to view %s", view.name.value)
+        logging.debug("Changing focus to view %s", view.name.value)
         layout = self._microscope.viewLayout.value
 
         self._main_frame.pnl_tab_live.Freeze()
@@ -184,7 +184,7 @@ class ViewController(object):
         self._main_frame.pnl_tab_live.Freeze()
 
         if layout == instrmodel.VIEW_LAYOUT_ONE:
-            log.debug("Showing only one view")
+            logging.debug("Showing only one view")
             # TODO resize all the viewports now, so that there is no flickering
             # when just changing view
             for viewport in self._viewports:
@@ -194,7 +194,7 @@ class ViewController(object):
                     viewport.Hide()
 
         elif layout == instrmodel.VIEW_LAYOUT_22:
-            log.debug("Showing all views")
+            logging.debug("Showing all views")
             for viewport in self._viewports:
                 viewport.Show()
 
@@ -291,9 +291,9 @@ class ViewSelector(object):
                 b.SetToggle(True)
             else:
                 if vl.vp:
-                    log.debug("untoggling button of view %s", vl.vp.mic_view.name.value)
+                    logging.debug("untoggling button of view %s", vl.vp.mic_view.name.value)
                 else:
-                    log.debug("untoggling button of view All")
+                    logging.debug("untoggling button of view All")
                 b.SetToggle(False)
 
     def _update22Thumbnail(self, im):
@@ -348,13 +348,13 @@ class ViewSelector(object):
         Called when another view is focused, or viewlayout is changed
         """
 
-        log.debug("View changed")
+        logging.debug("View changed")
 
         try:
             if view is not None:
                 assert isinstance(view, instrmodel.MicroscopeView)
         except AssertionError:
-            log.exception("Wrong type of view parameter! %s", view)
+            logging.exception("Wrong type of view parameter! %s", view)
             raise
 
         # TODO when changing from 2x2 to a view non focused, it will be called
@@ -385,13 +385,13 @@ class ViewSelector(object):
         viewport = self.buttons[btn].vp
 
         if viewport is None:
-            log.debug("Overview button click")
+            logging.debug("Overview button click")
             self.toggleButtonForView(None)
             # 2x2 button
             # When selecting the overview, the focussed viewport should not change
             self._microscope_gui.viewLayout.value = instrmodel.VIEW_LAYOUT_22
         else:
-            log.debug("View button click")
+            logging.debug("View button click")
             self.toggleButtonForView(viewport.mic_view)
             # It's preferable to change the view before the layout so that
             # if the layout was 2x2 with another view focused, it doesn't first

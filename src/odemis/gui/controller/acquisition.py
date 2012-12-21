@@ -28,22 +28,18 @@ of microscope images.
 
 """
 
+from odemis.gui.controller.settingspanel import SettingsSideBar
+from odemis.gui.main_xrc import xrcfr_acq
+from odemis.gui.util import img
+from os.path import expanduser
+import logging
 import os
 import re
 import subprocess
 import sys
 import threading
 import time
-
-from os.path import expanduser
-
 import wx
-
-from odemis.gui.log import log
-from odemis.gui.util import img
-from odemis.gui.main_xrc import xrcfr_acq
-from odemis.gui.controller.settingspanel import SettingsSideBar
-
 
 
 class AcquisitionController(object):
@@ -162,19 +158,19 @@ class AcquisitionController(object):
         extention = exporter.EXTENSIONS[0] # includes the .
         filename = os.path.join(dirname, basename + extention)
         if os.path.exists(filename):
-            log.warning("File '%s' for snapshot already exists, cancelling snapshot",
+            logging.warning("File '%s' for snapshot already exists, cancelling snapshot",
                             filename)
             return
 
         # get currently focused view
         view = self._microscope.focussedView.value
         if not view:
-            log.warning("Failed to take snapshot, no view is selected")
+            logging.warning("Failed to take snapshot, no view is selected")
             return
 
         streams = view.getStreams()
         if len(streams) == 0:
-            log.warning("Failed to take snapshot, no stream visible in view %s", view.name.value)
+            logging.warning("Failed to take snapshot, no stream visible in view %s", view.name.value)
             return
 
         self.start_snapshot_animation()
@@ -191,7 +187,7 @@ class AcquisitionController(object):
         for s in streams:
             data = s.raw # list of raw images for this stream (with metadata)
             if len(data) == 0:
-                log.warning("Failed to get the last raw image of stream %s, will acquire a new one", s.name.value)
+                logging.warning("Failed to get the last raw image of stream %s, will acquire a new one", s.name.value)
                 # FIXME: ask the stream to get activated and return an image
                 # it's the only one which know precisely how to configure detector and emitters
                 data = [s._dataflow.get()]
@@ -199,7 +195,7 @@ class AcquisitionController(object):
 
         # record everything to a file
         exporter.export(filename, raw_images, thumbnail)
-        log.info("Snapshot saved as file '%s'.", filename)
+        logging.info("Snapshot saved as file '%s'.", filename)
 
     def start_snapshot_animation(self):
         """
@@ -238,7 +234,7 @@ class AcquisitionController(object):
                 time.sleep(0.05) # ensure not to use too much CPU
                 now = time.time()
         except subprocess.CalledProcessError:
-            log.info("Failed to run snapshot animation.")
+            logging.info("Failed to run snapshot animation.")
         finally:
             # make sure we put it back
             time.sleep(0.05)
@@ -267,7 +263,7 @@ class AcquisitionController(object):
             exception in case change of brightness failed
         """
         assert (0 <= brightness)
-        log.debug("setting brightness to %f", brightness)
+        logging.debug("setting brightness to %f", brightness)
         if not len(outputs):
             return
         # to simplify, we don't use the XRANDR API, but just call xrandr command
@@ -277,7 +273,7 @@ class AcquisitionController(object):
         for o in outputs:
             args += ["--output", o, "--brightness", "%f" % brightness]
 
-        log.debug("Calling: %s", " ".join(args))
+        logging.debug("Calling: %s", " ".join(args))
         subprocess.check_call(args)
 
     @staticmethod
@@ -303,7 +299,7 @@ class AcquisitionController(object):
             pass
             # drop to default
         else:
-            log.warning("Platform not supported for picture folder")
+            logging.warning("Platform not supported for picture folder")
 
 
         # fall-back to HOME
