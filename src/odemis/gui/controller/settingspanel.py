@@ -135,7 +135,7 @@ SETTINGS = {
                 "dwellTime":
                 {
                     "control_type": odemis.gui.CONTROL_SLIDER,
-                    "range": (1e-9, 1),
+                    "range": (1e-9, 0.1),
                     "scale": "cubic",
                     "type": "float",
                 },
@@ -143,6 +143,10 @@ SETTINGS = {
                 {
                     "control_type": odemis.gui.CONTROL_COMBO,
                     "choices": resolution_from_range,
+                },
+                "magnification": # force using just a text field => it's for copy-paste
+                {
+                    "control_type": odemis.gui.CONTROL_FLT,
                 },
             }
         }
@@ -440,9 +444,9 @@ class SettingsPanel(object):
             for choice, formatted in zip(choices, choices_formatted):
                 new_ctrl.Append(u"%s %s" % (formatted, unit), choice)
 
-            def _getvalue_wrapper(ctrl, func):
+            def _getvalue_wrapper(ctrl):
                 def wrapper():
-                    value = func()
+                    value = ctrl.GetValue()
                     for i in range(ctrl.Count):
                         if ctrl.Items[i] == value:
                             logging.debug("Getting ComboBox value to %s",
@@ -450,39 +454,45 @@ class SettingsPanel(object):
                             return ctrl.GetClientData(i)
                 return wrapper
 
-            new_ctrl.GetValue = _getvalue_wrapper(new_ctrl, new_ctrl.GetValue)
+            new_ctrl.GetValue = _getvalue_wrapper(new_ctrl)
 
 
             # A small wrapper function makes sure that the value can
             # be set by passing the actual value (As opposed to the text label)
-            def _setvalue_wrapper(ctrl, func):
+            def _setvalue_wrapper(ctrl):
                 def wrapper(value):
                     for i in range(ctrl.Count):
                         if ctrl.GetClientData(i) == value:
                             logging.debug("Setting ComboBox value to %s",
                                       ctrl.Items[i])
-                            return func(ctrl.Items[i])
+                            return ctrl.SetValue(ctrl.Items[i])
                     logging.warning("No matching label found for value %s!", value)
                 return wrapper
 
-            new_ctrl.SetValue = _setvalue_wrapper(new_ctrl, new_ctrl.SetValue)
+            new_ctrl.SetValue = _setvalue_wrapper(new_ctrl)
 
             vac = VigilantAttributeConnector(
                     value,
                     new_ctrl,
                     new_ctrl.SetValue,
+                    new_ctrl.GetValue,
                     events=(wx.EVT_COMBOBOX, wx.EVT_TEXT_ENTER))
 
 
         elif control_type == odemis.gui.CONTROL_FLT:
             new_ctrl = text.UnitFloatCtrl(self.panel,
                                          -1,
-                                          value.value,
+                                          style=wx.NO_BORDER,
                                           unit=unit,
                                           min_val=value.range[0],
                                           max_val=value.range[1])
             new_ctrl.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_EDIT)
             new_ctrl.SetBackgroundColour(self.panel.GetBackgroundColour())
+
+            vac = VigilantAttributeConnector(value,
+                                             new_ctrl,
+                                             new_ctrl.SetValueStr,
+                                             events=wx.EVT_TEXT_ENTER)
 
         else:
             txt = util.units.readable_str(value.value, unit)

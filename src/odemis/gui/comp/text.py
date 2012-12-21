@@ -574,16 +574,15 @@ class NumberTextCtrl(wx.TextCtrl):
         cannot be cast to the required data type.
         """
         try:
-            msg = "Setting value to '%s' for %s" % (val, self.__class__.__name__)
-            logging.debug(msg)
+            logging.debug("Setting value to '%s' for %s" %
+                          (val, self.__class__.__name__))
             if val:
                 val = self.GetValidator()._cast(val)
-            wx.TextCtrl.SetValue(self, unicode(val))
+            wx.TextCtrl.SetValue(self, units.readable_str(val))
             self._send_change_event()
-
         except ValueError:
-            msg = "Value '%s' is not a valid number for %s."
-            raise ValueError(msg % (val, self.__class__.__name__))
+            raise ValueError("Value '%s' is not a valid number for %s."
+                              % (val, self.__class__.__name__))
 
     SetValueStr = SetValue
 
@@ -598,7 +597,7 @@ class NumberTextCtrl(wx.TextCtrl):
 
     def _send_change_event(self):
         changeEvent = wx.CommandEvent(wx.wxEVT_COMMAND_ENTER, self.GetId())
-         # Set the originating object for the event (ourselves)
+        # Set the originating object for the event (ourselves)
         changeEvent.SetEventObject(self)
 
         # Watch for a possible listener of this event that will catch it and

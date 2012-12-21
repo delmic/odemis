@@ -41,13 +41,13 @@ class VigilantAttributeConnector(object):
           VA is updated, to update the widget. If None, try to use the default
           SetValue().
         ctrl_2_va (None or callable ((None) -> value)): a function to be called
-          when the widget is update, to update the VA. If None, try to use the
+          when the widget is updated, to update the VA. If None, try to use the
           default GetValue().
         events (None or wx.EVT_* or tuple of wx.EVT_*): events to bind to update the value of the VA
         """
         self.vigilattr = va
         self.ctrl = ctrl
-        # TOOD None case
+        # TODO None case
         self.va_2_ctrl = call_after_wrapper(va_2_ctrl)
         self.ctrl_2_va = ctrl_2_va
         if events is None:
