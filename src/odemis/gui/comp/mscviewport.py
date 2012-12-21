@@ -143,16 +143,20 @@ class MicroscopeViewport(wx.Panel):
         leftColSizer.Add(self.hfwDisplay, border=10, flag=wx.ALIGN_CENTER)
 
         sliderSizer = wx.BoxSizer(wx.HORIZONTAL)
-        sliderSizer.Add(self.bmpIconOpt, flag=wx.RIGHT|wx.RESERVE_SPACE_EVEN_IF_HIDDEN, border=3)
-        sliderSizer.Add(self.mergeSlider, flag=wx.EXPAND|wx.RESERVE_SPACE_EVEN_IF_HIDDEN)
-        sliderSizer.Add(self.bmpIconSem, flag=wx.LEFT|wx.RESERVE_SPACE_EVEN_IF_HIDDEN, border=3)
+        sliderSizer.Add(self.bmpIconOpt, border=3,
+                        flag=wx.ALIGN_CENTER|wx.RIGHT|wx.RESERVE_SPACE_EVEN_IF_HIDDEN)
+        sliderSizer.Add(self.mergeSlider, 
+                        flag=wx.ALIGN_CENTER|wx.EXPAND|wx.RESERVE_SPACE_EVEN_IF_HIDDEN)
+        sliderSizer.Add(self.bmpIconSem, border=3,
+                        flag=wx.ALIGN_CENTER|wx.LEFT|wx.RESERVE_SPACE_EVEN_IF_HIDDEN)
 
         legendSizer = wx.BoxSizer(wx.HORIZONTAL)
-        legendSizer.Add(leftColSizer, 0)
+        legendSizer.Add(leftColSizer, 0, flag=wx.EXPAND|wx.ALIGN_CENTER)
         legendSizer.AddStretchSpacer(1)
-        legendSizer.Add(self.scaleDisplay, 2, border=2, flag=wx.EXPAND|wx.ALIGN_CENTER|wx.RIGHT|wx.LEFT)
+        legendSizer.Add(self.scaleDisplay, 2, border=2, 
+                        flag=wx.EXPAND|wx.ALIGN_CENTER|wx.RIGHT|wx.LEFT)
         legendSizer.AddStretchSpacer(1)
-        legendSizer.Add(sliderSizer, 0)
+        legendSizer.Add(sliderSizer, 0, flag=wx.EXPAND|wx.ALIGN_CENTER)
 
         # legend_panel_sizer is needed to add a border around the legend
         legend_panel_sizer = wx.BoxSizer(wx.VERTICAL)
