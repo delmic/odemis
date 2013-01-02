@@ -469,8 +469,8 @@ class UnitFloatSlider(NumberSlider):
             # The problem probably resides with Pyro, that does something to
             # the float values it's handed (like a cast?).
 
-            if abs(self.GetValue() - text_val) > 1e-8:
+            if abs(self.GetValue() - text_val) > 1e-6:
                 logging.debug("Number changed, updating slider to %s", text_val)
                 self.SetValue(text_val)
-            evt.Skip()
+                evt.Skip()
 
