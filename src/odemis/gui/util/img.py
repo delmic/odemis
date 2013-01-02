@@ -22,12 +22,47 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
+import logging
+import math
 import numpy
 import scipy
 import wx
-import logging
 
 # various functions to convert and modify images (DataArray and wxImage)
+
+# TODO: compute histogram. There are 3 ways in numpy:
+# * x=numpy.bincount(a, minlength=depth);x.min();x.max() => fast (~0.03s for 
+#   a 2048x2048 array) but only works only on flat array
+#   with uint8 and uint16 and creates 2**16 bins if uint16 (so need to do a 
+#   bytescale + a second bincount)
+# * numpy.histogram(a, bins=256, range=(0,depth)) => slow (~0.09s for a 
+#   2048x2048 array) but works exactly as needed directly in every case.
+# * see weave? (~ 0.01s for 2048x2048 array) eg: 
+#  timeit.timeit("counts=numpy.zeros((2**16), dtype=numpy.uint32); weave.inline( code, ['counts', 'idxa'])", "import numpy;from scipy import weave; code=r\"for (int i=0; i<Nidxa[0]; i++) { COUNTS1( IDXA1(i)>>8)++; }\"; idxa=numpy.ones((2048*2048), dtype=numpy.uint16)+15", number=100) 
+# for comparison, a.min() + a.max() are 0.01s for 2048x2048 array
+
+def FindOptimalBC(data, depth):
+    """
+    Computes the (mathematically) optimal brightness and contrast. It returns the
+    brightness and contrast values used by DataArray2wxImage in auto contrast/
+    brightness.
+    data (numpy.ndarray of unsigned int): 2D image greyscale
+    depth (1<int): maximum value possibly encoded (12 bits => 4096)
+    returns (-1<=float<=1, -1<=float<=1): brightness and contrast 
+    """
+    assert(depth >= 1)
+    
+    # inverse algorithm than in DataArray2wxImage(), using the min/max
+    hd = depth/2
+    d0 = data.min()
+    d255 = data.max()
+
+    a = depth / (d255 - d0 + 1)
+    b = d0 * a
+    brightness = (hd * a - b - hd) / depth
+    contrast = math.log(a, hd)
+    
+    return brightness, contrast
 
 def DataArray2wxImage(data, depth=None, brightness=None, contrast=None, tint=(255, 255, 255)):
     """
@@ -50,17 +85,17 @@ def DataArray2wxImage(data, depth=None, brightness=None, contrast=None, tint=(25
         drescaled = scipy.misc.bytescale(data)
     elif brightness == 0 and contrast == 0:
         assert(depth is not None)
-        logging.info("Applying brightness and contrast 0 with depth = %d", depth)
+        logging.debug("Applying brightness and contrast 0 with depth = %d", depth)
         if depth == 256:
             drescaled = data
         else:
-            drescaled = scipy.misc.bytescale(data, cmin=0, cmax=depth)
+            drescaled = scipy.misc.bytescale(data, cmin=0, cmax=depth-1)
     else:
         # manual brightness and contrast
         assert(depth is not None)
         assert(contrast is not None)
         assert(brightness is not None)
-        logging.info("Applying brightness %f and contrast %f with depth = %d", brightness, contrast, depth)
+        logging.debug("Applying brightness %f and contrast %f with depth = %d", brightness, contrast, depth)
         # see http://docs.opencv.org/doc/tutorials/core/basic_linear_transform/basic_linear_transform.html
         # and http://pippin.gimp.org/image-processing/chap_point.html
         # contrast is typically between 1/(depth/2) -> depth/2: = (depth/2)^our_contrast 
@@ -79,9 +114,9 @@ def DataArray2wxImage(data, depth=None, brightness=None, contrast=None, tint=(25
         a = hd ** contrast
         b = hd * a - (hd + brightness * depth)
         d0 = b/a
-        d255 = (b + depth)/a
+        d255 = (b + depth)/a - 1
         # bytescale: linear mapping cmin, cmax -> low, high; and then take the low byte (can overflow)
-        # TODO: do only clipping if useful: d0 >0 or d255 < depth
+        # Note: always do clipping, because it's relatively cheap and d0 >0 or d255 < depth is only corner case
         drescaled = scipy.misc.bytescale(data.clip(d0, d255), cmin=d0, cmax=d255)
         
 

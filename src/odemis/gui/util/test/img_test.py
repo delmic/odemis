@@ -3,7 +3,8 @@ Created on 19 Sep 2012
 
 @author: piel
 '''
-from odemis.gui.util.img import DataArray2wxImage, wxImage2NDImage
+from odemis.gui.util.img import DataArray2wxImage, wxImage2NDImage, \
+    FindOptimalBC
 import numpy
 import unittest
 import wx
@@ -18,6 +19,44 @@ def GetRGB(im, x, y):
     
     return (r, g, b)
     
+
+class TestFindOptimalBC(unittest.TestCase):
+    def test_simple(self):
+        size = (1024, 512)
+        depth = 2**8
+        img8 = numpy.zeros(size[-1:-3:-1], dtype="uint8")
+        img8[0,0] = depth-1
+        
+        b, c = FindOptimalBC(img8, depth)
+        self.assertEqual((0,0), (b,c))
+        
+        depth = 2**16
+        img16 = numpy.zeros(size[-1:-3:-1], dtype="uint16")
+        img16[0,0] = depth-1
+        
+        b, c = FindOptimalBC(img16, depth)
+        self.assertEqual((0,0), (b,c))
+        
+    def test_auto_vs_manual(self):
+        """
+        Checks that conversion with auto BC is the same as optimal BC + manual
+        conversion.
+        """
+        size = (1024, 512)
+        depth = 2**12
+        img12 = numpy.zeros(size[-1:-3:-1], dtype="uint16") + 42
+        img12[0,0] = depth-1-24
+        
+        # automatic
+        out_auto = DataArray2wxImage(img12)
+        img_auto = wxImage2NDImage(out_auto)
+        
+        # manual
+        b, c = FindOptimalBC(img12, depth)
+        out_manu = DataArray2wxImage(img12, depth, b, c)
+        img_manu = wxImage2NDImage(out_manu)
+        
+        self.assertTrue(numpy.all(img_auto==img_manu))
 
 class TestDataArray2wxImage(unittest.TestCase):
     def test_simple(self):
@@ -63,7 +102,7 @@ class TestDataArray2wxImage(unittest.TestCase):
         self.assertEqual(out.GetSize(), size)
         self.assertEqual(out.CountColours(), 3)
         pixel = GetRGB(out, 2, 2)
-        self.assertTrue(pixel == (127, 127, 127) or pixel == (128, 128, 128))
+        self.assertTrue(pixel == (128, 128, 128))
         
         # 16 bits
         depth = 4096
@@ -76,7 +115,7 @@ class TestDataArray2wxImage(unittest.TestCase):
         self.assertEqual(out.GetSize(), size)
         self.assertEqual(out.CountColours(), 3)
         pixel = GetRGB(out, 2, 2)
-        self.assertTrue(pixel == (127, 127, 127) or pixel == (128, 128, 128)) 
+        self.assertTrue(pixel == (128, 128, 128)) 
         
     def test_bc_forced(self):
         """test with brightness and contrast to specific corner values"""
