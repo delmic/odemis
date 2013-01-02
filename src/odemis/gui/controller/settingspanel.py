@@ -382,7 +382,7 @@ class SettingsPanel(object):
             vac = VigilantAttributeConnector(value,
                                              new_ctrl,
                                              new_ctrl.SetValue,
-                                             events=wx.EVT_COMMAND_ENTER)
+                                             events=wx.EVT_SLIDER)
 
         elif control_type == odemis.gui.CONTROL_INT:
             new_ctrl = text.UnitIntegerCtrl(self.panel,
