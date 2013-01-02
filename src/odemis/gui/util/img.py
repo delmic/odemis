@@ -54,8 +54,8 @@ def FindOptimalBC(data, depth):
     
     # inverse algorithm than in DataArray2wxImage(), using the min/max
     hd = depth/2
-    d0 = data.min()
-    d255 = data.max()
+    d0 = int(data.min())
+    d255 = int(data.max())
 
     a = depth / (d255 - d0 + 1)
     b = d0 * a

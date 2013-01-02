@@ -352,7 +352,7 @@ class Stream(object):
         self.contrast = model.FloatContinuous(0, range=[-100, 100]) # ratio, contrast if no auto
         self.brightness = model.FloatContinuous(0, range=[-100, 100]) # ratio, balance if no auto
 
-        self.auto_bc.subscribe(self.onBrightnessContrast)
+        self.auto_bc.subscribe(self.onAutoBC)
         self.contrast.subscribe(self.onBrightnessContrast)
         self.brightness.subscribe(self.onBrightnessContrast)
 
@@ -422,6 +422,15 @@ class Stream(object):
 
         self.image.value = InstrumentalImage(im, mpp, pos)
 
+    def onAutoBC(self, enabled):
+        # if changing to manual: need to set the current (automatic) B/C
+        if enabled == False:
+            if len(self.raw) < 1:
+                return  # no image acquired yet
+            b, c = util.img.FindOptimalBC(self.raw[0], self._depth)
+            self.brightness.value = b * 100
+            self.contrast.value = c * 100
+        
     def onBrightnessContrast(self, unused):
         # called whenever brightness/contrast changes
         # => needs to recompute the image (but not too often, so we do it in a timer)
