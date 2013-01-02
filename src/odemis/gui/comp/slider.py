@@ -210,6 +210,14 @@ class Slider(wx.PyPanel):
 
         event.Skip()
 
+    def OnSize(self, event=None):
+        """
+        If Panel is getting resize for any reason then calculate pointer's position
+        based on it's new size
+        """
+        self.handlePos = self._val_to_pixel()
+        self.Refresh()
+
     def OnLeftDown(self, event=None):
         """ This event handler fires when the left mouse button is pressed down
         when the  mouse cursor is over the slide bar.
@@ -243,14 +251,6 @@ class Slider(wx.PyPanel):
             # Set the value according to the slider's x position
             self.set_position_value(event.GetX())
             self.Refresh()
-
-    def OnSize(self, event=None):
-        """
-        If Panel is getting resize for any reason then calculate pointer's position
-        based on it's new size
-        """
-        self.handlePos = self._val_to_pixel()
-        self.Refresh()
 
     def set_position_value(self, xPos):
         """ This method sets the value of the slider according to the x position
