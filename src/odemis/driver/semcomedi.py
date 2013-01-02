@@ -88,10 +88,10 @@ def get_best_dtype_for_acc(idtype, count):
     count (int): number of values accumulated
     returns (dtype): the best fitting dtype
     """
-    maxval = 2**(idtype.itemsize * 8) * count
-    if maxval < 2**32:
+    maxval = numpy.iinfo(idtype).max * count
+    if maxval <= numpy.iinfo(numpy.uint32).max:
         adtype = numpy.uint32
-    elif maxval < 2**64:
+    elif maxval <= numpy.iinfo(numpy.uint64).max:
         adtype = numpy.uint64
     else:
         logging.debug("Going to use lossy intermediate type in order to support values up to %d", maxval)
