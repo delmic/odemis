@@ -53,22 +53,30 @@ def FindOptimalBC(data, depth):
     assert(depth >= 1)
     
     # inverse algorithm than in DataArray2wxImage(), using the min/max
-    hd = depth/2
-    d0 = int(data.min())
-    d255 = int(data.max())
+    hd = (depth-1)/2
+    d0 = float(data.min())
+    d255 = float(data.max()) 
 
-    a = depth / (d255 - d0 + 1)
-    b = d0 * a
-    brightness = (hd * a - b - hd) / depth
-    contrast = math.log(a, hd)
+    if (d255 - d0) < 2:
+        # infinite contrast => clip to 1
+        C = depth/2
+        B = - (d0 - hd)
+        # TODO not entirely sure it's correct, but it shouldn't be too far from truth
+    else:
+        C = (depth - 1) / (d255 - d0)
+        B = - (d0 - hd) * C - hd
     
+    brightness = B / (depth - 1)
+    contrast = math.log(C, depth/2)
+    
+    assert(contrast >= 0) # no way that we would compress the values
     return brightness, contrast
 
 def DataArray2wxImage(data, depth=None, brightness=None, contrast=None, tint=(255, 255, 255)):
     """
     data (numpy.ndarray of unsigned int): 2D image greyscale (unsigned float might work as well)
-    depth (None or 1<int): maximum value possibly encoded (12 bits => 4096)
-        None => brightness and contrast auto
+    depth (None or 1<int): maximum value possibly encoded (12 bits => depth=4096)
+        Note: if brightness and contrast auto it is not required.
     brightness (None or -1<=float<=1): brightness change.
         None => auto. 0 => no change. -1 => fully black, 1 => fully white
     contrast  (None or -1<=float<=1): contrast change.
@@ -98,23 +106,24 @@ def DataArray2wxImage(data, depth=None, brightness=None, contrast=None, tint=(25
         logging.debug("Applying brightness %f and contrast %f with depth = %d", brightness, contrast, depth)
         # see http://docs.opencv.org/doc/tutorials/core/basic_linear_transform/basic_linear_transform.html
         # and http://pippin.gimp.org/image-processing/chap_point.html
-        # contrast is typically between 1/(depth/2) -> depth/2: = (depth/2)^our_contrast 
+        # contrast is typically between 1/(depth/2) -> (depth/2): = (depth/2)^our_contrast 
         # brightness: newpixel = origpix + brightness*depth
         # contrast: newpixel = (origpix - depth/2) * contrast + depth/2
         # truncate
         # in Python this is:
         # corrected = (data - depth/2.0) * ((depth/2.0) ** contrast) + (depth/2.0 + brightness * depth)
         # numpy.clip(corrected, 0, depth, corrected) # inplace
-        # drescaled_orig = scipy.misc.bytescale(corrected, cmin=0, cmax=depth)
+        # drescaled_orig = scipy.misc.bytescale(corrected, cmin=0, cmax=depth-1)
 
         # There are 2 ways to speed it up:
         # * lookup table (not tried)
         # * use the fact that it's a linear transform, like bytescale (that's what we do) => 30% speed-up 
-        hd = depth/2
-        a = hd ** contrast
-        b = hd * a - (hd + brightness * depth)
-        d0 = b/a
-        d255 = (b + depth)/a - 1
+        #   => finc cmin (origpix when newpixel=0) and cmax (origpix when newpixel=depth-1)
+        B = brightness * (depth - 1)
+        C = (depth/2) ** contrast
+        hd = (depth - 1) / 2
+        d0 = hd - (B + hd) / C
+        d255 = hd + (hd - B) / C
         # bytescale: linear mapping cmin, cmax -> low, high; and then take the low byte (can overflow)
         # Note: always do clipping, because it's relatively cheap and d0 >0 or d255 < depth is only corner case
         drescaled = scipy.misc.bytescale(data.clip(d0, d255), cmin=d0, cmax=d255)

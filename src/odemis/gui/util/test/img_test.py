@@ -36,6 +36,33 @@ class TestFindOptimalBC(unittest.TestCase):
         
         b, c = FindOptimalBC(img16, depth)
         self.assertEqual((0,0), (b,c))
+
+        # almost grey
+        imggr = numpy.zeros(size[-1:-3:-1], dtype="uint16") + (depth/2-1)
+        imggr[0,0] = depth/2
+        b, c = FindOptimalBC(imggr, depth)
+        #self.assertEqual(0, b)
+        self.assertLessEqual(b, 0.01)
+        self.assertGreater(c, 0)
+        self.assertLessEqual(c, 1)
+        
+        # very dark grey
+        imggr = numpy.zeros(size[-1:-3:-1], dtype="uint16") 
+        imggr[0,0] = 1
+        b, c = FindOptimalBC(imggr, depth)
+        self.assertGreater(b, 0)
+        self.assertLessEqual(b, 1)
+        self.assertGreater(c, 0)
+        self.assertLessEqual(c, 1)
+        
+        # All Black: => brightness should be up, contrast too
+        imgbl = numpy.zeros(size[-1:-3:-1], dtype="uint16")
+        b, c = FindOptimalBC(imgbl, depth)
+        self.assertGreater(b, 0)
+        self.assertLessEqual(b, 1)
+        self.assertGreater(c, 0)
+        self.assertLessEqual(c, 1)
+
         
     def test_auto_vs_manual(self):
         """
@@ -44,8 +71,8 @@ class TestFindOptimalBC(unittest.TestCase):
         """
         size = (1024, 512)
         depth = 2**12
-        img12 = numpy.zeros(size[-1:-3:-1], dtype="uint16") + 42
-        img12[0,0] = depth-1-24
+        img12 = numpy.zeros(size[-1:-3:-1], dtype="uint16") + 420
+        img12[0,0] = depth-1-240
         
         # automatic
         out_auto = DataArray2wxImage(img12)
