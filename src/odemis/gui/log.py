@@ -43,13 +43,13 @@ def init_logger():
 
 def create_gui_logger(log_field):
     log = logging.getLogger()
-    
+
     # Create file handler
 
     # Path to the log file
     logfile_path = os.path.join(os.path.expanduser("~"), LOG_FILE)
     # Maximum size of the log file before it's rotated
-    max_logfile_size = 512**2
+    max_logfile_size = 1024**2
     # Maximum number of (rotated) log files
     max_logfile_count = 5
     # Formatting string for logging messages to file
@@ -60,7 +60,7 @@ def create_gui_logger(log_field):
                                        max_logfile_count)
 
     file_handler.setFormatter(file_format)
-    
+
     # Create gui handler
     gui_format = logging.Formatter('%(asctime)s (%(module)s) %(levelname)s: %(message)s', '%H:%M:%S')
     text_field_handler = TextFieldHandler()
@@ -71,7 +71,7 @@ def create_gui_logger(log_field):
     # remove whatever handler was already there
     for handler in log.handlers:
         log.removeHandler(handler)
-    
+
     try:
         log.addHandler(text_field_handler)
         log.addHandler(file_handler)

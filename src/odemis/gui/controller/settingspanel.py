@@ -382,7 +382,7 @@ class SettingsPanel(object):
             vac = VigilantAttributeConnector(value,
                                              new_ctrl,
                                              new_ctrl.SetValue,
-                                             events=wx.EVT_COMMAND_ENTER)
+                                             events=wx.EVT_SLIDER)
 
         elif control_type == odemis.gui.CONTROL_INT:
             new_ctrl = text.UnitIntegerCtrl(self.panel,
@@ -444,9 +444,9 @@ class SettingsPanel(object):
             for choice, formatted in zip(choices, choices_formatted):
                 new_ctrl.Append(u"%s %s" % (formatted, unit), choice)
 
-            def _getvalue_wrapper(ctrl):
+            def _getvalue_wrapper(ctrl, func):
                 def wrapper():
-                    value = ctrl.GetValue()
+                    value = func()
                     for i in range(ctrl.Count):
                         if ctrl.Items[i] == value:
                             logging.debug("Getting ComboBox value to %s",
@@ -454,22 +454,22 @@ class SettingsPanel(object):
                             return ctrl.GetClientData(i)
                 return wrapper
 
-            new_ctrl.GetValue = _getvalue_wrapper(new_ctrl)
+            new_ctrl.GetValue = _getvalue_wrapper(new_ctrl, new_ctrl.GetValue)
 
 
             # A small wrapper function makes sure that the value can
             # be set by passing the actual value (As opposed to the text label)
-            def _setvalue_wrapper(ctrl):
+            def _setvalue_wrapper(ctrl, func):
                 def wrapper(value):
                     for i in range(ctrl.Count):
                         if ctrl.GetClientData(i) == value:
                             logging.debug("Setting ComboBox value to %s",
                                       ctrl.Items[i])
-                            return ctrl.SetValue(ctrl.Items[i])
+                            return func(ctrl.Items[i])
                     logging.warning("No matching label found for value %s!", value)
                 return wrapper
 
-            new_ctrl.SetValue = _setvalue_wrapper(new_ctrl)
+            new_ctrl.SetValue = _setvalue_wrapper(new_ctrl, new_ctrl.SetValue)
 
             vac = VigilantAttributeConnector(
                     value,

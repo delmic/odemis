@@ -20,46 +20,59 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 
-from .text import NumberTextCtrl, UnitFloatCtrl, UnitIntegerCtrl
-from odemis.gui.img.data import getsliderBitmap, getslider_disBitmap
-from wx.lib.agw.aui.aui_utilities import StepColour
 import logging
 import math
-import odemis.gui
+import time
+
 import wx
+from wx.lib.agw.aui.aui_utilities import StepColour
+
+import odemis.gui
+from .text import UnitFloatCtrl, UnitIntegerCtrl
+from odemis.gui.img.data import getsliderBitmap, getslider_disBitmap
+
 
 
 class Slider(wx.PyPanel):
-    """
-    Custom Slider class
+    """ This class describes a Slider control.
+
+    The default value is 0.0 and the default value range is [0.0 ... 1.0]. The
+    SetValue and GetValue methods accept and return float values.
+
     """
 
     def __init__(self, parent, id=wx.ID_ANY, value=0.0, val_range=(0.0, 1.0),
                  size=(-1, -1), pos=wx.DefaultPosition, style=wx.NO_BORDER,
                  name="Slider", scale=None):
         """
-        @param parent: Parent window. Must not be None.
-        @param id:     Slider identifier.
-        @param pos:    Slider position. If the position (-1, -1) is specified
+        :param parent: Parent window. Must not be None.
+        :param id:     Slider identifier.
+        :param pos:    Slider position. If the position (-1, -1) is specified
                        then a default position is chosen.
-        @param size:   Slider size. If the default size (-1, -1) is specified
+        :param size:   Slider size. If the default size (-1, -1) is specified
                        then a default size is chosen.
-        @param style:  use wx.Panel styles
-        @param name:   Window name.
-        @param scale:  linear (default) or 'cubic'
+        :param style:  use wx.Panel styles
+        :param name:   Window name.
+        :param scale:  'linear' (default), 'cubic' or 'log'
         """
 
         wx.PyPanel.__init__(self, parent, id, pos, size, style, name)
 
+        # Set minimum height
+        if size == (-1, -1):
+            self.SetMinSize((-1, 8))
+
         self.current_value = value
 
+        # Closed range within which the current value must fall
         self.value_range = val_range
 
         self.range_span = float(val_range[1] - val_range[0])
-        #event.GetX() position or Horizontal position across Panel
+        # event.GetX() position or Horizontal position across Panel
         self.x = 0
-        #position of pointer
-        self.pointerPos = 0
+        # position of the drag handle within the slider, ranging from 0 to
+        # the slider width
+        self.handlePos = 0
 
         #Get Pointer's bitmap
         self.bitmap = getsliderBitmap()
@@ -80,11 +93,17 @@ class Slider(wx.PyPanel):
             self._percentage_to_val = lambda r0, r1, p: (r1 - r0) * p + r0
             self._val_to_percentage = lambda r0, r1, v: (float(v) - r0) / (r1 - r0)
 
-        #Events
-        self.Bind(wx.EVT_PAINT, self.OnPaint)
+        # Fire slide events at a maximum of once per '_fire_rate' seconds
+        self._fire_rate = 0.05
+        self._fire_time = time.time()
+
+        # Data events
         self.Bind(wx.EVT_MOTION, self.OnMotion)
         self.Bind(wx.EVT_LEFT_DOWN, self.OnLeftDown)
         self.Bind(wx.EVT_LEFT_UP, self.OnLeftUp)
+
+        # Layout Events
+        self.Bind(wx.EVT_PAINT, self.OnPaint)
         self.Bind(wx.EVT_SIZE, self.OnSize)
 
     @staticmethod
@@ -145,6 +164,7 @@ class Slider(wx.PyPanel):
         return self.value_range[1]
 
     def OnPaint(self, event=None):
+        """ This paint event handler draws the actual control """
         dc = wx.BufferedPaintDC(self)
         width, height = self.GetWidth(), self.GetHeight()
         _, half_height = width / 2, height / 2
@@ -179,61 +199,83 @@ class Slider(wx.PyPanel):
 
         if self.Enabled:
             dc.DrawBitmap(self.bitmap,
-                          self.pointerPos,
+                          self.handlePos,
                           half_height - self.half_h_height,
                           True)
         else:
             dc.DrawBitmap(self.bitmap_dis,
-                          self.pointerPos,
+                          self.handlePos,
                           half_height - self.half_h_height,
                           True)
 
         event.Skip()
-
-    def OnLeftDown(self, event=None):
-        #Capture Mouse
-        self.CaptureMouse()
-        self.getPointerLimitPos(event.GetX())
-        self.Refresh()
-
-
-    def OnLeftUp(self, event=None):
-        #Release Mouse
-        if self.HasCapture():
-            self.ReleaseMouse()
-            event.Skip()
-
-
-    def getPointerLimitPos(self, xPos):
-        #limit movement if X position is greater then self.width
-        if xPos > self.GetWidth() - self.half_h_width:
-            self.pointerPos = self.GetWidth() - self.handle_width
-        #limit movement if X position is less then 0
-        elif xPos < self.half_h_width:
-            self.pointerPos = 0
-        #if X position is between 0-self.width
-        else:
-            self.pointerPos = xPos - self.half_h_width
-
-        #calculate value, based on pointer position
-        self.current_value = self._pixel_to_val()
-
-
-    def OnMotion(self, event=None):
-        """ Mouse motion event handler """
-        if self.GetCapture():
-            self.getPointerLimitPos(event.GetX())
-            self.Refresh()
 
     def OnSize(self, event=None):
         """
         If Panel is getting resize for any reason then calculate pointer's position
         based on it's new size
         """
-        self.pointerPos = self._val_to_pixel()
+        self.handlePos = self._val_to_pixel()
         self.Refresh()
 
+    def OnLeftDown(self, event=None):
+        """ This event handler fires when the left mouse button is pressed down
+        when the  mouse cursor is over the slide bar.
+
+        It captures the mouse, so the user can drag the slider until the left
+        button is released.
+
+        """
+
+        self.CaptureMouse()
+        self.set_position_value(event.GetX())
+        self.Refresh()
+
+    def OnLeftUp(self, event=None):
+        """ This event handler is called when the left mouse button is released
+        while the mouse cursor is over the slide bar.
+
+        If the slider had the mouse captured, it will be released.
+
+        """
+
+        if self.HasCapture():
+            self.ReleaseMouse()
+
+        event.Skip()
+
+    def OnMotion(self, event=None):
+        """ Mouse motion event handler """
+        # If the user is dragging...
+        if self.HasCapture():
+            # Set the value according to the slider's x position
+            self.set_position_value(event.GetX())
+            self.Refresh()
+
+    def set_position_value(self, xPos):
+        """ This method sets the value of the slider according to the x position
+        of the slider handle.
+
+        :param Xpos (int): The x position relative to the left side of the
+                           slider
+        """
+
+        #limit movement if X position is greater then self.width
+        if xPos > self.GetWidth() - self.half_h_width:
+            self.handlePos = self.GetWidth() - self.handle_width
+        #limit movement if X position is less then 0
+        elif xPos < self.half_h_width:
+            self.handlePos = 0
+        #if X position is between 0-self.width
+        else:
+            self.handlePos = xPos - self.half_h_width
+
+        #calculate value, based on pointer position
+        #self.current_value = self._pixel_to_val()
+        self.SetValue(self._pixel_to_val())
+
     def _val_to_pixel(self, val=None):
+        """ Convert a slider value into a pixel position """
         val = self.current_value if val is None else val
         slider_width = self.GetWidth() - self.handle_width
         prcnt = self._val_to_percentage(self.value_range[0],
@@ -242,13 +284,40 @@ class Slider(wx.PyPanel):
         return int(abs(slider_width * prcnt))
 
     def _pixel_to_val(self):
-        prcnt = float(self.pointerPos) / (self.GetWidth() - self.handle_width)
+        """ Convert the current handle position into a value """
+        prcnt = float(self.handlePos) / (self.GetWidth() - self.handle_width)
         return self._percentage_to_val(self.value_range[0],
                                        self.value_range[1],
                                        prcnt)
 
+    def send_slider_update_event(self):
+        logging.debug("Firing change event")
+
+        now = time.time()
+        if self.HasCapture() and (now - self._fire_time) < self._fire_rate:
+            return
+
+        self._fire_time = now
+        logging.error("Fire!")
+
+        change_evt = wx.CommandEvent(wx.wxEVT_COMMAND_SLIDER_UPDATED)
+        self.GetEventHandler().ProcessEvent(change_evt)
+
     def SetValue(self, value):
+        """ Set the value of the slider
+
+        The value will be clipped if it is out of range.
+        """
+
+        if not isinstance(value, (int, long, float)):
+            raise TypeError("Illegal data type %s" % type(value))
+
+        if self.current_value == value:
+            logging.debug("Identical value %s ignored", value)
+            return
+
         logging.debug("Setting slider value to %s", value)
+
         if value < self.value_range[0]:
             logging.warn("Value lower than minimum!")
             self.current_value = self.value_range[0]
@@ -258,8 +327,15 @@ class Slider(wx.PyPanel):
         else:
             self.current_value = value
 
-        self.pointerPos = self._val_to_pixel()
+        self.handlePos = self._val_to_pixel()
+
+        self.send_slider_update_event()
+
         self.Refresh()
+
+    def GetValue(self):
+        """ Get the value of the slider """
+        return self.current_value
 
     def GetWidth(self):
         return self.GetSize()[0]
@@ -267,19 +343,18 @@ class Slider(wx.PyPanel):
     def GetHeight(self):
         return self.GetSize()[1]
 
-    def GetValue(self):
-        return self.current_value
-
-    def GetRange(self, range):
-        self.value_range = range
+    def GetRange(self, rng):
+        self.value_range = rng
 
 
 class NumberSlider(Slider):
-    """ A Slider with an extra linked text field showing the current value """
+    """ A Slider with an extra linked text field showing the current value.
+
+    """
 
     def __init__(self, parent, id=wx.ID_ANY, value=0.0, val_range=(0.0, 1.0),
                  size=(-1, -1), pos=wx.DefaultPosition, style=wx.NO_BORDER,
-                 name="Slider", scale=None, t_class=NumberTextCtrl,
+                 name="Slider", scale=None, t_class=UnitFloatCtrl,
                  t_size=(50, -1), unit="", accuracy=None):
         Slider.__init__(self, parent, id, value, val_range, size,
                         pos, style, name, scale)
@@ -299,45 +374,47 @@ class NumberSlider(Slider):
         self.linked_field.Bind(wx.EVT_COMMAND_ENTER, self._update_slider)
 
     def _update_slider(self, evt):
+        """ Private event handler called when the slider should be updated, for
+            example when a linked text field receives a new value.
+
+        """
+
+        # If the slider is not being dragged
         if not self.HasCapture():
             text_val = self.linked_field.GetValue()
-
-            # FIXME: (maybe?)
-            # Setting and retrieving float values with VigilantAttributeProxy
-            # objects resulted in very small differences in value making an
-            # inequality check useless.
-            # The problem probably resides with Pyro, that does something to
-            # the float values it's handed (like a cast?).
-
-            if abs(self.GetValue() - text_val) >  5.96189764224e-13:
-                logging.debug("Number changed, updating slider to %s", text_val)
+            if self.GetValue() != text_val:
+                logging.debug("Updating slider value to %s", text_val)
                 self.SetValue(text_val)
                 evt.Skip()
-
-    def getPointerLimitPos(self, xPos):
-        """ Overridden method, so the linked field update could be added """
-        Slider.getPointerLimitPos(self, xPos)
-        self._update_linked_field(self.current_value)
-
-    def SetValue(self, val):
-        """ Overridden method, so the linked field update could be added """
-        Slider.SetValue(self, val)
-        self._update_linked_field(val)
 
     def _update_linked_field(self, value):
         """ Update any linked field to the same value as this slider
         """
         if self.linked_field.GetValue() != value:
+            logging.debug("Updating number field to %s", value)
             if hasattr(self.linked_field, 'SetValueStr'):
                 self.linked_field.SetValueStr(value)
             else:
                 self.linked_field.SetValue(value)
 
-    def set_linked_field(self, text_ctrl):
-        self.linked_field = text_ctrl
+    def set_position_value(self, xPos):
+        """ Overridden method, so the linked field update could be added
+        """
+
+        Slider.set_position_value(self, xPos)
+        self._update_linked_field(self.current_value)
+
+    def SetValue(self, val):
+        """ Overridden method, so the linked field update could be added
+        """
+
+        Slider.SetValue(self, val)
+        self._update_linked_field(val)
 
     def OnLeftUp(self, event=None):
-        #Release Mouse
+        """ Overridden method, so the linked field update could be added
+        """
+
         if self.HasCapture():
             self.ReleaseMouse()
             self._update_linked_field(self.current_value)
@@ -345,6 +422,9 @@ class NumberSlider(Slider):
         event.Skip()
 
     def GetWidth(self):
+        """ Return the control's width, which includes both the slider bar and
+        the text field.
+        """
         return Slider.GetWidth(self) - self.linked_field.GetSize()[0]
 
     def OnPaint(self, event=None):
@@ -372,4 +452,25 @@ class UnitFloatSlider(NumberSlider):
         kwargs['accuracy'] = kwargs.get('accuracy', 3)
 
         NumberSlider.__init__(self, *args, **kwargs)
+
+    def _update_slider(self, evt):
+        """ Private event handler called when the slider should be updated, for
+            example when a linked text field receives a new value.
+
+        """
+
+        if not self.HasCapture():
+            text_val = self.linked_field.GetValue()
+
+            # FIXME: (maybe?)
+            # Setting and retrieving float values with VigilantAttributeProxy
+            # objects resulted in very small differences in value making an
+            # inequality check useless.
+            # The problem probably resides with Pyro, that does something to
+            # the float values it's handed (like a cast?).
+
+            if abs(self.GetValue() - text_val) > 1e-6:
+                logging.debug("Number changed, updating slider to %s", text_val)
+                self.SetValue(text_val)
+                evt.Skip()
 

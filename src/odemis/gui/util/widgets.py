@@ -65,8 +65,7 @@ class VigilantAttributeConnector(object):
             self.ctrl.Bind(event, self._on_value_change)
 
     def _on_value_change(self, evt):
-        """ This method is called when the value of the control is
-        changed.
+        """ This method is called when the value of the control is changed.
         """
         try:
             if self.ctrl_2_va is not None:
