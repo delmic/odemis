@@ -1354,6 +1354,8 @@ class SEMComedi(model.HwComponent):
                 # the GC runs only after we've managed to fill up the memory
                 gc.collect()
 
+        except:
+            logging.exception("Failed to acquire an image")
         finally:
             self.set_to_resting_position()
             logging.debug("Acquisition thread closed")
