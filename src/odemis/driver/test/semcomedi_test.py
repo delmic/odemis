@@ -146,7 +146,7 @@ class TestSEM(unittest.TestCase):
         size = self.scanner.resolution.value
         return size[0] * size[1] * dwell + size[1] * settle
     
-#    @unittest.skip("simple")
+    @unittest.skip("simple")
     def test_acquire(self):
         self.scanner.dwellTime.value = 10e-6 # s
         expected_duration = self.compute_expected_duration()
@@ -159,7 +159,7 @@ class TestSEM(unittest.TestCase):
         self.assertGreaterEqual(duration, expected_duration, "Error execution took %f s, less than exposure time %d." % (duration, expected_duration))
         self.assertIn(model.MD_DWELL_TIME, im.metadata)
 
-#    @unittest.skip("simple")
+    @unittest.skip("too long")
     def test_acquire_high_osr(self):
         """
         small resolution, but large osr, to force acquisition not by whole array
@@ -249,8 +249,8 @@ class TestSEM(unittest.TestCase):
         Test the dataflow on a quick cycle subscribing/unsubscribing
         Andorcam3 had a real bug causing deadlock in this scenario
         """ 
-        self.scanner.dwellTime.value = 100e-6
-        number = 3
+        self.scanner.dwellTime.value = 10e-6
+        number = 5
         expected_duration = self.compute_expected_duration()
         
         self.left = 10000 + number # don't unsubscribe automatically
