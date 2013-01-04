@@ -146,7 +146,7 @@ class TestSEM(unittest.TestCase):
         size = self.scanner.resolution.value
         return size[0] * size[1] * dwell + size[1] * settle
     
-    @unittest.skip("simple")
+#    @unittest.skip("simple")
     def test_acquire(self):
         self.scanner.dwellTime.value = 10e-6 # s
         expected_duration = self.compute_expected_duration()
@@ -159,7 +159,7 @@ class TestSEM(unittest.TestCase):
         self.assertGreaterEqual(duration, expected_duration, "Error execution took %f s, less than exposure time %d." % (duration, expected_duration))
         self.assertIn(model.MD_DWELL_TIME, im.metadata)
 
-    @unittest.skip("too long")
+#    @unittest.skip("too long")
     def test_acquire_high_osr(self):
         """
         small resolution, but large osr, to force acquisition not by whole array

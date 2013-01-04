@@ -43,7 +43,7 @@ for f in $testfiles; do
         #echo coucou >> "$TESTLOG" 2>&1
         status=$?
     popd > /dev/null
-    tail -1 "$TESTLOG"
+    grep -E "(OK|FAILED)" "$TESTLOG" | tail -1
     if [ "$status" -gt 0 ]; then
         failures=$(( $failures + 1 ))
     fi
