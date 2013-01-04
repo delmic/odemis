@@ -117,7 +117,7 @@ class TestWithBackend(unittest.TestCase):
         self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
         
         output = out.getvalue()
-        self.assertTrue("Light" in output)
+        self.assertTrue("Spectra" in output)
         self.assertTrue("Andor SimCam" in output)
 
     def test_check(self):
@@ -134,7 +134,7 @@ class TestWithBackend(unittest.TestCase):
             out = StringIO.StringIO()
             sys.stdout = out
             
-            cmdline = "cli --list-prop Light"
+            cmdline = "cli --list-prop Spectra"
             ret = main.main(cmdline.split())
         except SystemExit, exc:
             ret = exc.code
@@ -155,7 +155,7 @@ class TestWithBackend(unittest.TestCase):
             out = StringIO.StringIO()
             sys.stdout = out
             
-            cmdline = "cli --list-prop Light"
+            cmdline = "cli --list-prop Spectra"
             ret = main.main(cmdline.split())
         except SystemExit, exc:
             ret = exc.code
@@ -171,7 +171,7 @@ class TestWithBackend(unittest.TestCase):
             out = StringIO.StringIO()
             sys.stdout = out
             
-            cmdline = "cli --set-attr Light power 0"
+            cmdline = "cli --set-attr Spectra power 0"
             ret = main.main(cmdline.split())
         except SystemExit, exc:
             ret = exc.code
@@ -183,7 +183,7 @@ class TestWithBackend(unittest.TestCase):
             out = StringIO.StringIO()
             sys.stdout = out
             
-            cmdline = "cli --list-prop Light"
+            cmdline = "cli --list-prop Spectra"
             ret = main.main(cmdline.split())
         except SystemExit, exc:
             ret = exc.code
@@ -200,7 +200,7 @@ class TestWithBackend(unittest.TestCase):
             out = StringIO.StringIO()
             sys.stdout = out
             
-            cmdline = "cli --set-attr Stage speed x:0.5,y:0.2"
+            cmdline = "cli --set-attr FakeRedStoneStage speed x:0.5,y:0.2"
             ret = main.main(cmdline.split())
         except SystemExit, exc:
             ret = exc.code
@@ -214,7 +214,7 @@ class TestWithBackend(unittest.TestCase):
             out = StringIO.StringIO()
             sys.stdout = out
             
-            cmdline = "cli --move Stage x 5 --move Stage y -0.2"
+            cmdline = "cli --move FakeRedStoneStage x 5 --move FakeRedStoneStage y -0.2"
             ret = main.main(cmdline.split())
         except SystemExit, exc:
             ret = exc.code
