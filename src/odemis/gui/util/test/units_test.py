@@ -34,7 +34,7 @@ class TestUnits(unittest.TestCase):
         for (i, eo) in values:
             o = units.round_significant(*i)
             self.assertEquals(o, eo,
-                              "%f to %d figures = %f should be %f" % (i[0], i[1], o, eo))
+                              u"%f to %d figures = %f should be %f" % (i[0], i[1], o, eo))
     
     def test_round_down_significant(self):
         #         (input) (expected output)
@@ -49,7 +49,7 @@ class TestUnits(unittest.TestCase):
         for (i, eo) in values:
             o = units.round_down_significant(*i)
             self.assertEquals(o, eo,
-                              "%f to %d figures = %f should be %f" % (i[0], i[1], o, eo))
+                              u"%f to %d figures = %f should be %f" % (i[0], i[1], o, eo))
 
     def test_to_string_si_prefix(self):
         #         (input) (expected output)
@@ -58,14 +58,14 @@ class TestUnits(unittest.TestCase):
                   ((-1234,), "-1.234 k"),
                   ((1600,), "1.6 k"),
                   ((-1600,), "-1.6 k"),
-                  ((0.0001236,), "123.6 µ"),
+                  ((0.0001236,), u"123.6 µ"),
                   ((0.0012,), "1.2 m"),
                   ((0,), "0 "),
                   ]
         for (i, eo) in values:
             o = units.to_string_si_prefix(*i)
             self.assertEquals(o, eo,
-                              "%f is '%s' while expected '%s'" % (i[0], o, eo))
+                              u"%f is '%s' while expected '%s'" % (i[0], o, eo))
             
     def test_readable_str(self):
         #         (input) (expected output)
@@ -77,16 +77,16 @@ class TestUnits(unittest.TestCase):
                   ((-1600, ""), "-1.6 k"),
                   ((0.0001236, None), "0.0001236"),
                   ((0.0012, ""), "1.2 m"),
-                  ((200e-6, "m"), "200 µm"),
+                  ((200e-6, "m"), u"200 µm"),
                   ((0.0, "m"), "0 m"),
                   (([1500, 1200, 150], None), "1500 x 1200 x 150"),
-                  (([0.0001236, 0.00014], "m"), "123.6 x 140 µm"),
+                  (([0.0001236, 0.00014], "m"), u"123.6 x 140 µm"),
                   (([0.0001236, 12.0], "m"), "0.0001236 x 12 m"),
                   ]
         for (i, eo) in values:
             o = units.readable_str(*i)
             self.assertEquals(o, eo,
-                              "%s is '%s' while expected '%s'" % (i, o, eo))
+                              u"%s is '%s' while expected '%s'" % (i, o, eo))
 
 if __name__ == "__main__":
     unittest.main()
