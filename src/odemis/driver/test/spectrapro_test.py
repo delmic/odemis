@@ -211,5 +211,6 @@ class TestSP(unittest.TestCase):
         self.assertTrue(f2.done())
         
         f1.result()
-        
-        
+
+if __name__ == '__main__':
+    unittest.main()
