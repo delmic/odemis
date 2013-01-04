@@ -84,6 +84,22 @@ class TestFindOptimalBC(unittest.TestCase):
         img_manu = wxImage2NDImage(out_manu)
         
         self.assertTrue(numpy.all(img_auto==img_manu))
+        
+        # second try
+        img12 = numpy.zeros(size[-1:-3:-1], dtype="uint16") + 4000
+        img12[0,0] = depth-1-40
+        
+        # automatic
+        out_auto = DataArray2wxImage(img12)
+        img_auto = wxImage2NDImage(out_auto)
+        
+        # manual
+        b, c = FindOptimalBC(img12, depth)
+        out_manu = DataArray2wxImage(img12, depth, b, c)
+        img_manu = wxImage2NDImage(out_manu)
+        
+        self.assertTrue(numpy.all(img_auto==img_manu))
+        
 
 class TestDataArray2wxImage(unittest.TestCase):
     def test_simple(self):

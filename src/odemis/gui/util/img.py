@@ -25,7 +25,7 @@ from __future__ import division
 import logging
 import math
 import numpy
-import scipy
+import scipy.misc
 import wx
 
 # various functions to convert and modify images (DataArray and wxImage)
@@ -51,26 +51,23 @@ def FindOptimalBC(data, depth):
     returns (-1<=float<=1, -1<=float<=1): brightness and contrast 
     """
     assert(depth >= 1)
-    
+
     # inverse algorithm than in DataArray2wxImage(), using the min/max
     hd = (depth-1)/2
     d0 = float(data.min())
-    d255 = float(data.max()) 
+    d255 = float(data.max())
 
-    if (d255 - d0) < 2:
+    if d255 == d0:
         # infinite contrast => clip to 1
-        C = depth/2
-        B = - (d0 - hd)
-        # TODO not entirely sure it's correct, but it shouldn't be too far from truth
+        C = depth
     else:
         C = (depth - 1) / (d255 - d0)
-        B = - (d0 - hd) * C - hd
-    
+    B = hd - (d0 + d255)/2
+
     brightness = B / (depth - 1)
-    contrast = math.log(C, depth/2)
-    
-    assert(contrast >= 0) # no way that we would compress the values
-    return brightness, contrast
+    contrast = math.log(C, depth)
+
+    return brightness, contrast 
 
 def DataArray2wxImage(data, depth=None, brightness=None, contrast=None, tint=(255, 255, 255)):
     """
@@ -106,12 +103,14 @@ def DataArray2wxImage(data, depth=None, brightness=None, contrast=None, tint=(25
         logging.debug("Applying brightness %f and contrast %f with depth = %d", brightness, contrast, depth)
         # see http://docs.opencv.org/doc/tutorials/core/basic_linear_transform/basic_linear_transform.html
         # and http://pippin.gimp.org/image-processing/chap_point.html
-        # contrast is typically between 1/(depth/2) -> (depth/2): = (depth/2)^our_contrast 
-        # brightness: newpixel = origpix + brightness*depth
-        # contrast: newpixel = (origpix - depth/2) * contrast + depth/2
+        # However we apply brightness first (before contrast) so that it can
+        # always be experessed between -1 and 1
+        # contrast is between 1/(depth) -> (depth): = depth^our_contrast 
+        # brightness: newpixel = origpix + brightness*(depth-1)
+        # contrast: newpixel = (origpix - depth-1/2) * contrast + depth-1/2
         # truncate
         # in Python this is:
-        # corrected = (data - depth/2.0) * ((depth/2.0) ** contrast) + (depth/2.0 + brightness * depth)
+        # corrected = (data + (brightness * (depth-1)) - (depth-1)/2.0) * (depth ** contrast) + (depth-1)/2.0 
         # numpy.clip(corrected, 0, depth, corrected) # inplace
         # drescaled_orig = scipy.misc.bytescale(corrected, cmin=0, cmax=depth-1)
 
@@ -120,10 +119,10 @@ def DataArray2wxImage(data, depth=None, brightness=None, contrast=None, tint=(25
         # * use the fact that it's a linear transform, like bytescale (that's what we do) => 30% speed-up 
         #   => finc cmin (origpix when newpixel=0) and cmax (origpix when newpixel=depth-1)
         B = brightness * (depth - 1)
-        C = (depth/2) ** contrast
+        C = depth ** contrast
         hd = (depth - 1) / 2
-        d0 = hd - (B + hd) / C
-        d255 = hd + (hd - B) / C
+        d0 = hd - B - hd/C
+        d255 = hd - B + hd/C
         # bytescale: linear mapping cmin, cmax -> low, high; and then take the low byte (can overflow)
         # Note: always do clipping, because it's relatively cheap and d0 >0 or d255 < depth is only corner case
         drescaled = scipy.misc.bytescale(data.clip(d0, d255), cmin=d0, cmax=d255)
