@@ -633,7 +633,11 @@ class CancellableThreadPoolExecutor(ThreadPoolExecutor):
         
     def _on_done(self, future):
         # task is over
-        self._queue.remove(future)
+        try:
+            self._queue.remove(future)
+        except ValueError:
+            # can happen if it was cancelled
+            pass
      
     def cancel(self):
         """

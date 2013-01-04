@@ -58,7 +58,6 @@ class TestStatic(unittest.TestCase):
         self.assertTrue(sp.selfTest(), "self test failed.")
         sp.terminate()
     
-    @skip("simple")
     def test_fake(self):
         """
         Just makes sure we don't (completely) break FakeSpectraPro after an update
