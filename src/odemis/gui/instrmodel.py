@@ -423,21 +423,24 @@ class Stream(object):
         self.image.value = InstrumentalImage(im, mpp, pos)
 
     def onAutoBC(self, enabled):
+        if len(self.raw) == 0:
+            return  # no image acquired yet
+        
         # if changing to manual: need to set the current (automatic) B/C
         if enabled == False:
-            if len(self.raw) < 1:
-                return  # no image acquired yet
             b, c = util.img.FindOptimalBC(self.raw[0], self._depth)
             self.brightness.value = b * 100
             self.contrast.value = c * 100
+        else:
+            # B/C might be different from the manual values => redisplay
+            self._updateImage()
         
     def onBrightnessContrast(self, unused):
         # called whenever brightness/contrast changes
         # => needs to recompute the image (but not too often, so we do it in a timer)
 
-        # is there any image to update?
-        if not len(self.raw):
-            return
+        if len(self.raw) == 0:
+            return  # no image acquired yet
         # TODO: in timer
         self._updateImage()
 
