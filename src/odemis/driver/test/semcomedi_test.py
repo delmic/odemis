@@ -159,6 +159,30 @@ class TestSEM(unittest.TestCase):
         self.assertGreaterEqual(duration, expected_duration, "Error execution took %f s, less than exposure time %d." % (duration, expected_duration))
         self.assertIn(model.MD_DWELL_TIME, im.metadata)
 
+    def test_osr(self):
+        """
+        Checks that find_best_oversampling_rate always finds something appropriate
+        The period/osr should always give something close from the maximum scanning
+        rate of the AI device. 
+        """
+        # values to test
+        periods = [
+                   1e-6,
+                   3e-6,
+                   1e-5,
+                   7.3278e-05,
+                   6.68952e-06,
+                   0.000365129,
+                   0.000579224,
+                   ]
+        min_ai_period = self.sem._min_ai_periods[1]
+        for p in periods:
+            period, osr = self.sem.find_best_oversampling_rate(p)
+            ai_period = period/osr
+            print "ai_period = %g, best would be "
+            self.assertLess(ai_period, min_ai_period * 5, 
+                            "Got osr=%d, while expected something around %s" % (osr, period/min_ai_period))
+
 #    @unittest.skip("too long")
     def test_acquire_high_osr(self):
         """
@@ -177,6 +201,7 @@ class TestSEM(unittest.TestCase):
         self.assertGreaterEqual(duration, expected_duration, "Error execution took %f s, less than exposure time %d." % (duration, expected_duration))
         self.assertIn(model.MD_DWELL_TIME, im.metadata)
 
+#    @unittest.skip("too long")
     def test_acquire_long_short(self):
         """
         test being able to cancel image acquisition if dwell time is too long
