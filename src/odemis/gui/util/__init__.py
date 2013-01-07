@@ -18,10 +18,15 @@ def call_after(f, self, *args, **kwargs):
     """
     return wx.CallAfter(f, self, *args, **kwargs)
 
-def limit_invocation(rate):
+def limit_invocation(delay_s):
     """ This decorator limits how often a method will be executed.
 
-    :param rate: (float) The minimum interval between executions in seconds.
+
+    The first call will always immediately be executed. The last call will be
+    delayed 'delay_s' seconds at the most. In between the first and last calls,
+    the mehthod will be executed at 'delay_s' intervals.
+
+    :param delay_s: (float) The minimum interval between executions in seconds.
     """
     def limit(f, self, *args, **kwargs):
 
@@ -29,26 +34,28 @@ def limit_invocation(rate):
             raise ValueError("limit_invocation decorators should only be "
                              "assigned to instance methods!")
 
-        if rate > 5:
+        if delay_s > 5:
             logging.warn("Warning! Long delay interval. Please consider using "
                          "and interval of 5 or less seconds")
         now = time.time()
 
-        # If the function was called later than 'rate' seconds ago...
-        if hasattr(f, 'last_call') and now - f.last_call < rate:
+        # If the function was called later than 'delay_s' seconds ago...
+        if hasattr(f, 'last_call') and now - f.last_call < delay_s:
             # If a timer for a previous call is already running, cancel it.
             if hasattr(f, 'timer'):
                 logging.debug("Cancelling old delayed method call")
                 f.timer.cancel()
 
             logging.debug('Delaying method call')
-            f.timer = Timer(rate, f, args=[self] + list(args), kwargs=kwargs)
+            f.timer = Timer(delay_s - (now - f.last_call),
+                            f,
+                            args=[self] + list(args),
+                            kwargs=kwargs)
             f.timer.start()
             return
 
         #exectue method call
         f.last_call = now
-        logging.debug("Calling delayed method")
         return f(self, *args, **kwargs)
     return decorator(limit)
 
