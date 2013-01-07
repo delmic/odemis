@@ -94,7 +94,7 @@ SETTINGS = {
                 "exposureTime":
                 {
                     "control_type": odemis.gui.CONTROL_SLIDER,
-                    "scale": "cubic",
+                    "scale": "log",
                     "range": (0.01, 3.00),
                     "type": "float",
                 },
@@ -136,7 +136,7 @@ SETTINGS = {
                 {
                     "control_type": odemis.gui.CONTROL_SLIDER,
                     "range": (1e-9, 0.1),
-                    "scale": "cubic",
+                    "scale": "log",
                     "type": "float",
                 },
                 "resolution":
