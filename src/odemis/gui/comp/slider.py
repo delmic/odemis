@@ -30,6 +30,7 @@ from wx.lib.agw.aui.aui_utilities import StepColour
 import odemis.gui
 from .text import UnitFloatCtrl, UnitIntegerCtrl
 from odemis.gui.img.data import getsliderBitmap, getslider_disBitmap
+from odemis.gui.util import limit_invocation
 
 
 
@@ -292,16 +293,16 @@ class Slider(wx.PyPanel):
                                        self.value_range[1],
                                        prcnt)
 
+    @limit_invocation(0.07)  #pylint: disable=E1120
     def send_slider_update_event(self):
         logging.debug("Firing change event")
 
-        now = time.time()
-        # Prevent this event from firing too often.
-        if self.HasCapture() and (now - self._fire_time) < self._fire_rate:
-            logging.error("IGNORE")
-            return
+        # now = time.time()
+        # # Prevent this event from firing too often.
+        # if self.HasCapture() and (now - self._fire_time) < self._fire_rate:
+        #     return
 
-        self._fire_time = now
+        # self._fire_time = now
 
         change_evt = wx.CommandEvent(wx.wxEVT_COMMAND_SLIDER_UPDATED)
         self.GetEventHandler().ProcessEvent(change_evt)
