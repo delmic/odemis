@@ -1325,7 +1325,7 @@ class SEMComedi(model.HwComponent):
                         continue
                 except CancelledError:
                     # either because must be stopped or settings updated
-                    logging.debug("Restarting acquisition after it was cancelled")
+                    logging.debug("Acquisition was cancelled")
                     continue
             
                 nfailures = 0
@@ -1355,7 +1355,7 @@ class SEMComedi(model.HwComponent):
                 gc.collect()
 
         except:
-            logging.exception("Failed to acquire an image")
+            logging.exception("Unexpected failure during image acquisition")
         finally:
             self.set_to_resting_position()
             logging.debug("Acquisition thread closed")
