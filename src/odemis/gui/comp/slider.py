@@ -107,6 +107,19 @@ class Slider(wx.PyPanel):
         self.Bind(wx.EVT_PAINT, self.OnPaint)
         self.Bind(wx.EVT_SIZE, self.OnSize)
 
+    def __del__(self):
+        # FIXME: put here to try and prevent PyDeadObject exceptions. Might
+        # become superfluous.
+        # Data events
+        self.Unbind(wx.EVT_MOTION, self.OnMotion)
+        self.Unbind(wx.EVT_LEFT_DOWN, self.OnLeftDown)
+        self.Unbind(wx.EVT_LEFT_UP, self.OnLeftUp)
+
+        # Layout Events
+        self.Unbind(wx.EVT_PAINT, self.OnPaint)
+        self.Unbind(wx.EVT_SIZE, self.OnSize)
+        print "Slider unbound"
+
     @staticmethod
     def _log_val_to_perc(r0, r1, v):
         """ Transform the value v into a fraction [0..1] of the [r0..r1] range
@@ -307,6 +320,7 @@ class Slider(wx.PyPanel):
         change_evt = wx.CommandEvent(wx.wxEVT_COMMAND_SLIDER_UPDATED)
         self.GetEventHandler().ProcessEvent(change_evt)
 
+
     def SetValue(self, value):
         """ Set the value of the slider
 
@@ -385,6 +399,13 @@ class NumberSlider(Slider):
         self.linked_field.SetBackgroundColour(parent.GetBackgroundColour())
 
         self.linked_field.Bind(wx.EVT_COMMAND_ENTER, self._update_slider)
+
+
+    def __del__(self):
+        # FIXME: put here to try and prevent PyDeadObject exceptions. Might
+        # become superfluous.
+        self.linked_field.Unbind(wx.EVT_COMMAND_ENTER, self._update_slider)
+        print "NumberSlider unbound"
 
     def _update_slider(self, evt):
         """ Private event handler called when the slider should be updated, for

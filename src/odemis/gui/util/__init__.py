@@ -48,7 +48,7 @@ def limit_invocation(delay_s):
 
             logging.debug('Delaying method call')
             f.timer = Timer(delay_s - (now - f.last_call),
-                            f,
+                            dead_object_wrapper(f, self, *args, **kwargs),
                             args=[self] + list(args),
                             kwargs=kwargs)
             f.timer.start()
@@ -65,4 +65,13 @@ def limit_invocation(delay_s):
 def call_after_wrapper(f, *args, **kwargs):
     def wrapzor(*args, **kwargs):
         return wx.CallAfter(f, *args, **kwargs)
+    return wrapzor
+
+def dead_object_wrapper(f, *args, **kwargs):
+    def wrapzor(*args, **kwargs):
+        try:
+            return f(*args, **kwargs)
+        except wx.PyDeadObjectError:
+            logging.debug("PyDeadObjectError avoided")
+            pass
     return wrapzor
