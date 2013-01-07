@@ -1281,7 +1281,6 @@ class SEMComedi(model.HwComponent):
         self._acquisition_must_stop.set()
         self._reader.cancel()
         self._writer.cancel()
-        logging.debug("Acquisition stop requested")
     
     def _wait_acquisition_stopped(self):
         """
@@ -1302,9 +1301,7 @@ class SEMComedi(model.HwComponent):
         """
         try:
             nfailures = 0
-            logging.debug("Acquisition thread started")
             while not self._acquisition_must_stop.is_set():
-                logging.debug("One acquisition start")
                 # get the channels to acquire
                 with self._acquisition_data_lock:
                     detectors = self._acquisitions.keys()
