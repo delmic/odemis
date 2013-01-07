@@ -177,6 +177,7 @@ class SEMComedi(model.HwComponent):
         
         # acquisition thread setup
         self._acquisition_data_lock = threading.Lock()
+        self._acquisition_mng_lock = threading.Lock()
         self._acquisition_must_stop = threading.Event()
         self._acquisition_thread = None
         self._acquisitions = {} # detector -> callable (callback)
@@ -1247,7 +1248,10 @@ class SEMComedi(model.HwComponent):
                 raise KeyError("Channel %d already set up for acquisition.", detector.channel)
                
             self._acquisitions[detector] = callback
-            
+        
+        # the thread uses acquisition_data_lock, so we should never wait for
+        # the thread to stop with this lock acquired.
+        with self._acquisition_mng_lock:
             self._wait_acquisition_stopped() # only wait if acquisition thread is stopping
             if not self._acquisition_thread or not self._acquisition_thread.isAlive():
                 # Set up thread
@@ -1263,9 +1267,12 @@ class SEMComedi(model.HwComponent):
         """
         with self._acquisition_data_lock:
             del self._acquisitions[detector]
-            if not self._acquisitions:
-                # Nothing to acquire => stop the thread (almost) immediately
-                self._req_stop_acquisition()
+            if self._acquisitions:
+                # Still something to acquire => keep the thread running
+                return
+        
+        with self._acquisition_mng_lock:
+            self._req_stop_acquisition()
     
     def _req_stop_acquisition(self):
         """
@@ -1274,6 +1281,7 @@ class SEMComedi(model.HwComponent):
         self._acquisition_must_stop.set()
         self._reader.cancel()
         self._writer.cancel()
+        logging.debug("Acquisition stop requested")
     
     def _wait_acquisition_stopped(self):
         """
@@ -1294,7 +1302,9 @@ class SEMComedi(model.HwComponent):
         """
         try:
             nfailures = 0
+            logging.debug("Acquisition thread started")
             while not self._acquisition_must_stop.is_set():
+                logging.debug("One acquisition start")
                 # get the channels to acquire
                 with self._acquisition_data_lock:
                     detectors = self._acquisitions.keys()

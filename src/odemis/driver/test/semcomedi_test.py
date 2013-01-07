@@ -159,6 +159,7 @@ class TestSEM(unittest.TestCase):
         self.assertGreaterEqual(duration, expected_duration, "Error execution took %f s, less than exposure time %d." % (duration, expected_duration))
         self.assertIn(model.MD_DWELL_TIME, im.metadata)
 
+#    @unittest.skip("simple")
     def test_osr(self):
         """
         Checks that find_best_oversampling_rate always finds something appropriate
@@ -179,7 +180,6 @@ class TestSEM(unittest.TestCase):
         for p in periods:
             period, osr = self.sem.find_best_oversampling_rate(p)
             ai_period = period/osr
-            print "ai_period = %g, best would be "
             self.assertLess(ai_period, min_ai_period * 5, 
                             "Got osr=%d, while expected something around %s" % (osr, period/min_ai_period))
 
@@ -267,6 +267,30 @@ class TestSEM(unittest.TestCase):
         
         self.sed.data.unsubscribe(self.receive_image) # just in case it failed
         self.assertEqual(self.left, 0)
+
+
+    def test_df_fast_sub_unsub(self):
+        """
+        Test the dataflow on a very fast cycle subscribing/unsubscribing
+        SEMComedi had a bug causing the threads not to start again
+        """ 
+        self.scanner.dwellTime.value = self.scanner.dwellTime.range[0]
+        number = 10
+        expected_duration = self.compute_expected_duration()
+        
+        self.left = 10000 + number # don't unsubscribe automatically
+        
+        for i in range(number):
+            self.sed.data.subscribe(self.receive_image)
+            time.sleep(0.001)
+            self.sed.data.unsubscribe(self.receive_image)
+
+        # now this one should work
+        self.sed.data.subscribe(self.receive_image)
+        time.sleep(expected_duration * 1.2) # make sure we received at least one image
+        self.sed.data.unsubscribe(self.receive_image)
+        
+        self.assertLessEqual(self.left, 10000 + number - 1)
 
 #    @unittest.skip("simple")
     def test_df_alternate_sub_unsub(self):
