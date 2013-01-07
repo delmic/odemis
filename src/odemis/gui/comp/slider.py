@@ -239,6 +239,8 @@ class Slider(wx.PyPanel):
 
         """
 
+        logging.warn("rel 1")
+
         if self.HasCapture():
             self.ReleaseMouse()
 
@@ -272,7 +274,7 @@ class Slider(wx.PyPanel):
 
         #calculate value, based on pointer position
         #self.current_value = self._pixel_to_val()
-        self.SetValue(self._pixel_to_val())
+        self._SetValue(self._pixel_to_val())
 
     def _val_to_pixel(self, val=None):
         """ Convert a slider value into a pixel position """
@@ -294,16 +296,26 @@ class Slider(wx.PyPanel):
         logging.debug("Firing change event")
 
         now = time.time()
+        # Prevent this event from firing too often.
         if self.HasCapture() and (now - self._fire_time) < self._fire_rate:
+            logging.error("IGNORE")
             return
 
         self._fire_time = now
-        logging.error("Fire!")
 
         change_evt = wx.CommandEvent(wx.wxEVT_COMMAND_SLIDER_UPDATED)
         self.GetEventHandler().ProcessEvent(change_evt)
 
     def SetValue(self, value):
+        """ Set the value of the slider
+
+        If the slider is currently being dragged, the value will *NOT* be set.
+        """
+        # If the user is *NOT* dragging...
+        if not self.HasCapture():
+            self._SetValue(value)
+
+    def _SetValue(self, value):
         """ Set the value of the slider
 
         The value will be clipped if it is out of range.
@@ -384,7 +396,7 @@ class NumberSlider(Slider):
             text_val = self.linked_field.GetValue()
             if self.GetValue() != text_val:
                 logging.debug("Updating slider value to %s", text_val)
-                self.SetValue(text_val)
+                self._SetValue(text_val)
                 evt.Skip()
 
     def _update_linked_field(self, value):
@@ -404,19 +416,21 @@ class NumberSlider(Slider):
         Slider.set_position_value(self, xPos)
         self._update_linked_field(self.current_value)
 
-    def SetValue(self, val):
+    def _SetValue(self, val):
         """ Overridden method, so the linked field update could be added
         """
 
-        Slider.SetValue(self, val)
+        Slider._SetValue(self, val)
         self._update_linked_field(val)
 
     def OnLeftUp(self, event=None):
         """ Overridden method, so the linked field update could be added
         """
 
+        logging.warn("relase")
+
         if self.HasCapture():
-            self.ReleaseMouse()
+            Slider.OnLeftUp(self, event)
             self._update_linked_field(self.current_value)
 
         event.Skip()
@@ -471,6 +485,6 @@ class UnitFloatSlider(NumberSlider):
 
             if abs(self.GetValue() - text_val) > 1e-6:
                 logging.debug("Number changed, updating slider to %s", text_val)
-                self.SetValue(text_val)
+                self._SetValue(text_val)
                 evt.Skip()
 
