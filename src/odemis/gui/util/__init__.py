@@ -39,24 +39,37 @@ def limit_invocation(delay_s):
                          "and interval of 5 or less seconds")
         now = time.time()
 
-        # If the function was called later than 'delay_s' seconds ago...
-        if hasattr(f, 'last_call') and now - f.last_call < delay_s:
-            # If a timer for a previous call is already running, cancel it.
-            if hasattr(f, 'timer'):
-                logging.debug("Cancelling old delayed method call")
-                f.timer.cancel()
+        # The next statement was not useful in the sense that we cannot
+        # add attributes to bound methods.
+        # Get the bound version of the function
+        #bf = f.__get__(self)
 
-            logging.debug('Delaying method call')
-            f.timer = Timer(delay_s - (now - f.last_call),
-                            dead_object_wrapper(f, self, *args, **kwargs),
-                            args=[self] + list(args),
-                            kwargs=kwargs)
-            f.timer.start()
-            return
+
+        last_call_name = '%s_lim_inv_last_call' % f.__name__
+        timer_name = '%s_lim_inv_timer' % f.__name__
+
+        # If the function was called later than 'delay_s' seconds ago...
+        if hasattr(self, last_call_name):
+            if now - getattr(self, last_call_name) < delay_s:
+                # If a timer for a previous call is already running, cancel it.
+                if hasattr(self, timer_name):
+                    logging.debug("Cancelling old delayed method call")
+                    getattr(self, timer_name).cancel()
+
+                logging.debug('Delaying method call')
+                timer = Timer(delay_s,
+                              dead_object_wrapper(f, self, *args, **kwargs),
+                              args=[self] + list(args),
+                              kwargs=kwargs)
+                setattr(self, timer_name, timer)
+                setattr(self, last_call_name, now + delay_s)
+                timer.start()
+                return
 
         #exectue method call
-        f.last_call = now
+        setattr(self, last_call_name, now)
         return f(self, *args, **kwargs)
+
     return decorator(limit)
 
 
@@ -68,6 +81,9 @@ def call_after_wrapper(f, *args, **kwargs):
     return wrapzor
 
 def dead_object_wrapper(f, *args, **kwargs):
+    """ This simple wrapper suppresses errors caused code trying to access
+    wxPython widgets that have already been destroyed
+    """
     def wrapzor(*args, **kwargs):
         try:
             return f(*args, **kwargs)
