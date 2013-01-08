@@ -324,11 +324,11 @@ class OdemisGUIApp(wx.App):
         anywhere else and redirects them to the logger. """
         # in case of error here, don't call again, it'd create infinite recurssion
         sys.excepthook = sys.__excepthook__
-        
+
         try:
             exc = traceback.format_exception(type, value, trace)
             logging.error("".join(exc))
-    
+
             # When an exception occurs, automatically got to debug mode.
             if not isinstance(value, NotImplementedError):
                 self.goto_debug_mode()
@@ -370,7 +370,7 @@ def installThreadExcepthook():
 
 def main():
     log.init_logger()
-    
+
     # Create application
     app = OdemisGUIApp()
     # Change exception hook so unexpected exception

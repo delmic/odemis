@@ -132,6 +132,7 @@ class AcquisitionController(object):
         self._acq_dialog = AcquisitionDialog(self._main_frame,
                                              wx.GetApp().interface_model)
 
+
         self._acq_dialog.SetSize(parent_size)
         self._acq_dialog.Center()
         self._acq_dialog.ShowModal()
@@ -317,11 +318,16 @@ class AcquisitionDialog(xrcfr_acq):
     def __init__(self, parent, interface_model):
         xrcfr_acq.__init__(self, parent)
 
+
+
         self.cmb_presets.Append(u"high")
         self.cmb_presets.Append(u"medium")
         self.cmb_presets.Append(u"low")
 
         self.cmb_presets.Select(0)
+
+        # Store current values
+        wx.GetApp().settings_controller.store()
 
         self.settings_controller = SettingsSideBar(interface_model, self)
 
@@ -350,5 +356,8 @@ class AcquisitionDialog(xrcfr_acq):
 
 
     def on_cancel(self, evt):
+        # Restore current values
+        wx.GetApp().settings_controller.restore()
+
         self.Close()
         self.Destroy()

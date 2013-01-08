@@ -73,5 +73,4 @@ def dead_object_wrapper(f, *args, **kwargs):
             return f(*args, **kwargs)
         except wx.PyDeadObjectError:
             logging.debug("PyDeadObjectError avoided")
-            pass
     return wrapzor

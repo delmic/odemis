@@ -156,7 +156,7 @@ class SettingsPanel(object):
     """ Settings base class which describes an indirect wrapper for
     FoldPanelItems.
 
-    Do not instantiate this class, but always inherit it.
+    NOTE: Do not instantiate this class, but always inherit it.
     """
 
     def __init__(self, fp_panel, default_msg):
@@ -188,8 +188,35 @@ class SettingsPanel(object):
         self.num_entries = 0
         self.entries = []
 
+        # This attribute can be used to save and restore the current state
+        # (as in, all the values of the controls) of the SettingsPanel.
+        self._values_cache = []
+
         #self.panel.SetSize((380, -1))
         #print self.panel.Refresh()
+
+    def store(self):
+        """ Store the current control values into an internal values cache """
+        self._values_cache = []
+
+        for entry in self.entries:
+            value = None
+            if hasattr(entry["val_ctrl"], "GetValue"):
+                value = entry["val_ctrl"].GetValue()
+                logging.debug("Storing value %s for %s",
+                              value,
+                              entry["lbl_ctrl"].GetLabel())
+            self._values_cache.append(value)
+
+    def restore(self):
+        """ Restore the control values from the internal values cache """
+        for value, entry in zip(self._values_cache, self.entries):
+            if value:
+                logging.debug("Restoring value %s for %s",
+                              value,
+                              entry["lbl_ctrl"].GetLabel())
+                entry["val_ctrl"].SetValue(value)
+
 
     def _clear(self):
         # Remove default 'no content' label
@@ -264,7 +291,8 @@ class SettingsPanel(object):
             elif choices is None:
                 choices = va.choices
             else: # merge = intersection
-                # TODO: if va.range but no va.choices, ensure that choices is within va.range
+                # TODO: if va.range but no va.choices, ensure that
+                # choices is within va.range
                 choices &= va.choices
         except (AttributeError, NotApplicableError):
             pass
@@ -294,7 +322,9 @@ class SettingsPanel(object):
             self.panel.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR)
 
         self.num_entries += 1
-        self.entries.append((lbl_ctrl, value_ctrl, value))
+        self.entries.append({"lbl_ctrl": lbl_ctrl,
+                             "val_ctrl": value_ctrl,
+                             "value": value})
 
     def add_value(self, label, value, conf=None):
         """ Add a label/value pair to the settings panel.
@@ -449,7 +479,7 @@ class SettingsPanel(object):
                     value = func()
                     for i in range(ctrl.Count):
                         if ctrl.Items[i] == value:
-                            logging.debug("Getting ComboBox value to %s",
+                            logging.debug("Getting ComboBox value %s",
                                       ctrl.GetClientData(i))
                             return ctrl.GetClientData(i)
                 return wrapper
@@ -504,7 +534,9 @@ class SettingsPanel(object):
                         flag=wx.ALL|wx.EXPAND, border=5)
 
         self.num_entries += 1
-        self.entries.append(vac)
+        self.entries.append({"lbl_ctrl": lbl_ctrl,
+                             "val_ctrl": new_ctrl,
+                             "value": value.value})
         self.fb_panel.Parent.Layout()
 
 def set_on_notify(v):
@@ -542,6 +574,8 @@ class SettingsSideBar(object):
                                     parent_frame.fp_optical_settings,
                                     "No optical microscope found")
 
+        self.settings_panels = [self._sem_panel, self._optical_panel]
+
         # Query Odemis daemon (Should move this to separate thread)
         if interface_model.ccd:
             self.add_ccd(interface_model.ccd)
@@ -549,6 +583,16 @@ class SettingsSideBar(object):
 
         if interface_model.ebeam:
             self.add_ebeam(interface_model.ebeam)
+
+    def store(self):
+        """ Store all values in the used SettingsPanels """
+        for panel in self.settings_panels:
+            panel.store()
+
+    def restore(self):
+        """ Restore all values to the used SettingsPanels """
+        for panel in self.settings_panels:
+            panel.restore()
 
     # Optical microscope settings
     def add_ccd(self, comp):
