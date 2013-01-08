@@ -25,20 +25,22 @@ setting column of the user interface.
 
 """
 
+import collections
+import logging
+import re
+
+import wx.combo
+
+import odemis.gui
+import odemis.gui.comp.text as text
+import odemis.gui.img.data as img
+import odemis.gui.util.units as utun
 from ..comp.foldpanelbar import FoldPanelItem
 from odemis.gui import util
 from odemis.gui.comp.radio import GraphicalRadioButtonControl
 from odemis.gui.comp.slider import UnitIntegerSlider, UnitFloatSlider
 from odemis.gui.util.widgets import VigilantAttributeConnector
 from odemis.model import getVAs, NotApplicableError, VigilantAttributeBase
-import collections
-import logging
-import odemis.gui
-import odemis.gui.comp.text as text
-import odemis.gui.img.data as img
-import odemis.gui.util.units as utun
-import re
-import wx.combo
 
 
 # Utility functions
