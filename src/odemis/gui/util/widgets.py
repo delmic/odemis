@@ -47,8 +47,7 @@ class VigilantAttributeConnector(object):
         """
         self.vigilattr = va
         self.ctrl = ctrl
-        # TODO None case
-        self.va_2_ctrl = call_after_wrapper(va_2_ctrl)
+        self.va_2_ctrl = call_after_wrapper(va_2_ctrl or ctrl.SetValue)
         self.ctrl_2_va = ctrl_2_va
         if events is None:
             self.change_events = ()

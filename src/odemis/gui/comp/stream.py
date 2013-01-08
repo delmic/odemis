@@ -350,7 +350,7 @@ class StreamPanelEntry(wx.PyPanel):
                               value=self.stream.brightness.value,
                               val_range=self.stream.brightness.range,
                               t_size=(40, -1),
-                              unit="",
+                              unit=None,
                               name="brightness_slider")
 
         self._gbs.Add(self._sld_brightness, (1, 1), flag=wx.EXPAND)
@@ -366,7 +366,7 @@ class StreamPanelEntry(wx.PyPanel):
                              value=self.stream.contrast.value,
                              val_range=self.stream.contrast.range,
                              t_size=(40, -1),
-                             unit="",
+                             unit=None,
                              name="contrast_slider")
 
         self._gbs.Add(self._sld_contrast, (2, 1), flag=wx.EXPAND)
