@@ -86,40 +86,40 @@ class MicroscopeViewport(wx.Panel):
 
         # TODO: should make sure that a click _anywhere_ on the legend brings
         # the focus to the view
-        
+
 #        # Make sure that mouse clicks on the icons set the correct focus
 #        self.bmpIconOpt.Bind(wx.EVT_LEFT_DOWN, self.OnChildFocus)
 #        self.bmpIconSem.Bind(wx.EVT_LEFT_DOWN, self.OnChildFocus)
 
         self.mergeSlider.Bind(wx.EVT_LEFT_UP, self.OnSlider)
         # FIXME: dragging the slider should have immediate effect on the merge ratio
-        # Need to bind on EVT_SLIDER (seems to be the new way, on any type of change), 
+        # Need to bind on EVT_SLIDER (seems to be the new way, on any type of change),
         # EVT_SCROLL_CHANGED (seems to work only on windows and gtk, and only at the end)
         # EVT_SCROLL_THUMBTRACK (seems to work always, but only dragging, not key press)
         # Maybe our Slider control need to generate wx.wxEVT_COMMAND_SLIDER_UPDATED
         # when value is changed by user in order to have EVT_SLIDER passed?
-        
+
         # Dragging the slider should set the focus to the right view
         self.mergeSlider.Bind(wx.EVT_LEFT_DOWN, self.OnChildFocus)
-        
-        # TODO hide when not optical + sem available (or more exactly when the 
+
+        # TODO hide when not optical + sem available (or more exactly when the
         # root function of the stream tree doesn't have 2 im + a merge arg)
 
-        # scale 
+        # scale
         self.scaleDisplay = ScaleWindow(self.legend_panel)
         self.scaleDisplay.SetFont(font)
-        
+
         # Horizontal Full Width text
         # TODO: allow the user to select/copy the text
         self.hfwDisplay = wx.StaticText(self.legend_panel)
-        self.hfwDisplay.SetToolTipString("Horizontal Field Width") 
+        self.hfwDisplay.SetToolTipString("Horizontal Field Width")
         self.hfwDisplay.Bind(wx.EVT_LEFT_DOWN, self.OnChildFocus)
 
         # magnification
         self.LegendMag = wx.StaticText(self.legend_panel)
         self.LegendMag.SetToolTipString("Magnification")
         self.LegendMag.Bind(wx.EVT_LEFT_DOWN, self.OnChildFocus)
-        
+
         # TODO more...
 #        self.LegendWl = wx.StaticText(self.legend_panel)
 #        self.LegendWl.SetToolTipString("Wavelength")
@@ -145,7 +145,7 @@ class MicroscopeViewport(wx.Panel):
         sliderSizer = wx.BoxSizer(wx.HORIZONTAL)
         sliderSizer.Add(self.bmpIconOpt, border=3,
                         flag=wx.ALIGN_CENTER|wx.RIGHT|wx.RESERVE_SPACE_EVEN_IF_HIDDEN)
-        sliderSizer.Add(self.mergeSlider, 
+        sliderSizer.Add(self.mergeSlider,
                         flag=wx.ALIGN_CENTER|wx.EXPAND|wx.RESERVE_SPACE_EVEN_IF_HIDDEN)
         sliderSizer.Add(self.bmpIconSem, border=3,
                         flag=wx.ALIGN_CENTER|wx.LEFT|wx.RESERVE_SPACE_EVEN_IF_HIDDEN)
@@ -153,7 +153,7 @@ class MicroscopeViewport(wx.Panel):
         legendSizer = wx.BoxSizer(wx.HORIZONTAL)
         legendSizer.Add(leftColSizer, 0, flag=wx.EXPAND|wx.ALIGN_CENTER)
         legendSizer.AddStretchSpacer(1)
-        legendSizer.Add(self.scaleDisplay, 2, border=2, 
+        legendSizer.Add(self.scaleDisplay, 2, border=2,
                         flag=wx.EXPAND|wx.ALIGN_CENTER|wx.RIGHT|wx.LEFT)
         legendSizer.AddStretchSpacer(1)
         legendSizer.Add(sliderSizer, 0, flag=wx.EXPAND|wx.ALIGN_CENTER)
@@ -199,7 +199,7 @@ class MicroscopeViewport(wx.Panel):
 
         # set/subscribe merge ratio
         mic_view.merge_ratio.subscribe(self._onMergeRatio, init=True)
-        
+
         # subscribe to image, to update legend on streamtree/image change
         mic_view.lastUpdate.subscribe(self._onImageUpdate, init=True)
         self.ShowMergeSlider(True) # FIXME: only if required by the view
@@ -216,8 +216,8 @@ class MicroscopeViewport(wx.Panel):
 #        microscope_gui.optical_emt_wavelength.subscribe(self.avWavelength)
 #        microscope_gui.optical_det_wavelength.subscribe(self.avWavelength, True)
 #        microscope_gui.optical_det_exposure_time.subscribe(self.avExposureTime, True)
-        
-        
+
+
     def getView(self):
         return self.mic_view
 
@@ -264,40 +264,40 @@ class MicroscopeViewport(wx.Panel):
         # We could use real density but how much important is it?
         mppScreen = 0.00025 # 0.25 mm/px
         label = "Mag: "
-        
+
         # three possibilities:
         # * no image => total mag (using current mpp)
         # * all images have same mpp => mag instrument * mag digital
         # * >1 mpp => total mag
-        
+
         # get all the mpps
         mpps = set()
         for s in self.mic_view.getStreams():
             im = s.image.value
             if im and im.mpp:
                 mpps.add(im.mpp)
-        
+
         if len(mpps) == 1:
             # two magnifications
             im_mpp = mpps.pop()
             magIm = mppScreen / im_mpp # as if 1 im.px == 1 sc.px
             if magIm >= 1:
-                label += "×" + units.readable_str(units.round_significant(magIm, 3))
+                label += u"×" + units.readable_str(units.round_significant(magIm, 3))
             else:
-                label += "÷" + units.readable_str(units.round_significant(1.0/magIm, 3))
+                label += u"÷" + units.readable_str(units.round_significant(1.0/magIm, 3))
             magDig = im_mpp / self.mic_view.mpp.value
             if magDig >= 1:
-                label += " ×" + units.readable_str(units.round_significant(magDig, 3))
+                label += u" ×" + units.readable_str(units.round_significant(magDig, 3))
             else:
-                label += " ÷" + units.readable_str(units.round_significant(1.0/magDig, 3))
+                label += u" ÷" + units.readable_str(units.round_significant(1.0/magDig, 3))
         else:
             # one magnification
             mag = mppScreen / self.mic_view.mpp.value
             if mag >= 1:
-                label += "×" + units.readable_str(units.round_significant(mag, 3))
+                label += u"×" + units.readable_str(units.round_significant(mag, 3))
             else:
-                label += "÷" + units.readable_str(units.round_significant(1.0/mag, 3))
-            
+                label += u"÷" + units.readable_str(units.round_significant(1.0/mag, 3))
+
         self.LegendMag.SetLabel(label)
         self.legend_panel.Layout()
 
@@ -341,7 +341,7 @@ class MicroscopeViewport(wx.Panel):
             self.ShowMergeSlider(True)
         else:
             self.ShowMergeSlider(False)
-        
+
         # magnification might have changed (eg, different number of images)
         self.UpdateMagnification()
 
@@ -354,7 +354,7 @@ class MicroscopeViewport(wx.Panel):
 
         label = unicode(win) + " nm/" + unicode(wout) + " nm"
         self.LegendWl.SetLabel(label)
-        
+
     @call_after
     def avExposureTime(self, value):
         label = unicode("%0.2f s" % (value))
