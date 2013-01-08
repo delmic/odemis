@@ -96,7 +96,7 @@ SETTINGS = {
                 "exposureTime":
                 {
                     "control_type": odemis.gui.CONTROL_SLIDER,
-                    "scale": "cubic",
+                    "scale": "log",
                     "range": (0.01, 3.00),
                     "type": "float",
                 },
@@ -138,7 +138,7 @@ SETTINGS = {
                 {
                     "control_type": odemis.gui.CONTROL_SLIDER,
                     "range": (1e-9, 0.1),
-                    "scale": "cubic",
+                    "scale": "log",
                     "type": "float",
                 },
                 "resolution":
@@ -417,8 +417,9 @@ class SettingsPanel(object):
                                              events=wx.EVT_SLIDER)
 
         elif control_type == odemis.gui.CONTROL_INT:
+            if unit == "": # don't display unit prefix if no unit
+                unit = None
             new_ctrl = text.UnitIntegerCtrl(self.panel,
-                                            -1,
                                             style=wx.NO_BORDER,
                                             unit=unit,
                                             min_val=rng[0],
@@ -429,8 +430,24 @@ class SettingsPanel(object):
 
             vac = VigilantAttributeConnector(value,
                                              new_ctrl,
-                                             new_ctrl.SetValueStr,
-                                             events=wx.EVT_TEXT_ENTER)
+                                             events=wx.EVT_COMMAND_ENTER)
+
+        elif control_type == odemis.gui.CONTROL_FLT:
+            if unit == "": # don't display unit prefix if no unit
+                unit = None
+            new_ctrl = text.UnitFloatCtrl(self.panel,
+                                          style=wx.NO_BORDER,
+                                          unit=unit,
+                                          min_val=rng[0],
+                                          max_val=rng[1],
+                                          choices=choices,
+                                          accuracy=6)
+            new_ctrl.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_EDIT)
+            new_ctrl.SetBackgroundColour(self.panel.GetBackgroundColour())
+
+            vac = VigilantAttributeConnector(value,
+                                             new_ctrl,
+                                             events=wx.EVT_COMMAND_ENTER)
 
         elif control_type == odemis.gui.CONTROL_RADIO:
             new_ctrl = GraphicalRadioButtonControl(self.panel,
@@ -509,22 +526,6 @@ class SettingsPanel(object):
                     new_ctrl.SetValue,
                     new_ctrl.GetValue,
                     events=(wx.EVT_COMBOBOX, wx.EVT_TEXT_ENTER))
-
-
-        elif control_type == odemis.gui.CONTROL_FLT:
-            new_ctrl = text.UnitFloatCtrl(self.panel,
-                                         -1,
-                                          style=wx.NO_BORDER,
-                                          unit=unit,
-                                          min_val=value.range[0],
-                                          max_val=value.range[1])
-            new_ctrl.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_EDIT)
-            new_ctrl.SetBackgroundColour(self.panel.GetBackgroundColour())
-
-            vac = VigilantAttributeConnector(value,
-                                             new_ctrl,
-                                             new_ctrl.SetValueStr,
-                                             events=wx.EVT_TEXT_ENTER)
 
         else:
             txt = util.units.readable_str(value.value, unit)

@@ -30,6 +30,7 @@ from odemis.model import VigilantAttribute, MD_POS, MD_PIXEL_SIZE, \
     MD_SENSOR_PIXEL_SIZE
 from odemis.model._vattributes import FloatContinuous
 import logging
+import numpy
 import threading
 import time
 
@@ -457,6 +458,16 @@ class SEMStream(Stream):
     Stream containing images obtained via Scanning electron microscope.
     It basically knows how to activate the scanning electron and the detector.
     """
+    def __init__(self, name, detector, dataflow, emitter):
+        Stream.__init__(self, name, detector, dataflow, emitter)
+        
+        try:
+            self._prevDwellTime = emitter.dwellTime.value
+            emitter.dwellTime.subscribe(self.onDwellTime)
+        except AttributeError:
+            # if emitter has no dwell time -> no problem
+            pass
+
 
     def onActive(self, active):
         if active:
@@ -464,7 +475,37 @@ class SEMStream(Stream):
             pass
         Stream.onActive(self, active)
 
-
+    def onDwellTime(self, value):
+        # When the dwell time changes, the new value is only used on the next
+        # acquisition. Assuming the change comes from the user (very likely), 
+        # then if the current acquisition would take a long time, cancel it, and
+        # restart acquisition so that the new value is directly used. The main
+        # goal is to avoid cases where user mistakenly put a 10+ s acquisition,
+        # and it takes ages to get back to a faster acquisition. Note: it only
+        # works if we are the only subscriber (but that's very likely).
+        
+        try:
+            if self.active.value == False:
+                # not acquiring => nothing to do
+                return
+                
+            # approximate time for the current image acquisition
+            res = self._emitter.resolution.value
+            prevDuration = self._prevDwellTime * numpy.prod(res)
+            
+            if prevDuration < 1:
+                # very short anyway, not worthy
+                return
+            
+            # TODO: do this on a rate-limited fashion (now, or ~1s)
+            # unsubscribe, and re-subscribe immediately 
+            self._dataflow.unsubscribe(self.onNewImage)
+            self._dataflow.subscribe(self.onNewImage)
+            
+        finally:
+            self._prevDwellTime = value
+        
+        
 
 class BrightfieldStream(Stream):
     """

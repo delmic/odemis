@@ -66,7 +66,7 @@ def get_si_scale(x):
     Returns a (float, string) tuple: (divisor , SI prefix)
     """
     if x == 0:
-        return (1, "")
+        return (1, u"")
     
     most_significant = math.floor(math.log10(abs(x)))
     prefix_order = (most_significant // 3) * 3 # rounding to multiple of 3
@@ -86,7 +86,7 @@ def si_scale_list(values):
         marker = max(values)
         divisor, prefix = get_si_scale(marker)
         return [v / divisor for v in values], prefix
-    return None, ""
+    return None, u""
 
 def to_string_si_prefix(x):
     """
@@ -96,7 +96,7 @@ def to_string_si_prefix(x):
     return (string)
     """
     value, prefix = to_si_scale(x)
-    return "%s %s" % (to_string_pretty(value), prefix)
+    return u"%s %s" % (to_string_pretty(value), prefix)
 
 def to_string_pretty(x):
     """
@@ -104,16 +104,16 @@ def to_string_pretty(x):
     """
     if x == 0:
         # don't consider this a float
-        return "0"
+        return u"0"
      
     if abs(x) < 1:
         # just a float
-        return "%s" % x
+        return u"%r" % x
     
     # so close from an int that it's very likely one?
     if abs(x - round(x)) < 1e-5:
         x = int(round(x)) # avoid the .0
-    return "%s" % x
+    return u"%s" % x
 
 def readable_str(value, unit=None):
     """

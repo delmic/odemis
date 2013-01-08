@@ -177,6 +177,7 @@ class SEMComedi(model.HwComponent):
         
         # acquisition thread setup
         self._acquisition_data_lock = threading.Lock()
+        self._acquisition_mng_lock = threading.Lock()
         self._acquisition_must_stop = threading.Event()
         self._acquisition_thread = None
         self._acquisitions = {} # detector -> callable (callback)
@@ -755,39 +756,46 @@ class SEMComedi(model.HwComponent):
         rperiod_ns = max(period_ns, min_rperiod_ns)
         max_osr = min(max_osr, int(math.ceil(rperiod_ns / min_rperiod_ns)))
         
-        # try to find a two periods which are exact multiples
-        # start with the best osr, and at worse down to 1
+        if max_osr == 1:
+            # go the obvious way:
+            period = self.find_closest_dwell_time(period)
+            return period, 1
+
+        # The read period should be as close as possible from the minimum read
+        # period (as long as it's equal or above). Then try to find a write 
+        # period compatible with this read period, more or less in the same order
+        # of time as given
         rcmd = comedi.cmd_struct()
         wcmd = comedi.cmd_struct()
-        for osr in range(max_osr, 1, -1): # 1 is _not_ included
-            # read period from the orignal dwell time
-            rperiod_ns = int(math.ceil(period_ns / osr))
+        
+        rperiod_ns = int(min_rperiod_ns)
+        for i in range(5):
+            # it'll probably work on the first time, but just in case, we try
+            # 5 times, with slighly bigger read periods
             comedi.get_cmd_generic_timed(self._device, self._ai_subdevice,
                                                       rcmd, nrchans, rperiod_ns)
-            if rcmd.scan_begin_arg != rperiod_ns:
-                continue
+            rperiod_ns = rcmd.scan_begin_arg
             
-            # write period is OSR * read period
-            wperiod_ns = rperiod_ns * osr
-            if not self._test:
-                # TODO use command_test(), and check for return value 4 to know
-                # if time was changed. That should be a bit faster.
+            # get a write period multiple of it
+            for osr in range(max_osr, max_osr+5):
+                wperiod_ns = rperiod_ns * osr
+                if self._test:
+                    return wperiod_ns / 1e9, osr
+                # check this _exact_ write period is compatible
                 comedi.get_cmd_generic_timed(self._device, self._ao_subdevice,
                                                   wcmd, nwchans, wperiod_ns)
-                if wcmd.scan_begin_arg != wperiod_ns:
-                    continue
-            
-            # found something good!
-            logging.debug("Found over-sampling rate: %g x %d = %g", rperiod_ns, osr, wperiod_ns)
-            period = wperiod_ns / 1e9
-            return period, osr
-            
-        if max_osr >= 2:
-            logging.debug("Failed to find compatible over-sampling rate for dwell time of %g s", period)
-            
-        # at least osr = 1 ought to work
-        period_ns = self.find_closest_dwell_time(period)
-        return period_ns, 1
+                if wcmd.scan_begin_arg == wperiod_ns:
+                    # we've found it!
+                    logging.debug("Found over-sampling rate: %g ns x %d = %g ns", rperiod_ns, osr, wperiod_ns)
+                    return wperiod_ns / 1e9, osr
+                
+            # try a bigger read period
+            rperiod_ns = int(math.ceil(rperiod_ns * 1.1))
+
+        # We ought to never come here, but just in case, don't completely fail        
+        logging.error("Failed to find compatible over-sampling rate for dwell time of %g s", period)
+        period = self.find_closest_dwell_time(period)
+        return period, 1
     
     def write_data(self, channels, period, data):
         """
@@ -1240,7 +1248,10 @@ class SEMComedi(model.HwComponent):
                 raise KeyError("Channel %d already set up for acquisition.", detector.channel)
                
             self._acquisitions[detector] = callback
-            
+        
+        # the thread uses acquisition_data_lock, so we should never wait for
+        # the thread to stop with this lock acquired.
+        with self._acquisition_mng_lock:
             self._wait_acquisition_stopped() # only wait if acquisition thread is stopping
             if not self._acquisition_thread or not self._acquisition_thread.isAlive():
                 # Set up thread
@@ -1256,9 +1267,12 @@ class SEMComedi(model.HwComponent):
         """
         with self._acquisition_data_lock:
             del self._acquisitions[detector]
-            if not self._acquisitions:
-                # Nothing to acquire => stop the thread (almost) immediately
-                self._req_stop_acquisition()
+            if self._acquisitions:
+                # Still something to acquire => keep the thread running
+                return
+        
+        with self._acquisition_mng_lock:
+            self._req_stop_acquisition()
     
     def _req_stop_acquisition(self):
         """
@@ -1325,7 +1339,7 @@ class SEMComedi(model.HwComponent):
                         continue
                 except CancelledError:
                     # either because must be stopped or settings updated
-                    logging.debug("Restarting acquisition after it was cancelled")
+                    logging.debug("Acquisition was cancelled")
                     continue
             
                 nfailures = 0
@@ -1355,7 +1369,7 @@ class SEMComedi(model.HwComponent):
                 gc.collect()
 
         except:
-            logging.exception("Failed to acquire an image")
+            logging.exception("Unexpected failure during image acquisition")
         finally:
             self.set_to_resting_position()
             logging.debug("Acquisition thread closed")

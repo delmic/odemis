@@ -243,7 +243,8 @@ class Slider(wx.PyPanel):
 
         self.CaptureMouse()
         self.set_position_value(event.GetX())
-        self.Refresh()
+        # TODO: Should get the focus (and not give it to its text field)
+#        self.SetFocus()
 
     def OnLeftUp(self, event=None):
         """ This event handler is called when the left mouse button is released
@@ -252,8 +253,6 @@ class Slider(wx.PyPanel):
         If the slider had the mouse captured, it will be released.
 
         """
-
-        logging.warn("rel 1")
 
         if self.HasCapture():
             self.ReleaseMouse()
@@ -266,11 +265,11 @@ class Slider(wx.PyPanel):
         if self.HasCapture():
             # Set the value according to the slider's x position
             self.set_position_value(event.GetX())
-            self.Refresh()
 
     def set_position_value(self, xPos):
         """ This method sets the value of the slider according to the x position
         of the slider handle.
+        Called when the user changes the value.
 
         :param Xpos (int): The x position relative to the left side of the
                            slider
@@ -287,8 +286,8 @@ class Slider(wx.PyPanel):
             self.handlePos = xPos - self.half_h_width
 
         #calculate value, based on pointer position
-        #self.current_value = self._pixel_to_val()
         self._SetValue(self._pixel_to_val())
+        self.send_slider_update_event()
 
     def _val_to_pixel(self, val=None):
         """ Convert a slider value into a pixel position """
@@ -325,6 +324,9 @@ class Slider(wx.PyPanel):
         """ Set the value of the slider
 
         If the slider is currently being dragged, the value will *NOT* be set.
+
+        It doesn't send an event that the value was modified. To send an
+        event, you need to call send_slider_update_event()
         """
         # If the user is *NOT* dragging...
         if not self.HasCapture():
@@ -356,8 +358,6 @@ class Slider(wx.PyPanel):
 
         self.handlePos = self._val_to_pixel()
 
-        self.send_slider_update_event()
-
         self.Refresh()
 
     def GetValue(self):
@@ -379,10 +379,16 @@ class NumberSlider(Slider):
 
     """
 
-    def __init__(self, parent, id=wx.ID_ANY, value=0.0, val_range=(0.0, 1.0),
+    def __init__(self, parent, id=wx.ID_ANY, value=0, val_range=(0.0, 1.0),
                  size=(-1, -1), pos=wx.DefaultPosition, style=wx.NO_BORDER,
                  name="Slider", scale=None, t_class=UnitFloatCtrl,
                  t_size=(50, -1), unit="", accuracy=None):
+        """
+        unit (None or string): if None then display numbers as-is, otherwise
+          adds a SI prefix and unit.
+        accuracy (None or int): number of significant digits. If None, displays
+          almost all the value.
+        """
         Slider.__init__(self, parent, id, value, val_range, size,
                         pos, style, name, scale)
 
@@ -419,17 +425,14 @@ class NumberSlider(Slider):
             if self.GetValue() != text_val:
                 logging.debug("Updating slider value to %s", text_val)
                 self._SetValue(text_val)
+                self.send_slider_update_event()
                 evt.Skip()
 
     def _update_linked_field(self, value):
         """ Update any linked field to the same value as this slider
         """
-        if self.linked_field.GetValue() != value:
-            logging.debug("Updating number field to %s", value)
-            if hasattr(self.linked_field, 'SetValueStr'):
-                self.linked_field.SetValueStr(value)
-            else:
-                self.linked_field.SetValue(value)
+        logging.debug("Updating number field to %s", value)
+        self.linked_field.ChangeValue(value)
 
     def set_position_value(self, xPos):
         """ Overridden method, so the linked field update could be added
@@ -448,8 +451,6 @@ class NumberSlider(Slider):
     def OnLeftUp(self, event=None):
         """ Overridden method, so the linked field update could be added
         """
-
-        logging.warn("relase")
 
         if self.HasCapture():
             Slider.OnLeftUp(self, event)
@@ -488,25 +489,4 @@ class UnitFloatSlider(NumberSlider):
         kwargs['accuracy'] = kwargs.get('accuracy', 3)
 
         NumberSlider.__init__(self, *args, **kwargs)
-
-    def _update_slider(self, evt):
-        """ Private event handler called when the slider should be updated, for
-            example when a linked text field receives a new value.
-
-        """
-
-        if not self.HasCapture():
-            text_val = self.linked_field.GetValue()
-
-            # FIXME: (maybe?)
-            # Setting and retrieving float values with VigilantAttributeProxy
-            # objects resulted in very small differences in value making an
-            # inequality check useless.
-            # The problem probably resides with Pyro, that does something to
-            # the float values it's handed (like a cast?).
-
-            if abs(self.GetValue() - text_val) > 1e-6:
-                logging.debug("Number changed, updating slider to %s", text_val)
-                self._SetValue(text_val)
-                evt.Skip()
 

@@ -30,6 +30,7 @@ class TestUnits(unittest.TestCase):
                   ((-1600, 1), -2000),
                   ((0.0001236, 3), 0.000124),
                   ((0, 5), 0),
+                  ((4.375479375074184e-6, 3), 4.38e-6),
                   ]
         for (i, eo) in values:
             o = units.round_significant(*i)
