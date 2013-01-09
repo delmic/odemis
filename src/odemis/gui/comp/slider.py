@@ -247,9 +247,7 @@ class Slider(wx.PyControl):
 
         self.CaptureMouse()
         self.set_position_value(event.GetX())
-        # TODO: Should get the focus (and not give it to its text field)
         self.SetFocus()
-        #self.SetFocusIgnoringChildren()
 
     def OnLeftUp(self, event=None):
         """ This event handler is called when the left mouse button is released
@@ -346,9 +344,9 @@ class Slider(wx.PyControl):
         if not isinstance(value, (int, long, float)):
             raise TypeError("Illegal data type %s" % type(value))
 
-        if self.current_value == value:
-            logging.debug("Identical value %s ignored", value)
-            return
+        # if self.current_value == value:
+        #     logging.debug("Identical value %s ignored", value)
+        #     return
 
         logging.debug("Setting slider value to %s", value)
 

@@ -57,11 +57,7 @@ class VigilantAttributeConnector(object):
             self.change_events = events
 
         # Subscribe to the vigilant attribute and initialize
-
-        self.vigilattr.subscribe(self.va_2_ctrl, init=True)
-
-        for event in self.change_events:
-            self.ctrl.Bind(event, self._on_value_change)
+        self._connect(init=True)
 
     def _on_value_change(self, evt):
         """ This method is called when the value of the control is changed.
@@ -78,6 +74,20 @@ class VigilantAttributeConnector(object):
             logging.error("Illegal value: %s", oobe)
         finally:
             evt.Skip()
+
+    def pause(self):
+        """ Temporarily prevent vigilant attributes from updating controls """
+        self.vigilattr.unsubscribe(self.va_2_ctrl)
+
+    def resume(self):
+        """ Resume updating controls """
+        self.vigilattr.subscribe(self.va_2_ctrl, init=True)
+
+    def _connect(self, init):
+        logging.debug("Connecting VigilantAttributeConnector")
+        self.vigilattr.subscribe(self.va_2_ctrl, init)
+        for event in self.change_events:
+            self.ctrl.Bind(event, self._on_value_change)
 
     def disconnect(self):
         logging.debug("Disconnecting VigilantAttributeConnector")

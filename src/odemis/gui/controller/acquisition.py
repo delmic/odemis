@@ -327,9 +327,11 @@ class AcquisitionDialog(xrcfr_acq):
         self.cmb_presets.Select(0)
 
         # Store current values
-        wx.GetApp().settings_controller.store()
+        main_settings_controller = wx.GetApp().settings_controller
+        main_settings_controller.store()
+        main_settings_controller.pause()
 
-        self.settings_controller = SettingsSideBar(interface_model, self)
+        self.settings_controller = SettingsSideBar(interface_model, self, True)
 
         self.btn_cancel.Bind(wx.EVT_BUTTON, self.on_cancel)
         self.btn_change_file.Bind(wx.EVT_BUTTON, self.on_change_file)
@@ -356,8 +358,11 @@ class AcquisitionDialog(xrcfr_acq):
 
 
     def on_cancel(self, evt):
+        logging.debug("Canceling acquisition")
         # Restore current values
-        wx.GetApp().settings_controller.restore()
+        main_settings_controller = wx.GetApp().settings_controller
+        main_settings_controller.resume()
+        main_settings_controller.restore()
 
         self.Close()
         self.Destroy()
