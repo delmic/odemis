@@ -37,13 +37,14 @@ class VigilantAttributeConnector(object):
         """
         va (VigilantAttribute): the VA to connect with
         ctrl (wx.Window): a wx widget to connect to
-        va_2_ctrl (None or callable ((value) -> None)): a function to be called when the
-          VA is updated, to update the widget. If None, try to use the default
-          SetValue().
+        va_2_ctrl (None or callable ((value) -> None)): a function to be called
+            when the VA is updated, to update the widget. If None, try to use
+            the default SetValue().
         ctrl_2_va (None or callable ((None) -> value)): a function to be called
-          when the widget is updated, to update the VA. If None, try to use the
-          default GetValue().
-        events (None or wx.EVT_* or tuple of wx.EVT_*): events to bind to update the value of the VA
+            when the widget is updated, to update the VA. If None, try to use
+            the default GetValue().
+        events (None or wx.EVT_* or tuple of wx.EVT_*): events to bind to update
+            the value of the VA
         """
         self.vigilattr = va
         self.ctrl = ctrl

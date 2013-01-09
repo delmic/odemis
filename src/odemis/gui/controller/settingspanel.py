@@ -78,6 +78,18 @@ def traverse(seq_val):
     else:
         yield seq_val
 
+def bind_highlight(ctrl, vat, *evt_types):
+    def_val = vat.value
+    def hl(evt):
+        eo = evt.GetEventObject()
+        if eo.GetValue() == def_val:
+            eo.SetForegroundColour(FOREGROUND_COLOUR_EDIT)
+        else:
+            eo.SetForegroundColour(FOREGROUND_COLOUR_HIGHLIGHT)
+
+    for e in evt_types:
+        ctrl.Bind(e, hl)
+
 # Default settings for the different components.
 # (Just a ccd for now, 2012-8-27)
 # Values in the settings dictionary will be used to steer the default
@@ -243,8 +255,6 @@ class SettingsPanel(object):
                     entry["val_ctrl"].SetValue(value)
                 else:
                     continue
-
-
 
     def pause(self):
         """ Pause VigilantAttributeConnector related control updates """
@@ -484,6 +494,11 @@ class SettingsPanel(object):
             vac = VigilantAttributeConnector(value,
                                              new_ctrl,
                                              events=wx.EVT_COMMAND_ENTER)
+
+            if self.highlight_change:
+                bind_highlight(new_ctrl, value,
+                               wx.EVT_TEXT, wx.EVT_COMMAND_ENTER)
+
 
         elif control_type == odemis.gui.CONTROL_RADIO:
             new_ctrl = GraphicalRadioButtonControl(self.panel,
