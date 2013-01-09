@@ -14,11 +14,11 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
+from __future__ import division
 from libtiff import TIFF
 from odemis import __version__, model
-from osgeo import gdal_array
-import Image
-import gdal
+import libtiff.libtiff_ctypes as T # for the constant names
+import logging
 import numpy
 import time
 
@@ -38,80 +38,9 @@ FORMAT = "TIFF"
 EXTENSIONS = [".tiff", ".tif"]
 
 
-# Conversion from our internal tagname convention to (gdal) TIFF tagname
-# string -> (string, callable)
-DATagToTiffTag = {model.MD_SW_VERSION: ("TIFFTAG_SOFTWARE", str),
-                  model.MD_HW_NAME: ("TIFFTAG_HOSTCOMPUTER", str),
-                  model.MD_ACQ_DATE: ("TIFFTAG_DATETIME", lambda x: time.strftime("%a, %d %b %Y %H:%M:%S +0000", time.gmtime(x)))
-                  }
-
-# Export part
-# GDAL Python API is documented here: http://gdal.org/python/
-def _saveAsTiffGDAL(data, filename):
-    """
-    Saves a DataArray as a TIFF file.
-    data (ndarray): 2D data of int or float
-    filename (string): name of the file to save
-    """
-    driver = gdal.GetDriverByName("GTiff")
-    
-    # gdal expects the data to be in 'F' order, but it's in 'C'
-    # TODO check this from numpy!
-    data.shape = (data.shape[1], data.shape[0])
-    ds = gdal_array.OpenArray(data)
-    data.shape = (data.shape[1], data.shape[0])
-    for key, val in data.metadata.items():
-        if key in DATagToTiffTag:
-            ds.SetMetadataItem(DATagToTiffTag[key][0], DATagToTiffTag[key][1](val))
-    driver.CreateCopy(filename, ds, options=["PROFILE=BASELINE"]) # , options=["COMPRESS=LZW"] # LZW makes test image bigger
-    
-def _saveAsMultiTiffGDAL(ldata, filename):
-    """
-    Saves a list of DataArray as a multiple-page TIFF file.
-    ldata (list of ndarray): list of 2D data of int or float. Should have at least one array
-    filename (string): name of the file to save
-    """
-    # FIXME: This doesn't work because GDAL generates one channel per image 
-    # (band) instead of one _page_. It might be possible to use the notion of 
-    # subdatasets but it's not clear of GTiff supports them. 
-    # see http://www.gdal.org/gdal_tutorial.html
-    # and http://www.gdal.org/frmt_hdf5.html 
-    # and http://osgeo-org.1560.n6.nabble.com/ngpython-and-GetSubDataSets-td3760233.html
-    assert(len(ldata) > 0)
-    driver = gdal.GetDriverByName("GTiff")
-    
-    data0 = ldata[0]
-    datatype = gdal_array.NumericTypeCodeToGDALTypeCode(data0.dtype.type)
-    # FIXME: we assume all the data is the same shape and type
-    ds = driver.Create(filename, data0.shape[1], data0.shape[0], len(ldata), datatype)
-    
-    for i, data in enumerate(ldata):
-        data.shape = (data.shape[1], data.shape[0])
-        ds.GetRasterBand(i+1).WriteArray(data)
-        data.shape = (data.shape[1], data.shape[0])
-        
-def _saveAsTiffPIL(array, filename):
-    """
-    Saves an array as a TIFF file.
-    array (ndarray): 2D array of int or float
-    filename (string): name of the file to save
-    """
-    # Two memory copies for one conversion! because of the stride, fromarray() does as bad
-    pil_im = Image.fromarray(array)
-    #pil_im = Image.fromstring('I', size, array.tostring(), 'raw', 'I;16', 0, -1)
-    # 16bits files are converted to 32 bit float TIFF with PIL
-    pil_im.save(filename, "TIFF")
-
-
 # For tags, see convert.py of libtiff.py which has some specific for microscopy
 # Or use the LSM format (from Carl Zeiss)?
 
-DATagToLibTiffTag = {model.MD_SW_VERSION: ("SOFTWARE", 
-                        lambda x: __version__.shortname + " " + str(x)),
-                  model.MD_HW_NAME: ("MAKE", str), # Scanner manufacturer   
-                  model.MD_HW_VERSION: ("MODEL", str), # Scanner name
-                  model.MD_ACQ_DATE: ("DATETIME", lambda x: time.strftime("%Y:%m:%d %H:%M:%S", time.gmtime(x)))
-                  }
 #TIFFTAG_DOCUMENTNAME
 #TIFFTAG_ARTIST
 #TIFFTAG_COPYRIGHT
@@ -125,6 +54,58 @@ DATagToLibTiffTag = {model.MD_SW_VERSION: ("SOFTWARE",
 #TIFFTAG_IMAGEDESCRIPTION
 # TODO how to put our own tags? => use ome xml in ImageDescription?
 
+def _convertToTiffTag(metadata):
+    """
+    Converts DataArray tags to libtiff tags.
+    metadata (dict of tag -> value): the metadata of a DataArray
+    returns (dict of tag -> value): the metadata as compatible for libtiff
+    """
+    tiffmd = {}
+    # we've got choice between inches and cm... so it's easy 
+    tiffmd[T.TIFFTAG_RESOLUTIONUNIT] = T.RESUNIT_CENTIMETER
+    for key, val in metadata.items():
+        if key == model.MD_SW_VERSION:
+            tiffmd[T.TIFFTAG_SOFTWARE] = __version__.shortname + " " + val
+        elif key == model.MD_HW_NAME:
+            tiffmd[T.TIFFTAG_MAKE] = val
+        elif key == model.MD_HW_VERSION:
+            tiffmd[T.TIFFTAG_MODEL] = val
+        elif key == model.MD_ACQ_DATE:
+            tiffmd[T.TIFFTAG_DATETIME] = time.strftime("%Y:%m:%d %H:%M:%S", time.gmtime(val))
+        elif key == model.MD_PIXEL_SIZE:
+            # convert m/px -> px/cm
+            try:
+                tiffmd[T.TIFFTAG_XRESOLUTION] = (1 / val[0]) / 100
+                tiffmd[T.TIFFTAG_YRESOLUTION] = (1 / val[1]) / 100
+            except ZeroDivisionError:
+                logging.debug("Pixel size tag is incorrect: %r", val)
+        elif key == model.MD_POS:
+            # convert m -> cm
+            # XYPosition doesn't support negative values. So instead, we shift
+            # everything by 1 m, which should be enough as samples are typically
+            # a few cm big. The most important is that the image positions are  
+            # correct relatively to each other (for a given sample).
+            tiffmd[T.TIFFTAG_XPOSITION] = 100 + val[0] * 100
+            tiffmd[T.TIFFTAG_YPOSITION] = 100 + val[1] * 100
+        elif key == model.MD_ROTATION:
+            # TODO: should use the coarse grain rotation to update Orientation
+            # and update rotation information to -45< rot < 45 -> maybe GeoTIFF's ModelTransformationTag?
+            # or actually rotate the data?
+            logging.info("Metadata tag '%s' skipped when saving TIFF file", key)
+        # TODO MD_BPP : the actual bit size of the detector 
+        elif key == model.MD_DESCRIPTION:
+            # We don't use description as it's used for OME-TIFF
+            tiffmd[T.TIFFTAG_PAGENAME] = val
+        # TODO save the brightness and contrast applied by the user?
+        # Could use GrayResponseCurve, DotRange, or TransferFunction?
+        # TODO save the tint applied by the user? maybe WhitePoint can help
+        # TODO save username as "Artist" ? => not gonna fly if the user is "odemis"
+        else:
+            logging.debug("Metadata tag '%s' skipped when saving TIFF file", key)
+    
+    return tiffmd
+    
+
 def _saveAsTiffLT(filename, data, thumbnail):
     """
     Saves a DataArray as a TIFF file.
@@ -133,17 +114,27 @@ def _saveAsTiffLT(filename, data, thumbnail):
     """
     _saveAsMultiTiffLT(filename, [data], thumbnail)
 
-def _saveAsMultiTiffLT(filename, ldata, thumbnail):
+def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True):
     """
     Saves a list of DataArray as a multiple-page TIFF file.
     filename (string): name of the file to save
     ldata (list of ndarray): list of 2D data of int or float. Should have at least one array
+    thumbnail (None or numpy.array): see export
+    compressed (boolean): whether the file is LZW compressed or not.
     """
     tif = TIFF.open(filename, mode='w')
+    
+    # According to this page: http://www.openmicroscopy.org/site/support/file-formats/ome-tiff/ome-tiff-data
+    # LZW is a good trade-off between compatibility and small size (reduces file
+    # size by about 2). => that's why we use it by default
+    if compressed:
+        compression = "lzw"
+    else:
+        compression = None
 
     if thumbnail is not None:
         # save the thumbnail just as the first image
-        tif.SetField("ImageDescription", "Composited image")
+        tif.SetField(T.TIFFTAG_PAGENAME, "Composited image")
 
         # FIXME:
         # libtiff has a bug: it thinks that RGB image are organised as
@@ -153,7 +144,7 @@ def _saveAsMultiTiffLT(filename, ldata, thumbnail):
             thumbnail = numpy.rollaxis(thumbnail, 2) # a new view
         
         # write_rgb makes it clever to detect RGB vs. Greyscale
-        tif.write_image(thumbnail, compression="lzw", write_rgb=True)
+        tif.write_image(thumbnail, compression=compression, write_rgb=True)
         
         # TODO also save it as thumbnail of the image (in limited size)
         # see  http://www.libtiff.org/man/thumbnail.1.html
@@ -201,12 +192,11 @@ def _saveAsMultiTiffLT(filename, ldata, thumbnail):
         
     for data in ldata:
         # Save metadata (before the image)
-        for key, val in data.metadata.items():
-            if key in DATagToLibTiffTag:
-                tag, converter = DATagToLibTiffTag[key]
-                tif.SetField(tag, converter(val))
+        tags = _convertToTiffTag(data.metadata)
+        for key, val in tags.items():
+            tif.SetField(key, val)
         
-        tif.write_image(data, compression="lzw")
+        tif.write_image(data, compression=compression)
 
 def export(filename, data, thumbnail=None):
     '''

@@ -49,6 +49,7 @@ MD_SENSOR_SIZE = "Sensor size" # px, px
 MD_SENSOR_TEMP = "Sensor temperature" # C
 MD_POS = "Centre position" # (m, m), location of the picture centre relative to top-left of the sample)
 # Note that the following two might be a set of ranges
+MD_ROTATION = "Rotation" # degree (0<=float<360) rotation applied to the image (from its center) counter-clockwise 
 MD_IN_WL = "Input wavelength range" # (m, m), lower and upper range of the wavelength input
 MD_OUT_WL = "Output wavelength range"  # (m, m), lower and upper range of the filtered wavelength before the camera
 MD_LIGHT_POWER = "Light power" # W, power of the emitting light
@@ -58,6 +59,10 @@ MD_FILTER_NAME = "Filter name" # str, product name of the light filter
 MD_DWELL_TIME = "Pixel dwell time" # s (float), time the electron beam spends per pixel
 MD_EBEAM_ENERGY = "Electron beam energy" # eV (float), energy of the electron beam TODO: in SI, ie, Joules? 
 MD_EBEAM_SPOT_DIAM = "Electron beam spot diameter" # m (float), approximate diameter of the electron beam spot (typically function of the current)  
+
+# The following tags are not to be filled at acquisition, but by the user interface
+MD_DESCRIPTION = "Description" # (string) User-friendly name that describes what this acquisition is
+MD_USER_NOTE = "User note" # (string) Whatever comment the user has added to the image  
 
 class DataArray(numpy.ndarray):
     """
