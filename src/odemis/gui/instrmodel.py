@@ -361,6 +361,16 @@ class Stream(object):
         # TODO should be a set
         self.warnings = model.ListVA([]) # should only contains WARNING_*
 
+    def estimateAcquisitionTime(self):
+        """
+        Estimate the time it will take to acquire one image with the current
+        settings of the detector and emitter.
+        returns (0 <= float): approximate time in s that it will take
+        """
+        # default implementation is very hopeful, but not exactly 0, to take
+        # into account infrastructure overhead.
+        return 0.1
+
     def _removeWarnings(self, warnings):
         """
         Remove all the given warnings, if they are present
@@ -468,6 +478,24 @@ class SEMStream(Stream):
             # if emitter has no dwell time -> no problem
             pass
 
+    def estimateAcquisitionTime(self):
+        # each pixel * dwell time + set up overhead
+        
+        try:
+            res = list(self._emitter.resolution.value)
+            # Typically there is few more pixels inserted at the beginning of each
+            # line for the settle time of the beam. We guesstimate by justing adding
+            # 1 pixel to each line
+            if len(res) == 2: 
+                res[1] += 1
+            else:
+                logging.warning("Resolution of scanner is not 2 dimension, time estimation might be wrong")
+            duration = self._emitter.dwellTime * numpy.prod(res) + 0.1
+            
+            return duration
+        except:
+            logging.exception("Exception while trying to estimate time of SEM acquisition")
+            return Stream.estimateAcquisitionTime(self)
 
     def onActive(self, active):
         if active:
@@ -505,9 +533,29 @@ class SEMStream(Stream):
         finally:
             self._prevDwellTime = value
         
-        
+class CameraStream(Stream):
+    """
+    Abstract class representing all streams which have a digital camera as
+    detector. Used to share time estimation mostly only.
+    """
+    def estimateAcquisitionTime(self):
+        # exposure time + readout time * pixels (if CCD) + set-up time
+        try:
+            exp = self._detector.exposureTime.value
+            res = self._detector.resolution.value
+            try:
+                readout = 1. / self._detector.readoutRate.value
+            except AttributeError:
+                # let's assume it's super fast
+                readout = 0
+            
+            duration = exp + numpy.prod(res) * readout + 0.1
+            return duration
+        except:
+            logging.exception("Exception while trying to estimate time of SEM acquisition")
+            return Stream.estimateAcquisitionTime(self)
 
-class BrightfieldStream(Stream):
+class BrightfieldStream(CameraStream):
     """
     Stream containing images obtained via optical brightfield illumination.
     It basically knows how to select white light and disable any filter.
@@ -535,7 +583,7 @@ class BrightfieldStream(Stream):
         self._emitter.emissions.value = em
 
 
-class FluoStream(Stream):
+class FluoStream(CameraStream):
     """
     Stream containing images obtained via epi-fluorescence.
     It basically knows how to select the right emission/filtered wavelengths,
