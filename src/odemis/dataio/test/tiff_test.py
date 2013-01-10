@@ -24,8 +24,10 @@ import libtiff
 import libtiff.libtiff_ctypes as T # for the constant names
 import numpy
 import os
+import re
 import time
 import unittest
+import xml.etree.ElementTree as ET
 
 FILENAME = "test" + tiff.EXTENSIONS[0] 
 class TestTiffIO(unittest.TestCase):
@@ -135,9 +137,10 @@ class TestTiffIO(unittest.TestCase):
                     model.MD_BPP: 12,
                     model.MD_PIXEL_SIZE: (1e-6, 2e-5), # m/px
                     model.MD_POS: (1e-3, -30e-3), # m
+                    model.MD_EXP_TIME: 1.2, #s
                     }
         
-        data = model.DataArray(numpy.zeros(size[-1:-3:-1], dtype), metadata=metadata)     
+        data = model.DataArray(numpy.zeros((size[1], size[0]), dtype), metadata=metadata)     
         
         # export
         tiff.export(FILENAME, data)
@@ -168,6 +171,24 @@ class TestTiffIO(unittest.TestCase):
         omemd = imo.IFD[0].get_value("ImageDescription")
         self.assertTrue(omemd.startswith('<?xml') or omemd[:4].lower()=='<ome')
         
+        # remove "xmlns" which is the default namespace and is appended everywhere
+        omemd = re.sub('xmlns="http://www.openmicroscopy.org/Schemas/OME/....-.."',
+                       "", omemd, count=1)
+        root = ET.fromstring(omemd)
+        ns = {"ome": root.tag.rsplit("}")[0][1:]} # read the default namespace
+        roottag = root.tag.split("}")[-1]
+        self.assertEqual(roottag.lower(), "ome")
+        
+        self.assertEqual(len(root.findall("Image")), 1)
+        ime = root.find("Image")
+        ifdn = int(ime.find("Pixels/TiffData").get("IFD", "0"))
+        self.assertEqual(ifdn, 0)
+        sx = int(ime.find("Pixels").get("SizeX")) # px
+        self.assertEqual(size[0], sx)
+        psx = float(ime.find("Pixels").get("PhysicalSizeX")) # um
+        self.assertAlmostEqual(metadata[model.MD_PIXEL_SIZE][0], psx * 1e-6)
+        exp = float(ime.find("Pixels/Plane").get("ExposureTime")) # s
+        self.assertAlmostEqual(metadata[model.MD_EXP_TIME], exp)
         
 def rational2float(rational):
     """

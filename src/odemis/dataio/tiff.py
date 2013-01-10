@@ -37,7 +37,7 @@ import xml.etree.ElementTree as ET
 # User-friendly name
 FORMAT = "TIFF"
 # list of file-name extensions possible, the first one is the default when saving a file 
-EXTENSIONS = [".tiff", ".tif"]
+EXTENSIONS = [".ome.tiff", ".ome.tif", ".tiff", ".tif"]
 
 
 # For tags, see convert.py of libtiff.py which has some specific for microscopy
@@ -132,7 +132,7 @@ def _convertToOMEMD(images):
 #        + Objective
 #        + Filter
 #      + Image (*)         # To describe a set of images by the same instrument
-#        + Description
+#        + Description     # Not sure what to put (Image has "Name" attribute) => simple user note?
 #        + AcquisitionDate # time of acquisition of the (first) image
 #        + ExperimentRef
 #        + ExperimenterRef
@@ -164,11 +164,128 @@ def _convertToOMEMD(images):
     
     # for each set of images from the same instrument, add them
     
+    # TODO: don't expect every image to be from different instrument, but group
+    # them according to their metadata (and shape)
+    for i in range(len(images)):
+        idx = [i]
+        _addImageElement(root, images, idx)
+    
     ometxt = ('<?xml version="1.0" encoding="UTF-8"?>' +
               ET.tostring(root, encoding="utf-8")) 
     return ometxt 
-    
 
+def _addImageElement(root, das, idx):
+    """
+    Add the metadata of a list of DataArray to a OME-XML root element 
+    root (Element): the root element
+    das (list of DataArray): all the images of the final TIFF file
+    idx (list of int): the indexes of DataArray to add
+    """
+    idnum = len(root.findall("Image"))
+    ime = ET.SubElement(root, "Image", attrib={"ID": "Image:%d" % idnum})
+
+    # compute a common metadata
+    globalMD = {}
+    for i in idx:
+        globalMD.update(das[i].metadata)
+    
+    # find out about the common attribute (Name)
+    if model.MD_DESCRIPTION in globalMD:
+        ime.attrib["Name"] = globalMD[model.MD_DESCRIPTION]
+    
+    # find out about the common sub-elements (time, user note, shape)  
+    if model.MD_USER_NOTE in globalMD:
+        desc = ET.SubElement(ime, "Description")
+        desc.text = globalMD[model.MD_USER_NOTE]
+    
+    # TODO: should be the earliest time?
+    globalAD = None
+    if model.MD_ACQ_DATE in globalMD:
+        ad = ET.SubElement(ime, "AcquisitonDate")
+        globalAD = globalMD[model.MD_ACQ_DATE]
+        ad.text = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(globalAD))
+    
+    # TODO: check that all the DataArrays have the same shape
+    da0 = das[idx[0]]
+    pixels = ET.SubElement(ime, "Pixels", attrib={
+                              "ID": "Pixels:%d" % idnum,
+                              "DimensionOrder": "XYZTC", # we don't have ZT so it doesn't matter
+                              "Type": "%s" % da0.dtype, # seems to be compatible in general
+                              "SizeX": "%d" % da0.shape[1], # numpy shape is reversed
+                              "SizeY": "%d" % da0.shape[0],
+                              "SizeZ": "1", # for now, always one
+                              "SizeT": "1", # for now, always one
+                              "SizeC": "%d" % len(idx),
+                              })
+    # Add optional values
+    if model.MD_PIXEL_SIZE in globalMD:
+        pxs = globalMD[model.MD_PIXEL_SIZE]
+        pixels.attrib["PhysicalSizeX"] = "%f" % (pxs[0] * 1e6) # in µm
+        pixels.attrib["PhysicalSizeY"] = "%f" % (pxs[1] * 1e6) # in µm
+    
+    # For each DataArray, add a Channel, Plane and TiffData
+    subid = 0
+    for i in idx:
+        da = das[i]
+        
+        # Channel Element
+        chan = ET.SubElement(pixels, "Channel", attrib={
+                               "ID": "Channel:%d:%d" % (idnum, subid)})
+        # TODO Name attrib for Filtered color streams?
+        # TODO Color attrib for tint?
+        # TODO Fluor attrib for the dye?
+        if model.MD_IN_WL in da.metadata:
+            iwl = da.metadata[model.MD_IN_WL]
+            xwl = numpy.mean(iwl) * 1e9 # in nm
+            chan.attrib["ExcitationWavelength"] = xwl
+            
+            # if input wavelength range is small, it means we are in epifluoresence
+            if abs(iwl[1] - iwl[0]) < 100e-9:
+                chan.attrib["IlluminationType"] = "Epifluorescence"
+                chan.attrib["AcquisitionMode"] = "WideField"
+                chan.attrib["ContrastMethod"] = "Fluorescence"
+            else:
+                chan.attrib["IlluminationType"] = "Epifluorescence"
+                chan.attrib["AcquisitionMode"] = "WideField"
+                chan.attrib["ContrastMethod"] = "Brightfield"
+
+        if model.MD_OUT_WL in da.metadata:
+            owl = da.metadata[model.MD_OUT_WL]
+            ewl = numpy.mean(owl) * 1e9 # in nm
+            chan.attrib["EmissionWavelength"] = ewl
+
+        # Plane Element
+        plane = ET.SubElement(pixels, "Plane", attrib={
+                               "TheZ": "0",
+                               "TheT": "0",
+                               "TheC": "%d" % subid,
+                               })
+        if model.MD_ACQ_DATE in da.metadata:
+            diff = da.metadata[model.MD_ACQ_DATE] - globalAD
+            plane.attrib["DeltaT"] = "%.12f" % diff
+            
+        if model.MD_EXP_TIME in da.metadata:
+            exp = da.metadata[model.MD_EXP_TIME]
+            plane.attrib["ExposureTime"] = "%.12f" % exp
+        elif model.MD_DWELL_TIME in da.metadata:
+            # typical for scanning techniques => more or less correct
+            exp = da.metadata[model.MD_DWELL_TIME] * numpy.prod(da.shape)
+            plane.attrib["ExposureTime"] = "%.12f" % exp
+        
+        if model.MD_POS in da.metadata:
+            pos = da.metadata[model.MD_POS]
+            plane.attrib["PositionX"] = "%.12f" % pos[0] # any unit is allowed => m
+            plane.attrib["PositionY"] = "%.12f" % pos[1]
+        
+        # TiffData Element
+        tde = ET.SubElement(pixels, "TiffData", attrib={
+                                "IFD": "%d" % i,
+                                "FirstC": "%d" % subid,
+                                "PlaneCount": "1"
+                                })
+        
+        subid += 1
+        
 def _saveAsTiffLT(filename, data, thumbnail):
     """
     Saves a DataArray as a TIFF file.
@@ -187,6 +304,9 @@ def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True):
     """
     tif = TIFF.open(filename, mode='w')
     
+    # TODO: maybe thumbnail should be a dataarray, which would allow it to have
+    # metadata with global meaning (eg, user note, keywords)
+    
     # According to this page: http://www.openmicroscopy.org/site/support/file-formats/ome-tiff/ome-tiff-data
     # LZW is a good trade-off between compatibility and small size (reduces file
     # size by about 2). => that's why we use it by default
@@ -195,8 +315,12 @@ def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True):
     else:
         compression = None
 
-    # OME tags: a XML document in the ImageDescription of the first image 
-    ometxt = _convertToOMEMD([model.DataArray(thumbnail)] + ldata)
+    # OME tags: a XML document in the ImageDescription of the first image
+    if thumbnail is not None:
+        alldata = [model.DataArray(thumbnail)] + ldata
+    else:
+        alldata = ldata
+    ometxt = _convertToOMEMD(alldata)
     
     if thumbnail is not None:
         # save the thumbnail just as the first image
