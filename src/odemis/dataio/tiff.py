@@ -18,9 +18,11 @@ from __future__ import division
 from libtiff import TIFF
 from odemis import __version__, model
 import libtiff.libtiff_ctypes as T # for the constant names
+#pylint: disable=E1101
 import logging
 import numpy
 import time
+import xml.etree.ElementTree as ET
 
 # Note concerning the image format: it follows the numpy convention. The first
 # dimension is the height, and second one is the width. (This is so because
@@ -105,6 +107,67 @@ def _convertToTiffTag(metadata):
     
     return tiffmd
     
+def _convertToOMEMD(images):
+    """
+    Converts DataArray tags to OME-TIFF tags.
+    images (list of DataArrays): the images that will be in the TIFF file, in order
+    returns (string): the XML data as compatible with OME
+    Note: the first element of images should be in the IFD 0, second element in
+      IFD 1, etc.
+    """
+    # An OME-TIFF is a TIFF file with one OME-XML metadata embedded. For an
+    # overview of OME-XML, see:
+    # http://www.openmicroscopy.org/Schemas/Documentation/Generated/OME-2012-06/ome.html
+    
+    # It is not very clear in OME how to express that it's different acquisitions
+    # of the _same_ sample by different instruments. However, our interpretation
+    # of the format is the following:
+#    + OME
+#      + Experiment        # To describe the type of microscopy
+#      + Experimenter      # To describe the user
+#      + Instrument (*)    # To describe the acquisition technical details for each
+#        + Microscope      # set of emitter/detector.
+#        + LightSource
+#        + Detector
+#        + Objective
+#        + Filter
+#      + Image (*)         # To describe a set of images by the same instrument
+#        + Description
+#        + AcquisitionDate # time of acquisition of the (first) image
+#        + ExperimentRef
+#        + ExperimenterRef
+#        + InstrumentRef
+#        + ImagingEnvironment # To describe the physical conditions (temp...)
+#        + Pixels          # technical dimensions of the images (XYZ, T, C) 
+#          + Channel (*)   # emitter settings for the given channel (light wavelength) 
+#          + Plane (*)     # physical dimensions/position of each images
+#          + TiffData (*)  # where to find the data in the tiff file (IFD)
+#                          # we explicitly reference each dataarray to avoid
+#                          # potential ordering problems of the "Image" elements  
+#          
+    
+    # To create and manipulate the XML, we use the Python ElementTree API.
+    
+    # TODO: it seems pylibtiff has a small OME support, need to investigate 
+    # how much could be used.
+    root = ET.Element('OME', attrib={
+            "xmlns": "http://www.openmicroscopy.org/Schemas/OME/2012-06",
+            "xmlns:xsi": "http://www.w3.org/2001/XMLSchema-instance",
+            "xsi:schemaLocation": "http://www.openmicroscopy.org/Schemas/OME/2012-06 http://www.openmicroscopy.org/Schemas/OME/2012-06/ome.xsd",
+            })
+    com_txt = ("Warning: this comment is an OME-XML metadata block, which "
+               "contains crucial dimensional parameters and other important "
+               "metadata. Please edit cautiously (if at all), and back up the "
+               "original data before doing so. For more information, see the "
+               "OME-TIFF web site: http://ome-xml.org/wiki/OmeTiff.")
+    root.append(ET.Comment(com_txt))
+    
+    # for each set of images from the same instrument, add them
+    
+    ometxt = ('<?xml version="1.0" encoding="UTF-8"?>' +
+              ET.tostring(root, encoding="utf-8")) 
+    return ometxt 
+    
 
 def _saveAsTiffLT(filename, data, thumbnail):
     """
@@ -132,8 +195,13 @@ def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True):
     else:
         compression = None
 
+    # OME tags: a XML document in the ImageDescription of the first image 
+    ometxt = _convertToOMEMD([model.DataArray(thumbnail)] + ldata)
+    
     if thumbnail is not None:
         # save the thumbnail just as the first image
+        tif.SetField(T.TIFFTAG_IMAGEDESCRIPTION, ometxt)
+        ometxt = None
         tif.SetField(T.TIFFTAG_PAGENAME, "Composited image")
 
         # FIXME:
@@ -195,6 +263,10 @@ def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True):
         tags = _convertToTiffTag(data.metadata)
         for key, val in tags.items():
             tif.SetField(key, val)
+        
+        if ometxt: # save OME tags if not yet done
+            tif.SetField(T.TIFFTAG_IMAGEDESCRIPTION, ometxt)
+            ometxt = None
         
         tif.write_image(data, compression=compression)
 

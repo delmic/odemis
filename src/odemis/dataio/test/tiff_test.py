@@ -164,6 +164,10 @@ class TestTiffIO(unittest.TestCase):
         ypos = rational2float(ifd.get_value("YPosition"))
         self.assertAlmostEqual(metadata[model.MD_POS][1], (ypos / 100) - 1)
         
+        # check OME-TIFF metadata
+        omemd = imo.IFD[0].get_value("ImageDescription")
+        self.assertTrue(omemd.startswith('<?xml') or omemd[:4].lower()=='<ome')
+        
         
 def rational2float(rational):
     """
