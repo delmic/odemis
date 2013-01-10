@@ -34,7 +34,7 @@ from odemis.gui.util import limit_invocation
 
 
 
-class Slider(wx.PyPanel):
+class Slider(wx.PyControl):
     """ This class describes a Slider control.
 
     The default value is 0.0 and the default value range is [0.0 ... 1.0]. The
@@ -57,7 +57,7 @@ class Slider(wx.PyPanel):
         :param scale:  'linear' (default), 'cubic' or 'log'
         """
 
-        wx.PyPanel.__init__(self, parent, id, pos, size, style, name)
+        wx.PyControl.__init__(self, parent, id, pos, size, style)
 
         # Set minimum height
         if size == (-1, -1):
@@ -106,6 +106,7 @@ class Slider(wx.PyPanel):
         # Layout Events
         self.Bind(wx.EVT_PAINT, self.OnPaint)
         self.Bind(wx.EVT_SIZE, self.OnSize)
+        self.Bind( wx.EVT_SET_FOCUS, self.OnFocus)
 
     def __del__(self):
         # FIXME: put here to try and prevent PyDeadObject exceptions. Might
@@ -118,7 +119,7 @@ class Slider(wx.PyPanel):
         # Layout Events
         self.Unbind(wx.EVT_PAINT, self.OnPaint)
         self.Unbind(wx.EVT_SIZE, self.OnSize)
-        print "Slider unbound"
+        #print "Slider unbound"
 
     @staticmethod
     def _log_val_to_perc(r0, r1, v):
@@ -232,6 +233,9 @@ class Slider(wx.PyPanel):
         self.handlePos = self._val_to_pixel()
         self.Refresh()
 
+    def OnFocus(self, evt):
+        pass
+
     def OnLeftDown(self, event=None):
         """ This event handler fires when the left mouse button is pressed down
         when the  mouse cursor is over the slide bar.
@@ -243,8 +247,7 @@ class Slider(wx.PyPanel):
 
         self.CaptureMouse()
         self.set_position_value(event.GetX())
-        # TODO: Should get the focus (and not give it to its text field)
-#        self.SetFocus()
+        self.SetFocus()
 
     def OnLeftUp(self, event=None):
         """ This event handler is called when the left mouse button is released
@@ -307,7 +310,7 @@ class Slider(wx.PyPanel):
 
     @limit_invocation(0.07)  #pylint: disable=E1120
     def send_slider_update_event(self):
-        logging.debug("Firing change event")
+        logging.debug("Firing change event for value %s", self.current_value)
 
         # now = time.time()
         # # Prevent this event from firing too often.
@@ -341,9 +344,9 @@ class Slider(wx.PyPanel):
         if not isinstance(value, (int, long, float)):
             raise TypeError("Illegal data type %s" % type(value))
 
-        if self.current_value == value:
-            logging.debug("Identical value %s ignored", value)
-            return
+        # if self.current_value == value:
+        #     logging.debug("Identical value %s ignored", value)
+        #     return
 
         logging.debug("Setting slider value to %s", value)
 
@@ -405,6 +408,10 @@ class NumberSlider(Slider):
         self.linked_field.SetBackgroundColour(parent.GetBackgroundColour())
 
         self.linked_field.Bind(wx.EVT_COMMAND_ENTER, self._update_slider)
+
+    def SetForegroundColour(self,  colour, *args, **kwargs):
+        Slider.SetForegroundColour(self, colour)
+        self.linked_field.SetForegroundColour(colour)
 
 
     def __del__(self):

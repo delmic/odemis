@@ -313,7 +313,8 @@ class AcquisitionController(object):
 
 class AcquisitionDialog(xrcfr_acq):
     """ Wrapper class responsible for additional initialization of the
-    Acquisition Dialog created in XRCed"""
+    Acquisition Dialog created in XRCed
+    """
 
     def __init__(self, parent, interface_model):
         xrcfr_acq.__init__(self, parent)
@@ -327,13 +328,24 @@ class AcquisitionDialog(xrcfr_acq):
         self.cmb_presets.Select(0)
 
         # Store current values
-        wx.GetApp().settings_controller.store()
+        main_settings_controller = wx.GetApp().settings_controller
+        main_settings_controller.store()
+        main_settings_controller.pause()
 
-        self.settings_controller = SettingsSideBar(interface_model, self)
+        self.settings_controller = SettingsSideBar(interface_model, self, True)
 
-        self.btn_cancel.Bind(wx.EVT_BUTTON, self.on_cancel)
+        self.Bind(wx.EVT_CHAR_HOOK, self.on_key)
+
+        self.btn_cancel.Bind(wx.EVT_BUTTON, self.on_close)
         self.btn_change_file.Bind(wx.EVT_BUTTON, self.on_change_file)
+        self.Bind(wx.EVT_CLOSE, self.on_close)
 
+    def on_key(self, evt):
+        """ Dialog key press handler. """
+        if evt.GetKeyCode() == wx.WXK_ESCAPE:
+            self.Close()
+        else:
+            evt.Skip()
 
     def on_change_file(self, evt):
 
@@ -354,10 +366,14 @@ class AcquisitionDialog(xrcfr_acq):
             self.txt_filename.SetValue(dialog.GetFilename())
             self.txt_destination.SetValue(dialog.GetDirectory())
 
-
-    def on_cancel(self, evt):
+    def on_close(self, evt):
+        """ Close event handler that executes various cleanup actions
+        """
+        logging.warn("Canceling acquisition")
         # Restore current values
-        wx.GetApp().settings_controller.restore()
+        main_settings_controller = wx.GetApp().settings_controller
+        main_settings_controller.resume()
+        main_settings_controller.restore()
 
-        self.Close()
         self.Destroy()
+

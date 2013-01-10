@@ -37,13 +37,14 @@ class VigilantAttributeConnector(object):
         """
         va (VigilantAttribute): the VA to connect with
         ctrl (wx.Window): a wx widget to connect to
-        va_2_ctrl (None or callable ((value) -> None)): a function to be called when the
-          VA is updated, to update the widget. If None, try to use the default
-          SetValue().
+        va_2_ctrl (None or callable ((value) -> None)): a function to be called
+            when the VA is updated, to update the widget. If None, try to use
+            the default SetValue().
         ctrl_2_va (None or callable ((None) -> value)): a function to be called
-          when the widget is updated, to update the VA. If None, try to use the
-          default GetValue().
-        events (None or wx.EVT_* or tuple of wx.EVT_*): events to bind to update the value of the VA
+            when the widget is updated, to update the VA. If None, try to use
+            the default GetValue().
+        events (None or wx.EVT_* or tuple of wx.EVT_*): events to bind to update
+            the value of the VA
         """
         self.vigilattr = va
         self.ctrl = ctrl
@@ -57,11 +58,7 @@ class VigilantAttributeConnector(object):
             self.change_events = events
 
         # Subscribe to the vigilant attribute and initialize
-
-        self.vigilattr.subscribe(self.va_2_ctrl, init=True)
-
-        for event in self.change_events:
-            self.ctrl.Bind(event, self._on_value_change)
+        self._connect(init=True)
 
     def _on_value_change(self, evt):
         """ This method is called when the value of the control is changed.
@@ -78,6 +75,20 @@ class VigilantAttributeConnector(object):
             logging.error("Illegal value: %s", oobe)
         finally:
             evt.Skip()
+
+    def pause(self):
+        """ Temporarily prevent vigilant attributes from updating controls """
+        self.vigilattr.unsubscribe(self.va_2_ctrl)
+
+    def resume(self):
+        """ Resume updating controls """
+        self.vigilattr.subscribe(self.va_2_ctrl, init=True)
+
+    def _connect(self, init):
+        logging.debug("Connecting VigilantAttributeConnector")
+        self.vigilattr.subscribe(self.va_2_ctrl, init)
+        for event in self.change_events:
+            self.ctrl.Bind(event, self._on_value_change)
 
     def disconnect(self):
         logging.debug("Disconnecting VigilantAttributeConnector")

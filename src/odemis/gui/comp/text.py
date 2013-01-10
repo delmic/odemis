@@ -387,7 +387,7 @@ class NumberValidator(wx.PyValidator):
         if min_val == 0 and max_val == 0:
             min_val = None
             max_val = None
-            
+
         # Minimum and maximum allowed values
         self.min_val = min_val
         self.max_val = max_val
@@ -397,9 +397,9 @@ class NumberValidator(wx.PyValidator):
             if min_val > max_val:
                 raise ValueError("Min value is bigger than max value: %r > %r" % (min_val, max_val))
         self._validate_choices()
-        
+
         # Are negative values allowed?
-        if ((min_val is None or min_val < 0) or 
+        if ((min_val is None or min_val < 0) or
            (max_val is not None and max_val < 0) or
            (choices and min(choices) < 0)):
             self.legal += "-"
@@ -423,8 +423,8 @@ class NumberValidator(wx.PyValidator):
             val = fld.GetValueStr()
         else:
             val = fld.GetValue()
-        return val        
-        
+        return val
+
     def Clone(self): #pylint: disable=W0221
         raise NotImplementedError
 
@@ -490,26 +490,26 @@ class NumberValidator(wx.PyValidator):
         """
         if not val:
             return False
-        
+
         try:
             num = self.cast(val)
         except ValueError:
             return False
-        
+
         if self.choices and not num in self.choices:
             return False
         if self.min_val and num < self.min_val:
             return False
         if self.max_val and num > self.max_val:
             return False
-        
+
         return True
 
     def GetNumber(self, val):
         """
         Return a number corresponding to the (string) value provided
         val (string): a string representing a number
-        returns (None or number of the right type): the most meaningful value 
+        returns (None or number of the right type): the most meaningful value
           that would fit the validator for the given string, or None if the string
           is empty.
           If choices is set, it will pick the closest choice available
@@ -517,10 +517,10 @@ class NumberValidator(wx.PyValidator):
         """
         if not val:
             return None
-        
+
         # remove illegal characters
         val = "".join([c for c in val if c in self.legal])
-        
+
         # try hard to cast it to a legal value by removing anything meaningless at the end
         while len(val) > 0:
             try:
@@ -529,15 +529,15 @@ class NumberValidator(wx.PyValidator):
             except ValueError:
                 pass
             val = val[:len(val)-1]
-        
+
         if len(val) == 0:
             return None
-        
+
         # find the closest value in choices
         if self.choices:
             num = min(self.choices, key=lambda x:abs(x - num))
 
-        # bound the value by min/max        
+        # bound the value by min/max
         msg = "Value {} out of range [{}, {}]"
         if self.min_val is not None and num < self.min_val:
             logging.debug(msg.format(num, self.min_val, self.max_val))
@@ -545,7 +545,7 @@ class NumberValidator(wx.PyValidator):
         if self.max_val is not None and num > self.max_val:
             logging.debug(msg.format(num, self.min_val, self.max_val))
             num = self.max_val
-        
+
         return num
 
     def cast(self, val):
@@ -570,17 +570,17 @@ class NumberTextCtrl(wx.TextCtrl):
     The main behaviour is that when it has the focus, it just displays the number
     as raw as possible (in the standard unit), and if it's out of focus, it displays
     a beautiful value (not too digits, with unit and unit multiplicator if needed).
-    
-    Use .GetValue() and .SetValue()/.ChangeValue() to get/set the raw value 
+
+    Use .GetValue() and .SetValue()/.ChangeValue() to get/set the raw value
     (number). SetValue and ChangeValue are identical but the first one generates
     an event as if the user had typed something in.
-    To get the actual string displayed, use .GetValueStr() and .SetValueStr(), 
+    To get the actual string displayed, use .GetValueStr() and .SetValueStr(),
     but in general this shouldn't be needed.
-    
-    Generates a wxEVT_COMMAND_ENTER whenever a new number is set by the user. 
+
+    Generates a wxEVT_COMMAND_ENTER whenever a new number is set by the user.
     This happens typically when loosing the focus or when pressing "Enter" key.
     """
-    
+
 
     def __init__(self, *args, **kwargs):
         """
@@ -608,7 +608,7 @@ class NumberTextCtrl(wx.TextCtrl):
             args = args[:2]
         else:
             val = kwargs.pop('value', None)
-        
+
         # the raw value: a number or None
         self.number = val
 
@@ -634,14 +634,14 @@ class NumberTextCtrl(wx.TextCtrl):
         else:
             str_val = units.to_string_pretty(self.number)
         wx.TextCtrl.ChangeValue(self, str_val)
-    
+
     def _display_pretty(self):
         if self.number is None:
             str_val = u""
         else:
             str_val = units.readable_str(self.number)
         wx.TextCtrl.ChangeValue(self, str_val)
-        
+
     def GetValue(self): #pylint: disable=W0221
         """ Return the value as an integer, or None if no (valid) value is
         present.
@@ -662,14 +662,14 @@ class NumberTextCtrl(wx.TextCtrl):
         """
         self.number = val
         logging.debug("Setting value to '%s' for %s", val, self.__class__.__name__)
-        
+
         if self.HasFocus():
             logging.info("Received the new value '%s' to set while in focus", val)
             self._display_raw()
         else:
-            self._display_pretty()    
+            self._display_pretty()
 
-        
+
     def GetValueStr(self):
         """ Return the value of the control as a string """
         return wx.TextCtrl.GetValue(self)
@@ -694,10 +694,10 @@ class NumberTextCtrl(wx.TextCtrl):
             # TODO: turn the text red temporarily if not valid?
 #            if not validated:
 #                logging.debug("Value '%s' not valid, using '%s'", str_val, val)
-                
+
         if prev_num != self.number:
             self._send_change_event()
-        
+
     # -----------------
     # Event handlers
     # -----------------
@@ -720,7 +720,7 @@ class NumberTextCtrl(wx.TextCtrl):
         str_val = wx.TextCtrl.GetValue(self)
         self._processNewText(str_val)
         self._display_raw() # display the new value as understood
-            
+
     def on_char(self, evt):
         """ This event handler increases or decreases the integer value when
         the up/down cursor keys are pressed.
@@ -729,7 +729,7 @@ class NumberTextCtrl(wx.TextCtrl):
         """
 
         key = evt.GetKeyCode()
-        prev_num = self.number 
+        prev_num = self.number
         num = self.number
 
         if key == wx.WXK_UP and self.step:
@@ -741,12 +741,12 @@ class NumberTextCtrl(wx.TextCtrl):
             # (As in validate typed numbers etc.)
             evt.Skip()
             return
-        
+
         val = u"%r" % num # GetNumber needs a string
         self.number = self.GetValidator().GetNumber(val)
 #        if not validated:
 #            logging.debug("Reached invalid value %s", val)
-            
+
         if prev_num != self.number:
             self._display_raw() # we assume we have the focus
             self._send_change_event()
@@ -776,7 +776,7 @@ class UnitNumberCtrl(NumberTextCtrl):
     def __init__(self, *args, **kwargs):
         """
         unit (None or string): if None then behave like NumberTextCtrl
-        """ 
+        """
         self.unit = kwargs.pop('unit', None)
 
         NumberTextCtrl.__init__(self, *args, **kwargs)

@@ -36,11 +36,14 @@ import odemis.gui.comp.text as text
 import odemis.gui.img.data as img
 import odemis.gui.util.units as utun
 from ..comp.foldpanelbar import FoldPanelItem
-from odemis.gui import util
+from odemis.gui import FOREGROUND_COLOUR_HIGHLIGHT, FOREGROUND_COLOUR_EDIT
 from odemis.gui.comp.radio import GraphicalRadioButtonControl
 from odemis.gui.comp.slider import UnitIntegerSlider, UnitFloatSlider
 from odemis.gui.util.widgets import VigilantAttributeConnector
-from odemis.model import getVAs, NotApplicableError, VigilantAttributeBase
+from odemis.gui.util.units import readable_str
+from odemis.model import getVAs, NotApplicableError, VigilantAttributeBase, \
+    NotSettableError
+
 
 
 # Utility functions
@@ -74,6 +77,18 @@ def traverse(seq_val):
                 yield subvalue
     else:
         yield seq_val
+
+def bind_highlight(ctrl, vat, *evt_types):
+    def_val = vat.value
+    def hl(evt):
+        eo = evt.GetEventObject()
+        if eo.GetValue() == def_val:
+            eo.SetForegroundColour(FOREGROUND_COLOUR_EDIT)
+        else:
+            eo.SetForegroundColour(FOREGROUND_COLOUR_HIGHLIGHT)
+
+    for e in evt_types:
+        ctrl.Bind(e, hl)
 
 # Default settings for the different components.
 # (Just a ccd for now, 2012-8-27)
@@ -158,17 +173,25 @@ class SettingsPanel(object):
     """ Settings base class which describes an indirect wrapper for
     FoldPanelItems.
 
+    :param fold_panel: (FoldPanelItem) Parent window
+    :param default_msg: (str) Text message which will be shown if the
+        SettingPanel does not contain any child windows.
+    :param highlight_change: (bool) If set to True, the values will be
+        highlighted when they match the cached values.
     NOTE: Do not instantiate this class, but always inherit it.
     """
 
-    def __init__(self, fp_panel, default_msg):
-        self.fb_panel = fp_panel
-        assert isinstance(self.fb_panel, FoldPanelItem)
+    def __init__(self, fold_panel, default_msg, highlight_change=False):
+        self.fold_panel = fold_panel
+        assert isinstance(self.fold_panel, FoldPanelItem)
 
-        self.panel = wx.Panel(self.fb_panel)
+        self.panel = wx.Panel(self.fold_panel)
+
 
         self.panel.SetBackgroundColour(odemis.gui.BACKGROUND_COLOUR)
         self.panel.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR)
+
+        self.highlight_change = highlight_change
 
         self._main_sizer = wx.BoxSizer()
         self._sizer = wx.GridBagSizer()
@@ -183,7 +206,7 @@ class SettingsPanel(object):
                                           flag=wx.RIGHT|wx.EXPAND,
                                           border=10)
 
-        self.fb_panel.add_item(self.panel)
+        self.fold_panel.add_item(self.panel)
 
         self._sizer.AddGrowableCol(1)
 
@@ -199,15 +222,20 @@ class SettingsPanel(object):
 
     def store(self):
         """ Store the current control values into an internal values cache """
+        # Clear the current cache
         self._values_cache = []
 
         for entry in self.entries:
             value = None
-            if hasattr(entry["val_ctrl"], "GetValue"):
+
+            if "vaco" in entry:
+                value = entry["vaco"].vigilattr.value
+            elif hasattr(entry["val_ctrl"], "GetValue"):
                 value = entry["val_ctrl"].GetValue()
-                logging.debug("Storing value %s for %s",
-                              value,
-                              entry["lbl_ctrl"].GetLabel())
+
+            logging.debug("Storing value %s for %s",
+                          value,
+                          entry["lbl_ctrl"].GetLabel())
             self._values_cache.append(value)
 
     def restore(self):
@@ -217,8 +245,26 @@ class SettingsPanel(object):
                 logging.debug("Restoring value %s for %s",
                               value,
                               entry["lbl_ctrl"].GetLabel())
-                entry["val_ctrl"].SetValue(value)
 
+                if "vaco" in entry:
+                    try:
+                        entry["vaco"].vigilattr.value = value
+                    except NotSettableError:
+                        pass
+                elif hasattr(entry["val_ctrl"], "SetValue"):
+                    entry["val_ctrl"].SetValue(value)
+                else:
+                    continue
+
+    def pause(self):
+        """ Pause VigilantAttributeConnector related control updates """
+        for entry in [e for e in self.entries if "vaco" in e]:
+            entry["vaco"].pause()
+
+    def resume(self):
+        """ Pause VigilantAttributeConnector related control updates """
+        for entry in [e for e in self.entries if "vaco" in e]:
+            entry["vaco"].resume()
 
     def _clear(self):
         # Remove default 'no content' label
@@ -449,6 +495,11 @@ class SettingsPanel(object):
                                              new_ctrl,
                                              events=wx.EVT_COMMAND_ENTER)
 
+            if self.highlight_change:
+                bind_highlight(new_ctrl, value,
+                               wx.EVT_TEXT, wx.EVT_COMMAND_ENTER)
+
+
         elif control_type == odemis.gui.CONTROL_RADIO:
             new_ctrl = GraphicalRadioButtonControl(self.panel,
                                                    -1,
@@ -528,10 +579,11 @@ class SettingsPanel(object):
                     events=(wx.EVT_COMBOBOX, wx.EVT_TEXT_ENTER))
 
         else:
-            txt = util.units.readable_str(value.value, unit)
+            txt = readable_str(value.value, unit)
             new_ctrl = wx.StaticText(self.panel, -1, txt)
 
-
+        #if self.highlight_change and hasattr(new_ctrl, 'SetValue'):
+        #    new_ctrl.SetForegroundColour(FOREGROUND_COLOUR_HIGHLIGHT)
 
         self._sizer.Add(new_ctrl, (self.num_entries, 1),
                         flag=wx.ALL|wx.EXPAND, border=5)
@@ -539,8 +591,9 @@ class SettingsPanel(object):
         self.num_entries += 1
         self.entries.append({"lbl_ctrl": lbl_ctrl,
                              "val_ctrl": new_ctrl,
-                             "value": value.value})
-        self.fb_panel.Parent.Layout()
+                             "value": value.value,
+                             "vaco": vac})
+        self.fold_panel.Parent.Layout()
 
 def set_on_notify(v):
     logging.warn("def")
@@ -565,17 +618,19 @@ class SettingsSideBar(object):
     of the setting panel.
     """
 
-    def __init__(self, interface_model, parent_frame):
+    def __init__(self, interface_model, parent_frame, highlight_change=False):
         self._parent_frame = parent_frame
         self._interface_model = interface_model
 
         self._sem_panel = SemSettingsPanel(
                                     parent_frame.fp_sem_settings,
-                                    "No SEM found")
+                                    "No SEM found",
+                                    highlight_change)
 
         self._optical_panel = OpticalSettingsPanel(
                                     parent_frame.fp_optical_settings,
-                                    "No optical microscope found")
+                                    "No optical microscope found",
+                                    highlight_change)
 
         self.settings_panels = [self._sem_panel, self._optical_panel]
 
@@ -587,6 +642,10 @@ class SettingsSideBar(object):
         if interface_model.ebeam:
             self.add_ebeam(interface_model.ebeam)
 
+        # Save the current values so they can be used for highlighting
+        if highlight_change:
+            self.store()
+
     def store(self):
         """ Store all values in the used SettingsPanels """
         for panel in self.settings_panels:
@@ -596,6 +655,16 @@ class SettingsSideBar(object):
         """ Restore all values to the used SettingsPanels """
         for panel in self.settings_panels:
             panel.restore()
+
+    def pause(self):
+        """ Pause VigilantAttributeConnector related control updates """
+        for panel in self.settings_panels:
+            panel.pause()
+
+    def resume(self):
+        """ Resume VigilantAttributeConnector related control updates """
+        for panel in self.settings_panels:
+            panel.resume()
 
     # Optical microscope settings
     def add_ccd(self, comp):
