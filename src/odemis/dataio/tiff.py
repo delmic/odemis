@@ -187,11 +187,13 @@ def _convertToOMEMD(images):
     for g in groups:
         id = min(g) # ID is the smallest ID of the images
         da0 = images[id]
-        if model.MD_OPT_MAG in da0.metadata:
+        if model.MD_LENS_MAG in da0.metadata:
             obj = ET.SubElement(instr, "Objective", attrib={
                       "ID": "Objective:%d" % id,
-                      "CalibratedMagnification": "%f" % da0.metadata[model.MD_OPT_MAG]
+                      "CalibratedMagnification": "%f" % da0.metadata[model.MD_LENS_MAG]
                       })
+            if model.MD_LENS_NAME in da0.metadata:
+                obj.attrib["Model"] = da0.metadata[model.MD_LENS_NAME]
     
     for g in groups:
         _addImageElement(root, images, list(g))

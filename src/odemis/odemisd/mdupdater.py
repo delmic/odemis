@@ -106,7 +106,8 @@ class MetadataUpdater(model.Component):
                 binning = 1
             mag = float(lens.magnification.value)
             mpp = (captor_mpp[0] * binning / mag, captor_mpp[1] * binning / mag) 
-            md = {model.MD_PIXEL_SIZE: mpp}
+            md = {model.MD_PIXEL_SIZE: mpp,
+                  model.MD_LENS_MAG: mag}
             comp.updateMetadata(md)
         
         lens.magnification.subscribe(updatePixelDensity)

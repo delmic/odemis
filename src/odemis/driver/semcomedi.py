@@ -1853,6 +1853,7 @@ class Scanner(model.Emitter):
         res = self.resolution.value
         pxs = [self.HFWNoMag / (res[0] * mag), self.HFWNoMag / (res[1] * mag)]
         self.parent._metadata[model.MD_PIXEL_SIZE] = pxs
+        self.parent._metadata[model.MD_LENS_MAG] = mag
     
     def _setDwellTime(self, value):
         dt, self._osr = self.parent.find_best_oversampling_rate(value)
