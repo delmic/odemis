@@ -308,8 +308,8 @@ def _addImageElement(root, das, idx):
         # RGB?
         # Note: it seems officially OME-TIFF doesn't support RGB TIFF (instead, 
         # each colour should go in a separate channel). However, that'd defeat
-        # the purpose of the thumbnail, and it seems most softwares handle this
-        # fine anyway. 
+        # the purpose of the thumbnail, and it seems at OMERO handles this
+        # not too badly (all the other images get 3 components).
         if len(da.shape) == 3 and da.shape[2] == 3:
             chan.attrib["SamplesPerPixel"] = "3"
         
@@ -322,7 +322,7 @@ def _addImageElement(root, das, idx):
         if model.MD_IN_WL in da.metadata:
             iwl = da.metadata[model.MD_IN_WL]
             xwl = numpy.mean(iwl) * 1e9 # in nm
-            chan.attrib["ExcitationWavelength"] = xwl
+            chan.attrib["ExcitationWavelength"] = "%f" % xwl
             
             # if input wavelength range is small, it means we are in epifluoresence
             if abs(iwl[1] - iwl[0]) < 100e-9:
@@ -337,7 +337,7 @@ def _addImageElement(root, das, idx):
         if model.MD_OUT_WL in da.metadata:
             owl = da.metadata[model.MD_OUT_WL]
             ewl = numpy.mean(owl) * 1e9 # in nm
-            chan.attrib["EmissionWavelength"] = ewl
+            chan.attrib["EmissionWavelength"] = "%f" % ewl
         
         # Add info on detector
         attrib = {}
