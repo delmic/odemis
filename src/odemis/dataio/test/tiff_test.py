@@ -97,7 +97,7 @@ class TestTiffIO(unittest.TestCase):
         # thumbnail : small RGB completely red
         tshape = (size[1]//8, size[0]//8, 3)
         tdtype = numpy.uint8
-        thumbnail = numpy.zeros(tshape, tdtype)
+        thumbnail = model.DataArray(numpy.zeros(tshape, tdtype))
         thumbnail[:, :, 0] += 255 # red
         blue = (12, 22) # non symmetric position
         thumbnail[blue[-1:-3:-1]] = [0,0,255]
@@ -178,6 +178,9 @@ class TestTiffIO(unittest.TestCase):
         ns = {"ome": root.tag.rsplit("}")[0][1:]} # read the default namespace
         roottag = root.tag.split("}")[-1]
         self.assertEqual(roottag.lower(), "ome")
+        
+        detect_name = root.find("Instrument/Detector").get("Model")
+        self.assertEqual(metadata[model.MD_HW_NAME], detect_name)
         
         self.assertEqual(len(root.findall("Image")), 1)
         ime = root.find("Image")
