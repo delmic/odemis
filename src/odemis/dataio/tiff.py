@@ -416,7 +416,7 @@ def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True):
     thumbnail (None or DataArray): see export
     compressed (boolean): whether the file is LZW compressed or not.
     """
-    tif = TIFF.open(filename, mode='w')
+    f = TIFF.open(filename, mode='w')
     
     # According to this page: http://www.openmicroscopy.org/site/support/file-formats/ome-tiff/ome-tiff-data
     # LZW is a good trade-off between compatibility and small size (reduces file
@@ -435,9 +435,9 @@ def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True):
     
     if thumbnail is not None:
         # save the thumbnail just as the first image
-        tif.SetField(T.TIFFTAG_IMAGEDESCRIPTION, ometxt)
+        f.SetField(T.TIFFTAG_IMAGEDESCRIPTION, ometxt)
         ometxt = None
-        tif.SetField(T.TIFFTAG_PAGENAME, "Composited image")
+        f.SetField(T.TIFFTAG_PAGENAME, "Composited image")
 
         # FIXME:
         # libtiff has a bug: it thinks that RGB image are organised as
@@ -447,7 +447,7 @@ def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True):
             thumbnail = numpy.rollaxis(thumbnail, 2) # a new view
         
         # write_rgb makes it clever to detect RGB vs. Greyscale
-        tif.write_image(thumbnail, compression=compression, write_rgb=True)
+        f.write_image(thumbnail, compression=compression, write_rgb=True)
         
         # TODO also save it as thumbnail of the image (in limited size)
         # see  http://www.libtiff.org/man/thumbnail.1.html
@@ -497,13 +497,13 @@ def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True):
         # Save metadata (before the image)
         tags = _convertToTiffTag(data.metadata)
         for key, val in tags.items():
-            tif.SetField(key, val)
+            f.SetField(key, val)
         
         if ometxt: # save OME tags if not yet done
-            tif.SetField(T.TIFFTAG_IMAGEDESCRIPTION, ometxt)
+            f.SetField(T.TIFFTAG_IMAGEDESCRIPTION, ometxt)
             ometxt = None
         
-        tif.write_image(data, compression=compression)
+        f.write_image(data, compression=compression)
 
 def export(filename, data, thumbnail=None):
     '''
