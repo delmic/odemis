@@ -217,6 +217,8 @@ class AndorCam3(model.DigitalCamera):
         self.exposureTime = model.FloatContinuous(1.0, range_exp, unit="s", setter=self.setExposureTime)
         self.setExposureTime(1.0)
         
+        # TODO add readout rate (at least as RO, to allow for better time estimation)
+        
         current_temp = self.GetFloat(u"SensorTemperature")
         self.temperature = model.FloatVA(current_temp, unit="C", readonly=True)
         self._metadata[model.MD_SENSOR_TEMP] = current_temp
@@ -485,10 +487,11 @@ class AndorCam3(model.DigitalCamera):
 
     def setReadoutRate(self, frequency):
         """
-        frequency (100*1e6, 200*1e6, 280*1e6, 550*1e6): the pixel readout rate in Hz
+        Set the pixel readout rate
+        frequency (0 <= float): the pixel readout rate in Hz
         return (int): actual readout rate in Hz
         """
-        assert((0 <= frequency))
+        assert(0 <= frequency)
         # returns strings like u"550 MHz"
         rates = self.GetEnumStringAvailable(u"PixelReadoutRate")
         values = [int(r.rstrip(u" MHz")) for r in rates]
