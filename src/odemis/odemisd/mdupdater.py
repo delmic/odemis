@@ -17,6 +17,7 @@ You should have received a copy of the GNU General Public License along with Ode
 from odemis import model
 import gc
 import logging
+import numpy
 
 
 class MetadataUpdater(model.Component):
@@ -61,9 +62,9 @@ class MetadataUpdater(model.Component):
 #                elif a.role == "filter":
 #                    # update the received light wavelength
 #                    self.observeFilter(a, d)
-#                elif a.role == "light":
-#                    # update the emitted light wavelength
-#                    self.observeLight(a, d)
+                elif a.role == "light":
+                    # update the emitted light wavelength
+                    self.observeLight(a, d)
                 else:
                     logging.debug("not observing %s which affects %s", a.name, d.name)
 
@@ -118,6 +119,35 @@ class MetadataUpdater(model.Component):
         except AttributeError:
             pass            
         updatePixelDensity(None) # update it right now
+    
+    def observeLight(self, light, comp):
+
+        def updateInputWL(emissions):
+            # TODO compute the min/max from the emissions which are not 0
+            miniwl = 1 # 1m is huge
+            maxiwl = 0
+            
+            for i, e in enumerate(emissions):
+                if e > 0:
+                    miniwl = min(miniwl, light.spectra.value[i][2])
+                    maxiwl = max(maxiwl, light.spectra.value[i][4])
+            if miniwl == 1:
+                miniwl = 0
+            
+            md = {model.MD_IN_WL: (miniwl, maxiwl)}
+            comp.updateMetadata(md)
+        
+        def updateLightPower(power):
+            p = power * numpy.sum(light.emissions.value)
+            md = {model.MD_LIGHT_POWER: p}
+            comp.updateMetadata(md)     
+        
+        light.power.subscribe(updateLightPower, init=True)
+        self._onTerminate.append((light.power.unsubscribe, (updateLightPower,)))
+        
+        light.emissions.subscribe(updateInputWL, init=True)
+        self._onTerminate.append((light.emissions.unsubscribe, (updateInputWL,)))
+    
             
     def terminate(self):
         # call all the unsubscribes
