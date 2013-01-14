@@ -462,6 +462,9 @@ class SettingsPanel(object):
                                              new_ctrl.SetValue,
                                              events=wx.EVT_SLIDER)
 
+            if self.highlight_change:
+                bind_highlight(new_ctrl, value, wx.EVT_SLIDER)
+
         elif control_type == odemis.gui.CONTROL_INT:
             if unit == "": # don't display unit prefix if no unit
                 unit = None
@@ -477,6 +480,10 @@ class SettingsPanel(object):
             vac = VigilantAttributeConnector(value,
                                              new_ctrl,
                                              events=wx.EVT_COMMAND_ENTER)
+
+            if self.highlight_change:
+                bind_highlight(new_ctrl, value,
+                               wx.EVT_TEXT, wx.EVT_COMMAND_ENTER)
 
         elif control_type == odemis.gui.CONTROL_FLT:
             if unit == "": # don't display unit prefix if no unit
@@ -512,6 +519,10 @@ class SettingsPanel(object):
                                              new_ctrl,
                                              new_ctrl.SetValue,
                                              events=wx.EVT_BUTTON)
+
+            if self.highlight_change:
+                bind_highlight(new_ctrl, value,
+                               wx.EVT_BUTTON)
 
         elif control_type == odemis.gui.CONTROL_COMBO:
 
@@ -577,6 +588,10 @@ class SettingsPanel(object):
                     new_ctrl.SetValue,
                     new_ctrl.GetValue,
                     events=(wx.EVT_COMBOBOX, wx.EVT_TEXT_ENTER))
+
+            if self.highlight_change:
+                bind_highlight(new_ctrl, value,
+                               wx.EVT_COMBOBOX, wx.EVT_TEXT_ENTER)
 
         else:
             txt = readable_str(value.value, unit)
