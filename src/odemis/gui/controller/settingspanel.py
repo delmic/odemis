@@ -36,7 +36,6 @@ import odemis.gui.comp.text as text
 import odemis.gui.img.data as img
 import odemis.gui.util.units as utun
 from ..comp.foldpanelbar import FoldPanelItem
-from odemis.gui import FOREGROUND_COLOUR_HIGHLIGHT, FOREGROUND_COLOUR_EDIT
 from odemis.gui.comp.radio import GraphicalRadioButtonControl
 from odemis.gui.comp.slider import UnitIntegerSlider, UnitFloatSlider
 from odemis.gui.util.widgets import VigilantAttributeConnector
@@ -78,17 +77,43 @@ def traverse(seq_val):
     else:
         yield seq_val
 
-def bind_highlight(ctrl, vat, *evt_types):
+def bind_highlight(ctrl, label, vat, *evt_types):
     def_val = vat.value
-    def hl(evt):
+
+    def highlight_label(evt):
         eo = evt.GetEventObject()
         if eo.GetValue() == def_val:
-            eo.SetForegroundColour(FOREGROUND_COLOUR_EDIT)
+            label.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR)
         else:
-            eo.SetForegroundColour(FOREGROUND_COLOUR_HIGHLIGHT)
+            label.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_HIGHLIGHT)
 
     for e in evt_types:
-        ctrl.Bind(e, hl)
+        ctrl.Bind(e, highlight_label)
+
+    def reset_value(evt):
+        ctrl.SetValue(vat.value)
+
+    def show_reset_menu(evt):
+        eo = evt.GetEventObject()
+
+        # No menu needed if value hasn't changed
+        if eo.GetValue() == def_val:
+            return
+
+        menu = wx.Menu()
+        mi = wx.MenuItem(menu, wx.NewId(), 'Reset value')
+
+        ctrl.Bind(wx.EVT_MENU, reset_value, mi)
+
+        menu.AppendItem(mi)
+        ctrl.PopupMenu(menu, evt.GetPosition())
+
+        label.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR)
+
+
+    ctrl.Bind(wx.EVT_RIGHT_DOWN, show_reset_menu)
+
+
 
 # Default settings for the different components.
 # (Just a ccd for now, 2012-8-27)
@@ -463,7 +488,7 @@ class SettingsPanel(object):
                                              events=wx.EVT_SLIDER)
 
             if self.highlight_change:
-                bind_highlight(new_ctrl, value, wx.EVT_SLIDER)
+                bind_highlight(new_ctrl, lbl_ctrl, value, wx.EVT_SLIDER)
 
         elif control_type == odemis.gui.CONTROL_INT:
             if unit == "": # don't display unit prefix if no unit
@@ -482,7 +507,7 @@ class SettingsPanel(object):
                                              events=wx.EVT_COMMAND_ENTER)
 
             if self.highlight_change:
-                bind_highlight(new_ctrl, value,
+                bind_highlight(new_ctrl, lbl_ctrl, value,
                                wx.EVT_TEXT, wx.EVT_COMMAND_ENTER)
 
         elif control_type == odemis.gui.CONTROL_FLT:
@@ -503,7 +528,7 @@ class SettingsPanel(object):
                                              events=wx.EVT_COMMAND_ENTER)
 
             if self.highlight_change:
-                bind_highlight(new_ctrl, value,
+                bind_highlight(new_ctrl, lbl_ctrl, value,
                                wx.EVT_TEXT, wx.EVT_COMMAND_ENTER)
 
 
@@ -521,7 +546,7 @@ class SettingsPanel(object):
                                              events=wx.EVT_BUTTON)
 
             if self.highlight_change:
-                bind_highlight(new_ctrl, value,
+                bind_highlight(new_ctrl, lbl_ctrl, value,
                                wx.EVT_BUTTON)
 
         elif control_type == odemis.gui.CONTROL_COMBO:
@@ -590,7 +615,7 @@ class SettingsPanel(object):
                     events=(wx.EVT_COMBOBOX, wx.EVT_TEXT_ENTER))
 
             if self.highlight_change:
-                bind_highlight(new_ctrl, value,
+                bind_highlight(new_ctrl, lbl_ctrl, value,
                                wx.EVT_COMBOBOX, wx.EVT_TEXT_ENTER)
 
         else:
