@@ -145,8 +145,16 @@ class TestHDF5IO(unittest.TestCase):
         
         data = model.DataArray(numpy.zeros((size[1], size[0]), dtype), metadata=metadata)     
         
+        # thumbnail : small RGB completely red
+        tshape = (size[1]//8, size[0]//8, 3)
+        tdtype = numpy.uint8
+        thumbnail = model.DataArray(numpy.zeros(tshape, tdtype))
+        thumbnail[:, :, 0] += 255 # red
+        blue = (12, 22) # non symmetric position
+        thumbnail[blue[-1:-3:-1]] = [0,0,255]
+        
         # export
-        hdf5.export(FILENAME, data)
+        hdf5.export(FILENAME, data, thumbnail)
         
         # check it's here
         st = os.stat(FILENAME) # this test also that the file is created

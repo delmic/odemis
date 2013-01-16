@@ -93,6 +93,11 @@ def _add_image_info(group, dataset, image):
     dataset (HDF Dataset): the image dataset
     image (DataArray >= 2D): image with metadata, the last 2 dimensions are Y and X (H,W)
     """
+    # StateEnumeration??
+#    dtstate.commit(group, "StateEnumeration")
+    dtstate = h5py.special_dtype(enum=('i', {
+         "Invalid":111, "Default":112, "Estimated":113, "Reported":114, "Verified":115}))
+    
     # Note: DimensionScale support is only part of h5py since v2.1
     # Dimensions
     # The order of the dimension is reversed (the slowest changing is last)
@@ -111,8 +116,10 @@ def _add_image_info(group, dataset, image):
     if model.MD_POS in image.metadata:
         pos = image.metadata[model.MD_POS]
         group["XOffset"] = pos[0]
+        group["XOffset"].attrs.create("State", 114, dtype=dtstate)
         group["XOffset"].attrs["UNIT"] = "m" # our extension
         group["YOffset"] = pos[1]
+        group["YOffset"].attrs.create("State", 114, dtype=dtstate)
         group["YOffset"].attrs["UNIT"] = "m" # our extension
     
     # Time
@@ -136,6 +143,7 @@ def _add_image_info(group, dataset, image):
         ad = datetime.utcfromtimestamp(image.metadata[model.MD_ACQ_DATE])
         adstr = ad.strftime("%Y-%m-%dT%H:%M:%S.%f")
         group["TOffset"] = adstr
+        group["TOffset"].attrs.create("State", 114, dtype=dtstate)
         
     # Scale
     if model.MD_PIXEL_SIZE in image.metadata:
@@ -145,13 +153,28 @@ def _add_image_info(group, dataset, image):
         pxs = image.metadata[model.MD_PIXEL_SIZE]
         group["DimensionScaleX"] = pxs[0]
         group["DimensionScaleX"].attrs["UNIT"] = "m"
+        group["DimensionScaleX"].attrs.create("State", 114, dtype=dtstate)
         group["DimensionScaleY"] = pxs[1]
         group["DimensionScaleY"].attrs["UNIT"] = "m" # our extension
+        group["DimensionScaleY"].attrs.create("State", 114, dtype=dtstate)
         # No clear what's the relation between this name and the label
         dataset.dims.create_scale(group["DimensionScaleX"], "X")
         dataset.dims.create_scale(group["DimensionScaleY"], "Y")
         dataset.dims[l-1].attach_scale(group["DimensionScaleX"])
         dataset.dims[l-2].attach_scale(group["DimensionScaleY"])
+
+        # Unknown data, but SVI needs them to take the scales into consideration
+        if l >= 4:
+            group["DimensionScaleZ"] = 1
+            group["DimensionScaleT"] = 1
+            # No clear what's the relation between this name and the label
+            dataset.dims.create_scale(group["DimensionScaleZ"], "Z")
+            group["DimensionScaleZ"].attrs.create("State", 114, dtype=dtstate)
+            dataset.dims.create_scale(group["DimensionScaleT"], "T")
+            group["DimensionScaleT"].attrs.create("State", 114, dtype=dtstate)
+            dataset.dims[l-3].attach_scale(group["DimensionScaleZ"])
+            dataset.dims[l-4].attach_scale(group["DimensionScaleT"])
+
         
 def _add_image_metadata(group, image):
     """
@@ -176,6 +199,22 @@ def _add_image_metadata(group, image):
         
     if model.MD_LENS_MAG in image.metadata:
         group["Magnification"] = image.metadata[model.MD_LENS_MAG]
+    
+    # TODO: SVI Huygens still complains about these one missing
+    # MicroscopeSpec ModeSpec ImagingDir RefrIndexMed RefrIndexImm 
+    # PinholeSpacing NumAperture ObjQuality ExBeamFill DetPinhole IllPinhole
+    # DetMagnification LambdaEx LambdaEm ExPhotonCnt
+
+def _add_svi_info(group):
+    """
+    Adds the information to indicate this file follows the SVI format
+    group (HDF Group): the group that will contain the information
+    """
+    gi = group.create_group("SVIData")
+    gi["Company"] = "Delmic"
+    gi["FileSpecificationVersion"] = "0.01d8"
+    gi["ImageHistory"] = ""
+    gi["URL"] = "www.delmic.com"
 
 def _add_acquistion_svi(group, data, **kwargs):
     """
@@ -192,7 +231,8 @@ def _add_acquistion_svi(group, data, **kwargs):
     ids = _create_image_dataset(gi, "Image", data, **kwargs)
     _add_image_info(gi, ids, data)
     gp = group.create_group("PhysicalData")
-    _add_image_metadata(gp, data)    
+    _add_image_metadata(gp, data)
+    _add_svi_info(group)
 
 def _saveAsHDF5(filename, ldata, thumbnail, compressed=True):
     """
@@ -224,9 +264,12 @@ def _saveAsHDF5(filename, ldata, thumbnail, compressed=True):
         prevg = f.create_group("Preview")
         ids = _create_image_dataset(prevg, "Image", thumbnail, compression=compression)
         _add_image_info(prevg, ids, thumbnail)
+        _add_svi_info(prevg)
     
     for i, data in enumerate(ldata):
         g = f.create_group("Acquisition%d" % i)
+        # TODO: if images have the same shape, position, and mpp, they should go
+        # into the same acquisition, on different channels 
         _add_acquistion_svi(g, data, compression=compression)
     
     f.close()
