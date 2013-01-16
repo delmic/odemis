@@ -172,6 +172,9 @@ class TestHDF5IO(unittest.TestCase):
         iwl = f["Acquisition0/PhysicalData/ExcitationWavelength"][()] # m
         self.assertTrue((metadata[model.MD_IN_WL][0] <= iwl and 
                          iwl <= metadata[model.MD_IN_WL][1]))
+        
+        os.remove(FILENAME)
+        
 if __name__ == "__main__":
     #import sys;sys.argv = ['', 'Test.testName']
     unittest.main()
