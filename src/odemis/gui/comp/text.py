@@ -863,7 +863,7 @@ class UnitIntegerCtrl(UnitNumberCtrl):
         kwargs['validator'] = IntegerValidator(min_val, max_val, choices)
 
         if 'step' not in kwargs and (min_val != max_val):
-            kwargs['step'] = max(_step_from_range(min_val, max_val), 1)
+            kwargs['step'] = max(int(round(_step_from_range(min_val, max_val))), 1)
 
         UnitNumberCtrl.__init__(self, *args, **kwargs)
 

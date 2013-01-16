@@ -97,7 +97,7 @@ class TestTiffIO(unittest.TestCase):
         # thumbnail : small RGB completely red
         tshape = (size[1]//8, size[0]//8, 3)
         tdtype = numpy.uint8
-        thumbnail = numpy.zeros(tshape, tdtype)
+        thumbnail = model.DataArray(numpy.zeros(tshape, tdtype))
         thumbnail[:, :, 0] += 255 # red
         blue = (12, 22) # non symmetric position
         thumbnail[blue[-1:-3:-1]] = [0,0,255]
@@ -138,6 +138,7 @@ class TestTiffIO(unittest.TestCase):
                     model.MD_PIXEL_SIZE: (1e-6, 2e-5), # m/px
                     model.MD_POS: (1e-3, -30e-3), # m
                     model.MD_EXP_TIME: 1.2, #s
+                    model.MD_IN_WL: (500e-9, 520e-9), #m
                     }
         
         data = model.DataArray(numpy.zeros((size[1], size[0]), dtype), metadata=metadata)     
@@ -179,6 +180,9 @@ class TestTiffIO(unittest.TestCase):
         roottag = root.tag.split("}")[-1]
         self.assertEqual(roottag.lower(), "ome")
         
+        detect_name = root.find("Instrument/Detector").get("Model")
+        self.assertEqual(metadata[model.MD_HW_NAME], detect_name)
+        
         self.assertEqual(len(root.findall("Image")), 1)
         ime = root.find("Image")
         ifdn = int(ime.find("Pixels/TiffData").get("IFD", "0"))
@@ -189,6 +193,11 @@ class TestTiffIO(unittest.TestCase):
         self.assertAlmostEqual(metadata[model.MD_PIXEL_SIZE][0], psx * 1e-6)
         exp = float(ime.find("Pixels/Plane").get("ExposureTime")) # s
         self.assertAlmostEqual(metadata[model.MD_EXP_TIME], exp)
+        
+        iwl = float(ime.find("Pixels/Channel").get("ExcitationWavelength")) # nm
+        iwl *= 1e-9
+        self.assertTrue((metadata[model.MD_IN_WL][0] <= iwl and 
+                         iwl <= metadata[model.MD_IN_WL][1]))
         
 def rational2float(rational):
     """

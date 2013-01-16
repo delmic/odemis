@@ -420,7 +420,7 @@ class StreamPanelEntry(wx.PyPanel):
             self._txt_excitation.SetForegroundColour("#2FA7D4")
             self._txt_excitation.SetBackgroundColour(self.GetBackgroundColour())
 
-            self._txt_excitation.Bind(wx.EVT_TEXT, self.on_excitation_text)
+            self._txt_excitation.Bind(wx.EVT_COMMAND_ENTER, self.on_excitation_text)
 
             self._gbs.Add(self._txt_excitation, (3, 1),
                           flag=wx.ALIGN_CENTRE_VERTICAL | wx.RIGHT,
@@ -456,7 +456,7 @@ class StreamPanelEntry(wx.PyPanel):
             self._txt_emission.SetForegroundColour("#2FA7D4")
             self._txt_emission.SetBackgroundColour(self.GetBackgroundColour())
 
-            self._txt_emission.Bind(wx.EVT_TEXT, self.on_emission_text)
+            self._txt_emission.Bind(wx.EVT_COMMAND_ENTER, self.on_emission_text)
 
             self._gbs.Add(self._txt_emission, (4, 1),
                           flag=wx.ALIGN_CENTRE_VERTICAL | wx.RIGHT,

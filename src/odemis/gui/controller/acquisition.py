@@ -35,12 +35,14 @@ import subprocess
 import sys
 import threading
 import time
+
 import wx
 
+from odemis import model
+from odemis.gui.config import get_acqui_conf
 from odemis.gui.controller.settingspanel import SettingsSideBar
 from odemis.gui.main_xrc import xrcfr_acq
 from odemis.gui.util import img, get_picture_folder
-from odemis.gui.config import get_acqui_conf
 
 class AcquisitionController(object):
     """ controller to handle snapshot and high-res image acquisition in a "global"
@@ -79,6 +81,7 @@ class AcquisitionController(object):
 
     def onTakeScreenShot(self):
         """ Takes a screenshot of the screen at give pos & size (rect). """
+        logging.debug('Starting screenshot')
         rect = self._main_frame.GetRect()
         # see http://aspn.activestate.com/ASPN/Mail/Message/wxpython-users/3575899
         # created by Andrea Gavana
@@ -181,6 +184,12 @@ class AcquisitionController(object):
         else:
             # need to convert from wx.Image to ndimage
             thumbnail = img.wxImage2NDImage(view.thumbnail.value, keep_alpha=False)
+            # add some basic info to the image
+            mpp = view.mpp.value
+            metadata = {model.MD_POS: view.view_pos.value,
+                        model.MD_PIXEL_SIZE: (mpp, mpp),
+                        model.MD_DESCRIPTION: "Composited image preview"}
+            thumbnail = model.DataArray(thumbnail, metadata=metadata)
 
         # for each stream seen in the viewport
         raw_images = []
@@ -191,6 +200,9 @@ class AcquisitionController(object):
                 # FIXME: ask the stream to get activated and return an image
                 # it's the only one which know precisely how to configure detector and emitters
                 data = [s._dataflow.get()]
+            # add the stream name to the image
+            for d in data:
+                d.metadata[model.MD_DESCRIPTION] = s.name.value
             raw_images.extend(data)
 
         # record everything to a file

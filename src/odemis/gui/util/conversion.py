@@ -28,13 +28,13 @@ def wave2rgb(wavelength):
 
     w = wavelength * 1e9
     # outside of the visible spectrum, use fixed colour
-    if w < 380: # ultraviolet
-        w = 380
+    if w < 350: # ultraviolet
+        w = 350
     elif w > 780: # infrared
         w = 780
 
     # colour
-    if w >= 380 and w < 440:
+    if w >= 350 and w < 440:
         r = -(w - 440.0) / (440.0 - 350.0)
         g = 0.0
         b = 1.0
