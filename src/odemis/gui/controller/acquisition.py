@@ -4,7 +4,7 @@ Created on 22 Aug 2012
 
 @author: Éric Piel
 
-Copyright © 2012 Éric Piel, Delmic
+Copyright © 2012 Éric Piel, Rinze de Laat, Delmic
 
 This file is part of Odemis.
 
@@ -28,11 +28,6 @@ of microscope images.
 
 """
 
-from odemis import model
-from odemis.gui.controller.settingspanel import SettingsSideBar
-from odemis.gui.main_xrc import xrcfr_acq
-from odemis.gui.util import img
-from os.path import expanduser
 import logging
 import os
 import re
@@ -40,8 +35,14 @@ import subprocess
 import sys
 import threading
 import time
+
 import wx
 
+from odemis import model
+from odemis.gui.config import get_acqui_conf
+from odemis.gui.controller.settingspanel import SettingsSideBar
+from odemis.gui.main_xrc import xrcfr_acq
+from odemis.gui.util import img, get_picture_folder
 
 class AcquisitionController(object):
     """ controller to handle snapshot and high-res image acquisition in a "global"
@@ -59,7 +60,7 @@ class AcquisitionController(object):
 
         # nice default paths
         # Snapshots: always the "Pictures" user folder
-        self._snapshot_folder = AcquisitionController.get_picture_folder()
+        self._snapshot_folder = get_picture_folder()
         # High-res: last folder selected, and default to same as snapshot
         self._acquisition_folder = self._snapshot_folder
 
@@ -288,40 +289,6 @@ class AcquisitionController(object):
         logging.debug("Calling: %s", " ".join(args))
         subprocess.check_call(args)
 
-    @staticmethod
-    def get_picture_folder():
-        """
-        return (string): a full path to the "Picture" user folder.
-        It tries to always return an existing folder.
-        """
-        if sys.platform.startswith('linux'):
-            # First try to find the XDG picture folder
-            folder = None
-            try:
-                folder = subprocess.check_output(["xdg-user-dir", "PICTURES"])
-                folder = folder.strip()
-            except subprocess.CalledProcessError:
-                # XDG not supported
-                pass
-            if os.path.isdir(folder):
-                return folder
-            # drop to default
-        elif sys.platform.startswith('win32'):
-            # TODO Windows code
-            pass
-            # drop to default
-        else:
-            logging.warning("Platform not supported for picture folder")
-
-
-        # fall-back to HOME
-        folder = os.path.expanduser("~")
-        if os.path.isdir(folder):
-            return folder
-
-        # last resort: current working directory should always be existing
-        return os.getcwd()
-
 class AcquisitionDialog(xrcfr_acq):
     """ Wrapper class responsible for additional initialization of the
     Acquisition Dialog created in XRCed
@@ -330,13 +297,15 @@ class AcquisitionDialog(xrcfr_acq):
     def __init__(self, parent, interface_model):
         xrcfr_acq.__init__(self, parent)
 
-
+        self.conf = get_acqui_conf()
 
         self.cmb_presets.Append(u"high")
         self.cmb_presets.Append(u"medium")
         self.cmb_presets.Append(u"low")
 
         self.cmb_presets.Select(0)
+
+        self.set_default_filename_and_path()
 
         # Store current values
         main_settings_controller = wx.GetApp().settings_controller
@@ -351,6 +320,11 @@ class AcquisitionDialog(xrcfr_acq):
         self.btn_change_file.Bind(wx.EVT_BUTTON, self.on_change_file)
         self.Bind(wx.EVT_CLOSE, self.on_close)
 
+    def set_default_filename_and_path(self):
+        self.txt_filename.SetValue(u"%s%s" % (time.strftime("%Y%m%d-%H%M%S"),
+                                              self.conf.last_extension))
+        self.txt_destination.SetValue(self.conf.last_path)
+
     def on_key(self, evt):
         """ Dialog key press handler. """
         if evt.GetKeyCode() == wx.WXK_ESCAPE:
@@ -360,22 +334,45 @@ class AcquisitionDialog(xrcfr_acq):
 
     def on_change_file(self, evt):
 
+        print self.conf.wildcards
+        # Note:
+        # - Combining multiple filters into one wildcard is not supported
+        # - When setting 'defaultFile' when creating the file dialog, the
+        #   first filter will automatically be added to the name. Since it
+        #   cannot be changed by selecting a different file type, this is big
+        #   nono. Also, extensions with multiple periods ('.') are not correctly
+        #   handled. The solution is to use the SetFilename method instead.
         dialog = wx.FileDialog(self,
-                            message="message",
-                            defaultDir=expanduser("~"),
+                            message="Choose a filename and destination",
+                            defaultDir=self.conf.last_path,
                             defaultFile="",
-                            style=wx.FD_SAVE|wx.FD_OVERWRITE_PROMPT)
-        # ,
-        #                     wildcard=FileSelectorDefaultWildcardStr,
-        #                     style=FD_DEFAULT_STYLE,
-        #                     pos=DefaultPosition,
-        #                     size=DefaultSize,
-        #                     name=FileDialogNameStr)
+                            style=wx.FD_SAVE|wx.FD_OVERWRITE_PROMPT,
+                            wildcard=self.conf.wildcards)
 
+        # Get and select the last extension used.
+        dialog.SetFilterIndex(
+            self.conf.file_extensions.index(self.conf.last_extension)
+        )
 
+        # Strip the extension before setting the file name
+        name = self.txt_filename.GetValue()
+        dialog.SetFilename(name[:-len(self.conf.last_extension)])
+
+        # When a new location and name have been selected...
         if dialog.ShowModal() == wx.ID_OK:
-            self.txt_filename.SetValue(dialog.GetFilename())
-            self.txt_destination.SetValue(dialog.GetDirectory())
+            # Set and store (into the config file) the path
+            dest_dir = dialog.GetDirectory()
+            self.txt_destination.SetValue(dest_dir)
+            self.conf.last_path = dest_dir
+            # Store the chosen type
+            fi = dialog.GetFilterIndex()
+            self.conf.last_extension = self.conf.file_extensions[fi]
+
+            # Set the file name, augmented with the chosen file extension
+            self.txt_filename.SetValue(u"%s%s" % (dialog.GetFilename(),
+                                                  self.conf.last_extension))
+
+            self.conf.write()
 
     def on_close(self, evt):
         """ Close event handler that executes various cleanup actions
