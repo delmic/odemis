@@ -3,6 +3,10 @@
 import logging
 import time
 import inspect
+import sys
+import os.path
+import subprocess
+
 from threading import Timer
 
 import wx
@@ -90,3 +94,51 @@ def dead_object_wrapper(f, *args, **kwargs):
         except wx.PyDeadObjectError:
             logging.debug("PyDeadObjectError avoided")
     return wrapzor
+
+
+# Path functions
+
+def get_home_folder():
+    """ Return the home directory of the user running the Odemis GUI
+    """
+    # fall-back to HOME
+    folder = os.path.expanduser("~")
+    if os.path.isdir(folder):
+        return folder
+
+    # last resort: current working directory should always be existing
+    return os.getcwd()
+
+
+def get_picture_folder():
+    """
+    return (string): a full path to the "Picture" user folder.
+    It tries to always return an existing folder.
+    """
+    if sys.platform.startswith('linux'):
+        # First try to find the XDG picture folder
+        folder = None
+        try:
+            folder = subprocess.check_output(["xdg-user-dir", "PICTURES"])
+            folder = folder.strip()
+        except subprocess.CalledProcessError:
+            # XDG not supported
+            pass
+        if os.path.isdir(folder):
+            return folder
+        # drop to default
+    elif sys.platform.startswith('win32'):
+        # TODO Windows code
+        pass
+        # drop to default
+    else:
+        logging.warning("Platform not supported for picture folder")
+
+
+    # fall-back to HOME
+    folder = os.path.expanduser("~")
+    if os.path.isdir(folder):
+        return folder
+
+    # last resort: current working directory should always be existing
+    return os.getcwd()

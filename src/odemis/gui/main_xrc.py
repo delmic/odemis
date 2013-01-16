@@ -871,7 +871,7 @@ def __init_resources():
                           </object>
                           <object class="sizeritem">
                             <object class="ImageTextButton" name="btn_change_file">
-                              <label>change...</label>
+                              <label>change…</label>
                               <delta>1</delta>
                               <bitmap>img_btn_64x16_png</bitmap>
                               <hover>img_btn_64x16_h_png</hover>

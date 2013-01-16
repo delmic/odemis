@@ -743,7 +743,7 @@
                           </object>
                           <object class="sizeritem">
                             <object class="ImageTextButton" name="btn_change_file">
-                              <label>change...</label>
+                              <label>change…</label>
                               <delta>1</delta>
                               <bitmap>img/btn_64x16.png</bitmap>
                               <hover>img/btn_64x16_h.png</hover>
