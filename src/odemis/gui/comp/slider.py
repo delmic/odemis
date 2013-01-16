@@ -320,6 +320,7 @@ class Slider(wx.PyControl):
         # self._fire_time = now
 
         change_evt = wx.CommandEvent(wx.wxEVT_COMMAND_SLIDER_UPDATED)
+        change_evt.SetEventObject(self)
         self.GetEventHandler().ProcessEvent(change_evt)
 
 
