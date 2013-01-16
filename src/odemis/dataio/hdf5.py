@@ -16,8 +16,10 @@ You should have received a copy of the GNU General Public License along with Ode
 '''
 from __future__ import division
 from odemis import model
+from datetime import datetime
 import h5py
 import numpy
+import os
 import time
 # User-friendly name
 FORMAT = "HDF5"
@@ -56,27 +58,31 @@ def _create_image_dataset(group, dataset_name, image, **kwargs):
     dataset_name (string): name of the dataset
     image (numpy.ndimage): the image to create. It should have at least 2 dimensions
     returns the new dataset
-    """    
+    """
+    assert(len(image.shape) >= 2)
     image_dataset = group.create_dataset(dataset_name, data=image, **kwargs)
        
-    image_dataset.attrs["CLASS"] = "IMAGE"
+    # numpy.string_ is to force fixed-length string (necessary for compatibility)
+    image_dataset.attrs["CLASS"] = numpy.string_("IMAGE")
     # Colour image?
-    if len(image.shape) == 3 and image.shape[2] == 3:
+    if len(image.shape) == 3 and (image.shape[0] == 3 or image.shape[2] == 3):
         # TODO: check dtype is int?
-        image_dataset.attrs["IMAGE_SUBCLASS"] = "IMAGE_TRUECOLOR"
-        # Stored as [height][width][pixel components]
-        image_dataset.attrs["INTERLACE_MODE"] = "INTERLACE_PIXEL"
-        image_dataset.attrs["IMAGE_COLORMODEL"] = "RGB"
-        # TODO: not sure which on is right
-#        image_dataset.attrs["INTERLACE_MODE"] = "INTERLACE_PLANE"
+        image_dataset.attrs["IMAGE_SUBCLASS"] = numpy.string_("IMAGE_TRUECOLOR")
+        image_dataset.attrs["IMAGE_COLORMODEL"] = numpy.string_("RGB")
+        if image.shape[0] == 3:
+            # Stored as [pixel components][height][width]
+            image_dataset.attrs["INTERLACE_MODE"] = numpy.string_("INTERLACE_PLANE")
+        else: # This is the numpy standard
+            # Stored as [height][width][pixel components]
+            image_dataset.attrs["INTERLACE_MODE"] = numpy.string_("INTERLACE_PIXEL")
     else:
-        image_dataset.attrs["IMAGE_SUBCLASS"] = "IMAGE_GRAYSCALE"
+        image_dataset.attrs["IMAGE_SUBCLASS"] = numpy.string_("IMAGE_GRAYSCALE")
         image_dataset.attrs["IMAGE_WHITE_IS_ZERO"] = numpy.array(0, dtype="uint8")
         idtype = numpy.iinfo(image.dtype)
         image_dataset.attrs["IMAGE_MINMAXRANGE"] = [idtype.min, idtype.max]
     
-    image_dataset.attrs["DISPLAY_ORIGIN"] = "UL" # not rotated
-    image_dataset.attrs["IMAGE_VERSION"] = "1.2"
+    image_dataset.attrs["DISPLAY_ORIGIN"] = numpy.string_("UL") # not rotated
+    image_dataset.attrs["IMAGE_VERSION"] = numpy.string_("1.2")
    
     return image_dataset
 
@@ -85,13 +91,21 @@ def _add_image_info(group, dataset, image):
     Adds the basic metadata information about an image (scale and offset)
     group (HDF Group): the group that contains the dataset
     dataset (HDF Dataset): the image dataset
-    image (DataArray): image with metadata
+    image (DataArray >= 2D): image with metadata, the last 2 dimensions are Y and X (H,W)
     """
     # Note: DimensionScale support is only part of h5py since v2.1
     # Dimensions
-    dataset.dims[0].label = "X"
-    dataset.dims[1].label = "Y"
-    
+    # The order of the dimension is reversed (the slowest changing is last)
+    l = len(dataset.dims)
+    dataset.dims[l-1].label = "X"
+    dataset.dims[l-2].label = "Y"
+    # support more dimensions if available:
+    if l >= 3:
+        dataset.dims[l-3].label = "Z"
+    if l >= 4:
+        dataset.dims[l-4].label = "T"
+    if l >= 5:
+        dataset.dims[l-5].label = "C"
     
     # Offset
     if model.MD_POS in image.metadata:
@@ -103,9 +117,24 @@ def _add_image_info(group, dataset, image):
     
     # Time
     # TODO: is this correct? strange that it's a string? Is there a special type?
+    # Surprisingly (for such a usual type), time storage is a mess in HDF5.
+    # The documentation states that you can use H5T_TIME, but it is 
+    # "is not supported. If H5T_TIME is used, the resulting data will be readable
+    # and modifiable only on the originating computing platform; it will not be
+    # portable to other platforms.". It appears many format are allowed.
+    # In addition in h5py, it's indicated as "deprecated" (although it seems
+    # it was added in the latest version of HDF5. 
+    # Moreover, the only types available are 32 and 64 bits integers as number
+    # of seconds since epoch. No past, no milliseconds, no time-zone. 
+    # So there are other proposals like in in F5 
+    # (http://sciviz.cct.lsu.edu/papers/2007/F5TimeSemantics.pdf) to represent
+    # time with a float, a unit and an offset.
+    # KNMI uses a string like this: DD-MON-YYYY;HH:MM:SS.sss. 
+    # (cf http://www.knmi.nl/~beekhuis/documents/publicdocs/ir2009-01_hdftag36.pdf)
+    # So, to not solve anything, we save the date as a string in ISO 8601
     if model.MD_ACQ_DATE in image.metadata:
-        ad = image.metadata[model.MD_ACQ_DATE]
-        adstr = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(ad))
+        ad = datetime.utcfromtimestamp(image.metadata[model.MD_ACQ_DATE])
+        adstr = ad.strftime("%Y-%m-%dT%H:%M:%S.%f")
         group["TOffset"] = adstr
         
     # Scale
@@ -121,8 +150,8 @@ def _add_image_info(group, dataset, image):
         # No clear what's the relation between this name and the label
         dataset.dims.create_scale(group["DimensionScaleX"], "X")
         dataset.dims.create_scale(group["DimensionScaleY"], "Y")
-        dataset.dims[0].attach_scale(group["DimensionScaleX"])
-        dataset.dims[1].attach_scale(group["DimensionScaleY"])
+        dataset.dims[l-1].attach_scale(group["DimensionScaleX"])
+        dataset.dims[l-2].attach_scale(group["DimensionScaleY"])
         
 def _add_image_metadata(group, image):
     """
@@ -147,7 +176,24 @@ def _add_image_metadata(group, image):
         
     if model.MD_LENS_MAG in image.metadata:
         group["Magnification"] = image.metadata[model.MD_LENS_MAG]
-    
+
+def _add_acquistion_svi(group, data, **kwargs):
+    """
+    Adds the acquisition data according to the sub-format by SVI
+    group (HDF Group): the group that will contain the metadata (named "PhysicalData")
+    image (DataArray): image with metadata (2D image is the lowest dimension)
+    """
+    gi = group.create_group("ImageData")
+    # one of the main thing is that data must always be with 5 dimensions,
+    # in this order: CTZYX => so we add dimensions to data if needed
+    if len(data.shape) < 5:
+        shape5d = [1] * (5-len(data.shape)) + list(data.shape)
+        data = data.reshape(shape5d)
+    ids = _create_image_dataset(gi, "Image", data, **kwargs)
+    _add_image_info(gi, ids, data)
+    gp = group.create_group("PhysicalData")
+    _add_image_metadata(gp, data)    
+
 def _saveAsHDF5(filename, ldata, thumbnail, compressed=True):
     """
     Saves a list of DataArray as a HDF5 (SVI) file.
@@ -156,7 +202,16 @@ def _saveAsHDF5(filename, ldata, thumbnail, compressed=True):
     thumbnail (None or DataArray): see export
     compressed (boolean): whether the file is compressed or not.
     """
-    f = h5py.File(filename, "w") # w forces to delete the file if it exists
+    # TODO check what is the format in Odemis if image is 3D (ex: each pixel has
+    # a spectrum associated, or there is a Z axis as well) and convert to CTZYX.
+    
+    # h5py will extend the current file by default, so we want to make sure
+    # there is no file at all.
+    try:
+        os.remove(filename)
+    except OSError:
+        pass
+    f = h5py.File(filename, "w") # w will fail if file exists 
     if compressed:
         # szip is not free for commercial usage and lzf doesn't seem to be 
         # well supported yet 
@@ -172,11 +227,7 @@ def _saveAsHDF5(filename, ldata, thumbnail, compressed=True):
     
     for i, data in enumerate(ldata):
         g = f.create_group("Acquisition%d" % i)
-        gi = g.create_group("ImageData")
-        ids = _create_image_dataset(gi, "Image", data, compression=compression)
-        _add_image_info(gi, ids, data)
-        gp = g.create_group("PhysicalData")
-        _add_image_metadata(gp, data)
+        _add_acquistion_svi(g, data, compression=compression)
     
     f.close()
 
@@ -198,4 +249,3 @@ def export(filename, data, thumbnail=None):
         # TODO should probably not enforce it: respect duck typing
         assert(isinstance(data, model.DataArray))
         _saveAsHDF5(filename, [data], thumbnail)
-    
