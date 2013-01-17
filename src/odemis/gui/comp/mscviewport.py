@@ -74,7 +74,7 @@ class MicroscopeViewport(wx.Panel):
                     50,
                     (0, 100),
                     size=(100, 12),
-                    style=wx.SL_HORIZONTAL | wx.SL_AUTOTICKS | wx.SL_TICKS)
+                    style=wx.SL_HORIZONTAL | wx.SL_AUTOTICKS | wx.SL_TICKS | wx.NO_BORDER)
 
         self.mergeSlider.SetBackgroundColour(self.legend_panel.GetBackgroundColour())
         self.mergeSlider.SetForegroundColour("#4d4d4d")
