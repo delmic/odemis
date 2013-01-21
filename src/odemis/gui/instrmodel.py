@@ -24,7 +24,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from odemis import model
 from odemis.gui import util
-from odemis.gui.util.img import DataArray2wxImage
 from odemis.gui.util.units import readable_str
 from odemis.model import VigilantAttribute, MD_POS, MD_PIXEL_SIZE, \
     MD_SENSOR_PIXEL_SIZE
@@ -415,7 +414,7 @@ class Stream(object):
             brightness = self.brightness.value / 100.
             contrast = self.contrast.value / 100.
 
-        im = DataArray2wxImage(data, self._depth, brightness, contrast, tint)
+        im = util.img.DataArray2wxImage(data, self._depth, brightness, contrast, tint)
         im.InitAlpha() # it's a different buffer so useless to do it in numpy
 
         try:
@@ -911,7 +910,7 @@ class StreamTree(object):
             passed as an InstrumentalImage.
         kwargs: any argument to be given to the operator function
         """
-        self.operator = operator or StreamTree.Average
+        self.operator = operator or util.img.Average
 
         streams = streams or []
         assert(isinstance(streams, list))
@@ -936,24 +935,30 @@ class StreamTree(object):
 
         return leaves
 
-    def getImage(self):
+    def getImage(self, rect, mpp):
         """
         Returns an InstrumentalImage composed of all the current stream images.
         Precisely, it returns the output of a call to operator.
+        rect (2-tuple of 2-tuple of float): top-left and bottom-right points in 
+          world position (m) of the area to draw
+        mpp (0<float): density (meter/pixel) of the image to compute   
         """
         # TODO: probably not so useful function, need to see what canvas
         #  it will likely need as argument a wx.Bitmap, and view rectangle
         #  that will define where to save the result
 
+        # TODO: cache with the given rect and mpp and last update time of each image
+        
         # create the arguments list for operator
         images = []
         for s in self.streams:
             if isinstance(s, Stream):
                 images.append(s.image.value)
             elif isinstance(s, StreamTree):
-                images.append(s.getImage())
+                images.append(s.getImage(rect, mpp))
+                
 
-        return self.operator(images, **self.kwargs)
+        return self.operator(images, rect, mpp, **self.kwargs)
 
     def getRawImages(self):
         """
@@ -966,15 +971,6 @@ class StreamTree(object):
             lraw.extend(s.raw)
 
         return lraw
-
-    @staticmethod
-    def Average(images):
-        """
-        mix the given images into a big image so that each pixel is the average of each
-         pixel (separate operation for each colour channel).
-        """
-        # TODO (once the operator callable is clearly defined)
-        raise NotImplementedError()
 
 class PositiveVA(VigilantAttribute):
     """

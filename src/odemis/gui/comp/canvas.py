@@ -60,6 +60,7 @@ class DraggableCanvas(wx.Panel):
     """
     def __init__(self, parent):
         wx.Panel.__init__(self, parent, style=wx.NO_FULL_REPAINT_ON_RESIZE)
+        # TODO: would be better to have one list, with 2  types of objects (view, world)
         self.WorldOverlays = [] # on top of the pictures, relative position
         self.ViewOverlays = [] # on top, stays at an absolute position
         self.Images = [None, None]
@@ -479,7 +480,6 @@ class DraggableCanvas(wx.Panel):
             tl = final_rect[0:2]
         return (ret, tl)
 
-
     def _GetImageRectOnBuffer(self, dc, im, scale, center):
         """
         Computes the rectangle containing the image on the buffer coordinates
@@ -585,5 +585,4 @@ def WorldToBufferPoint(pos, world_pos, scale):
     """
     return (round((pos[0] - world_pos[0]) * scale),
             round((pos[1] - world_pos[1]) * scale))
-
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:
