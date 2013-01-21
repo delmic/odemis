@@ -43,11 +43,6 @@ import logging
 # the stream entries directly update the VA's
 
 
-# all the stream types related to optical
-OPTICAL_STREAMS = (instrmodel.FluoStream, instrmodel.BrightfieldStream, instrmodel.StaticStream)
-# all the stream types related to electron microscope
-EM_STREAMS = (instrmodel.SEMStream, instrmodel.StaticStream)
-
 class StreamController(object):
     """
     Manages the insertion/suppression of streams (with their corresponding
@@ -151,14 +146,18 @@ class StreamController(object):
                   self._livegui.ebeam)
         return self._addStream(stream, comp.stream.FixedStreamPanelEntry, add_to_all_views)
 
-    def addStatic(self, name, image, add_to_all_views=False):
+    def addStatic(self, name, image, cls=instrmodel.StaticStream, add_to_all_views=False, ):
         """
         Creates a new static stream and entry into the stream panel
         Note: only for debugging/testing
+        name (string)
+        image (InstrumentalImage)
+        cls (class of Stream)
         returns (StreamPanelEntry): the entry created
         """
-        stream = instrmodel.StaticStream(name, image)
+        stream = cls(name, image)
         return self._addStream(stream, comp.stream.FixedStreamPanelEntry, add_to_all_views)
+
 
     def _addStream(self, stream, entry_cls, add_to_all_views=False):
         """
@@ -235,24 +234,24 @@ class StreamController(object):
     def onOpticalState(self, state):
         # only called when it changes
         if state == STATE_OFF or state == STATE_PAUSE:
-            self._pauseStreams(OPTICAL_STREAMS)
+            self._pauseStreams(instrmodel.OPTICAL_STREAMS)
         elif state == STATE_ON:
             if not self._opticalWasTurnedOn:
                 self._opticalWasTurnedOn = True
                 self.addBrightfield(add_to_all_views=True)
 
-            self._startStreams(OPTICAL_STREAMS)
+            self._startStreams(instrmodel.OPTICAL_STREAMS)
 
     def onEMState(self, state):
         if state == STATE_OFF or state == STATE_PAUSE:
-            self._pauseStreams(EM_STREAMS)
+            self._pauseStreams(instrmodel.EM_STREAMS)
         elif state == STATE_ON:
             if not self._semWasTurnedOn:
                 self._semWasTurnedOn = True
                 if self._livegui.sed:
                     self.addSEMSED(add_to_all_views=True)
 
-            self._startStreams(EM_STREAMS)
+            self._startStreams(instrmodel.EM_STREAMS)
 
 
     def _pauseStreams(self, classes):

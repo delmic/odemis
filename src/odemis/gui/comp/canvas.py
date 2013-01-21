@@ -56,6 +56,9 @@ class DraggableCanvas(wx.Panel):
     * The whole world, which can have infinite dimensions, but needs a redraw
     * The buffer, which contains a precomputed image of the world big enough that a drag cannot bring it outside of the viewport
     * The viewport, which is what the user sees
+    
+    Unit: at scale = 1, 1px = 1 unit. So an image with scale = 1 will be
+      displayed actual size.
 
     """
     def __init__(self, parent):
@@ -63,7 +66,7 @@ class DraggableCanvas(wx.Panel):
         # TODO: would be better to have one list, with 2  types of objects (view, world)
         self.WorldOverlays = [] # on top of the pictures, relative position
         self.ViewOverlays = [] # on top, stays at an absolute position
-        self.Images = [None, None]
+        self.Images = [None] # should always have at least 1 element, to allow adding directly a 2nd image
         self.merge_ratio = 0.3
         # self.zoom = 0 # float, can also be negative
         self.scale = 1.0 # derived from zoom
@@ -250,28 +253,32 @@ class DraggableCanvas(wx.Panel):
     def SetImage(self, index, im, pos = None, scale = None):
         """
         Set (or update) the image
-        index (int, 0 or 1): index number of the image
+        index (0<=int): index number of the image, can be up to 1 more than the current number of images
         im (wx.Image): the image, or None to remove the current image
         pos (2-tuple of float): position of the center of the image (in world unit)
         scale (float): scaling of the image
         Note: call ShouldUpdateDrawing() to actually get the image redrawn afterwards
         """
-        assert(0 <= index <= 1)
+        assert(0 <= index <= len(self.Images))
 
-        if not im:
-            self.Images[index] = None
-            return
-
-        im._dc_center = pos
-        im._dc_scale = scale
-        if not im.HasAlpha():
-            im.InitAlpha()
-        self.Images[index] = im
-
-    def ImageCount(self):
-        """ Return the number of images stored within the canvas """
-        return len([i for i in self.Images if i])
-
+        if im is None: # Delete the image
+            # always keep at least a length of 1
+            if index == 0:
+                # just replace by None
+                self.Images[index] = None
+            else:
+                del self.Images[index]
+        else:
+            im._dc_center = pos
+            im._dc_scale = scale
+            if not im.HasAlpha():
+                im.InitAlpha()
+            if index == len(self.Images):
+                # increase the size
+                self.Images.append(im)
+            else:
+                # replace
+                self.Images[index] = im
 
     def OnPaint(self, event):
         """ Quick update of the window content with the buffer + the static
@@ -391,7 +398,7 @@ class DraggableCanvas(wx.Panel):
         # to scaling computation twice when the image has a scale != 1. In
         # addition, as coordinates are int, there is rounding error on zooming.
 
-        self._DrawMergedImages(dc, self.Images[0], self.Images[1], self.merge_ratio)
+        self._DrawMergedImages(dc, self.Images, self.merge_ratio)
 
         # Each overlay draws itself
         for o in self.WorldOverlays:
@@ -529,42 +536,45 @@ class DraggableCanvas(wx.Panel):
             abuf = imscaled.GetAlphaBuffer()
             self.memsetObject(abuf, int(255 * ratio))
 
+        # TODO: the conversion from Image to Bitmap should be done only once, 
+        # after all the images are merged
         dc.DrawBitmapPoint(wx.BitmapFromImage(imscaled), tl)
 
-    def _DrawMergedImages(self, dc, im1, im2, ratio = 0.5):
+    def _DrawMergedImages(self, dc, images, ratio = 0.5):
         """
         Draw the two images on the DC, centred around their _dc_center, with their own scale,
         and an opacity of "ratio" for im1.
         Both _dc_center's should be close in order to have the parts with only
         one picture drawn without transparency
         dc: wx.DC
-        im1, im2 (wx.Image): the images
-        ratio (0<float<1): how much to merge the images
+        images (list of wx.Image): the images (it can also be None).
+        ratio (0<float<1): how much to merge the images (between 1st and all other)
         scale (0<float): the scaling of the images in addition to their own
+        Note: this is a very rough implementation. It's not fully optimized, and
+        uses only a basic averaging algorithm. 
         """
         t_start = time.time()
 
-        if im1:
-            scale1 = im1._dc_scale
-        if im2:
-            scale2 = im2._dc_scale
-
-        # There can be no image or just one image
-        if not im1:
-            if not im2:
-                return
-            self._DrawImageTransparentRescaled(dc, im2, im2._dc_center, scale=scale2)
-        elif not im2:
-            self._DrawImageTransparentRescaled(dc, im1, im1._dc_center, scale=scale1)
-        # The biggest picture should be drawn first, so that the outside is not
-        # mixed with the black background
-        elif (im1.GetWidth() * scale1 >= im2.GetWidth() * scale2):
-            self._DrawImageTransparentRescaled(dc, im1, im1._dc_center, scale=scale1)
-            self._DrawImageTransparentRescaled(dc, im2, im2._dc_center, 1.0 - ratio, scale2)
-        else:
-            self._DrawImageTransparentRescaled(dc, im2, im2._dc_center, scale=scale2)
-            self._DrawImageTransparentRescaled(dc, im1, im1._dc_center, ratio, scale1)
-
+        # The idea: 
+        # * display the first image (SEM) last, with the given ratio (or 1 if it's the only one)
+        # * display all the other images (fluo) as if they were average
+        #   N images -> ratio = 1-0/N, 1-1/N,... 1-(N-1)/N 
+        
+        # Fluo images to actually display (ie, remove None)
+        fluo = [im for im in images[1:] if im is not None]
+        nb_fluo = len(fluo)
+        
+        for i, im in enumerate(fluo): # display the fluo images first
+            r = 1.0 - i / float(nb_fluo)
+            self._DrawImageTransparentRescaled(dc, im, im._dc_center, r, scale=im._dc_scale)
+        
+        for im in images[:1]: # the first image (or nothing)
+            if im is None:
+                continue
+            if nb_fluo == 0:
+                ratio = 1.0 # no transparency if it's alone
+            self._DrawImageTransparentRescaled(dc, im, im._dc_center, ratio, scale=im._dc_scale)
+        
         t_now = time.time()
         fps = 1.0 / float(t_now - t_start)
         #logging.debug("Display speed: %s fps", fps)
