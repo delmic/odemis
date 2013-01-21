@@ -72,6 +72,11 @@ def main(*args):
         ename = OUT_DIR + "environment/%d.json" % neid
         logging.debug("Downloading environment %s", eid)
         download(eurl, ename)
+        fe = open(ename, "r")
+        try:
+            fulle = json.load(fe)
+        except ValueError:
+            logging.exception("File %s seems to be an invalid JSON file", eurl)
         
     substances = {} # id -> url
     # For each substance, download it
@@ -86,6 +91,21 @@ def main(*args):
         logging.debug("Downloading substance %d", nsid)
         sname = OUT_DIR + "substance/%d.json" % nsid
         download(surl, sname)
+        
+        # gif file too, if it is there
+        fs = open(sname, "r")
+        try:
+            fulls = json.load(fs)
+        except ValueError:
+            logging.exception("File %s seems to be an invalid JSON file", surl)
+            continue
+        
+        strurl = fulls["structure"]
+        if strurl:
+            strsname = strurl.rsplit("/", 1)[1]
+            logging.debug("Downloading structure %s", strsname)
+            strname = OUT_DIR + "substance/" + strsname
+            download(strurl, strname) 
 
 if __name__ == '__main__':
     ret = main(sys.argv)
