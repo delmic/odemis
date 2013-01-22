@@ -27,21 +27,24 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 
+import collections
+import logging
+import math
+
+import wx
+import wx.lib.newevent
+
+import odemis.gui
+import odemis.gui.img.data as img
+
 from .buttons import ImageButton, ImageToggleButton, ImageTextToggleButton, \
     ColourButton, PopupImageButton
 from .foldpanelbar import FoldPanelItem
 from .slider import UnitIntegerSlider
-from .text import SuggestTextCtrl, UnitIntegerCtrl
+from .text import SuggestTextCtrl, UnitIntegerCtrl, IntegerTextCtrl
 from odemis.gui import instrmodel
 from odemis.gui.img.data import getemptyBitmap
 from odemis.gui.util.conversion import wave2rgb
-import collections
-import logging
-import math
-import odemis.gui.img.data as img
-import wx
-import wx.lib.newevent
-
 
 
 
@@ -263,14 +266,15 @@ class StreamPanelEntry(wx.PyPanel):
 
     expander_class = FixedExpander
 
-    def __init__(self, parent, stream, livegui, wid=wx.ID_ANY,
+    def __init__(self, parent, stream, microscope_model, wid=wx.ID_ANY,
                  pos=wx.DefaultPosition, size=wx.DefaultSize,
                  style=wx.CP_DEFAULT_STYLE, agwStyle=0,
                  validator=wx.DefaultValidator, name="CollapsiblePane",
                  collapsed=True):
         """
         stream (Stream): the data model to be displayed (and modified by the user)
-        livegui (GUIMicroscope): the microscope GUI, where there is focussedView
+        microscope_model (GUIMicroscope): the microscope GUI, where there is
+                         focussedView
         """
 
         wx.PyPanel.__init__(self, parent, wid, pos, size, style, name)
@@ -278,7 +282,7 @@ class StreamPanelEntry(wx.PyPanel):
         self.SetBackgroundColour("#4D4D4D")
         self.SetForegroundColour("#DDDDDD")
         self.stream = stream
-        self._livegui = livegui
+        self._microscope = microscope_model
         self._collapsed = True
         self._agwStyle = agwStyle | wx.CP_NO_TLW_RESIZE  # |wx.CP_GTK_EXPANDER
 
@@ -286,7 +290,7 @@ class StreamPanelEntry(wx.PyPanel):
         self._panel = wx.Panel(self, style=wx.TAB_TRAVERSAL | wx.NO_BORDER)
         self._panel.Hide()
 
-        self._gbs = wx.GridBagSizer(3, 5)
+        self._gbs = wx.GridBagSizer(8, 5)
         self._panel.SetSizer(self._gbs)
 
         self._expander = None
@@ -305,6 +309,8 @@ class StreamPanelEntry(wx.PyPanel):
         A delay was needed in order for all the settings to be loaded from the
         XRC file (i.e. Font and background/foreground colours).
         """
+
+        row_count = 0
 
         # ====== Add an expander button
 
@@ -335,14 +341,16 @@ class StreamPanelEntry(wx.PyPanel):
                                         bmp_h=img.getbtn_contrast_hBitmap(),
                                         bmp_sel=img.getbtn_contrast_aBitmap())
         self._btn_auto_contrast.SetForegroundColour("#000000")
-        self._gbs.Add(self._btn_auto_contrast, (0, 0), flag=wx.LEFT, border=34)
-
+        self._gbs.Add(self._btn_auto_contrast, (row_count, 0),
+                      flag=wx.LEFT, border=11)
+        row_count += 1
 
         # ====== Second row, brightness label, slider and value
-        lbl_brightness = wx.StaticText(self._panel, -1, "brightness:")
-        self._gbs.Add(lbl_brightness, (1, 0),
+
+        lbl_brightness = wx.StaticText(self._panel, -1, "Brightness")
+        self._gbs.Add(lbl_brightness, (row_count, 0),
                       flag=wx.LEFT | wx.ALIGN_CENTRE_VERTICAL,
-                      border=34)
+                      border=11)
 
         # FIXME: we need to ensure it's possible to have a value == 0 (and not just 1/201)
         self._sld_brightness = UnitIntegerSlider(
@@ -353,13 +361,14 @@ class StreamPanelEntry(wx.PyPanel):
                               unit=None,
                               name="brightness_slider")
 
-        self._gbs.Add(self._sld_brightness, (1, 1), flag=wx.EXPAND)
+        self._gbs.Add(self._sld_brightness, (row_count, 1), flag=wx.EXPAND)
+        row_count += 1
 
-        # ====== Third row, brightness label, slider and value
+        # ====== Third row, contrast label, slider and value
 
-        lbl_contrast = wx.StaticText(self._panel, -1, "contrast:")
-        self._gbs.Add(lbl_contrast, (2, 0),
-                      flag=wx.LEFT | wx.ALIGN_CENTRE_VERTICAL, border=34)
+        lbl_contrast = wx.StaticText(self._panel, -1, "Contrast")
+        self._gbs.Add(lbl_contrast, (row_count, 0),
+                      flag=wx.LEFT | wx.ALIGN_CENTRE_VERTICAL, border=11)
 
         self._sld_contrast = UnitIntegerSlider(
                              self._panel,
@@ -369,7 +378,57 @@ class StreamPanelEntry(wx.PyPanel):
                              unit=None,
                              name="contrast_slider")
 
-        self._gbs.Add(self._sld_contrast, (2, 1), flag=wx.EXPAND)
+        self._gbs.Add(self._sld_contrast, (row_count, 1), flag=wx.EXPAND)
+        row_count += 1
+
+
+        # ====== Fourth row, accumulation label, text field and value
+
+        lbl_accum = wx.StaticText(self._panel, -1, "Accumulation")
+        self._gbs.Add(lbl_accum, (row_count, 0),
+                      flag=wx.LEFT | wx.ALIGN_CENTRE_VERTICAL, border=11)
+
+        self._txt_accum = IntegerTextCtrl(self._panel,
+                                          value=1,
+                                          min_val=1,
+                                          key_inc=True,
+                                          step=1,
+                                          style=wx.NO_BORDER)
+        self._txt_accum.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_EDIT)
+        self._txt_accum.SetBackgroundColour(self._panel.GetBackgroundColour())
+
+        self._gbs.Add(self._txt_accum, (row_count, 1), flag=wx.EXPAND)
+
+        row_count += 1
+
+        # ====== Fifth row, interpolation label, text field and value
+
+        lbl_interp = wx.StaticText(self._panel, -1, "Interpolation")
+        self._gbs.Add(lbl_interp, (row_count, 0),
+                      flag=wx.LEFT | wx.ALIGN_CENTRE_VERTICAL, border=11)
+
+        choices = ["None", "Linear", "Cubic"]
+        self._cmb_interp = wx.combo.OwnerDrawnComboBox(self._panel,
+                                                   -1,
+                                                   value=choices[0],
+                                                   pos=(0, 0),
+                                                   size=(100, 16),
+                                                   style=wx.NO_BORDER |
+                                                         wx.CB_DROPDOWN |
+                                                         wx.TE_PROCESS_ENTER |
+                                                         wx.CB_READONLY,
+                                                    choices=choices)
+
+        self._cmb_interp.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_EDIT)
+        self._cmb_interp.SetBackgroundColour(self._panel.GetBackgroundColour())
+        self._cmb_interp.SetButtonBitmaps(img.getbtn_downBitmap(),
+                                          pushButtonBg=False)
+
+
+        self._gbs.Add(self._cmb_interp, (row_count, 1), flag=wx.EXPAND)
+
+        row_count += 1
+
 
         self._gbs.AddGrowableCol(1)
 
@@ -382,7 +441,7 @@ class StreamPanelEntry(wx.PyPanel):
         self._expander._btn_play.Bind(wx.EVT_BUTTON, self.on_play)
         self.stream.updated.subscribe(self.onUpdatedChanged, init=True)
         # initialise _btn_play
-        self.setVisible(self.stream in self._livegui.focussedView.value.getStreams())
+        self.setVisible(self.stream in self._microscope.focussedView.value.getStreams())
 
         # Panel controls
         # TODO reuse VigilantAttributeConnector, or at least refactor
@@ -405,9 +464,9 @@ class StreamPanelEntry(wx.PyPanel):
 
         if hasattr(self.stream, "excitation"):
             # Warning: stream.excitation is in m, we present everything in nm
-            lbl_excitation = wx.StaticText(self._panel, -1, "excitation:")
-            self._gbs.Add(lbl_excitation, (3, 0),
-                          flag=wx.LEFT | wx.ALIGN_CENTRE_VERTICAL, border=34)
+            lbl_excitation = wx.StaticText(self._panel, -1, "Excitation")
+            self._gbs.Add(lbl_excitation, (row_count, 0),
+                          flag=wx.LEFT | wx.ALIGN_CENTRE_VERTICAL, border=11)
 
             # TODO use the range of the VA
             self._txt_excitation = UnitIntegerCtrl(self._panel, -1,
@@ -422,7 +481,7 @@ class StreamPanelEntry(wx.PyPanel):
 
             self._txt_excitation.Bind(wx.EVT_COMMAND_ENTER, self.on_excitation_text)
 
-            self._gbs.Add(self._txt_excitation, (3, 1),
+            self._gbs.Add(self._txt_excitation, (row_count, 1),
                           flag=wx.ALIGN_CENTRE_VERTICAL | wx.RIGHT,
                           border=18)
             # TODO: is button a good choice? the user cannot click it, it's just
@@ -434,22 +493,23 @@ class StreamPanelEntry(wx.PyPanel):
                                 background_parent=self._panel)
             self._btn_excitation.SetToolTipString("Wavelength colour")
 
-            self._gbs.Add(self._btn_excitation, (3, 2),
+            self._gbs.Add(self._btn_excitation, (row_count, 2),
                           flag=wx.ALIGN_CENTRE_VERTICAL | wx.RIGHT,
                           border=18)
+            row_count += 1
 
             # TODO also a label for warnings
 
 
         if hasattr(self.stream, "emission"):
-            lbl_emission = wx.StaticText(self._panel, -1, "emission:")
-            self._gbs.Add(lbl_emission, (4, 0),
-                          flag=wx.LEFT | wx.ALIGN_CENTRE_VERTICAL, border=34)
+            lbl_emission = wx.StaticText(self._panel, -1, "Emission")
+            self._gbs.Add(lbl_emission, (row_count, 0),
+                          flag=wx.LEFT | wx.ALIGN_CENTRE_VERTICAL, border=11)
 
             self._txt_emission = UnitIntegerCtrl(self._panel, -1,
                     int(round(self.stream.emission.value * 1e9)),
                     style=wx.NO_BORDER,
-                    size=(50, -1), 
+                    size=(50, -1),
                     min_val=int(math.ceil(self.stream.emission.range[0] * 1e9)),
                     max_val=int(self.stream.emission.range[1] * 1e9),
                     unit='nm')
@@ -458,7 +518,7 @@ class StreamPanelEntry(wx.PyPanel):
 
             self._txt_emission.Bind(wx.EVT_COMMAND_ENTER, self.on_emission_text)
 
-            self._gbs.Add(self._txt_emission, (4, 1),
+            self._gbs.Add(self._txt_emission, (row_count, 1),
                           flag=wx.ALIGN_CENTRE_VERTICAL | wx.RIGHT,
                           border=10)
 
@@ -469,9 +529,13 @@ class StreamPanelEntry(wx.PyPanel):
                                               background_parent=self._panel)
             self._btn_emission.SetToolTipString("Wavelength colour")
 
-            self._gbs.Add(self._btn_emission, (4, 2),
+            self._gbs.Add(self._btn_emission, (row_count, 2),
                           flag=wx.ALIGN_CENTRE_VERTICAL | wx.RIGHT,
                           border=10)
+            row_count += 1
+
+        self._gbs.AddSpacer((5, 5), (row_count, 0))
+
 
     def set_expander_button(self, button):
         """ Assign a new expander button to the stream panel.
@@ -592,7 +656,7 @@ class StreamPanelEntry(wx.PyPanel):
 
     def on_visibility(self, evt):
         # TODO need to let the currently focused view know (via view controller?)
-        view = self._livegui.focussedView.value
+        view = self._microscope.focussedView.value
         if self._expander._btn_vis.GetToggle():
             logging.debug("Showing stream '%s'", self.stream.name.value)
             # FIXME how to get the ref?
@@ -683,7 +747,7 @@ class StreamPanelEntry(wx.PyPanel):
         wl = (obj.GetValue() or 0) * 1e-9
         # FIXME: need to turn the text red if the value is the smaller (bigger, maybe not necessary)
         wl = sorted(self.stream.emission.range + (wl,))[1]
-        self.stream.emission.value = wl 
+        self.stream.emission.value = wl
 
         colour = wave2rgb(self.stream.emission.value)
 #        logging.debug("Changing colour to %s", colour)
@@ -817,8 +881,6 @@ class StreamPanel(wx.Panel):
 
             self._set_warning()
 
-            # FIXME: dropdown not working atm
-            #self.btn_add_stream.Bind(wx.EVT_LISTBOX, self.on_add_stream)
             self.btn_add_stream.Bind(wx.EVT_BUTTON, self.on_add_stream)
 
         self._fitStreams()
