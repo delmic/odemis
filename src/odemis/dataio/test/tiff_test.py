@@ -199,6 +199,8 @@ class TestTiffIO(unittest.TestCase):
         self.assertTrue((metadata[model.MD_IN_WL][0] <= iwl and 
                          iwl <= metadata[model.MD_IN_WL][1]))
         
+        os.remove(FILENAME)
+        
 def rational2float(rational):
     """
     Converts a rational number (from libtiff) to a float

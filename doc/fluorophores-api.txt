@@ -1,0 +1,67 @@
+======================================================
+Fluorophores JSON interface
+======================================================
+
+The interface provides easy and unrestricted live read access to fluorophores
+data for integration in other services. Data is presented in the JSON format.
+Data fields should be self-describing so far.
+
+For questions, feedback or improvement suggestions feel free to write to Michael
+Bayer <michael.bayer@SG3net.org>.
+
+
+Structure - Model
+======================================================
+
+There are _substances_ used in different _environments_ providing 
+different absorption, excitation and emission spectra. An Environment is 
+defined through a substance, solvent, ph value and temperature.
+
+Substances and environments have unique identifiers, substance_id and 
+environment_id.
+
+URLs
+======================================================
+
+Environment index
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+------------------------------------------------------
+http://www.fluorophores.tugraz.at/environment/index.json
+------------------------------------------------------
+
+provides a list of _all_ available environments including the defining 
+properties and lists of excitation and emission maxima of the 
+environment's spectra.
+
+
+Environment details
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+------------------------------------------------------
+http://www.fluorophores.tugraz.at/environment/<environment_id>.json
+------------------------------------------------------
+
+provides the defining properties of an environment. Unavailable 
+properties are indicated with 'null'. Further, there are objects 
+describing the spectra, one for absorption, excitation and emission. 
+There is at least emission and one of excitation or absorption defined 
+for every environment. Missing spectra data is represented through an 
+empty object (e.g. "absorption": { }).
+The curve is defined by a list of points, where a point is a list 
+[wavelenght, value] itself. 'value' is a normalized value between 0 an 1.
+
+Example http://www.fluorophores.tugraz.at/environment/5080.json
+
+Environment details
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+------------------------------------------------------
+http://www.fluorophores.tugraz.at/substance/<substance_id>.json
+------------------------------------------------------
+
+provides detailed information on the substance used in an environment 
+including names, formula and a link to link to an (pixel based) image of 
+the substance's structure, to name a few of them.
+
+Example http://www.fluorophores.tugraz.at/substance/17.json

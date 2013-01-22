@@ -93,6 +93,11 @@ def _add_image_info(group, dataset, image):
     dataset (HDF Dataset): the image dataset
     image (DataArray >= 2D): image with metadata, the last 2 dimensions are Y and X (H,W)
     """
+    # StateEnumeration??
+#    dtstate.commit(group, "StateEnumeration")
+    dtstate = h5py.special_dtype(enum=('i', {
+         "Invalid":111, "Default":112, "Estimated":113, "Reported":114, "Verified":115}))
+    
     # Note: DimensionScale support is only part of h5py since v2.1
     # Dimensions
     # The order of the dimension is reversed (the slowest changing is last)
@@ -111,8 +116,10 @@ def _add_image_info(group, dataset, image):
     if model.MD_POS in image.metadata:
         pos = image.metadata[model.MD_POS]
         group["XOffset"] = pos[0]
+        group["XOffset"].attrs.create("State", 114, dtype=dtstate)
         group["XOffset"].attrs["UNIT"] = "m" # our extension
         group["YOffset"] = pos[1]
+        group["YOffset"].attrs.create("State", 114, dtype=dtstate)
         group["YOffset"].attrs["UNIT"] = "m" # our extension
     
     # Time
@@ -136,6 +143,7 @@ def _add_image_info(group, dataset, image):
         ad = datetime.utcfromtimestamp(image.metadata[model.MD_ACQ_DATE])
         adstr = ad.strftime("%Y-%m-%dT%H:%M:%S.%f")
         group["TOffset"] = adstr
+        group["TOffset"].attrs.create("State", 114, dtype=dtstate)
         
     # Scale
     if model.MD_PIXEL_SIZE in image.metadata:
@@ -145,54 +153,135 @@ def _add_image_info(group, dataset, image):
         pxs = image.metadata[model.MD_PIXEL_SIZE]
         group["DimensionScaleX"] = pxs[0]
         group["DimensionScaleX"].attrs["UNIT"] = "m"
+        group["DimensionScaleX"].attrs.create("State", 114, dtype=dtstate)
         group["DimensionScaleY"] = pxs[1]
         group["DimensionScaleY"].attrs["UNIT"] = "m" # our extension
+        group["DimensionScaleY"].attrs.create("State", 114, dtype=dtstate)
         # No clear what's the relation between this name and the label
         dataset.dims.create_scale(group["DimensionScaleX"], "X")
         dataset.dims.create_scale(group["DimensionScaleY"], "Y")
         dataset.dims[l-1].attach_scale(group["DimensionScaleX"])
         dataset.dims[l-2].attach_scale(group["DimensionScaleY"])
+
+        # Unknown data, but SVI needs them to take the scales into consideration
+        if l >= 4:
+            group["DimensionScaleZ"] = 1
+            group["DimensionScaleT"] = 1
+            # No clear what's the relation between this name and the label
+            dataset.dims.create_scale(group["DimensionScaleZ"], "Z")
+            group["DimensionScaleZ"].attrs.create("State", 114, dtype=dtstate)
+            dataset.dims.create_scale(group["DimensionScaleT"], "T")
+            group["DimensionScaleT"].attrs.create("State", 114, dtype=dtstate)
+            dataset.dims[l-3].attach_scale(group["DimensionScaleZ"])
+            dataset.dims[l-4].attach_scale(group["DimensionScaleT"])
+
         
-def _add_image_metadata(group, image):
+def _add_image_metadata(group, images):
     """
     Adds the basic metadata information about an image (scale and offset)
     group (HDF Group): the group that will contain the metadata (named "PhysicalData")
-    image (DataArray): image with metadata
+    images (list of DataArray): list of images with metadata
     """
-    if model.MD_DESCRIPTION in image.metadata:
-        group["Title"] = image.metadata[model.MD_DESCRIPTION]
+    gp = group.create_group("PhysicalData")
     
-    if model.MD_IN_WL in image.metadata:
-        iwl = image.metadata[model.MD_IN_WL]
-        xwl = numpy.mean(iwl) # in m
-        group["ExcitationWavelength"] = xwl
+    # TODO indicate the State of the information (especially if it's unknown)
     
-        # TODO: indicate this is epifluorescense?
+    # All values are duplicated by channel, excepted for Title
+    gdesc = [i.metadata.get(model.MD_DESCRIPTION, "") for i in images]
+    gp["Title"] = ", ".join(gdesc)
     
-    if model.MD_OUT_WL in image.metadata:
-        owl = image.metadata[model.MD_OUT_WL]
-        ewl = numpy.mean(owl) # in m
-        group["EmissionWavelength"] = ewl
-        
-    if model.MD_LENS_MAG in image.metadata:
-        group["Magnification"] = image.metadata[model.MD_LENS_MAG]
+    cdesc = [i.metadata.get(model.MD_DESCRIPTION, "") for i in images]
+    gp["ChannelDescription"] = cdesc
+    
+    xwls = [numpy.mean(i.metadata.get(model.MD_IN_WL, 0)) for i in images]
+    gp["ExcitationWavelength"] = xwls # in m
+    # TODO: indicate this is epifluorescense or not? => MicroscopeMode = 3 
+    
+    ewls = [numpy.mean(i.metadata.get(model.MD_OUT_WL, 0)) for i in images]
+    gp["EmissionWavelength"] = ewls # in m
 
-def _add_acquistion_svi(group, data, **kwargs):
+    mags = [i.metadata.get(model.MD_LENS_MAG, 1) for i in images]
+    gp["Magnification"] = mags
+    
+    # TODO: SVI Huygens still complains about these one missing
+    # MicroscopeSpec ModeSpec ImagingDir RefrIndexMed RefrIndexImm 
+    # PinholeSpacing NumAperture ObjQuality ExBeamFill DetPinhole IllPinhole
+    # DetMagnification LambdaEx LambdaEm ExPhotonCnt
+
+def _add_svi_info(group):
+    """
+    Adds the information to indicate this file follows the SVI format
+    group (HDF Group): the group that will contain the information
+    """
+    gi = group.create_group("SVIData")
+    gi["Company"] = "Delmic"
+    gi["FileSpecificationVersion"] = "0.01d8"
+    gi["ImageHistory"] = ""
+    gi["URL"] = "www.delmic.com"
+
+def _add_acquistion_svi(group, images, **kwargs):
     """
     Adds the acquisition data according to the sub-format by SVI
     group (HDF Group): the group that will contain the metadata (named "PhysicalData")
-    image (DataArray): image with metadata (2D image is the lowest dimension)
+    images (list of 2D DataArray): set of images with metadata
     """
     gi = group.create_group("ImageData")
     # one of the main thing is that data must always be with 5 dimensions,
     # in this order: CTZYX => so we add dimensions to data if needed
-    if len(data.shape) < 5:
-        shape5d = [1] * (5-len(data.shape)) + list(data.shape)
-        data = data.reshape(shape5d)
-    ids = _create_image_dataset(gi, "Image", data, **kwargs)
-    _add_image_info(gi, ids, data)
-    gp = group.create_group("PhysicalData")
-    _add_image_metadata(gp, data)    
+    # In the C dimension we put the different images
+    images4d = []
+    for d in images:
+        if len(d.shape) < 4:
+            shape4d = [1] * (4-len(d.shape)) + list(d.shape)
+            d = d.reshape(shape4d)
+        images4d.append(d)
+    gdata = numpy.array(images4d) # convert to a 5D array
+       
+    ids = _create_image_dataset(gi, "Image", gdata, **kwargs)
+    _add_image_info(gi, ids, images[0]) # all images should have the same info (but channel)
+    _add_image_metadata(group, images)
+    _add_svi_info(group)
+
+
+def _findImageGroups(das):
+    """
+    Find groups of images which should be considered part of the same acquisition
+    (be a channel of an Image in HDF5 SVI).
+    das (list of DataArray): all the images
+    returns (list of list of int): a set of "groups", each group is represented
+      by a set of indexes (of the images being part of the group)
+    Note: it's a slightly different function from tiff._findImageGroups()
+    """
+    # We consider images to be part of the same group if they have:
+    # * same shape
+    # * metadata that show they were acquired by the same instrument
+    # * same position
+    # * same density (MPP)
+    
+    groups = []
+    
+    for i, da in enumerate(das):
+        # try to find a matching group (compare just to the first picture)
+        found = False
+        for g in groups:
+            da0 = das[g[0]]
+            if da0.shape != da.shape:
+                continue
+            if (da0.metadata.get(model.MD_HW_NAME, None) != da.metadata.get(model.MD_HW_NAME, None) or
+                da0.metadata.get(model.MD_HW_VERSION, None) != da.metadata.get(model.MD_HW_VERSION, None)):
+                continue
+            if (da0.metadata.get(model.MD_PIXEL_SIZE, None) != da.metadata.get(model.MD_PIXEL_SIZE, None) or
+                da0.metadata.get(model.MD_POS, None) != da.metadata.get(model.MD_POS, None)):
+                continue
+            g.append(i)
+            found = True
+            break
+        
+        if not found:
+            # if not, create a new group
+            groups.append([i])
+    
+    return groups
 
 def _saveAsHDF5(filename, ldata, thumbnail, compressed=True):
     """
@@ -224,10 +313,15 @@ def _saveAsHDF5(filename, ldata, thumbnail, compressed=True):
         prevg = f.create_group("Preview")
         ids = _create_image_dataset(prevg, "Image", thumbnail, compression=compression)
         _add_image_info(prevg, ids, thumbnail)
+        _add_svi_info(prevg)
+        
+    # for each set of images from the same instrument, add them
+    groups = _findImageGroups(ldata)
     
-    for i, data in enumerate(ldata):
-        g = f.create_group("Acquisition%d" % i)
-        _add_acquistion_svi(g, data, compression=compression)
+    for g in groups:
+        ga = f.create_group("Acquisition%d" % min(g)) # smallest ID of the images
+        gdata = [ldata[i] for i in g]
+        _add_acquistion_svi(ga, gdata, compression=compression)
     
     f.close()
 

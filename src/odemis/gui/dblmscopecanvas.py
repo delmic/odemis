@@ -17,6 +17,7 @@ You should have received a copy of the GNU General Public License along with Ode
 '''
 
 from .comp.canvas import DraggableCanvas, WorldToBufferPoint
+from odemis.gui import controller, instrmodel
 import logging
 import threading
 import time
@@ -56,9 +57,6 @@ class DblMicroscopeCanvas(DraggableCanvas):
 #        self.WorldOverlays.append(CrossHairOverlay("Blue", CROSSHAIR_SIZE, (-10,-10))) # debug
 #        self.WorldOverlays.append(CrossHairOverlay("Red", CROSSHAIR_SIZE, (10,10))) # debug
 
-        #self.SetImage(0, gettest_patternImage(), (0.0, 0.0), 0.5)
-        #self.SetImage(1, gettest_patternImage(), (0.0, 0.0), 0.5)
-
     def setView(self, view):
         """
         Set the view that this canvas is displaying/representing
@@ -90,31 +88,47 @@ class DblMicroscopeCanvas(DraggableCanvas):
     
     def _convertStreamsToImages(self):
         """
-        Temporary function to convert the StreamTree to 2 images as the canvas 
+        Temporary function to convert the StreamTree to a list of images as the canvas 
           currently expects.
         """
         streams = self.view.streams.streams
-        # the stream tree can have less, or more than 2 images
-        for i, s in enumerate(streams[0:2]):
+        
+        # create a list of of each stream's image, but re-ordered so that SEM is first
+        images = []
+        has_sem_image = False
+        for i, s in enumerate(streams):
             if not s:
                 # should not happen, but let's not completely fail on this
                 logging.error("StreamTree has a None stream")
                 continue
-            
+
             iim = s.image.value
-            if iim and iim.image:
-                scale = float(iim.mpp) / self.mpwu
-                pos = (iim.center[0] / self.mpwu, iim.center[1] / self.mpwu)
-                self.SetImage(i, iim.image, pos, scale)
+            if iim is None or iim.image is None:
+                continue
+            
+            if isinstance(s, instrmodel.EM_STREAMS):
+                # as first
+                images.insert(0, iim)
+                if has_sem_image:
+                    logging.warning("Multiple SEM images are not handled correctly for now")
+                has_sem_image = True
             else:
-                #TODO it seems there is a problem, we had： that should be better, but we don't do it for now, to detect when to reset mpp
-                self.SetImage(i, None) # removes the image
+                images.append(iim)
         
-        # all the image not present in the stream are removed (set to None)
-        if len(streams) < 2:
-            for i in range(len(streams), 2):
-                self.SetImage(i, None) # removes the image
-                
+        if not has_sem_image: # make sure there is always a SEM image
+            images.insert(0, None)
+        
+        # remove all the images (so that the images deleted go away)
+        self.Images = [None]
+        
+        # add the images in order
+        for i, iim in enumerate(images):
+            if iim is None:
+                continue
+            scale = float(iim.mpp) / self.mpwu
+            pos = (iim.center[0] / self.mpwu, iim.center[1] / self.mpwu)
+            self.SetImage(i, iim.image, pos, scale)
+        
         # set merge_ratio 
         self.merge_ratio = self.view.streams.kwargs.get("merge", 0.5)
     
@@ -138,8 +152,12 @@ class DblMicroscopeCanvas(DraggableCanvas):
         if (self._lastThumbnailUpdate + self._thumbnailUpdatePeriod) < now:
             self._updateThumbnail()
             self._lastThumbnailUpdate = now
-        
+    
+    # TODO use rate limiting decorator
     def _updateThumbnail(self):
+        # TODO avoid doing 2 copies, by using directly the wxImage from the 
+        # result of the StreamTree
+        
         # new bitmap to copy the DC
         bitmap = wx.EmptyBitmap(*self.ClientSize)
         dc = wx.MemoryDC()

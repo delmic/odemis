@@ -235,7 +235,7 @@ class OdemisGUIApp(wx.App):
             im2 = InstrumentalImage(wx.Image(name2), 4.54545e-7, pos)
 
             self.stream_controller.addStatic("Fluorescence", im1)
-            self.stream_controller.addStatic("Secondary electrons", im2)
+            self.stream_controller.addStatic("Secondary electrons", im2, cls=instrmodel.StaticSEMStream)
         except e:
             logging.exception("Failed to load example")
 
@@ -251,7 +251,7 @@ class OdemisGUIApp(wx.App):
             im1 = InstrumentalImage(wx.Image(name1), 1.34e-07, pos)
 
             self.stream_controller.addStatic("Fluorescence", im1)
-            self.stream_controller.addStatic("Secondary electrons", im2)
+            self.stream_controller.addStatic("Secondary electrons", im2, cls=instrmodel.StaticSEMStream)
         except e:
             logging.exception("Failed to load example")
 

@@ -75,12 +75,12 @@ class TestHDF5IO(unittest.TestCase):
         self.assertGreater(st.st_size, 0)
         f = h5py.File(FILENAME, "r")
         
-        # check the number of pages
+        # check the number of channels
+        im = numpy.array(f["Acquisition0/ImageData/Image"])
         for i in range(num):
-            im = numpy.array(f["Acquisition%d/ImageData/Image" % i])
-            im.shape = im.shape[3:5]
-            self.assertEqual(im.shape, size[-1:-3:-1])
-            self.assertEqual(im[white[-1:-3:-1]], 124)
+            subim = im[i, 0, 0] # just one channel 
+            self.assertEqual(subim.shape, size[-1:-3:-1])
+            self.assertEqual(subim[white[-1:-3:-1]], 124)
             
         os.remove(FILENAME)
         
@@ -116,13 +116,11 @@ class TestHDF5IO(unittest.TestCase):
         self.assertEqual(im[0,0].tolist(), [255,0,0])
         self.assertEqual(im[blue[-1:-3:-1]].tolist(), [0,0,255])
         
-        # FIXME: color dimension should be C, and in order: Y, X, C
-        
-        # check the number of pages
+        # check the number of channels
+        im = numpy.array(f["Acquisition0/ImageData/Image"])
         for i in range(num):
-            im = numpy.array(f["Acquisition%d/ImageData/Image" % i])
-            im.shape = im.shape[3:5]
-            self.assertEqual(im.shape, size[-1:-3:-1])
+            subim = im[i, 0, 0] # just one channel 
+            self.assertEqual(subim.shape, size[-1:-3:-1])
             
         os.remove(FILENAME)
         
@@ -145,8 +143,16 @@ class TestHDF5IO(unittest.TestCase):
         
         data = model.DataArray(numpy.zeros((size[1], size[0]), dtype), metadata=metadata)     
         
+        # thumbnail : small RGB completely red
+        tshape = (size[1]//8, size[0]//8, 3)
+        tdtype = numpy.uint8
+        thumbnail = model.DataArray(numpy.zeros(tshape, tdtype))
+        thumbnail[:, :, 0] += 255 # red
+        blue = (12, 22) # non symmetric position
+        thumbnail[blue[-1:-3:-1]] = [0,0,255]
+        
         # export
-        hdf5.export(FILENAME, data)
+        hdf5.export(FILENAME, data, thumbnail)
         
         # check it's here
         st = os.stat(FILENAME) # this test also that the file is created
@@ -172,6 +178,9 @@ class TestHDF5IO(unittest.TestCase):
         iwl = f["Acquisition0/PhysicalData/ExcitationWavelength"][()] # m
         self.assertTrue((metadata[model.MD_IN_WL][0] <= iwl and 
                          iwl <= metadata[model.MD_IN_WL][1]))
+        
+        os.remove(FILENAME)
+        
 if __name__ == "__main__":
     #import sys;sys.argv = ['', 'Test.testName']
     unittest.main()

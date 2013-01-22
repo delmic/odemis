@@ -147,9 +147,14 @@ def DataArray2wxImage(data, depth=None, brightness=None, contrast=None, tint=(25
         numpy.multiply(drescaled, gtint / 255, out=rgb[:,:,1])
         numpy.multiply(drescaled, btint / 255, out=rgb[:,:,2])
 
-    size = data.shape[-1:-3:-1]
-    return wx.ImageFromBuffer(*size, dataBuffer=rgb) # 0 copy
+    return NDImage2wxImage(rgb)
 
+# Note: it's also possible to directly generate a wx.Bitmap from a buffer, but
+# always implies a memory copy.
+def NDImage2wxImage(image):
+    assert(len(image.shape) == 3 and image.shape[2] == 3)
+    size = image.shape[1::-1]
+    return wx.ImageFromBuffer(*size, dataBuffer=image) # 0 copy
 
 def wxImage2NDImage(image, keep_alpha=True):
     """
@@ -166,3 +171,20 @@ def wxImage2NDImage(image, keep_alpha=True):
         shape = image.Height, image.Width, 3
 
     return numpy.ndarray(buffer=image.DataBuffer, shape=shape, dtype=numpy.uint8) 
+
+
+# TODO use VIPS to be fast?
+def Average(images, rect, mpp, merge=0.5):
+    """
+    mix the given images into a big image so that each pixel is the average of each
+     pixel (separate operation for each colour channel).
+    images (list of InstrumentalImages)
+    merge (0<=float<=1): merge ratio of the first and second image (IOW: the
+      first image is weighted by merge and second image by (1-merge))
+    """
+    # TODO is ok to have a image = None?
+    
+    
+    # TODO (once the operator callable is clearly defined)
+    raise NotImplementedError()
+

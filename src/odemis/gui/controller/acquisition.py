@@ -154,6 +154,7 @@ class AcquisitionController(object):
         """
         # TODO: allow user to chose the file format in preferences
         import odemis.dataio.tiff as exporter
+        #import odemis.dataio.hdf5 as exporter
 
         # filename
         dirname = self._snapshot_folder
