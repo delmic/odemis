@@ -48,11 +48,9 @@ from odemis.gui.util import call_after
 
 
 
-
-
 TEST_STREAM_LST = ["Aap", u"nöot", "noot", "mies", "kees", "vuur",
                   "quantummechnica", "Repelsteeltje", "", "XXX", "a", "aa",
-                  "aaa", "aaaa", "aaaaa", "aaaaaa", "aaaaaaa"]
+                  "aaa", "aaaa", "aaaaa", "aaaaaa", "aaaaaaa", "aAa"]
 
 stream_remove_event, EVT_STREAM_REMOVE = wx.lib.newevent.NewEvent()
 
