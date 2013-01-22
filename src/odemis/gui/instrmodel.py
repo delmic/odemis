@@ -714,6 +714,7 @@ class FluoStream(CameraStream):
         # colouration of the image
         defaultTint = util.conversion.wave2rgb(self.emission.value)
         self.tint = model.ListVA(defaultTint, unit="RGB") # 3-tuple R,G,B
+        self.tint.subscribe(self.onTint)
 
     def onActive(self, active):
         # TODO update Emission or Excitation only if the stream is active
@@ -733,6 +734,11 @@ class FluoStream(CameraStream):
         if self.active.value:
             self._setFilterEmission()
 
+    def onTint(self, value):
+        if len(self.raw) == 0:
+            return  # no image acquired yet
+        self._updateImage()
+    
     def _setFilterEmission(self):
         wl = self.emission.value
         # TODO: we need a way to know if the HwComponent can change automatically

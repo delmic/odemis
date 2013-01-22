@@ -832,15 +832,30 @@ class CustomStreamPanelEntry(StreamPanelEntry):  # pylint: disable=R0901
          
         if hasattr(self.stream, "excitation") and hasattr(self.stream, "emission"):
             # handle the auto-completion of dye names
-            # TODO: should do something with dyes which cannot be handled by the
-            # hardware:
-            # * remove them from the list (but then the user might be surprised that they are not there)
-            # * mark them a different colour in the list (don't know how to do that)
-            # * show a warning message when they are picked
-            self._expander.SetChoices(instrmodel.DyeDatabase.keys())
+            # TODO: shall we do something better than remove the incompatible dyes?
+            # * mark them a different colour in the list (don't know how to do that)?
+            # * show a warning message when they are picked?
+            self._expander.SetChoices(self._getCompatibleDyes())
             self._expander.onLabelChange = self._onNewName
         else:
             logging.warning("CustomStreamEntry associated to a stream without excitation/emission")
+    
+    def _getCompatibleDyes(self):
+        """
+        Find the names of the dyes in the database which are compatible with the
+         hardware.
+        return (list of string): names of all the dyes which are compatible
+        """
+        # we expect excitation and emission to have a range
+        xrange = self.stream.excitation.range
+        erange = self.stream.emission.range
+        
+        dyes = []
+        for name, (xwl, ewl) in instrmodel.DyeDatabase.items():
+            if (xrange[0] <= xwl and xwl <= xrange[1] and
+                erange[0] <= ewl and ewl <= erange[1]):
+                dyes.append(name)
+        return dyes
         
     def _onNewName(self, txt):
         # update the name of the stream
