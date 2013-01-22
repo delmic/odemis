@@ -27,24 +27,26 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 
-import collections
-import logging
-import math
-
-import wx
-import wx.lib.newevent
-
-import odemis.gui
-import odemis.gui.img.data as img
-
 from .buttons import ImageButton, ImageToggleButton, ImageTextToggleButton, \
     ColourButton, PopupImageButton
 from .foldpanelbar import FoldPanelItem
 from .slider import UnitIntegerSlider
 from .text import SuggestTextCtrl, UnitIntegerCtrl, IntegerTextCtrl
+from odemis import model
 from odemis.gui import instrmodel
 from odemis.gui.img.data import getemptyBitmap
 from odemis.gui.util.conversion import wave2rgb
+import collections
+import logging
+import math
+import odemis.gui
+import odemis.gui.img.data as img
+import wx
+import wx.lib.newevent
+from odemis.gui.util import call_after
+
+
+
 
 
 
@@ -122,7 +124,8 @@ class Expander(wx.PyControl):
         self._sz = wx.BoxSizer(wx.HORIZONTAL)
 
         self._sz.Add(self._btn_rem, 0, wx.ALL | wx.ALIGN_CENTRE_VERTICAL, 8)
-        self._sz.AddStretchSpacer(1)
+        # If a label is to be inserted, it can come here (index = 1)
+        self._sz.AddStretchSpacer(0)
         self._sz.Add(self._btn_vis, 0, wx.RIGHT | wx.ALIGN_CENTRE_VERTICAL, 8)
         self._sz.Add(self._btn_play, 0, wx.RIGHT | wx.ALIGN_CENTRE_VERTICAL, 72)
 
@@ -144,9 +147,11 @@ class Expander(wx.PyControl):
         self._sz.Fit(self)
         self.Layout()
 
+    @call_after
     def onStreamTint(self, colour):
         """ Update the colour button to reflect the provided colour """
         self._btn_color.set_colour(colour)
+        logging.debug("Changing tint of button to %s", colour)
 
     def on_color_click(self, evt):
         # Remove the hover effect
@@ -203,7 +208,6 @@ class FixedExpander(Expander):
         Expander.__init__(self, parent, stream, wid)
 
         self._label_ctrl = wx.StaticText(self, -1, stream.name.value)
-        self._sz.Remove(1)
         self._sz.Insert(1, self._label_ctrl, 1,
                         wx.RIGHT | wx.ALIGN_CENTRE_VERTICAL, 8)
 
@@ -214,24 +218,30 @@ class CustomExpander(Expander):
 
     def __init__(self, parent, stream, wid=wx.ID_ANY):
         Expander.__init__(self, parent, stream, wid)
+        # Callback when the label changes: (string (text) -> None) 
+        self.onLabelChange = None
 
-        # We change afterward the label text into a full text entry
+        # Same as FixedExpander, but can change the name
         self._label_ctrl = SuggestTextCtrl(self, id= -1, value=stream.name.value)
-        # TODO link with the dye database
-        self._label_ctrl.SetChoices(TEST_STREAM_LST)
         self._label_ctrl.SetBackgroundColour(self.Parent.GetBackgroundColour())
         self._label_ctrl.SetForegroundColour("#2FA7D4")
 
-        # TODO make sure it changes the value of stream.name when it is updated
-        self._label_ctrl.Bind(wx.EVT_TEXT_ENTER, self._onLabelChange)
+        self._label_ctrl.Bind(wx.EVT_COMMAND_ENTER, self._onLabelChange)
 
-        self._sz.Remove(1)
         self._sz.Insert(1, self._label_ctrl, 1,
                         wx.RIGHT | wx.ALIGN_CENTRE_VERTICAL, 8)
 
+    def SetChoices(self, choices):
+        """
+        Set a list of choices from which the user can pick a pre-defined name
+        choices (list of string)
+        """
+        self._label_ctrl.SetChoices(choices)
+    
     # GUI event handlers
     def _onLabelChange(self, evt):
-        self._stream.name.value = self._label_ctrl.GetValue()
+        if self.onLabelChange:
+            self.onLabelChange(self._label_ctrl.GetValue())
 
 class StreamPanelEntry(wx.PyPanel):
     """ The StreamPanelEntry super class, a special case collapsible pane.
@@ -811,20 +821,45 @@ class FixedStreamPanelEntry(StreamPanelEntry):  # pylint: disable=R0901
 
     expander_class = FixedExpander
 
-    def __init__(self, *args, **kwargs):
-        StreamPanelEntry.__init__(self, *args, **kwargs)
-
-    def finalize(self):
-        StreamPanelEntry.finalize(self)
 
 class CustomStreamPanelEntry(StreamPanelEntry):  # pylint: disable=R0901
     """ A stream panel which can be altered by the user """
 
     expander_class = CustomExpander
 
-    def __init__(self, *args, **kwargs):
-        StreamPanelEntry.__init__(self, *args, **kwargs)
-
+    def finalize(self):
+        StreamPanelEntry.finalize(self)
+         
+        if hasattr(self.stream, "excitation") and hasattr(self.stream, "emission"):
+            # handle the auto-completion of dye names
+            # TODO: should do something with dyes which cannot be handled by the
+            # hardware:
+            # * remove them from the list (but then the user might be surprised that they are not there)
+            # * mark them a different colour in the list (don't know how to do that)
+            # * show a warning message when they are picked
+            self._expander.SetChoices(instrmodel.DyeDatabase.keys())
+            self._expander.onLabelChange = self._onNewName
+        else:
+            logging.warning("CustomStreamEntry associated to a stream without excitation/emission")
+        
+    def _onNewName(self, txt):
+        # update the name of the stream
+        self.stream.name.value = txt
+        
+        # update the excitation and emission wavelength
+        if txt in instrmodel.DyeDatabase:
+            xwl, ewl = instrmodel.DyeDatabase[txt]
+            try:
+                self.stream.excitation.value = xwl
+            except model.OutOfBoundError:
+                logging.info("Excitation at %g nm is out of bound", xwl * 1e9)
+            try:
+                self.stream.emission.value = ewl
+                colour = wave2rgb(self.stream.emission.value)
+                # changing emission should also change the tint
+                self.stream.tint.value = colour
+            except model.OutOfBoundError:
+                logging.info("Emission at %g nm is out of bound", ewl * 1e9)
 
 
 class StreamPanel(wx.Panel):
