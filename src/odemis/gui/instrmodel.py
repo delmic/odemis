@@ -28,10 +28,108 @@ from odemis.gui.util.units import readable_str
 from odemis.model import VigilantAttribute, MD_POS, MD_PIXEL_SIZE, \
     MD_SENSOR_PIXEL_SIZE
 from odemis.model._vattributes import FloatContinuous
+import json
 import logging
 import numpy
 import threading
 import time
+
+#logging.getLogger().setLevel(logging.DEBUG) # for the messages of dye database to appear
+
+# List of places to look for the database file
+FLUODB_PATHS = ["/usr/share/odemis/fluodb/",
+                "./install/linux/usr/share/odemis/fluodb/"]
+def LoadDyeDatabase():
+    """
+    Try to fill the dye database from known files
+    returns (boolean): True if a database was found, false otherwise
+    Note: it uses a cached version of the Fluorophores.org JSON database
+    """
+    
+    # For the API see doc/fluorophores-api.txt
+    index = None
+    basedir = None
+    for p in FLUODB_PATHS:
+        try:
+            findex = open(p + "environment/index.json")
+        except IOError:
+            # can't find this file, try the next one
+            continue
+        index = json.load(findex)
+        basedir = p
+        break
+    
+    if index is None:
+        return False
+    
+    # Load the main excitation and emission peak for each environment
+    # For each environment, download it
+    for eid, e in index.items():
+        # find the names (of the substance)
+        names = set()
+        s = e["substance"]
+        names.add(s["common_name"].strip()) # in case loading the substance file fails
+        nsid = int(s["substance_id"])
+        sname = basedir + "substance/%d.json" % nsid
+        try:
+            fs = open(sname, "r")
+            fulls = json.load(fs)
+            for n in fulls["common_names"]:
+                names.add(n.strip())
+        except (IOError, ValueError):
+            # no such file => no problem
+            logging.debug("Failed to open %s", sname)
+        names.discard("") # just in case some names are empty
+        if not names:
+            logging.debug("Skipping environment %d which has substance without name", eid)
+        
+        # find the peaks
+        xpeaks = e["excitation_max"]
+        epeaks = e["emission_max"]
+        if len(xpeaks) == 0 or len(epeaks) == 0:
+            # not enough information to be worthy
+            continue
+        xwl = xpeaks[0] * 1e-9 # m
+        ewl = epeaks[0] * 1e-9 # m 
+        
+        # Note: if two substances have the same name -> too bad, only the last
+        # one will be in our database. (it's not a big deal, as it's usually
+        # just duplicate entries)
+        # TODO: if the peaks are really different, and the solvent too, then
+        # append the name of the solvent in parenthesis.
+        for n in names:
+            if n in DyeDatabase:
+                logging.debug("Dye database already had an entry for dye %s", n)
+            DyeDatabase[n] = (xwl, ewl)
+    
+    # TODO: also de-duplicate names in a case insensitive way
+     
+    logging.info("Loaded %d dye names from the database.", len(DyeDatabase))
+    return True
+
+# Simple dye database, that will be filled in at initialisation, if there is a 
+# database file available
+# string (name) -> 2-tuple of float (excitation peak wl, emission peak wl in m)
+# TODO: Should support having multiple peaks, orderer by strength  
+DyeDatabase = None
+
+# Load the database the first time the module is imported
+if DyeDatabase is None:
+    DyeDatabase = {} # This ensures we try only once
+    start = time.time()
+    try:
+        # TODO: do it in a thread so that it doesn't slow down the loading?
+        # Or preparse the database so that's very fast to load
+        # For now, it seems to take 0.3 s => so let's say it's not needed
+        result = LoadDyeDatabase()
+    except:
+        logging.exception("Failed to load the fluorophores database.")
+    else:
+        if not result:
+            logging.info("No fluorophores database found.")
+    
+    duration = time.time() - start
+    logging.debug("Dye database loading took %g s", duration)
 
 class InstrumentalImage(object):
     """
@@ -69,6 +167,7 @@ STATE_PAUSE = 2
 VIEW_LAYOUT_ONE = 0 # one big view
 VIEW_LAYOUT_22 = 1 # 2x2 layout
 VIEW_LAYOUT_FULLSCREEN = 2 # Fullscreen view (not yet supported)
+
 
 class GUIMicroscope(object):
     """
@@ -615,6 +714,7 @@ class FluoStream(CameraStream):
         # colouration of the image
         defaultTint = util.conversion.wave2rgb(self.emission.value)
         self.tint = model.ListVA(defaultTint, unit="RGB") # 3-tuple R,G,B
+        self.tint.subscribe(self.onTint)
 
     def onActive(self, active):
         # TODO update Emission or Excitation only if the stream is active
@@ -634,6 +734,11 @@ class FluoStream(CameraStream):
         if self.active.value:
             self._setFilterEmission()
 
+    def onTint(self, value):
+        if len(self.raw) == 0:
+            return  # no image acquired yet
+        self._updateImage()
+    
     def _setFilterEmission(self):
         wl = self.emission.value
         # TODO: we need a way to know if the HwComponent can change automatically

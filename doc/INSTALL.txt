@@ -4,7 +4,7 @@ How to install Odemis
 = Installing the dependencies =
 
 You need Ubuntu 12.04 (x86 - 32 bits).
-sudo apt-get install python-imaging python-yaml python-gdal python-serial python-zmq python-concurrent.futures python-scipy python-decorator cgroup-bin python-libtiff python-comedilib python-h5py libhdf5-serial-1.8.4 
+sudo apt-get install python-imaging python-yaml python-serial python-zmq python-concurrent.futures python-scipy python-decorator cgroup-bin python-libtiff python-comedilib python-h5py libhdf5-serial-1.8.4 
 
 wxPython 2.9 is also required, but it has to be built form source as described
 in the following section.

@@ -38,6 +38,7 @@ import odemis.gui
 import odemis.gui.img.data as img
 import odemis.gui.comp.buttons as buttons
 
+from odemis import model
 from odemis.gui import instrmodel, FOREGROUND_COLOUR_EDIT
 from odemis.gui.comp.foldpanelbar import FoldPanelItem
 from odemis.gui.comp.slider import UnitIntegerSlider
@@ -244,6 +245,7 @@ class DyeExpander(Expander):
     def set_tint(self, colour):
         """ Update the colour button to reflect the provided colour """
         self._btn_color.set_colour(colour)
+        logging.debug("Changing tint of button to %s", colour)
 
     def on_color_click(self, evt):
         # Remove the hover effect
@@ -281,6 +283,12 @@ class DyeExpander(Expander):
             self._btn_color.SetBitmapHover(None)
             self._btn_color.Unbind(wx.EVT_BUTTON)
 
+    def SetChoices(self, choices):
+        """
+        Set a list of choices from which the user can pick a pre-defined name
+        choices (list of string)
+        """
+        self._label_ctrl.SetChoices(choices)
 
 class StreamPanel(wx.PyPanel):
     """ The StreamPanel super class, a special case collapsible panel.
@@ -847,7 +855,54 @@ class DyeStreamPanel(StreamPanel):
                           border=10)
             self.row_count += 1
 
-        #self._gbs.AddSpacer((5, 5), (self.row_count, 0))
+        if hasattr(self.stream, "excitation") and hasattr(self.stream, "emission"):
+            # handle the auto-completion of dye names
+            # TODO: shall we do something better than remove the incompatible dyes?
+            # * mark them a different colour in the list (don't know how to do that)?
+            # * show a warning message when they are picked?
+            self._expander.SetChoices(self._getCompatibleDyes())
+            self._expander.onLabelChange = self._onNewName
+        else:
+            logging.warning("CustomStreamEntry associated to a stream without "
+                            "excitation/emission")
+
+
+    def _getCompatibleDyes(self):
+        """
+        Find the names of the dyes in the database which are compatible with the
+         hardware.
+        return (list of string): names of all the dyes which are compatible
+        """
+        # we expect excitation and emission to have a range
+        xrange = self.stream.excitation.range
+        erange = self.stream.emission.range
+
+        dyes = []
+        for name, (xwl, ewl) in instrmodel.DyeDatabase.items():
+            if (xrange[0] <= xwl and xwl <= xrange[1] and
+                erange[0] <= ewl and ewl <= erange[1]):
+                dyes.append(name)
+
+        return dyes
+
+    def _onNewName(self, txt):
+        # update the name of the stream
+        self.stream.name.value = txt
+
+        # update the excitation and emission wavelength
+        if txt in instrmodel.DyeDatabase:
+            xwl, ewl = instrmodel.DyeDatabase[txt]
+            try:
+                self.stream.excitation.value = xwl
+            except model.OutOfBoundError:
+                logging.info("Excitation at %g nm is out of bound", xwl * 1e9)
+            try:
+                self.stream.emission.value = ewl
+                colour = wave2rgb(self.stream.emission.value)
+                # changing emission should also change the tint
+                self.stream.tint.value = colour
+            except model.OutOfBoundError:
+                logging.info("Emission at %g nm is out of bound", ewl * 1e9)
 
     def on_excitation_text(self, evt):
         # logging.debug("Excitation changed")
