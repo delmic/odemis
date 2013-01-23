@@ -33,7 +33,7 @@ from odemis import __version__, model
 from odemis.gui import main_xrc, instrmodel, log
 from odemis.gui.controller.acquisition import AcquisitionController
 from odemis.gui.controller.microscope import MicroscopeController
-from odemis.gui.controller.settingspanel import SettingsSideBar
+from odemis.gui.controller.settingspanel import SettingsBarController
 from odemis.gui.controller.streams import StreamController
 from odemis.gui.controller.tabs import TabBar
 from odemis.gui.controller.views import ViewController, ViewSelector
@@ -186,7 +186,7 @@ class OdemisGUIApp(wx.App):
             #self.main_frame.Raise()
             #self.main_frame.Refresh()
 
-            self.settings_controller = SettingsSideBar(self.interface_model,
+            self.settings_controller = SettingsBarController(self.interface_model,
                                                        self.main_frame)
 
             #print_microscope_tree(microscope)
@@ -225,7 +225,7 @@ class OdemisGUIApp(wx.App):
     def on_load_example1(self, e):
         """ Open the two files for example """
         try:
-            pos = self.interface_model.focussedView.value.view_pos.value
+            pos = self.interface_model.focussedView.value.view_pos.value #pylint: disable=E1101
             name1 = os.path.join(os.path.dirname(__file__),
                                  "1-optical-rot7.png")
             im1 = InstrumentalImage(wx.Image(name1), 7.14286e-7, pos)
@@ -242,7 +242,7 @@ class OdemisGUIApp(wx.App):
     def on_load_example2(self, e):
         """ Open the two files for example """
         try:
-            pos = self.interface_model.focussedView.value.view_pos.value
+            pos = self.interface_model.focussedView.value.view_pos.value #pylint: disable=E1101
             name2 = os.path.join(os.path.dirname(__file__), "3-sem.png")
             im2 = InstrumentalImage(wx.Image(name2), 2.5e-07, pos)
 
@@ -344,7 +344,7 @@ class OdemisOutputWindow(object):
 
     def write(self, txt):
         if txt.strip() != "":
-            logging.error("[CAP] %s" % txt.strip())
+            logging.error("[CAP] %s", txt.strip())
 
 def installThreadExcepthook():
     """ Workaround for sys.excepthook thread bug

@@ -46,7 +46,7 @@ import wx.xrc as xrc
 # Fold Panel Bar related Handlers
 ##################################
 
-class FixedStreamPanelEntryXmlHandler(xrc.XmlResourceHandler):
+class StandardStreamPanelXmlHandler(xrc.XmlResourceHandler):
     def __init__(self):
         xrc.XmlResourceHandler.__init__(self)
         # Specify the styles recognized by objects of this type
@@ -67,16 +67,16 @@ class FixedStreamPanelEntryXmlHandler(xrc.XmlResourceHandler):
 
         parent_window = self.GetParentAsWindow()
         # Now create the object
-        panel = strm.FixedStreamPanelEntry(parent_window,
-                                      self.GetID(),
-                                      self.GetText('label'),
-                                      self.GetPosition(),
-                                      self.GetSize(),
-                                      self.GetStyle("style", wx.TAB_TRAVERSAL),
-                                      #self.GetStyle('exstyle'),
-                                      name=self.GetName(),
-                                      collapsed=self.GetBool('collapsed')
-                                      )
+        panel = strm.StandardStreamPanel(parent_window,
+                                         self.GetID(),
+                                         self.GetText('label'),
+                                         self.GetPosition(),
+                                         self.GetSize(),
+                                         self.GetStyle("style", wx.TAB_TRAVERSAL),
+                                         #self.GetStyle('exstyle'),
+                                         name=self.GetName(),
+                                         collapsed=self.GetBool('collapsed')
+                                         )
 
         # These two things should be done in either case:
         # Set standard window attributes
@@ -90,7 +90,7 @@ class FixedStreamPanelEntryXmlHandler(xrc.XmlResourceHandler):
 
         return panel
 
-class CustomStreamPanelEntryXmlHandler(xrc.XmlResourceHandler):
+class DyeStreamPanelXmlHandler(xrc.XmlResourceHandler):
     def __init__(self):
         xrc.XmlResourceHandler.__init__(self)
         # Specify the styles recognized by objects of this type
@@ -108,16 +108,16 @@ class CustomStreamPanelEntryXmlHandler(xrc.XmlResourceHandler):
         assert self.GetInstance() is None
 
         # Now create the object
-        panel = strm.CustomStreamPanelEntry(self.GetParentAsWindow(),
-                                      self.GetID(),
-                                      self.GetText('label'),
-                                      self.GetPosition(),
-                                      self.GetSize(),
-                                      self.GetStyle("style", wx.TAB_TRAVERSAL),
-                                      #self.GetStyle('exstyle'),
-                                      name=self.GetName(),
-                                      collapsed=self.GetBool('collapsed')
-                                      )
+        panel = strm.DyeStreamPanel(self.GetParentAsWindow(),
+                                    self.GetID(),
+                                    self.GetText('label'),
+                                    self.GetPosition(),
+                                    self.GetSize(),
+                                    self.GetStyle("style", wx.TAB_TRAVERSAL),
+                                    #self.GetStyle('exstyle'),
+                                    name=self.GetName(),
+                                    collapsed=self.GetBool('collapsed')
+                                    )
 
         # These two things should be done in either case:
         # Set standard window attributes
@@ -207,16 +207,16 @@ class StreamPanelXmlHandler(xrc.XmlResourceHandler):
         # Custom styles
 
     def CanHandle(self, node):
-        return self.IsOfClass(node, 'StreamPanel')
+        return self.IsOfClass(node, 'StreamBar')
 
 
     # Process XML parameters and create the object
     def DoCreateResource(self):
 
-        if self.GetClass() == 'StreamPanel':
+        if self.GetClass() == 'StreamBar':
             #print "Creating FoldpanelItem"
             parent = self.GetParentAsWindow()
-            w = strm.StreamPanel(parent,
+            w = strm.StreamBar(parent,
                                  self.GetID(),
                                  self.GetPosition(),
                                  self.GetSize(),
@@ -740,8 +740,7 @@ class OwnerDrawnComboBoxHandler(xrc.XmlResourceHandler):
         return new_ctrl
 
 HANDLER_CLASS_LIST = [
-                      CustomStreamPanelEntryXmlHandler,
-                      FixedStreamPanelEntryXmlHandler,
+                      DyeStreamPanelXmlHandler,
                       FoldPanelBarXmlHandler,
                       FoldPanelItemXmlHandler,
                       GenBitmapButtonHandler,
@@ -751,6 +750,7 @@ HANDLER_CLASS_LIST = [
                       MicroscopeViewportXmlHandler,
                       OwnerDrawnComboBoxHandler,
                       PopupImageButtonHandler,
+                      StandardStreamPanelXmlHandler,
                       StreamPanelXmlHandler,
                       SuggestTextCtrlHandler,
                       TabButtonHandler,

@@ -20,12 +20,12 @@ class xrcfr_main(wx.Frame):
 #!XRCED:begin-block:xrcfr_main.PreCreate
     def PreCreate(self, pre):
         """ This function is called during the class's initialization.
-        
+
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
         pass
-        
+
 #!XRCED:end-block:xrcfr_main.PreCreate
 
     def __init__(self, parent):
@@ -83,12 +83,12 @@ class xrcfr_acq(wx.Dialog):
 #!XRCED:begin-block:xrcfr_acq.PreCreate
     def PreCreate(self, pre):
         """ This function is called during the class's initialization.
-        
+
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
         pass
-        
+
 #!XRCED:end-block:xrcfr_acq.PreCreate
 
     def __init__(self, parent):
@@ -623,7 +623,7 @@ def __init_resources():
                               <label>STREAMS</label>
                               <fg>#1A1A1A</fg>
                               <bg>#555555</bg>
-                              <object class="StreamPanel" name="pnl_stream">
+                              <object class="StreamBar" name="pnl_stream">
                                 <add_button>1</add_button>
                                 <fg>#7F7F7F</fg>
                                 <bg>#333333</bg>
@@ -946,7 +946,7 @@ def __init_resources():
                         </XRCED>
                       </object>
                       <object class="FoldPanelItem">
-                        <object class="StreamPanel" name="pnl_stream">
+                        <object class="StreamBar" name="pnl_stream">
                           <fg>#7F7F7F</fg>
                           <bg>#333333</bg>
                           <XRCED>

@@ -22,10 +22,10 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
-from odemis.gui import instrmodel, comp
-from odemis.gui.instrmodel import STATE_OFF, STATE_PAUSE, STATE_ON
 import logging
 
+from odemis.gui import instrmodel, comp
+from odemis.gui.instrmodel import STATE_OFF, STATE_PAUSE, STATE_ON
 
 # stream controller:
 # create the default streams when a part of the microscope is turned on, and
@@ -61,7 +61,7 @@ class StreamController(object):
     def __init__(self, microscope_model, spanel):
         """
         microscope (GUIMicroscope): the representation of the microscope Model
-        spanel (StreamPanel): an empty stream panel
+        spanel (StreamBar): an empty stream panel
         """
         self.microscope = microscope_model
         self._spanel = spanel
@@ -121,7 +121,7 @@ class StreamController(object):
     def addFluo(self, add_to_all_views=False):
         """
         Creates a new fluorescence stream and entry into the stream panel
-        returns (StreamPanelEntry): the entry created
+        returns (StreamPanel): the entry created
         """
         # Find a name not already taken
         existing_names = [s.name.value for s in self.microscope.streams]
@@ -133,27 +133,27 @@ class StreamController(object):
         stream = instrmodel.FluoStream(name,
                   self.microscope.ccd, self.microscope.ccd.data,
                   self.microscope.light, self.microscope.light_filter)
-        return self._addStream(stream, comp.stream.CustomStreamPanelEntry, add_to_all_views)
+        return self._addStream(stream, comp.stream.DyeStreamPanel, add_to_all_views)
 
     def addBrightfield(self, add_to_all_views=False):
         """
         Creates a new brightfield stream and entry into the stream panel
-        returns (StreamPanelEntry): the entry created
+        returns (StreamPanel): the entry created
         """
         stream = instrmodel.BrightfieldStream("Bright-field",
                   self.microscope.ccd, self.microscope.ccd.data,
                   self.microscope.light)
-        return self._addStream(stream, comp.stream.FixedStreamPanelEntry, add_to_all_views)
+        return self._addStream(stream, comp.stream.StandardStreamPanel, add_to_all_views)
 
     def addSEMSED(self, add_to_all_views=False):
         """
         Creates a new SED stream and entry into the stream panel
-        returns (StreamPanelEntry): the entry created
+        returns (StreamPanel): the entry created
         """
         stream = instrmodel.SEMStream("Secondary electrons",
                   self.microscope.sed, self.microscope.sed.data,
                   self.microscope.ebeam)
-        return self._addStream(stream, comp.stream.FixedStreamPanelEntry, add_to_all_views)
+        return self._addStream(stream, comp.stream.StandardStreamPanel, add_to_all_views)
 
     def addStatic(self, name, image, cls=instrmodel.StaticStream, add_to_all_views=False, ):
         """
@@ -162,10 +162,10 @@ class StreamController(object):
         name (string)
         image (InstrumentalImage)
         cls (class of Stream)
-        returns (StreamPanelEntry): the entry created
+        returns (StreamPanel): the entry created
         """
         stream = cls(name, image)
-        return self._addStream(stream, comp.stream.FixedStreamPanelEntry, add_to_all_views)
+        return self._addStream(stream, comp.stream.StandardStreamPanel, add_to_all_views)
 
 
     def _addStream(self, stream, entry_cls, add_to_all_views=False):
@@ -214,7 +214,7 @@ class StreamController(object):
         """
 
         # Note: self.microscope already has all the streams it needs, so we only
-        # need to duplicate the entries in the actuel StreamPanel widget
+        # need to duplicate the entries in the actuel StreamBar widget
 
         new_controller = StreamController(self.microscope, spanel)
 
@@ -222,6 +222,7 @@ class StreamController(object):
         for stream_entry in [s for s in self._spanel.entries if s.IsShown()]:
             entry = stream_entry.__class__(spanel, stream_entry.stream, self.microscope)
             spanel.add_stream(entry)
+            entry.to_acquisition_mode()
 
         return new_controller
 

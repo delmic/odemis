@@ -242,8 +242,8 @@ class SettingsPanel(object):
         # (as in, all the values of the controls) of the SettingsPanel.
         self._values_cache = []
 
-        #self.panel.SetSize((380, -1))
-        #print self.panel.Refresh()
+        #self.panel.SetMinSize((380, -1))
+        #self.panel.Refresh()
 
     def store(self):
         """ Store the current control values into an internal values cache """
@@ -650,7 +650,7 @@ class SemSettingsPanel(SettingsPanel):
 class OpticalSettingsPanel(SettingsPanel):
     pass
 
-class SettingsSideBar(object):
+class SettingsBarController(object):
     """ The main controller class for the settings panel in the live view and
     acquisition frame.
 

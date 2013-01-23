@@ -4,7 +4,7 @@ Created on 22 Aug 2012
 
 @author: Éric Piel
 
-Copyright © 2012 Éric Piel, Rinze de Laat, Delmic
+Copyright © 2012-2013 Éric Piel, Rinze de Laat, Delmic
 
 This file is part of Odemis.
 
@@ -40,7 +40,8 @@ import wx
 
 from odemis import model
 from odemis.gui.config import get_acqui_conf
-from odemis.gui.controller.settingspanel import SettingsSideBar
+from odemis.gui.controller.settingspanel import SettingsBarController
+from odemis.gui.controller.streams import StreamController
 from odemis.gui.main_xrc import xrcfr_acq
 from odemis.gui.util import img, get_picture_folder
 
@@ -137,7 +138,7 @@ class AcquisitionController(object):
 
         self._acq_dialog.SetSize(parent_size)
         self._acq_dialog.Center()
-        self._acq_dialog.ShowModal()
+        self._acq_dialog.Show() #Modal
 
     def start_snapshot_viewport(self, event):
         """
@@ -270,7 +271,9 @@ class AcquisitionController(object):
     def set_output_brightness(outputs, brightness):
         """
         Set the brightness of all the display outputs given
-        outputs (set of string): names of graphical output (screen) as xrandr uses them
+
+        outputs (set of string): names of graphical output (screen) as xrandr
+            uses them
         brightness (0<=float): brightness
         raises:
             exception in case change of brightness failed
@@ -307,12 +310,20 @@ class AcquisitionDialog(xrcfr_acq):
 
         self.set_default_filename_and_path()
 
-        # Store current values
+        # Store current values and pause updates on the current settings
+        # controller
         main_settings_controller = wx.GetApp().settings_controller
         main_settings_controller.store()
         main_settings_controller.pause()
 
-        self.settings_controller = SettingsSideBar(interface_model, self, True)
+        # Create a new settings controller for the acquisition dialog
+        self.settings_controller = SettingsBarController(interface_model, self, True)
+
+        # self.stream_controller = StreamController(interface_model,
+        #                                           self.pnl_stream)
+
+        main_stream_controller = wx.GetApp().stream_controller
+        self.stream_controller = main_stream_controller.duplicate_test(self.pnl_stream)
 
         self.Bind(wx.EVT_CHAR_HOOK, self.on_key)
 
