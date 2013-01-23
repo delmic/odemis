@@ -331,6 +331,19 @@ class AcquisitionDialog(xrcfr_acq):
         self.btn_change_file.Bind(wx.EVT_BUTTON, self.on_change_file)
         self.Bind(wx.EVT_CLOSE, self.on_close)
 
+        self.estimate_acquisition_time()
+
+
+    def estimate_acquisition_time(self):
+
+        seconds = 0
+
+        for str_pan in self.stream_controller.get_stream_panels():
+            seconds += str_pan.get_stream_mod().estimateAcquisitionTime()
+
+        txt = "Estimated acquisition time is {0:.2} seconds".format(seconds)
+        self.lbl_acqestimate.SetLabel(txt)
+
     def set_default_filename_and_path(self):
         self.txt_filename.SetValue(u"%s%s" % (time.strftime("%Y%m%d-%H%M%S"),
                                               self.conf.last_extension))

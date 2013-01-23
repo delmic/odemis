@@ -480,6 +480,8 @@ class StreamPanel(wx.PyPanel):
         self._btn_auto_contrast.SetToggle(self.stream.auto_bc.value)
         self.on_toggle_autocontrast(None)  # to ensure the controls are disabled if necessary
 
+    def get_stream_mod(self):
+        return self.stream
 
     def set_expander_button(self, button):
         """ Assign a new expander button to the stream panel.
@@ -1140,6 +1142,9 @@ class StreamBar(wx.Panel):
                               self._microscope.focussedView.value.stream_classes))
         self._fitStreams()
 
+
+    def get_stream_panels(self):
+        return self.entries
 
     def remove_stream(self, entry):
         """

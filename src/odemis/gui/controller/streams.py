@@ -332,3 +332,6 @@ class StreamController(object):
         # Remove from the views
         for v in [v for v in self.microscope.views.itervalues()]:
             v.removeStream(stream)
+
+    def get_stream_panels(self):
+        return self._spanel.get_stream_panels()
