@@ -59,7 +59,7 @@ def main(*args):
     
     # Download the root (environment index)
     logging.debug("Downloading the Environment index")
-    #download(URL_DB + "environment/index.json", OUT_DIR + "environment/index.json")
+    download(URL_DB + "environment/index.json", OUT_DIR + "environment/index.json")
     # parse it
     findex = open(OUT_DIR + "environment/index.json", "r")
     try:
@@ -78,7 +78,7 @@ def main(*args):
         neid = int(eid) # should be a int (also ensures that there is no trick in the name)
         ename = OUT_DIR + "environment/%d.json" % neid
         logging.debug("Downloading environment %s", eid)
-        #download(eurl, ename)
+        download(eurl, ename)
         fe = open(ename, "r")
         try:
             fulle = json.load(fe)
@@ -99,7 +99,7 @@ def main(*args):
         substances[nsid] = surl
         logging.debug("Downloading substance %d", nsid)
         sname = OUT_DIR + "substance/%d.json" % nsid
-        #download(surl, sname)
+        download(surl, sname)
         
         # gif file too, if it is there
         fs = open(sname, "r")
@@ -116,7 +116,7 @@ def main(*args):
             strsname = strurl.rsplit("/", 1)[1]
             logging.debug("Downloading structure %s", strsname)
             strname = OUT_DIR + "substance/" + strsname
-            #download(strurl, strname) 
+            download(strurl, strname) 
 
 if __name__ == '__main__':
     ret = main(sys.argv)
