@@ -290,6 +290,8 @@ class DyeExpander(Expander):
         """
         self._label_ctrl.SetChoices(choices)
 
+
+
 class StreamPanel(wx.PyPanel):
     """ The StreamPanel super class, a special case collapsible panel.
 
@@ -874,13 +876,13 @@ class DyeStreamPanel(StreamPanel):
         return (list of string): names of all the dyes which are compatible
         """
         # we expect excitation and emission to have a range
-        xrange = self.stream.excitation.range
-        erange = self.stream.emission.range
+        x_range = self.stream.excitation.range
+        e_range = self.stream.emission.range
 
         dyes = []
         for name, (xwl, ewl) in instrmodel.DyeDatabase.items():
-            if (xrange[0] <= xwl and xwl <= xrange[1] and
-                erange[0] <= ewl and ewl <= erange[1]):
+            if (x_range[0] <= xwl and xwl <= x_range[1] and
+                e_range[0] <= ewl and ewl <= e_range[1]):
                 dyes.append(name)
 
         return dyes
