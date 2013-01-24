@@ -79,7 +79,7 @@ def _create_image_dataset(group, dataset_name, image, **kwargs):
         image_dataset.attrs["IMAGE_SUBCLASS"] = numpy.string_("IMAGE_GRAYSCALE")
         image_dataset.attrs["IMAGE_WHITE_IS_ZERO"] = numpy.array(0, dtype="uint8")
         idtype = numpy.iinfo(image.dtype)
-        image_dataset.attrs["IMAGE_MINMAXRANGE"] = [idtype.min, idtype.max]
+        image_dataset.attrs["IMAGE_MINMAXRANGE"] = [image.min(), image.max()]
     
     image_dataset.attrs["DISPLAY_ORIGIN"] = numpy.string_("UL") # not rotated
     image_dataset.attrs["IMAGE_VERSION"] = numpy.string_("1.2")
@@ -93,11 +93,7 @@ def _add_image_info(group, dataset, image):
     dataset (HDF Dataset): the image dataset
     image (DataArray >= 2D): image with metadata, the last 2 dimensions are Y and X (H,W)
     """
-    # StateEnumeration??
-#    dtstate.commit(group, "StateEnumeration")
-    dtstate = h5py.special_dtype(enum=('i', {
-         "Invalid":111, "Default":112, "Estimated":113, "Reported":114, "Verified":115}))
-    
+
     # Note: DimensionScale support is only part of h5py since v2.1
     # Dimensions
     # The order of the dimension is reversed (the slowest changing is last)
@@ -116,10 +112,10 @@ def _add_image_info(group, dataset, image):
     if model.MD_POS in image.metadata:
         pos = image.metadata[model.MD_POS]
         group["XOffset"] = pos[0]
-        group["XOffset"].attrs.create("State", 114, dtype=dtstate)
+        _h5svi_set_state(group["XOffset"], ST_REPORTED)
         group["XOffset"].attrs["UNIT"] = "m" # our extension
         group["YOffset"] = pos[1]
-        group["YOffset"].attrs.create("State", 114, dtype=dtstate)
+        _h5svi_set_state(group["YOffset"], ST_REPORTED)
         group["YOffset"].attrs["UNIT"] = "m" # our extension
     
     # Time
@@ -143,7 +139,7 @@ def _add_image_info(group, dataset, image):
         ad = datetime.utcfromtimestamp(image.metadata[model.MD_ACQ_DATE])
         adstr = ad.strftime("%Y-%m-%dT%H:%M:%S.%f")
         group["TOffset"] = adstr
-        group["TOffset"].attrs.create("State", 114, dtype=dtstate)
+        _h5svi_set_state(group["TOffset"], ST_REPORTED)
         
     # Scale
     if model.MD_PIXEL_SIZE in image.metadata:
@@ -153,10 +149,10 @@ def _add_image_info(group, dataset, image):
         pxs = image.metadata[model.MD_PIXEL_SIZE]
         group["DimensionScaleX"] = pxs[0]
         group["DimensionScaleX"].attrs["UNIT"] = "m"
-        group["DimensionScaleX"].attrs.create("State", 114, dtype=dtstate)
+        _h5svi_set_state(group["DimensionScaleX"], ST_REPORTED)
         group["DimensionScaleY"] = pxs[1]
         group["DimensionScaleY"].attrs["UNIT"] = "m" # our extension
-        group["DimensionScaleY"].attrs.create("State", 114, dtype=dtstate)
+        _h5svi_set_state(group["DimensionScaleY"], ST_REPORTED)
         # No clear what's the relation between this name and the label
         dataset.dims.create_scale(group["DimensionScaleX"], "X")
         dataset.dims.create_scale(group["DimensionScaleY"], "Y")
@@ -165,16 +161,64 @@ def _add_image_info(group, dataset, image):
 
         # Unknown data, but SVI needs them to take the scales into consideration
         if l >= 4:
-            group["DimensionScaleZ"] = 1
-            group["DimensionScaleT"] = 1
+            group["DimensionScaleZ"] = 1.0
+            group["DimensionScaleT"] = 1.0
             # No clear what's the relation between this name and the label
             dataset.dims.create_scale(group["DimensionScaleZ"], "Z")
-            group["DimensionScaleZ"].attrs.create("State", 114, dtype=dtstate)
+            _h5svi_set_state(group["DimensionScaleZ"], ST_DEFAULT)
             dataset.dims.create_scale(group["DimensionScaleT"], "T")
-            group["DimensionScaleT"].attrs.create("State", 114, dtype=dtstate)
+            _h5svi_set_state(group["DimensionScaleT"], ST_DEFAULT)
             dataset.dims[l-3].attach_scale(group["DimensionScaleZ"])
             dataset.dims[l-4].attach_scale(group["DimensionScaleT"])
+            
+            # Put here to please Huygens
+            # Seems to be the coverslip position, ie, the lower and upper glass of
+            # the sample. Not clear what's the relation with ZOffset. 
+            group["PrimaryGlassMediumInterfacePosition"] = 0.0 # m?
+            _h5svi_set_state(group["PrimaryGlassMediumInterfacePosition"], ST_DEFAULT)        
+            group["SecondaryGlassMediumInterfacePosition"] = 1.0 # m?
+            _h5svi_set_state(group["SecondaryGlassMediumInterfacePosition"], ST_DEFAULT)
 
+            # TODO: extension for Rotation:
+#            RotationAngle (scalar): angle in radian
+#            RotationAxis (3-scalar): X,Y,Z of the rotation vector 
+            
+
+ST_INVALID=111
+ST_DEFAULT=112
+ST_ESTIMATED=113
+ST_REPORTED=114
+ST_VERIFIED=115
+def _h5svi_set_state(dataset, state):
+    """
+    Set the "State" of a dataset: the confidence that can be put in the value
+    dataset (Dataset): the dataset
+    state (int or list of int): the state value (ST_*) which will be duplicated
+     as many times as the shape of the dataset. If it's a list, it will be directly
+     used, as is.
+    """
+    dtstate = h5py.special_dtype(enum=('i', {
+         "Invalid":ST_INVALID, "Default":ST_DEFAULT, "Estimated":ST_ESTIMATED,
+         "Reported":ST_REPORTED, "Verified":ST_VERIFIED}))
+    
+    # the state should be the same shape as the dataset
+    if isinstance(state, int):
+        fullstate = numpy.empty(shape=dataset.shape, dtype=dtstate)
+        fullstate.fill(state)
+    else:
+        fullstate = numpy.array(state, dtype=dtstate)
+    dataset.attrs["State"] = fullstate
+
+def _h5py_enum_commit(group, name, dtype):
+    """
+    Commit (=save under a name) a enum to a group
+    group (h5py.Group)
+    name (string)
+    dtype (dtype)
+    """
+    enum_type = h5py.h5t.py_create(dtype, logical=True)
+    enum_type.commit(group.id, name)
+    #TODO: return the TypeEnumID created?
         
 def _add_image_metadata(group, images):
     """
@@ -184,6 +228,7 @@ def _add_image_metadata(group, images):
     """
     gp = group.create_group("PhysicalData")
     
+    dtvlen_str = h5py.special_dtype(vlen=str)
     # TODO indicate the State of the information (especially if it's unknown)
     
     # All values are duplicated by channel, excepted for Title
@@ -191,22 +236,105 @@ def _add_image_metadata(group, images):
     gp["Title"] = ", ".join(gdesc)
     
     cdesc = [i.metadata.get(model.MD_DESCRIPTION, "") for i in images]
-    gp["ChannelDescription"] = cdesc
+    gp["ChannelDescription"] = numpy.array(cdesc, dtype=dtvlen_str)
+    _h5svi_set_state(gp["ChannelDescription"], ST_ESTIMATED)
     
-    xwls = [numpy.mean(i.metadata.get(model.MD_IN_WL, 0)) for i in images]
+    # TODO: if it takes the default value, the state should be ST_DEFAULT
+    xwls = [numpy.mean(i.metadata.get(model.MD_IN_WL, 1e-9)) for i in images]
     gp["ExcitationWavelength"] = xwls # in m
-    # TODO: indicate this is epifluorescense or not? => MicroscopeMode = 3 
+    _h5svi_set_state(gp["ExcitationWavelength"], ST_REPORTED)
     
-    ewls = [numpy.mean(i.metadata.get(model.MD_OUT_WL, 0)) for i in images]
+    ewls = [numpy.mean(i.metadata.get(model.MD_OUT_WL, 1e-9)) for i in images]
     gp["EmissionWavelength"] = ewls # in m
+    _h5svi_set_state(gp["EmissionWavelength"], ST_REPORTED)
 
     mags = [i.metadata.get(model.MD_LENS_MAG, 1) for i in images]
     gp["Magnification"] = mags
+    _h5svi_set_state(gp["Magnification"], ST_REPORTED)
+
+    # MicroscopeMode
+    dtmm = h5py.special_dtype(enum=('i', {
+         "None":0, "Transmission":1 ,"Reflection":2, "Fluorescence":3}))
+    _h5py_enum_commit(gp, "MicroscopeModeEnumeration", dtmm)
+    # MicroscopeType
+    dtmt = h5py.special_dtype(enum=('i', {
+            "None":111, "WideField":112, "Confocal":113, "4PiExcitation":114,
+            "NipkowDiskConfocal":115, "GenericSensor":118}))
+    _h5py_enum_commit(gp, "MicroscopeTypeEnumeration", dtmt)
+    # ImagingDirection
+    dtid = h5py.special_dtype(enum=('i', {
+            "Upward":0, "Downward":1, "Both":2  
+            }))
+    _h5py_enum_commit(gp, "ImagingDirectionEnumeration", dtid)
+    mm, mt, id = [], [], []
+    # MicroscopeMode: if IN_WL => fluorescence/brightfield, otherwise SEM (=Reflection?)
+    for i in images:
+        # TODO: see with Andries if this is correct
+        # FIXME: this is true only for the SECOM
+        if model.MD_IN_WL in i.metadata:
+            iwl = i.metadata[model.MD_IN_WL]
+            if abs(iwl[1] - iwl[0]) < 100e-9:
+                mm.append("Fluorescence")
+                mt.append("WideField")
+                id.append("Downward")
+            else:
+                mm.append("Transmission")  # Brightfield
+                mt.append("WideField")
+                id.append("Downward")
+        else:
+            mm.append("Reflection")  # SEM
+            mt.append("GenericSensor") # ScanningElectron?
+            id.append("Upward")
+    # Microscope* is the old format, Microscope*Str is new format
+    dictmm = h5py.check_dtype(enum=dtmm)
+    # FIXME: it seems h5py doesn't allow to directly set the dataset type to a
+    # named type (it always creates a new transient type), unless you redo
+    # all make_new_dset() by hand.
+    gp["MicroscopeMode"] = numpy.array([dictmm[m] for m in mm], dtype=dtmm)
+    _h5svi_set_state(gp["MicroscopeMode"], ST_REPORTED)
+    gp["MicroscopeModeStr"] = numpy.array([m.lower() for m in mm], dtype=dtvlen_str)
+    _h5svi_set_state(gp["MicroscopeModeStr"], ST_REPORTED)
+    dictmt = h5py.check_dtype(enum=dtmt)
+    gp["MicroscopeType"] = numpy.array([dictmt[t] for t in mt], dtype=dtmt)
+    _h5svi_set_state(gp["MicroscopeType"], ST_REPORTED)
+    gp["MicroscopeTypeStr"] = numpy.array([t.lower() for t in mt], dtype=dtvlen_str)
+    _h5svi_set_state(gp["MicroscopeTypeStr"], ST_REPORTED)
+    dictid = h5py.check_dtype(enum=dtid)
+    gp["ImagingDirection"] = numpy.array([dictid[d] for d in id], dtype=dtid)
+    _h5svi_set_state(gp["ImagingDirection"], ST_REPORTED)
+    gp["ImagingDirectionStr"] = numpy.array([d.lower() for d in id], dtype=dtvlen_str)
+    _h5svi_set_state(gp["ImagingDirectionStr"], ST_REPORTED) 
+    
+    # Below are almost entirely made-up values, present just to please Huygens
+    # TODO: should allow the user to specify it in the preferences: 1=>vacuum, 1.5 => glass/oil
+    gp["RefractiveIndexLensImmersionMedium"] = [1.515] * len(images) # ratio (no unit)
+    _h5svi_set_state(gp["RefractiveIndexLensImmersionMedium"], ST_DEFAULT)
+    gp["RefractiveIndexSpecimenEmbeddingMedium"] = [1.515] * len(images) # ratio (no unit)
+    _h5svi_set_state(gp["RefractiveIndexSpecimenEmbeddingMedium"], ST_DEFAULT)
+    
+    # Only for confocal microscopes
+    gp["BackprojectedIlluminationPinholeSpacing"] = [2.53e-6] * len(images) # unit? m?
+    _h5svi_set_state(gp["BackprojectedIlluminationPinholeSpacing"], ST_DEFAULT)
+    gp["BackprojectedIlluminationPinholeRadius"] = [280e-9] * len(images) # unit? m?
+    _h5svi_set_state(gp["BackprojectedIlluminationPinholeRadius"], ST_DEFAULT)
+    gp["BackprojectedPinholeRadius"] = [280e-9] * len(images) # unit? m?
+    _h5svi_set_state(gp["BackprojectedPinholeRadius"], ST_DEFAULT)
+    
+    # TODO: should come from the microscope model?
+    gp["NumericalAperture"] = [1.4] * len(images) # ratio (no unit)
+    _h5svi_set_state(gp["NumericalAperture"], ST_DEFAULT)
+    gp["ObjectiveQuality"] = [80] * len(images) # unit? int [0->100] = percentage of respect to the theory?
+    _h5svi_set_state(gp["ObjectiveQuality"], ST_DEFAULT)
+    
+    # Only for confocal microscopes?
+    gp["ExcitationBeamOverfillFactor"] = [2.0] * len(images) # unit?
+    _h5svi_set_state(gp["ExcitationBeamOverfillFactor"], ST_DEFAULT)
+    # TODO: no idea how to find this information out
+    gp["ExcitationPhotonCount"] = [1] * len(images) # photons
+    _h5svi_set_state(gp["ExcitationPhotonCount"], ST_DEFAULT) 
     
     # TODO: SVI Huygens still complains about these one missing
-    # MicroscopeSpec ModeSpec ImagingDir RefrIndexMed RefrIndexImm 
-    # PinholeSpacing NumAperture ObjQuality ExBeamFill DetPinhole IllPinhole
-    # DetMagnification LambdaEx LambdaEm ExPhotonCnt
+    # MicroscopeSpec ModeSpec ImagingDir
 
 def _add_svi_info(group):
     """
@@ -215,6 +343,7 @@ def _add_svi_info(group):
     """
     gi = group.create_group("SVIData")
     gi["Company"] = "Delmic"
+    gi["FileSpecificationCompatibility"] = "0.01p0"
     gi["FileSpecificationVersion"] = "0.01d8"
     gi["ImageHistory"] = ""
     gi["URL"] = "www.delmic.com"
@@ -237,6 +366,12 @@ def _add_acquistion_svi(group, images, **kwargs):
         images4d.append(d)
     gdata = numpy.array(images4d) # convert to a 5D array
        
+    # StateEnumeration
+    # FIXME: should be done by _h5svi_set_state (and used)
+    dtstate = h5py.special_dtype(enum=('i', {
+         "Invalid":111, "Default":112, "Estimated":113, "Reported":114, "Verified":115}))
+    _h5py_enum_commit(group, "StateEnumeration", dtstate)
+    
     ids = _create_image_dataset(gi, "Image", gdata, **kwargs)
     _add_image_info(gi, ids, images[0]) # all images should have the same info (but channel)
     _add_image_metadata(group, images)
