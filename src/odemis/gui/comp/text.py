@@ -134,8 +134,8 @@ class SuggestTextCtrl (wx.TextCtrl, listmix.ColumnSorterMixin):
 
         #If need drop down on left click
         if dropDownClick:
-            self.Bind (wx.EVT_LEFT_DOWN , self.onClickToggleDown, self)
-            self.Bind (wx.EVT_LEFT_UP , self.onClickToggleUp, self)
+            self.Bind(wx.EVT_LEFT_DOWN , self.onClickToggleDown, self)
+            self.Bind(wx.EVT_LEFT_UP , self.onClickToggleUp, self)
 
         self.dropdown.Bind(wx.EVT_LISTBOX , self.onListItemSelected, self.dropdownlistbox)
         self.dropdownlistbox.Bind(wx.EVT_LEFT_DOWN, self.onListClick)
@@ -218,39 +218,27 @@ class SuggestTextCtrl (wx.TextCtrl, listmix.ColumnSorterMixin):
             up and down: move the cursor
             left and right: move the search
         """
-        skip = True
         sel = self.dropdownlistbox.GetFirstSelected()
-        visible = self.dropdown.IsShown()
         KC = event.GetKeyCode()
         if KC == wx.WXK_DOWN:
-            if sel < self.dropdownlistbox.GetItemCount () - 1:
-                self.dropdownlistbox.Select (sel + 1)
+            if sel < self.dropdownlistbox.GetItemCount() - 1:
+                self.dropdownlistbox.Select(sel + 1)
                 self._listItemVisible()
-            self._showDropDown ()
-            skip = False
+            self._showDropDown()
         elif KC == wx.WXK_UP:
             if sel > 0 :
                 self.dropdownlistbox.Select (sel - 1)
                 self._listItemVisible()
-            self._showDropDown ()
-            skip = False
-        elif KC == wx.WXK_LEFT:
-            return
-        elif KC == wx.WXK_RIGHT:
-            return
-        if visible:
-            if event.GetKeyCode() == wx.WXK_RETURN:
+            self._showDropDown()
+        elif KC == wx.WXK_RETURN or KC == wx.WXK_NUMPAD_ENTER:
+            visible = self.dropdown.IsShown()
+            if visible:
                 self._setValueFromSelected()
-                skip = False
-            if event.GetKeyCode() == wx.WXK_ESCAPE:
-                self._showDropDown(False)
-                skip = False
-        else:
-            # just confirm the change
-            if event.GetKeyCode() == wx.WXK_RETURN:
+            else:
                 self._send_change_event()
-                skip = False            
-        if skip:
+        elif KC == wx.WXK_ESCAPE:
+            self._showDropDown(False)
+        else:
             event.Skip()
 
     def onListItemSelected (self, event):
