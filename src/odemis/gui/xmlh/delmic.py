@@ -22,7 +22,7 @@ You should have received a copy of the GNU General Public License along with Ode
 from wx.tools.XRCed import component, params, images, attribute
 from wx.tools.XRCed.globals import TRACE
 
-import xh_delmic
+import odemis.gui.xmlh.xh_delmic as xh_delmic
 
 TRACE('*** creating xh_delmic components')
 
@@ -54,33 +54,33 @@ component.Manager.addXmlHandler(xh_delmic.FoldPanelItemXmlHandler)
 component.Manager.setMenu(c, 'Delmic', 'Fold Panel Item', 'FoldPanelItem', 2)
 
 
-### StreamPanel
+### StreamBar
 
-c = component.Container('StreamPanel',
+c = component.Container('StreamBar',
     ['window', 'top_level', 'control'],
     ['pos', 'size', 'label', 'add_button'])
 c.setParamClass('add_button', params.ParamBool)
 component.Manager.register(c)
 component.Manager.addXmlHandler(xh_delmic.StreamPanelXmlHandler)
-component.Manager.setMenu(c, 'Delmic', 'Stream Panel', 'StreamPanel', 3)
+component.Manager.setMenu(c, 'Delmic', 'Stream Panel', 'StreamBar', 3)
 
-c = component.Container('FixedStreamPanelEntry',
+c = component.Container('StandardStreamPanel',
     ['window', 'top_level', 'control'],
     ['pos', 'size', 'label', 'collapsed'])
 c.setParamClass('collapsed', params.ParamBool)
 c.addEvents('EVT_COMMAND_COLLPANE_CHANGED')
 component.Manager.register(c)
-component.Manager.addXmlHandler(xh_delmic.FixedStreamPanelEntryXmlHandler)
-component.Manager.setMenu(c, 'Delmic', 'Fixed Stream', 'FixedStreamPanel', 4)
+component.Manager.addXmlHandler(xh_delmic.StandardStreamPanelXmlHandler)
+component.Manager.setMenu(c, 'Delmic', 'Standard Stream', 'StandardStreamPanel', 4)
 
-c = component.Container('CustomStreamPanelEntry',
+c = component.Container('DyeStreamPanel',
     ['window', 'top_level', 'control'],
     ['pos', 'size', 'label', 'collapsed'])
 c.setParamClass('collapsed', params.ParamBool)
 c.addEvents('EVT_COMMAND_COLLPANE_CHANGED')
 component.Manager.register(c)
-component.Manager.addXmlHandler(xh_delmic.CustomStreamPanelEntryXmlHandler)
-component.Manager.setMenu(c, 'Delmic', 'Custom Stream', 'CustomStreamPanel', 5)
+component.Manager.addXmlHandler(xh_delmic.DyeStreamPanelXmlHandler)
+component.Manager.setMenu(c, 'Delmic', 'Dye Stream', 'DyeStreamPanel', 5)
 
 
 ### gui.dblmscopepanel.MicroscopeViewport

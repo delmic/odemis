@@ -19,7 +19,7 @@ You should have received a copy of the GNU General Public License along with Ode
 
 from odemis import model
 from odemis.gui import instrmodel, util
-from odemis.gui.comp.stream import FixedStreamPanelEntry, CustomStreamPanelEntry
+from odemis.gui.comp.stream import StandardStreamPanel, CustomStreamPanelEntry
 from odemis.gui.instrmodel import Stream
 from odemis.gui.xmlh import odemis_get_test_resources
 from wx.lib.inspection import InspectionTool
@@ -192,7 +192,7 @@ class FoldPanelBarTestCase(unittest.TestCase):
         # Add a fixed stream
         wx.MilliSleep(SLEEP_TIME)
         fake_fstream1 = FakeSEMStream("First Fixed Stream")
-        fixed_entry = FixedStreamPanelEntry(self.frm.stream_panel,
+        fixed_entry = StandardStreamPanel(self.frm.stream_panel,
                                            fake_fstream1, livegui)
         self.frm.stream_panel.add_stream(fixed_entry)
         loop()
@@ -208,7 +208,7 @@ class FoldPanelBarTestCase(unittest.TestCase):
         # Add a fixed stream
         wx.MilliSleep(SLEEP_TIME)
         fake_fstream2 = FakeSEMStream("Second Fixed Stream")
-        fixed_entry2 = FixedStreamPanelEntry(self.frm.stream_panel,
+        fixed_entry2 = StandardStreamPanel(self.frm.stream_panel,
                                            fake_fstream2, livegui)
         self.frm.stream_panel.add_stream(fixed_entry2)
         loop()
@@ -263,7 +263,7 @@ class FoldPanelBarTestCase(unittest.TestCase):
         # Add a callback/name combo to the add button
         def brightfield_callback():
             fake_stream = FakeBrightfieldStream("Brightfield")
-            fixed_entry = FixedStreamPanelEntry(self.frm.stream_panel,
+            fixed_entry = StandardStreamPanel(self.frm.stream_panel,
                                                 fake_stream, livegui)
             self.frm.stream_panel.add_stream(fixed_entry)
 
@@ -278,7 +278,7 @@ class FoldPanelBarTestCase(unittest.TestCase):
         # Add another callback/name combo to the add button
         def sem_callback():
             fake_stream = FakeSEMStream("SEM:EDT")
-            fixed_entry = FixedStreamPanelEntry(self.frm.stream_panel,
+            fixed_entry = StandardStreamPanel(self.frm.stream_panel,
                                            fake_stream, livegui)
             self.frm.stream_panel.add_stream(fixed_entry)
 

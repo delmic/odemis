@@ -27,46 +27,46 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 
-from .buttons import ImageButton, ImageToggleButton, ImageTextToggleButton, \
-    ColourButton, PopupImageButton
-from .foldpanelbar import FoldPanelItem
-from .slider import UnitIntegerSlider
-from .text import SuggestTextCtrl, UnitIntegerCtrl, IntegerTextCtrl
-from odemis import model
-from odemis.gui import instrmodel
-from odemis.gui.img.data import getemptyBitmap
-from odemis.gui.util.conversion import wave2rgb
 import collections
 import logging
 import math
-import odemis.gui
-import odemis.gui.img.data as img
+
 import wx
 import wx.lib.newevent
-from odemis.gui.util import call_after
 
+import odemis.gui
+import odemis.gui.img.data as img
+import odemis.gui.comp.buttons as buttons
+
+from odemis import model
+from odemis.gui import instrmodel, FOREGROUND_COLOUR_EDIT
+from odemis.gui.comp.foldpanelbar import FoldPanelItem
+from odemis.gui.comp.slider import UnitIntegerSlider
+from odemis.gui.comp.text import SuggestTextCtrl, UnitIntegerCtrl, \
+  IntegerTextCtrl
+from odemis.gui.util.conversion import wave2rgb
 
 
 
 TEST_STREAM_LST = ["Aap", u"nöot", "noot", "mies", "kees", "vuur",
                   "quantummechnica", "Repelsteeltje", "", "XXX", "a", "aa",
-                  "aaa", "aaaa", "aaaaa", "aaaaaa", "aaaaaaa", "aAa"]
+                  "aaa", "aaaa", "aaaaa", "aaaaaa", "aaaaaaa"]
 
 stream_remove_event, EVT_STREAM_REMOVE = wx.lib.newevent.NewEvent()
 
-CAPTION_PADDING_RIGHT = 10
-SCROLLBAR_WIDTH = 0
 
 class Expander(wx.PyControl):
-    """ An Expander is a header/button control at the top of a StreamPanelEntry.
-    It provides a means to expand or collapse the StreamPanelEntry, as well as a
-    label and various buttons offering easy access to much used functionality.
+    """ This class describes a clickable control responsible for showing and
+    hiding stream data.
+
+    It functions both as a header and a button that expands or collapses a
+    panel containg controls.
 
     Structure:
 
         + Expander
-        |-- ImageButton     (remove stream button)
-        |-- StaticText / SuggestTextCtrl (stream label)
+        |-- ImageButton: Removes the stream
+        |-- Spacer: Temporary place holder for other controls
         |-- ImageToggleButton (show/hide button)
         |-- ImageToggleButton (capture/pause button)
 
@@ -81,12 +81,8 @@ class Expander(wx.PyControl):
         # This style *needs* to be set on MS Windows
         self.SetBackgroundStyle(wx.BG_STYLE_CUSTOM)
 
-        self._parent = parent
         self._stream = stream
-        self._label = stream.name.value
         self._label_ctrl = None
-
-        self._label_color = parent.GetForegroundColour()
 
         self.Bind(wx.EVT_SIZE, self.OnSize)
 
@@ -98,23 +94,39 @@ class Expander(wx.PyControl):
 
         # ===== Remove button
 
-        self._btn_rem = ImageButton(self, -1, img.getico_rem_strBitmap(), (10, 8), (18, 18),
-                                    background_parent=parent)
+        self._btn_rem = buttons.ImageButton(self,
+                                            wx.ID_ANY,
+                                            img.getico_rem_strBitmap(),
+                                            (10, 8),
+                                            (18, 18),
+                                            background_parent=parent)
         self._btn_rem.SetBitmaps(img.getico_rem_str_hBitmap())
         self._btn_rem.SetToolTipString("Remove stream")
 
         # ===== Visibility button
 
-        self._btn_vis = ImageToggleButton(self, -1, img.getico_eye_closedBitmap(), (10, 8),
-                                          (18, 18), background_parent=parent)
-        self._btn_vis.SetBitmaps(img.getico_eye_closed_hBitmap(), img.getico_eye_openBitmap(), img.getico_eye_open_hBitmap())
+        self._btn_vis = buttons.ImageToggleButton(self,
+                                                  wx.ID_ANY,
+                                                  img.getico_eye_closedBitmap(),
+                                                  (10, 8),
+                                                  (18, 18),
+                                                  background_parent=parent)
+        self._btn_vis.SetBitmaps(img.getico_eye_closed_hBitmap(),
+                                 img.getico_eye_openBitmap(),
+                                 img.getico_eye_open_hBitmap())
         self._btn_vis.SetToolTipString("Show stream")
 
         # ===== Play button
 
-        self._btn_play = ImageToggleButton(self, -1, img.getico_pauseBitmap(), (10, 8),
-                                           (18, 18), background_parent=parent)
-        self._btn_play.SetBitmaps(img.getico_pause_hBitmap(), img.getico_playBitmap(), img.getico_play_hBitmap())
+        self._btn_play = buttons.ImageToggleButton(self,
+                                                   wx.ID_ANY,
+                                                   img.getico_pauseBitmap(),
+                                                   (10, 8),
+                                                   (18, 18),
+                                                   background_parent=parent)
+        self._btn_play.SetBitmaps(img.getico_pause_hBitmap(),
+                                  img.getico_playBitmap(),
+                                  img.getico_play_hBitmap())
         self._btn_play.SetToolTipString("Update stream")
 
 
@@ -122,15 +134,85 @@ class Expander(wx.PyControl):
         self._sz = wx.BoxSizer(wx.HORIZONTAL)
 
         self._sz.Add(self._btn_rem, 0, wx.ALL | wx.ALIGN_CENTRE_VERTICAL, 8)
-        # If a label is to be inserted, it can come here (index = 1)
-        self._sz.AddStretchSpacer(0)
+        self._sz.AddStretchSpacer(1)
         self._sz.Add(self._btn_vis, 0, wx.RIGHT | wx.ALIGN_CENTRE_VERTICAL, 8)
         self._sz.Add(self._btn_play, 0, wx.RIGHT | wx.ALIGN_CENTRE_VERTICAL, 72)
 
+        self.SetSizer(self._sz)
+        self._sz.Fit(self)
+        self.Layout()
+
+    def DoGetBestSize(self, *args, **kwargs):
+        """ Return the best size, which is the width of the parent and the
+        height or the content (determined through the sizer).
+        """
+        width, _ = self.Parent.GetSize()
+        _, height = self._sz.GetSize()
+
+        return wx.Size(width, height)
+
+    def OnSize(self, event):
+        """ Handles the wx.EVT_SIZE event for the Expander class.
+        :param `event`: a `wx.SizeEvent` event to be processed.
+        """
+        width = self.Parent.GetSize().GetWidth()
+        self.SetSize((width, -1))
+        self.Layout()
+        self.Refresh()
+
+    def OnDrawExpander(self, dc):
+        """ This method draws the expand/collapse icons.
+        It needs to be called from the parent's paint event
+        handler.
+        """
+        scrollbar_width = wx.SystemSettings_GetMetric(wx.SYS_VSCROLL_X) - 3
+        caption_padding_right = 10
+
+        wndRect = self.GetRect()
+        drw = wndRect.GetRight() - 16 - caption_padding_right - scrollbar_width
+        self._foldIcons.Draw(self.Parent._collapsed, dc, drw,
+                             (wndRect.GetHeight() - 16) / 2,
+                             wx.IMAGELIST_DRAW_TRANSPARENT)
+
+    def to_acquisition_mode(self):
+        """ This method hides or makes read-only any button or data that should
+        not be changed during acquisition.
+        """
+
+        self._btn_rem.Hide()
+        self._btn_vis.Hide()
+
+        # Insert spacer to add some left side padding.
+        self._sz.InsertSpacer(0, (5, 16))
+
+
+class StandardExpander(Expander):
+    """ Expander with a fixed name label """
+
+    def __init__(self, parent, stream, wid=wx.ID_ANY):
+        Expander.__init__(self, parent, stream, wid)
+
+        self._label_ctrl = wx.StaticText(self, -1, stream.name.value)
+        # Replace spacer with control
+        self._sz.Remove(1)
+        self._sz.Insert(1, self._label_ctrl, 1,
+                       wx.RIGHT | wx.ALIGN_CENTRE_VERTICAL, 8)
+
+
+class DyeExpander(Expander):
+    """ Expander with a editable name label, linked to a predefined list of
+    dyes.
+
+    This widget also contains an changeable colour indicator.
+    """
+
+    def __init__(self, parent, stream, wid=wx.ID_ANY):
+        Expander.__init__(self, parent, stream, wid)
+
         # add a colour button if the stream has a "tint" VA
         if hasattr(stream, "tint"):
-            self._btn_color = ColourButton(self, -1,
-                                           bitmap=getemptyBitmap(),
+            self._btn_color = buttons.ColourButton(self, -1,
+                                           bitmap=img.getemptyBitmap(),
                                            size=(18, 18),
                                            colour=stream.tint.value,
                                            background_parent=parent,
@@ -139,14 +221,28 @@ class Expander(wx.PyControl):
             self._sz.Insert(2, self._btn_color, 0,
                             wx.RIGHT | wx.ALIGN_CENTRE_VERTICAL, 8)
             self._btn_color.Bind(wx.EVT_BUTTON, self.on_color_click)
-            stream.tint.subscribe(self.onStreamTint)
+            stream.tint.subscribe(self.set_tint)
 
-        self.SetSizer(self._sz)
-        self._sz.Fit(self)
-        self.Layout()
 
-    @call_after
-    def onStreamTint(self, colour):
+        self._label_ctrl = SuggestTextCtrl(self, id= -1, value=stream.name.value)
+
+        self._label_ctrl.SetChoices(TEST_STREAM_LST)
+        self._label_ctrl.SetBackgroundColour(self.Parent.GetBackgroundColour())
+        self._label_ctrl.SetForegroundColour(FOREGROUND_COLOUR_EDIT)
+
+        # TODO make sure it changes the value of stream.name when it is updated
+        self._label_ctrl.Bind(wx.EVT_TEXT_ENTER, self._on_label_change)
+
+        # Replace spacer with control
+        self._sz.Remove(1)
+        self._sz.Insert(1, self._label_ctrl, 1,
+                        wx.RIGHT | wx.ALIGN_CENTRE_VERTICAL, 8)
+
+    # GUI event handlers
+    def _on_label_change(self, evt):
+        self._stream.name.value = self._label_ctrl.GetValue()
+
+    def set_tint(self, colour):
         """ Update the colour button to reflect the provided colour """
         self._btn_color.set_colour(colour)
         logging.debug("Changing tint of button to %s", colour)
@@ -167,67 +263,25 @@ class Expander(wx.PyControl):
             # this will automatically update the button's colour
             self._stream.tint.value = colour
 
-    def DoGetBestSize(self, *args, **kwargs):
-        """ Return the best size, which is the width of the parent and the
-        height or the content (determined through the sizer).
+    def to_acquisition_mode(self):
+        """ This method hides or makes read-only any button or data that should
+        not be changed during acquisition.
         """
-        width, dummy = self._parent.GetSize()
-        dummy, height = self._sz.GetSize()
 
-        return wx.Size(width, height)
+        Expander.to_acquisition_mode(self)
 
-    def OnSize(self, event):
-        """ Handles the wx.EVT_SIZE event for the Expander class.
-        :param `event`: a `wx.SizeEvent` event to be processed.
-        """
-        width = self._parent.GetSize().GetWidth()
-        self.SetSize((width, -1))
-        self.Layout()
-        self.Refresh()
+        self._sz.Remove(1)
+        self._label_ctrl.Destroy()
 
-    def OnDrawExpander(self, dc):
-        """ This method draws the expand/collapse icons.
-        It needs to be called from the parent's paint event
-        handler.
-        """
-        global SCROLLBAR_WIDTH
-        SCROLLBAR_WIDTH = wx.SystemSettings_GetMetric(wx.SYS_VSCROLL_X) - 3
-
-        wndRect = self.GetRect()
-        drw = wndRect.GetRight() - 16 - CAPTION_PADDING_RIGHT - SCROLLBAR_WIDTH
-        self._foldIcons.Draw(self._parent._collapsed, dc, drw,
-                             (wndRect.GetHeight() - 16) / 2,
-                             wx.IMAGELIST_DRAW_TRANSPARENT)
-
-class FixedExpander(Expander):
-    """ Expander for FixedStreamPanelEntries """
-
-    def __init__(self, parent, stream, wid=wx.ID_ANY):
-        Expander.__init__(self, parent, stream, wid)
-
-        self._label_ctrl = wx.StaticText(self, -1, stream.name.value)
+        self._label_ctrl = wx.StaticText(self, -1, self._stream.name.value)
+        # Replace spacer with control
+        self._sz.Remove(1)
         self._sz.Insert(1, self._label_ctrl, 1,
-                        wx.RIGHT | wx.ALIGN_CENTRE_VERTICAL, 8)
+                       wx.RIGHT | wx.ALIGN_CENTRE_VERTICAL, 8)
 
-
-
-class CustomExpander(Expander):
-    """ Expander for CustomStreamPanelEntries """
-
-    def __init__(self, parent, stream, wid=wx.ID_ANY):
-        Expander.__init__(self, parent, stream, wid)
-        # Callback when the label changes: (string (text) -> None) 
-        self.onLabelChange = None
-
-        # Same as FixedExpander, but can change the name
-        self._label_ctrl = SuggestTextCtrl(self, id= -1, value=stream.name.value)
-        self._label_ctrl.SetBackgroundColour(self.Parent.GetBackgroundColour())
-        self._label_ctrl.SetForegroundColour("#2FA7D4")
-
-        self._label_ctrl.Bind(wx.EVT_COMMAND_ENTER, self._onLabelChange)
-
-        self._sz.Insert(1, self._label_ctrl, 1,
-                        wx.RIGHT | wx.ALIGN_CENTRE_VERTICAL, 8)
+        if hasattr(self._stream, "tint"):
+            self._btn_color.SetBitmapHover(None)
+            self._btn_color.Unbind(wx.EVT_BUTTON)
 
     def SetChoices(self, choices):
         """
@@ -235,19 +289,16 @@ class CustomExpander(Expander):
         choices (list of string)
         """
         self._label_ctrl.SetChoices(choices)
-    
-    # GUI event handlers
-    def _onLabelChange(self, evt):
-        if self.onLabelChange:
-            self.onLabelChange(self._label_ctrl.GetValue())
 
-class StreamPanelEntry(wx.PyPanel):
-    """ The StreamPanelEntry super class, a special case collapsible pane.
 
-    The StreamPanelEntry consists of the following widgets:
 
-        + StreamPanelEntry
-        |--- FixedExpander
+class StreamPanel(wx.PyPanel):
+    """ The StreamPanel super class, a special case collapsible panel.
+
+    The StreamPanel consists of the following widgets:
+
+        + StreamPanel
+        |--- StandardExpander
         |--+ Panel
            |-- ImageTextToggleButton
            |-- StaticText (contrast)
@@ -272,7 +323,7 @@ class StreamPanelEntry(wx.PyPanel):
     controls if the vigilant attributes are not there.
     """
 
-    expander_class = FixedExpander
+    expander_class = StandardExpander
 
     def __init__(self, parent, stream, microscope_model, wid=wx.ID_ANY,
                  pos=wx.DefaultPosition, size=wx.DefaultSize,
@@ -299,7 +350,15 @@ class StreamPanelEntry(wx.PyPanel):
         self._panel.Hide()
 
         self._gbs = wx.GridBagSizer(8, 5)
-        self._panel.SetSizer(self._gbs)
+
+        # Add a simple sizer so we can create padding at the bottom of the panel
+        border_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        border_sizer.Add(self._gbs,
+                         border=10,
+                         flag=wx.BOTTOM|wx.EXPAND,
+                         proportion=1)
+
+        self._panel.SetSizer(border_sizer)
 
         self._expander = None
 
@@ -318,7 +377,7 @@ class StreamPanelEntry(wx.PyPanel):
         XRC file (i.e. Font and background/foreground colours).
         """
 
-        row_count = 0
+        self.row_count = 0
 
         # ====== Add an expander button
 
@@ -340,7 +399,7 @@ class StreamPanelEntry(wx.PyPanel):
 
         # ====== Top row, auto contrast toggle button
 
-        self._btn_auto_contrast = ImageTextToggleButton(self._panel, -1,
+        self._btn_auto_contrast = buttons.ImageTextToggleButton(self._panel, -1,
                                                 img.getbtn_contrastBitmap(),
                                                 label="Auto",
                                                 size=(68, 26),
@@ -349,18 +408,19 @@ class StreamPanelEntry(wx.PyPanel):
                                         bmp_h=img.getbtn_contrast_hBitmap(),
                                         bmp_sel=img.getbtn_contrast_aBitmap())
         self._btn_auto_contrast.SetForegroundColour("#000000")
-        self._gbs.Add(self._btn_auto_contrast, (row_count, 0),
+        self._gbs.Add(self._btn_auto_contrast, (self.row_count, 0),
                       flag=wx.LEFT, border=11)
-        row_count += 1
+        self.row_count += 1
 
         # ====== Second row, brightness label, slider and value
 
         lbl_brightness = wx.StaticText(self._panel, -1, "Brightness")
-        self._gbs.Add(lbl_brightness, (row_count, 0),
+        self._gbs.Add(lbl_brightness, (self.row_count, 0),
                       flag=wx.LEFT | wx.ALIGN_CENTRE_VERTICAL,
                       border=11)
 
-        # FIXME: we need to ensure it's possible to have a value == 0 (and not just 1/201)
+        # FIXME: we need to ensure it's possible to have a value == 0
+        # (and not just 1/201)
         self._sld_brightness = UnitIntegerSlider(
                               self._panel,
                               value=self.stream.brightness.value,
@@ -369,13 +429,13 @@ class StreamPanelEntry(wx.PyPanel):
                               unit=None,
                               name="brightness_slider")
 
-        self._gbs.Add(self._sld_brightness, (row_count, 1), flag=wx.EXPAND)
-        row_count += 1
+        self._gbs.Add(self._sld_brightness, (self.row_count, 1), flag=wx.EXPAND)
+        self.row_count += 1
 
         # ====== Third row, contrast label, slider and value
 
         lbl_contrast = wx.StaticText(self._panel, -1, "Contrast")
-        self._gbs.Add(lbl_contrast, (row_count, 0),
+        self._gbs.Add(lbl_contrast, (self.row_count, 0),
                       flag=wx.LEFT | wx.ALIGN_CENTRE_VERTICAL, border=11)
 
         self._sld_contrast = UnitIntegerSlider(
@@ -386,57 +446,8 @@ class StreamPanelEntry(wx.PyPanel):
                              unit=None,
                              name="contrast_slider")
 
-        self._gbs.Add(self._sld_contrast, (row_count, 1), flag=wx.EXPAND)
-        row_count += 1
-
-
-        # ====== Fourth row, accumulation label, text field and value
-
-        lbl_accum = wx.StaticText(self._panel, -1, "Accumulation")
-        self._gbs.Add(lbl_accum, (row_count, 0),
-                      flag=wx.LEFT | wx.ALIGN_CENTRE_VERTICAL, border=11)
-
-        self._txt_accum = IntegerTextCtrl(self._panel,
-                                          value=1,
-                                          min_val=1,
-                                          key_inc=True,
-                                          step=1,
-                                          style=wx.NO_BORDER)
-        self._txt_accum.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_EDIT)
-        self._txt_accum.SetBackgroundColour(self._panel.GetBackgroundColour())
-
-        self._gbs.Add(self._txt_accum, (row_count, 1), flag=wx.EXPAND)
-
-        row_count += 1
-
-        # ====== Fifth row, interpolation label, text field and value
-
-        lbl_interp = wx.StaticText(self._panel, -1, "Interpolation")
-        self._gbs.Add(lbl_interp, (row_count, 0),
-                      flag=wx.LEFT | wx.ALIGN_CENTRE_VERTICAL, border=11)
-
-        choices = ["None", "Linear", "Cubic"]
-        self._cmb_interp = wx.combo.OwnerDrawnComboBox(self._panel,
-                                                   -1,
-                                                   value=choices[0],
-                                                   pos=(0, 0),
-                                                   size=(100, 16),
-                                                   style=wx.NO_BORDER |
-                                                         wx.CB_DROPDOWN |
-                                                         wx.TE_PROCESS_ENTER |
-                                                         wx.CB_READONLY,
-                                                    choices=choices)
-
-        self._cmb_interp.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_EDIT)
-        self._cmb_interp.SetBackgroundColour(self._panel.GetBackgroundColour())
-        self._cmb_interp.SetButtonBitmaps(img.getbtn_downBitmap(),
-                                          pushButtonBg=False)
-
-
-        self._gbs.Add(self._cmb_interp, (row_count, 1), flag=wx.EXPAND)
-
-        row_count += 1
-
+        self._gbs.Add(self._sld_contrast, (self.row_count, 1), flag=wx.EXPAND)
+        self.row_count += 1
 
         self._gbs.AddGrowableCol(1)
 
@@ -469,81 +480,8 @@ class StreamPanelEntry(wx.PyPanel):
         self._btn_auto_contrast.SetToggle(self.stream.auto_bc.value)
         self.on_toggle_autocontrast(None)  # to ensure the controls are disabled if necessary
 
-
-        if hasattr(self.stream, "excitation"):
-            # Warning: stream.excitation is in m, we present everything in nm
-            lbl_excitation = wx.StaticText(self._panel, -1, "Excitation")
-            self._gbs.Add(lbl_excitation, (row_count, 0),
-                          flag=wx.LEFT | wx.ALIGN_CENTRE_VERTICAL, border=11)
-
-            # TODO use the range of the VA
-            self._txt_excitation = UnitIntegerCtrl(self._panel, -1,
-                    int(round(self.stream.excitation.value * 1e9)),
-                    style=wx.NO_BORDER,
-                    size=(50, -1),
-                    min_val=int(math.ceil(self.stream.excitation.range[0] * 1e9)),
-                    max_val=int(self.stream.excitation.range[1] * 1e9),
-                    unit='nm')
-            self._txt_excitation.SetForegroundColour("#2FA7D4")
-            self._txt_excitation.SetBackgroundColour(self.GetBackgroundColour())
-
-            self._txt_excitation.Bind(wx.EVT_COMMAND_ENTER, self.on_excitation_text)
-
-            self._gbs.Add(self._txt_excitation, (row_count, 1),
-                          flag=wx.ALIGN_CENTRE_VERTICAL | wx.RIGHT,
-                          border=18)
-            # TODO: is button a good choice? the user cannot click it, it's just
-            # to show the wavelength
-            self._btn_excitation = ColourButton(self._panel, -1,
-                                bitmap=getemptyBitmap(),
-                                size=(18, 18),
-                                colour=wave2rgb(self.stream.excitation.value),
-                                background_parent=self._panel)
-            self._btn_excitation.SetToolTipString("Wavelength colour")
-
-            self._gbs.Add(self._btn_excitation, (row_count, 2),
-                          flag=wx.ALIGN_CENTRE_VERTICAL | wx.RIGHT,
-                          border=18)
-            row_count += 1
-
-            # TODO also a label for warnings
-
-
-        if hasattr(self.stream, "emission"):
-            lbl_emission = wx.StaticText(self._panel, -1, "Emission")
-            self._gbs.Add(lbl_emission, (row_count, 0),
-                          flag=wx.LEFT | wx.ALIGN_CENTRE_VERTICAL, border=11)
-
-            self._txt_emission = UnitIntegerCtrl(self._panel, -1,
-                    int(round(self.stream.emission.value * 1e9)),
-                    style=wx.NO_BORDER,
-                    size=(50, -1),
-                    min_val=int(math.ceil(self.stream.emission.range[0] * 1e9)),
-                    max_val=int(self.stream.emission.range[1] * 1e9),
-                    unit='nm')
-            self._txt_emission.SetForegroundColour("#2FA7D4")
-            self._txt_emission.SetBackgroundColour(self.GetBackgroundColour())
-
-            self._txt_emission.Bind(wx.EVT_COMMAND_ENTER, self.on_emission_text)
-
-            self._gbs.Add(self._txt_emission, (row_count, 1),
-                          flag=wx.ALIGN_CENTRE_VERTICAL | wx.RIGHT,
-                          border=10)
-
-            self._btn_emission = ColourButton(self._panel, -1,
-                                              bitmap=getemptyBitmap(),
-                                              size=(18, 18),
-                                              colour=wave2rgb(self.stream.emission.value),
-                                              background_parent=self._panel)
-            self._btn_emission.SetToolTipString("Wavelength colour")
-
-            self._gbs.Add(self._btn_emission, (row_count, 2),
-                          flag=wx.ALIGN_CENTRE_VERTICAL | wx.RIGHT,
-                          border=10)
-            row_count += 1
-
-        self._gbs.AddSpacer((5, 5), (row_count, 0))
-
+    def get_stream_mod(self):
+        return self.stream
 
     def set_expander_button(self, button):
         """ Assign a new expander button to the stream panel.
@@ -565,7 +503,7 @@ class StreamPanelEntry(wx.PyPanel):
     # API
 
     def Layout(self, *args, **kwargs):
-        """ Layout the StreamPanelEntry. """
+        """ Layout the StreamPanel. """
 
         if not self._expander or not self._panel or not self._sz:
             return False  # we need to complete the creation first!
@@ -651,16 +589,10 @@ class StreamPanelEntry(wx.PyPanel):
 
     def on_remove(self, evt):
         logging.debug("Removing stream panel '%s'", self.stream.name.value)
-#        fpb_item = self.Parent
 
         # generate EVT_STREAM_REMOVE
         event = stream_remove_event(entry=self)
         wx.PostEvent(self, event)
-
-        # remove ourself from the panel
-        # TODO: do this in the panel handler?
-#        self.Destroy()
-#        fpb_item.Layout()
 
     def on_visibility(self, evt):
         # TODO need to let the currently focused view know (via view controller?)
@@ -737,56 +669,23 @@ class StreamPanelEntry(wx.PyPanel):
 
         evt.Skip()
 
-    def on_excitation_text(self, evt):
-#        logging.debug("Excitation changed")
-        obj = evt.GetEventObject()
-        wl = (obj.GetValue() or 0) * 1e-9
-        # FIXME: need to turn the text red if the value is the smaller (bigger, maybe not necessary)
-        wl = sorted(self.stream.emission.range + (wl,))[1]
-        self.stream.excitation.value = wl
-
-        colour = wave2rgb(self.stream.excitation.value)
-#        logging.debug("Changing colour to %s", colour)
-        self._btn_excitation.set_colour(colour)
-
-    def on_emission_text(self, evt):
-#        logging.debug("Emission changed")
-        obj = evt.GetEventObject()
-        wl = (obj.GetValue() or 0) * 1e-9
-        # FIXME: need to turn the text red if the value is the smaller (bigger, maybe not necessary)
-        wl = sorted(self.stream.emission.range + (wl,))[1]
-        self.stream.emission.value = wl
-
-        colour = wave2rgb(self.stream.emission.value)
-#        logging.debug("Changing colour to %s", colour)
-        self._btn_emission.set_colour(colour)
-
-        # changing emission should also change the tint
-        self.stream.tint.value = colour
-
     def OnToggle(self, evt):
-        """ Toggle the StreamPanelEntry
+        """ Toggle the StreamPanel """
 
-        Only toggle the view when the click was within the right 15% of the
-        Expander, otherwise ignore it.
-        """
         w = evt.GetEventObject().GetSize().GetWidth()
 
         if evt.GetX() > w * 0.85:
             self.collapse(not self._collapsed)
-            # this change was generated by the user - send the event
-            # ev = wx.CollapsiblePaneEvent(self, self.GetId(), self._collapsed)
-            # self.GetEventHandler().ProcessEvent(ev)
-
-        evt.Skip()
+        else:
+            evt.Skip()
 
     def OnSize(self, event):
-        """ Handles the wx.EVT_SIZE event for StreamPanelEntry
+        """ Handles the wx.EVT_SIZE event for StreamPanel
         """
         self.Layout()
 
     def on_button(self, event):
-        """ Handles the wx.EVT_BUTTON event for StreamPanelEntry
+        """ Handles the wx.EVT_BUTTON event for StreamPanel
         """
 
         if event.GetEventObject() != self._expander:
@@ -794,11 +693,6 @@ class StreamPanelEntry(wx.PyPanel):
             return
 
         self.collapse(not self._collapsed)
-
-        # this change was generated by the user - send the event
-        # ev = wx.CollapsiblePaneEvent(self, self.GetId(), self._collapsed)
-        # self.GetEventHandler().ProcessEvent(ev)
-
 
     def on_draw_expander(self, event):
         """ Handles the ``wx.EVT_PAINT`` event for the stream panel.
@@ -811,23 +705,160 @@ class StreamPanelEntry(wx.PyPanel):
 
         self._expander.OnDrawExpander(dc)
 
+    def to_acquisition_mode(self):
+        """ This method hides or makes read-only any button or data that should
+        not be changed during acquisition.
+        """
+
+        self._expander.to_acquisition_mode()
+
+        # ====== Fourth row, accumulation label, text field and value
+
+        lbl_accum = wx.StaticText(self._panel, -1, "Accumulation")
+        self._gbs.Add(lbl_accum, (self.row_count, 0),
+                      flag=wx.LEFT | wx.ALIGN_CENTRE_VERTICAL, border=11)
+
+        self._txt_accum = IntegerTextCtrl(self._panel,
+                                          value=1,
+                                          min_val=1,
+                                          key_inc=True,
+                                          step=1,
+                                          style=wx.NO_BORDER)
+        self._txt_accum.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_EDIT)
+        self._txt_accum.SetBackgroundColour(self._panel.GetBackgroundColour())
+
+        self._gbs.Add(self._txt_accum, (self.row_count, 1), flag=wx.EXPAND)
+
+        self.row_count += 1
+
+        # ====== Fifth row, interpolation label, text field and value
+
+        lbl_interp = wx.StaticText(self._panel, -1, "Interpolation")
+        self._gbs.Add(lbl_interp, (self.row_count, 0),
+                      flag=wx.LEFT | wx.ALIGN_CENTRE_VERTICAL, border=11)
+
+        choices = ["None", "Linear", "Cubic"]
+        self._cmb_interp = wx.combo.OwnerDrawnComboBox(self._panel,
+                                                   -1,
+                                                   value=choices[0],
+                                                   pos=(0, 0),
+                                                   size=(100, 16),
+                                                   style=wx.NO_BORDER |
+                                                         wx.CB_DROPDOWN |
+                                                         wx.TE_PROCESS_ENTER |
+                                                         wx.CB_READONLY,
+                                                    choices=choices)
+
+        self._cmb_interp.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_EDIT)
+        self._cmb_interp.SetBackgroundColour(self._panel.GetBackgroundColour())
+        self._cmb_interp.SetButtonBitmaps(img.getbtn_downBitmap(),
+                                          pushButtonBg=False)
+
+
+        self._gbs.Add(self._cmb_interp, (self.row_count, 1), flag=wx.EXPAND)
+
+        self.row_count += 1
+
+        #self._gbs.AddSpacer((5, 5), (self.row_count, 0))
 
 
 
-class FixedStreamPanelEntry(StreamPanelEntry):  # pylint: disable=R0901
+class StandardStreamPanel(StreamPanel):  # pylint: disable=R0901
     """ A pre-defined stream panel """
 
-    expander_class = FixedExpander
+    expander_class = StandardExpander
 
+    def __init__(self, *args, **kwargs):
+        StreamPanel.__init__(self, *args, **kwargs)
 
-class CustomStreamPanelEntry(StreamPanelEntry):  # pylint: disable=R0901
-    """ A stream panel which can be altered by the user """
-
-    expander_class = CustomExpander
 
     def finalize(self):
-        StreamPanelEntry.finalize(self)
-         
+        StreamPanel.finalize(self)
+        #self._gbs.AddSpacer((5, 5), (self.row_count, 0))
+
+
+class DyeStreamPanel(StreamPanel):
+    """ A stream panel which can be altered by the user """
+
+    expander_class = DyeExpander
+
+    def __init__(self, *args, **kwargs):
+        StreamPanel.__init__(self, *args, **kwargs)
+
+    def finalize(self):
+        StreamPanel.finalize(self)
+
+        if hasattr(self.stream, "excitation"):
+            # Warning: stream.excitation is in m, we present everything in nm
+            lbl_excitation = wx.StaticText(self._panel, -1, "Excitation")
+            self._gbs.Add(lbl_excitation, (self.row_count, 0),
+                          flag=wx.LEFT | wx.ALIGN_CENTRE_VERTICAL, border=11)
+
+            # TODO use the range of the VA
+            self._txt_excitation = UnitIntegerCtrl(self._panel, -1,
+                    int(round(self.stream.excitation.value * 1e9)),
+                    style=wx.NO_BORDER,
+                    size=(50, -1),
+                    min_val=int(math.ceil(self.stream.excitation.range[0] * 1e9)),
+                    max_val=int(self.stream.excitation.range[1] * 1e9),
+                    unit='nm')
+            self._txt_excitation.SetForegroundColour("#2FA7D4")
+            self._txt_excitation.SetBackgroundColour(self.GetBackgroundColour())
+
+            self._txt_excitation.Bind(wx.EVT_COMMAND_ENTER, self.on_excitation_text)
+
+            self._gbs.Add(self._txt_excitation, (self.row_count, 1),
+                          flag=wx.ALIGN_CENTRE_VERTICAL | wx.RIGHT,
+                          border=18)
+            # TODO: is button a good choice? the user cannot click it, it's just
+            # to show the wavelength
+            self._btn_excitation = buttons.ColourButton(self._panel, -1,
+                                bitmap=img.getemptyBitmap(),
+                                size=(18, 18),
+                                colour=wave2rgb(self.stream.excitation.value),
+                                background_parent=self._panel)
+            self._btn_excitation.SetToolTipString("Wavelength colour")
+
+            self._gbs.Add(self._btn_excitation, (self.row_count, 2),
+                          flag=wx.ALIGN_CENTRE_VERTICAL | wx.RIGHT,
+                          border=18)
+            self.row_count += 1
+
+            # TODO also a label for warnings
+
+        if hasattr(self.stream, "emission"):
+            lbl_emission = wx.StaticText(self._panel, -1, "Emission")
+            self._gbs.Add(lbl_emission, (self.row_count, 0),
+                          flag=wx.LEFT | wx.ALIGN_CENTRE_VERTICAL, border=11)
+
+            self._txt_emission = UnitIntegerCtrl(self._panel, -1,
+                    int(round(self.stream.emission.value * 1e9)),
+                    style=wx.NO_BORDER,
+                    size=(50, -1),
+                    min_val=int(math.ceil(self.stream.emission.range[0] * 1e9)),
+                    max_val=int(self.stream.emission.range[1] * 1e9),
+                    unit='nm')
+            self._txt_emission.SetForegroundColour("#2FA7D4")
+            self._txt_emission.SetBackgroundColour(self.GetBackgroundColour())
+
+            self._txt_emission.Bind(wx.EVT_COMMAND_ENTER, self.on_emission_text)
+
+            self._gbs.Add(self._txt_emission, (self.row_count, 1),
+                          flag=wx.ALIGN_CENTRE_VERTICAL | wx.RIGHT,
+                          border=10)
+
+            self._btn_emission = buttons.ColourButton(self._panel, -1,
+                                              bitmap=img.getemptyBitmap(),
+                                              size=(18, 18),
+                                              colour=wave2rgb(self.stream.emission.value),
+                                              background_parent=self._panel)
+            self._btn_emission.SetToolTipString("Wavelength colour")
+
+            self._gbs.Add(self._btn_emission, (self.row_count, 2),
+                          flag=wx.ALIGN_CENTRE_VERTICAL | wx.RIGHT,
+                          border=10)
+            self.row_count += 1
+
         if hasattr(self.stream, "excitation") and hasattr(self.stream, "emission"):
             # handle the auto-completion of dye names
             # TODO: shall we do something better than remove the incompatible dyes?
@@ -836,8 +867,10 @@ class CustomStreamPanelEntry(StreamPanelEntry):  # pylint: disable=R0901
             self._expander.SetChoices(self._getCompatibleDyes())
             self._expander.onLabelChange = self._onNewName
         else:
-            logging.warning("CustomStreamEntry associated to a stream without excitation/emission")
-    
+            logging.warning("CustomStreamEntry associated to a stream without "
+                            "excitation/emission")
+
+
     def _getCompatibleDyes(self):
         """
         Find the names of the dyes in the database which are compatible with the
@@ -845,20 +878,21 @@ class CustomStreamPanelEntry(StreamPanelEntry):  # pylint: disable=R0901
         return (list of string): names of all the dyes which are compatible
         """
         # we expect excitation and emission to have a range
-        xrange = self.stream.excitation.range
-        erange = self.stream.emission.range
-        
+        x_range = self.stream.excitation.range
+        e_range = self.stream.emission.range
+
         dyes = []
         for name, (xwl, ewl) in instrmodel.DyeDatabase.items():
-            if (xrange[0] <= xwl and xwl <= xrange[1] and
-                erange[0] <= ewl and ewl <= erange[1]):
+            if (x_range[0] <= xwl and xwl <= x_range[1] and
+                e_range[0] <= ewl and ewl <= e_range[1]):
                 dyes.append(name)
+
         return dyes
-        
+
     def _onNewName(self, txt):
         # update the name of the stream
         self.stream.name.value = txt
-        
+
         # update the excitation and emission wavelength
         if txt in instrmodel.DyeDatabase:
             xwl, ewl = instrmodel.DyeDatabase[txt]
@@ -874,8 +908,37 @@ class CustomStreamPanelEntry(StreamPanelEntry):  # pylint: disable=R0901
             except model.OutOfBoundError:
                 logging.info("Emission at %g nm is out of bound", ewl * 1e9)
 
+    def on_excitation_text(self, evt):
+        # logging.debug("Excitation changed")
+        obj = evt.GetEventObject()
+        wl = (obj.GetValue() or 0) * 1e-9
+        # FIXME: need to turn the text red if the value is the smaller (bigger,
+        # maybe not necessary)
+        wl = sorted(self.stream.emission.range + (wl,))[1]
+        self.stream.excitation.value = wl
 
-class StreamPanel(wx.Panel):
+        colour = wave2rgb(self.stream.excitation.value)
+        # logging.debug("Changing colour to %s", colour)
+        self._btn_excitation.set_colour(colour)
+
+    def on_emission_text(self, evt):
+        # logging.debug("Emission changed")
+        obj = evt.GetEventObject()
+        wl = (obj.GetValue() or 0) * 1e-9
+        # FIXME: need to turn the text red if the value is the smaller (bigger,
+        # maybe not necessary)
+        wl = sorted(self.stream.emission.range + (wl,))[1]
+        self.stream.emission.value = wl
+
+        colour = wave2rgb(self.stream.emission.value)
+        # logging.debug("Changing colour to %s", colour)
+        self._btn_emission.set_colour(colour)
+
+        # changing emission should also change the tint
+        self.stream.tint.value = colour
+
+
+class StreamBar(wx.Panel):
     """
     The whole panel containing stream entries and a button to add more streams
     There are multiple levels of visibility of a stream entry:
@@ -891,6 +954,11 @@ class StreamPanel(wx.Panel):
 
     DEFAULT_BORDER = 2
     DEFAULT_STYLE = wx.BOTTOM | wx.EXPAND
+    # the order in which the streams are displayed
+    STREAM_ORDER = [instrmodel.SEMStream,
+                    instrmodel.BrightfieldStream,
+                    instrmodel.FluoStream]
+
 
     def __init__(self, *args, **kwargs):
 
@@ -916,7 +984,7 @@ class StreamPanel(wx.Panel):
         self.btn_add_stream = None
 
         if add_btn:
-            self.btn_add_stream = PopupImageButton(
+            self.btn_add_stream = buttons.PopupImageButton(
                                                self, -1,
                                                bitmap=img.getstream_addBitmap(),
                                                label="ADD STREAM",
@@ -940,11 +1008,10 @@ class StreamPanel(wx.Panel):
         self._microscope.focussedView.subscribe(self._onView, init=True)
 
 
-    # internal methods TODO: is this still needed? Doesn't seem to do much
     def _fitStreams(self):
         h = self._sz.GetMinSize().GetHeight()
 
-        logging.debug("Setting StreamPanel height to %s", h)
+        logging.debug("Setting StreamBar height to %s", h)
         self.SetSize((-1, h))
 
         # The panel size is cached in the _PanelSize attribute.
@@ -956,11 +1023,6 @@ class StreamPanel(wx.Panel):
             p = p.Parent
 
         p._refresh()
-
-    # the order in which the streams are displayed
-    STREAM_ORDER = [instrmodel.SEMStream,
-                    instrmodel.BrightfieldStream,
-                    instrmodel.FluoStream]
 
     # TODO maybe should be provided after init by the controller (like key of
     # sorted()), to separate the GUI from the model ?
@@ -1003,7 +1065,6 @@ class StreamPanel(wx.Panel):
 
     def on_add_stream(self, evt):
         # TODO: call the action of the menu
-
         if "Filtered colour" in self.menu_actions:
             evt.Skip()
             #action = self.menu_actions["Filtered colour"]
@@ -1014,7 +1075,7 @@ class StreamPanel(wx.Panel):
         # stream_name = evt_obj.GetStringSelection()
 
     def on_stream_remove(self, evt):
-        logging.debug("StreamPanel received remove event %r", evt)
+        logging.debug("StreamBar received remove event %r", evt)
         # delete entry
         self.remove_stream(evt.entry)
 
@@ -1043,7 +1104,7 @@ class StreamPanel(wx.Panel):
         """
         This method adds a stream entry to the panel. The appropriate
         position is automatically determined.
-        entry (StreamPanelEntry): an entry (representing a specific stream)
+        entry (StreamPanel): an entry (representing a specific stream)
         """
         # Insert the entry in the order of STREAM_ORDER. If there are already
         # streams with the same type, insert after them.
@@ -1082,6 +1143,9 @@ class StreamPanel(wx.Panel):
         self._fitStreams()
 
 
+    def get_stream_panels(self):
+        return self.entries
+
     def remove_stream(self, entry):
         """
         Removes a stream entry
@@ -1104,7 +1168,8 @@ class StreamPanel(wx.Panel):
     # TODO need to have actions enabled/disabled depending on the context:
     #  * if microscope if off/pause => disabled
     #  * if focused view is not about this type of stream => disabled
-    #  * if there can be only one stream of this type, and it's already present => disabled
+    #  * if there can be only one stream of this type, and it's already present
+    #    => disabled
     # TODO: Add 'check_enabled' functions to the 'add_choice' method call that
     # determine whether the choice should be enabled or disabled (by returning
     # True or False)

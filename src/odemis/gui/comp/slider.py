@@ -398,7 +398,7 @@ class NumberSlider(Slider):
 
         self.linked_field = t_class(self, -1,
                                     value,
-                                    style=wx.NO_BORDER,
+                                    style=wx.NO_BORDER | wx.ALIGN_RIGHT,
                                     size=t_size,
                                     min_val=val_range[0],
                                     max_val=val_range[1],

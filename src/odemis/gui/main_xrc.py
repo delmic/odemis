@@ -20,12 +20,12 @@ class xrcfr_main(wx.Frame):
 #!XRCED:begin-block:xrcfr_main.PreCreate
     def PreCreate(self, pre):
         """ This function is called during the class's initialization.
-        
+
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
         pass
-        
+
 #!XRCED:end-block:xrcfr_main.PreCreate
 
     def __init__(self, parent):
@@ -83,12 +83,12 @@ class xrcfr_acq(wx.Dialog):
 #!XRCED:begin-block:xrcfr_acq.PreCreate
     def PreCreate(self, pre):
         """ This function is called during the class's initialization.
-        
+
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
         pass
-        
+
 #!XRCED:end-block:xrcfr_acq.PreCreate
 
     def __init__(self, parent):
@@ -111,6 +111,7 @@ class xrcfr_acq(wx.Dialog):
         self.pnl_stream = xrc.XRCCTRL(self, "pnl_stream")
         self.gauge_acq = xrc.XRCCTRL(self, "gauge_acq")
         self.lbl_acqtimer = xrc.XRCCTRL(self, "lbl_acqtimer")
+        self.lbl_acqestimate = xrc.XRCCTRL(self, "lbl_acqestimate")
         self.btn_cancel = xrc.XRCCTRL(self, "btn_cancel")
         self.btn_acquire = xrc.XRCCTRL(self, "btn_acquire")
 
@@ -127,7 +128,7 @@ def __init_resources():
     wx.FileSystem.AddHandler(wx.MemoryFSHandler())
 
     main_xrc = '''\
-<?xml version="1.0" ?><resource version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
+<?xml version="1.0" ?><resource class="wxStaticText" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
   <object class="wxFrame" name="fr_main">
     <object class="wxMenuBar">
       <object class="wxMenu">
@@ -622,7 +623,7 @@ def __init_resources():
                               <label>STREAMS</label>
                               <fg>#1A1A1A</fg>
                               <bg>#555555</bg>
-                              <object class="StreamPanel" name="pnl_stream">
+                              <object class="StreamBar" name="pnl_stream">
                                 <add_button>1</add_button>
                                 <fg>#7F7F7F</fg>
                                 <bg>#333333</bg>
@@ -838,7 +839,7 @@ def __init_resources():
                         <object class="OwnerDrawnComboBox" name="cmb_presets">
                           <size>-1,16</size>
                           <fg>#2FA7D4</fg>
-                          <bg>#333333</bg>
+                          <bg>#4D4D4D</bg>
                           <style>wxBORDER_NONE|wxCB_DROPDOWN|wxCB_READONLY|wxTE_PROCESS_ENTER</style>
                           <XRCED>
                             <assign_var>1</assign_var>
@@ -860,7 +861,7 @@ def __init_resources():
                               <size>-1,20</size>
                               <value>Select a destination file</value>
                               <fg>#2FA7D4</fg>
-                              <bg>#333333</bg>
+                              <bg>#4D4D4D</bg>
                               <style>wxBORDER_NONE|wxTE_READONLY</style>
                               <XRCED>
                                 <assign_var>1</assign_var>
@@ -899,7 +900,7 @@ def __init_resources():
                           <size>200,20</size>
                           <value>...</value>
                           <fg>#BFBFBF</fg>
-                          <bg>#333333</bg>
+                          <bg>#4D4D4D</bg>
                           <style>wxBORDER_NONE|wxTE_READONLY</style>
                           <XRCED>
                             <assign_var>1</assign_var>
@@ -918,7 +919,7 @@ def __init_resources():
                 </object>
                 <size>400,-1</size>
                 <fg>#DDDDDD</fg>
-                <bg>#333333</bg>
+                <bg>#4D4D4D</bg>
               </object>
               <flag>wxEXPAND</flag>
             </object>
@@ -945,7 +946,7 @@ def __init_resources():
                         </XRCED>
                       </object>
                       <object class="FoldPanelItem">
-                        <object class="StreamPanel" name="pnl_stream">
+                        <object class="StreamBar" name="pnl_stream">
                           <fg>#7F7F7F</fg>
                           <bg>#333333</bg>
                           <XRCED>
@@ -1005,6 +1006,9 @@ def __init_resources():
                 <size>-1,10</size>
                 <range>100</range>
                 <value>50</value>
+                <bg>#333333</bg>
+                <hidden>1</hidden>
+                <style>wxGA_SMOOTH</style>
                 <XRCED>
                   <assign_var>1</assign_var>
                 </XRCED>
@@ -1015,7 +1019,7 @@ def __init_resources():
             </object>
             <object class="sizeritem">
               <object class="wxStaticText" name="lbl_acqtimer">
-                <label>∞ s</label>
+                <label>9999 s</label>
                 <fg>#DDDDDD</fg>
                 <font>
                   <size>14</size>
@@ -1026,11 +1030,34 @@ def __init_resources():
                   <face>Ubuntu</face>
                   <encoding>UTF-8</encoding>
                 </font>
+                <hidden>1</hidden>
+                <style>wxALIGN_RIGHT</style>
                 <XRCED>
                   <assign_var>1</assign_var>
                 </XRCED>
               </object>
               <flag>wxTOP|wxBOTTOM|wxRIGHT|wxALIGN_RIGHT</flag>
+              <border>23</border>
+            </object>
+            <object class="sizeritem">
+              <object class="wxStaticText" name="lbl_acqestimate">
+                <label>Estimated acquisition time is 9999 seconds</label>
+                <fg>#DDDDDD</fg>
+                <font>
+                  <size>14</size>
+                  <style>normal</style>
+                  <weight>normal</weight>
+                  <underlined>0</underlined>
+                  <family>default</family>
+                  <face>Ubuntu</face>
+                  <encoding>UTF-8</encoding>
+                </font>
+                <style>wxALIGN_RIGHT</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxALL|wxALIGN_RIGHT</flag>
               <border>23</border>
             </object>
           </object>

@@ -1,0 +1,5 @@
+# This directory contains the database from fluorophores.org
+# To fill it, run ./util/getfluodb.py
+*
+# Except this file
+!.gitignore

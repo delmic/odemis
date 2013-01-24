@@ -36,7 +36,7 @@ import xml.etree.ElementTree as ET
 
 # User-friendly name
 FORMAT = "TIFF"
-# list of file-name extensions possible, the first one is the default when saving a file 
+# list of file-name extensions possible, the first one is the default when saving a file
 EXTENSIONS = [".ome.tiff", ".ome.tif", ".tiff", ".tif"]
 
 
@@ -63,7 +63,7 @@ def _convertToTiffTag(metadata):
     returns (dict of tag -> value): the metadata as compatible for libtiff
     """
     tiffmd = {}
-    # we've got choice between inches and cm... so it's easy 
+    # we've got choice between inches and cm... so it's easy
     tiffmd[T.TIFFTAG_RESOLUTIONUNIT] = T.RESUNIT_CENTIMETER
     for key, val in metadata.items():
         if key == model.MD_SW_VERSION:
@@ -85,7 +85,7 @@ def _convertToTiffTag(metadata):
             # convert m -> cm
             # XYPosition doesn't support negative values. So instead, we shift
             # everything by 1 m, which should be enough as samples are typically
-            # a few cm big. The most important is that the image positions are  
+            # a few cm big. The most important is that the image positions are
             # correct relatively to each other (for a given sample).
             tiffmd[T.TIFFTAG_XPOSITION] = 100 + val[0] * 100
             tiffmd[T.TIFFTAG_YPOSITION] = 100 + val[1] * 100
@@ -94,7 +94,7 @@ def _convertToTiffTag(metadata):
             # and update rotation information to -45< rot < 45 -> maybe GeoTIFF's ModelTransformationTag?
             # or actually rotate the data?
             logging.info("Metadata tag '%s' skipped when saving TIFF file", key)
-        # TODO MD_BPP : the actual bit size of the detector 
+        # TODO MD_BPP : the actual bit size of the detector
         elif key == model.MD_DESCRIPTION:
             # We don't use description as it's used for OME-TIFF
             tiffmd[T.TIFFTAG_PAGENAME] = val
@@ -104,9 +104,9 @@ def _convertToTiffTag(metadata):
         # TODO save username as "Artist" ? => not gonna fly if the user is "odemis"
         else:
             logging.debug("Metadata tag '%s' skipped when saving TIFF file", key)
-    
+
     return tiffmd
-    
+
 def _convertToOMEMD(images):
     """
     Converts DataArray tags to OME-TIFF tags.
@@ -118,7 +118,7 @@ def _convertToOMEMD(images):
     # An OME-TIFF is a TIFF file with one OME-XML metadata embedded. For an
     # overview of OME-XML, see:
     # http://www.openmicroscopy.org/Schemas/Documentation/Generated/OME-2012-06/ome.html
-    
+
     # It is not very clear in OME how to express that it's different acquisitions
     # of the _same_ sample by different instruments. However, our interpretation
     # of the format is the following:
@@ -138,18 +138,18 @@ def _convertToOMEMD(images):
 #        + ExperimenterRef
 #        + InstrumentRef
 #        + ImagingEnvironment # To describe the physical conditions (temp...)
-#        + Pixels          # technical dimensions of the images (XYZ, T, C) 
+#        + Pixels          # technical dimensions of the images (XYZ, T, C)
 #          + Channel (*)   # emitter settings for the given channel (light wavelength)
-#            + DetectorSettings 
+#            + DetectorSettings
 #          + Plane (*)     # physical dimensions/position of each images
 #          + TiffData (*)  # where to find the data in the tiff file (IFD)
 #                          # we explicitly reference each dataarray to avoid
-#                          # potential ordering problems of the "Image" elements  
-#          
-    
+#                          # potential ordering problems of the "Image" elements
+#
+
     # To create and manipulate the XML, we use the Python ElementTree API.
-    
-    # TODO: it seems pylibtiff has a small OME support, need to investigate 
+
+    # TODO: it seems pylibtiff has a small OME support, need to investigate
     # how much could be used.
     root = ET.Element('OME', attrib={
             "xmlns": "http://www.openmicroscopy.org/Schemas/OME/2012-06",
@@ -162,7 +162,7 @@ def _convertToOMEMD(images):
                "original data before doing so. For more information, see the "
                "OME-TIFF web site: http://ome-xml.org/wiki/OmeTiff.")
     root.append(ET.Comment(com_txt))
-    
+
     # add the microscope
     instr = ET.SubElement(root, "Instrument", attrib={
                                       "ID": "Instrument:0"})
@@ -170,10 +170,10 @@ def _convertToOMEMD(images):
                                "Manufacturer": "Delmic",
                                "Model": "SECOM", # FIXME: should depend on the metadata
                                 })
-    
+
     # for each set of images from the same instrument, add them
     groups = _findImageGroups(images)
-    
+
     # Detectors
     for g in groups:
         id = min(g) # ID is the smallest ID of the images
@@ -182,7 +182,7 @@ def _convertToOMEMD(images):
             detect = ET.SubElement(instr, "Detector", attrib={
                                       "ID": "Detector:%d" % id,
                                       "Model": da0.metadata[model.MD_HW_NAME]})
-    
+
     # Objectives
     for g in groups:
         id = min(g) # ID is the smallest ID of the images
@@ -194,16 +194,16 @@ def _convertToOMEMD(images):
                       })
             if model.MD_LENS_NAME in da0.metadata:
                 obj.attrib["Model"] = da0.metadata[model.MD_LENS_NAME]
-    
+
     for g in groups:
         _addImageElement(root, images, list(g))
-    
+
     # TODO add tag to each image with "Odemis", so that we can find them back
     # easily in a database?
-    
+
     ometxt = ('<?xml version="1.0" encoding="UTF-8"?>' +
-              ET.tostring(root, encoding="utf-8")) 
-    return ometxt 
+              ET.tostring(root, encoding="utf-8"))
+    return ometxt
 
 def _findImageGroups(das):
     """
@@ -217,7 +217,7 @@ def _findImageGroups(das):
     # * same shape
     # * metadata that show they were acquired by the same instrument
     groups = []
-    
+
     for i, da in enumerate(das):
         # try to find a matching group (compare just to the first picture)
         found = False
@@ -231,22 +231,22 @@ def _findImageGroups(das):
             g.append(i)
             found = True
             break
-        
+
         if not found:
             # if not, create a new group
             groups.append([i])
-    
+
     return groups
-    
+
 def _addImageElement(root, das, idx):
     """
-    Add the metadata of a list of DataArray to a OME-XML root element 
+    Add the metadata of a list of DataArray to a OME-XML root element
     root (Element): the root element
     das (list of DataArray): all the images of the final TIFF file
     idx (list of int): the indexes of DataArray to add
     """
     assert(len(idx) > 0)
-    
+
     idnum = len(root.findall("Image"))
     ime = ET.SubElement(root, "Image", attrib={"ID": "Image:%d" % idnum})
 
@@ -254,16 +254,16 @@ def _addImageElement(root, das, idx):
     globalMD = {}
     for i in idx:
         globalMD.update(das[i].metadata)
-    
+
     # find out about the common attribute (Name)
     if model.MD_DESCRIPTION in globalMD:
         ime.attrib["Name"] = globalMD[model.MD_DESCRIPTION]
-    
-    # find out about the common sub-elements (time, user note, shape)  
+
+    # find out about the common sub-elements (time, user note, shape)
     if model.MD_USER_NOTE in globalMD:
         desc = ET.SubElement(ime, "Description")
         desc.text = globalMD[model.MD_USER_NOTE]
-    
+
     # TODO: should be the earliest time?
     globalAD = None
     if model.MD_ACQ_DATE in globalMD:
@@ -279,7 +279,7 @@ def _addImageElement(root, das, idx):
             nb_channels += da.shape[2]
         else:
             nb_channels += 1
-    
+
     # TODO: check that all the DataArrays have the same shape
     da0 = das[idx[0]]
     pixels = ET.SubElement(ime, "Pixels", attrib={
@@ -297,10 +297,10 @@ def _addImageElement(root, das, idx):
         pxs = globalMD[model.MD_PIXEL_SIZE]
         pixels.attrib["PhysicalSizeX"] = "%f" % (pxs[0] * 1e6) # in µm
         pixels.attrib["PhysicalSizeY"] = "%f" % (pxs[1] * 1e6) # in µm
-    
-    # For each DataArray, add a Channel, TiffData, and Plane, but be careful 
+
+    # For each DataArray, add a Channel, TiffData, and Plane, but be careful
     # because they all have to be grouped and in this order.
-    
+
     # Channel Element
     subid = 0
     for i in idx:
@@ -308,24 +308,24 @@ def _addImageElement(root, das, idx):
         chan = ET.SubElement(pixels, "Channel", attrib={
                                "ID": "Channel:%d:%d" % (idnum, subid)})
         # RGB?
-        # Note: it seems officially OME-TIFF doesn't support RGB TIFF (instead, 
+        # Note: it seems officially OME-TIFF doesn't support RGB TIFF (instead,
         # each colour should go in a separate channel). However, that'd defeat
         # the purpose of the thumbnail, and it seems at OMERO handles this
         # not too badly (all the other images get 3 components).
         if len(da.shape) == 3 and da.shape[2] == 3:
             chan.attrib["SamplesPerPixel"] = "3"
-        
+
         # TODO Name attrib for Filtered color streams?
         if model.MD_DESCRIPTION in da.metadata:
             chan.attrib["Name"] = da.metadata[model.MD_DESCRIPTION]
-            
+
         # TODO Color attrib for tint?
         # TODO Fluor attrib for the dye?
         if model.MD_IN_WL in da.metadata:
             iwl = da.metadata[model.MD_IN_WL]
             xwl = numpy.mean(iwl) * 1e9 # in nm
             chan.attrib["ExcitationWavelength"] = "%f" % xwl
-            
+
             # if input wavelength range is small, it means we are in epifluoresence
             if abs(iwl[1] - iwl[0]) < 100e-9:
                 chan.attrib["IlluminationType"] = "Epifluorescence"
@@ -340,7 +340,7 @@ def _addImageElement(root, das, idx):
             owl = da.metadata[model.MD_OUT_WL]
             ewl = numpy.mean(owl) * 1e9 # in nm
             chan.attrib["EmissionWavelength"] = "%f" % ewl
-        
+
         # Add info on detector
         attrib = {}
         if model.MD_BINNING in da.metadata:
@@ -350,12 +350,12 @@ def _addImageElement(root, das, idx):
         if model.MD_READOUT_TIME in da.metadata:
             ror = (1 / da.metadata[model.MD_READOUT_TIME]) / 1e6 #MHz
             attrib["ReadOutRate"] = "%f" % ror
-            
+
         if attrib:
             # detector of the group has the same id as the lowest id in the group
             attrib["ID"] = "Detector:%d" % min(idx)
             ds = ET.SubElement(chan, "DetectorSettings", attrib=attrib)
-        
+
         subid += 1
 
     # TiffData Element
@@ -368,7 +368,7 @@ def _addImageElement(root, das, idx):
                                 "PlaneCount": "1"
                                 })
         subid += 1
-        
+
     # Plane Element
     subid = 0
     for i in idx:
@@ -381,7 +381,7 @@ def _addImageElement(root, das, idx):
         if model.MD_ACQ_DATE in da.metadata:
             diff = da.metadata[model.MD_ACQ_DATE] - globalAD
             plane.attrib["DeltaT"] = "%.12f" % diff
-            
+
         if model.MD_EXP_TIME in da.metadata:
             exp = da.metadata[model.MD_EXP_TIME]
             plane.attrib["ExposureTime"] = "%.12f" % exp
@@ -389,7 +389,7 @@ def _addImageElement(root, das, idx):
             # typical for scanning techniques => more or less correct
             exp = da.metadata[model.MD_DWELL_TIME] * numpy.prod(da.shape)
             plane.attrib["ExposureTime"] = "%.12f" % exp
-        
+
         # Note that Position has no official unit, which prevent Tiling to be
         # usable. In one OME-TIFF official example of tiles, they use pixels
         # (and ModuloAlongT "tile")
@@ -397,9 +397,9 @@ def _addImageElement(root, das, idx):
             pos = da.metadata[model.MD_POS]
             plane.attrib["PositionX"] = "%.12f" % pos[0] # any unit is allowed => m
             plane.attrib["PositionY"] = "%.12f" % pos[1]
-        
+
         subid += 1
-        
+
 def _saveAsTiffLT(filename, data, thumbnail):
     """
     Saves a DataArray as a TIFF file.
@@ -417,7 +417,7 @@ def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True):
     compressed (boolean): whether the file is LZW compressed or not.
     """
     f = TIFF.open(filename, mode='w')
-    
+
     # According to this page: http://www.openmicroscopy.org/site/support/file-formats/ome-tiff/ome-tiff-data
     # LZW is a good trade-off between compatibility and small size (reduces file
     # size by about 2). => that's why we use it by default
@@ -432,7 +432,7 @@ def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True):
     else:
         alldata = ldata
     ometxt = _convertToOMEMD(alldata)
-    
+
     if thumbnail is not None:
         # save the thumbnail just as the first image
         f.SetField(T.TIFFTAG_IMAGEDESCRIPTION, ometxt)
@@ -445,75 +445,75 @@ def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True):
         # So we need to swap the axes
         if len(thumbnail.shape) == 3:
             thumbnail = numpy.rollaxis(thumbnail, 2) # a new view
-        
+
         # write_rgb makes it clever to detect RGB vs. Greyscale
         f.write_image(thumbnail, compression=compression, write_rgb=True)
-        
+
         # TODO also save it as thumbnail of the image (in limited size)
         # see  http://www.libtiff.org/man/thumbnail.1.html
-        
-        # It seems that libtiff.py doesn't support yet SubIFD's so it's not 
+
+        # It seems that libtiff.py doesn't support yet SubIFD's so it's not
         # going to fly
-        
-        
+
+
         # from http://stackoverflow.com/questions/11959617/in-a-tiff-create-a-sub-ifd-with-thumbnail-libtiff
 #        //Define the number of sub-IFDs you are going to write
 #        //(assuming here that we are only writing one thumbnail for the image):
 #        int number_of_sub_IFDs = 1;
 #        toff_t sub_IFDs_offsets[1] = { 0UL };
-#        
+#
 #        //set the TIFFTAG_SUBIFD field:
-#        if(!TIFFSetField(created_TIFF, TIFFTAG_SUBIFD, number_of_sub_IFDs, 
+#        if(!TIFFSetField(created_TIFF, TIFFTAG_SUBIFD, number_of_sub_IFDs,
 #            sub_IFDs_offsets))
 #        {
 #            //there was an error setting the field
 #        }
-#        
+#
 #        //Write your main image raster data to the TIFF (using whatever means you need,
 #        //such as TIFFWriteRawStrip, TIFFWriteEncodedStrip, TIFFWriteEncodedTile, etc.)
 #        //...
-#        
+#
 #        //Write your main IFD like so:
 #        TIFFWriteDirectory(created_TIFF);
-#        
-#        //Now here is the trick: like the comment in the libtiff source states, the 
-#        //next n directories written will be sub-IFDs of the main IFD (where n is 
+#
+#        //Now here is the trick: like the comment in the libtiff source states, the
+#        //next n directories written will be sub-IFDs of the main IFD (where n is
 #        //number_of_sub_IFDs specified when you set the TIFFTAG_SUBIFD field)
-#        
+#
 #        //Set up your sub-IFD
 #        if(!TIFFSetField(created_TIFF, TIFFTAG_SUBFILETYPE, FILETYPE_REDUCEDIMAGE))
 #        {
 #            //there was an error setting the field
 #        }
-#        
+#
 #        //set the rest of the required tags here, as well as any extras you would like
 #        //(remember, these refer to the thumbnail, not the main image)
 #        //...
-#        
+#
 #        //Write this sub-IFD:
 #        TIFFWriteDirectory(created_TIFF);
-        
+
     for data in ldata:
         # Save metadata (before the image)
         tags = _convertToTiffTag(data.metadata)
         for key, val in tags.items():
             f.SetField(key, val)
-        
+
         if ometxt: # save OME tags if not yet done
             f.SetField(T.TIFFTAG_IMAGEDESCRIPTION, ometxt)
             ometxt = None
-        
+
         f.write_image(data, compression=compression)
 
 def export(filename, data, thumbnail=None):
     '''
     Write a TIFF file with the given image and metadata
     filename (string): filename of the file to create (including path)
-    data (list of model.DataArray, or model.DataArray): the data to export, 
-        must be 2D of int or float. Metadata is taken directly from the data 
+    data (list of model.DataArray, or model.DataArray): the data to export,
+        must be 2D of int or float. Metadata is taken directly from the data
         object. If it's a list, a multiple page file is created.
     thumbnail (None or numpy.array): Image used as thumbnail for the file. Can be of any
-      (reasonable) size. Must be either 2D array (greyscale) or 3D with last 
+      (reasonable) size. Must be either 2D array (greyscale) or 3D with last
       dimension of length 3 (RGB). If the exporter doesn't support it, it will
       be dropped silently.
     '''
@@ -523,5 +523,4 @@ def export(filename, data, thumbnail=None):
         # TODO should probably not enforce it: respect duck typing
         assert(isinstance(data, model.DataArray))
         _saveAsTiffLT(filename, data, thumbnail)
-    
-    
+
