@@ -39,7 +39,19 @@ def _get_version():
 version = _get_version()
 name = "Open Delmic Microscope Software"
 shortname = "Odemis"
-copyright = "Copyright © 2012 Delmic"
+copyright = "Copyright © 2012-2013 Delmic"
 license = "GNU General Public License version 2"
+license_summary = (
+"""Odemis is free software: you can redistribute it and/or modify it under the terms 
+of the GNU General Public License as published by the Free Software Foundation, 
+version 2 of the License.
+
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR 
+PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with 
+Odemis. If not, see http://www.gnu.org/licenses/.
+""")
 
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:

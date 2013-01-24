@@ -70,6 +70,12 @@ class OdemisGUIApp(wx.App):
         # be called
         # and it needs the attributes defined in this constructor!
         wx.App.__init__(self, redirect=True)
+        
+        # TODO: need to set WM_CLASS to a better value than "main.py". For now
+        # almost all wxPython windows get agglomerated together and Odemis is 
+        # named "FirstStep" sometimes.
+        # Not clear whether wxPython supports it. http://trac.wxwidgets.org/ticket/12778
+        # Maybe just change the name of this module to something more unique? (eg, odemis.py)
 
     def OnInit(self):
         """ Application initialization, automatically run from the :wx:`App`
@@ -272,16 +278,32 @@ class OdemisGUIApp(wx.App):
             evt.Skip()
 
     def on_about(self, evt):
-        message = ("%s\nVersion %s.\n\n%s.\nLicensed under the %s." %
-                   (__version__.name,
-                    __version__.version,
-                    __version__.copyright,
-                    __version__.license))
-        dlg = wx.MessageDialog(self.main_frame, message,
-                               "About " + __version__.shortname, wx.OK)
-        dlg.ShowModal() # blocking
-        dlg.Destroy()
-
+        
+        info = wx.AboutDialogInfo()
+        info.SetIcon(wx.Icon(os.path.join(self._module_path(), "img/icon128.png"),
+                             wx.BITMAP_TYPE_PNG))
+        info.Name = __version__.shortname
+        info.Version = __version__.version
+        info.Description = __version__.name
+        info.Copyright = __version__.copyright
+        info.WebSite = ("http://delmic.com", "delmic.com")
+        info.Licence = __version__.license_summary
+        info.Developers = ["Éric Piel", "Rinze de Laat"]
+#        info.DocWriter = '???'
+#        info.Artist = '???'
+#        info.Translator = '???'
+        
+        if instrmodel.DyeDatabase:
+            info.Developers += ["", "Dye database from http://fluorophores.org"]
+            info.Licence += ("""
+The dye database is provided as-is, from the Fluorobase consortium.
+The Fluorobase consortium provide this data and software in good faith, but make 
+no warranty, expressed or implied, nor assume any legal liability or 
+responsibility for any purpose for which they are used. For further information 
+see http://www.fluorophores.org/disclaimer/.
+""")
+        wx.AboutBox(info)
+        
     def on_inspect(self, evt):
         from wx.lib.inspection import InspectionTool
         InspectionTool().Show()
