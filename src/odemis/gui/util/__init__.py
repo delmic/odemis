@@ -25,12 +25,15 @@ def call_after(f, self, *args, **kwargs):
 def limit_invocation(delay_s):
     """ This decorator limits how often a method will be executed.
 
-
     The first call will always immediately be executed. The last call will be
     delayed 'delay_s' seconds at the most. In between the first and last calls,
-    the mehthod will be executed at 'delay_s' intervals.
+    the method will be executed at 'delay_s' intervals.
 
     :param delay_s: (float) The minimum interval between executions in seconds.
+    
+    Note that the method might be called in a separate thread. In wxPython, you
+    might need to decorate it by @call_after to ensure it is called in the GUI
+    thread.
     """
     def limit(f, self, *args, **kwargs):
 
@@ -48,31 +51,29 @@ def limit_invocation(delay_s):
         # Get the bound version of the function
         #bf = f.__get__(self)
 
-
+        # Hacky way to store value per instance and per methods
         last_call_name = '%s_lim_inv_last_call' % f.__name__
         timer_name = '%s_lim_inv_timer' % f.__name__
 
         # If the function was called later than 'delay_s' seconds ago...
-        if hasattr(self, last_call_name):
-            if now - getattr(self, last_call_name) < delay_s:
-                # If a timer for a previous call is already running, cancel it.
-                if hasattr(self, timer_name):
-                    logging.debug("Cancelling old delayed method call")
-                    getattr(self, timer_name).cancel()
-
-                logging.debug('Delaying method call')
-                timer = Timer(delay_s,
-                              dead_object_wrapper(f, self, *args, **kwargs),
-                              args=[self] + list(args),
-                              kwargs=kwargs)
-                setattr(self, timer_name, timer)
-                setattr(self, last_call_name, now + delay_s)
-                timer.start()
+        if (hasattr(self, last_call_name) and 
+            now - getattr(self, last_call_name) < delay_s):
+            logging.debug('Delaying method call')
+            if now < getattr(self, last_call_name):
+                # this means a timer is already set, nothing else to do
                 return
 
-        #exectue method call
-        setattr(self, last_call_name, now)
-        return f(self, *args, **kwargs)
+            timer = Timer(delay_s,
+                          dead_object_wrapper(f, self, *args, **kwargs),
+                          args=[self] + list(args),
+                          kwargs=kwargs)
+            setattr(self, timer_name, timer)
+            setattr(self, last_call_name, now + delay_s)
+            timer.start()
+        else:
+            #execute method call now
+            setattr(self, last_call_name, now)
+            return f(self, *args, **kwargs)
 
     return decorator(limit)
 
