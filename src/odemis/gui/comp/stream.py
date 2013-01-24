@@ -27,30 +27,31 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 
-import collections
-import logging
-import math
-
-import wx
-import wx.lib.newevent
-
-import odemis.gui
-import odemis.gui.img.data as img
-import odemis.gui.comp.buttons as buttons
-
 from odemis import model
 from odemis.gui import instrmodel, FOREGROUND_COLOUR_EDIT
 from odemis.gui.comp.foldpanelbar import FoldPanelItem
 from odemis.gui.comp.slider import UnitIntegerSlider
 from odemis.gui.comp.text import SuggestTextCtrl, UnitIntegerCtrl, \
-  IntegerTextCtrl
+    IntegerTextCtrl
+from odemis.gui.util import call_after
 from odemis.gui.util.conversion import wave2rgb
+import collections
+import logging
+import math
+import odemis.gui
+import odemis.gui.comp.buttons as buttons
+import odemis.gui.img.data as img
+import wx
+import wx.lib.newevent
+
+
+
 
 
 
 TEST_STREAM_LST = ["Aap", u"nöot", "noot", "mies", "kees", "vuur",
                   "quantummechnica", "Repelsteeltje", "", "XXX", "a", "aa",
-                  "aaa", "aaaa", "aaaaa", "aaaaaa", "aaaaaaa"]
+                  "aaa", "aaaa", "aaaaa", "aaaaaa", "aaaaaaa", "aAa"]
 
 stream_remove_event, EVT_STREAM_REMOVE = wx.lib.newevent.NewEvent()
 
@@ -134,7 +135,8 @@ class Expander(wx.PyControl):
         self._sz = wx.BoxSizer(wx.HORIZONTAL)
 
         self._sz.Add(self._btn_rem, 0, wx.ALL | wx.ALIGN_CENTRE_VERTICAL, 8)
-        self._sz.AddStretchSpacer(1)
+        # If a label is to be inserted, it can replace this spacer (index = 1)
+        self._sz.AddStretchSpacer(0)
         self._sz.Add(self._btn_vis, 0, wx.RIGHT | wx.ALIGN_CENTRE_VERTICAL, 8)
         self._sz.Add(self._btn_play, 0, wx.RIGHT | wx.ALIGN_CENTRE_VERTICAL, 72)
 
@@ -223,25 +225,25 @@ class DyeExpander(Expander):
             self._btn_color.Bind(wx.EVT_BUTTON, self.on_color_click)
             stream.tint.subscribe(self.set_tint)
 
-
         self._label_ctrl = SuggestTextCtrl(self, id= -1, value=stream.name.value)
-
-        self._label_ctrl.SetChoices(TEST_STREAM_LST)
         self._label_ctrl.SetBackgroundColour(self.Parent.GetBackgroundColour())
         self._label_ctrl.SetForegroundColour(FOREGROUND_COLOUR_EDIT)
-
-        # TODO make sure it changes the value of stream.name when it is updated
-        self._label_ctrl.Bind(wx.EVT_TEXT_ENTER, self._on_label_change)
+        self._label_ctrl.Bind(wx.EVT_COMMAND_ENTER, self._on_label_change)
 
         # Replace spacer with control
         self._sz.Remove(1)
         self._sz.Insert(1, self._label_ctrl, 1,
                         wx.RIGHT | wx.ALIGN_CENTRE_VERTICAL, 8)
+        
+        # Callback when the label changes: (string (text) -> None)
+        self.onLabelChange = None
 
     # GUI event handlers
     def _on_label_change(self, evt):
-        self._stream.name.value = self._label_ctrl.GetValue()
+        if self.onLabelChange:
+            self.onLabelChange(self._label_ctrl.GetValue())
 
+    @call_after
     def set_tint(self, colour):
         """ Update the colour button to reflect the provided colour """
         self._btn_color.set_colour(colour)
