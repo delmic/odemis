@@ -401,7 +401,9 @@ class SettingsPanel(object):
 
     def add_value(self, label, value, conf=None):
         """ Add a label/value pair to the settings panel.
-
+        
+        label (string): name of the value
+        value (VigilantAttribute)
         conf {dict}: Configuration items that may override default settings
         """
         assert isinstance(value, VigilantAttributeBase)
@@ -484,7 +486,6 @@ class SettingsPanel(object):
 
             vac = VigilantAttributeConnector(value,
                                              new_ctrl,
-                                             new_ctrl.SetValue,
                                              events=wx.EVT_SLIDER)
 
             if self.highlight_change:
@@ -542,7 +543,6 @@ class SettingsPanel(object):
                                                    units=unit)
             vac = VigilantAttributeConnector(value,
                                              new_ctrl,
-                                             new_ctrl.SetValue,
                                              events=wx.EVT_BUTTON)
 
             if self.highlight_change:
@@ -580,38 +580,30 @@ class SettingsPanel(object):
             for choice, formatted in zip(choices, choices_formatted):
                 new_ctrl.Append(u"%s %s" % (formatted, unit), choice)
 
-            def _getvalue_wrapper(ctrl, func):
-                def wrapper():
-                    value = func()
-                    for i in range(ctrl.Count):
-                        if ctrl.Items[i] == value:
-                            logging.debug("Getting ComboBox value %s",
-                                      ctrl.GetClientData(i))
-                            return ctrl.GetClientData(i)
-                return wrapper
-
-            new_ctrl.GetValue = _getvalue_wrapper(new_ctrl, new_ctrl.GetValue)
-
-
             # A small wrapper function makes sure that the value can
             # be set by passing the actual value (As opposed to the text label)
-            def _setvalue_wrapper(ctrl, func):
-                def wrapper(value):
-                    for i in range(ctrl.Count):
-                        if ctrl.GetClientData(i) == value:
-                            logging.debug("Setting ComboBox value to %s",
-                                      ctrl.Items[i])
-                            return func(ctrl.Items[i])
-                    logging.warning("No matching label found for value %s!", value)
-                return wrapper
+            def cb_set(value, ctrl=new_ctrl):
+                for i in range(ctrl.Count):
+                    if ctrl.GetClientData(i) == value:
+                        logging.debug("Setting ComboBox value to %s", ctrl.Items[i])
+                        return ctrl.SetValue(ctrl.Items[i])
+                logging.warning("No matching label found for value %s!", value)                
+            
+            # equivalent wrapper function to retrieve the actual value 
+            def cb_get(ctrl=new_ctrl):
+                value = ctrl.GetValue()
+                for i in range(ctrl.Count):
+                    if ctrl.Items[i] == value:
+                        logging.debug("Getting ComboBox value %s",
+                                  ctrl.GetClientData(i))
+                        return ctrl.GetClientData(i)
 
-            new_ctrl.SetValue = _setvalue_wrapper(new_ctrl, new_ctrl.SetValue)
 
             vac = VigilantAttributeConnector(
                     value,
                     new_ctrl,
-                    new_ctrl.SetValue,
-                    new_ctrl.GetValue,
+                    va_2_ctrl=cb_set,
+                    ctrl_2_va=cb_get,
                     events=(wx.EVT_COMBOBOX, wx.EVT_TEXT_ENTER))
 
             if self.highlight_change:
