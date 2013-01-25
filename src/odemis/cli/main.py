@@ -17,17 +17,16 @@ You should have received a copy of the GNU General Public License along with Ode
 '''
 # This is a basic command line interface to the odemis back-end
 
+from Pyro4.errors import CommunicationError
+from odemis import __version__, model, dataio
 from odemis.cli.video_displayer import VideoDisplayer
 from odemis.dataio import tiff
-from odemis import model
-from odemis import __version__
 import argparse
 import collections
 import inspect
 import logging
 import os
 import sys
-from Pyro4.errors import CommunicationError
 
 BACKEND_RUNNING = "RUNNING"
 BACKEND_DEAD = "DEAD"
@@ -445,12 +444,38 @@ def stop_move():
 
     return ret
 
+def getFittestExporter(filename, default=dataio.tiff):
+    """
+    Find the most fitting exporter according to a filename (actually, its extension)
+    filename (string): (path +) filename with extension
+    default (dataio. Module): default exporter to pick if no really fitting
+      exporter is found
+    returns (dataio. Module): the right exporter
+    """ 
+    # Find the extention of the file
+    basename = os.path.basename(filename)
+    if basename == "":
+        raise ValueError("Filename should have at least one letter: '%s'" % filename)
+    # TODO: This only finds the last extension:
+    # aaa.ome.tiff => .tiff
+    # It should compare the extension of the exporter to the end of the filename,
+    # but that should be fine for now.
+    extension = os.path.splitext(basename)[1].lower()
+    
+    for module_name in dataio.__all__:
+        exporter = __import__("odemis.dataio."+module_name, fromlist=[module_name])
+        if extension in exporter.EXTENSIONS:
+            logging.debug("Determined that '%s' corresponds to %s format", basename, exporter.FORMAT)
+            return exporter
+    
+    return default
+
 def acquire(comp_name, dataflow_names, filename):
     """
     Acquire an image from one (or more) dataflow
     comp_name (string): name of the detector to find
     dataflow_names (list of string): name of each dataflow to access
-    filename (string): name of the output file (will be TIFF with one page per dataflow)
+    filename (string): name of the output file (format depends on the extension)
     """
     try:
         component = get_detector(comp_name)
@@ -500,7 +525,8 @@ def acquire(comp_name, dataflow_names, filename):
         except:
             logging.exception("Failed to read image information")
 
-    tiff.export(filename, images)
+    exporter = getFittestExporter(filename)
+    exporter.export(filename, images)
     return 0
 
 def live_display(comp_name, df_name):
@@ -597,7 +623,7 @@ def main(args):
                          metavar=("<component>", "data-flow"),
                          help="Acquire an image (default data-flow is \"data\")")
     dm_grp.add_argument("--output", "-o", dest="output",
-                        help="name of the file where the image should be saved after acquisition. It is saved in TIFF format.")
+                        help="name of the file where the image should be saved after acquisition. The file format is derived from the extension (TIFF and HDF5 are supported).")
     dm_grpe.add_argument("--live", dest="live", nargs="+",
                          metavar=("<component>", "data-flow"),
                          help="Display and update an image on the screen (default data-flow is \"data\")")

@@ -15,4 +15,4 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 # for listing all the types of file format supported
-__all__ = ["tiff"]
+__all__ = ["tiff", "hdf5"]

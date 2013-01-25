@@ -17,6 +17,7 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from odemis.cli import main
+from unittest.case import skip
 import Image
 import StringIO
 import logging
@@ -38,6 +39,7 @@ class TestWithoutBackend(unittest.TestCase):
         if logging.root:
             del logging.root.handlers[:]
     
+#    @skip("Simple")
     def test_help(self):
         """
         It checks handling help option
@@ -55,7 +57,8 @@ class TestWithoutBackend(unittest.TestCase):
         
         output = out.getvalue()
         self.assertTrue("optional arguments" in output)
-        
+    
+#    @skip("Simple")
     def test_error_command_line(self):
         """
         It checks handling when wrong number of argument is given
@@ -67,6 +70,7 @@ class TestWithoutBackend(unittest.TestCase):
             ret = exc.code
         self.assertNotEqual(ret, 0, "trying to run erroneous '%s'" % cmdline)
 
+#    @skip("Simple")
     def test_scan(self):
         try:
             # change the stdout
@@ -83,7 +87,21 @@ class TestWithoutBackend(unittest.TestCase):
         # SimCam should be there for sure
         self.assertTrue("andorcam3.AndorCam3" in output)
     
+    def test_getFittestExporter(self):
+        # filename, format
+        tc = [("a/b/d.tiff", "TIFF"),
+              ("a/b/d.ome.tiff", "TIFF"),
+              ("a/b/d.h5", "HDF5"),
+              ("a/b/d.b", "TIFF"),
+              ("d.hdf5", "HDF5"),
+              ]
+        for input, exp_out in tc:
+            exporter = main.getFittestExporter(input)
+            out = exporter.FORMAT
+            self.assertEqual(exp_out, out,
+                 "getFittestExporter(%s) returned %s exporter" % (input, out))
     
+#@skip("Simple")
 class TestWithBackend(unittest.TestCase):
     def setUp(self):
         # reset the logging (because otherwise it accumulates)
