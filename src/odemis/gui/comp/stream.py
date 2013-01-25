@@ -415,11 +415,6 @@ class StreamPanel(wx.PyPanel):
                       flag=wx.LEFT, border=11)
         self.row_count += 1
         
-        # FIXME: CustomEntries have the contrast and brightness sliders
-        # smaller than the Fixed entries. Probably due to emission/excitation
-        # widget + sizer? 
-        # use wx.GBSpan to make them use 2 columns?
-        
         # ====== Second row, brightness label, slider and value
 
         lbl_brightness = wx.StaticText(self._panel, -1, "Brightness")
@@ -427,8 +422,6 @@ class StreamPanel(wx.PyPanel):
                       flag=wx.LEFT | wx.ALIGN_CENTRE_VERTICAL,
                       border=11)
 
-        # FIXME: we need to ensure it's possible to have a value == 0
-        # (and not just 1/201)
         self._sld_brightness = UnitIntegerSlider(
                               self._panel,
                               value=self.stream.brightness.value,
@@ -440,8 +433,9 @@ class StreamPanel(wx.PyPanel):
         self._vac_brightness = VigilantAttributeConnector(self.stream.brightness,
                                              self._sld_brightness,
                                              events=wx.EVT_SLIDER)
-        
-        self._gbs.Add(self._sld_brightness, (self.row_count, 1), flag=wx.EXPAND)
+        # span is 2, because emission/excitation have 2 controls 
+        self._gbs.Add(self._sld_brightness, pos=(self.row_count, 1),
+                      span=(1, 2), flag=wx.EXPAND | wx.RIGHT, border=18)
         self.row_count += 1
 
         # ====== Third row, contrast label, slider and value
@@ -462,7 +456,8 @@ class StreamPanel(wx.PyPanel):
                                              self._sld_contrast,
                                              events=wx.EVT_SLIDER)
             
-        self._gbs.Add(self._sld_contrast, (self.row_count, 1), flag=wx.EXPAND)
+        self._gbs.Add(self._sld_contrast, pos=(self.row_count, 1),
+                      span=(1, 2), flag=wx.EXPAND | wx.RIGHT, border=18)
         self.row_count += 1
 
         self._gbs.AddGrowableCol(1)
@@ -601,17 +596,15 @@ class StreamPanel(wx.PyPanel):
         wx.PostEvent(self, event)
 
     def on_visibility(self, evt):
-        # TODO need to let the currently focused view know (via view controller?)
         view = self._microscope.focussedView.value
+        if not view:
+            return
         if self._expander._btn_vis.GetToggle():
             logging.debug("Showing stream '%s'", self.stream.name.value)
-            # FIXME how to get the ref?
-            if view:
-                view.addStream(self.stream)
+            view.addStream(self.stream)
         else:
             logging.debug("Hiding stream '%s'", self.stream.name.value)
-            if view:
-                view.removeStream(self.stream)
+            view.removeStream(self.stream)
 
     def on_play(self, evt):
         if self._expander._btn_play.GetToggle():

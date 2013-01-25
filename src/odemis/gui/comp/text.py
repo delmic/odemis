@@ -842,6 +842,10 @@ class IntegerTextCtrl(NumberTextCtrl):
     exception will be raised.
 
     """
+    # TODO: should use the same parameter as NumberSlider: val_range instead
+    # of min_val/max_val
+    
+    # TODO: refactor to have IntegerTextCtrl a UnitIntegerCtrl with unit=None?
 
     def __init__(self, *args, **kwargs):
         min_val = kwargs.pop('min_val', None)
