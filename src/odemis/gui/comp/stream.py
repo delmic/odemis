@@ -35,6 +35,7 @@ from odemis.gui.comp.text import SuggestTextCtrl, UnitIntegerCtrl, \
     IntegerTextCtrl
 from odemis.gui.util import call_after
 from odemis.gui.util.conversion import wave2rgb
+from odemis.gui.util.widgets import VigilantAttributeConnector
 import collections
 import logging
 import math
@@ -413,7 +414,12 @@ class StreamPanel(wx.PyPanel):
         self._gbs.Add(self._btn_auto_contrast, (self.row_count, 0),
                       flag=wx.LEFT, border=11)
         self.row_count += 1
-
+        
+        # FIXME: CustomEntries have the contrast and brightness sliders
+        # smaller than the Fixed entries. Probably due to emission/excitation
+        # widget + sizer? 
+        # use wx.GBSpan to make them use 2 columns?
+        
         # ====== Second row, brightness label, slider and value
 
         lbl_brightness = wx.StaticText(self._panel, -1, "Brightness")
@@ -431,6 +437,10 @@ class StreamPanel(wx.PyPanel):
                               unit=None,
                               name="brightness_slider")
 
+        self._vac_brightness = VigilantAttributeConnector(self.stream.brightness,
+                                             self._sld_brightness,
+                                             events=wx.EVT_SLIDER)
+        
         self._gbs.Add(self._sld_brightness, (self.row_count, 1), flag=wx.EXPAND)
         self.row_count += 1
 
@@ -447,7 +457,11 @@ class StreamPanel(wx.PyPanel):
                              t_size=(40, -1),
                              unit=None,
                              name="contrast_slider")
-
+        
+        self._vac_contrast = VigilantAttributeConnector(self.stream.contrast,
+                                             self._sld_contrast,
+                                             events=wx.EVT_SLIDER)
+            
         self._gbs.Add(self._sld_contrast, (self.row_count, 1), flag=wx.EXPAND)
         self.row_count += 1
 
@@ -466,16 +480,6 @@ class StreamPanel(wx.PyPanel):
 
         # Panel controls
         # TODO reuse VigilantAttributeConnector, or at least refactor
-
-        self._sld_brightness.Bind(wx.EVT_MOTION, self.on_brightness_slide)
-        self._sld_brightness.Bind(wx.EVT_LEFT_UP, self.on_brightness_slide)
-        # self._txt_brightness.Bind(wx.EVT_TEXT_ENTER, self.on_brightness_entered)
-        # self._txt_brightness.Bind(wx.EVT_CHAR, self.on_brightness_key)
-
-        self._sld_contrast.Bind(wx.EVT_MOTION, self.on_contrast_slide)
-        self._sld_contrast.Bind(wx.EVT_LEFT_UP, self.on_contrast_slide)
-        # self._txt_contrast.Bind(wx.EVT_TEXT_ENTER, self.on_contrast_entered)
-        # self._txt_contrast.Bind(wx.EVT_CHAR, self.on_contrast_key)
 
         self._btn_auto_contrast.Bind(wx.EVT_BUTTON, self.on_toggle_autocontrast)
 
@@ -621,55 +625,10 @@ class StreamPanel(wx.PyPanel):
         # disable the manual controls if it's on
         ctrl_enabled = not enabled
         self._sld_brightness.Enable(ctrl_enabled)
-        # self._txt_brightness.Enable(ctrl_enabled)
         self._sld_contrast.Enable(ctrl_enabled)
-        # self._txt_contrast.Enable(ctrl_enabled)
 
         self.stream.auto_bc.value = enabled
 
-    def on_brightness_key(self, evt):
-        key = evt.GetKeyCode()
-
-        if key in (wx.WXK_UP, wx.WXK_DOWN):
-            # FIXME
-            # self._sld_brightness.SetValue(self._txt_brightness.GetValue())
-            # self._stream.optical_brightness.value = self._txt_brightness.GetValue()
-            pass
-
-        evt.Skip()
-
-    # TODO just change the stream. the slider should automatically follow the stream
-    def on_brightness_entered(self, evt):
-        # self._sld_brightness.SetValue(int(self._txt_brightness.GetValue()))
-        # self.stream.brightness.value = self._txt_brightness.GetValue()
-        evt.Skip()
-
-    def on_brightness_slide(self, evt):
-        if self._sld_brightness.HasCapture():
-            # self._txt_brightness.SetValue(self._sld_brightness.GetValue())
-            self.stream.brightness.value = self._sld_brightness.GetValue()
-        evt.Skip()
-
-    def on_contrast_entered(self, evt):
-        # self._sld_contrast.SetValue(int(self._txt_contrast.GetValue()))
-        # self._stream.optical_contrast.value = self._txt_contrast.GetValue()
-        evt.Skip()
-
-    def on_contrast_slide(self, evt):
-        if self._sld_contrast.HasCapture():
-            # self._txt_contrast.SetValue(self._sld_contrast.GetValue())
-            self.stream.contrast.value = self._sld_contrast.GetValue()
-        evt.Skip()
-
-    def on_contrast_key(self, evt):
-        key = evt.GetKeyCode()
-
-        if key in (wx.WXK_UP, wx.WXK_DOWN):
-            # self._sld_contrast.SetValue(self._txt_contrast.GetValue())
-            # self.stream.contrast.value = self._txt_contrast.GetValue()
-            pass
-
-        evt.Skip()
 
     def OnToggle(self, evt):
         """ Toggle the StreamPanel """
@@ -790,13 +749,20 @@ class DyeStreamPanel(StreamPanel):
     def finalize(self):
         StreamPanel.finalize(self)
 
-        if hasattr(self.stream, "excitation"):
+        if hasattr(self.stream, "excitation") and hasattr(self.stream, "emission"):
+            # handle the auto-completion of dye names
+            # TODO: shall we do something better than remove the incompatible dyes?
+            # * mark them a different colour in the list (don't know how to do that)?
+            # * show a warning message when they are picked?
+            self._expander.SetChoices(self._getCompatibleDyes())
+            self._expander.onLabelChange = self._onNewName
+            
+            # Excitation and emission are a text input + a color display
             # Warning: stream.excitation is in m, we present everything in nm
             lbl_excitation = wx.StaticText(self._panel, -1, "Excitation")
             self._gbs.Add(lbl_excitation, (self.row_count, 0),
                           flag=wx.LEFT | wx.ALIGN_CENTRE_VERTICAL, border=11)
 
-            # TODO use the range of the VA
             self._txt_excitation = UnitIntegerCtrl(self._panel, -1,
                     int(round(self.stream.excitation.value * 1e9)),
                     style=wx.NO_BORDER,
@@ -807,13 +773,11 @@ class DyeStreamPanel(StreamPanel):
             self._txt_excitation.SetForegroundColour("#2FA7D4")
             self._txt_excitation.SetBackgroundColour(self.GetBackgroundColour())
 
-            self._txt_excitation.Bind(wx.EVT_COMMAND_ENTER, self.on_excitation_text)
-
             self._gbs.Add(self._txt_excitation, (self.row_count, 1),
                           flag=wx.ALIGN_CENTRE_VERTICAL | wx.RIGHT,
                           border=18)
-            # TODO: is button a good choice? the user cannot click it, it's just
-            # to show the wavelength
+            
+            # A button, but not clickable, just to show the wavelength
             self._btn_excitation = buttons.ColourButton(self._panel, -1,
                                 bitmap=img.getemptyBitmap(),
                                 size=(18, 18),
@@ -826,9 +790,15 @@ class DyeStreamPanel(StreamPanel):
                           border=18)
             self.row_count += 1
 
+            self._vac_excitation = VigilantAttributeConnector(
+                  self.stream.excitation, self._txt_excitation,
+                  va_2_ctrl=self._excitation_2_ctrl, # to convert to nm + update btn
+                  ctrl_2_va=self._excitation_2_va, # to convert from nm
+                  events=wx.EVT_COMMAND_ENTER)
+
             # TODO also a label for warnings
 
-        if hasattr(self.stream, "emission"):
+            # Emission
             lbl_emission = wx.StaticText(self._panel, -1, "Emission")
             self._gbs.Add(lbl_emission, (self.row_count, 0),
                           flag=wx.LEFT | wx.ALIGN_CENTRE_VERTICAL, border=11)
@@ -842,8 +812,6 @@ class DyeStreamPanel(StreamPanel):
                     unit='nm')
             self._txt_emission.SetForegroundColour("#2FA7D4")
             self._txt_emission.SetBackgroundColour(self.GetBackgroundColour())
-
-            self._txt_emission.Bind(wx.EVT_COMMAND_ENTER, self.on_emission_text)
 
             self._gbs.Add(self._txt_emission, (self.row_count, 1),
                           flag=wx.ALIGN_CENTRE_VERTICAL | wx.RIGHT,
@@ -861,17 +829,14 @@ class DyeStreamPanel(StreamPanel):
                           border=10)
             self.row_count += 1
 
-        if hasattr(self.stream, "excitation") and hasattr(self.stream, "emission"):
-            # handle the auto-completion of dye names
-            # TODO: shall we do something better than remove the incompatible dyes?
-            # * mark them a different colour in the list (don't know how to do that)?
-            # * show a warning message when they are picked?
-            self._expander.SetChoices(self._getCompatibleDyes())
-            self._expander.onLabelChange = self._onNewName
+            self._vac_emission = VigilantAttributeConnector(
+                  self.stream.emission, self._txt_emission,
+                  va_2_ctrl=self._emission_2_ctrl, # to convert to nm + update btn
+                  ctrl_2_va=self._emission_2_va, # to convert from nm
+                  events=wx.EVT_COMMAND_ENTER)
         else:
-            logging.warning("CustomStreamEntry associated to a stream without "
+            logging.warning("DyeStreamEntry associated to a stream without "
                             "excitation/emission")
-
 
     def _getCompatibleDyes(self):
         """
@@ -910,35 +875,53 @@ class DyeStreamPanel(StreamPanel):
             except model.OutOfBoundError:
                 logging.info("Emission at %g nm is out of bound", ewl * 1e9)
 
-    def on_excitation_text(self, evt):
-        # logging.debug("Excitation changed")
-        obj = evt.GetEventObject()
-        wl = (obj.GetValue() or 0) * 1e-9
-        # FIXME: need to turn the text red if the value is the smaller (bigger,
-        # maybe not necessary)
-        wl = sorted(self.stream.emission.range + (wl,))[1]
-        self.stream.excitation.value = wl
-
-        colour = wave2rgb(self.stream.excitation.value)
-        # logging.debug("Changing colour to %s", colour)
+    def _excitation_2_va(self):
+        """
+        Called when the text is changed (by the user).
+        returns a value to set for the VA
+        """
+#        logging.debug("Excitation changed")
+        wl = (self._txt_excitation.GetValue() or 0) * 1e-9
+        # FIXME: need to turn the text red if the value is too small (bigger,
+        # maybe not necessary) => inside the widget?
+        wl = sorted(self.stream.excitation.range + (wl,))[1]
+        return wl
+    
+    def _excitation_2_ctrl(self, value):
+        """
+        Called to update the widgets (text + colour display) when the VA changes.
+        returns nothing
+        """
+        self._txt_excitation.ChangeValue(int(round(value * 1e9)))
+        colour = wave2rgb(value)
+#        logging.debug("Changing colour to %s", colour)
         self._btn_excitation.set_colour(colour)
 
-    def on_emission_text(self, evt):
-        # logging.debug("Emission changed")
-        obj = evt.GetEventObject()
-        wl = (obj.GetValue() or 0) * 1e-9
-        # FIXME: need to turn the text red if the value is the smaller (bigger,
-        # maybe not necessary)
+    def _emission_2_va(self):
+        """
+        Called when the text is changed (by the user). 
+        Also updates the tint as a side-effect.
+        returns a value to set for the VA
+        """
+        wl = (self._txt_emission.GetValue() or 0) * 1e-9
         wl = sorted(self.stream.emission.range + (wl,))[1]
-        self.stream.emission.value = wl
-
-        colour = wave2rgb(self.stream.emission.value)
-        # logging.debug("Changing colour to %s", colour)
-        self._btn_emission.set_colour(colour)
-
+        
         # changing emission should also change the tint
+        colour = wave2rgb(wl)
         self.stream.tint.value = colour
-
+        
+        return wl
+    
+    def _emission_2_ctrl(self, value):
+        """
+        Called to update the widgets (text + colour display) when the VA changes.
+        returns nothing
+        """
+        self._txt_emission.ChangeValue(int(round(value * 1e9)))
+        colour = wave2rgb(value)
+#        logging.debug("Changing colour to %s", colour)
+        self._btn_emission.set_colour(colour)
+        
 
 class StreamBar(wx.Panel):
     """

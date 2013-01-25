@@ -444,7 +444,7 @@ class SettingsPanel(object):
         self._sizer.Add(lbl_ctrl, (self.num_entries, 0), flag=wx.ALL, border=5)
 
         # the Vigilant Attribute Connector connects the wx control to the
-        # vigilatn attribute.
+        # vigilant attribute.
         vac = None
 
         logging.debug("Adding VA %s", label)
