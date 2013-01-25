@@ -28,6 +28,12 @@ of microscope images.
 
 """
 
+from odemis import model, dataio
+from odemis.gui.config import get_acqui_conf
+from odemis.gui.controller.settingspanel import SettingsBarController
+from odemis.gui.controller.streams import StreamController
+from odemis.gui.main_xrc import xrcfr_acq
+from odemis.gui.util import img, get_picture_folder
 import logging
 import os
 import re
@@ -35,15 +41,9 @@ import subprocess
 import sys
 import threading
 import time
-
 import wx
 
-from odemis import model
-from odemis.gui.config import get_acqui_conf
-from odemis.gui.controller.settingspanel import SettingsBarController
-from odemis.gui.controller.streams import StreamController
-from odemis.gui.main_xrc import xrcfr_acq
-from odemis.gui.util import img, get_picture_folder
+
 
 class AcquisitionController(object):
     """ controller to handle snapshot and high-res image acquisition in a "global"
@@ -341,7 +341,7 @@ class AcquisitionDialog(xrcfr_acq):
         for str_pan in self.stream_controller.get_stream_panels():
             seconds += str_pan.get_stream_mod().estimateAcquisitionTime()
 
-        txt = "Estimated acquisition time is {0:.2} seconds".format(seconds)
+        txt = "Estimated acquisition time is %.2f seconds" % seconds
         self.lbl_acqestimate.SetLabel(txt)
 
     def set_default_filename_and_path(self):
@@ -356,9 +356,47 @@ class AcquisitionDialog(xrcfr_acq):
         else:
             evt.Skip()
 
+    @staticmethod
+    def _get_available_formats():
+        """
+        Find the available file formats
+        returns (dict string -> list of strings): name of each format -> list of extensions
+        """
+        formats = {}
+        # Look dynamically which format is available
+        for module_name in dataio.__all__:
+            try:
+                exporter = __import__("odemis.dataio."+module_name, fromlist=[module_name])
+            except:
+                continue # module cannot be loaded
+            formats[exporter.FORMAT] = exporter.EXTENSIONS
+        
+        if not formats:
+            logging.error("Not file exporter found!")
+        return formats 
+    
+    @staticmethod
+    def _convert_formats_to_wildcards(formats2ext):
+        """
+        Convert formats into wildcards string compatible with wx.FileDialog()
+        formats2ext (dict string -> list of strings): name of each format -> list of extensions
+        returns (tuple (string, list of strings)): wildcards, name of the format in the same order as in the wildcards
+        """
+        wildcards = []
+        formats = []
+        for format, extensions in formats2ext.items():
+            ext_wildcards = ";".join(["*" + e for e in extensions])
+            wildcard = "%s files (%s)|%s" % (format, ext_wildcards, ext_wildcards) 
+            formats.append(format)
+            wildcards.append(wildcard)
+        
+        # the whole importance is that they are in the same order
+        return "|".join(wildcards), formats 
+    
     def on_change_file(self, evt):
 
-        print self.conf.wildcards
+        # TODO: remove self.conf.wildcards
+#        print self.conf.wildcards
         # Note:
         # - Combining multiple filters into one wildcard is not supported
         # - When setting 'defaultFile' when creating the file dialog, the
@@ -366,16 +404,21 @@ class AcquisitionDialog(xrcfr_acq):
         #   cannot be changed by selecting a different file type, this is big
         #   nono. Also, extensions with multiple periods ('.') are not correctly
         #   handled. The solution is to use the SetFilename method instead.
+        formats2extensions = self._get_available_formats()
+        wildcards, formats = self._convert_formats_to_wildcards(formats2extensions)
         dialog = wx.FileDialog(self,
                             message="Choose a filename and destination",
                             defaultDir=self.conf.last_path,
                             defaultFile="",
                             style=wx.FD_SAVE|wx.FD_OVERWRITE_PROMPT,
-                            wildcard=self.conf.wildcards)
+                            wildcard=wildcards)
 
         # Get and select the last extension used.
+        # TODO: ensure the last_extension is compatible
+        
         dialog.SetFilterIndex(
-            self.conf.file_extensions.index(self.conf.last_extension)
+#            self.conf.file_extensions.index(self.conf.last_extension)
+            0
         )
 
         # Strip the extension before setting the file name
@@ -392,7 +435,13 @@ class AcquisitionDialog(xrcfr_acq):
             fi = dialog.GetFilterIndex()
             self.conf.last_extension = self.conf.file_extensions[fi]
 
+            # FIXME: the filename can either have already an extension or not:
+            #  * if not extension => add the default one for the format
+            #  * if extension => use the filename as is.
             # Set the file name, augmented with the chosen file extension
+            format = formats[fi]
+            default_ext = formats2extensions[format][0]
+            
             self.txt_filename.SetValue(u"%s%s" % (dialog.GetFilename(),
                                                   self.conf.last_extension))
 

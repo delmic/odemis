@@ -452,7 +452,7 @@ def getFittestExporter(filename, default=dataio.tiff):
       exporter is found
     returns (dataio. Module): the right exporter
     """ 
-    # Find the extention of the file
+    # Find the extension of the file
     basename = os.path.basename(filename)
     if basename == "":
         raise ValueError("Filename should have at least one letter: '%s'" % filename)

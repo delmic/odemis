@@ -28,12 +28,13 @@ related configuration files.
 
 """
 
+from odemis import dataio
+from odemis.dataio import tiff
+from odemis.gui.util import get_picture_folder, get_home_folder
+import ConfigParser
 import logging
 import os.path
-import ConfigParser
 
-from odemis.gui.util import get_picture_folder, get_home_folder
-from odemis.dataio.tiff import EXTENSIONS as TIFF_EXTENSIONS
 
 CONF_PATH = os.path.join(get_home_folder(), r".config/odemis")
 ACQUI_PATH = get_picture_folder()
@@ -145,11 +146,11 @@ class AcquisitionConfig(Config):
 
         self.default.set("acquisition",
                          "last_extension",
-                         TIFF_EXTENSIONS[0])
+                         tiff.EXTENSIONS[0])
 
         self.default.set("acquisition",
                          "file_extensions",
-                         ",".join(TIFF_EXTENSIONS))
+                         ",".join(tiff.EXTENSIONS))
 
     @property
     def last_path(self):
@@ -167,12 +168,16 @@ class AcquisitionConfig(Config):
     def last_extension(self, last_extension):
         self.set("acquisition", "last_extension", last_extension)
 
+
+    # TODO: this should not be saved in the configuration, but queried from
+    # dataio.__all__
+    # Instead, we might want to save the last_format (= the exporter to use)
     @property
     def file_extensions(self):
         """ Return the available file extensions.
         Should always be dynamic, since they might change over time
         """
-        return TIFF_EXTENSIONS
+        return tiff.EXTENSIONS
 
     @file_extensions.setter
     def file_extensions(self, file_extensions):
@@ -182,4 +187,17 @@ class AcquisitionConfig(Config):
     def wildcards(self):
         """ Property that exposes the file extensions as a wildcard string
         """
-        return "|".join(["Tiff files (*%s)|*%s" % (e, e) for e in self.file_extensions])
+        formats = []
+        # Look dynamically which format is available
+        for module_name in dataio.__all__:
+            try:
+                exporter = __import__("odemis.dataio."+module_name, fromlist=[module_name])
+            except:
+                continue # module cannot be loaded
+            ext_wildcards = ";".join(["*" + e for e in exporter.EXTENSIONS])
+            wildcard = "%s files (%s)|%s" % (exporter.FORMAT, ext_wildcards, ext_wildcards) 
+            formats.append(wildcard)
+        
+        if not formats:
+            logging.error("Not file exporter found!")
+        return "|".join(formats) 
