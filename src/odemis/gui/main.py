@@ -31,12 +31,12 @@ import Pyro4.errors
 
 from odemis import __version__, model
 from odemis.gui import main_xrc, instrmodel, log
-from odemis.gui.controller.acquisition import AcquisitionController
-from odemis.gui.controller.microscope import MicroscopeController
-from odemis.gui.controller.settingspanel import SettingsBarController
-from odemis.gui.controller.streams import StreamController
-from odemis.gui.controller.tabs import TabBar
-from odemis.gui.controller.views import ViewController, ViewSelector
+from odemis.gui.cont.acquisition import AcquisitionController
+from odemis.gui.cont.microscope import MicroscopeController
+from odemis.gui.cont.settingspanel import SettingsBarController
+from odemis.gui.cont.streams import StreamController
+from odemis.gui.cont.tabs import TabBar
+from odemis.gui.cont.views import ViewController, ViewSelector
 from odemis.gui.instrmodel import InstrumentalImage
 from odemis.gui.xmlh import odemis_get_resources
 
@@ -70,9 +70,9 @@ class OdemisGUIApp(wx.App):
         # be called
         # and it needs the attributes defined in this constructor!
         wx.App.__init__(self, redirect=True)
-        
+
         # TODO: need to set WM_CLASS to a better value than "main.py". For now
-        # almost all wxPython windows get agglomerated together and Odemis is 
+        # almost all wxPython windows get agglomerated together and Odemis is
         # named "FirstStep" sometimes.
         # Not clear whether wxPython supports it. http://trac.wxwidgets.org/ticket/12778
         # Maybe just change the name of this module to something more unique? (eg, odemis.py)
@@ -278,7 +278,7 @@ class OdemisGUIApp(wx.App):
             evt.Skip()
 
     def on_about(self, evt):
-        
+
         info = wx.AboutDialogInfo()
         info.SetIcon(wx.Icon(os.path.join(self._module_path(), "img/icon128.png"),
                              wx.BITMAP_TYPE_PNG))
@@ -292,18 +292,18 @@ class OdemisGUIApp(wx.App):
 #        info.DocWriter = '???'
 #        info.Artist = '???'
 #        info.Translator = '???'
-        
+
         if instrmodel.DyeDatabase:
             info.Developers += ["", "Dye database from http://fluorophores.org"]
             info.Licence += ("""
 The dye database is provided as-is, from the Fluorobase consortium.
-The Fluorobase consortium provide this data and software in good faith, but make 
-no warranty, expressed or implied, nor assume any legal liability or 
-responsibility for any purpose for which they are used. For further information 
+The Fluorobase consortium provide this data and software in good faith, but make
+no warranty, expressed or implied, nor assume any legal liability or
+responsibility for any purpose for which they are used. For further information
 see http://www.fluorophores.org/disclaimer/.
 """)
         wx.AboutBox(info)
-        
+
     def on_inspect(self, evt):
         from wx.lib.inspection import InspectionTool
         InspectionTool().Show()

@@ -547,6 +547,7 @@
                             <bitmap>img/btn_acquire_image.png</bitmap>
                             <hover>img/btn_acquire_image_h.png</hover>
                             <selected>img/btn_acquire_image_a.png</selected>
+                            <disabled>img/btn_acquire_image_d.png</disabled>
                             <fg>#E5E5E5</fg>
                             <font>
                               <size>14</size>
@@ -557,6 +558,7 @@
                               <face>Ubuntu</face>
                               <encoding>UTF-8</encoding>
                             </font>
+                            <enabled>0</enabled>
                             <style>wxALIGN_CENTRE</style>
                             <XRCED>
                               <assign_var>1</assign_var>
