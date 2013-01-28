@@ -338,10 +338,15 @@ class AcquisitionDialog(xrcfr_acq):
 
         seconds = 0
 
-        for str_pan in self.stream_controller.get_stream_panels():
-            seconds += str_pan.get_stream_mod().estimateAcquisitionTime()
+        str_panels = self.stream_controller.get_stream_panels()
 
-        txt = "Estimated acquisition time is %.2f seconds" % seconds
+        if str_panels:
+            for str_pan in str_panels:
+                seconds += str_pan.get_stream_mod().estimateAcquisitionTime()
+            txt = "Estimated acquisition time is %.2f seconds" % seconds
+        else:
+            txt = "No streams present."
+
         self.lbl_acqestimate.SetLabel(txt)
 
     def set_default_filename_and_path(self):
@@ -370,11 +375,11 @@ class AcquisitionDialog(xrcfr_acq):
             except:
                 continue # module cannot be loaded
             formats[exporter.FORMAT] = exporter.EXTENSIONS
-        
+
         if not formats:
             logging.error("Not file exporter found!")
-        return formats 
-    
+        return formats
+
     @staticmethod
     def _convert_formats_to_wildcards(formats2ext):
         """
@@ -386,13 +391,13 @@ class AcquisitionDialog(xrcfr_acq):
         formats = []
         for format, extensions in formats2ext.items():
             ext_wildcards = ";".join(["*" + e for e in extensions])
-            wildcard = "%s files (%s)|%s" % (format, ext_wildcards, ext_wildcards) 
+            wildcard = "%s files (%s)|%s" % (format, ext_wildcards, ext_wildcards)
             formats.append(format)
             wildcards.append(wildcard)
-        
+
         # the whole importance is that they are in the same order
-        return "|".join(wildcards), formats 
-    
+        return "|".join(wildcards), formats
+
     def on_change_file(self, evt):
 
         # TODO: remove self.conf.wildcards
@@ -415,7 +420,7 @@ class AcquisitionDialog(xrcfr_acq):
 
         # Get and select the last extension used.
         # TODO: ensure the last_extension is compatible
-        
+
         dialog.SetFilterIndex(
 #            self.conf.file_extensions.index(self.conf.last_extension)
             0
@@ -441,7 +446,7 @@ class AcquisitionDialog(xrcfr_acq):
             # Set the file name, augmented with the chosen file extension
             format = formats[fi]
             default_ext = formats2extensions[format][0]
-            
+
             self.txt_filename.SetValue(u"%s%s" % (dialog.GetFilename(),
                                                   self.conf.last_extension))
 
