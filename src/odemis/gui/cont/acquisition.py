@@ -29,7 +29,7 @@ of microscope images.
 """
 
 from odemis import model, dataio
-from odemis.gui.config import get_acqui_conf
+from odemis.gui.conf import get_acqui_conf
 from odemis.gui.cont.settingspanel import SettingsBarController
 from odemis.gui.cont.streams import StreamController
 from odemis.gui.main_xrc import xrcfr_acq
