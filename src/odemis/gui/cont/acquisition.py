@@ -28,12 +28,6 @@ of microscope images.
 
 """
 
-from odemis import model, dataio
-from odemis.gui.conf import get_acqui_conf
-from odemis.gui.cont.settingspanel import SettingsBarController
-from odemis.gui.cont.streams import StreamController
-from odemis.gui.main_xrc import xrcfr_acq
-from odemis.gui.util import img, get_picture_folder
 import logging
 import os
 import re
@@ -41,7 +35,15 @@ import subprocess
 import sys
 import threading
 import time
+
 import wx
+from wx.lib.pubsub import pub
+
+from odemis import model, dataio
+from odemis.gui.conf import get_acqui_conf
+from odemis.gui.cont.settingspanel import SettingsBarController
+from odemis.gui.main_xrc import xrcfr_acq
+from odemis.gui.util import img, get_picture_folder
 
 
 
@@ -79,6 +81,13 @@ class AcquisitionController(object):
         # find the names of the active (=connected) screens
         # it's slow, so do it only at init (=expect not to change screen during acquisition)
         self._outputs = self.get_display_outputs()
+
+        pub.subscribe(self.on_stream_change, 'stream.change')
+
+
+    def on_stream_change(self, streams_present, streams_visible):
+
+        self._main_frame.btn_acquire.Enable(streams_present and streams_visible)
 
     def onTakeScreenShot(self):
         """ Takes a screenshot of the screen at give pos & size (rect). """
@@ -319,11 +328,8 @@ class AcquisitionDialog(xrcfr_acq):
         # Create a new settings controller for the acquisition dialog
         self.settings_controller = SettingsBarController(interface_model, self, True)
 
-        # self.stream_controller = StreamController(interface_model,
-        #                                           self.pnl_stream)
-
         main_stream_controller = wx.GetApp().stream_controller
-        self.stream_controller = main_stream_controller.duplicate_test(self.pnl_stream)
+        self.stream_controller = main_stream_controller.duplicate_visible(self.pnl_stream)
 
         self.Bind(wx.EVT_CHAR_HOOK, self.on_key)
 

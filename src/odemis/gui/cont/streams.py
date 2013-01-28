@@ -24,6 +24,8 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 import logging
 
+from wx.lib.pubsub import pub
+
 from odemis.gui import instrmodel, comp
 from odemis.gui.instrmodel import STATE_OFF, STATE_PAUSE, STATE_ON
 
@@ -58,21 +60,21 @@ class StreamController(object):
     microscope is turned on/off.
     """
 
-    def __init__(self, microscope_model, spanel):
+    def __init__(self, microscope_model, stream_bar):
         """
         microscope (GUIMicroscope): the representation of the microscope Model
-        spanel (StreamBar): an empty stream panel
+        stream_bar (StreamBar): an empty stream panel
         """
         self.microscope = microscope_model
-        self._spanel = spanel
-        self._spanel.setMicroscope(self.microscope, self)
+        self._stream_bar = stream_bar
+        self._stream_bar.setMicroscope(self.microscope, self)
         self._scheduler_subscriptions = {} # stream -> callable
 
         # TODO probably need a lock to access it correctly
         self._streams_to_restart = set() # streams to be restarted when turning on again
 
         # TODO remove the actions when microscope goes off
-        if spanel.btn_add_stream:
+        if stream_bar.btn_add_stream:
             self._createAddStreamActions()
 
         # On the first time, we'll create the streams, to be nice to the user
@@ -101,19 +103,19 @@ class StreamController(object):
             and self.microscope.ccd):
             # TODO: how to know it's _fluorescent_ microscope?
             #  => multiple source? filter?
-            self._spanel.add_action("Filtered colour",
+            self._stream_bar.add_action("Filtered colour",
                                     self.addFluo,
                                     self.optical_was_turned_on)
 
         # Bright-field
         if self.microscope.light and self.microscope.ccd:
-            self._spanel.add_action("Bright-field",
+            self._stream_bar.add_action("Bright-field",
                                     self.addBrightfield,
                                     self.optical_was_turned_on)
 
         # SED
         if self.microscope.ebeam and self.microscope.sed:
-            self._spanel.add_action("Secondary electrons",
+            self._stream_bar.add_action("Secondary electrons",
                                     self.addSEMSED,
                                     self.sem_was_turned_on)
 
@@ -201,27 +203,32 @@ class StreamController(object):
         # show the stream right now
         stream.updated.value = True
 
-        entry = entry_cls(self._spanel, stream, self.microscope)
-        self._spanel.add_stream(entry)
+        entry = entry_cls(self._stream_bar, stream, self.microscope)
+        self._stream_bar.add_stream(entry)
+
+        pub.sendMessage('stream.change.add',
+                        streams_present=True,
+                        streams_visible=True)
+
         return entry
 
-    def duplicate_test(self, spanel):
-        """ Test function to see if duplication of user generated widgets
-        can easily be achieved.
+    def duplicate_visible(self, stream_bar):
+        """ Create a new Stream controller with the same streams as are visible
+        in this controller.
 
-        Return a duplicate of self
+        :return StreamController:
 
         """
 
         # Note: self.microscope already has all the streams it needs, so we only
         # need to duplicate the entries in the actuel StreamBar widget
 
-        new_controller = StreamController(self.microscope, spanel)
+        new_controller = StreamController(self.microscope, stream_bar)
 
 
-        for stream_entry in [s for s in self._spanel.entries if s.IsShown()]:
-            entry = stream_entry.__class__(spanel, stream_entry.stream, self.microscope)
-            spanel.add_stream(entry)
+        for stream_entry in [s for s in self._stream_bar.entries if s.IsShown()]:
+            entry = stream_entry.__class__(stream_bar, stream_entry.stream, self.microscope)
+            stream_bar.add_stream(entry)
             entry.to_acquisition_mode()
 
         return new_controller
@@ -316,7 +323,7 @@ class StreamController(object):
         """
         Removes a stream.
         stream (Stream): the stream to remove
-        Note: the stream entry is to be destroyed separately via the spanel
+        Note: the stream entry is to be destroyed separately via the stream_bar
         It's ok to call if the stream has already been removed
         """
         self._streams_to_restart.discard(stream)
@@ -333,5 +340,15 @@ class StreamController(object):
         for v in [v for v in self.microscope.views.itervalues()]:
             v.removeStream(stream)
 
+        pub.sendMessage('stream.change.remove',
+                        streams_present=self._has_streams(),
+                        streams_visible=self._has_visible_streams())
+
+    def _has_streams(self):
+        return len(self._stream_bar.entries) > 0
+
+    def _has_visible_streams(self):
+        return any(s.IsShown() for s in self._stream_bar.entries)
+
     def get_stream_panels(self):
-        return self._spanel.get_stream_panels()
+        return self._stream_bar.get_stream_panels()
