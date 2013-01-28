@@ -17,7 +17,7 @@ You should have received a copy of the GNU General Public License along with Ode
 '''
 
 from .comp.canvas import DraggableCanvas, WorldToBufferPoint
-from odemis.gui import controller, instrmodel
+from odemis.gui import cont, instrmodel
 import logging
 import threading
 import time
@@ -49,10 +49,10 @@ class DblMicroscopeCanvas(DraggableCanvas):
         # TODO deduplicate!
         self._moveFocus0Timer = wx.PyTimer(self._moveFocus0)
         self._moveFocus1Timer = wx.PyTimer(self._moveFocus1)
-        
+
         # for thumbnail update (might need a timer, instead of a minimum period
         self._lastThumbnailUpdate = 0
-        self._thumbnailUpdatePeriod = 2 # s, minimal period before updating again 
+        self._thumbnailUpdatePeriod = 2 # s, minimal period before updating again
 
 #        self.WorldOverlays.append(CrossHairOverlay("Blue", CROSSHAIR_SIZE, (-10,-10))) # debug
 #        self.WorldOverlays.append(CrossHairOverlay("Red", CROSSHAIR_SIZE, (10,10))) # debug
@@ -62,37 +62,37 @@ class DblMicroscopeCanvas(DraggableCanvas):
         Set the view that this canvas is displaying/representing
         Can be called only once, at initialisation.
         """
-        # This is a kind of kludge, see mscviewport.MicroscopeViewport for details 
+        # This is a kind of kludge, see mscviewport.MicroscopeViewport for details
         assert(self.view is None)
-        
+
         self.view = view
 
         # meter per "world unit"
         # for conversion between "world pos" in the canvas and a real unit
         # mpp == mpwu => 1 world coord == 1 px => scale == 1
         self.mpwu = self.view.mpp.value  #m/wu
-        # Should not be changed! 
+        # Should not be changed!
         # FIXME!! => have a PhyscicalCanvas which directly use physical units
 
         self.view.mpp.subscribe(self._onMPP)
         self.view.crosshair.subscribe(self._onCrossHair, init=True)
 
-        # TODO subscribe to view_pos to synchronize with the other views  
+        # TODO subscribe to view_pos to synchronize with the other views
         # TODO subscribe to stage_pos as well/instead.
         if hasattr(self.view, "stage_pos"):
             self.view.stage_pos.subscribe(self._onStagePos, init=True)
-        
+
         # any image changes
         view.lastUpdate.subscribe(self._onViewImageUpdate, init=True)
-    
-    
+
+
     def _convertStreamsToImages(self):
         """
-        Temporary function to convert the StreamTree to a list of images as the canvas 
+        Temporary function to convert the StreamTree to a list of images as the canvas
           currently expects.
         """
         streams = self.view.streams.streams
-        
+
         # create a list of of each stream's image, but re-ordered so that SEM is first
         images = []
         has_sem_image = False
@@ -105,7 +105,7 @@ class DblMicroscopeCanvas(DraggableCanvas):
             iim = s.image.value
             if iim is None or iim.image is None:
                 continue
-            
+
             if isinstance(s, instrmodel.EM_STREAMS):
                 # as first
                 images.insert(0, iim)
@@ -114,13 +114,13 @@ class DblMicroscopeCanvas(DraggableCanvas):
                 has_sem_image = True
             else:
                 images.append(iim)
-        
+
         if not has_sem_image: # make sure there is always a SEM image
             images.insert(0, None)
-        
+
         # remove all the images (so that the images deleted go away)
         self.Images = [None]
-        
+
         # add the images in order
         for i, iim in enumerate(images):
             if iim is None:
@@ -128,58 +128,58 @@ class DblMicroscopeCanvas(DraggableCanvas):
             scale = float(iim.mpp) / self.mpwu
             pos = (iim.center[0] / self.mpwu, iim.center[1] / self.mpwu)
             self.SetImage(i, iim.image, pos, scale)
-        
-        # set merge_ratio 
+
+        # set merge_ratio
         self.merge_ratio = self.view.streams.kwargs.get("merge", 0.5)
-    
+
     def _onViewImageUpdate(self, t):
         # TODO use the real streamtree functions
         # for now we call a conversion layer
         self._convertStreamsToImages()
         logging.debug("Will update drawing for new image")
         wx.CallAfter(self.ShouldUpdateDrawing)
-        
+
     def UpdateDrawing(self):
         # override just in order to detect when it's just finished redrawn
-        
+
         # TODO detect that the canvas is not visible, and so should no/less frequently
-        # be updated? 
+        # be updated?
         super(DblMicroscopeCanvas, self).UpdateDrawing()
-        
+
         if not self.view:
             return
         now = time.time()
         if (self._lastThumbnailUpdate + self._thumbnailUpdatePeriod) < now:
             self._updateThumbnail()
             self._lastThumbnailUpdate = now
-    
+
     # TODO use rate limiting decorator
     def _updateThumbnail(self):
-        # TODO avoid doing 2 copies, by using directly the wxImage from the 
+        # TODO avoid doing 2 copies, by using directly the wxImage from the
         # result of the StreamTree
-        
+
         # new bitmap to copy the DC
         bitmap = wx.EmptyBitmap(*self.ClientSize)
         dc = wx.MemoryDC()
         dc.SelectObject(bitmap)
-        
+
         # simplified version of OnPaint()
         margin = ((self.buffer_size[0] - self.ClientSize[0])/2,
                   (self.buffer_size[1] - self.ClientSize[1])/2)
 
         dc.BlitPointSize((0, 0), self.ClientSize, self._dcBuffer, margin)
 
-        # close the DC, to be sure the bitmap can be used safely 
+        # close the DC, to be sure the bitmap can be used safely
         del dc
 
         self.view.thumbnail.value = wx.ImageFromBitmap(bitmap)
-        
+
     def _onStagePos(self, value):
         """
         When the stage is moved: recenter the view
         value: dict with "x" and "y" entries containing meters
         """
-        # this can be caused by any viewport which has requested to recenter the buffer 
+        # this can be caused by any viewport which has requested to recenter the buffer
         pos = (value["x"] / self.mpwu, value["y"] / self.mpwu)
         # self.ReCenterBuffer(pos)
         # skip ourself, to avoid asking the stage to move to (almost) the same position
@@ -198,7 +198,7 @@ class DblMicroscopeCanvas(DraggableCanvas):
         new_pos = self.world_pos_requested
         physical_pos = (new_pos[0] * self.mpwu, new_pos[1] * self.mpwu)
         self.view.view_pos.value = physical_pos # this should be done even when dragging
-        
+
         self.view.moveStageToView()
         # stage_pos will be updated once the move is completed
 
@@ -217,7 +217,7 @@ class DblMicroscopeCanvas(DraggableCanvas):
         """
         scale = 2.0 ** inc
         self.view.mpp.value /= scale # this will call _onMPP()
-        
+
     # Zoom/merge management
     def OnWheel(self, event):
         change = event.GetWheelRotation() / event.GetWheelDelta()
@@ -225,7 +225,7 @@ class DblMicroscopeCanvas(DraggableCanvas):
             change *= 0.2 # softer
 
         if event.CmdDown(): # = Ctrl on Linux/Win or Cmd on Mac
-            ratio = self.view.merge_ratio.value + (change * 0.1) 
+            ratio = self.view.merge_ratio.value + (change * 0.1)
             ratio = sorted(self.view.merge_ratio.range + (ratio,))[1] # clamp
             self.view.merge_ratio.value = ratio
         else:

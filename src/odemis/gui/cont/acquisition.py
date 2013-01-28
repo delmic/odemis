@@ -30,8 +30,8 @@ of microscope images.
 
 from odemis import model, dataio
 from odemis.gui.config import get_acqui_conf
-from odemis.gui.controller.settingspanel import SettingsBarController
-from odemis.gui.controller.streams import StreamController
+from odemis.gui.cont.settingspanel import SettingsBarController
+from odemis.gui.cont.streams import StreamController
 from odemis.gui.main_xrc import xrcfr_acq
 from odemis.gui.util import img, get_picture_folder
 import logging
