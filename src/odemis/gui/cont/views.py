@@ -4,7 +4,7 @@ Created on 1 Oct 2012
 
 @author: Rinze de Laat
 
-Copyright © 2012 Rinze de Laat and Éric Piel, Delmic
+Copyright © 2012-2013 Rinze de Laat and Éric Piel, Delmic
 
 This file is part of Odemis.
 
@@ -157,6 +157,7 @@ class ViewController(object):
         layout = self._microscope.viewLayout.value
 
         self._main_frame.pnl_tab_live.Freeze()
+
         for viewport in self._viewports:
             if viewport.mic_view == view:
                 viewport.SetFocus(True)
@@ -318,14 +319,14 @@ class ViewSelector(object):
                 # Rescale to have the smallest axis as big as the thumbnail
                 rsize = list(size_sub)
                 if (size_sub[0] / im.Width) > (size_sub[1] / im.Height):
-                    rsize[1] = int(im.Height * (size_sub[0] / im.Width)) 
+                    rsize[1] = int(im.Height * (size_sub[0] / im.Width))
                 else:
                     rsize[0] = int(im.Width * (size_sub[1] / im.Height))
                 sim = im.Scale(*rsize, quality=wx.IMAGE_QUALITY_HIGH)
-                
+
                 # crop to the right shape
                 lt = ((size_sub[0] - sim.Width)//2, (size_sub[1] - sim.Height)//2)
-                sim.Resize(size_sub, lt) 
+                sim.Resize(size_sub, lt)
 
                 # compute placement
                 y, x = divmod(i, 2)

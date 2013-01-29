@@ -2,7 +2,7 @@
 """
 @author: Rinze de Laat
 
-Copyright © 2012 Rinze de Laat, Delmic
+Copyright © 2012-2013 Rinze de Laat, Delmic
 
 This file is part of Odemis.
 
@@ -17,6 +17,7 @@ PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
+
 
 ### Purpose ###
 
@@ -35,17 +36,16 @@ import odemis.gui
 import odemis.gui.comp.text as text
 import odemis.gui.img.data as img
 import odemis.gui.util.units as utun
-from ..comp.foldpanelbar import FoldPanelItem
+
+from odemis.model import getVAs, NotApplicableError, VigilantAttributeBase, \
+    NotSettableError
+from odemis.gui.comp.foldpanelbar import FoldPanelItem
 from odemis.gui.comp.radio import GraphicalRadioButtonControl
 from odemis.gui.comp.slider import UnitIntegerSlider, UnitFloatSlider
 from odemis.gui.util.widgets import VigilantAttributeConnector
 from odemis.gui.util.units import readable_str
-from odemis.model import getVAs, NotApplicableError, VigilantAttributeBase, \
-    NotSettableError
 
-
-
-# Utility functions
+####### Utility functions #######
 
 def resolution_from_range(va, conf):
     """ Try and get the maximum value of range and use
@@ -193,6 +193,8 @@ SETTINGS = {
             }
         }
 
+
+####### Classes #######
 
 class SettingsPanel(object):
     """ Settings base class which describes an indirect wrapper for
@@ -401,7 +403,7 @@ class SettingsPanel(object):
 
     def add_value(self, label, value, conf=None):
         """ Add a label/value pair to the settings panel.
-        
+
         label (string): name of the value
         value (VigilantAttribute)
         conf {dict}: Configuration items that may override default settings
@@ -587,9 +589,9 @@ class SettingsPanel(object):
                     if ctrl.GetClientData(i) == value:
                         logging.debug("Setting ComboBox value to %s", ctrl.Items[i])
                         return ctrl.SetValue(ctrl.Items[i])
-                logging.warning("No matching label found for value %s!", value)                
-            
-            # equivalent wrapper function to retrieve the actual value 
+                logging.warning("No matching label found for value %s!", value)
+
+            # equivalent wrapper function to retrieve the actual value
             def cb_get(ctrl=new_ctrl):
                 value = ctrl.GetValue()
                 for i in range(ctrl.Count):

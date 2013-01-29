@@ -27,6 +27,17 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 
+import collections
+import logging
+import math
+
+import wx
+from wx.lib.pubsub import pub
+
+import odemis.gui
+import odemis.gui.comp.buttons as buttons
+import odemis.gui.img.data as img
+
 from odemis import model
 from odemis.gui import instrmodel, FOREGROUND_COLOUR_EDIT
 from odemis.gui.comp.foldpanelbar import FoldPanelItem
@@ -36,18 +47,6 @@ from odemis.gui.comp.text import SuggestTextCtrl, UnitIntegerCtrl, \
 from odemis.gui.util import call_after
 from odemis.gui.util.conversion import wave2rgb
 from odemis.gui.util.widgets import VigilantAttributeConnector
-import collections
-import logging
-import math
-import odemis.gui
-import odemis.gui.comp.buttons as buttons
-import odemis.gui.img.data as img
-import wx
-import wx.lib.newevent
-
-
-
-
 
 
 TEST_STREAM_LST = ["Aap", u"nöot", "noot", "mies", "kees", "vuur",
@@ -235,14 +234,14 @@ class DyeExpander(Expander):
         self._sz.Remove(1)
         self._sz.Insert(1, self._label_ctrl, 1,
                         wx.RIGHT | wx.ALIGN_CENTRE_VERTICAL, 8)
-        
+
         # Callback when the label changes: (string (text) -> None)
         self.onLabelChange = None
 
     # GUI event handlers
     def _on_label_change(self, evt):
         if self.onLabelChange:
-            self.onLabelChange(self._label_ctrl.GetValue())
+            self.onLabelChange(self._label_ctrl.GetValue())  #pylint: disable=E1102
 
     @call_after
     def set_tint(self, colour):
@@ -414,7 +413,7 @@ class StreamPanel(wx.PyPanel):
         self._gbs.Add(self._btn_auto_contrast, (self.row_count, 0),
                       flag=wx.LEFT, border=11)
         self.row_count += 1
-        
+
         # ====== Second row, brightness label, slider and value
 
         lbl_brightness = wx.StaticText(self._panel, -1, "Brightness")
@@ -433,7 +432,7 @@ class StreamPanel(wx.PyPanel):
         self._vac_brightness = VigilantAttributeConnector(self.stream.brightness,
                                              self._sld_brightness,
                                              events=wx.EVT_SLIDER)
-        # span is 2, because emission/excitation have 2 controls 
+        # span is 2, because emission/excitation have 2 controls
         self._gbs.Add(self._sld_brightness, pos=(self.row_count, 1),
                       span=(1, 2), flag=wx.EXPAND | wx.RIGHT, border=18)
         self.row_count += 1
@@ -451,11 +450,11 @@ class StreamPanel(wx.PyPanel):
                              t_size=(40, -1),
                              unit=None,
                              name="contrast_slider")
-        
+
         self._vac_contrast = VigilantAttributeConnector(self.stream.contrast,
                                              self._sld_contrast,
                                              events=wx.EVT_SLIDER)
-            
+
         self._gbs.Add(self._sld_contrast, pos=(self.row_count, 1),
                       span=(1, 2), flag=wx.EXPAND | wx.RIGHT, border=18)
         self.row_count += 1
@@ -466,10 +465,11 @@ class StreamPanel(wx.PyPanel):
 
         # Expander
 
-        self._expander._btn_rem.Bind(wx.EVT_BUTTON, self.on_remove)
-        self._expander._btn_vis.Bind(wx.EVT_BUTTON, self.on_visibility)
-        self._expander._btn_play.Bind(wx.EVT_BUTTON, self.on_play)
+        self._expander._btn_rem.Bind(wx.EVT_BUTTON, self.on_remove_btn)
+        self._expander._btn_vis.Bind(wx.EVT_BUTTON, self.on_visibility_btn)
+        self._expander._btn_play.Bind(wx.EVT_BUTTON, self.on_play_btn)
         self.stream.updated.subscribe(self.onUpdatedChanged, init=True)
+
         # initialise _btn_play
         self.setVisible(self.stream in self._microscope.focussedView.value.getStreams())
 
@@ -560,7 +560,7 @@ class StreamPanel(wx.PyPanel):
         Set the "visible" toggle button.
         Note: it does not add/remove it to the current view.
         """
-        # TODO: check that we don't call on_visibility()
+        # TODO: check that we don't call on_visibility_btn()
         self._expander._btn_vis.SetToggle(visible)
 
     def collapse(self, collapse=True):
@@ -588,14 +588,14 @@ class StreamPanel(wx.PyPanel):
 
     # GUI events: update the stream when the user changes the values
 
-    def on_remove(self, evt):
-        logging.debug("Removing stream panel '%s'", self.stream.name.value)
+    def on_remove_btn(self, evt):
+        logging.debug("Remove button clicked for '%s'", self.stream.name.value)
 
         # generate EVT_STREAM_REMOVE
-        event = stream_remove_event(entry=self)
+        event = stream_remove_event(spanel=self)
         wx.PostEvent(self, event)
 
-    def on_visibility(self, evt):
+    def on_visibility_btn(self, evt):
         view = self._microscope.focussedView.value
         if not view:
             return
@@ -606,7 +606,7 @@ class StreamPanel(wx.PyPanel):
             logging.debug("Hiding stream '%s'", self.stream.name.value)
             view.removeStream(self.stream)
 
-    def on_play(self, evt):
+    def on_play_btn(self, evt):
         if self._expander._btn_play.GetToggle():
             logging.debug("Activating stream '%s'", self.stream.name.value)
         else:
@@ -749,7 +749,7 @@ class DyeStreamPanel(StreamPanel):
             # * show a warning message when they are picked?
             self._expander.SetChoices(self._getCompatibleDyes())
             self._expander.onLabelChange = self._onNewName
-            
+
             # Excitation and emission are a text input + a color display
             # Warning: stream.excitation is in m, we present everything in nm
             lbl_excitation = wx.StaticText(self._panel, -1, "Excitation")
@@ -769,7 +769,7 @@ class DyeStreamPanel(StreamPanel):
             self._gbs.Add(self._txt_excitation, (self.row_count, 1),
                           flag=wx.ALIGN_CENTRE_VERTICAL | wx.RIGHT,
                           border=18)
-            
+
             # A button, but not clickable, just to show the wavelength
             self._btn_excitation = buttons.ColourButton(self._panel, -1,
                                 bitmap=img.getemptyBitmap(),
@@ -828,7 +828,7 @@ class DyeStreamPanel(StreamPanel):
                   ctrl_2_va=self._emission_2_va, # to convert from nm
                   events=wx.EVT_COMMAND_ENTER)
         else:
-            logging.warning("DyeStreamEntry associated to a stream without "
+            logging.warning("DyeStreamPanel associated to a stream without "
                             "excitation/emission")
 
     def _getCompatibleDyes(self):
@@ -873,13 +873,13 @@ class DyeStreamPanel(StreamPanel):
         Called when the text is changed (by the user).
         returns a value to set for the VA
         """
-#        logging.debug("Excitation changed")
+        # logging.debug("Excitation changed")
         wl = (self._txt_excitation.GetValue() or 0) * 1e-9
         # FIXME: need to turn the text red if the value is too small (bigger,
         # maybe not necessary) => inside the widget?
         wl = sorted(self.stream.excitation.range + (wl,))[1]
         return wl
-    
+
     def _excitation_2_ctrl(self, value):
         """
         Called to update the widgets (text + colour display) when the VA changes.
@@ -887,24 +887,24 @@ class DyeStreamPanel(StreamPanel):
         """
         self._txt_excitation.ChangeValue(int(round(value * 1e9)))
         colour = wave2rgb(value)
-#        logging.debug("Changing colour to %s", colour)
+        # logging.debug("Changing colour to %s", colour)
         self._btn_excitation.set_colour(colour)
 
     def _emission_2_va(self):
         """
-        Called when the text is changed (by the user). 
+        Called when the text is changed (by the user).
         Also updates the tint as a side-effect.
         returns a value to set for the VA
         """
         wl = (self._txt_emission.GetValue() or 0) * 1e-9
         wl = sorted(self.stream.emission.range + (wl,))[1]
-        
+
         # changing emission should also change the tint
         colour = wave2rgb(wl)
         self.stream.tint.value = colour
-        
+
         return wl
-    
+
     def _emission_2_ctrl(self, value):
         """
         Called to update the widgets (text + colour display) when the VA changes.
@@ -912,21 +912,21 @@ class DyeStreamPanel(StreamPanel):
         """
         self._txt_emission.ChangeValue(int(round(value * 1e9)))
         colour = wave2rgb(value)
-#        logging.debug("Changing colour to %s", colour)
+        # logging.debug("Changing colour to %s", colour)
         self._btn_emission.set_colour(colour)
-        
+
 
 class StreamBar(wx.Panel):
     """
-    The whole panel containing stream entries and a button to add more streams
-    There are multiple levels of visibility of a stream entry:
-     * the stream entry is shown in the panel and has the visible icon on:
+    The whole panel containing stream panels and a button to add more streams
+    There are multiple levels of visibility of a stream panel:
+     * the stream panel is shown in the panel and has the visible icon on:
         The current view is compatible with the stream and has it in its list
         of streams.
-     * the stream entry is shown in the panel and has the visible icon off:
+     * the stream panel is shown in the panel and has the visible icon off:
         The current view is compatible with the stream, but the stream is not
         in its list of streams
-     * the stream entry is not present in the panel (hidden):
+     * the stream panel is not present in the panel (hidden):
         The current view is not compatible with the stream
     """
 
@@ -946,7 +946,7 @@ class StreamBar(wx.Panel):
 
         self._microscope = None # GUIMicroscope
 
-        self.entries = []
+        self.stream_panels = []
         self.menu_actions = collections.OrderedDict()  # title => callback
 
         self._sz = wx.BoxSizer(wx.VERTICAL)
@@ -978,13 +978,6 @@ class StreamBar(wx.Panel):
             self.btn_add_stream.Bind(wx.EVT_BUTTON, self.on_add_stream)
 
         self._fitStreams()
-
-    def setMicroscope(self, microscope, stream_controller):
-        self._microscope = microscope
-        self._stream_controller = stream_controller
-
-        self._microscope.focussedView.subscribe(self._onView, init=True)
-
 
     def _fitStreams(self):
         h = self._sz.GetMinSize().GetHeight()
@@ -1019,25 +1012,7 @@ class StreamBar(wx.Panel):
 
     # === VA handlers
 
-    def _onView(self, view):
-        """
-        Called when the current view changes
-        """
-        if not view:
-            return
-
-        # hide/show the stream panel entries which are compatible with the view
-        allowed_classes = view.stream_classes
-        for e in self.entries:
-            e.Show(isinstance(e.stream, allowed_classes))
-        # self.Refresh()
-        self._fitStreams()
-
-        # update the "visible" icon of each stream panel entry to match the list
-        # of streams in the view
-        visible_streams = view.streams.getStreams()
-        for e in self.entries:
-            e.setVisible(e.stream in visible_streams)
+    # Moved to stream controller
 
     # === Event Handlers
 
@@ -1054,12 +1029,11 @@ class StreamBar(wx.Panel):
 
     def on_stream_remove(self, evt):
         logging.debug("StreamBar received remove event %r", evt)
-        # delete entry
-        self.remove_stream(evt.entry)
+        # delete stream panel
+        self.remove_stream_panel(evt.spanel)
 
-        # delete stream
-        stream = evt.entry.stream
-        self._stream_controller.removeStream(stream)
+        # Publish removal notification
+        pub.sendMessage("stream.remove", stream=evt.spanel.stream)
 
     # === API of the stream panel
     def show_add_button(self):
@@ -1073,34 +1047,35 @@ class StreamBar(wx.Panel):
             self._fitStreams()
 
     def is_empty(self):
-        return len(self.entries) == 0
+        return len(self.stream_panels) == 0
 
     def get_size(self):
-        return len(self.entries)
+        """ Return the number of stream contained withing the StreamBar """
+        return len(self.stream_panels)
 
-    def add_stream(self, entry):
+    def add_stream(self, spanel, show):
         """
-        This method adds a stream entry to the panel. The appropriate
+        This method adds a stream panel to the stream bar. The appropriate
         position is automatically determined.
-        entry (StreamPanel): an entry (representing a specific stream)
+        spanel (StreamPanel): a stream panel
         """
-        # Insert the entry in the order of STREAM_ORDER. If there are already
+        # Insert the spanel in the order of STREAM_ORDER. If there are already
         # streams with the same type, insert after them.
         ins_pos = 0
-        order_s = self._get_stream_order(entry.stream)
-        for e in self.entries:
+        order_s = self._get_stream_order(spanel.stream)
+        for e in self.stream_panels:
             order_e = self._get_stream_order(e.stream)
             if order_s < order_e:
                 break
             ins_pos += 1
 
         logging.debug("Inserting %s at position %s",
-                  entry.stream.__class__.__name__,
-                  ins_pos)
+                      spanel.stream.__class__.__name__,
+                      ins_pos)
 
-        entry.finalize()
+        spanel.finalize()
 
-        self.entries.insert(ins_pos, entry)
+        self.stream_panels.insert(ins_pos, spanel)
 
         self._set_warning()
 
@@ -1108,29 +1083,29 @@ class StreamBar(wx.Panel):
             self._sz = wx.BoxSizer(wx.VERTICAL)
             self.SetSizer(self._sz)
 
-        self._sz.InsertWindow(ins_pos, entry,
+        self._sz.InsertWindow(ins_pos, spanel,
                               flag=self.DEFAULT_STYLE,
                               border=self.DEFAULT_BORDER)
 
-        entry.Bind(EVT_STREAM_REMOVE, self.on_stream_remove)
+        spanel.Bind(EVT_STREAM_REMOVE, self.on_stream_remove)
 
-        entry.Layout()
+        spanel.Layout()
+
         # hide the stream if the current view is not compatible
-        entry.Show(isinstance(entry.stream,
-                              self._microscope.focussedView.value.stream_classes))
+        spanel.Show(show)
         self._fitStreams()
 
 
     def get_stream_panels(self):
-        return self.entries
+        return self.stream_panels
 
-    def remove_stream(self, entry):
+    def remove_stream_panel(self, spanel):
         """
-        Removes a stream entry
+        Removes a stream panel
         Deletion of the actual stream must be done separately.
         """
-        self.entries.remove(entry)
-        wx.CallAfter(entry.Destroy)
+        self.stream_panels.remove(spanel)
+        wx.CallAfter(spanel.Destroy)
         self._set_warning()
 
     def _set_warning(self):

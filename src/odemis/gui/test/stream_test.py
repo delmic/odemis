@@ -232,7 +232,7 @@ class FoldPanelBarTestCase(unittest.TestCase):
 
         # Delete the second fixed stream
         wx.MilliSleep(SLEEP_TIME)
-        self.frm.stream_panel.remove_stream(fixed_entry2)
+        self.frm.stream_panel.remove_stream_panel(fixed_entry2)
         loop()
 
         self.assertEqual(self.frm.stream_panel.get_size(), 2)
@@ -241,7 +241,7 @@ class FoldPanelBarTestCase(unittest.TestCase):
         wx.MilliSleep(SLEEP_TIME)
         # internal access to avoid reseting the whole window
         for e in list(self.frm.stream_panel.entries):
-            self.frm.stream_panel.remove_stream(e)
+            self.frm.stream_panel.remove_stream_panel(e)
         loop()
 
         self.assertEqual(self.frm.stream_panel.get_size(), 0)
@@ -310,7 +310,7 @@ class FoldPanelBarTestCase(unittest.TestCase):
         wx.MilliSleep(SLEEP_TIME)
         # internal access to avoid reseting the whole window
         for e in list(self.frm.stream_panel.entries):
-            self.frm.stream_panel.remove_stream(e)
+            self.frm.stream_panel.remove_stream_panel(e)
         loop()
 
 if __name__ == "__main__":

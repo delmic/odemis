@@ -207,7 +207,6 @@ class OdemisGUIApp(wx.App):
             self.view_selector = ViewSelector(self.interface_model,
                                               self.main_frame)
 
-
             self.acquisition_controller = AcquisitionController(self.interface_model,
                                                                 self.main_frame)
 

@@ -20,6 +20,7 @@ details.
 
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
+
 """
 
 import logging
@@ -31,19 +32,19 @@ from odemis.gui.instrmodel import STATE_OFF, STATE_PAUSE, STATE_ON
 
 # stream controller:
 # create the default streams when a part of the microscope is turned on, and
-#  create a corresponding stream entry in the panel. (when part is turned
+#  create a corresponding stream panel in the stream bar. (when part is turned
 #  off, stream stays)
-# ensures the right "Add XXX stream" entries are available in the "Add stream"
-#   button
+# ensures the right "Add XXX stream" stream panels are available in the
+#  "Add stream" button
 # on stream remove: contacted to remove the stream from the layers and the
 #   list
 # on microscope off: pause (set .updated to False) every stream which uses
 #  this microscope
 # TODO: how to prevent the user from turning on camera/light again from the
-#   stream entry when the microscope is off? => either stream entry "update"
+#   stream panel when the microscope is off? => either stream panel "update"
 #   icon is disabled/enable (decided by the stream controller), or the event
 #   handler checks first that the appropriate microscope is On or Off.
-# the stream entries directly update the VA's
+# the stream panels directly update the VA's
 
 # all the stream types related to optical
 OPTICAL_STREAMS = (instrmodel.FluoStream,
@@ -56,8 +57,8 @@ EM_STREAMS = (instrmodel.SEMStream, instrmodel.StaticStream)
 class StreamController(object):
     """
     Manages the insertion/suppression of streams (with their corresponding
-    entries in the panel), and the de/activation of the streams when the
-    microscope is turned on/off.
+    stream panels in the stream bar), and the de/activation of the
+    streams when the microscope is turned on/off.
     """
 
     def __init__(self, microscope_model, stream_bar):
@@ -67,7 +68,7 @@ class StreamController(object):
         """
         self.microscope = microscope_model
         self._stream_bar = stream_bar
-        self._stream_bar.setMicroscope(self.microscope, self)
+        self.setMicroscope(self.microscope, self)
         self._scheduler_subscriptions = {} # stream -> callable
 
         # TODO probably need a lock to access it correctly
@@ -83,6 +84,8 @@ class StreamController(object):
 
         self.microscope.opticalState.subscribe(self.onOpticalState)
         self.microscope.emState.subscribe(self.onEMState)
+
+        pub.subscribe(self.remove_stream, 'stream.remove')
 
     def optical_was_turned_on(self):
         return self._opticalWasTurnedOn
@@ -122,8 +125,8 @@ class StreamController(object):
 
     def addFluo(self, add_to_all_views=False):
         """
-        Creates a new fluorescence stream and entry into the stream panel
-        returns (StreamPanel): the entry created
+        Creates a new fluorescence stream and a stream panel in the stream bar
+        returns (StreamPanel): the panel created
         """
         # Find a name not already taken
         existing_names = [s.name.value for s in self.microscope.streams]
@@ -139,8 +142,8 @@ class StreamController(object):
 
     def addBrightfield(self, add_to_all_views=False):
         """
-        Creates a new brightfield stream and entry into the stream panel
-        returns (StreamPanel): the entry created
+        Creates a new brightfield stream and panel in the stream bar
+        returns (StreamPanel): the stream panel created
         """
         stream = instrmodel.BrightfieldStream("Bright-field",
                   self.microscope.ccd, self.microscope.ccd.data,
@@ -149,8 +152,8 @@ class StreamController(object):
 
     def addSEMSED(self, add_to_all_views=False):
         """
-        Creates a new SED stream and entry into the stream panel
-        returns (StreamPanel): the entry created
+        Creates a new SED stream and panel in the stream bar
+        returns (StreamPanel): the panel created
         """
         stream = instrmodel.SEMStream("Secondary electrons",
                   self.microscope.sed, self.microscope.sed.data,
@@ -159,26 +162,26 @@ class StreamController(object):
 
     def addStatic(self, name, image, cls=instrmodel.StaticStream, add_to_all_views=False, ):
         """
-        Creates a new static stream and entry into the stream panel
+        Creates a new static stream and panel in the stream bar
         Note: only for debugging/testing
         name (string)
         image (InstrumentalImage)
         cls (class of Stream)
-        returns (StreamPanel): the entry created
+        returns (StreamPanel): the panel created
         """
         stream = cls(name, image)
         return self._addStream(stream, comp.stream.StandardStreamPanel, add_to_all_views)
 
 
-    def _addStream(self, stream, entry_cls, add_to_all_views=False):
+    def _addStream(self, stream, spanel_cls, add_to_all_views=False):
         """
         Adds a stream.
 
         stream (Stream): the new stream to add
-        entry_cls (class): the type of stream entry to create
+        spanel_cls (class): the type of stream panel to create
         add_to_all_views (boolean): if True, add the stream to all the compatible
           views, otherwise add only to the current view
-        returns the entry created
+        returns the StreamPanel of subclass 'spanel_cls' that was created
         """
         self.microscope.streams.add(stream)
         if add_to_all_views:
@@ -203,14 +206,17 @@ class StreamController(object):
         # show the stream right now
         stream.updated.value = True
 
-        entry = entry_cls(self._stream_bar, stream, self.microscope)
-        self._stream_bar.add_stream(entry)
+        spanel = spanel_cls(self._stream_bar, stream, self.microscope)
 
-        pub.sendMessage('stream.change.add',
+        show = isinstance(spanel.stream,
+                          self._microscope.focussedView.value.stream_classes)
+        self._stream_bar.add_stream(spanel, show)
+
+        pub.sendMessage('stream.changed.added',
                         streams_present=True,
-                        streams_visible=True)
+                        streams_visible=self._has_visible_streams())
 
-        return entry
+        return spanel
 
     def duplicate_visible(self, stream_bar):
         """ Create a new Stream controller with the same streams as are visible
@@ -221,19 +227,53 @@ class StreamController(object):
         """
 
         # Note: self.microscope already has all the streams it needs, so we only
-        # need to duplicate the entries in the actuel StreamBar widget
+        # need to duplicate the stream panels in the actual StreamBar widget
 
         new_controller = StreamController(self.microscope, stream_bar)
 
 
-        for stream_entry in [s for s in self._stream_bar.entries if s.IsShown()]:
-            entry = stream_entry.__class__(stream_bar, stream_entry.stream, self.microscope)
-            stream_bar.add_stream(entry)
-            entry.to_acquisition_mode()
+        for sp in [sp for sp in self._stream_bar.stream_panels if sp.IsShown()]:
+            panel = sp.__class__(stream_bar,
+                                 sp.stream,
+                                 self.microscope)
+            # Used Streams can always be shown
+            stream_bar.add_stream(panel, True)
+            panel.to_acquisition_mode()
 
         return new_controller
 
 
+    # === VA handlers
+
+    def _onView(self, view):
+        """
+        Called when the current view changes
+        """
+        if not view:
+            return
+
+        # hide/show the stream panels which are compatible with the view
+        allowed_classes = view.stream_classes
+        for e in self._stream_bar.stream_panels:
+            e.Show(isinstance(e.stream, allowed_classes))
+        # self.Refresh()
+        self._stream_bar._fitStreams()
+
+        # update the "visible" icon of each stream panel to match the list
+        # of streams in the view
+        visible_streams = view.streams.getStreams()
+        for e in self._stream_bar.stream_panels:
+            e.setVisible(e.stream in visible_streams)
+
+        pub.sendMessage('stream.changed',
+                        streams_present=True,
+                        streams_visible=self._has_visible_streams())
+
+    def setMicroscope(self, microscope, stream_controller):
+        self._microscope = microscope
+        self._stream_controller = stream_controller
+
+        self._microscope.focussedView.subscribe(self._onView, init=True)
 
     def _onStreamUpdate(self, stream, updated):
         """
@@ -305,7 +345,7 @@ class StreamController(object):
                     self._streams_to_restart.add(s)
                     s.active.value = False
                     s.updated.value = False
-                    # TODO also disable entry "update" button?
+                    # TODO also disable stream panel "update" button?
 
 
     def _startStreams(self, classes):
@@ -319,11 +359,11 @@ class StreamController(object):
                 # it will be activated by the stream scheduler
 
 
-    def removeStream(self, stream):
+    def remove_stream(self, stream):
         """
-        Removes a stream.
+        Removes the given stream.
         stream (Stream): the stream to remove
-        Note: the stream entry is to be destroyed separately via the stream_bar
+        Note: the stream panel is to be destroyed separately via the stream_bar
         It's ok to call if the stream has already been removed
         """
         self._streams_to_restart.discard(stream)
@@ -340,15 +380,15 @@ class StreamController(object):
         for v in [v for v in self.microscope.views.itervalues()]:
             v.removeStream(stream)
 
-        pub.sendMessage('stream.change.remove',
+        pub.sendMessage('stream.changed.removed',
                         streams_present=self._has_streams(),
                         streams_visible=self._has_visible_streams())
 
     def _has_streams(self):
-        return len(self._stream_bar.entries) > 0
+        return len(self._stream_bar.stream_panels) > 0
 
     def _has_visible_streams(self):
-        return any(s.IsShown() for s in self._stream_bar.entries)
+        return any(s.IsShown() for s in self._stream_bar.stream_panels)
 
     def get_stream_panels(self):
         return self._stream_bar.get_stream_panels()
