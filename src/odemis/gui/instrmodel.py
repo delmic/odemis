@@ -45,7 +45,7 @@ def LoadDyeDatabase():
     returns (boolean): True if a database was found, false otherwise
     Note: it uses a cached version of the Fluorophores.org JSON database
     """
-    
+
     # For the API see doc/fluorophores-api.txt
     index = None
     basedir = None
@@ -58,10 +58,10 @@ def LoadDyeDatabase():
         index = json.load(findex)
         basedir = p
         break
-    
+
     if index is None:
         return False
-    
+
     # Load the main excitation and emission peak for each environment
     # For each environment, download it
     for eid, e in index.items():
@@ -82,7 +82,7 @@ def LoadDyeDatabase():
         names.discard("") # just in case some names are empty
         if not names:
             logging.debug("Skipping environment %d which has substance without name", eid)
-        
+
         # find the peaks
         xpeaks = e["excitation_max"]
         epeaks = e["emission_max"]
@@ -90,8 +90,8 @@ def LoadDyeDatabase():
             # not enough information to be worthy
             continue
         xwl = xpeaks[0] * 1e-9 # m
-        ewl = epeaks[0] * 1e-9 # m 
-        
+        ewl = epeaks[0] * 1e-9 # m
+
         # Note: if two substances have the same name -> too bad, only the last
         # one will be in our database. (it's not a big deal, as it's usually
         # just duplicate entries)
@@ -101,16 +101,16 @@ def LoadDyeDatabase():
             if n in DyeDatabase:
                 logging.debug("Dye database already had an entry for dye %s", n)
             DyeDatabase[n] = (xwl, ewl)
-    
+
     # TODO: also de-duplicate names in a case insensitive way
-     
+
     logging.info("Loaded %d dye names from the database.", len(DyeDatabase))
     return True
 
-# Simple dye database, that will be filled in at initialisation, if there is a 
+# Simple dye database, that will be filled in at initialisation, if there is a
 # database file available
 # string (name) -> 2-tuple of float (excitation peak wl, emission peak wl in m)
-# TODO: Should support having multiple peaks, orderer by strength  
+# TODO: Should support having multiple peaks, orderer by strength
 DyeDatabase = None
 
 # Load the database the first time the module is imported
@@ -127,9 +127,9 @@ if DyeDatabase is None:
     else:
         if not result:
             logging.info("No fluorophores database found.")
-    
-    duration = time.time() - start
-    logging.debug("Dye database loading took %g s", duration)
+
+    load_time = time.time() - start
+    logging.debug("Dye database loading took %g s", load_time)
 
 class InstrumentalImage(object):
     """
@@ -535,7 +535,7 @@ class Stream(object):
     def onAutoBC(self, enabled):
         if len(self.raw) == 0:
             return  # no image acquired yet
-        
+
         # if changing to manual: need to set the current (automatic) B/C
         if enabled == False:
             b, c = util.img.FindOptimalBC(self.raw[0], self._depth)
@@ -544,7 +544,7 @@ class Stream(object):
         else:
             # B/C might be different from the manual values => redisplay
             self._updateImage()
-        
+
     def onBrightnessContrast(self, unused):
         # called whenever brightness/contrast changes
         # => needs to recompute the image (but not too often, so we do it in a timer)
@@ -569,7 +569,7 @@ class SEMStream(Stream):
     """
     def __init__(self, name, detector, dataflow, emitter):
         Stream.__init__(self, name, detector, dataflow, emitter)
-        
+
         try:
             self._prevDwellTime = emitter.dwellTime.value
             emitter.dwellTime.subscribe(self.onDwellTime)
@@ -579,18 +579,18 @@ class SEMStream(Stream):
 
     def estimateAcquisitionTime(self):
         # each pixel * dwell time + set up overhead
-        
+
         try:
             res = list(self._emitter.resolution.value)
             # Typically there is few more pixels inserted at the beginning of each
             # line for the settle time of the beam. We guesstimate by justing adding
             # 1 pixel to each line
-            if len(res) == 2: 
+            if len(res) == 2:
                 res[1] += 1
             else:
                 logging.warning("Resolution of scanner is not 2 dimension, time estimation might be wrong")
             duration = self._emitter.dwellTime * numpy.prod(res) + 0.1
-            
+
             return duration
         except:
             logging.exception("Exception while trying to estimate time of SEM acquisition")
@@ -604,34 +604,34 @@ class SEMStream(Stream):
 
     def onDwellTime(self, value):
         # When the dwell time changes, the new value is only used on the next
-        # acquisition. Assuming the change comes from the user (very likely), 
+        # acquisition. Assuming the change comes from the user (very likely),
         # then if the current acquisition would take a long time, cancel it, and
         # restart acquisition so that the new value is directly used. The main
         # goal is to avoid cases where user mistakenly put a 10+ s acquisition,
         # and it takes ages to get back to a faster acquisition. Note: it only
         # works if we are the only subscriber (but that's very likely).
-        
+
         try:
             if self.active.value == False:
                 # not acquiring => nothing to do
                 return
-                
+
             # approximate time for the current image acquisition
             res = self._emitter.resolution.value
             prevDuration = self._prevDwellTime * numpy.prod(res)
-            
+
             if prevDuration < 1:
                 # very short anyway, not worthy
                 return
-            
+
             # TODO: do this on a rate-limited fashion (now, or ~1s)
-            # unsubscribe, and re-subscribe immediately 
+            # unsubscribe, and re-subscribe immediately
             self._dataflow.unsubscribe(self.onNewImage)
             self._dataflow.subscribe(self.onNewImage)
-            
+
         finally:
             self._prevDwellTime = value
-        
+
 class CameraStream(Stream):
     """
     Abstract class representing all streams which have a digital camera as
@@ -643,14 +643,14 @@ class CameraStream(Stream):
             exp = self._detector.exposureTime.value
             res = self._detector.resolution.value
             try:
-                readout = 1. / self._detector.readoutRate.value
+                readout = 1.0 / self._detector.readoutRate.value
             except AttributeError:
                 # let's assume it's super fast
                 readout = 0
-            
+
             duration = exp + numpy.prod(res) * readout + 0.1
             return duration
-        except:
+        except TypeError:
             logging.exception("Exception while trying to estimate time of SEM acquisition")
             return Stream.estimateAcquisitionTime(self)
 
@@ -738,7 +738,7 @@ class FluoStream(CameraStream):
         if len(self.raw) == 0:
             return  # no image acquired yet
         self._updateImage()
-    
+
     def _setFilterEmission(self):
         wl = self.emission.value
         # TODO: we need a way to know if the HwComponent can change automatically
@@ -1056,16 +1056,16 @@ class StreamTree(object):
         """
         Returns an InstrumentalImage composed of all the current stream images.
         Precisely, it returns the output of a call to operator.
-        rect (2-tuple of 2-tuple of float): top-left and bottom-right points in 
+        rect (2-tuple of 2-tuple of float): top-left and bottom-right points in
           world position (m) of the area to draw
-        mpp (0<float): density (meter/pixel) of the image to compute   
+        mpp (0<float): density (meter/pixel) of the image to compute
         """
         # TODO: probably not so useful function, need to see what canvas
         #  it will likely need as argument a wx.Bitmap, and view rectangle
         #  that will define where to save the result
 
         # TODO: cache with the given rect and mpp and last update time of each image
-        
+
         # create the arguments list for operator
         images = []
         for s in self.streams:
@@ -1073,7 +1073,7 @@ class StreamTree(object):
                 images.append(s.image.value)
             elif isinstance(s, StreamTree):
                 images.append(s.getImage(rect, mpp))
-                
+
 
         return self.operator(images, rect, mpp, **self.kwargs)
 
