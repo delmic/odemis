@@ -686,12 +686,7 @@
       <growablecols>0</growablecols>
       <growablerows>0</growablerows>
       <object class="sizeritem">
-        <object class="wxPanel" name="pnl_img">
-          <bg>#1A1A1A</bg>
-          <XRCED>
-            <assign_var>1</assign_var>
-          </XRCED>
-        </object>
+        <object class="MicroscopeViewport" name="pnl_view_acq"/>
         <flag>wxEXPAND</flag>
       </object>
       <object class="sizeritem">
