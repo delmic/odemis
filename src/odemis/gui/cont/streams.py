@@ -233,12 +233,12 @@ class StreamController(object):
         new_controller = StreamController(self.microscope, stream_bar)
 
         for sp in [sp for sp in self._stream_bar.stream_panels if sp.IsShown()]:
-            panel = sp.__class__(stream_bar,
-                                 sp.stream,
-                                 self.microscope)
+            stream_panel = sp.__class__(stream_bar,
+                                        sp.stream,
+                                        self.microscope)
             # Used Streams can always be shown
-            stream_bar.add_stream(panel, True)
-            panel.to_acquisition_mode()
+            stream_bar.add_stream(stream_panel, True)
+            stream_panel.to_acquisition_mode()
 
         return new_controller
 

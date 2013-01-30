@@ -665,12 +665,12 @@ class BrightfieldStream(CameraStream):
             self._setLightExcitation()
             # TODO do we need to have a special command to disable filter??
             #  or should it be disabled automatically by the other streams not using it?
-#            self._setFilterEmission()
+            # self._setFilterEmission()
         Stream.onActive(self, active)
 
-#    def _setFilterEmission(self):
-#        if not self._filter.band.readonly:
-#            raise NotImplementedError("Do not know how to change filter band")
+    # def _setFilterEmission(self):
+    #     if not self._filter.band.readonly:
+    #         raise NotImplementedError("Do not know how to change filter band")
 
 
     def _setLightExcitation(self):

@@ -75,7 +75,6 @@ class AcquisitionController(object):
             self.start_snapshot_viewport)
 
         # Link "acquire image" button to image acquisition
-        # TODO: for now it's just snapshot, but should be linked to the acquisition window
         self._main_frame.btn_acquire.Bind(wx.EVT_BUTTON, self.open_acquisition_dialog)
 
         # find the names of the active (=connected) screens
@@ -144,10 +143,12 @@ class AcquisitionController(object):
         self._acq_dialog = AcquisitionDialog(self._main_frame,
                                              wx.GetApp().interface_model)
 
-
         self._acq_dialog.SetSize(parent_size)
         self._acq_dialog.Center()
         self._acq_dialog.ShowModal()
+
+        # Make sure that the acquisition button is enabled again.
+        self._main_frame.btn_acquire.Enable()
 
     def start_snapshot_viewport(self, event):
         """
@@ -378,7 +379,8 @@ class AcquisitionDialog(xrcfr_acq):
         for module_name in dataio.__all__:
             try:
                 exporter = __import__("odemis.dataio."+module_name, fromlist=[module_name])
-            except:
+            # TODO: remove 'catch-all'
+            except:  #pylint: disable=W0702
                 continue # module cannot be loaded
             formats[exporter.FORMAT] = exporter.EXTENSIONS
 
