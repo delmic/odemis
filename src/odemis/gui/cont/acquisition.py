@@ -147,7 +147,7 @@ class AcquisitionController(object):
 
         self._acq_dialog.SetSize(parent_size)
         self._acq_dialog.Center()
-        self._acq_dialog.Show() #Modal
+        self._acq_dialog.ShowModal()
 
     def start_snapshot_viewport(self, event):
         """
@@ -407,7 +407,7 @@ class AcquisitionDialog(xrcfr_acq):
     def on_change_file(self, evt):
 
         # TODO: remove self.conf.wildcards
-#        print self.conf.wildcards
+        # print self.conf.wildcards
         # Note:
         # - Combining multiple filters into one wildcard is not supported
         # - When setting 'defaultFile' when creating the file dialog, the
@@ -428,7 +428,7 @@ class AcquisitionDialog(xrcfr_acq):
         # TODO: ensure the last_extension is compatible
 
         dialog.SetFilterIndex(
-#            self.conf.file_extensions.index(self.conf.last_extension)
+        # self.conf.file_extensions.index(self.conf.last_extension)
             0
         )
 
@@ -451,10 +451,11 @@ class AcquisitionDialog(xrcfr_acq):
             #  * if extension => use the filename as is.
             # Set the file name, augmented with the chosen file extension
             format = formats[fi]
-            default_ext = formats2extensions[format][0]
+            default_ext = self.conf.last_extension or \
+                          formats2extensions[format][0]
 
             self.txt_filename.SetValue(u"%s%s" % (dialog.GetFilename(),
-                                                  self.conf.last_extension))
+                                                  default_ext))
 
             self.conf.write()
 
@@ -462,6 +463,7 @@ class AcquisitionDialog(xrcfr_acq):
         """ Close event handler that executes various cleanup actions
         """
         logging.warn("Canceling acquisition")
+
         # Restore current values
         main_settings_controller = wx.GetApp().settings_controller
         main_settings_controller.resume()

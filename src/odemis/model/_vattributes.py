@@ -64,7 +64,7 @@ class VigilantAttributeBase(object):
         self._listeners.add(WeakMethod(listener))
 
         if init:
-            listener(self.value)
+            listener(self.value)  #pylint: disable=E1101
 
         # TODO allow to pass custom additional parameters to the callback
 
@@ -77,7 +77,6 @@ class VigilantAttributeBase(object):
                 l(v)
             except WeakRefLostError:
                 self.unsubscribe(l)
-
 
 class VigilantAttribute(VigilantAttributeBase):
     '''

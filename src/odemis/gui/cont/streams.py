@@ -68,7 +68,7 @@ class StreamController(object):
         """
         self.microscope = microscope_model
         self._stream_bar = stream_bar
-        self.setMicroscope(self.microscope, self)
+        self.setMicroscope(self.microscope)
         self._scheduler_subscriptions = {} # stream -> callable
 
         # TODO probably need a lock to access it correctly
@@ -212,6 +212,7 @@ class StreamController(object):
                           self._microscope.focussedView.value.stream_classes)
         self._stream_bar.add_stream(spanel, show)
 
+        logging.debug("Sending stream.changed.added message")
         pub.sendMessage('stream.changed.added',
                         streams_present=True,
                         streams_visible=self._has_visible_streams())
@@ -231,7 +232,6 @@ class StreamController(object):
 
         new_controller = StreamController(self.microscope, stream_bar)
 
-
         for sp in [sp for sp in self._stream_bar.stream_panels if sp.IsShown()]:
             panel = sp.__class__(stream_bar,
                                  sp.stream,
@@ -249,8 +249,12 @@ class StreamController(object):
         """
         Called when the current view changes
         """
+
         if not view:
             return
+
+        # import sys
+        # print sys.getrefcount(self)
 
         # hide/show the stream panels which are compatible with the view
         allowed_classes = view.stream_classes
@@ -262,18 +266,22 @@ class StreamController(object):
         # update the "visible" icon of each stream panel to match the list
         # of streams in the view
         visible_streams = view.streams.getStreams()
+
         for e in self._stream_bar.stream_panels:
             e.setVisible(e.stream in visible_streams)
 
+        logging.debug("Sending stream.changed message")
         pub.sendMessage('stream.changed',
                         streams_present=True,
                         streams_visible=self._has_visible_streams())
 
-    def setMicroscope(self, microscope, stream_controller):
+    def setMicroscope(self, microscope):
         self._microscope = microscope
-        self._stream_controller = stream_controller
-
         self._microscope.focussedView.subscribe(self._onView, init=True)
+
+    # def __del__(self):
+    #     logging.debug("%s Desctructor", self.__class__.__name__)
+    #     #self._microscope.focussedView.unsubscribe(self._onView)
 
     def _onStreamUpdate(self, stream, updated):
         """
@@ -380,6 +388,7 @@ class StreamController(object):
         for v in [v for v in self.microscope.views.itervalues()]:
             v.removeStream(stream)
 
+        logging.debug("Sending stream.changed.removed message")
         pub.sendMessage('stream.changed.removed',
                         streams_present=self._has_streams(),
                         streams_visible=self._has_visible_streams())
