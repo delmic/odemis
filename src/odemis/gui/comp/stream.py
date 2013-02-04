@@ -1033,8 +1033,8 @@ class StreamBar(wx.Panel):
         self.remove_stream_panel(evt.spanel)
 
         # Publish removal notification
-        logging.debug("Sending stream.remove message")
-        pub.sendMessage("stream.remove", stream=evt.spanel.stream)
+        #logging.debug("Sending stream.remove message")
+        #pub.sendMessage("stream.removed", stream=evt.spanel.stream)
 
     # === API of the stream panel
     def show_add_button(self):

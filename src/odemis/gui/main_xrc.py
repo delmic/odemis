@@ -99,7 +99,6 @@ class xrcfr_acq(wx.Dialog):
         self.PostCreate(pre)
 
         # Define variables for the controls, bind event handlers
-        self.pnl_img = xrc.XRCCTRL(self, "pnl_img")
         self.cmb_presets = xrc.XRCCTRL(self, "cmb_presets")
         self.txt_filename = xrc.XRCCTRL(self, "txt_filename")
         self.btn_change_file = xrc.XRCCTRL(self, "btn_change_file")
@@ -815,12 +814,7 @@ def __init_resources():
       <growablecols>0</growablecols>
       <growablerows>0</growablerows>
       <object class="sizeritem">
-        <object class="wxPanel" name="pnl_img">
-          <bg>#1A1A1A</bg>
-          <XRCED>
-            <assign_var>1</assign_var>
-          </XRCED>
-        </object>
+        <object class="MicroscopeViewport" name="pnl_view_acq"/>
         <flag>wxEXPAND</flag>
       </object>
       <object class="sizeritem">

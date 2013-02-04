@@ -75,14 +75,13 @@ class AcquisitionController(object):
             self.start_snapshot_viewport)
 
         # Link "acquire image" button to image acquisition
-        # TODO: for now it's just snapshot, but should be linked to the acquisition window
         self._main_frame.btn_acquire.Bind(wx.EVT_BUTTON, self.open_acquisition_dialog)
 
         # find the names of the active (=connected) screens
         # it's slow, so do it only at init (=expect not to change screen during acquisition)
         self._outputs = self.get_display_outputs()
 
-        pub.subscribe(self.on_stream_changed, 'stream.changed')
+        pub.subscribe(self.on_stream_changed, 'stream.ctrl')
 
 
     def on_stream_changed(self, streams_present, streams_visible):
@@ -144,10 +143,12 @@ class AcquisitionController(object):
         self._acq_dialog = AcquisitionDialog(self._main_frame,
                                              wx.GetApp().interface_model)
 
-
         self._acq_dialog.SetSize(parent_size)
         self._acq_dialog.Center()
         self._acq_dialog.ShowModal()
+
+        # Make sure that the acquisition button is enabled again.
+        self._main_frame.btn_acquire.Enable()
 
     def start_snapshot_viewport(self, event):
         """
@@ -339,8 +340,14 @@ class AcquisitionDialog(xrcfr_acq):
 
         self.estimate_acquisition_time()
 
+        pub.subscribe(self.on_setting_change, 'setting.changed')
+
+    def on_setting_change(self, setting_ctrl):
+        self.estimate_acquisition_time()
 
     def estimate_acquisition_time(self):
+
+        logging.warn("Estimating acquisition time")
 
         seconds = 0
 
@@ -378,7 +385,8 @@ class AcquisitionDialog(xrcfr_acq):
         for module_name in dataio.__all__:
             try:
                 exporter = __import__("odemis.dataio."+module_name, fromlist=[module_name])
-            except:
+            # TODO: remove 'catch-all'
+            except:  #pylint: disable=W0702
                 continue # module cannot be loaded
             formats[exporter.FORMAT] = exporter.EXTENSIONS
 

@@ -212,8 +212,8 @@ class StreamController(object):
                           self._microscope.focussedView.value.stream_classes)
         self._stream_bar.add_stream(spanel, show)
 
-        logging.debug("Sending stream.changed.added message")
-        pub.sendMessage('stream.changed.added',
+        logging.debug("Sending stream.ctrl.added message")
+        pub.sendMessage('stream.ctrl.added',
                         streams_present=True,
                         streams_visible=self._has_visible_streams())
 
@@ -233,12 +233,12 @@ class StreamController(object):
         new_controller = StreamController(self.microscope, stream_bar)
 
         for sp in [sp for sp in self._stream_bar.stream_panels if sp.IsShown()]:
-            panel = sp.__class__(stream_bar,
-                                 sp.stream,
-                                 self.microscope)
+            stream_panel = sp.__class__(stream_bar,
+                                        sp.stream,
+                                        self.microscope)
             # Used Streams can always be shown
-            stream_bar.add_stream(panel, True)
-            panel.to_acquisition_mode()
+            stream_bar.add_stream(stream_panel, True)
+            stream_panel.to_acquisition_mode()
 
         return new_controller
 
@@ -270,8 +270,8 @@ class StreamController(object):
         for e in self._stream_bar.stream_panels:
             e.setVisible(e.stream in visible_streams)
 
-        logging.debug("Sending stream.changed message")
-        pub.sendMessage('stream.changed',
+        logging.debug("Sending stream.ctrl message")
+        pub.sendMessage('stream.ctrl',
                         streams_present=True,
                         streams_visible=self._has_visible_streams())
 
@@ -388,8 +388,8 @@ class StreamController(object):
         for v in [v for v in self.microscope.views.itervalues()]:
             v.removeStream(stream)
 
-        logging.debug("Sending stream.changed.removed message")
-        pub.sendMessage('stream.changed.removed',
+        logging.debug("Sending stream.ctrl.removed message")
+        pub.sendMessage('stream.ctrl.removed',
                         streams_present=self._has_streams(),
                         streams_visible=self._has_visible_streams())
 
