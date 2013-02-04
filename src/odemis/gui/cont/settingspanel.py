@@ -499,7 +499,7 @@ class SettingsPanel(object):
             if self.highlight_change:
                 bind_highlight(new_ctrl, lbl_ctrl, vigil_attr, wx.EVT_SLIDER)
 
-            #new_ctrl.Bind(wx.EVT_SLIDER, self.on_setting_changed)
+            new_ctrl.Bind(wx.EVT_SLIDER, self.on_setting_changed)
 
         elif control_type == odemis.gui.CONTROL_INT:
             if unit == "": # don't display unit prefix if no unit
@@ -653,8 +653,8 @@ class SettingsPanel(object):
     def on_setting_changed(self, evt):
         logging.debug("Setting has changed")
         evt_obj = evt.GetEventObject()
-        pub.sendMessage('setting.changed',
-                        setting_ctrl=evt_obj)
+        # Make sure the message is sent form the main thread
+        wx.CallAfter(pub.sendMessage, 'setting.changed', setting_ctrl=evt_obj)
         evt.Skip()
 
 def set_on_notify(v):
