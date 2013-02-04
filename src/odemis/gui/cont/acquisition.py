@@ -140,12 +140,12 @@ class AcquisitionController(object):
 
         parent_size = [v * 0.66 for v in self._main_frame.GetSize()]
 
-        self._acq_dialog = AcquisitionDialog(self._main_frame,
+        acq_dialog = AcquisitionDialog(self._main_frame,
                                              wx.GetApp().interface_model)
 
-        self._acq_dialog.SetSize(parent_size)
-        self._acq_dialog.Center()
-        self._acq_dialog.ShowModal()
+        acq_dialog.SetSize(parent_size)
+        acq_dialog.Center()
+        acq_dialog.ShowModal()
 
         # Make sure that the acquisition button is enabled again.
         self._main_frame.btn_acquire.Enable()
