@@ -343,7 +343,7 @@ class DraggableCanvas(wx.Panel):
         # outside region
         self.ShouldUpdateDrawing()
 
-    def ShouldUpdateDrawing(self, period = 0.1):
+    def ShouldUpdateDrawing(self, period=0.1):
         """
         Schedule the update of the buffer
         period (second): maximum time to wait before it will be updated
@@ -355,8 +355,7 @@ class DraggableCanvas(wx.Panel):
             self.DrawTimer.Start(period * 1000.0, oneShot=True)
 
     def OnDrawTimer(self):
-        # FIXME: make sure we are called from the main thread only
-        logging.debug("Drawing timer in thread %s", threading.current_thread().name)
+#        logging.debug("Drawing timer in thread %s", threading.current_thread().name)
         self.UpdateDrawing()
 
     def UpdateDrawing(self):
@@ -462,15 +461,12 @@ class DraggableCanvas(wx.Panel):
                              goal_rect[3] / total_scale)
             # Note that width and length must be "double rounded" to account
             # for the round down of the origin and round up of the bottom left
-            unscaled_rounded_rect = (int(unscaled_rect[0]), # rounding down
-                                     int(unscaled_rect[1]),
-                                     math.ceil(unscaled_rect[0] + \
-                                        unscaled_rect[2]) - \
-                                        int(unscaled_rect[0]),
-                                     math.ceil(unscaled_rect[1] + \
-                                        unscaled_rect[3]) - \
-                                        int(unscaled_rect[1])
-                                    )
+            unscaled_rounded_rect = (
+                int(unscaled_rect[0]), # rounding down
+                int(unscaled_rect[1]),
+                math.ceil(unscaled_rect[0] + unscaled_rect[2]) - int(unscaled_rect[0]),
+                math.ceil(unscaled_rect[1] + unscaled_rect[3]) - int(unscaled_rect[1])
+                )
 
             assert(unscaled_rounded_rect[0] + unscaled_rounded_rect[2] <= orig_size[0])
             assert(unscaled_rounded_rect[1] + unscaled_rounded_rect[3] <= orig_size[1])
@@ -482,6 +478,11 @@ class DraggableCanvas(wx.Panel):
                           (unscaled_rounded_rect[1] * total_scale) + full_rect[1],
                           int(unscaled_rounded_rect[2] * total_scale),
                           int(unscaled_rounded_rect[3] * total_scale))
+            if (final_rect[2] > 2 * goal_rect[2] or
+               final_rect[3] > 2 * goal_rect[3]):
+                # a sign we went too far (too much zoomed) => not as perfect but don't use too much memory
+                final_rect = goal_rect
+                logging.debug("limiting image rescaling to %dx%d px" % final_rect[2:4])
             ret = imcropped.Rescale(*final_rect[2:4])
             # need to save it as the cropped part is not centred anymore
             tl = final_rect[0:2]

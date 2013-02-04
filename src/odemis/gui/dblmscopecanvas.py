@@ -17,7 +17,7 @@ You should have received a copy of the GNU General Public License along with Ode
 '''
 
 from .comp.canvas import DraggableCanvas, WorldToBufferPoint
-from odemis.gui import cont, instrmodel
+from odemis.gui import instrmodel
 import logging
 import threading
 import time
@@ -26,6 +26,10 @@ import wx
 
 CROSSHAIR_COLOR = wx.GREEN
 CROSSHAIR_SIZE = 16
+
+# TODO use the range of self.view.mpp instead
+MIN_SCALE = 0.1 # maximum zoom out possible
+
 class DblMicroscopeCanvas(DraggableCanvas):
     """
     A draggable, flicker-free window class adapted to show pictures of two
@@ -216,7 +220,14 @@ class DblMicroscopeCanvas(DraggableCanvas):
         ex:  # 1 => *2 ; -1 => /2; 2 => *4...
         """
         scale = 2.0 ** inc
-        self.view.mpp.value /= scale # this will call _onMPP()
+        # Clip within the range
+        mpp = self.view.mpp.value / scale
+        mpp = sorted(self.view.mpp.range + (mpp,))[1]
+        
+        # FIXME: seems to crash when the mpp is very low (1 px = the whole screen)
+        # maybe in the zooming function?
+        
+        self.view.mpp.value = mpp # this will call _onMPP()
 
     # Zoom/merge management
     def OnWheel(self, event):

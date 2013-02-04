@@ -583,13 +583,13 @@ class SEMStream(Stream):
         try:
             res = list(self._emitter.resolution.value)
             # Typically there is few more pixels inserted at the beginning of each
-            # line for the settle time of the beam. We guesstimate by justing adding
+            # line for the settle time of the beam. We guesstimate by just adding
             # 1 pixel to each line
             if len(res) == 2:
                 res[1] += 1
             else:
-                logging.warning("Resolution of scanner is not 2 dimension, time estimation might be wrong")
-            duration = self._emitter.dwellTime * numpy.prod(res) + 0.1
+                logging.warning("Resolution of scanner is not 2 dimensions, time estimation might be wrong")
+            duration = self._emitter.dwellTime.value * numpy.prod(res) + 0.1
 
             return duration
         except:
@@ -875,7 +875,8 @@ class MicroscopeView(object):
         self.view_pos = model.ListVA(view_pos_init, unit="m")
 
         # current density (meter per pixel, ~ scale/zoom level)
-        self.mpp = PositiveVA(10e-6, unit="m/px") # (10um/px => ~large view of the sample)
+        # 10µm/px => ~large view of the sample
+        self.mpp = FloatContinuous(10e-6, range=(10e-12, 1e-3), unit="m/px")
 
         # how much one image is displayed on the other one
         self.merge_ratio = FloatContinuous(0.3, range=[0, 1], unit="")
@@ -1088,13 +1089,6 @@ class StreamTree(object):
             lraw.extend(s.raw)
 
         return lraw
-
-class PositiveVA(VigilantAttribute):
-    """
-    VigilantAttribute with special validation for only allowing positive values (float>0)
-    """
-    def _check(self, value):
-        assert(0.0 < value)
 
 
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:
