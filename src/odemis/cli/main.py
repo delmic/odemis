@@ -20,6 +20,7 @@ You should have received a copy of the GNU General Public License along with Ode
 from Pyro4.errors import CommunicationError
 from odemis import __version__, model, dataio
 from odemis.cli.video_displayer import VideoDisplayer
+from odemis.dataio import tiff #pylint: disable=W0611
 import argparse
 import collections
 import inspect
