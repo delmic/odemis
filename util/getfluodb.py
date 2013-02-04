@@ -45,6 +45,47 @@ def download(url, filename):
     lfile = open(filename, 'w') # will delete if exists
     shutil.copyfileobj(ufile, lfile)
 
+def open_json_or_remove(filename):
+    """
+    try to open a JSON file. Try to fix it if it has strange escape sequences,
+    and delete the file if it's really bad.
+    filename (string): path to a JSON file to open
+    return (object): python object representing the content of the JSON file
+    raises: 
+        ValueError: if the file is not a correct JSON file (the file has been 
+          deleted)
+    """
+    f = open(filename, "r")
+    try:
+        content = json.load(f)
+        return content
+    except ValueError:
+        logging.error("File %s seems to be an invalid JSON file, trying to fix its escape sequences...", filename)
+    
+    # fluorophores.org sometimes returns JSON files which have "\ ". It's
+    # officially invalid, but it's not hard to make sense of it
+    f.seek(0)
+    text = f.read()
+    fixed_text = text.replace("\\ ", " ")
+    
+    try:
+        if fixed_text == text:
+            # not much hope
+            raise ValueError
+        else:
+            # save the fixed version
+            f.close()
+            f = open(filename, "w")
+            f.write(fixed_text)
+            
+        content = json.loads(fixed_text)
+        logging.error("File %s was fixed", filename)
+        return content
+    except ValueError:
+        logging.exception("File %s seems to be an invalid JSON file, deleting", filename)
+        f.close()
+        os.remove(filename)
+
 def main(*args):
     if not os.path.exists(OUT_DIR):
         logging.error("Directory '%s' doesn't exists, stopping.", OUT_DIR)
@@ -61,16 +102,12 @@ def main(*args):
     logging.debug("Downloading the Environment index")
     download(URL_DB + "environment/index.json", OUT_DIR + "environment/index.json")
     # parse it
-    findex = open(OUT_DIR + "environment/index.json", "r")
     try:
-        index = json.load(findex)
+        index = open_json_or_remove(OUT_DIR + "environment/index.json")
     except ValueError:
-        logging.exception("File %s seems to be an invalid JSON file, deleting", findex.name)
-        findex.close()
-        os.remove(findex.name)
+        logging.error("Cannot go further")
         return 1
         
-    
     # For each environment, download it
     for eid, e in index.items():
         eurl = e["environment_url"]
@@ -79,13 +116,10 @@ def main(*args):
         ename = OUT_DIR + "environment/%d.json" % neid
         logging.debug("Downloading environment %s", eid)
         download(eurl, ename)
-        fe = open(ename, "r")
         try:
-            fulle = json.load(fe)
+            open_json_or_remove(ename)
         except ValueError:
-            logging.exception("File %s seems to be an invalid JSON file, deleting", eurl)
-            fe.close()
-            os.remove(fe.name)
+            logging.exception("Skipping %s", eurl)
         
     substances = {} # id -> url
     # For each substance, download it
@@ -102,13 +136,10 @@ def main(*args):
         download(surl, sname)
         
         # gif file too, if it is there
-        fs = open(sname, "r")
         try:
-            fulls = json.load(fs)
+            fulls = open_json_or_remove(sname)
         except ValueError:
-            logging.exception("File %s seems to be an invalid JSON file, deleting", surl)
-            fs.close()
-            os.remove(fs.name)
+            logging.exception("Skipping %s", surl)
             continue
         
         strurl = fulls["structure"]
