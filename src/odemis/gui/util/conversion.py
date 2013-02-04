@@ -1,6 +1,6 @@
 #-*- coding: utf-8 -*-
 '''
-@author: Rinze de Laat 
+@author: Rinze de Laat
 
 Copyright © 2012 Rinze de Laat, Éric Piel, Delmic
 
@@ -63,3 +63,31 @@ def wave2rgb(wavelength):
 
     return int(255*r), int(255*g), int(255*b)
 
+def seconds2human(seconds):
+    """This function translates intervals given in seconds into humand readable
+    strings.
+    """
+
+    seconds = int(seconds)
+
+    if seconds > 60 * 60 * 24 * 7:
+        raise ValueError("Interval too long")
+    else:
+        minute, second = divmod(seconds, 60)
+        hour, minute = divmod(minute, 60)
+        day, hour = divmod(hour, 24)
+
+        result = []
+
+        if day:
+            result.append("{:d} day{}".format(day, "" if day == 1 else "s"))
+
+        if hour:
+            result.append("{:d} hour{}".format(hour, "" if hour == 1 else "s"))
+
+        if day or hour:
+            result.append("and")
+
+        result.append("{:d} second{}".format(second, "" if second == 1 else "s"))
+
+    return " ".join(result)

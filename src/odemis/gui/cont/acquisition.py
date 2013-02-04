@@ -44,6 +44,7 @@ from odemis.gui.conf import get_acqui_conf
 from odemis.gui.cont.settingspanel import SettingsBarController
 from odemis.gui.main_xrc import xrcfr_acq
 from odemis.gui.util import img, get_picture_folder
+from odemis.gui.util.conversion import seconds2human
 
 
 
@@ -356,7 +357,7 @@ class AcquisitionDialog(xrcfr_acq):
         if str_panels:
             for str_pan in str_panels:
                 seconds += str_pan.get_stream_mod().estimateAcquisitionTime()
-            txt = "Estimated acquisition time is %.2f seconds" % seconds
+            txt = "Estimated acquisition time is %s" % seconds2human(seconds)
         else:
             txt = "No streams present."
 
