@@ -44,6 +44,7 @@ from odemis.model import getVAs, NotApplicableError, VigilantAttributeBase, \
 from odemis.gui.comp.foldpanelbar import FoldPanelItem
 from odemis.gui.comp.radio import GraphicalRadioButtonControl
 from odemis.gui.comp.slider import UnitIntegerSlider, UnitFloatSlider
+from odemis.gui.util import call_after
 from odemis.gui.util.widgets import VigilantAttributeConnector
 from odemis.gui.util.units import readable_str
 
@@ -95,7 +96,7 @@ def bind_highlight(ctrl, label, vat, *evt_types):
         ctrl.Bind(e, highlight_label)
 
     def reset_value(evt):
-        ctrl.SetValue(vat.value)
+        vat.value = def_val
 
     def show_reset_menu(evt):
         eo = evt.GetEventObject()
@@ -405,21 +406,21 @@ class SettingsPanel(object):
                              "val_ctrl": value_ctrl,
                              "value": value})
 
-    def add_value(self, label, value, conf=None):
+    def add_value(self, label, vigil_attr, conf=None):
         """ Add a label/value pair to the settings panel.
 
         label (string): name of the value
-        value (VigilantAttribute)
+        vigil_attr (VigilantAttribute)
         conf {dict}: Configuration items that may override default settings
         """
-        assert isinstance(value, VigilantAttributeBase)
+        assert isinstance(vigil_attr, VigilantAttributeBase)
 
         # If no conf provided, set it to an empty dictionary
         conf = conf or {}
 
 
         # Get the range and choices
-        rng, choices, unit = self._get_rng_choice_unit(value, conf)
+        rng, choices, unit = self._get_rng_choice_unit(vigil_attr, conf)
 
         format = conf.get("format", False)
 
@@ -433,7 +434,7 @@ class SettingsPanel(object):
 
         # Get the defined type of control or assign a default one
         control_type = conf.get('control_type',
-                                self._determine_default_control(value))
+                                self._determine_default_control(vigil_attr))
 
         # Special case, early stop
         if control_type == odemis.gui.CONTROL_NONE:
@@ -471,7 +472,7 @@ class SettingsPanel(object):
                     txt = u"%s %s" % (value, unit)
                 new_ctrl.SetLabel(txt)
 
-            vac = VigilantAttributeConnector(value,
+            vac = VigilantAttributeConnector(vigil_attr,
                                              new_ctrl,
                                              format_label)
 
@@ -484,18 +485,18 @@ class SettingsPanel(object):
                 klass = UnitFloatSlider
 
             new_ctrl = klass(self.panel,
-                             value=value.value,
+                             value=vigil_attr.value,
                              val_range=rng,
                              scale=conf.get('scale', None),
                              unit=unit,
                              t_size=(50, -1))
 
-            vac = VigilantAttributeConnector(value,
+            vac = VigilantAttributeConnector(vigil_attr,
                                              new_ctrl,
                                              events=wx.EVT_SLIDER)
 
             if self.highlight_change:
-                bind_highlight(new_ctrl, lbl_ctrl, value, wx.EVT_SLIDER)
+                bind_highlight(new_ctrl, lbl_ctrl, vigil_attr, wx.EVT_SLIDER)
 
             new_ctrl.Bind(wx.EVT_SLIDER, self.on_setting_changed)
 
@@ -511,12 +512,12 @@ class SettingsPanel(object):
             new_ctrl.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_EDIT)
             new_ctrl.SetBackgroundColour(self.panel.GetBackgroundColour())
 
-            vac = VigilantAttributeConnector(value,
+            vac = VigilantAttributeConnector(vigil_attr,
                                              new_ctrl,
                                              events=wx.EVT_COMMAND_ENTER)
 
             if self.highlight_change:
-                bind_highlight(new_ctrl, lbl_ctrl, value,
+                bind_highlight(new_ctrl, lbl_ctrl, vigil_attr,
                                wx.EVT_TEXT, wx.EVT_COMMAND_ENTER)
 
             new_ctrl.Bind(wx.EVT_TEXT, self.on_setting_changed)
@@ -536,12 +537,12 @@ class SettingsPanel(object):
             new_ctrl.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_EDIT)
             new_ctrl.SetBackgroundColour(self.panel.GetBackgroundColour())
 
-            vac = VigilantAttributeConnector(value,
+            vac = VigilantAttributeConnector(vigil_attr,
                                              new_ctrl,
                                              events=wx.EVT_COMMAND_ENTER)
 
             if self.highlight_change:
-                bind_highlight(new_ctrl, lbl_ctrl, value,
+                bind_highlight(new_ctrl, lbl_ctrl, vigil_attr,
                                wx.EVT_TEXT, wx.EVT_COMMAND_ENTER)
 
             new_ctrl.Bind(wx.EVT_COMMAND_ENTER, self.on_setting_changed)
@@ -555,12 +556,12 @@ class SettingsPanel(object):
                                                    style=wx.NO_BORDER,
                                                    labels=choices_formatted,
                                                    units=unit)
-            vac = VigilantAttributeConnector(value,
+            vac = VigilantAttributeConnector(vigil_attr,
                                              new_ctrl,
                                              events=wx.EVT_BUTTON)
 
             if self.highlight_change:
-                bind_highlight(new_ctrl, lbl_ctrl, value,
+                bind_highlight(new_ctrl, lbl_ctrl, vigil_attr,
                                wx.EVT_BUTTON)
 
             new_ctrl.Bind(wx.EVT_BUTTON, self.on_setting_changed)
@@ -617,14 +618,14 @@ class SettingsPanel(object):
 
 
             vac = VigilantAttributeConnector(
-                    value,
+                    vigil_attr,
                     new_ctrl,
                     va_2_ctrl=cb_set,
                     ctrl_2_va=cb_get,
                     events=(wx.EVT_COMBOBOX, wx.EVT_TEXT_ENTER))
 
             if self.highlight_change:
-                bind_highlight(new_ctrl, lbl_ctrl, value,
+                bind_highlight(new_ctrl, lbl_ctrl, vigil_attr,
                                wx.EVT_COMBOBOX, wx.EVT_TEXT_ENTER)
 
             new_ctrl.Bind(wx.EVT_COMBOBOX, self.on_setting_changed)
@@ -632,7 +633,7 @@ class SettingsPanel(object):
 
 
         else:
-            txt = readable_str(value.value, unit)
+            txt = readable_str(vigil_attr.value, unit)
             new_ctrl = wx.StaticText(self.panel, -1, txt)
 
         #if self.highlight_change and hasattr(new_ctrl, 'SetValue'):
@@ -644,15 +645,15 @@ class SettingsPanel(object):
         self.num_entries += 1
         self.entries.append({"lbl_ctrl": lbl_ctrl,
                              "val_ctrl": new_ctrl,
-                             "value": value.value,
+                             "value": vigil_attr.value,
                              "vaco": vac})
         self.fold_panel.Parent.Layout()
 
     def on_setting_changed(self, evt):
         logging.debug("Setting has changed")
         evt_obj = evt.GetEventObject()
-        pub.sendMessage('setting.changed',
-                        setting_ctrl=evt_obj)
+        # Make sure the message is sent form the main thread
+        wx.CallAfter(pub.sendMessage, 'setting.changed', setting_ctrl=evt_obj)
         evt.Skip()
 
 def set_on_notify(v):
