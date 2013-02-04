@@ -324,7 +324,7 @@ class AcquisitionDialog(xrcfr_acq):
         # controller
         main_settings_controller = wx.GetApp().settings_controller
         main_settings_controller.store()
-        #main_settings_controller.pause()
+        main_settings_controller.pause()
 
         # Create a new settings controller for the acquisition dialog
         self.settings_controller = SettingsBarController(interface_model, self, True)
