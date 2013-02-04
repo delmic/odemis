@@ -89,6 +89,8 @@ def bind_highlight(ctrl, label, vat, *evt_types):
         else:
             label.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_HIGHLIGHT)
 
+        evt.Skip()
+
     for e in evt_types:
         ctrl.Bind(e, highlight_label)
 
