@@ -347,6 +347,8 @@ class AcquisitionDialog(xrcfr_acq):
 
     def estimate_acquisition_time(self):
 
+        logging.warn("Estimating acquisition time")
+
         seconds = 0
 
         str_panels = self.stream_controller.get_stream_panels()
