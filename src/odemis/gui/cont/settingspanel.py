@@ -31,6 +31,8 @@ import logging
 import re
 
 import wx.combo
+from wx.lib.pubsub import pub
+
 
 import odemis.gui
 import odemis.gui.comp.text as text
@@ -493,6 +495,8 @@ class SettingsPanel(object):
             if self.highlight_change:
                 bind_highlight(new_ctrl, lbl_ctrl, value, wx.EVT_SLIDER)
 
+            new_ctrl.Bind(wx.EVT_SLIDER, self.on_setting_changed)
+
         elif control_type == odemis.gui.CONTROL_INT:
             if unit == "": # don't display unit prefix if no unit
                 unit = None
@@ -512,6 +516,10 @@ class SettingsPanel(object):
             if self.highlight_change:
                 bind_highlight(new_ctrl, lbl_ctrl, value,
                                wx.EVT_TEXT, wx.EVT_COMMAND_ENTER)
+
+            new_ctrl.Bind(wx.EVT_TEXT, self.on_setting_changed)
+            new_ctrl.Bind(wx.EVT_COMMAND_ENTER, self.on_setting_changed)
+
 
         elif control_type == odemis.gui.CONTROL_FLT:
             if unit == "": # don't display unit prefix if no unit
@@ -534,6 +542,8 @@ class SettingsPanel(object):
                 bind_highlight(new_ctrl, lbl_ctrl, value,
                                wx.EVT_TEXT, wx.EVT_COMMAND_ENTER)
 
+            new_ctrl.Bind(wx.EVT_COMMAND_ENTER, self.on_setting_changed)
+            new_ctrl.Bind(wx.EVT_TEXT, self.on_setting_changed)
 
         elif control_type == odemis.gui.CONTROL_RADIO:
             new_ctrl = GraphicalRadioButtonControl(self.panel,
@@ -550,6 +560,9 @@ class SettingsPanel(object):
             if self.highlight_change:
                 bind_highlight(new_ctrl, lbl_ctrl, value,
                                wx.EVT_BUTTON)
+
+            new_ctrl.Bind(wx.EVT_BUTTON, self.on_setting_changed)
+
 
         elif control_type == odemis.gui.CONTROL_COMBO:
 
@@ -612,6 +625,10 @@ class SettingsPanel(object):
                 bind_highlight(new_ctrl, lbl_ctrl, value,
                                wx.EVT_COMBOBOX, wx.EVT_TEXT_ENTER)
 
+            new_ctrl.Bind(wx.EVT_COMBOBOX, self.on_setting_changed)
+            new_ctrl.Bind(wx.EVT_TEXT_ENTER, self.on_setting_changed)
+
+
         else:
             txt = readable_str(value.value, unit)
             new_ctrl = wx.StaticText(self.panel, -1, txt)
@@ -628,6 +645,13 @@ class SettingsPanel(object):
                              "value": value.value,
                              "vaco": vac})
         self.fold_panel.Parent.Layout()
+
+    def on_setting_changed(self, evt):
+        logging.debug("Setting has changed")
+        evt_obj = evt.GetEventObject()
+        pub.sendMessage('setting.changed',
+                        setting_ctrl=evt_obj)
+        evt.Skip()
 
 def set_on_notify(v):
     logging.warn("def")

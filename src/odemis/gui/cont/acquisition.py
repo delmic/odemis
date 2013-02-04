@@ -340,6 +340,10 @@ class AcquisitionDialog(xrcfr_acq):
 
         self.estimate_acquisition_time()
 
+        pub.subscribe(self.on_setting_change, 'setting.changed')
+
+    def on_setting_change(self, setting_ctrl):
+        self.estimate_acquisition_time()
 
     def estimate_acquisition_time(self):
 
