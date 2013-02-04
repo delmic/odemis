@@ -593,7 +593,7 @@ class SEMStream(Stream):
             
             return duration
         except:
-            logging.exception("Exception while trying to estimate time of SEM acquisition")
+            logging.exception("Exception while estimating acquisition time of %s", self.name.value)
             return Stream.estimateAcquisitionTime(self)
 
     def onActive(self, active):
@@ -642,16 +642,16 @@ class CameraStream(Stream):
         try:
             exp = self._detector.exposureTime.value
             res = self._detector.resolution.value
-            try:
+            if isinstance(self._detector.readoutRate, model.VigilantAttributeBase):
                 readout = 1. / self._detector.readoutRate.value
-            except AttributeError:
+            else:
                 # let's assume it's super fast
                 readout = 0
             
             duration = exp + numpy.prod(res) * readout + 0.1
             return duration
         except:
-            logging.exception("Exception while trying to estimate time of SEM acquisition")
+            logging.exception("Exception while estimating acquisition time of %s", self.name.value)
             return Stream.estimateAcquisitionTime(self)
 
 class BrightfieldStream(CameraStream):
