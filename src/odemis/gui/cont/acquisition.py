@@ -81,7 +81,7 @@ class AcquisitionController(object):
         # it's slow, so do it only at init (=expect not to change screen during acquisition)
         self._outputs = self.get_display_outputs()
 
-        pub.subscribe(self.on_stream_changed, 'stream.changed')
+        pub.subscribe(self.on_stream_changed, 'stream.ctrl')
 
 
     def on_stream_changed(self, streams_present, streams_visible):
