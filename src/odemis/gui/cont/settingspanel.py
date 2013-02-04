@@ -96,8 +96,7 @@ def bind_highlight(ctrl, label, vat, *evt_types):
         ctrl.Bind(e, highlight_label)
 
     def reset_value(evt):
-        ctrl.SetValue(def_val)
-        ctrl.Refresh()
+        vat.value = def_val
 
     def show_reset_menu(evt):
         eo = evt.GetEventObject()
