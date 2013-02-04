@@ -27,9 +27,6 @@ import wx
 CROSSHAIR_COLOR = wx.GREEN
 CROSSHAIR_SIZE = 16
 
-# TODO use the range of self.view.mpp instead
-MIN_SCALE = 0.1 # maximum zoom out possible
-
 class DblMicroscopeCanvas(DraggableCanvas):
     """
     A draggable, flicker-free window class adapted to show pictures of two
