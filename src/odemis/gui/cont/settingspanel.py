@@ -97,6 +97,7 @@ def bind_highlight(ctrl, label, vat, *evt_types):
 
     def reset_value(evt):
         vat.value = def_val
+        wx.CallAfter(pub.sendMessage, 'setting.changed', setting_ctrl=ctrl)
 
     def show_reset_menu(evt):
         eo = evt.GetEventObject()
