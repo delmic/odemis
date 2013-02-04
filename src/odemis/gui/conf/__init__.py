@@ -145,12 +145,12 @@ class AcquisitionConfig(Config):
                          ACQUI_PATH)
 
         self.default.set("acquisition",
-                         "last_extension",
-                         tiff.EXTENSIONS[0])
+                         "last_format",
+                         tiff.FORMAT)
 
         self.default.set("acquisition",
-                         "file_extensions",
-                         ",".join(tiff.EXTENSIONS))
+                         "last_extension",
+                         tiff.EXTENSIONS[0])
 
     @property
     def last_path(self):
@@ -161,6 +161,14 @@ class AcquisitionConfig(Config):
         self.set("acquisition", "last_path", last_path)
 
     @property
+    def last_format(self):
+        return self.get("acquisition", "last_format")
+
+    @last_format.setter
+    def last_format(self, value):
+        self.set("acquisition", "last_format", value)
+
+    @property
     def last_extension(self):
         return self.get("acquisition", "last_extension")
 
@@ -168,36 +176,3 @@ class AcquisitionConfig(Config):
     def last_extension(self, last_extension):
         self.set("acquisition", "last_extension", last_extension)
 
-
-    # TODO: this should not be saved in the configuration, but queried from
-    # dataio.__all__
-    # Instead, we might want to save the last_format (= the exporter to use)
-    @property
-    def file_extensions(self):
-        """ Return the available file extensions.
-        Should always be dynamic, since they might change over time
-        """
-        return tiff.EXTENSIONS
-
-    @file_extensions.setter
-    def file_extensions(self, file_extensions):
-        self.set("acquisition", "file_extensions", ",".join(file_extensions))
-
-    @property
-    def wildcards(self):
-        """ Property that exposes the file extensions as a wildcard string
-        """
-        formats = []
-        # Look dynamically which format is available
-        for module_name in dataio.__all__:
-            try:
-                exporter = __import__("odemis.dataio."+module_name, fromlist=[module_name])
-            except:
-                continue # module cannot be loaded
-            ext_wildcards = ";".join(["*" + e for e in exporter.EXTENSIONS])
-            wildcard = "%s files (%s)|%s" % (exporter.FORMAT, ext_wildcards, ext_wildcards) 
-            formats.append(wildcard)
-        
-        if not formats:
-            logging.error("Not file exporter found!")
-        return "|".join(formats) 

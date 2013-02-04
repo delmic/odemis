@@ -385,7 +385,6 @@ class AcquisitionDialog(xrcfr_acq):
         for module_name in dataio.__all__:
             try:
                 exporter = __import__("odemis.dataio."+module_name, fromlist=[module_name])
-            # TODO: remove 'catch-all'
             except:  #pylint: disable=W0702
                 continue # module cannot be loaded
             formats[exporter.FORMAT] = exporter.EXTENSIONS
@@ -403,10 +402,10 @@ class AcquisitionDialog(xrcfr_acq):
         """
         wildcards = []
         formats = []
-        for format, extensions in formats2ext.items():
+        for fmt, extensions in formats2ext.items():
             ext_wildcards = ";".join(["*" + e for e in extensions])
-            wildcard = "%s files (%s)|%s" % (format, ext_wildcards, ext_wildcards)
-            formats.append(format)
+            wildcard = "%s files (%s)|%s" % (fmt, ext_wildcards, ext_wildcards)
+            formats.append(fmt)
             wildcards.append(wildcard)
 
         # the whole importance is that they are in the same order
@@ -414,8 +413,6 @@ class AcquisitionDialog(xrcfr_acq):
 
     def on_change_file(self, evt):
 
-        # TODO: remove self.conf.wildcards
-        # print self.conf.wildcards
         # Note:
         # - Combining multiple filters into one wildcard is not supported
         # - When setting 'defaultFile' when creating the file dialog, the
@@ -433,39 +430,57 @@ class AcquisitionDialog(xrcfr_acq):
                             wildcard=wildcards)
 
         # Get and select the last extension used.
-        # TODO: ensure the last_extension is compatible
+        prev_fmt = self.conf.last_format
+        try:
+            idx = formats.index(self.conf.last_format)
+        except ValueError:
+            idx = 0
+        dialog.SetFilterIndex(idx)
 
-        dialog.SetFilterIndex(
-        # self.conf.file_extensions.index(self.conf.last_extension)
-            0
-        )
+        # Strip the extension, so that if the user changes the file format,
+        # it will not have 2 extensions in a row.
+        fn = self.txt_filename.GetValue()
+        if fn.endswith(self.conf.last_extension):
+            fn = fn[:-len(self.conf.last_extension)]
+        dialog.SetFilename(fn)
 
-        # Strip the extension before setting the file name
-        name = self.txt_filename.GetValue()
-        dialog.SetFilename(name[:-len(self.conf.last_extension)])
+        # Show the dialog and check whether is was accepted or cancelled
+        if dialog.ShowModal() != wx.ID_OK:
+            return
+        
+        # New location and name have been selected...
+        # Store the path
+        dest_dir = dialog.GetDirectory()
+        self.txt_destination.SetValue(dest_dir)
+        self.conf.last_path = dest_dir
+        
+        # Store the format
+        fmt = formats[dialog.GetFilterIndex()]
+        self.conf.last_format = fmt
+        
+        # Check the filename has a good extension, or add the default one
+        fn = dialog.GetFilename()
+        ext = None
+        for e in formats2extensions[fmt]:
+            if fn.endswith(e) and len(e) > len(ext or ""):
+                ext = e
 
-        # When a new location and name have been selected...
-        if dialog.ShowModal() == wx.ID_OK:
-            # Set and store (into the config file) the path
-            dest_dir = dialog.GetDirectory()
-            self.txt_destination.SetValue(dest_dir)
-            self.conf.last_path = dest_dir
-            # Store the chosen type
-            fi = dialog.GetFilterIndex()
-            self.conf.last_extension = self.conf.file_extensions[fi]
+        if ext is None:
+            if fmt == prev_fmt and self.conf.last_extension in formats2extensions[fmt]:
+                # if the format is the same (and extension is compatible): keep
+                # the extension. This avoid changing the extension if it's not
+                # the default one.
+                ext = self.conf.last_extension
+            else:
+                ext = formats2extensions[fmt][0] # default extension
+            fn += ext
 
-            # FIXME: the filename can either have already an extension or not:
-            #  * if not extension => add the default one for the format
-            #  * if extension => use the filename as is.
-            # Set the file name, augmented with the chosen file extension
-            format = formats[fi]
-            default_ext = self.conf.last_extension or \
-                          formats2extensions[format][0]
+        self.conf.last_extension = ext
+        
+        # save the filename
+        self.txt_filename.SetValue(unicode(fn))
 
-            self.txt_filename.SetValue(u"%s%s" % (dialog.GetFilename(),
-                                                  default_ext))
-
-            self.conf.write()
+        self.conf.write()
 
     def on_close(self, evt):
         """ Close event handler that executes various cleanup actions
