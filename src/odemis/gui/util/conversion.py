@@ -71,7 +71,7 @@ def seconds2human(seconds):
     seconds = int(seconds)
 
     if seconds > 60 * 60 * 24 * 7:
-        raise ValueError("Interval too long")
+        return "longer than a week."
     else:
         minute, second = divmod(seconds, 60)
         hour, minute = divmod(minute, 60)
@@ -85,9 +85,12 @@ def seconds2human(seconds):
         if hour:
             result.append("{:d} hour{}".format(hour, "" if hour == 1 else "s"))
 
-        if day or hour:
+        if minute:
+            result.append("{:d} minute{}".format(minute, "" if minute == 1 else "s"))
+
+        if day or hour or minute:
             result.append("and")
 
         result.append("{:d} second{}".format(second, "" if second == 1 else "s"))
 
-    return " ".join(result)
+    return "{} {}".format(", ".join(result[:-2]), " ".join(result[-2:]))
