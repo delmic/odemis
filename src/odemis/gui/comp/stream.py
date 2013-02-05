@@ -182,10 +182,13 @@ class Expander(wx.PyControl):
         """
 
         self._btn_rem.Hide()
-        self._btn_vis.Hide()
-
         # Insert spacer to add some left side padding.
         self._sz.InsertSpacer(0, (5, 16))
+
+        self._btn_play.Hide()
+        # Insert spacer to add some left side padding.
+        self._sz.InsertSpacer(4, (72, 16))
+
 
 
 class StandardExpander(Expander):
