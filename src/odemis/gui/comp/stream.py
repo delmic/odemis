@@ -138,7 +138,8 @@ class Expander(wx.PyControl):
         # If a label is to be inserted, it can replace this spacer (index = 1)
         self._sz.AddStretchSpacer(0)
         self._sz.Add(self._btn_vis, 0, wx.RIGHT | wx.ALIGN_CENTRE_VERTICAL, 8)
-        self._sz.Add(self._btn_play, 0, wx.RIGHT | wx.ALIGN_CENTRE_VERTICAL, 72)
+        self._sz.Add(self._btn_play, 0, wx.RIGHT | wx.ALIGN_CENTRE_VERTICAL, 8)
+        self._sz.AddSpacer((64, 16))
 
         self.SetSizer(self._sz)
         self._sz.Fit(self)
@@ -186,9 +187,6 @@ class Expander(wx.PyControl):
         self._sz.InsertSpacer(0, (5, 16))
 
         self._btn_play.Hide()
-        # Insert spacer to add some left side padding.
-        self._sz.InsertSpacer(4, (72, 16))
-
 
 
 class StandardExpander(Expander):
