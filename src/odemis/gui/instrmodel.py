@@ -355,14 +355,6 @@ class GUIMicroscope(object):
                     # Too bad. let's just do nothing then (and hope it's on)
                     logging.debug("Ebeam doesn't support setting energy")
 
-    # TODO dye database
-    # name (for the user only)
-    # excitation wl (used to control the hardware)
-    # emission wl (used to control the hardware)
-    # ?official full excitation/emission spectra? (for user only)
-
-
-
     # viewport controller (to be merged with stream controller?)
     # Creates the 4 microscope views at init, with the right names, depending on
     #   the available microscope hardware.
