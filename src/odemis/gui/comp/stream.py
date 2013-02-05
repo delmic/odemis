@@ -597,6 +597,8 @@ class StreamPanel(wx.PyPanel):
         wx.PostEvent(self, event)
 
     def on_visibility_btn(self, evt):
+        # TODO: Move to controller. Screen widget should not need to know about
+        # microscopes and focussed views.
         view = self._microscope.focussedView.value
         if not view:
             return
@@ -614,15 +616,29 @@ class StreamPanel(wx.PyPanel):
             logging.debug("Pausing stream '%s'", self.stream.name.value)
         self.stream.updated.value = self._expander._btn_play.GetToggle()
 
-    def _set_button(self, play):
-        self._expander._btn_play.SetToggle(play)
+    # Expander Button control
+
+    def _set_play(self, play):
         self.stream.updated.value = play
 
-    def pause(self):
-        self._set_button(False)
+    def pause_stream(self):
+        self._set_play(False)
 
-    def play(self):
-        self._set_button(True)
+    def play_stream(self):
+        self._set_play(True)
+
+    def is_playing(self):
+        return self.stream.updated.value == True
+
+    def _set_visibility(self, visible):
+        self._expander._btn_vis.SetToggle(visible)
+
+    def show_stream(self):
+        self._expander._btn_vis.SetToggle(True)
+
+    def hide_stream(self):
+        self._expander._btn_vis.SetToggle(False)
+
 
     def on_toggle_autocontrast(self, evt):
         enabled = self._btn_auto_contrast.GetToggle()

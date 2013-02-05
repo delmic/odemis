@@ -233,16 +233,26 @@ class StreamController(object):
         new_controller = StreamController(self.microscope, stream_bar)
 
         for sp in self._stream_bar.stream_panels:
+
+            was_playing = sp.is_playing()
+
             # TODO: temporary 'pause' should be removed when all handling has
             # been passed to scheduler. IMPORTANT: the pausing of the streams
             # should be done before they are duplicated!
-            sp.pause()
-            stream_panel = sp.__class__(stream_bar,
-                                        sp.stream,
-                                        self.microscope)
+            sp.pause_stream()
+
+            new_stream_panel = sp.__class__(stream_bar,
+                                            sp.stream,
+                                            self.microscope)
+
             # Used Streams can always be shown
-            stream_bar.add_stream(stream_panel, True)
-            stream_panel.to_acquisition_mode()
+            stream_bar.add_stream(new_stream_panel, True)
+            new_stream_panel.to_acquisition_mode()
+
+            if was_playing:
+                new_stream_panel.show_stream()
+            else:
+                new_stream_panel.hide_stream()
 
         return new_controller
 

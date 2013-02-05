@@ -1093,6 +1093,7 @@ def __init_resources():
             <orient>wxHORIZONTAL</orient>
             <object class="sizeritem">
               <object class="ImageTextButton" name="btn_acquire">
+                <size>242,48</size>
                 <label>START</label>
                 <delta>1</delta>
                 <bitmap>img_btn_acq_img_sml_png</bitmap>
