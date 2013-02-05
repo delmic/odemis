@@ -357,7 +357,7 @@ class AcquisitionDialog(xrcfr_acq):
         if str_panels:
             for str_pan in str_panels:
                 seconds += str_pan.get_stream_mod().estimateAcquisitionTime()
-            txt = "Estimated acquisition time is %s" % seconds2human(seconds)
+            txt = "The estimated acquisition time is %s." % seconds2human(seconds)
         else:
             txt = "No streams present."
 

@@ -227,21 +227,23 @@ class SettingsPanel(object):
         self.highlight_change = highlight_change
 
         self._main_sizer = wx.BoxSizer()
-        self._sizer = wx.GridBagSizer()
+        self._gb_sizer = wx.GridBagSizer(0, 0)
 
         self.panel.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_DIS)
-        self._sizer.Add(wx.StaticText(self.panel, -1, default_msg),
+        self._gb_sizer.Add(wx.StaticText(self.panel, -1, default_msg),
                         (0, 1))
         self.panel.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR)
 
         self.panel.SetSizer(self._main_sizer)
-        self._main_sizer.Add(self._sizer, proportion=1,
-                                          flag=wx.RIGHT|wx.EXPAND,
-                                          border=10)
+        self._main_sizer.Add(self._gb_sizer, proportion=1,
+                                          flag=wx.RIGHT|wx.LEFT|wx.EXPAND,
+                                          border=5)
+        # Add a little extra border at the right side
+        self._main_sizer.AddSpacer((15, -1))
 
         self.fold_panel.add_item(self.panel)
 
-        self._sizer.AddGrowableCol(1)
+        self._gb_sizer.AddGrowableCol(1)
 
         self.num_entries = 0
         self.entries = []
@@ -390,7 +392,7 @@ class SettingsPanel(object):
         self._clear()
         # Create label
         lbl_ctrl = wx.StaticText(self.panel, -1, "%s" % label)
-        self._sizer.Add(lbl_ctrl, (self.num_entries, 0), flag=wx.ALL, border=5)
+        self._gb_sizer.Add(lbl_ctrl, (self.num_entries, 0), flag=wx.ALL, border=5)
 
         value_ctrl = None
 
@@ -398,7 +400,7 @@ class SettingsPanel(object):
             self.panel.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_DIS)
 
             value_ctrl = wx.StaticText(self.panel, -1, unicode(value))
-            self._sizer.Add(value_ctrl, (self.num_entries, 1),
+            self._gb_sizer.Add(value_ctrl, (self.num_entries, 1),
                             flag=wx.ALL, border=5)
             self.panel.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR)
 
@@ -449,7 +451,7 @@ class SettingsPanel(object):
         label = conf.get('label', self._label_to_human(label))
         # Add the label to the panel
         lbl_ctrl = wx.StaticText(self.panel, -1, "%s" % label)
-        self._sizer.Add(lbl_ctrl, (self.num_entries, 0), flag=wx.ALL, border=5)
+        self._gb_sizer.Add(lbl_ctrl, (self.num_entries, 0), flag=wx.ALL, border=5)
 
         # the Vigilant Attribute Connector connects the wx control to the
         # vigilant attribute.
@@ -640,7 +642,7 @@ class SettingsPanel(object):
         #if self.highlight_change and hasattr(new_ctrl, 'SetValue'):
         #    new_ctrl.SetForegroundColour(FOREGROUND_COLOUR_HIGHLIGHT)
 
-        self._sizer.Add(new_ctrl, (self.num_entries, 1),
+        self._gb_sizer.Add(new_ctrl, (self.num_entries, 1),
                         flag=wx.ALL|wx.EXPAND, border=5)
 
         self.num_entries += 1

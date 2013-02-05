@@ -352,14 +352,16 @@ class StreamPanel(wx.PyPanel):
         self._panel = wx.Panel(self, style=wx.TAB_TRAVERSAL | wx.NO_BORDER)
         self._panel.Hide()
 
-        self._gbs = wx.GridBagSizer(8, 5)
+        self._gbs = wx.GridBagSizer(0, 0)
 
         # Add a simple sizer so we can create padding at the bottom of the panel
         border_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        border_sizer.AddSpacer((5, -1))
         border_sizer.Add(self._gbs,
-                         border=10,
-                         flag=wx.BOTTOM|wx.EXPAND,
+                         border=0,
+                         flag=wx.RIGHT|wx.EXPAND,
                          proportion=1)
+        border_sizer.AddSpacer((18, -1))
 
         self._panel.SetSizer(border_sizer)
 
@@ -406,43 +408,47 @@ class StreamPanel(wx.PyPanel):
                                                 img.getbtn_contrastBitmap(),
                                                 label="Auto",
                                                 size=(68, 26),
-                                                style=wx.ALIGN_RIGHT)
+                                                style=wx.ALIGN_RIGHT,)
+
+        tooltip = "Toggle auto brightness and contrast"
+
+        self._btn_auto_contrast.SetToolTipString(tooltip)
         self._btn_auto_contrast.SetBitmaps(
                                         bmp_h=img.getbtn_contrast_hBitmap(),
                                         bmp_sel=img.getbtn_contrast_aBitmap())
         self._btn_auto_contrast.SetForegroundColour("#000000")
         self._gbs.Add(self._btn_auto_contrast, (self.row_count, 0),
-                      flag=wx.LEFT, border=11)
+                      flag=wx.LEFT, border=5)
         self.row_count += 1
 
         # ====== Second row, brightness label, slider and value
 
         lbl_brightness = wx.StaticText(self._panel, -1, "Brightness")
         self._gbs.Add(lbl_brightness, (self.row_count, 0),
-                      flag=wx.LEFT | wx.ALIGN_CENTRE_VERTICAL,
-                      border=11)
+                      flag=wx.ALL,
+                      border=5)
 
         self._sld_brightness = UnitIntegerSlider(
-                              self._panel,
-                              value=self.stream.brightness.value,
-                              val_range=self.stream.brightness.range,
-                              t_size=(40, -1),
-                              unit=None,
-                              name="brightness_slider")
+                                    self._panel,
+                                    value=self.stream.brightness.value,
+                                    val_range=self.stream.brightness.range,
+                                    t_size=(40, -1),
+                                    unit=None,
+                                    name="brightness_slider")
 
         self._vac_brightness = VigilantAttributeConnector(self.stream.brightness,
                                              self._sld_brightness,
                                              events=wx.EVT_SLIDER)
         # span is 2, because emission/excitation have 2 controls
         self._gbs.Add(self._sld_brightness, pos=(self.row_count, 1),
-                      span=(1, 2), flag=wx.EXPAND | wx.RIGHT, border=18)
+                      span=(1, 2), flag=wx.EXPAND | wx.ALL, border=5)
         self.row_count += 1
 
         # ====== Third row, contrast label, slider and value
 
         lbl_contrast = wx.StaticText(self._panel, -1, "Contrast")
         self._gbs.Add(lbl_contrast, (self.row_count, 0),
-                      flag=wx.LEFT | wx.ALIGN_CENTRE_VERTICAL, border=11)
+                      flag=wx.ALL, border=5)
 
         self._sld_contrast = UnitIntegerSlider(
                              self._panel,
@@ -457,7 +463,7 @@ class StreamPanel(wx.PyPanel):
                                              events=wx.EVT_SLIDER)
 
         self._gbs.Add(self._sld_contrast, pos=(self.row_count, 1),
-                      span=(1, 2), flag=wx.EXPAND | wx.RIGHT, border=18)
+                      span=(1, 2), flag=wx.EXPAND | wx.ALL, border=5)
         self.row_count += 1
 
         self._gbs.AddGrowableCol(1)
@@ -697,9 +703,10 @@ class StreamPanel(wx.PyPanel):
 
         lbl_accum = wx.StaticText(self._panel, -1, "Accumulation")
         self._gbs.Add(lbl_accum, (self.row_count, 0),
-                      flag=wx.LEFT | wx.ALIGN_CENTRE_VERTICAL, border=11)
+                      flag=wx.ALL, border=5)
 
         self._txt_accum = IntegerTextCtrl(self._panel,
+                                          size=(-1,14),
                                           value=1,
                                           min_val=1,
                                           key_inc=True,
@@ -708,7 +715,9 @@ class StreamPanel(wx.PyPanel):
         self._txt_accum.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_EDIT)
         self._txt_accum.SetBackgroundColour(self._panel.GetBackgroundColour())
 
-        self._gbs.Add(self._txt_accum, (self.row_count, 1), flag=wx.EXPAND)
+        self._gbs.Add(self._txt_accum, (self.row_count, 1),
+                                        flag=wx.EXPAND|wx.ALL,
+                                        border=5)
 
         self.row_count += 1
 
@@ -716,7 +725,7 @@ class StreamPanel(wx.PyPanel):
 
         lbl_interp = wx.StaticText(self._panel, -1, "Interpolation")
         self._gbs.Add(lbl_interp, (self.row_count, 0),
-                      flag=wx.LEFT | wx.ALIGN_CENTRE_VERTICAL, border=11)
+                      flag=wx.ALL, border=5)
 
         choices = ["None", "Linear", "Cubic"]
         self._cmb_interp = wx.combo.OwnerDrawnComboBox(self._panel,
@@ -724,10 +733,11 @@ class StreamPanel(wx.PyPanel):
                                                    value=choices[0],
                                                    pos=(0, 0),
                                                    size=(100, 16),
-                                                   style=wx.NO_BORDER |
-                                                         wx.CB_DROPDOWN |
-                                                         wx.TE_PROCESS_ENTER |
-                                                         wx.CB_READONLY,
+                                                   style=wx.NO_BORDER|
+                                                         wx.CB_DROPDOWN|
+                                                         wx.TE_PROCESS_ENTER|
+                                                         wx.CB_READONLY|
+                                                         wx.EXPAND,
                                                     choices=choices)
 
         self._cmb_interp.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_EDIT)
@@ -736,7 +746,10 @@ class StreamPanel(wx.PyPanel):
                                           pushButtonBg=False)
 
 
-        self._gbs.Add(self._cmb_interp, (self.row_count, 1), flag=wx.EXPAND)
+        self._gbs.Add(self._cmb_interp, (self.row_count, 1),
+                                         flag=wx.EXPAND|wx.ALL,
+                                         border=5,
+                                         span=(1, 2))
 
         self.row_count += 1
 
@@ -755,7 +768,6 @@ class StandardStreamPanel(StreamPanel):  # pylint: disable=R0901
 
     def finalize(self):
         StreamPanel.finalize(self)
-        #self._gbs.AddSpacer((5, 5), (self.row_count, 0))
 
 
 class DyeStreamPanel(StreamPanel):
@@ -781,33 +793,33 @@ class DyeStreamPanel(StreamPanel):
             # Warning: stream.excitation is in m, we present everything in nm
             lbl_excitation = wx.StaticText(self._panel, -1, "Excitation")
             self._gbs.Add(lbl_excitation, (self.row_count, 0),
-                          flag=wx.LEFT | wx.ALIGN_CENTRE_VERTICAL, border=11)
+                          flag=wx.ALL, border=5)
 
             self._txt_excitation = UnitIntegerCtrl(self._panel, -1,
                     int(round(self.stream.excitation.value * 1e9)),
                     style=wx.NO_BORDER,
-                    size=(50, -1),
+                    size=(-1, 14),
                     min_val=int(math.ceil(self.stream.excitation.range[0] * 1e9)),
                     max_val=int(self.stream.excitation.range[1] * 1e9),
                     unit='nm')
+
             self._txt_excitation.SetForegroundColour("#2FA7D4")
             self._txt_excitation.SetBackgroundColour(self.GetBackgroundColour())
 
             self._gbs.Add(self._txt_excitation, (self.row_count, 1),
-                          flag=wx.ALIGN_CENTRE_VERTICAL | wx.RIGHT,
-                          border=18)
+                          flag=wx.ALL|wx.ALIGN_CENTRE_VERTICAL,
+                          border=5)
 
             # A button, but not clickable, just to show the wavelength
             self._btn_excitation = buttons.ColourButton(self._panel, -1,
                                 bitmap=img.getemptyBitmap(),
-                                size=(18, 18),
                                 colour=wave2rgb(self.stream.excitation.value),
                                 background_parent=self._panel)
             self._btn_excitation.SetToolTipString("Wavelength colour")
 
             self._gbs.Add(self._btn_excitation, (self.row_count, 2),
-                          flag=wx.ALIGN_CENTRE_VERTICAL | wx.RIGHT,
-                          border=18)
+                          flag=wx.RIGHT|wx.ALIGN_RIGHT,
+                          border=5)
             self.row_count += 1
 
             self._vac_excitation = VigilantAttributeConnector(
@@ -821,32 +833,32 @@ class DyeStreamPanel(StreamPanel):
             # Emission
             lbl_emission = wx.StaticText(self._panel, -1, "Emission")
             self._gbs.Add(lbl_emission, (self.row_count, 0),
-                          flag=wx.LEFT | wx.ALIGN_CENTRE_VERTICAL, border=11)
+                          flag=wx.ALL, border=5)
 
             self._txt_emission = UnitIntegerCtrl(self._panel, -1,
                     int(round(self.stream.emission.value * 1e9)),
                     style=wx.NO_BORDER,
-                    size=(50, -1),
+                    size=(-1, 14),
                     min_val=int(math.ceil(self.stream.emission.range[0] * 1e9)),
                     max_val=int(self.stream.emission.range[1] * 1e9),
                     unit='nm')
+
             self._txt_emission.SetForegroundColour("#2FA7D4")
             self._txt_emission.SetBackgroundColour(self.GetBackgroundColour())
 
             self._gbs.Add(self._txt_emission, (self.row_count, 1),
-                          flag=wx.ALIGN_CENTRE_VERTICAL | wx.RIGHT,
-                          border=10)
+                          flag=wx.ALL|wx.ALIGN_CENTRE_VERTICAL,
+                          border=5)
 
             self._btn_emission = buttons.ColourButton(self._panel, -1,
                                               bitmap=img.getemptyBitmap(),
-                                              size=(18, 18),
                                               colour=wave2rgb(self.stream.emission.value),
                                               background_parent=self._panel)
             self._btn_emission.SetToolTipString("Wavelength colour")
 
             self._gbs.Add(self._btn_emission, (self.row_count, 2),
-                          flag=wx.ALIGN_CENTRE_VERTICAL | wx.RIGHT,
-                          border=10)
+                          flag=wx.RIGHT|wx.ALIGN_RIGHT,
+                          border=5)
             self.row_count += 1
 
             self._vac_emission = VigilantAttributeConnector(
