@@ -331,7 +331,7 @@ class AcquisitionDialog(xrcfr_acq):
         self.settings_controller = SettingsBarController(interface_model, self, True)
 
         main_stream_controller = wx.GetApp().stream_controller
-        self.stream_controller = main_stream_controller.duplicate_visible(self.pnl_stream)
+        self.stream_controller = main_stream_controller.duplicate(self.pnl_stream)
 
         self.Bind(wx.EVT_CHAR_HOOK, self.on_key)
 
@@ -448,17 +448,17 @@ class AcquisitionDialog(xrcfr_acq):
         # Show the dialog and check whether is was accepted or cancelled
         if dialog.ShowModal() != wx.ID_OK:
             return
-        
+
         # New location and name have been selected...
         # Store the path
         dest_dir = dialog.GetDirectory()
         self.txt_destination.SetValue(dest_dir)
         self.conf.last_path = dest_dir
-        
+
         # Store the format
         fmt = formats[dialog.GetFilterIndex()]
         self.conf.last_format = fmt
-        
+
         # Check the filename has a good extension, or add the default one
         fn = dialog.GetFilename()
         ext = None
@@ -477,7 +477,7 @@ class AcquisitionDialog(xrcfr_acq):
             fn += ext
 
         self.conf.last_extension = ext
-        
+
         # save the filename
         self.txt_filename.SetValue(unicode(fn))
 

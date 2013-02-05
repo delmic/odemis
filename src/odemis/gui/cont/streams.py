@@ -219,7 +219,7 @@ class StreamController(object):
 
         return spanel
 
-    def duplicate_visible(self, stream_bar):
+    def duplicate(self, stream_bar):
         """ Create a new Stream controller with the same streams as are visible
         in this controller.
 
@@ -232,7 +232,11 @@ class StreamController(object):
 
         new_controller = StreamController(self.microscope, stream_bar)
 
-        for sp in [sp for sp in self._stream_bar.stream_panels if sp.IsShown()]:
+        for sp in self._stream_bar.stream_panels:
+            # TODO: temporary 'pause' should be removed when all handling has
+            # been passed to scheduler. IMPORTANT: the pausing of the streams
+            # should be done before they are duplicated!
+            sp.pause()
             stream_panel = sp.__class__(stream_bar,
                                         sp.stream,
                                         self.microscope)
@@ -401,3 +405,4 @@ class StreamController(object):
 
     def get_stream_panels(self):
         return self._stream_bar.get_stream_panels()
+

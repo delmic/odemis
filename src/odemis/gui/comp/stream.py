@@ -613,6 +613,16 @@ class StreamPanel(wx.PyPanel):
             logging.debug("Pausing stream '%s'", self.stream.name.value)
         self.stream.updated.value = self._expander._btn_play.GetToggle()
 
+    def _set_button(self, play):
+        self._expander._btn_play.SetToggle(play)
+        self.stream.updated.value = play
+
+    def pause(self):
+        self._set_button(False)
+
+    def play(self):
+        self._set_button(True)
+
     def on_toggle_autocontrast(self, evt):
         enabled = self._btn_auto_contrast.GetToggle()
         # disable the manual controls if it's on
