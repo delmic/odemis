@@ -45,7 +45,7 @@ class xrcfr_main(wx.Frame):
         self.menu_item_inspect = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_inspect"))
         self.menu_item_debug = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_debug"))
         self.menu_item_about = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_about"))
-        self.tab_btn_live = xrc.XRCCTRL(self, "tab_btn_live")
+        self.tab_btn_secom = xrc.XRCCTRL(self, "tab_btn_secom")
         self.tab_btn_gallery = xrc.XRCCTRL(self, "tab_btn_gallery")
         self.pnl_tab_live = xrc.XRCCTRL(self, "pnl_tab_live")
         self.lbl_view_all = xrc.XRCCTRL(self, "lbl_view_all")
@@ -208,7 +208,7 @@ def __init_resources():
           <object class="wxBoxSizer">
             <orient>wxHORIZONTAL</orient>
             <object class="sizeritem">
-              <object class="TabButton" name="tab_btn_live">
+              <object class="TabButton" name="tab_btn_secom">
                 <size>160,30</size>
                 <default>1</default>
                 <label>LIVE STREAMS</label>

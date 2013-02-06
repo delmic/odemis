@@ -27,7 +27,7 @@ import logging
 import wx
 
 
-class TabBar(object):
+class TabBarController(object):
 
     def __init__(self, main_frame, btns_n_tabs):
 

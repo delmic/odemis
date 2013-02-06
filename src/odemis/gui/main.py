@@ -35,12 +35,12 @@ from odemis.gui.cont.acquisition import AcquisitionController
 from odemis.gui.cont.microscope import MicroscopeController
 from odemis.gui.cont.settings import SettingsBarController
 from odemis.gui.cont.streams import StreamController
-from odemis.gui.cont.tabs import TabBar
+from odemis.gui.cont.tabs import TabBarController
 from odemis.gui.cont.views import ViewController, ViewSelector
 from odemis.gui.instrmodel import InstrumentalImage
 from odemis.gui.xmlh import odemis_get_resources
 
-# FIXME: move to some sort of config file
+        # FIXME: move to some sort of config file
 HTML_DOC = os.path.join(os.path.dirname(__file__),
                         "../../../doc/code/_build/html/index.html")
 
@@ -127,12 +127,12 @@ class OdemisGUIApp(wx.App):
             #self.main_frame.SetPosition((0, 0))
 
 
-            self.tabs = TabBar(self.main_frame,
-                               [(self.main_frame.tab_btn_live,
-                                 self.main_frame.pnl_tab_live),
-                                (self.main_frame.tab_btn_gallery,
-                                 self.main_frame.pnl_tab_gallery),
-                               ])
+            self.tabs = TabBarController(self.main_frame,
+                                        [(self.main_frame.tab_btn_secom,
+                                          self.main_frame.pnl_tab_live),
+                                         (self.main_frame.tab_btn_gallery,
+                                          self.main_frame.pnl_tab_gallery),
+                                        ])
 
             # FIXME (eric): why is this commented? If not needed => remove
             # Do a final layout of the fold panel bar

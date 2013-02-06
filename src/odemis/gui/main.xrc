@@ -80,7 +80,7 @@
           <object class="wxBoxSizer">
             <orient>wxHORIZONTAL</orient>
             <object class="sizeritem">
-              <object class="TabButton" name="tab_btn_live">
+              <object class="TabButton" name="tab_btn_secom">
                 <size>160,30</size>
                 <default>1</default>
                 <label>LIVE STREAMS</label>
