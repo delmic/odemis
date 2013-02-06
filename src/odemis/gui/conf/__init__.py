@@ -28,18 +28,20 @@ related configuration files.
 
 """
 
-from odemis import dataio
-from odemis.dataio import tiff
-from odemis.gui.util import get_picture_folder, get_home_folder
 import ConfigParser
 import logging
 import os.path
+
+from odemis import dataio
+from odemis.dataio import tiff
+from odemis.gui.util import get_picture_folder, get_home_folder
 
 
 CONF_PATH = os.path.join(get_home_folder(), r".config/odemis")
 ACQUI_PATH = get_picture_folder()
 
 CONF_ACQUI = None
+CONF_GENERAL = None
 
 def get_acqui_conf():
     """ Return the Acquisition config object and create/read it first if it does
@@ -49,9 +51,16 @@ def get_acqui_conf():
 
     if not CONF_ACQUI:
         CONF_ACQUI = AcquisitionConfig()
-        CONF_ACQUI.read()
 
     return CONF_ACQUI
+
+def get_general_conf():
+    global CONF_GENERAL
+
+    if not CONF_GENERAL:
+        CONF_GENERAL = GeneralConfig()
+
+    return CONF_GENERAL
 
 class Config(object):
     """ Configuration super class
@@ -59,12 +68,12 @@ class Config(object):
         Configurations are built around the
         :py:class:`ConfigParser.SafeConfigParser` class.
     """
-    def __init__(self, file_name):
+    def __init__(self, file_name, read=True):
         """ If no path is provided, the default path will be loaded using.
             :py:func:`elit.util.get_config_dir` function.
 
             :param string file_name:    Name of the configuration file
-            :param path: The path of the configuration file
+            :param read: Try and read the config file on creation
             :type path: string or None:
         """
 
@@ -77,6 +86,9 @@ class Config(object):
         self.config = ConfigParser.SafeConfigParser()
         # Default configuration used to check for completeness
         self.default = ConfigParser.SafeConfigParser()
+
+        if read:
+            self.read()
 
     def read(self):
         """ Will try to read the configuration file and will use the default.
@@ -128,6 +140,30 @@ class Config(object):
     def get(self, section, option):
         """ Get the value of an option """
         return self.config.get(section, option)
+
+class GeneralConfig(Config):
+    """ General configuration values """
+
+    def __init__(self):
+        file_name = "odemis.config"
+
+        super(GeneralConfig, self).__init__(file_name)
+
+        # Define the default settings
+        self.default.add_section("help")
+
+        self.default.set("help",
+                         "html_dev_doc",
+                         os.path.abspath(
+                            os.path.join(
+                                __file__,
+                                "../../../../../doc/code/_build/html/index.html")
+                            )
+                        )
+
+    @property
+    def html_dev_doc(self):
+        return self.get("help", "html_dev_doc")
 
 
 class AcquisitionConfig(Config):

@@ -31,6 +31,7 @@ import Pyro4.errors
 
 from odemis import __version__, model
 from odemis.gui import main_xrc, instrmodel, log
+from odemis.gui.conf import get_general_conf
 from odemis.gui.cont.acquisition import AcquisitionController
 from odemis.gui.cont.microscope import MicroscopeController
 from odemis.gui.cont.settings import SettingsBarController
@@ -39,10 +40,6 @@ from odemis.gui.cont.tabs import TabBarController
 from odemis.gui.cont.views import ViewController, ViewSelector
 from odemis.gui.instrmodel import InstrumentalImage
 from odemis.gui.xmlh import odemis_get_resources
-
-        # FIXME: move to some sort of config file
-HTML_DOC = os.path.join(os.path.dirname(__file__),
-                        "../../../doc/code/_build/html/index.html")
 
 class OdemisGUIApp(wx.App):
     """ This is Odemis' main GUI application class
@@ -149,8 +146,11 @@ class OdemisGUIApp(wx.App):
                         self.main_frame.menu_item_debug.GetId(),
                         self.on_debug)
 
-            if os.path.exists(HTML_DOC):
+            gc = get_general_conf()
+
+            if os.path.exists(gc.html_dev_doc):
                 self.main_frame.menu_item_htmldoc.Enable(True)
+            logging.warn(gc.html_dev_doc)
 
             wx.EVT_MENU(self.main_frame,
                         self.main_frame.menu_item_htmldoc.GetId(),
@@ -309,10 +309,12 @@ see http://www.fluorophores.org/disclaimer/.
 
     def on_htmldoc(self, evt):
         import subprocess
-        self.http_proc = subprocess.Popen(["python", "-m", "SimpleHTTPServer"],
-                                           stderr=subprocess.STDOUT,
-                                           stdout=subprocess.PIPE,
-                                           cwd=os.path.dirname(HTML_DOC))
+        self.http_proc = subprocess.Popen(
+            ["python", "-m", "SimpleHTTPServer"],
+            stderr=subprocess.STDOUT,
+            stdout=subprocess.PIPE,
+            cwd=os.path.dirname(get_general_conf().html_dev_doc))
+
         import webbrowser
         webbrowser.open('http://localhost:8000')
 
