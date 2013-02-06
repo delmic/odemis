@@ -27,45 +27,76 @@ import logging
 import wx
 
 
+class Tab(object):
+    """ Small helper class representing a tab (= tab button + panel) """
+
+    def __init__(self, name, button, panel):
+        self.name = name
+        self.button = button
+        self.panel = panel
+        self.active = True
+
+    def _show(self, show):
+        self.button.SetToggle(show)
+        self.panel.Show(show)
+
+    def show(self):
+        self._show(True)
+
+    def hide(self):
+        self._show(False)
+
+
 class TabBarController(object):
 
-    def __init__(self, main_frm):
-
-        self.main_frame = main_frm
-
-        self.btns_n_tabs = [
-            (main_frm.tab_btn_secom_live, main_frm.pnl_tab_secom_live),
-            (main_frm.tab_btn_secom_gallery, main_frm.pnl_tab_secom_gallery),
-            (main_frm.tab_btn_sparc_acqui, main_frm.pnl_tab_sparc_acqui),
-            (main_frm.tab_btn_sparc_analysis, main_frm.pnl_tab_sparc_analysis)
-        ]
-
-        for btn, _ in self.btns_n_tabs:
-            btn.Bind(wx.EVT_BUTTON, self.OnClick)
-            btn.Bind(wx.EVT_KEY_UP, self.OnKeyUp)
+    def __init__(self, main_frame):
 
 
-        btn, tab = self.btns_n_tabs[0]
-        btn.SetToggle(True)
-        tab.Show()
+        self.main_frame = main_frame
 
-    def _reset_buttons(self, btn=None):
-        logging.debug("Resetting tab buttons")
-        for button in [b for b, _ in self.btns_n_tabs if b != btn]:
-            button.SetToggle(False)
+        self.tabs = [Tab("secom_live",
+                         main_frame.btn_tab_secom_live,
+                         main_frame.pnl_tab_secom_live),
+                     Tab("secom_gallery",
+                         main_frame.btn_tab_secom_gallery,
+                         main_frame.pnl_tab_secom_gallery),
+                     Tab("sparc_acqui",
+                         main_frame.btn_tab_sparc_acqui,
+                         main_frame.pnl_tab_sparc_acqui),
+                     Tab("sparc_analysis",
+                         main_frame.btn_tab_sparc_analysis,
+                         main_frame.pnl_tab_sparc_analysis)
+                     ]
+
+        for tab in self.tabs:
+            tab.button.Bind(wx.EVT_BUTTON, self.OnClick)
+            tab.button.Bind(wx.EVT_KEY_UP, self.OnKeyUp)
+
+        self.show(0)
+
+    def show(self, tab_name_or_index):
+        for i, tab in enumerate(self.tabs):
+            if i == tab_name_or_index or tab.name == tab_name_or_index:
+                tab.show()
+            else:
+                tab.hide()
+
+    def hide_all(self):
+        for tab in self.tabs:
+            tab.hide()
 
     def OnKeyUp(self, evt):
         evt_btn = evt.GetEventObject()
 
         if evt_btn.hasFocus and evt.GetKeyCode() == ord(" "):
-            self._reset_buttons(evt_btn)
+            self.hide_all()
             self.main_frame.Freeze()
 
-            for btn, tab in self.btns_n_tabs:
-                if evt_btn == btn:
-                    tab.Show()
+            for tab in self.tabs:
+                if evt_btn == tab.button:
+                    tab.show()
                 else:
-                    tab.Hide()
+                    tab.hide()
 
             self.main_frame.Layout()
             self.main_frame.Thaw()
@@ -75,15 +106,15 @@ class TabBarController(object):
 
         evt_btn = evt.GetEventObject()
 
-        self._reset_buttons(evt_btn)
+        self.hide_all()
 
         self.main_frame.Freeze()
 
-        for btn, tab in self.btns_n_tabs:
-            if evt_btn == btn:
-                tab.Show()
+        for tab in self.tabs:
+            if evt_btn == tab.button:
+                tab.show()
             else:
-                tab.Hide()
+                tab.hide()
 
         self.main_frame.Layout()
         self.main_frame.Thaw()

@@ -80,7 +80,7 @@
           <object class="wxBoxSizer">
             <orient>wxHORIZONTAL</orient>
             <object class="sizeritem">
-              <object class="TabButton" name="tab_btn_secom_live">
+              <object class="TabButton" name="btn_tab_secom_live">
                 <size>160,30</size>
                 <default>1</default>
                 <label>LIVE STREAMS</label>
@@ -106,7 +106,7 @@
               <border>20</border>
             </object>
             <object class="sizeritem">
-              <object class="TabButton" name="tab_btn_secom_gallery">
+              <object class="TabButton" name="btn_tab_secom_gallery">
                 <size>160,30</size>
                 <label>PROJECT GALLERY</label>
                 <bitmap>img/tab_inactive.png</bitmap>
@@ -131,7 +131,7 @@
               <border>20</border>
             </object>
             <object class="sizeritem">
-              <object class="TabButton" name="tab_btn_sparc_acqui">
+              <object class="TabButton" name="btn_tab_sparc_acqui">
                 <size>160,30</size>
                 <label>ACQUISITION</label>
                 <bitmap>img/tab_inactive.png</bitmap>
@@ -156,7 +156,7 @@
               <border>20</border>
             </object>
             <object class="sizeritem">
-              <object class="TabButton" name="tab_btn_sparc_analysis">
+              <object class="TabButton" name="btn_tab_sparc_analysis">
                 <size>160,30</size>
                 <label>ANALYSIS</label>
                 <bitmap>img/tab_inactive.png</bitmap>

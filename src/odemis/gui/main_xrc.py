@@ -20,12 +20,12 @@ class xrcfr_main(wx.Frame):
 #!XRCED:begin-block:xrcfr_main.PreCreate
     def PreCreate(self, pre):
         """ This function is called during the class's initialization.
-
+        
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
         pass
-
+        
 #!XRCED:end-block:xrcfr_main.PreCreate
 
     def __init__(self, parent):
@@ -45,10 +45,10 @@ class xrcfr_main(wx.Frame):
         self.menu_item_inspect = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_inspect"))
         self.menu_item_debug = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_debug"))
         self.menu_item_about = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_about"))
-        self.tab_btn_secom_live = xrc.XRCCTRL(self, "tab_btn_secom_live")
-        self.tab_btn_secom_gallery = xrc.XRCCTRL(self, "tab_btn_secom_gallery")
-        self.tab_btn_sparc_acqui = xrc.XRCCTRL(self, "tab_btn_sparc_acqui")
-        self.tab_btn_sparc_analysis = xrc.XRCCTRL(self, "tab_btn_sparc_analysis")
+        self.btn_tab_secom_live = xrc.XRCCTRL(self, "btn_tab_secom_live")
+        self.btn_tab_secom_gallery = xrc.XRCCTRL(self, "btn_tab_secom_gallery")
+        self.btn_tab_sparc_acqui = xrc.XRCCTRL(self, "btn_tab_sparc_acqui")
+        self.btn_tab_sparc_analysis = xrc.XRCCTRL(self, "btn_tab_sparc_analysis")
         self.pnl_tab_secom_live = xrc.XRCCTRL(self, "pnl_tab_secom_live")
         self.lbl_view_all = xrc.XRCCTRL(self, "lbl_view_all")
         self.btn_view_all = xrc.XRCCTRL(self, "btn_view_all")
@@ -87,12 +87,12 @@ class xrcfr_acq(wx.Dialog):
 #!XRCED:begin-block:xrcfr_acq.PreCreate
     def PreCreate(self, pre):
         """ This function is called during the class's initialization.
-
+        
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
         pass
-
+        
 #!XRCED:end-block:xrcfr_acq.PreCreate
 
     def __init__(self, parent):
@@ -212,7 +212,7 @@ def __init_resources():
           <object class="wxBoxSizer">
             <orient>wxHORIZONTAL</orient>
             <object class="sizeritem">
-              <object class="TabButton" name="tab_btn_secom_live">
+              <object class="TabButton" name="btn_tab_secom_live">
                 <size>160,30</size>
                 <default>1</default>
                 <label>LIVE STREAMS</label>
@@ -238,7 +238,7 @@ def __init_resources():
               <border>20</border>
             </object>
             <object class="sizeritem">
-              <object class="TabButton" name="tab_btn_secom_gallery">
+              <object class="TabButton" name="btn_tab_secom_gallery">
                 <size>160,30</size>
                 <label>PROJECT GALLERY</label>
                 <bitmap>img_tab_inactive_png</bitmap>
@@ -263,7 +263,7 @@ def __init_resources():
               <border>20</border>
             </object>
             <object class="sizeritem">
-              <object class="TabButton" name="tab_btn_sparc_acqui">
+              <object class="TabButton" name="btn_tab_sparc_acqui">
                 <size>160,30</size>
                 <label>ACQUISITION</label>
                 <bitmap>img_tab_inactive_png</bitmap>
@@ -288,7 +288,7 @@ def __init_resources():
               <border>20</border>
             </object>
             <object class="sizeritem">
-              <object class="TabButton" name="tab_btn_sparc_analysis">
+              <object class="TabButton" name="btn_tab_sparc_analysis">
                 <size>160,30</size>
                 <label>ANALYSIS</label>
                 <bitmap>img_tab_inactive_png</bitmap>

@@ -743,14 +743,14 @@ class ViewButton(ImageTextToggleButton):
             # Rescale to have the smallest axis as big as the thumbnail
             rsize = list(size_tn)
             if (size_tn[0] / image.Width) > (size_tn[1] / image.Height):
-                rsize[1] = int(image.Height * (size_tn[0] / image.Width)) 
+                rsize[1] = int(image.Height * (size_tn[0] / image.Width))
             else:
                 rsize[0] = int(image.Width * (size_tn[1] / image.Height))
             sim = image.Scale(*rsize, quality=wx.IMAGE_QUALITY_HIGH)
-            
+
             # crop to the right shape
             lt = ((size_tn[0] - sim.Width)//2, (size_tn[1] - sim.Height)//2)
-            sim.Resize(size_tn, lt) 
+            sim.Resize(size_tn, lt)
         else:
             # black image
             sim = wx.EmptyImage(*size_tn)
@@ -772,6 +772,29 @@ class ViewButton(ImageTextToggleButton):
 
 class TabButton(ImageTextToggleButton):
     """ Simple graphical tab switching button """
+
+    def __init__(self, *args, **kwargs):
+        ImageTextToggleButton.__init__(self, *args, **kwargs)
+
+        self.Bind(wx.EVT_SET_FOCUS, self.on_focus)
+        self.Bind(wx.EVT_KILL_FOCUS, self.on_kill_focus)
+
+        self.fg_color_cache = "#FFFFFF"
+
+    def highlight(self, on):
+        if on:
+            self.fg_color_cache = self.GetForegroundColour()
+            self.SetForegroundColour("#FFFFFF")
+        else:
+            self.SetForegroundColour(self.fg_color_cache)
+
+    def on_focus(self, evt):
+        self.highlight(True)
+        evt.Skip()
+
+    def on_kill_focus(self, evt):
+        self.highlight(False)
+        evt.Skip()
 
     def OnLeftDown(self, event):
         """ This event handler is fired on left mouse button events, but it
