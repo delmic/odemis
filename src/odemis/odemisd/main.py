@@ -109,13 +109,13 @@ class BackendRunner(object):
         try:
             gid_base = grp.getgrnam(model.BASE_GROUP).gr_gid
         except KeyError:
-            logging.error(model.BASE_GROUP + " doesn't exists.")
+            logging.exception(model.BASE_GROUP + " group doesn't exists.")
             raise
         
         try:
             os.setgid(gid_base)
         except OSError:
-            logging.warning("Not enough permissions to get group " + model.BASE_GROUP + ", trying anyway...")
+            logging.warning("Not enough permissions to run in group " + model.BASE_GROUP + ", trying anyway...")
             
         # everything created after must be rw by group
         os.umask(~(stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IWGRP)) 
