@@ -16,7 +16,7 @@ You should have received a copy of the GNU General Public License along with Ode
 '''
 from concurrent import futures
 from concurrent.futures._base import CANCELLED, FINISHED, RUNNING, \
-    CANCELLED_AND_NOTIFIED, CancelledError
+    CANCELLED_AND_NOTIFIED, CancelledError, PENDING
 from odemis import model
 from odemis.gui import instrmodel
 import logging
@@ -63,7 +63,7 @@ def startAcquisition(streamTree):
     # return the interface to manipulate the task
     return future
 
-def _executeTask(future, fn, args, kwargs):
+def _executeTask(future, fn, *args, **kwargs):
     """
     Executes a task represented by a future
     """
@@ -223,9 +223,17 @@ class ProgressiveFuture(futures.Future):
     def _report_update(self, fn):
         now = time.time()
         with self._condition:
-            if self._state in [CANCELLED, FINISHED]:
+            if self._state in [CANCELLED, CANCELLED_AND_NOTIFIED, FINISHED]:
                 past = self._end_time - self._start_time
                 left = 0
+            elif self._state == PENDING:
+                past = now - self._start_time
+                left = self._end_time - now
+                # ensure we state it's not yet started 
+                if past >= 0:
+                    past = -1e-9
+                if left < 0:
+                    left = 0
             else:
                 past = now - self._start_time
                 left = self._end_time - now
@@ -309,6 +317,7 @@ class ProgressiveFuture(futures.Future):
             self._condition.notify_all()
 
         self._invoke_callbacks()
+        self._invoke_upd_callbacks()
         return True
         
     def set_running_or_notify_cancel(self):

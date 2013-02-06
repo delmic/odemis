@@ -25,7 +25,7 @@ import urllib
 import weakref
 #Pyro4.config.COMMTIMEOUT = 30.0 # a bit of timeout
 # There is a problem with threadpool: threads have a timeout on waiting for a 
-# request. That obvioulsy doesn't make much sense, but also means it's not
+# request. That obviously doesn't make much sense, but also means it's not
 # possible to put a global timeout with the current version and threadpool. 
 # One possibility is to change ._pyroTimeout on each proxy.
 
@@ -40,11 +40,12 @@ Pyro4.config.THREADPOOL_MINTHREADS = 24
 # TODO make sure Pyro can grow the pool: for now it allocates a huge static number of threads
 
 # TODO needs a different value on Windows
+# TODO try a user temp directory if /var/run/odemisd doesn't exist (and cannot be created)
 BASE_DIRECTORY="/var/run/odemisd"
 BASE_GROUP="odemis" # user group that is allowed to access the backend 
 
-#TODO special attributes, which are just properties that are explicitely duplicated
-# on the proxy. Getting/setting them always acces the actual objet remotely.
+#TODO special attributes, which are just properties that are explicitly duplicated
+# on the proxy. Getting/setting them always access the actual object remotely.
 # declarator is like a property. Two possible implementations:
 # * special message types (get/set) instead of method call
 # * create special methods on the object, to handle these attributes (when the parent object is registered or shared)

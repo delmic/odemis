@@ -24,10 +24,12 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from odemis import model
 from odemis.gui import util
-from odemis.gui.util.units import readable_str
-from odemis.model import VigilantAttribute, MD_POS, MD_PIXEL_SIZE, \
-    MD_SENSOR_PIXEL_SIZE
-from odemis.model._vattributes import FloatContinuous
+# the next three imports are necessary to access util.*
+import odemis.gui.util.img
+import odemis.gui.util.units
+import odemis.gui.util.conversion
+from odemis.model import FloatContinuous, VigilantAttribute, MD_POS, \
+    MD_PIXEL_SIZE, MD_SENSOR_PIXEL_SIZE
 import json
 import logging
 import numpy
@@ -746,7 +748,7 @@ class FluoStream(CameraStream):
                               Stream.WARNING_EMISSION_NOT_OPT])
         if not fitting:
             logging.warning("Emission wavelength %s doesn't fit the filter",
-                        readable_str(wl, "m"))
+                        util.units.readable_str(wl, "m"))
             self._addWarning(Stream.WARNING_EMISSION_IMPOSSIBLE)
             # TODO detect no optimal situation (within 10% band of border?)
         return
@@ -1041,7 +1043,7 @@ class StreamTree(object):
             if isinstance(s, Stream):
                 leaves.add(s)
             elif isinstance(s, StreamTree):
-                leaves += s.getStreams()
+                leaves |= s.getStreams()
 
         return leaves
 
