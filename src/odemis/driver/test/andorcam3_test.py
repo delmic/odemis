@@ -41,7 +41,7 @@ class TestAndorCam3(VirtualTestCam, unittest.TestCase):
         cls.camera = cls.camera_type(*cls.camera_args)
     
     @classmethod
-    def tearUpClass(cls):
+    def tearDownClass(cls):
         cls.camera.terminate()
         
 if __name__ == '__main__':

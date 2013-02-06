@@ -79,7 +79,7 @@ class TestSP(unittest.TestCase):
         self.sp = CLASS(**KWARGS)
         self.orig_pos = dict(self.sp.position.value)
            
-    def tearUp(self):
+    def tearDown(self):
         # move back to the original position
         f = self.sp.moveAbs(self.orig_pos)
         f.result()

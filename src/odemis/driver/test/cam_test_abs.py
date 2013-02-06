@@ -63,7 +63,7 @@ class VirtualTestCam(object):
 #        cls.camera = cls.camera_type(*cls.camera_args)
     
 #    @classmethod
-#    def tearUpClass(cls):
+#    def tearDownClass(cls):
 #        cls.camera.terminate()
  
     def setUp(self):
@@ -73,7 +73,7 @@ class VirtualTestCam(object):
         self.camera.resolution.value = self.size
         self.acq_dates = (set(), set()) # 2 sets of dates, one for each receiver 
            
-    def tearUp(self):
+    def tearDown(self):
 #        print gc.get_referrers(self.camera)
 #        gc.collect()
         pass
