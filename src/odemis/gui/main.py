@@ -124,8 +124,7 @@ class OdemisGUIApp(wx.App):
             #self.main_frame.SetSize((w, h))
             #self.main_frame.SetPosition((0, 0))
 
-
-            self.tabs = TabBarController(self.main_frame)
+            self.tab_controller = TabBarController(self.main_frame)
 
             # FIXME (eric): why is this commented? If not needed => remove
             # Do a final layout of the fold panel bar
@@ -146,7 +145,6 @@ class OdemisGUIApp(wx.App):
 
             if os.path.exists(gc.html_dev_doc):
                 self.main_frame.menu_item_htmldoc.Enable(True)
-            logging.warn(gc.html_dev_doc)
 
             wx.EVT_MENU(self.main_frame,
                         self.main_frame.menu_item_htmldoc.GetId(),

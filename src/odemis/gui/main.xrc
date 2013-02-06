@@ -44,7 +44,7 @@
       </object>
       <object class="wxMenu">
         <object class="wxMenuItem" name="menu_item_htmldoc">
-          <label>API Reference</label>
+          <label>Source Code Documentation</label>
           <enabled>0</enabled>
           <XRCED>
             <assign_var>1</assign_var>

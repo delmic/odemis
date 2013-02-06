@@ -72,6 +72,7 @@ class TabBarController(object):
             tab.button.Bind(wx.EVT_BUTTON, self.OnClick)
             tab.button.Bind(wx.EVT_KEY_UP, self.OnKeyUp)
 
+        # Show first tab by default
         self.show(0)
 
     def show(self, tab_name_or_index):
