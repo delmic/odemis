@@ -26,6 +26,7 @@ import os.path
 import sys
 import threading
 import traceback
+
 import wx
 import Pyro4.errors
 
@@ -124,12 +125,7 @@ class OdemisGUIApp(wx.App):
             #self.main_frame.SetPosition((0, 0))
 
 
-            self.tabs = TabBarController(self.main_frame,
-                                        [(self.main_frame.tab_btn_secom,
-                                          self.main_frame.pnl_tab_live),
-                                         (self.main_frame.tab_btn_gallery,
-                                          self.main_frame.pnl_tab_gallery),
-                                        ])
+            self.tabs = TabBarController(self.main_frame)
 
             # FIXME (eric): why is this commented? If not needed => remove
             # Do a final layout of the fold panel bar
@@ -288,9 +284,9 @@ class OdemisGUIApp(wx.App):
         info.WebSite = ("http://delmic.com", "delmic.com")
         info.Licence = __version__.license_summary
         info.Developers = ["Éric Piel", "Rinze de Laat"]
-#        info.DocWriter = '???'
-#        info.Artist = '???'
-#        info.Translator = '???'
+        # info.DocWriter = '???'
+        # info.Artist = '???'
+        # info.Translator = '???'
 
         if instrmodel.DyeDatabase:
             info.Developers += ["", "Dye database from http://fluorophores.org"]

@@ -156,7 +156,7 @@ class ViewController(object):
         logging.debug("Changing focus to view %s", view.name.value)
         layout = self._microscope.viewLayout.value
 
-        self._main_frame.pnl_tab_live.Freeze()
+        self._main_frame.pnl_tab_secom_live.Freeze()
 
         for viewport in self._viewports:
             if viewport.mic_view == view:
@@ -169,16 +169,16 @@ class ViewController(object):
                     viewport.Hide()
 
         if layout == instrmodel.VIEW_LAYOUT_ONE:
-            self._main_frame.pnl_tab_live.Layout()  # resize the viewport
+            self._main_frame.pnl_tab_secom_live.Layout()  # resize the viewport
 
-        self._main_frame.pnl_tab_live.Thaw()
+        self._main_frame.pnl_tab_secom_live.Thaw()
 
     def _onViewLayout(self, layout):
         """
         Called when the view layout of the GUI must be changed
         """
         # only called when changed
-        self._main_frame.pnl_tab_live.Freeze()
+        self._main_frame.pnl_tab_secom_live.Freeze()
 
         if layout == instrmodel.VIEW_LAYOUT_ONE:
             logging.debug("Showing only one view")
@@ -200,8 +200,8 @@ class ViewController(object):
         else:
             raise NotImplementedError()
 
-        self._main_frame.pnl_tab_live.Layout()  # resize the viewports
-        self._main_frame.pnl_tab_live.Thaw()
+        self._main_frame.pnl_tab_secom_live.Layout()  # resize the viewports
+        self._main_frame.pnl_tab_secom_live.Thaw()
 
 
 class ViewSelector(object):

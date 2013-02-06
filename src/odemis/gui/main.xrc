@@ -76,11 +76,11 @@
     </object>
     <object class="wxBoxSizer">
       <object class="sizeritem">
-        <object class="wxPanel" name="pnl_tab_buttons">
+        <object class="wxPanel" name="pnl_tabbuttons">
           <object class="wxBoxSizer">
             <orient>wxHORIZONTAL</orient>
             <object class="sizeritem">
-              <object class="TabButton" name="tab_btn_secom">
+              <object class="TabButton" name="tab_btn_secom_live">
                 <size>160,30</size>
                 <default>1</default>
                 <label>LIVE STREAMS</label>
@@ -106,9 +106,59 @@
               <border>20</border>
             </object>
             <object class="sizeritem">
-              <object class="TabButton" name="tab_btn_gallery">
+              <object class="TabButton" name="tab_btn_secom_gallery">
                 <size>160,30</size>
                 <label>PROJECT GALLERY</label>
+                <bitmap>img/tab_inactive.png</bitmap>
+                <hover>img/tab_hover.png</hover>
+                <selected>img/tab_active.png</selected>
+                <fg>#E5E5E5</fg>
+                <font>
+                  <size>11</size>
+                  <style>normal</style>
+                  <weight>normal</weight>
+                  <underlined>0</underlined>
+                  <family>default</family>
+                  <face>Ubuntu</face>
+                  <encoding>UTF-8</encoding>
+                </font>
+                <style>wxALIGN_CENTRE</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxLEFT|wxALIGN_BOTTOM</flag>
+              <border>20</border>
+            </object>
+            <object class="sizeritem">
+              <object class="TabButton" name="tab_btn_sparc_acqui">
+                <size>160,30</size>
+                <label>ACQUISITION</label>
+                <bitmap>img/tab_inactive.png</bitmap>
+                <hover>img/tab_hover.png</hover>
+                <selected>img/tab_active.png</selected>
+                <fg>#E5E5E5</fg>
+                <font>
+                  <size>11</size>
+                  <style>normal</style>
+                  <weight>normal</weight>
+                  <underlined>0</underlined>
+                  <family>default</family>
+                  <face>Ubuntu</face>
+                  <encoding>UTF-8</encoding>
+                </font>
+                <style>wxALIGN_CENTRE</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxLEFT|wxALIGN_BOTTOM</flag>
+              <border>20</border>
+            </object>
+            <object class="sizeritem">
+              <object class="TabButton" name="tab_btn_sparc_analysis">
+                <size>160,30</size>
+                <label>ANALYSIS</label>
                 <bitmap>img/tab_inactive.png</bitmap>
                 <hover>img/tab_hover.png</hover>
                 <selected>img/tab_active.png</selected>
@@ -148,7 +198,7 @@
         <minsize>-1,40</minsize>
       </object>
       <object class="sizeritem">
-        <object class="wxPanel" name="pnl_tab_live">
+        <object class="wxPanel" name="pnl_tab_secom_live">
           <object class="wxBoxSizer">
             <object class="sizeritem">
               <object class="wxPanel">
@@ -591,7 +641,7 @@
         <flag>wxEXPAND</flag>
       </object>
       <object class="sizeritem">
-        <object class="wxPanel" name="pnl_tab_gallery">
+        <object class="wxPanel" name="pnl_tab_secom_gallery">
           <object class="wxBoxSizer">
             <object class="spacer">
               <option>1</option>
@@ -599,7 +649,83 @@
             </object>
             <object class="sizeritem">
               <object class="wxStaticText">
-                <label>The amazing invisible gallery.</label>
+                <label>SECOM image gallery.</label>
+                <fg>#7F7F7F</fg>
+                <font>
+                  <size>8</size>
+                  <style>normal</style>
+                  <weight>normal</weight>
+                  <underlined>0</underlined>
+                  <family>default</family>
+                  <face>Ubuntu</face>
+                  <encoding>UTF-8</encoding>
+                </font>
+              </object>
+              <flag>wxALIGN_CENTRE_VERTICAL</flag>
+            </object>
+            <orient>wxHORIZONTAL</orient>
+            <object class="spacer">
+              <option>1</option>
+              <flag>wxEXPAND|wxALIGN_CENTRE_VERTICAL</flag>
+            </object>
+          </object>
+          <bg>#333333</bg>
+          <hidden>1</hidden>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
+        <option>1</option>
+        <flag>wxEXPAND</flag>
+      </object>
+      <object class="sizeritem">
+        <object class="wxPanel" name="pnl_tab_sparc_acqui">
+          <object class="wxBoxSizer">
+            <object class="spacer">
+              <option>1</option>
+              <flag>wxEXPAND|wxALIGN_CENTRE_VERTICAL</flag>
+            </object>
+            <object class="sizeritem">
+              <object class="wxStaticText">
+                <label>SPARC acquisition tab.</label>
+                <fg>#7F7F7F</fg>
+                <font>
+                  <size>8</size>
+                  <style>normal</style>
+                  <weight>normal</weight>
+                  <underlined>0</underlined>
+                  <family>default</family>
+                  <face>Ubuntu</face>
+                  <encoding>UTF-8</encoding>
+                </font>
+              </object>
+              <flag>wxALIGN_CENTRE_VERTICAL</flag>
+            </object>
+            <orient>wxHORIZONTAL</orient>
+            <object class="spacer">
+              <option>1</option>
+              <flag>wxEXPAND|wxALIGN_CENTRE_VERTICAL</flag>
+            </object>
+          </object>
+          <bg>#333333</bg>
+          <hidden>1</hidden>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
+        <option>1</option>
+        <flag>wxEXPAND</flag>
+      </object>
+      <object class="sizeritem">
+        <object class="wxPanel" name="pnl_tab_sparc_analysis">
+          <object class="wxBoxSizer">
+            <object class="spacer">
+              <option>1</option>
+              <flag>wxEXPAND|wxALIGN_CENTRE_VERTICAL</flag>
+            </object>
+            <object class="sizeritem">
+              <object class="wxStaticText">
+                <label>SPARC analysis tab.</label>
                 <fg>#7F7F7F</fg>
                 <font>
                   <size>8</size>

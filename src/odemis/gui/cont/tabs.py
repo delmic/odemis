@@ -29,10 +29,16 @@ import wx
 
 class TabBarController(object):
 
-    def __init__(self, main_frame, btns_n_tabs):
+    def __init__(self, main_frm):
 
-        self.main_frame = main_frame
-        self.btns_n_tabs = btns_n_tabs
+        self.main_frame = main_frm
+
+        self.btns_n_tabs = [
+            (main_frm.tab_btn_secom_live, main_frm.pnl_tab_secom_live),
+            (main_frm.tab_btn_secom_gallery, main_frm.pnl_tab_secom_gallery),
+            (main_frm.tab_btn_sparc_acqui, main_frm.pnl_tab_sparc_acqui),
+            (main_frm.tab_btn_sparc_analysis, main_frm.pnl_tab_sparc_analysis)
+        ]
 
         for btn, _ in self.btns_n_tabs:
             btn.Bind(wx.EVT_BUTTON, self.OnClick)
