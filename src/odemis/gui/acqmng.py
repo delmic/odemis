@@ -16,10 +16,11 @@ You should have received a copy of the GNU General Public License along with Ode
 '''
 from concurrent import futures
 from concurrent.futures._base import CANCELLED, FINISHED, RUNNING, \
-    CANCELLED_AND_NOTIFIED
+    CANCELLED_AND_NOTIFIED, CancelledError
 from odemis import model
 from odemis.gui import instrmodel
 import logging
+import numpy
 import sys
 import threading
 import time
@@ -97,7 +98,10 @@ def secom_weight_stream(stream):
      
 class AcquisitionTask(object):
     
-    # TODO: this all make sence for the SECOM, but 
+    # TODO: this all make sense for the SECOM, but for systems where multiple
+    # acquisitions are running in parallel (ex: SPARC), it needs a better handling
+    # of the stream dependencies. Similarly, features like drift-compensation
+    # might need a special handling.
     def __init__(self, streamTree, future):
         self._streamTree = streamTree
         self._future = future
@@ -111,6 +115,8 @@ class AcquisitionTask(object):
         self._streams = sorted(self._streamTimes.keys(), key=secom_weight_stream,
                                reverse=True)
     
+    
+        self._condition = threading.Condition()
         self._current_stream = None
         self._cancelled = False
     
@@ -118,61 +124,76 @@ class AcquisitionTask(object):
         """
         Runs the acquisition
         """
+        assert(self._current_stream is None) # Task should be used only once
+        
         raw_images = []
+        # no need to set the start time of the future: it's automatically done
+        # when setting its state to running.
+        expected_time = numpy.sum(self._streamTimes.values())
+        self._future.set_end_time(time.time() + expected_time)
         
         for s in self._streams:
             self._current_stream = s
-            s.image.subscribe(self._image_listener)
-            # TODO: shall we also do s.updated.value = True?
-            s.active.value = True
-        #   start stream
-        #   wait until one image acquired or cancelled
-        #   if cancelled => return
-        
-            data = s.raw # list of raw images for this stream (with metadata)
+            with self._condition:
+                # start stream
+                s.image.subscribe(self._image_listener)
+                # TODO: shall we also do s.updated.value = True?
+                s.active.value = True
+            
+                # wait until one image acquired or cancelled
+                self._condition.wait()
+                if self._cancelled:
+                    # normally the return value/exception will never reach the
+                    # user of the future: the future will raise a CancelledError
+                    # itself.
+                    raise CancelledError()
+
+            # add the raw images   
+            data = s.raw
             # add the stream name to the image
             for d in data:
                 d.metadata[model.MD_DESCRIPTION] = s.name.value
             raw_images.extend(data)
-        #   update the time left
-        
-        
+            
+            # update the time left
+            expected_time -= self._streamTimes[s]
+            self._future.set_end_time(time.time() + expected_time)
         
         # compute the thumbnail
         # FIXME: this call now doesn't work. We need a hack to call the canvas
         # method from outside the canvas, or use a canvas to render everything
-        thumbnail = self._streamTree.getImage()
-        
-        # add the stream name to the image
+#        thumbnail = self._streamTree.getImage()
+        thumbnail = None
         
         # return all
-        # TODO: what to emit if cancelled? raise CancelledError?
         return (raw_images, thumbnail) 
     
     def _image_listener(self, image):
         """
         called when a new image comes from a stream
         """
-        # stop acquisition
-        self._current_stream.image.unsubscribe(self._image_listener)
-        self._current_stream.active.value = False
-        
-        # let the thread know that it's all done
-        self._condition.notify_all()
+        with self._condition:
+            # stop acquisition
+            self._current_stream.image.unsubscribe(self._image_listener)
+            self._current_stream.active.value = False
+            
+            # let the thread know that it's all done
+            self._condition.notifyAll()
     
     def cancel(self):
         """
         cancel the acquisition
         """
-        if self._current_stream:
-            # unsubscribe to the current stream
-            self._current_stream.image.unsubscribe(self._image_listener)
-            self._current_stream.active.value = False
-        
-        # put the cancel flag
-        self._cancelled = True
-        # set the condition to let the thread know it's done
-        self._condition.notify_all()
+        with self._condition:
+            if self._current_stream:
+                # unsubscribe to the current stream
+                self._current_stream.image.unsubscribe(self._image_listener)
+                self._current_stream.active.value = False
+            
+            # put the cancel flag
+            self._cancelled = True
+            # let the thread know it's done
+            self._condition.notify_all()
 
 class ProgressiveFuture(futures.Future):
     """
@@ -189,6 +210,7 @@ class ProgressiveFuture(futures.Future):
         self._upd_callbacks = []
         
         if start is None:
+            # just a bit ahead of time to say it's not starting now
             start = time.time() + 0.1
         self._start_time = start
         if end is None:
