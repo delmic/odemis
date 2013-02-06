@@ -33,7 +33,7 @@ from odemis import __version__, model
 from odemis.gui import main_xrc, instrmodel, log
 from odemis.gui.cont.acquisition import AcquisitionController
 from odemis.gui.cont.microscope import MicroscopeController
-from odemis.gui.cont.settingspanel import SettingsBarController
+from odemis.gui.cont.settings import SettingsBarController
 from odemis.gui.cont.streams import StreamController
 from odemis.gui.cont.tabs import TabBar
 from odemis.gui.cont.views import ViewController, ViewSelector

@@ -41,7 +41,7 @@ from wx.lib.pubsub import pub
 
 from odemis import model, dataio
 from odemis.gui.conf import get_acqui_conf
-from odemis.gui.cont.settingspanel import SettingsBarController
+from odemis.gui.cont.settings import SettingsBarController
 from odemis.gui.main_xrc import xrcfr_acq
 from odemis.gui.util import img, get_picture_folder
 from odemis.gui.util.conversion import seconds2human
