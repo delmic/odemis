@@ -347,6 +347,7 @@ class AcquisitionDialog(xrcfr_acq):
         self.stream_controller = StreamController(self.interface_model, self.pnl_stream)
         # The streams currently displayed are the one
         self.add_all_streams(orig_view.getStreams())
+        # TODO: disable acquire button when no streams are visible
         
         # make sure the view displays the same thing as the one we are duplicating
         view.view_pos.value = orig_view.view_pos.value
@@ -415,12 +416,12 @@ class AcquisitionDialog(xrcfr_acq):
         if str_panels:
             for str_pan in str_panels:
                 seconds += str_pan.stream.estimateAcquisitionTime()
+                
+            self.gauge_acq.Range = 100 * seconds
             seconds = math.ceil(seconds) # round a bit pessimistically
             txt = "The estimated acquisition time is %s." % units.readable_time(seconds)
-            self.gauge_acq.Range = seconds
         else:
             txt = "No streams present."
-            self.gauge_acq.Range = 1
 
         self.lbl_acqestimate.SetLabel(txt)
 
@@ -544,6 +545,7 @@ class AcquisitionDialog(xrcfr_acq):
         Start the acquisition (really)
         """
         st = self.interface_model.focussedView.value.streams
+        # It should never be possible to reach here with an empty streamTree
         
         # start acquisition + connect events to callback
         f = acqmng.startAcquisition(st)
@@ -556,6 +558,7 @@ class AcquisitionDialog(xrcfr_acq):
         # the range of the progress bar was already set in estimate_acquisition_time()
         self.gauge_acq.Value = 0
         self.gauge_acq.Show()
+        self.Layout() # to put the gauge at the right place
         
     def on_cancel(self, evt):
         """
@@ -585,6 +588,7 @@ class AcquisitionDialog(xrcfr_acq):
             # hide progress bar (+ put pack estimated time)
             self.estimate_acquisition_time()
             self.gauge_acq.Show(False)
+            self.Layout()
             return
         except Exception:
             # We cannot do much: just warn the user and pretend it was cancelled 
@@ -619,8 +623,8 @@ class AcquisitionDialog(xrcfr_acq):
         left (float): estimated number of s left
         """
         # progress bar left/ (past+left)
-        self.gauge_acq.Value = left
-        self.gauge_acq.Range = past + left
+        self.gauge_acq.Value = 100 * left
+        self.gauge_acq.Range = 100 * (past + left)
         
         if future.done():
             # the text is handled by on_acquisition_done
