@@ -28,23 +28,28 @@ of microscope images.
 
 """
 
+from concurrent.futures._base import CancelledError
+from odemis import model, dataio
+from odemis.gui import acqmng, instrmodel
+from odemis.gui.conf import get_acqui_conf
+from odemis.gui.cont.settings import SettingsBarController
+from odemis.gui.cont.streams import StreamController
+from odemis.gui.instrmodel import VIEW_LAYOUT_ONE
+from odemis.gui.main_xrc import xrcfr_acq
+from odemis.gui.util import img, get_picture_folder, units
+from wx.lib.pubsub import pub
+import copy
 import logging
+import math
 import os
 import re
 import subprocess
 import sys
 import threading
 import time
-
 import wx
-from wx.lib.pubsub import pub
 
-from odemis import model, dataio
-from odemis.gui.conf import get_acqui_conf
-from odemis.gui.cont.settings import SettingsBarController
-from odemis.gui.main_xrc import xrcfr_acq
-from odemis.gui.util import img, get_picture_folder
-from odemis.gui.util.conversion import seconds2human
+
 
 
 
@@ -308,58 +313,112 @@ class AcquisitionDialog(xrcfr_acq):
     Acquisition Dialog created in XRCed
     """
 
-    def __init__(self, parent, interface_model):
+    def __init__(self, parent, main_interface_model):
         xrcfr_acq.__init__(self, parent)
 
         self.conf = get_acqui_conf()
 
-        self.cmb_presets.Append(u"high")
-        self.cmb_presets.Append(u"medium")
-        self.cmb_presets.Append(u"low")
-
+        self.cmb_presets.Append(u"High quality")
+        self.cmb_presets.Append(u"Fast")
+        self.cmb_presets.Append(u"Custom")
         self.cmb_presets.Select(0)
+        # TODO: need to compute the presets accordingly
 
         self.set_default_filename_and_path()
+        
+        self.acq_future = None # a ProgressiveFuture if the acquisition is going on
 
-        # Store current values and pause updates on the current settings
-        # controller
+        # Store current values and pause updates on the current settings controller
         main_settings_controller = wx.GetApp().settings_controller
         main_settings_controller.store()
         main_settings_controller.pause()
 
         # Create a new settings controller for the acquisition dialog
-        self.settings_controller = SettingsBarController(interface_model, self, True)
+        self.settings_controller = SettingsBarController(main_interface_model, self, True)
 
-        main_stream_controller = wx.GetApp().stream_controller
-        self.stream_controller = main_stream_controller.duplicate(self.pnl_stream)
+        self.interface_model = self.duplicate_interface_model(main_interface_model)
+        orig_view = main_interface_model.focussedView.value
+        view = self.interface_model.focussedView.value
+        
+#        main_stream_controller = wx.GetApp().stream_controller
+#        self.stream_controller = main_stream_controller.duplicate(self.interface_model, self.pnl_stream)
+        self.stream_controller = StreamController(self.interface_model, self.pnl_stream)
+        # the visible streams are the one currently displayed
+        self.add_all_streams(orig_view.getStreams())
+        
+        # make sure the view displays the same thing
+        view.view_pos.value = orig_view.view_pos.value
+        view.mpp.value = orig_view.mpp.value
+        view.merge_ratio.value = orig_view.merge_ratio.value
 
         self.Bind(wx.EVT_CHAR_HOOK, self.on_key)
 
         self.btn_cancel.Bind(wx.EVT_BUTTON, self.on_close)
         self.btn_change_file.Bind(wx.EVT_BUTTON, self.on_change_file)
+        self.btn_acquire.Bind(wx.EVT_BUTTON, self.on_acquire)
         self.Bind(wx.EVT_CLOSE, self.on_close)
 
         self.estimate_acquisition_time()
 
         pub.subscribe(self.on_setting_change, 'setting.changed')
+        
 
+    def duplicate_interface_model(self, orig):
+        """
+        Duplicate a GUIMicroscope and adapt it for the acquisition window
+        The streams will be shared, but not the views
+        orig (GUIMicroscope)
+        return (GUIMicroscope)
+        """
+        new = copy.copy(orig) # shallow copy
+        
+        # create view (which cannot move or focus)
+        view = instrmodel.MicroscopeView(orig.focussedView.name.value)
+        
+        # differentiate it (only one view) 
+        new.views = {"all": view}
+        new.focussedView = model.VigilantAttribute(view)
+        new.viewLayout = model.IntEnumerated(VIEW_LAYOUT_ONE,
+                                              choices=set([VIEW_LAYOUT_ONE]))
+        
+        return new
+        
+    def add_all_streams(self, visible_streams):
+        """
+        Add all the streams present in the interface model to the stream panel.
+        visible_streams (list of streams): the streams that should be visible
+        """
+        # the order the streams are added should not matter on the display, so
+        # it's ok to not duplicate the streamTree literally
+        view = self.interface_model.focussedView.value
+        
+        # go through all the streams available in the interface model
+        for s in self.interface_model.streams:
+            # add to the stream bar
+            sp = self.stream_controller.addStreamForAcquisition(s)
+            if s in visible_streams:
+                view.addStream(s)
+                sp.show_stream()
+            else:
+                sp.hide_stream()
+        
     def on_setting_change(self, setting_ctrl):
         self.estimate_acquisition_time()
+        # TODO check presets and fall-back to custom
 
     def estimate_acquisition_time(self):
-
-        logging.warn("Estimating acquisition time")
-
         seconds = 0
 
         str_panels = self.stream_controller.get_stream_panels()
-
         if str_panels:
             for str_pan in str_panels:
-                seconds += str_pan.get_stream_mod().estimateAcquisitionTime()
-            txt = "The estimated acquisition time is %s." % seconds2human(seconds)
+                seconds += str_pan.stream.estimateAcquisitionTime()
+            seconds = math.ceil(seconds) # round a bit pessimistically
+            txt = "The estimated acquisition time is %s." % units.readable_time(seconds)
+            self.gauge_acq.Range = seconds
         else:
             txt = "No streams present."
+            self.gauge_acq.Range = 1
 
         self.lbl_acqestimate.SetLabel(txt)
 
@@ -374,25 +433,6 @@ class AcquisitionDialog(xrcfr_acq):
             self.Close()
         else:
             evt.Skip()
-
-    @staticmethod
-    def _get_available_formats():
-        """
-        Find the available file formats
-        returns (dict string -> list of strings): name of each format -> list of extensions
-        """
-        formats = {}
-        # Look dynamically which format is available
-        for module_name in dataio.__all__:
-            try:
-                exporter = __import__("odemis.dataio."+module_name, fromlist=[module_name])
-            except:  #pylint: disable=W0702
-                continue # module cannot be loaded
-            formats[exporter.FORMAT] = exporter.EXTENSIONS
-
-        if not formats:
-            logging.error("Not file exporter found!")
-        return formats
 
     @staticmethod
     def _convert_formats_to_wildcards(formats2ext):
@@ -414,14 +454,12 @@ class AcquisitionDialog(xrcfr_acq):
 
     def on_change_file(self, evt):
 
-        # Note:
-        # - Combining multiple filters into one wildcard is not supported
-        # - When setting 'defaultFile' when creating the file dialog, the
+        # Note: When setting 'defaultFile' when creating the file dialog, the
         #   first filter will automatically be added to the name. Since it
         #   cannot be changed by selecting a different file type, this is big
         #   nono. Also, extensions with multiple periods ('.') are not correctly
         #   handled. The solution is to use the SetFilename method instead.
-        formats2extensions = self._get_available_formats()
+        formats2extensions = dataio.get_available_formats()
         wildcards, formats = self._convert_formats_to_wildcards(formats2extensions)
         dialog = wx.FileDialog(self,
                             message="Choose a filename and destination",
@@ -486,7 +524,11 @@ class AcquisitionDialog(xrcfr_acq):
     def on_close(self, evt):
         """ Close event handler that executes various cleanup actions
         """
-        logging.warn("Canceling acquisition")
+        if self.acq_future:
+            # TODO: ask for confirmation before cancelling?
+            # what to do if the acquisition is done while asking for confirmation?  
+            logging.info("Cancelling acquisition due to closing the acquisition window")
+            self.acq_future.cancel()
 
         # Restore current values
         main_settings_controller = wx.GetApp().settings_controller
@@ -494,4 +536,94 @@ class AcquisitionDialog(xrcfr_acq):
         main_settings_controller.restore()
 
         self.Destroy()
+
+    def on_acquire(self, evt):
+        """
+        Start the acquisition (really)
+        """
+        st = self.interface_model.focussedView.value.streams
+        
+        # start acquisition + connect events to callback
+        f = acqmng.startAcquisition(st)
+        f.add_update_callback(self.on_acquisition_upd)
+        f.add_done_callback(self.on_acquisition_done)
+        
+        self.btn_acquire.Disable()
+        self.btn_cancel.Bind(wx.EVT_BUTTON, self.on_cancel)
+        
+        # the range of the progress bar was already set in estimate_acquisition_time()
+        self.gauge_acq.Value = 0
+        self.gauge_acq.Show()
+        
+    def on_cancel(self, evt):
+        """
+        Called during acquisition when pressing the cancel button
+        """
+        if not self.acq_future:
+            logging.warning("Tried to cancel acquisition while it was not started")
+            return
+        
+        self.acq_future.cancel()
+        # all the rest will be handled by on_acquisition_done()
+    
+    def on_acquisition_done(self, future):
+        """
+        Callback called when the acquisition is finished (either successfully or cancelled)
+        """
+        # bind button back to direct closure
+        self.btn_cancel.Bind(wx.EVT_BUTTON, self.on_close)
+        
+        try:
+            data, thumb = future.result(1) # timeout is just for safety
+        except CancelledError:
+            # put back to original state:
+            # re-enable the acquire button
+            self.btn_acquire.Enable()
+            
+            # hide progress bar (+ put pack estimated time)
+            self.estimate_acquisition_time()
+            self.gauge_acq.Show(False)
+            return
+        except Exception:
+            # We cannot do much: just warn the user and pretend it was cancelled 
+            logging.exception("Acquisition failed")
+            self.btn_acquire.Enable()
+            self.lbl_acqestimate.SetLabel("Acquisition failed.")
+            return
+            
+        # save result to file
+        try:
+            filename = os.path.join(self.txt_destination.Value,
+                                    self.txt_filename.Value)
+            exporter = dataio.get_exporter(self.conf.last_format)
+            exporter.export(filename, data, thumb)
+            logging.info("Acquisition saved as file '%s'.", filename)
+        except Exception:
+            logging.exception("Saving acquisition failed")
+            self.btn_acquire.Enable()
+            self.lbl_acqestimate.SetLabel("Saving acquisition file failed.")
+            return
+        
+        self.lbl_acqestimate.SetLabel("Completed.")            
+        
+        # change the "cancel" button to "close"
+        self.btn_cancel.SetLabel("&Close")
+        
+    
+    def on_acquisition_upd(self, future, past, left):
+        """
+        Callback called during the acquisition to update on its progress
+        past (float): number of s already past
+        left (float): estimated number of s left
+        """
+        # progress bar left/ (past+left)
+        self.gauge_acq.Value = left
+        self.gauge_acq.Range = past + left
+        
+        if future.done():
+            # the text is handled by on_acquisition_done
+            return
+        
+        left = min(1, math.ceil(left)) # pessimistic
+        self.lbl_acqestimate.SetLabel("%s left." % units.readable_time(left))
 

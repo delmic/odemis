@@ -63,7 +63,7 @@ class StreamController(object):
 
     def __init__(self, microscope_model, stream_bar):
         """
-        microscope (GUIMicroscope): the representation of the microscope Model
+        microscope_model (GUIMicroscope): the representation of the microscope Model
         stream_bar (StreamBar): an empty stream panel
         """
         self.microscope = microscope_model
@@ -219,7 +219,7 @@ class StreamController(object):
 
         return spanel
 
-    def duplicate(self, stream_bar):
+    def duplicate(self, microscope_model, stream_bar):
         """ Create a new Stream controller with the same streams as are visible
         in this controller.
 
@@ -230,7 +230,7 @@ class StreamController(object):
         # Note: self.microscope already has all the streams it needs, so we only
         # need to duplicate the stream panels in the actual StreamBar widget
 
-        new_controller = StreamController(self.microscope, stream_bar)
+        new_controller = StreamController(microscope_model, stream_bar)
 
         for sp in self._stream_bar.stream_panels:
 
@@ -256,7 +256,24 @@ class StreamController(object):
 
         return new_controller
 
+    def addStreamForAcquisition(self, stream):
+        """ Create a stream entry for the given existing stream, adapted to ac
 
+        :return StreamPanel:
+
+        """
+        # find the right panel type
+        if isinstance(stream, instrmodel.FluoStream):
+            cls = comp.stream.DyeStreamPanel
+        else:
+            cls = comp.stream.StandardStreamPanel
+            
+        sp = cls(self._stream_bar, stream, self.microscope)
+        sp.to_acquisition_mode()
+        self._stream_bar.add_stream(sp, True)
+
+        return sp
+    
     # === VA handlers
 
     def _onView(self, view):
