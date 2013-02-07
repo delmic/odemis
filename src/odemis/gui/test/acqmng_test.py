@@ -77,7 +77,6 @@ class TestNoBackend(unittest.TestCase):
 class TestWithBackend(unittest.TestCase):
     # We don't need the whole GUI, but still a working backend is nice
     
-    
     @classmethod
     def setUpClass(cls):
         # run the backend as a daemon
@@ -143,14 +142,39 @@ class TestWithBackend(unittest.TestCase):
         self.assertIsInstance(data[0], model.DataArray)
         self.assertGreaterEqual(self.updates, 3) # at least one update per stream
         
+    def test_cancel(self):
+        """
+        try a bit the cancelling possibility
+        """
+        # create a little complex streamTree
+        st = instrmodel.StreamTree(streams=[
+                self.streams[2],
+                instrmodel.StreamTree(streams=self.streams[0:2])
+                ])
+        self.past = None
+        self.left = None
+        self.updates = 0
+        self.done = False
+        
+        f = startAcquisition(st)
+        f.add_update_callback(self.on_progress_update)
+        f.add_done_callback(self.on_done)
+        
+        time.sleep(0.5) # make sure it's started
+        self.assertTrue(f.running())
+        f.cancel()
+        
+        self.assertRaises(CancelledError, f.result, 1)
+        self.assertGreaterEqual(self.updates, 1) # at least one update at cancellation
+        self.assertEqual(self.left, 0)
+        self.assertTrue(self.done)
+        self.assertTrue(f.cancelled())
+
+    def on_done(self, future):
+        self.done = True
+        
     def on_progress_update(self, future, past, left):
         self.past = past
         self.left = left
         self.updates += 1
         
-    def test_cancel(self):
-        """
-        try a bit the cancelling possibility
-        """
-        self.cancelled = False
-        pass

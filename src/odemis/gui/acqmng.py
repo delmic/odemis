@@ -126,6 +126,8 @@ class AcquisitionTask(object):
         """
         assert(self._current_stream is None) # Task should be used only once
         
+        # TODO: put a timer every second to update the past/left time= call invoke_update?
+        
         raw_images = []
         # no need to set the start time of the future: it's automatically done
         # when setting its state to running.
