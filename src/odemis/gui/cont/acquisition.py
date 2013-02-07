@@ -406,8 +406,14 @@ class AcquisitionDialog(xrcfr_acq):
                 sp.hide_stream()
         
     def on_setting_change(self, setting_ctrl):
+        # if gauge was left over from an error => now hide it
+        if self.gauge_acq.isShown():
+            self.gauge_acq.Hide()
+            self.Layout()
+        
         self.estimate_acquisition_time()
         # TODO check presets and fall-back to custom
+        
 
     def estimate_acquisition_time(self):
         seconds = 0
@@ -587,7 +593,7 @@ class AcquisitionDialog(xrcfr_acq):
             
             # hide progress bar (+ put pack estimated time)
             self.estimate_acquisition_time()
-            self.gauge_acq.Show(False)
+            self.gauge_acq.Hide()
             self.Layout()
             return
         except Exception:
@@ -595,6 +601,7 @@ class AcquisitionDialog(xrcfr_acq):
             logging.exception("Acquisition failed")
             self.btn_acquire.Enable()
             self.lbl_acqestimate.SetLabel("Acquisition failed.")
+            # leave the gauge, to give a hint on what went wrong.
             return
             
         # save result to file
@@ -614,6 +621,7 @@ class AcquisitionDialog(xrcfr_acq):
         
         # change the "cancel" button to "close"
         self.btn_cancel.SetLabel("Close")
+        # FIXME: button doesn't update label until interaction
         
     
     def on_acquisition_upd(self, future, past, left):
