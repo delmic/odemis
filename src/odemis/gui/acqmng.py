@@ -19,6 +19,7 @@ from concurrent.futures._base import CANCELLED, FINISHED, RUNNING, \
     CANCELLED_AND_NOTIFIED, CancelledError, PENDING
 from odemis import model
 from odemis.gui import instrmodel
+from odemis.gui.util import img
 import logging
 import numpy
 import sys
@@ -165,7 +166,13 @@ class AcquisitionTask(object):
         # FIXME: this call now doesn't work. We need a hack to call the canvas
         # method from outside the canvas, or use a canvas to render everything
 #        thumbnail = self._streamTree.getImage()
-        thumbnail = None
+        iim = self._streams[0].image.value
+        thumbnail = img.wxImage2NDImage(iim.image, keep_alpha=False)
+        # add some basic info to the image
+        metadata = {model.MD_POS: iim.center,
+                    model.MD_PIXEL_SIZE: (iim.mpp, iim.mpp),
+                    model.MD_DESCRIPTION: "Composited image preview"}
+        thumbnail = model.DataArray(thumbnail, metadata=metadata)
         
         # return all
         return (raw_images, thumbnail) 
