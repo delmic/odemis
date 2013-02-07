@@ -25,6 +25,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 from __future__ import division
 import collections
+import logging
 import math
 
 SI_PREFIXES = {9: u"G",
@@ -123,6 +124,7 @@ def readable_str(value, unit=None):
       used to make the value more readable, unless None is given.
     return (string)
     """
+    # TODO: if unit="s", and value > 1 use readable_time? getting ks is weird
     if unit is None:
         # don't put SI scaling prefix
         if isinstance(value, collections.Iterable):
@@ -135,5 +137,66 @@ def readable_str(value, unit=None):
         return u"%s %s%s" % (u" x ".join([to_string_pretty(v) for v in values]), prefix, unit)
     else:
         return u"%s%s" % (to_string_si_prefix(value), unit)
+
+
+def readable_time(seconds):
+    """This function translates intervals given in seconds into human readable
+    strings.
+    seconds (float)
+    """
+    # TODO: a way to indicate some kind of significant number? (If it's going to
+    # last 5 days, the number of seconds is generally pointless)
+    result = []
+    
+    sign = 1
+    if seconds < 0:
+        # it's just plain weird, but let's do as well as we can
+        logging.warning("Asked to display negative time %f", seconds)
+        sign = -1
+        seconds = -seconds
+        
+    if seconds > 60 * 60 * 24 * 30:
+        # just for us to remember to extend the function 
+        logging.debug("Converting time longer than a month.")
+    
+    second, subsec = divmod(seconds, 1)
+    msec = round(subsec * 1e3)
+    if msec == 1000:
+        msec = 0
+        second += 1
+    if second == 0 and msec == 0:
+        # exactly 0 => special case
+        return "0 second"
+    
+    minute, second = divmod(second, 60)
+    hour, minute = divmod(minute, 60)
+    day, hour = divmod(hour, 24)
+
+    if day:
+        result.append("%d day%s" % (day, "" if day == 1 else "s"))
+
+    if hour:
+        result.append("%d hour%s" % (hour, "" if hour == 1 else "s"))
+
+    if minute:
+        result.append("%d minute%s" % (minute, "" if minute == 1 else "s"))
+
+    if second:
+        result.append("%d second%s" % (second, "" if second == 1 else "s"))
+    
+    if msec:
+        result.append("%d ms" % msec)
+    
+    if len(result) == 1:
+        # simple case
+        ret = result[0]
+    else:
+        # make them "x, x, x and x"
+        ret = "{} and {}".format(", ".join(result[:-1]), result[-1])
+
+    if sign == -1:
+        ret = "minus " + ret
+        
+    return ret
 
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:

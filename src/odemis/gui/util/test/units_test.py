@@ -89,6 +89,20 @@ class TestUnits(unittest.TestCase):
             self.assertEquals(o, eo,
                               u"%s is '%s' while expected '%s'" % (i, o, eo))
 
+    def test_readable_str_s(self):
+        #         (input) (expected output)
+        values = [((1.0,), "1 second"),
+                  ((0,), "0 second"),
+                  ((3601,), "1 hour and 1 second"),
+                  ((12.350,), "12 seconds and 350 ms"),
+                  ((3 * 24 * 60 * 60 + 12 * 60,), "3 days and 12 minutes"),
+                  ]
+        for (i, eo) in values:
+            o = units.readable_time(*i)
+            self.assertEquals(o, eo,
+                              u"%s is '%s' while expected '%s'" % (i, o, eo))
+
+        
 if __name__ == "__main__":
     unittest.main()
     
