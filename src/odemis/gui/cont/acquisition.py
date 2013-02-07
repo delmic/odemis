@@ -149,6 +149,9 @@ class AcquisitionController(object):
         acq_dialog = AcquisitionDialog(self._main_frame,
                                              wx.GetApp().interface_model)
 
+        # TODO: need to stop the update of all the streams, and start them again at
+        # the end. => add a function to the stream scheduler in the stream controller?
+        
         acq_dialog.SetSize(parent_size)
         acq_dialog.Center()
         acq_dialog.ShowModal()
@@ -336,17 +339,16 @@ class AcquisitionDialog(xrcfr_acq):
         # Create a new settings controller for the acquisition dialog
         self.settings_controller = SettingsBarController(main_interface_model, self, True)
 
+        # duplicate the interface, but with only one view
         self.interface_model = self.duplicate_interface_model(main_interface_model)
         orig_view = main_interface_model.focussedView.value
         view = self.interface_model.focussedView.value
-        
-#        main_stream_controller = wx.GetApp().stream_controller
-#        self.stream_controller = main_stream_controller.duplicate(self.interface_model, self.pnl_stream)
+
         self.stream_controller = StreamController(self.interface_model, self.pnl_stream)
-        # the visible streams are the one currently displayed
+        # The streams currently displayed are the one
         self.add_all_streams(orig_view.getStreams())
         
-        # make sure the view displays the same thing
+        # make sure the view displays the same thing as the one we are duplicating
         view.view_pos.value = orig_view.view_pos.value
         view.mpp.value = orig_view.mpp.value
         view.merge_ratio.value = orig_view.merge_ratio.value
@@ -373,9 +375,9 @@ class AcquisitionDialog(xrcfr_acq):
         new = copy.copy(orig) # shallow copy
         
         # create view (which cannot move or focus)
-        view = instrmodel.MicroscopeView(orig.focussedView.name.value)
+        view = instrmodel.MicroscopeView(orig.focussedView.value.name.value)
         
-        # differentiate it (only one view) 
+        # differentiate it (only one view)
         new.views = {"all": view}
         new.focussedView = model.VigilantAttribute(view)
         new.viewLayout = model.IntEnumerated(VIEW_LAYOUT_ONE,
@@ -604,10 +606,10 @@ class AcquisitionDialog(xrcfr_acq):
             self.lbl_acqestimate.SetLabel("Saving acquisition file failed.")
             return
         
-        self.lbl_acqestimate.SetLabel("Completed.")            
+        self.lbl_acqestimate.SetLabel("Acquisition completed.")            
         
         # change the "cancel" button to "close"
-        self.btn_cancel.SetLabel("&Close")
+        self.btn_cancel.SetLabel("Close")
         
     
     def on_acquisition_upd(self, future, past, left):

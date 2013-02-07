@@ -219,43 +219,6 @@ class StreamController(object):
 
         return spanel
 
-    def duplicate(self, microscope_model, stream_bar):
-        """ Create a new Stream controller with the same streams as are visible
-        in this controller.
-
-        :return StreamController:
-
-        """
-
-        # Note: self.microscope already has all the streams it needs, so we only
-        # need to duplicate the stream panels in the actual StreamBar widget
-
-        new_controller = StreamController(microscope_model, stream_bar)
-
-        for sp in self._stream_bar.stream_panels:
-
-            was_playing = sp.is_playing()
-
-            # TODO: temporary 'pause' should be removed when all handling has
-            # been passed to scheduler. IMPORTANT: the pausing of the streams
-            # should be done before they are duplicated!
-            sp.pause_stream()
-
-            new_stream_panel = sp.__class__(stream_bar,
-                                            sp.stream,
-                                            self.microscope)
-
-            # Used Streams can always be shown
-            stream_bar.add_stream(new_stream_panel, True)
-            new_stream_panel.to_acquisition_mode()
-
-            if was_playing:
-                new_stream_panel.show_stream()
-            else:
-                new_stream_panel.hide_stream()
-
-        return new_controller
-
     def addStreamForAcquisition(self, stream):
         """ Create a stream entry for the given existing stream, adapted to ac
 
@@ -269,8 +232,8 @@ class StreamController(object):
             cls = comp.stream.StandardStreamPanel
             
         sp = cls(self._stream_bar, stream, self.microscope)
-        sp.to_acquisition_mode()
         self._stream_bar.add_stream(sp, True)
+        sp.to_acquisition_mode()
 
         return sp
     
@@ -374,6 +337,9 @@ class StreamController(object):
             self._startStreams(instrmodel.EM_STREAMS)
 
 
+    # TODO: just return a list of streams which were paused, and use them
+    # for startStream
+    # + make it public to use from the acquisition
     def _pauseStreams(self, classes):
         """
         Pause (deactivate and stop updating) all the streams of the given class
