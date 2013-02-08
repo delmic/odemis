@@ -407,7 +407,7 @@ class AcquisitionDialog(xrcfr_acq):
         
     def on_setting_change(self, setting_ctrl):
         # if gauge was left over from an error => now hide it
-        if self.gauge_acq.isShown():
+        if self.gauge_acq.IsShown():
             self.gauge_acq.Hide()
             self.Layout()
         
@@ -586,6 +586,8 @@ class AcquisitionDialog(xrcfr_acq):
         
         try:
             data, thumb = future.result(1) # timeout is just for safety
+            # make sure the progress bar is at 100%
+            self.gauge_acq.Value = self.gauge_acq.Range
         except CancelledError:
             # put back to original state:
             # re-enable the acquire button
@@ -621,7 +623,6 @@ class AcquisitionDialog(xrcfr_acq):
         
         # change the "cancel" button to "close"
         self.btn_cancel.SetLabel("Close")
-        # FIXME: button doesn't update label until interaction
         
     
     def on_acquisition_upd(self, future, past, left):
@@ -630,14 +631,15 @@ class AcquisitionDialog(xrcfr_acq):
         past (float): number of s already past
         left (float): estimated number of s left
         """
-        # progress bar left/ (past+left)
-        self.gauge_acq.Value = 100 * left
-        self.gauge_acq.Range = 100 * (past + left)
-        
         if future.done():
-            # the text is handled by on_acquisition_done
+            # progress bar and text is handled by on_acquisition_done
             return
         
-        left = min(1, math.ceil(left)) # pessimistic
+        # progress bar: past / past+left
+        logging.debug("updating the progress bar to %f/%f", past, past + left)
+        self.gauge_acq.Range = 100 * (past + left)
+        self.gauge_acq.Value = 100 * past
+        
+        left = math.ceil(left) # pessimistic
         self.lbl_acqestimate.SetLabel("%s left." % units.readable_time(left))
 
