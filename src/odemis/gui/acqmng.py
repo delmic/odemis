@@ -14,6 +14,7 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
+from __future__ import division
 from concurrent import futures
 from concurrent.futures._base import CANCELLED, FINISHED, RUNNING, \
     CANCELLED_AND_NOTIFIED, CancelledError, PENDING
@@ -129,13 +130,19 @@ class AcquisitionTask(object):
         Runs the acquisition
         """
         assert(self._current_stream is None) # Task should be used only once
+        expected_time = numpy.sum(self._streamTimes.values())
         
-        # TODO: put a timer every second to update the past/left time= call invoke_update?
+        # This is a little trick to force the future to give updates even if
+        # the estimation is the same
+        upd_period = min(10, max(0.1, expected_time/100))
+        timer = threading.Thread(target=self._future_time_upd,
+                       name="Acquisition timer update",
+                       args=(upd_period,))
+        timer.start()
         
         raw_images = []
         # no need to set the start time of the future: it's automatically done
         # when setting its state to running.
-        expected_time = numpy.sum(self._streamTimes.values())
         self._future.set_end_time(time.time() + expected_time)
         
         for s in self._streams:
@@ -179,6 +186,18 @@ class AcquisitionTask(object):
         
         # return all
         return (raw_images, thumbnail) 
+    
+    def _future_time_upd(self, period):
+        """
+        Force the future to give a progress update at a given periodicity
+        period (float): period in s
+        Note: it automatically finishes when the future is done
+        """
+        logging.debug("starting thread update")
+        while not self._future.done():
+            logging.debug("updating the future")
+            self._future._invoke_upd_callbacks()
+            time.sleep(period)
     
     def _image_listener(self, image):
         """
@@ -233,8 +252,8 @@ class ProgressiveFuture(futures.Future):
         self.task_canceller = None
 
     def _report_update(self, fn):
-        now = time.time()
         with self._condition:
+            now = time.time()
             if self._state in [CANCELLED, CANCELLED_AND_NOTIFIED, FINISHED]:
                 past = self._end_time - self._start_time
                 left = 0
@@ -246,7 +265,7 @@ class ProgressiveFuture(futures.Future):
                     past = -1e-9
                 if left < 0:
                     left = 0
-            else:
+            else: # running
                 past = now - self._start_time
                 left = self._end_time - now
                 if left < 0:
