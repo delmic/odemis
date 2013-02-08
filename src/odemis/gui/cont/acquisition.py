@@ -348,6 +348,8 @@ class AcquisitionDialog(xrcfr_acq):
         # The streams currently displayed are the one
         self.add_all_streams(orig_view.getStreams())
         # TODO: disable acquire button when no streams are visible
+        # cf pub.subscribe (on_stream_changed)
+        
         
         # make sure the view displays the same thing as the one we are duplicating
         view.view_pos.value = orig_view.view_pos.value
@@ -362,6 +364,7 @@ class AcquisitionDialog(xrcfr_acq):
         self.Bind(wx.EVT_CLOSE, self.on_close)
 
         self.estimate_acquisition_time()
+        # TODO: remove self.lbl_acqtimer ? => we just use 
 
         pub.subscribe(self.on_setting_change, 'setting.changed')
         
@@ -539,6 +542,9 @@ class AcquisitionDialog(xrcfr_acq):
             logging.info("Cancelling acquisition due to closing the acquisition window")
             self.acq_future.cancel()
 
+        # stop listening to events
+        pub.unsubscribe(self.on_setting_change, 'setting.changed')
+
         # Restore current values
         main_settings_controller = wx.GetApp().settings_controller
         main_settings_controller.resume()
@@ -642,5 +648,8 @@ class AcquisitionDialog(xrcfr_acq):
         self.gauge_acq.Value = 100 * past
         
         left = math.ceil(left) # pessimistic
-        self.lbl_acqestimate.SetLabel("%s left." % units.readable_time(left))
-
+        if left > 2:
+            self.lbl_acqestimate.SetLabel("%s left." % units.readable_time(left))
+        else:
+            # don't be too precise
+            self.lbl_acqestimate.SetLabel("a few seconds left.")
