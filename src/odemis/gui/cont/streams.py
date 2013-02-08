@@ -72,7 +72,9 @@ class StreamController(object):
         self._scheduler_subscriptions = {} # stream -> callable
 
         # TODO probably need a lock to access it correctly
-        self._streams_to_restart = set() # streams to be restarted when turning on again
+        # streams to be restarted when turning on again
+        self._streams_to_restart_opt = set()
+        self._streams_to_restart_em = set()
 
         # TODO remove the actions when microscope goes off
         if stream_bar.btn_add_stream:
@@ -85,7 +87,7 @@ class StreamController(object):
         self.microscope.opticalState.subscribe(self.onOpticalState)
         self.microscope.emState.subscribe(self.onEMState)
 
-        pub.subscribe(self.remove_stream, 'stream.remove')
+        pub.subscribe(self.removeStream, 'stream.remove')
 
     def optical_was_turned_on(self):
         return self._opticalWasTurnedOn
@@ -185,7 +187,7 @@ class StreamController(object):
         """
         self.microscope.streams.add(stream)
         if add_to_all_views:
-            for _, v in self.microscope.views.items():
+            for v in self.microscope.views.values():
                 if isinstance(stream, v.stream_classes):
                     v.addStream(stream)
         else:
@@ -317,63 +319,60 @@ class StreamController(object):
     def onOpticalState(self, state):
         # only called when it changes
         if state == STATE_OFF or state == STATE_PAUSE:
-            self._pauseStreams(instrmodel.OPTICAL_STREAMS)
+            self._streams_to_restart_opt = self.pauseStreams(instrmodel.OPTICAL_STREAMS)
         elif state == STATE_ON:
             if not self._opticalWasTurnedOn:
                 self._opticalWasTurnedOn = True
                 self.addBrightfield(add_to_all_views=True)
 
-            self._startStreams(instrmodel.OPTICAL_STREAMS)
+            self.resumeStreams(self._streams_to_restart_opt)
 
     def onEMState(self, state):
         if state == STATE_OFF or state == STATE_PAUSE:
-            self._pauseStreams(instrmodel.EM_STREAMS)
+            self._streams_to_restart_em = self.pauseStreams(instrmodel.EM_STREAMS)
         elif state == STATE_ON:
             if not self._semWasTurnedOn:
                 self._semWasTurnedOn = True
                 if self.microscope.sed:
                     self.addSEMSED(add_to_all_views=True)
 
-            self._startStreams(instrmodel.EM_STREAMS)
+            self.resumeStreams(self._streams_to_restart_em)
 
 
-    # TODO: just return a list of streams which were paused, and use them
-    # for startStream
-    # + make it public to use from the acquisition
-    def _pauseStreams(self, classes):
+    def pauseStreams(self, classes=instrmodel.Stream):
         """
         Pause (deactivate and stop updating) all the streams of the given class
+        classes (class or list of class): classes of streams that should be disabled
+        returns (set of Stream): streams which were actually paused
         """
+        streams = set() # stream paused
         for s in self.microscope.streams:
             if isinstance(s, classes):
                 if s.updated.value:
-                    self._streams_to_restart.add(s)
+                    streams.add(s)
                     s.active.value = False
                     s.updated.value = False
                     # TODO also disable stream panel "update" button?
+        
+        return streams
 
-
-    def _startStreams(self, classes):
+    def resumeStreams(self, streams):
         """
-        (Re)start (activate) streams that are related to the classes
+        (Re)start (activate) streams
+        streams (set of streams): Streams that will be resumed
         """
-        for s in self.microscope.streams:
-            if (s in self._streams_to_restart and isinstance(s, classes)):
-                self._streams_to_restart.remove(s)
-                s.updated.value = True
-                # it will be activated by the stream scheduler
+        for s in streams:
+            s.updated.value = True
+            # it will be activated by the stream scheduler
 
 
-    def remove_stream(self, stream):
+    def removeStream(self, stream):
         """
         Removes the given stream.
         stream (Stream): the stream to remove
         Note: the stream panel is to be destroyed separately via the stream_bar
         It's ok to call if the stream has already been removed
         """
-        self._streams_to_restart.discard(stream)
-        self.microscope.streams.discard(stream)
-
         # don't schedule any more
         stream.active.value = False
         stream.updated.value = False
@@ -382,8 +381,12 @@ class StreamController(object):
             stream.updated.unsubscribe(callback)
 
         # Remove from the views
-        for v in [v for v in self.microscope.views.itervalues()]:
+        for v in self.microscope.views.values():
             v.removeStream(stream)
+
+        self._streams_to_restart_opt.discard(stream)
+        self._streams_to_restart_em.discard(stream)
+        self.microscope.streams.discard(stream)
 
         logging.debug("Sending stream.ctrl.removed message")
         pub.sendMessage('stream.ctrl.removed',

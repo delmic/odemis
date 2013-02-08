@@ -143,21 +143,22 @@ class AcquisitionController(object):
         return bmp.ConvertToImage()
 
     def open_acquisition_dialog(self, evt):
-
         parent_size = [v * 0.66 for v in self._main_frame.GetSize()]
 
-        acq_dialog = AcquisitionDialog(self._main_frame,
-                                             wx.GetApp().interface_model)
+        acq_dialog = AcquisitionDialog(self._main_frame, self._microscope)
 
-        # TODO: need to stop the update of all the streams, and start them again at
-        # the end. => add a function to the stream scheduler in the stream controller?
+        # pause all the live acquisitions
+        main_stream_controller = wx.GetApp().stream_controller
+        paused_streams = main_stream_controller.pauseStreams()
         
-        acq_dialog.SetSize(parent_size)
-        acq_dialog.Center()
-        acq_dialog.ShowModal()
-
-        # Make sure that the acquisition button is enabled again.
-        self._main_frame.btn_acquire.Enable()
+        try:
+            acq_dialog.SetSize(parent_size)
+            acq_dialog.Center()
+            acq_dialog.ShowModal()
+        finally:
+            main_stream_controller.resumeStreams(paused_streams)
+            # Make sure that the acquisition button is enabled again.
+            self._main_frame.btn_acquire.Enable()
 
     def start_snapshot_viewport(self, event):
         """
