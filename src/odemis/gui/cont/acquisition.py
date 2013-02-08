@@ -36,7 +36,7 @@ from odemis.gui.cont.settings import SettingsBarController
 from odemis.gui.cont.streams import StreamController
 from odemis.gui.instrmodel import VIEW_LAYOUT_ONE
 from odemis.gui.main_xrc import xrcfr_acq
-from odemis.gui.util import img, get_picture_folder, units
+from odemis.gui.util import img, get_picture_folder, units, call_after
 from wx.lib.pubsub import pub
 import copy
 import logging
@@ -554,9 +554,9 @@ class AcquisitionDialog(xrcfr_acq):
         # It should never be possible to reach here with an empty streamTree
         
         # start acquisition + connect events to callback
-        f = acqmng.startAcquisition(st)
-        f.add_update_callback(self.on_acquisition_upd)
-        f.add_done_callback(self.on_acquisition_done)
+        self.acq_future = acqmng.startAcquisition(st)
+        self.acq_future.add_update_callback(self.on_acquisition_upd)
+        self.acq_future.add_done_callback(self.on_acquisition_done)
         
         self.btn_acquire.Disable()
         self.btn_cancel.Bind(wx.EVT_BUTTON, self.on_cancel)
@@ -577,6 +577,7 @@ class AcquisitionDialog(xrcfr_acq):
         self.acq_future.cancel()
         # all the rest will be handled by on_acquisition_done()
     
+    @call_after
     def on_acquisition_done(self, future):
         """
         Callback called when the acquisition is finished (either successfully or cancelled)
@@ -624,7 +625,7 @@ class AcquisitionDialog(xrcfr_acq):
         # change the "cancel" button to "close"
         self.btn_cancel.SetLabel("Close")
         
-    
+    @call_after
     def on_acquisition_upd(self, future, past, left):
         """
         Callback called during the acquisition to update on its progress

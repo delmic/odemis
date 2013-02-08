@@ -73,6 +73,9 @@ def _executeTask(future, fn, *args, **kwargs):
 
     try:
         result = fn(*args, **kwargs)
+    except CancelledError:
+        # cancelled via the future (while running) => it's all already handled
+        pass
     except BaseException:
         e = sys.exc_info()[1]
         future.set_exception(e)
@@ -187,7 +190,7 @@ class AcquisitionTask(object):
             self._current_stream.active.value = False
             
             # let the thread know that it's all done
-            self._condition.notifyAll()
+            self._condition.notify_all()
     
     def cancel(self):
         """
