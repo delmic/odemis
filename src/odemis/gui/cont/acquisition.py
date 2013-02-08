@@ -349,12 +349,15 @@ class AcquisitionDialog(xrcfr_acq):
         self.add_all_streams(orig_view.getStreams())
         # TODO: disable acquire button when no streams are visible
         # cf pub.subscribe (on_stream_changed)
-        
+        # TODO: need to create a disabled version of the button
         
         # make sure the view displays the same thing as the one we are duplicating
         view.view_pos.value = orig_view.view_pos.value
         view.mpp.value = orig_view.mpp.value
         view.merge_ratio.value = orig_view.merge_ratio.value
+
+        # attach the view to the viewport        
+        self.pnl_view_acq.setView(view, self.interface_model)
 
         self.Bind(wx.EVT_CHAR_HOOK, self.on_key)
 
@@ -364,7 +367,6 @@ class AcquisitionDialog(xrcfr_acq):
         self.Bind(wx.EVT_CLOSE, self.on_close)
 
         self.estimate_acquisition_time()
-        # TODO: remove self.lbl_acqtimer ? => we just use 
 
         pub.subscribe(self.on_setting_change, 'setting.changed')
         

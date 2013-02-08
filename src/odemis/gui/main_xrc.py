@@ -103,6 +103,7 @@ class xrcfr_acq(wx.Dialog):
         self.PostCreate(pre)
 
         # Define variables for the controls, bind event handlers
+        self.pnl_view_acq = xrc.XRCCTRL(self, "pnl_view_acq")
         self.cmb_presets = xrc.XRCCTRL(self, "cmb_presets")
         self.txt_filename = xrc.XRCCTRL(self, "txt_filename")
         self.btn_change_file = xrc.XRCCTRL(self, "btn_change_file")
@@ -113,7 +114,6 @@ class xrcfr_acq(wx.Dialog):
         self.fp_optical_settings = xrc.XRCCTRL(self, "fp_optical_settings")
         self.pnl_stream = xrc.XRCCTRL(self, "pnl_stream")
         self.gauge_acq = xrc.XRCCTRL(self, "gauge_acq")
-        self.lbl_acqtimer = xrc.XRCCTRL(self, "lbl_acqtimer")
         self.lbl_acqestimate = xrc.XRCCTRL(self, "lbl_acqestimate")
         self.btn_cancel = xrc.XRCCTRL(self, "btn_cancel")
         self.btn_acquire = xrc.XRCCTRL(self, "btn_acquire")
@@ -944,7 +944,11 @@ def __init_resources():
       <growablecols>0</growablecols>
       <growablerows>0</growablerows>
       <object class="sizeritem">
-        <object class="MicroscopeViewport" name="pnl_view_acq"/>
+        <object class="MicroscopeViewport" name="pnl_view_acq">
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
         <flag>wxEXPAND</flag>
       </object>
       <object class="sizeritem">
@@ -1142,28 +1146,6 @@ def __init_resources():
               <option>1</option>
               <flag>wxALL|wxEXPAND</flag>
               <border>30</border>
-            </object>
-            <object class="sizeritem">
-              <object class="wxStaticText" name="lbl_acqtimer">
-                <label>9999 s</label>
-                <fg>#DDDDDD</fg>
-                <font>
-                  <size>14</size>
-                  <style>normal</style>
-                  <weight>normal</weight>
-                  <underlined>0</underlined>
-                  <family>default</family>
-                  <face>Ubuntu</face>
-                  <encoding>UTF-8</encoding>
-                </font>
-                <hidden>1</hidden>
-                <style>wxALIGN_RIGHT</style>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-              <flag>wxTOP|wxBOTTOM|wxRIGHT|wxALIGN_RIGHT</flag>
-              <border>23</border>
             </object>
             <object class="sizeritem">
               <object class="wxStaticText" name="lbl_acqestimate">

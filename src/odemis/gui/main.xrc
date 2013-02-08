@@ -812,7 +812,11 @@
       <growablecols>0</growablecols>
       <growablerows>0</growablerows>
       <object class="sizeritem">
-        <object class="MicroscopeViewport" name="pnl_view_acq"/>
+        <object class="MicroscopeViewport" name="pnl_view_acq">
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
         <flag>wxEXPAND</flag>
       </object>
       <object class="sizeritem">
@@ -1010,28 +1014,6 @@
               <option>1</option>
               <flag>wxALL|wxEXPAND</flag>
               <border>30</border>
-            </object>
-            <object class="sizeritem">
-              <object class="wxStaticText" name="lbl_acqtimer">
-                <label>9999 s</label>
-                <fg>#DDDDDD</fg>
-                <font>
-                  <size>14</size>
-                  <style>normal</style>
-                  <weight>normal</weight>
-                  <underlined>0</underlined>
-                  <family>default</family>
-                  <face>Ubuntu</face>
-                  <encoding>UTF-8</encoding>
-                </font>
-                <hidden>1</hidden>
-                <style>wxALIGN_RIGHT</style>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-              <flag>wxTOP|wxBOTTOM|wxRIGHT|wxALIGN_RIGHT</flag>
-              <border>23</border>
             </object>
             <object class="sizeritem">
               <object class="wxStaticText" name="lbl_acqestimate">
