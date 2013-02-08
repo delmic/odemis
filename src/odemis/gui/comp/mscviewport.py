@@ -29,6 +29,7 @@ from ..img.data import getico_blending_optBitmap, getico_blending_semBitmap
 from ..util import call_after, units
 from .scalewindow import ScaleWindow
 from .slider import Slider
+from odemis.gui import instrmodel
 import logging
 import wx
 
@@ -333,14 +334,25 @@ class MicroscopeViewport(wx.Panel):
 
     @call_after
     def _onImageUpdate(self, timestamp):
+        # TODO: Just depend on the "merge" argument on the streamTree
+        # For now we just duplicate the logic in _convertStreamsToImages():
+        #  display iif both EM and OPT streams
+        streams = self.mic_view.streams.getStreams()
+        has_opt = any(isinstance(s, instrmodel.OPTICAL_STREAMS) for s in streams)
+        has_em = any(isinstance(s, instrmodel.EM_STREAMS) for s in streams)
+        
+        if (has_opt and has_em):
+            self.ShowMergeSlider(True)
+        else:
+            self.ShowMergeSlider(False)        
         # MergeSlider is displayed iif:
         # * Root operator of StreamTree accepts merge argument
         # * (and) Root operator of StreamTree has >= 2 images
-        if ("merge" in self.mic_view.streams.kwargs and
-            len(self.mic_view.streams.streams) >= 2):
-            self.ShowMergeSlider(True)
-        else:
-            self.ShowMergeSlider(False)
+#        if ("merge" in self.mic_view.streams.kwargs and
+#            len(self.mic_view.streams.streams) >= 2):
+#            self.ShowMergeSlider(True)
+#        else:
+#            self.ShowMergeSlider(False)
 
         # magnification might have changed (eg, different number of images)
         self.UpdateMagnification()
@@ -348,7 +360,7 @@ class MicroscopeViewport(wx.Panel):
 
     @call_after
     def avWavelength(self, value):
-        # need to know both wavelengthes, so just look into the values
+        # need to know both wavelengths, so just look into the values
         win = self.datamodel.optical_emt_wavelength.value
         wout = self.datamodel.optical_det_wavelength.value
 
