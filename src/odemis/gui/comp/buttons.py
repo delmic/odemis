@@ -292,6 +292,12 @@ class ImageTextButton(GenBitmapTextButton):
         """
         return self.bmpHover
 
+    def SetLabel(self, label):
+        GenBitmapTextButton.SetLabel(self, label)
+        # FIXME: should be fixed into GenBitmapTextButton => opened ticket #15032
+        # http://trac.wxwidgets.org/ticket/15032
+        self.Refresh() # force to redraw the image
+    
     def OnEnter(self, evt):
         """ Event handler that fires when the mouse cursor enters the button """
         if self.bmpHover:
