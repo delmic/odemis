@@ -98,26 +98,25 @@ def bind_highlight(ctrl, label, vat, *evt_types):
     def reset_value(evt):
         vat.value = def_val
         wx.CallAfter(pub.sendMessage, 'setting.changed', setting_ctrl=ctrl)
+        label.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR)
 
     def show_reset_menu(evt):
         eo = evt.GetEventObject()
 
         # No menu needed if value hasn't changed
-        if eo.GetValue() == def_val:
+        if ctrl.GetValue() == def_val:
             return
 
         menu = wx.Menu()
         mi = wx.MenuItem(menu, wx.NewId(), 'Reset value')
 
-        ctrl.Bind(wx.EVT_MENU, reset_value, mi)
+        eo.Bind(wx.EVT_MENU, reset_value, mi)
 
         menu.AppendItem(mi)
-        ctrl.PopupMenu(menu, evt.GetPosition())
-
-        label.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR)
-
+        eo.PopupMenu(menu, evt.GetPosition())
 
     ctrl.Bind(wx.EVT_RIGHT_DOWN, show_reset_menu)
+    label.Bind(wx.EVT_RIGHT_DOWN, show_reset_menu)
 
 
 
