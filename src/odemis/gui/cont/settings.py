@@ -121,19 +121,19 @@ def bind_highlight(ctrl, label, vat, *evt_types):
 
 
 # Default settings for the different components.
-# (Just a ccd for now, 2012-8-27)
 # Values in the settings dictionary will be used to steer the default
-# behaviours in represening values and the way in which they can be altered.
+# behaviours in representing values and the way in which they can be altered.
 # All values are optional
 # Format:
-#   role
-#       vigilant attribute
+#   role of component
+#       vigilant attribute name
 #           label
-#           control_type
-#           range
-#           choices
-#           unit
-#           perc_to_val (a lambda function used in sliders)
+#              control_type (CONTROL_NONE to hide it)
+#              range
+#              choices
+#              scale
+#              type
+#              format
 
 SETTINGS = {
             "ccd":
@@ -201,6 +201,30 @@ SETTINGS = {
 
 ####### Classes #######
 
+class SettingEntry(object):
+    """
+    Represents an setting entry in the panel. It merely associates the VA to
+    the widgets that allow to control it.
+    """
+    # TODO: merge with VAC?
+    def __init__(self, name, va=None, comp=None, label=None, ctrl=None, vac=None):
+        """
+        name (string): name of the va in the component (as-is)
+        va (VA): the actual VigilanAttribute
+        comp (model.Component): the component that has this VA
+        label (wx.LabelTxt): a widget which displays the name of the VA
+        ctrl (wx.Window): a widget that allows to change the value
+        vac (VigilantAttributeController): the object that ensures the connection
+          between the VA and the widget
+        """
+        self.name = name
+        self.va = va
+        self.comp = comp
+        self.label = label
+        self.ctrl = ctrl
+        self.vac = vac
+          
+
 class SettingsPanel(object):
     """ Settings base class which describes an indirect wrapper for
     FoldPanelItems.
@@ -245,11 +269,11 @@ class SettingsPanel(object):
         self._gb_sizer.AddGrowableCol(1)
 
         self.num_entries = 0
-        self.entries = []
+        self.entries = [] # list of SettingEntry
 
         # This attribute can be used to save and restore the current state
         # (as in, all the values of the controls) of the SettingsPanel.
-        self._values_cache = []
+        self._values_cache = {} # SettingEntry -> value
 
         #self.panel.SetMinSize((380, -1))
         #self.panel.Refresh()
@@ -257,48 +281,41 @@ class SettingsPanel(object):
     def store(self):
         """ Store the current control values into an internal values cache """
         # Clear the current cache
-        self._values_cache = []
+        self._values_cache = {}
 
         for entry in self.entries:
-            value = None
-
-            if "vaco" in entry:
-                value = entry["vaco"].vigilattr.value
-            elif hasattr(entry["val_ctrl"], "GetValue"):
-                value = entry["val_ctrl"].GetValue()
+            if not entry.va:
+                continue
+            self._values_cache[entry] = entry.va.value
 
             logging.debug("Storing value %s for %s",
-                          value,
-                          entry["lbl_ctrl"].GetLabel())
-            self._values_cache.append(value)
+                          entry.va.value,
+                          entry.name)
 
     def restore(self):
         """ Restore the control values from the internal values cache """
-        for value, entry in zip(self._values_cache, self.entries):
-            if value:
-                logging.debug("Restoring value %s for %s",
-                              value,
-                              entry["lbl_ctrl"].GetLabel())
+        for entry, value in self._values_cache.items():
+            logging.debug("Restoring value %s for %s",
+                          value,
+                          entry.name)
 
-                if "vaco" in entry:
-                    try:
-                        entry["vaco"].vigilattr.value = value
-                    except NotSettableError:
-                        pass
-                elif hasattr(entry["val_ctrl"], "SetValue"):
-                    entry["val_ctrl"].SetValue(value)
-                else:
-                    continue
+            try:
+                entry.va.value = value
+            except NotSettableError:
+                logging.info("Couldn't restore value %s as it is read-only",
+                             entry.name)
 
     def pause(self):
         """ Pause VigilantAttributeConnector related control updates """
-        for entry in [e for e in self.entries if "vaco" in e]:
-            entry["vaco"].pause()
+        for entry in self.entries:
+            if entry.vac:
+                entry.vac.pause()
 
     def resume(self):
         """ Pause VigilantAttributeConnector related control updates """
-        for entry in [e for e in self.entries if "vaco" in e]:
-            entry["vaco"].resume()
+        for entry in self.entries:
+            if entry.vac:
+                entry.vac.resume()
 
     def _clear(self):
         # Remove default 'no content' label
@@ -404,15 +421,16 @@ class SettingsPanel(object):
             self.panel.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR)
 
         self.num_entries += 1
-        self.entries.append({"lbl_ctrl": lbl_ctrl,
-                             "val_ctrl": value_ctrl,
-                             "value": value})
+        # XXX
+        ne = SettingEntry(name=label, label=lbl_ctrl, ctrl=value_ctrl)
+        self.entries.append(ne)
 
-    def add_value(self, label, vigil_attr, conf=None):
-        """ Add a label/value pair to the settings panel.
+    def add_value(self, name, vigil_attr, comp, conf=None):
+        """ Add a name/value pair to the settings panel.
 
-        label (string): name of the value
+        name (string): name of the value
         vigil_attr (VigilantAttribute)
+        comp (Component): the component that contains this VigilantAttribute
         conf {dict}: Configuration items that may override default settings
         """
         assert isinstance(vigil_attr, VigilantAttributeBase)
@@ -447,7 +465,7 @@ class SettingsPanel(object):
         self._clear()
 
         # Format label
-        label = conf.get('label', self._label_to_human(label))
+        label = conf.get('label', self._label_to_human(name))
         # Add the label to the panel
         lbl_ctrl = wx.StaticText(self.panel, -1, "%s" % label)
         self._gb_sizer.Add(lbl_ctrl, (self.num_entries, 0), flag=wx.ALL, border=5)
@@ -644,11 +662,10 @@ class SettingsPanel(object):
         self._gb_sizer.Add(new_ctrl, (self.num_entries, 1),
                         flag=wx.ALL|wx.EXPAND, border=5)
 
+        ne = SettingEntry(name, vigil_attr, comp, lbl_ctrl, new_ctrl, vac)
+        self.entries.append(ne)
         self.num_entries += 1
-        self.entries.append({"lbl_ctrl": lbl_ctrl,
-                             "val_ctrl": new_ctrl,
-                             "value": vigil_attr.value,
-                             "vaco": vac})
+        
         self.fold_panel.Parent.Layout()
 
     def on_setting_changed(self, evt):
@@ -739,7 +756,7 @@ class SettingsBarController(object):
                 conf = SETTINGS[comp.role][name]
             else:
                 conf = None
-            self._optical_panel.add_value(name, value, conf)
+            self._optical_panel.add_value(name, value, comp, conf)
 
     def add_ebeam(self, comp):
         self._sem_panel.add_label("SEM", comp.name)
@@ -750,5 +767,5 @@ class SettingsBarController(object):
                 conf = SETTINGS[comp.role][name]
             else:
                 conf = None
-            self._sem_panel.add_value(name, value, conf)
+            self._sem_panel.add_value(name, value, comp, conf)
 
