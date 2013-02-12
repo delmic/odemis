@@ -30,15 +30,16 @@ import traceback
 import wx
 import Pyro4.errors
 
+import odemis.gui.cont.tabs as tabs
 from odemis import __version__, model
 from odemis.gui import main_xrc, instrmodel, log
 from odemis.gui.conf import get_general_conf
-from odemis.gui.cont.acquisition import AcquisitionController
-from odemis.gui.cont.microscope import MicroscopeController
-from odemis.gui.cont.settings import SettingsBarController
-from odemis.gui.cont.streams import StreamController
-from odemis.gui.cont.tabs import TabBarController
-from odemis.gui.cont.views import ViewController, ViewSelector
+from odemis.gui.cont import set_main_tab_controller
+# from odemis.gui.cont.acquisition import AcquisitionController
+# from odemis.gui.cont.microscope import MicroscopeController
+# from odemis.gui.cont.settings import SettingsBarController
+# from odemis.gui.cont.streams import StreamController
+# from odemis.gui.cont.views import ViewController, ViewSelector
 from odemis.gui.instrmodel import InstrumentalImage
 from odemis.gui.xmlh import odemis_get_resources
 
@@ -124,12 +125,6 @@ class OdemisGUIApp(wx.App):
             #self.main_frame.SetSize((w, h))
             #self.main_frame.SetPosition((0, 0))
 
-            self.tab_controller = TabBarController(self.main_frame)
-
-            # FIXME (eric): why is this commented? If not needed => remove
-            # Do a final layout of the fold panel bar
-            #wx.CallAfter(self.main_frame.fpb_settings.FitBar)
-
 
             # Menu events
 
@@ -183,29 +178,48 @@ class OdemisGUIApp(wx.App):
 
             self.main_frame.Maximize()
             self.main_frame.Show()
-            #self.main_frame.Raise()
-            #self.main_frame.Refresh()
 
-            self.settings_controller = SettingsBarController(self.interface_model,
-                                                       self.main_frame)
 
-            #print_microscope_tree(microscope)
+            tab_list = [tabs.SecomLiveTab("secom_live",
+                            self.main_frame.btn_tab_secom_live,
+                            self.main_frame.pnl_tab_secom_live,
+                            self.main_frame,
+                            self.interface_model),
+                        tabs.Tab("secom_gallery",
+                            self.main_frame.btn_tab_secom_gallery,
+                            self.main_frame.pnl_tab_secom_gallery),
+                        tabs.Tab("sparc_acqui",
+                            self.main_frame.btn_tab_sparc_acqui,
+                            self.main_frame.pnl_tab_sparc_acqui),
+                        tabs.Tab("sparc_analysis",
+                            self.main_frame.btn_tab_sparc_analysis,
+                            self.main_frame.pnl_tab_sparc_analysis),
+                        ]
+
+            # Create the main tab controller and store a global reference
+            # in the odemis.gui.cont package
+            set_main_tab_controller(tabs.TabBarController(tab_list,
+                                                          self.main_frame))
+
+
+            #self.settings_controller = SettingsBarController(self.interface_model,
+            #                                           self.main_frame)
 
             # Order matters!
             # First we create the views, then the streams
-            self.view_controller = ViewController(self.interface_model,
-                                                      self.main_frame)
-            self.stream_controller = StreamController(self.interface_model,
-                                                      self.main_frame.pnl_stream)
+            # self.view_controller = ViewController(self.interface_model,
+            #                                           self.main_frame)
+            # self.stream_controller = StreamController(self.interface_model,
+            #                                           self.main_frame.pnl_stream)
 
-            self.view_selector = ViewSelector(self.interface_model,
-                                              self.main_frame)
+            # self.view_selector = ViewSelector(self.interface_model,
+            #                                   self.main_frame)
 
-            self.acquisition_controller = AcquisitionController(self.interface_model,
-                                                                self.main_frame)
+            # self.acquisition_controller = AcquisitionController(self.interface_model,
+            #                                                     self.main_frame)
 
-            self.microscope_controller = MicroscopeController(self.interface_model,
-                                                              self.main_frame)
+            # self.microscope_controller = MicroscopeController(self.interface_model,
+            #                                                   self.main_frame)
 
         except Exception:  #pylint: disable=W0703
             self.excepthook(*sys.exc_info())

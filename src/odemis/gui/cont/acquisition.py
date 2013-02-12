@@ -28,16 +28,6 @@ of microscope images.
 
 """
 
-from concurrent.futures._base import CancelledError
-from odemis import model, dataio
-from odemis.gui import acqmng, instrmodel
-from odemis.gui.conf import get_acqui_conf
-from odemis.gui.cont.settings import SettingsBarController
-from odemis.gui.cont.streams import StreamController
-from odemis.gui.instrmodel import VIEW_LAYOUT_ONE
-from odemis.gui.main_xrc import xrcfr_acq
-from odemis.gui.util import img, get_picture_folder, units, call_after
-from wx.lib.pubsub import pub
 import copy
 import logging
 import math
@@ -47,17 +37,27 @@ import subprocess
 import sys
 import threading
 import time
+from concurrent.futures._base import CancelledError
+
 import wx
+from wx.lib.pubsub import pub
 
-
-
-
+from odemis import model, dataio
+from odemis.gui import acqmng, instrmodel
+from odemis.gui.conf import get_acqui_conf
+from odemis.gui.cont import get_main_tab_controller
+from odemis.gui.cont.settings import SettingsBarController
+from odemis.gui.cont.streams import StreamController
+from odemis.gui.instrmodel import VIEW_LAYOUT_ONE
+from odemis.gui.main_xrc import xrcfr_acq
+from odemis.gui.util import img, get_picture_folder, units, call_after
 
 class AcquisitionController(object):
-    """ controller to handle snapshot and high-res image acquisition in a "global"
-    context. In particular, it needs to be aware of which viewport is currently
-    focused, and block any change of settings during acquisition.
+    """ controller to handle snapshot and high-res image acquisition in a
+    "global" context. In particular, it needs to be aware of which viewport
+    is currently focused, and block any change of settings during acquisition.
     """
+
     def __init__(self, micgui, main_frame):
         """
         micgui (GUIMicroscope): the representation of the microscope GUI
@@ -81,10 +81,12 @@ class AcquisitionController(object):
             self.start_snapshot_viewport)
 
         # Link "acquire image" button to image acquisition
-        self._main_frame.btn_acquire.Bind(wx.EVT_BUTTON, self.open_acquisition_dialog)
+        self._main_frame.btn_acquire.Bind(wx.EVT_BUTTON,
+                                          self.open_acquisition_dialog)
 
         # find the names of the active (=connected) screens
-        # it's slow, so do it only at init (=expect not to change screen during acquisition)
+        # it's slow, so do it only at init (=expect not to change screen during
+        # acquisition)
         self._outputs = self.get_display_outputs()
 
         pub.subscribe(self.on_stream_changed, 'stream.ctrl')
@@ -98,7 +100,7 @@ class AcquisitionController(object):
         """ Takes a screenshot of the screen at give pos & size (rect). """
         logging.debug('Starting screenshot')
         rect = self._main_frame.GetRect()
-        # see http://aspn.activestate.com/ASPN/Mail/Message/wxpython-users/3575899
+        # http://aspn.activestate.com/ASPN/Mail/Message/wxpython-users/3575899
         # created by Andrea Gavana
 
         # adjust widths for Linux (figured out by John Torres
@@ -148,9 +150,10 @@ class AcquisitionController(object):
         acq_dialog = AcquisitionDialog(self._main_frame, self._microscope)
 
         # pause all the live acquisitions
-        main_stream_controller = wx.GetApp().stream_controller
+        mtc = get_main_tab_controller()
+        main_stream_controller = mtc['secom_live'].stream_controller
         paused_streams = main_stream_controller.pauseStreams()
-        
+
         try:
             acq_dialog.SetSize(parent_size)
             acq_dialog.Center()
@@ -161,15 +164,13 @@ class AcquisitionController(object):
             self._main_frame.btn_acquire.Enable()
 
     def start_snapshot_viewport(self, event):
-        """
-        wrapper to run snapshot_viewport in a separate thread as it can take time
-        """
+        """Wrapper to run snapshot_viewport in a separate thread."""
         thread = threading.Thread(target=self.snapshot_viewport)
         thread.start()
 
     def snapshot_viewport(self):
-        """
-        Save a snapshot of the raw image from the focused viewport on the filesystem.
+        """ Save a snapshot of the raw image from the focused view to the
+        filesystem.
         The name of the file follows the scheme date-time.tiff (e.g.,
         20120808-154812.tiff) and is located in the user's picture directory.
         """
@@ -312,6 +313,7 @@ class AcquisitionController(object):
         logging.debug("Calling: %s", " ".join(args))
         subprocess.check_call(args)
 
+
 class AcquisitionDialog(xrcfr_acq):
     """ Wrapper class responsible for additional initialization of the
     Acquisition Dialog created in XRCed
@@ -329,11 +331,12 @@ class AcquisitionDialog(xrcfr_acq):
         # TODO: need to compute the presets accordingly
 
         self.set_default_filename_and_path()
-        
+
         self.acq_future = None # a ProgressiveFuture if the acquisition is going on
 
         # Store current values and pause updates on the current settings controller
-        main_settings_controller = wx.GetApp().settings_controller
+        mtc = get_main_tab_controller()
+        main_settings_controller = mtc['secom_live'].settings_controller
         main_settings_controller.store()
         main_settings_controller.pause()
 
@@ -351,13 +354,13 @@ class AcquisitionDialog(xrcfr_acq):
         # TODO: disable acquire button when no streams are visible
         # cf pub.subscribe (on_stream_changed)
         # TODO: need to create a disabled version of the button
-        
+
         # make sure the view displays the same thing as the one we are duplicating
         view.view_pos.value = orig_view.view_pos.value
         view.mpp.value = orig_view.mpp.value
         view.merge_ratio.value = orig_view.merge_ratio.value
 
-        # attach the view to the viewport        
+        # attach the view to the viewport
         self.pnl_view_acq.setView(view, self.interface_model)
 
         self.Bind(wx.EVT_CHAR_HOOK, self.on_key)
@@ -370,7 +373,7 @@ class AcquisitionDialog(xrcfr_acq):
         self.estimate_acquisition_time()
 
         pub.subscribe(self.on_setting_change, 'setting.changed')
-        
+
 
     def duplicate_interface_model(self, orig):
         """
@@ -380,18 +383,18 @@ class AcquisitionDialog(xrcfr_acq):
         return (GUIMicroscope)
         """
         new = copy.copy(orig) # shallow copy
-        
+
         # create view (which cannot move or focus)
         view = instrmodel.MicroscopeView(orig.focussedView.value.name.value)
-        
+
         # differentiate it (only one view)
         new.views = {"all": view}
         new.focussedView = model.VigilantAttribute(view)
         new.viewLayout = model.IntEnumerated(VIEW_LAYOUT_ONE,
                                               choices=set([VIEW_LAYOUT_ONE]))
-        
+
         return new
-        
+
     def add_all_streams(self, visible_streams):
         """
         Add all the streams present in the interface model to the stream panel.
@@ -400,7 +403,7 @@ class AcquisitionDialog(xrcfr_acq):
         # the order the streams are added should not matter on the display, so
         # it's ok to not duplicate the streamTree literally
         view = self.interface_model.focussedView.value
-        
+
         # go through all the streams available in the interface model
         for s in self.interface_model.streams:
             # add to the stream bar
@@ -410,16 +413,16 @@ class AcquisitionDialog(xrcfr_acq):
                 sp.show_stream()
             else:
                 sp.hide_stream()
-        
+
     def on_setting_change(self, setting_ctrl):
         # if gauge was left over from an error => now hide it
         if self.gauge_acq.IsShown():
             self.gauge_acq.Hide()
             self.Layout()
-        
+
         self.estimate_acquisition_time()
         # TODO check presets and fall-back to custom
-        
+
 
     def estimate_acquisition_time(self):
         seconds = 0
@@ -428,7 +431,7 @@ class AcquisitionDialog(xrcfr_acq):
         if str_panels:
             for str_pan in str_panels:
                 seconds += str_pan.stream.estimateAcquisitionTime()
-                
+
             self.gauge_acq.Range = 100 * seconds
             seconds = math.ceil(seconds) # round a bit pessimistically
             txt = "The estimated acquisition time is %s." % units.readable_time(seconds)
@@ -541,7 +544,7 @@ class AcquisitionDialog(xrcfr_acq):
         """
         if self.acq_future:
             # TODO: ask for confirmation before cancelling?
-            # what to do if the acquisition is done while asking for confirmation?  
+            # what to do if the acquisition is done while asking for confirmation?
             logging.info("Cancelling acquisition due to closing the acquisition window")
             self.acq_future.cancel()
 
@@ -549,7 +552,8 @@ class AcquisitionDialog(xrcfr_acq):
         pub.unsubscribe(self.on_setting_change, 'setting.changed')
 
         # Restore current values
-        main_settings_controller = wx.GetApp().settings_controller
+        mtc = get_main_tab_controller()
+        main_settings_controller = mtc['secom_live'].settings_controller
         main_settings_controller.resume()
         main_settings_controller.restore()
 
@@ -561,20 +565,20 @@ class AcquisitionDialog(xrcfr_acq):
         """
         st = self.interface_model.focussedView.value.streams
         # It should never be possible to reach here with an empty streamTree
-        
+
         # start acquisition + connect events to callback
         self.acq_future = acqmng.startAcquisition(st)
         self.acq_future.add_update_callback(self.on_acquisition_upd)
         self.acq_future.add_done_callback(self.on_acquisition_done)
-        
+
         self.btn_acquire.Disable()
         self.btn_cancel.Bind(wx.EVT_BUTTON, self.on_cancel)
-        
+
         # the range of the progress bar was already set in estimate_acquisition_time()
         self.gauge_acq.Value = 0
         self.gauge_acq.Show()
         self.Layout() # to put the gauge at the right place
-        
+
     def on_cancel(self, evt):
         """
         Called during acquisition when pressing the cancel button
@@ -582,10 +586,10 @@ class AcquisitionDialog(xrcfr_acq):
         if not self.acq_future:
             logging.warning("Tried to cancel acquisition while it was not started")
             return
-        
+
         self.acq_future.cancel()
         # all the rest will be handled by on_acquisition_done()
-    
+
     @call_after
     def on_acquisition_done(self, future):
         """
@@ -593,7 +597,7 @@ class AcquisitionDialog(xrcfr_acq):
         """
         # bind button back to direct closure
         self.btn_cancel.Bind(wx.EVT_BUTTON, self.on_close)
-        
+
         try:
             data, thumb = future.result(1) # timeout is just for safety
             # make sure the progress bar is at 100%
@@ -602,20 +606,20 @@ class AcquisitionDialog(xrcfr_acq):
             # put back to original state:
             # re-enable the acquire button
             self.btn_acquire.Enable()
-            
+
             # hide progress bar (+ put pack estimated time)
             self.estimate_acquisition_time()
             self.gauge_acq.Hide()
             self.Layout()
             return
         except Exception:
-            # We cannot do much: just warn the user and pretend it was cancelled 
+            # We cannot do much: just warn the user and pretend it was cancelled
             logging.exception("Acquisition failed")
             self.btn_acquire.Enable()
             self.lbl_acqestimate.SetLabel("Acquisition failed.")
             # leave the gauge, to give a hint on what went wrong.
             return
-            
+
         # save result to file
         try:
             filename = os.path.join(self.txt_destination.Value,
@@ -628,12 +632,12 @@ class AcquisitionDialog(xrcfr_acq):
             self.btn_acquire.Enable()
             self.lbl_acqestimate.SetLabel("Saving acquisition file failed.")
             return
-        
-        self.lbl_acqestimate.SetLabel("Acquisition completed.")            
-        
+
+        self.lbl_acqestimate.SetLabel("Acquisition completed.")
+
         # change the "cancel" button to "close"
         self.btn_cancel.SetLabel("Close")
-        
+
     @call_after
     def on_acquisition_upd(self, future, past, left):
         """
@@ -644,12 +648,12 @@ class AcquisitionDialog(xrcfr_acq):
         if future.done():
             # progress bar and text is handled by on_acquisition_done
             return
-        
+
         # progress bar: past / past+left
         logging.debug("updating the progress bar to %f/%f", past, past + left)
         self.gauge_acq.Range = 100 * (past + left)
         self.gauge_acq.Value = 100 * past
-        
+
         left = math.ceil(left) # pessimistic
         if left > 2:
             self.lbl_acqestimate.SetLabel("%s left." % units.readable_time(left))
