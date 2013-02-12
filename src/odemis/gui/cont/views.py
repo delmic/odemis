@@ -52,10 +52,6 @@ class ViewController(object):
         self._microscope.viewLayout.subscribe(self._onViewLayout, init=True)
         self._microscope.focussedView.subscribe(self._onView, init=False)
 
-        # TODO when microscope get turned on (=state changes to on for the first time),
-        # set the default visible streams to different values for each view
-        # eg: if only SEM, and both BSD and SED => first 2 views have just one of them
-
         # Focus defaults to the top right viewport
         self._microscope.focussedView.value = self._viewports[1].getView()
 

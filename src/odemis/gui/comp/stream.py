@@ -588,8 +588,6 @@ class StreamPanel(wx.PyPanel):
     def onUpdatedChanged(self, updated):
         self._expander._btn_play.SetToggle(self.stream.updated.value)
 
-    # TODO need to subscribe to brightness/contrast, wavelengthes, tint...
-
     # GUI events: update the stream when the user changes the values
 
     def on_remove_btn(self, evt):
