@@ -29,6 +29,7 @@ from ..img.data import getico_blending_optBitmap, getico_blending_semBitmap
 from ..util import call_after, units
 from .scalewindow import ScaleWindow
 from .slider import Slider
+from odemis import gui
 from odemis.gui import instrmodel
 import logging
 import wx
@@ -102,9 +103,6 @@ class MicroscopeViewport(wx.Panel):
 
         # Dragging the slider should set the focus to the right view
         self.mergeSlider.Bind(wx.EVT_LEFT_DOWN, self.OnChildFocus)
-
-        # TODO hide when not optical + sem available (or more exactly when the
-        # root function of the stream tree doesn't have 2 im + a merge arg)
 
         # scale
         self.scaleDisplay = ScaleWindow(self.legend_panel)
@@ -241,14 +239,11 @@ class MicroscopeViewport(wx.Panel):
         """
         logging.debug(["Removing focus from %s", "Setting focus to %s"][focus], id(self))
 
-        #wx.Panel.SetFocus(self)
         self._has_focus = focus
-
-        # TODO: move hard coded colours to a separate file
         if focus:
-            self.SetBackgroundColour("#127BA6")
+            self.SetBackgroundColour(gui.BORDER_COLOUR_FOCUS)
         else:
-            self.SetBackgroundColour("#000000")
+            self.SetBackgroundColour(gui.BORDER_COLOUR_UNFOCUS)
 
     def UpdateHFWLabel(self):
         """ Physical width of the display"""
