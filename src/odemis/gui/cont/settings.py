@@ -80,61 +80,53 @@ def traverse(seq_val):
     else:
         yield seq_val
 
-def bind_highlight(ctrl, label, vat, *evt_types):
-    def_val = vat.value
-
-    def highlight_label(evt):
-        eo = evt.GetEventObject()
-        if eo.GetValue() == def_val:
-            label.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR)
-        else:
-            label.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_HIGHLIGHT)
-
-        evt.Skip()
-
-    for e in evt_types:
-        ctrl.Bind(e, highlight_label)
+def bind_menu(se):
+    """
+    Add a menu to reset a setting entry to the original (current) value
+    se (SettingEntry)
+    Note: se must have a valid label, ctrl and va at least
+    """ 
+    orig_val = se.va.value
 
     def reset_value(evt):
-        vat.value = def_val
-        wx.CallAfter(pub.sendMessage, 'setting.changed', setting_ctrl=ctrl)
-        label.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR)
+        se.va.value = orig_val
+        wx.CallAfter(pub.sendMessage, 'setting.changed', setting_ctrl=se.ctrl)
 
     def show_reset_menu(evt):
-        eo = evt.GetEventObject()
-
         # No menu needed if value hasn't changed
-        if ctrl.GetValue() == def_val:
-            return
+        if se.va.value == orig_val:
+            return # TODO: or display it greyed out?
 
         menu = wx.Menu()
         mi = wx.MenuItem(menu, wx.NewId(), 'Reset value')
 
+        eo = evt.GetEventObject()
         eo.Bind(wx.EVT_MENU, reset_value, mi)
 
         menu.AppendItem(mi)
-        eo.PopupMenu(menu, evt.GetPosition())
+        eo.PopupMenu(menu)
 
-    ctrl.Bind(wx.EVT_RIGHT_DOWN, show_reset_menu)
-    label.Bind(wx.EVT_RIGHT_DOWN, show_reset_menu)
+    se.ctrl.Bind(wx.EVT_CONTEXT_MENU, show_reset_menu)
+    se.label.Bind(wx.EVT_CONTEXT_MENU, show_reset_menu)
 
 
 
 # Default settings for the different components.
-# (Just a ccd for now, 2012-8-27)
 # Values in the settings dictionary will be used to steer the default
-# behaviours in represening values and the way in which they can be altered.
+# behaviours in representing values and the way in which they can be altered.
 # All values are optional
 # Format:
-#   role
-#       vigilant attribute
+#   role of component
+#       vigilant attribute name
 #           label
-#           control_type
-#           range
-#           choices
-#           unit
-#           perc_to_val (a lambda function used in sliders)
+#              control_type (CONTROL_NONE to hide it)
+#              range
+#              choices
+#              scale
+#              type
+#              format
 
+# TODO: special settings for the acquisition window? (higher ranges)
 SETTINGS = {
             "ccd":
             {
@@ -201,6 +193,43 @@ SETTINGS = {
 
 ####### Classes #######
 
+class SettingEntry(object):
+    """
+    Represents an setting entry in the panel. It merely associates the VA to
+    the widgets that allow to control it.
+    """
+    # TODO: merge with VAC?
+    def __init__(self, name, va=None, comp=None, label=None, ctrl=None, vac=None):
+        """
+        name (string): name of the va in the component (as-is)
+        va (VA): the actual VigilanAttribute
+        comp (model.Component): the component that has this VA
+        label (wx.LabelTxt): a widget which displays the name of the VA
+        ctrl (wx.Window): a widget that allows to change the value
+        vac (VigilantAttributeController): the object that ensures the connection
+          between the VA and the widget
+        """
+        self.name = name
+        self.va = va
+        self.comp = comp
+        self.label = label
+        self.ctrl = ctrl
+        self.vac = vac
+    
+    def highlight(self, active=True):
+        """
+        Highlight the setting entry (ie, the name label becomes bright coloured)
+        active (boolean): whether it should be highlighted or not
+        """ 
+        if not self.label:
+            return
+        
+        if active:
+            self.label.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_HIGHLIGHT)
+        else:
+            self.label.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR)
+
+
 class SettingsPanel(object):
     """ Settings base class which describes an indirect wrapper for
     FoldPanelItems.
@@ -245,60 +274,51 @@ class SettingsPanel(object):
         self._gb_sizer.AddGrowableCol(1)
 
         self.num_entries = 0
-        self.entries = []
+        self.entries = [] # list of SettingEntry
 
         # This attribute can be used to save and restore the current state
         # (as in, all the values of the controls) of the SettingsPanel.
-        self._values_cache = []
+        self._values_cache = {} # SettingEntry -> value
 
-        #self.panel.SetMinSize((380, -1))
-        #self.panel.Refresh()
-
+    # TODO: move to client code
     def store(self):
         """ Store the current control values into an internal values cache """
         # Clear the current cache
-        self._values_cache = []
+        self._values_cache = {}
 
         for entry in self.entries:
-            value = None
-
-            if "vaco" in entry:
-                value = entry["vaco"].vigilattr.value
-            elif hasattr(entry["val_ctrl"], "GetValue"):
-                value = entry["val_ctrl"].GetValue()
+            if not entry.va:
+                continue
+            self._values_cache[entry] = entry.va.value
 
             logging.debug("Storing value %s for %s",
-                          value,
-                          entry["lbl_ctrl"].GetLabel())
-            self._values_cache.append(value)
+                          entry.va.value,
+                          entry.name)
 
     def restore(self):
         """ Restore the control values from the internal values cache """
-        for value, entry in zip(self._values_cache, self.entries):
-            if value:
-                logging.debug("Restoring value %s for %s",
-                              value,
-                              entry["lbl_ctrl"].GetLabel())
+        for entry, value in self._values_cache.items():
+            logging.debug("Restoring value %s for %s",
+                          value,
+                          entry.name)
 
-                if "vaco" in entry:
-                    try:
-                        entry["vaco"].vigilattr.value = value
-                    except NotSettableError:
-                        pass
-                elif hasattr(entry["val_ctrl"], "SetValue"):
-                    entry["val_ctrl"].SetValue(value)
-                else:
-                    continue
+            try:
+                entry.va.value = value
+            except NotSettableError:
+                logging.info("Couldn't restore value %s as it is read-only",
+                             entry.name)
 
     def pause(self):
         """ Pause VigilantAttributeConnector related control updates """
-        for entry in [e for e in self.entries if "vaco" in e]:
-            entry["vaco"].pause()
+        for entry in self.entries:
+            if entry.vac:
+                entry.vac.pause()
 
     def resume(self):
         """ Pause VigilantAttributeConnector related control updates """
-        for entry in [e for e in self.entries if "vaco" in e]:
-            entry["vaco"].resume()
+        for entry in self.entries:
+            if entry.vac:
+                entry.vac.resume()
 
     def _clear(self):
         # Remove default 'no content' label
@@ -404,15 +424,16 @@ class SettingsPanel(object):
             self.panel.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR)
 
         self.num_entries += 1
-        self.entries.append({"lbl_ctrl": lbl_ctrl,
-                             "val_ctrl": value_ctrl,
-                             "value": value})
+        # XXX
+        ne = SettingEntry(name=label, label=lbl_ctrl, ctrl=value_ctrl)
+        self.entries.append(ne)
 
-    def add_value(self, label, vigil_attr, conf=None):
-        """ Add a label/value pair to the settings panel.
+    def add_value(self, name, vigil_attr, comp, conf=None):
+        """ Add a name/value pair to the settings panel.
 
-        label (string): name of the value
+        name (string): name of the value
         vigil_attr (VigilantAttribute)
+        comp (Component): the component that contains this VigilantAttribute
         conf {dict}: Configuration items that may override default settings
         """
         assert isinstance(vigil_attr, VigilantAttributeBase)
@@ -447,7 +468,7 @@ class SettingsPanel(object):
         self._clear()
 
         # Format label
-        label = conf.get('label', self._label_to_human(label))
+        label = conf.get('label', self._label_to_human(name))
         # Add the label to the panel
         lbl_ctrl = wx.StaticText(self.panel, -1, "%s" % label)
         self._gb_sizer.Add(lbl_ctrl, (self.num_entries, 0), flag=wx.ALL, border=5)
@@ -497,9 +518,6 @@ class SettingsPanel(object):
                                              new_ctrl,
                                              events=wx.EVT_SLIDER)
 
-            if self.highlight_change:
-                bind_highlight(new_ctrl, lbl_ctrl, vigil_attr, wx.EVT_SLIDER)
-
             new_ctrl.Bind(wx.EVT_SLIDER, self.on_setting_changed)
 
         elif control_type == odemis.gui.CONTROL_INT:
@@ -517,10 +535,6 @@ class SettingsPanel(object):
             vac = VigilantAttributeConnector(vigil_attr,
                                              new_ctrl,
                                              events=wx.EVT_COMMAND_ENTER)
-
-            if self.highlight_change:
-                bind_highlight(new_ctrl, lbl_ctrl, vigil_attr,
-                               wx.EVT_TEXT, wx.EVT_COMMAND_ENTER)
 
             new_ctrl.Bind(wx.EVT_TEXT, self.on_setting_changed)
             new_ctrl.Bind(wx.EVT_COMMAND_ENTER, self.on_setting_changed)
@@ -543,10 +557,6 @@ class SettingsPanel(object):
                                              new_ctrl,
                                              events=wx.EVT_COMMAND_ENTER)
 
-            if self.highlight_change:
-                bind_highlight(new_ctrl, lbl_ctrl, vigil_attr,
-                               wx.EVT_TEXT, wx.EVT_COMMAND_ENTER)
-
             new_ctrl.Bind(wx.EVT_COMMAND_ENTER, self.on_setting_changed)
             new_ctrl.Bind(wx.EVT_TEXT, self.on_setting_changed)
 
@@ -562,12 +572,7 @@ class SettingsPanel(object):
                                              new_ctrl,
                                              events=wx.EVT_BUTTON)
 
-            if self.highlight_change:
-                bind_highlight(new_ctrl, lbl_ctrl, vigil_attr,
-                               wx.EVT_BUTTON)
-
             new_ctrl.Bind(wx.EVT_BUTTON, self.on_setting_changed)
-
 
         elif control_type == odemis.gui.CONTROL_COMBO:
 
@@ -626,10 +631,6 @@ class SettingsPanel(object):
                     ctrl_2_va=cb_get,
                     events=(wx.EVT_COMBOBOX, wx.EVT_TEXT_ENTER))
 
-            if self.highlight_change:
-                bind_highlight(new_ctrl, lbl_ctrl, vigil_attr,
-                               wx.EVT_COMBOBOX, wx.EVT_TEXT_ENTER)
-
             new_ctrl.Bind(wx.EVT_COMBOBOX, self.on_setting_changed)
             new_ctrl.Bind(wx.EVT_TEXT_ENTER, self.on_setting_changed)
 
@@ -644,11 +645,13 @@ class SettingsPanel(object):
         self._gb_sizer.Add(new_ctrl, (self.num_entries, 1),
                         flag=wx.ALL|wx.EXPAND, border=5)
 
+        ne = SettingEntry(name, vigil_attr, comp, lbl_ctrl, new_ctrl, vac)
+        self.entries.append(ne)
         self.num_entries += 1
-        self.entries.append({"lbl_ctrl": lbl_ctrl,
-                             "val_ctrl": new_ctrl,
-                             "value": vigil_attr.value,
-                             "vaco": vac})
+        
+        if self.highlight_change:
+            bind_menu(ne)
+            
         self.fold_panel.Parent.Layout()
 
     def on_setting_changed(self, evt):
@@ -729,6 +732,16 @@ class SettingsBarController(object):
         for panel in self.settings_panels:
             panel.resume()
 
+    @property
+    def entries(self):
+        """
+        All the setting entries of all the panels
+        """
+        entries = []
+        for panel in self.settings_panels:
+            entries.extend(panel.entries)
+        return entries        
+
     # Optical microscope settings
     def add_ccd(self, comp):
         self._optical_panel.add_label("Camera", comp.name)
@@ -739,7 +752,7 @@ class SettingsBarController(object):
                 conf = SETTINGS[comp.role][name]
             else:
                 conf = None
-            self._optical_panel.add_value(name, value, conf)
+            self._optical_panel.add_value(name, value, comp, conf)
 
     def add_ebeam(self, comp):
         self._sem_panel.add_label("SEM", comp.name)
@@ -750,5 +763,5 @@ class SettingsBarController(object):
                 conf = SETTINGS[comp.role][name]
             else:
                 conf = None
-            self._sem_panel.add_value(name, value, conf)
+            self._sem_panel.add_value(name, value, comp, conf)
 
