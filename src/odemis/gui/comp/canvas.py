@@ -56,7 +56,7 @@ class DraggableCanvas(wx.Panel):
     * The whole world, which can have infinite dimensions, but needs a redraw
     * The buffer, which contains a precomputed image of the world big enough that a drag cannot bring it outside of the viewport
     * The viewport, which is what the user sees
-    
+
     Unit: at scale = 1, 1px = 1 unit. So an image with scale = 1 will be
       displayed actual size.
 
@@ -102,7 +102,8 @@ class DraggableCanvas(wx.Panel):
         self._rdrag_init_pos = None # (int, int) px
         self._rdrag_prev_value = None # (float, float) last absolute value, for sending the change
 
-        # timer to give a delay before redrawing so we wait to see if there are several events waiting
+        # timer to give a delay before redrawing so we wait to see if there are
+        # several events waiting
         self.DrawTimer = wx.PyTimer(self.OnDrawTimer)
 
         self.Bind(wx.EVT_PAINT, self.OnPaint)
@@ -203,7 +204,7 @@ class DraggableCanvas(wx.Panel):
             # the further from the original point, the more it moves for one pixel
             # => use 3 points: starting point, previous point, current point
             # if dis < 32 px => min : dis (small linear zone)
-            # else: dis + 1/32 * sign* (dis-32)**2 => (square zone) 
+            # else: dis + 1/32 * sign* (dis-32)**2 => (square zone)
             # send diff between value and previous value sent => it should always be at the same position for the cursor at the same place
             linear_zone = 32.0
             pos = event.GetPositionTuple()
@@ -218,7 +219,7 @@ class DraggableCanvas(wx.Panel):
                 if change:
                     self.onExtraAxisMove(i, change)
                     self._rdrag_prev_value[i] = value
-            
+
     def OnDblClick(self, event):
         pos = event.GetPositionTuple()
         center = (self.ClientSize[0] / 2, self.ClientSize[1] / 2)
@@ -355,7 +356,7 @@ class DraggableCanvas(wx.Panel):
             self.DrawTimer.Start(period * 1000.0, oneShot=True)
 
     def OnDrawTimer(self):
-#        logging.debug("Drawing timer in thread %s", threading.current_thread().name)
+        # logging.debug("Drawing timer in thread %s", threading.current_thread().name)
         self.UpdateDrawing()
 
     def UpdateDrawing(self):
@@ -537,7 +538,7 @@ class DraggableCanvas(wx.Panel):
             abuf = imscaled.GetAlphaBuffer()
             self.memsetObject(abuf, int(255 * ratio))
 
-        # TODO: the conversion from Image to Bitmap should be done only once, 
+        # TODO: the conversion from Image to Bitmap should be done only once,
         # after all the images are merged
         dc.DrawBitmapPoint(wx.BitmapFromImage(imscaled), tl)
 
@@ -552,30 +553,30 @@ class DraggableCanvas(wx.Panel):
         ratio (0<float<1): how much to merge the images (between 1st and all other)
         scale (0<float): the scaling of the images in addition to their own
         Note: this is a very rough implementation. It's not fully optimized, and
-        uses only a basic averaging algorithm. 
+        uses only a basic averaging algorithm.
         """
         t_start = time.time()
 
-        # The idea: 
+        # The idea:
         # * display the first image (SEM) last, with the given ratio (or 1 if it's the only one)
         # * display all the other images (fluo) as if they were average
-        #   N images -> ratio = 1-0/N, 1-1/N,... 1-(N-1)/N 
-        
+        #   N images -> ratio = 1-0/N, 1-1/N,... 1-(N-1)/N
+
         # Fluo images to actually display (ie, remove None)
         fluo = [im for im in images[1:] if im is not None]
         nb_fluo = len(fluo)
-        
+
         for i, im in enumerate(fluo): # display the fluo images first
             r = 1.0 - i / float(nb_fluo)
             self._DrawImageTransparentRescaled(dc, im, im._dc_center, r, scale=im._dc_scale)
-        
+
         for im in images[:1]: # the first image (or nothing)
             if im is None:
                 continue
             if nb_fluo == 0:
                 ratio = 1.0 # no transparency if it's alone
             self._DrawImageTransparentRescaled(dc, im, im._dc_center, ratio, scale=im._dc_scale)
-        
+
         t_now = time.time()
         fps = 1.0 / float(t_now - t_start)
         #logging.debug("Display speed: %s fps", fps)

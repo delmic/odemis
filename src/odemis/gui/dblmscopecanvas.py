@@ -220,10 +220,10 @@ class DblMicroscopeCanvas(DraggableCanvas):
         # Clip within the range
         mpp = self.view.mpp.value / scale
         mpp = sorted(self.view.mpp.range + (mpp,))[1]
-        
+
         # FIXME: seems to crash when the mpp is very low (1 px = the whole screen)
         # maybe in the zooming function?
-        
+
         self.view.mpp.value = mpp # this will call _onMPP()
 
     # Zoom/merge management
