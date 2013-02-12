@@ -276,38 +276,6 @@ class SettingsPanel(object):
         self.num_entries = 0
         self.entries = [] # list of SettingEntry
 
-        # This attribute can be used to save and restore the current state
-        # (as in, all the values of the controls) of the SettingsPanel.
-        self._values_cache = {} # SettingEntry -> value
-
-    # TODO: move to client code
-    def store(self):
-        """ Store the current control values into an internal values cache """
-        # Clear the current cache
-        self._values_cache = {}
-
-        for entry in self.entries:
-            if not entry.va:
-                continue
-            self._values_cache[entry] = entry.va.value
-
-            logging.debug("Storing value %s for %s",
-                          entry.va.value,
-                          entry.name)
-
-    def restore(self):
-        """ Restore the control values from the internal values cache """
-        for entry, value in self._values_cache.items():
-            logging.debug("Restoring value %s for %s",
-                          value,
-                          entry.name)
-
-            try:
-                entry.va.value = value
-            except NotSettableError:
-                logging.info("Couldn't restore value %s as it is read-only",
-                             entry.name)
-
     def pause(self):
         """ Pause VigilantAttributeConnector related control updates """
         for entry in self.entries:
@@ -708,20 +676,6 @@ class SettingsBarController(object):
         if interface_model.ebeam:
             self.add_ebeam(interface_model.ebeam)
 
-        # Save the current values so they can be used for highlighting
-        if highlight_change:
-            self.store()
-
-    def store(self):
-        """ Store all values in the used SettingsPanels """
-        for panel in self.settings_panels:
-            panel.store()
-
-    def restore(self):
-        """ Restore all values to the used SettingsPanels """
-        for panel in self.settings_panels:
-            panel.restore()
-
     def pause(self):
         """ Pause VigilantAttributeConnector related control updates """
         for panel in self.settings_panels:
@@ -740,7 +694,7 @@ class SettingsBarController(object):
         entries = []
         for panel in self.settings_panels:
             entries.extend(panel.entries)
-        return entries        
+        return entries
 
     # Optical microscope settings
     def add_ccd(self, comp):

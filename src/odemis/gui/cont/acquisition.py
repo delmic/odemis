@@ -145,21 +145,33 @@ class AcquisitionController(object):
         return bmp.ConvertToImage()
 
     def open_acquisition_dialog(self, evt):
-        parent_size = [v * 0.66 for v in self._main_frame.GetSize()]
-
-        acq_dialog = AcquisitionDialog(self._main_frame, self._microscope)
-
-        # pause all the live acquisitions
         mtc = get_main_tab_controller()
+
+        # save the original settings
+        main_settings_controller = mtc['secom_live'].settings_controller
+        orig_settings = preset_asis(main_settings_controller.entries)
+        main_settings_controller.pause()
+        # TODO: also pause the MicroscopeViews
+        
+        # pause all the live acquisitions
         main_stream_controller = mtc['secom_live'].stream_controller
         paused_streams = main_stream_controller.pauseStreams()
-
+        
+        # create the dialog
+        acq_dialog = AcquisitionDialog(self._main_frame, self._microscope)
+        parent_size = [v * 0.66 for v in self._main_frame.GetSize()]
+        
         try:
             acq_dialog.SetSize(parent_size)
             acq_dialog.Center()
             acq_dialog.ShowModal()
         finally:
             main_stream_controller.resumeStreams(paused_streams)
+            
+            for se, value in orig_settings.items():
+                se.va.value = value
+            main_settings_controller.resume()
+            
             # Make sure that the acquisition button is enabled again.
             self._main_frame.btn_acquire.Enable()
 
@@ -429,14 +441,6 @@ class AcquisitionDialog(xrcfr_acq):
 
         # a ProgressiveFuture if the acquisition is going on
         self.acq_future = None
-
-        # Store current values and pause updates on the current settings
-        # controller
-        mtc = get_main_tab_controller()
-        main_settings_controller = mtc['secom_live'].settings_controller
-        main_settings_controller.store()
-        # TODO: also pause the MicroscopeViews
-        main_settings_controller.pause()
 
         # Create a new settings controller for the acquisition dialog
         self.settings_controller = SettingsBarController(interface_model,
@@ -733,12 +737,6 @@ class AcquisitionDialog(xrcfr_acq):
 
         # stop listening to events
         pub.unsubscribe(self.on_setting_change, 'setting.changed')
-
-        # Restore current values
-        mtc = get_main_tab_controller()
-        main_settings_controller = mtc['secom_live'].settings_controller
-        main_settings_controller.resume()
-        main_settings_controller.restore()
 
         self.Destroy()
 
