@@ -28,6 +28,7 @@ of microscope images.
 
 """
 
+from collections import OrderedDict
 from concurrent.futures._base import CancelledError
 from odemis import model, dataio
 from odemis.gui import acqmng, instrmodel
@@ -312,6 +313,92 @@ class AcquisitionController(object):
         logging.debug("Calling: %s", " ".join(args))
         subprocess.check_call(args)
 
+
+def preset_hq(entries):
+    """
+    Preset for highest quality image
+    entries (list of SettingEntries): each value as originally set
+    returns (dict SettingEntries -> value): new value for each SettingEntry that should be modified
+    """
+    ret = {}
+    for entry in entries:
+        if not entry.va or entry.va.readonly:
+            # not a real setting, just info
+            logging.debug("Skipping the value %s", entry.name)
+            continue
+        
+        
+        value = entry.va.value
+        if entry.name == "resolution":
+            # if resolution => get the best one
+            try:
+                value = entry.va.range[1] # max
+            except (AttributeError, model.NotApplicableError):
+                pass
+        elif entry.name in ("exposureTime", "dwellTime"):
+            # if exposureTime/dwellTime => x10
+            value = entry.va.value * 10
+            
+            # make sure it still fits
+            if isinstance(entry.va.range, tuple):
+                value = sorted(entry.va.range + (value,))[1] # clip
+                
+        elif entry.name == "binning":
+            # if binning => smallest
+            try:
+                value = entry.va.range[0] # min
+            except (AttributeError, model.NotApplicableError):
+                try:
+                    value = min(entry.va.choices)
+                except (AttributeError, model.NotApplicableError):
+                    pass
+            # TODO: multiply exposuretime by the original binning
+        elif entry.name == "readoutRate":
+            # if readoutrate => smallest
+            try:
+                value = entry.va.range[0] # min
+            except (AttributeError, model.NotApplicableError):
+                try:
+                    value = min(entry.va.choices)
+                except (AttributeError, model.NotApplicableError):
+                    pass
+        # rest => as is
+        
+        logging.debug("Adapting value %s from %s to %s", entry.name, entry.va.value, value)
+        ret[entry] = value
+        
+    return ret
+
+def preset_asis(entries):
+    """
+    Preset which don't change anything (exactly as live)
+    entries (list of SettingEntries): each value as originally set
+    returns (dict SettingEntries -> value): new value for each SettingEntry that should be modified
+    """
+    ret = {}
+    for entry in entries:
+        if not entry.va or entry.va.readonly:
+            # not a real setting, just info
+            logging.debug("Skipping the value %s", entry.name)
+            continue
+        
+        # everything as-is
+        logging.debug("Copying value %s = %s", entry.name, entry.va.value)
+        ret[entry] = entry.va.value
+    
+    return ret
+
+def preset_no_change(entries):
+    """
+    Special preset which matches everything and doesn't change anything 
+    """
+    return {}
+
+# Name -> callable (list of SettingEntries -> dict (SettingEntries -> value)) 
+presets = OrderedDict(((u"High quality", preset_hq),
+                      (u"Fast", preset_asis),
+                      (u"Custom", preset_no_change)))
+
 class AcquisitionDialog(xrcfr_acq):
     """ Wrapper class responsible for additional initialization of the
     Acquisition Dialog created in XRCed
@@ -321,13 +408,12 @@ class AcquisitionDialog(xrcfr_acq):
         xrcfr_acq.__init__(self, parent)
 
         self.conf = get_acqui_conf()
-
-        self.cmb_presets.Append(u"High quality")
-        self.cmb_presets.Append(u"Fast")
-        self.cmb_presets.Append(u"Custom")
+        
+        for n in presets:
+            self.cmb_presets.Append(n)
+        # TODO: record and reuse the preset used?
         self.cmb_presets.Select(0)
-        # TODO: need to compute the presets accordingly
-
+        
         self.set_default_filename_and_path()
         
         self.acq_future = None # a ProgressiveFuture if the acquisition is going on
@@ -335,10 +421,20 @@ class AcquisitionDialog(xrcfr_acq):
         # Store current values and pause updates on the current settings controller
         main_settings_controller = wx.GetApp().settings_controller
         main_settings_controller.store()
+        # TODO: also pause the MicroscopeViews
         main_settings_controller.pause()
 
         # Create a new settings controller for the acquisition dialog
         self.settings_controller = SettingsBarController(main_interface_model, self, True)
+        
+        # Compute the preset values for each preset
+        self._preset_values = {} # dict string ->  dict (SettingEntries -> value)
+        orig_entries = self.settings_controller.entries
+        self._orig_settings = preset_asis(orig_entries) # used to detect changes
+        for n, preset in presets.items():
+            self._preset_values[n] = preset(orig_entries)
+        # Presets which have been confirmed on the hardware
+        self._presets_confirmed = set() # (string)
 
         # duplicate the interface, but with only one view
         self.interface_model = self.duplicate_interface_model(main_interface_model)
@@ -365,10 +461,11 @@ class AcquisitionDialog(xrcfr_acq):
         self.btn_cancel.Bind(wx.EVT_BUTTON, self.on_close)
         self.btn_change_file.Bind(wx.EVT_BUTTON, self.on_change_file)
         self.btn_acquire.Bind(wx.EVT_BUTTON, self.on_acquire)
+        self.cmb_presets.Bind(wx.EVT_COMBOBOX, self.on_preset)
         self.Bind(wx.EVT_CLOSE, self.on_close)
 
-        self.estimate_acquisition_time()
-
+        self.on_preset(None) # will force setting the current preset 
+        
         pub.subscribe(self.on_setting_change, 'setting.changed')
         
 
@@ -410,16 +507,52 @@ class AcquisitionDialog(xrcfr_acq):
                 sp.show_stream()
             else:
                 sp.hide_stream()
+
+    def find_current_preset(self):
+        """
+        find the name of the preset identical to the current settings (not 
+          including "Custom")
+        returns (string): name of the preset
+        raises KeyError: if no preset can be found
+        """
+        # check each preset
+        for n, settings in self._preset_values.items():
+            # compare each value between the current and proposed 
+            different = False
+            for entry, value in settings.items():
+                if entry.va.value != value:
+                    different = True
+                    break
+            if not different:
+                return n
         
-    def on_setting_change(self, setting_ctrl):
+        raise KeyError()
+    
+    def update_setting_display(self):
         # if gauge was left over from an error => now hide it
         if self.gauge_acq.IsShown():
             self.gauge_acq.Hide()
             self.Layout()
         
         self.estimate_acquisition_time()
-        # TODO check presets and fall-back to custom
         
+        # update highlight
+        for se, value in self._orig_settings.items():
+            se.highlight(se.va.value != value)
+        
+    def on_setting_change(self, setting_ctrl):
+        self.update_setting_display()
+        
+        # check presets and fall-back to custom
+        try:
+            preset_name = self.find_current_preset()
+            logging.debug("Detected preset %s", preset_name)
+        except KeyError:
+            # should not happen with the current preset_no_change
+            logging.exception("Couldn't match any preset")
+            preset_name = u"Custom"
+            
+        self.cmb_presets.SetValue(preset_name)
 
     def estimate_acquisition_time(self):
         seconds = 0
@@ -442,6 +575,36 @@ class AcquisitionDialog(xrcfr_acq):
                                               self.conf.last_extension))
         self.txt_destination.SetValue(self.conf.last_path)
 
+    def on_preset(self, evt):
+        preset_name = self.cmb_presets.GetValue()
+        try:
+            new_preset = self._preset_values[preset_name]
+        except KeyError:
+            logging.debug("Not changing settings for preset %s", preset_name)
+            return
+        
+        logging.debug("Changing setting to preset %s", preset_name)
+
+        # TODO: presets should also be able to change the special stream settings
+        # (eg: accumulation/interpolation) when we have them 
+               
+        # apply the recorded values
+        for se, value in new_preset.items():
+            # TODO: it might be more tricky that this because some values might
+            # affect others like resolution/binning => change them in a specific 
+            # order.
+            se.va.value = value
+            
+        # The hardware might not exactly apply the setting as computed in the
+        # preset. We need the _exact_ same value to find back which preset is
+        # currently selected. So update the values the first time. 
+        if not preset_name in self._presets_confirmed:
+            for se in new_preset.keys():
+                new_preset[se] = se.va.value
+            self._presets_confirmed.add(preset_name)
+        
+        self.update_setting_display()
+    
     def on_key(self, evt):
         """ Dialog key press handler. """
         if evt.GetKeyCode() == wx.WXK_ESCAPE:

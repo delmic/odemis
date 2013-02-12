@@ -80,43 +80,34 @@ def traverse(seq_val):
     else:
         yield seq_val
 
-def bind_highlight(ctrl, label, vat, *evt_types):
-    def_val = vat.value
-
-    def highlight_label(evt):
-        eo = evt.GetEventObject()
-        if eo.GetValue() == def_val:
-            label.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR)
-        else:
-            label.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_HIGHLIGHT)
-
-        evt.Skip()
-
-    for e in evt_types:
-        ctrl.Bind(e, highlight_label)
+def bind_menu(se):
+    """
+    Add a menu to reset a setting entry to the original (current) value
+    se (SettingEntry)
+    Note: se must have a valid label, ctrl and va at least
+    """ 
+    orig_val = se.va.value
 
     def reset_value(evt):
-        vat.value = def_val
-        wx.CallAfter(pub.sendMessage, 'setting.changed', setting_ctrl=ctrl)
-        label.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR)
+        se.va.value = orig_val
+        wx.CallAfter(pub.sendMessage, 'setting.changed', setting_ctrl=se.ctrl)
 
     def show_reset_menu(evt):
-        eo = evt.GetEventObject()
-
         # No menu needed if value hasn't changed
-        if ctrl.GetValue() == def_val:
-            return
+        if se.va.value == orig_val:
+            return # TODO: or display it greyed out?
 
         menu = wx.Menu()
         mi = wx.MenuItem(menu, wx.NewId(), 'Reset value')
 
+        eo = evt.GetEventObject()
         eo.Bind(wx.EVT_MENU, reset_value, mi)
 
         menu.AppendItem(mi)
-        eo.PopupMenu(menu, evt.GetPosition())
+        eo.PopupMenu(menu)
 
-    ctrl.Bind(wx.EVT_RIGHT_DOWN, show_reset_menu)
-    label.Bind(wx.EVT_RIGHT_DOWN, show_reset_menu)
+    se.ctrl.Bind(wx.EVT_CONTEXT_MENU, show_reset_menu)
+    se.label.Bind(wx.EVT_CONTEXT_MENU, show_reset_menu)
 
 
 
@@ -135,6 +126,7 @@ def bind_highlight(ctrl, label, vat, *evt_types):
 #              type
 #              format
 
+# TODO: special settings for the acquisition window? (higher ranges)
 SETTINGS = {
             "ccd":
             {
@@ -223,7 +215,20 @@ class SettingEntry(object):
         self.label = label
         self.ctrl = ctrl
         self.vac = vac
-          
+    
+    def highlight(self, active=True):
+        """
+        Highlight the setting entry (ie, the name label becomes bright coloured)
+        active (boolean): whether it should be highlighted or not
+        """ 
+        if not self.label:
+            return
+        
+        if active:
+            self.label.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_HIGHLIGHT)
+        else:
+            self.label.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR)
+
 
 class SettingsPanel(object):
     """ Settings base class which describes an indirect wrapper for
@@ -275,9 +280,7 @@ class SettingsPanel(object):
         # (as in, all the values of the controls) of the SettingsPanel.
         self._values_cache = {} # SettingEntry -> value
 
-        #self.panel.SetMinSize((380, -1))
-        #self.panel.Refresh()
-
+    # TODO: move to client code
     def store(self):
         """ Store the current control values into an internal values cache """
         # Clear the current cache
@@ -515,9 +518,6 @@ class SettingsPanel(object):
                                              new_ctrl,
                                              events=wx.EVT_SLIDER)
 
-            if self.highlight_change:
-                bind_highlight(new_ctrl, lbl_ctrl, vigil_attr, wx.EVT_SLIDER)
-
             new_ctrl.Bind(wx.EVT_SLIDER, self.on_setting_changed)
 
         elif control_type == odemis.gui.CONTROL_INT:
@@ -535,10 +535,6 @@ class SettingsPanel(object):
             vac = VigilantAttributeConnector(vigil_attr,
                                              new_ctrl,
                                              events=wx.EVT_COMMAND_ENTER)
-
-            if self.highlight_change:
-                bind_highlight(new_ctrl, lbl_ctrl, vigil_attr,
-                               wx.EVT_TEXT, wx.EVT_COMMAND_ENTER)
 
             new_ctrl.Bind(wx.EVT_TEXT, self.on_setting_changed)
             new_ctrl.Bind(wx.EVT_COMMAND_ENTER, self.on_setting_changed)
@@ -561,10 +557,6 @@ class SettingsPanel(object):
                                              new_ctrl,
                                              events=wx.EVT_COMMAND_ENTER)
 
-            if self.highlight_change:
-                bind_highlight(new_ctrl, lbl_ctrl, vigil_attr,
-                               wx.EVT_TEXT, wx.EVT_COMMAND_ENTER)
-
             new_ctrl.Bind(wx.EVT_COMMAND_ENTER, self.on_setting_changed)
             new_ctrl.Bind(wx.EVT_TEXT, self.on_setting_changed)
 
@@ -580,12 +572,7 @@ class SettingsPanel(object):
                                              new_ctrl,
                                              events=wx.EVT_BUTTON)
 
-            if self.highlight_change:
-                bind_highlight(new_ctrl, lbl_ctrl, vigil_attr,
-                               wx.EVT_BUTTON)
-
             new_ctrl.Bind(wx.EVT_BUTTON, self.on_setting_changed)
-
 
         elif control_type == odemis.gui.CONTROL_COMBO:
 
@@ -644,10 +631,6 @@ class SettingsPanel(object):
                     ctrl_2_va=cb_get,
                     events=(wx.EVT_COMBOBOX, wx.EVT_TEXT_ENTER))
 
-            if self.highlight_change:
-                bind_highlight(new_ctrl, lbl_ctrl, vigil_attr,
-                               wx.EVT_COMBOBOX, wx.EVT_TEXT_ENTER)
-
             new_ctrl.Bind(wx.EVT_COMBOBOX, self.on_setting_changed)
             new_ctrl.Bind(wx.EVT_TEXT_ENTER, self.on_setting_changed)
 
@@ -666,6 +649,9 @@ class SettingsPanel(object):
         self.entries.append(ne)
         self.num_entries += 1
         
+        if self.highlight_change:
+            bind_menu(ne)
+            
         self.fold_panel.Parent.Layout()
 
     def on_setting_changed(self, evt):
@@ -745,6 +731,16 @@ class SettingsBarController(object):
         """ Resume VigilantAttributeConnector related control updates """
         for panel in self.settings_panels:
             panel.resume()
+
+    @property
+    def entries(self):
+        """
+        All the setting entries of all the panels
+        """
+        entries = []
+        for panel in self.settings_panels:
+            entries.extend(panel.entries)
+        return entries        
 
     # Optical microscope settings
     def add_ccd(self, comp):
