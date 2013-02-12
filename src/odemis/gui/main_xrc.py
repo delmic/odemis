@@ -347,6 +347,29 @@ def __init_resources():
                     <flag>wxEXPAND</flag>
                   </object>
                   <object class="sizeritem">
+                    <object class="wxBoxSizer">
+                      <object class="sizeritem">
+                        <object class="wxStaticBitmap">
+                          <bitmap>img_side_menu_top_png</bitmap>
+                        </object>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="wxPanel">
+                          <bg>#000000</bg>
+                        </object>
+                        <minsize>30,100</minsize>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="wxStaticBitmap">
+                          <bitmap>img_side_menu_bottom_png</bitmap>
+                        </object>
+                      </object>
+                      <orient>wxVERTICAL</orient>
+                    </object>
+                    <flag>wxTOP|wxBOTTOM|wxALIGN_RIGHT</flag>
+                    <border>10</border>
+                  </object>
+                  <object class="sizeritem">
                     <object class="wxFlexGridSizer">
                       <object class="sizeritem">
                         <object class="wxStaticText" name="lbl_view_all">
@@ -771,7 +794,6 @@ def __init_resources():
             <orient>wxHORIZONTAL</orient>
           </object>
           <bg>#333333</bg>
-          <hidden>1</hidden>
           <XRCED>
             <assign_var>1</assign_var>
           </XRCED>
@@ -850,7 +872,7 @@ def __init_resources():
                     <flag>wxEXPAND</flag>
                   </object>
                 </object>
-                <bg>#000064</bg>
+                <bg>#000000</bg>
               </object>
               <option>1</option>
               <flag>wxEXPAND</flag>
@@ -1603,6 +1625,32 @@ N\xf8M3\xd7\xb6\xed"fN\x11B\x9cv\xb9\\\xff\xbcu\xdb\xb6\x8b\xd9\xd9\xd9\
 \xfc\x0d\x00>\x9f\xef\x9a\xe8\xe8\xf6\xee\xdd\xaf\xba\xc6\x9f\xe0\xdf\x9e\
 r\x1e~\xb8\xcd\\\xfe\x8c\x19rfA\x81l\xcf_\xff\x0f\xd2Ic=\xea9\x94\xbd\x00\
 \x00\x00\x00IEND\xaeB`\x82'''
+
+    img_side_menu_top_png = '''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00\x1e\x00\x00\x00\x06\x08\x06\x00\x00\x00\
+\xd4\xb5.T\x00\x00\x00\x06bKGD\x00\xff\x00\xff\x00\xff\xa0\xbd\xa7\x93\x00\
+\x00\x00\x09pHYs\x00\x00\x0b\x13\x00\x00\x0b\x13\x01\x00\x9a\x9c\x18\x00\
+\x00\x00\x07tIME\x07\xdd\x02\x0c\x10\x09\x0b\x08T\x888\x00\x00\x00\x19t\
+EXtComment\x00Created with GIMPW\x81\x0e\x17\x00\x00\x00=IDAT(\xcf\xc5\xd0\
+Q\x15\x00\x10\x14\x04\xd1\x19!\xfcJ\xa4\x80\x14\xb2I\xa4\x09?\xaf\x82\xe7\
+\x16\x98\xb3+Am\xc0\x04\x06Py\xcc\x88v`\x91\xc8X\xbaIV\xe2\xdet\xaa\xe7\
+G\xb8\xf0\xc9\x05\x9dA\x04\x81\xd3\xea\x9e\x0e\x00\x00\x00\x00IEND\xaeB\
+`\x82'''
+
+    img_side_menu_bottom_png = '''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00\x1e\x00\x00\x00\x06\x08\x06\x00\x00\x00\
+\xd4\xb5.T\x00\x00\x00\x06bKGD\x00\xff\x00\xff\x00\xff\xa0\xbd\xa7\x93\x00\
+\x00\x00\x09pHYs\x00\x00\x0b\x13\x00\x00\x0b\x13\x01\x00\x9a\x9c\x18\x00\
+\x00\x00\x07tIME\x07\xdd\x02\x0c\x10\x09+3:\xa8\xf0\x00\x00\x00\x19tEXt\
+Comment\x00Created with GIMPW\x81\x0e\x17\x00\x00\x00FIDAT(\xcf\xc5\x90\
+\xb1\x0d\xc0 \x10\xc4\xecP\xd2d\x83H\x99"S0#sQ%\x93<\x0d+\xe4qs\xd7Y\xb2\
+j\xb0\x81\x83M\x14\xf5\x04\x9el\xb1\xea\x05\xbc\xe9\xa9#\xe2\x03Zz\xea\xb5\
+C\xed\xeb\xdf@\xfd[<\x01{\xfd\x082\xfa\xc5)\xfb\x00\x00\x00\x00IEND\xae\
+B`\x82'''
 
     img_preview_block_png = '''\
 \x89PNG\x0d
@@ -3444,6 +3492,8 @@ f\x9d\x00\xee\xd6\xef\xc8a\xe1\x13\xb5r\x9ch\x0fr,1@(\x14\xdac$\x9d\xb5\
     wx.MemoryFSHandler.AddFile('XRC/main/img_tab_hover_png', img_tab_hover_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_tab_active_png', img_tab_active_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_logo_h30_png', img_logo_h30_png)
+    wx.MemoryFSHandler.AddFile('XRC/main/img_side_menu_top_png', img_side_menu_top_png)
+    wx.MemoryFSHandler.AddFile('XRC/main/img_side_menu_bottom_png', img_side_menu_bottom_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_preview_block_png', img_preview_block_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_preview_block_a_png', img_preview_block_a_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_btn_press_png', img_btn_press_png)

@@ -36,7 +36,7 @@ from odemis.gui.cont.views import ViewController, ViewSelector
 main_tab_controller = None
 
 class Tab(object):
-    """ Small helper class representing a tab (= tab button + panel) """
+    """ Small helper class representing a tab (tab button + panel) """
 
     def __init__(self, group, name, button, panel):
         self.group = group
