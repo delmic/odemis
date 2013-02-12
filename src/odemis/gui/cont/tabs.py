@@ -38,7 +38,8 @@ main_tab_controller = None
 class Tab(object):
     """ Small helper class representing a tab (= tab button + panel) """
 
-    def __init__(self, name, button, panel):
+    def __init__(self, group, name, button, panel):
+        self.group = group
         self.name = name
         self.button = button
         self.panel = panel
@@ -66,8 +67,8 @@ class Tab(object):
 
 class SecomLiveTab(Tab):
 
-    def __init__(self, name, button, panel, main_frame, interface_model):
-        super(SecomLiveTab, self).__init__(name, button, panel)
+    def __init__(self, group, name, button, panel, main_frame, interface_model):
+        super(SecomLiveTab, self).__init__(group, name, button, panel)
 
         self.interface_model = interface_model
         self.main_frame = main_frame
@@ -125,12 +126,13 @@ class SecomLiveTab(Tab):
 
 class TabBarController(object):
 
-    def __init__(self, tab_list, main_frame):
-
+    def __init__(self, tab_list, main_frame, interface_model):
 
         self.main_frame = main_frame
 
         self.tab_list = tab_list
+
+        self._filter_tabs(interface_model)
 
         for tab in self.tab_list:
             tab.button.Bind(wx.EVT_BUTTON, self.OnClick)
@@ -138,6 +140,23 @@ class TabBarController(object):
 
         # Show first tab by default
         self.show(0)
+
+    def _filter_tabs(self, interface_model):
+        """ Filter the tabs according to the current interface model.
+
+        Tabs that are not wanted or needed will be removed from the list and
+        the associated buttons will be hidden in the user interface.
+        """
+
+        needed_group = interface_model.microscope.role
+
+        logging.debug("Hiding tabs not belonging to the '%s' interface",
+                      needed_group)
+
+        for tab in [tab for tab in self.tab_list if tab.group != needed_group]:
+            tab.button.Hide()
+            self.tab_list.remove(tab)
+
 
     def __getitem__(self, name):
         return self.get_tab(name)

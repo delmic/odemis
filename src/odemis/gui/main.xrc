@@ -108,7 +108,7 @@
             <object class="sizeritem">
               <object class="TabButton" name="btn_tab_secom_gallery">
                 <size>160,30</size>
-                <label>PROJECT GALLERY</label>
+                <label>GALLERY</label>
                 <bitmap>img/tab_inactive.png</bitmap>
                 <hover>img/tab_hover.png</hover>
                 <selected>img/tab_active.png</selected>

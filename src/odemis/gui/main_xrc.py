@@ -246,7 +246,7 @@ def __init_resources():
             <object class="sizeritem">
               <object class="TabButton" name="btn_tab_secom_gallery">
                 <size>160,30</size>
-                <label>PROJECT GALLERY</label>
+                <label>GALLERY</label>
                 <bitmap>img_tab_inactive_png</bitmap>
                 <hover>img_tab_hover_png</hover>
                 <selected>img_tab_active_png</selected>

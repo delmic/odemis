@@ -179,19 +179,27 @@ class OdemisGUIApp(wx.App):
             self.main_frame.Maximize()
             self.main_frame.Show()
 
-
-            tab_list = [tabs.SecomLiveTab("secom_live",
+            # List of all possible tabs used in Odemis' main GUI
+            tab_list = [tabs.SecomLiveTab(
+                            "secom",
+                            "secom_live",
                             self.main_frame.btn_tab_secom_live,
                             self.main_frame.pnl_tab_secom_live,
                             self.main_frame,
                             self.interface_model),
-                        tabs.Tab("secom_gallery",
+                        tabs.Tab(
+                            "secom",
+                            "secom_gallery",
                             self.main_frame.btn_tab_secom_gallery,
                             self.main_frame.pnl_tab_secom_gallery),
-                        tabs.Tab("sparc_acqui",
+                        tabs.Tab(
+                            "sparc",
+                            "sparc_acqui",
                             self.main_frame.btn_tab_sparc_acqui,
                             self.main_frame.pnl_tab_sparc_acqui),
-                        tabs.Tab("sparc_analysis",
+                        tabs.Tab(
+                            "sparc",
+                            "sparc_analysis",
                             self.main_frame.btn_tab_sparc_analysis,
                             self.main_frame.pnl_tab_sparc_analysis),
                         ]
@@ -199,7 +207,8 @@ class OdemisGUIApp(wx.App):
             # Create the main tab controller and store a global reference
             # in the odemis.gui.cont package
             set_main_tab_controller(tabs.TabBarController(tab_list,
-                                                          self.main_frame))
+                                                          self.main_frame,
+                                                          self.interface_model))
 
 
             #self.settings_controller = SettingsBarController(self.interface_model,

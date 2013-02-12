@@ -147,7 +147,7 @@ SETTINGS = {
                     "control_type": odemis.gui.CONTROL_COMBO,
                     "choices": resolution_from_range,
                 },
-            # what we don't want to display:
+                # what we don't want to display:
                 "targetTemperature":
                 {
                     "control_type": odemis.gui.CONTROL_NONE,
