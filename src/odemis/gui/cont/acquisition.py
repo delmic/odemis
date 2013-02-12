@@ -184,7 +184,8 @@ class AcquisitionController(object):
         extention = exporter.EXTENSIONS[0] # includes the .
         filename = os.path.join(dirname, basename + extention)
         if os.path.exists(filename):
-            logging.warning("File '%s' for snapshot already exists, cancelling snapshot",
+            msg = "File '%s' for snapshot already exists, cancelling snapshot"
+            logging.warning(msg,
                             filename)
             return
 
@@ -196,7 +197,8 @@ class AcquisitionController(object):
 
         streams = view.getStreams()
         if len(streams) == 0:
-            logging.warning("Failed to take snapshot, no stream visible in view %s", view.name.value)
+            msg = "Failed to take snapshot, no stream visible in view %s"
+            logging.warning(msg, view.name.value)
             return
 
         self.start_snapshot_animation()
@@ -206,7 +208,8 @@ class AcquisitionController(object):
             thumbnail = None
         else:
             # need to convert from wx.Image to ndimage
-            thumbnail = img.wxImage2NDImage(view.thumbnail.value, keep_alpha=False)
+            thumbnail = img.wxImage2NDImage(view.thumbnail.value,
+                                            keep_alpha=False)
             # add some basic info to the image
             mpp = view.mpp.value
             metadata = {model.MD_POS: view.view_pos.value,
@@ -219,9 +222,12 @@ class AcquisitionController(object):
         for s in streams:
             data = s.raw # list of raw images for this stream (with metadata)
             if len(data) == 0:
-                logging.warning("Failed to get the last raw image of stream %s, will acquire a new one", s.name.value)
+                msg = ("Failed to get the last raw image of stream %s, will "
+                       "acquire a new one")
+                logging.warning(msg, s.name.value)
                 # FIXME: ask the stream to get activated and return an image
-                # it's the only one which know precisely how to configure detector and emitters
+                # it's the only one which know precisely how to configure
+                # detector and emitters
                 data = [s._dataflow.get()]
             # add the stream name to the image
             for d in data:
@@ -242,13 +248,17 @@ class AcquisitionController(object):
             return
 
         # otherwise start a new animation thread
-        self._anim_thread = threading.Thread(target=self.snapshot_animation, name="snapshot animation")
+        self._anim_thread = threading.Thread(target=self.snapshot_animation,
+                                             name="snapshot animation")
         self._anim_thread.start()
 
     def snapshot_animation(self, duration=0.6):
-        """
-        Change the brightness of all the screens to very high, and slowly decrease it back to original value (1.0)
-        duration (0<float): duration in second of the animation
+        """Show an animation indicating that a snapshot was taken.
+
+        Change the brightness of all the screens to very high, and slowly
+        decrease it back to the original value (1.0).
+
+        duration (float): duration in seconds of the animation.
         """
         assert (0 < duration)
         brightness_orig = 1.0 # TODO: read the previous brightness
@@ -262,7 +272,8 @@ class AcquisitionController(object):
             time.sleep(0.1) # first is a bit longer
             now = time.time()
             while now <= end:
-                # it should decrease quickly at the beginning and slowly at the end => 1/x (x 1/max->1)
+                # it should decrease quickly at the beginning and slowly at the
+                # end => 1/x (x 1/max->1)
                 pos = (now - start) / duration
                 brightness = 1/(1/brightness_max + (1 - 1/brightness_max) * pos)
                 self.set_output_brightness(self._outputs, brightness)
@@ -319,7 +330,7 @@ class AcquisitionDialog(xrcfr_acq):
     Acquisition Dialog created in XRCed
     """
 
-    def __init__(self, parent, main_interface_model):
+    def __init__(self, parent, interface_model):
         xrcfr_acq.__init__(self, parent)
 
         self.conf = get_acqui_conf()
@@ -332,30 +343,36 @@ class AcquisitionDialog(xrcfr_acq):
 
         self.set_default_filename_and_path()
 
-        self.acq_future = None # a ProgressiveFuture if the acquisition is going on
+        # a ProgressiveFuture if the acquisition is going on
+        self.acq_future = None
 
-        # Store current values and pause updates on the current settings controller
+        # Store current values and pause updates on the current settings
+        # controller
         mtc = get_main_tab_controller()
         main_settings_controller = mtc['secom_live'].settings_controller
         main_settings_controller.store()
         main_settings_controller.pause()
 
         # Create a new settings controller for the acquisition dialog
-        self.settings_controller = SettingsBarController(main_interface_model, self, True)
+        self.settings_controller = SettingsBarController(interface_model,
+                                                         self,
+                                                         True)
 
         # duplicate the interface, but with only one view
-        self.interface_model = self.duplicate_interface_model(main_interface_model)
-        orig_view = main_interface_model.focussedView.value
+        self.interface_model = self.duplicate_interface_model(interface_model)
+        orig_view = interface_model.focussedView.value
         view = self.interface_model.focussedView.value
 
-        self.stream_controller = StreamController(self.interface_model, self.pnl_stream)
+        self.stream_controller = StreamController(self.interface_model,
+                                                  self.pnl_stream)
         # The streams currently displayed are the one
         self.add_all_streams(orig_view.getStreams())
         # TODO: disable acquire button when no streams are visible
         # cf pub.subscribe (on_stream_changed)
         # TODO: need to create a disabled version of the button
 
-        # make sure the view displays the same thing as the one we are duplicating
+        # make sure the view displays the same thing as the one we are
+        # duplicating
         view.view_pos.value = orig_view.view_pos.value
         view.mpp.value = orig_view.mpp.value
         view.merge_ratio.value = orig_view.merge_ratio.value
@@ -434,7 +451,8 @@ class AcquisitionDialog(xrcfr_acq):
 
             self.gauge_acq.Range = 100 * seconds
             seconds = math.ceil(seconds) # round a bit pessimistically
-            txt = "The estimated acquisition time is %s." % units.readable_time(seconds)
+            txt = "The estimated acquisition time is {}."
+            txt = txt.format(units.readable_time(seconds))
         else:
             txt = "No streams present."
 
@@ -454,10 +472,13 @@ class AcquisitionDialog(xrcfr_acq):
 
     @staticmethod
     def _convert_formats_to_wildcards(formats2ext):
-        """
-        Convert formats into wildcards string compatible with wx.FileDialog()
-        formats2ext (dict string -> list of strings): name of each format -> list of extensions
-        returns (tuple (string, list of strings)): wildcards, name of the format in the same order as in the wildcards
+        """Convert formats into wildcards string compatible with wx.FileDialog()
+
+        formats2ext (dict {string: list of strings}): format names and lists of
+            their possible extensions.
+
+        returns (tuple (string, list of strings)): wildcards, name of the format
+            in the same order as in the wildcards
         """
         wildcards = []
         formats = []
@@ -477,14 +498,14 @@ class AcquisitionDialog(xrcfr_acq):
         #   cannot be changed by selecting a different file type, this is big
         #   nono. Also, extensions with multiple periods ('.') are not correctly
         #   handled. The solution is to use the SetFilename method instead.
-        formats2extensions = dataio.get_available_formats()
-        wildcards, formats = self._convert_formats_to_wildcards(formats2extensions)
+        formats = dataio.get_available_formats()
+        wildcards, formats = self._convert_formats_to_wildcards(formats)
         dialog = wx.FileDialog(self,
-                            message="Choose a filename and destination",
-                            defaultDir=self.conf.last_path,
-                            defaultFile="",
-                            style=wx.FD_SAVE|wx.FD_OVERWRITE_PROMPT,
-                            wildcard=wildcards)
+                               message="Choose a filename and destination",
+                               defaultDir=self.conf.last_path,
+                               defaultFile="",
+                               style=wx.FD_SAVE|wx.FD_OVERWRITE_PROMPT,
+                               wildcard=wildcards)
 
         # Get and select the last extension used.
         prev_fmt = self.conf.last_format
@@ -518,18 +539,18 @@ class AcquisitionDialog(xrcfr_acq):
         # Check the filename has a good extension, or add the default one
         fn = dialog.GetFilename()
         ext = None
-        for e in formats2extensions[fmt]:
-            if fn.endswith(e) and len(e) > len(ext or ""):
-                ext = e
+        for extension in formats[fmt]:
+            if fn.endswith(extension) and len(extension) > len(ext or ""):
+                ext = extension
 
         if ext is None:
-            if fmt == prev_fmt and self.conf.last_extension in formats2extensions[fmt]:
+            if fmt == prev_fmt and self.conf.last_extension in formats[fmt]:
                 # if the format is the same (and extension is compatible): keep
                 # the extension. This avoid changing the extension if it's not
                 # the default one.
                 ext = self.conf.last_extension
             else:
-                ext = formats2extensions[fmt][0] # default extension
+                ext = formats[fmt][0] # default extension
             fn += ext
 
         self.conf.last_extension = ext
@@ -544,8 +565,10 @@ class AcquisitionDialog(xrcfr_acq):
         """
         if self.acq_future:
             # TODO: ask for confirmation before cancelling?
-            # what to do if the acquisition is done while asking for confirmation?
-            logging.info("Cancelling acquisition due to closing the acquisition window")
+            # What to do if the acquisition is done while asking for
+            # confirmation?
+            msg = "Cancelling acquisition due to closing the acquisition window"
+            logging.info(msg)
             self.acq_future.cancel()
 
         # stop listening to events
@@ -574,7 +597,8 @@ class AcquisitionDialog(xrcfr_acq):
         self.btn_acquire.Disable()
         self.btn_cancel.Bind(wx.EVT_BUTTON, self.on_cancel)
 
-        # the range of the progress bar was already set in estimate_acquisition_time()
+        # the range of the progress bar was already set in
+        # estimate_acquisition_time()
         self.gauge_acq.Value = 0
         self.gauge_acq.Show()
         self.Layout() # to put the gauge at the right place
@@ -584,7 +608,8 @@ class AcquisitionDialog(xrcfr_acq):
         Called during acquisition when pressing the cancel button
         """
         if not self.acq_future:
-            logging.warning("Tried to cancel acquisition while it was not started")
+            msg = "Tried to cancel acquisition while it was not started"
+            logging.warning(msg)
             return
 
         self.acq_future.cancel()
@@ -593,7 +618,8 @@ class AcquisitionDialog(xrcfr_acq):
     @call_after
     def on_acquisition_done(self, future):
         """
-        Callback called when the acquisition is finished (either successfully or cancelled)
+        Callback called when the acquisition is finished (either successfully or
+        cancelled)
         """
         # bind button back to direct closure
         self.btn_cancel.Bind(wx.EVT_BUTTON, self.on_close)
@@ -656,7 +682,8 @@ class AcquisitionDialog(xrcfr_acq):
 
         left = math.ceil(left) # pessimistic
         if left > 2:
-            self.lbl_acqestimate.SetLabel("%s left." % units.readable_time(left))
+            lbl_txt = "%s left." % units.readable_time(left)
+            self.lbl_acqestimate.SetLabel(lbl_txt)
         else:
             # don't be too precise
             self.lbl_acqestimate.SetLabel("a few seconds left.")

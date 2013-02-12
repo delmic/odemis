@@ -139,7 +139,10 @@ class Config(object):
 
     def get(self, section, option):
         """ Get the value of an option """
-        return self.config.get(section, option)
+        try:
+            return self.config.get(section, option)
+        except ConfigParser.NoOptionError:
+            return self.default.get(section, option)
 
 class GeneralConfig(Config):
     """ General configuration values """

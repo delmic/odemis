@@ -89,20 +89,30 @@ class SecomLiveTab(Tab):
 
         # Order matters!
         # First we create the views, then the streams
-        self._view_controller = ViewController(self.interface_model,
-                                              self.main_frame)
+        self._view_controller = ViewController(
+                                    self.interface_model,
+                                    self.main_frame
+                                )
 
-        self._stream_controller = StreamController(self.interface_model,
-                                                  self.main_frame.pnl_stream)
+        self._stream_controller = StreamController(
+                                        self.interface_model,
+                                        self.main_frame.pnl_stream
+                                  )
 
-        self._view_selector = ViewSelector(self.interface_model,
-                                          self.main_frame)
+        self._view_selector = ViewSelector(
+                                    self.interface_model,
+                                    self.main_frame
+                              )
 
-        self._acquisition_controller = AcquisitionController(self.interface_model,
-                                                            self.main_frame)
+        self._acquisition_controller = AcquisitionController(
+                                            self.interface_model,
+                                            self.main_frame
+                                       )
 
-        self._microscope_controller = MicroscopeController(self.interface_model,
-                                                          self.main_frame)
+        self._microscope_controller = MicroscopeController(
+                                            self.interface_model,
+                                            self.main_frame
+                                      )
 
     @property
     def settings_controller(self):
