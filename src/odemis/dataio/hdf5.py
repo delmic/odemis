@@ -78,7 +78,6 @@ def _create_image_dataset(group, dataset_name, image, **kwargs):
     else:
         image_dataset.attrs["IMAGE_SUBCLASS"] = numpy.string_("IMAGE_GRAYSCALE")
         image_dataset.attrs["IMAGE_WHITE_IS_ZERO"] = numpy.array(0, dtype="uint8")
-        idtype = numpy.iinfo(image.dtype)
         image_dataset.attrs["IMAGE_MINMAXRANGE"] = [image.min(), image.max()]
     
     image_dataset.attrs["DISPLAY_ORIGIN"] = numpy.string_("UL") # not rotated

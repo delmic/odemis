@@ -2,7 +2,7 @@
 # Like the SECOM, but the stage is not controllable
 SPARC: {
     class: Microscope,
-    role: sem,
+    role: sparc,
     emitters: ["EBeam ExtXY"],
     detectors: ["SED ExtXY", "BSD ExtXY"],
     actuators: [],
