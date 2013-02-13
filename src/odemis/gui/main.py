@@ -175,9 +175,9 @@ class OdemisGUIApp(wx.App):
             self.main_frame.SetAcceleratorTable(accel_tbl)
 
             self.main_frame.Bind(wx.EVT_CLOSE, self.on_close_window)
-
             self.main_frame.Maximize()
             self.main_frame.Show()
+
 
             # List of all possible tabs used in Odemis' main GUI
             tab_list = [tabs.SecomLiveTab(
@@ -209,7 +209,6 @@ class OdemisGUIApp(wx.App):
             set_main_tab_controller(tabs.TabBarController(tab_list,
                                                           self.main_frame,
                                                           self.interface_model))
-
 
             #self.settings_controller = SettingsBarController(self.interface_model,
             #                                           self.main_frame)

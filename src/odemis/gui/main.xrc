@@ -204,32 +204,67 @@
               <object class="wxPanel">
                 <object class="wxBoxSizer">
                   <orient>wxVERTICAL</orient>
+                  
                   <object class="spacer">
                     <option>1</option>
                     <flag>wxEXPAND</flag>
                   </object>
                   <object class="sizeritem">
-                    <object class="wxBoxSizer">
-                      <object class="sizeritem">
-                        <object class="wxStaticBitmap">
-                          <bitmap>img/side_menu_top.png</bitmap>
+                    <object class="wxPanel">
+                      <object class="wxBoxSizer">
+                        <object class="sizeritem">
+                          <object class="wxStaticBitmap">
+                            <bitmap>img/side_menu_top.png</bitmap>
+                          </object>
                         </object>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="wxPanel">
-                          <bg>#000000</bg>
+                        <object class="sizeritem">
+                          <object class="wxPanel">
+                            <object class="wxBoxSizer">
+                              <orient>wxVERTICAL</orient>
+                              <object class="sizeritem">
+                                <object class="wxPanel">
+                                  <size>24,24</size>
+                                  <bg>#57E6C2</bg>
+                                </object>
+                                <flag>wxBOTTOM|wxLEFT</flag>
+                                <border>10</border>
+                              </object>
+                              <object class="sizeritem">
+                                <object class="wxPanel">
+                                  <size>24,24</size>
+                                  <bg>#E66D57</bg>
+                                </object>
+                                <flag>wxBOTTOM|wxLEFT</flag>
+                                <border>10</border>
+                              </object>
+                              <object class="sizeritem">
+                                <object class="wxPanel">
+                                  <size>24,24</size>
+                                  <bg>#D357E6</bg>
+                                </object>
+                                <flag>wxLEFT</flag>
+                                <border>10</border>
+                              </object>
+                            </object>
+                            <bg>#000000</bg>
+                          </object>
+                          <minsize>40,-1</minsize>
                         </object>
-                        <minsize>30,100</minsize>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="wxStaticBitmap">
-                          <bitmap>img/side_menu_bottom.png</bitmap>
+                        <object class="sizeritem">
+                          <object class="wxStaticBitmap">
+                            <bitmap>img/side_menu_bottom.png</bitmap>
+                          </object>
                         </object>
+                        <orient>wxVERTICAL</orient>
                       </object>
-                      <orient>wxVERTICAL</orient>
+                      <bg>#333333</bg>
+                      <hidden>1</hidden>
                     </object>
-                    <flag>wxTOP|wxBOTTOM|wxALIGN_RIGHT</flag>
-                    <border>10</border>
+                    <flag>wxALIGN_RIGHT</flag>
+                  </object>
+                  <object class="spacer">
+                    <option>1</option>
+                    <flag>wxEXPAND</flag>
                   </object>
                   <object class="sizeritem">
                     <object class="wxFlexGridSizer">
@@ -656,6 +691,7 @@
             <orient>wxHORIZONTAL</orient>
           </object>
           <bg>#333333</bg>
+          <hidden>1</hidden>
           <XRCED>
             <assign_var>1</assign_var>
           </XRCED>
@@ -709,6 +745,58 @@
               <object class="wxPanel" name="pnl_left">
                 <object class="wxBoxSizer">
                   <orient>wxVERTICAL</orient>
+                  <object class="sizeritem">
+                    <object class="wxPanel">
+                      <object class="wxBoxSizer">
+                        <object class="sizeritem">
+                          <object class="wxStaticBitmap">
+                            <bitmap>img/side_menu_top.png</bitmap>
+                          </object>
+                        </object>
+                        <object class="sizeritem">
+                          <object class="wxPanel">
+                            <object class="wxBoxSizer">
+                              <orient>wxVERTICAL</orient>
+                              <object class="sizeritem">
+                                <object class="wxPanel">
+                                  <size>24,24</size>
+                                  <bg>#57E6C2</bg>
+                                </object>
+                                <flag>wxBOTTOM|wxLEFT</flag>
+                                <border>10</border>
+                              </object>
+                              <object class="sizeritem">
+                                <object class="wxPanel">
+                                  <size>24,24</size>
+                                  <bg>#E66D57</bg>
+                                </object>
+                                <flag>wxBOTTOM|wxLEFT</flag>
+                                <border>10</border>
+                              </object>
+                              <object class="sizeritem">
+                                <object class="wxPanel">
+                                  <size>24,24</size>
+                                  <bg>#D357E6</bg>
+                                </object>
+                                <flag>wxLEFT</flag>
+                                <border>10</border>
+                              </object>
+                            </object>
+                            <bg>#000000</bg>
+                          </object>
+                          <minsize>40,-1</minsize>
+                        </object>
+                        <object class="sizeritem">
+                          <object class="wxStaticBitmap">
+                            <bitmap>img/side_menu_bottom.png</bitmap>
+                          </object>
+                        </object>
+                        <orient>wxVERTICAL</orient>
+                      </object>
+                      <bg>#333333</bg>
+                    </object>
+                    <flag>wxALIGN_RIGHT</flag>
+                  </object>
                 </object>
                 <size>200,-1</size>
                 <bg>#333333</bg>
