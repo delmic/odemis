@@ -138,8 +138,18 @@ class TabBarController(object):
             tab.button.Bind(wx.EVT_BUTTON, self.OnClick)
             tab.button.Bind(wx.EVT_KEY_UP, self.OnKeyUp)
 
-        # Show first tab by default
         self.show(0)
+
+        # IMPORTANT NOTE:
+        #
+        # When all tab panels are hidden on start-up, the MinSize attribute
+        # of the main GUI frame will be set to such a low value, that most of
+        # the interface will be invisible if the user takes the interface off of
+        # 'full screen' view.
+        # Also, Gnome's GDK library will start spewing error messages, saying
+        # it cannot draw certain images, because the dimensions are 0x0.
+
+        main_frame.SetMinSize((1400, 550))
 
     def _filter_tabs(self, interface_model):
         """ Filter the tabs according to the current interface model.
