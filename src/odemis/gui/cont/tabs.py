@@ -85,6 +85,9 @@ class SecomLiveTab(Tab):
     def _initialize(self):
         """ This method is called when the tab is first shown """
 
+        if not self.interface_model:
+            return
+
         self._settings_controller = SettingsBarController(self.interface_model,
                                                          self.main_frame)
 
@@ -132,7 +135,8 @@ class TabBarController(object):
 
         self.tab_list = tab_list
 
-        self._filter_tabs(interface_model)
+        if interface_model:
+            self._filter_tabs(interface_model)
 
         for tab in self.tab_list:
             tab.button.Bind(wx.EVT_BUTTON, self.OnClick)

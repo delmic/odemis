@@ -137,7 +137,7 @@ def __init_resources():
     wx.FileSystem.AddHandler(wx.MemoryFSHandler())
 
     main_xrc = '''\
-<?xml version="1.0" ?><resource version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
+<?xml version="1.0" ?><resource class="wxBoxSizer" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
   <object class="wxFrame" name="fr_main">
     <object class="wxMenuBar">
       <object class="wxMenu">
@@ -882,7 +882,10 @@ def __init_resources():
             <object class="sizeritem">
               <object class="wxPanel" name="pnl_left">
                 <object class="wxBoxSizer">
-                  <orient>wxVERTICAL</orient>
+                  <object class="spacer">
+                    <option>1</option>
+                    <flag>wxEXPAND</flag>
+                  </object>
                   <object class="sizeritem">
                     <object class="wxPanel">
                       <object class="wxBoxSizer">
@@ -935,6 +938,11 @@ def __init_resources():
                     </object>
                     <flag>wxALIGN_RIGHT</flag>
                   </object>
+                  <orient>wxVERTICAL</orient>
+                  <object class="spacer">
+                    <option>1</option>
+                    <flag>wxEXPAND</flag>
+                  </object>
                 </object>
                 <size>200,-1</size>
                 <bg>#333333</bg>
@@ -943,23 +951,7 @@ def __init_resources():
             </object>
             <object class="sizeritem">
               <object class="wxPanel" name="pnl_view">
-                <object class="wxBoxSizer">
-                  <orient>wxVERTICAL</orient>
-                  <object class="spacer">
-                    <flag>wxEXPAND</flag>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="wxStaticText">
-                      <label>test</label>
-                      <fg>#FFFFFF</fg>
-                    </object>
-                    <option>1</option>
-                    <flag>wxEXPAND|wxALIGN_CENTRE</flag>
-                  </object>
-                  <object class="spacer">
-                    <flag>wxEXPAND</flag>
-                  </object>
-                </object>
+                
                 <bg>#000000</bg>
               </object>
               <option>1</option>
@@ -1094,7 +1086,6 @@ def __init_resources():
             </object>
           </object>
           <bg>#333333</bg>
-          <hidden>1</hidden>
           <XRCED>
             <assign_var>1</assign_var>
           </XRCED>

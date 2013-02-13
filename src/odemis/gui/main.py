@@ -81,6 +81,9 @@ class OdemisGUIApp(wx.App):
         constructor.
         """
 
+        self.microscope = None
+        self.interface_model = None
+
         try:
             self.microscope = model.getMicroscope()
             self.interface_model = instrmodel.GUIMicroscope(self.microscope)
@@ -88,7 +91,7 @@ class OdemisGUIApp(wx.App):
             logging.exception("Failed to connect to back-end")
             msg = ("The Odemis GUI could not connect to the Odemis back-end:\n\n"
                    "{0}\n\n"
-                   "Launch GUI anyway?").format(e)
+                   "Launch user interface anyway?").format(e)
 
             answer = wx.MessageBox(msg,
                                    "Connection error",
@@ -348,9 +351,10 @@ see http://www.fluorophores.org/disclaimer/.
 
         logging.info("Exiting Odemis")
 
-        # Put cleanup actions here (like disconnect from odemisd)
-        self.interface_model.opticalState.value = instrmodel.STATE_OFF
-        self.interface_model.emState.value = instrmodel.STATE_OFF
+        if self.interface_model:
+            # Put cleanup actions here (like disconnect from odemisd)
+            self.interface_model.opticalState.value = instrmodel.STATE_OFF
+            self.interface_model.emState.value = instrmodel.STATE_OFF
 
         #self.dlg_startup.Destroy()
         self.main_frame.Destroy()
