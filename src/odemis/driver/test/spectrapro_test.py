@@ -15,7 +15,7 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from odemis.driver import spectrapro
-from unittest.case import skip
+from unittest.case import skip, skipIf
 import futures
 import logging
 import os
@@ -37,8 +37,8 @@ class TestStatic(unittest.TestCase):
     """
     Tests which don't need a component ready
     """
+    @skipIf(CLASS == spectrapro.FakeSpectraPro, "Scanning cannot work without real hardware") 
     def test_scan(self):
-        # TODO skip if Fake
         devices = CLASS.scan()
         self.assertGreater(len(devices), 0)
         
