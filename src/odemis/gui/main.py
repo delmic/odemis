@@ -86,7 +86,7 @@ class OdemisGUIApp(wx.App):
 
         try:
             self.microscope = model.getMicroscope()
-            self.interface_model = instrmodel.GUIMicroscope(self.microscope)
+            self.interface_model = instrmodel.MicroscopeModel(self.microscope)
         except (IOError, Pyro4.errors.CommunicationError), e:
             logging.exception("Failed to connect to back-end")
             msg = ("The Odemis GUI could not connect to the Odemis back-end:\n\n"

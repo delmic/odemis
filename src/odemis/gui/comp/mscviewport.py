@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
 Created on 8 Feb 2012
@@ -24,25 +23,26 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 from __future__ import division
-from ..dblmscopecanvas import DblMicroscopeCanvas
-from ..img.data import getico_blending_optBitmap, getico_blending_semBitmap
-from ..util import call_after, units
-from .scalewindow import ScaleWindow
-from .slider import Slider
+
+import logging
+
+import wx
+
 from odemis import gui
 from odemis.gui import instrmodel
-import logging
-import wx
+from odemis.gui.comp.scalewindow import ScaleWindow
+from odemis.gui.comp.slider import Slider
+from odemis.gui.dblmscopecanvas import DblMicroscopeCanvas
+from odemis.gui.img.data import getico_blending_optBitmap, getico_blending_semBitmap
+from odemis.gui.util import call_after, units
 
 
 class MicroscopeViewport(wx.Panel):
-    """
-    A panel that shows a microscope view and its legend below it.
+    """ A panel that shows a microscope view and its legend below it.
     """
 
     def __init__(self, *args, **kwargs):
-        """
-        Note: This is not fully initialised until setView() has been called
+        """Note: This is not fully initialised until setView() has been called
         """
         wx.Panel.__init__(self, *args, **kwargs)
 
@@ -182,7 +182,7 @@ class MicroscopeViewport(wx.Panel):
         *Important*: Should be called only once, at initialisation.
 
         mic_view       -- MicroscopeView
-        microscope_gui -- GUIMicroscope
+        microscope_gui -- MicroscopeModel
         """
 
         # This is a kind of a kludge, as it'd be best to have the viewport
@@ -335,11 +335,11 @@ class MicroscopeViewport(wx.Panel):
         streams = self.mic_view.streams.getStreams()
         has_opt = any(isinstance(s, instrmodel.OPTICAL_STREAMS) for s in streams)
         has_em = any(isinstance(s, instrmodel.EM_STREAMS) for s in streams)
-        
+
         if (has_opt and has_em):
             self.ShowMergeSlider(True)
         else:
-            self.ShowMergeSlider(False)        
+            self.ShowMergeSlider(False)
         # MergeSlider is displayed iif:
         # * Root operator of StreamTree accepts merge argument
         # * (and) Root operator of StreamTree has >= 2 images

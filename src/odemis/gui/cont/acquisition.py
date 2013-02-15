@@ -60,7 +60,7 @@ class AcquisitionController(object):
 
     def __init__(self, micgui, main_frame):
         """
-        micgui (GUIMicroscope): the representation of the microscope GUI
+        micgui (MicroscopeModel): the representation of the microscope GUI
         main_frame: (wx.Frame): the frame which contains the 4 viewports
         """
         self._microscope = micgui
@@ -152,26 +152,26 @@ class AcquisitionController(object):
         orig_settings = preset_asis(main_settings_controller.entries)
         main_settings_controller.pause()
         # TODO: also pause the MicroscopeViews
-        
+
         # pause all the live acquisitions
         main_stream_controller = mtc['secom_live'].stream_controller
         paused_streams = main_stream_controller.pauseStreams()
-        
+
         # create the dialog
         acq_dialog = AcquisitionDialog(self._main_frame, self._microscope)
         parent_size = [v * 0.66 for v in self._main_frame.GetSize()]
-        
+
         try:
             acq_dialog.SetSize(parent_size)
             acq_dialog.Center()
             acq_dialog.ShowModal()
         finally:
             main_stream_controller.resumeStreams(paused_streams)
-            
+
             for se, value in orig_settings.items():
                 se.va.value = value
             main_settings_controller.resume()
-            
+
             # Make sure that the acquisition button is enabled again.
             self._main_frame.btn_acquire.Enable()
 
@@ -491,10 +491,10 @@ class AcquisitionDialog(xrcfr_acq):
 
     def duplicate_interface_model(self, orig):
         """
-        Duplicate a GUIMicroscope and adapt it for the acquisition window
+        Duplicate a MicroscopeModel and adapt it for the acquisition window
         The streams will be shared, but not the views
-        orig (GUIMicroscope)
-        return (GUIMicroscope)
+        orig (MicroscopeModel)
+        return (MicroscopeModel)
         """
         new = copy.copy(orig) # shallow copy
 

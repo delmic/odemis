@@ -77,6 +77,7 @@ class xrcfr_main(wx.Frame):
         self.btn_acquire = xrc.XRCCTRL(self, "btn_acquire")
         self.pnl_tab_secom_gallery = xrc.XRCCTRL(self, "pnl_tab_secom_gallery")
         self.pnl_tab_sparc_acqui = xrc.XRCCTRL(self, "pnl_tab_sparc_acqui")
+        self.pnl_sparc_acq_view = xrc.XRCCTRL(self, "pnl_sparc_acq_view")
         self.btn_toggle_spectrometer = xrc.XRCCTRL(self, "btn_toggle_spectrometer")
         self.btn_toggle_angular = xrc.XRCCTRL(self, "btn_toggle_angular")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
@@ -347,7 +348,7 @@ def __init_resources():
                     <flag>wxEXPAND</flag>
                   </object>
                   <object class="sizeritem">
-                    <object class="wxPanel">
+                    <object class="wxPanel" name="pnl_secom_tool_menu">
                       <object class="wxBoxSizer">
                         <object class="sizeritem">
                           <object class="wxStaticBitmap">
@@ -886,7 +887,7 @@ def __init_resources():
                     <flag>wxEXPAND</flag>
                   </object>
                   <object class="sizeritem">
-                    <object class="wxPanel">
+                    <object class="wxPanel" name="pnl_sparc_tool_menu">
                       <object class="wxBoxSizer">
                         <object class="sizeritem">
                           <object class="wxStaticBitmap">
@@ -949,8 +950,10 @@ def __init_resources():
               <flag>wxEXPAND</flag>
             </object>
             <object class="sizeritem">
-              <object class="wxPanel" name="pnl_view">
-                <bg>#000000</bg>
+              <object class="MicroscopeViewport" name="pnl_sparc_acq_view">
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
               </object>
               <option>1</option>
               <flag>wxEXPAND</flag>

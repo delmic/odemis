@@ -335,7 +335,7 @@ class StreamPanel(wx.PyPanel):
                  collapsed=True):
         """
         stream (Stream): the data model to be displayed (and modified by the user)
-        microscope_model (GUIMicroscope): the microscope GUI, where there is
+        microscope_model (MicroscopeModel): the microscope GUI, where there is
                          focussedView
         """
 
@@ -978,7 +978,7 @@ class StreamBar(wx.Panel):
 
         wx.Panel.__init__(self, *args, **kwargs)
 
-        self._microscope = None # GUIMicroscope
+        self._microscope = None # MicroscopeModel
 
         self.stream_panels = []
         self.menu_actions = collections.OrderedDict()  # title => callback

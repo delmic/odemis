@@ -63,7 +63,7 @@ class StreamController(object):
 
     def __init__(self, microscope_model, stream_bar):
         """
-        microscope_model (GUIMicroscope): the representation of the microscope Model
+        microscope_model (MicroscopeModel): the representation of the microscope Model
         stream_bar (StreamBar): an empty stream panel
         """
         self.microscope = microscope_model
@@ -232,13 +232,13 @@ class StreamController(object):
             cls = comp.stream.DyeStreamPanel
         else:
             cls = comp.stream.StandardStreamPanel
-            
+
         sp = cls(self._stream_bar, stream, self.microscope)
         self._stream_bar.add_stream(sp, True)
         sp.to_acquisition_mode()
 
         return sp
-    
+
     # === VA handlers
 
     def _onView(self, view):
@@ -353,7 +353,7 @@ class StreamController(object):
                     s.active.value = False
                     s.updated.value = False
                     # TODO also disable stream panel "update" button?
-        
+
         return streams
 
     def resumeStreams(self, streams):

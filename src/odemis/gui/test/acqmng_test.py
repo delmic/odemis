@@ -31,8 +31,8 @@ SIM_CONFIG = "../../odemisd/test/optical-sim.odm.yaml"
 
 class TestNoBackend(unittest.TestCase):
     # No backend, and only fake streams that don't generate anything
-    
-    
+
+
     def testProgressiveFuture(self):
         """
         Only tests a simple ProgressiveFuture
@@ -42,7 +42,7 @@ class TestNoBackend(unittest.TestCase):
         self.cancelled = False
         self.past = None
         self.left = None
-        
+
         now = time.time()
         # try to update progress
         future.set_end_time(now + 1)
@@ -50,33 +50,33 @@ class TestNoBackend(unittest.TestCase):
         future.set_end_time(now + 2) # should say about 2 s left
         self.assertTrue(1.9 <= self.left and self.left < 2)
         self.assertLessEqual(self.past, 0)
-        
+
         # "start" the task
         future.set_running_or_notify_cancel()
         self.assertTrue(0 <= self.past and self.past < 0.1)
         time.sleep(0.1)
-        
+
         now = time.time()
         future.set_end_time(now + 1)
         self.assertTrue(0.9 <= self.left and self.left < 1)
-        
-        
+
+
         # try to cancel while running
         future.cancel()
         self.assertTrue(future.cancelled(), True)
         self.assertRaises(CancelledError, future.result, 1) # future.result(1) should fail
         self.assertEqual(self.left, 0)
-        
+
     def cancel_task(self):
         self.cancelled = True
-        
+
     def on_progress_update(self, future, past, left):
         self.past = past
         self.left = left
-        
+
 class TestWithBackend(unittest.TestCase):
     # We don't need the whole GUI, but still a working backend is nice
-    
+
     @classmethod
     def setUpClass(cls):
         # run the backend as a daemon
@@ -86,10 +86,10 @@ class TestWithBackend(unittest.TestCase):
         if ret != 0:
             logging.warning("Failed to start backend, will try anyway")
         time.sleep(1) # time to start
-        
+
         # create some streams connected to the backend
         cls.microscope = model.getMicroscope()
-        cls.imodel = instrmodel.GUIMicroscope(cls.microscope)
+        cls.imodel = instrmodel.MicroscopeModel(cls.microscope)
         s1 = instrmodel.FluoStream("fluo1",
                   cls.imodel.ccd, cls.imodel.ccd.data,
                   cls.imodel.light, cls.imodel.light_filter)
@@ -100,7 +100,7 @@ class TestWithBackend(unittest.TestCase):
                   cls.imodel.ccd, cls.imodel.ccd.data,
                   cls.imodel.light)
         cls.streams = [s1, s2, s3]
-    
+
     @classmethod
     def tearDownClass(cls):
 #        cls.microscope.terminate()
@@ -108,7 +108,7 @@ class TestWithBackend(unittest.TestCase):
         cmdline = ODEMISD_PATH + " --kill"
         subprocess.call(cmdline.split())
         time.sleep(1) # time to stop
-        
+
     def test_simple(self):
         # create a simple streamTree
         st = instrmodel.StreamTree(streams=[self.streams[0]])
@@ -116,12 +116,12 @@ class TestWithBackend(unittest.TestCase):
         data, thumb = f.result()
         self.assertIsInstance(data[0], model.DataArray)
         # don't test thumb for now, because it's not working
-        
+
         # let's do it a second time, "just for fun"
         f = startAcquisition(st)
         data, thumb = f.result()
         self.assertIsInstance(data[0], model.DataArray)
-    
+
     def test_progress(self):
         """
         Check we get some progress updates
@@ -134,14 +134,14 @@ class TestWithBackend(unittest.TestCase):
         self.past = None
         self.left = None
         self.updates = 0
-        
+
         f = startAcquisition(st)
         f.add_update_callback(self.on_progress_update)
-        
+
         data, thumb = f.result()
         self.assertIsInstance(data[0], model.DataArray)
         self.assertGreaterEqual(self.updates, 3) # at least one update per stream
-        
+
     def test_cancel(self):
         """
         try a bit the cancelling possibility
@@ -155,15 +155,15 @@ class TestWithBackend(unittest.TestCase):
         self.left = None
         self.updates = 0
         self.done = False
-        
+
         f = startAcquisition(st)
         f.add_update_callback(self.on_progress_update)
         f.add_done_callback(self.on_done)
-        
+
         time.sleep(0.5) # make sure it's started
         self.assertTrue(f.running())
         f.cancel()
-        
+
         self.assertRaises(CancelledError, f.result, 1)
         self.assertGreaterEqual(self.updates, 1) # at least one update at cancellation
         self.assertEqual(self.left, 0)
@@ -172,9 +172,8 @@ class TestWithBackend(unittest.TestCase):
 
     def on_done(self, future):
         self.done = True
-        
+
     def on_progress_update(self, future, past, left):
         self.past = past
         self.left = left
         self.updates += 1
-        

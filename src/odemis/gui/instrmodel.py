@@ -171,13 +171,8 @@ VIEW_LAYOUT_22 = 1 # 2x2 layout
 VIEW_LAYOUT_FULLSCREEN = 2 # Fullscreen view (not yet supported)
 
 
-class GUIMicroscope(object):
-    """
-    TODO: Rename, since the current name GUIMicroscope is confusing because
-    no actual gui controls are represented by or contained within this class.
-    Suggested name: MicroscopeModel
-
-    Represent a microscope directly for a graphical user interface.
+class MicroscopeModel(object):
+    """ Represent a microscope directly for a graphical user interface.
     Provides direct reference to the HwComponents and
     """
 
@@ -244,7 +239,7 @@ class GUIMicroscope(object):
 
         self.streams = set() # Streams available (handled by StreamController)
         # MicroscopeViews available, (handled by ViewController)
-        # The Viewcontroller cares about position (top left, etc), GUIMicroscope
+        # The Viewcontroller cares about position (top left, etc), MicroscopeModel
         # cares about what's what.
         self.views = {
             "sem_view": None,
@@ -862,7 +857,7 @@ class MicroscopeView(object):
             # stage.position.subscribe(self.onStagePos)
 
             # the current center of the view, which might be different from the stage
-            # TODO: we might need to have it on the GUIMicroscope, if all the viewports must display the same location
+            # TODO: we might need to have it on the MicroscopeModel, if all the viewports must display the same location
             pos = self.stage_pos.value
             view_pos_init = (pos["x"], pos["y"])
         else:
