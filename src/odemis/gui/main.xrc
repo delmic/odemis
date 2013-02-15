@@ -83,7 +83,7 @@
               <object class="TabButton" name="btn_tab_secom_streams">
                 <size>160,30</size>
                 <default>1</default>
-                <label>LIVE STREAMS</label>
+                <label>STREAMS</label>
                 <bitmap>img/tab_inactive.png</bitmap>
                 <hover>img/tab_hover.png</hover>
                 <selected>img/tab_active.png</selected>
@@ -581,7 +581,7 @@
                         <orient>wxVERTICAL</orient>
                         <object class="sizeritem">
                           <object class="FoldPanelBar" name="fpb_settings">
-                            <object class="FoldPanelItem" name="fp_sem_settings">
+                            <object class="FoldPanelItem" name="fp_settings_secom_sem">
                               <label>SEM SETTINGS</label>
                               <fg>#1A1A1A</fg>
                               <bg>#555555</bg>
@@ -589,7 +589,7 @@
                                 <assign_var>1</assign_var>
                               </XRCED>
                             </object>
-                            <object class="FoldPanelItem" name="fp_optical_settings">
+                            <object class="FoldPanelItem" name="fp_settings_secom_optical">
                               <label>OPTICAL SETTINGS</label>
                               <fg>#1A1A1A</fg>
                               <bg>#555555</bg>
@@ -891,16 +891,16 @@
                         <orient>wxVERTICAL</orient>
                         <object class="sizeritem">
                           <object class="FoldPanelBar" name="fpb_settings">
-                            <object class="FoldPanelItem" name="fp_settings_xx">
-                              <label>THESE SETTINGS</label>
+                            <object class="FoldPanelItem" name="fp_settings_sparc_sem">
+                              <label>SEM SETTINGS</label>
                               <fg>#1A1A1A</fg>
                               <bg>#555555</bg>
                               <XRCED>
                                 <assign_var>1</assign_var>
                               </XRCED>
                             </object>
-                            <object class="FoldPanelItem" name="fp_settings_xxx">
-                              <label>THOSE SETTINGS</label>
+                            <object class="FoldPanelItem" name="fp_settings_sparc_optical">
+                              <label>OPTICAL SETTINGS</label>
                               <fg>#1A1A1A</fg>
                               <bg>#555555</bg>
                               <XRCED>

@@ -85,7 +85,7 @@ def bind_menu(se):
     Add a menu to reset a setting entry to the original (current) value
     se (SettingEntry)
     Note: se must have a valid label, ctrl and va at least
-    """ 
+    """
     orig_val = se.va.value
 
     def reset_value(evt):
@@ -215,15 +215,15 @@ class SettingEntry(object):
         self.label = label
         self.ctrl = ctrl
         self.vac = vac
-    
+
     def highlight(self, active=True):
         """
         Highlight the setting entry (ie, the name label becomes bright coloured)
         active (boolean): whether it should be highlighted or not
-        """ 
+        """
         if not self.label:
             return
-        
+
         if active:
             self.label.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_HIGHLIGHT)
         else:
@@ -616,10 +616,10 @@ class SettingsPanel(object):
         ne = SettingEntry(name, vigil_attr, comp, lbl_ctrl, new_ctrl, vac)
         self.entries.append(ne)
         self.num_entries += 1
-        
+
         if self.highlight_change:
             bind_menu(ne)
-            
+
         self.fold_panel.Parent.Layout()
 
     def on_setting_changed(self, evt):
@@ -653,28 +653,12 @@ class SettingsBarController(object):
     """
 
     def __init__(self, interface_model, parent_frame, highlight_change=False):
-        self._parent_frame = parent_frame
         self._interface_model = interface_model
 
-        self._sem_panel = SemSettingsPanel(
-                                    parent_frame.fp_sem_settings,
-                                    "No SEM found",
-                                    highlight_change)
+        self._sem_panel = []
+        self._optical_panel = []
+        self.settings_panels = []
 
-        self._optical_panel = OpticalSettingsPanel(
-                                    parent_frame.fp_optical_settings,
-                                    "No optical microscope found",
-                                    highlight_change)
-
-        self.settings_panels = [self._sem_panel, self._optical_panel]
-
-        # Query Odemis daemon (Should move this to separate thread)
-        if interface_model.ccd:
-            self.add_ccd(interface_model.ccd)
-        # TODO allow to change light.power
-
-        if interface_model.ebeam:
-            self.add_ebeam(interface_model.ebeam)
 
     def pause(self):
         """ Pause VigilantAttributeConnector related control updates """
@@ -696,26 +680,81 @@ class SettingsBarController(object):
             entries.extend(panel.entries)
         return entries
 
-    # Optical microscope settings
     def add_ccd(self, comp):
-        self._optical_panel.add_label("Camera", comp.name)
+        #pylint: disable=E1101
+        if isinstance(self._optical_panel, OpticalSettingsPanel):
+            self._optical_panel.add_label("Camera", comp.name)
 
-        vigil_attrs = getVAs(comp)
-        for name, value in vigil_attrs.items():
-            if comp.role in SETTINGS and name in SETTINGS[comp.role]:
-                conf = SETTINGS[comp.role][name]
-            else:
-                conf = None
-            self._optical_panel.add_value(name, value, comp, conf)
+            vigil_attrs = getVAs(comp)
+            for name, value in vigil_attrs.items():
+                if comp.role in SETTINGS and name in SETTINGS[comp.role]:
+                    conf = SETTINGS[comp.role][name]
+                else:
+                    conf = None
+                self._optical_panel.add_value(name, value, comp, conf)
 
     def add_ebeam(self, comp):
-        self._sem_panel.add_label("SEM", comp.name)
+        #pylint: disable=E1101
+        if isinstance(self._sem_panel, SemSettingsPanel):
+            self._sem_panel.add_label("SEM", comp.name)
 
-        vigil_attrs = getVAs(comp)
-        for name, value in vigil_attrs.items():
-            if comp.role in SETTINGS and name in SETTINGS[comp.role]:
-                conf = SETTINGS[comp.role][name]
-            else:
-                conf = None
-            self._sem_panel.add_value(name, value, comp, conf)
+            vigil_attrs = getVAs(comp)
+            for name, value in vigil_attrs.items():
+                if comp.role in SETTINGS and name in SETTINGS[comp.role]:
+                    conf = SETTINGS[comp.role][name]
+                else:
+                    conf = None
+                self._sem_panel.add_value(name, value, comp, conf)
+
+class SecomSettingsController(SettingsBarController):
+
+    def __init__(self, interface_model, parent_frame, highlight_change=False):
+        super(SecomSettingsController, self).__init__(interface_model,
+                                                      highlight_change)
+
+        self._sem_panel = SemSettingsPanel(
+                                    parent_frame.fp_settings_secom_sem,
+                                    "No SEM found",
+                                    highlight_change)
+
+        self._optical_panel = OpticalSettingsPanel(
+                                    parent_frame.fp_settings_secom_optical,
+                                    "No optical microscope found",
+                                    highlight_change)
+
+        self.settings_panels = [self._sem_panel, self._optical_panel]
+
+        # Query Odemis daemon (Should move this to separate thread)
+        if interface_model.ccd:
+            self.add_ccd(interface_model.ccd)
+        # TODO allow to change light.power
+
+        if interface_model.ebeam:
+            self.add_ebeam(interface_model.ebeam)
+
+class SparcSettingsController(SettingsBarController):
+
+    def __init__(self, interface_model, parent_frame, highlight_change=False):
+        super(SparcSettingsController, self).__init__(interface_model,
+                                                      highlight_change)
+
+        self._sem_panel = SemSettingsPanel(
+                                    parent_frame.fp_settings_sparc_sem,
+                                    "No SEM found",
+                                    highlight_change)
+
+        self._optical_panel = OpticalSettingsPanel(
+                                    parent_frame.fp_settings_sparc_optical,
+                                    "No optical microscope found",
+                                    highlight_change)
+
+        self.settings_panels = [self._sem_panel]
+
+        # Query Odemis daemon (Should move this to separate thread)
+        if interface_model.ccd:
+            self.add_ccd(interface_model.ccd)
+        # TODO allow to change light.power
+
+        if interface_model.ebeam:
+            self.add_ebeam(interface_model.ebeam)
 

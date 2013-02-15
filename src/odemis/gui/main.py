@@ -183,7 +183,7 @@ class OdemisGUIApp(wx.App):
 
 
             # List of all possible tabs used in Odemis' main GUI
-            tab_list = [tabs.SecomLiveTab(
+            tab_list = [tabs.SecomStreamsTab(
                             "secom",
                             "secom_live",
                             self.main_frame.btn_tab_secom_streams,
@@ -195,11 +195,13 @@ class OdemisGUIApp(wx.App):
                             "secom_gallery",
                             self.main_frame.btn_tab_secom_gallery,
                             self.main_frame.pnl_tab_secom_gallery),
-                        tabs.Tab(
+                        tabs.SparcAcquisitionTab(
                             "sparc",
                             "sparc_acqui",
                             self.main_frame.btn_tab_sparc_acqui,
-                            self.main_frame.pnl_tab_sparc_acqui),
+                            self.main_frame.pnl_tab_sparc_acqui,
+                            self.main_frame,
+                            self.interface_model),
                         tabs.Tab(
                             "sparc",
                             "sparc_analysis",

@@ -29,7 +29,7 @@ import wx
 
 from odemis.gui.cont.acquisition import AcquisitionController
 from odemis.gui.cont.microscope import MicroscopeController
-from odemis.gui.cont.settings import SettingsBarController
+from odemis.gui.cont import settings
 from odemis.gui.cont.streams import StreamController
 from odemis.gui.cont.views import ViewController, ViewSelector
 
@@ -65,10 +65,10 @@ class Tab(object):
     def _initialize(self):
         pass
 
-class SecomLiveTab(Tab):
+class SecomStreamsTab(Tab):
 
     def __init__(self, group, name, button, panel, main_frame, interface_model):
-        super(SecomLiveTab, self).__init__(group, name, button, panel)
+        super(SecomStreamsTab, self).__init__(group, name, button, panel)
 
         self.interface_model = interface_model
         self.main_frame = main_frame
@@ -88,8 +88,9 @@ class SecomLiveTab(Tab):
         if not self.interface_model:
             return
 
-        self._settings_controller = SettingsBarController(self.interface_model,
-                                                         self.main_frame)
+        self._settings_controller = settings.SecomSettingsController(
+                                        self.interface_model,
+                                        self.main_frame)
 
         # Order matters!
         # First we create the views, then the streams
@@ -126,6 +127,27 @@ class SecomLiveTab(Tab):
     def stream_controller(self):
         return self._stream_controller
 
+class SparcAcquisitionTab(Tab):
+
+    def __init__(self, group, name, button, panel, main_frame, interface_model):
+        super(SparcAcquisitionTab, self).__init__(group, name, button, panel)
+
+        self.interface_model = interface_model
+        self.main_frame = main_frame
+
+        # Various controllers used for the live view and acquisition of images
+
+        self._settings_controller = None
+
+    def _initialize(self):
+        """ This method is called when the tab is first shown """
+
+        if not self.interface_model:
+            return
+
+        self._settings_controller = settings.SparcSettingsController(
+                                        self.interface_model,
+                                        self.main_frame)
 
 class TabBarController(object):
 

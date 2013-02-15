@@ -70,8 +70,8 @@ class xrcfr_main(wx.Frame):
         self.btn_toggle_pause = xrc.XRCCTRL(self, "btn_toggle_pause")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
         self.fpb_settings = xrc.XRCCTRL(self, "fpb_settings")
-        self.fp_sem_settings = xrc.XRCCTRL(self, "fp_sem_settings")
-        self.fp_optical_settings = xrc.XRCCTRL(self, "fp_optical_settings")
+        self.fp_settings_secom_sem = xrc.XRCCTRL(self, "fp_settings_secom_sem")
+        self.fp_settings_secom_optical = xrc.XRCCTRL(self, "fp_settings_secom_optical")
         self.pnl_stream = xrc.XRCCTRL(self, "pnl_stream")
         self.fp_annotations = xrc.XRCCTRL(self, "fp_annotations")
         self.btn_acquire = xrc.XRCCTRL(self, "btn_acquire")
@@ -82,8 +82,8 @@ class xrcfr_main(wx.Frame):
         self.btn_toggle_angular = xrc.XRCCTRL(self, "btn_toggle_angular")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
         self.fpb_settings = xrc.XRCCTRL(self, "fpb_settings")
-        self.fp_settings_xx = xrc.XRCCTRL(self, "fp_settings_xx")
-        self.fp_settings_xxx = xrc.XRCCTRL(self, "fp_settings_xxx")
+        self.fp_settings_sparc_sem = xrc.XRCCTRL(self, "fp_settings_sparc_sem")
+        self.fp_settings_sparc_optical = xrc.XRCCTRL(self, "fp_settings_sparc_optical")
         self.pnl_tab_sparc_analysis = xrc.XRCCTRL(self, "pnl_tab_sparc_analysis")
         self.pnl_log = xrc.XRCCTRL(self, "pnl_log")
         self.txt_log = xrc.XRCCTRL(self, "txt_log")
@@ -222,7 +222,7 @@ def __init_resources():
               <object class="TabButton" name="btn_tab_secom_streams">
                 <size>160,30</size>
                 <default>1</default>
-                <label>LIVE STREAMS</label>
+                <label>STREAMS</label>
                 <bitmap>img_tab_inactive_png</bitmap>
                 <hover>img_tab_hover_png</hover>
                 <selected>img_tab_active_png</selected>
@@ -720,7 +720,7 @@ def __init_resources():
                         <orient>wxVERTICAL</orient>
                         <object class="sizeritem">
                           <object class="FoldPanelBar" name="fpb_settings">
-                            <object class="FoldPanelItem" name="fp_sem_settings">
+                            <object class="FoldPanelItem" name="fp_settings_secom_sem">
                               <label>SEM SETTINGS</label>
                               <fg>#1A1A1A</fg>
                               <bg>#555555</bg>
@@ -728,7 +728,7 @@ def __init_resources():
                                 <assign_var>1</assign_var>
                               </XRCED>
                             </object>
-                            <object class="FoldPanelItem" name="fp_optical_settings">
+                            <object class="FoldPanelItem" name="fp_settings_secom_optical">
                               <label>OPTICAL SETTINGS</label>
                               <fg>#1A1A1A</fg>
                               <bg>#555555</bg>
@@ -1030,16 +1030,16 @@ def __init_resources():
                         <orient>wxVERTICAL</orient>
                         <object class="sizeritem">
                           <object class="FoldPanelBar" name="fpb_settings">
-                            <object class="FoldPanelItem" name="fp_settings_xx">
-                              <label>THESE SETTINGS</label>
+                            <object class="FoldPanelItem" name="fp_settings_sparc_sem">
+                              <label>SEM SETTINGS</label>
                               <fg>#1A1A1A</fg>
                               <bg>#555555</bg>
                               <XRCED>
                                 <assign_var>1</assign_var>
                               </XRCED>
                             </object>
-                            <object class="FoldPanelItem" name="fp_settings_xxx">
-                              <label>THOSE SETTINGS</label>
+                            <object class="FoldPanelItem" name="fp_settings_sparc_optical">
+                              <label>OPTICAL SETTINGS</label>
                               <fg>#1A1A1A</fg>
                               <bg>#555555</bg>
                               <XRCED>
