@@ -213,8 +213,9 @@ class GUIMicroscope(object):
                 # TODO: viewports should subscribe to the stage
             elif a.role == "focus":
                 self.focus = a
-        if not self.stage:
+        if not self.stage and microscope.role == "secom":
             raise Exception("no stage found in the microscope")
+
         # it's not an error to not have focus
         if not self.focus:
             logging.info("no focus actuator found in the microscope")

@@ -80,7 +80,7 @@
           <object class="wxBoxSizer">
             <orient>wxHORIZONTAL</orient>
             <object class="sizeritem">
-              <object class="TabButton" name="btn_tab_secom_live">
+              <object class="TabButton" name="btn_tab_secom_streams">
                 <size>160,30</size>
                 <default>1</default>
                 <label>LIVE STREAMS</label>
@@ -198,13 +198,12 @@
         <minsize>-1,40</minsize>
       </object>
       <object class="sizeritem">
-        <object class="wxPanel" name="pnl_tab_secom_live">
+        <object class="wxPanel" name="pnl_tab_secom_streams">
           <object class="wxBoxSizer">
             <object class="sizeritem">
               <object class="wxPanel">
                 <object class="wxBoxSizer">
                   <orient>wxVERTICAL</orient>
-                  
                   <object class="spacer">
                     <option>1</option>
                     <flag>wxEXPAND</flag>
@@ -813,7 +812,6 @@
             </object>
             <object class="sizeritem">
               <object class="wxPanel" name="pnl_view">
-                
                 <bg>#000000</bg>
               </object>
               <option>1</option>

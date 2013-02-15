@@ -45,11 +45,11 @@ class xrcfr_main(wx.Frame):
         self.menu_item_inspect = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_inspect"))
         self.menu_item_debug = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_debug"))
         self.menu_item_about = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_about"))
-        self.btn_tab_secom_live = xrc.XRCCTRL(self, "btn_tab_secom_live")
+        self.btn_tab_secom_streams = xrc.XRCCTRL(self, "btn_tab_secom_streams")
         self.btn_tab_secom_gallery = xrc.XRCCTRL(self, "btn_tab_secom_gallery")
         self.btn_tab_sparc_acqui = xrc.XRCCTRL(self, "btn_tab_sparc_acqui")
         self.btn_tab_sparc_analysis = xrc.XRCCTRL(self, "btn_tab_sparc_analysis")
-        self.pnl_tab_secom_live = xrc.XRCCTRL(self, "pnl_tab_secom_live")
+        self.pnl_tab_secom_streams = xrc.XRCCTRL(self, "pnl_tab_secom_streams")
         self.lbl_view_all = xrc.XRCCTRL(self, "lbl_view_all")
         self.btn_view_all = xrc.XRCCTRL(self, "btn_view_all")
         self.lbl_view_tl = xrc.XRCCTRL(self, "lbl_view_tl")
@@ -218,7 +218,7 @@ def __init_resources():
           <object class="wxBoxSizer">
             <orient>wxHORIZONTAL</orient>
             <object class="sizeritem">
-              <object class="TabButton" name="btn_tab_secom_live">
+              <object class="TabButton" name="btn_tab_secom_streams">
                 <size>160,30</size>
                 <default>1</default>
                 <label>LIVE STREAMS</label>
@@ -336,13 +336,12 @@ def __init_resources():
         <minsize>-1,40</minsize>
       </object>
       <object class="sizeritem">
-        <object class="wxPanel" name="pnl_tab_secom_live">
+        <object class="wxPanel" name="pnl_tab_secom_streams">
           <object class="wxBoxSizer">
             <object class="sizeritem">
               <object class="wxPanel">
                 <object class="wxBoxSizer">
                   <orient>wxVERTICAL</orient>
-                  
                   <object class="spacer">
                     <option>1</option>
                     <flag>wxEXPAND</flag>
@@ -951,7 +950,6 @@ def __init_resources():
             </object>
             <object class="sizeritem">
               <object class="wxPanel" name="pnl_view">
-                
                 <bg>#000000</bg>
               </object>
               <option>1</option>

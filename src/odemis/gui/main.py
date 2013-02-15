@@ -186,8 +186,8 @@ class OdemisGUIApp(wx.App):
             tab_list = [tabs.SecomLiveTab(
                             "secom",
                             "secom_live",
-                            self.main_frame.btn_tab_secom_live,
-                            self.main_frame.pnl_tab_secom_live,
+                            self.main_frame.btn_tab_secom_streams,
+                            self.main_frame.pnl_tab_secom_streams,
                             self.main_frame,
                             self.interface_model),
                         tabs.Tab(
