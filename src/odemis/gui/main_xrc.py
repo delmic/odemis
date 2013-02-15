@@ -137,7 +137,7 @@ def __init_resources():
     wx.FileSystem.AddHandler(wx.MemoryFSHandler())
 
     main_xrc = '''\
-<?xml version="1.0" ?><resource version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
+<?xml version="1.0" ?><resource class="wxBoxSizer" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
   <object class="wxFrame" name="fr_main">
     <object class="wxMenuBar">
       <object class="wxMenu">
@@ -342,6 +342,64 @@ def __init_resources():
               <object class="wxPanel">
                 <object class="wxBoxSizer">
                   <orient>wxVERTICAL</orient>
+                  
+                  <object class="spacer">
+                    <option>1</option>
+                    <flag>wxEXPAND</flag>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxPanel">
+                      <object class="wxBoxSizer">
+                        <object class="sizeritem">
+                          <object class="wxStaticBitmap">
+                            <bitmap>img_side_menu_top_png</bitmap>
+                          </object>
+                        </object>
+                        <object class="sizeritem">
+                          <object class="wxPanel">
+                            <object class="wxBoxSizer">
+                              <orient>wxVERTICAL</orient>
+                              <object class="sizeritem">
+                                <object class="wxPanel">
+                                  <size>24,24</size>
+                                  <bg>#57E6C2</bg>
+                                </object>
+                                <flag>wxBOTTOM|wxLEFT</flag>
+                                <border>10</border>
+                              </object>
+                              <object class="sizeritem">
+                                <object class="wxPanel">
+                                  <size>24,24</size>
+                                  <bg>#E66D57</bg>
+                                </object>
+                                <flag>wxBOTTOM|wxLEFT</flag>
+                                <border>10</border>
+                              </object>
+                              <object class="sizeritem">
+                                <object class="wxPanel">
+                                  <size>24,24</size>
+                                  <bg>#D357E6</bg>
+                                </object>
+                                <flag>wxLEFT</flag>
+                                <border>10</border>
+                              </object>
+                            </object>
+                            <bg>#000000</bg>
+                          </object>
+                          <minsize>40,-1</minsize>
+                        </object>
+                        <object class="sizeritem">
+                          <object class="wxStaticBitmap">
+                            <bitmap>img_side_menu_bottom_png</bitmap>
+                          </object>
+                        </object>
+                        <orient>wxVERTICAL</orient>
+                      </object>
+                      <bg>#333333</bg>
+                      <hidden>1</hidden>
+                    </object>
+                    <flag>wxALIGN_RIGHT</flag>
+                  </object>
                   <object class="spacer">
                     <option>1</option>
                     <flag>wxEXPAND</flag>
@@ -824,7 +882,67 @@ def __init_resources():
             <object class="sizeritem">
               <object class="wxPanel" name="pnl_left">
                 <object class="wxBoxSizer">
+                  <object class="spacer">
+                    <option>1</option>
+                    <flag>wxEXPAND</flag>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxPanel">
+                      <object class="wxBoxSizer">
+                        <object class="sizeritem">
+                          <object class="wxStaticBitmap">
+                            <bitmap>img_side_menu_top_png</bitmap>
+                          </object>
+                        </object>
+                        <object class="sizeritem">
+                          <object class="wxPanel">
+                            <object class="wxBoxSizer">
+                              <orient>wxVERTICAL</orient>
+                              <object class="sizeritem">
+                                <object class="wxPanel">
+                                  <size>24,24</size>
+                                  <bg>#57E6C2</bg>
+                                </object>
+                                <flag>wxBOTTOM|wxLEFT</flag>
+                                <border>10</border>
+                              </object>
+                              <object class="sizeritem">
+                                <object class="wxPanel">
+                                  <size>24,24</size>
+                                  <bg>#E66D57</bg>
+                                </object>
+                                <flag>wxBOTTOM|wxLEFT</flag>
+                                <border>10</border>
+                              </object>
+                              <object class="sizeritem">
+                                <object class="wxPanel">
+                                  <size>24,24</size>
+                                  <bg>#D357E6</bg>
+                                </object>
+                                <flag>wxLEFT</flag>
+                                <border>10</border>
+                              </object>
+                            </object>
+                            <bg>#000000</bg>
+                          </object>
+                          <minsize>40,-1</minsize>
+                        </object>
+                        <object class="sizeritem">
+                          <object class="wxStaticBitmap">
+                            <bitmap>img_side_menu_bottom_png</bitmap>
+                          </object>
+                        </object>
+                        <orient>wxVERTICAL</orient>
+                      </object>
+                      <bg>#333333</bg>
+                    </object>
+                    <flag>wxALIGN_RIGHT</flag>
+                  </object>
                   <orient>wxVERTICAL</orient>
+                  <object class="spacer">
+                    <option>1</option>
+                    <flag>wxEXPAND</flag>
+                  </object>
                 </object>
                 <size>200,-1</size>
                 <bg>#333333</bg>
@@ -833,24 +951,8 @@ def __init_resources():
             </object>
             <object class="sizeritem">
               <object class="wxPanel" name="pnl_view">
-                <object class="wxBoxSizer">
-                  <orient>wxVERTICAL</orient>
-                  <object class="spacer">
-                    <flag>wxEXPAND</flag>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="wxStaticText">
-                      <label>test</label>
-                      <fg>#FFFFFF</fg>
-                    </object>
-                    <option>1</option>
-                    <flag>wxEXPAND|wxALIGN_CENTRE</flag>
-                  </object>
-                  <object class="spacer">
-                    <flag>wxEXPAND</flag>
-                  </object>
-                </object>
-                <bg>#000064</bg>
+                
+                <bg>#000000</bg>
               </object>
               <option>1</option>
               <flag>wxEXPAND</flag>
@@ -984,7 +1086,6 @@ def __init_resources():
             </object>
           </object>
           <bg>#333333</bg>
-          <hidden>1</hidden>
           <XRCED>
             <assign_var>1</assign_var>
           </XRCED>
@@ -1603,6 +1704,39 @@ N\xf8M3\xd7\xb6\xed"fN\x11B\x9cv\xb9\\\xff\xbcu\xdb\xb6\x8b\xd9\xd9\xd9\
 \xfc\x0d\x00>\x9f\xef\x9a\xe8\xe8\xf6\xee\xdd\xaf\xba\xc6\x9f\xe0\xdf\x9e\
 r\x1e~\xb8\xcd\\\xfe\x8c\x19rfA\x81l\xcf_\xff\x0f\xd2Ic=\xea9\x94\xbd\x00\
 \x00\x00\x00IEND\xaeB`\x82'''
+
+    img_side_menu_top_png = '''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00(\x00\x00\x00\x14\x08\x06\x00\x00\x00\xff\
+F\xbb\x00\x00\x00\x06bKGD\x00\xff\x00\xff\x00\xff\xa0\xbd\xa7\x93\x00\x00\
+\x00\x09pHYs\x00\x00\x0b\x13\x00\x00\x0b\x13\x01\x00\x9a\x9c\x18\x00\x00\
+\x00\x07tIME\x07\xdd\x02\x0d\x0910\x05\x8b"}\x00\x00\x00\x19tEXtComment\
+\x00Created with GIMPW\x81\x0e\x17\x00\x00\x00\x9cIDATH\xc7\xed\xd6\xb1\
+\x09\x02A\x10\x05\xd0\xe7)\\\xa4\x98\xeaE&\x82&\x9a\x19\x9aY\x80u\xd8\x8f\
+mX\x80%\xd8\x80\x91\xb1U\x9c\x89g$\x82\xa0\xdcG\x1c\x98lY\x1e,f\xc9\xae\
+\xa2\x08\x07\x8e\x93q\x1d\x1cRq]\xecQ\xa7\xc1Jlq\xbd\xe3\xeaN\x8b\xcf\xd7\
+G\x85\x19V\xd8`\xf9\xec`\x04\xe4\xd5\x05\x11\x90O\x01\xbf\x06y\x17\xd8\xc3\
+\x10\x13\xcc\xb1\xbeC\xaa\xb6S\xb4\xc0\xb1IPH\x83\x01Na\xb0\xc7\x98)q\xc1\
+(r\x19c\x97\x8akBr\xc64\x19X\x0b\xae\xf4\xef\xd6\x1f\xf8\xfb\xc0\x1bH\xf3\
+W\xb5p\xe4f\xd7\x00\x00\x00\x00IEND\xaeB`\x82'''
+
+    img_side_menu_bottom_png = '''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00(\x00\x00\x00\x14\x08\x06\x00\x00\x00\xff\
+F\xbb\x00\x00\x00\x06bKGD\x00\xff\x00\xff\x00\xff\xa0\xbd\xa7\x93\x00\x00\
+\x00\x09pHYs\x00\x00\x0b\x13\x00\x00\x0b\x13\x01\x00\x9a\x9c\x18\x00\x00\
+\x00\x07tIME\x07\xdd\x02\x0d\x092\x07\x96\x1b\xd4\xb1\x00\x00\x00\x19tE\
+XtComment\x00Created with GIMPW\x81\x0e\x17\x00\x00\x00\x9aIDATH\xc7\xed\
+\xd61\x0e\x81A\x10\x06\xd07H\xfeJ\xa2\x15\x1a\x1d\x1a:\xa5\xce\x01\\\xce\
+5\x1c\xc0\x15\\@\xa3v\x04\x15\xcd\x16\x1a\x85\x90\xfdG\xf8\x92\xed\xb6x\
+\xc9\xcc\xceN\xe0&q:\x92\xe7\x0f\xfc\x09\xe0)3\xb0\x8b\x06\x9b\xac\xc0(\
+\xc03\x86YK|\xc5\x14G_\x90\x05\x0eex\xa78\xf1\x04\xda\xc3\x00\x13\xcc\xb1\
+.}:j\xa3\x07_\xbd\xdf/\xd0\x19V\x05\xbe\xcc\x02\xac\x0e\x8f
+\x15z\x0b\x1e-\x8e\xb7\xaa\xad\xf2\xa94\xd8\xe2\xf2\xf0\x92\xd3\xfep\xbb\
+\xec\xbbj`\x9f\xbd\xe4\xe3\xf4\xdb\xd6\x1d+`3\x95\x989\x95=\x00\x00\x00\
+\x00IEND\xaeB`\x82'''
 
     img_preview_block_png = '''\
 \x89PNG\x0d
@@ -3444,6 +3578,8 @@ f\x9d\x00\xee\xd6\xef\xc8a\xe1\x13\xb5r\x9ch\x0fr,1@(\x14\xdac$\x9d\xb5\
     wx.MemoryFSHandler.AddFile('XRC/main/img_tab_hover_png', img_tab_hover_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_tab_active_png', img_tab_active_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_logo_h30_png', img_logo_h30_png)
+    wx.MemoryFSHandler.AddFile('XRC/main/img_side_menu_top_png', img_side_menu_top_png)
+    wx.MemoryFSHandler.AddFile('XRC/main/img_side_menu_bottom_png', img_side_menu_bottom_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_preview_block_png', img_preview_block_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_preview_block_a_png', img_preview_block_a_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_btn_press_png', img_btn_press_png)

@@ -36,7 +36,7 @@ from odemis.gui.cont.views import ViewController, ViewSelector
 main_tab_controller = None
 
 class Tab(object):
-    """ Small helper class representing a tab (= tab button + panel) """
+    """ Small helper class representing a tab (tab button + panel) """
 
     def __init__(self, group, name, button, panel):
         self.group = group
@@ -85,6 +85,9 @@ class SecomLiveTab(Tab):
     def _initialize(self):
         """ This method is called when the tab is first shown """
 
+        if not self.interface_model:
+            return
+
         self._settings_controller = SettingsBarController(self.interface_model,
                                                          self.main_frame)
 
@@ -132,14 +135,25 @@ class TabBarController(object):
 
         self.tab_list = tab_list
 
-        self._filter_tabs(interface_model)
+        if interface_model:
+            self._filter_tabs(interface_model)
 
         for tab in self.tab_list:
             tab.button.Bind(wx.EVT_BUTTON, self.OnClick)
             tab.button.Bind(wx.EVT_KEY_UP, self.OnKeyUp)
 
-        # Show first tab by default
         self.show(0)
+
+        # IMPORTANT NOTE:
+        #
+        # When all tab panels are hidden on start-up, the MinSize attribute
+        # of the main GUI frame will be set to such a low value, that most of
+        # the interface will be invisible if the user takes the interface off of
+        # 'full screen' view.
+        # Also, Gnome's GDK library will start spewing error messages, saying
+        # it cannot draw certain images, because the dimensions are 0x0.
+
+        main_frame.SetMinSize((1400, 550))
 
     def _filter_tabs(self, interface_model):
         """ Filter the tabs according to the current interface model.
