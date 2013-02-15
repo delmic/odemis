@@ -135,6 +135,8 @@ class TabBarController(object):
 
         self.tab_list = tab_list
 
+        self.hide_all()
+
         if interface_model:
             self._filter_tabs(interface_model)
 
