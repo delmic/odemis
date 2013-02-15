@@ -47,7 +47,7 @@ class MicroscopeViewport(wx.Panel):
         wx.Panel.__init__(self, *args, **kwargs)
 
         self.mic_view = None # the MicroscopeView that this viewport is displaying
-        self._microscope_gui = None
+        self._microscope_model = None
 
         # Keep track of this panel's pseudo focus
         self._has_focus = False
@@ -176,13 +176,13 @@ class MicroscopeViewport(wx.Panel):
         self.Bind(wx.EVT_SIZE, self.OnSize)
 
 
-    def setView(self, mic_view, microscope_gui):
+    def setView(self, mic_view, microscope_model):
         """
         Set the microscope view that this viewport is displaying/representing
         *Important*: Should be called only once, at initialisation.
 
         mic_view       -- MicroscopeView
-        microscope_gui -- MicroscopeModel
+        microscope_model -- MicroscopeModel
         """
 
         # This is a kind of a kludge, as it'd be best to have the viewport
@@ -191,7 +191,7 @@ class MicroscopeViewport(wx.Panel):
         assert(self.mic_view is None)
 
         self.mic_view = mic_view
-        self._microscope_gui = microscope_gui
+        self._microscope_model = microscope_model
 
         # TODO Center to current view position, with current mpp
         mic_view.mpp.subscribe(self._onMPP, init=True)
@@ -208,13 +208,13 @@ class MicroscopeViewport(wx.Panel):
 
         # TODO: that should not be the current values, but the values of
         # the current image (so, taken from the metadata).
-#        microscope_gui.sem_emt_dwell_time.subscribe(self.avDwellTime, True)
-#        microscope_gui.sem_emt_spot.subscribe(self.avSpot, True)
-#        microscope_gui.sem_emt_hv.subscribe(self.avHV, True)
+#        microscope_model.sem_emt_dwell_time.subscribe(self.avDwellTime, True)
+#        microscope_model.sem_emt_spot.subscribe(self.avSpot, True)
+#        microscope_model.sem_emt_hv.subscribe(self.avHV, True)
 #
-#        microscope_gui.optical_emt_wavelength.subscribe(self.avWavelength)
-#        microscope_gui.optical_det_wavelength.subscribe(self.avWavelength, True)
-#        microscope_gui.optical_det_exposure_time.subscribe(self.avExposureTime, True)
+#        microscope_model.optical_emt_wavelength.subscribe(self.avWavelength)
+#        microscope_model.optical_det_wavelength.subscribe(self.avWavelength, True)
+#        microscope_model.optical_det_exposure_time.subscribe(self.avExposureTime, True)
 
 
     def getView(self):
@@ -392,11 +392,11 @@ class MicroscopeViewport(wx.Panel):
         considered as having the focus.
         """
 
-        if self.mic_view and self._microscope_gui:
+        if self.mic_view and self._microscope_model:
             # This will take care of doing everything necessary
             # Remember, the notify method of the vigilant attribute will
             # only fire if the values changes.
-            self._microscope_gui.focussedView.value = self.mic_view
+            self._microscope_model.focussedView.value = self.mic_view
 
         evt.Skip()
 

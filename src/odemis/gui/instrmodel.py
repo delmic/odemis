@@ -22,19 +22,22 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
-from odemis import model
-from odemis.gui import util
-# the next three imports are necessary to access util.*
-import odemis.gui.util.img
-import odemis.gui.util.units
-import odemis.gui.util.conversion
-from odemis.model import FloatContinuous, VigilantAttribute, MD_POS, \
-    MD_PIXEL_SIZE, MD_SENSOR_PIXEL_SIZE
 import json
 import logging
 import numpy
 import threading
 import time
+
+from odemis import model
+from odemis.gui import util
+# the next three imports are necessary to access util.*
+# import odemis.gui.util.img
+# import odemis.gui.util.units
+# import odemis.gui.util.conversion
+
+from odemis.model import FloatContinuous, VigilantAttribute, MD_POS, \
+    MD_PIXEL_SIZE, MD_SENSOR_PIXEL_SIZE
+
 
 #logging.getLogger().setLevel(logging.DEBUG) # for the messages of dye database to appear
 
@@ -824,10 +827,10 @@ OPTICAL_STREAMS = (FluoStream, BrightfieldStream, StaticStream)
 EM_STREAMS = (SEMStream, StaticSEMStream)
 
 class MicroscopeView(object):
-    """
-    Represents a view from a microscope, and ways to alter it.
-    Basically, its "input" is a StreamTree, and can request stage and focus move.
-    It never computes itself the composited image from all the streams. It's up
+    """ Represents a view from a microscope and ways to alter it.
+
+    Basically, its "input" is a StreamTree and can request stage and focus move.
+    It never computes the composited image from all the streams itself. It's up
     to other objects (e.g., the canvas) to ask the StreamTree for its latest
     image (the main goal of this scheme is to avoid computation when not needed).
     Similarly, the thumbnail is never automatically recomputed, but other
