@@ -201,15 +201,13 @@ class Slider(wx.PyControl):
                     width - self.half_h_width, half_height)
 
 
-        dc.SetPen(wx.Pen("#DDDDDD", 1))
-
         # ticks
         steps = [v / 10.0 for v in range(1, 10)]
         for s in steps:
             v = (self.range_span * s) + self.value_range[0]
             pix_x = self._val_to_pixel(v) + self.half_h_width
             dc.DrawLine(pix_x, half_height - 1,
-                        pix_x, half_height)
+                        pix_x, half_height + 2)
 
 
         if self.Enabled:
