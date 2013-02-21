@@ -38,6 +38,11 @@ class NotSettableError(Exception):
 class NotApplicableError(Exception):
     pass
 
+VA_EXCEPTIONS = (InvalidTypeError,
+                 OutOfBoundError,
+                 NotSettableError,
+                 NotApplicableError)
+
 class VigilantAttributeBase(object):
     '''
     An abstract class for VigilantAttributes and its proxy
@@ -303,6 +308,7 @@ class VigilantAttributeProxy(VigilantAttributeBase, Pyro4.Proxy):
         VigilantAttributeBase.__init__(self, unit=unit)
         _core.load_roattributes(self, roattributes)
 
+        #pylint: disable=E1101
         self._global_name = self._pyroUri.sockname + "@" + self._pyroUri.object
 
         self.ctx = None
@@ -545,6 +551,9 @@ class Continuous(object):
     Mixin which adds the ability to a VA to specify a min and max.
     It has an attribute range (2-tuple) min, max
     It checks that any value set is min <= val <= max
+
+    TODO: 'restricted', 'confined' or 'limited' might be better names which more
+    concisely describe this mixin.
     """
 
     def __init__(self, range):
@@ -571,6 +580,7 @@ class Continuous(object):
             raise InvalidTypeError("Range min (%s) should be smaller than max (%s)."
                                    % (str(new_range[0]), str(new_range[1])))
         if hasattr(self, "value"):
+            #pylint: disable=E1101
             if self.value < new_range[0] or self.value > new_range[1]:
                 raise OutOfBoundError("Current value '%s' is outside of the range %s→%s." %
                             (self.value, str(new_range[0]), str(new_range[1])))
@@ -631,6 +641,7 @@ class Enumerated(object):
         else:
             raise InvalidTypeError("Choices %s is not a set." % str(new_choices_raw))
         if hasattr(self, "value"):
+            #pylint: disable=E1101
             if not self.value in new_choices:
                 raise OutOfBoundError("Current value %s is not part of possible choices: %s." %
                             (self.value, ", ".join([str(c) for c in new_choices])))
