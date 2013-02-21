@@ -203,10 +203,10 @@ class StreamController(object):
             self._onStreamUpdate(stream, updated)
 
         self._scheduler_subscriptions[stream] = detectUpdate
-        stream.updated.subscribe(detectUpdate)
+        stream.should_update.subscribe(detectUpdate)
 
         # show the stream right now
-        stream.updated.value = True
+        stream.should_update.value = True
 
         spanel = spanel_cls(self._stream_bar, stream, self.microscope)
 
@@ -312,7 +312,7 @@ class StreamController(object):
             # make sure that every other streams is not updated
             for s in self._scheduler_subscriptions:
                 if s != stream:
-                    s.updated.value = False
+                    s.should_update.value = False
             # activate this stream
             stream.active.value = True
 
@@ -348,10 +348,10 @@ class StreamController(object):
         streams = set() # stream paused
         for s in self.microscope.streams:
             if isinstance(s, classes):
-                if s.updated.value:
+                if s.should_update.value:
                     streams.add(s)
                     s.active.value = False
-                    s.updated.value = False
+                    s.should_update.value = False
                     # TODO also disable stream panel "update" button?
 
         return streams
@@ -362,7 +362,7 @@ class StreamController(object):
         streams (set of streams): Streams that will be resumed
         """
         for s in streams:
-            s.updated.value = True
+            s.should_update.value = True
             # it will be activated by the stream scheduler
 
 
@@ -375,10 +375,10 @@ class StreamController(object):
         """
         # don't schedule any more
         stream.active.value = False
-        stream.updated.value = False
+        stream.should_update.value = False
         if stream in self._scheduler_subscriptions:
             callback = self._scheduler_subscriptions.pop(stream)
-            stream.updated.unsubscribe(callback)
+            stream.should_update.unsubscribe(callback)
 
         # Remove from the views
         for v in self.microscope.views.values():

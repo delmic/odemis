@@ -474,7 +474,7 @@ class StreamPanel(wx.PyPanel):
         self._expander._btn_rem.Bind(wx.EVT_BUTTON, self.on_remove_btn)
         self._expander._btn_vis.Bind(wx.EVT_BUTTON, self.on_visibility_btn)
         self._expander._btn_play.Bind(wx.EVT_BUTTON, self.on_play_btn)
-        self.stream.updated.subscribe(self.onUpdatedChanged, init=True)
+        self.stream.should_update.subscribe(self.onUpdatedChanged, init=True)
 
         # initialise _btn_play
         self.setVisible(self.stream in self._microscope.focussedView.value.getStreams())
@@ -585,7 +585,7 @@ class StreamPanel(wx.PyPanel):
 
     # VA subscriptions: reflect the changes on the stream to the GUI
     def onUpdatedChanged(self, updated):
-        self._expander._btn_play.SetToggle(self.stream.updated.value)
+        self._expander._btn_play.SetToggle(self.stream.should_update.value)
 
     # GUI events: update the stream when the user changes the values
 
@@ -614,12 +614,12 @@ class StreamPanel(wx.PyPanel):
             logging.debug("Activating stream '%s'", self.stream.name.value)
         else:
             logging.debug("Pausing stream '%s'", self.stream.name.value)
-        self.stream.updated.value = self._expander._btn_play.GetToggle()
+        self.stream.should_update.value = self._expander._btn_play.GetToggle()
 
     # Expander Button control
 
     def _set_play(self, play):
-        self.stream.updated.value = play
+        self.stream.should_update.value = play
 
     def pause_stream(self):
         self._set_play(False)
@@ -628,7 +628,7 @@ class StreamPanel(wx.PyPanel):
         self._set_play(True)
 
     def is_playing(self):
-        return self.stream.updated.value == True
+        return self.stream.should_update.value == True
 
     def _set_visibility(self, visible):
         self._expander._btn_vis.SetToggle(visible)
