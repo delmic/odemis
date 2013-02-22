@@ -22,6 +22,7 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
+import collections
 import logging
 import threading
 import time
@@ -221,7 +222,10 @@ class MicroscopeModel(object):
             if self.ebeam:
                 try:
                     # TODO use the previous value
-                    self.ebeam.energy.value = self.ebeam.energy.choices[1]
+                    if hasattr(self.ebeam.energ, "choice"):
+                        if isinstance(self.ebeam.energy.choices,
+                                      collections.Iterable):
+                            self.ebeam.energy.value = self.ebeam.energy.choices[1]
                 except VA_EXCEPTIONS:
                     # Too bad. let's just do nothing then (and hope it's on)
                     logging.debug("Ebeam doesn't support setting energy")

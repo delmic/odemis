@@ -32,7 +32,6 @@ from concurrent.futures._base import CANCELLED, FINISHED, RUNNING, \
 import numpy
 
 from odemis import model
-from odemis.gui import instrmodel
 from odemis.gui.model import OPTICAL_STREAMS, EM_STREAMS
 from odemis.gui.model.stream import FluoStream
 from odemis.gui.util import img

@@ -221,7 +221,7 @@ class StreamController(object):
 
         """
         # find the right panel type
-        if isinstance(stream, stream.FluoStream):
+        if isinstance(stream, model.stream.FluoStream):
             cls = comp.stream.DyeStreamPanel
         else:
             cls = comp.stream.StandardStreamPanel
