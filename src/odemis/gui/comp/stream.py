@@ -38,8 +38,7 @@ import odemis.gui
 import odemis.gui.comp.buttons as buttons
 import odemis.gui.img.data as img
 
-from odemis import model
-from odemis.gui import instrmodel, FOREGROUND_COLOUR_EDIT
+from odemis.gui import model, FOREGROUND_COLOUR_EDIT, FOREGROUND_COLOUR
 from odemis.gui.comp.foldpanelbar import FoldPanelItem
 from odemis.gui.comp.slider import UnitIntegerSlider
 from odemis.gui.comp.text import SuggestTextCtrl, UnitIntegerCtrl, \
@@ -47,14 +46,13 @@ from odemis.gui.comp.text import SuggestTextCtrl, UnitIntegerCtrl, \
 from odemis.gui.util import call_after
 from odemis.gui.util.conversion import wave2rgb
 from odemis.gui.util.widgets import VigilantAttributeConnector
+from odemis.model import OutOfBoundError
 
-
-TEST_STREAM_LST = ["Aap", u"nöot", "noot", "mies", "kees", "vuur",
-                  "quantummechnica", "Repelsteeltje", "", "XXX", "a", "aa",
-                  "aaa", "aaaa", "aaaaa", "aaaaaa", "aaaaaaa", "aAa"]
 
 stream_remove_event, EVT_STREAM_REMOVE = wx.lib.newevent.NewEvent()
 
+BG_COLOUR_EXPANDER = "#4D4D4D"
+BG_COLOUR_PANEL = "#333333"
 
 class Expander(wx.PyControl):
     """ This class describes a clickable control responsible for showing and
@@ -165,16 +163,17 @@ class Expander(wx.PyControl):
 
     def OnDrawExpander(self, dc):
         """ This method draws the expand/collapse icons.
-        It needs to be called from the parent's paint event
-        handler.
-        """
-        scrollbar_width = wx.SystemSettings_GetMetric(wx.SYS_VSCROLL_X) - 3
-        caption_padding_right = 10
 
-        wndRect = self.GetRect()
-        drw = wndRect.GetRight() - 16 - caption_padding_right - scrollbar_width
-        self._foldIcons.Draw(self.Parent._collapsed, dc, drw,
-                             (wndRect.GetHeight() - 16) / 2,
+        It needs to be called from the parent's paint event handler.
+        """
+        CAPTION_PADDING_RIGHT = 5
+        ICON_WIDTH, ICON_HEIGHT = 16, 16
+
+        win_rect = self.GetRect()
+        x_pos = win_rect.GetRight() - ICON_WIDTH - CAPTION_PADDING_RIGHT
+
+        self._foldIcons.Draw(self.Parent._collapsed, dc, x_pos,
+                             (win_rect.GetHeight() - ICON_HEIGHT) / 2,
                              wx.IMAGELIST_DRAW_TRANSPARENT)
 
     def to_acquisition_mode(self):
@@ -341,8 +340,9 @@ class StreamPanel(wx.PyPanel):
 
         wx.PyPanel.__init__(self, parent, wid, pos, size, style, name)
 
-        self.SetBackgroundColour("#4D4D4D")
-        self.SetForegroundColour("#DDDDDD")
+        self.SetBackgroundColour(BG_COLOUR_EXPANDER)
+        self.SetForegroundColour(FOREGROUND_COLOUR)
+
         self.stream = stream
         self._microscope = microscope_model
         self._collapsed = True
@@ -361,7 +361,7 @@ class StreamPanel(wx.PyPanel):
                          border=0,
                          flag=wx.RIGHT|wx.EXPAND,
                          proportion=1)
-        border_sizer.AddSpacer((18, -1))
+        border_sizer.AddSpacer((5, -1))
 
         self._panel.SetSizer(border_sizer)
 
@@ -397,9 +397,8 @@ class StreamPanel(wx.PyPanel):
         self._expander.Bind(wx.EVT_LEFT_UP, self.OnToggle)
 
         # ====== Build panel controls
-
-        self._panel.SetBackgroundColour(self.GetBackgroundColour())
-        self._panel.SetForegroundColour("#DDDDDD")
+        self._panel.SetBackgroundColour(BG_COLOUR_PANEL)
+        self._panel.SetForegroundColour(FOREGROUND_COLOUR)
         self._panel.SetFont(self.GetFont())
 
         # ====== Top row, auto contrast toggle button
@@ -418,7 +417,7 @@ class StreamPanel(wx.PyPanel):
                                         bmp_sel=img.getbtn_contrast_aBitmap())
         self._btn_auto_contrast.SetForegroundColour("#000000")
         self._gbs.Add(self._btn_auto_contrast, (self.row_count, 0),
-                      flag=wx.LEFT, border=5)
+                      flag=wx.LEFT|wx.TOP, border=5)
         self.row_count += 1
 
         # ====== Second row, brightness label, slider and value
@@ -475,7 +474,7 @@ class StreamPanel(wx.PyPanel):
         self._expander._btn_rem.Bind(wx.EVT_BUTTON, self.on_remove_btn)
         self._expander._btn_vis.Bind(wx.EVT_BUTTON, self.on_visibility_btn)
         self._expander._btn_play.Bind(wx.EVT_BUTTON, self.on_play_btn)
-        self.stream.updated.subscribe(self.onUpdatedChanged, init=True)
+        self.stream.should_update.subscribe(self.onUpdatedChanged, init=True)
 
         # initialise _btn_play
         self.setVisible(self.stream in self._microscope.focussedView.value.getStreams())
@@ -586,7 +585,7 @@ class StreamPanel(wx.PyPanel):
 
     # VA subscriptions: reflect the changes on the stream to the GUI
     def onUpdatedChanged(self, updated):
-        self._expander._btn_play.SetToggle(self.stream.updated.value)
+        self._expander._btn_play.SetToggle(self.stream.should_update.value)
 
     # GUI events: update the stream when the user changes the values
 
@@ -615,12 +614,12 @@ class StreamPanel(wx.PyPanel):
             logging.debug("Activating stream '%s'", self.stream.name.value)
         else:
             logging.debug("Pausing stream '%s'", self.stream.name.value)
-        self.stream.updated.value = self._expander._btn_play.GetToggle()
+        self.stream.should_update.value = self._expander._btn_play.GetToggle()
 
     # Expander Button control
 
     def _set_play(self, play):
-        self.stream.updated.value = play
+        self.stream.should_update.value = play
 
     def pause_stream(self):
         self._set_play(False)
@@ -629,7 +628,7 @@ class StreamPanel(wx.PyPanel):
         self._set_play(True)
 
     def is_playing(self):
-        return self.stream.updated.value == True
+        return self.stream.should_update.value == True
 
     def _set_visibility(self, visible):
         self._expander._btn_vis.SetToggle(visible)
@@ -798,8 +797,8 @@ class DyeStreamPanel(StreamPanel):
                     max_val=int(self.stream.excitation.range[1] * 1e9),
                     unit='nm')
 
-            self._txt_excitation.SetForegroundColour("#2FA7D4")
-            self._txt_excitation.SetBackgroundColour(self.GetBackgroundColour())
+            self._txt_excitation.SetForegroundColour(FOREGROUND_COLOUR_EDIT)
+            self._txt_excitation.SetBackgroundColour(BG_COLOUR_PANEL)
 
             self._gbs.Add(self._txt_excitation, (self.row_count, 1),
                           flag=wx.ALL|wx.ALIGN_CENTRE_VERTICAL,
@@ -838,8 +837,8 @@ class DyeStreamPanel(StreamPanel):
                     max_val=int(self.stream.emission.range[1] * 1e9),
                     unit='nm')
 
-            self._txt_emission.SetForegroundColour("#2FA7D4")
-            self._txt_emission.SetBackgroundColour(self.GetBackgroundColour())
+            self._txt_emission.SetForegroundColour(FOREGROUND_COLOUR_EDIT)
+            self._txt_emission.SetBackgroundColour(BG_COLOUR_PANEL)
 
             self._gbs.Add(self._txt_emission, (self.row_count, 1),
                           flag=wx.ALL|wx.ALIGN_CENTRE_VERTICAL,
@@ -876,7 +875,7 @@ class DyeStreamPanel(StreamPanel):
         e_range = self.stream.emission.range
 
         dyes = []
-        for name, (xwl, ewl) in instrmodel.DyeDatabase.items():
+        for name, (xwl, ewl) in model.dye.DyeDatabase.items():
             if (x_range[0] <= xwl and xwl <= x_range[1] and
                 e_range[0] <= ewl and ewl <= e_range[1]):
                 dyes.append(name)
@@ -888,18 +887,18 @@ class DyeStreamPanel(StreamPanel):
         self.stream.name.value = txt
 
         # update the excitation and emission wavelength
-        if txt in instrmodel.DyeDatabase:
-            xwl, ewl = instrmodel.DyeDatabase[txt]
+        if txt in model.dye.DyeDatabase:
+            xwl, ewl = model.dye.DyeDatabase[txt]
             try:
                 self.stream.excitation.value = xwl
-            except model.OutOfBoundError:
+            except OutOfBoundError:
                 logging.info("Excitation at %g nm is out of bound", xwl * 1e9)
             try:
                 self.stream.emission.value = ewl
                 colour = wave2rgb(self.stream.emission.value)
                 # changing emission should also change the tint
                 self.stream.tint.value = colour
-            except model.OutOfBoundError:
+            except OutOfBoundError:
                 logging.info("Emission at %g nm is out of bound", ewl * 1e9)
 
     def _excitation_2_va(self):
@@ -967,9 +966,9 @@ class StreamBar(wx.Panel):
     DEFAULT_BORDER = 2
     DEFAULT_STYLE = wx.BOTTOM | wx.EXPAND
     # the order in which the streams are displayed
-    STREAM_ORDER = [instrmodel.SEMStream,
-                    instrmodel.BrightfieldStream,
-                    instrmodel.FluoStream]
+    STREAM_ORDER = [model.stream.SEMStream,
+                    model.stream.BrightfieldStream,
+                    model.stream.FluoStream]
 
 
     def __init__(self, *args, **kwargs):

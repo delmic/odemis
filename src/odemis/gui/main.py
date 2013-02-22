@@ -31,16 +31,14 @@ import wx
 import Pyro4.errors
 
 import odemis.gui.cont.tabs as tabs
+
 from odemis import __version__, model
 from odemis.gui import main_xrc, instrmodel, log
 from odemis.gui.conf import get_general_conf
-from odemis.gui.cont import set_main_tab_controller
-# from odemis.gui.cont.acquisition import AcquisitionController
-# from odemis.gui.cont.microscope import MicroscopeController
-# from odemis.gui.cont.settings import SettingsBarController
-# from odemis.gui.cont.streams import StreamController
-# from odemis.gui.cont.views import ViewController, ViewSelector
-from odemis.gui.instrmodel import InstrumentalImage
+from odemis.gui.cont import set_main_tab_controller, get_main_tab_controller
+from odemis.gui.model.img import InstrumentalImage
+from odemis.gui.model.dye import DyeDatabase
+from odemis.gui.model.stream import StaticSEMStream
 from odemis.gui.xmlh import odemis_get_resources
 
 class OdemisGUIApp(wx.App):
@@ -260,8 +258,12 @@ class OdemisGUIApp(wx.App):
             name2 = os.path.join(os.path.dirname(__file__), "1-sem-bse.png")
             im2 = InstrumentalImage(wx.Image(name2), 4.54545e-7, pos)
 
-            self.stream_controller.addStatic("Fluorescence", im1)
-            self.stream_controller.addStatic("Secondary electrons", im2, cls=instrmodel.StaticSEMStream)
+            mtc = get_main_tab_controller()
+            stream_controller = mtc['secom_live'].stream_controller
+
+            stream_controller.addStatic("Fluorescence", im1)
+            stream_controller.addStatic("Secondary electrons", im2,
+                                        cls=StaticSEMStream)
         except e:
             logging.exception("Failed to load example")
 
@@ -276,8 +278,12 @@ class OdemisGUIApp(wx.App):
             name1 = os.path.join(os.path.dirname(__file__), "3-optical.png")
             im1 = InstrumentalImage(wx.Image(name1), 1.34e-07, pos)
 
-            self.stream_controller.addStatic("Fluorescence", im1)
-            self.stream_controller.addStatic("Secondary electrons", im2, cls=instrmodel.StaticSEMStream)
+            mtc = get_main_tab_controller()
+            stream_controller = mtc['secom_live'].stream_controller
+
+            stream_controller.addStatic("Fluorescence", im1)
+            stream_controller.addStatic("Secondary electrons", im2,
+                                        cls=StaticSEMStream)
         except e:
             logging.exception("Failed to load example")
 
@@ -313,7 +319,7 @@ class OdemisGUIApp(wx.App):
         # info.Artist = '???'
         # info.Translator = '???'
 
-        if instrmodel.DyeDatabase:
+        if DyeDatabase:
             info.Developers += ["", "Dye database from http://fluorophores.org"]
             info.Licence += ("""
 The dye database is provided as-is, from the Fluorobase consortium.

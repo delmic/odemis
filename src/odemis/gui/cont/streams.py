@@ -27,7 +27,7 @@ import logging
 
 from wx.lib.pubsub import pub
 
-from odemis.gui import instrmodel, comp
+from odemis.gui import comp, instrmodel, model
 from odemis.gui.instrmodel import STATE_OFF, STATE_PAUSE, STATE_ON
 
 # stream controller:
@@ -46,13 +46,6 @@ from odemis.gui.instrmodel import STATE_OFF, STATE_PAUSE, STATE_ON
 #   handler checks first that the appropriate microscope is On or Off.
 # the stream panels directly update the VA's
 
-# all the stream types related to optical
-OPTICAL_STREAMS = (instrmodel.FluoStream,
-                   instrmodel.BrightfieldStream,
-                   instrmodel.StaticStream)
-
-# all the stream types related to electron microscope
-EM_STREAMS = (instrmodel.SEMStream, instrmodel.StaticStream)
 
 class StreamController(object):
     """
@@ -137,7 +130,7 @@ class StreamController(object):
             if not name in existing_names:
                 break
 
-        stream = instrmodel.FluoStream(name,
+        stream = model.stream.FluoStream(name,
                   self.microscope.ccd, self.microscope.ccd.data,
                   self.microscope.light, self.microscope.light_filter)
         return self._addStream(stream, comp.stream.DyeStreamPanel, add_to_all_views)
@@ -147,7 +140,7 @@ class StreamController(object):
         Creates a new brightfield stream and panel in the stream bar
         returns (StreamPanel): the stream panel created
         """
-        stream = instrmodel.BrightfieldStream("Bright-field",
+        stream = model.stream.BrightfieldStream("Bright-field",
                   self.microscope.ccd, self.microscope.ccd.data,
                   self.microscope.light)
         return self._addStream(stream, comp.stream.StandardStreamPanel, add_to_all_views)
@@ -157,12 +150,12 @@ class StreamController(object):
         Creates a new SED stream and panel in the stream bar
         returns (StreamPanel): the panel created
         """
-        stream = instrmodel.SEMStream("Secondary electrons",
+        stream = model.stream.SEMStream("Secondary electrons",
                   self.microscope.sed, self.microscope.sed.data,
                   self.microscope.ebeam)
         return self._addStream(stream, comp.stream.StandardStreamPanel, add_to_all_views)
 
-    def addStatic(self, name, image, cls=instrmodel.StaticStream, add_to_all_views=False, ):
+    def addStatic(self, name, image, cls=model.stream.StaticStream, add_to_all_views=False, ):
         """
         Creates a new static stream and panel in the stream bar
         Note: only for debugging/testing
@@ -203,10 +196,10 @@ class StreamController(object):
             self._onStreamUpdate(stream, updated)
 
         self._scheduler_subscriptions[stream] = detectUpdate
-        stream.updated.subscribe(detectUpdate)
+        stream.should_update.subscribe(detectUpdate)
 
         # show the stream right now
-        stream.updated.value = True
+        stream.should_update.value = True
 
         spanel = spanel_cls(self._stream_bar, stream, self.microscope)
 
@@ -228,7 +221,7 @@ class StreamController(object):
 
         """
         # find the right panel type
-        if isinstance(stream, instrmodel.FluoStream):
+        if isinstance(stream, model.stream.FluoStream):
             cls = comp.stream.DyeStreamPanel
         else:
             cls = comp.stream.StandardStreamPanel
@@ -306,20 +299,20 @@ class StreamController(object):
         # stream is incompatible
 
         if not updated:
-            stream.active.value = False
+            stream.is_active.value = False
             # the other streams might or might not be updated, we don't care
         else:
             # make sure that every other streams is not updated
             for s in self._scheduler_subscriptions:
                 if s != stream:
-                    s.updated.value = False
+                    s.should_update.value = False
             # activate this stream
-            stream.active.value = True
+            stream.is_active.value = True
 
     def onOpticalState(self, state):
         # only called when it changes
         if state == STATE_OFF or state == STATE_PAUSE:
-            self._streams_to_restart_opt = self.pauseStreams(instrmodel.OPTICAL_STREAMS)
+            self._streams_to_restart_opt = self.pauseStreams(model.OPTICAL_STREAMS)
         elif state == STATE_ON:
             if not self._opticalWasTurnedOn:
                 self._opticalWasTurnedOn = True
@@ -329,7 +322,7 @@ class StreamController(object):
 
     def onEMState(self, state):
         if state == STATE_OFF or state == STATE_PAUSE:
-            self._streams_to_restart_em = self.pauseStreams(instrmodel.EM_STREAMS)
+            self._streams_to_restart_em = self.pauseStreams(model.EM_STREAMS)
         elif state == STATE_ON:
             if not self._semWasTurnedOn:
                 self._semWasTurnedOn = True
@@ -348,10 +341,10 @@ class StreamController(object):
         streams = set() # stream paused
         for s in self.microscope.streams:
             if isinstance(s, classes):
-                if s.updated.value:
+                if s.should_update.value:
                     streams.add(s)
-                    s.active.value = False
-                    s.updated.value = False
+                    s.is_active.value = False
+                    s.should_update.value = False
                     # TODO also disable stream panel "update" button?
 
         return streams
@@ -362,7 +355,7 @@ class StreamController(object):
         streams (set of streams): Streams that will be resumed
         """
         for s in streams:
-            s.updated.value = True
+            s.should_update.value = True
             # it will be activated by the stream scheduler
 
 
@@ -374,11 +367,11 @@ class StreamController(object):
         It's ok to call if the stream has already been removed
         """
         # don't schedule any more
-        stream.active.value = False
-        stream.updated.value = False
+        stream.is_active.value = False
+        stream.should_update.value = False
         if stream in self._scheduler_subscriptions:
             callback = self._scheduler_subscriptions.pop(stream)
-            stream.updated.unsubscribe(callback)
+            stream.should_update.unsubscribe(callback)
 
         # Remove from the views
         for v in self.microscope.views.values():

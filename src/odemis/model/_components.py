@@ -46,7 +46,7 @@ def getComponents():
 
 def _getChildren(root):
     """
-    Return the set of components which are referenced from the given component 
+    Return the set of components which are referenced from the given component
      (children, emitters, detectors, actuators...)
     root (HwComponent): the component to start from
     returns (set of HwComponents)
@@ -54,13 +54,13 @@ def _getChildren(root):
     ret = set([root])
     for child in getattr(root, "children", set()):
         ret |= _getChildren(child)
-    
+
     # cannot check for Microscope because it's a proxy
-#    if isinstance(root, Microscope):
+    # isinstance(root, Microscope):
     if isinstance(root.detectors, collections.Set):
         for child in (root.detectors | root.emitters | root.actuators):
             ret |= _getChildren(child)
-    
+
     return ret
 
 # Helper functions to list selectively the special attributes of a component
@@ -324,7 +324,9 @@ class HwComponentProxy(ComponentProxy):
 
 def HwComponentSerializer(self):
     """reduce function that automatically replaces Component objects by a Proxy"""
-    daemon=getattr(self,"_pyroDaemon",None)
+
+    daemon = getattr(self, "_pyroDaemon", None)
+
     if daemon: # TODO might not be even necessary: They should be registering themselves in the init
         # only return a proxy if the object is a registered pyro object
         return (HwComponentProxy, (daemon.uriFor(self),), self._getproxystate())
@@ -372,13 +374,14 @@ class Detector(HwComponent):
         HwComponent.__init__(self, name, role, **kwargs)
 
         # To be overridden
-        
-        # Maximum value of each dimension of the detector (including the 
+
+        # Maximum value of each dimension of the detector (including the
         # intensity). A CCD camera 2560x1920 with 12 bits intensity has a 3D
         # shape (2560,1920,2048).
-        self._shape = (0,)  
-        self.data = None # Data-flow coming from this detector.
+        self._shape = (0,)
+        # Data-flow coming from this detector.
         # normally a detector doesn't affect anything
+        self.data = None
 
     @roattribute
     def shape(self):
@@ -430,7 +433,7 @@ class Actuator(HwComponent):
         if ranges is None:
             ranges = {}
         self._ranges = dict(ranges)
-        
+
         # it should also have a .position VA
 
     @roattribute

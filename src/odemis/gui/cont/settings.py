@@ -263,11 +263,10 @@ class SettingsPanel(object):
         self.panel.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR)
 
         self.panel.SetSizer(self._main_sizer)
-        self._main_sizer.Add(self._gb_sizer, proportion=1,
-                                          flag=wx.RIGHT|wx.LEFT|wx.EXPAND,
-                                          border=5)
-        # Add a little extra border at the right side
-        self._main_sizer.AddSpacer((15, -1))
+        self._main_sizer.Add(self._gb_sizer,
+                             proportion=1,
+                             flag=wx.RIGHT|wx.LEFT|wx.EXPAND,
+                             border=5)
 
         self.fold_panel.add_item(self.panel)
 
@@ -564,7 +563,13 @@ class SettingsPanel(object):
 
             def _eat_event(evt):
                 """ Quick and dirty empty function used to 'eat'
-                mouse wheel events"""
+                mouse wheel events
+                """
+                # TODO: This solution only makes sure that the control's value
+                # doesn't accidentally get altered when it gets hit by a mouse
+                # wheel event. However, it also stop the event from propagating
+                # so the containing scrolled window will not scroll either.
+                # (If the event is skipped, the control will change value again)
                 pass
 
             new_ctrl.Bind(wx.EVT_MOUSEWHEEL, _eat_event)

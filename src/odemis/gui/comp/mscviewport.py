@@ -29,11 +29,12 @@ import logging
 import wx
 
 from odemis import gui
-from odemis.gui import instrmodel
 from odemis.gui.comp.scalewindow import ScaleWindow
 from odemis.gui.comp.slider import Slider
 from odemis.gui.dblmscopecanvas import DblMicroscopeCanvas
-from odemis.gui.img.data import getico_blending_optBitmap, getico_blending_semBitmap
+from odemis.gui.img.data import \
+    getico_blending_optBitmap, getico_blending_semBitmap
+from odemis.gui.model import OPTICAL_STREAMS, EM_STREAMS
 from odemis.gui.util import call_after, units
 
 
@@ -42,12 +43,13 @@ class MicroscopeViewport(wx.Panel):
     """
 
     def __init__(self, *args, **kwargs):
-        """Note: This is not fully initialised until setView() has been called
+        """Note: The MicroscopeViewport is not fully initialised until setView()
+        has been called.
         """
         wx.Panel.__init__(self, *args, **kwargs)
 
-        self.mic_view = None # the MicroscopeView that this viewport is displaying
-        self._microscope_model = None
+        self._microscope_view = None  # instrmodel.MicroscopeView
+        self._microscope_model = None # instrmodel.MicroscopeModel
 
         # Keep track of this panel's pseudo focus
         self._has_focus = False
@@ -176,49 +178,53 @@ class MicroscopeViewport(wx.Panel):
         self.Bind(wx.EVT_SIZE, self.OnSize)
 
 
-    def setView(self, mic_view, microscope_model):
+    def setView(self, microscope_view, microscope_model):
         """
         Set the microscope view that this viewport is displaying/representing
         *Important*: Should be called only once, at initialisation.
 
-        mic_view       -- MicroscopeView
+        microscope_view       -- MicroscopeView
         microscope_model -- MicroscopeModel
         """
 
         # This is a kind of a kludge, as it'd be best to have the viewport
         # created after the microscope view, but they are created independently
         # via XRC.
-        assert(self.mic_view is None)
+        assert(self._microscope_view is None)
 
-        self.mic_view = mic_view
+        self._microscope_view = microscope_view
         self._microscope_model = microscope_model
 
         # TODO Center to current view position, with current mpp
-        mic_view.mpp.subscribe(self._onMPP, init=True)
+        microscope_view.mpp.subscribe(self._onMPP, init=True)
 
         # set/subscribe merge ratio
-        mic_view.merge_ratio.subscribe(self._onMergeRatio, init=True)
+        microscope_view.merge_ratio.subscribe(self._onMergeRatio, init=True)
 
         # subscribe to image, to update legend on streamtree/image change
-        mic_view.lastUpdate.subscribe(self._onImageUpdate, init=True)
+        microscope_view.lastUpdate.subscribe(self._onImageUpdate, init=True)
         self.ShowMergeSlider(True) # FIXME: only if required by the view
 
         # canvas handles also directly some of the view properties
-        self.canvas.setView(mic_view)
+        self.canvas.setView(microscope_view)
 
         # TODO: that should not be the current values, but the values of
         # the current image (so, taken from the metadata).
-#        microscope_model.sem_emt_dwell_time.subscribe(self.avDwellTime, True)
-#        microscope_model.sem_emt_spot.subscribe(self.avSpot, True)
-#        microscope_model.sem_emt_hv.subscribe(self.avHV, True)
-#
-#        microscope_model.optical_emt_wavelength.subscribe(self.avWavelength)
-#        microscope_model.optical_det_wavelength.subscribe(self.avWavelength, True)
-#        microscope_model.optical_det_exposure_time.subscribe(self.avExposureTime, True)
+        # microscope_model.sem_emt_dwell_time.subscribe(self.avDwellTime, True)
+        # microscope_model.sem_emt_spot.subscribe(self.avSpot, True)
+        # microscope_model.sem_emt_hv.subscribe(self.avHV, True)
 
+        # microscope_model.optical_emt_wavelength.subscribe(self.avWavelength)
+        # microscope_model.optical_det_wavelength.subscribe(self.avWavelength, True)
+        # microscope_model.optical_det_exposure_time.subscribe(self.avExposureTime, True)
 
-    def getView(self):
-        return self.mic_view
+    @property
+    def mic_view(self):
+        return self._microscope_view
+
+    @property
+    def mic_model(self):
+        return self._microscope_model
 
     ################################################
     ## Panel control
@@ -247,9 +253,9 @@ class MicroscopeViewport(wx.Panel):
 
     def UpdateHFWLabel(self):
         """ Physical width of the display"""
-        if not self.mic_view:
+        if not self._microscope_view:
             return
-        hfw = self.mic_view.mpp.value * self.GetClientSize()[0]
+        hfw = self._microscope_view.mpp.value * self.GetClientSize()[0]
         hfw = units.round_significant(hfw, 4)
         label = "HFW: %s" % units.readable_str(hfw, "m")
         self.hfwDisplay.SetLabel(label)
@@ -268,7 +274,7 @@ class MicroscopeViewport(wx.Panel):
 
         # get all the mpps
         mpps = set()
-        for s in self.mic_view.getStreams():
+        for s in self._microscope_view.getStreams():
             im = s.image.value
             if im and im.mpp:
                 mpps.add(im.mpp)
@@ -281,14 +287,14 @@ class MicroscopeViewport(wx.Panel):
                 label += u"×" + units.readable_str(units.round_significant(magIm, 3))
             else:
                 label += u"÷" + units.readable_str(units.round_significant(1.0/magIm, 3))
-            magDig = im_mpp / self.mic_view.mpp.value
+            magDig = im_mpp / self._microscope_view.mpp.value
             if magDig >= 1:
                 label += u" ×" + units.readable_str(units.round_significant(magDig, 3))
             else:
                 label += u" ÷" + units.readable_str(units.round_significant(1.0/magDig, 3))
         else:
             # one magnification
-            mag = mppScreen / self.mic_view.mpp.value
+            mag = mppScreen / self._microscope_view.mpp.value
             if mag >= 1:
                 label += u"×" + units.readable_str(units.round_significant(mag, 3))
             else:
@@ -314,11 +320,11 @@ class MicroscopeViewport(wx.Panel):
     #  * if the stage moves by itself, keep the view at the same place
     #    (and the acquired images will not be centred anymore)
     def _onViewCenter(self, pos):
-        if self.mic_view is None:
+        if self._microscope_view is None:
             return
 
-        self.mic_view.view_pos.value = pos
-        self.mic_view.moveStageToView()
+        self._microscope_view.view_pos.value = pos
+        self._microscope_view.moveStageToView()
 
     @call_after
     def _onMPP(self, mpp):
@@ -332,9 +338,9 @@ class MicroscopeViewport(wx.Panel):
         # TODO: Just depend on the "merge" argument on the streamTree
         # For now we just duplicate the logic in _convertStreamsToImages():
         #  display iif both EM and OPT streams
-        streams = self.mic_view.streams.getStreams()
-        has_opt = any(isinstance(s, instrmodel.OPTICAL_STREAMS) for s in streams)
-        has_em = any(isinstance(s, instrmodel.EM_STREAMS) for s in streams)
+        streams = self._microscope_view.streams.getStreams()
+        has_opt = any(isinstance(s, OPTICAL_STREAMS) for s in streams)
+        has_em = any(isinstance(s, EM_STREAMS) for s in streams)
 
         if (has_opt and has_em):
             self.ShowMergeSlider(True)
@@ -343,8 +349,8 @@ class MicroscopeViewport(wx.Panel):
         # MergeSlider is displayed iif:
         # * Root operator of StreamTree accepts merge argument
         # * (and) Root operator of StreamTree has >= 2 images
-#        if ("merge" in self.mic_view.streams.kwargs and
-#            len(self.mic_view.streams.streams) >= 2):
+#        if ("merge" in self._microscope_view.streams.kwargs and
+#            len(self._microscope_view.streams.streams) >= 2):
 #            self.ShowMergeSlider(True)
 #        else:
 #            self.ShowMergeSlider(False)
@@ -353,35 +359,35 @@ class MicroscopeViewport(wx.Panel):
         self.UpdateMagnification()
 
 
-    @call_after
-    def avWavelength(self, value):
-        # need to know both wavelengths, so just look into the values
-        win = self.datamodel.optical_emt_wavelength.value
-        wout = self.datamodel.optical_det_wavelength.value
+    # @call_after
+    # def avWavelength(self, value):
+    #     # need to know both wavelengths, so just look into the values
+    #     win = self.datamodel.optical_emt_wavelength.value
+    #     wout = self.datamodel.optical_det_wavelength.value
 
-        label = unicode(win) + " nm/" + unicode(wout) + " nm"
-        self.LegendWl.SetLabel(label)
+    #     label = unicode(win) + " nm/" + unicode(wout) + " nm"
+    #     self.LegendWl.SetLabel(label)
 
-    @call_after
-    def avExposureTime(self, value):
-        label = unicode("%0.2f s" % (value))
-        self.LegendET.SetLabel(label)
-        self.Parent.Layout()
+    # @call_after
+    # def avExposureTime(self, value):
+    #     label = unicode("%0.2f s" % (value))
+    #     self.LegendET.SetLabel(label)
+    #     self.Parent.Layout()
 
-    @call_after
-    def avDwellTime(self, value):
-        label = "Dwell: %ss" % units.to_string_si_prefix(value)
-        self.LegendDwell.SetLabel(label)
+    # @call_after
+    # def avDwellTime(self, value):
+    #     label = "Dwell: %ss" % units.to_string_si_prefix(value)
+    #     self.LegendDwell.SetLabel(label)
 
-    @call_after
-    def avSpot(self, value):
-        label = "Spot: %g" % value
-        self.LegendSpot.SetLabel(label)
+    # @call_after
+    # def avSpot(self, value):
+    #     label = "Spot: %g" % value
+    #     self.LegendSpot.SetLabel(label)
 
-    @call_after
-    def avHV(self, value):
-        label = "HV: %sV" % units.to_string_si_prefix(value)
-        self.LegendHV.SetLabel(label)
+    # @call_after
+    # def avHV(self, value):
+    #     label = "HV: %sV" % units.to_string_si_prefix(value)
+    #     self.LegendHV.SetLabel(label)
 
     ################################################
     ## GUI Event handling
@@ -392,11 +398,11 @@ class MicroscopeViewport(wx.Panel):
         considered as having the focus.
         """
 
-        if self.mic_view and self._microscope_model:
+        if self._microscope_view and self._microscope_model:
             # This will take care of doing everything necessary
             # Remember, the notify method of the vigilant attribute will
             # only fire if the values changes.
-            self._microscope_model.focussedView.value = self.mic_view
+            self._microscope_model.focussedView.value = self._microscope_view
 
         evt.Skip()
 
@@ -404,10 +410,10 @@ class MicroscopeViewport(wx.Panel):
         """
         Merge ratio slider
         """
-        if self.mic_view is None:
+        if self._microscope_view is None:
             return
 
-        self.mic_view.merge_ratio.value = self.mergeSlider.GetValue() / 100
+        self._microscope_view.merge_ratio.value = self.mergeSlider.GetValue() / 100
         event.Skip()
 
     def OnSize(self, event):

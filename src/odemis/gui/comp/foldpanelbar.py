@@ -32,7 +32,7 @@ from odemis.gui.img.data import getarr_rightBitmap, getarr_downBitmap
 
 CAPTION_BAR_SIZE = (-1, 40)
 CAPTION_PADDING_LEFT = 10
-CAPTION_PADDING_RIGHT = 10
+CAPTION_PADDING_RIGHT = 6
 SCROLLBAR_WIDTH = 0
 
 
@@ -61,7 +61,7 @@ class FoldPanelBar(wx.Panel):
         self.Bind(wx.EVT_SIZE, self.OnSize)
 
         global SCROLLBAR_WIDTH
-        SCROLLBAR_WIDTH = wx.SystemSettings_GetMetric(wx.SYS_VSCROLL_X) - 3
+        SCROLLBAR_WIDTH = wx.SystemSettings_GetMetric(wx.SYS_VSCROLL_X)
 
         assert isinstance(parent, wx.ScrolledWindow)
 
@@ -355,7 +355,7 @@ class CaptionBar(wx.Window):
         x_pos = self.Parent.grandparent.GetSize().GetWidth() - \
                 self._iconWidth - CAPTION_PADDING_RIGHT
 
-        if not self.Parent.has_vert_scrollbar():
+        if self.Parent.has_vert_scrollbar():
             x_pos -= SCROLLBAR_WIDTH
 
         self._foldIcons.Draw(index, dc, x_pos,

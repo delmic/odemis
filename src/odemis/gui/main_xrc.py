@@ -737,10 +737,8 @@ def __init_resources():
                               </XRCED>
                             </object>
                             <object class="FoldPanelItem">
-                              <label>STREAMS</label>
-                              <fg>#1A1A1A</fg>
-                              <bg>#555555</bg>
                               <object class="StreamBar" name="pnl_stream">
+                                <size>300,-1</size>
                                 <add_button>1</add_button>
                                 <fg>#7F7F7F</fg>
                                 <bg>#333333</bg>
@@ -748,6 +746,9 @@ def __init_resources():
                                   <assign_var>1</assign_var>
                                 </XRCED>
                               </object>
+                              <label>STREAMS</label>
+                              <fg>#1A1A1A</fg>
+                              <bg>#555555</bg>
                             </object>
                             <object class="FoldPanelItem" name="fp_annotations">
                               <label>ANNOTATIONS</label>
