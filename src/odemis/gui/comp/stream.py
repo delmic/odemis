@@ -38,8 +38,7 @@ import odemis.gui
 import odemis.gui.comp.buttons as buttons
 import odemis.gui.img.data as img
 
-from odemis import model
-from odemis.gui import instrmodel, FOREGROUND_COLOUR_EDIT, FOREGROUND_COLOUR
+from odemis.gui import model, FOREGROUND_COLOUR_EDIT, FOREGROUND_COLOUR
 from odemis.gui.comp.foldpanelbar import FoldPanelItem
 from odemis.gui.comp.slider import UnitIntegerSlider
 from odemis.gui.comp.text import SuggestTextCtrl, UnitIntegerCtrl, \
@@ -47,6 +46,7 @@ from odemis.gui.comp.text import SuggestTextCtrl, UnitIntegerCtrl, \
 from odemis.gui.util import call_after
 from odemis.gui.util.conversion import wave2rgb
 from odemis.gui.util.widgets import VigilantAttributeConnector
+from odemis.model import OutOfBoundError
 
 
 stream_remove_event, EVT_STREAM_REMOVE = wx.lib.newevent.NewEvent()
@@ -875,7 +875,7 @@ class DyeStreamPanel(StreamPanel):
         e_range = self.stream.emission.range
 
         dyes = []
-        for name, (xwl, ewl) in instrmodel.DyeDatabase.items():
+        for name, (xwl, ewl) in model.dye.DyeDatabase.items():
             if (x_range[0] <= xwl and xwl <= x_range[1] and
                 e_range[0] <= ewl and ewl <= e_range[1]):
                 dyes.append(name)
@@ -887,18 +887,18 @@ class DyeStreamPanel(StreamPanel):
         self.stream.name.value = txt
 
         # update the excitation and emission wavelength
-        if txt in instrmodel.DyeDatabase:
-            xwl, ewl = instrmodel.DyeDatabase[txt]
+        if txt in model.dye.DyeDatabase:
+            xwl, ewl = model.dye.DyeDatabase[txt]
             try:
                 self.stream.excitation.value = xwl
-            except model.OutOfBoundError:
+            except OutOfBoundError:
                 logging.info("Excitation at %g nm is out of bound", xwl * 1e9)
             try:
                 self.stream.emission.value = ewl
                 colour = wave2rgb(self.stream.emission.value)
                 # changing emission should also change the tint
                 self.stream.tint.value = colour
-            except model.OutOfBoundError:
+            except OutOfBoundError:
                 logging.info("Emission at %g nm is out of bound", ewl * 1e9)
 
     def _excitation_2_va(self):
@@ -966,9 +966,9 @@ class StreamBar(wx.Panel):
     DEFAULT_BORDER = 2
     DEFAULT_STYLE = wx.BOTTOM | wx.EXPAND
     # the order in which the streams are displayed
-    STREAM_ORDER = [instrmodel.SEMStream,
-                    instrmodel.BrightfieldStream,
-                    instrmodel.FluoStream]
+    STREAM_ORDER = [model.stream.SEMStream,
+                    model.stream.BrightfieldStream,
+                    model.stream.FluoStream]
 
 
     def __init__(self, *args, **kwargs):

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-'''
+"""
 Created on 5 Feb 2013
 
 @author: Éric Piel
@@ -8,29 +8,40 @@ Copyright © 2013 Éric Piel, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software
+Odemis is free software: you can redistribute it and/or modify it under the
+terms of the GNU General Public License as published by the Free Software
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS F
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS F
 
-You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
-'''
+You should have received a copy of the GNU General Public License along with
+Odemis. If not, see http://www.gnu.org/licenses/.
+
+"""
+
 from __future__ import division
-from concurrent import futures
-from concurrent.futures._base import CANCELLED, FINISHED, RUNNING, \
-    CANCELLED_AND_NOTIFIED, CancelledError, PENDING
-from odemis import model
-from odemis.gui import instrmodel
-from odemis.gui.util import img
+
 import logging
-import numpy
 import sys
 import threading
 import time
+from concurrent import futures
+from concurrent.futures._base import CANCELLED, FINISHED, RUNNING, \
+    CANCELLED_AND_NOTIFIED, CancelledError, PENDING
+
+import numpy
+
+from odemis import model
+from odemis.gui import instrmodel
+from odemis.gui.model import OPTICAL_STREAMS, EM_STREAMS
+from odemis.gui.model.stream import FluoStream
+from odemis.gui.util import img
+
 
 # This is the "manager" of an acquisition. The basic idea is that you give it
-# a list of streams to acquire, and it will acquire them in the best way in the 
-# background. You are in charge of ensuring that no other acquisition is 
-# going on at the same time. 
+# a list of streams to acquire, and it will acquire them in the best way in the
+# background. You are in charge of ensuring that no other acquisition is
+# going on at the same time.
 # The manager receives a list of streams to acquire, order them in the best way,
 # and then creates a separate thread to run the acquisition of each stream. It
 # returns a special "ProgressiveFuture" which is a Future object that can be
@@ -44,19 +55,19 @@ def startAcquisition(streamTree):
       order the stream must be acquired.
       Note: it is highly recommended to not have any other acquisition going on.
     streamTree (instrmodel.StreamTree): the streams to acquire.
-    returns (ProgressiveFuture): an object that represents the task, allow to 
-      know how much time before it is over and to cancel it. It also permits to 
+    returns (ProgressiveFuture): an object that represents the task, allow to
+      know how much time before it is over and to cancel it. It also permits to
       receive the result of the task, which is:
       (list of model.DataArray, model.DataArray or None): the raw acquisition data, and
         a thumbnail.
     """
     # create a future
     future = ProgressiveFuture()
-    
+
     # create a task
     task = AcquisitionTask(streamTree, future)
     future.task_canceller = task.cancel # let the future cancel the task
-    
+
     # run executeTask in a thread
     thread = threading.Thread(target=_executeTask, name="Acquisition task",
                               args=(future, task.run))
@@ -85,24 +96,24 @@ def _executeTask(future, fn, *args, **kwargs):
 
 def secom_weight_stream(stream):
     """
-    Defines how much a stream is of priority (should be done first) for 
+    Defines how much a stream is of priority (should be done first) for
       acquisition on the SECOM platform
     stream (instrmodel.Stream): a stream to weight
     returns (number): priority (the higher the more it should be done first)
     """
     # SECOM: Optical before SEM to avoid bleaching
-    if isinstance(stream, instrmodel.FluoStream):
+    if isinstance(stream, FluoStream):
         return 100 # Fluorescence ASAP to avoid bleaching
-    elif isinstance(stream, instrmodel.OPTICAL_STREAMS):
+    elif isinstance(stream, OPTICAL_STREAMS):
         return 90 # any other kind of optical after fluorescence
-    elif isinstance(stream, instrmodel.EM_STREAMS):
+    elif isinstance(stream, EM_STREAMS):
         return 50 # can be done after
     else:
-        logging.debug("Unexpected stream of type %s for SECOM", stream.__class__.__name__) 
+        logging.debug("Unexpected stream of type %s for SECOM", stream.__class__.__name__)
         return 0
-     
+
 class AcquisitionTask(object):
-    
+
     # TODO: this all make sense for the SECOM, but for systems where multiple
     # acquisitions are running in parallel (ex: SPARC), it needs a better handling
     # of the stream dependencies. Similarly, features like drift-compensation
@@ -110,28 +121,28 @@ class AcquisitionTask(object):
     def __init__(self, streamTree, future):
         self._streamTree = streamTree
         self._future = future
-        
+
         # get the estimated time for each streams
         self._streamTimes = {} # Stream -> float (estimated time)
         for s in streamTree.getStreams():
             self._streamTimes[s] = s.estimateAcquisitionTime()
-        
-        # order the streams for optimal acquisition 
+
+        # order the streams for optimal acquisition
         self._streams = sorted(self._streamTimes.keys(), key=secom_weight_stream,
                                reverse=True)
-    
-    
+
+
         self._condition = threading.Condition()
         self._current_stream = None
         self._cancelled = False
-    
+
     def run(self):
         """
         Runs the acquisition
         """
         assert(self._current_stream is None) # Task should be used only once
         expected_time = numpy.sum(self._streamTimes.values())
-        
+
         # This is a little trick to force the future to give updates even if
         # the estimation is the same
         upd_period = min(10, max(0.1, expected_time/100))
@@ -139,12 +150,12 @@ class AcquisitionTask(object):
                        name="Acquisition timer update",
                        args=(upd_period,))
         timer.start()
-        
+
         raw_images = []
         # no need to set the start time of the future: it's automatically done
         # when setting its state to running.
         self._future.set_end_time(time.time() + expected_time)
-        
+
         for s in self._streams:
             self._current_stream = s
             with self._condition:
@@ -152,7 +163,7 @@ class AcquisitionTask(object):
                 s.image.subscribe(self._image_listener)
                 # TODO: shall we also do s.updated.value = True?
                 s.active.value = True
-            
+
                 # wait until one image acquired or cancelled
                 self._condition.wait()
                 if self._cancelled:
@@ -161,17 +172,17 @@ class AcquisitionTask(object):
                     # itself.
                     raise CancelledError()
 
-            # add the raw images   
+            # add the raw images
             data = s.raw
             # add the stream name to the image
             for d in data:
                 d.metadata[model.MD_DESCRIPTION] = s.name.value
             raw_images.extend(data)
-            
+
             # update the time left
             expected_time -= self._streamTimes[s]
             self._future.set_end_time(time.time() + expected_time)
-        
+
         # compute the thumbnail
         # FIXME: this call now doesn't work. We need a hack to call the canvas
         # method from outside the canvas, or use a canvas to render everything
@@ -183,10 +194,10 @@ class AcquisitionTask(object):
                     model.MD_PIXEL_SIZE: (iim.mpp, iim.mpp),
                     model.MD_DESCRIPTION: "Composited image preview"}
         thumbnail = model.DataArray(thumbnail, metadata=metadata)
-        
+
         # return all
-        return (raw_images, thumbnail) 
-    
+        return (raw_images, thumbnail)
+
     def _future_time_upd(self, period):
         """
         Force the future to give a progress update at a given periodicity
@@ -198,7 +209,7 @@ class AcquisitionTask(object):
             logging.debug("updating the future")
             self._future._invoke_upd_callbacks()
             time.sleep(period)
-    
+
     def _image_listener(self, image):
         """
         called when a new image comes from a stream
@@ -207,10 +218,10 @@ class AcquisitionTask(object):
             # stop acquisition
             self._current_stream.image.unsubscribe(self._image_listener)
             self._current_stream.active.value = False
-            
+
             # let the thread know that it's all done
             self._condition.notify_all()
-    
+
     def cancel(self):
         """
         cancel the acquisition
@@ -220,7 +231,7 @@ class AcquisitionTask(object):
                 # unsubscribe to the current stream
                 self._current_stream.image.unsubscribe(self._image_listener)
                 self._current_stream.active.value = False
-            
+
             # put the cancel flag
             self._cancelled = True
             # let the thread know it's done
@@ -230,8 +241,8 @@ class ProgressiveFuture(futures.Future):
     """
     set task_canceller to a function to call to cancel a running task
     """
-    
-    
+
+
     def __init__(self, start=None, end=None):
         """
         start (float): start time
@@ -239,7 +250,7 @@ class ProgressiveFuture(futures.Future):
         """
         futures.Future.__init__(self)
         self._upd_callbacks = []
-        
+
         if start is None:
             # just a bit ahead of time to say it's not starting now
             start = time.time() + 0.1
@@ -247,8 +258,8 @@ class ProgressiveFuture(futures.Future):
         if end is None:
             end = self._start_time + 0.1
         self._end_time = end
-        
-        # As long as it's None, the future cannot be cancelled while running 
+
+        # As long as it's None, the future cannot be cancelled while running
         self.task_canceller = None
 
     def _report_update(self, fn):
@@ -260,7 +271,7 @@ class ProgressiveFuture(futures.Future):
             elif self._state == PENDING:
                 past = now - self._start_time
                 left = self._end_time - now
-                # ensure we state it's not yet started 
+                # ensure we state it's not yet started
                 if past >= 0:
                     past = -1e-9
                 if left < 0:
@@ -284,22 +295,22 @@ class ProgressiveFuture(futures.Future):
     def set_start_time(self, val):
         """
         Update the start time of the task. To be used by executors only.
-        
+
         val (float): time at which the task started (or will be starting)
         """
         with self._condition:
             self._start_time = val
         self._invoke_upd_callbacks()
-    
+
     def set_end_time(self, val):
         """
         Update the end time of the task. To be used by executors only.
-        
+
         val (float): time at which the task ended (or will be ending)
         """
         with self._condition:
             self._end_time = val
-        self._invoke_upd_callbacks()    
+        self._invoke_upd_callbacks()
 
     def add_update_callback(self, fn):
         """
@@ -321,8 +332,8 @@ class ProgressiveFuture(futures.Future):
                 return
         # it's already over
         self._report_update(fn)
-    
-    
+
+
     def cancel(self):
         """Cancel the future if possible.
 
@@ -350,7 +361,7 @@ class ProgressiveFuture(futures.Future):
         self._invoke_callbacks()
         self._invoke_upd_callbacks()
         return True
-        
+
     def set_running_or_notify_cancel(self):
         cancelled = futures.Future.set_running_or_notify_cancel(self)
         now = time.time()
@@ -358,16 +369,16 @@ class ProgressiveFuture(futures.Future):
             self._start_time = now
             if cancelled:
                 self._end_time = now
-        
+
         self._invoke_upd_callbacks()
         return cancelled
-            
+
     def set_result(self, result):
         futures.Future.set_result(self, result)
         with self._condition:
             self._end_time = time.time()
         self._invoke_upd_callbacks()
-        
+
     def set_exception(self, exception):
         futures.Future.set_exception(self, exception)
         with self._condition:

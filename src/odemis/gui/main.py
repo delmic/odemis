@@ -31,16 +31,13 @@ import wx
 import Pyro4.errors
 
 import odemis.gui.cont.tabs as tabs
+
 from odemis import __version__, model
 from odemis.gui import main_xrc, instrmodel, log
 from odemis.gui.conf import get_general_conf
 from odemis.gui.cont import set_main_tab_controller
-# from odemis.gui.cont.acquisition import AcquisitionController
-# from odemis.gui.cont.microscope import MicroscopeController
-# from odemis.gui.cont.settings import SettingsBarController
-# from odemis.gui.cont.streams import StreamController
-# from odemis.gui.cont.views import ViewController, ViewSelector
-from odemis.gui.instrmodel import InstrumentalImage
+from odemis.gui.model.img import InstrumentalImage
+from odemis.gui.model.dye import DyeDatabase
 from odemis.gui.xmlh import odemis_get_resources
 
 class OdemisGUIApp(wx.App):
@@ -313,7 +310,7 @@ class OdemisGUIApp(wx.App):
         # info.Artist = '???'
         # info.Translator = '???'
 
-        if instrmodel.DyeDatabase:
+        if DyeDatabase:
             info.Developers += ["", "Dye database from http://fluorophores.org"]
             info.Licence += ("""
 The dye database is provided as-is, from the Fluorobase consortium.

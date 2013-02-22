@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Created on 12 Feb 2013
+Created on 22 Feb 2013
 
 @author: Rinze de Laat
 
@@ -23,22 +23,18 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 ### Purpose ###
 
-This package contains Controller classes which 'control' groups of widgets and
-other GUI components as logical units.
+This package contains contains all classes that describe various objects that
+can be controlled through the GUI.
 
 """
 
-_main_tab_controller = None
+import stream
 
+# All the stream types related to optical
+OPTICAL_STREAMS = (stream.FluoStream,
+                   stream.BrightfieldStream,
+                   stream.StaticStream)
 
-def set_main_tab_controller(mtc):
-    global _main_tab_controller
-    _main_tab_controller = mtc
-
-def get_main_tab_controller():
-    global _main_tab_controller
-
-    if not _main_tab_controller:
-        raise ValueError("Main tab controller not set!")
-
-    return _main_tab_controller
+# All the stream types related to electron microscope
+EM_STREAMS = (stream.SEMStream,
+              stream.StaticSEMStream)

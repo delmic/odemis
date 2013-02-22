@@ -19,13 +19,32 @@ PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
+
 """
 
 from __future__ import division
-from collections import namedtuple
-from odemis.gui import instrmodel
+
 import logging
+from collections import namedtuple
+
 import wx
+
+from odemis.gui import instrmodel
+from odemis.gui.model import OPTICAL_STREAMS, EM_STREAMS
+from odemis.gui.model.stream import SEMStream, BrightfieldStream, FluoStream
+
+# TODO: The next comments were copied from instrmodel. Read/implement/remove
+# viewport controller (to be merged with stream controller?)
+# Creates the 4 microscope views at init, with the right names, depending on
+#   the available microscope hardware.
+# (The 4 viewports canvas are already created, the main interface connect
+#   them to the view, by number)
+# In charge of switching between 2x2 layout and 1 layout.
+# In charge of updating the view focus
+# In charge of updating the view thumbnails???
+# In charge of ensuring they all have same zoom and center position
+# In charge of applying the toolbar actions on the right viewport
+# in charge of changing the "hair-cross" display
 
 class ViewController(object):
     """
@@ -53,7 +72,7 @@ class ViewController(object):
         self._microscope.focussedView.subscribe(self._onView, init=False)
 
         # Focus defaults to the top right viewport
-        self._microscope.focussedView.value = self._viewports[1].getView()
+        self._microscope.focussedView.value = self._viewports[1].mic_view
 
     def _createViews(self):
         """
@@ -68,7 +87,7 @@ class ViewController(object):
                 view = instrmodel.MicroscopeView("SEM %d" % i,
                          self._microscope.stage,
                          focus0=None, # TODO: SEM focus or focus1?
-                         stream_classes=(instrmodel.SEMStream,)
+                         stream_classes=(SEMStream,)
                          )
                 viewport.setView(view, self._microscope)
                 i += 1
@@ -82,7 +101,7 @@ class ViewController(object):
                 view = instrmodel.MicroscopeView("Optical %d" % i,
                          self._microscope.stage,
                          focus0=self._microscope.focus,
-                         stream_classes=(instrmodel.BrightfieldStream, instrmodel.FluoStream)
+                         stream_classes=(BrightfieldStream, FluoStream)
                          )
                 viewport.setView(view, self._microscope)
                 i += 1
@@ -95,7 +114,7 @@ class ViewController(object):
             view = instrmodel.MicroscopeView("SEM",
                      self._microscope.stage,
                      focus0=None, # TODO: SEM focus
-                     stream_classes=instrmodel.EM_STREAMS
+                     stream_classes=EM_STREAMS
                      )
             self._viewports[0].setView(view, self._microscope)
             self._microscope.sem_view = view
@@ -104,7 +123,7 @@ class ViewController(object):
             view = instrmodel.MicroscopeView("Optical",
                      self._microscope.stage,
                      focus0=self._microscope.focus,
-                     stream_classes=instrmodel.OPTICAL_STREAMS
+                     stream_classes=OPTICAL_STREAMS
                      )
             self._viewports[1].setView(view, self._microscope)
             self._microscope.optical_view = view
