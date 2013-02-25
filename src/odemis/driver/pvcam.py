@@ -21,6 +21,7 @@ You should have received a copy of the GNU General Public License along with Ode
 #
 # Note that libpvcam is only provided for x86 32-bits
 
+from __future__ import division
 from ctypes import *
 from odemis import __version__, model
 import gc
@@ -45,13 +46,13 @@ class PVCamError(Exception):
         return self.args[1]
 
 
+# TODO: on Windows, should be a WinDLL?
 class PVCamDLL(CDLL):
     """
     Subclass of CDLL specific to PVCam library, which handles error codes for
     all the functions automatically.
     It works by setting a default _FuncPtr.errcheck.
     """
-    # TODO: on Windows, should be a windll?
     
     def __init__(self):
         if os.name == "nt":
@@ -60,8 +61,12 @@ class PVCamDLL(CDLL):
             # Global so that other libraries can access it
             # need to have firewire loaded, even if not used
             self.raw1394 = CDLL("libraw1394.so", RTLD_GLOBAL)
+            #self.pthread = CDLL("libpthread.so.0", RTLD_GLOBAL) # python already loads libpthread
             CDLL.__init__(self, "libpvcam.so", RTLD_GLOBAL)
-            self.pl_pvcam_init()
+            try:
+                self.pl_pvcam_init()
+            except PVCamError:
+                pass # if opened several times, initialisation fails but it's all fine
 
 
     def pv_errcheck(self, result, func, args):
@@ -118,74 +123,81 @@ class PVCam(model.DigitalCamera):
     It also provide low-level methods corresponding to the SDK functions.
     """
     
-    def __init__(self, name, role, device=None, **kwargs):
+    def __init__(self, name, role, device, **kwargs):
         """
         Initialises the device
-        device (None or int): number of the device to open, as defined by Andor, cd scan()
-          if None, uses the system handle, which allows very limited access to some information
+        device (int): number of the device to open, as defined in pvcam, cf scan()
         Raise an exception if the device cannot be opened.
         """
         self.pvcam = PVCamDLL()
 
-        self._andor_capabilities = None # cached value of GetCapabilities()
-        self.temp_timer = None
-        if device is None:
-            # nothing else to initialise
-            self.handle = None
-            return
-        
+        # TODO: allow device to be a string, in which case it will look for 
+        # the given name => might be easier to find the right camera on systems
+        # will multiple cameras.
         self._device = device # for reinit only
         model.DigitalCamera.__init__(self, name, role, **kwargs)
+
+        # so that it's really not possible to use this object in case of error
+        self._handle = None
+        self._temp_timer = None
         try:
-            logging.debug("Looking for camera %d, can be long...", device) # ~20s
-            self.handle = self.GetCameraHandle(device)
-        except AndorV2Error, err:
-            # so that it's really not possible to use this object after
-            self.handle = None
-            raise IOError("Failed to find andor camera %d" % device)
-        self.select()
-        self.Initialize()
+            self._name = self.cam_get_name(device)
+        except PVCamError:
+            raise IOError("Failed to find PI PVCam camera %d" % device)
+
+        try:        
+            self._handle = self.cam_open(self._name, pv.OPEN_EXCLUSIVE)
+            # raises an error if camera has a problem
+            self.pvcam.pl_cam_get_diags(self._handle)
+        except PVCamError:
+            raise
+#            raise IOError("Failed to open PI PVCam camera %d (%s)" % (device, self._name))
         
-        logging.info("opened device %d successfully", device)
+        logging.info("Opened device %d successfully", device)
+        
         
         # Describe the camera
         # up-to-date metadata to be included in dataflow
         self._metadata = {model.MD_HW_NAME: self.getModelName()}
-        # TODO test on other hardwares
-        caps = self.GetCapabilities()
-        if caps.CameraType != AndorCapabilities.CAMERATYPE_CLARA:
-            logging.warning("This driver has not been tested for this camera type")
-
+        
         # odemis + drivers
         self._swVersion = "%s (%s)" % (__version__.version, self.getSwVersion()) 
         self._metadata[model.MD_SW_VERSION] = self._swVersion
         self._hwVersion = self.getHwVersion()
         self._metadata[model.MD_HW_VERSION] = self._hwVersion
         
-        resolution = self.GetDetector()
+        resolution = self.GetSensorSize()
         self._metadata[model.MD_SENSOR_SIZE] = resolution
         
         # setup everything best (fixed)
         self._prev_settings = [None, None, None, None] # image, exposure, readout, gain
-        self._setStaticSettings()
-        self._shape = resolution + (2**self._getMaxBPP(),)
+        # Bit depth is between 6 and 16, but data is _always_ uint16
+        self._shape = resolution + (2**self.get_param(pv.PARAM_BIT_DEPTH),)
         
         # put the detector pixelSize
         psize = self.GetPixelSize()
-        psize = (psize[0] * 1e-6, psize[1] * 1e-6) # m
         self.pixelSize = model.VigilantAttribute(psize, unit="m", readonly=True)
         self._metadata[model.MD_SENSOR_PIXEL_SIZE] = self.pixelSize.value
         
         # Strong cooling for low (image) noise
-        if self.hasSetFunction(AndorCapabilities.SETFUNCTION_TEMPERATURE):
-            if self.hasGetFunction(AndorCapabilities.GETFUNCTION_TEMPERATURERANGE):
-                ranges = self.GetTemperatureRange()
-            else:
-                ranges = [-275, 100]
-            self.targetTemperature = model.FloatContinuous(ranges[0], ranges, unit="C",
-                                                            setter=self.setTargetTemperature)
-            self.setTargetTemperature(ranges[0])
-                    
+        try:
+            # target temp
+            ttemp = self.get_param(pv.PARAM_TEMP_SETPOINT) / 100
+            ranges = self.GetTemperatureRange()
+            self.targetTemperature = model.FloatContinuous(ttemp, ranges, unit="C",
+                                                           setter=self.setTargetTemperature)
+            
+            temp = self.GetTemperature()
+            self.temperature = model.FloatVA(temp, unit="C", readonly=True)
+            self._metadata[model.MD_SENSOR_TEMP] = temp
+            self._temp_timer = RepeatingTimer(10, self.updateTemperatureVA,
+                                              "PVCam temperature update")
+            self._temp_timer.start()
+        except PVCamError:
+            logging.debug("Camera doesn't seem to provide temperature information")
+        
+        return
+    
         if self.hasFeature(AndorCapabilities.FEATURES_FANCONTROL):
             # max speed
             self.fanSpeed = model.FloatContinuous(1.0, [0.0, 1.0], unit="",
@@ -225,12 +237,6 @@ class PVCam(model.DigitalCamera):
         self.gain = model.FloatEnumerated(self._gain, gain_choices, unit="",
                                           setter=self.setGain)
         
-        current_temp = self.GetTemperature()
-        self.temperature = model.FloatVA(current_temp, unit="C", readonly=True)
-        self._metadata[model.MD_SENSOR_TEMP] = current_temp
-        self.temp_timer = RepeatingTimer(10, self.updateTemperatureVA,
-                                         "AndorCam2 temperature update")
-        self.temp_timer.start()
         
         self.acquisition_lock = threading.Lock()
         self.acquire_must_stop = threading.Event()
@@ -271,16 +277,6 @@ class PVCam(model.DigitalCamera):
         self._metadata.update(md)
     
     # low level methods, wrapper to the actual SDK functions
-    # they do not ensure the actual camera is selected, you have to call select()
-    # TODO: not _everything_ is implemented, just what we need
-    def Initialize(self):
-        # It can take a loooong time (Clara: ~10s)
-        logging.info("Initialising Andor camera, can be long...")
-        if os.name == "nt":
-            self.atcore.Initialize("")
-        else:
-            self.atcore.Initialize("/usr/local/etc/andor")
-        logging.info("Initialisation completed.")
     
     def Reinitialize(self):
         """
@@ -291,9 +287,9 @@ class PVCam(model.DigitalCamera):
          * WaitForAcquisition returns DRV_NO_NEW_DATA
         """
         # stop trying to read the temperature while we reinitialize
-        if self.temp_timer is not None:
-            self.temp_timer.cancel()
-            self.temp_timer = None
+        if self._temp_timer is not None:
+            self._temp_timer.cancel()
+            self._temp_timer = None
         
         # This stops the driver's internal threads
         try:
@@ -332,70 +328,215 @@ class PVCam(model.DigitalCamera):
         self.setTargetTemperature(self.targetTemperature.value)
         self.setFanSpeed(self.fanSpeed.value)
     
-        self.temp_timer = RepeatingTimer(10, self.updateTemperatureVA,
+        self._temp_timer = RepeatingTimer(10, self.updateTemperatureVA,
                                          "AndorCam2 temperature update")
-        self.temp_timer.start()
+        self._temp_timer.start()
         
     def Shutdown(self):
         self.atcore.ShutDown()
     
-    def GetCameraHandle(self, device):
+    def cam_get_name(self, num):
         """
-        return the handle, from the device number
-        device (int > 0)
-        return (c_int32): handle
+        return the name, from the device number
+        num (int >= 0): camera number
+        return (string): name
         """
-        handle = c_int32()
-        self.atcore.GetCameraHandle(c_int32(device), byref(handle))        
+        assert(num >= 0)
+        cam_name = create_string_buffer(pv.CAM_NAME_LEN)
+        self.pvcam.pl_cam_get_name(num, cam_name)
+        return cam_name.value
+    
+    def cam_open(self, name, mode):
+        """
+        Reserve and initializes the camera hardware
+        name (string): camera name
+        mode (int): open mode
+        returns (int): handle
+        """
+        handle = c_int16()
+        self.pvcam.pl_cam_open(name, byref(handle), mode)
         return handle
     
-    def GetAvailableCameras(self):
+    pv_type_to_ctype = {
+         pv.TYPE_INT8: c_int8,
+         pv.TYPE_INT16: c_int16,
+         pv.TYPE_INT32: c_int32,
+         pv.TYPE_UNS8: c_uint8,
+         pv.TYPE_UNS16: c_uint16,
+         pv.TYPE_UNS32: c_uint32,
+         pv.TYPE_UNS64: c_uint64,
+         pv.TYPE_FLT64: c_float,
+         pv.TYPE_BOOLEAN: c_byte,
+         }
+    def get_param(self, param, value=pv.ATTR_CURRENT):
         """
-        return (int): the number of cameras available
+        Read the current (or other) value of a parameter
+        param (int): parameter ID (cf pv.PARAM_*)
+        value (int from pv.ATTR_*): which value to read (current, default, min, max, increment)
+        return (value): the value of the parameter, whose type depend on the parameter
         """
-        dc = c_uint32()
-        self.atcore.GetAvailableCameras(byref(dc))
-        return dc.value
-    
-    def GetCapabilities(self):
-        """
-        return an instance of AndorCapabilities structure
-        note: this value is cached (as it is static)
-        """
-        if self._andor_capabilities is None:
-            self._andor_capabilities = AndorCapabilities()
-            self._andor_capabilities.Size = sizeof(self._andor_capabilities)
-            self.atcore.GetCapabilities(byref(self._andor_capabilities))
-        return self._andor_capabilities
+        assert(value in (pv.ATTR_DEFAULT, pv.ATTR_CURRENT, pv.ATTR_MIN,
+                         pv.ATTR_MAX, pv.ATTR_INCREMENT))
         
-    def GetDetector(self):
+        # find out the type of the parameter
+        tp = c_uint16()
+        self.pvcam.pl_get_param(self._handle, param, pv.ATTR_TYPE, byref(tp))
+        if tp.value == pv.TYPE_CHAR_PTR:
+            # a string => need to find out the length
+            count = c_uint32()
+            self.pvcam.pl_get_param(self._handle, param, pv.ATTR_COUNT, byref(count))
+            content = create_string_buffer(count.value)
+        elif tp.value in self.pv_type_to_ctype:
+            content = self.pv_type_to_ctype[tp.value]()
+        elif tp.value == pv.TYPE_ENUM:
+            # It'd be better to use get_enum_param()
+            content = c_int32()
+        elif tp.value in (pv.TYPE_VOID_PTR, pv.TYPE_VOID_PTR_PTR):
+            raise ValueError("Cannot handle arguments of type pointer")
+        else:
+            raise NotImplementedError("Argument of unknown type %d", tp.value)
+        logging.debug("Reading parameter %x of type %r", param, content)
+        
+        # read the parameter
+        self.pvcam.pl_get_param(self._handle, param, value, byref(content))
+        return content.value
+    
+    def set_param(self, param, value):
+        """
+        Write the current value of a parameter.
+        param (int): parameter ID (cf pv.PARAM_*)
+        value (should be of the right type): value to write
+        """
+        # find out the type of the parameter
+        tp = c_uint16()
+        self.pvcam.pl_get_param(self._handle, param, pv.ATTR_TYPE, byref(tp))
+        if tp.value == pv.TYPE_CHAR_PTR:
+            content = str(value)
+        elif tp.value in self.pv_type_to_ctype:
+            content = self.pv_type_to_ctype[tp.value](value)
+        elif tp.value == pv.TYPE_ENUM:
+            # It'd be better to use get_enum_param()
+            content = c_int32(value)
+        elif tp.value in (pv.TYPE_VOID_PTR, pv.TYPE_VOID_PTR_PTR):
+            raise ValueError("Cannot handle arguments of type pointer")
+        else:
+            raise NotImplementedError("Argument of unknown type %d", tp.value)
+
+        logging.debug("Writting parameter %x as %r", param, content)        
+        self.pvcam.pl_set_param(self._handle, param, byref(content))
+        
+    def _int2version(self, raw):
+        """
+        Convert a raw value into version, according to the pvcam convention
+        raw (int)
+        returns (string)
+        """
+        logging.debug("version = %x", raw)
+        ver = []
+        ver.insert(0, raw & 0x0f) # lowest 4 bits = trivial version
+        raw >>= 4
+        ver.insert(0, raw & 0x0f) # next 4 bits = minor version
+        raw >>= 4
+        ver.insert(0, raw & 0xff) # highest 8 bits = major version
+        return '.'.join(str(x) for x in ver)
+        
+    def getSwVersion(self):
+        """
+        returns a simplified software version information
+        or None if unknown
+        """
+        try:
+            ddi_ver = c_uint16()
+            self.pvcam.pl_ddi_get_ver(byref(ddi_ver))
+            interface = self._int2version(ddi_ver.value)
+        except PVCamError:
+            interface = "unknown"
+        
+        try:
+            pv_ver = c_uint16()
+            self.pvcam.pl_pvcam_get_ver(byref(pv_ver))
+            sdk = self._int2version(pv_ver.value)
+        except PVCamError:
+            sdk = "unknown"
+        
+        try:
+            driver = self._int2version(self.get_param(pv.PARAM_DD_VERSION))
+        except PVCamError:
+            driver = "unknown"
+
+        return "driver: %s, interface: %s, SDK: %s" % (driver, interface, sdk)
+
+    def getHwVersion(self):
+        """
+        returns a simplified hardware version information
+        """
+        versions = {pv.PARAM_CAM_FW_VERSION: "firmware",
+                    # Fails on PI pvcam (although PARAM_DD_VERSION manages to
+                    # read the firmware version inside the kernel)
+                    pv.PARAM_PCI_FW_VERSION: "firmware board",
+                    pv.PARAM_CAM_FW_FULL_VERSION: "firmware (full)",
+                    pv.PARAM_CAMERA_TYPE: "camera type",
+                    }
+        ret = ""
+        for pid, name in versions.items():
+            try:
+                value = self.get_param(pid)
+                ret += "%s: %s " % (name, value)
+            except PVCamError:
+#                logging.exception("param %x cannot be accessed", pid)
+                pass # skip
+            
+        if ret == "":
+            ret = "unknown"
+        return ret
+        
+    def getModelName(self):
+        """
+        returns (string): name of the camara
+        """
+        model_name = "Princeton Instruments camera"
+        
+        try:
+            model_name += " with CCD '%s'" % self.get_param(pv.PARAM_CHIP_NAME) 
+        except PVCamError:
+            pass # unknown
+        
+        try:
+            model_name += " (s/n: %s)" % self.get_param(pv.PARAM_SERIAL_NUM)
+        except PVCamError:
+            pass # unknown
+        
+        return model_name
+    
+    def GetSensorSize(self):
         """
         return 2-tuple (int, int): width, height of the detector in pixel
         """
-        width, height = c_int32(), c_int32()
-        self.atcore.GetDetector(byref(width), byref(height))
-        return width.value, height.value
-                
+        width = self.get_param(pv.PARAM_SER_SIZE, pv.ATTR_DEFAULT)
+        height = self.get_param(pv.PARAM_PAR_SIZE, pv.ATTR_DEFAULT)
+        return width, height
+    
     def GetPixelSize(self):
         """
-        return 2-tuple float, float: width, height of one pixel in um
+        return 2-tuple float, float: width, height of one pixel in m
         """
-        width, height = c_float(), c_float()
-        self.atcore.GetPixelSize(byref(width), byref(height))
-        return width.value, height.value
+        # values from the driver are in nm
+        width = self.get_param(pv.PARAM_PIX_SER_DIST, pv.ATTR_DEFAULT) * 1e-9
+        height = self.get_param(pv.PARAM_PIX_PAR_DIST, pv.ATTR_DEFAULT) * 1e-9
+        return width, height
+
+    def GetTemperature(self):
+        """
+        returns (float) the current temperature of the captor in C
+        """
+        # it's in 1/100 of C
+        temp = self.get_param(pv.PARAM_TEMP) / 100
+        return temp
     
     def GetTemperatureRange(self):
-        mint, maxt = c_int(), c_int()
-        self.atcore.GetTemperatureRange(byref(mint), byref(maxt))
-        return mint.value, maxt.value
-    
-    def GetStatus(self):
-        """
-        return int: status, as in AndorV2DLL.DRV_*
-        """
-        status = c_int()
-        self.atcore.GetStatus(byref(status))
-        return status.value
+        mint = self.get_param(pv.PARAM_TEMP_SETPOINT, pv.ATTR_MIN) / 100
+        maxt = self.get_param(pv.PARAM_TEMP_SETPOINT, pv.ATTR_MAX) / 100
+        return mint, maxt
     
     def GetMaximumBinning(self, readmode):
         """
@@ -409,180 +550,24 @@ class PVCam(model.DigitalCamera):
         self.atcore.GetMaximumBinning(readmode, 1, byref(maxv))
         return maxh.value, maxv.value
     
-    def GetTemperature(self):
-        """
-        returns (int) the current temperature of the captor in C
-        """
-        temp = c_int()
-        # It returns the status of the temperature via error code (stable, 
-        # not yet reached...) but we don't care
-        status = self.atcore.GetTemperature(byref(temp))
-        return temp.value
-        
-    def GetAcquisitionTimings(self):
-        """
-        returns (3-tuple float): exposure, accumulate, kinetic time in seconds
-        """
-        exposure, accumulate, kinetic = c_float(), c_float(), c_float() 
-        self.atcore.GetAcquisitionTimings(byref(exposure), byref(accumulate), byref(kinetic))
-        return exposure.value, accumulate.value, kinetic.value
-
-    def GetVersionInfo(self):
-        """
-        return (2-tuple string, string): the driver and sdk info 
-        """
-        sdk_str = create_string_buffer(80) # that should always fit!
-        self.atcore.GetVersionInfo(AndorV2DLL.AT_SDKVersion, sdk_str,
-                                   c_uint32(sizeof(sdk_str)))
-        driver_str = create_string_buffer(80)
-        self.atcore.GetVersionInfo(AndorV2DLL.AT_DeviceDriverVersion, driver_str,
-                                   c_uint32(sizeof(driver_str)))
-
-        return driver_str.value, sdk_str.value
-    
-    def WaitForAcquisition(self, timeout=None):
-        """
-        timeout (float or None): maximum time to wait in second (None for infinite)
-        """
-        if timeout is None:
-            self.atcore.WaitForAcquisition()
-        else:
-            logging.debug("waiting for acquisition, maximum %f s", timeout)
-            timeout_ms = c_uint(int(round(timeout * 1e3))) # ms
-            self.atcore.WaitForAcquisitionTimeOut(timeout_ms)
-
-    def GetReadoutRates(self):
-        """
-        returns (set of float): all available readout rates, in Hz
-        """  
-        # Each channel has different horizontal shift speeds possible
-        # and different (preamp) gain
-        hsspeeds = set()
-        
-        nb_channels = c_int()
-        nb_hsspeeds = c_int()
-        hsspeed = c_float()
-        self.atcore.GetNumberADChannels(byref(nb_channels))
-        for channel in range(nb_channels.value):
-            self.atcore.GetNumberHSSpeeds(channel, self._output_amp, byref(nb_hsspeeds))
-            for i in range(nb_hsspeeds.value):
-                self.atcore.GetHSSpeed(channel, self._output_amp, i, byref(hsspeed))
-                # FIXME: Doc says iStar and Classic systems report speed in microsecond per pixel
-                hsspeeds.add(hsspeed.value * 10e6)
-        
-        return hsspeeds
-
-    def _getChannelHSSpeed(self, speed):
-        """
-        speed (0<float): a valid speed in Hz
-        returns (2-tuple int, int): the indexes of the channel and hsspeed
-        """
-        nb_channels = c_int()
-        nb_hsspeeds = c_int()
-        hsspeed = c_float()
-        self.atcore.GetNumberADChannels(byref(nb_channels))
-        for channel in range(nb_channels.value):
-            self.atcore.GetNumberHSSpeeds(channel, self._output_amp, byref(nb_hsspeeds))
-            for i in range(nb_hsspeeds.value):
-                self.atcore.GetHSSpeed(channel, self._output_amp, i, byref(hsspeed))
-                if speed == hsspeed.value * 10e6:
-                    return channel, i
-
-        raise KeyError("Couldn't find readout rate %f", speed)
-    
-    def SetPreAmpGain(self, gain):
-        """
-        set the pre-amp-gain 
-        gain (float): wished gain (multiplication, no unit), should be a correct value
-        return (float): the actual gain set
-        """
-        assert((0 <= gain))
-        
-        gains = self.GetPreAmpGains()
-        self.atcore.SetPreAmpGain(index_closest(gain, gains))
-    
-    def GetPreAmpGains(self):
-        """
-        return (list of float): gain (multiplication, no unit) ordered by index
-        """
-        gains = []
-        nb_gains = c_int()
-        self.atcore.GetNumberPreAmpGains(byref(nb_gains))
-        for i in range(nb_gains.value):
-            gain = c_float()
-            self.atcore.GetPreAmpGain(i, byref(gain))
-            gains.append(gain.value)
-        return gains
-
     # High level methods
-    def select(self):
-        """
-        ensure the camera is selected to be managed
-        """
-        assert self.handle is not None
-        
-        # Do not select it if it's already selected
-        current_handle = c_int32()
-        self.atcore.GetCurrentCamera(byref(current_handle))
-        if current_handle != self.handle:
-            self.atcore.SetCurrentCamera(self.handle)
-    
-    def hasFeature(self, feature):
-        """
-        return whether a feature is supported by the camera
-        Need to be selected
-        feature (int): one of the AndorCapabilities.FEATURE_* constant (can be OR'd)
-        return boolean
-        """
-        caps = self.GetCapabilities()
-        return bool(caps.Features & feature)
-    
-    def hasSetFunction(self, function):
-        """
-        return whether a set function is supported by the camera
-        Need to be selected
-        function (int): one of the AndorCapabilities.SETFUNCTION_* constant (can be OR'd)
-        return boolean
-        """
-        caps = self.GetCapabilities()
-        return bool(caps.SetFunctions & function)
-    
-    def hasGetFunction(self, function):
-        """
-        return whether a get function is supported by the camera
-        Need to be selected
-        function (int): one of the AndorCapabilities.GETFUNCTION_* constant (can be OR'd)
-        return boolean
-        """
-        caps = self.GetCapabilities()
-        return bool(caps.GetFunctions & function)
-
     def setTargetTemperature(self, temp):
         """
-        Change the targeted temperature of the CCD.
-        The cooler the less dark noise. Not everything is possible, but it will
-        try to accommodate by targeting the closest temperature possible.
-        temp (-300 < float < 100): temperature in C
+        Change the targeted temperature of the CCD. The cooler the less dark noise.
+        temp (-300 < float < 100): temperature in C, should be within the allowed range
         """
         assert((-300 <= temp) and (temp <= 100))
+        # it's in 1/100 of C
+        # TODO: use increment?
+        self.set_param(pv.PARAM_TEMP_SETPOINT, int(round(temp * 100)))
         
-        self.select()
-        if not self.hasSetFunction(AndorCapabilities.SETFUNCTION_TEMPERATURE):
-            return
-        
-        if self.hasGetFunction(AndorCapabilities.GETFUNCTION_TEMPERATURERANGE):
-            ranges = self.GetTemperatureRange()
-            temp = sorted(ranges + (temp,))[1]
-        
-        # TODO Clara must be cooled to the specified temperature: -45 C with fan, -15 C without.
-        
-        temp = int(round(temp))
-        self.atcore.SetTemperature(temp)
-        if temp > 20:
-            self.atcore.CoolerOFF()
-        else:
-            self.atcore.CoolerON()
+        # TODO
+#        if temp > 20:
+#            self.atcore.CoolerOFF()
+#        else:
+#            self.atcore.CoolerON()
 
+        temp = self.get_param(pv.PARAM_TEMP_SETPOINT) / 100
         # TODO: a more generic function which set up the fan to the right speed
         # according to the target temperature?
         return float(temp)
@@ -591,7 +576,7 @@ class PVCam(model.DigitalCamera):
         """
         to be called at regular interval to update the temperature
         """
-        if self.handle is None:
+        if self._handle is None:
             # might happen if terminate() has just been called
             logging.info("No temperature update, camera is stopped")
             return
@@ -601,7 +586,7 @@ class PVCam(model.DigitalCamera):
         # it's read-only, so we change it only via _value
         self.temperature._value = temp
         self.temperature.notify(self.temperature.value)
-        logging.debug("temp is %d", temp)
+        logging.debug("temp is %s", temp)
         
     def setFanSpeed(self, speed):
         """
@@ -623,60 +608,7 @@ class PVCam(model.DigitalCamera):
         val = values[int(round(speed * (len(values) - 1)))]
         self.atcore.SetFanMode(val)
         return (float(val) / max(values))
-    
-    def getModelName(self):
-        self.select()
-        caps = self.GetCapabilities()
-        model_name = "Andor " + AndorCapabilities.CameraTypes.get(caps.CameraType, "unknown")
-        
-        headmodel = create_string_buffer(260) # MAX_PATH
-        self.atcore.GetHeadModel(headmodel)
-    
-        try:
-            serial = c_int32()
-            self.atcore.GetCameraSerialNumber(byref(serial))
-            serial_str = " (s/n: %d)" % serial.value
-        except AndorV2Error:
-            serial_str = "" # unknown
-        
-        return "%s %s%s" % (model_name, headmodel.value, serial_str)
-    
-    def getSwVersion(self):
-        """
-        returns a simplified software version information
-        or None if unknown
-        """
-        self.select()
-        try:
-            driver, sdk = self.GetVersionInfo()
-            
-        except AndorV2Error:
-            return "unknown"
-        return "driver: '%s', SDK:'%s'" % (driver, sdk)
-    
-    def getHwVersion(self):
-        """
-        returns a simplified hardware version information
-        """
-        self.select()
-        try:
-            eprom, coffile = c_uint(), c_uint()
-            vxdrev, vxdver = c_uint(), c_uint() # same as driver
-            dllrev, dllver = c_uint(), c_uint() # same as sdk
-            self.atcore.GetSoftwareVersion(byref(eprom), byref(coffile),
-                byref(vxdrev), byref(vxdver), byref(dllrev), byref(dllver))
 
-            PCB, Decode = c_uint(), c_uint()
-            dummy1, dummy2 = c_uint(), c_uint()
-            CameraFirmwareVersion, CameraFirmwareBuild = c_uint(), c_uint()
-            self.atcore.GetHardwareVersion(byref(PCB), byref(Decode), 
-                byref(dummy1), byref(dummy2), byref(CameraFirmwareVersion), byref(CameraFirmwareBuild))
-        except AndorV2Error:
-            return "unknown"
-        
-        return ("PCB: %d/%d, firmware: %d.%d, EPROM: %d/%d" %
-                (PCB.value, Decode.value, CameraFirmwareVersion.value,
-                 CameraFirmwareBuild.value, eprom.value, coffile.value))
     
     def _storeBinning(self, binning):
         """
@@ -1106,21 +1038,17 @@ class PVCam(model.DigitalCamera):
         """
         Must be called at the end of the usage
         """
-        if self.temp_timer is not None:
-            self.temp_timer.cancel()
-            self.temp_timer = None
+        if self._temp_timer is not None:
+            self._temp_timer.cancel()
+            self._temp_timer = None
         
-        if self.handle is not None:
-            # TODO for some hardware we need to wait the temperature is above -20°C
-            try:
-                self.atcore.SetCoolerMode(1) # Temperature is maintained on ShutDown
-                # FIXME: not sure if it does anything (with Clara)
-            except:
-                pass
+        if self._handle is not None:
+            # don't touch the temperature target/cooling
 
             logging.debug("Shutting down the camera")
-            self.Shutdown()
-            self.handle = None
+            self.pvcam.pl_cam_close(self._handle)
+            self._handle = None
+            del self.pvcam
             
     def __del__(self):
         self.terminate()
