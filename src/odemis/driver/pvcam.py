@@ -27,7 +27,6 @@ from ctypes import *
 from odemis import __version__, model, util
 import gc
 import logging
-import math
 import numpy
 import os
 import threading
@@ -110,7 +109,11 @@ class PVCamDLL(CDLL):
     def __del__(self):
         self.pl_pvcam_uninit()
 
-   
+# all the values that say the acquisition is in progress 
+STATUS_IN_PROGRESS = [pv.ACQUISITION_IN_PROGRESS, pv.EXPOSURE_IN_PROGRESS, 
+                      pv.READOUT_IN_PROGRESS]
+STATUS_
+
 class PVCam(model.DigitalCamera):
     """
     Represents one PVCam camera and provides all the basic interfaces typical of
@@ -118,6 +121,9 @@ class PVCam(model.DigitalCamera):
     This implementation is for the Roper/PI/Photometrics PVCam library... or at
     least for the PI version.
     
+    This is tested on Linux with SDK 2.7, using the documentation found here:
+    ftp://ftp.piacton.com/Public/Manuals/Princeton%20Instruments/PVCAM%202.7%20Software%20User%20Manual.pdf
+
     Be aware that the library resets almost all the values to their default 
     values after initialisation. The library doesn't call the dimensions 
     horizontal/vertical but serial/parallel (because the camera could be rotated).
@@ -127,7 +133,7 @@ class PVCam(model.DigitalCamera):
     It offers mostly a couple of VigilantAttributes to modify the settings, and a 
     DataFlow to get one or several images from the camera.
     
-    It also provide low-level methods corresponding to the SDK functions.
+    It also provides low-level methods corresponding to the SDK functions.
     """
     
     def __init__(self, name, role, device, **kwargs):
@@ -460,6 +466,18 @@ class PVCam(model.DigitalCamera):
             ret[content.value] = desc.value
         return ret
     
+    def exp_check_status(self):
+        """
+        Checks the status of the current exposure (acquisition)
+        returns (int): status as in pv.* (cf documentation)
+        raises:
+            PVCamError (with the exact error): if status would be READOUT_FAILED 
+        """
+        status = c_int16()
+        byte_cnt = c_uint32() # number of bytes already acquired: unused
+        self.pvcam.pl_exp_check_status(self._handle, byref(status), byref(byte_cnt))
+        return status.value
+        
     def _int2version(self, raw):
         """
         Convert a raw value into version, according to the pvcam convention
@@ -585,6 +603,7 @@ class PVCam(model.DigitalCamera):
         return the maximum binning allowable in horizontal and vertical
          dimension for a particular readout mode.
         """
+        # FIXME
         assert(readmode in range(5))
         maxh, maxv = c_int(), c_int()
         self.atcore.GetMaximumBinning(readmode, 0, byref(maxh))
@@ -897,11 +916,12 @@ class PVCam(model.DigitalCamera):
         self._prev_settings = [new_image_settings, self._exposure_time, 
                                self._readout_rate, self._gain]
     
-    def _allocate_buffer(self, size):
+    def _allocate_buffer(self, length):
         """
+        length (int)
         returns a cbuffer of the right size for an image
         """
-        cbuffer = (c_uint16 * (size[0] * size[1]))() # empty array
+        cbuffer = (c_uint16 * length)() # empty array
         return cbuffer
     
     def _buffer_as_array(self, cbuffer, size, metadata=None):
@@ -962,12 +982,9 @@ class PVCam(model.DigitalCamera):
         self.wait_stopped_flow() # no-op is the thread is not running
         self.acquisition_lock.acquire()
         
-        self.select()
-        assert(self.GetStatus() == AndorV2DLL.DRV_IDLE) # Just to be sure
-        
         # Set up thread
         self.acquire_thread = threading.Thread(target=self._acquire_thread_run,
-                name="andorcam acquire flow thread",
+                name="PVCam acquire flow thread",
                 args=(callback,))
         self.acquire_thread.start()
 
@@ -976,40 +993,44 @@ class PVCam(model.DigitalCamera):
         The core of the acquisition thread. Runs until acquire_must_stop is set.
         """
         need_reinit = True
+        retries = 0
+        cbuffer = None
         while not self.acquire_must_stop.is_set():
             # need to stop acquisition to update settings
             if need_reinit or self._need_update_settings():
                 try:
-                    if self.GetStatus() == AndorV2DLL.DRV_ACQUIRING:
-                        self.atcore.AbortAcquisition()
+                    # cancel acquisition if it's still going on
+                    if self.exp_check_status() in STATUS_IN_PROGRESS:
+                        self.pvcam.pl_exp_abort()
                         time.sleep(0.1)
-                except AndorV2Error as (errno, strerr):
-                    # it was already aborted
-                    if errno != 20073: # DRV_IDLE
-                        self.acquisition_lock.release()
-                        self.acquire_must_stop.clear()
-                        raise
-                # We don't use the kinetic mode as it might go faster than we can
-                # process them.
-                self.atcore.SetAcquisitionMode(5) # 5 = Run till abort
-                # Seems exposure needs to be re-set after setting acquisition mode
-                self._prev_settings[1] = None # 1 => exposure time
-                self._update_settings()
-                self.atcore.SetKineticCycleTime(0) # don't wait between acquisitions
-                self.atcore.StartAcquisition()
+                except PVCamError:
+                    pass # already done?
+                # With circular buffer, we could go about up to 10% faster, but
+                # everything is more complex (eg: odd buffer size will block the
+                # PIXIS). So we keep it simple.
                 
+                region = self._computeRegion()
                 size = self.resolution.value
-                exposure, accumulate, kinetic = self.GetAcquisitionTimings()
-                logging.debug("Accumulate time = %f, kinetic = %f", accumulate, kinetic)
-                readout = size[0] * size[1] * self._metadata[model.MD_READOUT_TIME] # s
-                # kinetic should be approximately same as exposure + readout => play safe
-                duration = max(kinetic, exposure + readout)
+                
+                # TODO: prepare
+                self.pvcam.pl_exp_init_seq()
+                blength = c_uint32()
+                self.pvcam.pl_exp_setup_seq(self._handle, 1, 1, region, pv.TIMED_MODE, exp_time, byref(blength))
+                cbuffer = self._allocate_buffer(blength.value) # TODO shall allocate a new buffer every time?
+                
+                readout_sw = size[0] * size[1] * self._metadata[model.MD_READOUT_TIME] # s
+                # should be more or less the same as:
+                readout = self.get_param(pv.PARAM_READOUT_TIME) * 1e-3 # s
+                logging.debug("Computed readout time of %g s, while sdk says %g s",
+                              readout_sw, readout)
+                
+                duration = exposure + readout
                 need_reinit = False
     
             # Acquire the images
             metadata = dict(self._metadata) # duplicate
             metadata[model.MD_ACQ_DATE] = time.time() # time at the beginning
-            cbuffer = self._allocate_buffer(size)
+            self.pvcam.pl_exp_start_seq(self._handle, cbuffer)
             
             # first we wait ourselves the typical time (which might be very long)
             # while detecting requests for stop
@@ -1019,34 +1040,38 @@ class PVCam(model.DigitalCamera):
             
             # then wait a bounded time to ensure the image is acquired
             try:
-                self.WaitForAcquisition(1)
-                # if the must_stop flag has been set while we were waiting
-                if self.acquire_must_stop.is_set():
-                    break
+                timeout = time.time() + 1
+                while self.exp_check_status() != pv.READOUT_COMPLETE:
+                    if time.time() < timeout:
+                        raise IOError("Timeout")
+                    # check if we should stop
+                    must_stop = self.acquire_must_stop.wait(0.01)
+                    if must_stop:
+                        break
                 
-                # it might have acquired _several_ images in the time to process
-                # one image. In this case we discard all but the last one.
-                self.atcore.GetMostRecentImage16(cbuffer, size[0] * size[1])
-            except AndorV2Error as (errno, strerr):
-                # Note: with SDK 2.93 it will happen after a few image grabbed, and
-                # there is no way to recover
-                if errno == 20024: # DRV_NO_NEW_DATA
-                    self.atcore.CancelWait()
-                    # -999°C means the camera is gone
-                    if self.GetTemperature() == -999:
-                        logging.error("Camera seems to have disappeared, will try to reinitialise it")
-                        self.Reinitialize()
-                    else:  
-                        time.sleep(0.1)
-                        logging.warning("trying again to acquire image after error %s", strerr)
-                    need_reinit = True
-                    continue
-                else:
+                if must_stop:
+                    break
+            except (IOError, PVCamError) as exp:
+                if retries > 5:
+                    logging.error("Too many failures to acquire an image")
                     self.acquisition_lock.release()
                     self.acquire_must_stop.clear()
                     raise
                 
+                retries += 1
+                # TODO: any way to detect the camera is completly gone?
+#                        self.Reinitialize()
+                try:
+                    self.pvcam.pl_exp_abort()
+                except PVCamError:
+                    pass
+                time.sleep(0.1)
+                logging.exception("trying again to acquire image after error")
+                need_reinit = True
+                continue
+            
             array = self._buffer_as_array(cbuffer, size, metadata)
+            retries = 0
             callback(array)
          
             # force the GC to non-used buffers, for some reason, without this
@@ -1055,16 +1080,22 @@ class PVCam(model.DigitalCamera):
      
         # ending cleanly
         try:
-            if self.GetStatus() == AndorV2DLL.DRV_ACQUIRING:
-                self.atcore.AbortAcquisition()
-        except AndorV2Error as (errno, strerr):
-            # it was already aborted
-            if errno != 20073: # DRV_IDLE
-                self.acquisition_lock.release()
-                logging.debug("Acquisition thread closed after giving up")
-                self.acquire_must_stop.clear()
-                raise
-        self.atcore.FreeInternalMemory() # TODO not sure it's needed
+            if self.exp_check_status() in STATUS_IN_PROGRESS:
+                self.pvcam.pl_exp_abort()
+        except PVCamError:
+            pass # status reported an error
+        
+        try:
+            if cbuffer:
+                self.pvcam.pl_exp_finish_seq(self._handle, cbuffer, 0)
+        except PVCamError:
+            logging.exception("Failed to finish the acquisition properly")
+    
+        try:
+            self.pvcam.pl_exp_uninit_seq()
+        except PVCamError:
+            logging.exception("Failed to finish the acquisition properly")
+        
         self.acquisition_lock.release()
         logging.debug("Acquisition thread closed")
         self.acquire_must_stop.clear()
