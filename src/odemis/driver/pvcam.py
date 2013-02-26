@@ -22,10 +22,12 @@ You should have received a copy of the GNU General Public License along with Ode
 # Note that libpvcam is only provided for x86 32-bits
 
 from __future__ import division
+from . import pvcam_h as pv
 from ctypes import *
-from odemis import __version__, model
+from odemis import __version__, model, util
 import gc
 import logging
+import math
 import numpy
 import os
 import threading
@@ -35,7 +37,6 @@ import weakref
 # This python file is automatically generated from the pvcam.h include file by:
 # h2xml pvcam.h -c -I . -o pvcam_h.xml
 # xml2py pvcam_h.xml -o pvcam_h.py
-from . import pvcam_h as pv
 
 
 class PVCamError(Exception):
@@ -117,6 +118,12 @@ class PVCam(model.DigitalCamera):
     This implementation is for the Roper/PI/Photometrics PVCam library... or at
     least for the PI version.
     
+    Be aware that the library resets almost all the values to their default 
+    values after initialisation. The library doesn't call the dimensions 
+    horizontal/vertical but serial/parallel (because the camera could be rotated).
+    But we stick to: horizontal = serial (max = width - 1)
+                     vertical = parallel (max = height - 1)
+    
     It offers mostly a couple of VigilantAttributes to modify the settings, and a 
     DataFlow to get one or several images from the camera.
     
@@ -134,14 +141,13 @@ class PVCam(model.DigitalCamera):
         # TODO: allow device to be a string, in which case it will look for 
         # the given name => might be easier to find the right camera on systems
         # will multiple cameras.
-        self._device = device # for reinit only
         model.DigitalCamera.__init__(self, name, role, **kwargs)
 
         # so that it's really not possible to use this object in case of error
         self._handle = None
         self._temp_timer = None
         try:
-            self._name = self.cam_get_name(device)
+            self._name = self.cam_get_name(device) # for reinit
         except PVCamError:
             raise IOError("Failed to find PI PVCam camera %d" % device)
 
@@ -177,7 +183,7 @@ class PVCam(model.DigitalCamera):
         # put the detector pixelSize
         psize = self.GetPixelSize()
         self.pixelSize = model.VigilantAttribute(psize, unit="m", readonly=True)
-        self._metadata[model.MD_SENSOR_PIXEL_SIZE] = self.pixelSize.value
+        self._metadata[model.MD_SENSOR_PIXEL_SIZE] = psize
         
         # Strong cooling for low (image) noise
         try:
@@ -190,24 +196,46 @@ class PVCam(model.DigitalCamera):
             temp = self.GetTemperature()
             self.temperature = model.FloatVA(temp, unit="C", readonly=True)
             self._metadata[model.MD_SENSOR_TEMP] = temp
-            self._temp_timer = RepeatingTimer(10, self.updateTemperatureVA,
+            self._temp_timer = util.RepeatingTimer(100, self.updateTemperatureVA, # DEBUG -> 10
                                               "PVCam temperature update")
             self._temp_timer.start()
         except PVCamError:
             logging.debug("Camera doesn't seem to provide temperature information")
+            
+        # TODO: fan speed (but it seems PIXIS cannot change it anyway)        
+            # max speed
+#            self.fanSpeed = model.FloatContinuous(1.0, [0.0, 1.0], unit="",
+#                                        setter=self.setFanSpeed) # ratio to max speed
+#            self.setFanSpeed(1.0)
+        
+        self._setStaticSettings()
+
+        # gain        
+        # The PIXIS has 3 gains (x1 x2 x4) + 2 output amplifiers (~x1 x4)
+        # => we fix the OA to low noise (x1), so it's just the gain to change,
+        # but we could also allow the user to pick the gain as a multiplication of
+        # gain and OA? 
+        self._gains = self._getAvailableGains()
+        gain_choices = set(self._gains.values())
+        self._gain = min(gain_choices) # default to low gain (low noise)
+        self.gain = model.FloatEnumerated(self._gain, gain_choices, unit="",
+                                          setter=self._setGain)
+        self._setGain(self._gain)
+        
+        # read out rate 
+        self._readout_rates = self._getAvailableReadoutRates() # needed by _setReadoutRate()
+        ror_choices = set(self._readout_rates.values())
+        self._readout_rate = max(ror_choices) # default to fast acquisition
+        self.readoutRate = model.FloatEnumerated(self._readout_rate, ror_choices,
+                                                 unit="Hz", setter=self._setReadoutRate)
+        self._setReadoutRate(self._readout_rate)
         
         return
-    
-        if self.hasFeature(AndorCapabilities.FEATURES_FANCONTROL):
-            # max speed
-            self.fanSpeed = model.FloatContinuous(1.0, [0.0, 1.0], unit="",
-                                        setter=self.setFanSpeed) # ratio to max speed
-            self.setFanSpeed(1.0)
 
-        # binning is horizontal, vertical (used by resolutionFitter()), but odemis
+        # binning is (horizontal, vertical), but odemis
         # only supports same value on both dimensions (for simplification)
         self._binning = (1,1) # 
-        self._image_rect = (1, resolution[0], 1, resolution[1])
+        self._image_rect = (0, resolution[0]-1, 0, resolution[1]-1)
         # need to be before binning, as it is modified when changing binning         
         self.resolution = model.ResolutionVA(resolution, [(1, 1), resolution], 
                                              setter=self.setResolution)
@@ -223,26 +251,15 @@ class PVCam(model.DigitalCamera):
         self._exposure_time = 1.0 # s
         self.exposureTime = model.FloatContinuous(self._exposure_time, range_exp,
                                                   unit="s", setter=self.setExposureTime)
+        # TODO becareful with PARAM_EXP_RES (ms/us)
         
-        # For the Clara: 0 = conventional, 1 = Extended Near Infra-Red
-        self._output_amp = 0 # less noise
-        
-        ror_choices = set(self.GetReadoutRates())
-        self._readout_rate = max(ror_choices) # default to fast acquisition
-        self.readoutRate = model.FloatEnumerated(self._readout_rate, ror_choices,
-                                                 unit="Hz", setter=self.setReadoutRate)
-        
-        gain_choices = set(self.GetPreAmpGains())
-        self._gain = min(gain_choices) # default to high gain
-        self.gain = model.FloatEnumerated(self._gain, gain_choices, unit="",
-                                          setter=self.setGain)
         
         
         self.acquisition_lock = threading.Lock()
         self.acquire_must_stop = threading.Event()
         self.acquire_thread = None
         
-        self.data = AndorCam2DataFlow(self)
+        self.data = PVCamDataFlow(self)
         logging.debug("Camera component ready to use.")
     
     def _setStaticSettings(self):
@@ -250,19 +267,21 @@ class PVCam(model.DigitalCamera):
         Set up all the values that we don't need to change after.
         Should only be called at initialisation
         """
-        # needed for the AOI
-        self.atcore.SetReadMode(AndorV2DLL.RM_IMAGE)
+        # Set the output amplifier to lowest noise
+        try:
+            # Try to set to low noise, if existing, otherwise: default value
+            aos = self.get_enum_available(pv.PARAM_READOUT_PORT)
+            if pv.READOUT_PORT_LOW_NOISE in aos:
+                self.set_param(pv.PARAM_READOUT_PORT, pv.READOUT_PORT_LOW_NOISE)
+            else:
+                ao = self.get_param(pv.PARAM_READOUT_PORT, pv.ATTR_DEFAULT)
+                self.set_param(pv.PARAM_READOUT_PORT, ao)
+            self._output_amp = self.get_param(pv.PARAM_READOUT_PORT)
+        except PVCamError:
+            pass # maybe doesn't even have this parameter
         
-        # Doesn't seem to work for the clara (or single scan mode?)
-#        self.atcore.SetFilterMode(2) # 2 = on
-#        metadata['Filter'] = "Cosmic Ray filter"
+        # TODO change PARAM_COLOR_MODE to greyscale? => probably always default
 
-        # TODO: according to doc: if AC_FEATURES_SHUTTEREX you MUST use SetShutterEx()
-        # TODO: 20, 20 ms for open/closing times matter in auto? Should be 0, more?
-        # Clara : 20, 20 gives horrible results. Default for Andor Solis: 10, 0
-        # Apparently, if there is no shutter, it should be 0, 0
-        self.atcore.SetShutter(1, 0, 0, 0) # mode 0 = auto
-        self.atcore.SetTriggerMode(0) # 0 = internal
     
     def getMetadata(self):
         return self._metadata
@@ -282,9 +301,6 @@ class PVCam(model.DigitalCamera):
         """
         Waits for the camera to reappear and reinitialise it. Typically
         useful in case the user switched off/on the camera.
-        Note that it's hard to detect the camera is gone. Hints are :
-         * temperature is -999
-         * WaitForAcquisition returns DRV_NO_NEW_DATA
         """
         # stop trying to read the temperature while we reinitialize
         if self._temp_timer is not None:
@@ -293,9 +309,10 @@ class PVCam(model.DigitalCamera):
         
         # This stops the driver's internal threads
         try:
-            self.atcore.ShutDown()
-        except AndorV2Error:
+            self.pvcam.pl_pvcam_uninit()
+        except PVCamError:
             logging.warning("Reinitialisation failed to shutdown the driver")
+        # FIXME
         
         # wait until the device is available
         # it's a bit tricky if there are more than one camera, but at least
@@ -310,7 +327,7 @@ class PVCam(model.DigitalCamera):
             self.handle = self.GetCameraHandle(self._device)
             self.select()
             self.Initialize()
-        except AndorV2Error:
+        except PVCamError:
             # Let's give it a second chance
             try:
                 self.handle = self.GetCameraHandle(self._device)
@@ -328,13 +345,10 @@ class PVCam(model.DigitalCamera):
         self.setTargetTemperature(self.targetTemperature.value)
         self.setFanSpeed(self.fanSpeed.value)
     
-        self._temp_timer = RepeatingTimer(10, self.updateTemperatureVA,
+        self._temp_timer = util.RepeatingTimer(10, self.updateTemperatureVA,
                                          "AndorCam2 temperature update")
         self._temp_timer.start()
         
-    def Shutdown(self):
-        self.atcore.ShutDown()
-    
     def cam_get_name(self, num):
         """
         return the name, from the device number
@@ -367,10 +381,13 @@ class PVCam(model.DigitalCamera):
          pv.TYPE_UNS64: c_uint64,
          pv.TYPE_FLT64: c_float,
          pv.TYPE_BOOLEAN: c_byte,
+         pv.TYPE_ENUM: c_uint32, 
          }
     def get_param(self, param, value=pv.ATTR_CURRENT):
         """
-        Read the current (or other) value of a parameter
+        Read the current (or other) value of a parameter.
+        Note: for the enumerated parameters, this it the actual value, not the 
+        index.
         param (int): parameter ID (cf pv.PARAM_*)
         value (int from pv.ATTR_*): which value to read (current, default, min, max, increment)
         return (value): the value of the parameter, whose type depend on the parameter
@@ -388,9 +405,6 @@ class PVCam(model.DigitalCamera):
             content = create_string_buffer(count.value)
         elif tp.value in self.pv_type_to_ctype:
             content = self.pv_type_to_ctype[tp.value]()
-        elif tp.value == pv.TYPE_ENUM:
-            # It'd be better to use get_enum_param()
-            content = c_int32()
         elif tp.value in (pv.TYPE_VOID_PTR, pv.TYPE_VOID_PTR_PTR):
             raise ValueError("Cannot handle arguments of type pointer")
         else:
@@ -403,9 +417,13 @@ class PVCam(model.DigitalCamera):
     
     def set_param(self, param, value):
         """
-        Write the current value of a parameter.
+        Write the current value of a parameter. 
+        Note: for the enumerated parameter, this is the actual value to set, not
+        the index.
         param (int): parameter ID (cf pv.PARAM_*)
         value (should be of the right type): value to write
+        Warning: it seems to not always complain if the value written is incorrect,
+        just using default instead.
         """
         # find out the type of the parameter
         tp = c_uint16()
@@ -414,24 +432,40 @@ class PVCam(model.DigitalCamera):
             content = str(value)
         elif tp.value in self.pv_type_to_ctype:
             content = self.pv_type_to_ctype[tp.value](value)
-        elif tp.value == pv.TYPE_ENUM:
-            # It'd be better to use get_enum_param()
-            content = c_int32(value)
         elif tp.value in (pv.TYPE_VOID_PTR, pv.TYPE_VOID_PTR_PTR):
             raise ValueError("Cannot handle arguments of type pointer")
         else:
             raise NotImplementedError("Argument of unknown type %d", tp.value)
 
-        logging.debug("Writting parameter %x as %r", param, content)        
+        logging.debug("Writing parameter %x as %r", param, content)        
         self.pvcam.pl_set_param(self._handle, param, byref(content))
+    
+    def get_enum_available(self, param):
+        """
+        Get all the available values for a given enumerated parameter.
+        param (int): parameter ID (cf pv.PARAM_*), it must be an enumerated one
+        return (dict (int -> string)): value to description
+        """
+        count = c_uint32()
+        self.pvcam.pl_get_param(self._handle, param, pv.ATTR_COUNT, byref(count))
         
+        ret = {} # int -> str
+        for i in range(count.value):
+            length = c_uint32()
+            content = c_uint32()
+            self.pvcam.pl_enum_str_length(self._handle, param, i, byref(length))
+            desc = create_string_buffer(length.value)
+            self.pvcam.pl_get_enum_param(self._handle, param, i, byref(content),
+                                         desc, length)
+            ret[content.value] = desc.value
+        return ret
+    
     def _int2version(self, raw):
         """
         Convert a raw value into version, according to the pvcam convention
         raw (int)
         returns (string)
         """
-        logging.debug("version = %x", raw)
         ver = []
         ver.insert(0, raw & 0x0f) # lowest 4 bits = trivial version
         raw >>= 4
@@ -485,7 +519,13 @@ class PVCam(model.DigitalCamera):
             except PVCamError:
 #                logging.exception("param %x cannot be accessed", pid)
                 pass # skip
-            
+        
+        # TODO: if we really want, we can try to look at the product name if it's
+        # USB: from the name, find in in /dev/ -> read major/minor
+        # -> /sys/dev/char/$major:$minor/device
+        # -> read symlink canonically, remove last directory 
+        # -> read "product" file 
+        
         if ret == "":
             ret = "unknown"
         return ret
@@ -529,6 +569,7 @@ class PVCam(model.DigitalCamera):
         """
         returns (float) the current temperature of the captor in C
         """
+        # FIXME: might need the lock (cannot be done during acquisition)
         # it's in 1/100 of C
         temp = self.get_param(pv.PARAM_TEMP) / 100
         return temp
@@ -561,15 +602,19 @@ class PVCam(model.DigitalCamera):
         # TODO: use increment?
         self.set_param(pv.PARAM_TEMP_SETPOINT, int(round(temp * 100)))
         
-        # TODO
-#        if temp > 20:
-#            self.atcore.CoolerOFF()
-#        else:
-#            self.atcore.CoolerON()
+        # Turn off the cooler if above room temperature
+        try:
+            # Note: doesn't seem to have any effect on the PIXIS
+            if temp >= 20:
+                self.set_param(pv.PARAM_HEAD_COOLING_CTRL, pv.HEAD_COOLING_CTRL_OFF)
+                self.set_param(pv.PARAM_COOLING_FAN_CTRL, pv.COOLING_FAN_CTRL_OFF)
+            else:
+                self.set_param(pv.PARAM_HEAD_COOLING_CTRL, pv.HEAD_COOLING_CTRL_ON)
+                self.set_param(pv.PARAM_COOLING_FAN_CTRL, pv.COOLING_FAN_CTRL_ON)
+        except PVCamError:
+            pass
 
         temp = self.get_param(pv.PARAM_TEMP_SETPOINT) / 100
-        # TODO: a more generic function which set up the fan to the right speed
-        # according to the target temperature?
         return float(temp)
         
     def updateTemperatureVA(self):
@@ -588,27 +633,79 @@ class PVCam(model.DigitalCamera):
         self.temperature.notify(self.temperature.value)
         logging.debug("temp is %s", temp)
         
-    def setFanSpeed(self, speed):
+    def _getAvailableGains(self):
         """
-        Change the fan speed. Will accommodate to whichever speed is possible.
-        speed (0<=float<= 1): ratio of full speed -> 0 is slowest, 1.0 is fastest
+        Find the gains supported by the device
+        returns (dict of int -> float): index -> multiplier
         """
-        assert((0 <= speed) and (speed <= 1))
+        # Gains are special: they do not use a enum type, just min/max
+        ming = self.get_param(pv.PARAM_GAIN_INDEX, pv.ATTR_MIN)
+        maxg = self.get_param(pv.PARAM_GAIN_INDEX, pv.ATTR_MAX)
+        gains = {}
+        for i in range(ming, maxg + 1):
+            # seems to be correct for PIXIS and ST133
+            gains[i] = 2**(i-1) 
+        return gains
         
-        self.select()
-        if not self.hasFeature(AndorCapabilities.FEATURES_FANCONTROL):
-            return
+    def _setGain(self, value):
+        """
+        VA setter for gain
+        """
+        i = util.find_closest(value, self._gains)
+        self.set_param(pv.PARAM_GAIN_INDEX, i)
+        
+        self._gain = self._gains[i]
+        return value
+        
+    def _getAvailableReadoutRates(self):
+        """
+        Find the readout rates supported by the device
+        returns (dict int -> float): for each index: frequency in Hz
+        Note: this is for the current output amplifier and bit depth
+        """
+        # It depends on the port (output amplifier), bit depth, which we 
+        # consider both fixed. 
+        # PARAM_READOUT_TIME is not useful (total time for the current ROI) 
+        
+        # PARAM_PIX_TIME (ns): the time per pixel
+        # PARAM_SPDTAB_INDEX: the speed index
+        # Note: setting the spdtab idx reset the gain
 
-        # It's more or less linearly distributed in speed... 
-        # 0 = full, 1 = low, 2 = off
-        if self.hasFeature(AndorCapabilities.FEATURES_MIDFANCONTROL):
-            values = [2, 1, 0]
-        else:
-            values = [2, 0]
-        val = values[int(round(speed * (len(values) - 1)))]
-        self.atcore.SetFanMode(val)
-        return (float(val) / max(values))
+        mins = self.get_param(pv.PARAM_SPDTAB_INDEX, pv.ATTR_MIN)
+        maxs = self.get_param(pv.PARAM_SPDTAB_INDEX, pv.ATTR_MAX)
+        # save the current value
+        current_spdtab = self.get_param(pv.PARAM_SPDTAB_INDEX)
+        current_gain = self.get_param(pv.PARAM_GAIN_INDEX)
+        
+        rates = {}
+        for i in range(mins, maxs + 1):
+            # Try with this given speed tab
+            self.set_param(pv.PARAM_SPDTAB_INDEX, i)
+            pixel_time = self.get_param(pv.PARAM_PIX_TIME) # ns
+            if pixel_time == 0:
+                logging.warning("Camera reporting pixel readout time of 0 ns!")
+                pixel_time = 1
+            rates[i] = 1 / (pixel_time * 1e-9)
 
+        # restore the current values
+        self.set_param(pv.PARAM_SPDTAB_INDEX, current_spdtab)
+        self.set_param(pv.PARAM_GAIN_INDEX, current_gain)
+        return rates
+    
+    def _setReadoutRate(self, value):
+        """
+        VA setter for readout rate
+        
+        """
+        # Everything (within the choices) is fine, just need to keep the gain.
+        current_gain = self.get_param(pv.PARAM_GAIN_INDEX)
+        
+        i = util.find_closest(value, self._readout_rates)
+        self.set_param(pv.PARAM_SPDTAB_INDEX, i)
+                
+        self.set_param(pv.PARAM_GAIN_INDEX, current_gain)
+        self._readout_rate = self._readout_rates[i]
+        return value
     
     def _storeBinning(self, binning):
         """
@@ -635,7 +732,8 @@ class PVCam(model.DigitalCamera):
         
     def setBinning(self, value):
         """
-        Called when "binning" VA is modified. It actually modifies the camera binning.
+        Called when "binning" VA is modified. It actually modifies the camera 
+        binning and updates the resolution so that the AOI is the same.
         """
         previous_binning = self._binning
         self._storeBinning(value)
@@ -731,42 +829,6 @@ class PVCam(model.DigitalCamera):
         self._exposure_time = min(value, maxexp.value)
         return self._exposure_time
     
-    def setReadoutRate(self, value):
-        # Everything (within the choices) is fine, just need to update gain.
-        self._readout_rate = value
-        self.gain.value = self.setGain(self.gain.value)
-        return value
-    
-    def setGain(self, value):
-        # not every gain is compatible with the readout rate (channel/hsspeed)
-        gains = self.gain.choices
-        for i in range(len(gains)):
-            c, hs = self._getChannelHSSpeed(self._readout_rate)
-            # FIXME: this doesn't work is driver is acquiring
-#            is_avail = c_int()
-#            self.atcore.IsPreAmpGainAvailable(c, self._output_amp, hs, i, byref(is_avail))
-#            if is_avail == 0:
-#                gains[i] = -100000 # should never be picked up
-                 
-        self._gain = find_closest(value, gains)
-        return self._gain
-        
-    def _getMaxBPP(self):
-        """
-        return (0<int): the maximum number of bits per pixel for the camera
-        """ 
-        # bits per pixel depends on the AD channel
-        mbpp = 0
-        bpp = c_int()
-        nb_channels = c_int()
-        self.atcore.GetNumberADChannels(byref(nb_channels))
-        for channel in range(nb_channels.value):
-            self.atcore.GetBitDepth(channel, byref(bpp))
-            mbpp = max(mbpp, bpp.value)
-
-        assert(mbpp > 0)
-        return mbpp
-        
     def _need_update_settings(self):
         """
         returns (boolean): True if _update_settings() needs to be called
@@ -1154,36 +1216,5 @@ class PVCamDataFlow(model.DataFlow):
             
     def notify(self, data):
         model.DataFlow.notify(self, data)
-
-
-# Copy from AndorCam3
-class RepeatingTimer(threading.Thread):
-    """
-    An almost endless timer thread. 
-    It stops when calling cancel() or the callback disappears.
-    """
-    def __init__(self, period, callback, name="TimerThread"):
-        """
-        period (float): time in second between two calls
-        callback (callable): function to call
-        name (str): fancy name to give to the thread
-        """
-        threading.Thread.__init__(self, name=name)
-        self.callback = model.WeakMethod(callback)
-        self.period = period
-        self.daemon = True
-        self.must_stop = threading.Event()
-    
-    def run(self):
-        # use the timeout as a timer
-        while not self.must_stop.wait(self.period):
-            try:
-                self.callback()
-            except model.WeakRefLostError:
-                # it's gone, it's over
-                return
-        
-    def cancel(self):
-        self.must_stop.set()
 
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:
