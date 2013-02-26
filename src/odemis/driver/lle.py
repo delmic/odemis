@@ -14,7 +14,7 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
-from odemis import model, __version__
+from odemis import model, __version__, util
 import glob
 import logging
 import os
@@ -103,7 +103,7 @@ class LLE(model.Emitter):
         
         # Update temperature every 10s
         self.temperature = model.FloatVA(current_temp, unit="C", readonly=True)
-        self._temp_timer = RepeatingTimer(10, self._updateTemperature,
+        self._temp_timer = util.RepeatingTimer(10, self._updateTemperature,
                                          "LLE temperature update")
         self._temp_timer.start()
     
@@ -533,34 +533,4 @@ class FakeLLE(LLE):
             
         logging.debug("Received: %s", str(response).encode('hex_codec'))
         return response
-
-# Copy from andorcam3
-class RepeatingTimer(threading.Thread):
-    """
-    An almost endless timer thread. 
-    It stops when calling cancel() or the callback disappears.
-    """
-    def __init__(self, period, callback, name="TimerThread"):
-        """
-        period (float): time in second between two calls
-        callback (callable): function to call
-        name (str): fancy name to give to the thread
-        """
-        threading.Thread.__init__(self, name=name)
-        self.callback = model.WeakMethod(callback)
-        self.period = period
-        self.daemon = True
-        self.must_stop = threading.Event()
-    
-    def run(self):
-        # use the timeout as a timer
-        while not self.must_stop.wait(self.period):
-            try:
-                self.callback()
-            except model.WeakRefLostError:
-                # it's gone, it's over
-                return
-        
-    def cancel(self):
-        self.must_stop.set()
 

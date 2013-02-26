@@ -16,7 +16,7 @@ You should have received a copy of the GNU General Public License along with Ode
 '''
 
 from ctypes import *
-from odemis import __version__, model
+from odemis import __version__, model, util
 import gc
 import logging
 import numpy
@@ -24,19 +24,6 @@ import os
 import threading
 import time
 import weakref
-
-# Helper function
-def find_closest(val, l):
-    """
-    finds in a list the closest existing value from a given value
-    """ 
-    return min(l, key=lambda x:abs(x - val))
-
-def index_closest(val, l):
-    """
-    finds in a list the index of the closest existing value from a given value
-    """ 
-    return min(enumerate(l), key=lambda x:abs(x[1] - val))[0]
 
 class AndorV2Error(Exception):
     def __init__(self, errno, strerror):
@@ -439,7 +426,7 @@ class AndorCam2(model.DigitalCamera):
         current_temp = self.GetTemperature()
         self.temperature = model.FloatVA(current_temp, unit="C", readonly=True)
         self._metadata[model.MD_SENSOR_TEMP] = current_temp
-        self.temp_timer = RepeatingTimer(10, self.updateTemperatureVA,
+        self.temp_timer = util.RepeatingTimer(10, self.updateTemperatureVA,
                                          "AndorCam2 temperature update")
         self.temp_timer.start()
         
@@ -543,7 +530,7 @@ class AndorCam2(model.DigitalCamera):
         self.setTargetTemperature(self.targetTemperature.value)
         self.setFanSpeed(self.fanSpeed.value)
     
-        self.temp_timer = RepeatingTimer(10, self.updateTemperatureVA,
+        self.temp_timer = util.RepeatingTimer(10, self.updateTemperatureVA,
                                          "AndorCam2 temperature update")
         self.temp_timer.start()
         
@@ -710,7 +697,7 @@ class AndorCam2(model.DigitalCamera):
         assert((0 <= gain))
         
         gains = self.GetPreAmpGains()
-        self.atcore.SetPreAmpGain(index_closest(gain, gains))
+        self.atcore.SetPreAmpGain(util.index_closest(gain, gains))
     
     def GetPreAmpGains(self):
         """
@@ -1027,7 +1014,7 @@ class AndorCam2(model.DigitalCamera):
 #            if is_avail == 0:
 #                gains[i] = -100000 # should never be picked up
                  
-        self._gain = find_closest(value, gains)
+        self._gain = util.find_closest(value, gains)
         return self._gain
         
     def _getMaxBPP(self):
@@ -1440,35 +1427,5 @@ class AndorCam2DataFlow(model.DataFlow):
     def notify(self, data):
         model.DataFlow.notify(self, data)
 
-
-# Copy from AndorCam3
-class RepeatingTimer(threading.Thread):
-    """
-    An almost endless timer thread. 
-    It stops when calling cancel() or the callback disappears.
-    """
-    def __init__(self, period, callback, name="TimerThread"):
-        """
-        period (float): time in second between two calls
-        callback (callable): function to call
-        name (str): fancy name to give to the thread
-        """
-        threading.Thread.__init__(self, name=name)
-        self.callback = model.WeakMethod(callback)
-        self.period = period
-        self.daemon = True
-        self.must_stop = threading.Event()
-    
-    def run(self):
-        # use the timeout as a timer
-        while not self.must_stop.wait(self.period):
-            try:
-                self.callback()
-            except model.WeakRefLostError:
-                # it's gone, it's over
-                return
-        
-    def cancel(self):
-        self.must_stop.set()
 
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:

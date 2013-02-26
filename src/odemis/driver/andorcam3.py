@@ -16,7 +16,7 @@ You should have received a copy of the GNU General Public License along with Ode
 '''
 
 from ctypes import *
-from odemis import __version__, model
+from odemis import __version__, model, util
 import gc
 import logging
 import numpy
@@ -222,7 +222,7 @@ class AndorCam3(model.DigitalCamera):
         current_temp = self.GetFloat(u"SensorTemperature")
         self.temperature = model.FloatVA(current_temp, unit="C", readonly=True)
         self._metadata[model.MD_SENSOR_TEMP] = current_temp
-        self.temp_timer = RepeatingTimer(10, self.updateTemperatureVA,
+        self.temp_timer = util.RepeatingTimer(10, self.updateTemperatureVA,
                                          "AndorCam3 temperature update")
         self.temp_timer.start()
         
@@ -1046,35 +1046,5 @@ class AndorCam3DataFlow(model.DataFlow):
             
     def notify(self, data):
         model.DataFlow.notify(self, data)
-
-   
-class RepeatingTimer(threading.Thread):
-    """
-    An almost endless timer thread. 
-    It stops when calling cancel() or the callback disappears.
-    """
-    def __init__(self, period, callback, name="TimerThread"):
-        """
-        period (float): time in second between two calls
-        callback (callable): function to call
-        name (str): fancy name to give to the thread
-        """
-        threading.Thread.__init__(self, name=name)
-        self.callback = model.WeakMethod(callback)
-        self.period = period
-        self.daemon = True
-        self.must_stop = threading.Event()
-    
-    def run(self):
-        # use the timeout as a timer
-        while not self.must_stop.wait(self.period):
-            try:
-                self.callback()
-            except model.WeakRefLostError:
-                # it's gone, it's over
-                return
-        
-    def cancel(self):
-        self.must_stop.set()
 
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:
