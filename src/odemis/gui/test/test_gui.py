@@ -90,6 +90,30 @@ class xrcslider_frame(wx.Frame):
 
 
 
+class xrccairo_frame(wx.Frame):
+#!XRCED:begin-block:xrccairo_frame.PreCreate
+    def PreCreate(self, pre):
+        """ This function is called during the class's initialization.
+        
+        Override it for custom setup before the window is created usually to
+        set additional window styles using SetWindowStyle() and SetExtraStyle().
+        """
+        pass
+        
+#!XRCED:end-block:xrccairo_frame.PreCreate
+
+    def __init__(self, parent):
+        # Two stage creation (see http://wiki.wxpython.org/index.cgi/TwoStageCreation)
+        pre = wx.PreFrame()
+        self.PreCreate(pre)
+        get_resources().LoadOnFrame(pre, parent, "cairo_frame")
+        self.PostCreate(pre)
+
+        # Define variables for the controls, bind event handlers
+        self.cairo_panel = xrc.XRCCTRL(self, "cairo_panel")
+
+
+
 
 
 # ------------------------ Resource data ----------------------
@@ -101,7 +125,7 @@ def __init_resources():
     wx.FileSystem.AddHandler(wx.MemoryFSHandler())
 
     test_gui_xrc = '''\
-<?xml version="1.0" ?><resource class="wxFrame" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
+<?xml version="1.0" ?><resource class="wxBoxSizer" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
   <object class="wxFrame" name="text_frame">
     <object class="wxPanel" name="text_panel">
       <object class="wxBoxSizer">
@@ -250,6 +274,18 @@ def __init_resources():
       </XRCED>
     </object>
     <size>400,400</size>
+  </object>
+  <object class="wxFrame" name="cairo_frame">
+    <object class="wxPanel" name="cairo_panel" subclass="test_cairo.CairoPanel">
+      <size>400,400</size>
+      <fg>#FFFFFF</fg>
+      <bg>#000000</bg>
+      <XRCED>
+        <assign_var>1</assign_var>
+      </XRCED>
+    </object>
+    <size>400,400</size>
+    <title>Cairo Test</title>
   </object>
 </resource>'''
 
