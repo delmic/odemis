@@ -161,7 +161,7 @@ class AcquisitionTask(object):
                 # start stream
                 s.image.subscribe(self._image_listener)
                 # TODO: shall we also do s.updated.value = True?
-                s.active.value = True
+                s.is_active.value = True
 
                 # wait until one image acquired or cancelled
                 self._condition.wait()
@@ -216,7 +216,7 @@ class AcquisitionTask(object):
         with self._condition:
             # stop acquisition
             self._current_stream.image.unsubscribe(self._image_listener)
-            self._current_stream.active.value = False
+            self._current_stream.is_active.value = False
 
             # let the thread know that it's all done
             self._condition.notify_all()
@@ -229,7 +229,7 @@ class AcquisitionTask(object):
             if self._current_stream:
                 # unsubscribe to the current stream
                 self._current_stream.image.unsubscribe(self._image_listener)
-                self._current_stream.active.value = False
+                self._current_stream.is_active.value = False
 
             # put the cancel flag
             self._cancelled = True
@@ -250,21 +250,18 @@ class ProgressiveFuture(futures.Future):
         futures.Future.__init__(self)
         self._upd_callbacks = []
 
-        if start is None:
-            # just a bit ahead of time to say it's not starting now
-            start = time.time() + 0.1
-        self._start_time = start
-        if end is None:
-            end = self._start_time + 0.1
-        self._end_time = end
+        # just a bit ahead of time to say it's not starting now
+        self._start_time = start or (time.time() + 0.1)
+        self._end_time = end or (self._start_time + 0.1)
 
         # As long as it's None, the future cannot be cancelled while running
         self.task_canceller = None
 
     def _report_update(self, fn):
+        # Why the 'with'? Is there some cleanup needed?
         with self._condition:
             now = time.time()
-            if self._state in [CANCELLED, CANCELLED_AND_NOTIFIED, FINISHED]:
+            if self._state in (CANCELLED, CANCELLED_AND_NOTIFIED, FINISHED):
                 past = self._end_time - self._start_time
                 left = 0
             elif self._state == PENDING:
@@ -326,7 +323,7 @@ class ProgressiveFuture(futures.Future):
           be called with this future as argument and the past and left information.
         """
         with self._condition:
-            if self._state not in [CANCELLED, FINISHED]:
+            if self._state not in (CANCELLED, FINISHED):
                 self._upd_callbacks.append(fn)
                 return
         # it's already over

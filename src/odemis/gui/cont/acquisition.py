@@ -28,18 +28,6 @@ of microscope images.
 
 """
 
-from collections import OrderedDict
-from concurrent.futures._base import CancelledError
-from odemis import model, dataio
-from odemis.gui import acqmng, instrmodel
-from odemis.gui.conf import get_acqui_conf
-from odemis.gui.cont import get_main_tab_controller
-from odemis.gui.cont.settings import SettingsBarController
-from odemis.gui.cont.streams import StreamController
-from odemis.gui.instrmodel import VIEW_LAYOUT_ONE
-from odemis.gui.main_xrc import xrcfr_acq
-from odemis.gui.util import img, get_picture_folder, units, call_after
-from wx.lib.pubsub import pub
 import copy
 import logging
 import math
@@ -49,7 +37,22 @@ import subprocess
 import sys
 import threading
 import time
+from collections import OrderedDict
+from concurrent.futures._base import CancelledError
+
 import wx
+from wx.lib.pubsub import pub
+
+from odemis import model, dataio
+from odemis.gui import acqmng, instrmodel
+from odemis.gui.conf import get_acqui_conf
+from odemis.gui.cont import get_main_tab_controller
+from odemis.gui.cont.settings import SettingsBarController
+from odemis.gui.cont.streams import StreamController
+from odemis.gui.instrmodel import VIEW_LAYOUT_ONE
+from odemis.gui.main_xrc import xrcfr_acq
+from odemis.gui.util import img, get_picture_folder, units, call_after
+
 
 
 class AcquisitionController(object):
