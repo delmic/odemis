@@ -25,6 +25,7 @@ from __future__ import division
 from . import pvcam_h as pv
 from ctypes import *
 from odemis import __version__, model, util
+from odemis.model._dataflow import MD_BPP
 import gc
 import logging
 import numpy
@@ -112,7 +113,6 @@ class PVCamDLL(CDLL):
 # all the values that say the acquisition is in progress 
 STATUS_IN_PROGRESS = [pv.ACQUISITION_IN_PROGRESS, pv.EXPOSURE_IN_PROGRESS, 
                       pv.READOUT_IN_PROGRESS]
-STATUS_
 
 class PVCam(model.DigitalCamera):
     """
@@ -194,7 +194,7 @@ class PVCam(model.DigitalCamera):
         # Strong cooling for low (image) noise
         try:
             # target temp
-            ttemp = self.get_param(pv.PARAM_TEMP_SETPOINT) / 100
+            ttemp = self.get_param(pv.PARAM_TEMP_SETPOINT) / 100 # C
             ranges = self.GetTemperatureRange()
             self.targetTemperature = model.FloatContinuous(ttemp, ranges, unit="C",
                                                            setter=self.setTargetTemperature)
@@ -236,30 +236,28 @@ class PVCam(model.DigitalCamera):
                                                  unit="Hz", setter=self._setReadoutRate)
         self._setReadoutRate(self._readout_rate)
         
-        return
-
         # binning is (horizontal, vertical), but odemis
         # only supports same value on both dimensions (for simplification)
-        self._binning = (1,1) # 
+        self._binning = (1,1) # px
         self._image_rect = (0, resolution[0]-1, 0, resolution[1]-1)
         # need to be before binning, as it is modified when changing binning         
         self.resolution = model.ResolutionVA(resolution, [(1, 1), resolution], 
-                                             setter=self.setResolution)
-        self.setResolution(resolution)
+                                             setter=self._setResolution)
+        self._setResolution(resolution)
         
-        self.binning = model.IntEnumerated(self._binning[0], self._getAvailableBinnings(),
-                                           unit="px", setter=self.setBinning)
+        bin_choices = range(1, min(resolution)) # for safety: the min of both axes
+        self.binning = model.IntEnumerated(self._binning[0], bin_choices,
+                                           unit="px", setter=self._setBinning)
         
         # default values try to get live microscopy imaging more likely to show something
-        maxexp = c_float()
-        self.atcore.GetMaximumExposure(byref(maxexp))
-        range_exp = (1e-6, maxexp.value) # s
+        minexp = self.get_param(pv.PARAM_EXP_MIN_TIME) #s
+        minexp = min(1e-3, minexp) # we've set the exposure resolution at ms
+        # exposure is represented by unsigned int
+        maxexp = (2**32 -1) * 1e-3 #s
+        range_exp = (minexp, maxexp) # s
         self._exposure_time = 1.0 # s
         self.exposureTime = model.FloatContinuous(self._exposure_time, range_exp,
-                                                  unit="s", setter=self.setExposureTime)
-        # TODO becareful with PARAM_EXP_RES (ms/us)
-        
-        
+                                                  unit="s", setter=self._setExposureTime)
         
         self.acquisition_lock = threading.Lock()
         self.acquire_must_stop = threading.Event()
@@ -288,6 +286,15 @@ class PVCam(model.DigitalCamera):
         
         # TODO change PARAM_COLOR_MODE to greyscale? => probably always default
 
+        # Set to simple acquisition mode
+        self.set_param(pv.PARAM_PMODE, pv.PMODE_NORMAL)
+        #TODO correct? pre-exposure?
+        self.set_param(pv.PARAM_PMODE, pv.CLEAR_PRE_SEQUENCE)
+        
+        # set the exposure resolution. (choices are us, ms or s) => ms is best
+        # for life imaging
+        self.set_param(pv.PARAM_EXP_RES_INDEX, pv.EXP_RES_ONE_MILLISEC)
+        # TODO: autoadapt according to the exposure requested?
     
     def getMetadata(self):
         return self._metadata
@@ -668,12 +675,9 @@ class PVCam(model.DigitalCamera):
         
     def _setGain(self, value):
         """
-        VA setter for gain
+        VA setter for gain (just save)
         """
-        i = util.find_closest(value, self._gains)
-        self.set_param(pv.PARAM_GAIN_INDEX, i)
-        
-        self._gain = self._gains[i]
+        self._gain = value
         return value
         
     def _getAvailableReadoutRates(self):
@@ -713,53 +717,27 @@ class PVCam(model.DigitalCamera):
     
     def _setReadoutRate(self, value):
         """
-        VA setter for readout rate
-        
+        VA setter for readout rate (just save)
         """
-        # Everything (within the choices) is fine, just need to keep the gain.
-        current_gain = self.get_param(pv.PARAM_GAIN_INDEX)
-        
-        i = util.find_closest(value, self._readout_rates)
-        self.set_param(pv.PARAM_SPDTAB_INDEX, i)
-                
-        self.set_param(pv.PARAM_GAIN_INDEX, current_gain)
-        self._readout_rate = self._readout_rates[i]
+        self._readout_rate = value
         return value
     
-    def _storeBinning(self, binning):
+    def _setBinning(self, value):
         """
-        Check the binning is correct and store it ready for SetImage
-        binning (int): how many pixels horizontally and vertically
+        Called when "binning" VA is modified. It also updates the resolution so
+        that the AOI is approximately the same.
+        value (int): how many pixels horizontally and vertically
          are combined to create "super pixels"
-        Note: super pixels are always square (although some hw don't require this)
+        Note: super pixels are always square (although hw doesn't require this)
         """
-        # TODO support "Full Vertical Binning" if binning[1] == size[1]
-        maxbinning = self.GetMaximumBinning(AndorV2DLL.RM_IMAGE)
-        assert((1 <= binning) and (binning <= maxbinning[0]) and
-               (1 <= binning) and (binning <= maxbinning[1]))
-
-        self._binning = (binning, binning)
-    
-    def _getAvailableBinnings(self):
-        """
-        returns  list of int with the available binnings (same for horizontal
-          and vertical)
-        """
-        maxbinning = self.GetMaximumBinning(AndorV2DLL.RM_IMAGE)
-        # be conservative by return the smallest of horizontal and vertical binning
-        return set(range(1, min(maxbinning)+1))
+        # TODO: support non square binning (for spectroscopy)
         
-    def setBinning(self, value):
-        """
-        Called when "binning" VA is modified. It actually modifies the camera 
-        binning and updates the resolution so that the AOI is the same.
-        """
-        previous_binning = self._binning
-        self._storeBinning(value)
+        prev_binning = self._binning
+        self._binning = (binning, binning)
         
         # adapt resolution so that the AOI stays the same
-        change = (float(previous_binning[0]) / value,
-                  float(previous_binning[1]) / value)
+        change = (prev_binning[0] / value,
+                  prev_binning[1] / value)
         old_resolution = self.resolution.value
         new_resolution = (int(round(old_resolution[0] * change[0])),
                           int(round(old_resolution[1] * change[1])))
@@ -799,7 +777,7 @@ class PVCam(model.DigitalCamera):
         self._image_rect = (lt[0] * self._binning[0] + 1, (lt[0] + size[0]) * self._binning[0],
                             lt[1] * self._binning[1] + 1, (lt[1] + size[1]) * self._binning[1])
     
-    def setResolution(self, value):
+    def _setResolution(self, value):
         new_res = self.resolutionFitter(value)
         self._storeSize(new_res)
         return new_res
@@ -834,7 +812,7 @@ class PVCam(model.DigitalCamera):
         
         return size
 
-    def setExposureTime(self, value):
+    def _setExposureTime(self, value):
         """
         Set the exposure time. It's automatically adapted to a working one.
         exp (0<float): exposure time in seconds
@@ -862,59 +840,48 @@ class PVCam(model.DigitalCamera):
         Commits the settings to the camera. Only the settings which have been
         modified are updated.
         Note: acquisition_lock must be taken, and acquisition must _not_ going on.
+        returns (exposure, region, size):
+                exposure: (float) exposure time in second
+                region (pv.rgn_type): the region structure that can be used to set up the acquisition
+                size (2-tuple of int): the size of the data array that will get acquired
         """
         prev_image_settings, prev_exp_time, prev_readout_rate, prev_gain = self._prev_settings
 
         if prev_readout_rate != self._readout_rate:
             logging.debug("Updating readout rate settings to %f Hz", self._readout_rate) 
-
-            # set readout rate 
-            channel, hsspeed = self._getChannelHSSpeed(self._readout_rate)
-            self.atcore.SetADChannel(channel)
-            try:
-                self.atcore.SetOutputAmplifier(self._output_amp)
-            except AndorV2Error:
-                pass # unsupported
-    
-            self.atcore.SetHSSpeed(self._output_amp, hsspeed)
+            i = util.find_closest(self._readout_rate, self._readout_rates)
+            self.set_param(pv.PARAM_SPDTAB_INDEX, i)
+                
             self._metadata[model.MD_READOUT_TIME] = 1.0 / self._readout_rate # s
-    
-            # fastest VSspeed which doesn't need to increase noise (voltage) 
-#            nb_vsspeeds = c_int()
-#            self.atcore.GetNumberVSSpeeds(byref(nb_vsspeeds))
-            speed_idx, vsspeed = c_int(), c_float() # ms
-            self.atcore.GetFastestRecommendedVSSpeed(byref(speed_idx), byref(vsspeed))
-            self.atcore.SetVSSpeed(speed_idx)
-    
-            # bits per pixel depends just on the AD channel
-            bpp = c_int()
-            self.atcore.GetBitDepth(channel, byref(bpp))
-            self._metadata[model.MD_BPP] = bpp.value
+            # rate might affect the BPP (although on the PIXIS, it's always 16)
+            self._metadata[MD_BPP] = self.get_param(pv.PARAM_BIT_DEPTH)
+            
+            # If readout rate is changed, gain is reset => force update
+            prev_gain = None
 
         if prev_gain != self._gain:
             logging.debug("Updating gain to %f", self._gain)
-            # EMCCDGAIN, DDGTIMES, DDGIO, EMADVANCED => lots of gain settings
-            # None supported on the Clara?
-            self.SetPreAmpGain(self._gain)
+            i = util.find_closest(self._gain, self._gains)
+            self.set_param(pv.PARAM_GAIN_INDEX, i)
             self._metadata[model.MD_GAIN] = self._gain
 
+        # prepare image (region)
+        region = pv.rgn_type()
+        # region is 0 indexed 
+        region.s1, region.s2, region.p1, region.p2 = self._image_rect
+        region.sbin, region.pbin = self._binning
+        self._metadata[model.MD_BINNING] = self._binning[0] # H and V should be equal
         new_image_settings = self._binning + self._image_rect
-        if prev_image_settings != new_image_settings:   
-            logging.debug("Updating image settings") 
-            self.atcore.SetImage(*new_image_settings)
-            # there is no metadata for the resolution
-            self._metadata[model.MD_BINNING] = self._binning[0] # H and V should be equal
-    
-        if prev_exp_time != self._exposure_time:
-            self.atcore.SetExposureTime(c_float(self._exposure_time))
-            # Read actual value
-            exposure, accumulate, kinetic = self.GetAcquisitionTimings()
-            self._metadata[model.MD_EXP_TIME] = exposure
-            logging.debug("Updating exposure time setting to %f s (asked %f s)",
-                          exposure, self._exposure_time) 
+        size = ((self._image_rect[1] - self._image_rect[0] + 1) // self._binning[0],
+                (self._image_rect[3] - self._image_rect[2] + 1) // self._binning[1])
+
+        # nothing special for the exposure time    
+        self._metadata[model.MD_EXP_TIME] = self._exposure_time
 
         self._prev_settings = [new_image_settings, self._exposure_time, 
                                self._readout_rate, self._gain]
+        
+        return self._exposure_time, region, size
     
     def _allocate_buffer(self, length):
         """
@@ -995,110 +962,124 @@ class PVCam(model.DigitalCamera):
         need_reinit = True
         retries = 0
         cbuffer = None
-        while not self.acquire_must_stop.is_set():
-            # need to stop acquisition to update settings
-            if need_reinit or self._need_update_settings():
-                try:
-                    # cancel acquisition if it's still going on
-                    if self.exp_check_status() in STATUS_IN_PROGRESS:
-                        self.pvcam.pl_exp_abort()
-                        time.sleep(0.1)
-                except PVCamError:
-                    pass # already done?
-                # With circular buffer, we could go about up to 10% faster, but
-                # everything is more complex (eg: odd buffer size will block the
-                # PIXIS). So we keep it simple.
+        try:
+            while not self.acquire_must_stop.is_set():
+                # need to stop acquisition to update settings
+                if need_reinit or self._need_update_settings():
+                    try:
+                        # cancel acquisition if it's still going on
+                        if self.exp_check_status() in STATUS_IN_PROGRESS:
+                            self.pvcam.pl_exp_abort()
+                            time.sleep(0.1)
+                    except PVCamError:
+                        pass # already done?
+                    
+                    # finish the seq if it was started
+                    if cbuffer:
+                        self.pvcam.pl_exp_finish_seq(self._handle, cbuffer, 0)
+                        self.pvcam.pl_exp_uninit_seq()
+                        
+                    # With circular buffer, we could go about up to 10% faster, but
+                    # everything is more complex (eg: odd buffer size will block the
+                    # PIXIS), and not all hardware supports it. It would allow
+                    # to do memory allocation during the acquisition, but would
+                    # require a memcpy afterwards. So we keep it simple.
+                    
+                    exposure, region, size = self._update_settings()
+                    self.pvcam.pl_exp_init_seq()
+                    blength = c_uint32()
+                    exp_ms = int(math.ceil(exposure * 1e3)) # ms
+                    # 1 image, with 1 region
+                    self.pvcam.pl_exp_setup_seq(self._handle, 1, 1, region,
+                                                pv.TIMED_MODE, exposure, byref(blength))
+                    cbuffer = self._allocate_buffer(blength.value) # TODO shall allocate a new buffer every time?
+                    
+                    readout_sw = size[0] * size[1] * self._metadata[model.MD_READOUT_TIME] # s
+                    # should be more or less the same as:
+                    readout = self.get_param(pv.PARAM_READOUT_TIME) * 1e-3 # s
+                    logging.debug("Computed readout time of %g s, while sdk says %g s",
+                                  readout_sw, readout)
+                    
+                    duration = exposure + readout
+                    need_reinit = False
+        
+                # Acquire the images
+                metadata = dict(self._metadata) # duplicate
+                metadata[model.MD_ACQ_DATE] = time.time() # time at the beginning
+                self.pvcam.pl_exp_start_seq(self._handle, cbuffer)
                 
-                region = self._computeRegion()
-                size = self.resolution.value
-                
-                # TODO: prepare
-                self.pvcam.pl_exp_init_seq()
-                blength = c_uint32()
-                self.pvcam.pl_exp_setup_seq(self._handle, 1, 1, region, pv.TIMED_MODE, exp_time, byref(blength))
-                cbuffer = self._allocate_buffer(blength.value) # TODO shall allocate a new buffer every time?
-                
-                readout_sw = size[0] * size[1] * self._metadata[model.MD_READOUT_TIME] # s
-                # should be more or less the same as:
-                readout = self.get_param(pv.PARAM_READOUT_TIME) * 1e-3 # s
-                logging.debug("Computed readout time of %g s, while sdk says %g s",
-                              readout_sw, readout)
-                
-                duration = exposure + readout
-                need_reinit = False
-    
-            # Acquire the images
-            metadata = dict(self._metadata) # duplicate
-            metadata[model.MD_ACQ_DATE] = time.time() # time at the beginning
-            self.pvcam.pl_exp_start_seq(self._handle, cbuffer)
-            
-            # first we wait ourselves the typical time (which might be very long)
-            # while detecting requests for stop
-            must_stop = self.acquire_must_stop.wait(duration)
-            if must_stop:
-                break
-            
-            # then wait a bounded time to ensure the image is acquired
-            try:
-                timeout = time.time() + 1
-                while self.exp_check_status() != pv.READOUT_COMPLETE:
-                    if time.time() < timeout:
-                        raise IOError("Timeout")
-                    # check if we should stop
-                    must_stop = self.acquire_must_stop.wait(0.01)
-                    if must_stop:
-                        break
-                
+                # first we wait ourselves the typical time (which might be very long)
+                # while detecting requests for stop
+                must_stop = self.acquire_must_stop.wait(duration)
                 if must_stop:
                     break
-            except (IOError, PVCamError) as exp:
-                if retries > 5:
-                    logging.error("Too many failures to acquire an image")
-                    self.acquisition_lock.release()
-                    self.acquire_must_stop.clear()
-                    raise
                 
-                retries += 1
-                # TODO: any way to detect the camera is completly gone?
-#                        self.Reinitialize()
+                # then wait a bounded time to ensure the image is acquired
                 try:
-                    self.pvcam.pl_exp_abort()
-                except PVCamError:
-                    pass
-                time.sleep(0.1)
-                logging.exception("trying again to acquire image after error")
-                need_reinit = True
-                continue
-            
-            array = self._buffer_as_array(cbuffer, size, metadata)
-            retries = 0
-            callback(array)
+                    timeout = time.time() + 1
+                    while self.exp_check_status() != pv.READOUT_COMPLETE:
+                        if time.time() < timeout:
+                            raise IOError("Timeout")
+                        # check if we should stop
+                        must_stop = self.acquire_must_stop.wait(0.01)
+                        if must_stop:
+                            break
+                    
+                    if must_stop:
+                        break
+                except (IOError, PVCamError) as exp:
+                    if retries > 5:
+                        logging.error("Too many failures to acquire an image")
+                        self.acquisition_lock.release()
+                        self.acquire_must_stop.clear()
+                        raise
+                    
+                    retries += 1
+                    # TODO: any way to detect the camera is completly gone?
+    #                        self.Reinitialize()
+                    try:
+                        self.pvcam.pl_exp_abort()
+                    except PVCamError:
+                        pass
+                    time.sleep(0.1)
+                    logging.exception("trying again to acquire image after error")
+                    need_reinit = True
+                    continue
+                
+                array = self._buffer_as_array(cbuffer, size, metadata)
+                retries = 0
+                callback(array)
+             
+                # force the GC to non-used buffers, for some reason, without this
+                # the GC runs only after we've managed to fill up the memory
+                gc.collect()
          
-            # force the GC to non-used buffers, for some reason, without this
-            # the GC runs only after we've managed to fill up the memory
-            gc.collect()
-     
-        # ending cleanly
-        try:
-            if self.exp_check_status() in STATUS_IN_PROGRESS:
-                self.pvcam.pl_exp_abort()
-        except PVCamError:
-            pass # status reported an error
         
-        try:
-            if cbuffer:
-                self.pvcam.pl_exp_finish_seq(self._handle, cbuffer, 0)
-        except PVCamError:
-            logging.exception("Failed to finish the acquisition properly")
-    
-        try:
-            self.pvcam.pl_exp_uninit_seq()
-        except PVCamError:
-            logging.exception("Failed to finish the acquisition properly")
+        except:
+            logging.exception("Unexpected failure during image acquisition")
+        finally:
+            # ending cleanly
+            try:
+                if self.exp_check_status() in STATUS_IN_PROGRESS:
+                    self.pvcam.pl_exp_abort()
+            except PVCamError:
+                pass # status reported an error
+            
+            try:
+                if cbuffer:
+                    self.pvcam.pl_exp_finish_seq(self._handle, cbuffer, 0)
+            except PVCamError:
+                logging.exception("Failed to finish the acquisition properly")
         
-        self.acquisition_lock.release()
-        logging.debug("Acquisition thread closed")
-        self.acquire_must_stop.clear()
+            try:
+                self.pvcam.pl_exp_uninit_seq()
+            except PVCamError:
+                logging.exception("Failed to finish the acquisition properly")
+            
+            self.acquisition_lock.release()
+            logging.debug("Acquisition thread closed")
+            self.acquire_must_stop.clear()
+        
     
     def req_stop_flow(self):
         """

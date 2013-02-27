@@ -998,12 +998,14 @@ class AndorCam2(model.DigitalCamera):
         return self._exposure_time
     
     def setReadoutRate(self, value):
+        # Just save, and the setting will be actually updated by _update_settings()
         # Everything (within the choices) is fine, just need to update gain.
         self._readout_rate = value
         self.gain.value = self.setGain(self.gain.value)
         return value
     
     def setGain(self, value):
+        # Just save, and the setting will be actually updated by _update_settings()
         # not every gain is compatible with the readout rate (channel/hsspeed)
         gains = self.gain.choices
         for i in range(len(gains)):
