@@ -251,11 +251,12 @@ class OdemisGUIApp(wx.App):
         try:
             pos = self.interface_model.focussedView.value.view_pos.value #pylint: disable=E1101
             name1 = os.path.join(os.path.dirname(__file__),
-                                 "1-optical-rot7.png")
+                                 "img/example/1-optical-rot7.png")
             im1 = InstrumentalImage(wx.Image(name1), 7.14286e-7, pos)
 
             pos = (pos[0] + 2e-6, pos[1] - 1e-5)
-            name2 = os.path.join(os.path.dirname(__file__), "1-sem-bse.png")
+            name2 = os.path.join(os.path.dirname(__file__),
+                                 "img/example/1-sem-bse.png")
             im2 = InstrumentalImage(wx.Image(name2), 4.54545e-7, pos)
 
             mtc = get_main_tab_controller()
@@ -271,11 +272,13 @@ class OdemisGUIApp(wx.App):
         """ Open the two files for example """
         try:
             pos = self.interface_model.focussedView.value.view_pos.value #pylint: disable=E1101
-            name2 = os.path.join(os.path.dirname(__file__), "3-sem.png")
+            name2 = os.path.join(os.path.dirname(__file__),
+                                 "img/example/3-sem.png")
             im2 = InstrumentalImage(wx.Image(name2), 2.5e-07, pos)
 
             pos = (pos[0] + 5.5e-06, pos[1] + 1e-6)
-            name1 = os.path.join(os.path.dirname(__file__), "3-optical.png")
+            name1 = os.path.join(os.path.dirname(__file__),
+                                 "img/example/3-optical.png")
             im1 = InstrumentalImage(wx.Image(name1), 1.34e-07, pos)
 
             mtc = get_main_tab_controller()
