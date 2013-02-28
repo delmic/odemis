@@ -848,7 +848,7 @@ class PVCam(model.DigitalCamera):
         """
         [prev_image_settings, prev_exp_time,
                 prev_readout_rate, prev_gain] = self._prev_settings
-
+        
         if prev_readout_rate != self._readout_rate:
             logging.debug("Updating readout rate settings to %f Hz", self._readout_rate) 
             i = util.index_closest(self._readout_rate, self._readout_rates)
@@ -857,7 +857,7 @@ class PVCam(model.DigitalCamera):
             self._metadata[model.MD_READOUT_TIME] = 1.0 / self._readout_rate # s
             # rate might affect the BPP (although on the PIXIS, it's always 16)
             self._metadata[MD_BPP] = self.get_param(pv.PARAM_BIT_DEPTH)
-            
+        
             # If readout rate is changed, gain is reset => force update
             prev_gain = None
 
@@ -978,7 +978,7 @@ class PVCam(model.DigitalCamera):
                     
                     # finish the seq if it was started
                     if cbuffer:
-                        self.pvcam.pl_exp_finish_seq(self._handle, cbuffer, 0)
+#                        self.pvcam.pl_exp_finish_seq(self._handle, cbuffer, None)
                         self.pvcam.pl_exp_uninit_seq()
                         
                     # The only way I've found to detect the camera is not 
@@ -1060,7 +1060,9 @@ class PVCam(model.DigitalCamera):
                 
                 array = self._buffer_as_array(cbuffer, size, metadata)
                 retries = 0
+                logging.debug("data acquired successfully")
                 callback(array)
+                logging.debug("data processed")
              
                 # force the GC to non-used buffers, for some reason, without this
                 # the GC runs only after we've managed to fill up the memory
@@ -1077,16 +1079,29 @@ class PVCam(model.DigitalCamera):
                 logging.exception("Failed to abort acquisition")
                 pass # status reported an error
             
-            try:
-                if cbuffer:
-                    self.pvcam.pl_exp_finish_seq(self._handle, cbuffer, 0)
-            except PVCamError:
-                logging.exception("Failed to finish the acquisition properly")
+            # only required with multiple images
+#            try:
+#                if cbuffer:
+#                    self.pvcam.pl_exp_finish_seq(self._handle, cbuffer, None)
+#            except PVCamError:
+#                logging.exception("Failed to finish the acquisition properly")
         
             try:
-                self.pvcam.pl_exp_uninit_seq()
+                if cbuffer:
+                    self.pvcam.pl_exp_uninit_seq()
             except PVCamError:
                 logging.exception("Failed to finish the acquisition properly")
+            
+            # A close/open cycle seems the only way to have a stable library
+            # TODO: prevent the temp updater to use the handle at this time
+            # TODO: handle errors here
+            try:
+                self.pvcam.pl_cam_close(self._handle)
+                self._handle = self.cam_open(self._name, pv.OPEN_EXCLUSIVE)
+                self._setStaticSettings()
+            except PVCamError:
+                logging.exception("Failed to reset the library properly")
+            self._prev_settings = [None, None, None, None]
             
             self.acquisition_lock.release()
             logging.debug("Acquisition thread closed")
@@ -1101,14 +1116,6 @@ class PVCam(model.DigitalCamera):
         """
         assert not self.acquire_must_stop.is_set()
         self.acquire_must_stop.set()
-        try:
-            logging.debug("aborting acquisition from separate thread")
-            self.pvcam.pl_exp_abort(self._handle, pv.CCS_HALT)
-        except PVCamError:
-            # probably complaining it's not possible because the acquisition is 
-            # already over, so nothing to do
-            logging.exception("Failed to abort acquisition")
-            pass
           
     def wait_stopped_flow(self):
         """
@@ -1131,7 +1138,11 @@ class PVCam(model.DigitalCamera):
         
         if self._handle is not None:
             # don't touch the temperature target/cooling
-
+            
+            # stop the acquisition thread if needed
+            self.acquire_must_stop.set()
+            self.wait_stopped_flow()
+            
             logging.debug("Shutting down the camera")
             self.pvcam.pl_cam_close(self._handle)
             self._handle = None
