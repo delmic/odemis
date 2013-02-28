@@ -278,8 +278,6 @@ def __init_resources():
   <object class="wxFrame" name="cairo_frame">
     <object class="wxPanel" name="cairo_panel" subclass="test_cairo.CairoPanel">
       <size>400,400</size>
-      <fg>#FFFFFF</fg>
-      <bg>#000000</bg>
       <XRCED>
         <assign_var>1</assign_var>
       </XRCED>

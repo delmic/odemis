@@ -84,10 +84,11 @@ class ViewController(object):
         if self._microscope.ebeam and not self._microscope.light:
             i = 1
             for viewport in self._viewports:
-                view = instrmodel.MicroscopeView("SEM %d" % i,
-                         self._microscope.stage,
-                         focus0=None, # TODO: SEM focus or focus1?
-                         stream_classes=(SEMStream,)
+                view = instrmodel.MicroscopeView(
+                            "SEM %d" % i,
+                            self._microscope.stage,
+                            focus0=None, # TODO: SEM focus or focus1?
+                            stream_classes=(SEMStream,)
                          )
                 viewport.setView(view, self._microscope)
                 i += 1
@@ -98,10 +99,11 @@ class ViewController(object):
         elif not self._microscope.ebeam and self._microscope.light:
             i = 1
             for viewport in self._viewports:
-                view = instrmodel.MicroscopeView("Optical %d" % i,
-                         self._microscope.stage,
-                         focus0=self._microscope.focus,
-                         stream_classes=(BrightfieldStream, FluoStream)
+                view = instrmodel.MicroscopeView(
+                            "Optical %d" % i,
+                            self._microscope.stage,
+                            focus0=self._microscope.focus,
+                            stream_classes=(BrightfieldStream, FluoStream)
                          )
                 viewport.setView(view, self._microscope)
                 i += 1
@@ -111,37 +113,41 @@ class ViewController(object):
         elif self._microscope.ebeam and self._microscope.light:
             logging.info("Creating combined SEM/Optical viewport layout")
 
-            view = instrmodel.MicroscopeView("SEM",
-                     self._microscope.stage,
-                     focus0=None, # TODO: SEM focus
-                     stream_classes=EM_STREAMS
+            view = instrmodel.MicroscopeView(
+                        "SEM",
+                        self._microscope.stage,
+                        focus0=None, # TODO: SEM focus
+                        stream_classes=EM_STREAMS
                      )
             self._viewports[0].setView(view, self._microscope)
             self._microscope.sem_view = view
 
 
-            view = instrmodel.MicroscopeView("Optical",
-                     self._microscope.stage,
-                     focus0=self._microscope.focus,
-                     stream_classes=OPTICAL_STREAMS
+            view = instrmodel.MicroscopeView(
+                        "Optical",
+                        self._microscope.stage,
+                        focus0=self._microscope.focus,
+                        stream_classes=OPTICAL_STREAMS
                      )
             self._viewports[1].setView(view, self._microscope)
             self._microscope.optical_view = view
 
 
-            view = instrmodel.MicroscopeView("Combined 1",
-                     self._microscope.stage,
-                     focus0=self._microscope.focus,
-                     focus1=None, # TODO: SEM focus
+            view = instrmodel.MicroscopeView(
+                        "Combined 1",
+                        self._microscope.stage,
+                        focus0=self._microscope.focus,
+                        focus1=None, # TODO: SEM focus
                      )
             self._viewports[2].setView(view, self._microscope)
             self._microscope.combo1_view = view
 
 
-            view = instrmodel.MicroscopeView("Combined 2",
-                     self._microscope.stage,
-                     focus0=self._microscope.focus,
-                     focus1=None, # TODO: SEM focus
+            view = instrmodel.MicroscopeView(
+                        "Combined 2",
+                        self._microscope.stage,
+                        focus0=self._microscope.focus,
+                        focus1=None, # TODO: SEM focus
                      )
             self._viewports[3].setView(view, self._microscope)
             self._microscope.combo2_view = view
@@ -153,9 +159,10 @@ class ViewController(object):
             logging.warning("No known microscope configuration, creating 4 generic views")
             i = 1
             for viewport in self._viewports:
-                view = instrmodel.MicroscopeView("View %d" % i,
-                         self._microscope.stage,
-                         focus0=self._microscope.focus
+                view = instrmodel.MicroscopeView(
+                            "View %d" % i,
+                            self._microscope.stage,
+                            focus0=self._microscope.focus
                          )
                 viewport.setView(view, self._microscope)
                 i += 1

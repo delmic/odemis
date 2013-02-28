@@ -98,9 +98,12 @@ class DraggableCanvas(wx.Panel):
         # self.margin = 2
 
         # view = the area displayed
-        self.drag_shift = (0, 0) # px, px: Current shift to world_pos_buffer in the actual view
+
+        # px, px: Current shift to world_pos_buffer in the actual view
+        self.drag_shift = (0, 0)
         self.dragging = False
-        self.drag_init_pos = (0, 0) # px, px: initial position of mouse when started dragging
+        # px, px: initial position of mouse when started dragging
+        self.drag_init_pos = (0, 0)
 
         self._rdragging = False
         self._rdrag_init_pos = None # (int, int) px
@@ -320,8 +323,8 @@ class DraggableCanvas(wx.Panel):
             self.Refresh(eraseBackground=False)
 
     def ResizeBuffer(self, size):
-        """
-        Updates the size of the buffer to the given size
+        """ Updates the size of the buffer to the given size
+
         size (2-tuple int)
         """
         # Make new offscreen bitmap: this bitmap will always have the
@@ -329,7 +332,8 @@ class DraggableCanvas(wx.Panel):
         self._buffer = wx.EmptyBitmap(*size)
         self.buffer_size = size
         self._dcBuffer.SelectObject(self._buffer)
-        self._dcBuffer.SetBackground(wx.BLACK_BRUSH) # On Linux necessary after every select object
+        # On Linux necessary after every 'SelectObject'
+        self._dcBuffer.SetBackground(wx.BLACK_BRUSH)
 
     def ReCenterBuffer(self, pos):
         """

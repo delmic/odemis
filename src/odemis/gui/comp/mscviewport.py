@@ -66,13 +66,14 @@ class MicroscopeViewport(wx.Panel):
 
         ##### Legend
         # It's made of multiple controls positioned via sizers
-        # TODO: allow the user to pick which information is displayed in the legend
+        # TODO: allow the user to pick which information is displayed in the
+        # legend
         self.legend_panel = wx.Panel(self)
         self.legend_panel.SetBackgroundColour(self.GetBackgroundColour())
         self.legend_panel.SetForegroundColour(self.GetForegroundColour())
 
         # Merge slider
-        # TODO should be possible to use VAConnector
+        # TODO: should be possible to use VAConnector
         self.mergeSlider = Slider(self.legend_panel,
                     wx.ID_ANY,
                     50,
@@ -91,9 +92,9 @@ class MicroscopeViewport(wx.Panel):
         # TODO: should make sure that a click _anywhere_ on the legend brings
         # the focus to the view
 
-#        # Make sure that mouse clicks on the icons set the correct focus
-#        self.bmpIconOpt.Bind(wx.EVT_LEFT_DOWN, self.OnChildFocus)
-#        self.bmpIconSem.Bind(wx.EVT_LEFT_DOWN, self.OnChildFocus)
+        # # Make sure that mouse clicks on the icons set the correct focus
+        # self.bmpIconOpt.Bind(wx.EVT_LEFT_DOWN, self.OnChildFocus)
+        # self.bmpIconSem.Bind(wx.EVT_LEFT_DOWN, self.OnChildFocus)
 
         self.mergeSlider.Bind(wx.EVT_LEFT_UP, self.OnSlider)
         # FIXME: dragging the slider should have immediate effect on the merge ratio
@@ -183,8 +184,8 @@ class MicroscopeViewport(wx.Panel):
         Set the microscope view that this viewport is displaying/representing
         *Important*: Should be called only once, at initialisation.
 
-        microscope_view       -- MicroscopeView
-        microscope_model -- MicroscopeModel
+        :param microscope_view:(instrmodel.MicroscopeView)
+        :param microscope_model: (instrmodel.MicroscopeModel)
         """
 
         # This is a kind of a kludge, as it'd be best to have the viewport
@@ -195,7 +196,7 @@ class MicroscopeViewport(wx.Panel):
         self._microscope_view = microscope_view
         self._microscope_model = microscope_model
 
-        # TODO Center to current view position, with current mpp
+        # TODO: Center to current view position, with current mpp
         microscope_view.mpp.subscribe(self._onMPP, init=True)
 
         # set/subscribe merge ratio
