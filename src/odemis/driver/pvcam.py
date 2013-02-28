@@ -108,12 +108,26 @@ class PVCamDLL(CDLL):
     # have their result checked
     err_funcs = ("pl_error_code", "pl_error_message", "pl_exp_check_status")
     
+    def reinit(self):
+        """
+        Does a fast uninit/init cycle
+        """
+        try:
+            self.pl_pvcam_uninit()
+        except PVCamError:
+            pass # whatever
+        try:
+            self.pl_pvcam_init()
+        except PVCamError:
+            pass # whatever
+
     def __del__(self):
         self.pl_pvcam_uninit()
 
 # all the values that say the acquisition is in progress 
 STATUS_IN_PROGRESS = [pv.ACQUISITION_IN_PROGRESS, pv.EXPOSURE_IN_PROGRESS, 
                       pv.READOUT_IN_PROGRESS]
+TEMP_CAM_GONE = 2550 # temperature value that hints that the camera is gone
 
 class PVCam(model.DigitalCamera):
     """
@@ -326,35 +340,30 @@ class PVCam(model.DigitalCamera):
             self._temp_timer.cancel()
             self._temp_timer = None
         
-        # This stops the driver's internal threads
         try:
-            self.pvcam.pl_pvcam_uninit()
+            self.pvcam.pl_cam_close(self._handle)
         except PVCamError:
-            logging.warning("Reinitialisation failed to shutdown the driver")
-        # FIXME
+            pass
+        self._handle = None
         
-        # wait until the device is available
-        # it's a bit tricky if there are more than one camera, but at least
-        # should work fine with one camera.
-        while self.GetAvailableCameras() <= self._device:
+        # PVCam only update the camera list after uninit()/init()
+        while True:
             logging.info("Waiting for the camera to reappear")
-            time.sleep(1)
+            self.pvcam.reinit()
+            try:
+                self._handle = self.cam_open(self._name, pv.OPEN_EXCLUSIVE)
+                # succeded!
+                break
+            except PVCamError:
+                time.sleep(1)
         
         # reinitialise the sdk
-        logging.info("Trying to reinitialise the camera %d...", self._device)
+        logging.info("Trying to reinitialise the camera %s...", self._name)
         try:
-            self.handle = self.GetCameraHandle(self._device)
-            self.select()
-            self.Initialize()
+            self.pvcam.pl_cam_get_diags(self._handle)
         except PVCamError:
-            # Let's give it a second chance
-            try:
-                self.handle = self.GetCameraHandle(self._device)
-                self.select()
-                self.Initialize()
-            except:
-                logging.info("Reinitialisation failed")
-                raise
+            logging.info("Reinitialisation failed")
+            raise
             
         logging.info("Reinitialisation successful")
         
@@ -362,10 +371,9 @@ class PVCam(model.DigitalCamera):
         self._prev_settings = [None, None, None, None]
         self._setStaticSettings()
         self.setTargetTemperature(self.targetTemperature.value)
-        self.setFanSpeed(self.fanSpeed.value)
     
         self._temp_timer = util.RepeatingTimer(10, self.updateTemperatureVA,
-                                         "AndorCam2 temperature update")
+                                         "PVCam temperature update")
         self._temp_timer.start()
         
     def cam_get_name(self, num):
@@ -843,7 +851,7 @@ class PVCam(model.DigitalCamera):
 
         if prev_readout_rate != self._readout_rate:
             logging.debug("Updating readout rate settings to %f Hz", self._readout_rate) 
-            i = util.find_closest(self._readout_rate, self._readout_rates)
+            i = util.index_closest(self._readout_rate, self._readout_rates)
             self.set_param(pv.PARAM_SPDTAB_INDEX, i)
                 
             self._metadata[model.MD_READOUT_TIME] = 1.0 / self._readout_rate # s
@@ -855,7 +863,7 @@ class PVCam(model.DigitalCamera):
 
         if prev_gain != self._gain:
             logging.debug("Updating gain to %f", self._gain)
-            i = util.find_closest(self._gain, self._gains)
+            i = util.index_closest(self._gain, self._gains)
             self.set_param(pv.PARAM_GAIN_INDEX, i)
             self._metadata[model.MD_GAIN] = self._gain
 
@@ -973,6 +981,11 @@ class PVCam(model.DigitalCamera):
                         self.pvcam.pl_exp_finish_seq(self._handle, cbuffer, 0)
                         self.pvcam.pl_exp_uninit_seq()
                         
+                    # The only way I've found to detect the camera is not 
+                    # responding is to check for weird camera temperature
+                    if self.get_param(pv.PARAM_TEMP) == TEMP_CAM_GONE:
+                        self.Reinitialize() #returns only once the camera is working again 
+                    
                     # With circular buffer, we could go about up to 10% faster, but
                     # everything is more complex (eg: odd buffer size will block the
                     # PIXIS), and not all hardware supports it. It would allow
@@ -1004,9 +1017,10 @@ class PVCam(model.DigitalCamera):
                 self.pvcam.pl_exp_start_seq(self._handle, cbuffer)
                 metadata[model.MD_ACQ_DATE] = time.time() # time at the beginning
                 
-                # first we wait ourselves the typical time (which might be very long)
-                # while detecting requests for stop
-                must_stop = self.acquire_must_stop.wait(duration)
+                # first we wait ourselves the 80% of expected time (which 
+                # might be very long) while detecting requests for stop. 80%, 
+                # because the SDK is sometimes quite pessimistic.
+                must_stop = self.acquire_must_stop.wait(duration * 0.8)
                 if must_stop:
                     break
                 
@@ -1035,13 +1049,11 @@ class PVCam(model.DigitalCamera):
                         raise
 
                     logging.exception("trying again to acquire image after error")
-                    retries += 1
-                    # TODO: any way to detect the camera is completly gone?
-    #                        self.Reinitialize()
                     try:
                         self.pvcam.pl_exp_abort(self._handle, pv.CCS_HALT)
                     except PVCamError:
                         pass
+                    retries += 1
                     time.sleep(0.1)
                     need_reinit = True
                     continue
