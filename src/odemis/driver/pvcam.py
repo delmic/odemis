@@ -28,6 +28,7 @@ from odemis import __version__, model, util
 from odemis.model._dataflow import MD_BPP
 import gc
 import logging
+import math
 import numpy
 import os
 import threading
@@ -105,7 +106,7 @@ class PVCamDLL(CDLL):
     
     # names of the functions which are used in case of error (so should not
     # have their result checked
-    err_funcs = ("pl_error_code", "pl_error_message")
+    err_funcs = ("pl_error_code", "pl_error_message", "pl_exp_check_status")
     
     def __del__(self):
         self.pl_pvcam_uninit()
@@ -162,8 +163,7 @@ class PVCam(model.DigitalCamera):
             # raises an error if camera has a problem
             self.pvcam.pl_cam_get_diags(self._handle)
         except PVCamError:
-            raise
-#            raise IOError("Failed to open PI PVCam camera %d (%s)" % (device, self._name))
+            raise IOError("Failed to open PVCam camera %d (%s)" % (device, self._name))
         
         logging.info("Opened device %d successfully", device)
         
@@ -216,7 +216,7 @@ class PVCam(model.DigitalCamera):
         
         self._setStaticSettings()
 
-        # gain        
+        # gain
         # The PIXIS has 3 gains (x1 x2 x4) + 2 output amplifiers (~x1 x4)
         # => we fix the OA to low noise (x1), so it's just the gain to change,
         # but we could also allow the user to pick the gain as a multiplication of
@@ -240,17 +240,22 @@ class PVCam(model.DigitalCamera):
         # only supports same value on both dimensions (for simplification)
         self._binning = (1,1) # px
         self._image_rect = (0, resolution[0]-1, 0, resolution[1]-1)
+        minr = self.GetMinResolution()
         # need to be before binning, as it is modified when changing binning         
-        self.resolution = model.ResolutionVA(resolution, [(1, 1), resolution], 
+        self.resolution = model.ResolutionVA(resolution, [minr, resolution], 
                                              setter=self._setResolution)
         self._setResolution(resolution)
         
-        bin_choices = range(1, min(resolution)) # for safety: the min of both axes
+        bin_choices = set(range(1, min(resolution))) # for safety: the min of both axes
         self.binning = model.IntEnumerated(self._binning[0], bin_choices,
                                            unit="px", setter=self._setBinning)
         
         # default values try to get live microscopy imaging more likely to show something
-        minexp = self.get_param(pv.PARAM_EXP_MIN_TIME) #s
+        try:
+            minexp = self.get_param(pv.PARAM_EXP_MIN_TIME) #s
+        except PVCamError:
+            # attribute doesn't exist
+            minexp = 0 # same as the resolution
         minexp = min(1e-3, minexp) # we've set the exposure resolution at ms
         # exposure is represented by unsigned int
         maxexp = (2**32 -1) * 1e-3 #s
@@ -288,11 +293,12 @@ class PVCam(model.DigitalCamera):
 
         # Set to simple acquisition mode
         self.set_param(pv.PARAM_PMODE, pv.PMODE_NORMAL)
-        #TODO correct? pre-exposure?
-        self.set_param(pv.PARAM_PMODE, pv.CLEAR_PRE_SEQUENCE)
+        # In PI cameras, this is fixed (so read-only)
+        if self.get_param_access(pv.PARAM_CLEAR_MODE) == pv.ACC_READ_WRITE:
+            self.set_param(pv.PARAM_CLEAR_MODE, pv.CLEAR_PRE_SEQUENCE)
         
         # set the exposure resolution. (choices are us, ms or s) => ms is best
-        # for life imaging
+        # for life imaging (us allows up to 71min)
         self.set_param(pv.PARAM_EXP_RES_INDEX, pv.EXP_RES_ONE_MILLISEC)
         # TODO: autoadapt according to the exposure requested?
     
@@ -392,7 +398,7 @@ class PVCam(model.DigitalCamera):
          pv.TYPE_UNS16: c_uint16,
          pv.TYPE_UNS32: c_uint32,
          pv.TYPE_UNS64: c_uint64,
-         pv.TYPE_FLT64: c_float,
+         pv.TYPE_FLT64: c_double, # hopefully true on all platforms?
          pv.TYPE_BOOLEAN: c_byte,
          pv.TYPE_ENUM: c_uint32, 
          }
@@ -427,6 +433,16 @@ class PVCam(model.DigitalCamera):
         # read the parameter
         self.pvcam.pl_get_param(self._handle, param, value, byref(content))
         return content.value
+    
+    def get_param_access(self, param):
+        """
+        gives the access rights for a given parameter.
+        param (int): parameter ID (cf pv.PARAM_*)
+        returns (int): value as in pv.ACC_*
+        """
+        rights = c_uint16()
+        self.pvcam.pl_get_param(self._handle, param, pv.ATTR_ACCESS, byref(rights))
+        return rights.value
     
     def set_param(self, param, value):
         """
@@ -477,8 +493,6 @@ class PVCam(model.DigitalCamera):
         """
         Checks the status of the current exposure (acquisition)
         returns (int): status as in pv.* (cf documentation)
-        raises:
-            PVCamError (with the exact error): if status would be READOUT_FAILED 
         """
         status = c_int16()
         byte_cnt = c_uint32() # number of bytes already acquired: unused
@@ -581,6 +595,14 @@ class PVCam(model.DigitalCamera):
         height = self.get_param(pv.PARAM_PAR_SIZE, pv.ATTR_DEFAULT)
         return width, height
     
+    def GetMinResolution(self):
+        """
+        return 2-tuple (int, int): width, height of the minimum possible resolution
+        """
+        width = self.get_param(pv.PARAM_SER_SIZE, pv.ATTR_MIN)
+        height = self.get_param(pv.PARAM_PAR_SIZE, pv.ATTR_MIN)
+        return width, height
+    
     def GetPixelSize(self):
         """
         return 2-tuple float, float: width, height of one pixel in m
@@ -603,19 +625,6 @@ class PVCam(model.DigitalCamera):
         mint = self.get_param(pv.PARAM_TEMP_SETPOINT, pv.ATTR_MIN) / 100
         maxt = self.get_param(pv.PARAM_TEMP_SETPOINT, pv.ATTR_MAX) / 100
         return mint, maxt
-    
-    def GetMaximumBinning(self, readmode):
-        """
-        readmode (0<= int <= 4): cf SetReadMode
-        return the maximum binning allowable in horizontal and vertical
-         dimension for a particular readout mode.
-        """
-        # FIXME
-        assert(readmode in range(5))
-        maxh, maxv = c_int(), c_int()
-        self.atcore.GetMaximumBinning(readmode, 0, byref(maxh))
-        self.atcore.GetMaximumBinning(readmode, 1, byref(maxv))
-        return maxh.value, maxv.value
     
     # High level methods
     def setTargetTemperature(self, temp):
@@ -688,11 +697,11 @@ class PVCam(model.DigitalCamera):
         """
         # It depends on the port (output amplifier), bit depth, which we 
         # consider both fixed. 
-        # PARAM_READOUT_TIME is not useful (total time for the current ROI) 
-        
         # PARAM_PIX_TIME (ns): the time per pixel
         # PARAM_SPDTAB_INDEX: the speed index
-        # Note: setting the spdtab idx reset the gain
+        # The only way to find out the rate of a speed, is to set the speed, and
+        # see the new time per pixel. 
+        # Note: setting the spdtab idx resets the gain
 
         mins = self.get_param(pv.PARAM_SPDTAB_INDEX, pv.ATTR_MIN)
         maxs = self.get_param(pv.PARAM_SPDTAB_INDEX, pv.ATTR_MAX)
@@ -733,7 +742,7 @@ class PVCam(model.DigitalCamera):
         # TODO: support non square binning (for spectroscopy)
         
         prev_binning = self._binning
-        self._binning = (binning, binning)
+        self._binning = (value, value)
         
         # adapt resolution so that the AOI stays the same
         change = (prev_binning[0] / value,
@@ -754,28 +763,19 @@ class PVCam(model.DigitalCamera):
          resolution.
         """
         full_res = self._shape[:2]
-        resolution = full_res[0] / self._binning[0], full_res[1] / self._binning[1] 
+        resolution = (int(full_res[0] // self._binning[0]),
+                      int(full_res[1] // self._binning[1])) 
         assert((1 <= size[0]) and (size[0] <= resolution[0]) and
                (1 <= size[1]) and (size[1] <= resolution[1]))
         
-
-        # If the camera doesn't support Area of Interest, then it has to be the
-        # size of the sensor
-        caps = self.GetCapabilities()
-        if (not caps.ReadModes & AndorCapabilities.READMODE_SUBIMAGE):
-            if size != resolution:
-                raise IOError("AndorCam: Requested image size " + str(size) + 
-                              " does not match sensor resolution " + str(resolution))
-            return
-        
         # Region of interest
         # center the image
-        lt = ((resolution[0] - size[0]) / 2,
-              (resolution[1] - size[1]) / 2)
+        lt = ((resolution[0] - size[0]) // 2,
+              (resolution[1] - size[1]) // 2)
         
-        # the rectangle is defined in normal pixels (not super-pixels) from (1,1)
-        self._image_rect = (lt[0] * self._binning[0] + 1, (lt[0] + size[0]) * self._binning[0],
-                            lt[1] * self._binning[1] + 1, (lt[1] + size[1]) * self._binning[1])
+        # the rectangle is defined in normal pixels (not super-pixels) from (0,0)
+        self._image_rect = (lt[0] * self._binning[0], (lt[0] + size[0]) * self._binning[0] - 1,
+                            lt[1] * self._binning[1], (lt[1] + size[1]) * self._binning[1] - 1)
     
     def _setResolution(self, value):
         new_res = self.resolutionFitter(value)
@@ -790,25 +790,19 @@ class PVCam(model.DigitalCamera):
         returns (2-tuple of int): resolution which fits the camera. It is equal
          or bigger than the requested resolution
         """
-        #
+        # find maximum resolution (with binning)
         resolution = self._shape[:2]
-        max_size = (int(resolution[0] / self._binning[0]), 
-                    int(resolution[1] / self._binning[1]))
-        
-        # SetReadMode() cannot be here because it cannot be called during acquisition 
-        # If the camera doesn't support Area of Interest, then it has to be the
-        # size of the sensor
-        caps = self.GetCapabilities()
-        if (not caps.ReadModes & AndorCapabilities.READMODE_SUBIMAGE):
-            return max_size
+        max_size = (int(resolution[0] // self._binning[0]),
+                    int(resolution[1] // self._binning[1]))
+        min_res = self.resolution.range[0]
+        min_size = (int(math.ceil(min_res[0] / self._binning[0])),
+                    int(math.ceil(min_res[1] / self._binning[1])))
         
         # smaller than the whole sensor
         size = (min(size_req[0], max_size[0]), min(size_req[1], max_size[1]))
         
         # bigger than the minimum
-        min_spixels = c_int()
-        self.atcore.GetMinimumImageLength(byref(min_spixels))
-        size = (max(min_spixels.value, size[0]), max(min_spixels.value, size[1]))
+        size = (max(min_size[0], size[0]), max(min_size[0], size[1]))
         
         return size
 
@@ -818,12 +812,11 @@ class PVCam(model.DigitalCamera):
         exp (0<float): exposure time in seconds
         returns the new exposure time
         """
-        assert(0.0 < value)
+        assert(0 < value)
         
-        maxexp = c_float()
-        self.atcore.GetMaximumExposure(byref(maxexp))
+        # The checks done in the VA should be enough
         # we cache it until just before the next acquisition  
-        self._exposure_time = min(value, maxexp.value)
+        self._exposure_time = value
         return self._exposure_time
     
     def _need_update_settings(self):
@@ -845,7 +838,8 @@ class PVCam(model.DigitalCamera):
                 region (pv.rgn_type): the region structure that can be used to set up the acquisition
                 size (2-tuple of int): the size of the data array that will get acquired
         """
-        prev_image_settings, prev_exp_time, prev_readout_rate, prev_gain = self._prev_settings
+        [prev_image_settings, prev_exp_time,
+                prev_readout_rate, prev_gain] = self._prev_settings
 
         if prev_readout_rate != self._readout_rate:
             logging.debug("Updating readout rate settings to %f Hz", self._readout_rate) 
@@ -885,10 +879,10 @@ class PVCam(model.DigitalCamera):
     
     def _allocate_buffer(self, length):
         """
-        length (int)
-        returns a cbuffer of the right size for an image
+        length (int): number of bytes requested by pl_exp_setup
+        returns a cbuffer of the right type for an image
         """
-        cbuffer = (c_uint16 * length)() # empty array
+        cbuffer = (c_uint16 * (length // 2))() # empty array
         return cbuffer
     
     def _buffer_as_array(self, cbuffer, size, metadata=None):
@@ -908,9 +902,9 @@ class PVCam(model.DigitalCamera):
           parameters.
         return (DataArray): an array containing the image with the metadata
         """
+        # TODO: not used, not working
         with self.acquisition_lock:
             self.select()
-            assert(self.GetStatus() == AndorV2DLL.DRV_IDLE)
             
             self.atcore.SetAcquisitionMode(1) # 1 = Single scan
             # Seems exposure needs to be re-set after setting acquisition mode
@@ -969,7 +963,7 @@ class PVCam(model.DigitalCamera):
                     try:
                         # cancel acquisition if it's still going on
                         if self.exp_check_status() in STATUS_IN_PROGRESS:
-                            self.pvcam.pl_exp_abort()
+                            self.pvcam.pl_exp_abort(self._handle, pv.CCS_HALT)
                             time.sleep(0.1)
                     except PVCamError:
                         pass # already done?
@@ -990,12 +984,13 @@ class PVCam(model.DigitalCamera):
                     blength = c_uint32()
                     exp_ms = int(math.ceil(exposure * 1e3)) # ms
                     # 1 image, with 1 region
-                    self.pvcam.pl_exp_setup_seq(self._handle, 1, 1, region,
-                                                pv.TIMED_MODE, exposure, byref(blength))
+                    self.pvcam.pl_exp_setup_seq(self._handle, 1, 1, byref(region),
+                                                pv.TIMED_MODE, exp_ms, byref(blength))
+                    logging.debug("acquisition setup report buffer size of %d", blength.value)
                     cbuffer = self._allocate_buffer(blength.value) # TODO shall allocate a new buffer every time?
                     
                     readout_sw = size[0] * size[1] * self._metadata[model.MD_READOUT_TIME] # s
-                    # should be more or less the same as:
+                    # tends to be very slightly bigger:
                     readout = self.get_param(pv.PARAM_READOUT_TIME) * 1e-3 # s
                     logging.debug("Computed readout time of %g s, while sdk says %g s",
                                   readout_sw, readout)
@@ -1005,8 +1000,9 @@ class PVCam(model.DigitalCamera):
         
                 # Acquire the images
                 metadata = dict(self._metadata) # duplicate
-                metadata[model.MD_ACQ_DATE] = time.time() # time at the beginning
+                logging.debug("starting acquisition")
                 self.pvcam.pl_exp_start_seq(self._handle, cbuffer)
+                metadata[model.MD_ACQ_DATE] = time.time() # time at the beginning
                 
                 # first we wait ourselves the typical time (which might be very long)
                 # while detecting requests for stop
@@ -1017,32 +1013,36 @@ class PVCam(model.DigitalCamera):
                 # then wait a bounded time to ensure the image is acquired
                 try:
                     timeout = time.time() + 1
-                    while self.exp_check_status() != pv.READOUT_COMPLETE:
-                        if time.time() < timeout:
+                    status = self.exp_check_status()
+                    while status in STATUS_IN_PROGRESS:
+                        logging.debug("status is %d", status)
+                        if time.time() > timeout:
                             raise IOError("Timeout")
                         # check if we should stop
                         must_stop = self.acquire_must_stop.wait(0.01)
                         if must_stop:
                             break
+                        status = self.exp_check_status()
                     
                     if must_stop:
                         break
+                    if status != pv.READOUT_COMPLETE:
+                        raise IOError("Acquisition status is unexpected %d" % status)
+
                 except (IOError, PVCamError) as exp:
                     if retries > 5:
                         logging.error("Too many failures to acquire an image")
-                        self.acquisition_lock.release()
-                        self.acquire_must_stop.clear()
                         raise
-                    
+
+                    logging.exception("trying again to acquire image after error")
                     retries += 1
                     # TODO: any way to detect the camera is completly gone?
     #                        self.Reinitialize()
                     try:
-                        self.pvcam.pl_exp_abort()
+                        self.pvcam.pl_exp_abort(self._handle, pv.CCS_HALT)
                     except PVCamError:
                         pass
                     time.sleep(0.1)
-                    logging.exception("trying again to acquire image after error")
                     need_reinit = True
                     continue
                 
@@ -1053,16 +1053,16 @@ class PVCam(model.DigitalCamera):
                 # force the GC to non-used buffers, for some reason, without this
                 # the GC runs only after we've managed to fill up the memory
                 gc.collect()
-         
-        
         except:
             logging.exception("Unexpected failure during image acquisition")
         finally:
             # ending cleanly
             try:
                 if self.exp_check_status() in STATUS_IN_PROGRESS:
-                    self.pvcam.pl_exp_abort()
+                    logging.debug("aborting acquisition")
+                    self.pvcam.pl_exp_abort(self._handle, pv.CCS_HALT)
             except PVCamError:
+                logging.exception("Failed to abort acquisition")
                 pass # status reported an error
             
             try:
@@ -1090,11 +1090,12 @@ class PVCam(model.DigitalCamera):
         assert not self.acquire_must_stop.is_set()
         self.acquire_must_stop.set()
         try:
-            self.atcore.CancelWait()
-            self.atcore.AbortAcquisition()
-        except AndorV2Error:
+            logging.debug("aborting acquisition from separate thread")
+            self.pvcam.pl_exp_abort(self._handle, pv.CCS_HALT)
+        except PVCamError:
             # probably complaining it's not possible because the acquisition is 
             # already over, so nothing to do
+            logging.exception("Failed to abort acquisition")
             pass
           
     def wait_stopped_flow(self):
@@ -1132,30 +1133,22 @@ class PVCam(model.DigitalCamera):
         Check whether the connection to the camera works.
         return (boolean): False if it detects any problem
         """
+        # TODO: this is pretty weak, because if we've managed to init, all
+        # this already passed before
         try:
-            PCB, Decode = c_uint(), c_uint()
-            dummy1, dummy2 = c_uint(), c_uint()
-            CameraFirmwareVersion, CameraFirmwareBuild = c_uint(), c_uint()
-            self.atcore.GetHardwareVersion(byref(PCB), byref(Decode), 
-                byref(dummy1), byref(dummy2), byref(CameraFirmwareVersion), byref(CameraFirmwareBuild))
+            resolution = self.GetSensorSize()
         except Exception as err:
-            logging.error("Failed to read camera model: " + str(err))
-            return False
-    
-        # Try to get an image with the default resolution
-        try:
-            resolution = self.GetDetector()
-        except Exception as err:
-            logging.error("Failed to read camera resolution: " + str(err))
+            logging.exception("Failed to read camera resolution: " + str(err))
             return False
         
         try:
-            self.resolution.value = resolution
-            self.exposureTime.value = 0.01
-            im = self.acquireOne()
+            # raises an error if camera has a problem
+            self.pvcam.pl_cam_get_diags(self._handle)
         except Exception as err:
-            logging.error("Failed to acquire an image: " + str(err))
+            logging.exception("Camera reports a problem: " + str(err))
             return False
+
+        # TODO: try to acquire an image too?
         
         return True
         
