@@ -528,14 +528,15 @@ class StreamTree(object):
 
     def __init__(self, operator=None, streams=None, **kwargs):
         """
-        operator (callable): a function that takes a list of InstrumentalImage in the
-            same order as the streams are given, and the additional arguments and
-            returns one InstrumentalImage.
+        :param operator: (callable) a function that takes a list of
+            InstrumentalImage in the same order as the streams are given and the
+            additional arguments and returns one InstrumentalImage.
             By default operator is an average function.
-        streams (list of Streams or StreamTree): a list of streams, or StreamTrees.
+        :param streams: (list of Streams or StreamTree): a list of streams, or
+            StreamTrees.
             If a StreamTree is provided, its outlook is first computed and then
             passed as an InstrumentalImage.
-        kwargs: any argument to be given to the operator function
+        :param kwargs: any argument to be given to the operator function
         """
         self.operator = operator or util.img.Average
 

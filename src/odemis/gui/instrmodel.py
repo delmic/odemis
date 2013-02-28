@@ -242,17 +242,23 @@ class MicroscopeView(object):
     objects can update it.
     """
 
-    def __init__(self, name, stage=None, focus0=None, focus1=None, stream_classes=None):
+    def __init__(self, name, stage=None,
+                 focus0=None, focus1=None, stream_classes=None):
         """
-        name (string): user-friendly name of the view
-        stage (Actuator): actuator with two axes: x and y
-        focus0 (Actuator): actuator with one axis: z. Can be None
-        focus1 (Actuator): actuator with one axis: z. Can be None
+        :param name (string): user-friendly name of the view
+        :param stage (Actuator): actuator with two axes: x and y
+        :param focus0 (Actuator): actuator with one axis: z. Can be None
+        :param focus1 (Actuator): actuator with one axis: z. Can be None
+
         Focuses 0 and 1 are modified when changing focus respectively along the
-           X and Y axis.
-        stream_classes (None, or tuple of classes): all subclasses that the streams
-          in this view can show (restriction is not technical, only for the user)
+        X and Y axis.
+
+        stream_classes (None, or tuple of classes): all subclasses that the
+        streams in this view can show (restriction is not technical, only for
+        the user)
+
         """
+
         self.name = model.StringVA(name)
         self.stream_classes = stream_classes or (Stream,)
         self._stage = stage
@@ -264,49 +270,59 @@ class MicroscopeView(object):
             self.stage_pos = stage.position
             # stage.position.subscribe(self.onStagePos)
 
-            # the current center of the view, which might be different from the stage
-            # TODO: we might need to have it on the MicroscopeModel, if all the viewports must display the same location
+            # the current center of the view, which might be different from
+            # the stage
+            # TODO: we might need to have it on the MicroscopeModel, if all the
+            # viewports must display the same location
             pos = self.stage_pos.value
             view_pos_init = (pos["x"], pos["y"])
         else:
             view_pos_init = (0, 0)
+
         self.view_pos = model.ListVA(view_pos_init, unit="m")
 
         # current density (meter per pixel, ~ scale/zoom level)
         # 10µm/px => ~large view of the sample
         self.mpp = FloatContinuous(10e-6, range=(10e-12, 1e-3), unit="m/px")
 
-        # how much one image is displayed on the other one
+        # How much one image is displayed on the other one. Value used by
+        # StreamTree
         self.merge_ratio = FloatContinuous(0.3, range=[0, 1], unit="")
         self.merge_ratio.subscribe(self._onMergeRatio)
 
-        # Streams to display (can be considered in most cases a implementation detail)
+        # Streams to display (can be considered an implementation detail in most
+        # cases)
         # Note: use addStream/removeStream for simple modifications
         self.streams = StreamTree(merge=self.merge_ratio.value)
         # Only modify with this lock acquired:
+        # TODO: Is this the source of the intermittent locking of the GUI when
+        # Streams are active? If so, is there another/better way?
         self._streams_lock = threading.Lock()
 
         # Last time the image of the view was changed. It's actually mostly
         # a trick to allow other parts of the GUI to know when the (theoretical)
         # composited image has changed.
         self.lastUpdate = model.FloatVA(time.time(), unit="s")
-        self._has_received_image = False # last initialisation is done on the first image received
+        # Last initialisation is done on the first image received
+        self._has_received_image = False
 
         # a thumbnail version of what is displayed
         self.thumbnail = VigilantAttribute(None) # contains a wx.Image
 
         # TODO list of annotations to display
-        self.crosshair = model.BooleanVA(True)
+        self.show_crosshair = model.BooleanVA(True)
 
     def moveStageToView(self):
-        """
-        move the stage to the current view_pos
-        return: a future (that allows to know when the move is finished)
+        """ Move the stage to the current view_pos
+
+        :return: a future (that allows to know when the move is finished)
+
         Note: once the move is finished stage_pos will be updated (by the back-end)
         """
+
         if not self._stage:
             return
-        pos = self.view_pos.value
+
         # TODO: a way to know if it can do absolute move? => .capabilities!
         # if hasattr(self.stage, "moveAbs"):
         #     # absolute
@@ -314,9 +330,14 @@ class MicroscopeView(object):
         #     self._stage.moveAbs(move)
         # else:
 
+        view_pos = self.view_pos.value
         # relative
         prev_pos = self.stage_pos.value
-        move = {"x": pos[0] - prev_pos["x"], "y": pos[1] - prev_pos["y"]}
+        move = {
+            "x": view_pos[0] - prev_pos["x"],
+            "y": view_pos[1] - prev_pos["y"]
+        }
+
         return self._stage.moveRel(move)
 
         #    def onStagePos(self, pos):
@@ -328,7 +349,8 @@ class MicroscopeView(object):
 
     def getStreams(self):
         """
-        returns (list of Stream): list of streams that are displayed in the view
+        :returns [Stream]: list of streams that are displayed in the view
+
         Do not modify directly, use addStream(), and removeStream().
         Note: use .streams for getting the raw StreamTree
         """

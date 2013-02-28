@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-'''
+"""
 Created on 10 Feb 2012
 
 @author: Éric Piel
@@ -9,19 +9,31 @@ Copyright © 2012 Éric Piel, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 2 of the License, or (at your option) any later version.
+Odemis is free software: you can redistribute it and/or modify it under the
+terms of the GNU General Public License as published by the Free Software
+Foundation, either version 2 of the License, or (at your option) any later
+version.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
-'''
+You should have received a copy of the GNU General Public License along with
+Odemis. If not, see http://www.gnu.org/licenses/.
+
+"""
+
+import time
+import unittest
+
+import wx
+
 from odemis import model
 from odemis.gui import instrmodel
 from odemis.gui.dblmscopecanvas import DblMicroscopeCanvas
-from odemis.gui.instrmodel import InstrumentalImage
-import time
-import unittest
-import wx
+from odemis.gui.model.img import InstrumentalImage
+from odemis.gui.model.stream import StaticStream
+
 
 def loop():
     app = wx.GetApp()
@@ -62,12 +74,12 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
 
     def test_CrosHair(self):
         # crosshair
-        crosshair = self.view.crosshair
-        crosshair.value = True
+        show_crosshair = self.view.show_crosshair
+        show_crosshair.value = True
         self.assertTrue(len(self.canvas.ViewOverlays) == 1)
-        crosshair.value = True
+        show_crosshair.value = True
         self.assertTrue(len(self.canvas.ViewOverlays) == 1)
-        crosshair.value = False
+        show_crosshair.value = False
         self.assertTrue(len(self.canvas.ViewOverlays) == 0)
 
     def test_BasicDisplay(self):
@@ -81,23 +93,30 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
 
         # add images
         im1 = wx.EmptyImage(11, 11, clear=True)
-        px1_cent = (5,5)
-        im1.SetRGB(px1_cent[0], px1_cent[1], 255, 0, 0) # Red pixel at center, (5,5)
+        px1_cent = (5, 5)
+        # Red pixel at center, (5,5)
+        im1.SetRGB(px1_cent[0], px1_cent[1], 255, 0, 0)
         im2 = wx.EmptyImage(201, 201, clear=True)
-        px2_cent = (100,100)
-        im2.SetRGB(px2_cent[0], px2_cent[1], 0, 0, 255) # Blue pixel at center (100,100)
-        stream1 = instrmodel.StaticStream("s1", InstrumentalImage(im1, mpp *10, (0,0)))
+        px2_cent = (100, 100)
+        # Blue pixel at center (100,100)
+        im2.SetRGB(px2_cent[0], px2_cent[1], 0, 0, 255)
+        stream1 = StaticStream("s1", InstrumentalImage(im1, mpp * 10, (0, 0)))
         # 200, 200 => outside of the im1
-        stream2 = instrmodel.StaticStream("s2", InstrumentalImage(im2, mpp, (200 * mpp, 200 * mpp)))
+        stream2 = StaticStream("s2", InstrumentalImage(
+                                        im2,
+                                        mpp,
+                                        (200 * mpp, 200 * mpp)))
         self.view.addStream(stream1)
         self.view.addStream(stream2)
 
-        # reset the mpp of the view, as it's automatically set to the first image
+        # reset the mpp of the view, as it's automatically set to the first
+        # image
         self.view.mpp.value = mpp
 
-        # for now it fails: depending on shift (sometimes everything is shifted by -1,-1)
-        shift = (0,0) # 63,63 ; 100, 100 work
-#        self.canvas.ShiftView(shift)
+        # for now it fails: depending on shift (sometimes everything is shifted
+        # by -1,-1)
+        shift = (0, 0) # 63,63 ; 100, 100 work
+        # self.canvas.ShiftView(shift)
 
         # merge the images
         ratio = 0.5
@@ -111,11 +130,11 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
 
         # copy the buffer into a nice image here
         resultIm = GetImageFromBuffer(self.canvas)
-#        for i in range(resultIm.GetWidth()):
-#            for j in range(resultIm.GetHeight()):
-#                px = GetRGB(resultIm, i, j)
-#                if px != (0,0,0):
-#                    print px, i, j
+        # for i in range(resultIm.GetWidth()):
+        #     for j in range(resultIm.GetHeight()):
+        #         px = GetRGB(resultIm, i, j)
+        #         if px != (0,0,0):
+        #             print px, i, j
 
         px1 = GetRGB(resultIm, resultIm.Width/2 + shift[0], resultIm.Height/2 + shift[1])
         self.assertEqual(px1, (127, 0, 0))
@@ -140,20 +159,20 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
 
         # add images
         im1 = wx.EmptyImage(11, 11, clear=True)
-        px1_cent = (5,5)
+        px1_cent = (5, 5)
         im1.SetRGB(px1_cent[0], px1_cent[1], 255, 0, 0) # Red pixel at center, (5,5)
         im2 = wx.EmptyImage(201, 201, clear=True)
-        px2_cent = (100,100)
+        px2_cent = (100, 100)
         im2.SetRGB(px2_cent[0], px2_cent[1], 0, 0, 255) # Blue pixel at center (100,100)
-        stream1 = instrmodel.StaticStream("s1", InstrumentalImage(im1, mpp * 10, (0,0)))
-        stream2 = instrmodel.StaticStream("s2", InstrumentalImage(im2, mpp, (200 * mpp,200 * mpp)))
+        stream1 = StaticStream("s1", InstrumentalImage(im1, mpp * 10, (0, 0)))
+        stream2 = StaticStream("s2", InstrumentalImage(im2, mpp, (200 * mpp, 200 * mpp)))
         self.view.addStream(stream1)
         self.view.addStream(stream2)
         # view might set its mpp to the mpp of first image => reset it
         self.view.mpp.value = mpp
         self.assertEqual(mpp, self.view.mpp.value)
 
-        shift = (100,100)
+        shift = (100, 100)
         self.canvas.ShiftView(shift)
 
         # merge the images
@@ -182,14 +201,14 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
 
         # add images
         im1 = wx.EmptyImage(11, 11, clear=True)
-        px1_cent = (5,5)
+        px1_cent = (5, 5)
         im1.SetRGB(px1_cent[0], px1_cent[1], 255, 0, 0) # Red pixel at center, (5,5)
-        stream1 = instrmodel.StaticStream("s1", InstrumentalImage(im1, mpp * 10, (0,0)))
+        stream1 = StaticStream("s1", InstrumentalImage(im1, mpp * 10, (0, 0)))
         self.view.addStream(stream1)
         # view might set its mpp to the mpp of first image => reset it
         self.view.mpp.value = mpp
 
-        shift = (10,10)
+        shift = (10, 10)
         self.canvas.ShiftView(shift)
 
         loop()
@@ -222,7 +241,7 @@ if __name__ == "__main__":
 
 def GetRGB(im, x, y):
     # TODO use DC.GetPixel()
-    return (im.GetRed(x,y), im.GetGreen(x,y), im.GetBlue(x,y))
+    return (im.GetRed(x, y), im.GetGreen(x, y), im.GetBlue(x, y))
 
 def GetImageFromBuffer(canvas):
     """
@@ -231,7 +250,7 @@ def GetImageFromBuffer(canvas):
     resultBmp = wx.EmptyBitmap(*canvas.buffer_size)
     resultDC = wx.MemoryDC()
     resultDC.SelectObject(resultBmp)
-    resultDC.BlitPointSize((0,0), canvas.buffer_size,canvas._dcBuffer, (0,0))
+    resultDC.BlitPointSize((0, 0), canvas.buffer_size, canvas._dcBuffer, (0, 0))
     resultDC.SelectObject(wx.NullBitmap)
     return wx.ImageFromBitmap(resultBmp)
 

@@ -34,6 +34,8 @@ if os.getcwd().endswith('test'):
     os.chdir('../..')
     print "Working directory changed to", os.getcwd()
 
+print os.getcwd()
+
 import wx
 import wx.lib.wxcairo
 import cairo
@@ -71,6 +73,13 @@ class TestApp(wx.App):
 
         return True
 
+def hex_to_rgb(hex_str):
+    hex_str = hex_str[-6:]
+    return tuple(int(hex_str[i:i+2], 16) / 255.0 for i in range(0, 6, 2))
+
+def hex_to_rgba(hex_str, af=1.0):
+    return hex_to_rgb(hex_str) + (af,)
+
 class CairoPanel(wx.Panel):
     def __init__(self):
         pre = wx.PrePanel()
@@ -85,27 +94,47 @@ class CairoPanel(wx.Panel):
 
     def OnPaint(self, evt):
         dc = wx.BufferedPaintDC(self)
-        dc.SetBackground(wx.Brush('black'))
+        dc.SetBackground(wx.Brush('#000000'))
         dc.Clear()
 
-        self.go_red()
+        self.go_red(dc)
 
-    def go_red(self):
+    def go_red(self, dc):
         print "going red"
-        dc = wx.BufferedPaintDC(self)
-        #dc.SetBackground(wx.Brush('#EB3E3E'))
+
+        sz = self.GetSize()
+        dc.SetPen(wx.Pen("#CCCCCC", 1))
 
         ctx = wx.lib.wxcairo.ContextFromDC(dc)
+        ctx.set_line_width(2)
 
-        ctx.set_line_width(15)
-        ctx.move_to(125, 25)
-        ctx.line_to(225, 225)
-        ctx.rel_line_to(-200, 0)
-        ctx.close_path()
-        ctx.set_source_rgba(1.0, 0, 0.5, 1)
+        color = hex_to_rgba("#8ACD12")
+        ctx.set_source_rgba(*color)
+
+        x = y = 0
+
+        while x < sz.width * 2 or y < sz.height * 2:
+            x += 20
+            y += 20
+            ctx.move_to(x, 0)
+            ctx.line_to(0, y)
+
         ctx.stroke()
 
+        image = cairo.ImageSurface.create_from_png("src/odemis/gui/img/example/3-sem.png")
+        #w = image.get_width()
+        #h = image.get_height()
 
+        ctx.set_source_surface (image, 100, 100)
+        ctx.paint ()
+
+        # now draw something with cairo
+
+
+        #ctx.rel_line_to(-200, 0)
+        #ctx.close_path()
+
+        ctx.stroke()
 
 class OwnerDrawnComboBoxTestCase(unittest.TestCase):
 
@@ -124,7 +153,7 @@ class OwnerDrawnComboBoxTestCase(unittest.TestCase):
                 inspection.InspectionTool().Show()
             cls.app.MainLoop()
 
-    def test_draw_image(self):
+    def test_load_image(self):
         pass#self.app.test_frame.cairo_panel.go_red()
 
 

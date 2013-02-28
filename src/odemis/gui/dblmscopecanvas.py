@@ -49,11 +49,12 @@ class DblMicroscopeCanvas(DraggableCanvas):
     """
     def __init__(self, *args, **kwargs):
         DraggableCanvas.__init__(self, *args, **kwargs)
-        self.view = None
+        self.microscope_view = None
 
         self.Bind(wx.EVT_MOUSEWHEEL, self.OnWheel)
 
-        # TODO: If it's too resource consuming, which might want to create just our own thread
+        # TODO: If it's too resource consuming, which might want to create just
+        # our own thread
         # FIXME: "stop all axes" should also cancel the next timer
         self._moveFocusLock = threading.Lock()
         self._moveFocusDistance = [0, 0]
@@ -65,36 +66,42 @@ class DblMicroscopeCanvas(DraggableCanvas):
         self._lastThumbnailUpdate = 0
         self._thumbnailUpdatePeriod = 2 # s, minimal period before updating again
 
-#        self.WorldOverlays.append(CrossHairOverlay("Blue", CROSSHAIR_SIZE, (-10,-10))) # debug
-#        self.WorldOverlays.append(CrossHairOverlay("Red", CROSSHAIR_SIZE, (10,10))) # debug
+        # self.WorldOverlays.append(CrossHairOverlay("Blue",
+        #                                            CROSSHAIR_SIZE,
+        #                                            (-10, -10)))
+        # self.WorldOverlays.append(CrossHairOverlay("Red",
+        #                                            CROSSHAIR_SIZE,
+        #                                            (10, 10)))
 
-    def setView(self, view):
+    def setView(self, microscope_view):
         """
-        Set the view that this canvas is displaying/representing
+        Set the microscope_view that this canvas is displaying/representing
         Can be called only once, at initialisation.
+
+        :param microscope_view:(instrmodel.MicroscopeView)
         """
         # This is a kind of kludge, see mscviewport.MicroscopeViewport for details
-        assert(self.view is None)
+        assert(self.microscope_view is None)
 
-        self.view = view
+        self.microscope_view = microscope_view
 
         # meter per "world unit"
         # for conversion between "world pos" in the canvas and a real unit
         # mpp == mpwu => 1 world coord == 1 px => scale == 1
-        self.mpwu = self.view.mpp.value  #m/wu
+        self.mpwu = self.microscope_view.mpp.value  #m/wu
         # Should not be changed!
         # FIXME!! => have a PhyscicalCanvas which directly use physical units
 
-        self.view.mpp.subscribe(self._onMPP)
-        self.view.crosshair.subscribe(self._onCrossHair, init=True)
+        self.microscope_view.mpp.subscribe(self._onMPP)
+        self.microscope_view.show_crosshair.subscribe(self._onCrossHair, init=True)
 
         # TODO subscribe to view_pos to synchronize with the other views
         # TODO subscribe to stage_pos as well/instead.
-        if hasattr(self.view, "stage_pos"):
-            self.view.stage_pos.subscribe(self._onStagePos, init=True)
+        if hasattr(self.microscope_view, "stage_pos"):
+            self.microscope_view.stage_pos.subscribe(self._onStagePos, init=True)
 
         # any image changes
-        view.lastUpdate.subscribe(self._onViewImageUpdate, init=True)
+        microscope_view.lastUpdate.subscribe(self._onViewImageUpdate, init=True)
 
 
     def _convertStreamsToImages(self):
@@ -102,7 +109,7 @@ class DblMicroscopeCanvas(DraggableCanvas):
         Temporary function to convert the StreamTree to a list of images as the canvas
           currently expects.
         """
-        streams = self.view.streams.streams
+        streams = self.microscope_view.streams.streams
 
         # create a list of of each stream's image, but re-ordered so that SEM is first
         images = []
@@ -141,7 +148,7 @@ class DblMicroscopeCanvas(DraggableCanvas):
             self.SetImage(i, iim.image, pos, scale)
 
         # set merge_ratio
-        self.merge_ratio = self.view.streams.kwargs.get("merge", 0.5)
+        self.merge_ratio = self.microscope_view.streams.kwargs.get("merge", 0.5)
 
     def _onViewImageUpdate(self, t):
         # TODO use the real streamtree functions
@@ -157,7 +164,7 @@ class DblMicroscopeCanvas(DraggableCanvas):
         # be updated?
         super(DblMicroscopeCanvas, self).UpdateDrawing()
 
-        if not self.view:
+        if not self.microscope_view:
             return
         now = time.time()
         if (self._lastThumbnailUpdate + self._thumbnailUpdatePeriod) < now:
@@ -183,7 +190,7 @@ class DblMicroscopeCanvas(DraggableCanvas):
         # close the DC, to be sure the bitmap can be used safely
         del dc
 
-        self.view.thumbnail.value = wx.ImageFromBitmap(bitmap)
+        self.microscope_view.thumbnail.value = wx.ImageFromBitmap(bitmap)
 
     def _onStagePos(self, value):
         """
@@ -204,13 +211,13 @@ class DblMicroscopeCanvas(DraggableCanvas):
         super(DblMicroscopeCanvas, self).ReCenterBuffer(pos)
 
         # TODO check it works fine
-        if not self.view:
+        if not self.microscope_view:
             return
         new_pos = self.world_pos_requested
         physical_pos = (new_pos[0] * self.mpwu, new_pos[1] * self.mpwu)
-        self.view.view_pos.value = physical_pos # this should be done even when dragging
+        self.microscope_view.view_pos.value = physical_pos # this should be done even when dragging
 
-        self.view.moveStageToView()
+        self.microscope_view.moveStageToView()
         # stage_pos will be updated once the move is completed
 
     def _onMPP(self, mpp):
@@ -228,13 +235,13 @@ class DblMicroscopeCanvas(DraggableCanvas):
         """
         scale = 2.0 ** inc
         # Clip within the range
-        mpp = self.view.mpp.value / scale
-        mpp = sorted(self.view.mpp.range + (mpp,))[1]
+        mpp = self.microscope_view.mpp.value / scale
+        mpp = sorted(self.microscope_view.mpp.range + (mpp,))[1]
 
         # FIXME: seems to crash when the mpp is very low (1 px = the whole screen)
         # maybe in the zooming function?
 
-        self.view.mpp.value = mpp # this will call _onMPP()
+        self.microscope_view.mpp.value = mpp # this will call _onMPP()
 
     # Zoom/merge management
     def OnWheel(self, event):
@@ -243,9 +250,9 @@ class DblMicroscopeCanvas(DraggableCanvas):
             change *= 0.2 # softer
 
         if event.CmdDown(): # = Ctrl on Linux/Win or Cmd on Mac
-            ratio = self.view.merge_ratio.value + (change * 0.1)
-            ratio = sorted(self.view.merge_ratio.range + (ratio,))[1] # clamp
-            self.view.merge_ratio.value = ratio
+            ratio = self.microscope_view.merge_ratio.value + (change * 0.1)
+            ratio = sorted(self.microscope_view.merge_ratio.range + (ratio,))[1] # clamp
+            self.microscope_view.merge_ratio.value = ratio
         else:
             self.Zoom(change)
 
@@ -258,7 +265,7 @@ class DblMicroscopeCanvas(DraggableCanvas):
         shift (int): relative amount of pixel moved
             >0: toward up/right
         """
-        focus = [self.view.focus0, self.view.focus1][axis]
+        focus = [self.microscope_view.focus0, self.microscope_view.focus1][axis]
         if focus is not None:
             # conversion: 1 unit => 0.1 μm (so a whole screen, ~44000u, is a couple of mm)
             # TODO this should be adjusted by the lens magnification:
@@ -291,18 +298,17 @@ class DblMicroscopeCanvas(DraggableCanvas):
             shift = self._moveFocusDistance[0]
             self._moveFocusDistance[0] = 0
         logging.debug("Moving focus0 by %f μm", shift * 1e6)
-        self.view.focus0.moveRel({"z": shift})
+        self.microscope_view.focus0.moveRel({"z": shift})
 
     def _moveFocus1(self):
         with self._moveFocusLock:
             shift = self._moveFocusDistance[1]
             self._moveFocusDistance[1] = 0
         logging.debug("Moving focus1 by %f μm", shift * 1e6)
-        self.view.focus1.moveRel({"z": shift})
+        self.microscope_view.focus1.moveRel({"z": shift})
 
     def _onCrossHair(self, activated):
-        """
-        Activate or disable the display of a cross in the middle of the view
+        """ Activate or disable the display of a cross in the middle of the view
         activated = true if the cross should be displayed
         """
         # We don't specifically know about the crosshair, so look for it in the static overlays
@@ -325,12 +331,39 @@ class DblMicroscopeCanvas(DraggableCanvas):
 
 ### Here come all the classes for drawing overlays
 class CrossHairOverlay(object):
-    def __init__(self, color=CROSSHAIR_COLOR, size=CROSSHAIR_SIZE, center=(0,0)):
+    def __init__(self, color=CROSSHAIR_COLOR, size=CROSSHAIR_SIZE, center=(0, 0)):
         self.pen = wx.Pen(color)
         self.size = size
         self.center = center
 
-    def Draw(self, dc, shift=(0,0), scale=1.0):
+    def Draw(self, dc, shift=(0, 0), scale=1.0):
+        """
+        Draws the crosshair
+        dc (wx.DC)
+        shift (2-tuple float): shift for the coordinate conversion
+        scale (float): scale for the coordinate conversion
+        """
+        dc.SetPen(self.pen)
+
+        tl = (self.center[0] - self.size,
+              self.center[1] - self.size)
+        br = (self.center[0] + self.size,
+              self.center[1] + self.size)
+        tl_s = WorldToBufferPoint(tl, shift, scale)
+        br_s = WorldToBufferPoint(br, shift, scale)
+        center = WorldToBufferPoint(self.center, shift, scale)
+
+        dc.DrawLine(tl_s[0], center[1], br_s[0], center[1])
+        dc.DrawLine(center[0], tl_s[1], center[0], br_s[1])
+
+### Here come all the classes for drawing overlays
+class SelectionOverlay(object):
+    def __init__(self, color=CROSSHAIR_COLOR, size=CROSSHAIR_SIZE, center=(0, 0)):
+        self.pen = wx.Pen(color)
+        self.size = size
+        self.center = center
+
+    def Draw(self, dc, shift=(0, 0), scale=1.0):
         """
         Draws the crosshair
         dc (wx.DC)

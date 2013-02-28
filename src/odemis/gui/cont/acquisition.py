@@ -467,8 +467,6 @@ class AcquisitionDialog(xrcfr_acq):
                                                   self.pnl_stream)
         # The streams currently displayed are the one
         self.add_all_streams(orig_view.getStreams())
-        # TODO: disable acquire button when no streams are visible
-        # cf pub.subscribe (on_stream_changed)
 
         # make sure the view displays the same thing as the one we are
         # duplicating
