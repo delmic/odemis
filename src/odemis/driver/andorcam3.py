@@ -974,6 +974,9 @@ class AndorCam3(model.DigitalCamera):
             logging.warning("Failed to read camera resolution: " + str(err))
             return False
         
+        # TODO: should not do this if the acquisition is already going on
+        prev_res = self.resolution.value
+        prev_exp = self.exposureTime.value
         try:
             self.resolution.value = resolution
             self.exposureTime.value = 0.01
@@ -981,6 +984,8 @@ class AndorCam3(model.DigitalCamera):
         except Exception as err:
             logging.warning("Failed to acquire an image: " + str(err))
             return False
+        self.resolution.value = prev_res
+        self.exposureTime.value = prev_exp
         
         return True
         

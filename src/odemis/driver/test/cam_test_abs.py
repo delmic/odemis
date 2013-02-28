@@ -78,6 +78,7 @@ class VirtualTestCam(object):
 #        gc.collect()
         pass
     
+#    @unittest.skip("simple")
     def test_temp(self):
         if (not hasattr(self.camera, "targetTemperature") or 
             not isinstance(self.camera.targetTemperature, model.VigilantAttributeBase)):
@@ -229,7 +230,7 @@ class VirtualTestCam(object):
         Test the dataflow on a quick cycle subscribing/unsubscribing
         Andorcam3 had a real bug causing deadlock in this scenario
         """ 
-        exposure = 0.1 # 
+        exposure = 0.1 # s
         number = 5
         self.camera.exposureTime.value = exposure
         
@@ -291,7 +292,7 @@ class VirtualTestCam(object):
         self.camera.exposureTime.value = exposure
         
         start = time.time()
-        im = self.camera.acquireOne()
+        im = self.camera.data.get()
         duration = time.time() - start
     
         self.assertEqual(im.shape, self.size[-1:-3:-1]) # TODO a small size diff is fine if bigger than requested

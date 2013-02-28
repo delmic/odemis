@@ -23,7 +23,7 @@ import unittest
 
 logging.getLogger().setLevel(logging.DEBUG)
 
-@skip("simple")
+#@skip("simple")
 class StaticTestPVCam(VirtualStaticTestCam, unittest.TestCase):
     camera_type = pvcam.PVCam
     camera_args = ("camera", "test", 0)
