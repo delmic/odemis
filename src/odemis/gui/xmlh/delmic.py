@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-'''
+"""
 Created:      2012-5-15
 
 @author: Rinze de Laat
@@ -8,16 +8,22 @@ Copyright © 2012 Rinze de Laat, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 2 of the License, or (at your option) any later version.
+Odemis is free software: you can redistribute it and/or modify it under the
+terms of the GNU General Public License as published by the Free Software
+Foundation, either version 2 of the License, or (at your option) any later
+version.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
-'''
+You should have received a copy of the GNU General Public License along with
+Odemis. If not, see http://www.gnu.org/licenses/.
+
+"""
 # Purpose:      XRCED Component plugin for custom Delmic wxPython classes
-
-# Create a symbolic link to this and the xh_delmic module within XRCED's
-# plugins folder.
+# Important: Create a symbolic link to this and the xh_delmic module within
+# XRCED's plugins folder.
 
 from wx.tools.XRCed import component, params, images, attribute
 from wx.tools.XRCed.globals import TRACE
@@ -150,6 +156,37 @@ c.addEvents('EVT_BUTTON')
 component.Manager.register(c)
 component.Manager.addXmlHandler(xh_delmic.ImageButtonHandler)
 component.Manager.setMenu(c, 'Delmic button', 'Bitmap Button', 'ImageButton', 2)
+component.Manager.setTool(c, 'Controls', pos=(1, 1))
+
+### ImageToggleButton
+
+c = component.Component('ImageToggleButton', ['control', 'tool'],
+              ['pos', 'size', 'default', 'delta',
+               'bitmap', 'hover', 'selected', 'focus', 'disabled'],
+              image=images.TreeBitmapButton.GetImage())
+#c.addStyles()
+c.setParamClass('delta', params.ParamInt)
+
+c.setParamClass('default', params.ParamBool)
+c.setSpecial('bitmap',  attribute.BitmapAttribute)
+
+c.setSpecial('hover',  attribute.BitmapAttribute)
+c.setParamClass('hover', params.ParamBitmap)
+
+c.setSpecial('selected',  attribute.BitmapAttribute)
+c.setParamClass('selected', params.ParamBitmap)
+
+c.setSpecial('focus',  attribute.BitmapAttribute)
+c.setParamClass('focus', params.ParamBitmap)
+
+c.setSpecial('disabled',  attribute.BitmapAttribute)
+c.setParamClass('disabled', params.ParamBitmap)
+
+
+c.addEvents('EVT_BUTTON')
+component.Manager.register(c)
+component.Manager.addXmlHandler(xh_delmic.ImageToggleButtonHandler)
+component.Manager.setMenu(c, 'Delmic button', 'Bitmap Toggle Button', 'ImageToggleButton', 2)
 component.Manager.setTool(c, 'Controls', pos=(1, 1))
 
 

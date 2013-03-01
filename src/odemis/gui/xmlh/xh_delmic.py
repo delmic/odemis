@@ -320,6 +320,52 @@ class ImageButtonHandler(xrc.XmlResourceHandler):
         self.SetupWindow(w)
         return w
 
+class ImageToggleButtonHandler(xrc.XmlResourceHandler):
+
+    def __init__(self):
+        xrc.XmlResourceHandler.__init__(self)
+        # Standard styles
+        self.AddWindowStyles()
+        # Custom styles
+
+    def CanHandle(self, node):
+        return self.IsOfClass(node, 'ImageToggleButton')
+
+    # Process XML parameters and create the object
+    def DoCreateResource(self):
+        assert self.GetInstance() is None
+
+        bmp = wx.NullBitmap
+        if self.GetParamNode("bitmap"):
+            bmp = self.GetBitmap("bitmap")
+
+        w = btns.ImageToggleButton(self.GetParentAsWindow(),
+                                   self.GetID(),
+                                   bmp,
+                                   pos=self.GetPosition(),
+                                   size=self.GetSize(),
+                                   style=self.GetStyle(),
+                                   label_delta=self.GetLong('delta'))
+
+        if self.GetParamNode("selected"):
+            bmp = self.GetBitmap("selected")
+            w.SetBitmapSelected(bmp)
+
+        if self.GetParamNode("hover"):
+            bmp = self.GetBitmap("hover")
+            w.SetBitmapHover(bmp)
+
+        if self.GetParamNode("focus"):
+            bmp = self.GetBitmap("focus")
+            w.SetBitmapFocus(bmp)
+
+        if self.GetParamNode("disabled"):
+            bmp = self.GetBitmap("disabled")
+            w.SetBitmapDisabled(bmp)
+
+        self.SetupWindow(w)
+        return w
+
 class ImageTextButtonHandler(xrc.XmlResourceHandler):
 
     def __init__(self):
@@ -745,6 +791,7 @@ HANDLER_CLASS_LIST = [
                       FoldPanelItemXmlHandler,
                       GenBitmapButtonHandler,
                       ImageButtonHandler,
+                      ImageToggleButtonHandler,
                       ImageTextButtonHandler,
                       ImageTextToggleButtonHandler,
                       MicroscopeViewportXmlHandler,
