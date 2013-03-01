@@ -305,6 +305,12 @@ class PVCam(model.DigitalCamera):
         
         # TODO change PARAM_COLOR_MODE to greyscale? => probably always default
 
+        # Shutter mode (could be an init parameter?)
+        try:
+            self.set_param(pv.PARAM_SHTR_OPEN_MODE, pv.OPEN_PRE_EXPOSURE)
+        except PVCamError:
+            logging.debug("Failed to change shutter mode")
+        
         # Set to simple acquisition mode
         self.set_param(pv.PARAM_PMODE, pv.PMODE_NORMAL)
         # In PI cameras, this is fixed (so read-only)
@@ -435,7 +441,6 @@ class PVCam(model.DigitalCamera):
             raise ValueError("Cannot handle arguments of type pointer")
         else:
             raise NotImplementedError("Argument of unknown type %d", tp.value)
-        logging.debug("Reading parameter %x of type %r", param, content)
         
         # read the parameter
         self.pvcam.pl_get_param(self._handle, param, value, byref(content))
@@ -473,7 +478,6 @@ class PVCam(model.DigitalCamera):
         else:
             raise NotImplementedError("Argument of unknown type %d", tp.value)
 
-        logging.debug("Writing parameter %x as %r", param, content)        
         self.pvcam.pl_set_param(self._handle, param, byref(content))
     
     def get_enum_available(self, param):
@@ -1002,7 +1006,6 @@ class PVCam(model.DigitalCamera):
                     timeout = time.time() + 1
                     status = self.exp_check_status()
                     while status in STATUS_IN_PROGRESS:
-                        logging.debug("status is %d", status)
                         if time.time() > timeout:
                             raise IOError("Timeout")
                         # check if we should stop
@@ -1034,7 +1037,6 @@ class PVCam(model.DigitalCamera):
                 retries = 0
                 logging.debug("data acquired successfully")
                 callback(array)
-                logging.debug("data processed")
              
                 # force the GC to non-used buffers, for some reason, without this
                 # the GC runs only after we've managed to fill up the memory
