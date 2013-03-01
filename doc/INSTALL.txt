@@ -76,6 +76,7 @@ For some other boards, which are calibrated in hardware, you need to do:
 sudo comedi_calibrate -f /dev/comedi0
 
 == Installing comedilib 0.10.1 ==
+Ubuntu 12.04 has a too old version of comedi (v 0.8). Version 0.10 or higher is required.
 git clone git://comedi.org/git/comedi/comedilib.git
 sudo apt-get install autoconf libltdl-dev flex byacc python-dev swig
 cd comedilib
@@ -93,21 +94,14 @@ cd comedi_calibrate
 make -j
 sudo make install
 
-== Installing pycomedi ==
-
-*Note: shouldn't comedi-dev be libcomedi-dev?
-
-git clone git://tremily.us/pycomedi.git
-sudo apt-get install python-comedilib comedi-dev python-nose cython
-cd pycomedi
-sudo python setup.py install
-
 == Loading the comedi simulator driver ==
 Needs to be done after every boot.
 sudo modprobe comedi comedi_num_legacy_minors=4
 sudo modprobe comedi_test
 sudo comedi_config /dev/comedi0 comedi_test 1000000,1000000
 
+Note: if you use this simulator, you probably want to ensure you have a kernel >= 3.2.38 or
+>= 3.5.7.4, as earlier versions are known to crash.
 
 = Installing Odemis =
 
@@ -169,7 +163,29 @@ sudo udevadm control --reload-rules
 - Install Andor SDK v3.1 (3.3 does *not* work for simulator).
 
 On Linux, the bitflow driver has to be reinstalled (recompiled) each time the
-kernel is updated.
+kernel is updated. Note that it is only required if you are using the real camera,
+the simulator doesn't need this module.
+
+== Princeton Instruments PVCam cameras ==
+Pixis and cameras connected via a ST133 controller are supported (only via USB connection).
+
+The official driver is not working on new Linux kernels (> 2.6.31). You need to get the
+updated driver version.
+Either install pvcam-pilk-usb-dkms_1.0.3-1ubuntu1_all.deb:
+sudo apt-get install dkms
+sudo dpkg -i pvcam-pilk-usb-dkms_1.0.3-1ubuntu1_all.deb
+
+Or install it from source (needs to be recompiled after each kernel update):
+git clone https://github.com/delmic/pvcam-pilk.git
+cd pvcam-pilk/usb
+make
+sudo cp rspiusb.ko /lib/modules/$(uname -r)/updates/
+sudo depmod
+
+Then install the libpvcam library from PI, as can be found on their site:
+ftp://ftp.piacton.com/Public/Software/Official/Linux/libpvcam.so.2.7.4.2
+sudo cp libpvcam.so.2.7.4.2 /usr/lib
+sudo ln -s libpvcam.so.2.7.4.2 /usr/lib/libpvcam.so
 
 == Physik Instrumente C-170 (Redstone) piezo-motor controllers ==
 

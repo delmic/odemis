@@ -14,6 +14,7 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
+from __future__ import division
 from odemis import model
 import gc
 import logging
@@ -104,9 +105,12 @@ class MetadataUpdater(model.Component):
             try:
                 binning = comp.binning.value
             except AttributeError:
-                binning = 1
-            mag = float(lens.magnification.value)
-            mpp = (captor_mpp[0] * binning / mag, captor_mpp[1] * binning / mag) 
+                binning = 1,1
+            # binning can be int or (int, int) 
+            if isinstance(binning, int):
+                binning = (binning, binning)
+            mag = lens.magnification.value
+            mpp = (captor_mpp[0] * binning[0] / mag, captor_mpp[1] * binning[1] / mag) 
             md = {model.MD_PIXEL_SIZE: mpp,
                   model.MD_LENS_MAG: mag}
             comp.updateMetadata(md)

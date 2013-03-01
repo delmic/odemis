@@ -158,29 +158,33 @@ class PVCam(model.DigitalCamera):
         Raise an exception if the device cannot be opened.
         """
         self.pvcam = PVCamDLL()
-
+        
+        # TODO: allow device to be None, and have a chipname string parameter.
+        # If defined, the camera to open is the one reporting this chip name.
+         
         # TODO: allow device to be a string, in which case it will look for 
         # the given name => might be easier to find the right camera on systems
         # will multiple cameras.
-        model.DigitalCamera.__init__(self, name, role, **kwargs)
+        model.DigitalCamera.__init__(self, name, role, **kwargs) # name is stored as ._name
 
         # so that it's really not possible to use this object in case of error
         self._handle = None
         self._temp_timer = None
         try:
-            self._name = self.cam_get_name(device) # for reinit
+            self._devname = self.cam_get_name(device) # for reinit
         except PVCamError:
             raise IOError("Failed to find PI PVCam camera %d" % device)
 
         try:        
-            self._handle = self.cam_open(self._name, pv.OPEN_EXCLUSIVE)
+            self._handle = self.cam_open(self._devname, pv.OPEN_EXCLUSIVE)
             # raises an error if camera has a problem
             self.pvcam.pl_cam_get_diags(self._handle)
         except PVCamError:
-            raise IOError("Failed to open PVCam camera %d (%s)" % (device, self._name))
+            raise IOError("Failed to open PVCam camera %d (%s)" % (device, self._devname))
         
         logging.info("Opened device %d successfully", device)
         
+        self.lib_lock = threading.Lock() # to modify the _handle
         
         # Describe the camera
         # up-to-date metadata to be included in dataflow
@@ -216,17 +220,13 @@ class PVCam(model.DigitalCamera):
             temp = self.GetTemperature()
             self.temperature = model.FloatVA(temp, unit="C", readonly=True)
             self._metadata[model.MD_SENSOR_TEMP] = temp
-            self._temp_timer = util.RepeatingTimer(100, self.updateTemperatureVA, # DEBUG -> 10
+            self._temp_timer = util.RepeatingTimer(10, self.updateTemperatureVA,
                                               "PVCam temperature update")
             self._temp_timer.start()
         except PVCamError:
             logging.debug("Camera doesn't seem to provide temperature information")
             
-        # TODO: fan speed (but it seems PIXIS cannot change it anyway)        
-            # max speed
-#            self.fanSpeed = model.FloatContinuous(1.0, [0.0, 1.0], unit="",
-#                                        setter=self.setFanSpeed) # ratio to max speed
-#            self.setFanSpeed(1.0)
+        # TODO: .fanSpeed? (but it seems PIXIS cannot change it anyway)        
         
         self._setStaticSettings()
 
@@ -260,8 +260,8 @@ class PVCam(model.DigitalCamera):
                                              setter=self._setResolution)
         self._setResolution(resolution)
         
-        bin_choices = set(range(1, min(resolution))) # for safety: the min of both axes
-        self.binning = model.IntEnumerated(self._binning[0], bin_choices,
+        # 2D binning is like a "small resolution"
+        self.binning = model.ResolutionVA(self._binning, [(1,1), resolution],
                                            unit="px", setter=self._setBinning)
         
         # default values try to get live microscopy imaging more likely to show something
@@ -351,14 +351,13 @@ class PVCam(model.DigitalCamera):
             logging.info("Waiting for the camera to reappear")
             self.pvcam.reinit()
             try:
-                self._handle = self.cam_open(self._name, pv.OPEN_EXCLUSIVE)
-                # succeded!
-                break
+                self._handle = self.cam_open(self._devname, pv.OPEN_EXCLUSIVE)
+                break # succeded!
             except PVCamError:
                 time.sleep(1)
         
         # reinitialise the sdk
-        logging.info("Trying to reinitialise the camera %s...", self._name)
+        logging.info("Trying to reinitialise the camera %s...", self._devname)
         try:
             self.pvcam.pl_cam_get_diags(self._handle)
         except PVCamError:
@@ -664,12 +663,13 @@ class PVCam(model.DigitalCamera):
         """
         to be called at regular interval to update the temperature
         """
-        if self._handle is None:
-            # might happen if terminate() has just been called
-            logging.info("No temperature update, camera is stopped")
-            return
-        
-        temp = self.GetTemperature()
+        with self.lib_lock:
+            if self._handle is None:
+                # might happen if terminate() has just been called
+                logging.info("No temperature update, camera is stopped")
+                return
+            
+            temp = self.GetTemperature()
         self._metadata[model.MD_SENSOR_TEMP] = temp
         # it's read-only, so we change it only via _value
         self.temperature._value = temp
@@ -750,17 +750,18 @@ class PVCam(model.DigitalCamera):
         # TODO: support non square binning (for spectroscopy)
         
         prev_binning = self._binning
-        self._binning = (value, value)
-        
+#        self._binning = (value, value)
+        self._binning = tuple(value) # duplicate
+
         # adapt resolution so that the AOI stays the same
-        change = (prev_binning[0] / value,
-                  prev_binning[1] / value)
+        change = (prev_binning[0] / self._binning[0],
+                  prev_binning[1] / self._binning[1])
         old_resolution = self.resolution.value
         new_resolution = (int(round(old_resolution[0] * change[0])),
                           int(round(old_resolution[1] * change[1])))
         
         self.resolution.value = new_resolution # will automatically call _storeSize
-        return self._binning[0]
+        return self._binning
     
     def _storeSize(self, size):
         """
@@ -904,41 +905,6 @@ class PVCam(model.DigitalCamera):
         dataarray = model.DataArray(ndbuffer, metadata)
         return dataarray
         
-    def acquireOne(self):
-        """
-        Set up the camera and acquire one image at the best quality for the given
-          parameters.
-        return (DataArray): an array containing the image with the metadata
-        """
-        # TODO: not used, not working
-        with self.acquisition_lock:
-            self.select()
-            
-            self.atcore.SetAcquisitionMode(1) # 1 = Single scan
-            # Seems exposure needs to be re-set after setting acquisition mode
-            self._prev_settings[1] = None # 1 => exposure time
-            self._update_settings()
-            metadata = dict(self._metadata) # duplicate
-                        
-            # Acquire the image
-            self.atcore.StartAcquisition()
-            
-            size = self.resolution.value
-            exposure, accumulate, kinetic = self.GetAcquisitionTimings()
-            logging.debug("Accumulate time = %f, kinetic = %f", accumulate, kinetic)
-            self._metadata[model.MD_EXP_TIME] = exposure
-            readout = size[0] * size[1] * self._metadata[model.MD_READOUT_TIME] # s
-            # kinetic should be approximately same as exposure + readout => play safe
-            duration = max(kinetic, exposure + readout)
-            self.WaitForAcquisition(duration + 1)
-            
-            cbuffer = self._allocate_buffer(size)
-            self.atcore.GetMostRecentImage16(cbuffer, size[0] * size[1])
-            array = self._buffer_as_array(cbuffer, size, metadata)
-        
-            self.atcore.FreeInternalMemory() # TODO not sure it's needed
-            return array
-    
     def start_flow(self, callback):
         """
         Set up the camera and acquireOne a flow of images at the best quality for the given
@@ -1093,11 +1059,10 @@ class PVCam(model.DigitalCamera):
                 logging.exception("Failed to finish the acquisition properly")
             
             # A close/open cycle seems the only way to have a stable library
-            # TODO: prevent the temp updater to use the handle at this time
-            # TODO: handle errors here
             try:
-                self.pvcam.pl_cam_close(self._handle)
-                self._handle = self.cam_open(self._name, pv.OPEN_EXCLUSIVE)
+                with self.lib_lock:
+                    self.pvcam.pl_cam_close(self._handle)
+                    self._handle = self.cam_open(self._devname, pv.OPEN_EXCLUSIVE)
                 self._setStaticSettings()
             except PVCamError:
                 logging.exception("Failed to reset the library properly")
@@ -1122,6 +1087,9 @@ class PVCam(model.DigitalCamera):
         Waits until the end acquisition of a flow of images. Calling from the
          acquisition callback is not permitted (it would cause a dead-lock).
         """
+        if not self.acquire_thread: # no thread ever created
+            return
+        
         # "if" is to not wait if it's already finished 
         if self.acquire_must_stop.is_set():
             self.acquire_thread.join(10) # 10s timeout for safety
@@ -1132,7 +1100,7 @@ class PVCam(model.DigitalCamera):
         """
         Must be called at the end of the usage
         """
-        if self._temp_timer is not None:
+        if self._temp_timer:
             self._temp_timer.cancel()
             self._temp_timer = None
         
