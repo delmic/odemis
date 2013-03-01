@@ -270,9 +270,9 @@ class PVCam(model.DigitalCamera):
         except PVCamError:
             # attribute doesn't exist
             minexp = 0 # same as the resolution
-        minexp = min(1e-3, minexp) # we've set the exposure resolution at ms
+        minexp = max(1e-3, minexp) # at least 1 x the exposure resolution (1 ms)
         # exposure is represented by unsigned int
-        maxexp = (2**32 -1) * 1e-3 #s
+        maxexp = (2**32 -1) * 1e-3 # s
         range_exp = (minexp, maxexp) # s
         self._exposure_time = 1.0 # s
         self.exposureTime = model.FloatContinuous(self._exposure_time, range_exp,
@@ -640,8 +640,12 @@ class PVCam(model.DigitalCamera):
         temp (-300 < float < 100): temperature in C, should be within the allowed range
         """
         assert((-300 <= temp) and (temp <= 100))
+        # TODO: doublebuff_focus.c example code has big warnings to not read/write
+        # the temperature during image acquisition. We might want to avoid it as
+        # well. (as soon as the READOUT_COMPLETE state is reached, it's fine again)
+        
         # it's in 1/100 of C
-        # TODO: use increment?
+        # TODO: use increment? => doesn't seem to matter
         self.set_param(pv.PARAM_TEMP_SETPOINT, int(round(temp * 100)))
         
         # Turn off the cooler if above room temperature
@@ -967,6 +971,7 @@ class PVCam(model.DigitalCamera):
                                                 pv.TIMED_MODE, exp_ms, byref(blength))
                     logging.debug("acquisition setup report buffer size of %d", blength.value)
                     cbuffer = self._allocate_buffer(blength.value) # TODO shall allocate a new buffer every time?
+                    assert (blength.value / 2) >= (size[0] * size[1]) # for now we even expect == 
                     
                     readout_sw = size[0] * size[1] * self._metadata[model.MD_READOUT_TIME] # s
                     # tends to be very slightly bigger:
@@ -982,6 +987,8 @@ class PVCam(model.DigitalCamera):
                 logging.debug("starting acquisition")
                 self.pvcam.pl_exp_start_seq(self._handle, cbuffer)
                 metadata[model.MD_ACQ_DATE] = time.time() # time at the beginning
+                array = self._buffer_as_array(cbuffer, size, metadata)
+                # TODO: we could already allocate the buffer for the next acquisition to save some time.
                 
                 # first we wait ourselves the 80% of expected time (which 
                 # might be very long) while detecting requests for stop. 80%, 
@@ -1024,7 +1031,6 @@ class PVCam(model.DigitalCamera):
                     need_reinit = True
                     continue
                 
-                array = self._buffer_as_array(cbuffer, size, metadata)
                 retries = 0
                 logging.debug("data acquired successfully")
                 callback(array)
