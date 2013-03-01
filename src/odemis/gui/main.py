@@ -31,7 +31,6 @@ import wx
 import Pyro4.errors
 
 import odemis.gui.cont.tabs as tabs
-
 from odemis import __version__, model
 from odemis.gui import main_xrc, instrmodel, log
 from odemis.gui.conf import get_general_conf
@@ -58,6 +57,10 @@ class OdemisGUIApp(wx.App):
 
         # HTTP documentation http server process
         self.http_proc = None
+
+        self.microscope = None
+        self.interface_model = None
+        self.main_frame = None
 
         # Output catcher using a helper class
         wx.App.outputWindowClass = OdemisOutputWindow
@@ -103,7 +106,10 @@ class OdemisGUIApp(wx.App):
         #self.main_frame.Bind(wx.EVT_CHAR, self.on_key)
 
         log.create_gui_logger(self.main_frame.txt_log)
-        logging.info("Starting Odemis GUI")
+        logging.info("***********************************************")
+        logging.info("************  Starting Odemis GUI  ************")
+        logging.info("***********************************************")
+
         self.init_gui()
 
         # Application successfully launched

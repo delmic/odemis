@@ -761,25 +761,40 @@
                             <object class="wxBoxSizer">
                               <orient>wxVERTICAL</orient>
                               <object class="sizeritem">
-                                <object class="wxPanel">
+                                <object class="ImageToggleButton" name="btn_sparc_view_select">
                                   <size>24,24</size>
-                                  <bg>#57E6C2</bg>
+                                  <bitmap>img/btn_view_sel.png</bitmap>
+                                  <hover>img/btn_view_sel_h.png</hover>
+                                  <selected>img/btn_view_sel_a.png</selected>
+                                  <XRCED>
+                                    <assign_var>1</assign_var>
+                                  </XRCED>
                                 </object>
                                 <flag>wxBOTTOM|wxLEFT</flag>
                                 <border>10</border>
                               </object>
                               <object class="sizeritem">
-                                <object class="wxPanel">
+                                <object class="ImageToggleButton" name="btn_sparc_view_pick">
                                   <size>24,24</size>
-                                  <bg>#E66D57</bg>
+                                  <bitmap>img/btn_view_pick.png</bitmap>
+                                  <hover>img/btn_view_pick_h.png</hover>
+                                  <selected>img/btn_view_pick_a.png</selected>
+                                  <XRCED>
+                                    <assign_var>1</assign_var>
+                                  </XRCED>
                                 </object>
                                 <flag>wxBOTTOM|wxLEFT</flag>
                                 <border>10</border>
                               </object>
                               <object class="sizeritem">
-                                <object class="wxPanel">
+                                <object class="ImageToggleButton" name="btn_sparc_view_resize">
                                   <size>24,24</size>
-                                  <bg>#D357E6</bg>
+                                  <bitmap>img/btn_view_resize.png</bitmap>
+                                  <hover>img/btn_view_resize_h.png</hover>
+                                  <selected>img/btn_view_resize_a.png</selected>
+                                  <XRCED>
+                                    <assign_var>1</assign_var>
+                                  </XRCED>
                                 </object>
                                 <flag>wxLEFT</flag>
                                 <border>10</border>

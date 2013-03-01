@@ -297,7 +297,7 @@ class ImageTextButton(GenBitmapTextButton):
         # FIXME: should be fixed into GenBitmapTextButton => opened ticket #15032
         # http://trac.wxwidgets.org/ticket/15032
         self.Refresh() # force to redraw the image
-    
+
     def OnEnter(self, evt):
         """ Event handler that fires when the mouse cursor enters the button """
         if self.bmpHover:
@@ -499,7 +499,7 @@ class ImageToggleButton(GenBitmapToggleButton):  #pylint: disable=R0901
         if self.bmpFocus and self.hasFocus:
             bmp = self.bmpFocus
         if self.bmpSelected and not self.up:
-            if self.hovering:
+            if self.hovering and self.bmpSelectedHover:
                 bmp = self.bmpSelectedHover
             else:
                 bmp = self.bmpSelected
