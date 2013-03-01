@@ -79,6 +79,7 @@ class xrcfr_main(wx.Frame):
         self.pnl_tab_sparc_acqui = xrc.XRCCTRL(self, "pnl_tab_sparc_acqui")
         self.btn_sparc_view_select = xrc.XRCCTRL(self, "btn_sparc_view_select")
         self.btn_sparc_view_pick = xrc.XRCCTRL(self, "btn_sparc_view_pick")
+        self.btn_sparc_view_resize = xrc.XRCCTRL(self, "btn_sparc_view_resize")
         self.pnl_sparc_acq_view = xrc.XRCCTRL(self, "pnl_sparc_acq_view")
         self.btn_toggle_spectrometer = xrc.XRCCTRL(self, "btn_toggle_spectrometer")
         self.btn_toggle_angular = xrc.XRCCTRL(self, "btn_toggle_angular")
@@ -928,9 +929,14 @@ def __init_resources():
                                 <border>10</border>
                               </object>
                               <object class="sizeritem">
-                                <object class="wxPanel">
+                                <object class="ImageToggleButton" name="btn_sparc_view_resize">
                                   <size>24,24</size>
-                                  <bg>#D357E6</bg>
+                                  <bitmap>img_btn_view_resize_png</bitmap>
+                                  <hover>img/btn_view_resize_h.png</hover>
+                                  <selected>img/btn_view_resize_a.png</selected>
+                                  <XRCED>
+                                    <assign_var>1</assign_var>
+                                  </XRCED>
                                 </object>
                                 <flag>wxLEFT</flag>
                                 <border>10</border>
@@ -1977,6 +1983,37 @@ scription> </rdf:RDF> </x:xmpmeta> <?xpacket end="r"?>\xa4!\xac)\x00\x00\
 F\x16Lf@j\xb6\xbc\xa3E\xb3\x05 \xc0\x00\xb5\xc4\xc6\x90\x0e\xf4h;\x00\x00\
 \x00\x00IEND\xaeB`\x82'''
 
+    img_btn_view_resize_png = '''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00\x18\x00\x00\x00\x18\x08\x06\x00\x00\x00\
+\xe0w=\xf8\x00\x00\x00\x19tEXtSoftware\x00Adobe ImageReadyq\xc9e<\x00\x00\
+\x03"iTXtXML:com.adobe.xmp\x00\x00\x00\x00\x00<?xpacket begin="\xef\xbb\
+\xbf" id="W5M0MpCehiHzreSzNTczkc9d"?> <x:xmpmeta xmlns:x="adobe:ns:meta\
+/" x:xmptk="Adobe XMP Core 5.3-c011 66.145661, 2012/02/06-14:56:27     \
+   "> <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">\
+ <rdf:Description rdf:about="" xmlns:xmp="http://ns.adobe.com/xap/1.0/"\
+ xmlns:xmpMM="http://ns.adobe.com/xap/1.0/mm/" xmlns:stRef="http://ns.a\
+dobe.com/xap/1.0/sType/ResourceRef#" xmp:CreatorTool="Adobe Photoshop C\
+S6 (Windows)" xmpMM:InstanceID="xmp.iid:33F4CDF3827011E29D08D8893C2FC63\
+8" xmpMM:DocumentID="xmp.did:33F4CDF4827011E29D08D8893C2FC638"> <xmpMM:\
+DerivedFrom stRef:instanceID="xmp.iid:33F4CDF1827011E29D08D8893C2FC638"\
+ stRef:documentID="xmp.did:33F4CDF2827011E29D08D8893C2FC638"/> </rdf:De\
+scription> </rdf:RDF> </x:xmpmeta> <?xpacket end="r"?>\x17H\xe2R\x00\x00\
+\x01\x0dIDATx\xda\xb4V1\x0e\x830\x0c4\x14\x95\xbdcWV\x1e\xd0\x15\x1e\xc1\
+\x9b\x18[\xf5\x17l\x8c\x80\x98\x98\x18\xd9A\x88\x91\xa1\x11\x1f\x804\x91\
+RD\xa1\x90\xa4J,\x1d\x831w\xd6\x199\x01\x008\x13<\x08^\x04X\x11\x10\xe3\
+\xa4\xdcpWH\xbcFh\xb0\xce/\xa0\x27\x90\xc1\x94\xb4\x05W \x8ecp]w\x93\xef\
+\xba\x0e|\xdf\xe7
+\x98\xbc\x824M\xa5\xf2\xd2\x02I\x92H\xe5\xa5\x05\xea\xba\x86\xb6m\xbfr\
+}\xdfCUUj\x04hdY\xb6\xb1g\x9a&u\x02k;D\xfd\x17\x16\xa0vP[h\x0c\xc3\x00e\
+Y\xaa\x15\xc0\x18\xcf]\xe7y\x0e\xe38\xaa\x15X\xceA\xc6\x9e\xb9A\x11X\x96\
+\x85\x8b\xa2\xc0\xb6m\xcb\xee#\xf1b\xcf\xf3\xfeYx\xfb/\x9b\xa6\xe1\x12\xf0\
+jvg@>\x14\xf6\xf8\xa8\xf6\xe7\xb2\x93!_\x86\xe38\xe2\xdb\xf4#\x12\x04\xc1\
+!i\x14E\xbb\xe4\xdc\xbfH\xc5\x0c\xb4\x1f8&;\xa0u\x05:\x91\xc7\x95\xe0\xa6\
+I\xe0\x09\x8bk\x0b\xd2qmy\x0b0\x00\x19\x14\x03\xf2\x904\x89-\x00\x00\x00\
+\x00IEND\xaeB`\x82'''
+
     img_btn_128x48_png = '''\
 \x89PNG\x0d
 \x1a
@@ -2303,6 +2340,7 @@ D\xf2\x9d\xc8\xed\x27\x07h?9\xa0\xd1\x15\x99\xd9B\xd6\xc3\x15"E_\xc8Z\x01\
     wx.MemoryFSHandler.AddFile('XRC/main/img_btn_acquire_image_png', img_btn_acquire_image_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_btn_view_sel_png', img_btn_view_sel_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_btn_view_pick_png', img_btn_view_pick_png)
+    wx.MemoryFSHandler.AddFile('XRC/main/img_btn_view_resize_png', img_btn_view_resize_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_btn_128x48_png', img_btn_128x48_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_btn_64x16_png', img_btn_64x16_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_btn_acq_img_sml_png', img_btn_acq_img_sml_png)
