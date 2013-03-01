@@ -1,0 +1,71 @@
+Optical: {
+    class: Microscope,
+    role: brightfield,
+    emitters: ["Nikon Super Duper", "MultiBand Fixed Filter"],
+    detectors: [Pixis],
+    actuators: ["FakeRedStoneStage", "SEM-Optical Alignment", "OpticalZ actuator"],
+}
+
+"Nikon Super Duper": {
+    class: static.OpticalLens,
+    role: lens,
+    init: {mag: 10.0}, # ratio
+    affects: [Pixis]
+}
+
+"MultiBand Fixed Filter": {
+    class: static.LightFilter,
+    role: filter,
+    init: {band: [[430.e-9, 480.e-9], [520.e-9, 600.e-9]]}, # m,m
+    affects: [Pixis]
+}
+
+Pixis: {
+    class: pvcam.PVCam,
+    role: ccd,
+    init: {device: 0} # 0 is almost always correct
+}
+
+"FakeRedStoneStage": {
+    class: simulated.Stage2D,
+    role: stage,
+    init: {axes: ["x", "y"]},
+    affects: [Pixis],
+    properties: {
+        speed: {'x':0.1, 'y':0.1} #m/s
+    }
+}
+
+# Use 2 CombinedActuators to separate the axes of the PIGCS over different roles
+"SEM-Optical Alignment": {
+    class: CombinedActuator,
+    role: align,
+    affects: [Pixis],
+    children: {"l": FakePIGCS, "r": FakePIGCS},
+    init: {
+        axes_map: {"l": "l", "r": "r"},
+        inverted: ["r"]
+    },
+    properties: {
+        speed: {'l': 0.1, 'r': 0.1} #m/s
+    }
+}
+
+"OpticalZ actuator": {
+    class: CombinedActuator,
+    role: focus,
+    affects: [Pixis],
+    children: {"z": FakePIGCS},
+    init: {
+        axes_map: {"z": "z"}
+    },
+    properties: {
+        speed: {'z': 0.1} #m/s
+    }
+}
+
+FakePIGCS: {
+    class: simulated.Stage2D,
+    role: AlignAndFocus,
+    init: {axes: ["l", "r", "z"]},
+}
