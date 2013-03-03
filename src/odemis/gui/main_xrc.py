@@ -50,6 +50,8 @@ class xrcfr_main(wx.Frame):
         self.btn_tab_sparc_acqui = xrc.XRCCTRL(self, "btn_tab_sparc_acqui")
         self.btn_tab_sparc_analysis = xrc.XRCCTRL(self, "btn_tab_sparc_analysis")
         self.pnl_tab_secom_streams = xrc.XRCCTRL(self, "pnl_tab_secom_streams")
+        self.btn_secom_view_zoom = xrc.XRCCTRL(self, "btn_secom_view_zoom")
+        self.btn_secom_view_update = xrc.XRCCTRL(self, "btn_secom_view_update")
         self.lbl_view_all = xrc.XRCCTRL(self, "lbl_view_all")
         self.btn_view_all = xrc.XRCCTRL(self, "btn_view_all")
         self.lbl_view_tl = xrc.XRCCTRL(self, "lbl_view_tl")
@@ -79,7 +81,6 @@ class xrcfr_main(wx.Frame):
         self.pnl_tab_sparc_acqui = xrc.XRCCTRL(self, "pnl_tab_sparc_acqui")
         self.btn_sparc_view_select = xrc.XRCCTRL(self, "btn_sparc_view_select")
         self.btn_sparc_view_pick = xrc.XRCCTRL(self, "btn_sparc_view_pick")
-        self.btn_sparc_view_resize = xrc.XRCCTRL(self, "btn_sparc_view_resize")
         self.pnl_sparc_acq_view = xrc.XRCCTRL(self, "pnl_sparc_acq_view")
         self.btn_toggle_spectrometer = xrc.XRCCTRL(self, "btn_toggle_spectrometer")
         self.btn_toggle_angular = xrc.XRCCTRL(self, "btn_toggle_angular")
@@ -141,7 +142,7 @@ def __init_resources():
     wx.FileSystem.AddHandler(wx.MemoryFSHandler())
 
     main_xrc = '''\
-<?xml version="1.0" ?><resource class="wxBoxSizer" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
+<?xml version="1.0" ?><resource class="wxPanel" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
   <object class="wxFrame" name="fr_main">
     <object class="wxMenuBar">
       <object class="wxMenu">
@@ -363,29 +364,43 @@ def __init_resources():
                             <object class="wxBoxSizer">
                               <orient>wxVERTICAL</orient>
                               <object class="sizeritem">
-                                <object class="wxPanel">
+                                <object class="ImageToggleButton" name="btn_secom_view_zoom">
                                   <size>24,24</size>
-                                  <bg>#57E6C2</bg>
+                                  <bitmap>img_btn_view_zoom_png</bitmap>
+                                  <hover>img/btn_view_zoom_h.png</hover>
+                                  <selected>img/btn_view_zoom_a.png</selected>
+                                  <XRCED>
+                                    <assign_var>1</assign_var>
+                                  </XRCED>
                                 </object>
                                 <flag>wxBOTTOM|wxLEFT</flag>
                                 <border>10</border>
                               </object>
                               <object class="sizeritem">
-                                <object class="wxPanel">
+                                <object class="ImageToggleButton" name="btn_secom_view_update">
                                   <size>24,24</size>
-                                  <bg>#E66D57</bg>
+                                  <bitmap>img_btn_view_update_png</bitmap>
+                                  <hover>img/btn_view_update_h.png</hover>
+                                  <selected>img/btn_view_update_a.png</selected>
+                                  <XRCED>
+                                    <assign_var>1</assign_var>
+                                  </XRCED>
                                 </object>
                                 <flag>wxBOTTOM|wxLEFT</flag>
                                 <border>10</border>
                               </object>
                               <object class="sizeritem">
-                                <object class="wxPanel">
+                                <object class="ImageButton" name="btn_secom_view_resize">
                                   <size>24,24</size>
-                                  <bg>#D357E6</bg>
+                                  <bitmap>img_btn_view_resize_png</bitmap>
+                                  <hover>img/btn_view_resize_h.png</hover>
+                                  <selected>img/btn_view_resize_a.png</selected>
                                 </object>
-                                <flag>wxLEFT</flag>
+                                <flag>wxBOTTOM|wxLEFT</flag>
                                 <border>10</border>
                               </object>
+                            
+                              
                             </object>
                             <bg>#000000</bg>
                           </object>
@@ -921,6 +936,7 @@ def __init_resources():
                                   <bitmap>img_btn_view_pick_png</bitmap>
                                   <hover>img/btn_view_pick_h.png</hover>
                                   <selected>img/btn_view_pick_a.png</selected>
+                                  <enabled>0</enabled>
                                   <XRCED>
                                     <assign_var>1</assign_var>
                                   </XRCED>
@@ -929,14 +945,12 @@ def __init_resources():
                                 <border>10</border>
                               </object>
                               <object class="sizeritem">
-                                <object class="ImageToggleButton" name="btn_sparc_view_resize">
+                                <object class="ImageButton" name="btn_sparc_view_resize">
                                   <size>24,24</size>
                                   <bitmap>img_btn_view_resize_png</bitmap>
                                   <hover>img/btn_view_resize_h.png</hover>
                                   <selected>img/btn_view_resize_a.png</selected>
-                                  <XRCED>
-                                    <assign_var>1</assign_var>
-                                  </XRCED>
+                                  <enabled>0</enabled>
                                 </object>
                                 <flag>wxLEFT</flag>
                                 <border>10</border>
@@ -1709,6 +1723,122 @@ G\x85\x19V\xd8`\xf9\xec`\x04\xe4\xd5\x05\x11\x90O\x01\xbf\x06y\x17\xd8\xc3\
 (r\x19c\x97\x8akBr\xc64\x19X\x0b\xae\xf4\xef\xd6\x1f\xf8\xfb\xc0\x1bH\xf3\
 W\xb5p\xe4f\xd7\x00\x00\x00\x00IEND\xaeB`\x82'''
 
+    img_btn_view_zoom_png = '''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00\x18\x00\x00\x00\x18\x08\x06\x00\x00\x00\
+\xe0w=\xf8\x00\x00\x00\x19tEXtSoftware\x00Adobe ImageReadyq\xc9e<\x00\x00\
+\x03fiTXtXML:com.adobe.xmp\x00\x00\x00\x00\x00<?xpacket begin="\xef\xbb\
+\xbf" id="W5M0MpCehiHzreSzNTczkc9d"?> <x:xmpmeta xmlns:x="adobe:ns:meta\
+/" x:xmptk="Adobe XMP Core 5.3-c011 66.145661, 2012/02/06-14:56:27     \
+   "> <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">\
+ <rdf:Description rdf:about="" xmlns:xmpMM="http://ns.adobe.com/xap/1.0\
+/mm/" xmlns:stRef="http://ns.adobe.com/xap/1.0/sType/ResourceRef#" xmln\
+s:xmp="http://ns.adobe.com/xap/1.0/" xmpMM:OriginalDocumentID="xmp.did:\
+BBBF2A684582E211B869C7176EFA681B" xmpMM:DocumentID="xmp.did:0EC2305A844\
+611E291DFB89F6D98D0FC" xmpMM:InstanceID="xmp.iid:0EC23059844611E291DFB8\
+9F6D98D0FC" xmp:CreatorTool="Adobe Photoshop CS6 (Windows)"> <xmpMM:Der\
+ivedFrom stRef:instanceID="xmp.iid:BBBF2A684582E211B869C7176EFA681B" st\
+Ref:documentID="xmp.did:BBBF2A684582E211B869C7176EFA681B"/> </rdf:Descr\
+iption> </rdf:RDF> </x:xmpmeta> <?xpacket end="r"?>\xab\xb1\x18\xf2\x00\
+\x00\x01\xebIDATx\xda\xb4V\xbd\xaf)A\x14\xff\xed\x8a\x17\x1f\x89\xc4\xa3\
+\xba
+\x85\x10\x1f\xbd\xbc(\x14\x12\x0d\xff\x80h\x10\xa5D\xe8\xb5\x92{Cqo^\xa7\
+\xa3\xa4QhDD\xa8\xa8\x85Bhh\xd1\x09\x95\xb9\xb3\x13\xf6\xba\xcb\xc6JvO\xf2\
+\xdb3;s>\xe7\xe4\xcc\x0c\x00\xfc\xa1\xf8\xa2\xd8Q\x10\x95\xb0\xbf\xd8\x14\
+l\xe3SE\xc3R\xbcs\x97\xc8\xff\xe2\x09q\x1c\x87X,\x86D"\x01\xaf\xd7\x8b\xf3\
+\xf9\x8c\xf9|\x8eF\xa3\x81\xc1` \xa7\xb6\xd7\xd1\xcf\xc73\xe3:\x9d\x0e\xd5\
+j\x15\xc5b\x11\x87\xc3\x01\xbd^\x0f\xcb\xe5\x12\x81@\x00\xe9t\x1a6\x9b\x0d\
+\xc3\xe1\xf0\x91\xaa\x11JR\xcd\xe5r\x84\x1a$\xa9T\x8a\xd0L\xc4y\x9e\xe7\
+I\xa1P \xab\xd5\x8a$\x93I9\xfd\xfbIA\xe1\xcaM&\x13\x99N\xa7\xa4R\xa9\xc8\
+\x06P\xab\xd5\xc8x<&4Se\x0en\x11
+\x85\x98\xa3`0(+\x13\x8dF\x99\x8c\xdf\xef\xbf[\xe3\x1fm\x1c\x15\x16\xc7\
+V\xab\x95\xf1\xedv+[\xa3\xddn\xc7\xb8\xd9l\xbe[{\xe8\xc0\xe5r\x89\xe3\xf5\
+z\xcd\xb8\xdb\xed\x96u\xe0\xf1x~\xc9JI\xb6\x06\xd7B\xf6\xfb}\xd2n\xb7\x89\
+^\xaf\xbf\x935\x1a\x8d\xe2\xba\xe2"K\x11\x0e\x87\xc9b\xb1 \xf5z\x9d8\x9d\
+Nq\x9eFNZ\xad\x16\x0b\xa8\xd9l2gR]\xee\xeaEZ\x83\xdbm\x12Hh\xb2r\xb9\x0c\
+\x8b\xc5\x82\xcdf\x03\x9a\x19\x1c\x0e\x07N\xa7\x13\x0c\x06\x03\x93\x99L\
+&\xc8f\xb38\x1e\x8f?\x0d\xfa\xc8\x81\x1c\x09\x05\x8f\xc7\xe3\xf0\xf9|\xec\
+6\x9b\xa1\xd3\xe9 \x9f\xcf#\x93\xc9\xb0\xb9\xd1h$\x8e\x15\xd5@)J\xa5\x12\
+\xd3\xebv\xbb\xaf\xd7@\x09\x04\xe3\x91H\x84\xd8\xedv\xe5\x9d\xac\x12\xd4\
+\xcb\xe0\xe5\xb3H\xd3\x0cn\x0f\xbcW\xb8\xa2>P\x93xhL\xfc\xe5\x82\xd6\x8a\
+\xd8\x95\xf9F\xf1O#\x07\xffq\xf3l\xd9k\xf1l\xf9\x16`\x00\x0f\xd6\xf5\xb1\
+<\xe9|1\x00\x00\x00\x00IEND\xaeB`\x82'''
+
+    img_btn_view_update_png = '''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00\x18\x00\x00\x00\x18\x08\x06\x00\x00\x00\
+\xe0w=\xf8\x00\x00\x00\x19tEXtSoftware\x00Adobe ImageReadyq\xc9e<\x00\x00\
+\x03fiTXtXML:com.adobe.xmp\x00\x00\x00\x00\x00<?xpacket begin="\xef\xbb\
+\xbf" id="W5M0MpCehiHzreSzNTczkc9d"?> <x:xmpmeta xmlns:x="adobe:ns:meta\
+/" x:xmptk="Adobe XMP Core 5.3-c011 66.145661, 2012/02/06-14:56:27     \
+   "> <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">\
+ <rdf:Description rdf:about="" xmlns:xmpMM="http://ns.adobe.com/xap/1.0\
+/mm/" xmlns:stRef="http://ns.adobe.com/xap/1.0/sType/ResourceRef#" xmln\
+s:xmp="http://ns.adobe.com/xap/1.0/" xmpMM:OriginalDocumentID="xmp.did:\
+BBBF2A684582E211B869C7176EFA681B" xmpMM:DocumentID="xmp.did:81EAC994844\
+611E28DB6C0AAA0FAE910" xmpMM:InstanceID="xmp.iid:81EAC993844611E28DB6C0\
+AAA0FAE910" xmp:CreatorTool="Adobe Photoshop CS6 (Windows)"> <xmpMM:Der\
+ivedFrom stRef:instanceID="xmp.iid:BBBF2A684582E211B869C7176EFA681B" st\
+Ref:documentID="xmp.did:BBBF2A684582E211B869C7176EFA681B"/> </rdf:Descr\
+iption> </rdf:RDF> </x:xmpmeta> <?xpacket end="r"?>\x08VLK\x00\x00\x02)\
+IDATx\xda\xccV\xcd\xabAA\x14?\xf7\xaaW\x12\x8b\x17\x92\x15\x89\x8dRV\xef\
+\x15;\x91\x8d,%\x1b%+\x0b;)\x82\x14=\xc9V\xd9Z\xd8Y\xd8!\x8a\x92\xb2\xf2\
+\xb5`\xa9\x87\x94\x15\x9a73y\x93\xcb\xf5\xd5\xa3\xde\xa9\xdf=\xf7\xce\x9c\
+9\xe7\xcc9\xbf\xb9\xf7\x02\x00\xbcad0\xbe1\xd0\x93\xb08\xf8|\x93\xe0K
+#\x8a!\x85;E\xadV\x83N\xa7\x03\xb9\\\x0e\xeb\xf5\x1a\x10B\xa7&\xc4\xd7\
+\x07\x09\xc0\x1d2\xbf\xe5T"\x91\x80\xcf\xe7\x83`0\x08\x06\x83\x81\x8d\xcf\
+\xe7s(\x95J\x90\xcb\xe5`\xb3\xd9\x9c.[p\x87-]\x15\x92i6\x9b\x05\xbb\xdd\
+~\xd1f6\x9b\xd1\xe0R\xa9\x14\xf6\xfb=\x0c\x06\x03:~W\x80|>\x0fN\xa7\x93\
+\xde\xefv;\xa8V\xab\xd4\x81J\xa5\xa2\xe3J\xa5\x92\xce-\x97KP(\x14\x10\x08\
+\x04\xa0\xddn\xb3\xf5gM\x1a\x8f\xc7L;\x1c\x0e\xaa\x09\x1a\x8d\x062\x1a\x8d\
+\x02[\x99L\x86\xca\xe52\xb3!0\x99Ll\x9e\x17\xcb\xf8\xb7\xc6D\xfb\xfd~6\x1e\
+\x8dFa8\x1c
+\xfa\x92H$\xc0l6\x0b\xd6\x93\xc6\xff\x8ah\x00\x9c\x05\xbb\xb7Z\xadTO&\x13\
+\xe8t:\x02;R\xebT*\x05\xc9d\x12\xa6\xd3\xa9h\x00\xb8\xc5i\\k\xba\xedb\xb1\
+x\xd5\x8e\xe38d\xb3\xd9P&\x939\x9d\xbb\xdc\x03\x82z\xbdN\x9fk\xb5\x1au\xf2\
+\xe8\xa1\xbb\xda\x03"\xcdf\x93j\xadV\x0b\x1e\x8fG\x94e\x1a\x8d\x06
+\x85\x02\xb8\\.\xe0\xf9s\x97Ww`\xb1X\xd0h4\xa2c\xbd^\x0f\xb9\xddn\x81\xad\
+^\xafG\x95J\x851\x08STX\xba{\xceA<\x1e\x87p8\xcc\x9eI\xc3\x09\x9b\xc8+\x03\
+\x27@\xd9D\xa4\xdb\xedR\xd6m\xb7[f+\x1a\x80\xb0\xe8\xb8L\xc4A,\x16\x83P\
+(\x04\xb8\x0f\xa2I\xb4Z-\x88D"\xb0Z\xadn\x97\xe8\x120eQ:\x9dF\xb8/\xb4\x1c\
+\xfd~\x9f\xb2\xcb\xeb\xf5
+\xca\xfa\x10\x8b\x9e\x80\xe78\xfa;8~\xe1=\xa2\xcfN\xf8=4\xfd\x8b\xf0\xf0\
+b\xe1\x0f\x1f\xe8W\xc9\x82\x1cA-\xc6\xe7\x8b\x02|\xc1\xd1o\xcb\xe2\x15\xbf\
+-?\x02\x0c\x00\x05(\xe6 W\x8b\xbd\x02\x00\x00\x00\x00IEND\xaeB`\x82'''
+
+    img_btn_view_resize_png = '''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00\x18\x00\x00\x00\x18\x08\x06\x00\x00\x00\
+\xe0w=\xf8\x00\x00\x00\x19tEXtSoftware\x00Adobe ImageReadyq\xc9e<\x00\x00\
+\x03"iTXtXML:com.adobe.xmp\x00\x00\x00\x00\x00<?xpacket begin="\xef\xbb\
+\xbf" id="W5M0MpCehiHzreSzNTczkc9d"?> <x:xmpmeta xmlns:x="adobe:ns:meta\
+/" x:xmptk="Adobe XMP Core 5.3-c011 66.145661, 2012/02/06-14:56:27     \
+   "> <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">\
+ <rdf:Description rdf:about="" xmlns:xmp="http://ns.adobe.com/xap/1.0/"\
+ xmlns:xmpMM="http://ns.adobe.com/xap/1.0/mm/" xmlns:stRef="http://ns.a\
+dobe.com/xap/1.0/sType/ResourceRef#" xmp:CreatorTool="Adobe Photoshop C\
+S6 (Windows)" xmpMM:InstanceID="xmp.iid:33F4CDF3827011E29D08D8893C2FC63\
+8" xmpMM:DocumentID="xmp.did:33F4CDF4827011E29D08D8893C2FC638"> <xmpMM:\
+DerivedFrom stRef:instanceID="xmp.iid:33F4CDF1827011E29D08D8893C2FC638"\
+ stRef:documentID="xmp.did:33F4CDF2827011E29D08D8893C2FC638"/> </rdf:De\
+scription> </rdf:RDF> </x:xmpmeta> <?xpacket end="r"?>\x17H\xe2R\x00\x00\
+\x01\x0dIDATx\xda\xb4V1\x0e\x830\x0c4\x14\x95\xbdcWV\x1e\xd0\x15\x1e\xc1\
+\x9b\x18[\xf5\x17l\x8c\x80\x98\x98\x18\xd9A\x88\x91\xa1\x11\x1f\x804\x91\
+RD\xa1\x90\xa4J,\x1d\x831w\xd6\x199\x01\x008\x13<\x08^\x04X\x11\x10\xe3\
+\xa4\xdcpWH\xbcFh\xb0\xce/\xa0\x27\x90\xc1\x94\xb4\x05W \x8ecp]w\x93\xef\
+\xba\x0e|\xdf\xe7
+\x98\xbc\x824M\xa5\xf2\xd2\x02I\x92H\xe5\xa5\x05\xea\xba\x86\xb6m\xbfr\
+}\xdfCUUj\x04hdY\xb6\xb1g\x9a&u\x02k;D\xfd\x17\x16\xa0vP[h\x0c\xc3\x00e\
+Y\xaa\x15\xc0\x18\xcf]\xe7y\x0e\xe38\xaa\x15X\xceA\xc6\x9e\xb9A\x11X\x96\
+\x85\x8b\xa2\xc0\xb6m\xcb\xee#\xf1b\xcf\xf3\xfeYx\xfb/\x9b\xa6\xe1\x12\xf0\
+jvg@>\x14\xf6\xf8\xa8\xf6\xe7\xb2\x93!_\x86\xe38\xe2\xdb\xf4#\x12\x04\xc1\
+!i\x14E\xbb\xe4\xdc\xbfH\xc5\x0c\xb4\x1f8&;\xa0u\x05:\x91\xc7\x95\xe0\xa6\
+I\xe0\x09\x8bk\x0b\xd2qmy\x0b0\x00\x19\x14\x03\xf2\x904\x89-\x00\x00\x00\
+\x00IEND\xaeB`\x82'''
+
     img_side_menu_bottom_png = '''\
 \x89PNG\x0d
 \x1a
@@ -1982,37 +2112,6 @@ scription> </rdf:RDF> </x:xmpmeta> <?xpacket end="r"?>\xa4!\xac)\x00\x00\
 0>u\xe8x4\x15\x8d\xfa`\x88\xf8\xe0\x1d\x0d\xcd\xc7\x0c$\xa4\x80\xd8\x82\
 F\x16Lf@j\xb6\xbc\xa3E\xb3\x05 \xc0\x00\xb5\xc4\xc6\x90\x0e\xf4h;\x00\x00\
 \x00\x00IEND\xaeB`\x82'''
-
-    img_btn_view_resize_png = '''\
-\x89PNG\x0d
-\x1a
-\x00\x00\x00\x0dIHDR\x00\x00\x00\x18\x00\x00\x00\x18\x08\x06\x00\x00\x00\
-\xe0w=\xf8\x00\x00\x00\x19tEXtSoftware\x00Adobe ImageReadyq\xc9e<\x00\x00\
-\x03"iTXtXML:com.adobe.xmp\x00\x00\x00\x00\x00<?xpacket begin="\xef\xbb\
-\xbf" id="W5M0MpCehiHzreSzNTczkc9d"?> <x:xmpmeta xmlns:x="adobe:ns:meta\
-/" x:xmptk="Adobe XMP Core 5.3-c011 66.145661, 2012/02/06-14:56:27     \
-   "> <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">\
- <rdf:Description rdf:about="" xmlns:xmp="http://ns.adobe.com/xap/1.0/"\
- xmlns:xmpMM="http://ns.adobe.com/xap/1.0/mm/" xmlns:stRef="http://ns.a\
-dobe.com/xap/1.0/sType/ResourceRef#" xmp:CreatorTool="Adobe Photoshop C\
-S6 (Windows)" xmpMM:InstanceID="xmp.iid:33F4CDF3827011E29D08D8893C2FC63\
-8" xmpMM:DocumentID="xmp.did:33F4CDF4827011E29D08D8893C2FC638"> <xmpMM:\
-DerivedFrom stRef:instanceID="xmp.iid:33F4CDF1827011E29D08D8893C2FC638"\
- stRef:documentID="xmp.did:33F4CDF2827011E29D08D8893C2FC638"/> </rdf:De\
-scription> </rdf:RDF> </x:xmpmeta> <?xpacket end="r"?>\x17H\xe2R\x00\x00\
-\x01\x0dIDATx\xda\xb4V1\x0e\x830\x0c4\x14\x95\xbdcWV\x1e\xd0\x15\x1e\xc1\
-\x9b\x18[\xf5\x17l\x8c\x80\x98\x98\x18\xd9A\x88\x91\xa1\x11\x1f\x804\x91\
-RD\xa1\x90\xa4J,\x1d\x831w\xd6\x199\x01\x008\x13<\x08^\x04X\x11\x10\xe3\
-\xa4\xdcpWH\xbcFh\xb0\xce/\xa0\x27\x90\xc1\x94\xb4\x05W \x8ecp]w\x93\xef\
-\xba\x0e|\xdf\xe7
-\x98\xbc\x824M\xa5\xf2\xd2\x02I\x92H\xe5\xa5\x05\xea\xba\x86\xb6m\xbfr\
-}\xdfCUUj\x04hdY\xb6\xb1g\x9a&u\x02k;D\xfd\x17\x16\xa0vP[h\x0c\xc3\x00e\
-Y\xaa\x15\xc0\x18\xcf]\xe7y\x0e\xe38\xaa\x15X\xceA\xc6\x9e\xb9A\x11X\x96\
-\x85\x8b\xa2\xc0\xb6m\xcb\xee#\xf1b\xcf\xf3\xfeYx\xfb/\x9b\xa6\xe1\x12\xf0\
-jvg@>\x14\xf6\xf8\xa8\xf6\xe7\xb2\x93!_\x86\xe38\xe2\xdb\xf4#\x12\x04\xc1\
-!i\x14E\xbb\xe4\xdc\xbfH\xc5\x0c\xb4\x1f8&;\xa0u\x05:\x91\xc7\x95\xe0\xa6\
-I\xe0\x09\x8bk\x0b\xd2qmy\x0b0\x00\x19\x14\x03\xf2\x904\x89-\x00\x00\x00\
-\x00IEND\xaeB`\x82'''
 
     img_btn_128x48_png = '''\
 \x89PNG\x0d
@@ -2331,6 +2430,9 @@ D\xf2\x9d\xc8\xed\x27\x07h?9\xa0\xd1\x15\x99\xd9B\xd6\xc3\x15"E_\xc8Z\x01\
     wx.MemoryFSHandler.AddFile('XRC/main/img_tab_inactive_png', img_tab_inactive_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_logo_h30_png', img_logo_h30_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_side_menu_top_png', img_side_menu_top_png)
+    wx.MemoryFSHandler.AddFile('XRC/main/img_btn_view_zoom_png', img_btn_view_zoom_png)
+    wx.MemoryFSHandler.AddFile('XRC/main/img_btn_view_update_png', img_btn_view_update_png)
+    wx.MemoryFSHandler.AddFile('XRC/main/img_btn_view_resize_png', img_btn_view_resize_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_side_menu_bottom_png', img_side_menu_bottom_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_preview_block_png', img_preview_block_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_btn_press_png', img_btn_press_png)
@@ -2340,7 +2442,6 @@ D\xf2\x9d\xc8\xed\x27\x07h?9\xa0\xd1\x15\x99\xd9B\xd6\xc3\x15"E_\xc8Z\x01\
     wx.MemoryFSHandler.AddFile('XRC/main/img_btn_acquire_image_png', img_btn_acquire_image_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_btn_view_sel_png', img_btn_view_sel_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_btn_view_pick_png', img_btn_view_pick_png)
-    wx.MemoryFSHandler.AddFile('XRC/main/img_btn_view_resize_png', img_btn_view_resize_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_btn_128x48_png', img_btn_128x48_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_btn_64x16_png', img_btn_64x16_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_btn_acq_img_sml_png', img_btn_acq_img_sml_png)

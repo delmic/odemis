@@ -1,5 +1,3 @@
-import sys
-
 """ This custom XRCED launcher allows a small wx function to be wrapped
 so it provides a little extra needed functionality.
 
@@ -10,7 +8,11 @@ controls, of which XRC knows nothing by default.
 The little wrapper added to the pywxrc.XmlResourceCompiler.NodeContainsFilename
 method,  will return true if it contains a value ending with '.png', indicating
 the content is an PNG image.
-"""  #pylint: disable=W0105
+"""
+
+import sys
+
+#pylint: disable=W0105
 
 if __name__ == '__main__':
     try:
@@ -21,9 +23,10 @@ if __name__ == '__main__':
     sys.modules['wx.tools.XRCed'] = sys.modules['XRCed']
 
     from wx.tools import pywxrc
-    # Move this to a separate launcher so it can be spread with
 
+    # Move this to a separate launcher so it can be spread with
     # odemis
+
     def ncf_decorator(ncf):
         def wrapper(self, node):
             if node.firstChild and node.firstChild.nodeType == 3 and \
