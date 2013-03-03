@@ -787,9 +787,14 @@
                                 <border>10</border>
                               </object>
                               <object class="sizeritem">
-                                <object class="wxPanel">
+                                <object class="ImageToggleButton" name="btn_sparc_view_resize">
                                   <size>24,24</size>
-                                  <bg>#D357E6</bg>
+                                  <bitmap>img/btn_view_resize.png</bitmap>
+                                  <hover>img/btn_view_resize_h.png</hover>
+                                  <selected>img/btn_view_resize_a.png</selected>
+                                  <XRCED>
+                                    <assign_var>1</assign_var>
+                                  </XRCED>
                                 </object>
                                 <flag>wxLEFT</flag>
                                 <border>10</border>

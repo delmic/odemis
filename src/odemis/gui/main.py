@@ -58,6 +58,10 @@ class OdemisGUIApp(wx.App):
         # HTTP documentation http server process
         self.http_proc = None
 
+        self.microscope = None
+        self.interface_model = None
+        self.main_frame = None
+
         # Output catcher using a helper class
         wx.App.outputWindowClass = OdemisOutputWindow
 
@@ -72,10 +76,6 @@ class OdemisGUIApp(wx.App):
         # named "FirstStep" sometimes.
         # Not clear whether wxPython supports it. http://trac.wxwidgets.org/ticket/12778
         # Maybe just change the name of this module to something more unique? (eg, odemis.py)
-
-        self.microscope = None
-        self.interface_model = None
-        self.main_frame = None
 
     def OnInit(self):
         """ Application initialization, automatically run from the :wx:`App`
