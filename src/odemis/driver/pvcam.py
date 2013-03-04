@@ -154,33 +154,42 @@ class PVCam(model.DigitalCamera):
     def __init__(self, name, role, device, **kwargs):
         """
         Initialises the device
-        device (int): number of the device to open, as defined in pvcam, cf scan()
+        device (int or string): number of the device to open, as defined in 
+         pvcam, cf scan(), or the name of the device (as in /dev/).
         Raise an exception if the device cannot be opened.
         """
         self.pvcam = PVCamDLL()
         
         # TODO: allow device to be None, and have a chipname string parameter.
         # If defined, the camera to open is the one reporting this chip name.
-         
-        # TODO: allow device to be a string, in which case it will look for 
-        # the given name => might be easier to find the right camera on systems
-        # will multiple cameras.
+        # Note that it might be slow with ST133's, which take 15s each to initialise
         model.DigitalCamera.__init__(self, name, role, **kwargs) # name is stored as ._name
 
         # so that it's really not possible to use this object in case of error
         self._handle = None
         self._temp_timer = None
-        try:
-            self._devname = self.cam_get_name(device) # for reinit
-        except PVCamError:
-            raise IOError("Failed to find PI PVCam camera %d" % device)
+        # pick the right selection method depending on the type of "device"
+        if isinstance(device, int):
+            try:
+                self._devname = self.cam_get_name(device) # for reinit
+            except PVCamError:
+                raise IOError("Failed to find PI PVCam camera %d" % device)
+        elif isinstance(device, str):
+            # check the file exists
+            if not os.path.exists("/dev/" + device):
+                raise IOError("Failed to find PI PVCam camera %s" % device)
+            self._devname = device
+        else:
+            raise ValueError("Unexpected type for device: %s", device)
 
         try:        
+            # TODO : can be ~15s for ST133: don't say anything on the PIXIS
+            logging.info("Initializing camera, can be long (~15 s)...")
             self._handle = self.cam_open(self._devname, pv.OPEN_EXCLUSIVE)
             # raises an error if camera has a problem
             self.pvcam.pl_cam_get_diags(self._handle)
         except PVCamError:
-            raise IOError("Failed to open PVCam camera %d (%s)" % (device, self._devname))
+            raise IOError("Failed to open PVCam camera %s (%s)" % (device, self._devname))
         
         logging.info("Opened device %d successfully", device)
         
@@ -307,7 +316,9 @@ class PVCam(model.DigitalCamera):
 
         # Shutter mode (could be an init parameter?)
         try:
-            self.set_param(pv.PARAM_SHTR_OPEN_MODE, pv.OPEN_PRE_EXPOSURE)
+            # TODO: if the the shutter is in Pre-Exposure mode, a short exposure
+            # time can burn it.
+            self.set_param(pv.PARAM_SHTR_OPEN_MODE, pv.OPEN_PRE_SEQUENCE)
         except PVCamError:
             logging.debug("Failed to change shutter mode")
         
@@ -315,6 +326,8 @@ class PVCam(model.DigitalCamera):
         self.set_param(pv.PARAM_PMODE, pv.PMODE_NORMAL)
         # In PI cameras, this is fixed (so read-only)
         if self.get_param_access(pv.PARAM_CLEAR_MODE) == pv.ACC_READ_WRITE:
+            logging.debug("Setting clear mode to pre sequence")
+            # TODO: should be done pre-exposure? As we are not closing the shutter?
             self.set_param(pv.PARAM_CLEAR_MODE, pv.CLEAR_PRE_SEQUENCE)
         
         # set the exposure resolution. (choices are us, ms or s) => ms is best
@@ -922,7 +935,7 @@ class PVCam(model.DigitalCamera):
         """
         # if there is a very quick unsubscribe(), subscribe(), the previous
         # thread might still be running
-        self.wait_stopped_flow() # no-op is the thread is not running
+        self.wait_stopped_flow() # no-op if the thread is not running
         self.acquisition_lock.acquire()
         
         # Set up thread
@@ -945,7 +958,7 @@ class PVCam(model.DigitalCamera):
                     try:
                         # cancel acquisition if it's still going on
                         if self.exp_check_status() in STATUS_IN_PROGRESS:
-                            self.pvcam.pl_exp_abort(self._handle, pv.CCS_HALT)
+                            self.pvcam.pl_exp_abort(self._handle, pv.CCS_HALT_CLOSE_SHTR)
                             time.sleep(0.1)
                     except PVCamError:
                         pass # already done?
@@ -957,6 +970,7 @@ class PVCam(model.DigitalCamera):
                         
                     # The only way I've found to detect the camera is not 
                     # responding is to check for weird camera temperature
+                    # TODO: seems that the ST133 gives -120 => check usb to detect connected or not
                     if self.get_param(pv.PARAM_TEMP) == TEMP_CAM_GONE:
                         self.Reinitialize() #returns only once the camera is working again 
                     
@@ -1026,7 +1040,7 @@ class PVCam(model.DigitalCamera):
 
                     logging.exception("trying again to acquire image after error")
                     try:
-                        self.pvcam.pl_exp_abort(self._handle, pv.CCS_HALT)
+                        self.pvcam.pl_exp_abort(self._handle, pv.CCS_HALT_CLOSE_SHTR)
                     except PVCamError:
                         pass
                     retries += 1
@@ -1044,21 +1058,23 @@ class PVCam(model.DigitalCamera):
         except:
             logging.exception("Unexpected failure during image acquisition")
         finally:
+            self.set_param(pv.PARAM_SHTR_OPEN_MODE, pv.OPEN_PRE_EXPOSURE)
             # ending cleanly
             try:
-                if self.exp_check_status() in STATUS_IN_PROGRESS:
+                if True  or self.exp_check_status() in STATUS_IN_PROGRESS: # DEBUG: force closing shutter?
                     logging.debug("aborting acquisition")
-                    self.pvcam.pl_exp_abort(self._handle, pv.CCS_HALT)
+                    self.pvcam.pl_exp_abort(self._handle, pv.CCS_HALT_CLOSE_SHTR)
+#                    self.pvcam.pl_exp_abort(self._handle, pv.CCS_CLEAR_CLOSE_SHTR)
             except PVCamError:
                 logging.exception("Failed to abort acquisition")
                 pass # status reported an error
             
             # only required with multiple images
-#            try:
-#                if cbuffer:
-#                    self.pvcam.pl_exp_finish_seq(self._handle, cbuffer, None)
-#            except PVCamError:
-#                logging.exception("Failed to finish the acquisition properly")
+            try:
+                if cbuffer:
+                    self.pvcam.pl_exp_finish_seq(self._handle, cbuffer, None)
+            except PVCamError:
+                logging.exception("Failed to finish the acquisition properly")
         
             try:
                 if cbuffer:
@@ -1066,14 +1082,16 @@ class PVCam(model.DigitalCamera):
             except PVCamError:
                 logging.exception("Failed to finish the acquisition properly")
             
+            # FIXME: how to close the shutter? It seams it's not closed
             # A close/open cycle seems the only way to have a stable library
-            try:
-                with self.lib_lock:
-                    self.pvcam.pl_cam_close(self._handle)
-                    self._handle = self.cam_open(self._devname, pv.OPEN_EXCLUSIVE)
-                self._setStaticSettings()
-            except PVCamError:
-                logging.exception("Failed to reset the library properly")
+#            try:
+#                with self.lib_lock:
+#                    self.pvcam.pl_cam_close(self._handle)
+            # FIXME: can be 15s with the ST133
+#                    self._handle = self.cam_open(self._devname, pv.OPEN_EXCLUSIVE)
+#                self._setStaticSettings()
+#            except PVCamError:
+#                logging.exception("Failed to reset the library properly")
             self._prev_settings = [None, None, None, None]
             
             self.acquisition_lock.release()

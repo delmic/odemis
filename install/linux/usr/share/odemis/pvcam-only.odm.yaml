@@ -2,7 +2,7 @@ Optical: {
     class: Microscope,
     role: brightfield,
     emitters: ["Nikon Super Duper", "MultiBand Fixed Filter"],
-    detectors: [Pixis],
+    detectors: [Pixis], # ST133
     actuators: ["FakeRedStoneStage", "SEM-Optical Alignment", "OpticalZ actuator"],
 }
 
@@ -23,8 +23,16 @@ Optical: {
 Pixis: {
     class: pvcam.PVCam,
     role: ccd,
-    init: {device: 0} # 0 is almost always correct
+    init: {device: "rspipixis"} # use 0 if this symlink is no created
 }
+
+# second PVCam camera
+#ST133: {
+#    class: pvcam.PVCam,
+#    role: ccd,
+#    init: {device: "rspist133"}
+#}
+
 
 "FakeRedStoneStage": {
     class: simulated.Stage2D,
