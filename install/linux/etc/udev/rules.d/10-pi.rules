@@ -1,3 +1,3 @@
 # Overrides the default group of Princeton Instruments camera to Odemis
-SUBSYSTEMS=="usb", ATTRS{idProduct}=="a010", ATTRS{idVendor}=="0bd7", GROUP="odemis", MODE="0660"
-SUBSYSTEMS=="usb", ATTRS{idProduct}=="a026", ATTRS{idVendor}=="0bd7", GROUP="odemis", MODE="0660"
+SUBSYSTEMS=="usb", ATTRS{idProduct}=="a010", ATTRS{idVendor}=="0bd7", GROUP="odemis", MODE="0660", SYMLINK="rspist133"
+SUBSYSTEMS=="usb", ATTRS{idProduct}=="a026", ATTRS{idVendor}=="0bd7", GROUP="odemis", MODE="0660", SYMLINK="rspipixis"
