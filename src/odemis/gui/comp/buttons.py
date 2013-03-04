@@ -122,7 +122,9 @@ class ImageButton(GenBitmapButton):
         GenBitmapButton.__init__(self, *args, **kwargs)
 
         if self.background_parent:
-            self.SetBackgroundColour(self.background_parent.GetBackgroundColour())
+            self.SetBackgroundColour(
+                self.background_parent.GetBackgroundColour()
+            )
         else:
             self.SetBackgroundColour(self.GetParent().GetBackgroundColour())
 
@@ -184,13 +186,13 @@ class ImageButton(GenBitmapButton):
         hasMask = bmp.GetMask() != None
         dc.DrawBitmap(bmp, (width - bw) // 2, (height - bh) // 2, hasMask)
 
-    def InitColours(self):
-        """ Deprecated? """
-        GenBitmapButton.InitColours(self)
-        if self.background_parent:
-            self.faceDnClr = self.background_parent.GetBackgroundColour()
-        else:
-            self.faceDnClr = self.GetParent().GetBackgroundColour()
+    # def InitColours(self):
+    #     """ Depddrecated? """
+    #     GenBitmapButton.InitColours(self)
+    #     if self.background_parent:
+    #         self.faceDnClr = self.background_parent.GetBackgroundColour()
+    #     else:
+    #         self.faceDnClr = self.GetParent().GetBackgroundColour()
 
     def SetLabelDelta(self, delta):
         """ Change the label delta value
@@ -292,9 +294,10 @@ class ImageTextButton(GenBitmapTextButton):
         """
         return self.bmpHover
 
-    def SetLabel(self, label):
+    def SetLabel(self, label):  #pylint: disable=W0221
         GenBitmapTextButton.SetLabel(self, label)
-        # FIXME: should be fixed into GenBitmapTextButton => opened ticket #15032
+        # FIXME: should be fixed into GenBitmapTextButton => opened ticket
+        # #15032
         # http://trac.wxwidgets.org/ticket/15032
         self.Refresh() # force to redraw the image
 
@@ -338,7 +341,9 @@ class ImageTextButton(GenBitmapTextButton):
         if self.IsEnabled():
             dc.SetTextForeground(self.GetForegroundColour())
         else:
-            dc.SetTextForeground(wx.SystemSettings.GetColour(wx.SYS_COLOUR_GRAYTEXT))
+            dc.SetTextForeground(
+                wx.SystemSettings.GetColour(wx.SYS_COLOUR_GRAYTEXT)
+            )
 
         # Get the label text
         label = self.GetLabel()
@@ -363,15 +368,16 @@ class ImageTextButton(GenBitmapTextButton):
         else:
             pos_x = pos_x + self.padding_x
 
-        dc.DrawText(label, pos_x, (height - th) // 2 + dy + self.padding_y)      # draw the text
+        # draw the text
+        dc.DrawText(label, pos_x, (height - th) // 2 + dy + self.padding_y)
 
-    def InitColours(self):
-        """ Deprecated? """
-        GenBitmapTextButton.InitColours(self)
-        if self.background_parent:
-            self.faceDnClr = self.background_parent.GetBackgroundColour()
-        else:
-            self.faceDnClr = self.GetParent().GetBackgroundColour()
+    # def InitColours(self):
+    #     """ Deprecated? """
+    #     GenBitmapTextButton.InitColours(self)
+    #     if self.background_parent:
+    #         self.faceDnClr = self.background_parent.GetBackgroundColour()
+    #     else:
+    #         self.faceDnClr = self.GetParent().GetBackgroundColour()
 
 class ImageToggleButton(GenBitmapToggleButton):  #pylint: disable=R0901
     """ Graphical toggle button with a hover effect. """
@@ -426,7 +432,9 @@ class ImageToggleButton(GenBitmapToggleButton):  #pylint: disable=R0901
         GenBitmapToggleButton.__init__(self, *args, **kwargs)
 
         if self.background_parent:
-            self.SetBackgroundColour(self.background_parent.GetBackgroundColour())
+            self.SetBackgroundColour(
+                self.background_parent.GetBackgroundColour()
+            )
         else:
             self.SetBackgroundColour(self.GetParent().GetBackgroundColour())
 
@@ -509,13 +517,13 @@ class ImageToggleButton(GenBitmapToggleButton):  #pylint: disable=R0901
         hasMask = bmp.GetMask() != None
         dc.DrawBitmap(bmp, (width - bw) // 2, (height - bh) // 2, hasMask)
 
-    def InitColours(self):
-        """ Deprecated?? """
-        GenBitmapButton.InitColours(self)
-        if self.background_parent:
-            self.faceDnClr = self.background_parent.GetBackgroundColour()
-        else:
-            self.faceDnClr = self.GetParent().GetBackgroundColour()
+    # def InitColours(self):
+    #     """ Deprecated?? """
+    #     GenBitmapButton.InitColours(self)
+    #     if self.background_parent:
+    #         self.faceDnClr = self.background_parent.GetBackgroundColour()
+    #     else:
+    #         self.faceDnClr = self.GetParent().GetBackgroundColour()
 
 class ImageTextToggleButton(GenBitmapTextToggleButton):
     """ Graphical toggle button with text and a hover effect. """
@@ -651,7 +659,9 @@ class ImageTextToggleButton(GenBitmapTextToggleButton):
         if self.IsEnabled():
             dc.SetTextForeground(self.GetForegroundColour())
         else:
-            dc.SetTextForeground(wx.SystemSettings.GetColour(wx.SYS_COLOUR_GRAYTEXT))
+            dc.SetTextForeground(
+                wx.SystemSettings.GetColour(wx.SYS_COLOUR_GRAYTEXT)
+            )
 
         label = self.GetLabel()
         tw, th = dc.GetTextExtent(label) # size of text
@@ -671,13 +681,13 @@ class ImageTextToggleButton(GenBitmapTextToggleButton):
 
         dc.DrawText(label, pos_x, (height - th) // 2 + dy + 1) # draw the text
 
-    def InitColours(self):
-        """ Deprecated?? """
-        GenBitmapButton.InitColours(self)
-        if self.background_parent:
-            self.faceDnClr = self.background_parent.GetBackgroundColour()
-        else:
-            self.faceDnClr = self.GetParent().GetBackgroundColour()
+    # def InitColours(self):
+    #     """ Deprecated?? """
+    #     GenBitmapButton.InitColours(self)
+    #     if self.background_parent:
+    #         self.faceDnClr = self.background_parent.GetBackgroundColour()
+    #     else:
+    #         self.faceDnClr = self.GetParent().GetBackgroundColour()
 
 class ViewButton(ImageTextToggleButton):
     """ The ViewButton class describes a toggle button that has an image overlay
@@ -716,12 +726,16 @@ class ViewButton(ImageTextToggleButton):
         # The border that will be kept clear.
         self.overlay_border = 5
 
+        self.overlay_width = None
+        self.overlay_height = None
+
         self._calc_overlay_size()
 
     def _calc_overlay_size(self):
         width, height = self.GetSize()
-        self.overlay_width = width - self.overlay_border * 2 - self.pointer_offset
-        self.overlay_height = height - self.overlay_border * 2
+        overlay_border_size = self.overlay_border * 2
+        self.overlay_width = width - overlay_border_size - self.pointer_offset
+        self.overlay_height = height - overlay_border_size
 
     def OnLeftDown(self, event):
         """ This event handler is fired on left mouse button events, but it
@@ -845,10 +859,10 @@ class ColourButton(ImageButton):
     DEFAULT_COLOR = "#88BA38"
 
     def __init__(self, *args, **kwargs):
-        colour = kwargs.pop('colour', None)
+        self.colour = kwargs.pop('colour', None) or self.DEFAULT_COLOR
         self.use_hover = kwargs.pop('use_hover', False)
         ImageButton.__init__(self, *args, **kwargs)
-        self.set_colour(colour)
+        self.set_colour(self.colour)
 
     def set_colour(self, colour=None):
         """ Change the background colour of the button.
@@ -856,7 +870,8 @@ class ColourButton(ImageButton):
             :param colour: (string) Hex colour value (optional)
         """
 
-        self.colour = colour or self.DEFAULT_COLOR
+        if colour:
+            self.colour = colour
 
         BMP_EMPTY = img.getemptyBitmap()
 
@@ -876,7 +891,7 @@ class ColourButton(ImageButton):
         if self.use_hover:
             BMP_EMPTY_H = img.getempty_hBitmap()
             bmp = BMP_EMPTY_H.GetSubBitmap(
-                        wx.Rect(0, 0, BMP_EMPTY.GetWidth(), BMP_EMPTY.GetHeight()))
+                    wx.Rect(0, 0, BMP_EMPTY.GetWidth(), BMP_EMPTY.GetHeight()))
             mdc = wx.MemoryDC()
             mdc.SelectObject(bmp)
             mdc.SetBrush(brush)

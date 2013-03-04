@@ -414,7 +414,6 @@ def __init_resources():
                         <orient>wxVERTICAL</orient>
                       </object>
                       <bg>#333333</bg>
-                      <hidden>1</hidden>
                     </object>
                     <flag>wxALIGN_RIGHT</flag>
                   </object>
