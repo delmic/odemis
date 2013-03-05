@@ -1292,6 +1292,8 @@ class SEMComedi(model.HwComponent):
             self._acquisition_thread.join(10) # 10s timeout for safety
             if self._acquisition_thread.isAlive():
                 raise OSError("Failed to stop the acquisition thread")
+            # ensure it's not set, even if the thread died prematurately
+            self._acquisition_must_stop.clear()
         
     def _acquisition_run(self):
         """

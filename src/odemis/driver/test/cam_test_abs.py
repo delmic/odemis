@@ -68,7 +68,10 @@ class VirtualTestCam(object):
  
     def setUp(self):
         # reset size and binning
-        self.camera.binning.value = 1
+        if isinstance(self.camera.binning.value, tuple):
+            self.camera.binning.value = (1, 1)
+        else:
+            self.camera.binning.value = 1
         self.size = self.camera.shape[0:2]
         self.camera.resolution.value = self.size
         self.acq_dates = (set(), set()) # 2 sets of dates, one for each receiver 
@@ -105,7 +108,13 @@ class VirtualTestCam(object):
 #    @unittest.skip("simple")
     def test_two_acquire(self):
         exposure = 0.1
-        self.camera.binning.value = 1 # just to check it works
+        
+        # just to check it works
+        if isinstance(self.camera.binning.value, tuple):
+            self.camera.binning.value = (1, 1)
+        else:
+            self.camera.binning.value = 1
+        
         self.camera.exposureTime.value = exposure
         
         start = time.time()
@@ -116,7 +125,12 @@ class VirtualTestCam(object):
         self.assertGreaterEqual(duration, exposure, "Error execution took %f s, less than exposure time %d." % (duration, exposure))
         self.assertIn(model.MD_EXP_TIME, im.metadata)
         
-        self.camera.binning.value = 1 # just to check it still works
+        # just to check it still works
+        if isinstance(self.camera.binning.value, tuple):
+            self.camera.binning.value = (1, 1)
+        else:
+            self.camera.binning.value = 1
+            
         start = time.time()
         im = self.camera.data.get()
         duration = time.time() - start
@@ -272,17 +286,27 @@ class VirtualTestCam(object):
 
 #    @unittest.skip("simple")
     def test_binning(self):
-        binnings = self.camera.binning.choices
-        self.assertIn(1, binnings)
-        # The SimCam of SDKv3 doesn't support binning, so let's just try on v2
-        if not 2 in binnings:
-            # if there is no binning 2, there is no binning at all
-            assert(len(binnings) == 1)
-            self.skipTest("Camera doesn't support binning")
+        if isinstance(self.camera.binning.value, tuple):
+            self.camera.binning.value = (1, 1)
+            max_binning = self.camera.binning.range[1] 
+            new_binning = (2, 2)
+            if new_binning >= max_binning:
+                # if there is no binning 2, let's not try
+                self.skipTest("Camera doesn't support binning")
+        else:
+            binnings = self.camera.binning.choices
+            self.camera.binning.value = 1
+            self.assertIn(1, binnings)
+            # The SimCam of SDKv3 doesn't support binning, so let's just try on v2
+            if not 2 in binnings:
+                # if there is no binning 2, there is no binning at all
+                assert(len(binnings) == 1)
+                self.skipTest("Camera doesn't support binning")
+            new_binning = 2
         
         # binning should automatically resize the image
         prev_size = self.camera.resolution.value
-        self.camera.binning.value = 2
+        self.camera.binning.value = new_binning
         self.assertNotEqual(self.camera.resolution.value, prev_size)
         
         # ask for the whole image
