@@ -31,11 +31,13 @@ import wx
 
 from odemis.gui.comp.canvas import DraggableCanvas, WorldToBufferPoint
 from odemis.gui.model import EM_STREAMS
-
-
+from odemis.gui import FOREGROUND_COLOUR_EDIT
+from odemis.gui.util.conversion import hex_to_rgb, hex_to_rgba
 
 CROSSHAIR_COLOR = wx.GREEN
 CROSSHAIR_SIZE = 16
+
+SELECTION_COLOR = FOREGROUND_COLOUR_EDIT
 
 class DblMicroscopeCanvas(DraggableCanvas):
     """
@@ -66,12 +68,31 @@ class DblMicroscopeCanvas(DraggableCanvas):
         self._lastThumbnailUpdate = 0
         self._thumbnailUpdatePeriod = 2 # s, minimal period before updating again
 
+        self.selection_overlay = SelectionOverlay()
+        self.WorldOverlays.append(self.selection_overlay)
+
         # self.WorldOverlays.append(CrossHairOverlay("Blue",
         #                                            CROSSHAIR_SIZE,
         #                                            (-10, -10)))
         # self.WorldOverlays.append(CrossHairOverlay("Red",
         #                                            CROSSHAIR_SIZE,
         #                                            (10, 10)))
+
+        self.select_mode = True
+
+    def OnLeftDown(self, event):
+        if self.select_mode:
+            self.selection_overlay.start_selection(wx.PaintDC(self),
+                                                   event.GetPosition())
+        else:
+            DraggableCanvas.OnLeftDown(self, event)
+
+    def OnLeftUp(self, event):
+        if self.select_mode:
+            self.selection_overlay.update_selection(event.GetPosition())
+            self.Draw(wx.PaintDC(self))
+        else:
+            DraggableCanvas.OnLeftDown(self, event)
 
     def setView(self, microscope_view):
         """
@@ -356,32 +377,37 @@ class CrossHairOverlay(object):
         dc.DrawLine(tl_s[0], center[1], br_s[0], center[1])
         dc.DrawLine(center[0], tl_s[1], center[0], br_s[1])
 
-### Here come all the classes for drawing overlays
 class SelectionOverlay(object):
-    def __init__(self, color=CROSSHAIR_COLOR, size=CROSSHAIR_SIZE, center=(0, 0)):
-        self.pen = wx.Pen(color)
-        self.size = size
+    def __init__(self, color=SELECTION_COLOR, center=(0, 0)):
+        self.color = hex_to_rgb(color)
         self.center = center
+        self.size = 16
+
+        self.ctx = None
+        self.start_pos = None
+        self.end_pos = None
+
+
+    def start_selection(self, dc, start_pos):
+        logging.debug("Starting selection at %s", start_pos)
+        self.start_pos = start_pos
+        self.ctx = wx.lib.wxcairo.ContextFromDC(dc)
+
+    def update_selection(self, end_pos):
+        logging.debug("Updating selection to %s", end_pos)
+        self.end_pos = end_pos
 
     def Draw(self, dc, shift=(0, 0), scale=1.0):
-        """
-        Draws the crosshair
-        dc (wx.DC)
-        shift (2-tuple float): shift for the coordinate conversion
-        scale (float): scale for the coordinate conversion
-        """
-        dc.SetPen(self.pen)
-
-        tl = (self.center[0] - self.size,
-              self.center[1] - self.size)
-        br = (self.center[0] + self.size,
-              self.center[1] + self.size)
-        tl_s = WorldToBufferPoint(tl, shift, scale)
-        br_s = WorldToBufferPoint(br, shift, scale)
-        center = WorldToBufferPoint(self.center, shift, scale)
-
-        dc.DrawLine(tl_s[0], center[1], br_s[0], center[1])
-        dc.DrawLine(center[0], tl_s[1], center[0], br_s[1])
+        if self.ctx:
+            logging.debug("Drawing selection")
+            self.ctx.set_source_rgba(*self.color)
+            self.ctx.rectangle (self.start_pos.x,
+                                self.start_pos.y,
+                                self.end_pos.x,
+                                self.end_pos.y) # Rectangle(x0, y0, x1, y1)
+            #self.ctx.fill_preserve()
+            #self.ctx.set_source_rgb(0.1, 0.5, 0)
+            self.ctx.stroke()
 
 
 

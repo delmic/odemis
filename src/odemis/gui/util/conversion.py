@@ -63,3 +63,11 @@ def wave2rgb(wavelength):
 
     return int(255*r), int(255*g), int(255*b)
 
+def hex_to_rgb(hex_str):
+    """ Convert a Hexadecimal color representation into an 3-tuple of floats """
+    hex_str = hex_str[-6:]
+    return tuple(int(hex_str[i:i+2], 16) / 255.0 for i in range(0, 6, 2))
+
+def hex_to_rgba(hex_str, af=1.0):
+    """ Convert a Hexadecimal color representation into an 3-tuple of floats """
+    return hex_to_rgb(hex_str) + (af,)

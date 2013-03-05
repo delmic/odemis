@@ -31,8 +31,6 @@ from odemis import model
 from odemis.gui.model.stream import Stream, StreamTree
 from odemis.model import FloatContinuous, VigilantAttribute, VA_EXCEPTIONS
 
-#logging.getLogger().setLevel(logging.DEBUG) # for the messages of dye database to appear
-
 # The different states of a microscope
 STATE_OFF = 0
 STATE_ON = 1
@@ -55,12 +53,13 @@ class MicroscopeModel(object):
             by the back-end
         """
         self.microscope = microscope
+
         # These are either HwComponents or None (if not available)
         self.ccd = None
         self.stage = None
         self.focus = None # actuator to change the camera focus
         self.light = None
-        self.light_filter = None # emission light filter for fluorescence microscopy
+        self.light_filter = None # emission light filter for fluorescence micro.
         self.ebeam = None
         self.sed = None # secondary electron detector
         self.bsd = None # back-scatter electron detector
@@ -73,7 +72,8 @@ class MicroscopeModel(object):
             elif d.role == "bs-detector":
                 self.bsd = d
         if not self.ccd and not self.sed and not self.bsd:
-            raise Exception("no camera nor electron detector found in the microscope")
+            msg = "no camera nor electron detector found in the microscope"
+            raise Exception(msg)
 
         for a in microscope.actuators:
             if a.role == "stage":
@@ -102,11 +102,12 @@ class MicroscopeModel(object):
                             self._light_power_on = max(self.light.power.choices)
                         except (AttributeError, model.NotApplicableError):
                             self._light_power_on = 1
-                            logging.warning("Unknown value to turn on the light")
+                            logging.warning("Unknown light power value")
             elif e.role == "filter":
                 self.light_filter = e
             elif e.role == "e-beam":
                 self.ebeam = e
+
         if not self.light and not self.ebeam:
             raise Exception("No emitter found in the microscope")
 
@@ -125,15 +126,15 @@ class MicroscopeModel(object):
         # The MicroscopeView currently focused
         self.focussedView = VigilantAttribute(None)
 
-        views = set([VIEW_LAYOUT_ONE, VIEW_LAYOUT_22, VIEW_LAYOUT_FULLSCREEN])
-        states = set([STATE_OFF, STATE_ON, STATE_PAUSE])
+        layouts = set([VIEW_LAYOUT_ONE, VIEW_LAYOUT_22, VIEW_LAYOUT_FULLSCREEN])
+        hw_states = set([STATE_OFF, STATE_ON, STATE_PAUSE])
 
-        self.viewLayout = model.IntEnumerated(VIEW_LAYOUT_22, choices=views)
+        self.viewLayout = model.IntEnumerated(VIEW_LAYOUT_22, choices=layouts)
 
-        self.opticalState = model.IntEnumerated(STATE_OFF, choices=states)
+        self.opticalState = model.IntEnumerated(STATE_OFF, choices=hw_states)
         self.opticalState.subscribe(self.onOpticalState)
 
-        self.emState = model.IntEnumerated(STATE_OFF, choices=states)
+        self.emState = model.IntEnumerated(STATE_OFF, choices=hw_states)
         self.emState.subscribe(self.onEMState)
 
     # Getters and Setters
@@ -180,6 +181,7 @@ class MicroscopeModel(object):
         """ Event handler for when the state of the optical microscope changes
         """
         # only called when it changes
+
         if state in (STATE_OFF, STATE_PAUSE):
             # Turn off the optical path. All the streams using it should be
             # already deactivated.
@@ -317,7 +319,8 @@ class MicroscopeView(object):
 
         :return: a future (that allows to know when the move is finished)
 
-        Note: once the move is finished stage_pos will be updated (by the back-end)
+        Note: once the move is finished stage_pos will be updated (by the
+        back-end)
         """
 
         if not self._stage:
@@ -422,14 +425,10 @@ class MicroscopeView(object):
         Called when the merge ratio is modified
         """
         # This actually modifies the root operator of the stream tree
-        # It has effect only if the operator can do something with the "merge" argument
+        # It has effect only if the operator can do something with the "merge"
+        # argument
         with self._streams_lock:
             self.streams.kwargs["merge"] = ratio
 
         # just let everyone that the composited image has changed
         self.lastUpdate.value = time.time()
-
-
-
-
-# vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:
