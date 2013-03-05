@@ -71,7 +71,7 @@ def open_json_or_remove(filename):
     try:
         if fixed_text == text:
             # not much hope
-            raise ValueError
+            raise ValueError()
         else:
             # save the fixed version
             f.close()
@@ -82,9 +82,10 @@ def open_json_or_remove(filename):
         logging.error("File %s was fixed", filename)
         return content
     except ValueError:
-        logging.exception("File %s seems to be an invalid JSON file, deleting", filename)
+        logging.info("File %s seems to be an invalid JSON file, deleting", filename)
         f.close()
         os.remove(filename)
+        raise
 
 def main(*args):
     if not os.path.exists(OUT_DIR):
@@ -115,7 +116,7 @@ def main(*args):
         neid = int(eid) # should be a int (also ensures that there is no trick in the name)
         ename = OUT_DIR + "environment/%d.json" % neid
         logging.debug("Downloading environment %s", eid)
-        download(eurl, ename)
+        #download(eurl, ename)
         try:
             open_json_or_remove(ename)
         except ValueError:
@@ -133,9 +134,10 @@ def main(*args):
         substances[nsid] = surl
         logging.debug("Downloading substance %d", nsid)
         sname = OUT_DIR + "substance/%d.json" % nsid
-        download(surl, sname)
+        if nsid == 58:
+            download(surl, sname)
         
-        # gif file too, if it is there
+        # gif/png file too, if it is there
         try:
             fulls = open_json_or_remove(sname)
         except ValueError:
