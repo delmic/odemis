@@ -306,8 +306,9 @@ class DblMicroscopeCanvas(DraggableCanvas):
             >0: toward up/right
         """
 
-        focus = [self.microscope_view.focus0, self.microscope_view.focus1][axis]
-        if focus is not None:
+        #focus = [self.microscope_view.focus0, self.microscope_view.focus1][axis]
+
+        if self.microscope_view.get_focus(axis) is not None:
             # conversion: 1 unit => 0.1 μm (so a whole screen, ~44000u, is a
             # couple of mm)
             # TODO this should be adjusted by the lens magnification:
@@ -341,14 +342,14 @@ class DblMicroscopeCanvas(DraggableCanvas):
             shift = self._moveFocusDistance[0]
             self._moveFocusDistance[0] = 0
         logging.debug("Moving focus0 by %f μm", shift * 1e6)
-        self.microscope_view.focus0.moveRel({"z": shift})
+        self.microscope_view.get_focus(0).moveRel({"z": shift})
 
     def _moveFocus1(self):
         with self._moveFocusLock:
             shift = self._moveFocusDistance[1]
             self._moveFocusDistance[1] = 0
         logging.debug("Moving focus1 by %f μm", shift * 1e6)
-        self.microscope_view.focus1.moveRel({"z": shift})
+        self.microscope_view.get_focus(1).moveRel({"z": shift})
 
     def _onCrossHair(self, activated):
         """ Activate or disable the display of a cross in the middle of the view
