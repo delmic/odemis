@@ -771,7 +771,7 @@ class PVCam(model.DigitalCamera):
         # FIXME: detect more generally if the detector supports binning or not?
         if "InGaAs" in chip:
             # InGaAs detectors don't support binning (written in the 
-            # specifiction). In practice, it stops sending images if binning > 1.
+            # specification). In practice, it stops sending images if binning > 1.
             return (1, 1)
         
         # other cameras seem to support up to the entire sensor resolution
@@ -966,6 +966,7 @@ class PVCam(model.DigitalCamera):
         need_reinit = True
         retries = 0
         cbuffer = None
+        expected_end = 0
         try:
             while not self.acquire_must_stop.is_set():
                 # need to stop acquisition to update settings
@@ -1004,7 +1005,7 @@ class PVCam(model.DigitalCamera):
                                                 pv.TIMED_MODE, exp_ms, byref(blength))
                     logging.debug("acquisition setup report buffer size of %d", blength.value)
                     cbuffer = self._allocate_buffer(blength.value) # TODO shall allocate a new buffer every time?
-                    assert (blength.value / 2) >= (size[0] * size[1]) # for now we even expect == 
+                    assert (blength.value / 2) == (size[0] * size[1]) 
                     
                     readout_sw = size[0] * size[1] * self._metadata[model.MD_READOUT_TIME] # s
                     # tends to be very slightly bigger:
@@ -1020,8 +1021,8 @@ class PVCam(model.DigitalCamera):
                 logging.debug("starting acquisition")
                 self.pvcam.pl_exp_start_seq(self._handle, cbuffer)
                 metadata[model.MD_ACQ_DATE] = time.time() # time at the beginning
+                expected_end = time.time() + duration
                 array = self._buffer_as_array(cbuffer, size, metadata)
-                # TODO: we could already allocate the buffer for the next acquisition to save some time.
                 
                 # first we wait ourselves the 80% of expected time (which 
                 # might be very long) while detecting requests for stop. 80%, 
@@ -1032,7 +1033,7 @@ class PVCam(model.DigitalCamera):
                 
                 # then wait a bounded time to ensure the image is acquired
                 try:
-                    timeout = time.time() + 1
+                    timeout = expected_end + 1
                     status = self.exp_check_status()
                     while status in STATUS_IN_PROGRESS:
                         if time.time() > timeout:
@@ -1073,15 +1074,25 @@ class PVCam(model.DigitalCamera):
         except:
             logging.exception("Unexpected failure during image acquisition")
         finally:
-            self.set_param(pv.PARAM_SHTR_OPEN_MODE, pv.OPEN_PRE_EXPOSURE)
             # ending cleanly
-            try:
-                if self.exp_check_status() in STATUS_IN_PROGRESS:
-                    logging.debug("aborting acquisition")
-                    self.pvcam.pl_exp_abort(self._handle, pv.CCS_HALT_CLOSE_SHTR)
-            except PVCamError:
-                logging.exception("Failed to abort acquisition")
-                pass # status reported an error
+            
+            # if end is soon, just wait for it (because the camera hates
+            # being aborted during the end of acquisition (ie, during readout?)
+            left = expected_end - time.time()
+            while left < 5 and left > -1: # between 5 s ahead to 1 s late 
+                if not self.exp_check_status() in STATUS_IN_PROGRESS:
+                    logging.debug("not aborting acquisition as it's already finished")
+                    break
+                time.sleep(0.01)
+                left = expected_end - time.time()
+            else:
+                try:
+                    if self.exp_check_status() in STATUS_IN_PROGRESS:    
+                        logging.debug("aborting acquisition")
+                        self.pvcam.pl_exp_abort(self._handle, pv.CCS_HALT_CLOSE_SHTR)
+                except PVCamError:
+                    logging.exception("Failed to abort acquisition")
+                    pass # status reported an error
             
             # only required with multiple images, but just in case, we do it
             try:
@@ -1095,17 +1106,6 @@ class PVCam(model.DigitalCamera):
                     self.pvcam.pl_exp_uninit_seq()
             except PVCamError:
                 logging.exception("Failed to finish the acquisition properly")
-            
-            # A close/open cycle seems the only way to have a stable library
-            try:
-                with self.lib_lock:
-                    self.pvcam.pl_cam_close(self._handle)
-                    # FIXME: can be 15s with the ST133
-                    self._handle = self.cam_open(self._devname, pv.OPEN_EXCLUSIVE)
-                self._setStaticSettings()
-            except PVCamError:
-                logging.exception("Failed to reset the library properly")
-            self._prev_settings = [None, None, None, None]
             
             self.acquisition_lock.release()
             logging.debug("Acquisition thread closed")
