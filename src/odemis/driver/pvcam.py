@@ -189,9 +189,11 @@ class PVCam(model.DigitalCamera):
             # raises an error if camera has a problem
             self.pvcam.pl_cam_get_diags(self._handle)
         except PVCamError:
+            logging.info("PI camera seems connected but not responding, "
+                         "you might want to try turning it off and on again.")
             raise IOError("Failed to open PVCam camera %s (%s)" % (device, self._devname))
         
-        logging.info("Opened device %d successfully", device)
+        logging.info("Opened device %s successfully", device)
         
         self.lib_lock = threading.Lock() # to modify the _handle
         
@@ -270,7 +272,7 @@ class PVCam(model.DigitalCamera):
         self._setResolution(resolution)
         
         # 2D binning is like a "small resolution"
-        self.binning = model.ResolutionVA(self._binning, [(1,1), resolution],
+        self.binning = model.ResolutionVA(self._binning, [(1,1), self._getMaxBinning()],
                                            unit="px", setter=self._setBinning)
         
         # default values try to get live microscopy imaging more likely to show something
@@ -760,6 +762,21 @@ class PVCam(model.DigitalCamera):
         self._readout_rate = value
         return value
     
+    def _getMaxBinning(self):
+        """
+        return the maximum binning in both directions
+        returns (list of int): maximum binning in height, width
+        """
+        chip = self.get_param(pv.PARAM_CHIP_NAME)
+        # FIXME: detect more generally if the detector supports binning or not?
+        if "InGaAs" in chip:
+            # InGaAs detectors don't support binning (written in the 
+            # specifiction). In practice, it stops sending images if binning > 1.
+            return (1, 1)
+        
+        # other cameras seem to support up to the entire sensor resolution
+        return self.GetSensorSize()
+        
     def _setBinning(self, value):
         """
         Called when "binning" VA is modified. It also updates the resolution so
@@ -768,10 +785,8 @@ class PVCam(model.DigitalCamera):
          are combined to create "super pixels"
         Note: super pixels are always square (although hw doesn't require this)
         """
-        # TODO: support non square binning (for spectroscopy)
         
         prev_binning = self._binning
-#        self._binning = (value, value)
         self._binning = tuple(value) # duplicate
 
         # adapt resolution so that the AOI stays the same
@@ -899,7 +914,7 @@ class PVCam(model.DigitalCamera):
         size = ((self._image_rect[1] - self._image_rect[0] + 1) // self._binning[0],
                 (self._image_rect[3] - self._image_rect[2] + 1) // self._binning[1])
 
-        # nothing special for the exposure time    
+        # nothing special for the exposure time   
         self._metadata[model.MD_EXP_TIME] = self._exposure_time
 
         self._prev_settings = [new_image_settings, self._exposure_time, 
@@ -965,7 +980,7 @@ class PVCam(model.DigitalCamera):
                     
                     # finish the seq if it was started
                     if cbuffer:
-#                        self.pvcam.pl_exp_finish_seq(self._handle, cbuffer, None)
+                        self.pvcam.pl_exp_finish_seq(self._handle, cbuffer, None)
                         self.pvcam.pl_exp_uninit_seq()
                         
                     # The only way I've found to detect the camera is not 
@@ -1061,15 +1076,14 @@ class PVCam(model.DigitalCamera):
             self.set_param(pv.PARAM_SHTR_OPEN_MODE, pv.OPEN_PRE_EXPOSURE)
             # ending cleanly
             try:
-                if True  or self.exp_check_status() in STATUS_IN_PROGRESS: # DEBUG: force closing shutter?
+                if self.exp_check_status() in STATUS_IN_PROGRESS:
                     logging.debug("aborting acquisition")
                     self.pvcam.pl_exp_abort(self._handle, pv.CCS_HALT_CLOSE_SHTR)
-#                    self.pvcam.pl_exp_abort(self._handle, pv.CCS_CLEAR_CLOSE_SHTR)
             except PVCamError:
                 logging.exception("Failed to abort acquisition")
                 pass # status reported an error
             
-            # only required with multiple images
+            # only required with multiple images, but just in case, we do it
             try:
                 if cbuffer:
                     self.pvcam.pl_exp_finish_seq(self._handle, cbuffer, None)
@@ -1082,16 +1096,15 @@ class PVCam(model.DigitalCamera):
             except PVCamError:
                 logging.exception("Failed to finish the acquisition properly")
             
-            # FIXME: how to close the shutter? It seams it's not closed
             # A close/open cycle seems the only way to have a stable library
-#            try:
-#                with self.lib_lock:
-#                    self.pvcam.pl_cam_close(self._handle)
-            # FIXME: can be 15s with the ST133
-#                    self._handle = self.cam_open(self._devname, pv.OPEN_EXCLUSIVE)
-#                self._setStaticSettings()
-#            except PVCamError:
-#                logging.exception("Failed to reset the library properly")
+            try:
+                with self.lib_lock:
+                    self.pvcam.pl_cam_close(self._handle)
+                    # FIXME: can be 15s with the ST133
+                    self._handle = self.cam_open(self._devname, pv.OPEN_EXCLUSIVE)
+                self._setStaticSettings()
+            except PVCamError:
+                logging.exception("Failed to reset the library properly")
             self._prev_settings = [None, None, None, None]
             
             self.acquisition_lock.release()
@@ -1118,9 +1131,11 @@ class PVCam(model.DigitalCamera):
         
         # "if" is to not wait if it's already finished 
         if self.acquire_must_stop.is_set():
-            self.acquire_thread.join(10) # 10s timeout for safety
+            self.acquire_thread.join(20) # 20s timeout for safety
             if self.acquire_thread.isAlive():
                 raise OSError("Failed to stop the acquisition thread")
+            # ensure it's not set, even if the thread died prematurately
+            self.acquire_must_stop.clear()
     
     def terminate(self):
         """
