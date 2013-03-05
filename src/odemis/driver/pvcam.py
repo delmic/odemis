@@ -195,8 +195,6 @@ class PVCam(model.DigitalCamera):
         
         logging.info("Opened device %s successfully", device)
         
-        self.lib_lock = threading.Lock() # to modify the _handle
-        
         # Describe the camera
         # up-to-date metadata to be included in dataflow
         self._metadata = {model.MD_HW_NAME: self.getModelName()}
@@ -686,13 +684,12 @@ class PVCam(model.DigitalCamera):
         """
         to be called at regular interval to update the temperature
         """
-        with self.lib_lock:
-            if self._handle is None:
-                # might happen if terminate() has just been called
-                logging.info("No temperature update, camera is stopped")
-                return
-            
-            temp = self.GetTemperature()
+        if self._handle is None:
+            # might happen if terminate() has just been called
+            logging.info("No temperature update, camera is stopped")
+            return
+        
+        temp = self.GetTemperature()
         self._metadata[model.MD_SENSOR_TEMP] = temp
         # it's read-only, so we change it only via _value
         self.temperature._value = temp
@@ -963,32 +960,18 @@ class PVCam(model.DigitalCamera):
         """
         The core of the acquisition thread. Runs until acquire_must_stop is set.
         """
-        need_reinit = True
+        need_init = True
         retries = 0
         cbuffer = None
         expected_end = 0
         try:
             while not self.acquire_must_stop.is_set():
                 # need to stop acquisition to update settings
-                if need_reinit or self._need_update_settings():
-                    try:
-                        # cancel acquisition if it's still going on
-                        if self.exp_check_status() in STATUS_IN_PROGRESS:
-                            self.pvcam.pl_exp_abort(self._handle, pv.CCS_HALT_CLOSE_SHTR)
-                            time.sleep(0.1)
-                    except PVCamError:
-                        pass # already done?
-                    
-                    # finish the seq if it was started
+                if need_init or self._need_update_settings():
                     if cbuffer:
+                        # finish the seq if it was started
                         self.pvcam.pl_exp_finish_seq(self._handle, cbuffer, None)
                         self.pvcam.pl_exp_uninit_seq()
-                        
-                    # The only way I've found to detect the camera is not 
-                    # responding is to check for weird camera temperature
-                    # TODO: seems that the ST133 gives -120 => check usb to detect connected or not
-                    if self.get_param(pv.PARAM_TEMP) == TEMP_CAM_GONE:
-                        self.Reinitialize() #returns only once the camera is working again 
                     
                     # With circular buffer, we could go about up to 10% faster, but
                     # everything is more complex (eg: odd buffer size will block the
@@ -1012,9 +995,8 @@ class PVCam(model.DigitalCamera):
                     readout = self.get_param(pv.PARAM_READOUT_TIME) * 1e-3 # s
                     logging.debug("Computed readout time of %g s, while sdk says %g s",
                                   readout_sw, readout)
-                    
                     duration = exposure + readout
-                    need_reinit = False
+                    need_init = False
         
                 # Acquire the images
                 metadata = dict(self._metadata) # duplicate
@@ -1059,9 +1041,19 @@ class PVCam(model.DigitalCamera):
                         self.pvcam.pl_exp_abort(self._handle, pv.CCS_HALT_CLOSE_SHTR)
                     except PVCamError:
                         pass
+                    
+                    self.pvcam.pl_exp_finish_seq(self._handle, cbuffer, None)
+                    self.pvcam.pl_exp_uninit_seq()
+                    
+#                    # The only way I've found to detect the camera is not 
+#                    # responding is to check for weird camera temperature
+#                    # TODO: seems that the ST133 gives -120 => check usb to detect connected or not
+#                    if self.get_param(pv.PARAM_TEMP) == TEMP_CAM_GONE:
+                    self.Reinitialize() #returns only once the camera is working again
+                    
                     retries += 1
-                    time.sleep(0.1)
-                    need_reinit = True
+                    cbuffer = None
+                    need_init = True
                     continue
                 
                 retries = 0
@@ -1079,6 +1071,7 @@ class PVCam(model.DigitalCamera):
             # if end is soon, just wait for it (because the camera hates
             # being aborted during the end of acquisition (ie, during readout?)
             left = expected_end - time.time()
+            # TODO: make it proportional to readout, to save some time on small images?
             while left < 5 and left > -1: # between 5 s ahead to 1 s late 
                 if not self.exp_check_status() in STATUS_IN_PROGRESS:
                     logging.debug("not aborting acquisition as it's already finished")
