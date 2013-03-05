@@ -28,11 +28,13 @@ import threading
 import time
 
 import wx
+import cairo
 
+from odemis.gui import FOREGROUND_COLOUR_EDIT
 from odemis.gui.comp.canvas import DraggableCanvas, WorldToBufferPoint
 from odemis.gui.model import EM_STREAMS
-from odemis.gui import FOREGROUND_COLOUR_EDIT
-from odemis.gui.util.conversion import hex_to_rgb, hex_to_rgba
+from odemis.gui.util import limit_invocation
+from odemis.gui.util.conversion import hex_to_rgba
 
 CROSSHAIR_COLOR = wx.GREEN
 CROSSHAIR_SIZE = 16
@@ -79,20 +81,36 @@ class DblMicroscopeCanvas(DraggableCanvas):
         #                                            (10, 10)))
 
         self.select_mode = True
+        self.select_drag = False
 
     def OnLeftDown(self, event):
         if self.select_mode:
-            self.selection_overlay.start_selection(wx.PaintDC(self),
-                                                   event.GetPosition())
+            self.select_drag = True
+            pos = event.GetPosition()
+            logging.debug("Started selection at %s", pos)
+            self.selection_overlay.start_selection(wx.PaintDC(self), pos)
+            self.Draw(wx.PaintDC(self))
         else:
             DraggableCanvas.OnLeftDown(self, event)
 
     def OnLeftUp(self, event):
         if self.select_mode:
-            self.selection_overlay.update_selection(event.GetPosition())
-            self.Draw(wx.PaintDC(self))
+            if self.select_drag:
+                pos = event.GetPosition()
+                logging.debug("Ended selection at %s", pos)
+                self.selection_overlay.stop_selection()
+                self.Draw(wx.PaintDC(self))
+                self.select_drag = False
         else:
             DraggableCanvas.OnLeftDown(self, event)
+
+    def OnMouseMotion(self, event):
+        if self.select_mode and self.select_drag:
+            pos = event.GetPosition()
+            self.selection_overlay.update_selection(pos)
+            self.Draw(wx.PaintDC(self))
+        else:
+            DraggableCanvas.OnMouseMotion(self, event)
 
     def setView(self, microscope_view):
         """
@@ -277,6 +295,7 @@ class DblMicroscopeCanvas(DraggableCanvas):
         else:
             self.Zoom(change)
 
+    #@limit_invocation(0.07)
     def onExtraAxisMove(self, axis, shift):
         """
         called when the extra dimensions are modified (right drag)
@@ -286,11 +305,14 @@ class DblMicroscopeCanvas(DraggableCanvas):
         shift (int): relative amount of pixel moved
             >0: toward up/right
         """
+
         focus = [self.microscope_view.focus0, self.microscope_view.focus1][axis]
         if focus is not None:
-            # conversion: 1 unit => 0.1 μm (so a whole screen, ~44000u, is a couple of mm)
+            # conversion: 1 unit => 0.1 μm (so a whole screen, ~44000u, is a
+            # couple of mm)
             # TODO this should be adjusted by the lens magnification:
-            # the higher the magnification, the smaller is the change (=> proportional ?)
+            # the higher the magnification, the smaller is the change
+            # (=> proportional ?)
             # negative == go up == closer from the sample
             val = 0.1e-6 * shift # m
             assert(abs(val) < 0.01) # a move of 1 cm is a clear sign of bug
@@ -379,35 +401,75 @@ class CrossHairOverlay(object):
 
 class SelectionOverlay(object):
     def __init__(self, color=SELECTION_COLOR, center=(0, 0)):
-        self.color = hex_to_rgb(color)
+        self.color = hex_to_rgba(color)
         self.center = center
-        self.size = 16
+        self.size = 0
 
         self.ctx = None
+        self.current_pos = None
         self.start_pos = None
         self.end_pos = None
+
+        self.dragging = False
 
 
     def start_selection(self, dc, start_pos):
         logging.debug("Starting selection at %s", start_pos)
-        self.start_pos = start_pos
+        self.start_pos = self.end_pos = self.current_pos = start_pos
         self.ctx = wx.lib.wxcairo.ContextFromDC(dc)
+
+        self.ctx.select_font_face("Courier",
+                                  cairo.FONT_SLANT_NORMAL,
+                                  cairo.FONT_WEIGHT_NORMAL)
+        self.ctx.set_font_size(10)
+        self.dragging = True
 
     def update_selection(self, end_pos):
         logging.debug("Updating selection to %s", end_pos)
-        self.end_pos = end_pos
+        self.end_pos = self.current_pos = end_pos
+
+    def stop_selection(self):
+        self.dragging = False
 
     def Draw(self, dc, shift=(0, 0), scale=1.0):
         if self.ctx:
             logging.debug("Drawing selection")
+            logging.debug("Drawing from %s, %s to %s. %s", self.start_pos.x,
+                                                           self.start_pos.y,
+                                                           self.end_pos.x,
+                                                           self.end_pos.y )
+            self.ctx.set_line_width(1)
+            self.ctx.set_dash([1.5,])
+            self.ctx.set_line_join(cairo.LINE_JOIN_MITER)
+
             self.ctx.set_source_rgba(*self.color)
-            self.ctx.rectangle (self.start_pos.x,
-                                self.start_pos.y,
-                                self.end_pos.x,
-                                self.end_pos.y) # Rectangle(x0, y0, x1, y1)
-            #self.ctx.fill_preserve()
+            self.ctx.rectangle(self.start_pos.x + 0.5,
+                               self.start_pos.y + 0.5,
+                               self.end_pos.x - self.start_pos.x,
+                               self.end_pos.y - self.start_pos.y)
+                               #self.end_pos.x,
+                               #self.end_pos.y) # Rectangle(x0, y0, x1, y1)
+            self.ctx.stroke()
+
+            self.ctx.set_line_width(2)
+            self.ctx.set_source_rgba(0, 0, 0, 1)
+            self.ctx.rectangle(self.start_pos.x + 1.5,
+                               self.start_pos.y + 1.5,
+                               self.end_pos.x - self.start_pos.x + 1,
+                               self.end_pos.y - self.start_pos.y + 1)
+
+            # self.ctx.rectangle(0, 0, 10, 10)
+            # self.ctx.rectangle(0, 0, 100, 100)
+            # self.ctx.rectangle(0, 0, 400, 400)
+
+
             #self.ctx.set_source_rgb(0.1, 0.5, 0)
             self.ctx.stroke()
+
+            if self.dragging:
+                self.ctx.set_source_rgb(0.9, 0.9, 0.9)
+                self.ctx.move_to(10, 10)
+                self.ctx.show_text("%s" % self.current_pos)
 
 
 

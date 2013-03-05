@@ -256,8 +256,6 @@
                                 <flag>wxBOTTOM|wxLEFT</flag>
                                 <border>10</border>
                               </object>
-                            
-                              
                             </object>
                             <bg>#000000</bg>
                           </object>

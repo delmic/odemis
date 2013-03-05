@@ -30,7 +30,7 @@ def limit_invocation(delay_s):
     the method will be executed at 'delay_s' intervals.
 
     :param delay_s: (float) The minimum interval between executions in seconds.
-    
+
     Note that the method might be called in a separate thread. In wxPython, you
     might need to decorate it by @call_after to ensure it is called in the GUI
     thread.
@@ -56,9 +56,9 @@ def limit_invocation(delay_s):
         timer_name = '%s_lim_inv_timer' % f.__name__
 
         # If the function was called later than 'delay_s' seconds ago...
-        if (hasattr(self, last_call_name) and 
+        if (hasattr(self, last_call_name) and
             now - getattr(self, last_call_name) < delay_s):
-            logging.debug('Delaying method call')
+            #logging.debug('Delaying method call')
             if now < getattr(self, last_call_name):
                 # this means a timer is already set, nothing else to do
                 return
