@@ -16,14 +16,13 @@ You should have received a copy of the GNU General Public License along with Ode
 '''
 from Pyro4.core import isasync
 from concurrent.futures.thread import ThreadPoolExecutor
-from odemis import model, __version__
+from odemis import model, __version__, util
 import collections
 import glob
 import logging
 import os
 import re
 import serial
-import sys
 import threading
 import time
 
@@ -110,7 +109,7 @@ class SpectraPro(model.Actuator):
                                 ranges={"wavelength": (0, 10e-6)}, **kwargs)
     
         # set HW and SW version
-        self._swVersion = "%s (serial driver: %s)" % (__version__.version, self.getSerialDriver(port))
+        self._swVersion = "%s (serial driver: %s)" % (__version__.version, util.driver.getSerialDriver(port))
         self._hwVersion = "%s (s/n: %s)" % (model_name, (self.GetSerialNumber() or "Unknown"))
     
         # will take care of executing axis move asynchronously
@@ -143,6 +142,12 @@ class SpectraPro(model.Actuator):
         self.grating = model.IntEnumerated(grating, choices=gchoices, unit="", 
                                            setter=self._setGrating)
         
+        # store focal length for the polynomial computation
+        try:
+            self._focal_length = self.GetFocalLength()
+        except IOError:
+            self._focal_length = None
+                
     # Low-level methods: to access the hardware (should be called with the lock acquired)
     
     def _sendOrder(self, *args, **kwargs):
@@ -358,7 +363,6 @@ class SpectraPro(model.Actuator):
         assert(1 <= g and g <= (3 * self.max_gratings))
         # TODO check that the grating is configured
         
-        # TODO
         self._sendOrder("%d grating" % g, timeout=20)
         
     def GetWavelength(self):
@@ -397,7 +401,22 @@ class SpectraPro(model.Actuator):
         assert(0 <= wl and wl <= 10e-6)
         # TODO: check that the value fit the grating configuration?
         self._sendOrder("%.3f goto" % (wl * 1e9), timeout=20)
-    
+
+    def GetFocalLength(self):
+        """
+        Return (float): the focal length (in m)
+        Note: this depend on the model number only (i.e, not very precise)
+        raise:
+            IOError: if the focal length couldn't be determined
+        """ 
+        # convert 'SP-2-150i' to 150 mm
+        model = self.GetModel()
+        m = re.search("SP-\w*-(\d+)i?", model)
+        if not m:
+            raise IOError("Failed to find the focal length for model '%s'" % model)
+        
+        return float(m.group(1)) * 1e-3 
+        
     def GetModel(self):
         """
         Return (str): the model name
@@ -519,6 +538,37 @@ class SpectraPro(model.Actuator):
         if self._serial:
             self._serial.close()
             self._serial = None
+    
+    def getToWavelengthPolynomial(self):
+        """
+        Compute the right polynomial to convert from a position on the sensor to the
+          wavelength detected. It depends on the current grating, center 
+          wavelength (and focal length of the spectrometer). 
+        Note: It will always return some not-too-stupid values, but the only way
+          to get precise values is to have provided a calibration data file.
+          Without it, it will just base the calculations on the theoretical 
+          perfect spectrometer. 
+        returns (list of float): polynomial coefficients to apply to get the current
+          wavelength corresponding to a given distance from the center: 
+          w = p[0] + p[1] * x + p[2] * x²... 
+          where w is the wavelength (in m), x is the position from the center
+          (in m, negative are to the left), and p is the polynomial.
+        """
+        # FIXME: shall we report the error on the polynomial? At least say if it's
+        # using calibration or not.
+        # TODO: have a calibration procedure, a file format, and load it at init
+        # See fsc2, their calibration is like this for each grating:
+        # INCLUSION_ANGLE_1  =   30.3
+        # FOCAL_LENGTH_1     =   301.2 mm
+        # DETECTOR_ANGLE_1   =   0.324871
+        # TODO: default back to theoretical computation based on
+        #  http://www.roperscientific.de/gratingcalcmaster.html
+        fl = self._focal_length
+        if not fl:
+            # very very bad calibration
+            center = self.position.value["wavelength"]
+            return [center]
+        
         
     def selfTest(self):
         """
@@ -578,21 +628,6 @@ class SpectraPro(model.Actuator):
 
         return found
     
-    # copy from lle.LLE
-    @staticmethod
-    def getSerialDriver(name):
-        """
-        return (string): the name of the serial driver used for the given port
-        """
-        # In linux, can be found as link of /sys/class/tty/tty*/device/driver
-        if sys.platform.startswith('linux'):
-            path = "/sys/class/tty/" + os.path.basename(name) + "/device/driver"
-            try:
-                return os.path.basename(os.readlink(path))
-            except OSError:
-                return "Unknown"
-        else:
-            return "Unknown"
         
     @staticmethod
     def openSerialPort(port):
@@ -674,13 +709,6 @@ class FakeSpectraPro(SpectraPro):
         return SpectraPro.scan(port) + [("fakesp", {"port":"fake"})]
     
     @staticmethod
-    def getSerialDriver(name):
-        """
-        return (string): the name of the serial driver used for the given port
-        """
-        return "fakesp"
-        
-    @staticmethod
     def openSerialPort(port):
         """
         Opens the given serial port the right way for the SpectraPro.
@@ -751,7 +779,7 @@ class SPSimulator(object):
         elif com == "?nm":
             out = "%.2f nm" % self._wavelength
         elif com == "model":
-            out = "SP-FAKE"
+            out = "SP-FAKE-300"
         elif com == "serial":
             out = "12345"
         elif com == "no-echo":

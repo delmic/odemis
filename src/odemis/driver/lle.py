@@ -19,7 +19,6 @@ import glob
 import logging
 import os
 import serial
-import sys
 import threading
 import time
 
@@ -36,7 +35,6 @@ class LLE(model.Emitter):
     documentation states about 200 μs. As it's smaller than most camera frame
     rates, it shouldn't matter much. 
     '''
-
 
     def __init__(self, name, role, port, _noinit=False, **kwargs):
         """
@@ -97,7 +95,7 @@ class LLE(model.Emitter):
         
         self.power.subscribe(self._updatePower)
         # set HW and SW version
-        self._swVersion = "%s (serial driver: %s)" % (__version__.version, self.getSerialDriver(port))
+        self._swVersion = "%s (serial driver: %s)" % (__version__.version, util.driver.getSerialDriver(port))
         self._hwVersion = "Lumencor Light Engine" # hardware doesn't report any version
         
         
@@ -474,21 +472,6 @@ class LLE(model.Emitter):
 
         return found
     
-    @staticmethod
-    def getSerialDriver(name):
-        """
-        return (string): the name of the serial driver used for the given port
-        """
-        # In linux, can be found as link of /sys/class/tty/tty*/device/driver
-        if sys.platform.startswith('linux'):
-            path = "/sys/class/tty/" + os.path.basename(name) + "/device/driver"
-            try:
-                return os.path.basename(os.readlink(path))
-            except OSError:
-                return "Unknown"
-        else:
-            return "Unknown"
-        
     @staticmethod
     def openSerialPort(port):
         """
