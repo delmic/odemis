@@ -145,6 +145,19 @@ class PVCam(model.DigitalCamera):
     But we stick to: horizontal = serial (max = width - 1)
                      vertical = parallel (max = height - 1)
     
+    Here are a few more non-obvious requirements given by the PI technical 
+    support:
+    * PIXIS, must allocate an even number of frame buffers.
+    * One must not turn off or disconnect the camera with the camera open.
+    * One must not call other PVCAM parameters such as PARAM_TEMP to get the
+     current temperature during data collection. Only functions or parameters
+     designated as 'online' may be called.
+    * Order dependency issue: can't turn on continuous clean before external
+     sync (strobed mode) is enabled.
+    * InGaAs camera cannot do hardware binning
+
+    
+    
     It offers mostly a couple of VigilantAttributes to modify the settings, and a 
     DataFlow to get one or several images from the camera.
     
@@ -217,7 +230,11 @@ class PVCam(model.DigitalCamera):
         psize = self.GetPixelSize()
         self.pixelSize = model.VigilantAttribute(psize, unit="m", readonly=True)
         self._metadata[model.MD_SENSOR_PIXEL_SIZE] = psize
-        
+
+        # to be used to separate acquisition and offline-only parameters (like 
+        # PARAM_TEMP) 
+        self._online_lock = threading.Lock() 
+                
         # Strong cooling for low (image) noise
         try:
             # target temp
@@ -640,9 +657,9 @@ class PVCam(model.DigitalCamera):
         """
         returns (float) the current temperature of the captor in C
         """
-        # FIXME: might need the lock (cannot be done during acquisition)
         # it's in 1/100 of C
-        temp = self.get_param(pv.PARAM_TEMP) / 100
+        with self._online_lock:
+            temp = self.get_param(pv.PARAM_TEMP) / 100
         return temp
     
     def GetTemperatureRange(self):
@@ -964,6 +981,7 @@ class PVCam(model.DigitalCamera):
         retries = 0
         cbuffer = None
         expected_end = 0
+        readout = 0 #s
         try:
             while not self.acquire_must_stop.is_set():
                 # need to stop acquisition to update settings
@@ -995,67 +1013,74 @@ class PVCam(model.DigitalCamera):
                     readout = self.get_param(pv.PARAM_READOUT_TIME) * 1e-3 # s
                     logging.debug("Computed readout time of %g s, while sdk says %g s",
                                   readout_sw, readout)
+                    # FIXME: if exposure > ~0.1 and readout > exposure/10 => activate
+                    # shutter per exposure? Or just allow the user to decide?
                     duration = exposure + readout
                     need_init = False
         
-                # Acquire the images
-                metadata = dict(self._metadata) # duplicate
-                logging.debug("starting acquisition")
-                self.pvcam.pl_exp_start_seq(self._handle, cbuffer)
-                metadata[model.MD_ACQ_DATE] = time.time() # time at the beginning
-                expected_end = time.time() + duration
-                array = self._buffer_as_array(cbuffer, size, metadata)
-                
-                # first we wait ourselves the 80% of expected time (which 
-                # might be very long) while detecting requests for stop. 80%, 
-                # because the SDK is sometimes quite pessimistic.
-                must_stop = self.acquire_must_stop.wait(duration * 0.8)
-                if must_stop:
-                    break
-                
-                # then wait a bounded time to ensure the image is acquired
-                try:
-                    timeout = expected_end + 1
-                    status = self.exp_check_status()
-                    while status in STATUS_IN_PROGRESS:
-                        if time.time() > timeout:
-                            raise IOError("Timeout")
-                        # check if we should stop
-                        must_stop = self.acquire_must_stop.wait(0.01)
-                        if must_stop:
-                            break
-                        status = self.exp_check_status()
+                # Acquire the image
+                # Note: might be unlocked slightly too early in case of must_stop,
+                # but should be very rare and not too much of a problem hopefully.
+                with self._online_lock: 
+                    logging.debug("starting acquisition")
+                    self.pvcam.pl_exp_start_seq(self._handle, cbuffer)
+                    metadata = dict(self._metadata) # duplicate
+                    metadata[model.MD_ACQ_DATE] = time.time() # time at the beginning
+                    expected_end = time.time() + duration
+                    array = self._buffer_as_array(cbuffer, size, metadata)
                     
+                    # first we wait ourselves the 80% of expected time (which 
+                    # might be very long) while detecting requests for stop. 80%, 
+                    # because the SDK is sometimes quite pessimistic.
+                    must_stop = self.acquire_must_stop.wait(duration * 0.8)
                     if must_stop:
                         break
-                    if status != pv.READOUT_COMPLETE:
-                        raise IOError("Acquisition status is unexpected %d" % status)
-
-                except (IOError, PVCamError) as exp:
-                    if retries > 5:
-                        logging.error("Too many failures to acquire an image")
-                        raise
-
-                    logging.exception("trying again to acquire image after error")
+                    
+                    # then wait a bounded time to ensure the image is acquired
                     try:
-                        self.pvcam.pl_exp_abort(self._handle, pv.CCS_HALT_CLOSE_SHTR)
-                    except PVCamError:
-                        pass
-                    
-                    self.pvcam.pl_exp_finish_seq(self._handle, cbuffer, None)
-                    self.pvcam.pl_exp_uninit_seq()
-                    
-#                    # The only way I've found to detect the camera is not 
-#                    # responding is to check for weird camera temperature
-#                    # TODO: seems that the ST133 gives -120 => check usb to detect connected or not
-#                    if self.get_param(pv.PARAM_TEMP) == TEMP_CAM_GONE:
-                    self.Reinitialize() #returns only once the camera is working again
-                    
-                    retries += 1
-                    cbuffer = None
-                    need_init = True
-                    continue
-                
+                        timeout = expected_end + 1
+                        status = self.exp_check_status()
+                        while status in STATUS_IN_PROGRESS:
+                            if time.time() > timeout:
+                                raise IOError("Timeout")
+                            # check if we should stop
+                            must_stop = self.acquire_must_stop.wait(0.01)
+                            if must_stop:
+                                break
+                            status = self.exp_check_status()
+        
+                        if must_stop:
+                            break
+                        if status != pv.READOUT_COMPLETE:
+                            raise IOError("Acquisition status is unexpected %d" % status)
+                    except (IOError, PVCamError) as exp:
+                        if retries > 5:
+                            logging.error("Too many failures to acquire an image")
+                            raise
+    
+                        logging.exception("trying again to acquire image after error")
+                        try:
+                            self.pvcam.pl_exp_abort(self._handle, pv.CCS_HALT_CLOSE_SHTR)
+                        except PVCamError:
+                            pass
+                        self._online_lock.release()
+                        
+                        self.pvcam.pl_exp_finish_seq(self._handle, cbuffer, None)
+                        self.pvcam.pl_exp_uninit_seq()
+    
+                        # The only way I've found to detect the camera is not 
+                        # responding is to check for weird camera temperature
+                        # TODO: seems that the ST133 gives -120 => check usb to detect connected or not
+                        #if self.get_param(pv.PARAM_TEMP) == TEMP_CAM_GONE:
+                        # Always assume the "worse": the camera has been turned off
+                        self.Reinitialize() #returns only once the camera is working again
+                        self._online_lock.acquire()
+                        
+                        retries += 1
+                        cbuffer = None
+                        need_init = True
+                        continue
+
                 retries = 0
                 logging.debug("data acquired successfully")
                 callback(array)
@@ -1071,8 +1096,9 @@ class PVCam(model.DigitalCamera):
             # if end is soon, just wait for it (because the camera hates
             # being aborted during the end of acquisition (ie, during readout?)
             left = expected_end - time.time()
-            # TODO: make it proportional to readout, to save some time on small images?
-            while left < 5 and left > -1: # between 5 s ahead to 1 s late 
+            # proportional to readout
+            margin = max(readout * 2, 2) # at least 2s
+            while left < margin and left > -1: # between margin s ahead up to 1 s late 
                 if not self.exp_check_status() in STATUS_IN_PROGRESS:
                     logging.debug("not aborting acquisition as it's already finished")
                     break
