@@ -29,7 +29,7 @@ if os.name == "nt":
 else:
     PORT = "/dev/ttySP" #"/dev/ttyUSB0"
 
-CLASS = spectrapro.SpectraPro # use FakeSpectraPro if no hardware present
+CLASS = spectrapro.FakeSpectraPro # use FakeSpectraPro if no hardware present
 KWARGS = {"name": "test", "role": "spectrograph", "port": PORT}
 
 #@unittest.skip("faster") 

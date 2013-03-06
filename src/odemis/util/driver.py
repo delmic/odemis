@@ -2,7 +2,7 @@
 '''
 Created on 5 Mar 2013
 
-@author: piel
+@author: Éric Piel
 
 Copyright © 2013 Éric Piel, Delmic
 

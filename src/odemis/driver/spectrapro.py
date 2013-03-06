@@ -16,7 +16,8 @@ You should have received a copy of the GNU General Public License along with Ode
 '''
 from Pyro4.core import isasync
 from concurrent.futures.thread import ThreadPoolExecutor
-from odemis import model, __version__, util
+from odemis import model, __version__
+from odemis.util import driver
 import collections
 import glob
 import logging
@@ -109,7 +110,7 @@ class SpectraPro(model.Actuator):
                                 ranges={"wavelength": (0, 10e-6)}, **kwargs)
     
         # set HW and SW version
-        self._swVersion = "%s (serial driver: %s)" % (__version__.version, util.driver.getSerialDriver(port))
+        self._swVersion = "%s (serial driver: %s)" % (__version__.version, driver.getSerialDriver(port))
         self._hwVersion = "%s (s/n: %s)" % (model_name, (self.GetSerialNumber() or "Unknown"))
     
         # will take care of executing axis move asynchronously

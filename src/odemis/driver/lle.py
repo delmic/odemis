@@ -15,6 +15,7 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from odemis import model, __version__, util
+from odemis.util import driver
 import glob
 import logging
 import os
@@ -95,7 +96,7 @@ class LLE(model.Emitter):
         
         self.power.subscribe(self._updatePower)
         # set HW and SW version
-        self._swVersion = "%s (serial driver: %s)" % (__version__.version, util.driver.getSerialDriver(port))
+        self._swVersion = "%s (serial driver: %s)" % (__version__.version, driver.getSerialDriver(port))
         self._hwVersion = "Lumencor Light Engine" # hardware doesn't report any version
         
         
