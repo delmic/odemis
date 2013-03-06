@@ -314,6 +314,9 @@ class MicroscopeView(object):
         # TODO list of annotations to display
         self.show_crosshair = model.BooleanVA(True)
 
+    def get_focus(self, i):
+        return self._focus[i]
+
     def moveStageToView(self):
         """ Move the stage to the current view_pos
 

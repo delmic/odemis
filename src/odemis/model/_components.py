@@ -720,7 +720,7 @@ class MockComponent(HwComponent):
 
 class InstantaneousFuture(object):
     """
-    This is a simple class which follow the Future interface and represent a
+    This is a simple class which follows the Future interface and represent a
     call already finished successfully when returning.
     """
     def __init__(self, result=None, exception=None):

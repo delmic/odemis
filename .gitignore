@@ -38,10 +38,11 @@ odemis.sublime-workspace
 #Translations
 *.mo
 
-#Machine dependant
+#Rinze
 launch_daemon
 xrced
 swap.sh
+*.autosave
 
 #HTML documentation files
 doc/code/_build
