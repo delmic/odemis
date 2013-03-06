@@ -18,7 +18,7 @@ You should have received a copy of the GNU General Public License along with Ode
 # This is a basic command line interface to the odemis back-end
 
 from Pyro4.errors import CommunicationError
-from odemis import __version__, model, dataio
+from odemis import __version__, model, dataio, util
 from odemis.cli.video_displayer import VideoDisplayer
 from odemis.dataio import tiff #pylint: disable=W0611
 import argparse
@@ -375,6 +375,16 @@ def set_attr(comp_name, attr_name, str_val):
     except ValueError:
         logging.error("Impossible to convert '%s' to a %r", str_val, type(attr.value))
         return 127
+
+    # Special case for floats, due to rounding error, it's very hard to put the
+    # exact value if it's an enumerated VA. So just pick the closest one in this
+    # case.
+    if isinstance(new_val, float) and (
+       hasattr(attr, "choices") and isinstance(attr.choices, collections.Iterable)):
+        orig_val = new_val
+        new_val = util.find_closest(new_val, attr.choices)
+        if new_val != orig_val:
+            logging.debug("Adjusting value to %s", new_val)
 
     try:
         attr.value = new_val
