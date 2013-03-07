@@ -29,6 +29,7 @@ import time
 
 import wx
 import cairo
+from wx.lib.pubsub import pub
 from decorator import decorator
 
 from odemis.gui import FOREGROUND_COLOUR_EDIT
@@ -40,6 +41,8 @@ CROSSHAIR_COLOR = wx.GREEN
 CROSSHAIR_SIZE = 16
 
 SELECTION_COLOR = FOREGROUND_COLOUR_EDIT
+
+MODE_SELECT = 1
 
 @decorator
 def microscope_view_check(f, self, *args, **kwargs):
@@ -87,35 +90,44 @@ class DblMicroscopeCanvas(DraggableCanvas):
         #                                            CROSSHAIR_SIZE,
         #                                            (10, 10)))
 
-        self.select_mode = True
-        self.select_drag = False
+        self.current_mode = None
+        pub.subscribe(self.toggle_select_mode, 'secom.tool.zoom.click')
+
+    def toggle_select_mode(self, enabled):
+        if self.current_mode == MODE_SELECT and not enabled:
+            self.current_mode = None
+        elif not self.dragging and enabled:
+            self.current_mode = MODE_SELECT
 
     def OnLeftDown(self, event):
-        if self.select_mode:
-            self.select_drag = True
+        if self.current_mode == MODE_SELECT:
+            self.dragging = True
             pos = event.GetPosition()
             logging.debug("Started selection at %s", pos)
-            self.selection_overlay.start_selection(wx.PaintDC(self), pos)
-            self.Draw(wx.PaintDC(self))
+            self.selection_overlay.start_selection(self._dcBuffer, pos)
+            self.ShouldUpdateDrawing()
+            #self.Draw(wx.PaintDC(self))
         else:
             DraggableCanvas.OnLeftDown(self, event)
 
     def OnLeftUp(self, event):
-        if self.select_mode:
-            if self.select_drag:
-                pos = event.GetPosition()
-                logging.debug("Ended selection at %s", pos)
-                self.selection_overlay.stop_selection()
-                self.Draw(wx.PaintDC(self))
-                self.select_drag = False
+        if self.current_mode == MODE_SELECT and self.dragging:
+            self.dragging = False
+            pos = event.GetPosition()
+            logging.debug("Ended selection at %s", pos)
+            self.selection_overlay.stop_selection()
+            self.ShouldUpdateDrawing()
+            #self.Draw(wx.PaintDC(self))
         else:
-            DraggableCanvas.OnLeftDown(self, event)
+            DraggableCanvas.OnLeftUp(self, event)
 
     def OnMouseMotion(self, event):
-        if self.select_mode and self.select_drag:
+        if self.current_mode == MODE_SELECT and self.dragging:
             pos = event.GetPosition()
             self.selection_overlay.update_selection(pos)
-            self.Draw(wx.PaintDC(self))
+            self.ShouldUpdateDrawing()
+
+            #self.Draw(wx.PaintDC(self))
         else:
             DraggableCanvas.OnMouseMotion(self, event)
 
@@ -206,7 +218,7 @@ class DblMicroscopeCanvas(DraggableCanvas):
     def UpdateDrawing(self):
         # override just in order to detect when it's just finished redrawn
 
-        # TODO detect that the canvas is not visible, and so should no/less frequently
+        # TODO: detect that the canvas is not visible, and so should no/less frequently
         # be updated?
         super(DblMicroscopeCanvas, self).UpdateDrawing()
 
@@ -424,6 +436,7 @@ class SelectionOverlay(object):
     def start_selection(self, dc, start_pos):
         logging.debug("Starting selection at %s", start_pos)
         self.start_pos = self.end_pos = self.current_pos = start_pos
+
         self.ctx = wx.lib.wxcairo.ContextFromDC(dc)
 
         self.ctx.select_font_face("Courier",

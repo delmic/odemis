@@ -209,7 +209,7 @@
                     <flag>wxEXPAND</flag>
                   </object>
                   <object class="sizeritem">
-                    <object class="wxPanel" name="pnl_secom_tool_menu">
+                    <object class="wxPanel" name="pnl_secom_tool_menu" subclass="cont.tools.SemToolMenu">
                       <object class="wxBoxSizer">
                         <object class="sizeritem">
                           <object class="wxStaticBitmap">
@@ -1293,11 +1293,6 @@
                     <object class="wxPanel" name="main_buttons">
                       <object class="wxBoxSizer">
                         <orient>wxHORIZONTAL</orient>
-                      
-                        
-                        
-                        
-                        
                       </object>
                       <size>400,-1</size>
                       <bg>#4D4D4D</bg>
@@ -1308,7 +1303,6 @@
                     <object class="wxScrolledWindow" name="scr_win_right">
                       <object class="wxBoxSizer">
                         <orient>wxVERTICAL</orient>
-                        
                         <object class="sizeritem">
                           <object class="FoldPanelBar">
                             <object class="FoldPanelItem" name="fp_sparc_file_info">
@@ -1361,7 +1355,6 @@
                     <flag>wxEXPAND</flag>
                     <minsize>400,400</minsize>
                   </object>
-                  
                   <orient>wxVERTICAL</orient>
                 </object>
                 <size>400,-1</size>
