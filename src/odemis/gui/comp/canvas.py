@@ -303,9 +303,10 @@ class DraggableCanvas(wx.Panel):
         #                  (0,0))
         dc.BlitPointSize((0, 0), self.ClientSize, self._dcBuffer,
                          (margin[0] - self.drag_shift[0],
-                            margin[1] - self.drag_shift[1]))
+                          margin[1] - self.drag_shift[1]))
 
-        # TODO do this only when drag_shift changes, and record the modified region before and put back after.
+        # TODO: do this only when drag_shift changes, and record the modified
+        # region before and put back after.
         self.DrawStaticOverlays(dc)
 
     def OnSize(self, event):
@@ -389,7 +390,10 @@ class DraggableCanvas(wx.Panel):
 
         # eraseBackground doesn't seem to matter, but just in case...
         self.Refresh(eraseBackground=False)
-        # self.Update() # not really necessary as refresh causes an onPaint event soon, but makes it slightly sooner, so smoother
+
+        # not really necessary as refresh causes an onPaint event soon, but
+        # makes it slightly sooner, so smoother
+        # self.Update()
 
     def Draw(self, dc):
         """
