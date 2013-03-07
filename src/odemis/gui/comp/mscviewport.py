@@ -84,10 +84,12 @@ class MicroscopeViewport(wx.Panel):
         self.mergeSlider.SetBackgroundColour(self.legend_panel.GetBackgroundColour())
         self.mergeSlider.SetForegroundColour("#4d4d4d")
         self.mergeSlider.SetToolTipString("Merge ratio")
-        #self.mergeSlider.SetLineSize(50)
 
         self.bmpIconOpt = wx.StaticBitmap(self.legend_panel, wx.ID_ANY, getico_blending_optBitmap())
         self.bmpIconSem = wx.StaticBitmap(self.legend_panel, wx.ID_ANY, getico_blending_semBitmap())
+
+        self.ShowMergeSlider(False)
+
 
         # TODO: should make sure that a click _anywhere_ on the legend brings
         # the focus to the view
@@ -204,7 +206,7 @@ class MicroscopeViewport(wx.Panel):
 
         # subscribe to image, to update legend on streamtree/image change
         microscope_view.lastUpdate.subscribe(self._onImageUpdate, init=True)
-        self.ShowMergeSlider(True) # FIXME: only if required by the view
+        #self.ShowMergeSlider(self.canvas.image_count > 1)
 
         # canvas handles also directly some of the view properties
         self.canvas.setView(microscope_view)
@@ -347,6 +349,7 @@ class MicroscopeViewport(wx.Panel):
             self.ShowMergeSlider(True)
         else:
             self.ShowMergeSlider(False)
+
         # MergeSlider is displayed iif:
         # * Root operator of StreamTree accepts merge argument
         # * (and) Root operator of StreamTree has >= 2 images

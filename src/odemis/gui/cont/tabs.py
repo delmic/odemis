@@ -101,7 +101,7 @@ class SecomStreamsTab(Tab):
 
         self._stream_controller = StreamController(
                                         self.interface_model,
-                                        self.main_frame.pnl_stream
+                                        self.main_frame.pnl_secom_streams
                                   )
 
         self._view_selector = ViewSelector(

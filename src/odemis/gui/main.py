@@ -164,13 +164,18 @@ class OdemisGUIApp(wx.App):
                         self.main_frame.menu_item_halt.GetId(),
                         self.on_stop_axes)
 
-            wx.EVT_MENU(self.main_frame,
-                        self.main_frame.menu_item_load1.GetId(),
-                        self.on_load_example1)
+            if self.interface_model.focussedView.value:
+                wx.EVT_MENU(self.main_frame,
+                            self.main_frame.menu_item_load1.GetId(),
+                            self.on_load_example1)
 
-            wx.EVT_MENU(self.main_frame,
-                        self.main_frame.menu_item_load2.GetId(),
-                        self.on_load_example2)
+                wx.EVT_MENU(self.main_frame,
+                            self.main_frame.menu_item_load2.GetId(),
+                            self.on_load_example2)
+            else:
+                self.main_frame.menu_item_load1.Enable(False)
+                self.main_frame.menu_item_load2.Enable(False)
+
 
             # The escape accelerator has to be added manually, because for some
             # reason, the 'ESC' key will not register using XRCED.
@@ -227,7 +232,7 @@ class OdemisGUIApp(wx.App):
             # self.view_controller = ViewController(self.interface_model,
             #                                           self.main_frame)
             # self.stream_controller = StreamController(self.interface_model,
-            #                                           self.main_frame.pnl_stream)
+            #                                           self.main_frame.pnl_secom_streams)
 
             # self.view_selector = ViewSelector(self.interface_model,
             #                                   self.main_frame)

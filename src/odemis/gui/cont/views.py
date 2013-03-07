@@ -61,8 +61,8 @@ class ViewController(object):
         self._main_frame = main_frame
 
         # list of all the viewports (widgets that show the views)
-        self._viewports = [main_frame.pnl_view_tl, main_frame.pnl_view_tr,
-                           main_frame.pnl_view_bl, main_frame.pnl_view_br]
+        self._viewports = [main_frame.vp_secom_tl, main_frame.vp_secom_tr,
+                           main_frame.vp_secom_bl, main_frame.vp_secom_br]
 
         # create the (default) views and set focussedView
         self._createViews()
@@ -245,16 +245,16 @@ class ViewSelector(object):
         # btn -> (viewport, label)
         ViewportLabel = namedtuple('ViewportLabel', ['vp', 'lbl'])
 
-        self.buttons = {main_frame.btn_view_all:
-                            ViewportLabel(None, main_frame.lbl_view_all), # 2x2 layout
-                        main_frame.btn_view_tl:
-                            ViewportLabel(main_frame.pnl_view_tl, main_frame.lbl_view_tl),
-                        main_frame.btn_view_tr:
-                            ViewportLabel(main_frame.pnl_view_tr, main_frame.lbl_view_tr),
-                        main_frame.btn_view_bl:
-                            ViewportLabel(main_frame.pnl_view_bl, main_frame.lbl_view_bl),
-                        main_frame.btn_view_br:
-                            ViewportLabel(main_frame.pnl_view_br, main_frame.lbl_view_br)}
+        self.buttons = {main_frame.btn_secom_view_all:
+                            ViewportLabel(None, main_frame.lbl_secom_view_all), # 2x2 layout
+                        main_frame.btn_secom_view_tl:
+                            ViewportLabel(main_frame.vp_secom_tl, main_frame.lbl_secom_view_tl),
+                        main_frame.btn_secom_view_tr:
+                            ViewportLabel(main_frame.vp_secom_tr, main_frame.lbl_secom_view_tr),
+                        main_frame.btn_secom_view_bl:
+                            ViewportLabel(main_frame.vp_secom_bl, main_frame.lbl_secom_view_bl),
+                        main_frame.btn_secom_view_br:
+                            ViewportLabel(main_frame.vp_secom_br, main_frame.lbl_secom_view_br)}
 
         for btn in self.buttons:
             btn.Bind(wx.EVT_BUTTON, self.OnClick)
@@ -267,8 +267,8 @@ class ViewSelector(object):
 
         # subscribe to thumbnails
         self._subscriptions = [] # list of functions
-        for btn in [self._main_frame.btn_view_tl, self._main_frame.btn_view_tr,
-                    self._main_frame.btn_view_bl, self._main_frame.btn_view_br]:
+        for btn in [self._main_frame.btn_secom_view_tl, self._main_frame.btn_secom_view_tr,
+                    self._main_frame.btn_secom_view_bl, self._main_frame.btn_secom_view_br]:
             def onThumbnail(im, btn=btn): # save btn in scope
                 btn.set_overlay(im)
 
@@ -322,7 +322,7 @@ class ViewSelector(object):
         im (unused)
         """
         # Create an image from the 4 thumbnails in a 2x2 layout with small border
-        btn_all = self._main_frame.btn_view_all
+        btn_all = self._main_frame.btn_secom_view_all
         border_width = 2 # px
         size = max(1, btn_all.overlay_width), max(1, btn_all.overlay_height)
         size_sub = (max(1, (size[0] - border_width) // 2),
@@ -331,8 +331,8 @@ class ViewSelector(object):
         im_22 = wx.EmptyImage(*size, clear=False)
         im_22.SetRGBRect(wx.Rect(0, 0, *size), *btn_all.GetBackgroundColour().Get())
 
-        for i, btn in enumerate([self._main_frame.btn_view_tl, self._main_frame.btn_view_tr,
-                                 self._main_frame.btn_view_bl, self._main_frame.btn_view_br]):
+        for i, btn in enumerate([self._main_frame.btn_secom_view_tl, self._main_frame.btn_secom_view_tr,
+                                 self._main_frame.btn_secom_view_bl, self._main_frame.btn_secom_view_br]):
 
             im = self.buttons[btn].vp.mic_view.thumbnail.value
             if im:

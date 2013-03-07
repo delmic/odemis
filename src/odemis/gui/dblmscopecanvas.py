@@ -29,17 +29,24 @@ import time
 
 import wx
 import cairo
+from decorator import decorator
 
 from odemis.gui import FOREGROUND_COLOUR_EDIT
 from odemis.gui.comp.canvas import DraggableCanvas, WorldToBufferPoint
 from odemis.gui.model import EM_STREAMS
-from odemis.gui.util import limit_invocation
 from odemis.gui.util.conversion import hex_to_rgba
 
 CROSSHAIR_COLOR = wx.GREEN
 CROSSHAIR_SIZE = 16
 
 SELECTION_COLOR = FOREGROUND_COLOUR_EDIT
+
+@decorator
+def microscope_view_check(f, self, *args, **kwargs):
+    """ This method decorator check if the microscope_view attribute is set
+    """
+    if self.microscope_view:
+        return f(self, *args, **kwargs)
 
 class DblMicroscopeCanvas(DraggableCanvas):
     """
@@ -266,6 +273,7 @@ class DblMicroscopeCanvas(DraggableCanvas):
         self.scale = self.mpwu / mpp
         wx.CallAfter(self.ShouldUpdateDrawing)
 
+    @microscope_view_check
     def Zoom(self, inc):
         """
         Zoom by the given factor
@@ -295,7 +303,7 @@ class DblMicroscopeCanvas(DraggableCanvas):
         else:
             self.Zoom(change)
 
-    #@limit_invocation(0.07)
+    @microscope_view_check
     def onExtraAxisMove(self, axis, shift):
         """
         called when the extra dimensions are modified (right drag)
@@ -307,7 +315,6 @@ class DblMicroscopeCanvas(DraggableCanvas):
         """
 
         #focus = [self.microscope_view.focus0, self.microscope_view.focus1][axis]
-
         if self.microscope_view.get_focus(axis) is not None:
             # conversion: 1 unit => 0.1 μm (so a whole screen, ~44000u, is a
             # couple of mm)
@@ -422,7 +429,7 @@ class SelectionOverlay(object):
         self.ctx.select_font_face("Courier",
                                   cairo.FONT_SLANT_NORMAL,
                                   cairo.FONT_WEIGHT_NORMAL)
-        self.ctx.set_font_size(10)
+        self.ctx.set_font_size(12)
         self.dragging = True
 
     def update_selection(self, end_pos):
@@ -469,7 +476,7 @@ class SelectionOverlay(object):
 
             if self.dragging:
                 self.ctx.set_source_rgb(0.9, 0.9, 0.9)
-                self.ctx.move_to(10, 10)
+                self.ctx.move_to(10, 20)
                 self.ctx.show_text("%s" % self.current_pos)
 
 

@@ -279,7 +279,7 @@
                   <object class="sizeritem">
                     <object class="wxFlexGridSizer">
                       <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_view_all">
+                        <object class="wxStaticText" name="lbl_secom_view_all">
                           <label>view</label>
                           <fg>#BFBFBF</fg>
                           <XRCED>
@@ -289,7 +289,7 @@
                         <flag>wxALIGN_RIGHT</flag>
                       </object>
                       <object class="sizeritem">
-                        <object class="ViewButton" name="btn_view_all">
+                        <object class="ViewButton" name="btn_secom_view_all">
                           <bitmap>img/preview_block.png</bitmap>
                           <hover>img/preview_block_a.png</hover>
                           <selected>img/preview_block_a.png</selected>
@@ -301,7 +301,7 @@
                         <border>5</border>
                       </object>
                       <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_view_tl">
+                        <object class="wxStaticText" name="lbl_secom_view_tl">
                           <label>view</label>
                           <fg>#BFBFBF</fg>
                           <XRCED>
@@ -311,7 +311,7 @@
                         <flag>wxALIGN_RIGHT</flag>
                       </object>
                       <object class="sizeritem">
-                        <object class="ViewButton" name="btn_view_tl">
+                        <object class="ViewButton" name="btn_secom_view_tl">
                           <bitmap>img/preview_block.png</bitmap>
                           <hover>img/preview_block_a.png</hover>
                           <selected>img/preview_block_a.png</selected>
@@ -321,7 +321,7 @@
                         </object>
                       </object>
                       <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_view_tr">
+                        <object class="wxStaticText" name="lbl_secom_view_tr">
                           <label>view</label>
                           <fg>#BFBFBF</fg>
                           <XRCED>
@@ -331,7 +331,7 @@
                         <flag>wxALIGN_RIGHT</flag>
                       </object>
                       <object class="sizeritem">
-                        <object class="ViewButton" name="btn_view_tr">
+                        <object class="ViewButton" name="btn_secom_view_tr">
                           <bitmap>img/preview_block.png</bitmap>
                           <hover>img/preview_block_a.png</hover>
                           <selected>img/preview_block_a.png</selected>
@@ -341,7 +341,7 @@
                         </object>
                       </object>
                       <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_view_bl">
+                        <object class="wxStaticText" name="lbl_secom_view_bl">
                           <label>view</label>
                           <fg>#BFBFBF</fg>
                           <XRCED>
@@ -351,7 +351,7 @@
                         <flag>wxALIGN_RIGHT</flag>
                       </object>
                       <object class="sizeritem">
-                        <object class="ViewButton" name="btn_view_bl">
+                        <object class="ViewButton" name="btn_secom_view_bl">
                           <bitmap>img/preview_block.png</bitmap>
                           <hover>img/preview_block_a.png</hover>
                           <selected>img/preview_block_a.png</selected>
@@ -361,7 +361,7 @@
                         </object>
                       </object>
                       <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_view_br">
+                        <object class="wxStaticText" name="lbl_secom_view_br">
                           <label>view</label>
                           <fg>#BFBFBF</fg>
                           <XRCED>
@@ -371,7 +371,7 @@
                         <flag>wxALIGN_RIGHT</flag>
                       </object>
                       <object class="sizeritem">
-                        <object class="ViewButton" name="btn_view_br">
+                        <object class="ViewButton" name="btn_secom_view_br">
                           <bitmap>img/preview_block.png</bitmap>
                           <hover>img/preview_block_a.png</hover>
                           <selected>img/preview_block_a.png</selected>
@@ -406,7 +406,7 @@
                 <object class="sizeritem">
                   <object class="wxBoxSizer">
                     <object class="sizeritem">
-                      <object class="MicroscopeViewport" name="pnl_view_tl">
+                      <object class="MicroscopeViewport" name="vp_secom_tl">
                         <size>400,-1</size>
                         <fg>#BFBFBF</fg>
                         <bg>#000000</bg>
@@ -419,7 +419,7 @@
                       <ratio>1</ratio>
                     </object>
                     <object class="sizeritem">
-                      <object class="MicroscopeViewport" name="pnl_view_tr">
+                      <object class="MicroscopeViewport" name="vp_secom_tr">
                         <size>400,-1</size>
                         <fg>#BFBFBF</fg>
                         <bg>#000000</bg>
@@ -440,7 +440,7 @@
                 <object class="sizeritem">
                   <object class="wxBoxSizer">
                     <object class="sizeritem">
-                      <object class="MicroscopeViewport" name="pnl_view_bl">
+                      <object class="MicroscopeViewport" name="vp_secom_bl">
                         <size>400,-1</size>
                         <fg>#BFBFBF</fg>
                         <bg>#000000</bg>
@@ -453,7 +453,7 @@
                       <ratio>1</ratio>
                     </object>
                     <object class="sizeritem">
-                      <object class="MicroscopeViewport" name="pnl_view_br">
+                      <object class="MicroscopeViewport" name="vp_secom_br">
                         <size>400,-1</size>
                         <fg>#BFBFBF</fg>
                         <bg>#000000</bg>
@@ -591,7 +591,7 @@
                       <object class="wxBoxSizer">
                         <orient>wxVERTICAL</orient>
                         <object class="sizeritem">
-                          <object class="FoldPanelBar" name="fpb_settings">
+                          <object class="FoldPanelBar">
                             <object class="FoldPanelItem" name="fp_settings_secom_sem">
                               <label>SEM SETTINGS</label>
                               <fg>#1A1A1A</fg>
@@ -609,7 +609,7 @@
                               </XRCED>
                             </object>
                             <object class="FoldPanelItem">
-                              <object class="StreamBar" name="pnl_stream">
+                              <object class="StreamBar" name="pnl_secom_streams">
                                 <size>300,-1</size>
                                 <add_button>1</add_button>
                                 <fg>#7F7F7F</fg>
@@ -636,9 +636,6 @@
                             <leftspacing>0</leftspacing>
                             <rightspacing>0</rightspacing>
                             <bg>#333333</bg>
-                            <XRCED>
-                              <assign_var>1</assign_var>
-                            </XRCED>
                           </object>
                           <flag>wxEXPAND</flag>
                         </object>
@@ -760,7 +757,7 @@
                     <flag>wxEXPAND</flag>
                   </object>
                   <object class="sizeritem">
-                    <object class="wxPanel" name="pnl_sparc_tool_menu">
+                    <object class="wxPanel" name="pnl_sparc_acq_tool_menu">
                       <object class="wxBoxSizer">
                         <object class="sizeritem">
                           <object class="wxStaticBitmap">
@@ -772,7 +769,7 @@
                             <object class="wxBoxSizer">
                               <orient>wxVERTICAL</orient>
                               <object class="sizeritem">
-                                <object class="ImageToggleButton" name="btn_sparc_view_select">
+                                <object class="ImageToggleButton" name="btn_sparc_acq_view_select">
                                   <size>24,24</size>
                                   <bitmap>img/btn_view_sel.png</bitmap>
                                   <hover>img/btn_view_sel_h.png</hover>
@@ -785,7 +782,7 @@
                                 <border>10</border>
                               </object>
                               <object class="sizeritem">
-                                <object class="ImageToggleButton" name="btn_sparc_view_pick">
+                                <object class="ImageToggleButton" name="btn_sparc_acq_view_pick">
                                   <size>24,24</size>
                                   <bitmap>img/btn_view_pick.png</bitmap>
                                   <hover>img/btn_view_pick_h.png</hover>
@@ -799,7 +796,7 @@
                                 <border>10</border>
                               </object>
                               <object class="sizeritem">
-                                <object class="ImageButton" name="btn_sparc_view_resize">
+                                <object class="ImageButton" name="btn_sparc_acq_view_resize">
                                   <size>24,24</size>
                                   <bitmap>img/btn_view_resize.png</bitmap>
                                   <hover>img/btn_view_resize_h.png</hover>
@@ -837,7 +834,7 @@
               <flag>wxEXPAND</flag>
             </object>
             <object class="sizeritem">
-              <object class="MicroscopeViewport" name="pnl_sparc_acq_view">
+              <object class="MicroscopeViewport" name="vp_sparc_acq_view">
                 <XRCED>
                   <assign_var>1</assign_var>
                 </XRCED>
@@ -940,6 +937,14 @@
                             <XRCED>
                               <assign_var>1</assign_var>
                             </XRCED>
+                            <object class="FoldPanelItem" name="fp_settings_sparc_spectro">
+                              <label>SPECTROMETER SETTINGS</label>
+                              <fg>#1A1A1A</fg>
+                              <bg>#555555</bg>
+                              <XRCED>
+                                <assign_var>1</assign_var>
+                              </XRCED>
+                            </object>
                           </object>
                           <flag>wxEXPAND</flag>
                         </object>
@@ -974,6 +979,7 @@
             </object>
           </object>
           <bg>#333333</bg>
+          <hidden>1</hidden>
           <XRCED>
             <assign_var>1</assign_var>
           </XRCED>
@@ -983,38 +989,389 @@
       </object>
       <object class="sizeritem">
         <object class="wxPanel" name="pnl_tab_sparc_analysis">
-          <object class="wxBoxSizer">
-            <object class="spacer">
-              <option>1</option>
-              <flag>wxEXPAND|wxALIGN_CENTRE_VERTICAL</flag>
-            </object>
-            <object class="sizeritem">
-              <object class="wxStaticText">
-                <label>SPARC analysis tab.</label>
-                <fg>#7F7F7F</fg>
-                <font>
-                  <size>8</size>
-                  <style>normal</style>
-                  <weight>normal</weight>
-                  <underlined>0</underlined>
-                  <family>default</family>
-                  <face>Ubuntu</face>
-                  <encoding>UTF-8</encoding>
-                </font>
-              </object>
-              <flag>wxALIGN_CENTRE_VERTICAL</flag>
-            </object>
-            <orient>wxHORIZONTAL</orient>
-            <object class="spacer">
-              <option>1</option>
-              <flag>wxEXPAND|wxALIGN_CENTRE_VERTICAL</flag>
-            </object>
-          </object>
           <bg>#333333</bg>
-          <hidden>1</hidden>
           <XRCED>
             <assign_var>1</assign_var>
           </XRCED>
+          <object class="wxBoxSizer">
+            <object class="sizeritem">
+              <object class="wxPanel">
+                <object class="wxBoxSizer">
+                  <orient>wxVERTICAL</orient>
+                  <object class="sizeritem">
+                    <object class="wxPanel">
+                      <bg>#1A1A1A</bg>
+                      <object class="wxBoxSizer">
+                        <orient>wxVERTICAL</orient>
+                        <object class="sizeritem">
+                          <object class="wxStaticBitmap">
+                            <size>200,150</size>
+                            <bitmap>img/test_pattern_s.png</bitmap>
+                          </object>
+                          <flag>wxALL</flag>
+                          <border>10</border>
+                        </object>
+                      </object>
+                    </object>
+                  </object>
+                  <object class="spacer">
+                    <option>1</option>
+                    <flag>wxEXPAND</flag>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxPanel" name="pnl_sparc_ana_tool_menu">
+                      <object class="wxBoxSizer">
+                        <object class="sizeritem">
+                          <object class="wxStaticBitmap">
+                            <bitmap>img/side_menu_top.png</bitmap>
+                          </object>
+                        </object>
+                        <object class="sizeritem">
+                          <object class="wxPanel">
+                            <object class="wxBoxSizer">
+                              <orient>wxVERTICAL</orient>
+                              <object class="sizeritem">
+                                <object class="ImageToggleButton" name="btn_sparc_ana_view_zoom">
+                                  <size>24,24</size>
+                                  <bitmap>img/btn_view_sel.png</bitmap>
+                                  <hover>img/btn_view_sel_h.png</hover>
+                                  <selected>img/btn_view_sel_a.png</selected>
+                                  <XRCED>
+                                    <assign_var>1</assign_var>
+                                  </XRCED>
+                                </object>
+                                <flag>wxBOTTOM|wxLEFT</flag>
+                                <border>10</border>
+                              </object>
+                              <object class="sizeritem">
+                                <object class="ImageToggleButton" name="btn_sparc_ana_view_update">
+                                  <size>24,24</size>
+                                  <bitmap>img/btn_view_pick.png</bitmap>
+                                  <hover>img/btn_view_pick_h.png</hover>
+                                  <selected>img/btn_view_pick_a.png</selected>
+                                  <XRCED>
+                                    <assign_var>1</assign_var>
+                                  </XRCED>
+                                </object>
+                                <flag>wxBOTTOM|wxLEFT</flag>
+                                <border>10</border>
+                              </object>
+                              <object class="sizeritem">
+                                <object class="ImageButton" name="btn_sparc_ana_view_resize">
+                                  <size>24,24</size>
+                                  <bitmap>img/btn_view_resize.png</bitmap>
+                                  <hover>img/btn_view_resize_h.png</hover>
+                                  <selected>img/btn_view_resize_a.png</selected>
+                                </object>
+                                <flag>wxBOTTOM|wxLEFT</flag>
+                                <border>10</border>
+                              </object>
+                            </object>
+                            <bg>#000000</bg>
+                          </object>
+                          <minsize>40,-1</minsize>
+                        </object>
+                        <object class="sizeritem">
+                          <object class="wxStaticBitmap">
+                            <bitmap>img/side_menu_bottom.png</bitmap>
+                          </object>
+                        </object>
+                        <orient>wxVERTICAL</orient>
+                      </object>
+                      <bg>#333333</bg>
+                    </object>
+                    <flag>wxALIGN_RIGHT</flag>
+                  </object>
+                  <object class="spacer">
+                    <option>1</option>
+                    <flag>wxEXPAND</flag>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxFlexGridSizer">
+                      <object class="sizeritem">
+                        <object class="wxStaticText" name="lbl_sparc_view_all">
+                          <label>view</label>
+                          <fg>#BFBFBF</fg>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <flag>wxALIGN_RIGHT</flag>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="ViewButton" name="btn_sparc_view_all">
+                          <bitmap>img/preview_block.png</bitmap>
+                          <hover>img/preview_block_a.png</hover>
+                          <selected>img/preview_block_a.png</selected>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <flag>wxRIGHT</flag>
+                        <border>5</border>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="wxStaticText" name="lbl_sparc_view_tl">
+                          <label>view</label>
+                          <fg>#BFBFBF</fg>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <flag>wxALIGN_RIGHT</flag>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="ViewButton" name="btn_sparc_view_tl">
+                          <bitmap>img/preview_block.png</bitmap>
+                          <hover>img/preview_block_a.png</hover>
+                          <selected>img/preview_block_a.png</selected>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="wxStaticText" name="lbl_sparc_view_tr">
+                          <label>view</label>
+                          <fg>#BFBFBF</fg>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <flag>wxALIGN_RIGHT</flag>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="ViewButton" name="btn_sparc_view_tr">
+                          <bitmap>img/preview_block.png</bitmap>
+                          <hover>img/preview_block_a.png</hover>
+                          <selected>img/preview_block_a.png</selected>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="wxStaticText" name="lbl_sparc_view_bl">
+                          <label>view</label>
+                          <fg>#BFBFBF</fg>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <flag>wxALIGN_RIGHT</flag>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="ViewButton" name="btn_sparc_view_bl">
+                          <bitmap>img/preview_block.png</bitmap>
+                          <hover>img/preview_block_a.png</hover>
+                          <selected>img/preview_block_a.png</selected>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="wxStaticText" name="lbl_sparc_view_br">
+                          <label>view</label>
+                          <fg>#BFBFBF</fg>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <flag>wxALIGN_RIGHT</flag>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="ViewButton" name="btn_sparc_view_br">
+                          <bitmap>img/preview_block.png</bitmap>
+                          <hover>img/preview_block_a.png</hover>
+                          <selected>img/preview_block_a.png</selected>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                      </object>
+                      <cols>2</cols>
+                      <rows>5</rows>
+                      <vgap>20</vgap>
+                      <hgap>5</hgap>
+                      <growablecols>0</growablecols>
+                      <growablerows>0</growablerows>
+                      <growablerows>1</growablerows>
+                      <growablerows>2</growablerows>
+                      <growablerows>3</growablerows>
+                      <growablerows>4</growablerows>
+                    </object>
+                    <option>0</option>
+                    <flag>wxBOTTOM|wxEXPAND</flag>
+                    <border>50</border>
+                  </object>
+                </object>
+                <size>200,-1</size>
+                <bg>#333333</bg>
+              </object>
+              <flag>wxEXPAND</flag>
+            </object>
+            <object class="sizeritem">
+              <object class="wxBoxSizer">
+                <object class="sizeritem">
+                  <object class="wxBoxSizer">
+                    <object class="sizeritem">
+                      <object class="MicroscopeViewport" name="vp_sparc_analysis_tl">
+                        <size>400,-1</size>
+                        <fg>#BFBFBF</fg>
+                        <bg>#000000</bg>
+                        <XRCED>
+                          <assign_var>1</assign_var>
+                        </XRCED>
+                      </object>
+                      <option>1</option>
+                      <flag>wxEXPAND</flag>
+                      <ratio>1</ratio>
+                    </object>
+                    <object class="sizeritem">
+                      <object class="MicroscopeViewport" name="vp_sparc_analysis_tr">
+                        <size>400,-1</size>
+                        <fg>#BFBFBF</fg>
+                        <bg>#000000</bg>
+                        <XRCED>
+                          <assign_var>1</assign_var>
+                        </XRCED>
+                      </object>
+                      <option>1</option>
+                      <flag>wxEXPAND</flag>
+                      <ratio>1</ratio>
+                    </object>
+                    <orient>wxHORIZONTAL</orient>
+                  </object>
+                  <option>1</option>
+                  <flag>wxEXPAND</flag>
+                  <ratio>1</ratio>
+                </object>
+                <object class="sizeritem">
+                  <object class="wxBoxSizer">
+                    <object class="sizeritem">
+                      <object class="MicroscopeViewport" name="vp_sparc_analysis_bl">
+                        <size>400,-1</size>
+                        <fg>#BFBFBF</fg>
+                        <bg>#000000</bg>
+                        <XRCED>
+                          <assign_var>1</assign_var>
+                        </XRCED>
+                      </object>
+                      <option>1</option>
+                      <flag>wxEXPAND</flag>
+                      <ratio>1</ratio>
+                    </object>
+                    <object class="sizeritem">
+                      <object class="MicroscopeViewport" name="vp_sparc_analysis_br">
+                        <size>400,-1</size>
+                        <fg>#BFBFBF</fg>
+                        <bg>#000000</bg>
+                        <XRCED>
+                          <assign_var>1</assign_var>
+                        </XRCED>
+                      </object>
+                      <option>1</option>
+                      <flag>wxEXPAND</flag>
+                      <ratio>1</ratio>
+                    </object>
+                    <orient>wxHORIZONTAL</orient>
+                  </object>
+                  <option>1</option>
+                  <flag>wxEXPAND</flag>
+                  <ratio>1</ratio>
+                </object>
+                <orient>wxVERTICAL</orient>
+              </object>
+              <option>1</option>
+              <flag>wxEXPAND</flag>
+            </object>
+            <object class="sizeritem">
+              <object class="wxPanel" name="pnl_right">
+                <object class="wxBoxSizer">
+                  <object class="sizeritem">
+                    <object class="wxPanel" name="main_buttons">
+                      <object class="wxBoxSizer">
+                        <orient>wxHORIZONTAL</orient>
+                      
+                        
+                        
+                        
+                        
+                      </object>
+                      <size>400,-1</size>
+                      <bg>#4D4D4D</bg>
+                    </object>
+                    <flag>wxEXPAND</flag>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxScrolledWindow" name="scr_win_right">
+                      <object class="wxBoxSizer">
+                        <orient>wxVERTICAL</orient>
+                        
+                        <object class="sizeritem">
+                          <object class="FoldPanelBar">
+                            <object class="FoldPanelItem" name="fp_sparc_file_info">
+                              <label>FILE INFO</label>
+                              <fg>#1A1A1A</fg>
+                              <bg>#555555</bg>
+                              <XRCED>
+                                <assign_var>1</assign_var>
+                              </XRCED>
+                            </object>
+                            <object class="FoldPanelItem">
+                              <object class="StreamBar" name="pnl_sparc_streams">
+                                <size>300,-1</size>
+                                <fg>#7F7F7F</fg>
+                                <bg>#333333</bg>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                              </object>
+                              <label>STREAMS</label>
+                              <fg>#1A1A1A</fg>
+                              <bg>#555555</bg>
+                            </object>
+                            <object class="FoldPanelItem" name="fp_annotations">
+                              <label>ANNOTATIONS</label>
+                              <collapsed>1</collapsed>
+                              <fg>#1A1A1A</fg>
+                              <bg>#555555</bg>
+                              <hidden>1</hidden>
+                              <XRCED>
+                                <assign_var>1</assign_var>
+                              </XRCED>
+                            </object>
+                            <spacing>0</spacing>
+                            <leftspacing>0</leftspacing>
+                            <rightspacing>0</rightspacing>
+                            <bg>#333333</bg>
+                          </object>
+                          <flag>wxEXPAND</flag>
+                        </object>
+                      </object>
+                      <size>400,-1</size>
+                      <bg>#333333</bg>
+                      <style>wxVSCROLL</style>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <option>1</option>
+                    <flag>wxEXPAND</flag>
+                    <minsize>400,400</minsize>
+                  </object>
+                  
+                  <orient>wxVERTICAL</orient>
+                </object>
+                <size>400,-1</size>
+                <bg>#333333</bg>
+                <style>wxBORDER_NONE</style>
+              </object>
+              <flag>wxEXPAND</flag>
+            </object>
+            <orient>wxHORIZONTAL</orient>
+          </object>
         </object>
         <option>1</option>
         <flag>wxEXPAND</flag>
@@ -1191,7 +1548,7 @@
                 <object class="wxBoxSizer">
                   <orient>wxVERTICAL</orient>
                   <object class="sizeritem">
-                    <object class="FoldPanelBar" name="fpb_settings">
+                    <object class="FoldPanelBar">
                       <object class="FoldPanelItem" name="fp_sem_settings">
                         <label>SEM SETTINGS</label>
                         <fg>#1A1A1A</fg>
@@ -1209,7 +1566,7 @@
                         </XRCED>
                       </object>
                       <object class="FoldPanelItem">
-                        <object class="StreamBar" name="pnl_stream">
+                        <object class="StreamBar" name="pnl_secom_streams">
                           <fg>#7F7F7F</fg>
                           <bg>#333333</bg>
                           <XRCED>
@@ -1224,9 +1581,6 @@
                       <leftspacing>0</leftspacing>
                       <rightspacing>0</rightspacing>
                       <bg>#333333</bg>
-                      <XRCED>
-                        <assign_var>1</assign_var>
-                      </XRCED>
                     </object>
                     <flag>wxEXPAND</flag>
                   </object>
