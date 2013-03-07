@@ -14,6 +14,7 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
+from __future__ import division
 from Pyro4.core import isasync
 from concurrent.futures.thread import ThreadPoolExecutor
 from odemis import model, __version__
@@ -21,6 +22,7 @@ from odemis.util import driver
 import collections
 import glob
 import logging
+import math
 import os
 import re
 import serial
@@ -35,7 +37,8 @@ import time
 #
 # The basic of this device is to move mirror and lenses in order to select a 
 # specific range of wavelength observed. Therefore it's an actuator, with special
-# characteristics.
+# characteristics. For background knowledge on such system, see wikipedia entry
+# on "Czerny-Turner monochromator".
 #
 # Some vocabulary:
 # Turret: a rotating holder that allows to change the current grating
@@ -61,6 +64,31 @@ import time
 class SPError(IOError):
     """Error related to the hardware behaviour"""
     pass
+
+# From the specifications
+# string -> value : model name -> length (m)/angle (°)
+FOCAL_LENGTH_OFFICIAL = {
+                         "SP-2-150i": 150e-9,
+                         "SP-2-300i": 300e-9,
+                         "SP-2-500i": 500e-9,
+                         "SP-2-750i": 750e-9,
+                         "SP-FAKE": 300e-9, 
+                         }
+INCLUSION_ANGLE_OFFICIAL = {
+                         "SP-2-150i": 24.66,
+                         "SP-2-300i": 15.15,
+                         "SP-2-500i": 8.59,
+                         "SP-2-750i": 6.55,
+                         "SP-FAKE": 15.15,
+                         }
+# maximum number of gratings per turret
+MAX_GRATINGS_NUM = {
+                     "SP-2-150i": 2,
+                     "SP-2-300i": 3,
+                     "SP-2-500i": 3,
+                     "SP-2-750i": 3,
+                     "SP-FAKE": 3,
+                     }
 
 class SpectraPro(model.Actuator):
     def __init__(self, name, role, port, turret=None, _noinit=False, **kwargs):
@@ -92,7 +120,7 @@ class SpectraPro(model.Actuator):
         
         # according to the model determine how many gratings per turret
         model_name = self.GetModel()
-        self.max_gratings = self.model2max_gratings.get(model_name, 3)
+        self.max_gratings = MAX_GRATINGS_NUM.get(model_name, 3)
         
         if turret is not None:
             if turret < 1 or turret > self.max_gratings:
@@ -104,10 +132,10 @@ class SpectraPro(model.Actuator):
             self._turret = self.GetTurret()
     
         # TODO: a more precise way to find the maximum wavelength (looking at the available gratings?)
-        # provides a ._axes and ._range
         # TODO: what's the min? 200nm seems the actual min working, although wavelength is set to 0 by default !?
+        # provides a ._axes and ._range
         model.Actuator.__init__(self, name, role, axes=["wavelength"], 
-                                ranges={"wavelength": (0, 10e-6)}, **kwargs)
+                                ranges={"wavelength": (0, 2400e-9)}, **kwargs)
     
         # set HW and SW version
         self._swVersion = "%s (serial driver: %s)" % (__version__.version, driver.getSerialDriver(port))
@@ -143,11 +171,14 @@ class SpectraPro(model.Actuator):
         self.grating = model.IntEnumerated(grating, choices=gchoices, unit="", 
                                            setter=self._setGrating)
         
-        # store focal length for the polynomial computation
+        # store focal length and inclusion angle for the polynomial computation
+        model = self.GetModel()
         try:
-            self._focal_length = self.GetFocalLength()
+            self._focal_length = FOCAL_LENGTH_OFFICIAL[model]
+            self._inclusion_angle = INCLUSION_ANGLE_OFFICIAL[model]
         except IOError:
             self._focal_length = None
+            self._inclusion_angle = None
                 
     # Low-level methods: to access the hardware (should be called with the lock acquired)
     
@@ -254,8 +285,6 @@ class SpectraPro(model.Actuator):
         self._initDevice()
         self._try_recover = True
 
-    # default is 3, so no need to list models with 3 grating per turret
-    model2max_gratings = {"SP-2-150i": 2}
     def _initDevice(self):
         # If no echo is desired, the command NO-ECHO will suppress the echo. The
         # command ECHO will return the SP-2150i to the default echo state.
@@ -334,6 +363,23 @@ class SpectraPro(model.Actuator):
         
         return gratings
     
+    RE_GDENSITY = re.compile("(\d+)\s*g/mm")
+    def _getGrooveDensity(self, gid):
+        """
+        Returns the groove density of the given grating
+        gid (int): index of the grating
+        returns (float): groove density in lines/meter
+        raise
+           LookupError if the grating is not installed
+           ValueError: if the groove density cannot be found out
+        """
+        gstring = self.grating.choices[gid]
+        m = self.RE_GDENSITY.search(gstring)
+        if not m:
+            raise ValueError("Failed to find groove density in '%s'", gstring)
+        density = float(m.group(1)) * 1e3 # l/m
+        return density
+    
     def GetGrating(self):
         """
         Retuns the current grating in use
@@ -403,21 +449,6 @@ class SpectraPro(model.Actuator):
         # TODO: check that the value fit the grating configuration?
         self._sendOrder("%.3f goto" % (wl * 1e9), timeout=20)
 
-    def GetFocalLength(self):
-        """
-        Return (float): the focal length (in m)
-        Note: this depend on the model number only (i.e, not very precise)
-        raise:
-            IOError: if the focal length couldn't be determined
-        """ 
-        # convert 'SP-2-150i' to 150 mm
-        model = self.GetModel()
-        m = re.search("SP-\w*-(\d+)i?", model)
-        if not m:
-            raise IOError("Failed to find the focal length for model '%s'" % model)
-        
-        return float(m.group(1)) * 1e-3 
-        
     def GetModel(self):
         """
         Return (str): the model name
@@ -442,7 +473,6 @@ class SpectraPro(model.Actuator):
     
     
     # high-level methods (interface)
-    # TODO call at the end of an action
     def _updatePosition(self):
         """
         update the position VA
@@ -562,14 +592,43 @@ class SpectraPro(model.Actuator):
         # INCLUSION_ANGLE_1  =   30.3
         # FOCAL_LENGTH_1     =   301.2 mm
         # DETECTOR_ANGLE_1   =   0.324871
-        # TODO: default back to theoretical computation based on
-        #  http://www.roperscientific.de/gratingcalcmaster.html
         fl = self._focal_length
+        ia = math.radians(self._inclusion_angle)
+        cw = self.position.value["wavelength"]
         if not fl:
             # "very very bad" calibration
-            center = self.position.value["wavelength"]
-            return [center]
+            return [cw]
         
+        # When no calibration available, fallback to theoretical computation
+        # based on http://www.roperscientific.de/gratingcalcmaster.html
+        gl = self._getGrooveDensity(self.grating.value)
+        # fL = focal length (mm)
+        # wE = inclusion angle (°) = the angle between the incident and the reflected beam for the center wavelength of the grating
+        # gL = grating lines (l/mm)
+        # cW = center wavelength (nm)
+        #   Grating angle
+        #A8 = (cW/1000*gL/2000)/Math.cos(wE* Math.PI/180);
+        # E8 = Math.asin(A8)*180/Math.PI;
+        try:
+            a8 = (cw * gl/2) / math.cos(ia)
+            ga = math.asin(a8) # radians
+        except (ValueError, ZeroDivisionError):
+            logging.exception("Failed to compute polynomial for wavelength conversion")
+            return [cw]
+        # if (document.forms[0].E8.value == "NaN deg." || E8 > 40){document.forms[0].E8.value = "> 40 deg."; document.forms[0].E8.style.color="red";  
+        if math.degrees(ga) > 40:
+            logging.warning("Failed to compute polynomial for wavelength "
+                            "conversion, got grating angle = %g°", math.degrees(ga))
+            return [cw]
+        
+        # dispersion: wavelength(m)/distance(m) 
+        # F8a = Math.cos(Math.PI/180*(wE*1 + E8))*(1000000)/(gL*fL); // nm/mm
+        # to convert from nm/mm -> m/m : *1e-6
+        dispersion = math.cos(ia + ga) / (gl*fl) # m/m
+        assert 0 < dispersion and dispersion < 0.5e-3 # < 500 nm/mm
+        
+        # polynomial is cw + dispersion * x
+        return [cw, dispersion]
         
     def selfTest(self):
         """
@@ -780,7 +839,7 @@ class SPSimulator(object):
         elif com == "?nm":
             out = "%.2f nm" % self._wavelength
         elif com == "model":
-            out = "SP-FAKE-300"
+            out = "SP-FAKE"
         elif com == "serial":
             out = "12345"
         elif com == "no-echo":

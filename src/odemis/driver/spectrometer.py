@@ -143,6 +143,10 @@ class CompositedSpectrometer(model.Detector):
 
         # Update metadata of detector with wavelength conversion 
         # whenever the wavelength/grating axes moves.
+        try:
+            pn = sp.getPolyToWavelength()
+        except AttributeError:
+            raise ArgumentError("Child spectrograph has no getPolyToWavelength() method")
         if hasattr(sp, "grating") and isinstance(sp.grating, model.VigilantAttributeBase):
             sp.grating.subscribe(self._onGratingUpdate)
         sp.position.subscribe(self._onWavelengthUpdate, init=True) 
@@ -193,7 +197,7 @@ class CompositedSpectrometer(model.Detector):
         # with "a" the distance of the centre of the left-most pixel to the 
         # centre of the image, and b the density in meters per pixel. 
         
-        # TODO: convert from m to px => use pixelSize[0]*binning
+        # TODO: pass these values to getPolyToWavelength()?
         mpp = self.pixelSize[0] * self._binning[0] # m/px
         distance0 = -(self.resolution.value[0] / 2 - 0.5) * mpp # m
         pnc = self.polycomp(pn, [distance0, mpp])
