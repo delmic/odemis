@@ -117,7 +117,7 @@ class SpectraPro(model.Actuator):
         self._executor = CancellableThreadPoolExecutor(max_workers=1) # one task at a time
         
         # One absolute axis: wavelength
-        # One enumerated int: grating number (between 1 and 3: only the current turret)
+        # TODO: second dimension: enumerated int: grating/groove density (l/m or g/m) 
         # TODO: how to let know that the grating is done moving? Or should it be an axis with 3 positions? range is a dict instead of a 2-tuple  
         
         pos = {"wavelength": self.GetWavelength()}
@@ -540,7 +540,7 @@ class SpectraPro(model.Actuator):
             self._serial.close()
             self._serial = None
     
-    def getToWavelengthPolynomial(self):
+    def getPolyToWavelength(self):
         """
         Compute the right polynomial to convert from a position on the sensor to the
           wavelength detected. It depends on the current grating, center 
@@ -553,7 +553,7 @@ class SpectraPro(model.Actuator):
           wavelength corresponding to a given distance from the center: 
           w = p[0] + p[1] * x + p[2] * x²... 
           where w is the wavelength (in m), x is the position from the center
-          (in m, negative are to the left), and p is the polynomial.
+          (in m, negative are to the left), and p is the polynomial (in m, m^0, m^-1...).
         """
         # FIXME: shall we report the error on the polynomial? At least say if it's
         # using calibration or not.
@@ -566,7 +566,7 @@ class SpectraPro(model.Actuator):
         #  http://www.roperscientific.de/gratingcalcmaster.html
         fl = self._focal_length
         if not fl:
-            # very very bad calibration
+            # "very very bad" calibration
             center = self.position.value["wavelength"]
             return [center]
         

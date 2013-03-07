@@ -15,6 +15,7 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
+from numpy.polynomial import polynomial
 from odemis import model
 from odemis.model._components import ComponentBase, ArgumentError
 from odemis.model._dataflow import DataFlowBase
@@ -118,7 +119,6 @@ class CompositedSpectrometer(model.Detector):
         
         min_res = (dt.resolution.range[0][0], 1)
         max_res = (dt.resolution.range[1][0], 1)
-        self._resolution = resolution
         self.resolution = model.ResolutionVA(resolution, [min_res, max_res], 
                                              setter=self._setResolution)
         # 2D binning is like a "small resolution"
@@ -130,25 +130,128 @@ class CompositedSpectrometer(model.Detector):
         
         # TODO: support software binning by rolling up our own dataflow that
         # does data merging
-        assert (dt.resolution.range[0][1] == 1)
+        assert dt.resolution.range[0][1] == 1
         self.data = dt.data
         
         # duplicate every other VA from the detector
+        # that includes required VA like .pixelSize and .exposureTime
         for aname, value in model.getVAs(dt).items():
             if not hasattr(self, aname):
                 setattr(self, aname, value)
             else:
                 logging.debug("skipping duplication of already existing VA '%s'", aname)
 
-
-        # TODO: update Metadata of detector with wavelength polynomial conversion 
-        # whenever the wavelength axis moves. 
+        # Update metadata of detector with wavelength conversion 
+        # whenever the wavelength/grating axes moves.
+        if hasattr(sp, "grating") and isinstance(sp.grating, model.VigilantAttributeBase):
+            sp.grating.subscribe(self._onGratingUpdate)
+        sp.position.subscribe(self._onWavelengthUpdate, init=True) 
+    
+    # The following 2 metadata methods are just redirecting to the detector
+    def getMetadata(self):
+        return self._detector.getMetadata()
+    
+    def updateMetadata(self, md):
+        """
+        Update the metadata associated with every image acquired to these
+        new values. It's accumulative, so previous metadata values will be kept
+        if they are not given.
+        md (dict string -> value): the metadata
+        """
+        self._detector.update(md)
+    
+    def _onWavelengthUpdate(self, pos):
+        """
+        Called when the wavelength position of the spectrograph is changed
+        """
+        # Need to get new conversion polynomial and update metadata
+        self._updateWavelengthPolynomial()
+        
+    def _onGratingUpdate(self, grating):
+        """
+        Called when the grating/groove density of the spectrograph is changed
+        """
+        # Need to get new conversion polynomial and update metadata
+        self._updateWavelengthPolynomial()
+        
+    def _updateWavelengthPolynomial(self):
+        """
+        Update the metadata with the wavelength conversion polynomial provided
+        by the spectrograph.
+        Note: this assumes that the spectrograph has a getPolyToWavelength()
+         method.
+        """
+        pn = self._spectrograph.getPolyToWavelength()
+        
+        # This polynomial is from m (distance from centre) to m (wavelength),
+        # but we need from px (pixel number on spectrum) to m (wavelength). So
+        # we need to convert by using the density and quantity of pixels
+        # wl = pn(x)
+        # x = a + bx' = pn1(x')
+        # wl = pn(pn1(x')) = pnc(x')
+        # => composition of polynomials
+        # with "a" the distance of the centre of the left-most pixel to the 
+        # centre of the image, and b the density in meters per pixel. 
+        
+        # TODO: convert from m to px => use pixelSize[0]*binning
+        mpp = self.pixelSize[0] * self._binning[0] # m/px
+        distance0 = -(self.resolution.value[0] / 2 - 0.5) * mpp # m
+        pnc = self.polycomp(pn, [distance0, mpp])
+        
+        md = {model.MD_WL_POLYNOMIAL: pnc}
+        self.updateMetadata(md)
+    
+    @staticmethod
+    def polycomp(c1, c2):
+        """
+        Compose two polynomials : c1 o c2 = c1(c2(x))
+        The arguments are sequences of coefficients, from lowest order term to highest, e.g., [1,2,3] represents the polynomial 1 + 2*x + 3*x**2.
+        """
+        # using Horner's method to compute the result of a polynomial
+        cr = [c1[-1]]
+        for a in reversed(c1[:-1]):
+            # cr = cr * c2 + a 
+            cr = polynomial.polyadd(polynomial.polymul(cr, c2), [a])
+        
+        return cr
     
     def _setBinning(self, value):
+        """
+        Called when "binning" VA is modified. It also updates the resolution so
+        that the horizontal AOI is approximately the same. The vertical size
+        stays 1.
+        value (int): how many pixels horizontally and vertically
+          are combined to create "super pixels"
+        """
+        prev_binning = self._binning
+        self._binning = tuple(value) # duplicate
+        
+        # adapt horizontal resolution so that the AOI stays the same
+        changeh = prev_binning[0] / self._binning[0]
+        old_resolution = self.resolution.value
+        assert old_resolution[1] == 1
+        new_resolution = (int(round(old_resolution[0] * changeh)), 1)
+        assert (new_resolution[0] % value[0]) == 0 
+        
         # setting resolution and binning is slightly tricky, because binning
         # will change resolution to keep the same area. So first set binning, then
         # resolution
         self._detector.binning.value = value
-        # TODO: update the resolution so that the ROI stays the same??
-        self._detector.resolution.value = self.resolution.value
+        self.resolution.value = new_resolution
         return value
+    
+    def _setResolution(self, value):
+        """
+        Called when the resolution VA is to be updated.
+        """
+        # only the width might change
+        assert value[1] == 1
+        self._detector.resolution.value = value
+        return value
+
+    def selfTest(self):
+        return self._detector.selfTest() and self._spectrograph.selfTest()
+    
+    # No scan(): we cannot detect if a detector and spectrograph are linked or 
+    # not without endangering the system too much (e.g., it's not clever to move
+    # the spectrograph like crazy while acquiring images from all CCDs)

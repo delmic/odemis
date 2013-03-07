@@ -156,8 +156,6 @@ class PVCam(model.DigitalCamera):
      sync (strobed mode) is enabled.
     * InGaAs camera cannot do hardware binning
 
-    
-    
     It offers mostly a couple of VigilantAttributes to modify the settings, and a 
     DataFlow to get one or several images from the camera.
     
@@ -252,7 +250,8 @@ class PVCam(model.DigitalCamera):
         except PVCamError:
             logging.debug("Camera doesn't seem to provide temperature information")
             
-        # TODO: .fanSpeed? (but it seems PIXIS cannot change it anyway)        
+        # TODO: .fanSpeed? (but it seems PIXIS cannot change it anyway and LN 
+        # camera don't have any)        
         
         self._setStaticSettings()
 
@@ -288,7 +287,7 @@ class PVCam(model.DigitalCamera):
         
         # 2D binning is like a "small resolution"
         self.binning = model.ResolutionVA(self._binning, [(1,1), self._getMaxBinning()],
-                                           unit="px", setter=self._setBinning)
+                                          setter=self._setBinning)
         
         # default values try to get live microscopy imaging more likely to show something
         try:
@@ -797,7 +796,6 @@ class PVCam(model.DigitalCamera):
         that the AOI is approximately the same.
         value (int): how many pixels horizontally and vertically
          are combined to create "super pixels"
-        Note: super pixels are always square (although hw doesn't require this)
         """
         
         prev_binning = self._binning
@@ -809,9 +807,11 @@ class PVCam(model.DigitalCamera):
         old_resolution = self.resolution.value
         new_resolution = (int(round(old_resolution[0] * change[0])),
                           int(round(old_resolution[1] * change[1])))
+        assert((new_resolution[0] % value[0]) == 0)
+        assert((new_resolution[1] % value[1]) == 0)
         
         self.resolution.value = new_resolution # will automatically call _storeSize
-        return self._binning
+        return value
     
     def _storeSize(self, size):
         """

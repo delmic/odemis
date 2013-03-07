@@ -59,6 +59,7 @@ MD_FILTER_NAME = "Filter name" # str, product name of the light filter
 MD_DWELL_TIME = "Pixel dwell time" # s (float), time the electron beam spends per pixel
 MD_EBEAM_ENERGY = "Electron beam energy" # eV (float), energy of the electron beam TODO: in SI, ie, Joules? 
 MD_EBEAM_SPOT_DIAM = "Electron beam spot diameter" # m (float), approximate diameter of the electron beam spot (typically function of the current)  
+MD_WL_POLYNOMIAL = "Wavelength polynomial" # m, m/px, m/px²... (list of float), polynomial to convert from a pixel number of a spectrum to the wavelength
 
 # The following tags are not to be filled at acquisition, but by the user interface
 MD_DESCRIPTION = "Description" # (string) User-friendly name that describes what this acquisition is
