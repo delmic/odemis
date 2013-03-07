@@ -15,6 +15,7 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from odemis.gui.util.img import DataArray2wxImage
+from scipy import ndimage
 import logging
 import wx
 
@@ -40,6 +41,8 @@ class VideoDisplayer(object):
         at ratio 1:1)
         data (numpy.ndarray): an 2D array containing the image (can be 3D if in RGB)
         """
+        mn, mx, mnp, mxp = ndimage.extrema(data)
+        logging.info("Image data from %s to %s", mn, mx)
         self.app.img = DataArray2wxImage(data) # auto brightness/contrast
         wx.CallAfter(self.app.update_view)
     
