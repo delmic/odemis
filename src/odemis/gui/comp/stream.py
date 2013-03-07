@@ -985,7 +985,7 @@ class StreamBar(wx.Panel):
         self._sz = wx.BoxSizer(wx.VERTICAL)
         self.SetSizer(self._sz)
 
-        msg = "No stream available as both SEM and optical paths are off."
+        msg = "No streams available."
 
         # logging.debug("Point size %s" % self.GetFont().GetPointSize())
 

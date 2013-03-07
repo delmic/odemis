@@ -36,13 +36,14 @@ import wx
 import wx.lib.wxcairo
 import cairo
 
-
 # A class for smooth, flicker-less display of anything on a window, with drag
 # and zoom capability a bit like: wx.canvas, wx.BufferedWindow, BufferedCanvas,
 # wx.floatcanvas and wx.scrolledwindow...
 #
 # The main differences are:
-#  * when dragging the window the surrounding margin is already computed
+#  * when dragging the window the surrounding margin, expanding beyond the
+#    visible area of the panel, is already computed, so that doesn not have to
+#    be done during the dragging.
 #  * You can draw at any coordinate, and it's displayed if the user has dragged
 #    the canvas close from the area. (Rinze: ???)
 #  * Built-in optimised zoom/transparency for 2 images

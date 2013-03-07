@@ -464,7 +464,7 @@ class AcquisitionDialog(xrcfr_acq):
         view = self.interface_model.focussedView.value
 
         self.stream_controller = StreamController(self.interface_model,
-                                                  self.pnl_stream)
+                                                  self.pnl_secom_streams)
         # The streams currently displayed are the one
         self.add_all_streams(orig_view.getStreams())
 
