@@ -99,8 +99,6 @@ class SpectraPro(model.Actuator):
         inverted (None): it is not allowed to invert the axes
         _noinit (boolean): for internal use only, don't try to initialise the device 
         """
-        # TODO: allow to specify the currently installed turret? And change to it at init?
-        
         if kwargs.get("inverted", None):
             raise ValueError("Axis of spectrograph cannot be inverted")
         
@@ -172,10 +170,9 @@ class SpectraPro(model.Actuator):
                                            setter=self._setGrating)
         
         # store focal length and inclusion angle for the polynomial computation
-        model = self.GetModel()
         try:
-            self._focal_length = FOCAL_LENGTH_OFFICIAL[model]
-            self._inclusion_angle = INCLUSION_ANGLE_OFFICIAL[model]
+            self._focal_length = FOCAL_LENGTH_OFFICIAL[model_name]
+            self._inclusion_angle = INCLUSION_ANGLE_OFFICIAL[model_name]
         except IOError:
             self._focal_length = None
             self._inclusion_angle = None
