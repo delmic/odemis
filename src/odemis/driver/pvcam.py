@@ -278,15 +278,18 @@ class PVCam(model.DigitalCamera):
         # binning is (horizontal, vertical), but odemis
         # only supports same value on both dimensions (for simplification)
         self._binning = (1,1) # px
+        max_bin = self._getMaxBinning()
         self._image_rect = (0, resolution[0]-1, 0, resolution[1]-1)
-        minr = self.GetMinResolution()
+        self._min_res = self.GetMinResolution()
+        minr = (int(math.ceil(self._min_res[0] / max_bin[0])),
+                int(math.ceil(self._min_res[1] / max_bin[1])))
         # need to be before binning, as it is modified when changing binning         
         self.resolution = model.ResolutionVA(resolution, [minr, resolution], 
                                              setter=self._setResolution)
         self._setResolution(resolution)
         
         # 2D binning is like a "small resolution"
-        self.binning = model.ResolutionVA(self._binning, [(1,1), self._getMaxBinning()],
+        self.binning = model.ResolutionVA(self._binning, [(1,1), max_bin],
                                           setter=self._setBinning)
         
         # default values try to get live microscopy imaging more likely to show something
@@ -807,8 +810,6 @@ class PVCam(model.DigitalCamera):
         old_resolution = self.resolution.value
         new_resolution = (int(round(old_resolution[0] * change[0])),
                           int(round(old_resolution[1] * change[1])))
-        assert((new_resolution[0] % value[0]) == 0)
-        assert((new_resolution[1] % value[1]) == 0)
         
         self.resolution.value = new_resolution # will automatically call _storeSize
         return value
@@ -853,9 +854,8 @@ class PVCam(model.DigitalCamera):
         resolution = self._shape[:2]
         max_size = (int(resolution[0] // self._binning[0]),
                     int(resolution[1] // self._binning[1]))
-        min_res = self.resolution.range[0]
-        min_size = (int(math.ceil(min_res[0] / self._binning[0])),
-                    int(math.ceil(min_res[1] / self._binning[1])))
+        min_size = (int(math.ceil(self._min_res[0] / self._binning[0])),
+                    int(math.ceil(self._min_res[1] / self._binning[1])))
         
         # smaller than the whole sensor
         size = (min(size_req[0], max_size[0]), min(size_req[1], max_size[1]))
@@ -923,7 +923,7 @@ class PVCam(model.DigitalCamera):
         # region is 0 indexed 
         region.s1, region.s2, region.p1, region.p2 = self._image_rect
         region.sbin, region.pbin = self._binning
-        self._metadata[model.MD_BINNING] = self._binning[0] # H and V should be equal
+        self._metadata[model.MD_BINNING] = self._binning
         new_image_settings = self._binning + self._image_rect
         size = ((self._image_rect[1] - self._image_rect[0] + 1) // self._binning[0],
                 (self._image_rect[3] - self._image_rect[2] + 1) // self._binning[1])
