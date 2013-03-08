@@ -322,6 +322,7 @@ class VirtualTestCam(object):
         self.assertEqual(im.shape, self.size[-1:-3:-1]) # TODO a small size diff is fine if bigger than requested
         self.assertGreaterEqual(duration, exposure, "Error execution took %f s, less than exposure time %d." % (duration, exposure))
         self.assertIn(model.MD_EXP_TIME, im.metadata)
+        self.assertEqual(im.metadata[model.MD_BINNING], new_binning)
         
 #    @unittest.skip("simple")
     def test_aoi(self):
