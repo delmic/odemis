@@ -20,6 +20,7 @@ from odemis import model
 from odemis.model._components import ComponentBase, ArgumentError
 from odemis.model._dataflow import DataFlowBase
 import logging
+import math
 
 # This is a spectrometer class that strives to be generic by representing a 
 # spectrometer out of just a generic DigitalCamera and actuator which offers 
@@ -141,6 +142,9 @@ class CompositedSpectrometer(model.Detector):
             else:
                 logging.debug("skipping duplication of already existing VA '%s'", aname)
 
+        assert hasattr(self, "pixelSize")
+        assert hasattr(self, "exposureTime")
+
         # Update metadata of detector with wavelength conversion 
         # whenever the wavelength/grating axes moves.
         try:
@@ -162,7 +166,7 @@ class CompositedSpectrometer(model.Detector):
         if they are not given.
         md (dict string -> value): the metadata
         """
-        self._detector.update(md)
+        self._detector.updateMetadata(md)
     
     def _onWavelengthUpdate(self, pos):
         """
@@ -198,7 +202,7 @@ class CompositedSpectrometer(model.Detector):
         # centre of the image, and b the density in meters per pixel. 
         
         # TODO: pass these values to getPolyToWavelength()?
-        mpp = self.pixelSize[0] * self._binning[0] # m/px
+        mpp = self.pixelSize.value[0] * self._binning[0] # m/px
         distance0 = -(self.resolution.value[0] / 2 - 0.5) * mpp # m
         pnc = self.polycomp(pn, [distance0, mpp])
         
@@ -235,7 +239,6 @@ class CompositedSpectrometer(model.Detector):
         old_resolution = self.resolution.value
         assert old_resolution[1] == 1
         new_resolution = (int(round(old_resolution[0] * changeh)), 1)
-        assert (new_resolution[0] % value[0]) == 0 
         
         # setting resolution and binning is slightly tricky, because binning
         # will change resolution to keep the same area. So first set binning, then
@@ -250,8 +253,14 @@ class CompositedSpectrometer(model.Detector):
         """
         # only the width might change
         assert value[1] == 1
-        self._detector.resolution.value = value
-        return value
+        
+        # fit the width to the maximum possible given the binning
+        max_size = int(self.resolution.range[1][0] // self._binning[0])
+        min_size = int(math.ceil(self.resolution.range[0][0] / self._binning[0]))
+        size = (max(min(value[0], max_size), min_size), 1)
+        
+        self._detector.resolution.value = size
+        return size
 
     def selfTest(self):
         return self._detector.selfTest() and self._spectrograph.selfTest()

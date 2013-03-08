@@ -613,7 +613,7 @@ class SpectraPro(model.Actuator):
             logging.exception("Failed to compute polynomial for wavelength conversion")
             return [cw]
         # if (document.forms[0].E8.value == "NaN deg." || E8 > 40){document.forms[0].E8.value = "> 40 deg."; document.forms[0].E8.style.color="red";  
-        if math.degrees(ga) > 40:
+        if 0.5 > math.degrees(ga) or math.degrees(ga) > 40:
             logging.warning("Failed to compute polynomial for wavelength "
                             "conversion, got grating angle = %g°", math.degrees(ga))
             return [cw]
