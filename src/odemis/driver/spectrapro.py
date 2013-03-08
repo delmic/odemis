@@ -548,6 +548,7 @@ class SpectraPro(model.Actuator):
         with self._ser_access:
             self.SetWavelength(pos)
         self._updatePosition()
+        
     
     def stop(self):
         """
@@ -622,7 +623,10 @@ class SpectraPro(model.Actuator):
         # F8a = Math.cos(Math.PI/180*(wE*1 + E8))*(1000000)/(gL*fL); // nm/mm
         # to convert from nm/mm -> m/m : *1e-6
         dispersion = math.cos(ia + ga) / (gl*fl) # m/m
-        assert 0 < dispersion and dispersion < 0.5e-3 # < 500 nm/mm
+        if 0 > dispersion or dispersion > 0.5e-3: # < 500 nm/mm
+            logging.warning("Computed dispersion is not within expected bounds: %f nm/mm",
+                            dispersion * 1e6)
+            return [cw]
         
         # polynomial is cw + dispersion * x
         return [cw, dispersion]

@@ -1006,7 +1006,7 @@ class PVCam(model.DigitalCamera):
                                                 pv.TIMED_MODE, exp_ms, byref(blength))
                     logging.debug("acquisition setup report buffer size of %d", blength.value)
                     cbuffer = self._allocate_buffer(blength.value) # TODO shall allocate a new buffer every time?
-                    assert (blength.value / 2) == (size[0] * size[1]) 
+                    assert (blength.value / 2) >= (size[0] * size[1]) 
                     
                     readout_sw = size[0] * size[1] * self._metadata[model.MD_READOUT_TIME] # s
                     # tends to be very slightly bigger:
