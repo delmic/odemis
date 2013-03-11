@@ -317,13 +317,13 @@ class OdemisGUIApp(wx.App):
         # It uses raw data, not images
         try:
             name1 = os.path.join(os.path.dirname(__file__),
-                                 "img/example/s1-sem.mat")
+                                 "img/example/s1-sem-bse.mat")
             md = {model.MD_PIXEL_SIZE: (178e-9, 178e-9),
                   model.MD_POS: (0,0)}
             semdata = model.DataArray(scipy.io.loadmat(name1)["sem"], md)
 
             name2 = os.path.join(os.path.dirname(__file__),
-                                 "img/example/s1-spec.mat")
+                                 "img/example/s1-spectrum.mat")
             md = {model.MD_PIXEL_SIZE: (178e-9, 178e-9),
                   model.MD_POS: (0,0),
                   # 335px : 409nm -> 695 nm (about linear)
