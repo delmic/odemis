@@ -69,6 +69,7 @@ def FindOptimalBC(data, depth):
 
     return brightness, contrast
 
+# TODO: rename to raw_to_rgba?
 def DataArray2wxImage(data, depth=None, brightness=None, contrast=None, tint=(255, 255, 255)):
     """
     data (numpy.ndarray of unsigned int): 2D image greyscale (unsigned float might work as well)
@@ -83,6 +84,7 @@ def DataArray2wxImage(data, depth=None, brightness=None, contrast=None, tint=(25
         multiplied by the value. Default is white.
     returns (wxImage): rgb (888) converted image with the same dimension
     """
+    # TODO: handle signed values
     assert(len(data.shape) == 2) # => 2D with greyscale
 
     # fit it to 8 bits and update brightness and contrast at the same time

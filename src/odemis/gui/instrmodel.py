@@ -4,7 +4,7 @@ Created on 16 Feb 2012
 
 @author: Éric Piel
 
-Copyright © 2012 Éric Piel, Delmic
+Copyright © 2012-2013 Éric Piel, Delmic
 
 This file is part of Odemis.
 

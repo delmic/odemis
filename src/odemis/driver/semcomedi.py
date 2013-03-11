@@ -1069,7 +1069,7 @@ class SEMComedi(model.HwComponent):
         x (int): x position of the line in the output array
         data (1D ndarray): the raw linear array (including oversampling), of one channel
         oarray (2D ndarray): the output array, already allocated, of shape self.shape
-        adtype (dtype): intermediarry type to use for the accumulator
+        adtype (dtype): intermediay type to use for the accumulator
         """
         # reshape to a 3D array with margin and sub-samples
         rectangle = data.reshape((-1, shape[1] + margin, osr))

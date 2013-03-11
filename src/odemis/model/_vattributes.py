@@ -781,4 +781,69 @@ class ResolutionVA(VigilantAttribute, Continuous):
     # need to overwrite the whole property
     value = property(VigilantAttribute._get_value, _set_value, VigilantAttribute._del_value, "The actual value")
 
+
+class BandwidthVA(VigilantAttribute, Continuous):
+    """
+    VigilantAttribute which represents a (spectrum) bandwidth : 2-tuple of float
+    It represents the low and high components of the bandwidth. It can be given
+    a min and max of the bandwidth as well as a minimun distance between low and
+    high. It also ensures that low is always lower than high
+    """
+
+    def __init__(self, value, range, unit="", **kwargs):
+        """
+        range (2x (2-tuple of float)): first tuple is minimum low, minimum high 
+        when the low is at its minimum, and second tuple is maximum low when the
+        maximum high is at its maximum and the maximum high.
+        """
+        Continuous.__init__(self, range)
+        VigilantAttribute.__init__(self, value, unit=unit, **kwargs)
+
+    def _set_range(self, new_range):
+        """
+        Override to do more checking on the range.
+        """
+        if len(new_range) != 2:
+            raise InvalidTypeError("Range '%s' is not a 2-tuple." % str(new_range))
+        if new_range[0][0] > new_range[0][1] or new_range[1][0] > new_range[1][1]:
+            raise InvalidTypeError("Low part of range should be smaller than high part: %s / %s."
+                                   % (new_range[0], new_range[1]))
+        if new_range[0][0] > new_range[1][1]:
+            raise InvalidTypeError("Range min low should be smaller than max high: %s / %s."
+                                   % (new_range[0], new_range[1]))
+            
+        if hasattr(self, "value"):
+            if (self.value[0] < new_range[0][0] or self.value[0] > new_range[1][0] or
+                self.value[1] < new_range[0][1] or self.value[1] > new_range[1][1]):
+                raise OutOfBoundError("Current value '%s' is outside of the range %s→%s." %
+                            (str(self.value), str(new_range[0]), str(new_range[1])))
+        self._range = tuple(new_range)
+
+    def _check(self, value):
+        """
+        Raises:
+            OutOfBoundError if the value is not within the authorised range
+        """
+        if len(value) != 2:
+            raise InvalidTypeError("Value '%s' is not a 2-tuple." % str(value))
+
+        if not isinstance(value[0], numbers.Real) or not isinstance(value[1], numbers.Real):
+            raise InvalidTypeError("Value '%s' is not a 2-tuple of numbers." % str(value))
+
+        if value[0] > value[1]:
+            raise OutOfBoundError("Trying to assign value '%s' where low is higher than high." %
+                        (value,))
+        if (value[0] < self._range[0][0] or value[0] > self._range[1][0] or
+            value[1] < self._range[0][1] or value[1] > self._range[1][1]):
+            raise OutOfBoundError("Trying to assign value '%s' outside of the range %s→%s." %
+                        (value, self._range[0], self._range[1]))
+
+    def _set_value(self, value):
+        # force tuple
+        value = tuple(value)
+        VigilantAttribute._set_value(self, value)
+    # need to overwrite the whole property
+    value = property(VigilantAttribute._get_value, _set_value, VigilantAttribute._del_value, "The actual value")
+
+
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:

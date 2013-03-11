@@ -21,24 +21,26 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 
-import logging
-import os.path
-import sys
-import threading
-import traceback
-
-import wx
-import Pyro4.errors
-
-import odemis.gui.cont.tabs as tabs
 from odemis import __version__, model
 from odemis.gui import main_xrc, instrmodel, log
 from odemis.gui.conf import get_general_conf
 from odemis.gui.cont import set_main_tab_controller, get_main_tab_controller
-from odemis.gui.model.img import InstrumentalImage
 from odemis.gui.model.dye import DyeDatabase
+from odemis.gui.model.img import InstrumentalImage
 from odemis.gui.model.stream import StaticSEMStream
 from odemis.gui.xmlh import odemis_get_resources
+import Pyro4.errors
+import logging
+import odemis.gui.cont.tabs as tabs
+import os.path
+import scipy.io
+import sys
+import threading
+import traceback
+import wx
+from odemis.model._dataflow import MD_PIXEL_SIZE, MD_POS
+
+
 
 class OdemisGUIApp(wx.App):
     """ This is Odemis' main GUI application class
@@ -164,14 +166,21 @@ class OdemisGUIApp(wx.App):
                         self.main_frame.menu_item_halt.GetId(),
                         self.on_stop_axes)
 
-            if self.interface_model.focussedView.value:
+            if self.interface_model.microscope.role == "secom":
+                # TODO: only activate if we are in the live view tab
                 wx.EVT_MENU(self.main_frame,
                             self.main_frame.menu_item_load1.GetId(),
-                            self.on_load_example1)
+                            self.on_load_example_secom1)
 
                 wx.EVT_MENU(self.main_frame,
                             self.main_frame.menu_item_load2.GetId(),
-                            self.on_load_example2)
+                            self.on_load_example_secom2)
+            elif self.interface_model.microscope.role == "sparc":
+                # TODO only activate if we are in the analysis tab? Or automatically switch?
+                wx.EVT_MENU(self.main_frame,
+                            self.main_frame.menu_item_load1.GetId(),
+                            self.on_load_example_sparc1)
+                self.main_frame.menu_item_load2.Enable(False)
             else:
                 self.main_frame.menu_item_load1.Enable(False)
                 self.main_frame.menu_item_load2.Enable(False)
@@ -257,7 +266,7 @@ class OdemisGUIApp(wx.App):
         encoding = sys.getfilesystemencoding()
         return os.path.dirname(unicode(__file__, encoding))
 
-    def on_load_example1(self, e):
+    def on_load_example_secom1(self, e):
         """ Open the two files for example """
         try:
             pos = self.interface_model.focussedView.value.view_pos.value #pylint: disable=E1101
@@ -279,7 +288,7 @@ class OdemisGUIApp(wx.App):
         except e:
             logging.exception("Failed to load example")
 
-    def on_load_example2(self, e):
+    def on_load_example_secom2(self, e):
         """ Open the two files for example """
         try:
             pos = self.interface_model.focussedView.value.view_pos.value #pylint: disable=E1101
@@ -300,6 +309,37 @@ class OdemisGUIApp(wx.App):
                                         cls=StaticSEMStream)
         except e:
             logging.exception("Failed to load example")
+
+    def on_load_example_sparc1(self, e):
+        """ Open a SEM view and spectrum cube for example
+            Must be in the analysis tab of the Sparc
+        """
+        # It uses raw data, not images
+        try:
+            name1 = os.path.join(os.path.dirname(__file__),
+                                 "img/example/s1-sem.mat")
+            md = {model.MD_PIXEL_SIZE: (178e-9, 178e-9),
+                  model.MD_POS: (0,0)}
+            semdata = model.DataArray(scipy.io.loadmat(name1)["sem"], md)
+
+            name2 = os.path.join(os.path.dirname(__file__),
+                                 "img/example/s1-spec.mat")
+            md = {model.MD_PIXEL_SIZE: (178e-9, 178e-9),
+                  model.MD_POS: (0,0),
+                  # 335px : 409nm -> 695 nm (about linear)
+                  model.MD_WL_POLYNOMIAL: [552e-9, 0.85373e-9] 
+                  }
+            specdata = model.DataArray(scipy.io.loadmat(name2)["spectraldat"], md)
+
+            mtc = get_main_tab_controller()
+            stream_controller = mtc['sparc_analysis'].stream_controller
+
+            stream_controller.addStatic("Secondary electrons", semdata,
+                                        cls=StaticSEMStream)
+            stream_controller.addStatic("Spectrogram", specdata)
+        except e:
+            logging.exception("Failed to load example")
+
 
     def goto_debug_mode(self):
         """ This method sets the application into debug mode, setting the
