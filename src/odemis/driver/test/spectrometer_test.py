@@ -20,6 +20,7 @@ from odemis import model
 from odemis.driver import spectrometer, spectrapro, pvcam
 from unittest.case import skip, skipIf
 import logging
+import math
 import os
 import time
 import unittest
@@ -108,7 +109,7 @@ class TestCompositedSpectrometer(unittest.TestCase):
         self.assertEqual(data.shape[0], 1)
         self.assertEqual(data.shape[-1::-1], self.spectrometer.resolution.value)
         
-        
+#    @skip("simple")
     def test_vbinning(self):
         """
         Test vertical binning (use less than the whole detector)
@@ -122,6 +123,8 @@ class TestCompositedSpectrometer(unittest.TestCase):
                    self.spectrometer.binning.range[1][1]] # max
         self.spectrometer.binning.value = binning
         self.spectrometer.resolution.value = self.spectrometer.resolution.range[1]
+        self.assertEqual(self.spectrometer.binning.value, binning)
+        
         data = self.spectrometer.data.get()
         self.assertEqual(data.shape[-1::-1], self.spectrometer.resolution.value)
         md = data.metadata
@@ -136,7 +139,8 @@ class TestCompositedSpectrometer(unittest.TestCase):
         self.assertEqual(data.shape[-1::-1], self.spectrometer.resolution.value)
         md = data.metadata
         self.assertEqual(md[model.MD_BINNING], tuple(binning))
-        
+    
+#    @skip("simple")
     def test_hbinning(self):
         """
         Test horizontal binning (large horizontal pixels)
@@ -222,12 +226,17 @@ class TestCompositedSpectrometer(unittest.TestCase):
         if len(pn) <= 1:
             logging.warning("Wavelength polynomial is of very low quality: length = %d", len(pn))
         # pixel 0 to pixel N +1 => whole CCD
-        wl_bw_max_res = polynomial.polyval(0, pn) - polynomial.polyval(res[0], pn)
+        wl_bw_max_res =  polynomial.polyval(res[0], pn) - polynomial.polyval(0, pn)
         cwl_max_res = (polynomial.polyval(0, pn) + polynomial.polyval(res[0]-1, pn)) / 2
         logging.info("Wl bw = %f nm, center = %f nm", 
                      wl_bw_max_res * 1e9, cwl_max_res * 1e9)
         
+        cwl_max_res_s = (polynomial.polyval(res[0]//2, pn) + 
+                         polynomial.polyval(math.ceil(res[0]/2), pn)) / 2
+        
         # do they make any sense?
+        # should be a monotonic function
+        self.assertTrue(cwl_max_res / 1.1 < cwl_max_res_s and cwl_max_res_s < cwl_max_res * 1.1)
         # centre wavelength should about (~30%) the same as the wavelength position
         exp_cwl = self.spectrograph.position.value["wavelength"] 
         self.assertTrue(exp_cwl / 1.3 < cwl_max_res and cwl_max_res < exp_cwl * 1.3)
@@ -245,10 +254,10 @@ class TestCompositedSpectrometer(unittest.TestCase):
         data = self.spectrometer.data.get()
         pn = data.metadata[model.MD_WL_POLYNOMIAL]
         # pixel 0 to pixel N +1 => whole CCD
-        wl_bw_low_res = polynomial.polyval(0, pn) - polynomial.polyval(res[0], pn)
+        wl_bw_low_res = polynomial.polyval(res[0], pn) - polynomial.polyval(0, pn)
         cwl_low_res = (polynomial.polyval(0, pn) + polynomial.polyval(res[0]-1, pn)) / 2
         
-        self.assertAlmostEqual(wl_bw_low_res, wl_bw_max_res)
+        self.assertAlmostEqual(wl_bw_low_res, wl_bw_max_res, 2)
         self.assertAlmostEqual(cwl_low_res, cwl_max_res)
         
 if __name__ == '__main__':

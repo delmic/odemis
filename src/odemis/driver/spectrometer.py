@@ -148,12 +148,14 @@ class CompositedSpectrometer(model.Detector):
         # Update metadata of detector with wavelength conversion 
         # whenever the wavelength/grating axes moves.
         try:
-            pn = sp.getPolyToWavelength()
+            self._pn_phys = sp.getPolyToWavelength()
         except AttributeError:
             raise ArgumentError("Child spectrograph has no getPolyToWavelength() method")
         if hasattr(sp, "grating") and isinstance(sp.grating, model.VigilantAttributeBase):
             sp.grating.subscribe(self._onGratingUpdate)
-        sp.position.subscribe(self._onWavelengthUpdate, init=True) 
+        sp.position.subscribe(self._onWavelengthUpdate)
+        self.resolution.subscribe(self._onResBinningUpdate)
+        self.binning.subscribe(self._onResBinningUpdate, init=True) 
     
     # The following 2 metadata methods are just redirecting to the detector
     def getMetadata(self):
@@ -173,6 +175,10 @@ class CompositedSpectrometer(model.Detector):
         Called when the wavelength position of the spectrograph is changed
         """
         # Need to get new conversion polynomial and update metadata
+        self._pn_phys = self._spectrograph.getPolyToWavelength()
+        self._updateWavelengthPolynomial()
+        
+    def _onResBinningUpdate(self, value):
         self._updateWavelengthPolynomial()
         
     def _onGratingUpdate(self, grating):
@@ -180,17 +186,15 @@ class CompositedSpectrometer(model.Detector):
         Called when the grating/groove density of the spectrograph is changed
         """
         # Need to get new conversion polynomial and update metadata
+        self._pn_phys = self._spectrograph.getPolyToWavelength()
         self._updateWavelengthPolynomial()
         
     def _updateWavelengthPolynomial(self):
         """
         Update the metadata with the wavelength conversion polynomial provided
-        by the spectrograph.
-        Note: this assumes that the spectrograph has a getPolyToWavelength()
-         method.
+        by the spectrograph. Should be called every time ._pn_phys is updated,
+        or whenever the binning or resolution change
         """
-        pn = self._spectrograph.getPolyToWavelength()
-        
         # This polynomial is from m (distance from centre) to m (wavelength),
         # but we need from px (pixel number on spectrum) to m (wavelength). So
         # we need to convert by using the density and quantity of pixels
@@ -201,10 +205,10 @@ class CompositedSpectrometer(model.Detector):
         # with "a" the distance of the centre of the left-most pixel to the 
         # centre of the image, and b the density in meters per pixel. 
         
-        # TODO: pass these values to getPolyToWavelength()?
         mpp = self.pixelSize.value[0] * self._binning[0] # m/px
-        distance0 = -(self.resolution.value[0] / 2 - 0.5) * mpp # m
-        pnc = self.polycomp(pn, [distance0, mpp])
+        # distance from the pixel 0 to the centre (in m)
+        distance0 = -(self.resolution.value[0] / 2 - 0.5) * mpp
+        pnc = self.polycomp(self._pn_phys, [distance0, mpp])
         
         md = {model.MD_WL_POLYNOMIAL: pnc}
         self.updateMetadata(md)

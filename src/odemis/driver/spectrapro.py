@@ -67,22 +67,22 @@ class SPError(IOError):
 
 # From the specifications
 # string -> value : model name -> length (m)/angle (°)
-FOCAL_LENGTH_OFFICIAL = {
-                         "SP-2-150i": 150e-9,
-                         "SP-2-300i": 300e-9,
-                         "SP-2-500i": 500e-9,
-                         "SP-2-750i": 750e-9,
-                         "SP-FAKE": 300e-9, 
+FOCAL_LENGTH_OFFICIAL = { # m
+                         "SP-2-150i": 150e-3, # 150mm
+                         "SP-2-300i": 300e-3,
+                         "SP-2-500i": 500e-3,
+                         "SP-2-750i": 750e-3,
+                         "SP-FAKE": 300e-3, 
                          }
-INCLUSION_ANGLE_OFFICIAL = {
-                         "SP-2-150i": 24.66,
+INCLUSION_ANGLE_OFFICIAL = { # in degrees
+                         "SP-2-150i": 24.66, 
                          "SP-2-300i": 15.15,
                          "SP-2-500i": 8.59,
                          "SP-2-750i": 6.55,
                          "SP-FAKE": 15.15,
                          }
 # maximum number of gratings per turret
-MAX_GRATINGS_NUM = {
+MAX_GRATINGS_NUM = { # gratings
                      "SP-2-150i": 2,
                      "SP-2-300i": 3,
                      "SP-2-500i": 3,
@@ -800,7 +800,7 @@ class SPSimulator(object):
         
         # internal values to simulate the device
         self._turret = 1
-        self._grating = 1
+        self._grating = 2
         self._wavelength = 0 # nm
         self._output_buf = "" # what the commands sends back to the "host computer"
         self._input_buf = "" # what we receive from the "host computer"
