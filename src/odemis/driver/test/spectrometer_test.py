@@ -123,7 +123,7 @@ class TestCompositedSpectrometer(unittest.TestCase):
                    self.spectrometer.binning.range[1][1]] # max
         self.spectrometer.binning.value = binning
         self.spectrometer.resolution.value = self.spectrometer.resolution.range[1]
-        self.assertEqual(self.spectrometer.binning.value, binning)
+        self.assertEqual(self.spectrometer.binning.value, tuple(binning))
         
         data = self.spectrometer.data.get()
         self.assertEqual(data.shape[-1::-1], self.spectrometer.resolution.value)
@@ -259,6 +259,56 @@ class TestCompositedSpectrometer(unittest.TestCase):
         
         self.assertAlmostEqual(wl_bw_low_res, wl_bw_max_res, 2)
         self.assertAlmostEqual(cwl_low_res, cwl_max_res)
+        
+    def _select_grating(self, gdensity):
+        """
+        Selects a grating according to its groove density
+        gdensity (int): in l/mm
+        """
+        density_str = "%d g/mm" % gdensity
+        for n, desc in self.spectrograph.grating.choices.items():
+            if density_str in desc.lower():
+                self.spectrograph.grating.value = n
+                break
+        else:
+            raise IOError("Failed to find grating with density %d l/mm", gdensity)
+        
+    def test_known_calib(self):
+        """
+        Check that the calibration of the wavelength give similar results for
+        a known system as computed theoretically (by PI).
+        """
+        # This assumes that we have a PIXIS 400 (1340 x 400)
+        if (self.spectrometer.shape[0] != 1340 or 
+            self.spectrometer.pixelSize.value[0] != 20e-6):
+            self.skipTest("Hardware needs to have to be a PIXIS 400 for the test")
+        # TODO: check we have a SpectraPro i2300 or FakeSpectraPro 
+        
+        res = self.spectrometer.resolution.value
+        
+        # 300 l/mm / 600 nm
+        # => CCD coverage = 278 nm
+        self._select_grating(300)
+        f = self.spectrograph.moveAbs({"wavelength": 600e-9})
+        f.result() # wait for the position to be set
+        
+        data = self.spectrometer.data.get()
+        pn = data.metadata[model.MD_WL_POLYNOMIAL]
+        wl_bw = polynomial.polyval(res[0], pn) - polynomial.polyval(0, pn)
+        logging.debug("Got CCD coverage = %f nm", wl_bw * 1e9)
+        self.assertAlmostEqual(wl_bw, 278e-9, 2)
+        
+        # 1200 l/mm / 900 nm
+        # => CCD coverage = 48 nm
+        self._select_grating(1200)
+        f = self.spectrograph.moveAbs({"wavelength": 900e-9})
+        f.result() # wait for the position to be set
+        
+        data = self.spectrometer.data.get()
+        pn = data.metadata[model.MD_WL_POLYNOMIAL]
+        wl_bw = polynomial.polyval(res[0], pn) - polynomial.polyval(0, pn)
+        logging.debug("Got CCD coverage = %f nm", wl_bw * 1e9)
+        self.assertAlmostEqual(wl_bw, 48e-9, 2)
         
 if __name__ == '__main__':
     unittest.main()
