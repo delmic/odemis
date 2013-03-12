@@ -14,6 +14,7 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
+from __future__ import division
 from odemis import model, __version__, util
 from odemis.util import driver
 import glob
@@ -22,6 +23,38 @@ import os
 import serial
 import threading
 import time
+
+# Colour name (lower case) to source ID (as used in the device)
+COLOUR_TO_SOURCE = {"red": 0,
+                    "green": 1, # cf yellow
+                    "cyan": 2, 
+                    "uv": 3,
+                    "yellow": 4, # actually filter selection for green/yellow
+                    "blue": 5,
+                    "teal": 6,
+                    }
+
+# map of source number to bit & address for source intensity setting
+SOURCE_TO_BIT_ADDR = { 0: (3, 0x18), # Red
+                       1: (2, 0x18), # Green
+                       2: (1, 0x18), # Cyan
+                       3: (0, 0x18), # UV
+                       4: (2, 0x18), # Yellow is the same source as Green
+                       5: (0, 0x1A), # Blue
+                       6: (1, 0x1A), # Teal
+                  }
+
+# The default sources, as found in the documentation, and as the default 
+# Spectra LLE can be bought. Used only by scan().
+# source name -> 99% low, 25% low, centre, 25% high, 99% high in m
+DEFAULT_SOURCES = {"red": (615e-9, 625e-9, 635e-9, 640e-9, 650e-9),
+                   "green": (525e-9, 540e-9, 550e-9, 555e-9, 560e-9),
+                   "cyan": (455e-9, 465e-9, 475e-9, 485e-9, 495e-9),
+                   "UV": (375e-9, 390e-9, 400e-9, 402e-9, 405e-9),
+                   "yellow": (595e-9, 580e-9, 565e-9, 560e-9, 555e-9),
+                   "blue": (420e-9, 430e-9, 437e-9, 445e-9, 455e-9),
+                   "teal": (495e-9, 505e-9, 515e-9, 520e-9, 530e-9),
+           }
 
 class LLE(model.Emitter):
     '''
@@ -37,9 +70,17 @@ class LLE(model.Emitter):
     rates, it shouldn't matter much. 
     '''
 
-    def __init__(self, name, role, port, _noinit=False, **kwargs):
+    def __init__(self, name, role, port, sources, _noinit=False, **kwargs):
         """
         port (string): name of the serial port to connect to.
+        sources (dict string -> 5-tuple of float): the light sources (by colour).
+         The string is one of the seven names for the sources: "red", "cyan", 
+         "green", "UV", "yellow", "blue", "teal". They correspond to fix 
+         number in the LLE (cf documentation). The tuple contains the wavelength
+         in m for the 99% low, 25% low, centre/max, 25% high, 99% high. They do
+         no have to be extremely precise. The most important is the centre, and
+         that they are all increasing values. If the device doesn't have the 
+         source it can be skipped.
         _noinit (boolean): for internal use only, don't try to initialise the device 
         """
         # start with this opening the port: if it fails, we are done
@@ -61,6 +102,35 @@ class LLE(model.Emitter):
         if _noinit:
             return
         
+        # parse source and do some sanity check
+        if not sources or not isinstance(sources, dict):
+            logging.error("sources argument must be a dict of source name -> wavelength 5 points")
+            raise ValueError("Incorrect sources argument")
+        
+        self._source_id = [] # source number for each spectra
+        self._gy = [] # indexes of green and yellow source
+        self._rcubt = [] # indexes of other sources
+        spectra = [] # list of the 5 wavelength points
+        for cn, wls in sources.items():
+            cn = cn.lower()
+            if cn not in COLOUR_TO_SOURCE:
+                raise ValueError("Sources argument contains unknown colour '%s'" % cn)
+            if len(wls) != 5:
+                raise ValueError("Sources colour '%s' doesn't have exactly 5 wavelength points" % cn)
+            prev_wl = 0
+            for wl in wls:
+                if 0 > wl or wl > 100e-6:
+                    raise ValueError("Sources colour '%s' has unexpected wavelength = %f nm"
+                                     % (cn, wl * 1e9))
+                if prev_wl > wl:
+                    raise ValueError("Sources colour '%s' has unsorted wavelengths" % cn)
+            self._source_id.append(COLOUR_TO_SOURCE[cn])
+            if cn in ["green", "yellow"]:
+                self._gy.append(len(spectra))
+            else:
+                self._rcubt.append(len(spectra))
+            spectra.append(wls)
+        
         model.Emitter.__init__(self, name, role, **kwargs)
         
         # Test the LLE answers back
@@ -76,22 +146,16 @@ class LLE(model.Emitter):
         self.power = model.FloatContinuous(0, (0, self._max_power), unit="W")
 
         # emissions is list of 0 <= floats <= 1.
-        self._intensities = [0.0] * 7 # start off
+        self._intensities = [0] * len(spectra) # start off
         self.emissions = model.ListVA(list(self._intensities), unit="", 
                                       setter=self._setEmissions)
-        # FIXME: values are just from reading the documentation graph => better values?
+        # TODO: add init param to specify which light is actually inside the box
+        # (it can come with 2, 4 or 7 colours)
+        # Order matters (it's the order the sources in the device)
         # list of 5-tuples of floats: filter-low, 25% low, max, 25% high, filter-high 
-        self.spectra = model.ListVA([(615e-9, 625e-9, 635e-9, 640e-9, 650e-9), # Red
-                                     (455e-9, 465e-9, 475e-9, 485e-9, 495e-9), # Cyan
-                                     (525e-9, 540e-9, 550e-9, 555e-9, 560e-9), # Green
-                                     (375e-9, 390e-9, 400e-9, 402e-9, 405e-9), # UV
-                                     (595e-9, 580e-9, 565e-9, 560e-9, 555e-9), # Yellow
-                                     (420e-9, 430e-9, 437e-9, 445e-9, 455e-9), # Blue
-                                     (495e-9, 505e-9, 515e-9, 520e-9, 530e-9), # Teal
-                                     ],
-                                     unit="m", readonly=True) 
+        self.spectra = model.ListVA(spectra, unit="m", readonly=True) 
         
-        self._prev_intensities = [None] * 7 # => will update for sure
+        self._prev_intensities = [None] * len(spectra) # => will update for sure
         self._updateIntensities() # turn off every source
         
         self.power.subscribe(self._updatePower)
@@ -110,18 +174,18 @@ class LLE(model.Emitter):
     def getMetadata(self):
         metadata = {}
         # MD_IN_WL expects just min/max => if multiple sources, we need to combine
-        wl_range = (1, 0) # big min, small max
+        wl_range = (None, None) # min, max in m
         power = 0
-        for i in range(len(self._intensities)):
-            if self._intensities[i] > 0:
+        for i, intens in enumerate(self._intensities):
+            if intens > 0:
                 wl_range = (min(wl_range[0], self.spectra.value[i][0]),
-                            min(wl_range[1], self.spectra.value[i][4]))
+                            max(wl_range[1], self.spectra.value[i][4]))
                 # FIXME: not sure how to combine
-                power = max(power, self._intensities[i])
+                power += intens
         
-        if wl_range == (1, 0):
-            wl_range = (0, 0)
-        metadata[model.MD_IN_WL] = (380e-9, 740e-9)
+        if wl_range == (None, None):
+            wl_range = (0, 0) # TODO: needed?
+        metadata[model.MD_IN_WL] = wl_range
         metadata[model.MD_LIGHT_POWER] = power
         return metadata
 
@@ -239,16 +303,8 @@ class LLE(model.Emitter):
             self._sendCommand(b"\x57\x02\x55\x50") # Set GPIO0-3 as input
             self._sendCommand(b"\x57\x03\x55\x50") # Set GPI04-7 as input
 
-    # Sources number for the driver are:
-    # 0: Red
-    # 1: Green (see below)
-    # 2: Cyan
-    # 3: UV
-    # 4: Yellow (see below)
-    # 5: Blue
-    # 6: Teal
 
-    # Actual sources are more complicated:
+    # The source ID is more complicated than it looks like:
     # 0, 2, 3, 5, 6 are as is. 1 is for Yellow/Green. Setting 4 selects 
     # whether yellow (activated) or green (deactivated) is used.
    
@@ -261,14 +317,14 @@ class LLE(model.Emitter):
         """
         com = bytearray(b"\x4F\x00\x50") # the second byte will contain the sources to activate
         
-        # Do we need to active Green filter?
+        # Do we need to activate Green filter?
         if (1 in sources or 4 in sources) and len(sources) > 1:
             logging.warning("Asked to activate multiple conflicting sources %r", sources)
             
         s_byte = 0x7f # reset a bit to 0 to activate
         for s in sources:
             assert(0 <= s and s <= 6)
-            if s == 4: # for yellow, "green/yellow" (1) channel must be activated (0)
+            if s == 4: # for yellow, "green/yellow" (1) channel must be activated (=0)
                 s_byte &= ~ (1 << 1)
             s_byte &= ~ (1 << s) 
         
@@ -276,15 +332,7 @@ class LLE(model.Emitter):
         with self._ser_access:
             self._sendCommand(com)
     
-    # map of source number to bit & address for source intensity setting
-    source2BitAddr = { 0: (3, 0x18), # Red
-                       1: (2, 0x18), # Green
-                       2: (1, 0x18), # Cyan
-                       3: (0, 0x18), # UV
-                       4: (2, 0x18), # Yellow is the same source as Green
-                       5: (0, 0x1A), # Blue
-                       6: (1, 0x1A), # Teal
-                      }
+
     def _setSourceIntensity(self, source, intensity):
         """
         Select the intensity of the given source (it needs to be activated separately).
@@ -292,11 +340,11 @@ class LLE(model.Emitter):
         intensity (0<= int <= 255): intensity value 0=> off, 255 => fully bright
         """
         assert(0 <= source and source <= 6)
-        bit, addr = self.source2BitAddr[source]
+        bit, addr = SOURCE_TO_BIT_ADDR[source]
         
         com = bytearray(b"\x53\x18\x03\x0F\xFF\xF0\x50")
-        #            ^^       ^   ^  ^ : modified bits
-        #         address    bit intensity
+        #                       ^^       ^   ^  ^ : modified bits
+        #                    address    bit intensity
         
         # address
         com[1] = addr
@@ -331,11 +379,26 @@ class LLE(model.Emitter):
         logging.debug("LLE temp is %g", temp)
     
     def _getIntensityGY(self, intensities):
-        if intensities[4] > 0:
-            # Yellow has precedence over green
-            return intensities[4]
+        """
+        return the intensity of green and yellow (they share the same intensity)
+        """
+        try:
+            yellow_i = self._source_id.index(4)
+        except ValueError:
+            yellow_i = None
+            
+        try:
+            green_i = self._source_id.index(1)
+        except ValueError:
+            green_i = None
+        
+        # Yellow has precedence over green
+        if yellow_i is not None and intensities[yellow_i] > 0:
+            return intensities[yellow_i]
+        elif green_i is not None:
+            return intensities[green_i]
         else:
-            return intensities[1]
+            return 0
     
     def _updateIntensities(self):
         """
@@ -346,34 +409,35 @@ class LLE(model.Emitter):
             if self._prev_intensities[i] != self._intensities[i]:
                 need_update = True
                 # Green and Yellow share the same source => do it later    
-                if i in [1, 4]:
+                if i in self._gy:
                     continue
-                self._setSourceIntensity(i, int(round(self._intensities[i] * 255. / self._max_power)))
+                sid = self._source_id[i]
+                self._setSourceIntensity(sid, int(round(self._intensities[i] * 255 / self._max_power)))
         
         # special for Green/Yellow: merge them
         prev_gy = self._getIntensityGY(self._prev_intensities)
         gy = self._getIntensityGY(self._intensities)
         if prev_gy != gy:
-            self._setSourceIntensity(1, int(round(gy * 255. / self._max_power)))
+            self._setSourceIntensity(1, int(round(gy * 255 / self._max_power)))
         
         if need_update:
             toTurnOn = set()
             for i in range(len(self._intensities)):
-                if self._intensities[i] > self._max_power/255.:
-                    toTurnOn.add(i)
+                if self._intensities[i] > self._max_power/255:
+                    toTurnOn.add(self._source_id[i])
             self._enableSources(toTurnOn)
             
         self._prev_intensities = list(self._intensities)
         
     def _updatePower(self, value):
         # set the actual values
-        for i in range(7):
-            self._intensities[i] = self.emissions.value[i] * value
+        for i, intensity in enumerate(self.emissions.value):
+            self._intensities[i] = intensity * value
         self._updateIntensities()
         
     def _setEmissions(self, intensities):
         """
-        intensities (list of 7 floats [0..1]): intensity of each source
+        intensities (list of N floats [0..1]): intensity of each source
         """ 
         if len(intensities) != len(self._intensities):
             raise TypeError("Emission must be an array of %d floats." % len(self._intensities))
@@ -385,25 +449,26 @@ class LLE(model.Emitter):
         # If only green and yellow: pick the strongest
         # If mix: if the max of GY > max other => pick G or Y, other pick others 
         intensities = list(intensities) # duplicate
-        max_gy = max([intensities[i] for i in [1, 4]])
-        max_others = max([intensities[i] for i in [0, 2, 3, 5, 6]])
+        max_gy = max([intensities[i] for i in self._gy] + [0]) # + [0] to always have a non-empty list
+        max_others = max([intensities[i] for i in self._rcubt] + [0])
         if max_gy <= max_others:
             # we pick others => G/Y becomes 0
-            intensities[1] = 0
-            intensities[4] = 0
+            for i in self._gy:
+                intensities[i] = 0
         else:
-            # We pick G/Y (the strongest of them)
-            to_cancel = [0, 2, 3, 5, 6]
-            if intensities[1] > intensities[4]: # green it is
-                to_cancel.append(4)
-            else: # yellow it is
-                to_cancel.append(1)
-            for i in to_cancel:
-                intensities[i] = 0 
+            # We pick G/Y (the strongest of the two)
+            for i in self._rcubt:
+                intensities[i] = 0
+            if len(self._gy) == 2: # only one => nothing to do
+                if intensities[self._gy[0]] > intensities[self._gy[1]]:
+                    # first is the strongest
+                    intensities[self._gy[1]] = 0
+                else: # second is the strongest
+                    intensities[self._gy[0]] = 0
         
         # set the actual values
-        for i in range(7):
-            intensity = max(0, min(1, intensities[i]))
+        for i, intensity in enumerate(intensities):
+            intensity = max(0, min(1, intensity))
             self._intensities[i] = intensity * self.power.value
         self._updateIntensities()
         return intensities
@@ -457,7 +522,7 @@ class LLE(model.Emitter):
         for p in ports:
             try:
                 logging.debug("Trying port %s", p)
-                dev = LLE(None, None, p, _noinit=True)
+                dev = LLE(None, None, port=p, sources=None, _noinit=True)
             except serial.SerialException:
                 # not possible to use this port? next one!
                 continue
@@ -467,7 +532,7 @@ class LLE(model.Emitter):
             try:
                 temp = dev.GetTemperature()
                 if 0 < temp and temp < 250: # avoid 0 and 255 => only 000's or 1111's, which is bad sign
-                    found.append(("LLE", {"port": p}))
+                    found.append(("LLE", {"port": p, "sources": DEFAULT_SOURCES}))
             except:
                 continue
 
@@ -499,7 +564,7 @@ class FakeLLE(LLE):
     """
     
     def __init__(self, name, role, port, **kwargs):
-        LLE.__init__(self, name, role, None, **kwargs)
+        LLE.__init__(self, name, role, port=None, **kwargs)
     
     def _initDevice(self):
         pass
