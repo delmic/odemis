@@ -9,7 +9,16 @@ SECOM: {
 Spectra: {
     class: lle.LLE,
     role: light,
-    init: {port: "/dev/ttyLLE"},
+    init: {
+        port: "/dev/ttyLLE",
+        # source name -> 99% low, 25% low, centre, 25% high, 99% high wavelength in m
+        # Values are quite approximate (only centre is pretty sure)
+        sources: {"UV": [372.e-9, 382.e-9, 390.e-9, 398.e-9, 408.e-9],
+                  "cyan": [465.e-9, 475.e-9, 485.e-9, 495.e-9, 505.e-9],
+                  "green": [535.e-9, 545.e-9, 560.e-9, 575.e-9, 585.e-9],
+                  "red": [637.e-9, 645.e-9, 650.e-9, 655.e-9, 663.e-9],
+                 }
+        },
     affects: [Clara],
 }
 

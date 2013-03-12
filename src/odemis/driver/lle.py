@@ -129,7 +129,7 @@ class LLE(model.Emitter):
                 self._gy.append(len(spectra))
             else:
                 self._rcubt.append(len(spectra))
-            spectra.append(wls)
+            spectra.append(tuple(wls))
         
         model.Emitter.__init__(self, name, role, **kwargs)
         
@@ -146,13 +146,9 @@ class LLE(model.Emitter):
         self.power = model.FloatContinuous(0, (0, self._max_power), unit="W")
 
         # emissions is list of 0 <= floats <= 1.
-        self._intensities = [0] * len(spectra) # start off
+        self._intensities = [0.] * len(spectra) # start off
         self.emissions = model.ListVA(list(self._intensities), unit="", 
                                       setter=self._setEmissions)
-        # TODO: add init param to specify which light is actually inside the box
-        # (it can come with 2, 4 or 7 colours)
-        # Order matters (it's the order the sources in the device)
-        # list of 5-tuples of floats: filter-low, 25% low, max, 25% high, filter-high 
         self.spectra = model.ListVA(spectra, unit="m", readonly=True) 
         
         self._prev_intensities = [None] * len(spectra) # => will update for sure
@@ -307,7 +303,6 @@ class LLE(model.Emitter):
     # The source ID is more complicated than it looks like:
     # 0, 2, 3, 5, 6 are as is. 1 is for Yellow/Green. Setting 4 selects 
     # whether yellow (activated) or green (deactivated) is used.
-   
     def _enableSources(self, sources):
         """
         Select the light sources which must be enabled.
@@ -469,6 +464,7 @@ class LLE(model.Emitter):
         # set the actual values
         for i, intensity in enumerate(intensities):
             intensity = max(0, min(1, intensity))
+            intensities[i] = intensity
             self._intensities[i] = intensity * self.power.value
         self._updateIntensities()
         return intensities
