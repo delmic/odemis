@@ -242,7 +242,9 @@ class CompositedSpectrometer(model.Detector):
         changeh = prev_binning[0] / self._binning[0]
         old_resolution = self.resolution.value
         assert old_resolution[1] == 1
-        new_resolution = (int(round(old_resolution[0] * changeh)), 1)
+        new_resh = int(round(old_resolution[0] * changeh))
+        new_resh = max(min(new_resh, self.resolution.range[1][0]), self.resolution.range[0][0])
+        new_resolution = (new_resh, 1)
         
         # setting resolution and binning is slightly tricky, because binning
         # will change resolution to keep the same area. So first set binning, then
@@ -264,6 +266,8 @@ class CompositedSpectrometer(model.Detector):
         size = (max(min(value[0], max_size), min_size), 1)
         
         self._detector.resolution.value = size
+        assert self._detector.resolution.value[1] == 1 # TODO: handle this by software mean
+        
         return size
 
     def selfTest(self):
