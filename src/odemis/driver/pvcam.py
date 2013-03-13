@@ -58,7 +58,7 @@ class PVCamDLL(CDLL):
     
     def __init__(self):
         if os.name == "nt":
-            WinDLL.__init__('libpvcam.dll') # TODO check it works
+            WinDLL.__init__(self, "libpvcam.dll") # TODO check it works
         else:
             # Global so that other libraries can access it
             # need to have firewire loaded, even if not used

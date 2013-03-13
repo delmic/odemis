@@ -17,6 +17,7 @@ You should have received a copy of the GNU General Public License along with Ode
 
 from ctypes import *
 from odemis import __version__, model, util
+import ctypes # for fake AndorV2DLL
 import gc
 import logging
 import numpy
@@ -114,6 +115,15 @@ class AndorV2DLL(CDLL):
     It works by setting a default _FuncPtr.errcheck.
     """
 
+    def __init__(self):
+        if os.name == "nt":
+            # FIXME: That's not gonna fly... on Windows, should be a WinDLL?
+            WinDLL.__init__(self, "atmcd32d.dll") # TODO check it works
+            # atmcd64d.dll on 64 bits
+        else:
+            # Global so that its sub-libraries can access it
+            CDLL.__init__(self, "libandor.so.2", RTLD_GLOBAL)
+            
     # For GetVersionInfo()
     AT_SDKVersion = 0x40000000
     AT_DeviceDriverVersion = 0x40000001
@@ -295,7 +305,7 @@ class AndorV2DLL(CDLL):
 20211: "DRV_PROCESSING_FAILED",
 }
 
-   
+
 class AndorCam2(model.DigitalCamera):
     """
     Represents one Andor camera and provides all the basic interfaces typical of
@@ -308,22 +318,18 @@ class AndorCam2(model.DigitalCamera):
     It also provide low-level methods corresponding to the SDK functions.
     """
     
-    # TODO: make it working if the operator switches off/on the camera
-    
-    def __init__(self, name, role, device=None, **kwargs):
+    def __init__(self, name, role, device=None, _fake=False, **kwargs):
         """
         Initialises the device
         device (None or int): number of the device to open, as defined by Andor, cd scan()
           if None, uses the system handle, which allows very limited access to some information
+        _fake (boolean): for internal use only (will make a fake device)
         Raise an exception if the device cannot be opened.
         """
-        if os.name == "nt":
-            # FIXME That's not gonna fly... need to put this into AndorV2DLL
-            self.atcore = windll.LoadLibrary('atmcd32d.dll') # TODO check it works
-            # atmcd64d.dll on 64 bits
+        if _fake:
+            self.atcore = FakeAndorV2DLL()
         else:
-            # Global so that its sub-libraries can access it
-            self.atcore = AndorV2DLL("libandor.so.2", RTLD_GLOBAL)
+            self.atcore = AndorV2DLL()
 
         self._andor_capabilities = None # cached value of GetCapabilities()
         self.temp_timer = None
@@ -847,10 +853,9 @@ class AndorCam2(model.DigitalCamera):
         self.select()
         try:
             driver, sdk = self.GetVersionInfo()
-            
         except AndorV2Error:
             return "unknown"
-        return "driver: '%s', SDK:'%s'" % (driver, sdk)
+        return "driver: '%s', SDK: '%s'" % (driver, sdk)
     
     def getHwVersion(self):
         """
@@ -1366,13 +1371,13 @@ class AndorCam2(model.DigitalCamera):
         return True
         
     @staticmethod
-    def scan():
+    def scan(_fake=False):
         """
         List all the available cameras.
         Note: it's not recommended to call this method when cameras are being used
         return (list of 2-tuple: name (strin), device number (int))
         """
-        camera = AndorCam2("System", "bus") # system
+        camera = AndorCam2("System", "bus", _fake=_fake) # system
         dc = camera.GetAvailableCameras()
         logging.debug("found %d devices.", dc)
         
@@ -1437,5 +1442,348 @@ class AndorCam2DataFlow(model.DataFlow):
     def notify(self, data):
         model.DataFlow.notify(self, data)
 
+# Only for testing/simulation purpose
+# Very rough version that is just enough so that if the wrapper behaves correctly,
+# it returns the expected values.
 
+def _deref(p, typep):
+    """
+    
+    p (byref object)
+    typep (c_type): type of pointer
+    Use .value to change the value of the object
+    """
+    # This is using internal ctypes attributes, that might change in later
+    # versions. Ugly!
+    # Another possibility would be to redefine byref by identity function:
+    # byref= lambda x: x
+    # and then dereferencing would be also identity function.
+    return typep.from_address(addressof(p._obj))
+
+def _val(obj):
+    """
+    return the value contained in the object. Needed because ctype automatically
+    converts the arguments to c_types if they are not already c_type
+    obj (c_type or python object)
+    """
+    if isinstance(obj, ctypes._SimpleCData):
+        return obj.value
+    else:
+        return obj
+    
+
+class FakeAndorV2DLL(object):
+    """
+    Fake AndorV2DLL. It basically simulates a camera is connected, but actually
+    only return simulated values.
+    """
+    
+    def __init__(self):
+        self.targetTemperature = -100
+        self.status = AndorV2DLL.DRV_IDLE
+        self.readmode = AndorV2DLL.RM_IMAGE
+        self.acqmode = 1 # single scan
+        self.triggermode = 0 # internal
+        self.gains = [1.]
+        self.gain = self.gains[0]
+        
+        self.exposure = 0.1 # s
+        self.kinetic = 0. # s, kinetic cycle time
+        self.pixelReadout = 0.1e-6 # s, time to readout one pixel
+        
+        self.pixelSize = (2.0, 2.0) # um
+        self.shape = (1024, 1024) # px
+        self.bpp = 12
+        self.maxBinning = (64, 64) # px
+        
+        self.roi = (1, 1024, 1, 1024) # h0, hlast, v0, vlast, starting from 1
+        self.binning = (1, 1) # px
+        
+        self.acq_end = None 
+        self.acq_aborted = threading.Event()
+        
+        # will be copied when asked for an image
+        self.data = numpy.empty((self.shape[1], self.shape[0]), dtype=numpy.uint16)
+        end = 2**self.bpp
+        step = end // self.shape[0]
+        self.data[:] = numpy.arange(0, end, step, dtype=numpy.uint16)[0:self.shape[0]]
+        self.data.shape = self.shape[0] * self.shape[1]
+    
+    # init
+    def Initialize(self, path):
+        pass
+    
+    def ShutDown(self):
+        pass
+    
+    # camera selection
+    def GetAvailableCameras(self, p_count):
+        count = _deref(p_count, c_int32)
+        count.value = 1
+    
+    def GetCameraHandle(self, device, p_handle):
+        if device.value != 0:
+            raise AndorV2Error()
+        handle = _deref(p_handle, c_int32)
+        handle.value = 1
+                
+    def GetCurrentCamera(self, p_handle):
+        handle = _deref(p_handle, c_int32)
+        handle.value = 1
+        
+    def SetCurrentCamera(self, handle):
+        if _val(handle) != 1:
+            raise AndorV2Error()
+    
+    # info and capabilities
+    def GetStatus(self, p_status):
+        status = _deref(p_status, c_int)
+        status.value = self.status
+        
+    def GetCapabilities(self, p_caps):
+        caps = _deref(p_caps, AndorCapabilities)
+        caps.SetFunctions = (AndorCapabilities.SETFUNCTION_TEMPERATURE
+                             )
+        caps.GetFunctions = (AndorCapabilities.GETFUNCTION_TEMPERATURERANGE
+                             )
+        caps.Features = (AndorCapabilities.FEATURES_FANCONTROL | 
+                         AndorCapabilities.FEATURES_MIDFANCONTROL
+                         )
+        caps.CameraType = AndorCapabilities.CAMERATYPE_CLARA
+        caps.ReadModes = (AndorCapabilities.READMODE_SUBIMAGE
+                          )
+    
+    def GetCameraSerialNumber(self, p_serial):
+        serial = _deref(p_serial, c_int32)
+        serial.value = 1234
+        
+    def GetVersionInfo(self, vertype, ver_str, str_size):
+        if vertype == AndorV2DLL.AT_SDKVersion:
+            ver_str.value = "2.1"
+        elif vertype == AndorV2DLL.AT_DeviceDriverVersion:
+            ver_str.value = "2.2"
+        else:
+            raise AndorV2Error()
+        
+    def GetHeadModel(self, model_str):
+        model_str.value = "FAKECDD 1024"
+        
+    def GetSoftwareVersion(self, p_eprom, p_coffile, p_vxdrev, p_vxdver,
+                           p_dllrev, p_dllver):
+        eprom, coffile = _deref(p_eprom, c_uint), _deref(p_coffile, c_uint)
+        vxdrev, vxdver = _deref(p_vxdrev, c_uint), _deref(p_vxdver, c_uint)
+        dllrev, dllver = _deref(p_dllrev, c_uint), _deref(p_dllver, c_uint)
+        eprom.value, coffile.value = 1, 1
+        vxdrev.value, vxdver.value = 2, 1 # same as driver
+        dllrev.value, dllver.value = 2, 2 # same as sdk
+            
+    def GetHardwareVersion(self, p_pcb, p_decode, p_d1, p_d2, p_cfwv, p_cfwb):
+        pcb, decode = _deref(p_pcb, c_uint), _deref(p_decode, c_uint)
+        d1, d2 = _deref(p_d1, c_uint), _deref(p_d2, c_uint)
+        cfwv, cfwb = _deref(p_cfwv, c_uint), _deref(p_cfwb, c_uint)
+        pcb.value, decode.value = 9, 9
+        d1.value, d2.value = 24, 42
+        cfwv.value, cfwb.value = 45, 3
+
+    def GetDetector(self, p_width, p_height):
+        width, height = _deref(p_width, c_int32), _deref(p_height, c_int32)
+        width.value, height.value = self.shape
+        
+    def GetPixelSize(self, p_width, p_height):
+        width, height = _deref(p_width, c_float), _deref(p_height, c_float)
+        width.value, height.value = self.pixelSize
+    
+    def GetTemperature(self, p_temp):
+        temp = _deref(p_temp, c_int)
+        temp.value = self.targetTemperature
+        return AndorV2DLL.DRV_TEMPERATURE_STABILIZED
+    
+    def GetTemperatureRange(self, p_mint, p_maxt):
+        mint = _deref(p_mint, c_int)
+        maxt = _deref(p_maxt, c_int)
+        mint.value = -200
+        maxt.value = 50
+        
+    def SetTemperature(self, temp):
+        self.targetTemperature = _val(temp)
+        
+    def SetFanMode(self, val):
+        pass
+    def CoolerOFF(self):
+        pass
+    def CoolerON(self):
+        pass
+    def SetCoolerMode(self, mode):
+        pass
+    
+    def GetMaximumExposure(self, p_exp):
+        exp = _deref(p_exp, c_float)
+        exp.value = 4200.0
+
+    def GetMaximumBinning(self, readmode, dim, p_maxb):
+        
+        maxb = _deref(p_maxb, c_int)
+        maxb.value = self.maxBinning[_val(dim)]
+    
+    def GetMinimumImageLength(self, p_minp):
+        minp = _deref(p_minp, c_int)
+        minp.value = 1
+        
+    # image settings
+    
+    def SetOutputAmplifier(self, output_amp):
+        # should be 0 or 1
+        if _val(output_amp) > 1:
+            raise AndorV2Error()
+        
+    def GetNumberADChannels(self, p_nb):
+        nb = _deref(p_nb, c_int)
+        nb.value = 1
+    
+    def SetADChannel(self, channel):
+        if _val(channel) != 0:
+            raise AndorV2Error()
+        self.channel = _val(channel)
+    
+    def GetBitDepth(self, channel, p_bpp):
+        # only one channel
+        bpp = _deref(p_bpp, c_int)
+        bpp.value = self.bpp
+    
+    def GetNumberPreAmpGains(self, p_nb):
+        nb = _deref(p_nb, c_int)
+        nb.value = 1
+        
+    def GetPreAmpGain(self, i, p_gain):
+        gain = _deref(p_gain, c_float)
+        gain.value = self.gains[_val(i)]
+        
+    def SetPreAmpGain(self, i):
+        if _val(i) > len(self.gains):
+            raise AndorV2Error()
+        # whatever
+    
+    def GetNumberHSSpeeds(self, channel, output_amp, p_nb):
+        # only one channel and OA
+        nb = _deref(p_nb, c_int)
+        nb.value = 1
+        
+    def GetHSSpeed(self, channel, output_amp, i, p_speed):
+        # only one channel and OA
+        speed = _deref(p_speed, c_float)
+        speed.value = 1e-3/self.pixelReadout # MHz
+        
+    def SetHSSpeed(self, output_amp, i):
+        if _val(i) != 0:
+            raise AndorV2Error()
+        # whatever
+    
+    def GetFastestRecommendedVSSpeed(self, p_i, p_speed):
+        i = _deref(p_i, c_int)
+        speed = _deref(p_speed, c_float)
+        i.value = 0
+        speed.value = 1e-6 # us
+        
+    def SetVSSpeed(self, i):
+        if _val(i) != 0:
+            raise AndorV2Error()
+        # whatever
+    
+    # settings
+    def SetReadMode(self, mode):
+        self.readmode = _val(mode)
+    
+    def SetShutter(self, typ, mode, closingtime, openingtime):
+        # mode 0 = auto
+        pass # whatever
+    
+    def SetTriggerMode(self, mode):
+        # 0 = internal
+        if _val(mode) > 12:
+            raise AndorV2Error()
+        if _val(mode) != 0:
+            raise NotImplementedError()
+    
+    def SetAcquisitionMode(self, mode):
+        # 1 = Single scan
+        # 5 = Run till abort
+        self.acqmode = _val(mode)
+        
+    def SetKineticCycleTime(self, t):
+        self.kinetic = _val(t)
+    
+    def SetExposureTime(self, t):
+        self.exposure = _val(t)
+    
+    # acquisition
+    def SetImage(self, binh, binv, h0, hl, v0, vl):
+        self.binning = _val(binh), _val(binv)
+        self.roi = (_val(h0), _val(hl), _val(v0), _val(vl))
+    
+    def _getReadout(self):
+        res = ((self.roi[1] - self.roi[0] + 1) // self.binning[0],
+               (self.roi[3] - self.roi[2] + 1) // self.binning[1])
+        nb_pixels = res[0] * res[1]
+        return self.pixelReadout * nb_pixels #s
+        
+    def GetAcquisitionTimings(self, p_exposure, p_accumulate, p_kinetic):
+        exposure = _deref(p_exposure, c_float)
+        accumulate = _deref(p_accumulate, c_float)
+        kinetic = _deref(p_kinetic, c_float)
+        
+        exposure.value = self.exposure
+        accumulate.value = self._getReadout()
+        kinetic.value = exposure.value + accumulate.value + self.kinetic
+    
+    def StartAcquisition(self):
+        self.status = AndorV2DLL.DRV_ACQUIRING
+        duration = self.exposure + self._getReadout()
+        self.acq_end = time.time() + duration
+        
+    def _WaitForAcquisition(self, timeout=None):
+        left = time.time() - self.acq_end
+        timeout = max(min(left, timeout), 0.001)
+        try:
+            must_stop = self.acq_aborted.wait(timeout)
+            if must_stop:
+                return
+            
+            if self.acqmode == 1: # Single scan
+                self.AbortAcquisition()
+            elif self.acqmode == 5: # Run till abort
+                self.StartAcquisition()
+            else:
+                raise NotImplementedError()
+        finally:
+            self.acq_aborted.clear()
+            
+    def WaitForAcquisition(self):
+        self._WaitForAcquisition()
+        
+    def WaitForAcquisitionTimeOut(self, timeout_ms):
+        self._WaitForAcquisition(_val(timeout_ms) * 1000)
+        
+    def CancelWait(self):
+        self.acq_aborted.set()
+        
+    def AbortAcquisition(self):
+        self.status = AndorV2DLL.DRV_IDLE
+        self.acq_aborted.set()
+        
+    def GetMostRecentImage16(self, cbuffer, size):
+        p = cast(cbuffer, POINTER(c_uint16))
+        ndbuffer = numpy.ctypeslib.as_array(p, (size,))
+        ndbuffer[...] = self.data[0:size]
+        
+    def FreeInternalMemory(self):
+        pass
+
+class FakeAndorCam2(AndorCam2):
+    def __init__(self, name, role, device=None, **kwargs):
+        AndorCam2.__init__(self, name, role, device=device, _fake=True, **kwargs)
+    @staticmethod
+    def scan():
+        return AndorCam2.scan(_fake=True)
+        
+    
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:
