@@ -1671,7 +1671,7 @@ class FakeAndorV2DLL(object):
     def GetHSSpeed(self, channel, output_amp, i, p_speed):
         # only one channel and OA
         speed = _deref(p_speed, c_float)
-        speed.value = 1e-3/self.pixelReadout # MHz
+        speed.value = 1e-6/self.pixelReadout # MHz
         
     def SetHSSpeed(self, output_amp, i):
         if _val(i) != 0:
