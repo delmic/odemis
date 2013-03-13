@@ -50,6 +50,7 @@ class xrcfr_main(wx.Frame):
         self.btn_tab_sparc_acqui = xrc.XRCCTRL(self, "btn_tab_sparc_acqui")
         self.btn_tab_sparc_analysis = xrc.XRCCTRL(self, "btn_tab_sparc_analysis")
         self.pnl_tab_secom_streams = xrc.XRCCTRL(self, "pnl_tab_secom_streams")
+        self.secom_tool_menu = xrc.XRCCTRL(self, "secom_tool_menu")
         self.btn_secom_view_zoom = xrc.XRCCTRL(self, "btn_secom_view_zoom")
         self.btn_secom_view_update = xrc.XRCCTRL(self, "btn_secom_view_update")
         self.lbl_secom_view_all = xrc.XRCCTRL(self, "lbl_secom_view_all")
@@ -78,6 +79,7 @@ class xrcfr_main(wx.Frame):
         self.btn_acquire = xrc.XRCCTRL(self, "btn_acquire")
         self.pnl_tab_secom_gallery = xrc.XRCCTRL(self, "pnl_tab_secom_gallery")
         self.pnl_tab_sparc_acqui = xrc.XRCCTRL(self, "pnl_tab_sparc_acqui")
+        self.sparc_acq_tool_menu = xrc.XRCCTRL(self, "sparc_acq_tool_menu")
         self.btn_sparc_acq_view_select = xrc.XRCCTRL(self, "btn_sparc_acq_view_select")
         self.btn_sparc_acq_view_pick = xrc.XRCCTRL(self, "btn_sparc_acq_view_pick")
         self.vp_sparc_acq_view = xrc.XRCCTRL(self, "vp_sparc_acq_view")
@@ -89,6 +91,7 @@ class xrcfr_main(wx.Frame):
         self.fp_settings_sparc_optical = xrc.XRCCTRL(self, "fp_settings_sparc_optical")
         self.fp_settings_sparc_spectro = xrc.XRCCTRL(self, "fp_settings_sparc_spectro")
         self.pnl_tab_sparc_analysis = xrc.XRCCTRL(self, "pnl_tab_sparc_analysis")
+        self.sparc_ana_tool_menu = xrc.XRCCTRL(self, "sparc_ana_tool_menu")
         self.btn_sparc_ana_view_zoom = xrc.XRCCTRL(self, "btn_sparc_ana_view_zoom")
         self.btn_sparc_ana_view_update = xrc.XRCCTRL(self, "btn_sparc_ana_view_update")
         self.lbl_sparc_view_all = xrc.XRCCTRL(self, "lbl_sparc_view_all")
@@ -371,7 +374,7 @@ def __init_resources():
                     <flag>wxEXPAND</flag>
                   </object>
                   <object class="sizeritem">
-                    <object class="wxPanel" name="pnl_secom_tool_menu" subclass="cont.tools.SemToolMenu">
+                    <object class="wxPanel" name="secom_tool_menu" subclass="cont.tools.SemToolMenu">
                       <object class="wxBoxSizer">
                         <object class="sizeritem">
                           <object class="wxStaticBitmap">
@@ -408,7 +411,6 @@ def __init_resources():
                                 <flag>wxBOTTOM|wxLEFT</flag>
                                 <border>10</border>
                               </object>
-                              
                               <object class="sizeritem">
                                 <object class="ImageButton" name="btn_secom_view_resize">
                                   <size>24,24</size>
@@ -432,6 +434,9 @@ def __init_resources():
                         <orient>wxVERTICAL</orient>
                       </object>
                       <bg>#333333</bg>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
                     </object>
                     <flag>wxALIGN_RIGHT</flag>
                   </object>
@@ -571,8 +576,6 @@ def __init_resources():
                     <object class="sizeritem">
                       <object class="MicroscopeViewport" name="vp_secom_tl">
                         <size>400,-1</size>
-                        <fg>#BFBFBF</fg>
-                        <bg>#000000</bg>
                         <XRCED>
                           <assign_var>1</assign_var>
                         </XRCED>
@@ -920,7 +923,7 @@ def __init_resources():
                     <flag>wxEXPAND</flag>
                   </object>
                   <object class="sizeritem">
-                    <object class="wxPanel" name="pnl_sparc_acq_tool_menu">
+                    <object class="wxPanel" name="sparc_acq_tool_menu" subclass="cont.tools.SparcAcquisitionToolMenu">
                       <object class="wxBoxSizer">
                         <object class="sizeritem">
                           <object class="wxStaticBitmap">
@@ -982,6 +985,9 @@ def __init_resources():
                         <orient>wxVERTICAL</orient>
                       </object>
                       <bg>#333333</bg>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
                     </object>
                     <flag>wxALIGN_RIGHT</flag>
                   </object>
@@ -1182,7 +1188,7 @@ def __init_resources():
                     <flag>wxEXPAND</flag>
                   </object>
                   <object class="sizeritem">
-                    <object class="wxPanel" name="pnl_sparc_ana_tool_menu">
+                    <object class="wxPanel" name="sparc_ana_tool_menu" subclass="cont.tools.SparcAnalysisToolMenu">
                       <object class="wxBoxSizer">
                         <object class="sizeritem">
                           <object class="wxStaticBitmap">
@@ -1242,6 +1248,9 @@ def __init_resources():
                         <orient>wxVERTICAL</orient>
                       </object>
                       <bg>#333333</bg>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
                     </object>
                     <flag>wxALIGN_RIGHT</flag>
                   </object>

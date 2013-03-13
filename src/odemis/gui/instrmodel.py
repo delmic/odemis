@@ -113,8 +113,8 @@ class MicroscopeModel(object):
 
         self.streams = set() # Streams available (handled by StreamController)
 
-        # MicroscopeViews available, (handled by ViewController)
-        # The Viewcontroller cares about position (top left, etc),
+        # MicroscopeViews available, (handled by SecomViewController)
+        # The SecomViewController cares about position (top left, etc),
         # MicroscopeModel cares about what's what.
         self.views = {
             "sem_view": None,

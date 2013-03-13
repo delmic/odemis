@@ -209,7 +209,7 @@
                     <flag>wxEXPAND</flag>
                   </object>
                   <object class="sizeritem">
-                    <object class="wxPanel" name="pnl_secom_tool_menu" subclass="cont.tools.SemToolMenu">
+                    <object class="wxPanel" name="secom_tool_menu" subclass="cont.tools.SemToolMenu">
                       <object class="wxBoxSizer">
                         <object class="sizeritem">
                           <object class="wxStaticBitmap">
@@ -246,7 +246,6 @@
                                 <flag>wxBOTTOM|wxLEFT</flag>
                                 <border>10</border>
                               </object>
-                              
                               <object class="sizeritem">
                                 <object class="ImageButton" name="btn_secom_view_resize">
                                   <size>24,24</size>
@@ -270,6 +269,9 @@
                         <orient>wxVERTICAL</orient>
                       </object>
                       <bg>#333333</bg>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
                     </object>
                     <flag>wxALIGN_RIGHT</flag>
                   </object>
@@ -409,8 +411,6 @@
                     <object class="sizeritem">
                       <object class="MicroscopeViewport" name="vp_secom_tl">
                         <size>400,-1</size>
-                        <fg>#BFBFBF</fg>
-                        <bg>#000000</bg>
                         <XRCED>
                           <assign_var>1</assign_var>
                         </XRCED>
@@ -758,7 +758,7 @@
                     <flag>wxEXPAND</flag>
                   </object>
                   <object class="sizeritem">
-                    <object class="wxPanel" name="pnl_sparc_acq_tool_menu">
+                    <object class="wxPanel" name="sparc_acq_tool_menu" subclass="cont.tools.SparcAcquisitionToolMenu">
                       <object class="wxBoxSizer">
                         <object class="sizeritem">
                           <object class="wxStaticBitmap">
@@ -820,6 +820,9 @@
                         <orient>wxVERTICAL</orient>
                       </object>
                       <bg>#333333</bg>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
                     </object>
                     <flag>wxALIGN_RIGHT</flag>
                   </object>
@@ -1020,7 +1023,7 @@
                     <flag>wxEXPAND</flag>
                   </object>
                   <object class="sizeritem">
-                    <object class="wxPanel" name="pnl_sparc_ana_tool_menu">
+                    <object class="wxPanel" name="sparc_ana_tool_menu" subclass="cont.tools.SparcAnalysisToolMenu">
                       <object class="wxBoxSizer">
                         <object class="sizeritem">
                           <object class="wxStaticBitmap">
@@ -1080,6 +1083,9 @@
                         <orient>wxVERTICAL</orient>
                       </object>
                       <bg>#333333</bg>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
                     </object>
                     <flag>wxALIGN_RIGHT</flag>
                   </object>
