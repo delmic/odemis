@@ -1503,11 +1503,11 @@ class FakeAndorV2DLL(object):
         self.acq_aborted = threading.Event()
         
         # will be copied when asked for an image
-        self.data = numpy.empty((self.shape[1], self.shape[0]), dtype=numpy.uint16)
+        self._data = numpy.empty((self.shape[1], self.shape[0]), dtype=numpy.uint16)
         end = 2**self.bpp
         step = end // self.shape[0]
-        self.data[:] = numpy.arange(0, end, step, dtype=numpy.uint16)[0:self.shape[0]]
-        self.data.shape = self.shape[0] * self.shape[1]
+        self._data[:] = numpy.arange(0, end, step, dtype=numpy.uint16)[0:self.shape[0]]
+#        self._data.shape = self.shape[0] * self.shape[1]
     
     # init
     def Initialize(self, path):
@@ -1772,8 +1772,12 @@ class FakeAndorV2DLL(object):
         
     def GetMostRecentImage16(self, cbuffer, size):
         p = cast(cbuffer, POINTER(c_uint16))
-        ndbuffer = numpy.ctypeslib.as_array(p, (size,))
-        ndbuffer[...] = self.data[0:size]
+        res = ((self.roi[1] - self.roi[0] + 1) // self.binning[0],
+               (self.roi[3] - self.roi[2] + 1) // self.binning[1])
+        assert res[0] * res[1] == size
+        ndbuffer = numpy.ctypeslib.as_array(p, (res[1], res[0]))
+        ndbuffer[...] = self._data[self.roi[2]-1:self.roi[3]:self.binning[1],
+                                  self.roi[0]-1:self.roi[1]:self.binning[0]]
         
     def FreeInternalMemory(self):
         pass
