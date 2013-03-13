@@ -396,17 +396,16 @@ class AndorCam2(model.DigitalCamera):
                                         setter=self.setFanSpeed) # ratio to max speed
             self.setFanSpeed(1.0)
 
-        # binning is horizontal, vertical (used by resolutionFitter()), but odemis
-        # only supports same value on both dimensions (for simplification)
-        self._binning = (1,1) # 
+        self._binning = (1, 1) # px, horizontal, vertical
         self._image_rect = (1, resolution[0], 1, resolution[1])
         # need to be before binning, as it is modified when changing binning         
         self.resolution = model.ResolutionVA(resolution, [(1, 1), resolution], 
-                                             setter=self.setResolution)
-        self.setResolution(resolution)
+                                             setter=self._setResolution)
+        self._setResolution(resolution)
         
-        self.binning = model.IntEnumerated(self._binning[0], self._getAvailableBinnings(),
-                                           unit="px", setter=self.setBinning)
+        maxbin = self.GetMaximumBinnings(AndorV2DLL.RM_IMAGE)
+        self.binning = model.ResolutionVA(self._binning, [(1, 1), maxbin],
+                                          setter=self._setBinning)
         
         # default values try to get live microscopy imaging more likely to show something
         maxexp = c_float()
@@ -601,7 +600,7 @@ class AndorCam2(model.DigitalCamera):
         self.atcore.GetStatus(byref(status))
         return status.value
     
-    def GetMaximumBinning(self, readmode):
+    def GetMaximumBinnings(self, readmode):
         """
         readmode (0<= int <= 4): cf SetReadMode
         return the maximum binning allowable in horizontal and vertical
@@ -881,45 +880,25 @@ class AndorCam2(model.DigitalCamera):
                 (PCB.value, Decode.value, CameraFirmwareVersion.value,
                  CameraFirmwareBuild.value, eprom.value, coffile.value))
     
-    def _storeBinning(self, binning):
+    def _setBinning(self, value):
         """
-        Check the binning is correct and store it ready for SetImage
-        binning (int): how many pixels horizontally and vertically
-         are combined to create "super pixels"
-        Note: super pixels are always square (although some hw don't require this)
-        """
-        # TODO support "Full Vertical Binning" if binning[1] == size[1]
-        maxbinning = self.GetMaximumBinning(AndorV2DLL.RM_IMAGE)
-        assert((1 <= binning) and (binning <= maxbinning[0]) and
-               (1 <= binning) and (binning <= maxbinning[1]))
-
-        self._binning = (binning, binning)
-    
-    def _getAvailableBinnings(self):
-        """
-        returns  list of int with the available binnings (same for horizontal
-          and vertical)
-        """
-        maxbinning = self.GetMaximumBinning(AndorV2DLL.RM_IMAGE)
-        # be conservative by return the smallest of horizontal and vertical binning
-        return set(range(1, min(maxbinning)+1))
-        
-    def setBinning(self, value):
-        """
+        value (2-tuple of int)
         Called when "binning" VA is modified. It actually modifies the camera binning.
         """
-        previous_binning = self._binning
-        self._storeBinning(value)
+        # TODO support "Full Vertical Binning" if binning[1] == size[1]
+        prev_binning = self._binning
+        self._binning = value
         
         # adapt resolution so that the AOI stays the same
-        change = (float(previous_binning[0]) / value,
-                  float(previous_binning[1]) / value)
+        change = (float(prev_binning[0]) // value[0],
+                  float(prev_binning[1]) // value[1])
         old_resolution = self.resolution.value
         new_resolution = (int(round(old_resolution[0] * change[0])),
                           int(round(old_resolution[1] * change[1])))
-        
-        self.resolution.value = new_resolution # will automatically call _storeSize
-        return self._binning[0]
+
+        # to update the VA, need to ensure it's at least within the range        
+        self.resolution.value = self.resolutionFitter(new_resolution)
+        return self._binning
     
     def _storeSize(self, size):
         """
@@ -930,11 +909,10 @@ class AndorCam2(model.DigitalCamera):
          resolution.
         """
         full_res = self._shape[:2]
-        resolution = full_res[0] / self._binning[0], full_res[1] / self._binning[1] 
+        resolution = full_res[0] // self._binning[0], full_res[1] // self._binning[1] 
         assert((1 <= size[0]) and (size[0] <= resolution[0]) and
                (1 <= size[1]) and (size[1] <= resolution[1]))
         
-
         # If the camera doesn't support Area of Interest, then it has to be the
         # size of the sensor
         caps = self.GetCapabilities()
@@ -946,14 +924,14 @@ class AndorCam2(model.DigitalCamera):
         
         # Region of interest
         # center the image
-        lt = ((resolution[0] - size[0]) / 2,
-              (resolution[1] - size[1]) / 2)
+        lt = ((resolution[0] - size[0]) // 2,
+              (resolution[1] - size[1]) // 2)
         
         # the rectangle is defined in normal pixels (not super-pixels) from (1,1)
         self._image_rect = (lt[0] * self._binning[0] + 1, (lt[0] + size[0]) * self._binning[0],
                             lt[1] * self._binning[1] + 1, (lt[1] + size[1]) * self._binning[1])
     
-    def setResolution(self, value):
+    def _setResolution(self, value):
         new_res = self.resolutionFitter(value)
         self._storeSize(new_res)
         return new_res
@@ -966,10 +944,9 @@ class AndorCam2(model.DigitalCamera):
         returns (2-tuple of int): resolution which fits the camera. It is equal
          or bigger than the requested resolution
         """
-        #
         resolution = self._shape[:2]
-        max_size = (int(resolution[0] / self._binning[0]), 
-                    int(resolution[1] / self._binning[1]))
+        max_size = (int(resolution[0] // self._binning[0]), 
+                    int(resolution[1] // self._binning[1]))
         
         # SetReadMode() cannot be here because it cannot be called during acquisition 
         # If the camera doesn't support Area of Interest, then it has to be the
@@ -1095,7 +1072,7 @@ class AndorCam2(model.DigitalCamera):
             logging.debug("Updating image settings") 
             self.atcore.SetImage(*new_image_settings)
             # there is no metadata for the resolution
-            self._metadata[model.MD_BINNING] = self._binning[0] # H and V should be equal
+            self._metadata[model.MD_BINNING] = self._binning
     
         if prev_exp_time != self._exposure_time:
             self.atcore.SetExposureTime(c_float(self._exposure_time))
@@ -1491,7 +1468,7 @@ class FakeAndorV2DLL(object):
         self.kinetic = 0. # s, kinetic cycle time
         self.pixelReadout = 0.1e-6 # s, time to readout one pixel
         
-        self.pixelSize = (2.0, 2.0) # um
+        self.pixelSize = (20.0, 20.0) # um
         self.shape = (1024, 1024) # px
         self.bpp = 12
         self.maxBinning = (64, 64) # px

@@ -36,7 +36,7 @@ MD_ACQ_DATE = "Acquisition date" # s since epoch
 # distance between two points on the sample that are seen at the centre of two
 # adjacent pixels considering that these two points are in focus 
 MD_PIXEL_SIZE = "Pixel size" # (m, m)  
-MD_BINNING = "Binning" # px (number of pixels averaged in both dimension)
+MD_BINNING = "Binning" # (px, px), number of pixels acquired as one big pixel, in each dimension
 MD_SAMPLES_PER_PIXEL = "Samples per pixel" # samples (number of samples acquired for each pixel) default: 1
 MD_HW_VERSION = "Hardware version" # str
 MD_SW_VERSION = "Software version" # str
