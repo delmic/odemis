@@ -28,6 +28,26 @@ import collections
 from odemis.gui.util import call_after_wrapper
 from odemis.model._vattributes import OutOfBoundError
 
+def get_all_children(widget, klass=None):
+    """ Recursively get all the child widgets of the given widget
+
+    Results can be filtered by providing a class.
+    """
+
+    result = []
+
+    for w in widget.GetChildren():
+        cl = w.GetChildren()
+
+        if cl:
+            result.extend(get_all_children(w, klass))
+        elif klass is None:
+            result.append(w)
+        elif isinstance(w, klass):
+            result.append(w)
+
+    return result
+
 class VigilantAttributeConnector(object):
     """ This class connects a vigilant attribute with a wxPython control,
     making sure that the changes in one are automatically reflected in the

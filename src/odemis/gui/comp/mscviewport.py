@@ -31,7 +31,7 @@ import wx
 from odemis import gui
 from odemis.gui.comp.scalewindow import ScaleWindow
 from odemis.gui.comp.slider import Slider
-from odemis.gui.dblmscopecanvas import DblMicroscopeCanvas
+from odemis.gui.dblmscopecanvas import DblMicroscopeCanvas, SecomCanvas
 from odemis.gui.img.data import \
     getico_blending_optBitmap, getico_blending_semBitmap
 from odemis.gui.model import OPTICAL_STREAMS, EM_STREAMS
@@ -426,4 +426,17 @@ class MicroscopeViewport(wx.Panel):
 
     ## END Event handling
 
-# vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:
+class SecomViewport(MicroscopeViewport):
+
+    def __init__(self):
+        super(SecomViewport, self).__init__()
+
+class SparcAcquisitionViewport(MicroscopeViewport):
+
+    def __init__(self):
+        super(SparcAcquisitionViewport, self).__init__()
+
+class SparcAnalysisViewport(MicroscopeViewport):
+
+    def __init__(self):
+        super(SparcAnalysisViewport, self).__init__()

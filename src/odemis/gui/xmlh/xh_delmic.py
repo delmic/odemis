@@ -41,6 +41,7 @@ import wx.lib.buttons
 import wx.xrc as xrc
 
 
+HANDLER_CLASS_LIST = []
 
 ##################################
 # Fold Panel Bar related Handlers
@@ -89,6 +90,7 @@ class StandardStreamPanelXmlHandler(xrc.XmlResourceHandler):
         #self.CreateChildren(panel.get_panel())
 
         return panel
+HANDLER_CLASS_LIST.append(StandardStreamPanelXmlHandler)
 
 class DyeStreamPanelXmlHandler(xrc.XmlResourceHandler):
     def __init__(self):
@@ -129,6 +131,8 @@ class DyeStreamPanelXmlHandler(xrc.XmlResourceHandler):
         #self.CreateChildren(panel.get_panel())
 
         return panel
+HANDLER_CLASS_LIST.append(DyeStreamPanelXmlHandler)
+
 
 class FoldPanelBarXmlHandler(xrc.XmlResourceHandler):
     def __init__(self):
@@ -164,6 +168,7 @@ class FoldPanelBarXmlHandler(xrc.XmlResourceHandler):
             self.CreateChildren(w, False)
 
             return w
+HANDLER_CLASS_LIST.append(FoldPanelBarXmlHandler)
 
 
 class FoldPanelItemXmlHandler(xrc.XmlResourceHandler):
@@ -198,6 +203,8 @@ class FoldPanelItemXmlHandler(xrc.XmlResourceHandler):
             w.children_to_sizer()
             parent.add_item(w)
             return w
+HANDLER_CLASS_LIST.append(FoldPanelItemXmlHandler)
+
 
 class StreamPanelXmlHandler(xrc.XmlResourceHandler):
     def __init__(self):
@@ -228,6 +235,8 @@ class StreamPanelXmlHandler(xrc.XmlResourceHandler):
                 w.btn_add_stream.SetBackgroundColour(w.GetBackgroundColour())
             parent.add_item(w)
             return w
+HANDLER_CLASS_LIST.append(StreamPanelXmlHandler)
+
 
 ################################
 # ImageButton sub class handlers
@@ -272,6 +281,8 @@ class GenBitmapButtonHandler(xrc.XmlResourceHandler):
 
         self.SetupWindow(w)
         return w
+HANDLER_CLASS_LIST.append(GenBitmapButtonHandler)
+
 
 class ImageButtonHandler(xrc.XmlResourceHandler):
 
@@ -319,6 +330,8 @@ class ImageButtonHandler(xrc.XmlResourceHandler):
 
         self.SetupWindow(w)
         return w
+HANDLER_CLASS_LIST.append(ImageButtonHandler)
+
 
 class ImageToggleButtonHandler(xrc.XmlResourceHandler):
 
@@ -365,6 +378,8 @@ class ImageToggleButtonHandler(xrc.XmlResourceHandler):
 
         self.SetupWindow(w)
         return w
+HANDLER_CLASS_LIST.append(ImageToggleButtonHandler)
+
 
 class ImageTextButtonHandler(xrc.XmlResourceHandler):
 
@@ -415,7 +430,7 @@ class ImageTextButtonHandler(xrc.XmlResourceHandler):
 
         self.SetupWindow(w)
         return w
-
+HANDLER_CLASS_LIST.append(ImageTextButtonHandler)
 
 
 class ImageTextToggleButtonHandler(xrc.XmlResourceHandler):
@@ -470,6 +485,8 @@ class ImageTextToggleButtonHandler(xrc.XmlResourceHandler):
 
         self.SetupWindow(w)
         return w
+HANDLER_CLASS_LIST.append(ImageTextToggleButtonHandler)
+
 
 class TabButtonHandler(ImageTextToggleButtonHandler):
 
@@ -479,6 +496,7 @@ class TabButtonHandler(ImageTextToggleButtonHandler):
 
     def CanHandle(self, node):
         return self.IsOfClass(node, 'TabButton')
+HANDLER_CLASS_LIST.append(TabButtonHandler)
 
 
 class ViewButtonHandler(ImageTextToggleButtonHandler):
@@ -489,6 +507,8 @@ class ViewButtonHandler(ImageTextToggleButtonHandler):
 
     def CanHandle(self, node):
         return self.IsOfClass(node, 'ViewButton')
+HANDLER_CLASS_LIST.append(ViewButtonHandler)
+
 
 class PopupImageButtonHandler(xrc.XmlResourceHandler):
 
@@ -534,6 +554,8 @@ class PopupImageButtonHandler(xrc.XmlResourceHandler):
 
         self.SetupWindow(w)
         return w
+HANDLER_CLASS_LIST.append(PopupImageButtonHandler)
+
 
 class SuggestTextCtrlHandler(xrc.XmlResourceHandler):
 
@@ -559,6 +581,8 @@ class SuggestTextCtrlHandler(xrc.XmlResourceHandler):
                                 choices=[str(i) for i in range(2)])
         self.SetupWindow(w)
         return w
+HANDLER_CLASS_LIST.append(SuggestTextCtrlHandler)
+
 
 class UnitIntegerCtrlHandler(xrc.XmlResourceHandler):
 
@@ -588,6 +612,8 @@ class UnitIntegerCtrlHandler(xrc.XmlResourceHandler):
                                 max_val=self.GetLong('max'))
         self.SetupWindow(w)
         return w
+HANDLER_CLASS_LIST.append(UnitIntegerCtrlHandler)
+
 
 class UnitFloatCtrlHandler(xrc.XmlResourceHandler):
 
@@ -617,12 +643,17 @@ class UnitFloatCtrlHandler(xrc.XmlResourceHandler):
                               max_val=self.GetLong('max'))
         self.SetupWindow(w)
         return w
+HANDLER_CLASS_LIST.append(UnitFloatCtrlHandler)
+
 
 ##################################
 # Canvas Handlers
 ##################################
 
 class MicroscopeViewportXmlHandler(xrc.XmlResourceHandler):
+
+    klass = mscp.MicroscopeViewport
+
     def __init__(self):
         xrc.XmlResourceHandler.__init__(self)
         # Specify the styles recognized by objects of this type
@@ -631,20 +662,51 @@ class MicroscopeViewportXmlHandler(xrc.XmlResourceHandler):
 
     # This method and the next one are required for XmlResourceHandlers
     def CanHandle(self, node):
-        capable = self.IsOfClass(node, "MicroscopeViewport")
-        return capable
+        return self.IsOfClass(node, "MicroscopeViewport")
 
     def DoCreateResource(self):
         assert self.GetInstance() is None
 
         # Now create the object
-        panel = mscp.MicroscopeViewport(self.GetParentAsWindow(),
-                                        id=self.GetID(),
-                                        pos=self.GetPosition(),
-                                        size=self.GetSize(),
-                                        style=self.GetStyle())
+        panel = self.klass(self.GetParentAsWindow(),
+                           id=self.GetID(),
+                           pos=self.GetPosition(),
+                           size=self.GetSize(),
+                           style=self.GetStyle())
         self.SetupWindow(panel)
         return panel
+HANDLER_CLASS_LIST.append(MicroscopeViewportXmlHandler)
+
+
+class SecomViewportXmlHandler(MicroscopeViewportXmlHandler):
+
+    klass = mscp.SecomViewport
+
+    # This method and the next one are required for XmlResourceHandlers
+    def CanHandle(self, node):
+        return self.IsOfClass(node, "SecomViewport")
+HANDLER_CLASS_LIST.append(SecomViewportXmlHandler)
+
+
+class SparcAcquisitionViewportXmlHandler(MicroscopeViewportXmlHandler):
+
+    klass = mscp.SparcAcquisitionViewport
+
+    # This method and the next one are required for XmlResourceHandlers
+    def CanHandle(self, node):
+        return self.IsOfClass(node, "SparcAcquisitionViewport")
+HANDLER_CLASS_LIST.append(SparcAcquisitionViewportXmlHandler)
+
+
+class SparcAnalysisViewportXmlHandler(MicroscopeViewportXmlHandler):
+
+    klass = mscp.SparcAnalysisViewport
+
+    # This method and the next one are required for XmlResourceHandlers
+    def CanHandle(self, node):
+        return self.IsOfClass(node, "SparcAnalysisViewport")
+HANDLER_CLASS_LIST.append(SparcAnalysisViewportXmlHandler)
+
 
 ##################################
 # Sliders
@@ -689,6 +751,8 @@ class UnitIntegerSliderHandler(xrc.XmlResourceHandler):
                                         t_size = text_size)
         self.SetupWindow(slider)
         return slider
+HANDLER_CLASS_LIST.append(UnitIntegerSliderHandler)
+
 
 class UnitFloatSliderHandler(xrc.XmlResourceHandler):
     def __init__(self):
@@ -744,6 +808,8 @@ class UnitFloatSliderHandler(xrc.XmlResourceHandler):
 
         self.SetupWindow(slider)
         return slider
+HANDLER_CLASS_LIST.append(UnitFloatSliderHandler)
+
 
 ####################################################################
 # OwnerDrawnComboBox Handlers
@@ -784,27 +850,4 @@ class OwnerDrawnComboBoxHandler(xrc.XmlResourceHandler):
         new_ctrl.SetButtonBitmaps(img.getbtn_downBitmap(), pushButtonBg=False)
         self.SetupWindow(new_ctrl)
         return new_ctrl
-
-HANDLER_CLASS_LIST = [
-                      DyeStreamPanelXmlHandler,
-                      FoldPanelBarXmlHandler,
-                      FoldPanelItemXmlHandler,
-                      GenBitmapButtonHandler,
-                      ImageButtonHandler,
-                      ImageToggleButtonHandler,
-                      ImageTextButtonHandler,
-                      ImageTextToggleButtonHandler,
-                      MicroscopeViewportXmlHandler,
-                      OwnerDrawnComboBoxHandler,
-                      PopupImageButtonHandler,
-                      StandardStreamPanelXmlHandler,
-                      StreamPanelXmlHandler,
-                      SuggestTextCtrlHandler,
-                      TabButtonHandler,
-                      UnitFloatCtrlHandler,
-                      UnitFloatSliderHandler,
-                      UnitIntegerCtrlHandler,
-                      UnitIntegerSliderHandler,
-                      ViewButtonHandler,
-                      ]
-
+HANDLER_CLASS_LIST.append(OwnerDrawnComboBoxHandler)

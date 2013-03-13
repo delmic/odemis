@@ -42,7 +42,12 @@ CROSSHAIR_SIZE = 16
 
 SELECTION_COLOR = FOREGROUND_COLOUR_EDIT
 
-MODE_SELECT = 1
+MODE_SECOM_ZOOM = 1
+MODE_SECOM_UPDATE = 2
+
+MODE_SPARC_SELECT = 3
+MODE_SPARC_PICK = 4
+
 
 @decorator
 def microscope_view_check(f, self, *args, **kwargs):
@@ -89,47 +94,7 @@ class DblMicroscopeCanvas(DraggableCanvas):
         # self.WorldOverlays.append(CrossHairOverlay("Red",
         #                                            CROSSHAIR_SIZE,
         #                                            (10, 10)))
-
         self.current_mode = None
-        pub.subscribe(self.toggle_select_mode, 'secom.tool.zoom.click')
-
-    def toggle_select_mode(self, enabled):
-        if self.current_mode == MODE_SELECT and not enabled:
-            self.current_mode = None
-        elif not self.dragging and enabled:
-            self.current_mode = MODE_SELECT
-
-    def OnLeftDown(self, event):
-        if self.current_mode == MODE_SELECT:
-            self.dragging = True
-            pos = event.GetPosition()
-            logging.debug("Started selection at %s", pos)
-            self.selection_overlay.start_selection(self._dcBuffer, pos)
-            self.ShouldUpdateDrawing()
-            #self.Draw(wx.PaintDC(self))
-        else:
-            DraggableCanvas.OnLeftDown(self, event)
-
-    def OnLeftUp(self, event):
-        if self.current_mode == MODE_SELECT and self.dragging:
-            self.dragging = False
-            pos = event.GetPosition()
-            logging.debug("Ended selection at %s", pos)
-            self.selection_overlay.stop_selection()
-            self.ShouldUpdateDrawing()
-            #self.Draw(wx.PaintDC(self))
-        else:
-            DraggableCanvas.OnLeftUp(self, event)
-
-    def OnMouseMotion(self, event):
-        if self.current_mode == MODE_SELECT and self.dragging:
-            pos = event.GetPosition()
-            self.selection_overlay.update_selection(pos)
-            self.ShouldUpdateDrawing()
-
-            #self.Draw(wx.PaintDC(self))
-        else:
-            DraggableCanvas.OnMouseMotion(self, event)
 
     def setView(self, microscope_view):
         """
@@ -391,6 +356,51 @@ class DblMicroscopeCanvas(DraggableCanvas):
                 self.ViewOverlays.remove(ch)
                 self.Refresh(eraseBackground=False)
 
+class SecomCanvas(DblMicroscopeCanvas):
+
+    def __init__(self, *args, **kwargs):
+        super(SecomCanvas, self).__init__(*args, **kwargs)
+        pub.subscribe(self.toggle_select_mode, 'sparc.tool.select.click')
+
+    def toggle_select_mode(self, enabled):
+
+        logging.debug("Select mode %s", self)
+        if self.current_mode == MODE_SECOM_ZOOM and not enabled:
+            self.current_mode = None
+        elif not self.dragging and enabled:
+            self.current_mode = MODE_SECOM_ZOOM
+
+    def OnLeftDown(self, event):
+        if self.current_mode == MODE_SECOM_ZOOM:
+            self.dragging = True
+            pos = event.GetPosition()
+            logging.debug("Started selection at %s", pos)
+            self.selection_overlay.start_selection(self._dcBuffer, pos)
+            self.ShouldUpdateDrawing()
+            #self.Draw(wx.PaintDC(self))
+        else:
+            DraggableCanvas.OnLeftDown(self, event)
+
+    def OnLeftUp(self, event):
+        if self.current_mode == MODE_SECOM_ZOOM and self.dragging:
+            self.dragging = False
+            pos = event.GetPosition()
+            logging.debug("Ended selection at %s", pos)
+            self.selection_overlay.stop_selection()
+            self.ShouldUpdateDrawing()
+            #self.Draw(wx.PaintDC(self))
+        else:
+            DraggableCanvas.OnLeftUp(self, event)
+
+    def OnMouseMotion(self, event):
+        if self.current_mode == MODE_SECOM_ZOOM and self.dragging:
+            pos = event.GetPosition()
+            self.selection_overlay.update_selection(pos)
+            self.ShouldUpdateDrawing()
+
+            #self.Draw(wx.PaintDC(self))
+        else:
+            DraggableCanvas.OnMouseMotion(self, event)
 
 ### Here come all the classes for drawing overlays
 class CrossHairOverlay(object):

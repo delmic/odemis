@@ -37,21 +37,24 @@ import wx
 import wx.xrc as xrc
 from wx.lib.pubsub import pub
 
-from odemis.gui.comp.buttons import ImageToggleButton
+from odemis.gui.util.widgets import get_all_children
+from odemis.gui.comp.buttons import ImageButton, ImageToggleButton
+
 # from odemis.gui.cont.acquisition import AcquisitionController
 # from odemis.gui.cont.microscope import MicroscopeController
 # from odemis.gui.cont import settings
 # from odemis.gui.cont.streams import StreamController
-# from odemis.gui.cont.views import ViewController, ViewSelector
+# from odemis.gui.cont.views import SecomViewController, ViewSelector
 
 class ToolMenu(wx.Panel):
-    """ Tool Menu base class """
+    """ Tool Menu base class responsible for the general buttons states """
 
     def __init__(self):
         pre = wx.PrePanel()
         # the Create step is done later by XRC.
         self.PostCreate(pre)
         self.Bind(wx.EVT_WINDOW_CREATE, self.OnCreate)
+        self.Bind(wx.EVT_BUTTON, self._on_button)
 
         self.toggle_buttons = []
         self.action_buttons = []
@@ -59,40 +62,144 @@ class ToolMenu(wx.Panel):
     def OnCreate(self, event):
         raise NotImplementedError
 
-    def _sort_buttons(self, btn_list):
+    def _on_button(self, evt):
+        """ Clear the toggle buttons on any button click within the menu """
+        evt_btn = evt.GetEventObject()
 
-        for b in btn_list:
-            if isinstance(b, ImageToggleButton):
-                self.toggle_buttons.append(b)
-            else:
-                self.action_buttons.append(b)
+        for b in self.toggle_buttons:
+            if b != evt_btn:
+                b.SetToggle(False)
+        evt.Skip()
+
+    def _sort_buttons(self):
+        self.toggle_buttons = get_all_children(self, ImageToggleButton)
+        self.action_buttons = get_all_children(self, ImageButton)
 
 class SemToolMenu(ToolMenu):
+    """ Tool menu for SEM view manipulation """
 
     def __init__(self):
         ToolMenu.__init__(self)
 
-        self.btn_zoom_tool = None
-        self.btn_update_tool = None
+        self.btn_zoom = None
+        self.btn_update = None
         self.btn_resize = None
 
     def OnCreate(self, event):
         self.Unbind(wx.EVT_WINDOW_CREATE)
 
-        self.btn_zoom_tool = xrc.XRCCTRL(self, "btn_secom_view_zoom")
-        self.btn_update_tool = xrc.XRCCTRL(self, "btn_secom_view_update")
+        self.btn_zoom = xrc.XRCCTRL(self, "btn_secom_view_zoom")
+        self.btn_update = xrc.XRCCTRL(self, "btn_secom_view_update")
         self.btn_resize = xrc.XRCCTRL(self, "btn_secom_view_resize")
 
-        self._sort_buttons ([self.btn_zoom_tool,
-                             self.btn_update_tool,
-                             self.btn_resize])
+        self._sort_buttons()
 
-        self.btn_zoom_tool.Bind(wx.EVT_BUTTON, self.on_zoom)
+        self.btn_zoom.Bind(wx.EVT_BUTTON, self.on_zoom)
+        self.btn_update.Bind(wx.EVT_BUTTON, self.on_update)
 
         logging.debug("Created SemToolMenu")
 
     def on_zoom(self, evt):
         logging.debug("Zoom tool clicked")
         pub.sendMessage('secom.tool.zoom.click',
-                        enabled=self.btn_zoom_tool.GetToggle()
+                        enabled=self.btn_zoom.GetToggle()
                         )
+        evt.Skip()
+
+    def on_update(self, evt):
+        logging.debug("Update tool clicked")
+        pub.sendMessage('secom.tool.update.click',
+                        enabled=self.btn_update.GetToggle()
+                        )
+        evt.Skip()
+
+    def on_resize(self, evt):
+        logging.debug("Resize tool clicked")
+        pub.sendMessage('secom.tool.resize.click')
+        evt.Skip()
+
+class SparcAcquisitionToolMenu(ToolMenu):
+    """ Tool menu for Sparc acquisition view manipulation """
+
+    def __init__(self):
+        ToolMenu.__init__(self)
+
+        self.btn_zoom = None
+        self.btn_update = None
+        self.btn_resize = None
+
+    def OnCreate(self, event):
+        self.Unbind(wx.EVT_WINDOW_CREATE)
+
+        self.btn_select = xrc.XRCCTRL(self, "btn_sparc_acq_view_select")
+        self.btn_pick = xrc.XRCCTRL(self, "btn_sparc_acq_view_pick")
+        self.btn_resize = xrc.XRCCTRL(self, "btn_sparc_acq_view_resize")
+
+        self._sort_buttons()
+
+        self.btn_select.Bind(wx.EVT_BUTTON, self.on_select)
+        self.btn_pick.Bind(wx.EVT_BUTTON, self.on_pick)
+
+        logging.debug("Created SparcToolMenu")
+
+    def on_select(self, evt):
+        logging.debug("Select tool clicked")
+        pub.sendMessage('sparc.acq.tool.select.click',
+                        enabled=self.btn_select.GetToggle()
+                        )
+        evt.Skip()
+
+    def on_pick(self, evt):
+        logging.debug("Pick tool clicked")
+        pub.sendMessage('sparc.acq.tool.pick.click',
+                        enabled=self.btn_pick.GetToggle()
+                        )
+        evt.Skip()
+
+    def on_resize(self, evt):
+        logging.debug("Resize tool clicked")
+        pub.sendMessage('sparc.acq.tool.resize.click')
+        evt.Skip()
+
+class SparcAnalysisToolMenu(ToolMenu):
+    """ Tool menu for Sparc analysis view manipulation """
+
+    def __init__(self):
+        ToolMenu.__init__(self)
+
+        self.btn_zoom = None
+        self.btn_update = None
+        self.btn_resize = None
+
+    def OnCreate(self, event):
+        self.Unbind(wx.EVT_WINDOW_CREATE)
+
+        self.btn_zoom = xrc.XRCCTRL(self, "btn_sparc_ana_view_zoom")
+        self.btn_update = xrc.XRCCTRL(self, "btn_sparc_ana_view_update")
+        self.btn_resize = xrc.XRCCTRL(self, "btn_sparc_ana_view_resize")
+
+        self._sort_buttons()
+
+        self.btn_zoom.Bind(wx.EVT_BUTTON, self.on_zoom)
+        self.btn_update.Bind(wx.EVT_BUTTON, self.on_update)
+
+        logging.debug("Created SparcToolMenu")
+
+    def on_zoom(self, evt):
+        logging.debug("Zoom tool clicked")
+        pub.sendMessage('sparc.ana.tool.zoom.click',
+                        enabled=self.btn_zoom.GetToggle()
+                        )
+        evt.Skip()
+
+    def on_update(self, evt):
+        logging.debug("Update tool clicked")
+        pub.sendMessage('sparc.ana.tool.update.click',
+                        enabled=self.btn_update.GetToggle()
+                        )
+        evt.Skip()
+
+    def on_resize(self, evt):
+        logging.debug("Resize tool clicked")
+        pub.sendMessage('sparc.ana.tool.resize.click')
+        evt.Skip()

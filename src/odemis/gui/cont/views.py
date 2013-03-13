@@ -46,9 +46,8 @@ from odemis.gui.model.stream import SEMStream, BrightfieldStream, FluoStream
 # In charge of applying the toolbar actions on the right viewport
 # in charge of changing the "hair-cross" display
 
-class ViewController(object):
-    """
-    Manages the microscope view updates, change of viewport focus, etc.
+class SecomViewController(object):
+    """ Manages the microscope view updates, change of viewport focus, etc.
     """
 
     def __init__(self, micgui, main_frame):

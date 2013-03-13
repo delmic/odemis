@@ -233,25 +233,6 @@ class OdemisGUIApp(wx.App):
                                                           self.main_frame,
                                                           self.interface_model))
 
-            #self.settings_controller = SettingsBarController(self.interface_model,
-            #                                           self.main_frame)
-
-            # Order matters!
-            # First we create the views, then the streams
-            # self.view_controller = ViewController(self.interface_model,
-            #                                           self.main_frame)
-            # self.stream_controller = StreamController(self.interface_model,
-            #                                           self.main_frame.pnl_secom_streams)
-
-            # self.view_selector = ViewSelector(self.interface_model,
-            #                                   self.main_frame)
-
-            # self.acquisition_controller = AcquisitionController(self.interface_model,
-            #                                                     self.main_frame)
-
-            # self.microscope_controller = MicroscopeController(self.interface_model,
-            #                                                   self.main_frame)
-
         except Exception:  #pylint: disable=W0703
             self.excepthook(*sys.exc_info())
             #raise
@@ -269,7 +250,8 @@ class OdemisGUIApp(wx.App):
     def on_load_example_secom1(self, e):
         """ Open the two files for example """
         try:
-            pos = self.interface_model.focussedView.value.view_pos.value #pylint: disable=E1101
+            #pylint: disable=E1103
+            pos = self.interface_model.focussedView.value.view_pos.value
             name1 = os.path.join(os.path.dirname(__file__),
                                  "img/example/1-optical-rot7.png")
             im1 = InstrumentalImage(wx.Image(name1), 7.14286e-7, pos)
@@ -291,7 +273,8 @@ class OdemisGUIApp(wx.App):
     def on_load_example_secom2(self, e):
         """ Open the two files for example """
         try:
-            pos = self.interface_model.focussedView.value.view_pos.value #pylint: disable=E1101
+            #pylint: disable=E1103
+            pos = self.interface_model.focussedView.value.view_pos.value
             name2 = os.path.join(os.path.dirname(__file__),
                                  "img/example/3-sem.png")
             im2 = InstrumentalImage(wx.Image(name2), 2.5e-07, pos)
@@ -327,7 +310,7 @@ class OdemisGUIApp(wx.App):
             md = {model.MD_PIXEL_SIZE: (178e-9, 178e-9),
                   model.MD_POS: (0,0),
                   # 335px : 409nm -> 695 nm (about linear)
-                  model.MD_WL_POLYNOMIAL: [552e-9, 0.85373e-9] 
+                  model.MD_WL_POLYNOMIAL: [552e-9, 0.85373e-9]
                   }
             specdata = model.DataArray(scipy.io.loadmat(name2)["spectraldat"], md)
 

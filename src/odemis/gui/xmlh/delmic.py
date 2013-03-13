@@ -89,15 +89,23 @@ component.Manager.addXmlHandler(xh_delmic.DyeStreamPanelXmlHandler)
 component.Manager.setMenu(c, 'Delmic', 'Dye Stream', 'DyeStreamPanel', 5)
 
 
-### gui.dblmscopepanel.MicroscopeViewport
+### gui.dblmscopepanel.MicroscopeViewport and subclasses
 
-c = component.Container('MicroscopeViewport', ['window', 'top_level', 'control'],
-              ['pos', 'size'],
-              image=images.TreePanel.GetImage())
-c.addStyles('wxTAB_TRAVERSAL')
-component.Manager.register(c)
-component.Manager.addXmlHandler(xh_delmic.MicroscopeViewportXmlHandler)
-component.Manager.setMenu(c, 'Delmic', 'Microscope Viewport', 'MicroscopeViewport', 10)
+msvps  = [('MicroscopeViewport', xh_delmic.MicroscopeViewportXmlHandler),
+          ('SecomViewport', xh_delmic.SecomViewportXmlHandler),
+          ('SparcAcquisitionViewport', xh_delmic.SparcAcquisitionViewportXmlHandler),
+          ('SparcAnalysisViewport', xh_delmic.SparcAnalysisViewportXmlHandler),]
+
+for i, (name, handler) in enumerate(msvps):
+    c = component.Container(
+                        name,
+                        ['window', 'top_level', 'control'],
+                        ['pos', 'size'],
+                        image=images.TreePanel.GetImage())
+    c.addStyles('wxTAB_TRAVERSAL')
+    component.Manager.register(c)
+    component.Manager.addXmlHandler(handler)
+    component.Manager.setMenu(c, 'Delmic', name, name, 10 + i)
 
 
 ### wx.lib.buttons.GenBitmapButton

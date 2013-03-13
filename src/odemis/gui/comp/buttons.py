@@ -186,13 +186,13 @@ class ImageButton(GenBitmapButton):
         hasMask = bmp.GetMask() != None
         dc.DrawBitmap(bmp, (width - bw) // 2, (height - bh) // 2, hasMask)
 
-    # def InitColours(self):
-    #     """ Depddrecated? """
-    #     GenBitmapButton.InitColours(self)
-    #     if self.background_parent:
-    #         self.faceDnClr = self.background_parent.GetBackgroundColour()
-    #     else:
-    #         self.faceDnClr = self.GetParent().GetBackgroundColour()
+    def InitColours(self):
+        """ Needed for correct background coloration """
+        GenBitmapButton.InitColours(self)
+        if self.background_parent:
+            self.faceDnClr = self.background_parent.GetBackgroundColour()
+        else:
+            self.faceDnClr = self.GetParent().GetBackgroundColour()
 
     def SetLabelDelta(self, delta):
         """ Change the label delta value
@@ -371,13 +371,13 @@ class ImageTextButton(GenBitmapTextButton):
         # draw the text
         dc.DrawText(label, pos_x, (height - th) // 2 + dy + self.padding_y)
 
-    # def InitColours(self):
-    #     """ Deprecated? """
-    #     GenBitmapTextButton.InitColours(self)
-    #     if self.background_parent:
-    #         self.faceDnClr = self.background_parent.GetBackgroundColour()
-    #     else:
-    #         self.faceDnClr = self.GetParent().GetBackgroundColour()
+    def InitColours(self):
+        """ Needed for correct background coloration """
+        GenBitmapTextButton.InitColours(self)
+        if self.background_parent:
+            self.faceDnClr = self.background_parent.GetBackgroundColour()
+        else:
+            self.faceDnClr = self.GetParent().GetBackgroundColour()
 
 class ImageToggleButton(GenBitmapToggleButton):  #pylint: disable=R0901
     """ Graphical toggle button with a hover effect. """
@@ -517,13 +517,13 @@ class ImageToggleButton(GenBitmapToggleButton):  #pylint: disable=R0901
         hasMask = bmp.GetMask() != None
         dc.DrawBitmap(bmp, (width - bw) // 2, (height - bh) // 2, hasMask)
 
-    # def InitColours(self):
-    #     """ Deprecated?? """
-    #     GenBitmapButton.InitColours(self)
-    #     if self.background_parent:
-    #         self.faceDnClr = self.background_parent.GetBackgroundColour()
-    #     else:
-    #         self.faceDnClr = self.GetParent().GetBackgroundColour()
+    def InitColours(self):
+        """ Needed for correct background coloration """
+        GenBitmapButton.InitColours(self)
+        if self.background_parent:
+            self.faceDnClr = self.background_parent.GetBackgroundColour()
+        else:
+            self.faceDnClr = self.GetParent().GetBackgroundColour()
 
 class ImageTextToggleButton(GenBitmapTextToggleButton):
     """ Graphical toggle button with text and a hover effect. """
@@ -681,13 +681,13 @@ class ImageTextToggleButton(GenBitmapTextToggleButton):
 
         dc.DrawText(label, pos_x, (height - th) // 2 + dy + 1) # draw the text
 
-    # def InitColours(self):
-    #     """ Deprecated?? """
-    #     GenBitmapButton.InitColours(self)
-    #     if self.background_parent:
-    #         self.faceDnClr = self.background_parent.GetBackgroundColour()
-    #     else:
-    #         self.faceDnClr = self.GetParent().GetBackgroundColour()
+    def InitColours(self):
+        """ Needed for correct background coloration """
+        GenBitmapButton.InitColours(self)
+        if self.background_parent:
+            self.faceDnClr = self.background_parent.GetBackgroundColour()
+        else:
+            self.faceDnClr = self.GetParent().GetBackgroundColour()
 
 class ViewButton(ImageTextToggleButton):
     """ The ViewButton class describes a toggle button that has an image overlay
