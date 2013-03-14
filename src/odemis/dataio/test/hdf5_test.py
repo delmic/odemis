@@ -24,7 +24,6 @@ import numpy
 import os
 import time
 import unittest
-from odemis.model._dataflow import MD_BPP
 
 FILENAME = "test" + hdf5.EXTENSIONS[0] 
 class TestHDF5IO(unittest.TestCase):
@@ -159,7 +158,7 @@ class TestHDF5IO(unittest.TestCase):
         ldata = []
         # 3D data generation (+ metadata): gradient along the wavelength
         data3d = numpy.empty(size3d[-1::-1], dtype=dtype)
-        end = 2**metadata3d[MD_BPP]
+        end = 2**metadata3d[model.MD_BPP]
         step = end // size3d[2]
         lin = numpy.arange(0, end, step, dtype=dtype)[:size3d[2]]
         lin.shape = (size3d[2], 1, 1) # to be able to copy it on the first dim
@@ -181,6 +180,7 @@ class TestHDF5IO(unittest.TestCase):
         
         # check the 3D data
         im = f["Acquisition0/ImageData/Image"]
+        self.assertEqual(im[1,0,0,1,1], step)
         self.assertEqual(im.shape, data3d.shape)
         self.assertEqual(im.attrs["IMAGE_SUBCLASS"], "IMAGE_GRAYSCALE")
         
