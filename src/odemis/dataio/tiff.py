@@ -112,8 +112,8 @@ def _convertToOMEMD(images):
     Converts DataArray tags to OME-TIFF tags.
     images (list of DataArrays): the images that will be in the TIFF file, in order
     returns (string): the XML data as compatible with OME
-    Note: the first element of images should be in the IFD 0, second element in
-      IFD 1, etc.
+    Note: the images will be considered from the same detectors only if they are
+      consecutive (and the metadata confirms the detector is the same)
     """
     # An OME-TIFF is a TIFF file with one OME-XML metadata embedded. For an
     # overview of OME-XML, see:
@@ -172,31 +172,31 @@ def _convertToOMEMD(images):
                                 })
 
     # for each set of images from the same instrument, add them
-    groups = _findImageGroups(images)
+    groups, first_ifd = _findImageGroups(images)
 
     # Detectors
-    for g in groups:
-        id = min(g) # ID is the smallest ID of the images
-        da0 = images[id]
+    for i, g in enumerate(groups):
+        did = first_ifd[i] # our convention: ID is the first IFD
+        da0 = g[0]
         if model.MD_HW_NAME in da0.metadata:
             detect = ET.SubElement(instr, "Detector", attrib={
-                                      "ID": "Detector:%d" % id,
+                                      "ID": "Detector:%d" % did,
                                       "Model": da0.metadata[model.MD_HW_NAME]})
 
     # Objectives
-    for g in groups:
-        id = min(g) # ID is the smallest ID of the images
-        da0 = images[id]
+    for i, g in enumerate(groups):
+        oid = first_ifd[i] # our convention: ID is the first IFD
+        da0 = g[0]
         if model.MD_LENS_MAG in da0.metadata:
             obj = ET.SubElement(instr, "Objective", attrib={
-                      "ID": "Objective:%d" % id,
+                      "ID": "Objective:%d" % oid,
                       "CalibratedMagnification": "%f" % da0.metadata[model.MD_LENS_MAG]
                       })
             if model.MD_LENS_NAME in da0.metadata:
                 obj.attrib["Model"] = da0.metadata[model.MD_LENS_NAME]
 
-    for g in groups:
-        _addImageElement(root, images, list(g))
+    for i, g in enumerate(groups):
+        _addImageElement(root, g, first_ifd[i])
 
     # TODO add tag to each image with "Odemis", so that we can find them back
     # easily in a database?
@@ -210,50 +210,59 @@ def _findImageGroups(das):
     Find groups of images which should be considered part of the same acquisition
     (aka "Image" in OME-XML).
     das (list of DataArray): all the images of the final TIFF file
-    returns (list of list of int): a set of "groups", each group is represented
-      by a set of indexes (of the images being part of the group)
+    returns :
+        groups (list of list of DataArray): a set of "groups", each group is 
+         a list which contains the DataArrays 
+        first_ifd (list of int): the IFD (index) of the first image of the group 
     """
     # We consider images to be part of the same group if they have:
     # * same shape
     # * metadata that show they were acquired by the same instrument
     groups = []
+    first_ifd = []
 
-    for i, da in enumerate(das):
-        # try to find a matching group (compare just to the first picture)
-        found = False
-        for g in groups:
-            da0 = das[g[0]]
-            if da0.shape != da.shape:
-                continue
-            if (da0.metadata.get(model.MD_HW_NAME, None) != da.metadata.get(model.MD_HW_NAME, None) or
-                da0.metadata.get(model.MD_HW_VERSION, None) != da.metadata.get(model.MD_HW_VERSION, None)):
-                continue
-            g.append(i)
-            found = True
-            break
+    ifd = 0
+    prev_da = None
+    for da in das:
+        # check if it can be part of the current group (compare just to the previous DA)
+        if (prev_da is None or
+            prev_da.shape != da.shape or
+            prev_da.metadata.get(model.MD_HW_NAME, None) != da.metadata.get(model.MD_HW_NAME, None) or
+            prev_da.metadata.get(model.MD_HW_VERSION, None) != da.metadata.get(model.MD_HW_VERSION, None)
+            ):
+            # new group
+            groups.append([da])
+            first_ifd.append(ifd)
+        else:
+            # same group
+            groups[-1].append(da)
+        
+        # increase ifd by the number of planes (= everything above 2D)
+        ifd += numpy.prod(da.shape[:-2])
+            
+    return groups, first_ifd
 
-        if not found:
-            # if not, create a new group
-            groups.append([i])
-
-    return groups
-
-def _addImageElement(root, das, idx):
+def _addImageElement(root, das, ifd):
     """
     Add the metadata of a list of DataArray to a OME-XML root element
     root (Element): the root element
-    das (list of DataArray): all the images of the final TIFF file
-    idx (list of int): the indexes of DataArray to add
+    das (list of DataArray): all the images to describe. Each DataArray
+     can have up to 5 dimensions in the order CTZYX. IOW, RGB images have C=3. 
+    ifd (int): the IFD of the first DataArray
+    Note: the images in das must be added in the final TIFF in the same order
+     and contiguously
     """
-    assert(len(idx) > 0)
+    assert(len(das) > 0)
+    # all image have the same shape?
+    assert all([das[0].shape == im.shape for im in das]) 
 
     idnum = len(root.findall("Image"))
     ime = ET.SubElement(root, "Image", attrib={"ID": "Image:%d" % idnum})
 
     # compute a common metadata
     globalMD = {}
-    for i in idx:
-        globalMD.update(das[i].metadata)
+    for da in das:
+        globalMD.update(da.metadata)
 
     # find out about the common attribute (Name)
     if model.MD_DESCRIPTION in globalMD:
@@ -271,26 +280,32 @@ def _addImageElement(root, das, idx):
         globalAD = globalMD[model.MD_ACQ_DATE]
         ad.text = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(globalAD))
 
-    # count the number of channels (RGB=3)
-    nb_channels = 0
-    for i in idx:
-        da = das[i]
-        if len(da.shape) == 3:
-            nb_channels += da.shape[2]
-        else:
-            nb_channels += 1
-
+    # Find a dimension along which the DA can be concatenated. That's a
+    # dimension which is of size 1. 
+    # For now, if there are many possibilities, we pick the first one.
+    da0 = das[0]
+    
+    dshape = das[0].shape 
+    if len(dshape) < 5:
+        dshape = [1] * (5-len(dshape)) + list(dshape)
+    if not 1 in dshape:
+        raise ValueError("No dimension found to concatenate images: %s" % dshape)
+    concat_axis = dshape.index(1)
+    # global shape (same as dshape, but the axis of concatenation is the number of images)
+    gshape = list(dshape)
+    gshape[concat_axis] = len(das)
+    gshape = tuple(gshape)
+    
     # TODO: check that all the DataArrays have the same shape
-    da0 = das[idx[0]]
     pixels = ET.SubElement(ime, "Pixels", attrib={
                               "ID": "Pixels:%d" % idnum,
                               "DimensionOrder": "XYZTC", # we don't have ZT so it doesn't matter
                               "Type": "%s" % da0.dtype, # seems to be compatible in general
-                              "SizeX": "%d" % da0.shape[1], # numpy shape is reversed
-                              "SizeY": "%d" % da0.shape[0],
-                              "SizeZ": "1", # for now, always one
-                              "SizeT": "1", # for now, always one
-                              "SizeC": "%d" % nb_channels,
+                              "SizeX": "%d" % gshape[4], # numpy shape is reversed
+                              "SizeY": "%d" % gshape[3],
+                              "SizeZ": "%d" % gshape[2],
+                              "SizeT": "%d" % gshape[1],
+                              "SizeC": "%d" % gshape[0],
                               })
     # Add optional values
     if model.MD_PIXEL_SIZE in globalMD:
@@ -303,80 +318,87 @@ def _addImageElement(root, das, idx):
 
     # Channel Element
     subid = 0
-    for i in idx:
-        da = das[i]
-        chan = ET.SubElement(pixels, "Channel", attrib={
-                               "ID": "Channel:%d:%d" % (idnum, subid)})
+    for da in das:
         # RGB?
         # Note: it seems officially OME-TIFF doesn't support RGB TIFF (instead,
         # each colour should go in a separate channel). However, that'd defeat
         # the purpose of the thumbnail, and it seems at OMERO handles this
         # not too badly (all the other images get 3 components).
-        if len(da.shape) == 3 and da.shape[2] == 3:
-            chan.attrib["SamplesPerPixel"] = "3"
+        is_rgb = (len(da.shape) == 5 and da.shape[0] == 3)
+        
+        if is_rgb or len(da.shape) < 5:
+            num_chan = 1
+        else:
+            num_chan = da.shape[0]
+        for c in range(num_chan):
+            chan = ET.SubElement(pixels, "Channel", attrib={
+                                   "ID": "Channel:%d:%d" % (idnum, subid)})
+            if is_rgb:
+                chan.attrib["SamplesPerPixel"] = "3"
+                
+            # TODO Name attrib for Filtered color streams?
+            if model.MD_DESCRIPTION in da.metadata:
+                chan.attrib["Name"] = da.metadata[model.MD_DESCRIPTION]
+    
+            # TODO Color attrib for tint?
+            # TODO Fluor attrib for the dye?
+            if model.MD_IN_WL in da.metadata:
+                iwl = da.metadata[model.MD_IN_WL]
+                xwl = numpy.mean(iwl) * 1e9 # in nm
+                chan.attrib["ExcitationWavelength"] = "%f" % xwl
+    
+                # if input wavelength range is small, it means we are in epifluoresence
+                if abs(iwl[1] - iwl[0]) < 100e-9:
+                    chan.attrib["IlluminationType"] = "Epifluorescence"
+                    chan.attrib["AcquisitionMode"] = "WideField"
+                    chan.attrib["ContrastMethod"] = "Fluorescence"
+                else:
+                    chan.attrib["IlluminationType"] = "Epifluorescence"
+                    chan.attrib["AcquisitionMode"] = "WideField"
+                    chan.attrib["ContrastMethod"] = "Brightfield"
+    
+            if model.MD_OUT_WL in da.metadata:
+                owl = da.metadata[model.MD_OUT_WL]
+                ewl = numpy.mean(owl) * 1e9 # in nm
+                chan.attrib["EmissionWavelength"] = "%f" % ewl
+    
+            # Add info on detector
+            attrib = {}
+            if model.MD_BINNING in da.metadata:
+                attrib["Binning"] = "%dx%d" % da.metadata[model.MD_BINNING]
+            if model.MD_GAIN in da.metadata:
+                attrib["Gain"] = "%f" % da.metadata[model.MD_GAIN]
+            if model.MD_READOUT_TIME in da.metadata:
+                ror = (1 / da.metadata[model.MD_READOUT_TIME]) / 1e6 #MHz
+                attrib["ReadOutRate"] = "%f" % ror
+    
+            if attrib:
+                # detector of the group has the same id as first IFD of the group
+                attrib["ID"] = "Detector:%d" % ifd
+                ds = ET.SubElement(chan, "DetectorSettings", attrib=attrib)
 
-        # TODO Name attrib for Filtered color streams?
-        if model.MD_DESCRIPTION in da.metadata:
-            chan.attrib["Name"] = da.metadata[model.MD_DESCRIPTION]
+            subid += 1
 
-        # TODO Color attrib for tint?
-        # TODO Fluor attrib for the dye?
-        if model.MD_IN_WL in da.metadata:
-            iwl = da.metadata[model.MD_IN_WL]
-            xwl = numpy.mean(iwl) * 1e9 # in nm
-            chan.attrib["ExcitationWavelength"] = "%f" % xwl
-
-            # if input wavelength range is small, it means we are in epifluoresence
-            if abs(iwl[1] - iwl[0]) < 100e-9:
-                chan.attrib["IlluminationType"] = "Epifluorescence"
-                chan.attrib["AcquisitionMode"] = "WideField"
-                chan.attrib["ContrastMethod"] = "Fluorescence"
-            else:
-                chan.attrib["IlluminationType"] = "Epifluorescence"
-                chan.attrib["AcquisitionMode"] = "WideField"
-                chan.attrib["ContrastMethod"] = "Brightfield"
-
-        if model.MD_OUT_WL in da.metadata:
-            owl = da.metadata[model.MD_OUT_WL]
-            ewl = numpy.mean(owl) * 1e9 # in nm
-            chan.attrib["EmissionWavelength"] = "%f" % ewl
-
-        # Add info on detector
-        attrib = {}
-        if model.MD_BINNING in da.metadata:
-            attrib["Binning"] = "%dx%d" % da.metadata[model.MD_BINNING]
-        if model.MD_GAIN in da.metadata:
-            attrib["Gain"] = "%f" % da.metadata[model.MD_GAIN]
-        if model.MD_READOUT_TIME in da.metadata:
-            ror = (1 / da.metadata[model.MD_READOUT_TIME]) / 1e6 #MHz
-            attrib["ReadOutRate"] = "%f" % ror
-
-        if attrib:
-            # detector of the group has the same id as the lowest id in the group
-            attrib["ID"] = "Detector:%d" % min(idx)
-            ds = ET.SubElement(chan, "DetectorSettings", attrib=attrib)
-
-        subid += 1
-
-    # TiffData Element
+    # TiffData Element: describe every single IFD image
     subid = 0
-    for i in idx:
-        da = das[i]
+    for index in numpy.ndindex(gshape[:-2]):
         tde = ET.SubElement(pixels, "TiffData", attrib={
-                                "IFD": "%d" % i,
-                                "FirstC": "%d" % subid,
+                                "IFD": "%d" % (ifd + subid),
+                                "FirstZ": "%d" % index[2],
+                                "FirstT": "%d" % index[1],
+                                "FirstC": "%d" % index[0],
                                 "PlaneCount": "1"
                                 })
         subid += 1
 
     # Plane Element
     subid = 0
-    for i in idx:
-        da = das[i]
+    for index in numpy.ndindex(gshape[:-2]):
+        da = das[index[concat_axis]]
         plane = ET.SubElement(pixels, "Plane", attrib={
-                               "TheZ": "0",
-                               "TheT": "0",
-                               "TheC": "%d" % subid,
+                               "TheZ": "%d" % index[2],
+                               "TheT": "%d" % index[1],
+                               "TheC": "%d" % index[0],
                                })
         if model.MD_ACQ_DATE in da.metadata:
             diff = da.metadata[model.MD_ACQ_DATE] - globalAD
@@ -428,9 +450,17 @@ def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True):
 
     # OME tags: a XML document in the ImageDescription of the first image
     if thumbnail is not None:
-        alldata = [thumbnail] + ldata
+        # OME expects channel as 5th dimension. If thumbnail is RGB as HxWx3,
+        # reorganise as 3x1x1xHxW
+        if len(thumbnail.shape) == 3:
+            OME_thumbnail = numpy.rollaxis(thumbnail, 2)
+            OME_thumbnail = OME_thumbnail[:,numpy.newaxis,numpy.newaxis,:,:] #5D
+        else:
+            OME_thumbnail = thumbnail
+        alldata = [OME_thumbnail] + ldata
     else:
         alldata = ldata
+    # TODO: reorder the data so that data from the same sensor are together
     ometxt = _convertToOMEMD(alldata)
 
     if thumbnail is not None:
@@ -503,7 +533,9 @@ def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True):
             f.SetField(T.TIFFTAG_IMAGEDESCRIPTION, ometxt)
             ometxt = None
 
-        f.write_image(data, compression=compression)
+        # for data > 2D: write as a sequence of 2D images
+        for i in numpy.ndindex(data.shape[:-2]):
+            f.write_image(data[i], compression=compression)
 
 def export(filename, data, thumbnail=None):
     '''
