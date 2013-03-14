@@ -28,10 +28,10 @@ import logging
 
 import wx
 
+import odemis.gui.dblmscopecanvas as canvas
 from odemis import gui
 from odemis.gui.comp.scalewindow import ScaleWindow
 from odemis.gui.comp.slider import Slider
-from odemis.gui.dblmscopecanvas import DblMicroscopeCanvas, SecomCanvas
 from odemis.gui.img.data import \
     getico_blending_optBitmap, getico_blending_semBitmap
 from odemis.gui.model import OPTICAL_STREAMS, EM_STREAMS
@@ -40,7 +40,11 @@ from odemis.gui.util import call_after, units
 
 class MicroscopeViewport(wx.Panel):
     """ A panel that shows a microscope view and its legend below it.
+
+    This is a generic class, that should be inherited by more specific classes.
     """
+
+    canvas_class = canvas.DblMicroscopeCanvas
 
     def __init__(self, *args, **kwargs):
         """Note: The MicroscopeViewport is not fully initialised until setView()
@@ -62,7 +66,7 @@ class MicroscopeViewport(wx.Panel):
         self.SetForegroundColour("#BBBBBB")
 
         # main widget
-        self.canvas = DblMicroscopeCanvas(self)
+        self.canvas = self.canvas_class(self)
 
         ##### Legend
         # It's made of multiple controls positioned via sizers
@@ -428,15 +432,17 @@ class MicroscopeViewport(wx.Panel):
 
 class SecomViewport(MicroscopeViewport):
 
-    def __init__(self):
-        super(SecomViewport, self).__init__()
+    canvas_class = canvas.SecomCanvas
+
+    def __init__(self, *args, **kwargs):
+        super(SecomViewport, self).__init__(*args, **kwargs)
 
 class SparcAcquisitionViewport(MicroscopeViewport):
 
-    def __init__(self):
-        super(SparcAcquisitionViewport, self).__init__()
+    def __init__(self, *args, **kwargs):
+        super(SparcAcquisitionViewport, self).__init__(*args, **kwargs)
 
 class SparcAnalysisViewport(MicroscopeViewport):
 
-    def __init__(self):
-        super(SparcAnalysisViewport, self).__init__()
+    def __init__(self, *args, **kwargs):
+        super(SparcAnalysisViewport, self).__init__(*args, **kwargs)
