@@ -42,6 +42,8 @@ CROSSHAIR_SIZE = 16
 
 SELECTION_COLOR = FOREGROUND_COLOUR_EDIT
 
+# Various modes canvas elements can go into.
+
 MODE_SECOM_ZOOM = 1
 MODE_SECOM_UPDATE = 2
 
@@ -57,8 +59,7 @@ def microscope_view_check(f, self, *args, **kwargs):
         return f(self, *args, **kwargs)
 
 class DblMicroscopeCanvas(DraggableCanvas):
-    """
-    A draggable, flicker-free window class adapted to show pictures of two
+    """ A draggable, flicker-free window class adapted to show pictures of two
     microscope simultaneously.
 
     It knows size and position of what is represented in a picture and display
@@ -93,7 +94,8 @@ class DblMicroscopeCanvas(DraggableCanvas):
         #                                            (-10, -10)))
         # self.WorldOverlays.append(CrossHairOverlay("Red",
         #                                            CROSSHAIR_SIZE,
-        #                                            (10, 10)))
+        #                                            (-10, -10)))
+
         self.current_mode = None
 
     def setView(self, microscope_view):
@@ -116,7 +118,6 @@ class DblMicroscopeCanvas(DraggableCanvas):
         # FIXME!! => have a PhyscicalCanvas which directly use physical units
 
         self.microscope_view.mpp.subscribe(self._onMPP)
-        self.microscope_view.show_crosshair.subscribe(self._onCrossHair, init=True)
 
         # TODO subscribe to view_pos to synchronize with the other views
         # TODO subscribe to stage_pos as well/instead.
@@ -335,36 +336,15 @@ class DblMicroscopeCanvas(DraggableCanvas):
         logging.debug("Moving focus1 by %f μm", shift * 1e6)
         self.microscope_view.get_focus(1).moveRel({"z": shift})
 
-    def _onCrossHair(self, activated):
-        """ Activate or disable the display of a cross in the middle of the view
-        activated = true if the cross should be displayed
-        """
-        # We don't specifically know about the crosshair, so look for it in the static overlays
-        ch = None
-        for o in self.ViewOverlays:
-            if isinstance(o, CrossHairOverlay):
-                ch = o
-                break
-
-        if activated:
-            if not ch:
-                ch = CrossHairOverlay(CROSSHAIR_COLOR, CROSSHAIR_SIZE)
-                self.ViewOverlays.append(ch)
-                self.Refresh(eraseBackground=False)
-        else:
-            if ch:
-                self.ViewOverlays.remove(ch)
-                self.Refresh(eraseBackground=False)
-
 class SecomCanvas(DblMicroscopeCanvas):
 
     def __init__(self, *args, **kwargs):
         super(SecomCanvas, self).__init__(*args, **kwargs)
-        pub.subscribe(self.toggle_select_mode, 'sparc.tool.select.click')
+        pub.subscribe(self.toggle_select_mode, 'secom.tool.zoom.click')
 
     def toggle_select_mode(self, enabled):
 
-        logging.debug("Select mode %s", self)
+        logging.debug("Zoom mode %s", self)
         if self.current_mode == MODE_SECOM_ZOOM and not enabled:
             self.current_mode = None
         elif not self.dragging and enabled:
@@ -402,6 +382,38 @@ class SecomCanvas(DblMicroscopeCanvas):
         else:
             DraggableCanvas.OnMouseMotion(self, event)
 
+    def setView(self, microscope_view):
+        """
+        Set the microscope_view that this canvas is displaying/representing
+        Can be called only once, at initialisation.
+
+        :param microscope_view:(instrmodel.MicroscopeView)
+        """
+        super(SecomCanvas, self).setView(microscope_view)
+        self.microscope_view.show_crosshair.subscribe(self._onCrossHair, init=True)
+
+    def _onCrossHair(self, activated):
+        """ Activate or disable the display of a cross in the middle of the view
+        activated = true if the cross should be displayed
+        """
+        # We don't specifically know about the crosshair, so look for it in the
+        # static overlays
+        ch = None
+        for o in self.ViewOverlays:
+            if isinstance(o, CrossHairOverlay):
+                ch = o
+                break
+
+        if activated:
+            if not ch:
+                ch = CrossHairOverlay(CROSSHAIR_COLOR, CROSSHAIR_SIZE)
+                self.ViewOverlays.append(ch)
+                self.Refresh(eraseBackground=False)
+        else:
+            if ch:
+                self.ViewOverlays.remove(ch)
+                self.Refresh(eraseBackground=False)
+
 ### Here come all the classes for drawing overlays
 class CrossHairOverlay(object):
     def __init__(self, color=CROSSHAIR_COLOR, size=CROSSHAIR_SIZE, center=(0, 0)):
@@ -428,6 +440,7 @@ class CrossHairOverlay(object):
 
         dc.DrawLine(tl_s[0], center[1], br_s[0], center[1])
         dc.DrawLine(center[0], tl_s[1], center[0], br_s[1])
+
 
 class SelectionOverlay(object):
     def __init__(self, color=SELECTION_COLOR, center=(0, 0)):

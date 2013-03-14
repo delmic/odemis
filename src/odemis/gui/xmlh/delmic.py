@@ -105,7 +105,7 @@ for i, (name, handler) in enumerate(msvps):
     c.addStyles('wxTAB_TRAVERSAL')
     component.Manager.register(c)
     component.Manager.addXmlHandler(handler)
-    component.Manager.setMenu(c, 'Delmic', name, name, 10 + i)
+    component.Manager.setMenu(c, 'Delmic Viewport', name, name, 10 + i)
 
 
 ### wx.lib.buttons.GenBitmapButton

@@ -574,7 +574,7 @@ def __init_resources():
                 <object class="sizeritem">
                   <object class="wxBoxSizer">
                     <object class="sizeritem">
-                      <object class="MicroscopeViewport" name="vp_secom_tl">
+                      <object class="SecomViewport" name="vp_secom_tl">
                         <size>400,-1</size>
                         <XRCED>
                           <assign_var>1</assign_var>
@@ -585,7 +585,7 @@ def __init_resources():
                       <ratio>1</ratio>
                     </object>
                     <object class="sizeritem">
-                      <object class="MicroscopeViewport" name="vp_secom_tr">
+                      <object class="SecomViewport" name="vp_secom_tr">
                         <size>400,-1</size>
                         <fg>#BFBFBF</fg>
                         <bg>#000000</bg>
@@ -606,7 +606,7 @@ def __init_resources():
                 <object class="sizeritem">
                   <object class="wxBoxSizer">
                     <object class="sizeritem">
-                      <object class="MicroscopeViewport" name="vp_secom_bl">
+                      <object class="SecomViewport" name="vp_secom_bl">
                         <size>400,-1</size>
                         <fg>#BFBFBF</fg>
                         <bg>#000000</bg>
@@ -619,7 +619,7 @@ def __init_resources():
                       <ratio>1</ratio>
                     </object>
                     <object class="sizeritem">
-                      <object class="MicroscopeViewport" name="vp_secom_br">
+                      <object class="SecomViewport" name="vp_secom_br">
                         <size>400,-1</size>
                         <fg>#BFBFBF</fg>
                         <bg>#000000</bg>
@@ -1003,7 +1003,7 @@ def __init_resources():
               <flag>wxEXPAND</flag>
             </object>
             <object class="sizeritem">
-              <object class="MicroscopeViewport" name="vp_sparc_acq_view">
+              <object class="SparcAcquisitionViewport" name="vp_sparc_acq_view">
                 <XRCED>
                   <assign_var>1</assign_var>
                 </XRCED>
@@ -1388,7 +1388,7 @@ def __init_resources():
                 <object class="sizeritem">
                   <object class="wxBoxSizer">
                     <object class="sizeritem">
-                      <object class="MicroscopeViewport" name="vp_sparc_analysis_tl">
+                      <object class="SparcAnalysisViewport" name="vp_sparc_analysis_tl">
                         <size>400,-1</size>
                         <fg>#BFBFBF</fg>
                         <bg>#000000</bg>
@@ -1401,7 +1401,7 @@ def __init_resources():
                       <ratio>1</ratio>
                     </object>
                     <object class="sizeritem">
-                      <object class="MicroscopeViewport" name="vp_sparc_analysis_tr">
+                      <object class="SparcAnalysisViewport" name="vp_sparc_analysis_tr">
                         <size>400,-1</size>
                         <fg>#BFBFBF</fg>
                         <bg>#000000</bg>
@@ -1422,7 +1422,7 @@ def __init_resources():
                 <object class="sizeritem">
                   <object class="wxBoxSizer">
                     <object class="sizeritem">
-                      <object class="MicroscopeViewport" name="vp_sparc_analysis_bl">
+                      <object class="SparcAnalysisViewport" name="vp_sparc_analysis_bl">
                         <size>400,-1</size>
                         <fg>#BFBFBF</fg>
                         <bg>#000000</bg>
@@ -1435,7 +1435,7 @@ def __init_resources():
                       <ratio>1</ratio>
                     </object>
                     <object class="sizeritem">
-                      <object class="MicroscopeViewport" name="vp_sparc_analysis_br">
+                      <object class="SparcAnalysisViewport" name="vp_sparc_analysis_br">
                         <size>400,-1</size>
                         <fg>#BFBFBF</fg>
                         <bg>#000000</bg>
