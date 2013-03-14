@@ -17,7 +17,7 @@ You should have received a copy of the GNU General Public License along with Ode
 from __future__ import division
 from numpy.polynomial import polynomial
 from odemis import model
-from odemis.driver import spectrometer, spectrapro, pvcam
+from odemis.driver import spectrometer, spectrapro, pvcam, andorcam2
 from unittest.case import skip, skipIf
 import logging
 import math
@@ -33,15 +33,79 @@ else:
     PORT_SPG = "/dev/ttySP"
 
 # Simulated device
-CLASS_SPG = spectrapro.FakeSpectraPro
+CLASS_SPG = spectrapro.FakeSpectraPro # use FakeSpectraPro for simulated
+CLASS_SPG_SIM = spectrapro.FakeSpectraPro # should always be the simulated version
 KWARGS_SPG = {"name": "spg", "role": "spectrograph", "port": PORT_SPG}
 
 # Real device: PI PIXIS
 CLASS_CCD = pvcam.PVCam
 KWARGS_CCD = {"name": "pixis", "role": "ccd", "device": 0}
 
+CLASS_CCD_SIM = andorcam2.FakeAndorCam2
+KWARGS_CCD_SIM = {"name": "simcam", "role": "ccd", "device": 0}
+
+#CLASS_CCD=CLASS_CCD_SIM # full test simulated
+
 CLASS = spectrometer.CompositedSpectrometer
 
+class TestSimulated(unittest.TestCase):
+    """
+    Test the CompositedSpectrometer class with only simulated components
+    """
+    @classmethod
+    def setUpClass(cls):
+        cls.detector = CLASS_CCD_SIM(**KWARGS_CCD_SIM)
+        cls.spectrograph = CLASS_SPG_SIM(**KWARGS_SPG)
+        cls.spectrometer = CLASS(name="test", role="spectrometer",
+                                 children={"detector": cls.detector,
+                                           "spectrograph": cls.spectrograph})
+        #save position
+        cls._orig_pos = cls.spectrograph.position.value
+    
+    @classmethod
+    def tearDownClass(cls):
+        # restore position
+        f = cls.spectrograph.moveAbs(cls._orig_pos)
+        f.result() # wait for the move to finish
+        
+        cls.spectrometer.terminate()
+        cls.detector.terminate()
+        cls.spectrograph.terminate()
+    
+    def setUp(self):
+        # put a meaningful wavelength
+        f = self.spectrograph.moveAbs({"wavelength": 500e-9})
+        
+        # save basic VA
+        self._orig_binning = self.spectrometer.binning.value
+        self._orig_res = self.spectrometer.resolution.value
+        
+        f.result() # wait for the position to be set
+    
+    def tearDown(self):
+        # put back VAs
+        self.spectrometer.binning.value = self._orig_binning
+        self.spectrometer.resolution.value = self._orig_res
+    
+    def test_acquisition(self):
+        exp = 0.1 #s
+        self.spectrometer.exposureTime.value = exp
+        
+        begin = time.time()
+        data = self.spectrometer.data.get()
+        duration = time.time() - begin
+        self.assertGreaterEqual(duration, exp)
+        self.assertEqual(data.shape[0], 1)
+        self.assertEqual(data.shape[-1::-1], self.spectrometer.resolution.value)
+        
+        begin = time.time()
+        data = self.spectrometer.data.get()
+        duration = time.time() - begin
+        self.assertGreaterEqual(duration, exp)
+        self.assertEqual(data.shape[0], 1)
+        self.assertEqual(data.shape[-1::-1], self.spectrometer.resolution.value)
+        
+#@skip("only simulated")
 class TestCompositedSpectrometer(unittest.TestCase):
     """
     Test the CompositedSpectrometer class

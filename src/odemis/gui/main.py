@@ -27,7 +27,7 @@ from odemis.gui.conf import get_general_conf
 from odemis.gui.cont import set_main_tab_controller, get_main_tab_controller
 from odemis.gui.model.dye import DyeDatabase
 from odemis.gui.model.img import InstrumentalImage
-from odemis.gui.model.stream import StaticSEMStream
+from odemis.gui.model.stream import StaticSEMStream, StaticSpectrumStream
 from odemis.gui.xmlh import odemis_get_resources
 import Pyro4.errors
 import logging
@@ -319,7 +319,8 @@ class OdemisGUIApp(wx.App):
 
             stream_controller.addStatic("Secondary electrons", semdata,
                                         cls=StaticSEMStream)
-            stream_controller.addStatic("Spectrogram", specdata)
+            stream_controller.addStatic("Spectrogram", specdata,
+                                        cls=StaticSpectrumStream)
         except e:
             logging.exception("Failed to load example")
 

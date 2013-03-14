@@ -24,17 +24,26 @@ import unittest
 logging.getLogger().setLevel(logging.DEBUG)
 
 #@unittest.skip("simple")
+CLASS=andorcam2.FakeAndorCam2 # use FakeAndorCam2 if you don't have the hardware
+
+class StaticTestFake(VirtualStaticTestCam, unittest.TestCase):
+    """
+    Ensure we always test the fake version at least a bit
+    """
+    camera_type = andorcam2.FakeAndorCam2
+    camera_args = ("camera", "test", 0)
+
 class StaticTestAndorCam2(VirtualStaticTestCam, unittest.TestCase):
-    camera_type = andorcam2.AndorCam2
-    camera_args = ("camera", "test", None, 0)
+    camera_type = CLASS
+    camera_args = ("camera", "test", 0)
 
 # Inheritance order is important for setUp, tearDown
 class TestAndorCam2(VirtualTestCam, unittest.TestCase):
     """
     Test directly the AndorCam2 class.
     """
-    camera_type = andorcam2.AndorCam2
-    camera_args = ("camera", "test", None, 0)
+    camera_type = CLASS
+    camera_args = ("camera", "test", 0)
     
     @classmethod
     def setUpClass(cls):

@@ -202,15 +202,15 @@ class AndorCam3(model.DigitalCamera):
                                                   setter=self.setFanSpeed) # ratio to max speed
             self.setFanSpeed(1.0)
 
-        self._binning = 1 # used by resolutionFitter()
+        self._binning = (1, 1) # used by resolutionFitter()
         # need to be before binning, as it is modified when changing binning         
         self.resolution = model.ResolutionVA(resolution, [(1, 1), resolution], 
-                                             setter=self.setResolution)
-        self.setResolution(resolution)
+                                             setter=self._setResolution)
+        self._setResolution(resolution)
         
-        self.binning = model.IntEnumerated(self._binning, self._getAvailableBinnings(),
-                                           unit="px", setter=self.setBinning)
-        self.setBinning(self._binning)
+        self.binning = model.ResolutionVA(self._binning, [(1, 1), self._getMaxBinnings()],
+                                          setter=self._setBinning)
+        self._setBinning(self._binning)
         
         range_exp = list(self.GetFloatRanges(u"ExposureTime"))
         range_exp[0] = max(range_exp[0], 1e-6) # s, to make sure != 0 
@@ -478,13 +478,6 @@ class AndorCam3(model.DigitalCamera):
         self.SetEnumString(u"FanSpeed", values[speed_index])
         return float(speed_index) / len(values)
         
-    @staticmethod
-    def find_closest(val, l):
-        """
-        finds in a list the closest existing value from a given value
-        """ 
-        return min(l, key=lambda x:abs(x - val))
-
     def setReadoutRate(self, frequency):
         """
         Set the pixel readout rate
@@ -495,71 +488,82 @@ class AndorCam3(model.DigitalCamera):
         # returns strings like u"550 MHz"
         rates = self.GetEnumStringAvailable(u"PixelReadoutRate")
         values = [int(r.rstrip(u" MHz")) for r in rates]
-        closest = self.find_closest(frequency / 1e6, values)
+        closest = util.find_closest(frequency / 1e6, values)
         self.SetEnumString(u"PixelReadoutRate", u"%d MHz" % closest)
         return closest * 1e6
         
-    def _setBinning(self, binning):
+    def _storeBinning(self, binning):
         """
         binning (int 1, 2, 3, 4, or 8): how many pixels horizontally and vertically
          are combined to create "super pixels"
-        Note: super pixels are always square
+        return (2-tuple
         """
-        values = [1, 2, 3, 4, 8]
-        assert(binning in values)
         
         # Nicely the API is different depending on cameras...
         if self.isImplemented(u"AOIBinning"):
             # Typically for the Neo
-            binning_str = u"%dx%d" % (binning, binning)
+            allowed_bin = [1, 2, 3, 4, 8]
+            binning = (util.find_closest(binning[0], allowed_bin),
+                       util.find_closest(binning[1], allowed_bin))
+            # TODO: might need to check combination is available in GetEnumStringAvailable()
+            binning_str = u"%dx%d" % binning
             self.SetEnumString(u"AOIBinning", binning_str)
         elif self.isImplemented(u"AOIHBin"):
             if self.isWritable(u"AOIHBin"):
-                self.SetInt(u"AOIHBin", binning)
-                self.SetInt(u"AOIVBin", binning)
-            else:
-                # Typically for the simcam
-                act_binning = (self.GetInt(u"AOIHBin"), self.GetInt(u"AOIVBin"))
-                if act_binning != (binning, binning):
-                    raise IOError("Requested binning " + 
-                                  str((binning, binning)) + 
-                                  " does not match fixed binning " +
-                                  str(act_binning))
+                self.SetInt(u"AOIHBin", binning[0])
+                self.SetInt(u"AOIVBin", binning[1])
+            # Typically for the simcam
+            act_binning = (self.GetInt(u"AOIHBin"), self.GetInt(u"AOIVBin"))
+            if act_binning != binning:
+                raise IOError("Requested binning %s but got %s " %  
+                              (binning, act_binning))
+            binning = act_binning
             
         return binning
     
-    def _getAvailableBinnings(self):
+    def _getMaxBinnings(self):
         """
-        returns  list of int with the available binnings (same for horizontal
-          and vertical)
+        returns (2-tuple int): maximum binning value (horizontal and vertical)
         """
         # Nicely the API is different depending on cameras...
+        binning = [1, 1]
+        
         if self.isImplemented(u"AOIBinning"):
             # Typically for the Neo
             binnings = self.GetEnumStringAvailable(u"AOIBinning")
-            values = [re.match("([0-9]+)x([0-9]+)", r).group(1) for r in binnings]
-            return set(values)
+            for b in binnings:
+                m = re.match("([0-9]+)x([0-9]+)", b)
+                binning[0] = max(binning[0], int(m.group(1)))
+                binning[1] = max(binning[1], int(m.group(2)))
         elif self.isImplemented(u"AOIHBin"):
             if self.isWritable(u"AOIHBin"):
-                return set(range(1, self.GetIntMax(u"AOIHBin") + 1))
-            else:
-                return set([1])
+                binning[0] = self.GetIntMax(u"AOIHBin")
+            if self.isWritable(u"AOIVBin"):
+                binning[1] = self.GetIntMax(u"AOIVBin")
+                
+        return tuple(binning)
 
-    def setBinning(self, value):
+    def _setBinning(self, value):
         """
+        value (2-tuple int)
         Called when "binning" VA is modified. It actually modifies the camera binning.
         """
-        previous_binning = self._binning
+        prev_binning = self._binning
         #TODO queue this for after acquisition.
-        self._binning = self._setBinning(value)
+        self._binning = self._storeBinning(value)
         self._metadata[model.MD_BINNING] = self._binning
         
         # adapt resolution so that the AOI stays the same
-        change = float(previous_binning) / value
+        change = (float(prev_binning[0]) // value[0],
+                  float(prev_binning[1]) // value[1])
         old_resolution = self.resolution.value
-        new_resolution = (int(round(old_resolution[0] * change)),
-                          int(round(old_resolution[1] * change)))
-        self.resolution.value = new_resolution
+        new_res = (int(round(old_resolution[0] * change[0])),
+                          int(round(old_resolution[1] * change[1])))
+        
+        # fit
+        new_res = (min(new_res[0], self.resolution.range[1][0]),
+                   min(new_res[1], self.resolution.range[1][1]))
+        self.resolution.value = new_res
         return self._binning
     
     def getModelName(self):
@@ -610,8 +614,8 @@ class AndorCam3(model.DigitalCamera):
         # size of the sensor
         if (not self.isImplemented(u"AOIWidth") or 
             not self.isWritable(u"AOIWidth")):
-            max_size = (int(resolution[0] / self._binning), 
-                        int(resolution[1] / self._binning))
+            max_size = (int(resolution[0] // self._binning[0]), 
+                        int(resolution[1] // self._binning[1]))
             if size != max_size:
                 logging.warning("requested size %s different from the only"
                        " size available %s.", size, max_size)
@@ -634,7 +638,7 @@ class AndorCam3(model.DigitalCamera):
         self.SetInt(u"AOIHeight", c_uint64(size[1]))
         self.SetInt(u"AOITop", c_uint64(lt[1]))
     
-    def setResolution(self, value):
+    def _setResolution(self, value):
         # TODO wait until we are done with image acquisition
         new_res = self.resolutionFitter(value)
         self._setSize(new_res)
@@ -648,10 +652,9 @@ class AndorCam3(model.DigitalCamera):
         returns (2-tuple of int): resolution which fits the camera. It is equal
          or bigger than the requested resolution
         """
-        #
         resolution = self.getSensorResolution()
-        max_size = (int(resolution[0] / self._binning), 
-                    int(resolution[1] / self._binning))
+        max_size = (int(resolution[0] // self._binning[0]), 
+                    int(resolution[1] // self._binning[1]))
 
         if (not self.isImplemented(u"AOIWidth") or 
             not self.isWritable(u"AOIWidth")):
