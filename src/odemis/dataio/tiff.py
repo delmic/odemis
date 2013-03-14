@@ -344,7 +344,7 @@ def _addImageElement(root, das, idx):
         # Add info on detector
         attrib = {}
         if model.MD_BINNING in da.metadata:
-            attrib["Binning"] = "{0}x{0}".format(da.metadata[model.MD_BINNING])
+            attrib["Binning"] = "%dx%d" % da.metadata[model.MD_BINNING]
         if model.MD_GAIN in da.metadata:
             attrib["Gain"] = "%f" % da.metadata[model.MD_GAIN]
         if model.MD_READOUT_TIME in da.metadata:
@@ -510,8 +510,9 @@ def export(filename, data, thumbnail=None):
     Write a TIFF file with the given image and metadata
     filename (string): filename of the file to create (including path)
     data (list of model.DataArray, or model.DataArray): the data to export,
-        must be 2D of int or float. Metadata is taken directly from the data
-        object. If it's a list, a multiple page file is created.
+        must be 2D or more of int or float. Metadata is taken directly from the data
+        object. If it's a list, a multiple page file is created. The order of the
+        dimensions is Channel, Time, Z, Y, X.
     thumbnail (None or numpy.array): Image used as thumbnail for the file. Can be of any
       (reasonable) size. Must be either 2D array (greyscale) or 3D with last
       dimension of length 3 (RGB). If the exporter doesn't support it, it will

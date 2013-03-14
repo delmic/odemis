@@ -135,6 +135,7 @@ class TestTiffIO(unittest.TestCase):
                     model.MD_DESCRIPTION: "test",
                     model.MD_ACQ_DATE: time.time(),
                     model.MD_BPP: 12,
+                    model.MD_BINNING: (1, 2), # px, px
                     model.MD_PIXEL_SIZE: (1e-6, 2e-5), # m/px
                     model.MD_POS: (1e-3, -30e-3), # m
                     model.MD_EXP_TIME: 1.2, #s
@@ -198,6 +199,10 @@ class TestTiffIO(unittest.TestCase):
         iwl *= 1e-9
         self.assertTrue((metadata[model.MD_IN_WL][0] <= iwl and 
                          iwl <= metadata[model.MD_IN_WL][1]))
+        
+        bin_str = ime.find("Pixels/Channel/DetectorSettings").get("Binning")
+        exp_bin = "%dx%d" % metadata[model.MD_BINNING]
+        self.assertEqual(bin_str, exp_bin)
         
         os.remove(FILENAME)
         
