@@ -600,21 +600,26 @@ class DraggableCanvas(wx.Panel):
 
     def _DrawMergedImages(self, dc, images, ratio = 0.5):
         """
-        Draw the two images on the DC, centred around their _dc_center, with their own scale,
+        Draw the two images on the DC, centred around their _dc_center, with
+        their own scale,
         and an opacity of "ratio" for im1.
         Both _dc_center's should be close in order to have the parts with only
         one picture drawn without transparency
+
         dc: wx.DC
         images (list of wx.Image): the images (it can also be None).
-        ratio (0<float<1): how much to merge the images (between 1st and all other)
+        ratio (0<float<1): how much to merge the images (between 1st and all
+            other)
         scale (0<float): the scaling of the images in addition to their own
+
         Note: this is a very rough implementation. It's not fully optimized, and
         uses only a basic averaging algorithm.
         """
         t_start = time.time()
 
         # The idea:
-        # * display the first image (SEM) last, with the given ratio (or 1 if it's the only one)
+        # * display the first image (SEM) last, with the given ratio (or 1 if
+        #   it's the only one)
         # * display all the other images (fluo) as if they were average
         #   N images -> ratio = 1-0/N, 1-1/N,... 1-(N-1)/N
 
@@ -624,22 +629,35 @@ class DraggableCanvas(wx.Panel):
 
         for i, im in enumerate(fluo): # display the fluo images first
             r = 1.0 - i / float(nb_fluo)
-            self._DrawImageTransparentRescaled(dc, im, im._dc_center, r, scale=im._dc_scale)
+            self._DrawImageTransparentRescaled(
+                dc,
+                im,
+                im._dc_center,
+                r,
+                scale=im._dc_scale
+            )
 
         for im in images[:1]: # the first image (or nothing)
             if im is None:
                 continue
             if nb_fluo == 0:
                 ratio = 1.0 # no transparency if it's alone
-            self._DrawImageTransparentRescaled(dc, im, im._dc_center, ratio, scale=im._dc_scale)
+            self._DrawImageTransparentRescaled(
+                dc,
+                im,
+                im._dc_center,
+                ratio,
+                scale=im._dc_scale
+            )
 
         t_now = time.time()
-        fps = 1.0 / float(t_now - t_start)
+        fps = 1.0 / float(t_now - t_start) #pylint: disable=W0612
         #logging.debug("Display speed: %s fps", fps)
 
     def WorldToBufferPoint(self, pos):
-        """ Converts a position from world coordinates to buffer coordinates using
-        the current values
+        """ Converts a position from world coordinates to buffer coordinates
+        using the current values
+
         pos (2-tuple floats): the coordinates in the world
         """
         return WorldToBufferPoint(pos, self.world_pos_buffer, self.scale)
@@ -653,4 +671,3 @@ def WorldToBufferPoint(pos, world_pos, scale):
     """
     return (round((pos[0] - world_pos[0]) * scale),
             round((pos[1] - world_pos[1]) * scale))
-# vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:
