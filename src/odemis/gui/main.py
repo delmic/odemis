@@ -29,8 +29,10 @@ from odemis.gui.model.dye import DyeDatabase
 from odemis.gui.model.img import InstrumentalImage
 from odemis.gui.model.stream import StaticSEMStream, StaticSpectrumStream
 from odemis.gui.xmlh import odemis_get_resources
+from odemis.model._dataflow import MD_PIXEL_SIZE, MD_POS
 import Pyro4.errors
 import logging
+import numpy
 import odemis.gui.cont.tabs as tabs
 import os.path
 import scipy.io
@@ -38,7 +40,6 @@ import sys
 import threading
 import traceback
 import wx
-from odemis.model._dataflow import MD_PIXEL_SIZE, MD_POS
 
 
 
@@ -301,27 +302,34 @@ class OdemisGUIApp(wx.App):
         try:
             name1 = os.path.join(os.path.dirname(__file__),
                                  "img/example/s1-sem-bse.mat")
-            md = {model.MD_PIXEL_SIZE: (178e-9, 178e-9),
+            mdsem = {model.MD_PIXEL_SIZE: (178e-9, 178e-9),
                   model.MD_POS: (0,0)}
-            semdata = model.DataArray(scipy.io.loadmat(name1)["sem"], md)
+            semdata = scipy.io.loadmat(name1)["sem"]
+            semdatas = model.DataArray(numpy.array(semdata - semdata.min(),
+                                                   dtype=numpy.float32),
+                                       mdsem)
 
             name2 = os.path.join(os.path.dirname(__file__),
                                  "img/example/s1-spectrum.mat")
-            md = {model.MD_PIXEL_SIZE: (178e-9, 178e-9),
+            mdspec = {model.MD_PIXEL_SIZE: (178e-9, 178e-9),
                   model.MD_POS: (0,0),
                   # 335px : 409nm -> 695 nm (about linear)
                   model.MD_WL_POLYNOMIAL: [552e-9, 0.85373e-9]
                   }
-            specdata = model.DataArray(scipy.io.loadmat(name2)["spectraldat"], md)
-
+            # first dim is the wavelength, then Y, X
+            specdata = scipy.io.loadmat(name2)["spectraldat"]
+            specdatai = model.DataArray(numpy.array(specdata-specdata.min(), 
+                                                    dtype=numpy.uint16),
+                                        mdspec)
+            
             mtc = get_main_tab_controller()
             stream_controller = mtc['sparc_analysis'].stream_controller
 
-            stream_controller.addStatic("Secondary electrons", semdata,
+            stream_controller.addStatic("Secondary electrons", semdatas,
                                         cls=StaticSEMStream)
-            stream_controller.addStatic("Spectrogram", specdata,
+            stream_controller.addStatic("Spectrogram", specdatai,
                                         cls=StaticSpectrumStream)
-        except e:
+        except Exception:
             logging.exception("Failed to load example")
 
 

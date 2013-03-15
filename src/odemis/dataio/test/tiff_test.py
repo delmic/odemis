@@ -188,6 +188,7 @@ class TestTiffIO(unittest.TestCase):
         # check the 2D data
         im.seek(i + 1)
         self.assertEqual(im.size, size)
+        self.assertEqual(im.getpixel((1,1)), 0)
             
         os.remove(FILENAME)
 
