@@ -443,10 +443,15 @@ class CrossHairOverlay(object):
 
 
 class SelectionOverlay(object):
+    """ This overlay is for the selection of a rectangular arrea.
+
+    Once the final end point has been established, the bounding rectangle will
+    no longer be drawn.
+    """
+
     def __init__(self, color=SELECTION_COLOR, center=(0, 0)):
         self.color = hex_to_rgba(color)
         self.center = center
-        self.size = 0
 
         self.ctx = None
         self.current_pos = None
@@ -459,13 +464,6 @@ class SelectionOverlay(object):
     def start_selection(self, dc, start_pos):
         logging.debug("Starting selection at %s", start_pos)
         self.start_pos = self.end_pos = self.current_pos = start_pos
-
-        self.ctx = wx.lib.wxcairo.ContextFromDC(dc)
-
-        self.ctx.select_font_face("Courier",
-                                  cairo.FONT_SLANT_NORMAL,
-                                  cairo.FONT_WEIGHT_NORMAL)
-        self.ctx.set_font_size(12)
         self.dragging = True
 
     def update_selection(self, end_pos):
@@ -476,12 +474,18 @@ class SelectionOverlay(object):
         self.dragging = False
 
     def Draw(self, dc, shift=(0, 0), scale=1.0):
-        if self.ctx:
+        if self.start_pos and self.end_pos and self.dragging:
             logging.debug("Drawing selection")
             logging.debug("Drawing from %s, %s to %s. %s", self.start_pos.x,
                                                            self.start_pos.y,
                                                            self.end_pos.x,
                                                            self.end_pos.y )
+            self.ctx = wx.lib.wxcairo.ContextFromDC(dc)
+            self.ctx.select_font_face("Courier",
+                                  cairo.FONT_SLANT_NORMAL,
+                                  cairo.FONT_WEIGHT_NORMAL)
+            self.ctx.set_font_size(12)
+
             self.ctx.set_line_width(1)
             self.ctx.set_dash([1.5,])
             self.ctx.set_line_join(cairo.LINE_JOIN_MITER)
@@ -514,6 +518,7 @@ class SelectionOverlay(object):
                 self.ctx.set_source_rgb(0.9, 0.9, 0.9)
                 self.ctx.move_to(10, 20)
                 self.ctx.show_text("%s" % self.current_pos)
+
 
 
 
