@@ -39,8 +39,7 @@ import odemis.gui.comp.text as text
 import odemis.gui.img.data as img
 import odemis.gui.util.units as utun
 
-from odemis.model import getVAs, NotApplicableError, VigilantAttributeBase, \
-    NotSettableError
+from odemis.model import getVAs, NotApplicableError, VigilantAttributeBase
 from odemis.gui.comp.foldpanelbar import FoldPanelItem
 from odemis.gui.comp.radio import GraphicalRadioButtonControl
 from odemis.gui.comp.slider import UnitIntegerSlider, UnitFloatSlider
@@ -50,22 +49,42 @@ from odemis.gui.util.units import readable_str
 
 ####### Utility functions #######
 
-def resolution_from_range(va, conf):
+def _resolution_from_range(va, conf):
     """ Try and get the maximum value of range and use
     that to construct a list of resolutions
     """
     try:
         logging.debug("Generating resolutions...")
-        res = [max(va.range)]
+        choices = set([va.value])
+        res = va.range[1] # start with max resolution
 
         for dummy in range(3):
-            width = res[-1][0] / 2
-            height = res[-1][1] / 2
-            res.append((width, height))
-        return res
-
+            choices.add(res)
+            res = (res[0] // 2, res[1] // 2)
+        
+        return sorted(choices) # return a list, to be sure it's in order
     except NotApplicableError:
-        return set()
+        return [va.value]
+
+def _binning_1d_from_2d(va, conf):
+    """
+    Find simple binnings available in one dimension (pixel always square)
+    binning provided by a camera is normally a 2-tuple of int
+    """
+    try:
+        choices = set([va.value[0]])
+        minbin = max(va.range[0])
+        maxbin = min(va.range[1])
+        
+        # remove choices not available
+        for b in [1, 2, 4]: # all we want at best
+            if minbin <= b and b <= maxbin:
+                choices.add(b)
+                 
+        return sorted(choices) # return a list, to be sure it's in order
+    except NotApplicableError:
+        return [va.value[0]]
+
 
 def choice_to_str(choice):
     if not isinstance(choice, collections.Iterable):
@@ -137,15 +156,16 @@ SETTINGS = {
                     "range": (0.01, 3.00),
                     "type": "float",
                 },
-                "binning":
+                "binning":  
                 {
                     "control_type": odemis.gui.CONTROL_RADIO,
-                    "choices": set([1, 2, 4]),
+                    "choices": _binning_1d_from_2d,
+                    "type": "1d_binning", # means will make sure both dimensions are treated as one
                 },
                 "resolution":
                 {
                     "control_type": odemis.gui.CONTROL_COMBO,
-                    "choices": resolution_from_range,
+                    "choices": _resolution_from_range,
                 },
                 # what we don't want to display:
                 "targetTemperature":
@@ -181,7 +201,7 @@ SETTINGS = {
                 "resolution":
                 {
                     "control_type": odemis.gui.CONTROL_COMBO,
-                    "choices": resolution_from_range,
+                    "choices": _resolution_from_range,
                 },
                 "magnification": # force using just a text field => it's for copy-paste
                 {
@@ -430,6 +450,8 @@ class SettingsPanel(object):
         if control_type == odemis.gui.CONTROL_NONE:
             # No value, not even label
             return
+        # TODO: if choices has len == 1 => don't provide choice at all
+        #  => either display the value as a text, or don't display at all.
 
         # Remove any 'empty panel' warning
         self._clear()
@@ -535,8 +557,29 @@ class SettingsPanel(object):
                                                    style=wx.NO_BORDER,
                                                    labels=choices_formatted,
                                                    units=unit)
+            
+            if conf.get('type', None) == "1d_binning":
+                # need to convert back and forth between 1D and 2D
+                # from 2D to 1D (just pick X)
+                def radio_set(value, ctrl=new_ctrl):
+                    v = value[0]
+                    logging.debug("Setting Radio value to %d", v)
+                    # it's fine to set a value not in the choices, it will
+                    # just not set any of the buttons.
+                    return ctrl.SetValue(v)
+    
+                # from 1D to 2D (both identical)
+                def radio_get(ctrl=new_ctrl):
+                    value = ctrl.GetValue()
+                    return (value, value)
+            else:
+                radio_get = None
+                radio_set = None
+                
             vac = VigilantAttributeConnector(vigil_attr,
                                              new_ctrl,
+                                             va_2_ctrl=radio_set,
+                                             ctrl_2_va=radio_get,
                                              events=wx.EVT_BUTTON)
 
             new_ctrl.Bind(wx.EVT_BUTTON, self.on_setting_changed)
