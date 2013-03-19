@@ -89,12 +89,14 @@ class DraggableCanvas(wx.Panel):
 
         self.world_pos_buffer = (0, 0) # centre pos of the buffer in the world
         # the position the view is asking to the next buffer recomputation
-        # in buffer-coordinates: =1px at scale = 1
+        # in buffer-coordinates: = 1px at scale = 1
         self.world_pos_requested = self.world_pos_buffer
 
         # buffer = the whole image to be displayed
         self._dcBuffer = wx.MemoryDC()
 
+        # wx.Bitmap that will allways contain the image to be displayed
+        self._buffer = None
         # very small first, so that for sure it'll be resized with OnSize
         self.buffer_size = (1, 1)
         self.ResizeBuffer(self.buffer_size)
@@ -105,6 +107,7 @@ class DraggableCanvas(wx.Panel):
             # Avoids flickering on windows, but prevents black background on
             # Linux...
             self.SetBackgroundStyle(wx.BG_STYLE_CUSTOM)
+
         self.SetBackgroundColour('black')
 
         # DEBUG
@@ -328,8 +331,8 @@ class DraggableCanvas(wx.Panel):
                          (margin[0] - self.drag_shift[0],
                           margin[1] - self.drag_shift[1]))
 
-        for o in self.WorldOverlays:
-            o.Draw(dc, self.world_pos_buffer, self.scale)
+        # for o in self.WorldOverlays:
+        #     o.Draw(dc, self.world_pos_buffer, self.scale)
 
         # TODO: do this only when drag_shift changes, and record the modified
         # region before and put back after.
@@ -362,6 +365,8 @@ class DraggableCanvas(wx.Panel):
         # current drawing in it
         self._buffer = wx.EmptyBitmap(*size)
         self.buffer_size = size
+
+        # Select the bitmap into the device context
         self._dcBuffer.SelectObject(self._buffer)
         # On Linux necessary after every 'SelectObject'
         self._dcBuffer.SetBackground(wx.BLACK_BRUSH)
@@ -426,7 +431,7 @@ class DraggableCanvas(wx.Panel):
 
         # not really necessary as refresh causes an onPaint event soon, but
         # makes it slightly sooner, so smoother
-        # self.Update()
+        self.Update()
 
     def Draw(self, dc):
         """
@@ -449,8 +454,8 @@ class DraggableCanvas(wx.Panel):
         self._DrawMergedImages(dc, self.Images, self.merge_ratio)
 
         # Each overlay draws itself
-        # for o in self.WorldOverlays:
-        #     o.Draw(dc, self.world_pos_buffer, self.scale)
+        for o in self.WorldOverlays:
+            o.Draw(dc, self.world_pos_buffer, self.scale)
 
         dc.SetDeviceOriginPoint((0, 0))
 
