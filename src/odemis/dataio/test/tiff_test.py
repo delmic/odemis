@@ -123,7 +123,76 @@ class TestTiffIO(unittest.TestCase):
             self.assertEqual(im.size, size)
             
         os.remove(FILENAME)
-    
+        
+    def testExportCube(self):
+        """
+        Check it's possible to export a 3D data (typically: 2D area with full
+         spectrum for each point)
+        """
+        dtype = numpy.dtype("uint16")
+        size3d = (512, 256, 220) # X, Y, C
+        size = (512, 256)
+        metadata3d = {model.MD_SW_VERSION: "1.0-test",
+                    model.MD_HW_NAME: "fake spec",
+                    model.MD_DESCRIPTION: "test3d",
+                    model.MD_ACQ_DATE: time.time(),
+                    model.MD_BPP: 12,
+                    model.MD_BINNING: (1, 1), # px, px
+                    model.MD_PIXEL_SIZE: (1e-6, 2e-5), # m/px
+                    model.MD_WL_POLYNOMIAL: [500e-9, 1e-9], # m, m/px: wl polynomial
+                    model.MD_POS: (1e-3, -30e-3), # m
+                    model.MD_EXP_TIME: 1.2, #s
+                    model.MD_IN_WL: (500e-9, 520e-9), #m
+                    }
+        metadata = {model.MD_SW_VERSION: "1.0-test",
+                    model.MD_HW_NAME: "fake hw",
+                    model.MD_DESCRIPTION: "test",
+                    model.MD_ACQ_DATE: time.time(),
+                    model.MD_BPP: 12,
+                    model.MD_BINNING: (1, 2), # px, px
+                    model.MD_PIXEL_SIZE: (1e-6, 2e-5), # m/px
+                    model.MD_POS: (1e-3, -30e-3), # m
+                    model.MD_EXP_TIME: 1.2, #s
+                    model.MD_IN_WL: (500e-9, 520e-9), #m
+                    }
+        ldata = []
+        # 3D data generation (+ metadata): gradient along the wavelength
+        data3d = numpy.empty(size3d[-1::-1], dtype=dtype)
+        end = 2**metadata3d[model.MD_BPP]
+        step = end // size3d[2]
+        lin = numpy.arange(0, end, step, dtype=dtype)[:size3d[2]]
+        lin.shape = (size3d[2], 1, 1) # to be able to copy it on the first dim
+        data3d[:] = lin
+        # introduce Time and Z dimension to state the 3rd dim is channel
+        data3d = data3d[:, numpy.newaxis, numpy.newaxis,:,:] 
+        ldata.append(model.DataArray(data3d, metadata3d))
+        
+        # an additional 2D data, for the sake of it
+        ldata.append(model.DataArray(numpy.zeros(size[-1::-1], dtype), metadata))
+
+        # export
+        tiff.export(FILENAME, ldata)
+        
+        # check it's here
+        st = os.stat(FILENAME) # this test also that the file is created
+        self.assertGreater(st.st_size, 0)
+        im = Image.open(FILENAME)
+        self.assertEqual(im.format, "TIFF")
+        
+        # check the 3D data (one image per channel)
+        for i in range(size3d[2]):
+            im.seek(i)
+            self.assertEqual(im.size, size3d[0:2])
+            self.assertEqual(im.getpixel((1,1)), i * step)
+            
+        # check the 2D data
+        im.seek(i + 1)
+        self.assertEqual(im.size, size)
+        self.assertEqual(im.getpixel((1,1)), 0)
+            
+        os.remove(FILENAME)
+
+
     def testMetadata(self):
         """
         checks that the metadata is saved with every picture
@@ -135,6 +204,7 @@ class TestTiffIO(unittest.TestCase):
                     model.MD_DESCRIPTION: "test",
                     model.MD_ACQ_DATE: time.time(),
                     model.MD_BPP: 12,
+                    model.MD_BINNING: (1, 2), # px, px
                     model.MD_PIXEL_SIZE: (1e-6, 2e-5), # m/px
                     model.MD_POS: (1e-3, -30e-3), # m
                     model.MD_EXP_TIME: 1.2, #s
@@ -198,6 +268,10 @@ class TestTiffIO(unittest.TestCase):
         iwl *= 1e-9
         self.assertTrue((metadata[model.MD_IN_WL][0] <= iwl and 
                          iwl <= metadata[model.MD_IN_WL][1]))
+        
+        bin_str = ime.find("Pixels/Channel/DetectorSettings").get("Binning")
+        exp_bin = "%dx%d" % metadata[model.MD_BINNING]
+        self.assertEqual(bin_str, exp_bin)
         
         os.remove(FILENAME)
         

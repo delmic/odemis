@@ -51,15 +51,15 @@ SimSPARC: {
 }
 
 ARSimCam: {
-    class: andorcam3.AndorCam3,
+    class: andorcam2.FakeAndorCam2,
     role: ccd,
-    init: {device: 0} # 0 is a SimCam if no real Andor3 camera connected
+    init: {device: 0}
 }
 
 SpecSimCam: {
-    class: andorcam3.AndorCam3,
+    class: andorcam2.FakeAndorCam2,
     role: sp-ccd,
-    init: {device: 1} # 1 is almost always SimCam
+    init: {device: 0} # same device number but it will actually be different device
 }
 
 # Simulated SP-3000i, the spectrograph part of the Spec-10

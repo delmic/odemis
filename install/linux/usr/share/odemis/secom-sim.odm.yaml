@@ -92,9 +92,9 @@ Spectra: {
 }
 
 "Andor SimCam": {
-    class: andorcam3.AndorCam3,
+    class: andorcam2.FakeAndorCam2,
     role: ccd,
-    init: {device: 1} # 1 is almost always SimCam
+    init: {device: 0}
 }
 
 "FakeRedStoneStage": {

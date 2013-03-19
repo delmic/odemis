@@ -15,8 +15,9 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
-from odemis import model
 from datetime import datetime
+from numpy.polynomial import polynomial
+from odemis import model
 import h5py
 import numpy
 import os
@@ -118,7 +119,7 @@ def _add_image_info(group, dataset, image):
         group["YOffset"].attrs["UNIT"] = "m" # our extension
     
     # Time
-    # TODO: is this correct? strange that it's a string? Is there a special type?
+    # TODO:
     # Surprisingly (for such a usual type), time storage is a mess in HDF5.
     # The documentation states that you can use H5T_TIME, but it is 
     # "is not supported. If H5T_TIME is used, the resulting data will be readable
@@ -143,9 +144,9 @@ def _add_image_info(group, dataset, image):
         group["TOffset"] = image.metadata[model.MD_ACQ_DATE]
         _h5svi_set_state(group["TOffset"], ST_REPORTED)
     else:
-        group["TOffset"] = 0.0
+        group["TOffset"] = time.time()
         _h5svi_set_state(group["TOffset"], ST_DEFAULT)
-        
+    
     # Scale
     if model.MD_PIXEL_SIZE in image.metadata:
         # DimensionScales are not clearly explained in the specification to 
@@ -165,33 +166,56 @@ def _add_image_info(group, dataset, image):
         dataset.dims[l-1].attach_scale(group["DimensionScaleX"])
         dataset.dims[l-2].attach_scale(group["DimensionScaleY"])
 
-        # Unknown data, but SVI needs them to take the scales into consideration
-        if l >= 4:
-            group["ZOffset"] = 0.0
-            _h5svi_set_state(group["ZOffset"], ST_DEFAULT)
-            group["DimensionScaleZ"] = 1e-3 # m
-            group["DimensionScaleZ"].attrs["UNIT"] = "m"
-            group["DimensionScaleT"] = 1.0 # s
-            group["DimensionScaleT"].attrs["UNIT"] = "s"
-            # No clear what's the relation between this name and the label
-            dataset.dims.create_scale(group["DimensionScaleZ"], "Z")
-            _h5svi_set_state(group["DimensionScaleZ"], ST_DEFAULT)
-            dataset.dims.create_scale(group["DimensionScaleT"], "T")
-            _h5svi_set_state(group["DimensionScaleT"], ST_DEFAULT)
-            dataset.dims[l-3].attach_scale(group["DimensionScaleZ"])
-            dataset.dims[l-4].attach_scale(group["DimensionScaleT"])
-            
-            # Put here to please Huygens
-            # Seems to be the coverslip position, ie, the lower and upper glass of
-            # the sample. Not clear what's the relation with ZOffset. 
-            group["PrimaryGlassMediumInterfacePosition"] = 0.0 # m?
-            _h5svi_set_state(group["PrimaryGlassMediumInterfacePosition"], ST_DEFAULT)        
-            group["SecondaryGlassMediumInterfacePosition"] = 1.0 # m?
-            _h5svi_set_state(group["SecondaryGlassMediumInterfacePosition"], ST_DEFAULT)
+    # Unknown data, but SVI needs them to take the scales into consideration
+    if l >= 4:
+        group["ZOffset"] = 0.0
+        _h5svi_set_state(group["ZOffset"], ST_DEFAULT)
+        group["DimensionScaleZ"] = 1e-3 # m
+        group["DimensionScaleZ"].attrs["UNIT"] = "m"
+        group["DimensionScaleT"] = 1.0 # s
+        group["DimensionScaleT"].attrs["UNIT"] = "s"
+        # No clear what's the relation between this name and the label
+        dataset.dims.create_scale(group["DimensionScaleZ"], "Z")
+        _h5svi_set_state(group["DimensionScaleZ"], ST_DEFAULT)
+        dataset.dims.create_scale(group["DimensionScaleT"], "T")
+        _h5svi_set_state(group["DimensionScaleT"], ST_DEFAULT)
+        dataset.dims[l-3].attach_scale(group["DimensionScaleZ"])
+        dataset.dims[l-4].attach_scale(group["DimensionScaleT"])
+        
+        # Put here to please Huygens
+        # Seems to be the coverslip position, ie, the lower and upper glass of
+        # the sample. Not clear what's the relation with ZOffset. 
+        group["PrimaryGlassMediumInterfacePosition"] = 0.0 # m?
+        _h5svi_set_state(group["PrimaryGlassMediumInterfacePosition"], ST_DEFAULT)        
+        group["SecondaryGlassMediumInterfacePosition"] = 1.0 # m?
+        _h5svi_set_state(group["SecondaryGlassMediumInterfacePosition"], ST_DEFAULT)
 
-            # TODO: extension for Rotation:
-#            RotationAngle (scalar): angle in radian
-#            RotationAxis (3-scalar): X,Y,Z of the rotation vector 
+    # Wavelength (for spectrograms)
+    if l >= 5:
+        if (model.MD_WL_POLYNOMIAL in image.metadata and 
+            len(image.metadata[model.MD_WL_POLYNOMIAL]) > 0):
+            pn = image.metadata[model.MD_WL_POLYNOMIAL]
+            # polynomial of degree = 2 => linear
+            group["COffset"] = pn[0]
+            _h5svi_set_state(group["COffset"], ST_REPORTED)
+            if len(pn) == 2:
+                group["DimensionScaleC"] = pn[1] # m
+            elif len(pn) > 2:
+                # polynomial of degree > 2 => need to store the values of each
+                # pixel index explicitly. We follow another way to express
+                # scaling in HDF5.
+                pnl = polynomial.Polynomial(pn, domain=[0, image.shape[l-5]-1])
+                n, px_values = pnl.linspace(image.shape[l-5])
+                group["DimensionScaleC"] = px_values # m
+            if len(pn) > 1:
+                group["DimensionScaleC"].attrs["UNIT"] = "m"
+                dataset.dims.create_scale(group["DimensionScaleC"], "C")
+                _h5svi_set_state(group["DimensionScaleC"], ST_REPORTED)
+                dataset.dims[l-5].attach_scale(group["DimensionScaleC"])
+            
+    # TODO: extension for Rotation:
+#   RotationAngle (scalar): angle in radian
+#   RotationAxis (3-scalar): X,Y,Z of the rotation vector 
             
 
 ST_INVALID=111
@@ -363,19 +387,30 @@ def _add_acquistion_svi(group, images, **kwargs):
     """
     Adds the acquisition data according to the sub-format by SVI
     group (HDF Group): the group that will contain the metadata (named "PhysicalData")
-    images (list of 2D DataArray): set of images with metadata
+    images (list of DataArray): set of images with metadata, all the images must
+      have the same shape.
     """
+    # all image have the same shape?
+    assert all([images[0].shape == im.shape for im in images]) 
+     
     gi = group.create_group("ImageData")
-    # one of the main thing is that data must always be with 5 dimensions,
-    # in this order: CTZYX => so we add dimensions to data if needed
-    # In the C dimension we put the different images
-    images4d = []
+    # The data must always be with 5 dimensions, in this order: CTZYX 
+    # => so we add dimensions to data if needed
+    images5d = []
     for d in images:
-        if len(d.shape) < 4:
-            shape4d = [1] * (4-len(d.shape)) + list(d.shape)
-            d = d.reshape(shape4d)
-        images4d.append(d)
-    gdata = numpy.array(images4d) # convert to a 5D array
+        if len(d.shape) < 5:
+            shape5d = [1] * (5-len(d.shape)) + list(d.shape)
+            d = d.reshape(shape5d)
+        images5d.append(d)
+    
+    # Then find a dimension along which they can be concatenated. That's a
+    # dimension which is of size 1. 
+    # For now, if there are many possibilities, we pick the first one. 
+    # TODO: be more clever in choosing which dimension to pick using metadata
+    if not 1 in images5d[0].shape:
+        raise ValueError("No dimension found to concatenate images: %s" % images5d[0].shape)
+    concat_axis = images5d[0].shape.index(1)
+    gdata = numpy.concatenate(images5d, axis=concat_axis)
        
     # StateEnumeration
     # FIXME: should be done by _h5svi_set_state (and used)
@@ -433,13 +468,11 @@ def _saveAsHDF5(filename, ldata, thumbnail, compressed=True):
     """
     Saves a list of DataArray as a HDF5 (SVI) file.
     filename (string): name of the file to save
-    ldata (list of DataArray): list of 2D data of int or float. Should have at least one array
+    ldata (list of DataArray): list of 2D (up to 5D) data of int or float. 
+     Should have at least one array.
     thumbnail (None or DataArray): see export
     compressed (boolean): whether the file is compressed or not.
     """
-    # TODO check what is the format in Odemis if image is 3D (ex: each pixel has
-    # a spectrum associated, or there is a Z axis as well) and convert to CTZYX.
-    
     # h5py will extend the current file by default, so we want to make sure
     # there is no file at all.
     try:
@@ -476,8 +509,9 @@ def export(filename, data, thumbnail=None):
     Write a HDF5 file with the given image and metadata
     filename (string): filename of the file to create (including path)
     data (list of model.DataArray, or model.DataArray): the data to export, 
-        must be 2D of int or float. Metadata is taken directly from the data 
-        object. If it's a list, a multiple page file is created.
+        must be 2D or more of int or float. Metadata is taken directly from the data 
+        object. If it's a list, a multiple page file is created. The order of the
+        dimensions is Channel, Time, Z, Y, X.
     thumbnail (None or model.DataArray): Image used as thumbnail for the file. Can be of any
       (reasonable) size. Must be either 2D array (greyscale) or 3D with last 
       dimension of length 3 (RGB). If the exporter doesn't support it, it will
