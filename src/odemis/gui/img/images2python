@@ -6,6 +6,10 @@ first=1
 
 rm data.py
 
+pngcrush -brute -rem alla -d tmp *
+mv tmp/* .
+rmdir tmp/
+
 for file in `ls *.png`
 do
     if [ $first -eq 1 ]

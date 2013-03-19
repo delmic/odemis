@@ -39,7 +39,9 @@ Optionally, if you want to modify the graphical user interface, you need to
 make the following preparation concerning XRCEd. (XRCED is the GUI editor of
 choice.)
 
-- Find the location where you Python packages are installed:
+- Find the location where WxPython 2.9 is installed:
+    # This may not return the needed path. In case of errors try:
+    # /usr/local/lib/python2.7/dist-packages/wx-2.9.4-gtk2/wx
     cd $(python -c "import wx; import os; print os.path.dirname(wx.__file__)")
 - Goto the XRCED directory
     cd tools/XRCed/plugins
