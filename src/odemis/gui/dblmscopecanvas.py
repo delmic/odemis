@@ -37,6 +37,7 @@ from odemis.gui.comp.canvas import DraggableCanvas, WorldToBufferPoint
 from odemis.gui.model import EM_STREAMS
 from odemis.gui.util.conversion import hex_to_rgba
 
+
 CROSSHAIR_COLOR = wx.GREEN
 CROSSHAIR_SIZE = 16
 
@@ -381,38 +382,43 @@ class SecomCanvas(DblMicroscopeCanvas):
         self._toggle_mode(enabled, self.update_overlay, MODE_SECOM_UPDATE)
 
     def OnLeftDown(self, event):
+        # If one of the Secom tools is activated...
         if self.current_mode in SECOM_MODES:
-            self.dragging = True
             pos = event.GetPosition()
-            logging.debug("Started selection at %s", pos)
+            hover = self.active_overlay.is_hovering(pos)
 
-            if self.active_overlay:
-                hover = self.active_overlay.is_hovering(pos)
-
-                if hover:
-                    self.active_overlay.start_edit(pos, hover)
-                else:
-                    self.active_overlay.start_selection(pos)
-
+            # Clicked outside selection
+            if not hover:
+                self.dragging = True
+                self.active_overlay.start_selection(pos)
+            # Clicked on edge
+            elif hover != HOVER_SELECTION:
+                self.dragging = True
+                self.active_overlay.start_edit(pos, hover)
+            # Clicked inside selection
+            elif self.current_mode == MODE_SECOM_ZOOM:
+                self.dragging = False
 
             self.ShouldUpdateDrawing()
-            #self.Draw(wx.PaintDC(self))
         else:
             DraggableCanvas.OnLeftDown(self, event)
 
     def OnLeftUp(self, event):
-        if self.current_mode in SECOM_MODES and self.dragging:
-            self.dragging = False
-            pos = event.GetPosition()
-            logging.debug("Ended selection at %s", pos)
+        if self.current_mode in SECOM_MODES:
+            if self.dragging:
+                self.dragging = False
 
-            pub.sendMessage('secom.canvas.enddrag')
+                if self.active_overlay:
+                    # Stop both selection and edit
+                    self.active_overlay.stop_selection()
 
-            if self.active_overlay:
-                self.active_overlay.stop_selection()
+                self.ShouldUpdateDrawing()
 
-            self.ShouldUpdateDrawing()
-            #self.Draw(wx.PaintDC(self))
+            else:
+                print "ZOOM! ZOOM!"
+                self.active_overlay.clear_selection()
+                self.ShouldUpdateDrawing()
+                pub.sendMessage('secom.canvas.zoom')
         else:
             DraggableCanvas.OnLeftUp(self, event)
 
@@ -429,7 +435,9 @@ class SecomCanvas(DblMicroscopeCanvas):
                 #self.Draw(wx.PaintDC(self))
             else:
                 hover = self.active_overlay.is_hovering(pos)
-                if hover in (HOVER_LEFT_EDGE, HOVER_RIGHT_EDGE):
+                if hover == HOVER_SELECTION:
+                    self.SetCursor(wx.StockCursor(wx.CURSOR_MAGNIFIER))
+                elif hover in (HOVER_LEFT_EDGE, HOVER_RIGHT_EDGE):
                     self.SetCursor(wx.StockCursor(wx.CURSOR_SIZEWE))
                 elif hover in (HOVER_TOP_EDGE, HOVER_BOTTOM_EDGE):
                     self.SetCursor(wx.StockCursor(wx.CURSOR_SIZENS))
@@ -548,6 +556,7 @@ class SelectionOverlay(Overlay):
         self.dragging = False
         self.edit = False
 
+        # Dictionary containing values for the inner and outer edges
         self.edges = {}
 
     # Creating a new selection
@@ -577,16 +586,20 @@ class SelectionOverlay(Overlay):
 
     def stop_selection(self):
         """ End the creation of the current selection """
+
+        logging.debug("Stopping selection")
+
         if max(self.get_height(), self.get_width()) < self.min_dim:
             logging.debug("Selection too small")
             self.clear_selection()
         else:
             self._calc_edges()
             self.dragging = False
+            self.edit = False
 
     def clear_selection(self):
-
-        logging.debug("Selection cleared")
+        """ Clear the selection """
+        logging.debug("Clearing selections")
         self.dragging = False
         self.edit = False
 
@@ -599,12 +612,16 @@ class SelectionOverlay(Overlay):
     # Edit existing selection
 
     def start_edit(self, start_pos, edge):
+        """ Start an edit to the current selection """
+        logging.debug("Starting edit of edge %s at %s", edge, start_pos)
         self.edit_start_pos = start_pos
         self.edit_edge = edge
         self.edit = True
 
     def update_edit(self, current_pos):
-
+        """ Adjust the selection according to the given position and the current
+        edit action
+        """
         current_pos = self._clip_pos(current_pos)
 
         logging.debug("Moving selection to %s", current_pos)
@@ -621,11 +638,13 @@ class SelectionOverlay(Overlay):
                 self.end_pos.x = current_pos.x
 
     def stop_edit(self):
-        self._calc_edges()
-        self.edit = False
-
+        """ End the selection edit """
+        self.stop_selection()
 
     def _calc_edges(self):
+        """ Calculate the inner and outer edges of the selection according to
+        the hover margin
+        """
 
         l, r = sorted([self.start_pos.x, self.end_pos.x])
         t, b = sorted([self.start_pos.y, self.end_pos.y])
@@ -644,10 +663,14 @@ class SelectionOverlay(Overlay):
             "i_b": i_b
         }
 
-    def is_hovering(self, pos):
+    def is_hovering(self, pos):  #pylint: disable=R0911
+        """ Check if the given position is on/near a selection edge or inside
+        the selection.
+
+        :return: (bool) Return False if not hovering, or the type of hover
+        """
 
         if self.edges:
-
             if not self.edges["o_l"] < pos.x < self.edges["o_r"] or \
                 not self.edges["o_t"] < pos.y < self.edges["o_b"]:
                 return False
@@ -725,8 +748,3 @@ class SelectionOverlay(Overlay):
                 ctx.set_source_rgb(0.9, 0.9, 0.9)
                 ctx.move_to(10, 20)
                 ctx.show_text("{} {}".format(self.label, self.end_pos))
-
-
-
-
-# vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:

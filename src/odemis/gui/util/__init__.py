@@ -143,3 +143,12 @@ def get_picture_folder():
 
     # last resort: current working directory should always be existing
     return os.getcwd()
+
+# Data container
+
+class DictObj(dict):
+    """ Dict like object that allows the values to be accessed like attributes
+    """
+    def __init__(self, **kw):
+        dict.__init__(self, kw)
+        self.__dict__.update(kw)
