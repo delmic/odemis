@@ -527,6 +527,10 @@ class SelectionOverlay(Overlay):
     no longer be drawn.
     """
 
+    min_dim = 10 # Minimum selectino size (width and weight)
+    hover_margin = 10 #px
+
+
     def __init__(self, base, label, color=SELECTION_COLOR, center=(0, 0)):
         super(SelectionOverlay, self).__init__(base)
 
@@ -544,7 +548,7 @@ class SelectionOverlay(Overlay):
         self.dragging = False
         self.edit = False
 
-        self.hover_margin = 10 #px
+        self.edges = {}
 
     # Creating a new selection
 
@@ -573,7 +577,24 @@ class SelectionOverlay(Overlay):
 
     def stop_selection(self):
         """ End the creation of the current selection """
+        if max(self.get_height(), self.get_width()) < self.min_dim:
+            logging.debug("Selection too small")
+            self.clear_selection()
+        else:
+            self._calc_edges()
+            self.dragging = False
+
+    def clear_selection(self):
+
+        logging.debug("Selection cleared")
         self.dragging = False
+        self.edit = False
+
+        self.start_pos = None
+        self.end_pos = None
+
+        self.edges = {}
+
 
     # Edit existing selection
 
@@ -600,30 +621,63 @@ class SelectionOverlay(Overlay):
                 self.end_pos.x = current_pos.x
 
     def stop_edit(self):
+        self._calc_edges()
         self.edit = False
 
 
+    def _calc_edges(self):
+
+        l, r = sorted([self.start_pos.x, self.end_pos.x])
+        t, b = sorted([self.start_pos.y, self.end_pos.y])
+
+        i_l, o_r, i_t, o_b = [v + self.hover_margin for v in [l, r, t, b]]
+        o_l, i_r, o_t, i_b = [v - self.hover_margin for v in [l, r, t, b]]
+
+        self.edges = {
+            "i_l": i_l,
+            "o_r": o_r,
+            "i_t": i_t,
+            "o_b": o_b,
+            "o_l": o_l,
+            "i_r": i_r,
+            "o_t": o_t,
+            "i_b": i_b
+        }
+
     def is_hovering(self, pos):
 
-        if self.start_pos and self.end_pos:
-            if abs(self.start_pos.x - pos.x) < self.hover_margin :
-                if self.start_pos.y < pos.y < self.end_pos.y:
-                    logging.debug("Left edge hover")
-                    return HOVER_LEFT_EDGE
-            elif abs(self.end_pos.x - pos.x) < self.hover_margin:
-                if self.start_pos.y < pos.y < self.end_pos.y:
-                    logging.debug("Right edge hover")
-                    return HOVER_RIGHT_EDGE
-            elif abs(self.start_pos.y - pos.y) < self.hover_margin:
-                if self.start_pos.x < pos.x < self.end_pos.x:
-                    logging.debug("Top edge hover")
-                    return HOVER_TOP_EDGE
-            elif abs(self.end_pos.y - pos.y) < self.hover_margin:
-                if self.start_pos.x < pos.x < self.end_pos.x:
-                    logging.debug("Bottom edge hover")
-                    return HOVER_BOTTOM_EDGE
+        if self.edges:
+
+            if not self.edges["o_l"] < pos.x < self.edges["o_r"] or \
+                not self.edges["o_t"] < pos.y < self.edges["o_b"]:
+                return False
+            elif self.edges["i_l"] < pos.x < self.edges["i_r"] and \
+                self.edges["i_t"] < pos.y < self.edges["i_b"]:
+                logging.debug("Selection hover")
+                return HOVER_SELECTION
+            elif pos.x < self.edges["i_l"]:
+                logging.debug("Left edge hover")
+                return HOVER_LEFT_EDGE
+            elif pos.x > self.edges["i_r"]:
+                logging.debug("Right edge hover")
+                return HOVER_RIGHT_EDGE
+            elif pos.y < self.edges["i_t"]:
+                logging.debug("Top edge hover")
+                return HOVER_TOP_EDGE
+            elif pos.y > self.edges["i_b"]:
+                logging.debug("Bottom edge hover")
+                return HOVER_BOTTOM_EDGE
 
         return False
+
+    def get_width(self):
+        return abs(self.start_pos.x - self.end_pos.x)
+
+    def get_height(self):
+        return abs(self.start_pos.y - self.end_pos.y)
+
+    def get_size(self):
+        return (self.get_width(), self.get_height())
 
     def Draw(self, dc, shift=(0, 0), scale=1.0):
         if self.start_pos and self.end_pos:
