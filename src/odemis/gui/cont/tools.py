@@ -101,22 +101,38 @@ class SemToolMenu(ToolMenu):
 
     def on_zoom(self, evt):
         logging.debug("Zoom tool clicked")
-        pub.sendMessage('secom.tool.zoom.click',
-                        enabled=self.btn_zoom.GetToggle()
-                        )
+        pub.sendMessage(
+            'secom.tool.zoom.click',
+            enabled=self.btn_zoom.GetToggle()
+        )
         evt.Skip()
 
     def on_update(self, evt):
         logging.debug("Update tool clicked")
-        pub.sendMessage('secom.tool.update.click',
-                        enabled=self.btn_update.GetToggle()
-                        )
+        pub.sendMessage(
+            'secom.tool.update.click',
+            enabled=self.btn_update.GetToggle()
+        )
         evt.Skip()
 
     def on_resize(self, evt):
         logging.debug("Resize tool clicked")
         pub.sendMessage('secom.tool.resize.click')
         evt.Skip()
+
+    # def toggle_tool(self, btn, pub_event):
+    #     new_state = not btn.GetToggle()
+    #     btn.SetToggle(new_state)
+    #     pub.sendMessage(
+    #         pub_event,
+    #         enabled=new_state
+    #     )
+
+    # def toggle_zoom(self):
+    #     self._toggle_tool(self.btn_zoom, 'secom.tool.zoom.click')
+
+    # def toggle_update(self):
+    #     self._toggle_tool(self.btn_update, 'secom.tool.update.click')
 
 class SparcAcquisitionToolMenu(ToolMenu):
     """ Tool menu for Sparc acquisition view manipulation """
