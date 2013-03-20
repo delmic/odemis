@@ -14,14 +14,15 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
-from Pyro4.core import oneway
-from ._core import WeakMethod, WeakRefLostError
 from . import _core
+from ._core import WeakMethod, WeakRefLostError
+from Pyro4.core import oneway
 import Pyro4
 import inspect
 import logging
 import numpy
 import threading
+import time
 import zmq
 
 """
@@ -111,8 +112,8 @@ class DataFlowBase(object):
     This is an abstract class that must be extended by each detector which
     wants to provide a dataflow.
     extend: subscribe() and unsubcribe() to start stop generating data. 
-            Each time a new data is available it should call notify(dataarray)
-    extend: get() to synchronously return the next dataarray available
+            Each time a new data is available it should call notify(DataArray)
+    extend: get() to synchronously return the next DataArray available
     """
     def __init__(self):
         self._listeners = set()
@@ -149,7 +150,13 @@ class DataFlowBase(object):
             if count_before > 0 and count_after == 0:
                 self.stop_generate()
     
-    # TODO should default to open a thread that continuously call get()
+#    # to be overridden
+#    def synchronizedOn(self, event):
+#        raise NotImplementedError("This DataFlow doesn't support Event synchronization")
+    
+    # TODO should default to open a thread that continuously call get() ?
+    # For now we default to have get() as a continuous acquisition which gets
+    # unsubscribed after one data received.
         
     # The following methods are only to be used by the object which own
     # the dataflow, they are not part of the external API
@@ -180,7 +187,7 @@ class DataFlowBase(object):
         # for one last notify
         
         # to allow modify the set while calling
-        snapshot_listeners = self._listeners.copy()
+        snapshot_listeners = frozenset(self._listeners)
         for l in snapshot_listeners: 
             try:
                 l(self, data)
@@ -262,7 +269,7 @@ class DataFlow(DataFlowBase):
         self._global_name = uri.sockname + "@" + uri.object
         logging.debug("server is registered to send to " + "ipc://" + self._global_name)
         self.pipe.bind("ipc://" + self._global_name)
-    
+        
     def _unregister(self):
         """
         unregister the dataflow from the daemon and clean up the 0MQ bindings
@@ -550,5 +557,102 @@ def DataFlowSerializer(self):
         return self.__reduce__()
     
 Pyro4.Daemon.serializers[DataFlow] = DataFlowSerializer
+
+
+# Be careful: for now, only the Components have their Events and DataFlows copied
+# when used remotely. IOW, if a dataflow has an Event as attribute, it will not
+# be accessible remotely.
+class Event(object):
+    """
+    An Event is used to transmit information that "something" has happened.
+    DataFlow can be synchronized on an Event to ensure that it starts acquisition
+    at a specific moment.
+    Simple implementation of simplistic event interface. Callback directly each
+    subscriber. Low latency, but blocking in each subscriber.
+    Pretty similar to a VigilantAttribute, but:
+     * doesn't contain value (so no unit, range either)
+     * every notify matters, so none should be discarded ever.
+    """ 
+    def __init__(self):
+        self._listeners = set() # callback (None -> None)
+    
+    def _getMostDirectObject(self, obj):
+        """
+        obj (object): any object
+        returns (object): if obj is a pyroProxy of an object handled by the same
+          Pyro daemon as this component is handled, returns the actual object, 
+          otherwise, returns obj
+        """
+        if not isinstance(obj, Pyro4.core.Proxy):
+            return obj
+        daemon = getattr(self, "_pyroDaemon", None)
+        if daemon is None:
+            return obj
+        
+        # check if this daemon is exporting an object with the same URI
+        uri = obj._pyroUri
+        for obj_id, act_obj in daemon.objectsById.items():
+            if uri == daemon.uriFor(obj_id):
+                return act_obj
+        return obj
+    
+    def subscribe(self, listener):
+        """
+        Register a callback function to be called when the Event is changed
+        listener (obj with onEvent method): callback function which takes no argument and return nothing
+        """
+        # if direct (python call): latency ~100us (down to ~20us with RT priority)
+        # via Pyro: ~2ms (first one is much bigger)
+        # => if object is on the same container as us, use the direct connection
+        # if possible to find lower latency communication channel => create a proxy
+        # object and use it.
+        
+        # TODO: listener could be directly a callable, and if it is a bound method,
+        # get the object and the method name, and reconstruct it with the direct
+        # object 
+        callback = self._getMostDirectObject(listener).onEvent
+        assert callable(callback)
+        # not using WeakMethod, because callback would immediately be unreferenced
+        # and disappear anyway.
+        self._listeners.add(callback)
+        
+    def unsubscribe(self, listener):
+        callback = self._getMostDirectObject(listener).onEvent
+        self._listeners.discard(callback)
+
+    def notify(self):
+        for l in frozenset(self._listeners):
+            l() # for debugging: pass time.time()
+
+
+def unregister_events(self):
+    for name, value in inspect.getmembers(self, lambda x: isinstance(x, Event)):
+        daemon = getattr(value, "_pyroDaemon", None)
+        if daemon:
+            daemon.unregister(value)
+
+def dump_events(self):
+    """
+    return the names and value of all the Events added to an object 
+    (component). If an Event is not registered yet, it is registered.
+    self (Component): the object (instance of a class). It must already be
+                      registered to a Pyro daemon.
+    return (dict string -> value): attribute name -> Event
+    """
+    events = dict()
+    daemon = self._pyroDaemon
+    for name, value in inspect.getmembers(self, lambda x: isinstance(x, Event)):
+        if not hasattr(value, "_pyroDaemon"):
+            daemon.register(value)
+        events[name] = value
+    return events
+
+def load_events(self, events):
+    """
+    duplicate the given events into the instance.
+    useful only for a proxy class
+    """
+    for name, df in events.items():
+        setattr(self, name, df)
 
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:

@@ -36,7 +36,7 @@ import unittest
 #gc.set_debug(gc.DEBUG_LEAK | gc.DEBUG_STATS)
 
 # Use processes or threads? Threads are easier to debug, but less real
-USE_THREADS = False
+USE_THREADS = True
 
 #@unittest.skip("simple")
 class ContainerTest(unittest.TestCase):
@@ -285,64 +285,62 @@ class RemoteTest(unittest.TestCase):
         else:
             self.server = Process(target=ServerLoop, args=(self.container_name,))
         self.server.start()
+        
+        self.count = 0
+        self.data_arrays_sent = 0
         time.sleep(0.1) # give it some time to start
+        self.rdaemon = Pyro4.Proxy("PYRO:Pyro.Daemon@./u:"+self.container_name)
+        self.comp = self.rdaemon.getObject("mycomp")
 
     def tearDown(self):
+        self.comp.stopServer()
+        time.sleep(0.1) # give it some time to terminate
+        
         if self.server.is_alive():
-            print "Warning: killing server still alive"
-            self.server.terminate()
+            if not USE_THREADS:
+                print "Warning: killing server still alive"
+                self.server.terminate()
 
+#    @unittest.skip("simple")
     def test_simple(self):
         """
         start a component, ping, and stop it
         """
-        rdaemon = Pyro4.Proxy("PYRO:Pyro.Daemon@./u:"+self.container_name)
-        comp = rdaemon.getObject("mycomp")
-        ret = comp.ping()
+
+        ret = self.comp.ping()
         self.assertEqual(ret, "pong", "Ping failed")
-        comp.stopServer()
-        time.sleep(0.1) # give it some time to terminate
 
 #    @unittest.skip("simple")
     def test_exception(self):
-        rdaemon = Pyro4.Proxy("PYRO:Pyro.Daemon@./u:"+self.container_name)
-        comp = rdaemon.getObject("mycomp")
         
         # test it raises
-        self.assertRaises(MyError, comp.bad_call)
+        self.assertRaises(MyError, self.comp.bad_call)
         
         # test it raises when wrong argument
-        self.assertRaises(TypeError, comp.ping, ("non needed arg",))
+        self.assertRaises(TypeError, self.comp.ping, ("non needed arg",))
         
         # non existing method
-        self.assertRaises(AttributeError, comp.non_existing_method)
+        self.assertRaises(AttributeError, self.comp.non_existing_method)
         
-        comp.stopServer()
-        time.sleep(0.1) # give it some time to terminate
 
+#    @unittest.skip("simple")
     def test_roattributes(self):
         """
         check roattributes
         """
-        rdaemon = Pyro4.Proxy("PYRO:Pyro.Daemon@./u:"+self.container_name)
-        comp = rdaemon.getObject("mycomp")
-        val = comp.my_value
+        val = self.comp.my_value
         self.assertEqual(val, "ro", "Reading attribute failed")
-        comp.stopServer()
-        time.sleep(0.1) # give it some time to terminate
     
+#    @unittest.skip("simple")
     def test_async(self):
         """
         test futures
         MyComponent queues the future in order of request
         """
-        rdaemon = Pyro4.Proxy("PYRO:Pyro.Daemon@./u:"+self.container_name)
-        comp = rdaemon.getObject("mycomp")
-
-        comp.set_number_futures(0)
+        self.comp.set_number_futures(0)
         
-        ft1 = comp.do_long(2) # long enough we can cancel ft2
-        ft2 = comp.do_long(1) # shorter than ft1
+        ft1 = self.comp.do_long(2) # long enough we can cancel ft2
+        ft2 = self.comp.do_long(1) # shorter than ft1
         self.assertFalse(ft1.done(), "Future finished too early")
         self.assertFalse(ft2.done(), "Future finished too early")
         self.assertFalse(ft2.cancelled(), "future doesn't claim being cancelled")
@@ -353,51 +351,43 @@ class RemoteTest(unittest.TestCase):
         self.assertTrue(ft1.done(), "Future not finished")
         self.assertGreater(ft1.result(), 2)
         
-        self.assertEqual(comp.get_number_futures(), 2)
+        self.assertEqual(self.comp.get_number_futures(), 2)
         
-        comp.stopServer()
-        time.sleep(0.1) # give it some time to terminate
-
+#    @unittest.skip("simple")
     def test_unref_futures(self):
         """
         test many futures which don't even get referenced
         It should behave as if the function does not return anything
         """
-        rdaemon = Pyro4.Proxy("PYRO:Pyro.Daemon@./u:"+self.container_name)
-        comp = rdaemon.getObject("mycomp")
-        comp.set_number_futures(0)
+        self.comp.set_number_futures(0)
         
         expected = 100 # there was a bug with expected > threadpool size (=24)
         start = time.time()
         for i in range(expected):
-            comp.do_long(0.1)
+            self.comp.do_long(0.1)
             
-        ft_last = comp.do_long(0.1)
+        ft_last = self.comp.do_long(0.1)
         ft_last.result()
         duration = time.time() - start
         self.assertGreaterEqual(duration, expected * 0.1)
         
-        self.assertEqual(comp.get_number_futures(), expected + 1)
+        self.assertEqual(self.comp.get_number_futures(), expected + 1)
         
-        comp.stopServer()
-        time.sleep(0.1) # give it some time to terminate
-
+#    @unittest.skip("simple")
     def test_ref_futures(self):
         """
         test many futures which get referenced and accumulated
         It should behave as if the function does not return anything
         """
-        rdaemon = Pyro4.Proxy("PYRO:Pyro.Daemon@./u:"+self.container_name)
-        comp = rdaemon.getObject("mycomp")
-        comp.set_number_futures(0)
+        self.comp.set_number_futures(0)
         small_futures = []
         
         expected = 100 # there was a bug with expected > threadpool size (=24)
         start = time.time()
         for i in range(expected):
-            small_futures.append(comp.do_long(0.1))
+            small_futures.append(self.comp.do_long(0.1))
         
-        ft_last = comp.do_long(0.1)
+        ft_last = self.comp.do_long(0.1)
         ft_last.result()
         duration = time.time() - start
         self.assertGreaterEqual(duration, expected * 0.1)
@@ -405,22 +395,17 @@ class RemoteTest(unittest.TestCase):
         for f in small_futures:
             self.assertTrue(f.done())
         
-        self.assertEqual(comp.get_number_futures(), expected + 1)
+        self.assertEqual(self.comp.get_number_futures(), expected + 1)
         
-        comp.stopServer()
-        time.sleep(0.1) # give it some time to terminate
-
+#    @unittest.skip("simple")
     def test_async_cancel(self):
         """
         test futures
         """
-        rdaemon = Pyro4.Proxy("PYRO:Pyro.Daemon@./u:"+self.container_name)
-        comp = rdaemon.getObject("mycomp")
-
-        comp.set_number_futures(0)
+        self.comp.set_number_futures(0)
         
-        ft1 = comp.do_long(2) # long enough we can cancel ft2
-        ft2 = comp.do_long(1) # shorter than ft1
+        ft1 = self.comp.do_long(2) # long enough we can cancel ft2
+        ft2 = self.comp.do_long(1) # shorter than ft1
         self.assertTrue(ft2.cancel(), "couldn't cancel the future")
         self.assertTrue(ft2.cancelled(), "future doesn't claim being cancelled")
         self.assertRaises(futures.CancelledError, ft2.result)
@@ -433,18 +418,14 @@ class RemoteTest(unittest.TestCase):
         self.assertEqual(res1a, res1b)
         self.assertGreater(res1b, 2)
         
-        self.assertEqual(comp.get_number_futures(), 2)
+        self.assertEqual(self.comp.get_number_futures(), 2)
         
-        comp.stopServer()
-        time.sleep(0.1) # give it some time to terminate
-
+#    @unittest.skip("simple")
     def test_subcomponents(self):
         # via method and via roattributes
         # need to test cycles
-        rdaemon = Pyro4.Proxy("PYRO:Pyro.Daemon@./u:"+self.container_name)
-        comp = rdaemon.getObject("mycomp")
         
-        p = rdaemon.getObject("parent")
+        p = self.rdaemon.getObject("parent")
         self.assertEqual(len(p.children), 1, "parent doesn't have one child")
         c = list(p.children)[0]
 #        self.assertEqual(c.parent, p, "Component and parent of child is different")
@@ -452,21 +433,16 @@ class RemoteTest(unittest.TestCase):
         self.assertEqual(c.value, 43)
         self.assertEqual(len(c.children), 0, "child shouldn't have children")
                 
-        comp.stopServer()
-        time.sleep(0.1) # give it some time to terminate
-    
+#    @unittest.skip("simple")
     def test_dataflow_subscribe(self):
-        rdaemon = Pyro4.Proxy("PYRO:Pyro.Daemon@./u:"+self.container_name)
-        comp = rdaemon.getObject("mycomp")
-
         self.count = 0
         self.expected_shape = (2048, 2048)
         self.data_arrays_sent = 0
-        comp.data.reset()
+        self.comp.data.reset()
         
-        comp.data.subscribe(self.receive_data)
+        self.comp.data.subscribe(self.receive_data)
         time.sleep(0.5)
-        comp.data.unsubscribe(self.receive_data)
+        self.comp.data.unsubscribe(self.receive_data)
         count_end = self.count
         print "received %d arrays over %d" % (self.count, self.data_arrays_sent)
         
@@ -474,67 +450,85 @@ class RemoteTest(unittest.TestCase):
         self.assertEqual(count_end, self.count)
         self.assertGreaterEqual(count_end, 1)
         
+
+    def test_synchronized_df(self):
+        """
+        Tests 2 dataflows, one synchronized on the event of acquisition started
+        on the other dataflow.
+        """ 
+        number = 20
         self.count = 0
+        self.left = number
+        self.expected_shape = (2, 2)
+        self.expected_shape_au = (2048, 2048)
         self.data_arrays_sent = 0
-        comp.data.reset()
-
-        comp.stopServer()
-        time.sleep(0.1) # give it some time to terminate
-    
-    def test_dataflow_strided(self):
-        # test that strided array can be passed (even if less efficient)
-        rdaemon = Pyro4.Proxy("PYRO:Pyro.Daemon@./u:"+self.container_name)
-        comp = rdaemon.getObject("mycomp")
-
+        dfe = self.comp.data
+        dfs = self.comp.datas
+        dfe.reset()
+        
+        dfs.synchronizedOn(self.comp.startAcquire)
+        dfs.subscribe(self.receive_data)
+        
+        time.sleep(0.2) # long enough to be after the first data if it generates data
+        # ensure that datas hasn't generated anything yet
+        self.assertEqual(self.count, 0)
+        
+        dfe.subscribe(self.receive_data_auto_unsub)
+        for i in range(number):
+            # end early if it's already finished
+            if self.left == 0:
+                break
+            time.sleep(0.2) # 0.2s should be more than enough in any case
+            
+        self.assertEqual(0, self.left)
+        self.assertEqual(number, self.count)
+        print "received %d arrays over %d" % (self.count, self.data_arrays_sent)
+        max_lat = dfs.get_max_lat()
+        if max_lat:
+            print "latency: %r, max= %f, avg= %f" % (max_lat, max(max_lat), sum(max_lat)/len(max_lat))
+        
+        time.sleep(0.1)
+        self.assertEqual(number, self.count)
+        dfs.unsubscribe(self.receive_data)
+        dfs.synchronizedOn(None)
+        time.sleep(0.1)
+        self.assertEqual(number, self.count)
+        
+#    @unittest.skip("simple")
+    def test_dataflow_stridden(self):
+        # test that stridden array can be passed (even if less efficient)
         self.count = 0
         self.data_arrays_sent = 0
         self.expected_shape = (2048, 2045)
-        comp.cut.value = 3
-        comp.data.reset()
+        self.comp.cut.value = 3
+        self.comp.data.reset()
         
-        comp.data.subscribe(self.receive_data)
+        self.comp.data.subscribe(self.receive_data)
         time.sleep(0.5)
-        comp.data.unsubscribe(self.receive_data)
-        comp.cut.value = 0 # put it back
+        self.comp.data.unsubscribe(self.receive_data)
+        self.comp.cut.value = 0 # put it back
         count_end = self.count
-        print "received %d strided arrays over %d" % (self.count, self.data_arrays_sent)
+        print "received %d stridden arrays over %d" % (self.count, self.data_arrays_sent)
         
         time.sleep(0.1)
         self.assertEqual(count_end, self.count)
         self.assertGreaterEqual(count_end, 1)
         
-        comp.stopServer()
-        time.sleep(0.1) # give it some time to terminate
-    
     def receive_data(self, dataflow, data):
         self.count += 1
         self.assertEqual(data.shape, self.expected_shape)
         self.data_arrays_sent = data[0][0]
         self.assertGreaterEqual(self.data_arrays_sent, self.count)
-
-    def test_dataflow_unsubscribe_from_callback(self):
-        rdaemon = Pyro4.Proxy("PYRO:Pyro.Daemon@./u:"+self.container_name)
-        comp = rdaemon.getObject("mycomp")
-
-        self.count = 0
-        self.data_arrays_sent = 0
-        comp.data.reset()
         
-        comp.data.subscribe(self.receive_data_and_unsubscribe)
-        time.sleep(0.3)
-        self.assertEqual(self.count, 1)
-        # It should be 1, or if the generation went very fast, it might be bigger
-        self.assertGreaterEqual(self.data_arrays_sent, 1)
-#        print "received %d arrays over %d" % (self.count, self.data_arrays_sent)
-        
-        comp.stopServer()
-        time.sleep(0.1) # give it some time to terminate
-#        data = comp.data
-#        del comp
-#        print gc.get_referrers(data)
-#        gc.collect()
-#        print gc.get_referrers(data)
-    
+    def receive_data_auto_unsub(self, dataflow, data):
+        """
+        callback for df
+        """
+        self.assertEqual(data.shape, self.expected_shape_au)
+        self.left -= 1
+        if self.left <= 0:
+            dataflow.unsubscribe(self.receive_data_auto_unsub)
+
     def receive_data_and_unsubscribe(self, dataflow, data):
         self.count += 1
         self.assertEqual(data.shape, (2048, 2048))
@@ -542,27 +536,40 @@ class RemoteTest(unittest.TestCase):
         self.assertGreaterEqual(self.data_arrays_sent, self.count)
         dataflow.unsubscribe(self.receive_data_and_unsubscribe)
 
+#    @unittest.skip("simple")
+    def test_dataflow_unsubscribe_from_callback(self):
+        self.count = 0
+        self.data_arrays_sent = 0
+        self.comp.data.reset()
+        
+        self.comp.data.subscribe(self.receive_data_and_unsubscribe)
+        time.sleep(0.3)
+        self.assertEqual(self.count, 1)
+        # It should be 1, or if the generation went very fast, it might be bigger
+        self.assertGreaterEqual(self.data_arrays_sent, 1)
+#        print "received %d arrays over %d" % (self.count, self.data_arrays_sent)
+        
+#        data = comp.data
+#        del comp
+#        print gc.get_referrers(data)
+#        gc.collect()
+#        print gc.get_referrers(data)
+    
+
+#    @unittest.skip("simple")
     def test_dataflow_get(self):
-        rdaemon = Pyro4.Proxy("PYRO:Pyro.Daemon@./u:"+self.container_name)
-        comp = rdaemon.getObject("mycomp")
-
-        comp.data.reset()
-        array = comp.data.get()
+        self.comp.data.reset()
+        array = self.comp.data.get()
         self.assertEqual(array.shape, (2048, 2048))
         self.assertEqual(array[0][0], 0)
         
-        array = comp.data.get()
+        array = self.comp.data.get()
         self.assertEqual(array.shape, (2048, 2048))
         self.assertEqual(array[0][0], 0)
         
-        comp.stopServer()
-        time.sleep(0.1) # give it some time to terminate
-
+#    @unittest.skip("simple")
     def test_va_update(self):
-        rdaemon = Pyro4.Proxy("PYRO:Pyro.Daemon@./u:"+self.container_name)
-        comp = rdaemon.getObject("mycomp")
-
-        prop = comp.prop
+        prop = self.comp.prop
         self.assertIsInstance(prop, VigilantAttributeBase)
         self.assertEqual(prop.value, 42)
         prop.value += 1
@@ -588,10 +595,10 @@ class RemoteTest(unittest.TestCase):
         prop.value = 3 # +1
         self.assertEqual(self.called, called_before)
         
-        # re-susbcribe
+        # re-subscribe
         prop.subscribe(self.receive_va_update)
         # change remotely
-        comp.change_prop(45)
+        self.comp.change_prop(45)
         time.sleep(0.1) # give time to receive notifications
         self.assertEqual(prop.value, 45)
         prop.unsubscribe(self.receive_va_update)
@@ -603,46 +610,38 @@ class RemoteTest(unittest.TestCase):
         except model.InvalidTypeError:
             pass # as it should be
         
-        comp.stopServer()
-        time.sleep(0.1) # give it some time to terminate
-    
     def receive_va_update(self, value):
         self.called += 1
         self.last_value = value
         self.assertIsInstance(value, (int, float))
     
+#    @unittest.skip("simple")
     def test_complex_va(self):
-        rdaemon = Pyro4.Proxy("PYRO:Pyro.Daemon@./u:"+self.container_name)
-        comp = rdaemon.getObject("mycomp")
-
         # enumerated
-        self.assertEqual(comp.enum.value, "a")
-        self.assertEqual(comp.enum.choices, set(["a", "c", "bfds"]))
-        comp.enum.value = "c"
-        self.assertEqual(comp.enum.value, "c")
+        self.assertEqual(self.comp.enum.value, "a")
+        self.assertEqual(self.comp.enum.choices, set(["a", "c", "bfds"]))
+        self.comp.enum.value = "c"
+        self.assertEqual(self.comp.enum.value, "c")
                 
         try:
-            comp.enum.value = "wfds"
+            self.comp.enum.value = "wfds"
             self.fail("Assigning out of bound should not be allowed.")
         except model.OutOfBoundError:
             pass # as it should be
         
         # continuous
-        self.assertEqual(comp.cont.value, 2)
-        self.assertEqual(comp.cont.range, (-1, 3.4))
+        self.assertEqual(self.comp.cont.value, 2)
+        self.assertEqual(self.comp.cont.range, (-1, 3.4))
         
-        comp.cont.value = 3.0
-        self.assertEqual(comp.cont.value, 3)
+        self.comp.cont.value = 3.0
+        self.assertEqual(self.comp.cont.value, 3)
         
         try:
-            comp.cont.value = 4.0
+            self.comp.cont.value = 4.0
             self.fail("Assigning out of bound should not be allowed.")
         except model.OutOfBoundError:
             pass # as it should be
         
-        comp.stopServer()
-        time.sleep(0.1) # give it some time to terminate
-    
 # a basic server (component container)
 def ServerLoop(socket_name):
     try:
@@ -699,7 +698,9 @@ class MyComponent(model.Component):
         model.Component.__init__(self, name=name, daemon=daemon)
         self.executor = ThreadPoolExecutor(max_workers=1)
         self.number_futures = 0
-        self.data = FakeDataFlow()
+        self.startAcquire = model.Event() # triggers when the acquisition of .data starts
+        self.data = FakeDataFlow(sae=self.startAcquire)
+        self.datas = SynchronizableDataFlow()
         # TODO automatically register the property when serializing the Component
         self.prop = model.IntVA(42)
         self.cont = model.FloatContinuous(2.0, [-1, 3.4], unit="C")
@@ -801,7 +802,7 @@ class FatherComponent(model.Component):
     
     
 class FakeDataFlow(model.DataFlow):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, sae=None, *args, **kwargs):
         super(FakeDataFlow, self).__init__(*args, **kwargs)
         self.shape = (2048, 2048)
         self.bpp = 16
@@ -809,8 +810,13 @@ class FakeDataFlow(model.DataFlow):
         self._thread = None
         self.count = 0
         self.cut = 0 # to test non stride arrays
-    
+        self._startAcquire = sae 
+
     def _create_one(self, shape, bpp, index):
+#        print self.startAcquire
+        if self._startAcquire:
+            self._startAcquire.notify()
+            time.sleep(0.1) # if test events => simulate slow acquisition
         array = numpy.zeros(shape, dtype=("uint%d" % bpp)).view(model.DataArray)
         array[index % shape[0],:] = 255
         return array[:, self.cut:]
@@ -855,6 +861,87 @@ class FakeDataFlow(model.DataFlow):
             array[0][0] = self.count
 #            print "generating array %d" % self.count
             self.notify(array)
+            time.sleep(0.05) # wait a bit see if the subscribers still want data
+
+
+class SynchronizableDataFlow(model.DataFlow):
+    # very basic dataflow
+    def __init__(self, *args, **kwargs):
+        model.DataFlow.__init__(self, *args, **kwargs)
+        self._thread_must_stop = threading.Event()
+        self._thread = None
+        self._sync_event = None
+        self.max_lat = []
+        self._got_event = threading.Event()
+    
+    def get_max_lat(self):
+        return self.max_lat
+    
+    @oneway
+    def onEvent(self, triggert=None):
+        if triggert: # sent for debug only
+            latency = time.time() - triggert
+            self.max_lat.append(latency)
+        self._got_event.set()
+    
+    def _wait_event_or_stop_cb(self):
+        """
+        return True if must stop, False otherwise
+        """
+        while not self._thread_must_stop.is_set():
+            event = self._sync_event
+            if event is None:
+                return False
+            # In practice, this would be a hardware signal, not an threading.event!
+            if self._got_event.wait(timeout=0.1):
+                self._got_event.clear()
+                return False
+        return True
+        
+    def _thread_main(self):
+        i = 0
+        # generate a stupid array every time we receive an event
+        while not self._thread_must_stop.is_set():
+            time.sleep(0.01) # bit of "initialisation" time
+            
+            must_stop = self._wait_event_or_stop_cb()
+            if must_stop:
+                break
+            
+#            time.sleep(1) #DEBUG: for test over-run
+            i += 1
+            data = model.DataArray([[i, 0],[0, 0]], metadata={"a": 2, "num": i})
+            self.notify(data)
+        self._thread_must_stop.clear()
+    
+    def start_generate(self):
+        # if there is already a thread, wait for it to finish before starting a new one
+        if self._thread:
+            self._thread.join()
+            assert not self._thread_must_stop.is_set()
+            self._thread = None
+        
+        # create a thread
+        self._thread = threading.Thread(target=self._thread_main, name="flow thread")
+        self._thread.start()
+
+    def stop_generate(self):
+        assert self._thread
+        assert not self._thread_must_stop.is_set()
+        # we don't wait for the thread to stop fully
+        self._thread_must_stop.set()
+
+    def synchronizedOn(self, event):
+        if self._sync_event == event:
+            return
+        
+        if self._sync_event:
+            self._sync_event.unsubscribe(self)
+        
+        self._sync_event = event
+        if self._sync_event:
+            self._sync_event.subscribe(self)
+
 
 if __name__ == "__main__":
     #import sys;sys.argv = ['', 'Test.testName']

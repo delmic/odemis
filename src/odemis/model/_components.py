@@ -127,7 +127,8 @@ class Component(ComponentBase):
         return (proxy_state, self.parent,
                 _core.dump_roattributes(self),
                 _dataflow.dump_dataflows(self),
-                _vattributes.dump_vigilant_attributes(self))
+                _vattributes.dump_vigilant_attributes(self),
+                _dataflow.dump_events(self))
 
     # .parent is a weakref so that there is no cycle.
     # Too complicated to be a roattribute
@@ -168,6 +169,7 @@ class Component(ComponentBase):
             # dataflows (because they hold ref to daemon, so hard to get deleted
             _dataflow.unregister_dataflows(self)
             _vattributes.unregister_vigilant_attributes(self)
+            _dataflow.unregister_events(self)
             daemon.unregister(self)
 
 #    def __del__(self):
@@ -205,7 +207,9 @@ class ComponentProxy(ComponentBase, Pyro4.Proxy):
         proxy_state = Pyro4.Proxy.__getstate__(self)
         return (proxy_state, self.parent, _core.dump_roattributes(self),
                 _dataflow.dump_dataflows(self),
-                _vattributes.dump_vigilant_attributes(self))
+                _vattributes.dump_vigilant_attributes(self),
+                _dataflow.dump_events(self),
+                )
 
     def __setstate__(self, state):
         """
@@ -215,11 +219,12 @@ class ComponentProxy(ComponentBase, Pyro4.Proxy):
         dataflows (dict string -> dataflow)
         vas (dict string -> VA)
         """
-        proxy_state, self.parent, roattributes, dataflows, vas = state
+        proxy_state, self.parent, roattributes, dataflows, vas, events = state
         Pyro4.Proxy.__setstate__(self, proxy_state)
         _core.load_roattributes(self, roattributes)
         _dataflow.load_dataflows(self, dataflows)
         _vattributes.load_vigilant_attributes(self, vas)
+        _dataflow.load_events(self, events)
 
 # Note: this could be directly __reduce__ of Component, but is a separate function
 # to look more like the normal Proxy of Pyro

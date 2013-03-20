@@ -24,7 +24,7 @@ import threading
 import time
 import unittest
 
-# unused, alternative implementation
+# unused, alternative implementation to model.Event
 class EventQueue(object):
     """
     Event implementation using queues. Avoids blocking but latency ~1ms.
@@ -83,42 +83,13 @@ class EventQueue(object):
         if isinstance(self._queues[listener], Queue.Queue):
             self._queues[listener].clear()
             
-class Event(object):
-    """
-    Simple implementation of simplistic event interface. Callback directly each
-    subscriber. Low latency, but blocking in each subscriber.
-    Pretty similar to a VigilantAttribute, but:
-     * doesn't contain value (so no unit, range either)
-     * every notify matters, so none should be discarded ever.
-    """ 
-    def __init__(self):
-        self._listeners = set() # callback (None -> None)
-    
-    def subscribe(self, listener):
-        """
-        Register a callback function to be called when the Event is changed
-        listener (function): callback function which takes no argument and return nothing
-        """
-        assert callable(listener)
-        self._listeners.add(model.WeakMethod(listener))
-        
-    def unsubscribe(self, listener):
-        self._listeners.discard(model.WeakMethod(listener))
-
-    def notify(self):
-        for l in self._listeners.copy():
-            try:
-                l(time.time()) # DEBUG only => no parameter normally
-            except model.WeakRefLostError:
-                self.unsubscribe(l)
-    
 class SimpleDataFlow(model.DataFlow):
     # very basic dataflow
     def __init__(self, *args, **kwargs):
         model.DataFlow.__init__(self, *args, **kwargs)
         self._thread_must_stop = threading.Event()
         self._thread = None
-        self.startAcquire = Event() # triggers when the acquisition starts
+        self.startAcquire = model.Event() # triggers when the acquisition starts
     
     def _thread_main(self):
         i = 0
@@ -158,9 +129,10 @@ class SynchronizableDataFlow(model.DataFlow):
         self._got_event = threading.Event()
     
     @oneway
-    def _on_trigger(self, triggert):
-        latency = time.time() - triggert
-        self.max_lat.append(latency)
+    def onEvent(self, triggert=None):
+        if triggert: # sent for debug only
+            latency = time.time() - triggert
+            self.max_lat.append(latency)
         self._got_event.set()
     
     def _wait_event_or_stop_cb(self):
@@ -237,11 +209,11 @@ class SynchronizableDataFlow(model.DataFlow):
             return
         
         if self._sync_event:
-            self._sync_event.unsubscribe(self._on_trigger)
+            self._sync_event.unsubscribe(self)
         
         self._sync_event = event
         if self._sync_event:
-            self._sync_event.subscribe(self._on_trigger)
+            self._sync_event.subscribe(self)
 
         
 class TestDataFlow(unittest.TestCase):
@@ -338,7 +310,7 @@ class TestDataFlow(unittest.TestCase):
         self.dfs.subscribe(self.receive_data)
         
         time.sleep(0.2) # long enough to be after the first data
-        # ensure the dfs is hasn't generated anything yet
+        # ensure the dfs hasn't generated anything yet
         self.assertEqual(self.left, number + 10)
         
         # start the eventfull df
@@ -357,7 +329,8 @@ class TestDataFlow(unittest.TestCase):
         # make sure we can unsubscribe even if synchronized and waiting on event
         self.dfs.unsubscribe(self.receive_data) 
         self.dfs.synchronizedOn(None)
-        print self.dfs.max_lat, max(self.dfs.max_lat)
+        if self.dfs.max_lat:
+            print self.dfs.max_lat, max(self.dfs.max_lat)
         time.sleep(0.1)
         self.assertEqual(self.left, 10)
 
