@@ -182,6 +182,7 @@ class SEMComedi(model.HwComponent):
         self._acquisition_thread = None
         self._acquisitions = {} # detector -> callable (callback)
         
+        
         # create the scanner child "scanner"
         try:
             kwargs = children["scanner"]
@@ -191,6 +192,9 @@ class SEMComedi(model.HwComponent):
         self._detectors = dict([(n, None) for n in children if n.startswith("detector")])
         self._scanner = Scanner(parent=self, daemon=daemon, **kwargs)
         self.children.add(self._scanner)
+        # for scanner.newPosition
+        self._new_position_thread = None
+        self._new_position_thread_pipe = [] # list to communicate with the current thread
         
         # create the detector children "detectorN"
         self._detectors = {} # string (name) -> component
@@ -1006,10 +1010,18 @@ class SEMComedi(model.HwComponent):
         # We write at the given period, and read "osr" samples for each pixel
         nrchans = len(rchannels)
         
+        if self._scanner.newPosition.hasListeners() and period >= 1e-3:
+            # if the newPosition event is used, prefer the per pixel write/read
+            # as it's much more precise (albeit a bit slower). It just needs to 
+            # not be too costly (1 ms should be higher than the setup cost).
+            force_per_pixel = True
+        else:
+            force_per_pixel = False
+            
         # find the best method to read that fit the buffer: /lines, or /pixel
         # try to fit a couple of lines
         linesz = data.shape[1] * nrchans * osr * self._reader.dtype.itemsize
-        if linesz < self._max_bufsz:
+        if linesz < self._max_bufsz and not force_per_pixel:
             lines = self._max_bufsz // linesz
             return self._write_read_2d_lines(wchannels, wranges, rchannels, rranges, 
                          period, margin, osr, lines, data)
@@ -1018,7 +1030,7 @@ class SEMComedi(model.HwComponent):
         pixelsz = nrchans * osr * self._reader.dtype.itemsize
         if pixelsz > self._max_bufsz:
             # probably going to fail, but let's try...
-            logging.warning("Going to try to read very large buffer of %f MB.", pixelsz/2.**20)
+            logging.warning("Going to try to read very large buffer of %g MB.", pixelsz/2.**20)
         
         # TODO: read several pixels at a time => need clever placement
         return self._write_read_2d_pixel(wchannels, wranges, rchannels, rranges, 
@@ -1031,8 +1043,14 @@ class SEMComedi(model.HwComponent):
         Implementation of write_read_2d_data_raw by reading the input data n
           lines at a time.
         """
-        logging.debug("Reading %d lines at a time: %d samples/read", maxlines,
-                      maxlines * data.shape[1] * osr * len(rchannels))
+        if self._scanner.newPosition.hasListeners() and margin > 0:
+            # we don't support margin detection on multiple lines for 
+            # newPosition trigger. 
+            maxlines = 1
+            
+        logging.debug("Reading %d lines at a time: %d samples/read every %g µs",
+                      maxlines, maxlines * data.shape[1] * osr * len(rchannels),
+                      period * 1e6)
         rshape = (data.shape[0], data.shape[1] - margin)
         
         # allocate one full buffer per channel
@@ -1040,6 +1058,7 @@ class SEMComedi(model.HwComponent):
         for c in rchannels:
             buf.append(numpy.empty(rshape, dtype=self._reader.dtype))
         adtype = get_best_dtype_for_acc(self._reader.dtype, osr)
+        
         
         # read "maxlines" lines at a time
         x = 0
@@ -1049,7 +1068,7 @@ class SEMComedi(model.HwComponent):
             wdata = data[x:x+lines,:,:] # just a couple of lines
             wdata = wdata.reshape(-1, wdata.shape[2]) # flatten X/Y
             rbuf = self._write_read_raw_one_cmd(wchannels, wranges, rchannels,
-                                                rranges, period, osr, wdata)
+                                            rranges, period, osr, wdata, margin)
             
             # decimate into each buffer
             for i, b in enumerate(buf):
@@ -1090,8 +1109,8 @@ class SEMComedi(model.HwComponent):
         Implementation of write_read_2d_data_raw by reading the input data one 
           pixel at a time.
         """ 
-        logging.debug("Reading one pixel at a time: %d samples/read", 
-                      osr * len(rchannels))
+        logging.debug("Reading one pixel at a time: %d samples/read every %g µs", 
+                      osr * len(rchannels), period * 1e6)
         rshape = (data.shape[0], data.shape[1] - margin)
         
         # allocate one full buffer per channel
@@ -1104,8 +1123,12 @@ class SEMComedi(model.HwComponent):
         for x, y in numpy.ndindex(data.shape[0], data.shape[1]):
             wdata = data[x,y,:] # just one pixel
             wdata.shape = (1, data.shape[2]) # reshape to 2D
+            if y < margin:
+                ss = 1
+            else:
+                ss = 0
             rbuf = self._write_read_raw_one_cmd(wchannels, wranges, rchannels,
-                                                rranges, period, osr, wdata)
+                                                rranges, period, osr, wdata, ss)
             
             # decimate into each buffer
             for i, b in enumerate(buf):
@@ -1120,19 +1143,22 @@ class SEMComedi(model.HwComponent):
         shape (2-tuple int): H,W dimension of the scanned image (margin not included)
         margin (int): amount of useless pixels at the beginning of each line
         osr (int): over-sampling rate
-        x (int): x position of the pixel in the output array
-        y (int): y position of the pixel in the output array
+        x (int): x position of the pixel in the input array
+        y (int): y position of the pixel in the input array
         data (1D ndarray): the raw data (including oversampling), of one channel
         oarray (2D ndarray): the output array, already allocated, of shape self.shape
         """
-        oarray[x,y] = numpy.sum(data, dtype=adtype) / osr
+        if y < margin:
+            return
+        oarray[x,y-margin] = numpy.sum(data, dtype=adtype) / osr
     
     def _fake_write_read_raw_one_cmd(self, wchannels, wranges, rchannels, rranges, 
-                                 period, osr, data):
+                                 period, osr, data, settling_samples):
         """
         Imitates _write_read_raw_one_cmd() but works with the comedi_test driver,
           just read data.
         """
+        begin = time.time()
         nwscans = data.shape[0]
         nwchans = data.shape[1]
         nrscans = nwscans * osr
@@ -1153,10 +1179,21 @@ class SEMComedi(model.HwComponent):
         self.setup_timed_command(self._ai_subdevice, rchannels, rranges, rperiod_ns,
                     start_src=comedi.TRIG_NOW, # start immediately (trigger is not supported)
                     stop_arg=nrscans)
-    
+        start = time.time()
+        
+        np_to_report = nwscans - settling_samples
+        shift_report = settling_samples
+        if settling_samples == 0:  # indicate a new ebeam position
+            self._scanner.newPosition.notify()
+            np_to_report -= 1
+            shift_report += 1
+            
         # run the commands
         self._reader.run()
         self._writer.run()
+        self._start_new_position_notifier(np_to_report,
+                                      start + shift_report * period,
+                                      period)
         
         timeout = expected_time * 1.10 + 0.1 # s   == expected time + 10% + 0.1s
         logging.debug("Waiting %g s for the acquisition to finish", timeout)
@@ -1164,10 +1201,11 @@ class SEMComedi(model.HwComponent):
         self._writer.wait(0.1)
         # reshape to 2D
         rbuf.shape = (nrscans, nrchans)
+        logging.debug("acquisition took %g s, init =%g s", time.time()- begin, start - begin)
         return rbuf
     
     def _write_read_raw_one_cmd(self, wchannels, wranges, rchannels, rranges, 
-                            period, osr, data):
+                            period, osr, data, settling_samples):
         """
         write data on the given analog output channels and read synchronously
           on the given analog input channels in one command
@@ -1181,6 +1219,8 @@ class SEMComedi(model.HwComponent):
           output sample 
         data (2D numpy.ndarray of int): array to write (raw values)
           first dimension is along the time, second is along the channels
+        settling_samples (int): number of first write samples used for the 
+          settling of the beam, and so don't need to trigger newPosition 
         return (2D numpy.array with dtype=device type)
             the raw data read (first dimension is data.shape[0] * osr) for each
             channel (as second dimension).
@@ -1220,8 +1260,12 @@ class SEMComedi(model.HwComponent):
         # but it is. Maybe just to let Comedi know that the command has started.
         comedi.internal_trigger(self._device, self._ao_subdevice, 0)
         comedi.internal_trigger(self._device, self._ai_subdevice, 0)
+        start = time.time()
+        self._scanner.newPosition.notify() # indicate a new ebeam position
+        
         self._reader.run()
         self._writer.run()
+        self._start_new_position_notifier(nwscans - 1, start + period, period)
 
         timeout = expected_time * 1.10 + 0.1 # s   == expected time + 10% + 0.1s
         logging.debug("Waiting %g s for the acquisition to finish", timeout)
@@ -1231,7 +1275,68 @@ class SEMComedi(model.HwComponent):
         rbuf.shape = (nrscans, nrchans)
         return rbuf
 
-
+    def _start_new_position_notifier(self, n, start, period):
+        """
+        Notify the newPosition Event n times with the given period.
+        n (0 <= int): number of event notifications
+        start (float): time for the first event (should be in the future)
+        period (float): period between two events
+        Note: this is used to emulate an actual ebeam change of position when 
+         the hardware is requested to move the ebeam at multiple positions in a
+         row. Do not expect a precision better than 10us.
+        Note 2: this method returns immediately (and the emulation is run in a
+         separate thread).
+        """
+        if n <= 0:
+            return
+        
+        if period < 10e-6:
+            # don't even try: that's the time it'd take to have just one loop
+            # doing nothing
+            if self._scanner.newPosition.hasListeners():
+                logging.error("Cannot generate newPosition events at such a "
+                              "small period of %s µs", period * 1e6)
+            return
+            
+        self._new_position_thread_pipe = []
+        self._new_position_thread = threading.Thread(
+                         target=self._notify_new_position,
+                         args=(n, start, period, self._new_position_thread_pipe),
+                         name="SEM new position notifier")
+        
+        self._new_position_thread.start()
+    
+    def _notify_new_position(self, n, start, period, pipe):
+        """
+        The thread content
+        """
+        trigger = 0
+        failures = 0
+        for i in range(n):
+            now = time.time()
+            trigger += period # accumulation error should be small
+            left = start - now + trigger
+            if left > 0:
+                if left > 10e-6: # TODO: if left < 1 ms => use usleep or nsleep
+                    time.sleep(left)
+            else:
+                failures += 1
+            if pipe: # put anything in the pipe and it will mean it has to stop
+                logging.debug("npnotifier received cancel message")
+                return
+            self._scanner.newPosition.notify()
+        
+        # FIXME: stop if the acquisition is canceled
+        
+        if failures:
+            logging.warning("Failed to trigger newPosition in time %d times, "
+                            "last trigger was %g µs late.", failures, -left * 1e6)
+    
+    def _cancel_new_position_notifier(self):
+        logging.debug("cancelling npnotifier")
+        self._new_position_thread_pipe.append(True) # means it has to stop
+        
+    
     def start_acquire(self, detector, callback):
         """
         Start acquiring images on the given detector (i.e., input channel).
@@ -1279,8 +1384,10 @@ class SEMComedi(model.HwComponent):
         Request the acquisition thread to stop
         """
         self._acquisition_must_stop.set()
+        self._cancel_new_position_notifier()
         self._reader.cancel()
         self._writer.cancel()
+        
     
     def _wait_acquisition_stopped(self):
         """
@@ -1565,12 +1672,14 @@ class Reader(Accesser):
         
     def run(self):
         # start reader thread
+        self.begin = time.time()
         self.thread.start()
     
     def _thread(self):
         """To be called in a separate thread"""
         try:
             self.buf = numpy.fromfile(self.file, dtype=self.dtype, count=self.count)
+            logging.debug("read took %g s", time.time()-self.begin)
         except IOError:
             # might be due to a cancel
             logging.debug("Read ended before the end")
@@ -1582,8 +1691,12 @@ class Reader(Accesser):
         timeout (float): maximum number of seconds to wait for the read to finish
         """
         timeout = timeout or self.period
-         
+        
+        begin = time.time()
+        # Note: join is pretty costly when timeout is not None, because it'll
+        # do long sleeps between each checks.
         self.thread.join(timeout)
+        logging.debug("waiting for the read thread for %g s", time.time() - begin)
         if self.thread.isAlive():
             logging.warning("Reading thread is still running after %g s", timeout)
             self.cancel()
@@ -1735,7 +1848,8 @@ class FakeWriter(Accesser):
     
     def wait(self, timeout=None):
         left = self._expected_end - time.time()
-        if left > 0: 
+        if left > 0:
+            logging.debug("simulating a write for another %g s", left)
             self.must_stop.wait(left)
     
     def cancel(self):
@@ -1819,6 +1933,11 @@ class Scanner(model.Emitter):
         self.dwellTime = model.FloatContinuous(range_dwell[0], range_dwell, 
                                                unit="s", setter=self._setDwellTime)
 
+        # event to allow another component to synchronize on the begginning of 
+        # a pixel position. Only sent during an actual pixel of a scan, not for
+        # the beam settling time or when put to rest.
+        self.newPosition = model.Event()
+        
         # next two values are just to determine the pixel size
         # Distance between borders if magnification = 1. It should be found out
         # via calibration. We assume that image is square, i.e., VFW = HFW

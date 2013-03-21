@@ -596,6 +596,13 @@ class Event(object):
                 return act_obj
         return obj
     
+    def hasListeners(self):
+        """
+        returns (boolean): True if the event currently has some listeners, or
+         False otherwise.
+        """
+        return not not self._listeners # = not empty
+    
     def subscribe(self, listener):
         """
         Register a callback function to be called when the Event is changed
