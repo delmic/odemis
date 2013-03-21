@@ -1160,8 +1160,8 @@ class SEMComedi(model.HwComponent):
         
         timeout = expected_time * 1.10 + 0.1 # s   == expected time + 10% + 0.1s
         logging.debug("Waiting %g s for the acquisition to finish", timeout)
-        self._writer.wait(timeout)
         rbuf = self._reader.wait(timeout)
+        self._writer.wait(0.1)
         # reshape to 2D
         rbuf.shape = (nrscans, nrchans)
         return rbuf
@@ -1226,7 +1226,7 @@ class SEMComedi(model.HwComponent):
         timeout = expected_time * 1.10 + 0.1 # s   == expected time + 10% + 0.1s
         logging.debug("Waiting %g s for the acquisition to finish", timeout)
         rbuf = self._reader.wait(timeout)
-        self._writer.wait(timeout) # writer is faster, so there should be no wait
+        self._writer.wait(0.1) # writer is faster, so there should be no wait
         # reshape to 2D
         rbuf.shape = (nrscans, nrchans)
         return rbuf
@@ -1721,6 +1721,7 @@ class FakeWriter(Accesser):
     def __init__(self, parent):
         self.duration = None
         self.must_stop = threading.Event()
+        self._expected_end = 0
     
     def close(self):
         pass
@@ -1729,8 +1730,13 @@ class FakeWriter(Accesser):
         self.duration = duration
         self.must_stop.clear()
     
+    def run(self):
+        self._expected_end = time.time() + self.duration
+    
     def wait(self, timeout=None):
-        self.must_stop.wait(self.duration)
+        left = self._expected_end - time.time()
+        if left > 0: 
+            self.must_stop.wait(left)
     
     def cancel(self):
         self.must_stop.set()

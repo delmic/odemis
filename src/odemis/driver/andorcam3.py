@@ -468,7 +468,7 @@ class AndorCam3(model.DigitalCamera):
         assert((0 <= speed) and (speed <= 1))
         
         if not self.isImplemented(u"FanSpeed"):
-            return
+            return 0
 
         # Let's assume it's linearly distributed in speed... at least it's true
         # for the Neo and the SimCam. Looks like this for Neo:
@@ -554,8 +554,8 @@ class AndorCam3(model.DigitalCamera):
         self._metadata[model.MD_BINNING] = self._binning
         
         # adapt resolution so that the AOI stays the same
-        change = (float(prev_binning[0]) // value[0],
-                  float(prev_binning[1]) // value[1])
+        change = (float(prev_binning[0]) / value[0],
+                  float(prev_binning[1]) / value[1])
         old_resolution = self.resolution.value
         new_res = (int(round(old_resolution[0] * change[0])),
                           int(round(old_resolution[1] * change[1])))

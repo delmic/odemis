@@ -542,6 +542,8 @@ class StaticSpectrumStream(StaticStream):
     A Spectrum stream which displays only one static image/data.
     The main difference from the normal streams is that the data is 3D (a cube)
     The metadata should have a MD_WL_POLYNOMIAL
+    Note that the data received should be of the (numpy) shape CYX. (where YX might be missing)
+    When saving, the data will be converted to CTZYX (where TZ is 11)  
     """
     def __init__(self, name, image):
         # Spectrum stream has in addition to normal stream:
@@ -576,6 +578,7 @@ class StaticSpectrumStream(StaticStream):
         # this will call _updateImage(), which needs bandwidth
         StaticStream.__init__(self, name, image)
         
+        # TODO: to convert to final raw data: raw = raw[:,numpy.newaxis,numpy.newaxis,:,:]
 
     def _get_bandwith_in_pixel(self):
         """

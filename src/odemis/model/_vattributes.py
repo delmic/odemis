@@ -198,9 +198,6 @@ class VigilantAttribute(VigilantAttributeBase):
             self.ctx.term()
             self.ctx = None
 
-    def _count_listeners(self):
-        return len(self._listeners) + len(self._remote_listeners)
-
     @oneway
     def subscribe(self, listener, init=False):
         """

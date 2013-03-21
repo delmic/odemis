@@ -15,6 +15,7 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 
+from __future__ import division
 from ctypes import *
 from odemis import __version__, model, util
 import ctypes # for fake AndorV2DLL
@@ -815,7 +816,7 @@ class AndorCam2(model.DigitalCamera):
         
         self.select()
         if not self.hasFeature(AndorCapabilities.FEATURES_FANCONTROL):
-            return
+            return 0
 
         # It's more or less linearly distributed in speed... 
         # 0 = full, 1 = low, 2 = off
@@ -825,7 +826,7 @@ class AndorCam2(model.DigitalCamera):
             values = [2, 0]
         val = values[int(round(speed * (len(values) - 1)))]
         self.atcore.SetFanMode(val)
-        return (float(val) / max(values))
+        return val / max(values)
     
     def getModelName(self):
         self.select()
@@ -890,8 +891,8 @@ class AndorCam2(model.DigitalCamera):
         self._binning = value
         
         # adapt resolution so that the AOI stays the same
-        change = (float(prev_binning[0]) // value[0],
-                  float(prev_binning[1]) // value[1])
+        change = (prev_binning[0] / value[0],
+                  prev_binning[1] / value[1])
         old_resolution = self.resolution.value
         new_resolution = (int(round(old_resolution[0] * change[0])),
                           int(round(old_resolution[1] * change[1])))
@@ -924,8 +925,7 @@ class AndorCam2(model.DigitalCamera):
         
         # Region of interest
         # center the image
-        lt = ((resolution[0] - size[0]) // 2,
-              (resolution[1] - size[1]) // 2)
+        lt = ((resolution[0] - size[0]) // 2, (resolution[1] - size[1]) // 2)
         
         # the rectangle is defined in normal pixels (not super-pixels) from (1,1)
         self._image_rect = (lt[0] * self._binning[0] + 1, (lt[0] + size[0]) * self._binning[0],

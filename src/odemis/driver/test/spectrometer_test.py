@@ -2,7 +2,7 @@
 '''
 Created on 8 Mar 2013
 
-@author: piel
+@author: Éric Piel
 
 Copyright © 2013 Éric Piel, Delmic
 
@@ -87,6 +87,16 @@ class TestSimulated(unittest.TestCase):
         self.spectrometer.binning.value = self._orig_binning
         self.spectrometer.resolution.value = self._orig_res
     
+    def test_simple(self):
+        """
+        Just ensures that the device has all the VA it should
+        """
+        self.assertTrue(isinstance(self.spectrometer.binning.value, tuple))
+        self.assertEqual(self.spectrometer.resolution.value[1], 1)
+        self.assertEqual(len(self.spectrometer.shape), 3)
+        self.assertGreaterEqual(self.spectrometer.shape[0], self.spectrometer.shape[1])
+        self.assertGreater(self.spectrometer.exposureTime.value, 0)
+    
     def test_acquisition(self):
         exp = 0.1 #s
         self.spectrometer.exposureTime.value = exp
@@ -152,8 +162,9 @@ class TestCompositedSpectrometer(unittest.TestCase):
         """
         self.assertTrue(isinstance(self.spectrometer.binning.value, tuple))
         self.assertEqual(self.spectrometer.resolution.value[1], 1)
+        self.assertEqual(len(self.spectrometer.shape), 3)
         self.assertGreaterEqual(self.spectrometer.shape[0], self.spectrometer.shape[1])
-        self.assertGreater(self.spectrometer.exposureTime, 0)
+        self.assertGreater(self.spectrometer.exposureTime.value, 0)
         
     def test_acquisition(self):
         exp = 0.1 #s

@@ -94,6 +94,7 @@ class VirtualTestCam(object):
     
 #    @unittest.skip("simple")
     def test_acquire(self):
+        self.assertEqual(len(self.camera.shape), 3)
         exposure = 0.1
         self.camera.exposureTime.value = exposure
         
