@@ -358,6 +358,7 @@ class SecomCanvas(DblMicroscopeCanvas):
 
         pub.subscribe(self.toggle_zoom_mode, 'secom.tool.zoom.click')
         pub.subscribe(self.toggle_update_mode, 'secom.tool.update.click')
+        pub.subscribe(self.on_zoom_start, 'secom.canvas.zoom.select')
 
         self.cursor = wx.STANDARD_CURSOR
 
@@ -366,6 +367,8 @@ class SecomCanvas(DblMicroscopeCanvas):
             self.current_mode = None
             self.active_overlay = None
             self.cursor = wx.STANDARD_CURSOR
+            self.zoom_overlay.clear_selection()
+            self.ShouldUpdateDrawing()
         elif not self.dragging and enabled:
             self.current_mode = mode
             self.active_overlay = overlay
@@ -381,6 +384,14 @@ class SecomCanvas(DblMicroscopeCanvas):
         logging.debug("Update mode %s", self)
         self._toggle_mode(enabled, self.update_overlay, MODE_SECOM_UPDATE)
 
+    def on_zoom_start(self, canvas):
+        """ If a zoom selection starts, all previous selections should be
+        cleared.
+        """
+        if canvas != self:
+            self.zoom_overlay.clear_selection()
+            self.ShouldUpdateDrawing()
+
     def OnLeftDown(self, event):
         # If one of the Secom tools is activated...
         if self.current_mode in SECOM_MODES:
@@ -391,6 +402,7 @@ class SecomCanvas(DblMicroscopeCanvas):
             if not hover:
                 self.dragging = True
                 self.active_overlay.start_selection(pos)
+                pub.sendMessage('secom.canvas.zoom.select', canvas=self)
             # Clicked on edge
             elif hover != HOVER_SELECTION:
                 self.dragging = True
@@ -407,18 +419,14 @@ class SecomCanvas(DblMicroscopeCanvas):
         if self.current_mode in SECOM_MODES:
             if self.dragging:
                 self.dragging = False
-
-                if self.active_overlay:
-                    # Stop both selection and edit
-                    self.active_overlay.stop_selection()
-
-                self.ShouldUpdateDrawing()
-
+                # Stop both selection and edit
+                self.active_overlay.stop_selection()
             else:
                 print "ZOOM! ZOOM!"
                 self.active_overlay.clear_selection()
-                self.ShouldUpdateDrawing()
-                pub.sendMessage('secom.canvas.zoom')
+                pub.sendMessage('secom.canvas.zoom.done')
+
+            self.ShouldUpdateDrawing()
         else:
             DraggableCanvas.OnLeftUp(self, event)
 
@@ -500,7 +508,8 @@ class Overlay(object):
 
 
 class CrossHairOverlay(Overlay):
-    def __init__(self, base, color=CROSSHAIR_COLOR, size=CROSSHAIR_SIZE, center=(0, 0)):
+    def __init__(self, base,
+                 color=CROSSHAIR_COLOR, size=CROSSHAIR_SIZE, center=(0, 0)):
         super(CrossHairOverlay, self).__init__(base)
 
         self.pen = wx.Pen(color)
@@ -529,17 +538,15 @@ class CrossHairOverlay(Overlay):
 
 
 class SelectionOverlay(Overlay):
-    """ This overlay is for the selection of a rectangular arreas.
-
-    Once the final end point has been established, the bounding rectangle will
-    no longer be drawn.
+    """ This overlay is for the selection of a rectangular arrea.
     """
 
     min_dim = 10 # Minimum selectino size (width and weight)
     hover_margin = 10 #px
 
 
-    def __init__(self, base, label, color=SELECTION_COLOR, center=(0, 0)):
+    def __init__(self, base, label,
+                 sel_cur=None, color=SELECTION_COLOR, center=(0, 0)):
         super(SelectionOverlay, self).__init__(base)
 
         self.label = label
@@ -704,7 +711,6 @@ class SelectionOverlay(Overlay):
 
     def Draw(self, dc, shift=(0, 0), scale=1.0):
         if self.start_pos and self.end_pos:
-            logging.debug("Drawing selection")
             logging.debug("Drawing from %s, %s to %s. %s", self.start_pos.x,
                                                            self.start_pos.y,
                                                            self.end_pos.x,
@@ -736,10 +742,6 @@ class SelectionOverlay(Overlay):
                                self.start_pos.y + 1.5,
                                self.end_pos.x - self.start_pos.x + 1,
                                self.end_pos.y - self.start_pos.y + 1)
-
-            # ctx.rectangle(0, 0, 10, 10)
-            # ctx.rectangle(0, 0, 100, 100)
-            # ctx.rectangle(0, 0, 400, 400)
 
             #ctx.set_source_rgb(0.1, 0.5, 0)
             ctx.stroke()
