@@ -44,6 +44,7 @@ class MicroscopeViewport(wx.Panel):
     This is a generic class, that should be inherited by more specific classes.
     """
 
+    # Default class
     canvas_class = canvas.DblMicroscopeCanvas
 
     def __init__(self, *args, **kwargs):

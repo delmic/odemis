@@ -94,10 +94,10 @@ class DraggableCanvas(wx.Panel):
         self.world_pos_requested = self.world_pos_buffer
 
         # buffer = the whole image to be displayed
-        self._dcBuffer = wx.MemoryDC()
+        self._dc_buffer = wx.MemoryDC()
 
         # wx.Bitmap that will allways contain the image to be displayed
-        self._buffer = None
+        self._img_buffer = None
         # very small first, so that for sure it'll be resized with OnSize
         self.buffer_size = (1, 1)
         self.ResizeBuffer(self.buffer_size)
@@ -324,10 +324,9 @@ class DraggableCanvas(wx.Panel):
         """ Quick update of the window content with the buffer + the static
         overlays
 
+        Note: The Device Context (dc) will automatically be drawn when it goes
+        out of scope at the end of this method.
         """
-        # The device context is copied to the screen just before it's deleted
-        # when this method goes out of scope
-
         dc = wx.PaintDC(self)
 
         margin = ((self.buffer_size[0] - self.ClientSize[0])/2,
@@ -335,9 +334,9 @@ class DraggableCanvas(wx.Panel):
 
         # dc.BlitPointSize(self.drag_shift,
         #                  self.buffer_size,
-        #                  self._dcBuffer,
+        #                  self._dc_buffer,
         #                  (0,0))
-        dc.BlitPointSize((0, 0), self.ClientSize, self._dcBuffer,
+        dc.BlitPointSize((0, 0), self.ClientSize, self._dc_buffer,
                          (margin[0] - self.drag_shift[0],
                           margin[1] - self.drag_shift[1]))
 
@@ -373,13 +372,13 @@ class DraggableCanvas(wx.Panel):
         """
         # Make new offscreen bitmap: this bitmap will always have the
         # current drawing in it
-        self._buffer = wx.EmptyBitmap(*size)
+        self._img_buffer = wx.EmptyBitmap(*size)
         self.buffer_size = size
 
         # Select the bitmap into the device context
-        self._dcBuffer.SelectObject(self._buffer)
+        self._dc_buffer.SelectObject(self._img_buffer)
         # On Linux necessary after every 'SelectObject'
-        self._dcBuffer.SetBackground(wx.BLACK_BRUSH)
+        self._dc_buffer.SetBackground(wx.BLACK_BRUSH)
 
     def ReCenterBuffer(self, pos):
         """Update the position of the buffer on the world
@@ -421,7 +420,7 @@ class DraggableCanvas(wx.Panel):
         Redraws everything (that is viewed in the buffer)
         """
         prev_world_pos = self.world_pos_buffer
-        self.Draw(self._dcBuffer)
+        self.Draw(self._dc_buffer)
 
         shift_view = (
             (self.world_pos_buffer[0] - prev_world_pos[0]) * self.scale,

@@ -216,7 +216,7 @@ class DblMicroscopeCanvas(DraggableCanvas):
         margin = ((self.buffer_size[0] - self.ClientSize[0])/2,
                   (self.buffer_size[1] - self.ClientSize[1])/2)
 
-        dc.BlitPointSize((0, 0), self.ClientSize, self._dcBuffer, margin)
+        dc.BlitPointSize((0, 0), self.ClientSize, self._dc_buffer, margin)
 
         # close the DC, to be sure the bitmap can be used safely
         del dc
@@ -454,6 +454,20 @@ class SecomCanvas(DblMicroscopeCanvas):
 
         else:
             DraggableCanvas.OnMouseMotion(self, event)
+
+    # Capture onwanted events when a tool is active.
+
+    def OnWheel(self, event):
+        if self.current_mode not in SECOM_MODES:
+            super(SecomCanvas, self).OnWheel(event)
+
+    def OnRightDown(self, event):
+        if self.current_mode not in SECOM_MODES:
+            super(SecomCanvas, self).OnRightDown(event)
+
+    def OnRightUp(self, event):
+        if self.current_mode not in SECOM_MODES:
+            super(SecomCanvas, self).OnRightUp(event)
 
     def setView(self, microscope_view):
         """
@@ -723,6 +737,17 @@ class SelectionOverlay(Overlay):
             )
             ctx.set_font_size(12)
 
+            ctx.set_line_width(1.5)
+            ctx.set_source_rgba(0, 0, 0, 1)
+            ctx.rectangle(
+                self.start_pos.x + 0.5,
+                self.start_pos.y + 0.5,
+                self.end_pos.x - self.start_pos.x + 0,
+                self.end_pos.y - self.start_pos.y + 0
+            )
+
+            ctx.stroke()
+
             ctx.set_line_width(1)
             ctx.set_dash([1.5,])
             ctx.set_line_join(cairo.LINE_JOIN_MITER)
@@ -736,17 +761,11 @@ class SelectionOverlay(Overlay):
                                #self.end_pos.y) # Rectangle(x0, y0, x1, y1)
             ctx.stroke()
 
-            ctx.set_line_width(2)
-            ctx.set_source_rgba(0, 0, 0, 1)
-            ctx.rectangle(self.start_pos.x + 1.5,
-                               self.start_pos.y + 1.5,
-                               self.end_pos.x - self.start_pos.x + 1,
-                               self.end_pos.y - self.start_pos.y + 1)
-
-            #ctx.set_source_rgb(0.1, 0.5, 0)
-            ctx.stroke()
-
             if self.dragging:
-                ctx.set_source_rgb(0.9, 0.9, 0.9)
+                ctx.set_source_rgb(0.0, 0.0, 0.0)
+                ctx.move_to(9, 19)
+                ctx.show_text("{} {}".format(self.label, self.end_pos))
+                ctx.set_source_rgb(1.0, 1.0, 1.0)
                 ctx.move_to(10, 20)
                 ctx.show_text("{} {}".format(self.label, self.end_pos))
+
