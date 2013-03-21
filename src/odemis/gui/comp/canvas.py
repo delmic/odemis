@@ -166,10 +166,11 @@ class DraggableCanvas(wx.Panel):
         if self.dragging:
             return
 
+        # TODO: Show 'focussing' text in viewport
         self._rdragging = True
         self._rdrag_init_pos = event.GetPositionTuple()
         self._rdrag_prev_value = [0, 0]
-        self.SetCursor(wx.StockCursor(wx.CURSOR_SIZENS))
+        self.SetCursor(wx.StockCursor(wx.CURSOR_BULLSEYE))
         if not self.HasCapture():
             self.CaptureMouse()
 
