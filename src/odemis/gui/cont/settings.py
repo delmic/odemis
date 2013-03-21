@@ -61,7 +61,7 @@ def _resolution_from_range(va, conf):
         for dummy in range(3):
             choices.add(res)
             res = (res[0] // 2, res[1] // 2)
-        
+
         return sorted(choices) # return a list, to be sure it's in order
     except NotApplicableError:
         return [va.value]
@@ -75,12 +75,12 @@ def _binning_1d_from_2d(va, conf):
         choices = set([va.value[0]])
         minbin = max(va.range[0])
         maxbin = min(va.range[1])
-        
+
         # remove choices not available
         for b in [1, 2, 4]: # all we want at best
             if minbin <= b and b <= maxbin:
                 choices.add(b)
-                 
+
         return sorted(choices) # return a list, to be sure it's in order
     except NotApplicableError:
         return [va.value[0]]
@@ -156,7 +156,7 @@ SETTINGS = {
                     "range": (0.01, 3.00),
                     "type": "float",
                 },
-                "binning":  
+                "binning":
                 {
                     "control_type": odemis.gui.CONTROL_RADIO,
                     "choices": _binning_1d_from_2d,
@@ -557,7 +557,7 @@ class SettingsPanel(object):
                                                    style=wx.NO_BORDER,
                                                    labels=choices_formatted,
                                                    units=unit)
-            
+
             if conf.get('type', None) == "1d_binning":
                 # need to convert back and forth between 1D and 2D
                 # from 2D to 1D (just pick X)
@@ -567,7 +567,7 @@ class SettingsPanel(object):
                     # it's fine to set a value not in the choices, it will
                     # just not set any of the buttons.
                     return ctrl.SetValue(v)
-    
+
                 # from 1D to 2D (both identical)
                 def radio_get(ctrl=new_ctrl):
                     value = ctrl.GetValue()
@@ -575,7 +575,7 @@ class SettingsPanel(object):
             else:
                 radio_get = None
                 radio_set = None
-                
+
             vac = VigilantAttributeConnector(vigil_attr,
                                              new_ctrl,
                                              va_2_ctrl=radio_set,

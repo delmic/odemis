@@ -460,6 +460,7 @@ class AcquisitionDialog(xrcfr_acq):
 
         # duplicate the interface, but with only one view
         self.interface_model = self.duplicate_interface_model(interface_model)
+
         orig_view = interface_model.focussedView.value
         view = self.interface_model.focussedView.value
 

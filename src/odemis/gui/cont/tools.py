@@ -85,6 +85,8 @@ class SemToolMenu(ToolMenu):
         self.btn_update = None
         self.btn_resize = None
 
+        pub.subscribe(self.clear_zoom, 'secom.canvas.zoom.done')
+
     def OnCreate(self, event):
         self.Unbind(wx.EVT_WINDOW_CREATE)
 
@@ -128,8 +130,12 @@ class SemToolMenu(ToolMenu):
     #         enabled=new_state
     #     )
 
-    # def toggle_zoom(self):
-    #     self._toggle_tool(self.btn_zoom, 'secom.tool.zoom.click')
+    def clear_zoom(self):
+        self.btn_zoom.SetToggle(False)
+        pub.sendMessage(
+            'secom.tool.zoom.click',
+            enabled=self.btn_zoom.GetToggle()
+        )
 
     # def toggle_update(self):
     #     self._toggle_tool(self.btn_update, 'secom.tool.update.click')

@@ -1599,7 +1599,7 @@ def __init_resources():
       <growablecols>0</growablecols>
       <growablerows>0</growablerows>
       <object class="sizeritem">
-        <object class="MicroscopeViewport" name="pnl_view_acq">
+        <object class="SecomViewport" name="pnl_view_acq">
           <XRCED>
             <assign_var>1</assign_var>
           </XRCED>
