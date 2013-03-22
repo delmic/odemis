@@ -80,7 +80,7 @@ class DraggableCanvas(wx.Panel):
         # on top, stays at an absolute position
         self.ViewOverlays = []
         # should always have at least 1 element, to allow adding directly a 2nd
-        # image
+        # image.
         self.Images = [None]
         self.merge_ratio = 0.3
         # self.zoom = 0 # float, can also be negative
@@ -97,10 +97,10 @@ class DraggableCanvas(wx.Panel):
         self._dc_buffer = wx.MemoryDC()
 
         # wx.Bitmap that will allways contain the image to be displayed
-        self._img_buffer = None
+        self._bmp_buffer = None
         # very small first, so that for sure it'll be resized with OnSize
-        self.buffer_size = (1, 1)
-        self.ResizeBuffer(self.buffer_size)
+        self._bmp_buffer_size = (1, 1)
+        self.ResizeBuffer(self._bmp_buffer_size)
         # When resizing, margin to put around the current size
         self.margin = 512
 
@@ -112,8 +112,8 @@ class DraggableCanvas(wx.Panel):
         self.SetBackgroundColour('black')
 
         # DEBUG
-        # self.SetBackgroundColour('grey') # (grey is for debugging)
-        # self.margin = 2
+        #self.SetBackgroundColour('grey') # (grey is for debugging)
+        #self.margin = 2
 
         # view = the area displayed
 
@@ -145,6 +145,8 @@ class DraggableCanvas(wx.Panel):
         self.Bind(wx.EVT_RIGHT_UP, self.OnRightUp)
 
         self.Bind(wx.EVT_CHAR, self.OnChar)
+
+    # Event handlers
 
     def OnChar(self, event):
         key = event.GetKeyCode()
@@ -274,6 +276,8 @@ class DraggableCanvas(wx.Panel):
         logging.debug("double click at %s", new_pos)
         self.ReCenterBuffer(new_pos)
 
+    # END Event handlers
+
     def onExtraAxisMove(self, axis, shift):
         """
         called when the extra dimensions are modified (right drag)
@@ -289,8 +293,8 @@ class DraggableCanvas(wx.Panel):
 
     # Change picture one/two
     def SetImage(self, index, im, pos = None, scale = None):
-        """
-        Set (or update) the image
+        """ Set (or update)  image
+
         index (0<=int): index number of the image, can be up to 1 more than the
             current number of images
         im (wx.Image): the image, or None to remove the current image
@@ -330,16 +334,18 @@ class DraggableCanvas(wx.Panel):
         """
         dc = wx.PaintDC(self)
 
-        margin = ((self.buffer_size[0] - self.ClientSize[0])/2,
-                  (self.buffer_size[1] - self.ClientSize[1])/2)
+        margin = ((self._bmp_buffer_size[0] - self.ClientSize[0])/2,
+                  (self._bmp_buffer_size[1] - self.ClientSize[1])/2)
 
         # dc.BlitPointSize(self.drag_shift,
-        #                  self.buffer_size,
+        #                  self._bmp_buffer_size,
         #                  self._dc_buffer,
         #                  (0,0))
-        dc.BlitPointSize((0, 0), self.ClientSize, self._dc_buffer,
-                         (margin[0] - self.drag_shift[0],
-                          margin[1] - self.drag_shift[1]))
+        dc.BlitPointSize(
+            (0, 0),
+            self.ClientSize,
+            self._dc_buffer,
+            (margin[0] - self.drag_shift[0], margin[1] - self.drag_shift[1]))
 
         # for o in self.WorldOverlays:
         #     o.Draw(dc, self.world_pos_buffer, self.scale)
@@ -354,12 +360,12 @@ class DraggableCanvas(wx.Panel):
         # Make sure the buffer is always at least the same size as the Window or
         # bigger
         new_size = (
-            max(self.buffer_size[0], self.ClientSize[0] + self.margin * 2),
-            max(self.buffer_size[1], self.ClientSize[1] + self.margin * 2)
+            max(self._bmp_buffer_size[0], self.ClientSize[0] + self.margin * 2),
+            max(self._bmp_buffer_size[1], self.ClientSize[1] + self.margin * 2)
         )
 
         # recenter the view
-        if (new_size != self.buffer_size):
+        if (new_size != self._bmp_buffer_size):
             self.ResizeBuffer(new_size)
             # self.ReCenterBuffer((new_size[0]/2, new_size[1]/2))
             self.ShouldUpdateDrawing()
@@ -369,15 +375,15 @@ class DraggableCanvas(wx.Panel):
     def ResizeBuffer(self, size):
         """ Updates the size of the buffer to the given size
 
-        size (2-tuple int)
+        :param size: (2-tuple int) The new size
         """
         # Make new offscreen bitmap: this bitmap will always have the
         # current drawing in it
-        self._img_buffer = wx.EmptyBitmap(*size)
-        self.buffer_size = size
+        self._bmp_buffer = wx.EmptyBitmap(*size)
+        self._bmp_buffer_size = size
 
         # Select the bitmap into the device context
-        self._dc_buffer.SelectObject(self._img_buffer)
+        self._dc_buffer.SelectObject(self._bmp_buffer)
         # On Linux necessary after every 'SelectObject'
         self._dc_buffer.SetBackground(wx.BLACK_BRUSH)
 
@@ -446,10 +452,11 @@ class DraggableCanvas(wx.Panel):
         self.Update()
 
     def Draw(self, dc):
-        """
-        Redraw the buffer with the images and overlays
-        dc (wx.DC)
-        overlays must have a Draw(dc, shift, scale) method
+        """ Redraw the buffer with the images and overlays
+
+        Overlays must have a `Draw(dc, shift, scale)` method.
+
+        :param dc: (wx.DC)
         """
         self.world_pos_buffer = self.world_pos_requested
         #logging.debug("New drawing at %s", self.world_pos_buffer)
@@ -457,12 +464,12 @@ class DraggableCanvas(wx.Panel):
         # set and reset the origin here because Blit in onPaint gets "confused"
         # with values > 2048
         # centred on self.world_pos_buffer
-        origin_point = (self.buffer_size[0] / 2, self.buffer_size[1] / 2)
+        origin_point = tuple(d / 2 for d in self._bmp_buffer_size)
         dc.SetDeviceOriginPoint(origin_point)
+
         # we do not use the UserScale of the DC here because it would lead
         # to scaling computation twice when the image has a scale != 1. In
         # addition, as coordinates are int, there is rounding error on zooming.
-
         self._DrawMergedImages(dc, self.Images, self.merge_ratio)
 
         # Each overlay draws itself
@@ -514,8 +521,8 @@ class DraggableCanvas(wx.Panel):
             # where is the buffer in the world?
             buffer_rect = (dc.DeviceToLogicalX(0),
                            dc.DeviceToLogicalY(0),
-                           self.buffer_size[0],
-                           self.buffer_size[1])
+                           self._bmp_buffer_size[0],
+                           self._bmp_buffer_size[1])
             goal_rect = wx.IntersectRect(full_rect, buffer_rect)
             if not goal_rect: # no intersection
                 return (None, None)
@@ -580,7 +587,7 @@ class DraggableCanvas(wx.Panel):
 
     @staticmethod
     def memsetObject(bufferObject, value):
-        """Note, dangerous"""
+        """Note: dangerous"""
         data = ctypes.POINTER(ctypes.c_char)()
         size = ctypes.c_int()
         ctypes.pythonapi.PyObject_AsCharBuffer(
@@ -607,8 +614,9 @@ class DraggableCanvas(wx.Panel):
 
         if ratio < 1.0:
             # im2merged = im2scaled.AdjustChannels(1.0,1.0,1.0,ratio)
-            # TODO Check if we could speed up by caching the alphabuffer
+            # TODO: Check if we could speed up by caching the alphabuffer
             abuf = imscaled.GetAlphaBuffer()
+            print abuf
             self.memsetObject(abuf, int(255 * ratio))
 
         # TODO: the conversion from Image to Bitmap should be done only once,
@@ -616,22 +624,27 @@ class DraggableCanvas(wx.Panel):
         dc.DrawBitmapPoint(wx.BitmapFromImage(imscaled), tl)
 
     def _DrawMergedImages(self, dc, images, ratio = 0.5):
-        """
-        Draw the two images on the DC, centred around their _dc_center, with
-        their own scale,
-        and an opacity of "ratio" for im1.
+        """ Draw the two images on the DC, centred around their _dc_center, with
+        their own scale and an opacity of "ratio" for im1.
+
         Both _dc_center's should be close in order to have the parts with only
         one picture drawn without transparency
 
-        dc: wx.DC
-        images (list of wx.Image): the images (it can also be None).
-        ratio (0<float<1): how much to merge the images (between 1st and all
-            other)
-        scale (0<float): the scaling of the images in addition to their own
+        :param dc: (wx.DC) The device context which will be drawn to
+        :param images: (list of wx.Image): The images to be drawn or a list with
+            a sinle 'None' element.
+        :parma ratio: (float [0..1]): How to merge the images (between 1st and
+            all others)
+        :parma scale: (float > 0): the scaling of the images in addition to
+            their own scale.
 
-        Note: this is a very rough implementation. It's not fully optimized, and
+        Note: this is a very rough implementation. It's not fully optimized and
         uses only a basic averaging algorithm.
+
         """
+
+        # TODO: Move Secom specific stuff to subclass
+
         t_start = time.time()
 
         # The idea:

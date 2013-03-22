@@ -213,8 +213,8 @@ class DblMicroscopeCanvas(DraggableCanvas):
         dc.SelectObject(bitmap)
 
         # simplified version of OnPaint()
-        margin = ((self.buffer_size[0] - self.ClientSize[0])/2,
-                  (self.buffer_size[1] - self.ClientSize[1])/2)
+        margin = ((self._bmp_buffer_size[0] - self.ClientSize[0])/2,
+                  (self._bmp_buffer_size[1] - self.ClientSize[1])/2)
 
         dc.BlitPointSize((0, 0), self.ClientSize, self._dc_buffer, margin)
 
