@@ -87,7 +87,7 @@ class DraggableCanvas(wx.Panel):
         self.scale = 1.0 # derived from zoom
         # self.zoom_range = (-10.0, 10.0)
 
-        # centre pos of the buffer in the world
+        # centre position of the buffer in the world
         self.world_pos_buffer = (0, 0)
         # the position the view is asking to the next buffer recomputation
         # in buffer-coordinates: = 1px at scale = 1
@@ -423,8 +423,7 @@ class DraggableCanvas(wx.Panel):
         self.UpdateDrawing()
 
     def UpdateDrawing(self):
-        """
-        Redraws everything (that is viewed in the buffer)
+        """ Redraws everything (that is viewed in the buffer)
         """
         prev_world_pos = self.world_pos_buffer
         self.Draw(self._dc_buffer)
@@ -616,7 +615,6 @@ class DraggableCanvas(wx.Panel):
             # im2merged = im2scaled.AdjustChannels(1.0,1.0,1.0,ratio)
             # TODO: Check if we could speed up by caching the alphabuffer
             abuf = imscaled.GetAlphaBuffer()
-            print abuf
             self.memsetObject(abuf, int(255 * ratio))
 
         # TODO: the conversion from Image to Bitmap should be done only once,
