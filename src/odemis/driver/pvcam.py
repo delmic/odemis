@@ -356,11 +356,11 @@ class PVCam(model.DigitalCamera):
         
         # Set to simple acquisition mode
         self.set_param(pv.PARAM_PMODE, pv.PMODE_NORMAL)
-#        # In PI cameras, this is fixed (so read-only)
-#        if self.get_param_access(pv.PARAM_CLEAR_MODE) == pv.ACC_READ_WRITE:
-#            logging.debug("Setting clear mode to pre sequence")
-#            # TODO: should be done pre-exposure? As we are not closing the shutter?
-#            self.set_param(pv.PARAM_CLEAR_MODE, pv.CLEAR_PRE_SEQUENCE)
+        # In PI cameras, this is fixed (so read-only)
+        if self.get_param_access(pv.PARAM_CLEAR_MODE) == pv.ACC_READ_WRITE:
+            logging.debug("Setting clear mode to pre sequence")
+            # TODO: should be done pre-exposure? As we are not closing the shutter?
+            self.set_param(pv.PARAM_CLEAR_MODE, pv.CLEAR_PRE_SEQUENCE)
         
         # set the exposure resolution. (choices are us, ms or s) => ms is best
         # for life imaging (us allows up to 71min)
