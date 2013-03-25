@@ -34,11 +34,12 @@ sudo modprobe comedi_test
 sudo chmod a+rw /dev/comedi0
 sudo comedi_config /dev/comedi0 comedi_test 1000000,1000000
 
-Be aware that comedi_test can crash easily while running those tests.
+Be aware that comedi_test might crash the system while running those tests (much
+less likely with kernels >= 3.5).
 """
 
 logging.getLogger().setLevel(logging.DEBUG)
-comedi.comedi_loglevel(3)
+#comedi.comedi_loglevel(3)
 
 # arguments used for the creation of basic components
 CONFIG_SED = {"name": "sed", "role": "sed", "channel":5, "limits": [-3, 3]}

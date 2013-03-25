@@ -17,22 +17,26 @@ You should have received a copy of the GNU General Public License along with Ode
 '''
 # This is not a real test case, but just a stub to be used for each camera driver.
 
+#from abc import ABCMeta, abstractproperty
+from abc import ABCMeta, abstractproperty
 from odemis import model
+import gc
 import time
 import unittest
-import gc
 #gc.set_debug(gc.DEBUG_LEAK | gc.DEBUG_STATS)
 
 class VirtualStaticTestCam(object):
     """
     For tests which don't need a camera ready
     """
+#    __metaclass__ = ABCMeta
+    
     # needs:
     # camera_type : class of the camera
-    # camera_args : tuple of arguments to create a camera
-    camera_type = None
-    # name, role, children...
-    camera_args = ("camera", "test", None)
+    # camera_kwargs : dict of arguments to create a camera
+#    @abstractproperty
+#    def camera_type(self):
+#        pass
     
     def test_scan(self):
         """
@@ -44,34 +48,35 @@ class VirtualStaticTestCam(object):
     
 
 # It doesn't inherit from TestCase because it should not be run by itself
+#class VirtualTestCam(unittest.TestCase):
 class VirtualTestCam(object):
     """
-    Virtual class for all the (andor) cameras
+    Abstract class for all the DigitalCameras
     """
+    __metaclass__ = ABCMeta
     
     # needs:
     # camera_type : class of the camera
-    # camera_args : tuple of arguments to create a camera
-    camera_type = None
-    # name, role, children...
-    camera_args = ("camera", "test", None)
+    # camera_kwargs : dict of arguments to create a camera
+    @abstractproperty
+    def camera_type(self):
+        pass
+    
     camera = None
     
-    # doesn't work as it's not a TestCase
+    
+#    # doesn't work as it's not a TestCase
 #    @classmethod
 #    def setUpClass(cls):
-#        cls.camera = cls.camera_type(*cls.camera_args)
-    
+#        cls.camera = cls.camera_type(**cls.camera_kwargs)
+#    
 #    @classmethod
 #    def tearDownClass(cls):
 #        cls.camera.terminate()
  
     def setUp(self):
         # reset size and binning
-        if isinstance(self.camera.binning.value, tuple):
-            self.camera.binning.value = (1, 1)
-        else:
-            self.camera.binning.value = 1
+        self.camera.binning.value = (1, 1)
         self.size = self.camera.shape[0:2]
         self.camera.resolution.value = self.size
         self.acq_dates = (set(), set()) # 2 sets of dates, one for each receiver 
@@ -111,10 +116,7 @@ class VirtualTestCam(object):
         exposure = 0.1
         
         # just to check it works
-        if isinstance(self.camera.binning.value, tuple):
-            self.camera.binning.value = (1, 1)
-        else:
-            self.camera.binning.value = 1
+        self.camera.binning.value = (1, 1)
         
         self.camera.exposureTime.value = exposure
         
@@ -127,10 +129,7 @@ class VirtualTestCam(object):
         self.assertIn(model.MD_EXP_TIME, im.metadata)
         
         # just to check it still works
-        if isinstance(self.camera.binning.value, tuple):
-            self.camera.binning.value = (1, 1)
-        else:
-            self.camera.binning.value = 1
+        self.camera.binning.value = (1, 1)
             
         start = time.time()
         im = self.camera.data.get()
@@ -287,23 +286,12 @@ class VirtualTestCam(object):
 
 #    @unittest.skip("simple")
     def test_binning(self):
-        if isinstance(self.camera.binning.value, tuple):
-            self.camera.binning.value = (1, 1)
-            max_binning = self.camera.binning.range[1] 
-            new_binning = (2, 2)
-            if new_binning >= max_binning:
-                # if there is no binning 2, let's not try
-                self.skipTest("Camera doesn't support binning")
-        else:
-            binnings = self.camera.binning.choices
-            self.camera.binning.value = 1
-            self.assertIn(1, binnings)
-            # The SimCam of SDKv3 doesn't support binning, so let's just try on v2
-            if not 2 in binnings:
-                # if there is no binning 2, there is no binning at all
-                assert(len(binnings) == 1)
-                self.skipTest("Camera doesn't support binning")
-            new_binning = 2
+        self.camera.binning.value = (1, 1)
+        max_binning = self.camera.binning.range[1] 
+        new_binning = (2, 2)
+        if new_binning >= max_binning:
+            # if there is no binning 2, let's not try
+            self.skipTest("Camera doesn't support binning")
         
         # binning should automatically resize the image
         prev_size = self.camera.resolution.value
