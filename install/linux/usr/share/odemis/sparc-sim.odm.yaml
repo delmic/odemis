@@ -3,8 +3,8 @@ SimSPARC: {
     class: Microscope,
     role: sparc,
     emitters: ["EBeam ExtXY"],
-    detectors: ["SED ExtXY", "ARSimCam", "SpecSimCam"],
-    actuators: ["MirrorMover", "FakeSP3000i"],
+    detectors: ["SED ExtXY", "ARSimCam", "FakeSpec10"],
+    actuators: ["MirrorMover"],
 }
 
 # Can simulate a SEM connected to a DAQ board by using the comedi_test driver:
@@ -54,6 +54,12 @@ ARSimCam: {
     class: andorcam2.FakeAndorCam2,
     role: ccd,
     init: {device: 0}
+}
+
+FakeSpec10: {
+    class: spectrometer.CompositedSpectrometer,
+    role: spectrometer,
+    children: {detector: "SpecSimCam", spectrograph: "FakeSP3000i"}
 }
 
 SpecSimCam: {
