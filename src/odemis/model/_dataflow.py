@@ -562,7 +562,11 @@ Pyro4.Daemon.serializers[DataFlow] = DataFlowSerializer
 # Be careful: for now, only the Components have their Events and DataFlows copied
 # when used remotely. IOW, if a dataflow has an Event as attribute, it will not
 # be accessible remotely.
-class Event(object):
+class EventBase(object):
+    pass
+            
+
+class Event(EventBase):
     """
     An Event is used to transmit information that "something" has happened.
     DataFlow can be synchronized on an Event to ensure that it starts acquisition
@@ -631,9 +635,28 @@ class Event(object):
         for l in frozenset(self._listeners):
             l() # for debugging: pass time.time()
 
+# All the classes and functions bellow is to make the remote objects look like 
+# Events. 
+    def _getproxystate(self):
+        """
+        Equivalent to __getstate__() of the proxy version
+        """
+        return Pyro4.core.pyroObjectSerializer(self)[2]
+
+class EventProxy(EventBase, Pyro4.Proxy):
+    def __init__(self, uri):
+        Pyro4.Proxy.__init__(self, uri)
+        
+    def __getstate__(self):
+        # must permit to recreate a proxy to a data-flow in a different container
+        return Pyro4.Proxy.__getstate__(self)
+        
+    def __setstate__(self, state):
+        Pyro4.Proxy.__setstate__(self, state)
+
 
 def unregister_events(self):
-    for name, value in inspect.getmembers(self, lambda x: isinstance(x, Event)):
+    for name, value in inspect.getmembers(self, lambda x: isinstance(x, EventBase)):
         daemon = getattr(value, "_pyroDaemon", None)
         if daemon:
             daemon.unregister(value)
@@ -648,7 +671,7 @@ def dump_events(self):
     """
     events = dict()
     daemon = self._pyroDaemon
-    for name, value in inspect.getmembers(self, lambda x: isinstance(x, Event)):
+    for name, value in inspect.getmembers(self, lambda x: isinstance(x, EventBase)):
         if not hasattr(value, "_pyroDaemon"):
             daemon.register(value)
         events[name] = value
@@ -659,7 +682,21 @@ def load_events(self, events):
     duplicate the given events into the instance.
     useful only for a proxy class
     """
-    for name, df in events.items():
-        setattr(self, name, df)
+    logging.debug("loading events for comp %s", self.name)
+    for name, evt in events.items():
+        setattr(self, name, evt)
+
+# Without this one, it would share events, but they would look like a basic Proxy,
+# so there would be no way to know 
+def EventSerializer(self):
+    """reduce function that automatically replaces Pyro objects by a Proxy"""
+    daemon=getattr(self,"_pyroDaemon",None)
+    if daemon: 
+        # only return a proxy if the object is a registered pyro object
+        return (EventProxy, (daemon.uriFor(self),), self._getproxystate())
+    else:
+        return self.__reduce__()
+    
+Pyro4.Daemon.serializers[Event] = EventSerializer
 
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:

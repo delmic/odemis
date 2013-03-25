@@ -175,6 +175,14 @@ def print_data_flows(component):
     for name, value in model.getDataFlows(component).items():
         print_data_flow(name, value)
 
+def print_event(name, evt):
+    print "\t" + name + " (Event)"
+    
+def print_events(component):
+    # find all Events
+    for name, value in model.getEvents(component).items():
+        print_event(name, value)
+        
 def print_vattribute(name, va):
     if va.unit:
         unit = " (unit: %s)" % va.unit
@@ -213,6 +221,7 @@ def print_attributes(component):
     print_roattributes(component)
     print_vattributes(component)
     print_data_flows(component)
+    print_events(component)
 
 def get_component_from_set(comp_name, components):
     """
