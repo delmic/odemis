@@ -133,6 +133,10 @@ class TestSynchronized(unittest.TestCase):
         self.assertEqual(self.sem_left, 0)
         self.assertEqual(self.ccd_left, 0)
         self.ccd.data.synchronizedOn(None)
+        
+        # check we can still get data normally
+        d = self.ccd.data.get()
+        
         time.sleep(0.1)
 
     def receive_sem_data(self, dataflow, image):
