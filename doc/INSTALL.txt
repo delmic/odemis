@@ -9,7 +9,10 @@ sudo apt-get install python-imaging python-yaml python-serial python-zmq python-
 wxPython 2.9 is also required, but it has to be built form source as described
 in the following section.
 
-python-h5py version 2.1 is required. It can be built from source as described in
+python-h5py version 2.1+ is required. It can be built from source as described in
+its specific section.
+
+comedilib version 0.10+ is required. It can be built from source as described in
 its specific section.
 
 == wxPython 2.9 ==
@@ -109,8 +112,8 @@ Note: if you use this simulator, you probably want to ensure you have a kernel >
 
 Download the source code:
 cd ~/development
-git clone git@github.com:delmic/Pyro4.git
-git clone git@github.com:delmic/odemis.git
+git clone git://github.com/delmic/Pyro4.git
+git clone git://github.com/delmic/odemis.git
 
 Create a "odemis" group and add all the necessary users to it:
 sudo addgroup odemis
@@ -121,6 +124,8 @@ sudo adduser replace_by_login_name odemis
 On Linux, install the files this way:
 cd odemis
 sudo cp -dr --preserve=mode,xattr,timestamps install/linux/* /
+sudo desktop-file-install install/linux/usr/share/applications/odemis.desktop
+
 
 
 = Installing the vendor device drivers =
@@ -185,7 +190,7 @@ sudo cp rspiusb.ko /lib/modules/$(uname -r)/updates/
 sudo depmod
 
 Then install the libpvcam library from PI, as can be found on their site:
-ftp://ftp.piacton.com/Public/Software/Official/Linux/libpvcam.so.2.7.4.2
+wget ftp://ftp.piacton.com/Public/Software/Official/Linux/libpvcam.so.2.7.4.2
 sudo cp libpvcam.so.2.7.4.2 /usr/lib
 sudo ln -s libpvcam.so.2.7.4.2 /usr/lib/libpvcam.so
 
