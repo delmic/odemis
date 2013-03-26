@@ -17,7 +17,6 @@ You should have received a copy of the GNU General Public License along with Ode
 '''
 # This is not a real test case, but just a stub to be used for each camera driver.
 
-#from abc import ABCMeta, abstractproperty
 from abc import ABCMeta, abstractproperty
 from odemis import model
 import gc
@@ -29,14 +28,18 @@ class VirtualStaticTestCam(object):
     """
     For tests which don't need a camera ready
     """
-#    __metaclass__ = ABCMeta
+    __metaclass__ = ABCMeta
     
     # needs:
     # camera_type : class of the camera
     # camera_kwargs : dict of arguments to create a camera
-#    @abstractproperty
-#    def camera_type(self):
-#        pass
+    @abstractproperty
+    def camera_type(self):
+        pass
+
+    @abstractproperty
+    def camera_kwargs(self):
+        pass
     
     def test_scan(self):
         """
@@ -61,9 +64,12 @@ class VirtualTestCam(object):
     @abstractproperty
     def camera_type(self):
         pass
+
+    @abstractproperty
+    def camera_kwargs(self):
+        pass
     
     camera = None
-    
     
 #    # doesn't work as it's not a TestCase
 #    @classmethod
