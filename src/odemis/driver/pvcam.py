@@ -1039,7 +1039,6 @@ class PVCam(model.DigitalCamera):
                 # but should be very rare and not too much of a problem hopefully.
                 with self._online_lock:
                     self._start_acquisition(cbuffer)
-#                    self.pvcam.pl_exp_start_seq(self._handle, cbuffer)
                     start = time.time()
                     metadata = dict(self._metadata) # duplicate
                     metadata[model.MD_ACQ_DATE] = start
@@ -1189,7 +1188,7 @@ class PVCam(model.DigitalCamera):
         cbuf = self._cbuffer 
         if not cbuf:
             if self.acquire_thread and self.acquire_thread.isAlive():
-                logging.warning("Received synchronization event but acquistion not ready")
+                logging.warning("Received synchronization event but acquisition not ready")
                 # queue the events, it's bad but less bad than skipping it
                 self._late_events.append(time.time())
             return
@@ -1301,7 +1300,7 @@ class PVCamDataFlow(model.DataFlow):
         camera: PVCam instance ready to acquire images
         """
         model.DataFlow.__init__(self)
-        self._sync_event = None # synchronization Event 
+        self._sync_event = None # synchronization Event
         self.component = weakref.proxy(camera)
         
 #    def get(self):
