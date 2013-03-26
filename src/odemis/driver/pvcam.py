@@ -27,6 +27,7 @@ from Pyro4.core import oneway
 from ctypes import *
 from odemis import __version__, model, util
 from odemis.model._dataflow import MD_BPP
+import collections
 import gc
 import logging
 import math
@@ -322,6 +323,7 @@ class PVCam(model.DigitalCamera):
         # for synchronized acquisition
         self._cbuffer = None
         self._got_event = threading.Event()
+        self._late_events = collections.deque() # events which haven't been handled yet
         
         self.data = PVCamDataFlow(self)
         logging.debug("Camera component ready to use.")
@@ -1053,7 +1055,7 @@ class PVCam(model.DigitalCamera):
                         while status in STATUS_IN_PROGRESS:
                             now = time.time()
                             if now > timeout:
-                                raise IOError("Timeout")
+                                raise IOError("Timeout after %g s" % (now - timeout))
                             # check if we should stop (sleeping less and less)
                             left = expected_end - now
                             if self.acquire_must_stop.wait(max(0.01, left/2)):
@@ -1063,6 +1065,7 @@ class PVCam(model.DigitalCamera):
                         if status != pv.READOUT_COMPLETE:
                             raise IOError("Acquisition status is unexpected %d" % status)
                     except (IOError, PVCamError):
+                        self.pvcam.pl_exp_abort(self._handle, pv.CCS_NO_CHANGE)
                         if retries > 5:
                             logging.error("Too many failures to acquire an image")
                             raise
@@ -1150,6 +1153,14 @@ class PVCam(model.DigitalCamera):
         raises CancelledError if the acquisition must stop
         """
         assert cbuf
+        
+        # catch up late events if we missed the start
+        if self._late_events:
+            event_time = self._late_events.pop()
+            logging.warning("starting acquisition late by %g s", time.time() - event_time)
+            self.pvcam.pl_exp_start_seq(self._handle, cbuf)
+            return
+        
         try:
             self._cbuffer = cbuf
             # wait until onEvent was called (it will directly start acquisition)
@@ -1179,6 +1190,8 @@ class PVCam(model.DigitalCamera):
         if not cbuf:
             if self.acquire_thread and self.acquire_thread.isAlive():
                 logging.warning("Received synchronization event but acquistion not ready")
+                # queue the events, it's bad but less bad than skipping it
+                self._late_events.append(time.time())
             return
         
         logging.debug("starting sync acquisition")

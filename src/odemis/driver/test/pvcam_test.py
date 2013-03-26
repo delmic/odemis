@@ -98,11 +98,12 @@ class TestSynchronized(unittest.TestCase):
         check the synchronization of the SEM with the CCD:
         The SEM scans a region and for each point, the CCD acquires one image.
         """
+        start = time.time()
         # use large binning, to reduce the resolution
-        self.ccd.binning.value = (1, self.ccd.binning.range[1][1]) 
+        self.ccd.binning.value = (4, self.ccd.binning.range[1][1]) 
         
         exp = 50e-3 #s
-        # in practice, it takes up to 100ms to take an image of 50 ms exposure
+        # in practice, it takes up to 500ms to take an image of 50 ms exposure
         self.sem_size = (10, 10)
         self.ccd_size = self.ccd.resolution.value
         numbert = numpy.prod(self.sem_size)
@@ -111,7 +112,7 @@ class TestSynchronized(unittest.TestCase):
         # magical formula to get a long enough dwell time.
         # works with PVCam, but is probably different with other drivers :-(
         readout = numpy.prod(self.ccd_size) / self.ccd.readoutRate.value + 0.01
-        self.scanner.dwellTime.value = (exp + readout) * 1.1 + 0.06 # 60ms to account for the overhead and extra image acquisition 
+        self.scanner.dwellTime.value = (exp + readout) * 1.1 + 0.05 # 50ms to account for the overhead and extra image acquisition 
         self.scanner.resolution.value = self.sem_size
         # pixel write/read setup is pretty expensive ~10ms
         expected_duration = numbert * (self.scanner.dwellTime.value + 0.01)
@@ -128,7 +129,8 @@ class TestSynchronized(unittest.TestCase):
             time.sleep(expected_duration * 2 / 10)
             if self.sem_left == 0:
                 break # just to make it quicker if it's quicker
-         
+        
+        logging.info("Took %g s", self.end_time - start)
         time.sleep(exp + readout)
         self.assertEqual(self.sem_left, 0)
         self.assertEqual(self.ccd_left, 0)
@@ -157,6 +159,7 @@ class TestSynchronized(unittest.TestCase):
         self.ccd_left -= 1
         if self.ccd_left <= 0:
             dataflow.unsubscribe(self.receive_ccd_image)
+            self.end_time = time.time()
             
 if __name__ == '__main__':
     unittest.main()
