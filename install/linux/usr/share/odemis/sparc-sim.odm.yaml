@@ -59,7 +59,7 @@ ARSimCam: {
 FakeSpec10: {
     class: spectrometer.CompositedSpectrometer,
     role: spectrometer,
-    children: {detector: "SpecSimCam", spectrograph: "FakeSP3000i"}
+    children: {detector: "SpecSimCam", spectrograph: "FakeSP2300i"}
 }
 
 SpecSimCam: {
@@ -68,8 +68,8 @@ SpecSimCam: {
     init: {device: 0} # same device number but it will actually be different device
 }
 
-# Simulated SP-3000i, the spectrograph part of the Spec-10
-FakeSP3000i: {
+# Simulated SP-2300i, the spectrograph part of the Spec-10
+FakeSP2300i: {
     class: spectrapro.FakeSpectraPro,
     role: spectrograph,
     affects: [SpecSimCam],
