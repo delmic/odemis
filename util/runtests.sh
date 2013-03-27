@@ -18,6 +18,9 @@ if [ ! -d /var/run/odemisd ] ; then
     sudo mkdir -m 777 /var/run/odemisd
 fi
 
+# stop the backend
+odemis-stop
+
 # make sure it is full path
 TESTLOG="$(readlink -m "$TESTLOG")"
 
@@ -55,3 +58,6 @@ if [ $failures -gt 0 ]; then
 else
     echo "All tests passed"
 fi
+
+# try to clean up a bit
+pkill -f odemis.odemisd.main

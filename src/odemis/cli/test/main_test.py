@@ -28,8 +28,7 @@ import sys
 import time
 import unittest
 
-
-ODEMISD_PATH = "../../odemisd/main.py"
+ODEMISD_CMD = "python2 -m odemis.odemisd.main"
 SIM_CONFIG = "../../odemisd/test/optical-sim.odm.yaml"
 class TestWithoutBackend(unittest.TestCase):
     # all the test cases which don't need a backend running
@@ -110,7 +109,7 @@ class TestWithBackend(unittest.TestCase):
             
         # run the backend as a daemon
         # we cannot run it normally as the child would also think he's in a unittest
-        cmdline = ODEMISD_PATH + " --log-level=2 --log-target=testdaemon.log --daemonize %s" % SIM_CONFIG
+        cmdline = ODEMISD_CMD + " --log-level=2 --log-target=testdaemon.log --daemonize %s" % SIM_CONFIG
         ret = subprocess.call(cmdline.split())
         self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
         time.sleep(1) # time to start
@@ -118,7 +117,7 @@ class TestWithBackend(unittest.TestCase):
 
     def tearDown(self):
         # end the backend
-        cmdline = ODEMISD_PATH + " --kill"
+        cmdline = ODEMISD_CMD + " --kill"
         subprocess.call(cmdline.split())
         time.sleep(1) # time to stop
 

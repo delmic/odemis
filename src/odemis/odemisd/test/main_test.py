@@ -25,7 +25,7 @@ import sys
 import time
 import unittest
 
-ODEMISD_CMD = "python2.7 -m odemis.odemisd.main"
+ODEMISD_CMD = "python2 -m odemis.odemisd.main"
 SIM_CONFIG = "optical-sim.odm.yaml"
 
 class TestCommandLine(unittest.TestCase):

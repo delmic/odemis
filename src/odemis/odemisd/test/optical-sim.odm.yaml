@@ -17,8 +17,19 @@ SimOptical: {
 
 Spectra: {
     class: lle.FakeLLE,
-    role: light,
-    init: {port: "/dev/ttyLLE"},
+    role: brightlight,
+    init: {
+        port: "/dev/ttyLLE",
+        # source name -> 99% low, 25% low, centre, 25% high, 99% high wavelength in m
+        sources: {"red": [615.e-9, 625.e-9, 635.e-9, 640.e-9, 650.e-9],
+                  "green": [525.e-9, 540.e-9, 550.e-9, 555.e-9, 560.e-9],
+                  "cyan": [455.e-9, 465.e-9, 475.e-9, 485.e-9, 495.e-9],
+                  "UV": [375.e-9, 390.e-9, 400.e-9, 402.e-9, 405.e-9],
+                  "yellow": [595.e-9, 580.e-9, 565.e-9, 560.e-9, 555.e-9],
+                  "blue": [420.e-9, 430.e-9, 437.e-9, 445.e-9, 455.e-9],
+                  "teal": [495.e-9, 505.e-9, 515.e-9, 520.e-9, 530.e-9],
+                 }
+        },
     affects: ["Andor SimCam"],
 }
 
