@@ -86,6 +86,14 @@ def getDataFlows(component):
     dfs = inspect.getmembers(component, lambda x: isinstance(x, _dataflow.DataFlowBase))
     return dict(dfs)
 
+def getEvents(component):
+    """
+    returns (dict of name -> Events): all the Events in the component with their name
+    """
+    # like dump_dataflow, but doesn't register them
+    evts = inspect.getmembers(component, lambda x: isinstance(x, _dataflow.EventBase))
+    return dict(evts)
+
 class ArgumentError(Exception):
     pass
 

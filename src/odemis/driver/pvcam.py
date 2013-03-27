@@ -23,9 +23,11 @@ You should have received a copy of the GNU General Public License along with Ode
 
 from __future__ import division
 from . import pvcam_h as pv
+from Pyro4.core import oneway
 from ctypes import *
 from odemis import __version__, model, util
 from odemis.model._dataflow import MD_BPP
+import collections
 import gc
 import logging
 import math
@@ -47,7 +49,11 @@ class PVCamError(Exception):
     def __str__(self):
         return self.args[1]
 
-
+class CancelledError(Exception):
+    """
+    raise to indicate the acquisition is cancelled and must stop
+    """
+    pass
 # TODO: on Windows, should be a WinDLL?
 class PVCamDLL(CDLL):
     """
@@ -127,7 +133,12 @@ class PVCamDLL(CDLL):
 # all the values that say the acquisition is in progress 
 STATUS_IN_PROGRESS = [pv.ACQUISITION_IN_PROGRESS, pv.EXPOSURE_IN_PROGRESS, 
                       pv.READOUT_IN_PROGRESS]
-TEMP_CAM_GONE = 2550 # temperature value that hints that the camera is gone
+
+# The only way I've found to detect the camera is not responding is to check for
+# weird camera temperature. However, it's pretty unreliable as depending on the
+# camera, the weird temperature is different. 
+# It seems that the ST133 gives -120°C
+TEMP_CAM_GONE = 2550 # temperature value that hints that the camera is gone (PIXIS)
 
 class PVCam(model.DigitalCamera):
     """
@@ -309,6 +320,10 @@ class PVCam(model.DigitalCamera):
         self.acquisition_lock = threading.Lock()
         self.acquire_must_stop = threading.Event()
         self.acquire_thread = None
+        # for synchronized acquisition
+        self._cbuffer = None
+        self._got_event = threading.Event()
+        self._late_events = collections.deque() # events which haven't been handled yet
         
         self.data = PVCamDataFlow(self)
         logging.debug("Camera component ready to use.")
@@ -390,7 +405,7 @@ class PVCam(model.DigitalCamera):
             self.pvcam.reinit()
             try:
                 self._handle = self.cam_open(self._devname, pv.OPEN_EXCLUSIVE)
-                break # succeded!
+                break # succeeded!
             except PVCamError:
                 time.sleep(1)
         
@@ -1011,49 +1026,45 @@ class PVCam(model.DigitalCamera):
                     readout_sw = size[0] * size[1] * self._metadata[model.MD_READOUT_TIME] # s
                     # tends to be very slightly bigger:
                     readout = self.get_param(pv.PARAM_READOUT_TIME) * 1e-3 # s
-                    logging.debug("Computed readout time of %g s, while sdk says %g s",
-                                  readout_sw, readout)
-                    # FIXME: if exposure > ~0.1 and readout > exposure/10 => activate
+                    logging.debug("Exposure of %g s, readout %g s (expected %g s)",
+                                  exp_ms * 1e-3, readout, readout_sw)
+                    # FIXME: if readout > exposure/10 (and readout + exposure >~ 0.1,
+                    # to make sure it's not too fast) => activate
                     # shutter per exposure? Or just allow the user to decide?
-                    duration = exposure + readout
+                    duration = exposure + readout # seems it actually takes +40ms
                     need_init = False
         
                 # Acquire the image
                 # Note: might be unlocked slightly too early in case of must_stop,
                 # but should be very rare and not too much of a problem hopefully.
-                with self._online_lock: 
-                    logging.debug("starting acquisition")
-                    self.pvcam.pl_exp_start_seq(self._handle, cbuffer)
+                with self._online_lock:
+                    self._start_acquisition(cbuffer)
+                    start = time.time()
                     metadata = dict(self._metadata) # duplicate
-                    metadata[model.MD_ACQ_DATE] = time.time() # time at the beginning
-                    expected_end = time.time() + duration
+                    metadata[model.MD_ACQ_DATE] = start
+                    expected_end = start + duration
+                    timeout = expected_end + 1
                     array = self._buffer_as_array(cbuffer, size, metadata)
                     
-                    # first we wait ourselves the 80% of expected time (which 
-                    # might be very long) while detecting requests for stop. 80%, 
-                    # because the SDK is sometimes quite pessimistic.
-                    must_stop = self.acquire_must_stop.wait(duration * 0.8)
-                    if must_stop:
-                        break
-                    
-                    # then wait a bounded time to ensure the image is acquired
+                    # wait a bounded time until the image is acquired
                     try:
-                        timeout = expected_end + 1
+                        # warning: in seq mode, it will only report once that status is done,
+                        # and then automatically go to acquisition again
                         status = self.exp_check_status()
                         while status in STATUS_IN_PROGRESS:
-                            if time.time() > timeout:
-                                raise IOError("Timeout")
-                            # check if we should stop
-                            must_stop = self.acquire_must_stop.wait(0.01)
-                            if must_stop:
-                                break
+                            now = time.time()
+                            if now > timeout:
+                                raise IOError("Timeout after %g s" % (now - timeout))
+                            # check if we should stop (sleeping less and less)
+                            left = expected_end - now
+                            if self.acquire_must_stop.wait(max(0.01, left/2)):
+                                raise CancelledError()
                             status = self.exp_check_status()
         
-                        if must_stop:
-                            break
                         if status != pv.READOUT_COMPLETE:
                             raise IOError("Acquisition status is unexpected %d" % status)
-                    except (IOError, PVCamError) as exp:
+                    except (IOError, PVCamError):
+                        self.pvcam.pl_exp_abort(self._handle, pv.CCS_NO_CHANGE)
                         if retries > 5:
                             logging.error("Too many failures to acquire an image")
                             raise
@@ -1067,11 +1078,7 @@ class PVCam(model.DigitalCamera):
                         
                         self.pvcam.pl_exp_finish_seq(self._handle, cbuffer, None)
                         self.pvcam.pl_exp_uninit_seq()
-    
-                        # The only way I've found to detect the camera is not 
-                        # responding is to check for weird camera temperature
-                        # TODO: seems that the ST133 gives -120 => check usb to detect connected or not
-                        #if self.get_param(pv.PARAM_TEMP) == TEMP_CAM_GONE:
+
                         # Always assume the "worse": the camera has been turned off
                         self.Reinitialize() #returns only once the camera is working again
                         self._online_lock.acquire()
@@ -1082,14 +1089,21 @@ class PVCam(model.DigitalCamera):
                         continue
 
                 retries = 0
-                logging.debug("data acquired successfully")
+                logging.debug("image acquired successfully after %g s", time.time() - start)
                 callback(array)
              
                 # force the GC to non-used buffers, for some reason, without this
                 # the GC runs only after we've managed to fill up the memory
                 gc.collect()
+        except CancelledError:
+            # received a must-stop event
+            pass
         except:
             logging.exception("Unexpected failure during image acquisition")
+        else:
+            # we know it finished fine, so stop imediately
+            # (also stop the pvcam background thread in _seq acquisition) 
+            self.pvcam.pl_exp_abort(self._handle, pv.CCS_HALT_CLOSE_SHTR)
         finally:
             # ending cleanly
             
@@ -1107,7 +1121,7 @@ class PVCam(model.DigitalCamera):
             else:
                 try:
                     if self.exp_check_status() in STATUS_IN_PROGRESS:    
-                        logging.debug("aborting acquisition")
+                        logging.debug("aborting acquisition, left = %g s", left)
                         self.pvcam.pl_exp_abort(self._handle, pv.CCS_HALT_CLOSE_SHTR)
                 except PVCamError:
                     logging.exception("Failed to abort acquisition")
@@ -1129,7 +1143,59 @@ class PVCam(model.DigitalCamera):
             self.acquisition_lock.release()
             logging.debug("Acquisition thread closed")
             self.acquire_must_stop.clear()
+    
+    def _start_acquisition(self, cbuf):
+        """
+        Triggers the start of the acquisition on the camera. If the DataFlow
+         is synchronized, wait for the Event to be triggered.
+        cbuf (ctype): buffer to contain the data
+        raises CancelledError if the acquisition must stop
+        """
+        assert cbuf
         
+        # catch up late events if we missed the start
+        if self._late_events:
+            event_time = self._late_events.pop()
+            logging.warning("starting acquisition late by %g s", time.time() - event_time)
+            self.pvcam.pl_exp_start_seq(self._handle, cbuf)
+            return
+        
+        try:
+            self._cbuffer = cbuf
+            # wait until onEvent was called (it will directly start acquisition)
+            # or must stop
+            while not self.acquire_must_stop.is_set():
+                if not self.data._sync_event: # not synchronized (anymore)?
+                    logging.debug("starting acquisition")
+                    self.pvcam.pl_exp_start_seq(self._handle, cbuf)
+                    return
+                # doesn't need to be very frequent, just not too long to delay
+                # cancelling the acquisition, and to check for the event frequently
+                # enough 
+                if self._got_event.wait(0.01):
+                    self._got_event.clear()
+                    return
+        finally:
+            self._cbuffer = None
+        
+        raise CancelledError()
+        
+    @oneway
+    def onEvent(self):
+        """
+        Called by the Event when it is triggered
+        """
+        cbuf = self._cbuffer 
+        if not cbuf:
+            if self.acquire_thread and self.acquire_thread.isAlive():
+                logging.warning("Received synchronization event but acquisition not ready")
+                # queue the events, it's bad but less bad than skipping it
+                self._late_events.append(time.time())
+            return
+        
+        logging.debug("starting sync acquisition")
+        self.pvcam.pl_exp_start_seq(self._handle, cbuf)
+        self._got_event.set() # let the acquisition thread know it's starting
     
     def req_stop_flow(self):
         """
@@ -1234,6 +1300,7 @@ class PVCamDataFlow(model.DataFlow):
         camera: PVCam instance ready to acquire images
         """
         model.DataFlow.__init__(self)
+        self._sync_event = None # synchronization Event
         self.component = weakref.proxy(camera)
         
 #    def get(self):
@@ -1270,7 +1337,29 @@ class PVCamDataFlow(model.DataFlow):
             # camera has been deleted, it's all fine, we'll be GC'd soon
             pass
             
-    def notify(self, data):
-        model.DataFlow.notify(self, data)
-
+    
+    def synchronizedOn(self, event):
+        """
+        Synchronize the acquisition on the given event. Every time the event is
+          triggered, the DataFlow will start a new acquisition.
+        Behaviour is unspecified if the acquisition is already running.
+        event (model.Event or None): event to synchronize with. Use None to 
+          disable synchronization.
+        The DataFlow can be synchronize only with one Event at a time.
+        """
+        if self._sync_event == event:
+            return
+        
+        if self._sync_event:
+            self._sync_event.unsubscribe(self.component)
+        else:
+            # report problem if the acquisition was started without expecting synchronization
+            assert (not self.component.acquire_thread or 
+                    not self.component.acquire_thread.isAlive() or
+                    self.component.acquire_must_stop.is_set())
+            
+        self._sync_event = event
+        if self._sync_event:
+            self._sync_event.subscribe(self.component)
+            
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:

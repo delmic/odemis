@@ -16,8 +16,10 @@ You should have received a copy of the GNU General Public License along with Ode
 '''
 
 from __future__ import division
+from Pyro4.core import oneway
 from ctypes import *
 from odemis import __version__, model, util
+import collections
 import ctypes # for fake AndorV2DLL
 import gc
 import logging
@@ -33,6 +35,12 @@ class AndorV2Error(Exception):
         
     def __str__(self):
         return self.args[1]
+
+class CancelledError(Exception):
+    """
+    raise to indicate the acquisition is cancelled and must stop
+    """
+    pass
 
 class AndorCapabilities(Structure):
     _fields_ = [("Size", c_uint32), # the size of this structure
@@ -439,6 +447,10 @@ class AndorCam2(model.DigitalCamera):
         self.acquisition_lock = threading.Lock()
         self.acquire_must_stop = threading.Event()
         self.acquire_thread = None
+        # for synchronized acquisition
+        self._cbuffer = None
+        self._got_event = threading.Event()
+        self._late_events = collections.deque() # events which haven't been handled yet
         
         self.data = AndorCam2DataFlow(self)
         logging.debug("Camera component ready to use.")
@@ -672,7 +684,7 @@ class AndorCam2(model.DigitalCamera):
             for i in range(nb_hsspeeds.value):
                 self.atcore.GetHSSpeed(channel, self._output_amp, i, byref(hsspeed))
                 # FIXME: Doc says iStar and Classic systems report speed in microsecond per pixel
-                hsspeeds.add(hsspeed.value * 10e6)
+                hsspeeds.add(hsspeed.value * 1e6)
         
         return hsspeeds
 
@@ -689,7 +701,7 @@ class AndorCam2(model.DigitalCamera):
             self.atcore.GetNumberHSSpeeds(channel, self._output_amp, byref(nb_hsspeeds))
             for i in range(nb_hsspeeds.value):
                 self.atcore.GetHSSpeed(channel, self._output_amp, i, byref(hsspeed))
-                if speed == hsspeed.value * 10e6:
+                if speed == hsspeed.value * 1e6:
                     return channel, i
 
         raise KeyError("Couldn't find readout rate %f", speed)
@@ -1154,108 +1166,271 @@ class AndorCam2(model.DigitalCamera):
         assert(self.GetStatus() == AndorV2DLL.DRV_IDLE) # Just to be sure
         
         # Set up thread
-        self.acquire_thread = threading.Thread(target=self._acquire_thread_run,
+        if self.data._sync_event:
+            # need synchronized acquisition
+            target = self._acquire_thread_synchronized
+        else:
+            # no event (now, and hopefully not during the acquisition)
+            target = self._acquire_thread_continuous
+        self.acquire_thread = threading.Thread(target=target,
                 name="andorcam acquire flow thread",
                 args=(callback,))
         self.acquire_thread.start()
 
-    def _acquire_thread_run(self, callback):
+    def _acquire_thread_continuous(self, callback):
         """
         The core of the acquisition thread. Runs until acquire_must_stop is set.
+        Version which keeps acquiring images as frequently as possible
         """
         need_reinit = True
-        while not self.acquire_must_stop.is_set():
-            # need to stop acquisition to update settings
-            if need_reinit or self._need_update_settings():
-                try:
-                    if self.GetStatus() == AndorV2DLL.DRV_ACQUIRING:
-                        self.atcore.AbortAcquisition()
-                        time.sleep(0.1)
-                except AndorV2Error as (errno, strerr):
-                    # it was already aborted
-                    if errno != 20073: # DRV_IDLE
-                        self.acquisition_lock.release()
-                        self.acquire_must_stop.clear()
-                        raise
-                # We don't use the kinetic mode as it might go faster than we can
-                # process them.
-                self.atcore.SetAcquisitionMode(5) # 5 = Run till abort
-                # Seems exposure needs to be re-set after setting acquisition mode
-                self._prev_settings[1] = None # 1 => exposure time
-                self._update_settings()
-                self.atcore.SetKineticCycleTime(0) # don't wait between acquisitions
-                self.atcore.StartAcquisition()
+        try:
+            while not self.acquire_must_stop.is_set():
+                # need to stop acquisition to update settings
+                if need_reinit or self._need_update_settings():
+                    try:
+                        if self.GetStatus() == AndorV2DLL.DRV_ACQUIRING:
+                            self.atcore.AbortAcquisition()
+                            time.sleep(0.1)
+                    except AndorV2Error as (errno, strerr):
+                        # it was already aborted
+                        if errno != 20073: # DRV_IDLE
+                            self.acquisition_lock.release()
+                            self.acquire_must_stop.clear()
+                            raise
+                    # We don't use the kinetic mode as it might go faster than we can
+                    # process them.
+                    self.atcore.SetAcquisitionMode(5) # 5 = Run till abort
+                    # Seems exposure needs to be re-set after setting acquisition mode
+                    self._prev_settings[1] = None # 1 => exposure time
+                    self._update_settings()
+                    self.atcore.SetKineticCycleTime(0) # don't wait between acquisitions
+                    self.atcore.StartAcquisition()
+                    
+                    size = self.resolution.value
+                    exposure, accumulate, kinetic = self.GetAcquisitionTimings()
+                    logging.debug("Accumulate time = %f, kinetic = %f", accumulate, kinetic)
+                    readout = size[0] * size[1] * self._metadata[model.MD_READOUT_TIME] # s
+                    # kinetic should be approximately same as exposure + readout => play safe
+                    duration = max(kinetic, exposure + readout)
+                    need_reinit = False
+        
+                # Acquire the images
+                metadata = dict(self._metadata) # duplicate
+                metadata[model.MD_ACQ_DATE] = time.time() # time at the beginning
+                cbuffer = self._allocate_buffer(size)
+                array = self._buffer_as_array(cbuffer, size, metadata)
                 
-                size = self.resolution.value
-                exposure, accumulate, kinetic = self.GetAcquisitionTimings()
-                logging.debug("Accumulate time = %f, kinetic = %f", accumulate, kinetic)
-                readout = size[0] * size[1] * self._metadata[model.MD_READOUT_TIME] # s
-                # kinetic should be approximately same as exposure + readout => play safe
-                duration = max(kinetic, exposure + readout)
-                need_reinit = False
-    
-            # Acquire the images
-            metadata = dict(self._metadata) # duplicate
-            metadata[model.MD_ACQ_DATE] = time.time() # time at the beginning
-            cbuffer = self._allocate_buffer(size)
-            
-            # first we wait ourselves the typical time (which might be very long)
-            # while detecting requests for stop
-            must_stop = self.acquire_must_stop.wait(duration)
-            if must_stop:
-                break
-            
-            # then wait a bounded time to ensure the image is acquired
-            try:
-                self.WaitForAcquisition(1)
-                # if the must_stop flag has been set while we were waiting
-                if self.acquire_must_stop.is_set():
+                # first we wait ourselves the typical time (which might be very long)
+                # while detecting requests for stop
+                if self.acquire_must_stop.wait(duration):
                     break
                 
-                # it might have acquired _several_ images in the time to process
-                # one image. In this case we discard all but the last one.
-                self.atcore.GetMostRecentImage16(cbuffer, size[0] * size[1])
+                # then wait a bounded time to ensure the image is acquired
+                try:
+                    self.WaitForAcquisition(1)
+                    # if the must_stop flag has been set while we were waiting
+                    if self.acquire_must_stop.is_set():
+                        break
+                    
+                    # it might have acquired _several_ images in the time to process
+                    # one image. In this case we discard all but the last one.
+                    self.atcore.GetMostRecentImage16(cbuffer, size[0] * size[1])
+                except AndorV2Error as (errno, strerr):
+                    # Note: with SDK 2.93 it will happen after a few image grabbed, and
+                    # there is no way to recover
+                    if errno == 20024: # DRV_NO_NEW_DATA
+                        self.atcore.CancelWait()
+                        # -999°C means the camera is gone
+                        if self.GetTemperature() == -999:
+                            logging.error("Camera seems to have disappeared, will try to reinitialise it")
+                            self.Reinitialize()
+                        else:  
+                            time.sleep(0.1)
+                            logging.warning("trying again to acquire image after error %s", strerr)
+                        need_reinit = True
+                        continue
+                    else:
+                        raise
+                
+                callback(array)
+             
+                # force the GC to non-used buffers, for some reason, without this
+                # the GC runs only after we've managed to fill up the memory
+                gc.collect()
+        finally:
+            # ending cleanly
+            try:
+                if self.GetStatus() == AndorV2DLL.DRV_ACQUIRING:
+                    self.atcore.AbortAcquisition()
             except AndorV2Error as (errno, strerr):
-                # Note: with SDK 2.93 it will happen after a few image grabbed, and
-                # there is no way to recover
-                if errno == 20024: # DRV_NO_NEW_DATA
-                    self.atcore.CancelWait()
-                    # -999°C means the camera is gone
-                    if self.GetTemperature() == -999:
-                        logging.error("Camera seems to have disappeared, will try to reinitialise it")
-                        self.Reinitialize()
-                    else:  
-                        time.sleep(0.1)
-                        logging.warning("trying again to acquire image after error %s", strerr)
-                    need_reinit = True
-                    continue
-                else:
+                # it was already aborted
+                if errno != 20073: # DRV_IDLE
                     self.acquisition_lock.release()
+                    logging.debug("Acquisition thread closed after giving up")
                     self.acquire_must_stop.clear()
                     raise
-                
-            array = self._buffer_as_array(cbuffer, size, metadata)
-            callback(array)
-         
-            # force the GC to non-used buffers, for some reason, without this
-            # the GC runs only after we've managed to fill up the memory
-            gc.collect()
-     
-        # ending cleanly
+            self.atcore.FreeInternalMemory() # TODO not sure it's needed
+            self.acquisition_lock.release()
+            logging.debug("Acquisition thread closed")
+            self.acquire_must_stop.clear()
+
+
+    def _acquire_thread_synchronized(self, callback):
+        """
+        The core of the acquisition thread. Runs until acquire_must_stop is set.
+        Version which wait for a synchronized event. Works also if there is no
+        event set (but a bit slower than the continuous version).
+        """
+        self._ready_for_acq_start = False
+        need_reinit = True
         try:
-            if self.GetStatus() == AndorV2DLL.DRV_ACQUIRING:
-                self.atcore.AbortAcquisition()
-        except AndorV2Error as (errno, strerr):
-            # it was already aborted
-            if errno != 20073: # DRV_IDLE
-                self.acquisition_lock.release()
-                logging.debug("Acquisition thread closed after giving up")
-                self.acquire_must_stop.clear()
-                raise
-        self.atcore.FreeInternalMemory() # TODO not sure it's needed
-        self.acquisition_lock.release()
-        logging.debug("Acquisition thread closed")
-        self.acquire_must_stop.clear()
+            while not self.acquire_must_stop.is_set():
+                # need to stop acquisition to update settings
+                if need_reinit or self._need_update_settings():
+                    try:
+                        if self.GetStatus() == AndorV2DLL.DRV_ACQUIRING:
+                            self.atcore.AbortAcquisition()
+                            time.sleep(0.1)
+                    except AndorV2Error as (errno, strerr):
+                        # it was already aborted
+                        if errno != 20073: # DRV_IDLE
+                            self.acquisition_lock.release()
+                            self.acquire_must_stop.clear()
+                            raise
+                    # We don't use the kinetic mode as it might go faster than we can
+                    # process them.
+                    self.atcore.SetAcquisitionMode(1) # 1 = Single scan
+                    # Seems exposure needs to be re-set after setting acquisition mode
+                    self._prev_settings[1] = None # 1 => exposure time
+                    self._update_settings()
+
+                    # TODO: can be before starting?            
+                    size = self.resolution.value
+                    exposure, accumulate, kinetic = self.GetAcquisitionTimings()
+                    logging.debug("Accumulate time = %f, kinetic = %f", accumulate, kinetic)
+                    readout = size[0] * size[1] * self._metadata[model.MD_READOUT_TIME] # s
+                    # kinetic should be approximately same as exposure + readout => play safe
+                    duration = max(kinetic, exposure + readout)
+                    logging.debug("Will get image every %g s (expected %g s)", kinetic, exposure + readout)
+                    need_reinit = False
+        
+                # Acquire the images
+                self._ready_for_acq_start = True
+                self._start_acquisition()
+                start = time.time()
+                metadata = dict(self._metadata) # duplicate
+                metadata[model.MD_ACQ_DATE] = start
+                cbuffer = self._allocate_buffer(size)
+                array = self._buffer_as_array(cbuffer, size, metadata)
+                
+                # first we wait ourselves the typical time (which might be very long)
+                # while detecting requests for stop
+                if self.acquire_must_stop.wait(duration):
+                    raise CancelledError()
+                
+                # then wait a bounded time to ensure the image is acquired
+                try:
+                    self.WaitForAcquisition(1)
+                    # if the must_stop flag has been set while we were waiting
+                    if self.acquire_must_stop.is_set():
+                        raise CancelledError()
+                    
+                    # it might have acquired _several_ images in the time to process
+                    # one image. In this case we discard all but the last one.
+                    self.atcore.GetMostRecentImage16(cbuffer, size[0] * size[1])
+                except AndorV2Error as (errno, strerr):
+                    # Note: with SDK 2.93 it will happen after a few image grabbed, and
+                    # there is no way to recover
+                    if errno == 20024: # DRV_NO_NEW_DATA
+                        self.atcore.CancelWait()
+                        # -999°C means the camera is gone
+                        if self.GetTemperature() == -999:
+                            logging.error("Camera seems to have disappeared, will try to reinitialise it")
+                            self.Reinitialize()
+                        else:  
+                            time.sleep(0.1)
+                            logging.warning("trying again to acquire image after error %s", strerr)
+                        need_reinit = True
+                        continue
+                    else:
+                        raise
+                
+                logging.debug("image acquired successfully after %g s", time.time() - start)
+                callback(array)
+             
+                # force the GC to non-used buffers, for some reason, without this
+                # the GC runs only after we've managed to fill up the memory
+                gc.collect()
+        except CancelledError:
+            # received a must-stop event
+            pass
+        finally:
+            # ending cleanly
+            try:
+                if self.GetStatus() == AndorV2DLL.DRV_ACQUIRING:
+                    self.atcore.AbortAcquisition()
+            except AndorV2Error as (errno, strerr):
+                # it was already aborted
+                if errno != 20073: # DRV_IDLE
+                    self.acquisition_lock.release()
+                    logging.debug("Acquisition thread closed after giving up")
+                    self.acquire_must_stop.clear()
+                    raise
+            self.atcore.FreeInternalMemory() # TODO not sure it's needed
+            self.acquisition_lock.release()
+            logging.debug("Acquisition thread closed")
+            self.acquire_must_stop.clear()
+
+
+    def _start_acquisition(self):
+        """
+        Triggers the start of the acquisition on the camera. If the DataFlow
+         is synchronized, wait for the Event to be triggered.
+        raises CancelledError if the acquisition must stop
+        """
+        assert self._ready_for_acq_start
+         
+        # catch up late events if we missed the start
+        if self._late_events:
+            event_time = self._late_events.pop()
+            logging.warning("starting acquisition late by %g s", time.time() - event_time)
+            self.atcore.StartAcquisition()
+            return
+        
+        try:
+            # wait until onEvent was called (it will directly start acquisition)
+            # or must stop
+            while not self.acquire_must_stop.is_set():
+                if not self.data._sync_event: # not synchronized (anymore)?
+                    logging.debug("starting acquisition")
+                    self.atcore.StartAcquisition()
+                    return
+                # doesn't need to be very frequent, just not too long to delay
+                # cancelling the acquisition, and to check for the event frequently
+                # enough 
+                if self._got_event.wait(0.01):
+                    self._got_event.clear()
+                    return
+        finally:
+            self._ready_for_acq_start = False
+        
+        raise CancelledError()
+
+    @oneway
+    def onEvent(self):
+        """
+        Called by the Event when it is triggered
+        """
+        if not self._ready_for_acq_start:
+            if self.acquire_thread and self.acquire_thread.isAlive():
+                logging.warning("Received synchronization event but acquisition not ready")
+                # queue the events, it's bad but less bad than skipping it
+                self._late_events.append(time.time())
+            return
+        
+        logging.debug("starting sync acquisition")
+        self.atcore.StartAcquisition()
+        self._got_event.set() # let the acquisition thread know it's starting
     
     def req_stop_flow(self):
         """
@@ -1380,6 +1555,7 @@ class AndorCam2DataFlow(model.DataFlow):
         camera: andorcam instance ready to acquire images
         """
         model.DataFlow.__init__(self)
+        self._sync_event = None # synchronization Event 
         self.component = weakref.proxy(camera)
         
 #    def get(self):
@@ -1416,8 +1592,29 @@ class AndorCam2DataFlow(model.DataFlow):
             # camera has been deleted, it's all fine, we'll be GC'd soon
             pass
             
-    def notify(self, data):
-        model.DataFlow.notify(self, data)
+    def synchronizedOn(self, event):
+        """
+        Synchronize the acquisition on the given event. Every time the event is
+          triggered, the DataFlow will start a new acquisition.
+        Behaviour is unspecified if the acquisition is already running.
+        event (model.Event or None): event to synchronize with. Use None to 
+          disable synchronization.
+        The DataFlow can be synchronize only with one Event at a time.
+        """
+        if self._sync_event == event:
+            return
+        
+        if self._sync_event:
+            self._sync_event.unsubscribe(self.component)
+        else:
+            # report problem if the acquisition was started without expecting synchronization
+            assert (not self.component.acquire_thread or 
+                    not self.component.acquire_thread.isAlive() or
+                    self.component.acquire_must_stop.is_set())
+            
+        self._sync_event = event
+        if self._sync_event:
+            self._sync_event.subscribe(self.component)
 
 # Only for testing/simulation purpose
 # Very rough version that is just enough so that if the wrapper behaves correctly,

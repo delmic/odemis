@@ -23,22 +23,24 @@ import unittest
 
 logging.getLogger().setLevel(logging.DEBUG)
 
+CLASS = andorcam3.AndorCam3
+KWARGS = {"name": "camera", "role": "ccd", "device": 0} 
+
 class StaticTestAndorCam3(VirtualStaticTestCam, unittest.TestCase):
-    camera_type = andorcam3.AndorCam3
-    camera_args = ("camera", "test", 0)
+    camera_type = CLASS
+    camera_kwargs = KWARGS
 
 # Inheritance order is important for setUp, tearDown
 class TestAndorCam3(VirtualTestCam, unittest.TestCase):
     """
     Test directly the AndorCam3 class.
     """
-    camera_type = andorcam3.AndorCam3
-    # name, role, device number
-    camera_args = ("camera", "test", 0)
-
+    camera_type = CLASS
+    camera_kwargs = KWARGS
+    
     @classmethod
     def setUpClass(cls):
-        cls.camera = cls.camera_type(*cls.camera_args)
+        cls.camera = cls.camera_type(**cls.camera_kwargs)
     
     @classmethod
     def tearDownClass(cls):
