@@ -1872,11 +1872,6 @@ class Scanner(model.Emitter):
         hfw_nomag (0<float<=1): (theoritical) distance between horizontal borders 
           (lower/upper limit in X) if magnification is 1 (in m)
         """
-        # TODO: do oversampling when possible (= take multiple samples in a raw
-        # of each pixel and average their value). Should be maximum ~5smpl/px and
-        # adapt automatically down to 1 smpl/px if the dwell time is close from
-        # HW limit.
-        
         if len(channels) != 2:
             raise ValueError("E-beam scanner '%s' needs 2 channels" % (name,))
         
