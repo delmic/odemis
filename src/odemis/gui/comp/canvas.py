@@ -79,8 +79,8 @@ class DraggableCanvas(wx.Panel):
         self.WorldOverlays = []
         # on top, stays at an absolute position
         self.ViewOverlays = []
-        # should always have at least 1 element, to allow adding directly a 2nd
-        # image.
+        # should always have at least 1 element, to allow the direct additino of
+        # a 2nd image.
         self.Images = [None]
         self.merge_ratio = 0.3
         # self.zoom = 0 # float, can also be negative
@@ -199,9 +199,9 @@ class DraggableCanvas(wx.Panel):
 
         self.dragging = True
 
+        pos = event.GetPositionTuple()
         # There might be several draggings before the buffer is updated
         # So take into account the current drag_shift to compensate
-        pos = event.GetPositionTuple()
         self.drag_init_pos = (pos[0] - self.drag_shift[0],
                               pos[1] - self.drag_shift[1])
 
@@ -337,18 +337,24 @@ class DraggableCanvas(wx.Panel):
         margin = ((self._bmp_buffer_size[0] - self.ClientSize[0])/2,
                   (self._bmp_buffer_size[1] - self.ClientSize[1])/2)
 
+
         # dc.BlitPointSize(self.drag_shift,
         #                  self._bmp_buffer_size,
         #                  self._dc_buffer,
         #                  (0,0))
+
         dc.BlitPointSize(
             (0, 0),
             self.ClientSize,
             self._dc_buffer,
             (margin[0] - self.drag_shift[0], margin[1] - self.drag_shift[1]))
 
-        # for o in self.WorldOverlays:
-        #     o.Draw(dc, self.world_pos_buffer, self.scale)
+        origin_point = tuple(d / 2 for d in self._bmp_buffer_size)
+
+        dc.SetDeviceOriginPoint(origin_point)
+        for o in self.WorldOverlays:
+            o.Draw(dc, self.world_pos_buffer, self.scale)
+        dc.SetDeviceOriginPoint((0, 0))
 
         # TODO: do this only when drag_shift changes, and record the modified
         # region before and put back after.
@@ -457,9 +463,12 @@ class DraggableCanvas(wx.Panel):
 
         :param dc: (wx.DC)
         """
+
         self.world_pos_buffer = self.world_pos_requested
         #logging.debug("New drawing at %s", self.world_pos_buffer)
+
         dc.Clear()
+
         # set and reset the origin here because Blit in onPaint gets "confused"
         # with values > 2048
         # centred on self.world_pos_buffer
@@ -472,8 +481,8 @@ class DraggableCanvas(wx.Panel):
         self._DrawMergedImages(dc, self.Images, self.merge_ratio)
 
         # Each overlay draws itself
-        for o in self.WorldOverlays:
-            o.Draw(dc, self.world_pos_buffer, self.scale)
+        # for o in self.WorldOverlays:
+        #     o.Draw(dc, self.world_pos_buffer, self.scale)
 
         dc.SetDeviceOriginPoint((0, 0))
 
@@ -621,9 +630,34 @@ class DraggableCanvas(wx.Panel):
         # after all the images are merged
         dc.DrawBitmapPoint(wx.BitmapFromImage(imscaled), tl)
 
-    def _DrawMergedImages(self, dc, images, ratio = 0.5):
+    def _draw_background(self, dc):
+        """ TODO: make it fixed
+        """
+        #dc.SetDeviceOriginPoint((0, 0))
+
+        origin_point = tuple(d / 2 for d in self._bmp_buffer_size)
+        dc.SetDeviceOriginPoint(origin_point)
+
+        ctx = wx.lib.wxcairo.ContextFromDC(dc)
+
+        image = cairo.ImageSurface.create_from_png ("src/odemis/gui/img/canvasbg.png")
+        pattern = cairo.SurfacePattern (image)
+        pattern.set_extend (cairo.EXTEND_REPEAT)
+        ctx.set_source (pattern)
+
+        #ctx.set_source_rgba(1.0, 0, 0, 1)
+
+        ctx.rectangle (0,
+                       0,
+                       self.ClientSize[0] + (3 * self.margin),
+                       self.ClientSize[1] + (3 * self.margin))
+        ctx.fill ()
+        dc.SetDeviceOriginPoint((0, 0))
+
+
+    def _DrawMergedImages(self, dc, images, mergeratio=0.5):
         """ Draw the two images on the DC, centred around their _dc_center, with
-        their own scale and an opacity of "ratio" for im1.
+        their own scale and an opacity of "mergeratio" for im1.
 
         Both _dc_center's should be close in order to have the parts with only
         one picture drawn without transparency
@@ -631,7 +665,7 @@ class DraggableCanvas(wx.Panel):
         :param dc: (wx.DC) The device context which will be drawn to
         :param images: (list of wx.Image): The images to be drawn or a list with
             a sinle 'None' element.
-        :parma ratio: (float [0..1]): How to merge the images (between 1st and
+        :parma mergeratio: (float [0..1]): How to merge the images (between 1st and
             all others)
         :parma scale: (float > 0): the scaling of the images in addition to
             their own scale.
@@ -645,11 +679,13 @@ class DraggableCanvas(wx.Panel):
 
         t_start = time.time()
 
+        self._draw_background(dc)
+
         # The idea:
-        # * display the first image (SEM) last, with the given ratio (or 1 if
+        # * display the first image (SEM) last, with the given mergeratio (or 1 if
         #   it's the only one)
         # * display all the other images (fluo) as if they were average
-        #   N images -> ratio = 1-0/N, 1-1/N,... 1-(N-1)/N
+        #   N images -> mergeratio = 1-0/N, 1-1/N,... 1-(N-1)/N
 
         # Fluo images to actually display (ie, remove None)
         fluo = [im for im in images[1:] if im is not None]
@@ -669,12 +705,12 @@ class DraggableCanvas(wx.Panel):
             if im is None:
                 continue
             if nb_fluo == 0:
-                ratio = 1.0 # no transparency if it's alone
+                mergeratio = 1.0 # no transparency if it's alone
             self._DrawImageTransparentRescaled(
                 dc,
                 im,
                 im._dc_center,
-                ratio,
+                mergeratio,
                 scale=im._dc_scale
             )
 

@@ -401,17 +401,24 @@ class SecomCanvas(DblMicroscopeCanvas):
             # Clicked outside selection
             if not hover:
                 self.dragging = True
-                self.active_overlay.start_selection(pos)
+                self.active_overlay.start_selection(pos, self.scale)
                 pub.sendMessage('secom.canvas.zoom.select', canvas=self)
+                if not self.HasCapture():
+                    self.CaptureMouse()
             # Clicked on edge
             elif hover != HOVER_SELECTION:
                 self.dragging = True
                 self.active_overlay.start_edit(pos, hover)
+                if not self.HasCapture():
+                    self.CaptureMouse()
             # Clicked inside selection
             elif self.current_mode == MODE_SECOM_ZOOM:
                 self.dragging = False
+                if self.HasCapture():
+                    self.ReleaseMouse()
 
             self.ShouldUpdateDrawing()
+
         else:
             DraggableCanvas.OnLeftDown(self, event)
 
@@ -421,6 +428,8 @@ class SecomCanvas(DblMicroscopeCanvas):
                 self.dragging = False
                 # Stop both selection and edit
                 self.active_overlay.stop_selection()
+                if self.HasCapture():
+                    self.ReleaseMouse()
             else:
                 print "ZOOM! ZOOM!"
                 self.active_overlay.clear_selection()
@@ -568,6 +577,8 @@ class SelectionOverlay(Overlay):
         self.color = hex_to_rgba(color)
         self.center = center
 
+        self.scale = 1.0
+
         self.start_pos = None
         self.end_pos = None
 
@@ -582,16 +593,28 @@ class SelectionOverlay(Overlay):
 
     # Creating a new selection
 
-    def start_selection(self, start_pos):
+    def _scale_point(self, point):
+        point.x = int(point.x / self.scale)
+        point.y = int(point.y / self.scale)
+        return point
+
+    def _unscale_point(self, point, scale):
+        point.x = int(point.x * scale)
+        point.y = int(point.y * scale)
+        return point
+
+    def start_selection(self, start_pos, scale):
         """ Start a new selection.
 
         :param start_pos: (wx.Point) Pixel coordinates where the selection
             starts
         """
 
-        logging.debug("Starting selection at %s", start_pos)
-        self.start_pos = self.end_pos = start_pos
+        self.scale = scale
+        self.start_pos = self.end_pos = self._scale_point(start_pos)
         self.dragging = True
+
+        logging.debug("Starting selection at %s", start_pos)
 
     def update_selection(self, current_pos):
         """ Update the selection to reflect the given mouse position.
@@ -600,10 +623,10 @@ class SelectionOverlay(Overlay):
             point
         """
 
-        current_pos = self._clip_pos(current_pos)
+        current_pos = self._scale_point(self._clip_pos(current_pos))
+        self.end_pos = current_pos
 
         logging.debug("Updating selection to %s", current_pos)
-        self.end_pos = current_pos
 
     def stop_selection(self):
         """ End the creation of the current selection """
@@ -724,11 +747,18 @@ class SelectionOverlay(Overlay):
         return (self.get_width(), self.get_height())
 
     def Draw(self, dc, shift=(0, 0), scale=1.0):
+
         if self.start_pos and self.end_pos:
-            logging.debug("Drawing from %s, %s to %s. %s", self.start_pos.x,
-                                                           self.start_pos.y,
-                                                           self.end_pos.x,
-                                                           self.end_pos.y )
+            #pylint: disable=E1103
+
+            start_pos = self._unscale_point(self.start_pos, scale)
+            end_pos = self._unscale_point(self.end_pos, scale)
+
+            # logging.debug("Drawing from %s, %s to %s. %s", start_pos.x,
+            #                                                start_pos.y,
+            #                                                end_pos.x,
+            #                                                end_pos.y )
+
             ctx = wx.lib.wxcairo.ContextFromDC(dc)
             ctx.select_font_face(
                 "Courier",
@@ -739,12 +769,13 @@ class SelectionOverlay(Overlay):
 
             ctx.set_line_width(1.5)
             ctx.set_source_rgba(0, 0, 0, 1)
-            ctx.rectangle(
-                self.start_pos.x + 0.5,
-                self.start_pos.y + 0.5,
-                self.end_pos.x - self.start_pos.x + 0,
-                self.end_pos.y - self.start_pos.y + 0
-            )
+
+            rect = (start_pos.x + 0.5,
+                    start_pos.y + 0.5,
+                    end_pos.x - start_pos.x,
+                    end_pos.y - start_pos.y)
+
+            ctx.rectangle(*rect)
 
             ctx.stroke()
 
@@ -753,19 +784,22 @@ class SelectionOverlay(Overlay):
             ctx.set_line_join(cairo.LINE_JOIN_MITER)
 
             ctx.set_source_rgba(*self.color)
-            ctx.rectangle(self.start_pos.x + 0.5,
-                               self.start_pos.y + 0.5,
-                               self.end_pos.x - self.start_pos.x,
-                               self.end_pos.y - self.start_pos.y)
-                               #self.end_pos.x,
-                               #self.end_pos.y) # Rectangle(x0, y0, x1, y1)
+            ctx.rectangle(*rect)
+
             ctx.stroke()
 
-            if self.dragging:
+            if self.dragging or True:
+                msg = "{}: {} to {}, {} to {} unscaled".format(
+                                            self.label,
+                                            self.start_pos,
+                                            self.end_pos,
+                                            start_pos,
+                                            end_pos
+                )
                 ctx.set_source_rgb(0.0, 0.0, 0.0)
                 ctx.move_to(9, 19)
-                ctx.show_text("{} {}".format(self.label, self.end_pos))
+                ctx.show_text(msg)
                 ctx.set_source_rgb(1.0, 1.0, 1.0)
                 ctx.move_to(10, 20)
-                ctx.show_text("{} {}".format(self.label, self.end_pos))
+                ctx.show_text(msg)
 
