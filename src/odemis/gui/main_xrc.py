@@ -143,8 +143,8 @@ class xrcfr_acq(wx.Dialog):
         self.btn_change_file = xrc.XRCCTRL(self, "btn_change_file")
         self.txt_destination = xrc.XRCCTRL(self, "txt_destination")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
-        self.fp_sem_settings = xrc.XRCCTRL(self, "fp_sem_settings")
-        self.fp_optical_settings = xrc.XRCCTRL(self, "fp_optical_settings")
+        self.fp_settings_secom_sem = xrc.XRCCTRL(self, "fp_settings_secom_sem")
+        self.fp_settings_secom_optical = xrc.XRCCTRL(self, "fp_settings_secom_optical")
         self.pnl_secom_streams = xrc.XRCCTRL(self, "pnl_secom_streams")
         self.gauge_acq = xrc.XRCCTRL(self, "gauge_acq")
         self.lbl_acqestimate = xrc.XRCCTRL(self, "lbl_acqestimate")
@@ -1714,7 +1714,7 @@ def __init_resources():
                   <orient>wxVERTICAL</orient>
                   <object class="sizeritem">
                     <object class="FoldPanelBar">
-                      <object class="FoldPanelItem" name="fp_sem_settings">
+                      <object class="FoldPanelItem" name="fp_settings_secom_sem">
                         <label>SEM SETTINGS</label>
                         <fg>#1A1A1A</fg>
                         <bg>#555555</bg>
@@ -1722,7 +1722,7 @@ def __init_resources():
                           <assign_var>1</assign_var>
                         </XRCED>
                       </object>
-                      <object class="FoldPanelItem" name="fp_optical_settings">
+                      <object class="FoldPanelItem" name="fp_settings_secom_optical">
                         <label>OPTICAL SETTINGS</label>
                         <fg>#1A1A1A</fg>
                         <bg>#555555</bg>

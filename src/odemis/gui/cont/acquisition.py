@@ -47,7 +47,7 @@ from odemis import model, dataio
 from odemis.gui import acqmng, instrmodel
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.cont import get_main_tab_controller
-from odemis.gui.cont.settings import SettingsBarController
+from odemis.gui.cont.settings import SecomSettingsController
 from odemis.gui.cont.streams import StreamController
 from odemis.gui.instrmodel import VIEW_LAYOUT_ONE
 from odemis.gui.main_xrc import xrcfr_acq
@@ -399,7 +399,8 @@ def preset_asis(entries):
     """
     Preset which don't change anything (exactly as live)
     entries (list of SettingEntries): each value as originally set
-    returns (dict SettingEntries -> value): new value for each SettingEntry that should be modified
+    returns (dict SettingEntries -> value): new value for each SettingEntry that
+        should be modified
     """
     ret = {}
     for entry in entries:
@@ -446,9 +447,10 @@ class AcquisitionDialog(xrcfr_acq):
         self.acq_future = None
 
         # Create a new settings controller for the acquisition dialog
-        self.settings_controller = SettingsBarController(interface_model,
+        self.settings_controller = SecomSettingsController(interface_model,
                                                          self,
                                                          True)
+
         # Compute the preset values for each preset
         self._preset_values = {} # dict string ->  dict (SettingEntries -> value)
         orig_entries = self.settings_controller.entries
