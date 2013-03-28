@@ -572,10 +572,11 @@ class StaticSpectrumStream(StaticStream):
         # they might represent wavelength out of the possible values, but they
         # will automatically be clipped to fine values
         self.centerWavelength = model.FloatContinuous((maxb + minb) / 2,
-                                                      range=(minb, maxb), 
+                                                      range=(minb, maxb),
                                                       unit="m")
         max_bw = maxb - minb
-        self.bandwidth = model.FloatContinuous(max_bw / 12, range=(1e-9, max_bw), 
+        self.bandwidth = model.FloatContinuous(max_bw / 12,
+                                               range=(max_bw/200, max_bw),
                                                unit="m")
         # TODO: how to export the average spectrum of the whole image (for the
         # bandwidth selector)? a separate method?
