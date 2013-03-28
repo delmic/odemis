@@ -87,11 +87,11 @@ class DraggableCanvas(wx.Panel):
         self.scale = 1.0 # derived from zoom
         # self.zoom_range = (-10.0, 10.0)
 
-        # centre position of the buffer in the world
-        self.world_pos_buffer = (0, 0)
+        # Center of the buffer in world coordinates
+        self.buffer_center_world_pos = (0, 0)
         # the position the view is asking to the next buffer recomputation
         # in buffer-coordinates: = 1px at scale = 1
-        self.world_pos_requested = self.world_pos_buffer
+        self.requested_world_pos = self.buffer_center_world_pos
 
         # buffer = the whole image to be displayed
         self._dc_buffer = wx.MemoryDC()
@@ -190,8 +190,8 @@ class DraggableCanvas(wx.Panel):
         """ Moves the position of the view by a delta
         shift (2-tuple int): delta in buffer coordinates (pixels)
         """
-        self.ReCenterBuffer((self.world_pos_buffer[0] - (shift[0] / self.scale),
-                            self.world_pos_buffer[1] - (shift[1] / self.scale)))
+        self.ReCenterBuffer((self.buffer_center_world_pos[0] - (shift[0] / self.scale),
+                            self.buffer_center_world_pos[1] - (shift[1] / self.scale)))
 
     def OnLeftDown(self, event):
         if self._rdragging:
@@ -224,8 +224,8 @@ class DraggableCanvas(wx.Panel):
             # Update the position of the buffer to where the view is centered
             # self.drag_shift is the delta we want to apply
             new_pos = (
-                self.world_pos_buffer[0] - self.drag_shift[0] / self.scale,
-                self.world_pos_buffer[1] - self.drag_shift[1] / self.scale
+                self.buffer_center_world_pos[0] - self.drag_shift[0] / self.scale,
+                self.buffer_center_world_pos[1] - self.drag_shift[1] / self.scale
             )
             self.ReCenterBuffer(new_pos)
 
@@ -271,8 +271,8 @@ class DraggableCanvas(wx.Panel):
         self.Refresh()
 
         # recompute the view
-        new_pos = (self.world_pos_buffer[0] - shift[0] / self.scale,
-                   self.world_pos_buffer[1] - shift[1] / self.scale)
+        new_pos = (self.buffer_center_world_pos[0] - shift[0] / self.scale,
+                   self.buffer_center_world_pos[1] - shift[1] / self.scale)
         logging.debug("double click at %s", new_pos)
         self.ReCenterBuffer(new_pos)
 
@@ -338,26 +338,16 @@ class DraggableCanvas(wx.Panel):
                   (self._bmp_buffer_size[1] - self.ClientSize[1])/2)
 
 
-        # dc.BlitPointSize(self.drag_shift,
-        #                  self._bmp_buffer_size,
-        #                  self._dc_buffer,
-        #                  (0,0))
-
+        # Blit the appropriate area from the buffer to the view port
         dc.BlitPointSize(
-            (0, 0),
-            self.ClientSize,
-            self._dc_buffer,
-            (margin[0] - self.drag_shift[0], margin[1] - self.drag_shift[1]))
+            (0, 0),             # destination point
+            self.ClientSize,    # size of area to copy
+            self._dc_buffer,    # source
+            (min(max(margin[0] - self.drag_shift[0], 0), 2 * self.margin), # source point
+             min(max(margin[1] - self.drag_shift[1], 0), 2 * self.margin))
+        )
 
-        origin_point = tuple(d / 2 for d in self._bmp_buffer_size)
-
-        dc.SetDeviceOriginPoint(origin_point)
-        for o in self.WorldOverlays:
-            o.Draw(dc, self.world_pos_buffer, self.scale)
-        dc.SetDeviceOriginPoint((0, 0))
-
-        # TODO: do this only when drag_shift changes, and record the modified
-        # region before and put back after.
+        # Remember that the device context of the view port is passed!
         self.DrawStaticOverlays(dc)
 
     def OnSize(self, event):
@@ -393,23 +383,22 @@ class DraggableCanvas(wx.Panel):
         # On Linux necessary after every 'SelectObject'
         self._dc_buffer.SetBackground(wx.BLACK_BRUSH)
 
-    def ReCenterBuffer(self, pos):
+    def ReCenterBuffer(self, world_pos):
         """Update the position of the buffer on the world
 
-        pos (2-tuple float): the world coordinates of the center of the buffer
+        :param world_pos: (2-tuple float) The world coordinates to center the
+            buffer on.
 
         Warning: always call from the main GUI thread. So if you're not sure
-         in which thread you are, do:
-         wx.CallAfter(canvas.ReCenterBuffer, pos)
+        in which thread you are, do: wx.CallAfter(canvas.ReCenterBuffer, pos)
         """
-        if self.world_pos_requested == pos:
-            return
-        self.world_pos_requested = pos
 
-        # TODO: we need also to save the scale requested
-        # FIXME: could maybe be more clever and only request redraw for the
-        # outside region
-        self.ShouldUpdateDrawing()
+        if self.requested_world_pos != world_pos:
+            self.requested_world_pos = world_pos
+            # TODO: we need also to save the scale requested
+            # FIXME: could maybe be more clever and only request redraw for the
+            # outside region
+            self.ShouldUpdateDrawing()
 
     def ShouldUpdateDrawing(self, period=0.1):
         """Schedule the update of the buffer
@@ -431,12 +420,12 @@ class DraggableCanvas(wx.Panel):
     def UpdateDrawing(self):
         """ Redraws everything (that is viewed in the buffer)
         """
-        prev_world_pos = self.world_pos_buffer
+        prev_world_pos = self.buffer_center_world_pos
         self.Draw(self._dc_buffer)
 
         shift_view = (
-            (self.world_pos_buffer[0] - prev_world_pos[0]) * self.scale,
-            (self.world_pos_buffer[1] - prev_world_pos[1]) * self.scale,
+            (self.buffer_center_world_pos[0] - prev_world_pos[0]) * self.scale,
+            (self.buffer_center_world_pos[1] - prev_world_pos[1]) * self.scale,
         )
         # everything is redrawn centred, so reset drag_shift
         if self.dragging:
@@ -461,17 +450,17 @@ class DraggableCanvas(wx.Panel):
 
         Overlays must have a `Draw(dc, shift, scale)` method.
 
-        :param dc: (wx.DC)
+        :param dc: (wx.DC) The buffer device context
         """
 
-        self.world_pos_buffer = self.world_pos_requested
-        #logging.debug("New drawing at %s", self.world_pos_buffer)
+        self.buffer_center_world_pos = self.requested_world_pos
+        #logging.debug("New drawing at %s", self.buffer_center_world_pos)
 
         dc.Clear()
 
         # set and reset the origin here because Blit in onPaint gets "confused"
         # with values > 2048
-        # centred on self.world_pos_buffer
+        # centred on self.buffer_center_world_pos
         origin_point = tuple(d / 2 for d in self._bmp_buffer_size)
         dc.SetDeviceOriginPoint(origin_point)
 
@@ -480,11 +469,14 @@ class DraggableCanvas(wx.Panel):
         # addition, as coordinates are int, there is rounding error on zooming.
         self._DrawMergedImages(dc, self.Images, self.merge_ratio)
 
-        # Each overlay draws itself
-        # for o in self.WorldOverlays:
-        #     o.Draw(dc, self.world_pos_buffer, self.scale)
-
         dc.SetDeviceOriginPoint((0, 0))
+
+        # Each overlay draws itself
+        # Remember that the device context being passed belongs to the *buffer*
+        for o in self.WorldOverlays:
+            o.Draw(dc, self.buffer_center_world_pos, self.scale)
+
+
 
     def DrawStaticOverlays(self, dc):
         """ Draws all the static overlays on the DC dc (wx.DC)
@@ -631,12 +623,12 @@ class DraggableCanvas(wx.Panel):
         dc.DrawBitmapPoint(wx.BitmapFromImage(imscaled), tl)
 
     def _draw_background(self, dc):
-        """ TODO: make it fixed
+        """ TODO: make it fixed, cache image etc.
         """
         #dc.SetDeviceOriginPoint((0, 0))
 
-        origin_point = tuple(d / 2 for d in self._bmp_buffer_size)
-        dc.SetDeviceOriginPoint(origin_point)
+        #origin_point = tuple(d / 2 for d in self._bmp_buffer_size)
+        #dc.SetDeviceOriginPoint((origin_point))
 
         ctx = wx.lib.wxcairo.ContextFromDC(dc)
 
@@ -646,13 +638,14 @@ class DraggableCanvas(wx.Panel):
         ctx.set_source (pattern)
 
         #ctx.set_source_rgba(1.0, 0, 0, 1)
-
-        ctx.rectangle (0,
-                       0,
-                       self.ClientSize[0] + (3 * self.margin),
-                       self.ClientSize[1] + (3 * self.margin))
+        ctx.rectangle(
+            0,
+            0,
+            self.ClientSize[0] * 80,
+            self.ClientSize[1] * 80
+        )
         ctx.fill ()
-        dc.SetDeviceOriginPoint((0, 0))
+        #dc.SetDeviceOriginPoint((0, 0))
 
 
     def _DrawMergedImages(self, dc, images, mergeratio=0.5):
@@ -724,15 +717,15 @@ class DraggableCanvas(wx.Panel):
 
         pos (2-tuple floats): the coordinates in the world
         """
-        return WorldToBufferPoint(pos, self.world_pos_buffer, self.scale)
+        return WorldToBufferPoint(pos, self.buffer_center_world_pos, self.scale)
 
-def WorldToBufferPoint(pos, world_pos, scale):
+def WorldToBufferPoint(world_pos, world_buffer_center, scale):
     """
     Converts a position from world coordinates to buffer coordinates
 
-    :param pos: (2-tuple floats) the coordinates in the world
-    :param world_pos_buffer: the center of the buffer in world coordinates
-    scale: how much zoomed is the buffer compared to the world
+    :param world_pos: (2-tuple float) the coordinates in the world
+    :param world_buffer_center: the center of the buffer in world coordinates
+    :param scale: how much zoomed is the buffer compared to the world
     """
-    return (round((pos[0] - world_pos[0]) * scale),
-            round((pos[1] - world_pos[1]) * scale))
+    return (round((world_pos[0] - world_buffer_center[0]) * scale),
+            round((world_pos[1] - world_buffer_center[1]) * scale))
