@@ -28,6 +28,7 @@ Detector, Emiter and Dataflow associations.
 
 """
 
+from __future__ import division
 from numpy.polynomial import polynomial
 from odemis import model
 from odemis.gui import util
@@ -176,8 +177,8 @@ class Stream(object):
             brightness = None
             contrast = None
         else:
-            brightness = self.brightness.value / 100.0
-            contrast = self.contrast.value / 100.0
+            brightness = self.brightness.value / 100
+            contrast = self.contrast.value / 100
 
         im = util.img.DataArray2wxImage(data,
                                         self._depth,
@@ -198,7 +199,7 @@ class Stream(object):
         except KeyError:
             logging.warning("pixel density of image unknown")
             # Hopefully it'll be within the same magnitude
-            mpp = data.metadata[MD_SENSOR_PIXEL_SIZE][0] / 10.0
+            mpp = data.metadata[MD_SENSOR_PIXEL_SIZE][0] / 10
 
         self.image.value = InstrumentalImage(im, mpp, pos)
 
@@ -315,7 +316,7 @@ class CameraStream(Stream):
             exp = self._detector.exposureTime.value
             res = self._detector.resolution.value
             if isinstance(self._detector.readoutRate, model.VigilantAttributeBase):
-                readout = 1. / self._detector.readoutRate.value
+                readout = 1 / self._detector.readoutRate.value
             else:
                 # let's assume it's super fast
                 readout = 0
@@ -458,7 +459,7 @@ class FluoStream(CameraStream):
             if spec[0] < wl < spec[4]:
                 distance = abs(wl - spec[2]) # distance to 100%
                 if distance:
-                    return 1.0 / distance
+                    return 1 / distance
                 # No distance, ultimate match
                 return float("inf")
             else:
@@ -560,9 +561,22 @@ class StaticSpectrumStream(StaticStream):
             pn = image.metadata[MD_WL_POLYNOMIAL]
             minb = polynomial.polyval(0, pn)
             maxb = polynomial.polyval(image.shape[0]-1, pn)
-        self.bandwidth = model.BandwidthVA((minb, maxb), 
-                                           range=((minb, minb), (maxb, maxb)),
-                                           unit="m")
+        
+        # TODO: get rid of this, if not necessary
+#        self.bandwidth = model.BandwidthVA((minb, maxb), 
+#                                           range=((minb, minb), (maxb, maxb)),
+#                                           unit="m")
+#        
+        
+        # VAs: center wavelength + bandwidth (=center + width)
+        # they might represent wavelength out of the possible values, but they
+        # will automatically be clipped to fine values
+        self.centerWavelength = model.FloatContinuous((maxb + minb) / 2,
+                                                      range=(minb, maxb), 
+                                                      unit="m")
+        max_bw = maxb - minb
+        self.bandwidth = model.FloatContinuous(max_bw / 12, range=(1e-9, max_bw), 
+                                               unit="m")
         # TODO: how to export the average spectrum of the whole image (for the
         # bandwidth selector)? a separate method?
         
@@ -582,9 +596,15 @@ class StaticSpectrumStream(StaticStream):
 
     def _get_bandwith_in_pixel(self):
         """
-        Return the current bandwidth in pixels
+        Return the current bandwidth in pixels index
         returns (2-tuple of int): low and high pixel coordinates
         """
+        center = self.centerWavelength.value
+        width = self.bandwidth.value
+        low = center - width / 2
+        high = center + width / 2
+        # no need to clip, because searchsorted will do it anyway
+        
         # In theory it's a very complex question because you need to find the 
         # solution for the polynomial at the bandwidth borders. In reality, the
         # world constraints help a lot: the polynomial is monotonic in the range
@@ -596,7 +616,7 @@ class StaticSpectrumStream(StaticStream):
         pn = polynomial.Polynomial(data.metadata[MD_WL_POLYNOMIAL], 
                                    domain=[0, data.shape[0]-1])
         n, px_values = pn.linspace(data.shape[0]) # TODO: cache it, as the polynomial is rarely updated!
-        low, high = self.bandwidth.value
+        
         low_px = numpy.searchsorted(px_values, low, side="left")
         if high == low:
             high_px = low_px
@@ -617,11 +637,14 @@ class StaticSpectrumStream(StaticStream):
         data = self.raw[0]
         if self.projection.value == PROJ_AVERAGE_SPECTRUM:
             if self.auto_bc.value:
+                # FIXME: need to fix the brightness/contrast to the min/max of 
+                # the _entire_ image (not just the current slice)
+                # b, c = util.img.FindOptimalBC(self.raw[0], self._depth)
                 brightness = None
                 contrast = None
             else:
-                brightness = self.brightness.value / 100.0
-                contrast = self.contrast.value / 100.0
+                brightness = self.brightness.value / 100
+                contrast = self.contrast.value / 100
             
             # pick only the data inside the bandwidth
             spec_range = self._get_bandwith_in_pixel()
@@ -646,7 +669,7 @@ class StaticSpectrumStream(StaticStream):
             except KeyError:
                 logging.warning("pixel density of image unknown")
                 # Hopefully it'll be within the same magnitude
-                mpp = data.metadata[MD_SENSOR_PIXEL_SIZE][0] / 10.0
+                mpp = data.metadata[MD_SENSOR_PIXEL_SIZE][0] / 10
     
             self.image.value = InstrumentalImage(im, mpp, pos)
         else:
