@@ -45,10 +45,11 @@ SLEEP_TIME = 100 # Sleep timer in milliseconds
 MANUAL = True # If manual is set to True, the window will be kept open at the end
 INSPECT = False
 
-scales = [0.0, 0.1, 0.3, 0.7, 1.0, 1.1, 1.4]
-margins = (512, 512)
+SCALES = [0.0, 0.1, 0.3, 0.7, 1.0, 1.1, 1.4]
 
-view_points = [(-10, -10),
+MARGINS = (512, 512)
+
+VIEW_POINTS = [(-10, -10),
                (0, 0),
                (269, 314),
                (254, 282),
@@ -63,7 +64,9 @@ view_points = [(-10, -10),
                (340, 304),
                (409, 337)]
 
-w_points = [(10230.3571438, 11055.6071439),
+BUFFER_CENTER = (10234.3571438, 11062.6071439)
+
+W_POINTS = [(10230.3571438, 11055.6071439),
             (10231.3571438, 11055.6071439),
             (10231.3571438, 11056.6071439),
             (10231.3571438, 11057.6071439),
@@ -105,7 +108,6 @@ class TestApp(wx.App):
         self.test_frame.Center()
 
         panel =  self.test_frame.button_panel
-        sizer = panel.GetSizer()
 
         self.test_frame.Layout()
         self.test_frame.Show()
@@ -129,8 +131,11 @@ class CanvasTestCase(unittest.TestCase):
             cls.app.MainLoop()
 
     def test_view_to_buffer_pos(self):
-        for vp in view_points:
-            print canvas.view_to_buffer_pos(vp, margins)
+        for wp in W_POINTS:
+            bf = canvas.world_to_buffer_point(wp, BUFFER_CENTER, 1.0)
+            nwp = canvas.buffer_to_world_point(bf, BUFFER_CENTER, 1.0)
+            #self.assertTrue(len(self.canvas.ViewOverlays) == 1)
+            print wp, bf, nwp
 
 if __name__ == "__main__":
     unittest.main()
