@@ -30,17 +30,18 @@ import cairo
 import wx
 
 import odemis.gui as gui
-from .canvas import WorldToBufferPoint
+import odemis.gui.comp.canvas as canvas
 from ..util.conversion import hex_to_rgba
 
 class Overlay(object):
 
-    def __init__(self, base):
+    def __init__(self, base, label=None):
         """
         :param base: (DblMicroscopeCanvas) Canvas to which the overlay belongs
         """
 
         self.base = base
+        self.label = label
 
     def _clip_viewport_pos(self, pos):
         """ Return the given pos, clipped by the base's viewport """
@@ -50,19 +51,15 @@ class Overlay(object):
 
         return pos
 
-    def view_to_buffer_pos(self, view_pos):
-        margin = ((self.base._bmp_buffer_size[0] - self.base.ClientSize[0]) / 2,
-                  (self.base._bmp_buffer_size[1] - self.base.ClientSize[1]) / 2)
-
-        return (view_pos[0] + margin[0], view_pos[1] + margin[1])
-
-class StaticOverlay(Overlay):
+class ViewOverlay(Overlay):
+    """ This class displays an overlay on the view port """
     pass
 
-class RelativeOverlay(Overlay):
+class WorldOverlay(Overlay):
+    """ This class displays an overlay on the buffer """
     pass
 
-class CrossHairOverlay(StaticOverlay):
+class CrossHairOverlay(ViewOverlay):
     def __init__(self, base,
                  color=gui.CROSSHAIR_COLOR, size=gui.CROSSHAIR_SIZE, center=(0, 0)):
         super(CrossHairOverlay, self).__init__(base)
@@ -84,22 +81,50 @@ class CrossHairOverlay(StaticOverlay):
               self.center[1] - self.size)
         br = (self.center[0] + self.size,
               self.center[1] + self.size)
-        tl_s = WorldToBufferPoint(tl, shift, scale)
-        br_s = WorldToBufferPoint(br, shift, scale)
-        center = WorldToBufferPoint(self.center, shift, scale)
+        tl_s = canvas.world_to_buffer_point(tl, shift, scale)
+        br_s = canvas.world_to_buffer_point(br, shift, scale)
+        center = canvas.world_to_buffer_point(self.center, shift, scale)
 
         dc.DrawLine(tl_s[0], center[1], br_s[0], center[1])
         dc.DrawLine(center[0], tl_s[1], center[0], br_s[1])
 
-
 class SelectionMixin(object):
 
-    def __init__(self):
+    """ This Overlay class can be used to draw rectangular selection areas.
+    These areas are always expressed in view port coordinates.
+    Conversions to buffer and world coordinates should be done using subclasses.
+    """
 
-        self.vp_start_pos = None
-        self.vp_end_pos = None
+    hover_margin = 10 #px
+
+
+    def __init__(self, sel_cur=None, color=gui.SELECTION_COLOR, center=(0, 0)):
+        #super(SelectionOverlay, self).__init__(base)
+
+        # The start and end points of the selection rectangle in view port
+        # coordinates
+        self.v_start_pos = None
+        self.v_end_pos = None
+
+        # The view port coordinates where a drag/edit originated
+        self.edit_start_pos = None
+        # What edge is being edited
+        self.edit_edge = None
+
+        self.dragging = False
+        self.edit = False
 
         self.edges = {}
+
+        self.color = hex_to_rgba(color)
+        self.center = center
+
+        self.scale = 1.0
+
+        # # Dictionary containing values for the inner and outer edges
+        # self.edges = {}
+
+    ##### selection methods  #####
 
     def start_selection(self, start_pos, scale):
         """ Start a new selection.
@@ -112,7 +137,7 @@ class SelectionMixin(object):
 
         self.dragging = True
         self.scale = scale
-        self.vp_start_pos = self.vp_end_pos = start_pos
+        self.v_start_pos = self.v_end_pos = start_pos
 
 
     def update_selection(self, current_pos):
@@ -122,10 +147,10 @@ class SelectionMixin(object):
             point
         """
 
-        logging.debug("Updating selection to %s", current_pos)
+        #logging.debug("Updating selection to %s", current_pos)
 
-        current_pos = self._scale_point(self._clip_viewport_pos(current_pos))
-        self.vp_end_pos = current_pos
+        current_pos = self._clip_viewport_pos(current_pos)
+        self.v_end_pos = current_pos
 
     def stop_selection(self):
         """ End the creation of the current selection """
@@ -146,81 +171,15 @@ class SelectionMixin(object):
         self.dragging = False
         self.edit = False
 
-        self.vp_start_pos = None
-        self.vp_end_pos = None
+        self.v_start_pos = None
+        self.v_end_pos = None
 
         self.edges = {}
 
-    def _calc_edges(self):
-        """ Calculate the inner and outer edges of the selection according to
-        the hover margin
-        """
-
-        l, r = sorted([self.vp_start_pos.x, self.vp_end_pos.x])
-        t, b = sorted([self.vp_start_pos.y, self.vp_end_pos.y])
-
-        i_l, o_r, i_t, o_b = [v + self.hover_margin for v in [l, r, t, b]]
-        o_l, i_r, o_t, i_b = [v - self.hover_margin for v in [l, r, t, b]]
-
-        self.edges = {
-            "i_l": i_l,
-            "o_r": o_r,
-            "i_t": i_t,
-            "o_b": o_b,
-            "o_l": o_l,
-            "i_r": i_r,
-            "o_t": o_t,
-            "i_b": i_b
-        }
-
-class SelectionOverlay(Overlay, SelectionMixin):
-    """ This overlay is for the selection of a rectangular arrea.
-    """
-
-    hover_margin = 10 #px
+    ##### END selection methods  #####
 
 
-    def __init__(self, base, label,
-                 sel_cur=None, color=gui.SELECTION_COLOR, center=(0, 0)):
-        super(SelectionOverlay, self).__init__(base)
-        SelectionMixin.__init__(self)
-
-        self.label = label
-
-        self.color = hex_to_rgba(color)
-        self.center = center
-
-        self.scale = 1.0
-
-
-
-        self.edit_start_pos = None
-        self.edit_edge = None
-
-        self.dragging = False
-        self.edit = False
-
-        # # Dictionary containing values for the inner and outer edges
-        # self.edges = {}
-
-    # Creating a new selection
-
-    def _scale_point(self, point):
-        point.x = int(point.x / self.scale)
-        point.y = int(point.y / self.scale)
-        return point
-
-    def _unscale_point(self, point, scale):
-        point.x = int(point.x * scale)
-        point.y = int(point.y * scale)
-        return point
-
-
-
-
-
-
-    # Edit existing selection
+    ##### edit methods  #####
 
     def start_edit(self, start_pos, edge):
         """ Start an edit to the current selection """
@@ -239,20 +198,43 @@ class SelectionOverlay(Overlay, SelectionMixin):
 
         if self.edit_edge in (gui.HOVER_TOP_EDGE, gui.HOVER_BOTTOM_EDGE):
             if self.edit_edge == gui.HOVER_TOP_EDGE:
-                self.vp_start_pos.y = current_pos.y
+                self.v_start_pos.y = current_pos.y
             else:
-                self.vp_end_pos.y = current_pos.y
+                self.v_end_pos.y = current_pos.y
         else:
             if self.edit_edge == gui.HOVER_LEFT_EDGE:
-                self.vp_start_pos.x = current_pos.x
+                self.v_start_pos.x = current_pos.x
             else:
-                self.vp_end_pos.x = current_pos.x
+                self.v_end_pos.x = current_pos.x
 
     def stop_edit(self):
         """ End the selection edit """
         self.stop_selection()
 
+    ##### END edit methods  #####
 
+
+    def _calc_edges(self):
+        """ Calculate the inner and outer edges of the selection according to
+        the hover margin
+        """
+
+        l, r = sorted([self.v_start_pos.x, self.v_end_pos.x])
+        t, b = sorted([self.v_start_pos.y, self.v_end_pos.y])
+
+        i_l, o_r, i_t, o_b = [v + self.hover_margin for v in [l, r, t, b]]
+        o_l, i_r, o_t, i_b = [v - self.hover_margin for v in [l, r, t, b]]
+
+        self.edges = {
+            "i_l": i_l,
+            "o_r": o_r,
+            "i_t": i_t,
+            "o_b": o_b,
+            "o_l": o_l,
+            "i_r": i_r,
+            "o_t": o_t,
+            "i_b": i_b
+        }
 
     def is_hovering(self, pos):  #pylint: disable=R0911
         """ Check if the given position is on/near a selection edge or inside
@@ -262,9 +244,11 @@ class SelectionOverlay(Overlay, SelectionMixin):
         """
 
         if self.edges:
+            # If position outside outer box
             if not self.edges["o_l"] < pos.x < self.edges["o_r"] or \
                 not self.edges["o_t"] < pos.y < self.edges["o_b"]:
                 return False
+            # If position inside inner box
             elif self.edges["i_l"] < pos.x < self.edges["i_r"] and \
                 self.edges["i_t"] < pos.y < self.edges["i_b"]:
                 logging.debug("Selection hover")
@@ -285,21 +269,32 @@ class SelectionOverlay(Overlay, SelectionMixin):
         return False
 
     def get_width(self):
-        return abs(self.vp_start_pos.x - self.vp_end_pos.x)
+        return abs(self.v_start_pos.x - self.v_end_pos.x)
 
     def get_height(self):
-        return abs(self.vp_start_pos.y - self.vp_end_pos.y)
+        return abs(self.v_start_pos.y - self.v_end_pos.y)
 
     def get_size(self):
         return (self.get_width(), self.get_height())
 
+
+class ZoomOverlay(ViewOverlay, SelectionMixin):
+
+    def __init__(self, base, label,
+                 sel_cur=None,
+                 color=gui.SELECTION_COLOR,
+                 center=(0, 0)):
+
+        super(ZoomOverlay, self).__init__(base, label)
+        SelectionMixin.__init__(self, sel_cur, color, center)
+
     def Draw(self, dc, shift=(0, 0), scale=1.0):
 
-        if self.vp_start_pos and self.vp_end_pos:
+        if self.v_start_pos and self.v_end_pos:
             #pylint: disable=E1103
 
-            start_pos = self._unscale_point(self.vp_start_pos, scale)
-            end_pos = self._unscale_point(self.vp_end_pos, scale)
+            start_pos = self.v_start_pos
+            end_pos = self.v_end_pos
 
             # logging.debug("Drawing from %s, %s to %s. %s", start_pos.x,
             #                                                start_pos.y,
@@ -311,7 +306,7 @@ class SelectionOverlay(Overlay, SelectionMixin):
             ctx.set_line_width(1.5)
             ctx.set_source_rgba(0, 0, 0, 1)
 
-            #logging.warn("%s %s", shift, WorldToBufferPoint(shift))
+            #logging.warn("%s %s", shift, world_to_buffer_point(shift))
 
             #start_pos.x, start_pos.y = 100, 100
             #end_pos.x, end_pos.y = 200, 200
@@ -337,8 +332,8 @@ class SelectionOverlay(Overlay, SelectionMixin):
             if self.dragging or True:
                 msg = "{}: {} to {}, {} to {} unscaled".format(
                                             self.label,
-                                            self.vp_start_pos,
-                                            self.vp_end_pos,
+                                            self.v_start_pos,
+                                            self.v_end_pos,
                                             start_pos,
                                             end_pos)
 
@@ -349,7 +344,7 @@ class SelectionOverlay(Overlay, SelectionMixin):
                 )
                 ctx.set_font_size(12)
 
-                #buf_pos = self.vp_to_buffer_pos((9, 19))
+                #buf_pos = self.v_to_buffer_pos((9, 19))
 
                 ctx.set_source_rgb(0.0, 0.0, 0.0)
                 ctx.move_to(9, 19)
@@ -358,3 +353,113 @@ class SelectionOverlay(Overlay, SelectionMixin):
                 ctx.move_to(10, 20)
                 ctx.show_text(msg)
 
+class UpdateOverlay(WorldOverlay, SelectionMixin):
+
+    def __init__(self, base, label,
+                 sel_cur=None,
+                 color=gui.SELECTION_COLOR,
+                 center=(0, 0)):
+
+        super(UpdateOverlay, self).__init__(base, label)
+        SelectionMixin.__init__(self, sel_cur, color, center)
+
+        self.w_start_pos = None
+        self.w_end_pos = None
+
+    def start_selection(self, start_pos, scale):
+        SelectionMixin.start_selection(self, start_pos, scale)
+        self._calc_world_pos()
+
+    def update_selection(self, current_pos):
+        SelectionMixin.update_selection(self, current_pos)
+        self._calc_world_pos()
+
+    def stop_selection(self):
+        """ End the creation of the current selection """
+
+        SelectionMixin.stop_selection(self)
+        self._calc_world_pos()
+
+    def clear_selection(self):
+        SelectionMixin.clear_selection(self)
+        self.w_start_pos = None
+        self.w_end_pos = None
+
+    def _calc_world_pos(self):
+
+        if self.v_start_pos and self.v_end_pos:
+            self.w_start_pos = self.base.view_to_world_point(self.v_start_pos)
+            self.w_end_pos = self.base.view_to_world_point(self.v_end_pos)
+
+            logging.warn(
+                    "world from view: %s, %s to %s. %s",
+                    self.v_end_pos[0],
+                    self.v_end_pos[1],
+                    self.w_end_pos[0],
+                    self.w_end_pos[1]
+            )
+
+    def Draw(self, dc, shift=(0, 0), scale=1.0):
+
+        if self.w_start_pos and self.w_end_pos:
+            #pylint: disable=E1103
+
+            start_pos = self.base.world_to_buffer_point(self.w_start_pos)
+            end_pos = self.base.world_to_buffer_point(self.w_end_pos)
+
+            # logging.debug("Drawing from %s, %s to %s. %s", start_pos[0],
+            #                                                start_pos[1],
+            #                                                end_pos[0],
+            #                                                end_pos[1] )
+
+            ctx = wx.lib.wxcairo.ContextFromDC(dc)
+
+            ctx.set_line_width(1.5)
+            ctx.set_source_rgba(0, 0, 0, 1)
+
+            #logging.warn("%s %s", shift, world_to_buffer_point(shift))
+
+            #start_pos.x, start_pos.y = 100, 100
+            #end_pos.x, end_pos.y = 200, 200
+
+            rect = (start_pos[0] + 0.5,
+                    start_pos[1] + 0.5,
+                    end_pos[0] - start_pos[0],
+                    end_pos[1] - start_pos[1])
+
+            ctx.rectangle(*rect)
+
+            ctx.stroke()
+
+            ctx.set_line_width(1)
+            ctx.set_dash([1.5,])
+            ctx.set_line_join(cairo.LINE_JOIN_MITER)
+
+            ctx.set_source_rgba(*self.color)
+            ctx.rectangle(*rect)
+
+            ctx.stroke()
+
+            if self.dragging or True:
+                msg = "{}: {} to {}, {} to {} unscaled".format(
+                                            self.label,
+                                            self.w_start_pos,
+                                            self.w_end_pos,
+                                            start_pos,
+                                            end_pos)
+
+                ctx.select_font_face(
+                    "Courier",
+                    cairo.FONT_SLANT_NORMAL,
+                    cairo.FONT_WEIGHT_NORMAL
+                )
+                ctx.set_font_size(12)
+
+                #buf_pos = self.b_to_buffer_pos((9, 19))
+
+                ctx.set_source_rgb(0.0, 0.0, 0.0)
+                ctx.move_to(9, 19)
+                ctx.show_text(msg)
+                ctx.set_source_rgb(1.0, 1.0, 1.0)
+                ctx.move_to(10, 20)
+                ctx.show_text(msg)

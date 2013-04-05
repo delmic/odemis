@@ -33,7 +33,7 @@ from decorator import decorator
 
 import odemis.gui as gui
 from .comp.canvas import DraggableCanvas
-from .comp.overlay import CrossHairOverlay, SelectionOverlay
+from .comp.overlay import CrossHairOverlay, ZoomOverlay, UpdateOverlay
 from odemis.gui.model import EM_STREAMS
 
 
@@ -339,10 +339,10 @@ class SecomCanvas(DblMicroscopeCanvas):
     def __init__(self, *args, **kwargs):
         super(SecomCanvas, self).__init__(*args, **kwargs)
 
-        self.zoom_overlay = SelectionOverlay(self, "Zoom")
+        self.zoom_overlay = ZoomOverlay(self, "Zoom")
         self.ViewOverlays.append(self.zoom_overlay)
 
-        self.update_overlay = SelectionOverlay(self, "Update")
+        self.update_overlay = UpdateOverlay(self, "Update")
         self.WorldOverlays.append(self.update_overlay)
 
         self.active_overlay = None
