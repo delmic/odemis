@@ -817,7 +817,7 @@ class PVCam(model.DigitalCamera):
         """
         
         prev_binning = self._binning
-        self._binning = tuple(value) # duplicate
+        self._binning = value
 
         # adapt resolution so that the AOI stays the same
         change = (prev_binning[0] / self._binning[0],

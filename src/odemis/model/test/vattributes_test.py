@@ -184,6 +184,13 @@ class VigilantAttributeTest(unittest.TestCase):
         va.value = [11, 150]
         self.assertEqual(va.value, (11, 150))
 
+        # must not accept resolutions with float
+        try:
+            va.value = (8., 160)
+            self.fail("Assigning non int values should not be allowed.")
+        except model.InvalidTypeError:
+            pass # as it should be
+
         # must not accept resolutions outside of the range
         try:
             va.value = (80, 160)
@@ -194,6 +201,31 @@ class VigilantAttributeTest(unittest.TestCase):
         try:
             va.value = (10,10,10)
             self.fail("Assigning a 3-tuple to a resolution should not be allowed.")
+        except model.InvalidTypeError:
+            pass # as it should be
+
+    def test_tc(self):
+        """
+        TupleContinuous
+        """
+        va = model.TupleContinuous((0.1,10,.5), ((-1.3,12,0), (100.,150.,1.)), cls=(int, long, float))
+        self.assertEqual(va.value, (0.1,10,.5))
+        self.assertEqual(va.range, ((-1.3,12,0), (100.,150.,1.)))
+
+        # must convert anything to a tuple
+        va.value = [-1, 150, .5]
+        self.assertEqual(va.value, (-1, 150, .5))
+
+        # must not accept values outside of the range
+        try:
+            va.value = (-1., 160., .5)
+            self.fail("Assigning value not in range should not be allowed.")
+        except model.OutOfBoundError:
+            pass # as it should be
+
+        try:
+            va.value = (10.,10.)
+            self.fail("Assigning a 2-tuple to a 3-tuple should not be allowed.")
         except model.InvalidTypeError:
             pass # as it should be
 

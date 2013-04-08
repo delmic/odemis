@@ -724,18 +724,23 @@ class MultiSpeedVA(VigilantAttribute, Continuous):
                 raise OutOfBoundError("Trying to assign axis '%s' value '%s' outside of the range %s→%s." %
                             (str(axis), str(value), str(self._range[0]), str(self._range[1])))
 
-class ResolutionVA(VigilantAttribute, Continuous):
+class TupleContinuous(VigilantAttribute, Continuous):
     """
-    VigilantAttribute which represents a (camera) resolution : 2-tuple of int
-    It can only be set a min and max, but might also have additional constraints
-    It's allowed to request any resolution within min and max, but it will
-    be automatically adapted to a bigger one allowed.
+    VigilantAttribute which contains tuple of fixed length and has all the
+    elements of the same type.
+    It's allowed to request any value within min and max (but might also have
+    additional constraints).
+    The length of the original value determines the allowed tuple length.
     """
 
-    def __init__(self, value, range, unit="px", **kwargs):
+    def __init__(self, value, range, unit="", cls=None, **kwargs):
         """
-        range (2x (2-tuple of int)): minimum and maximum size in each dimension
+        range (2 x tuple): minimum and maximum size for each dimension
+        cls (class or list of classes): classes allowed for each element of the tuple
+          default to the same class as the first element
         """
+        self._cls = cls or value[0].__class__
+        self._len = len(value)
         Continuous.__init__(self, range)
         VigilantAttribute.__init__(self, value, unit=unit, **kwargs)
 
@@ -744,15 +749,15 @@ class ResolutionVA(VigilantAttribute, Continuous):
         Override to do more checking on the range.
         """
         if len(new_range) != 2:
-            raise InvalidTypeError("Range '%s' is not a 2-tuple." % str(new_range))
-        if new_range[0][0] > new_range[1][0] or new_range[0][1] > new_range[1][1]:
+            raise InvalidTypeError("Range '%s' is not a 2-tuple." % (new_range,))
+        if any([mn > mx for mn, mx in zip(new_range[0], new_range[1])]):
             raise InvalidTypeError("Range min %s should be smaller than max %s."
                                    % (str(new_range[0]), str(new_range[1])))
         if hasattr(self, "value"):
-            if (self.value[0] < new_range[0][0] or self.value[0] > new_range[1][0] or
-                self.value[1] < new_range[0][1] or self.value[1] > new_range[1][1]):
+            if (any([v < mn for v, mn in zip(self.value, new_range[0])]) or
+                any([v > mx for v, mx in zip(self.value, new_range[1])])):
                 raise OutOfBoundError("Current value '%s' is outside of the range %s→%s." %
-                            (str(self.value), str(new_range[0]), str(new_range[1])))
+                            (self.value, new_range[0], new_range[1]))
         self._range = tuple(new_range)
 
     def _check(self, value):
@@ -760,78 +765,14 @@ class ResolutionVA(VigilantAttribute, Continuous):
         Raises:
             OutOfBoundError if the value is not within the authorised range
         """
-        if len(value) != 2:
-            raise InvalidTypeError("Value '%s' is not a 2-tuple." % str(value))
+        if len(value) != self._len:
+            raise InvalidTypeError("Value '%s' is not a %d-tuple." % (value, self._len))
 
-        if not isinstance(value[0], (int, long)) or not isinstance(value[1], (int, long)):
-            raise InvalidTypeError("Value '%s' is not a 2-tuple of int." % str(value))
+        if not all([isinstance(v, self._cls) for v in value]):
+            raise InvalidTypeError("Value '%s' is not a tuple of %s." % (value, self._cls))
 
-        if (value[0] < self._range[0][0] or value[0] > self._range[1][0] or
-            value[1] < self._range[0][1] or value[1] > self._range[1][1]):
-            raise OutOfBoundError("Trying to assign value '%s' outside of the range %s→%s." %
-                        (str(value), str(self._range[0]), str(self._range[1])))
-
-    def _set_value(self, value):
-        # force tuple
-        value = tuple(value)
-        VigilantAttribute._set_value(self, value)
-    # need to overwrite the whole property
-    value = property(VigilantAttribute._get_value, _set_value, VigilantAttribute._del_value, "The actual value")
-
-
-class BandwidthVA(VigilantAttribute, Continuous):
-    """
-    VigilantAttribute which represents a (spectrum) bandwidth : 2-tuple of float
-    It represents the low and high components of the bandwidth. It can be given
-    a min and max of the bandwidth as well as a minimun distance between low and
-    high. It also ensures that low is always lower than high
-    """
-
-    def __init__(self, value, range, unit="", **kwargs):
-        """
-        range (2x (2-tuple of float)): first tuple is minimum low, minimum high 
-        when the low is at its minimum, and second tuple is maximum low when the
-        maximum high is at its maximum and the maximum high.
-        """
-        Continuous.__init__(self, range)
-        VigilantAttribute.__init__(self, value, unit=unit, **kwargs)
-
-    def _set_range(self, new_range):
-        """
-        Override to do more checking on the range.
-        """
-        if len(new_range) != 2:
-            raise InvalidTypeError("Range '%s' is not a 2-tuple." % str(new_range))
-        if new_range[0][0] > new_range[0][1] or new_range[1][0] > new_range[1][1]:
-            raise InvalidTypeError("Low part of range should be smaller than high part: %s / %s."
-                                   % (new_range[0], new_range[1]))
-        if new_range[0][0] > new_range[1][1]:
-            raise InvalidTypeError("Range min low should be smaller than max high: %s / %s."
-                                   % (new_range[0], new_range[1]))
-            
-        if hasattr(self, "value"):
-            if (self.value[0] < new_range[0][0] or self.value[0] > new_range[1][0] or
-                self.value[1] < new_range[0][1] or self.value[1] > new_range[1][1]):
-                raise OutOfBoundError("Current value '%s' is outside of the range %s→%s." %
-                            (str(self.value), str(new_range[0]), str(new_range[1])))
-        self._range = tuple(new_range)
-
-    def _check(self, value):
-        """
-        Raises:
-            OutOfBoundError if the value is not within the authorised range
-        """
-        if len(value) != 2:
-            raise InvalidTypeError("Value '%s' is not a 2-tuple." % str(value))
-
-        if not isinstance(value[0], numbers.Real) or not isinstance(value[1], numbers.Real):
-            raise InvalidTypeError("Value '%s' is not a 2-tuple of numbers." % str(value))
-
-        if value[0] > value[1]:
-            raise OutOfBoundError("Trying to assign value '%s' where low is higher than high." %
-                        (value,))
-        if (value[0] < self._range[0][0] or value[0] > self._range[1][0] or
-            value[1] < self._range[0][1] or value[1] > self._range[1][1]):
+        if (any([v < mn for v, mn in zip(value, self._range[0])]) or
+            any([v > mx for v, mx in zip(value, self._range[1])])):
             raise OutOfBoundError("Trying to assign value '%s' outside of the range %s→%s." %
                         (value, self._range[0], self._range[1]))
 
@@ -841,6 +782,14 @@ class BandwidthVA(VigilantAttribute, Continuous):
         VigilantAttribute._set_value(self, value)
     # need to overwrite the whole property
     value = property(VigilantAttribute._get_value, _set_value, VigilantAttribute._del_value, "The actual value")
+
+
+class ResolutionVA(TupleContinuous):
+    # old name for TupleContinuous, when it was fixed to len == 2 and cls == int
+    # and default unit == "px"
+    def __init__(self, value, range, unit="px", cls=None, **kwargs):
+        cls = cls or (int, long)
+        TupleContinuous.__init__(self, value, range, unit=unit, cls=cls, **kwargs)
 
 
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:
