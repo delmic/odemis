@@ -14,6 +14,7 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
+from __future__ import division
 from numpy.core import umath
 from odemis import model, __version__
 from odemis.model._core import roattribute
@@ -1201,7 +1202,7 @@ class SEMComedi(model.HwComponent):
         self._writer.wait(0.1)
         # reshape to 2D
         rbuf.shape = (nrscans, nrchans)
-        logging.debug("acquisition took %g s, init =%g s", time.time()- begin, start - begin)
+        logging.debug("acquisition took %g s, init=%g s", time.time()- begin, start - begin)
         return rbuf
     
     def _write_read_raw_one_cmd(self, wchannels, wranges, rchannels, rranges, 
@@ -1261,11 +1262,19 @@ class SEMComedi(model.HwComponent):
         comedi.internal_trigger(self._device, self._ao_subdevice, 0)
         comedi.internal_trigger(self._device, self._ai_subdevice, 0)
         start = time.time()
-        self._scanner.newPosition.notify() # indicate a new ebeam position
+                
+        np_to_report = nwscans - settling_samples
+        shift_report = settling_samples
+        if settling_samples == 0:  # indicate a new ebeam position
+            self._scanner.newPosition.notify()
+            np_to_report -= 1
+            shift_report += 1
         
         self._reader.run()
         self._writer.run()
-        self._start_new_position_notifier(nwscans - 1, start + period, period)
+        self._start_new_position_notifier(np_to_report,
+                                      start + shift_report * period,
+                                      period)
 
         timeout = expected_time * 1.10 + 0.1 # s   == expected time + 10% + 0.1s
         logging.debug("Waiting %g s for the acquisition to finish", timeout)
@@ -1858,6 +1867,12 @@ class FakeWriter(Accesser):
 class Scanner(model.Emitter):
     """
     Represents the e-beam scanner
+    
+    Note that the .resolution, .translation, .scale and .rotation VAs are 
+      linked, so that the region of interest stays approximately the same (in
+      terms of physical space). So to change them to specific vaules, it is 
+      recommended to set them in the following order: Rotation > Scale > 
+      Resolution > Translation.  
     """
     def __init__(self, name, role, parent, channels, limits, settle_time, 
                  hfw_nomag, **kwargs):
@@ -1885,7 +1900,7 @@ class Scanner(model.Emitter):
         self._settle_time = settle_time
         
         # write channel as Y/X, for compatibility with numpy
-        self._channels = channels[-1:-3:-1]
+        self._channels = channels[-1::-1]
         nchan = comedi.get_n_channels(parent._device, parent._ao_subdevice)
         if nchan < max(channels):
             raise ValueError("Requested channels %r on device '%s' which has only %d output channels" 
@@ -1893,7 +1908,7 @@ class Scanner(model.Emitter):
         
         # write limits as Y/X, for compatibility with numpy
         # check the limits are reachable
-        self._limits = limits[-1:-3:-1]
+        self._limits = limits[-1::-1]
         for i, channel in enumerate(channels):
             data_lim = self._limits[i]
             try:
@@ -1913,14 +1928,56 @@ class Scanner(model.Emitter):
         # can be used and the maxdata. For simplicity we just fix it to 2048
         # which is probably sufficient for most usages and almost always reachable
         # shapeX = (diff_limitsX / diff_bestrangeX) * maxdataX
-        self._shape = (2048, 2048) 
+        self._shape = (2048, 2048)
+        # FIXME: resolution should not change the scale
+        # .resolution is the number of pixels actually scanned. If it's less than
+        # the whole possible area, it's centered.
         resolution = (256, 256) # small resolution to get a fast display
-        self.resolution = model.ResolutionVA(resolution, [(1, 1), self._shape])
-        self.resolution.subscribe(self._onResolution)
+        self.resolution = model.ResolutionVA(resolution, [(1, 1), self._shape],
+                                             setter=self._setResolution)
+        self._resolution = resolution
         
-        # TODO: introduce .transformation, which is a 3x3 matrix that allows 
-        # to specify the translation, rotation, and scaling applied to get the
-        # conversion from coordinates to physical units.
+        # next two values are just to determine the pixel size
+        # Distance between borders if magnification = 1. It should be found out
+        # via calibration. We assume that image is square, i.e., VFW = HFW
+        if hfw_nomag <= 0 or hfw_nomag > 1:
+            raise ValueError("hfw_nomag is %g m, while it should be between 0 and 1 m." 
+                             % hfw_nomag)
+        self._hfw_nomag = hfw_nomag # m
+        
+        # Allow the user to modify the value, to copy it from the SEM software
+        mag = 1e3 # pretty random value which could be real
+        self.magnification = model.FloatContinuous(mag, range=[1, 1e9], unit="")
+        self.magnification.subscribe(self._onMagnification)
+        
+        # pixelSize is the same as MD_PIXEL_SIZE, with scale == 1
+        # == smallest size/ between two different ebeam positions
+        pxs = (self.HFWNoMag / (self._shape[0] * mag),
+               self.HFWNoMag / (self._shape[1] * mag))
+        self.pixelSize = model.VigilantAttribute(pxs, unit="m", readonly=True)
+        
+        # (.resolution), .translation, .rotation, and .scaling are used to 
+        # define the conversion from coordinates to a region of interest.
+        
+        # (float, float) in px => moves center of acquisition by this amount
+        # independent of scale and rotation. 
+        tran_rng = [(-self._shape[0] / 2, -self._shape[1] / 2),
+                   (self._shape[0] / 2, self._shape[1] / 2)]
+        self.translation = model.TupleContinuous((0, 0), tran_rng,
+                                              cls=(int, long, float),                                           unit="",
+                                              setter=self._setTranslation)
+        # (float, float) as a ratio => how big is a pixel, compared to pixelSize
+        # it basically works the same as binning, but can be float
+        self._scale = (self._shape[0] / resolution[0], self._shape[1] / resolution[1])
+        self.scale = model.TupleContinuous(self._scale, [(1, 1), self._shape],
+                                           cls=(int, long, float),
+                                           unit="", setter=self._setScale)
+        self.scale.subscribe(self._onScale, init=True) # to update metadata
+        
+        # (float) in rad => rotation of the image compared to the original axes
+        # TODO: for now it's readonly because no rotation is supported  
+        self.rotation = model.FloatContinuous(0, [0, 2 * math.pi], unit="rad",
+                                              readonly=True)
         
         # max dwell time is purely arbitrary
         range_dwell = (parent.find_closest_dwell_time(0), 1) # s
@@ -1933,19 +1990,7 @@ class Scanner(model.Emitter):
         # the beam settling time or when put to rest.
         self.newPosition = model.Event()
         
-        # next two values are just to determine the pixel size
-        # Distance between borders if magnification = 1. It should be found out
-        # via calibration. We assume that image is square, i.e., VFW = HFW
-        if hfw_nomag <= 0 or hfw_nomag > 1:
-            raise ValueError("hfw_nomag is %g m, while it should be between 0 and 1 m." 
-                             % hfw_nomag)
-        self._hfw_nomag = hfw_nomag # m
-        
-        # Allow the user to modify the value, to copy it from the SEM software
-        self.magnification = model.FloatContinuous(1e3, range=[1, 1e9], unit="")
-        self.magnification.subscribe(self._onMagnification, init=True)
-        
-        self._prev_settings = [None, None, None] # resolution, dwellTime, margin
+        self._prev_settings = [None, None, None, None] # resolution, scale, translation, margin
         self._scan_array = None # last scan array computed
     
     @roattribute
@@ -1963,30 +2008,92 @@ class Scanner(model.Emitter):
     def _onMagnification(self, mag):
         self._updatePixelSize()
         
-    def _onResolution(self, res):
+    def _onScale(self, s):
         self._updatePixelSize()
     
     def _updatePixelSize(self):
         """
-        Update the pixel size using the resolution, HFWNoMag and magnification
+        Update the pixel size using the scale, HFWNoMag and magnification
         """
-        # This is correct as long as there is not region of interest/transformation
         mag = self.magnification.value
-        res = self.resolution.value
-        pxs = [self.HFWNoMag / (res[0] * mag), self.HFWNoMag / (res[1] * mag)]
-        self.parent._metadata[model.MD_PIXEL_SIZE] = pxs
         self.parent._metadata[model.MD_LENS_MAG] = mag
+        
+        pxs = (self.HFWNoMag / (self._shape[0] * mag),
+               self.HFWNoMag / (self._shape[1] * mag))
+        # it's read-only, so we change it only via _value
+        self.pixelSize._value = pxs
+        self.pixelSize.notify(pxs)
+        
+        # If scaled up, the pixels are bigger
+        pxs_scaled = (pxs[0] * self.scale.value[0], pxs[1] * self.scale.value[1])
+        self.parent._metadata[model.MD_PIXEL_SIZE] = pxs_scaled
     
     def _setDwellTime(self, value):
         dt, self._osr = self.parent.find_best_oversampling_rate(value)
         return dt
 
+    def _setScale(self, value):
+        """
+        value (1 < float, 1 < float): increase of size between pixels compared to
+         the orginal pixel size. It will adapt the translation and resolution to
+         have the same ROI (just different amount of pixels scanned)
+        return the actual value used
+        """
+        prev_scale = self._scale
+        self._scale = value
+
+        # adapt resolution so that the ROI stays the same
+        change = (prev_scale[0] / self._scale[0],
+                  prev_scale[1] / self._scale[1])
+        old_resolution = self.resolution.value
+        new_resolution = (int(round(old_resolution[0] * change[0])),
+                          int(round(old_resolution[1] * change[1])))
+        # no need to update translation, as it's independent of scale and will
+        # be checked by setting the resolution.
+        self.resolution.value = new_resolution # will call _setResolution()
+        
+        return value
+    
+    def _setResolution(self, value):
+        """
+        value (0<int, 0<int): defines the size of the resolution. If the 
+         resolution is not possible, it will pick the most fitting one. It will
+         recenter the translation if otherwise it would be out of the whole
+         scanned area.
+        returns the actual value used
+        """
+        max_size = (int(self._shape[0] // self._scale[0]), 
+                    int(self._shape[1] // self._scale[1]))
+        
+        # at least one pixel, and at most the whole area
+        size = (max(min(value[0], max_size[0]), 1),
+                max(min(value[1], max_size[1]), 1))
+        self._resolution = size
+        
+        # setting the same value means it will recheck the boundaries with the
+        # new resolution, and reduce the distance to the center if necessary.
+        self.translation.value = self.translation.value
+        return size
+    
+    def _setTranslation(self, value):
+        """
+        value (float, float): shift from the center. It will always ensure that
+          the whole ROI fits the screen.
+        returns actual shift accepted
+        """
+        # compute the min/max of the shift. It's the same as the margin between
+        # the centered ROI and the border, taking into account the scaling.
+        max_tran = ((self._shape[0] - self._resolution[0] * self._scale[0]) / 2,
+                    (self._shape[1] - self._resolution[1] * self._scale[1]) / 2)
+        
+        # between -margin and +margin
+        tran = (max(min(value[0], max_tran[0]), -max_tran[0]),
+                max(min(value[1], max_tran[1]), -max_tran[1]))
+        return tran
+        
     def updateMetadata(self, md):
         # we share metadata with our parent
         self.parent.updateMetadata(md)
-    
-    # TODO get_resting_point_data() -> to get the data to write when not scanning
-    # returns: array (1x2 numpy.ndarray), channels (list of ints), ranges (list of float)
     
     def get_resting_point_data(self):
         """
@@ -2034,34 +2141,56 @@ class Scanner(model.Emitter):
         """
         dwell_time = self.dwellTime.value
         resolution = self.resolution.value
+        scale = self.scale.value
+        translation = self.translation.value
         margin = int(math.ceil(self._settle_time / dwell_time))
         
-        prev_resolution, prev_dwell_time, prev_margin = self._prev_settings
-
-        if prev_resolution != resolution or margin != prev_margin:
+        new_settings = [resolution, scale, translation, margin]
+        if self._prev_settings != new_settings:
             # TODO: if only margin changes, just duplicate the margin columns
             # need to recompute the scanning array
-            self._update_raw_scan_array(resolution[-1:-3:-1], margin)
+            self._update_raw_scan_array(resolution[-1::-1], scale[-1::-1],
+                                        translation[-1::-1], margin)
             
-        self._prev_settings = [resolution, dwell_time, margin]
-        return (self._scan_array, dwell_time, resolution[-1:-3:-1],
+            self._prev_settings = new_settings
+            
+        return (self._scan_array, dwell_time, resolution[-1::-1],
                 margin, self._channels, self._ranges, self._osr)
 
-    def _update_raw_scan_array(self, shape, margin):
+    def _update_raw_scan_array(self, shape, scale, translation, margin):
         """
         Update the raw array of values to send to scan the 2D area.
         shape (list of 2 int): H/W=Y/X of the scanning area (slow, fast axis)
+        scale (tuple of 2 float): scaling of the pixels
+        translation (tuple of 2 float): shift 
         margin (0<=int): number of additional pixels to add at the begginning of
             each scanned line
+        Warning: the dimensions follow the numpy convention, so opposite of user API
         returns nothing, but update ._scan_array and ._ranges.
         """
-        # TODO: if the conversion polynom is order <= 1, it's as precise and
+        area_shape = self._shape[-1::-1]
+        # adapt limits according to the scale and translation so that if scale
+        # == 1,1 and translation == 0,0 , the area is centered and a pixel is 
+        # the size of pixelSize
+        roi_limits = [] # min/max for X/Y in V
+        for i, lim in enumerate(self._limits):
+            center = (lim[0] + lim[1]) / 2
+            width = lim[1] - lim[0]
+            ratio = (shape[i] * scale[i]) / area_shape[i] 
+            assert ratio <= 1 # cannot be bigger than the whole area
+            shift = translation[i] * (width / area_shape[i]) # trans * pixel volt
+            roi_lim = (center - width * ratio + shift,
+                       center + width * ratio + shift)
+            
+            roi_limits.append(roi_lim)
+         
+        # if the conversion polynom is order <= 1, it's as precise and
         # much faster to generate directly the raw data.
         if self._can_generate_raw_directly:
             # Compute the best ranges for each channel
             ranges = []
             for i, channel in enumerate(self._channels):
-                data_lim = self._limits[i]
+                data_lim = roi_limits[i]
                 best_range = comedi.find_range(self.parent._device,
                                                self.parent._ao_subdevice, 
                                   channel, comedi.UNIT_volt, data_lim[0], data_lim[1])
@@ -2071,12 +2200,11 @@ class Scanner(model.Emitter):
             # computes the limits in raw values
             limits = self.parent._array_from_phys(self.parent._ao_subdevice,
                                                   self._channels, ranges, 
-                                                  numpy.array(self._limits, dtype=numpy.double))
-
+                                                  numpy.array(roi_limits, dtype=numpy.double))
             scan_raw = self._generate_scan_array(shape, limits, margin)
             self._scan_array = scan_raw
         else:
-            limits = numpy.array(self._limits, dtype=numpy.double)
+            limits = numpy.array(roi_limits, dtype=numpy.double)
             scan_phys = self._generate_scan_array(shape, limits, margin)
             
             # Compute the best ranges for each channel
