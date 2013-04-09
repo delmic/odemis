@@ -752,6 +752,8 @@ class DraggableCanvas(wx.Panel):
     def view_to_buffer_pos(self, pos):
         return view_to_buffer_pos(pos, self.margins)
 
+# World <-> Buffer
+
 def world_to_buffer_point(world_pos, world_buffer_center, scale):
     """
     Converts a position from world coordinates to buffer coordinates
@@ -768,12 +770,7 @@ def buffer_to_world_point(buff_pos, world_buffer_center, scale):
     return (buff_pos[0] / scale - world_buffer_center[0],
             buff_pos[1] / scale - world_buffer_center[1])
 
-def view_to_world_point(view_pos, world_buffer_center, margins, scale):
-
-    buffer_pos = (view_pos[0] + margins[0], view_pos[1] + margins[1])
-
-    return (buffer_pos[0] / scale - world_buffer_center[0],
-            buffer_pos[1] / scale - world_buffer_center[1])
+# View <-> Buffer
 
 def view_to_buffer_pos(view_pos, margins):
     """ Convert view port coordinates to buffer coordinates """
@@ -784,3 +781,22 @@ def view_to_buffer_pos(view_pos, margins):
         return wx.Point(*buffer_pos)
     else:
         return buffer_pos
+
+def buffer_to_view_pos(buffer_pos, margins):
+
+    view_pos = (buffer_pos[0] - margins[0], buffer_pos[1] - margins[1])
+
+    if isinstance(buffer_pos, wx.Point):
+        return wx.Point(*view_pos)
+    else:
+        return view_pos
+
+# View <-> World
+
+def view_to_world_point(view_pos, world_buffer_center, margins, scale):
+
+    buffer_pos = (view_pos[0] + margins[0], view_pos[1] + margins[1])
+
+    return (buffer_pos[0] / scale - world_buffer_center[0],
+            buffer_pos[1] / scale - world_buffer_center[1])
+
