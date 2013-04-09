@@ -334,12 +334,12 @@ class DraggableCanvas(wx.Panel):
         Note: The Device Context (dc) will automatically be drawn when it goes
         out of scope at the end of this method.
         """
-        dc = wx.PaintDC(self)
+        dc_view = wx.PaintDC(self)
 
         self.margins = ((self._bmp_buffer_size[0] - self.ClientSize[0])/2,
                         (self._bmp_buffer_size[1] - self.ClientSize[1])/2)
 
-        src_point =  (
+        src_pos =  (
                         min(
                             max(self.margins[0] - self.drag_shift[0], 0),
                             2 * self.margins[0]
@@ -351,15 +351,15 @@ class DraggableCanvas(wx.Panel):
                     )
 
         # Blit the appropriate area from the buffer to the view port
-        dc.BlitPointSize(
-            (0, 0),             # destination point
-            self.ClientSize,    # size of area to copy
-            self._dc_buffer,    # source
-            src_point           # source point
+        dc_view.BlitPointSize(
+                    (0, 0),             # destination point
+                    self.ClientSize,    # size of area to copy
+                    self._dc_buffer,    # source
+                    src_pos           # source point
         )
 
         # Remember that the device context of the view port is passed!
-        self.DrawStaticOverlays(dc)
+        self.DrawStaticOverlays(dc_view)
 
     def OnSize(self, event):
         """ Ensures that the buffer still fits in the view and recenter the view
@@ -473,8 +473,8 @@ class DraggableCanvas(wx.Panel):
         # set and reset the origin here because Blit in onPaint gets "confused"
         # with values > 2048
         # centred on self.buffer_center_world_pos
-        origin_point = tuple(d / 2 for d in self._bmp_buffer_size)
-        dc_buffer.SetDeviceOriginPoint(origin_point)
+        origin_pos = tuple(d / 2 for d in self._bmp_buffer_size)
+        dc_buffer.SetDeviceOriginPoint(origin_pos)
 
         # we do not use the UserScale of the DC here because it would lead
         # to scaling computation twice when the image has a scale != 1. In
@@ -592,7 +592,7 @@ class DraggableCanvas(wx.Panel):
         actual_size = size[0] * scale, size[1] * scale
         tl_unscaled = (center[0] - (actual_size[0] / 2),
                        center[1] - (actual_size[1] / 2))
-        tl = self.world_to_buffer_point(tl_unscaled)
+        tl = self.world_to_buffer_pos(tl_unscaled)
         final_size = (actual_size[0] * self.scale,
                       actual_size[1] * self.scale)
         return tl + final_size
@@ -637,37 +637,30 @@ class DraggableCanvas(wx.Panel):
     def _draw_background(self, dc):
         """ TODO: make it fixed, cache image etc.
         """
-        #dc.SetDeviceOriginPoint((0, 0))
-
-        #origin_point = tuple(d / 2 for d in self._bmp_buffer_size)
-        #dc.SetDeviceOriginPoint((origin_point))
-
         ctx = wx.lib.wxcairo.ContextFromDC(dc)
 
-        image = cairo.ImageSurface.create_from_png ("src/odemis/gui/img/canvasbg.png")
+        image = cairo.ImageSurface.create_from_png("src/odemis/gui/img/canvasbg.png")
         pattern = cairo.SurfacePattern (image)
         pattern.set_extend (cairo.EXTEND_REPEAT)
         ctx.set_source (pattern)
 
-        #ctx.set_source_rgba(1.0, 0, 0, 1)
         ctx.rectangle(
             0,
             0,
-            self.ClientSize[0] * 80,
-            self.ClientSize[1] * 80
+            self._bmp_buffer_size[0],
+            self._bmp_buffer_size[1]
         )
         ctx.fill ()
-        #dc.SetDeviceOriginPoint((0, 0))
 
 
-    def _DrawMergedImages(self, dc, images, mergeratio=0.5):
+    def _DrawMergedImages(self, dc_buffer, images, mergeratio=0.5):
         """ Draw the two images on the DC, centred around their _dc_center, with
         their own scale and an opacity of "mergeratio" for im1.
 
         Both _dc_center's should be close in order to have the parts with only
         one picture drawn without transparency
 
-        :param dc: (wx.DC) The device context which will be drawn to
+        :param dc_buffer: (wx.DC) The buffer device context which will be drawn to
         :param images: (list of wx.Image): The images to be drawn or a list with
             a sinle 'None' element.
         :parma mergeratio: (float [0..1]): How to merge the images (between 1st and
@@ -684,7 +677,7 @@ class DraggableCanvas(wx.Panel):
 
         t_start = time.time()
 
-        self._draw_background(dc)
+        #self._draw_background(dc_buffer)
 
         # The idea:
         # * display the first image (SEM) last, with the given mergeratio (or 1 if
@@ -699,7 +692,7 @@ class DraggableCanvas(wx.Panel):
         for i, im in enumerate(fluo): # display the fluo images first
             r = 1.0 - i / float(nb_fluo)
             self._DrawImageTransparentRescaled(
-                dc,
+                dc_buffer,
                 im,
                 im._dc_center,
                 r,
@@ -712,7 +705,7 @@ class DraggableCanvas(wx.Panel):
             if nb_fluo == 0:
                 mergeratio = 1.0 # no transparency if it's alone
             self._DrawImageTransparentRescaled(
-                dc,
+                dc_buffer,
                 im,
                 im._dc_center,
                 mergeratio,
@@ -723,27 +716,34 @@ class DraggableCanvas(wx.Panel):
         fps = 1.0 / float(t_now - t_start) #pylint: disable=W0612
         #logging.debug("Display speed: %s fps", fps)
 
-    def world_to_buffer_point(self, pos):
+    def world_to_buffer_pos(self, pos):
         """ Converts a position from world coordinates to buffer coordinates
         using the current values
 
         pos (2-tuple floats): the coordinates in the world
         """
-        return world_to_buffer_point(
+        return world_to_buffer_pos(
                     pos,
                     self.buffer_center_world_pos,
                     self.scale
         )
 
-    def buffer_to_world_point(self, pos):
-        return buffer_to_world_point(
+    def buffer_to_world_pos(self, pos):
+        return buffer_to_world_pos(
                     pos,
                     self.buffer_center_world_pos,
                     self.scale
         )
 
-    def view_to_world_point(self, pos):
-        return view_to_world_point(
+    def view_to_world_pos(self, pos):
+        return view_to_world_pos(
+                    pos,
+                    self.buffer_center_world_pos,
+                    self.margins,
+                    self.scale)
+
+    def world_to_view_pos(self, pos):
+        return world_to_view_pos(
                     pos,
                     self.buffer_center_world_pos,
                     self.margins,
@@ -752,7 +752,12 @@ class DraggableCanvas(wx.Panel):
     def view_to_buffer_pos(self, pos):
         return view_to_buffer_pos(pos, self.margins)
 
-def world_to_buffer_point(world_pos, world_buffer_center, scale):
+    def buffer_to_view_pos(self, pos):
+        return buffer_to_view_pos(pos, self.margins)
+
+# World <-> Buffer
+
+def world_to_buffer_pos(world_pos, world_buffer_center, scale):
     """
     Converts a position from world coordinates to buffer coordinates
 
@@ -763,17 +768,19 @@ def world_to_buffer_point(world_pos, world_buffer_center, scale):
     return (round((world_pos[0] - world_buffer_center[0]) * scale),
             round((world_pos[1] - world_buffer_center[1]) * scale))
 
-def buffer_to_world_point(buff_pos, world_buffer_center, scale):
+def buffer_to_world_pos(buff_pos, world_buffer_center, scale):
+    """
+    Converts a position from world coordinates to buffer coordinates
 
-    return (buff_pos[0] / scale - world_buffer_center[0],
-            buff_pos[1] / scale - world_buffer_center[1])
+    :param world_pos: (2-tuple float) the coordinates in the world
+    :param world_buffer_center: the center of the buffer in world coordinates
+    :param scale: how much zoomed is the buffer compared to the world
+    """
 
-def view_to_world_point(view_pos, world_buffer_center, margins, scale):
+    return ((buff_pos[0] / scale) + world_buffer_center[0],
+            (buff_pos[1] / scale) + world_buffer_center[1])
 
-    buffer_pos = (view_pos[0] + margins[0], view_pos[1] + margins[1])
-
-    return (buffer_pos[0] / scale - world_buffer_center[0],
-            buffer_pos[1] / scale - world_buffer_center[1])
+# View <-> Buffer
 
 def view_to_buffer_pos(view_pos, margins):
     """ Convert view port coordinates to buffer coordinates """
@@ -784,3 +791,29 @@ def view_to_buffer_pos(view_pos, margins):
         return wx.Point(*buffer_pos)
     else:
         return buffer_pos
+
+def buffer_to_view_pos(buffer_pos, margins):
+
+    view_pos = (buffer_pos[0] - margins[0], buffer_pos[1] - margins[1])
+
+    if isinstance(buffer_pos, wx.Point):
+        return wx.Point(*view_pos)
+    else:
+        return view_pos
+
+# View <-> World
+
+def view_to_world_pos(view_pos, world_buffer_center, margins, scale):
+
+    return buffer_to_world_pos(
+                view_to_buffer_pos(view_pos, margins),
+                world_buffer_center,
+                scale
+    )
+
+def world_to_view_pos(world_pos, world_buffer_center, margins, scale):
+
+    return buffer_to_view_pos(
+                world_to_buffer_pos(world_pos, world_buffer_center, scale),
+                margins
+    )
