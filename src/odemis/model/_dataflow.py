@@ -682,7 +682,6 @@ def load_events(self, events):
     duplicate the given events into the instance.
     useful only for a proxy class
     """
-    logging.debug("loading events for comp %s", self.name)
     for name, evt in events.items():
         setattr(self, name, evt)
 

@@ -56,7 +56,7 @@ class StaticTestAndorCam2(VirtualStaticTestCam, unittest.TestCase):
     camera_kwargs = KWARGS
 
 # Inheritance order is important for setUp, tearDown
-#@skip("simple")
+# @skip("simple")
 class TestAndorCam2(VirtualTestCam, unittest.TestCase):
     """
     Test directly the AndorCam2 class.
@@ -72,7 +72,7 @@ class TestAndorCam2(VirtualTestCam, unittest.TestCase):
     def tearDownClass(cls):
         cls.camera.terminate()
 
-#@skip("simple")
+# @skip("simple")
 class TestSynchronized(unittest.TestCase):
     """
     Test the synchronizedOn(Event) interface, using the fake SEM
@@ -119,9 +119,10 @@ class TestSynchronized(unittest.TestCase):
         
         self.ccd.exposureTime.value = exp
         # magical formula to get a long enough dwell time.
-        # works with PVCam, but is probably different with other drivers :-(
+        # works with PVCam and Andorcam, but is probably different with other drivers :-(
         readout = numpy.prod(self.ccd_size) / self.ccd.readoutRate.value
-        self.scanner.dwellTime.value = (exp + readout) * 1.1 + 0.05 # 50ms to account for the overhead and extra image acquisition 
+        # it seems with the iVac, 20ms is enough to account for the overhead and extra image acquisition
+        self.scanner.dwellTime.value = (exp + readout) * 1.1 + 0.02 
         self.scanner.resolution.value = self.sem_size
         # pixel write/read setup is pretty expensive ~10ms
         expected_duration = numbert * (self.scanner.dwellTime.value + 0.01)
