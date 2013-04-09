@@ -90,6 +90,7 @@ class xrcfr_main(wx.Frame):
         self.fp_settings_sparc_sem = xrc.XRCCTRL(self, "fp_settings_sparc_sem")
         self.fp_settings_sparc_optical = xrc.XRCCTRL(self, "fp_settings_sparc_optical")
         self.fp_settings_sparc_spectro = xrc.XRCCTRL(self, "fp_settings_sparc_spectro")
+        self.btn_sparc_acquire = xrc.XRCCTRL(self, "btn_sparc_acquire")
         self.pnl_tab_sparc_analysis = xrc.XRCCTRL(self, "pnl_tab_sparc_analysis")
         self.sparc_ana_tool_menu = xrc.XRCCTRL(self, "sparc_ana_tool_menu")
         self.btn_sparc_ana_view_zoom = xrc.XRCCTRL(self, "btn_sparc_ana_view_zoom")
@@ -164,7 +165,7 @@ def __init_resources():
     wx.FileSystem.AddHandler(wx.MemoryFSHandler())
 
     main_xrc = '''\
-<?xml version="1.0" ?><resource class="ImageButton" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
+<?xml version="1.0" ?><resource class="wxPanel" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
   <object class="wxFrame" name="fr_main">
     <object class="wxMenuBar">
       <object class="wxMenu">
@@ -1134,10 +1135,37 @@ def __init_resources():
                     <object class="wxPanel">
                       <object class="wxBoxSizer">
                         <orient>wxVERTICAL</orient>
+                        <object class="sizeritem">
+                          <object class="ImageTextButton" name="btn_sparc_acquire">
+                            <size>382,-1</size>
+                            <label>ACQUIRE IMAGE</label>
+                            <delta>1</delta>
+                            <bitmap>img_btn_acquire_image_png</bitmap>
+                            <hover>img_btn_acquire_image_h_png</hover>
+                            <selected>img_btn_acquire_image_a_png</selected>
+                            <disabled>img_btn_acquire_image_d_png</disabled>
+                            <fg>#E5E5E5</fg>
+                            <font>
+                              <size>14</size>
+                              <style>normal</style>
+                              <weight>normal</weight>
+                              <underlined>0</underlined>
+                              <family>default</family>
+                              <face>Ubuntu</face>
+                              <encoding>UTF-8</encoding>
+                            </font>
+                            <enabled>0</enabled>
+                            <style>wxALIGN_CENTRE</style>
+                            <XRCED>
+                              <assign_var>1</assign_var>
+                            </XRCED>
+                          </object>
+                          <flag>wxALL</flag>
+                          <border>10</border>
+                        </object>
                       </object>
                       <bg>#4D4D4D</bg>
                     </object>
-                    <flag>wxEXPAND</flag>
                   </object>
                 </object>
                 <size>400,-1</size>
