@@ -27,7 +27,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 import unittest
 import os
-
+import random
 
 if os.getcwd().endswith('test'):
     os.chdir('../..')
@@ -42,48 +42,13 @@ import odemis.gui.comp.canvas as canvas
 from odemis.gui.xmlh import odemis_get_test_resources
 
 SLEEP_TIME = 100 # Sleep timer in milliseconds
-MANUAL = True # If manual is set to True, the window will be kept open at the end
+MANUAL = False # If manual is set to True, the window will be kept open at the end
 INSPECT = False
-
-SCALES = [0.0, 0.1, 0.3, 0.7, 1.0, 1.1, 1.4]
 
 MARGINS = (512, 512)
 
-VIEW_POINTS = [(-10, -10),
-               (0, 0),
-               (269, 314),
-               (254, 282),
-               (164, 308),
-               (256, 341),
-               (423, 332),
-               (530, 362),
-               (485, 321),
-               (398, 363),
-               (166, 160),
-               (239, 234),
-               (340, 304),
-               (409, 337)]
+BUFFER_CENTER = (234.3571438, 62.6071439)
 
-BUFFER_CENTER = (10234.3571438, 11062.6071439)
-
-W_POINTS = [(10230.3571438, 11055.6071439),
-            (10231.3571438, 11055.6071439),
-            (10231.3571438, 11056.6071439),
-            (10231.3571438, 11057.6071439),
-            (10232.3571438, 11058.6071439),
-            (10233.3571438, 11058.6071439),
-            (10233.3571438, 11059.6071439),
-            (10233.3571438, 11061.6071439),
-            (10234.3571438, 11061.6071439),
-            (10234.3571438, 11062.6071439),
-            (10235.3571438, 11063.6071439),
-            (10236.3571438, 11064.6071439),
-            (10237.3571438, 11064.6071439),
-            (10237.3571438, 11065.6071439),
-            (10237.3571438, 11066.6071439),
-            (10238.3571438, 11067.6071439),
-            (10239.3571438, 11067.6071439),
-            (10239.3571438, 11069.6071439)]
 
 def loop():
     app = wx.GetApp()
@@ -107,7 +72,7 @@ class TestApp(wx.App):
         self.test_frame.SetSize((400, 400))
         self.test_frame.Center()
 
-        panel =  self.test_frame.button_panel
+        #panel =  self.test_frame.button_panel
 
         self.test_frame.Layout()
         self.test_frame.Show()
@@ -130,12 +95,63 @@ class CanvasTestCase(unittest.TestCase):
                 InspectionTool().Show()
             cls.app.MainLoop()
 
-    def test_view_to_buffer_pos(self):
-        for wp in W_POINTS:
-            bf = canvas.world_to_buffer_point(wp, BUFFER_CENTER, 1.0)
-            nwp = canvas.buffer_to_world_point(bf, BUFFER_CENTER, 1.0)
-            #self.assertTrue(len(self.canvas.ViewOverlays) == 1)
-            print wp, bf, nwp
+    @classmethod
+    def generate_scales(cls):
+        mi = 0.002355
+        ma = 100.5699
+        l = 10
+        return [0.4375822135]
+        return [random.uniform(mi, ma) for _ in range(l)]
+
+    @classmethod
+    def generate_world_coordinates(cls):
+        ma = 10.0
+        mi = -ma
+        l = 100
+        r = [(random.uniform(mi, ma), random.uniform(mi, ma)) for _ in range(l)]
+        return [(0.0, 0.0)] + r
+
+    @classmethod
+    def generate_buffer_coordinates(cls):
+
+        mi = 0
+        ma = 2000
+        l = 100
+
+        return [(random.randint(mi, ma), random.randint(mi, ma)) for _ in range(l)]
+
+    def test_world_vs_buffer(self):
+
+        d = 0.9
+
+        for wp in self.generate_world_coordinates():
+            for s in self.generate_scales():
+                bf = canvas.world_to_buffer_pos(wp, BUFFER_CENTER, s)
+                nwp = canvas.buffer_to_world_pos(bf, BUFFER_CENTER, s)
+
+                err = """{} -> {} -> {}
+                         With scale {} out of delta range {}/{} (={})"""
+                err = err.format(wp, bf, nwp, s, d, s, d/s)
+
+                # The allowed deviation delta relies on the scale
+                self.assertAlmostEqual(wp[0], nwp[0], delta=d/s, msg=err)
+                self.assertAlmostEqual(wp[1], nwp[1], delta=d/s, msg=err)
+
+    def test_world_vs_view(self):
+
+        d = 0.9
+
+        for wp in self.generate_world_coordinates():
+            for s in self.generate_scales():
+                vw = canvas.world_to_view_pos(wp, BUFFER_CENTER, MARGINS, s)
+                nwp = canvas.view_to_world_pos(vw, BUFFER_CENTER, MARGINS, s)
+
+                err = """{} -> {} -> {}
+                         With scale {} out of delta range {}/{} (={})"""
+                err = err.format(wp, vw, nwp, s, d, s, d/s)
+
+                self.assertAlmostEqual(wp[0], nwp[0], delta=1/s, msg=err)
+                self.assertAlmostEqual(wp[1], nwp[1], delta=1/s, msg=err)
 
 if __name__ == "__main__":
     unittest.main()

@@ -81,9 +81,9 @@ class CrossHairOverlay(ViewOverlay):
               self.center[1] - self.size)
         br = (self.center[0] + self.size,
               self.center[1] + self.size)
-        tl_s = canvas.world_to_buffer_point(tl, shift, scale)
-        br_s = canvas.world_to_buffer_point(br, shift, scale)
-        center = canvas.world_to_buffer_point(self.center, shift, scale)
+        tl_s = canvas.world_to_buffer_pos(tl, shift, scale)
+        br_s = canvas.world_to_buffer_pos(br, shift, scale)
+        center = canvas.world_to_buffer_pos(self.center, shift, scale)
 
         dc.DrawLine(tl_s[0], center[1], br_s[0], center[1])
         dc.DrawLine(center[0], tl_s[1], center[0], br_s[1])
@@ -306,7 +306,7 @@ class ZoomOverlay(ViewOverlay, SelectionMixin):
             ctx.set_line_width(1.5)
             ctx.set_source_rgba(0, 0, 0, 1)
 
-            #logging.warn("%s %s", shift, world_to_buffer_point(shift))
+            #logging.warn("%s %s", shift, world_to_buffer_pos(shift))
 
             #start_pos.x, start_pos.y = 100, 100
             #end_pos.x, end_pos.y = 200, 200
@@ -388,8 +388,8 @@ class UpdateOverlay(WorldOverlay, SelectionMixin):
     def _calc_world_pos(self):
 
         if self.v_start_pos and self.v_end_pos:
-            self.w_start_pos = self.base.view_to_world_point(self.v_start_pos)
-            self.w_end_pos = self.base.view_to_world_point(self.v_end_pos)
+            self.w_start_pos = self.base.view_to_world_pos(self.v_start_pos)
+            self.w_end_pos = self.base.view_to_world_pos(self.v_end_pos)
 
             logging.warn(
                     "world from view: %s, %s to %s. %s",
@@ -399,13 +399,19 @@ class UpdateOverlay(WorldOverlay, SelectionMixin):
                     self.w_end_pos[1]
             )
 
+    def get_world_selection_pos(self):
+        if self.w_start_pos and self.w_end_pos:
+            return self.w_start_pos, self.w_end_pos
+        else:
+            return None
+
     def Draw(self, dc, shift=(0, 0), scale=1.0):
 
         if self.w_start_pos and self.w_end_pos:
             #pylint: disable=E1103
 
-            start_pos = self.base.world_to_buffer_point(self.w_start_pos)
-            end_pos = self.base.world_to_buffer_point(self.w_end_pos)
+            start_pos = self.base.world_to_buffer_pos(self.w_start_pos)
+            end_pos = self.base.world_to_buffer_pos(self.w_end_pos)
 
             # logging.debug("Drawing from %s, %s to %s. %s", start_pos[0],
             #                                                start_pos[1],
@@ -417,7 +423,7 @@ class UpdateOverlay(WorldOverlay, SelectionMixin):
             ctx.set_line_width(1.5)
             ctx.set_source_rgba(0, 0, 0, 1)
 
-            #logging.warn("%s %s", shift, world_to_buffer_point(shift))
+            #logging.warn("%s %s", shift, world_to_buffer_pos(shift))
 
             #start_pos.x, start_pos.y = 100, 100
             #end_pos.x, end_pos.y = 200, 200
