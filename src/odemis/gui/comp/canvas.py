@@ -29,12 +29,13 @@ import ctypes
 import logging
 import math
 import os
-import threading
 import time
 
+import cairo
 import wx
 import wx.lib.wxcairo
-import cairo
+
+import odemis.gui.img.data as imgdata
 
 # A class for smooth, flicker-less display of anything on a window, with drag
 # and zoom capability a bit like: wx.canvas, wx.BufferedWindow, BufferedCanvas,
@@ -639,7 +640,8 @@ class DraggableCanvas(wx.Panel):
         """
         ctx = wx.lib.wxcairo.ContextFromDC(dc)
 
-        image = cairo.ImageSurface.create_from_png("src/odemis/gui/img/canvasbg.png")
+        # image = cairo.ImageSurface.create_from_png("src/odemis/gui/img/canvasbg.png")
+        image = wx.lib.wxcairo.ImageSurfaceFromBitmap(imgdata.getcanvasbgBitmap())
         pattern = cairo.SurfacePattern (image)
         pattern.set_extend (cairo.EXTEND_REPEAT)
         ctx.set_source (pattern)
@@ -677,7 +679,7 @@ class DraggableCanvas(wx.Panel):
 
         t_start = time.time()
 
-        #self._draw_background(dc_buffer)
+        self._draw_background(dc_buffer)
 
         # The idea:
         # * display the first image (SEM) last, with the given mergeratio (or 1 if
