@@ -113,8 +113,10 @@ class AndorCapabilities(Structure):
     CAMERATYPE_IXONULTRA = 21
     CAMERATYPE_VOLMOS = 22
     
+    # only put here the cameras confirmed to work with this driver
     CameraTypes = {
-        CAMERATYPE_CLARA: "Clara",   
+        CAMERATYPE_CLARA: "Clara",
+        CAMERATYPE_IVAC: "iVac",
         }
     
 class AndorV2DLL(CDLL):
@@ -363,17 +365,19 @@ class AndorCam2(model.DigitalCamera):
         
         # Describe the camera
         # up-to-date metadata to be included in dataflow
-        self._metadata = {model.MD_HW_NAME: self.getModelName()}
+        hw_name = self.getModelName()
+        self._metadata = {model.MD_HW_NAME: hw_name}
         # TODO test on other hardwares
         caps = self.GetCapabilities()
-        if caps.CameraType != AndorCapabilities.CAMERATYPE_CLARA:
+        if not caps.CameraType in AndorCapabilities.CameraTypes:
             logging.warning("This driver has not been tested for this camera type")
 
         # odemis + drivers
         self._swVersion = "%s (%s)" % (__version__.version, self.getSwVersion()) 
         self._metadata[model.MD_SW_VERSION] = self._swVersion
-        self._hwVersion = self.getHwVersion()
-        self._metadata[model.MD_HW_VERSION] = self._hwVersion
+        hwv = self.getHwVersion()
+        self._metadata[model.MD_HW_VERSION] = hwv
+        self._hwVersion = "%s (%s)" % (hw_name, hwv)
         
         resolution = self.GetDetector()
         self._metadata[model.MD_SENSOR_SIZE] = resolution
@@ -843,7 +847,8 @@ class AndorCam2(model.DigitalCamera):
     def getModelName(self):
         self.select()
         caps = self.GetCapabilities()
-        model_name = "Andor " + AndorCapabilities.CameraTypes.get(caps.CameraType, "unknown")
+        model_name = "Andor " + AndorCapabilities.CameraTypes.get(caps.CameraType,
+                                      "unknown (type %d)" % caps.CameraType)
         
         headmodel = create_string_buffer(260) # MAX_PATH
         self.atcore.GetHeadModel(headmodel)
