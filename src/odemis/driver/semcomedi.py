@@ -333,7 +333,7 @@ class SEMComedi(model.HwComponent):
             self._prepare_command(cmd)
             bufsz = min(cmd.stop_arg, bufsz)
         except comedi.ComediError:
-            # concider it can take the max
+            # consider it can take the max
             pass
         
         return bufsz
@@ -358,7 +358,6 @@ class SEMComedi(model.HwComponent):
         """
         return comedi.get_board_name(self._device)
 
-    
     def getMetadata(self):
         return self._metadata
     
@@ -369,6 +368,8 @@ class SEMComedi(model.HwComponent):
         if they are not given.
         md (dict string -> value): the metadata
         """
+        # We receive as MD_POS the _center_ position. When applied to an image, 
+        # the scanner translation will be added to it. 
         self._metadata.update(md)
     
     def _get_converter_actual(self, subdevice, channel, range, direction):
@@ -1438,6 +1439,13 @@ class SEMComedi(model.HwComponent):
                 metadata[model.MD_DWELL_TIME] = period
                 metadata[model.MD_SAMPLES_PER_PIXEL] = osr
                 
+                # add scanner translation to the center
+                center = metadata.get(model.MD_POS, (0, 0))
+                tran = self._scanner.translation.value # px, hopefuly has been changed since data generation
+                pxs = self._scanner.pixelSize.value # m/px
+                metadata[model.MD_POS] = (center[0] + tran[0] * pxs[0],
+                                          center[1] + tran[1] * pxs[1])
+                
                 # write and read the raw data
                 try:
                     rbuf = self.write_read_2d_data_raw(wchannels, wranges, rchannels,
@@ -2046,8 +2054,8 @@ class Scanner(model.Emitter):
         change = (prev_scale[0] / self._scale[0],
                   prev_scale[1] / self._scale[1])
         old_resolution = self.resolution.value
-        new_resolution = (int(round(old_resolution[0] * change[0])),
-                          int(round(old_resolution[1] * change[1])))
+        new_resolution = (max(int(round(old_resolution[0] * change[0])), 1),
+                          max(int(round(old_resolution[1] * change[1])), 1))
         # no need to update translation, as it's independent of scale and will
         # be checked by setting the resolution.
         self.resolution.value = new_resolution # will call _setResolution()
@@ -2162,7 +2170,7 @@ class Scanner(model.Emitter):
         Update the raw array of values to send to scan the 2D area.
         shape (list of 2 int): H/W=Y/X of the scanning area (slow, fast axis)
         scale (tuple of 2 float): scaling of the pixels
-        translation (tuple of 2 float): shift 
+        translation (tuple of 2 float): shift from the center
         margin (0<=int): number of additional pixels to add at the begginning of
             each scanned line
         Warning: the dimensions follow the numpy convention, so opposite of user API
@@ -2178,10 +2186,13 @@ class Scanner(model.Emitter):
             width = lim[1] - lim[0]
             ratio = (shape[i] * scale[i]) / area_shape[i] 
             assert ratio <= 1 # cannot be bigger than the whole area
-            shift = translation[i] * (width / area_shape[i]) # trans * pixel volt
-            roi_lim = (center - width * ratio + shift,
-                       center + width * ratio + shift)
-            
+            pxv = width / area_shape[i] # V/px
+            shift = translation[i] * pxv
+            # pxv/2 is to ensure the point scanned of each pixel is at the center
+            # of the area of each pixel
+            roi_lim = (center - width * ratio + shift + pxv/2,
+                       center + width * ratio + shift - pxv/2)
+            assert roi_lim[0] <= roi_lim[1] 
             roi_limits.append(roi_lim)
          
         # if the conversion polynom is order <= 1, it's as precise and
