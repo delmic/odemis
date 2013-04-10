@@ -1561,7 +1561,7 @@ class AndorCam2DataFlow(model.DataFlow):
         """
         model.DataFlow.__init__(self)
         self._sync_event = None # synchronization Event 
-        self.component = weakref.proxy(camera)
+        self.component = weakref.ref(camera)
         
 #    def get(self):
 #        # TODO if camera is already acquiring, subscribe and wait for the coming picture with an event
@@ -1582,14 +1582,14 @@ class AndorCam2DataFlow(model.DataFlow):
     # start/stop_generate are _never_ called simultaneously (thread-safe)
     def start_generate(self):
         try:
-            self.component.start_flow(self.notify)
+            self.component().start_flow(self.notify)
         except ReferenceError:
             # camera has been deleted, it's all fine, we'll be GC'd soon
             pass
     
     def stop_generate(self):
         try:
-            self.component.req_stop_flow()
+            self.component().req_stop_flow()
             # we cannot wait for the thread to stop because:
             # * it would be long
             # * we can be called inside a notify(), which is inside the thread => would cause a dead-lock
@@ -1609,17 +1609,19 @@ class AndorCam2DataFlow(model.DataFlow):
         if self._sync_event == event:
             return
         
+        comp = self.component()
+        
         if self._sync_event:
-            self._sync_event.unsubscribe(self.component)
+            self._sync_event.unsubscribe(comp)
         else:
             # report problem if the acquisition was started without expecting synchronization
-            assert (not self.component.acquire_thread or 
-                    not self.component.acquire_thread.isAlive() or
-                    self.component.acquire_must_stop.is_set())
+            assert (not comp.acquire_thread or 
+                    not comp.acquire_thread.isAlive() or
+                    comp.acquire_must_stop.is_set())
             
         self._sync_event = event
         if self._sync_event:
-            self._sync_event.subscribe(self.component)
+            self._sync_event.subscribe(comp)
 
 # Only for testing/simulation purpose
 # Very rough version that is just enough so that if the wrapper behaves correctly,

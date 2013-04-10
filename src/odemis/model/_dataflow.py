@@ -578,7 +578,7 @@ class Event(EventBase):
      * every notify matters, so none should be discarded ever.
     """ 
     def __init__(self):
-        self._listeners = set() # callback (None -> None)
+        self._listeners = set() # object (None -> None)
     
     def _getMostDirectObject(self, obj):
         """
@@ -625,15 +625,14 @@ class Event(EventBase):
         assert callable(callback)
         # not using WeakMethod, because callback would immediately be unreferenced
         # and disappear anyway.
-        self._listeners.add(callback)
+        self._listeners.add(listener)
         
     def unsubscribe(self, listener):
-        callback = self._getMostDirectObject(listener).onEvent
-        self._listeners.discard(callback)
+        self._listeners.discard(listener)
 
     def notify(self):
         for l in frozenset(self._listeners):
-            l() # for debugging: pass time.time()
+            l.onEvent() # for debugging: pass time.time()
 
 # All the classes and functions bellow is to make the remote objects look like 
 # Events. 

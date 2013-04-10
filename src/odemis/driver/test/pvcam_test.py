@@ -156,6 +156,7 @@ class TestSynchronized(unittest.TestCase):
         callback for CCD
         """
         self.assertEqual(image.shape, self.ccd_size[-1:-3:-1])
+        print "shape = %r" % (image.shape, )
         self.ccd_left -= 1
         if self.ccd_left <= 0:
             dataflow.unsubscribe(self.receive_ccd_image)
