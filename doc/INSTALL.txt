@@ -126,7 +126,8 @@ cd odemis
 sudo cp -dr --preserve=mode,xattr,timestamps install/linux/* /
 sudo desktop-file-install install/linux/usr/share/applications/odemis.desktop
 
-
+To get the fluorophores database, you can run this command:
+./util/getfluodb.py
 
 = Installing the vendor device drivers =
 
@@ -188,6 +189,9 @@ cd pvcam-pilk/usb
 make
 sudo cp rspiusb.ko /lib/modules/$(uname -r)/updates/
 sudo depmod
+
+Note that the driver seems to not work with USB3 ("SS"), so make sure the camera
+is connected to a USB2 slot.
 
 Then install the libpvcam library from PI, as can be found on their site:
 wget ftp://ftp.piacton.com/Public/Software/Official/Linux/libpvcam.so.2.7.4.2
