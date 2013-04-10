@@ -106,6 +106,11 @@ CONFIG = {
                     "control_type": odemis.gui.CONTROL_COMBO,
                     "choices": _resolution_from_range,
                 },
+                "readoutRate":
+                {
+                    "control_type": odemis.gui.CONTROL_INT,
+                },
+
                 # what we don't want to display:
                 "targetTemperature":
                 {
@@ -145,6 +150,10 @@ CONFIG = {
                 "magnification": # force using just a text field => it's for copy-paste
                 {
                     "control_type": odemis.gui.CONTROL_FLT,
+                },
+                "pixelSize":
+                {
+                    "control_type": odemis.gui.CONTROL_TEXT,
                 },
             }
         }

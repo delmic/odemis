@@ -245,9 +245,9 @@ class SettingsPanel(object):
         or override them with the values provided in the configuration.
         """
 
-        rng = conf.get("range", None)
+        rng = conf.get("range", (None, None))
         try:
-            if rng is None:
+            if rng == (None, None):
                 rng = va.range
             else: # merge
                 rng = [max(rng[0], va.range[0]), min(rng[1], va.range[1])]
@@ -613,28 +613,36 @@ class SettingsBarController(object):
     def add_ccd(self, comp):
         #pylint: disable=E1101
         if isinstance(self._optical_panel, OpticalSettingsPanel):
-            self._optical_panel.add_label("Camera", comp.name)
-
-            vigil_attrs = getVAs(comp)
-            for name, value in vigil_attrs.items():
-                if comp.role in CONFIG and name in CONFIG[comp.role]:
-                    conf = CONFIG[comp.role][name]
-                else:
-                    conf = None
-                self._optical_panel.add_value(name, value, comp, conf)
+            try:
+                self._optical_panel.add_label("Camera", comp.name)
+                vigil_attrs = getVAs(comp)
+                for name, value in vigil_attrs.items():
+                    if comp.role in CONFIG and name in CONFIG[comp.role]:
+                        conf = CONFIG[comp.role][name]
+                    else:
+                        logging.warn("No config found for %s: %s", comp.role, name)
+                        conf = None
+                    self._optical_panel.add_value(name, value, comp, conf)
+            except TypeError:
+                msg = "Error adding ccd setting for: %s"
+                logging.exception(msg, name)
 
     def add_ebeam(self, comp):
         #pylint: disable=E1101
         if isinstance(self._sem_panel, SemSettingsPanel):
-            self._sem_panel.add_label("SEM", comp.name)
-            vigil_attrs = getVAs(comp)
-            for name, value in vigil_attrs.items():
-                if comp.role in CONFIG and name in CONFIG[comp.role]:
-                    conf = CONFIG[comp.role][name]
-                else:
-                    logging.warn("No config found for %s: %s", comp.role, name)
-                    conf = None
-                self._sem_panel.add_value(name, value, comp, conf)
+            try:
+                self._sem_panel.add_label("SEM", comp.name)
+                vigil_attrs = getVAs(comp)
+                for name, value in vigil_attrs.items():
+                    if comp.role in CONFIG and name in CONFIG[comp.role]:
+                        conf = CONFIG[comp.role][name]
+                    else:
+                        logging.warn("No config found for %s: %s", comp.role, name)
+                        conf = None
+                    self._sem_panel.add_value(name, value, comp, conf)
+            except TypeError:
+                msg = "Error adding ebeam setting for: %s"
+                logging.exception(msg, name)
 
 class SecomSettingsController(SettingsBarController):
 
