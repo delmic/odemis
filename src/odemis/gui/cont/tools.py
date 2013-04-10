@@ -85,7 +85,7 @@ class SemToolMenu(ToolMenu):
         self.btn_update = None
         self.btn_resize = None
 
-        pub.subscribe(self.clear_zoom, 'secom.canvas.zoom.done')
+        pub.subscribe(self.clear_zoom, 'secom.canvas.zoom.end')
 
     def OnCreate(self, event):
         self.Unbind(wx.EVT_WINDOW_CREATE)
@@ -146,9 +146,11 @@ class SparcAcquisitionToolMenu(ToolMenu):
     def __init__(self):
         ToolMenu.__init__(self)
 
-        self.btn_zoom = None
-        self.btn_update = None
+        self.btn_select = None
+        self.btn_pick = None
         self.btn_resize = None
+
+        pub.subscribe(self.on_select_end, "sparc.acq.select.end")
 
     def OnCreate(self, event):
         self.Unbind(wx.EVT_WINDOW_CREATE)
@@ -170,6 +172,13 @@ class SparcAcquisitionToolMenu(ToolMenu):
                         enabled=self.btn_select.GetToggle()
                         )
         evt.Skip()
+
+    def on_select_end(self):
+        self.btn_select.SetToggle(False)
+        pub.sendMessage(
+            'sparc.acq.tool.select.click',
+            enabled=self.btn_select.GetToggle()
+        )
 
     def on_pick(self, evt):
         logging.debug("Pick tool clicked")

@@ -278,14 +278,14 @@ class SelectionMixin(object):
         return (self.get_width(), self.get_height())
 
 
-class ZoomOverlay(ViewOverlay, SelectionMixin):
+class ViewSelectOverlay(ViewOverlay, SelectionMixin):
 
     def __init__(self, base, label,
                  sel_cur=None,
                  color=gui.SELECTION_COLOR,
                  center=(0, 0)):
 
-        super(ZoomOverlay, self).__init__(base, label)
+        super(ViewSelectOverlay, self).__init__(base, label)
         SelectionMixin.__init__(self, sel_cur, color, center)
 
     def Draw(self, dc, shift=(0, 0), scale=1.0):
@@ -353,14 +353,14 @@ class ZoomOverlay(ViewOverlay, SelectionMixin):
                 ctx.move_to(10, 20)
                 ctx.show_text(msg)
 
-class UpdateOverlay(WorldOverlay, SelectionMixin):
+class WorldSelectOverlay(WorldOverlay, SelectionMixin):
 
     def __init__(self, base, label,
                  sel_cur=None,
                  color=gui.SELECTION_COLOR,
                  center=(0, 0)):
 
-        super(UpdateOverlay, self).__init__(base, label)
+        super(WorldSelectOverlay, self).__init__(base, label)
         SelectionMixin.__init__(self, sel_cur, color, center)
 
         self.w_start_pos = None

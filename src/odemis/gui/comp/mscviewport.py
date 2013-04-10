@@ -440,6 +440,8 @@ class SecomViewport(MicroscopeViewport):
 
 class SparcAcquisitionViewport(MicroscopeViewport):
 
+    canvas_class = canvas.SparcAcquiCanvas
+
     def __init__(self, *args, **kwargs):
         super(SparcAcquisitionViewport, self).__init__(*args, **kwargs)
 
