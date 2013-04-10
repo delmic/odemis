@@ -309,7 +309,6 @@ class SettingsPanel(object):
         # If no conf provided, set it to an empty dictionary
         conf = conf or {}
 
-
         # Get the range and choices
         rng, choices, unit = self._get_rng_choice_unit(vigil_attr, conf)
 

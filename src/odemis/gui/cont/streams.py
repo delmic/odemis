@@ -47,7 +47,7 @@ from odemis.gui.instrmodel import STATE_OFF, STATE_PAUSE, STATE_ON
 # the stream panels directly update the VA's
 
 
-class StreamController(object):
+class SecomStreamController(object):
     """
     Manages the insertion/suppression of streams (with their corresponding
     stream panels in the stream bar), and the de/activation of the

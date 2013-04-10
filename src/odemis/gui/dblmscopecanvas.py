@@ -535,6 +535,10 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
         elif not self.dragging and enabled:
             if mode == MODE_SPARC_SELECT:
                 self.select_overlay.clear_selection()
+                pub.sendMessage(
+                    'sparc.acq.selection.changed',
+                    selection_present=self.select_overlay.contains_selection()
+                )
                 self.ShouldUpdateDrawing()
             self.current_mode = mode
             self.active_overlay = overlay
@@ -585,6 +589,10 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
                 if self.HasCapture():
                     self.ReleaseMouse()
                 pub.sendMessage('sparc.acq.select.end')
+                pub.sendMessage(
+                    'sparc.acq.selection.changed',
+                    selection_present=self.select_overlay.contains_selection()
+                )
             else:
                 self.active_overlay.clear_selection()
 

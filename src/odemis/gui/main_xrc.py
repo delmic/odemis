@@ -76,7 +76,7 @@ class xrcfr_main(wx.Frame):
         self.fp_settings_secom_optical = xrc.XRCCTRL(self, "fp_settings_secom_optical")
         self.pnl_secom_streams = xrc.XRCCTRL(self, "pnl_secom_streams")
         self.fp_annotations = xrc.XRCCTRL(self, "fp_annotations")
-        self.btn_acquire = xrc.XRCCTRL(self, "btn_acquire")
+        self.btn_secom_acquire = xrc.XRCCTRL(self, "btn_secom_acquire")
         self.pnl_tab_secom_gallery = xrc.XRCCTRL(self, "pnl_tab_secom_gallery")
         self.pnl_tab_sparc_acqui = xrc.XRCCTRL(self, "pnl_tab_sparc_acqui")
         self.sparc_acq_tool_menu = xrc.XRCCTRL(self, "sparc_acq_tool_menu")
@@ -150,7 +150,7 @@ class xrcfr_acq(wx.Dialog):
         self.gauge_acq = xrc.XRCCTRL(self, "gauge_acq")
         self.lbl_acqestimate = xrc.XRCCTRL(self, "lbl_acqestimate")
         self.btn_cancel = xrc.XRCCTRL(self, "btn_cancel")
-        self.btn_acquire = xrc.XRCCTRL(self, "btn_acquire")
+        self.btn_secom_acquire = xrc.XRCCTRL(self, "btn_secom_acquire")
 
 
 
@@ -823,7 +823,7 @@ def __init_resources():
                       <object class="wxBoxSizer">
                         <orient>wxVERTICAL</orient>
                         <object class="sizeritem">
-                          <object class="ImageTextButton" name="btn_acquire">
+                          <object class="ImageTextButton" name="btn_secom_acquire">
                             <size>382,-1</size>
                             <label>ACQUIRE IMAGE</label>
                             <delta>1</delta>
@@ -1884,7 +1884,7 @@ def __init_resources():
             </object>
             <orient>wxHORIZONTAL</orient>
             <object class="sizeritem">
-              <object class="ImageTextButton" name="btn_acquire">
+              <object class="ImageTextButton" name="btn_secom_acquire">
                 <size>242,48</size>
                 <label>START</label>
                 <delta>1</delta>

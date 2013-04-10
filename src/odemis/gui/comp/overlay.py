@@ -277,6 +277,8 @@ class SelectionMixin(object):
     def get_size(self):
         return (self.get_width(), self.get_height())
 
+    def contains_selection(self):
+        return None not in (self.v_start_pos, self.v_end_pos)
 
 class ViewSelectOverlay(ViewOverlay, SelectionMixin):
 

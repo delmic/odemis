@@ -49,6 +49,21 @@ import odemis.gui.img.data as imgdata
 #    the canvas close from the area. (Rinze: ???)
 #  * Built-in optimised zoom/transparency for 2 images
 # Maybe could be replaced by a GLCanvas + magic, or a Cairo Canvas
+#
+#
+# * Canvas rendering
+# ------------------
+#
+# OnDrawTimer
+#     UpdateDrawing
+#         Draw(dc_buffer)
+#             _DrawMergedImages
+#                 _DrawImageTransparentRescaled
+#                     _RescaleImageOptimized
+#         Refresh/Update
+#
+# DrawTimer is set by ShouldUpdateDrawing
+
 
 class DraggableCanvas(wx.Panel):
     """ A draggable, buffered window class.

@@ -657,7 +657,7 @@
                       <object class="wxBoxSizer">
                         <orient>wxVERTICAL</orient>
                         <object class="sizeritem">
-                          <object class="ImageTextButton" name="btn_acquire">
+                          <object class="ImageTextButton" name="btn_secom_acquire">
                             <size>382,-1</size>
                             <label>ACQUIRE IMAGE</label>
                             <delta>1</delta>
@@ -1718,7 +1718,7 @@
             </object>
             <orient>wxHORIZONTAL</orient>
             <object class="sizeritem">
-              <object class="ImageTextButton" name="btn_acquire">
+              <object class="ImageTextButton" name="btn_secom_acquire">
                 <size>242,48</size>
                 <label>START</label>
                 <delta>1</delta>

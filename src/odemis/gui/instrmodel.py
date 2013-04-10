@@ -111,7 +111,7 @@ class MicroscopeModel(object):
         if not self.light and not self.ebeam:
             raise Exception("No emitter found in the microscope")
 
-        self.streams = set() # Streams available (handled by StreamController)
+        self.streams = set() # Streams available (handled by SecomStreamController)
 
         # MicroscopeViews available, (handled by SecomViewController)
         # The SecomViewController cares about position (top left, etc),
