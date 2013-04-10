@@ -41,7 +41,7 @@ import numpy
 
 
 class Stream(object):
-    """ A stream combines a Detector, its associated Dataflow and an Emiter.
+    """ A stream combines a Detector, its associated Dataflow and an Emitter.
 
     It handles acquiring the data from the hardware and renders it as an
     InstrumentalImage with the given image transformation.
@@ -49,7 +49,7 @@ class Stream(object):
     This is an abstract class, unless the emitter doesn't need any configuration
     (always on, with the right settings).
 
-    Note: If a Stream needs multiple Emiters, then this should be implemented in
+    Note: If a Stream needs multiple Emitters, then this should be implemented in
     a subclass of Stream.
     """
 
@@ -81,7 +81,7 @@ class Stream(object):
 
         # Dataflow (Live image stream with meta data)
         # Note: A Detectors can have multiple dataflows, so that's why a Stream
-        # has a seperate attribute.
+        # has a separate attribute.
         self._dataflow = dataflow
 
         # list of DataArray received and used to generate the image
@@ -129,7 +129,7 @@ class Stream(object):
         returns (float): approximate time in seconds that acquisition will take
         """
         # This default implementation returns the shortest possible time, taking
-        # into account a minimun overhead. (As in, acquisition will never take
+        # into account a minimum overhead. (As in, acquisition will never take
         # less than 0.1 seconds)
         return self.SETUP_OVERHEAD
 
@@ -491,6 +491,75 @@ class FluoStream(CameraStream):
         elif wave_length < best[1] or wave_length > best[3]:
             # outside of main 50% band
             self._addWarning(Stream.WARNING_EXCITATION_NOT_OPT)
+
+
+class SpectrumStream(Stream):
+    """
+    A Spectrum stream. Be aware that acquisition can be very long so should
+    not be used for live view. So it has no .image (for now).
+    See StaticSpectrumStream for displaying a stream.
+    """
+    
+    def __init__(self, name, detector, dataflow, emitter):
+        self.name = model.StringVA(name)
+
+        # Hardware Components
+        self._detector = detector # the spectrometer
+        self._emitter = emitter # the e-beam
+        # To acquire simultaneously other detector (ex: SEM secondary electrons)
+        # a separate stream must be used, and the acquisition manager will take
+        # care of doing both at the same time 
+         
+        # data-flow of the spectrometer
+        self._dataflow = dataflow
+        
+        # all the information needed to acquire an image (in addition to the 
+        # hardware component settings which can be directly set).
+        
+        # Region of interest as left, top, right, bottom (in ratio from the 
+        # whole area of the emitter => between 0 and 1)
+        self.roi = model.TupleContinuous((0, 0, 1, 1), 
+                                         range=[(0, 0, 0, 0), (1, 1, 1, 1)],
+                                         cls=(int, long, float))
+        # the number of pixels acquired in each dimension
+        # it will be assigned to the resolution of the emitter (but cannot be
+        # directly set, as one might want to use the emitter while configuring
+        # the stream).
+        self.repetition = model.ResolutionVA(emitter.resolution.value,
+                                             emitter.resolution.range)
+        
+        # exposure time of each pixel is the exposure time of the detector,
+        # the dwell time of the emitter will be adapted before acquisition.
+        
+    def estimateAcquisitionTime(self):
+        try:
+            res = list(self.repetition.value)
+            # Typically there is few more pixels inserted at the beginning of each
+            # line for the settle time of the beam. We guesstimate by just adding
+            # 1 pixel to each line
+            if len(res) == 2:
+                res[1] += 1
+            else:
+                logging.warning(("Resolution of scanner is not 2 dimensional, "
+                                 "time estimation might be wrong"))
+            
+            # Each pixel x the exposure time (of the detector) + readout time + 10% overhead
+            exp = self._detector.exposureTime.value
+            try:
+                ro_rate = self._detector.readoutRate.value
+                readout = numpy.prod(self._detector.resolution.value) / ro_rate 
+            except:
+                readout = 0
+            duration = (exp + readout) * numpy.prod(res) * 1.10
+            # Add the setup time
+            duration += self.SETUP_OVERHEAD
+
+            return duration
+        except:
+            msg = "Exception while estimating acquisition time of %s"
+            logging.exception(msg, self.name.value)
+            return Stream.estimateAcquisitionTime(self)
+
 
 class StaticStream(Stream):
     """ Stream containing one static image.
