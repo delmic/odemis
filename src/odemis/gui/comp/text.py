@@ -416,7 +416,7 @@ class NumberValidator(wx.PyValidator):
 
         if self.choices:
             for c in self.choices:
-                valid, _ = self.validate_value(c)
+                valid = self.validate_value(c)
 
                 if not valid:
                     raise ValueError("Illegal value (%s) found in choices" % c)
@@ -844,7 +844,7 @@ class IntegerTextCtrl(NumberTextCtrl):
     """
     # TODO: should use the same parameter as NumberSlider: val_range instead
     # of min_val/max_val
-    
+
     # TODO: refactor to have IntegerTextCtrl a UnitIntegerCtrl with unit=None?
 
     def __init__(self, *args, **kwargs):
