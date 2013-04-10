@@ -13,7 +13,7 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
-
+from __future__ import division
 from odemis import model
 from odemis.driver import semcomedi
 import Pyro4
@@ -365,12 +365,12 @@ class TestSEM(unittest.TestCase):
         
         for i in range(number):
             self.sed.data.subscribe(self.receive_image)
-            time.sleep(0.001)
+            time.sleep(0.001 * i)
             self.sed.data.unsubscribe(self.receive_image)
 
         # now this one should work
         self.sed.data.subscribe(self.receive_image)
-        time.sleep(expected_duration * 1.2) # make sure we received at least one image
+        time.sleep(expected_duration * 2) # make sure we received at least one image
         self.sed.data.unsubscribe(self.receive_image)
         
         self.assertLessEqual(self.left, 10000 - 1)
@@ -414,7 +414,7 @@ class TestSEM(unittest.TestCase):
     
         self.sed.data.subscribe(self.receive_image)
         for i in range(10):
-            # * 3 because it can be quite long to setup each pixel.
+            # * 2 because it can be quite long to setup each pixel.
             time.sleep(expected_duration * 2 / 10)
             if self.left == 0:
                 break # just to make it quicker if it's quicker

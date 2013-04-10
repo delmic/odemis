@@ -177,12 +177,13 @@ class SEMComedi(model.HwComponent):
         self._max_bufsz = self._get_max_buffer_size()
         
         # acquisition thread setup
+        # FIXME: we have too many locks. Need to simplify the acquisition and cancellation code
         self._acquisition_data_lock = threading.Lock()
         self._acquisition_mng_lock = threading.Lock()
+        self._acquisition_init_lock = threading.Lock() 
         self._acquisition_must_stop = threading.Event()
         self._acquisition_thread = None
         self._acquisitions = {} # detector -> callable (callback)
-        
         
         # create the scanner child "scanner"
         try:
@@ -609,16 +610,22 @@ class SEMComedi(model.HwComponent):
         if self._test:
             return
         
-        # There is a bug in NI driver which thinks the minimun value is 357 but
-        # recommends 350 ns. A patch was sent to fix it.
-        # int(self._min_ao_periods[2] * 1e9) is changed to "500" that works
-        self.setup_timed_command(self._ao_subdevice, channels, ranges, 500)
+        # need lock to avoid setting up the command at the same time as the
+        # (next) acquisition is starting.
+        with self._acquisition_init_lock:
+            # There was a bug in the NI driver, it's fixed in the latest kernels. 
+            # Set min_period to "500" to work around it.
+            min_period = int(self._min_ao_periods[2] * 1e9)
+            self.setup_timed_command(self._ao_subdevice, channels, ranges, min_period)
+            
+            # we expect that both values can fit in the buffer
+            pos.tofile(self._writer.file)
+            self._writer.file.flush()
+    
+            comedi.internal_trigger(self._device, self._ao_subdevice, 0)
         
-        # we expect that both values can fit in the buffer
-        pos.tofile(self._writer.file)
-        self._writer.file.flush()
-
-        comedi.internal_trigger(self._device, self._ao_subdevice, 0)
+        # we use a timer because of the problem with the NI driver with 1 scan only
+        # (although it seems to work when period is min_period)
         time.sleep(0.001) # that should be more than enough
         comedi.cancel(self._device, self._ao_subdevice)
     
@@ -1168,15 +1175,22 @@ class SEMComedi(model.HwComponent):
         rperiod_ns = int(round(period * 1e9) / osr)  # in nanoseconds
         expected_time = nwscans * period # s
         
-        logging.debug("Generating a new read command for %d scans", nrscans)
-
-        # flatten the array
-        wbuf = numpy.reshape(data, nwscans * nwchans)
-        self._writer.prepare(wbuf, expected_time)
-
-        # prepare read buffer info        
-        self._reader.prepare(nrscans * nrchans, expected_time)
-        
+        with self._acquisition_init_lock:
+            # Check if the acquisition has already been cancelled
+            # After this block (i.e., reader and writer prepared), the .cancel()
+            # methods will have enough effect to stop the acquisition
+            if self._acquisition_must_stop.is_set():
+                raise CancelledError("Acquisition cancelled during preparation")
+     
+            logging.debug("Generating a new read command for %d scans", nrscans)
+    
+            # flatten the array
+            wbuf = numpy.reshape(data, nwscans * nwchans)
+            self._writer.prepare(wbuf, expected_time)
+    
+            # prepare read buffer info        
+            self._reader.prepare(nrscans * nrchans, expected_time)
+            
         # create a command for reading, with a period osr times smaller than the write
         self.setup_timed_command(self._ai_subdevice, rchannels, rranges, rperiod_ns,
                     start_src=comedi.TRIG_NOW, # start immediately (trigger is not supported)
@@ -1238,24 +1252,31 @@ class SEMComedi(model.HwComponent):
         rperiod_ns = int(round(period * 1e9) / osr)  # in nanoseconds
         expected_time = nwscans * period # s
         
-        # create a command for writing
-        logging.debug("Generating new write and read commands for %d scans on "
-                      "channels %r/%r", nwscans, wchannels, rchannels)
-        self.setup_timed_command(self._ao_subdevice, wchannels, wranges, period_ns,
-                    start_src = comedi.TRIG_EXT, # from PyComedi docs: should improve synchronisation
-                    start_arg = NI_TRIG_AI_START1, # when the AI starts reading
-                    stop_arg = nwscans)
-
-        # create a command for reading, with a period osr times smaller than the write
-        self.setup_timed_command(self._ai_subdevice, rchannels, rranges, rperiod_ns,
-                    stop_arg = nrscans)
-
-        # prepare to write the flattened buffer
-        wbuf = data.reshape((nwscans * nwchans,))
-        self._writer.prepare(wbuf, expected_time)
-
-        # prepare to read
-        self._reader.prepare(nrscans * nrchans, expected_time)
+        with self._acquisition_init_lock:
+            # Check if the acquisition has already been cancelled
+            # After this block (i.e., reader and writer prepared), the .cancel()
+            # methods will have enough effect to stop the acquisition
+            if self._acquisition_must_stop.is_set():
+                raise CancelledError("Acquisition cancelled during preparation")
+            
+            # create a command for writing
+            logging.debug("Generating new write and read commands for %d scans on "
+                          "channels %r/%r", nwscans, wchannels, rchannels)
+            self.setup_timed_command(self._ao_subdevice, wchannels, wranges, period_ns,
+                        start_src = comedi.TRIG_EXT, # from PyComedi docs: should improve synchronisation
+                        start_arg = NI_TRIG_AI_START1, # when the AI starts reading
+                        stop_arg = nwscans)
+    
+            # create a command for reading, with a period osr times smaller than the write
+            self.setup_timed_command(self._ai_subdevice, rchannels, rranges, rperiod_ns,
+                        stop_arg = nrscans)
+    
+            # prepare to write the flattened buffer
+            wbuf = data.reshape((nwscans * nwchans,))
+            self._writer.prepare(wbuf, expected_time)
+    
+            # prepare to read
+            self._reader.prepare(nrscans * nrchans, expected_time)
         
         # run the commands
         # AO is waiting for AI/Start1, so not sure why internal trigger needed,
@@ -1263,10 +1284,11 @@ class SEMComedi(model.HwComponent):
         comedi.internal_trigger(self._device, self._ao_subdevice, 0)
         comedi.internal_trigger(self._device, self._ai_subdevice, 0)
         start = time.time()
-                
+        
         np_to_report = nwscans - settling_samples
         shift_report = settling_samples
-        if settling_samples == 0:  # indicate a new ebeam position
+        if settling_samples == 0:
+            # no margin => indicate a new ebeam position right now
             self._scanner.newPosition.notify()
             np_to_report -= 1
             shift_report += 1
@@ -1336,8 +1358,6 @@ class SEMComedi(model.HwComponent):
                 return
             self._scanner.newPosition.notify()
         
-        # FIXME: stop if the acquisition is canceled
-        
         if failures:
             logging.warning("Failed to trigger newPosition in time %d times, "
                             "last trigger was %g µs late.", failures, -left * 1e6)
@@ -1393,11 +1413,13 @@ class SEMComedi(model.HwComponent):
         """
         Request the acquisition thread to stop
         """
-        self._acquisition_must_stop.set()
-        self._cancel_new_position_notifier()
-        self._reader.cancel()
-        self._writer.cancel()
-        
+        # This must be entirely done before any new comedi command is started
+        # So it's protected with the init of read/write and set_to_resting_position
+        with self._acquisition_init_lock:
+            self._acquisition_must_stop.set()
+            self._cancel_new_position_notifier()
+            self._writer.cancel()
+            self._reader.cancel()
     
     def _wait_acquisition_stopped(self):
         """
@@ -1688,6 +1710,8 @@ class Reader(Accesser):
         self.file.seek(0)
         
     def run(self):
+        if self.cancelled:
+            raise CancelledError("Writting thread was cancelled")
         # start reader thread
         self.begin = time.time()
         self.thread.start()
@@ -1769,25 +1793,27 @@ class Writer(Accesser):
                 
         self._expected_end = None
         self._preload_size = None
+        self._lock = threading.Lock()
     
     def prepare(self, buf, duration):
         """
         buf (numpy.ndarray): 1 dimension array to write
         duration: expected total duration it will take (in s)
         """
-        self.duration = duration
-        self.buf = buf
-        self.cancelled = False
-        self.file.seek(0)
-        
-        # preload the buffer with enough data first
-        dev_buf_size = comedi.get_buffer_size(self._device, self._subdevice)
-        self._preload_size = dev_buf_size / buf.itemsize
-        logging.debug("Going to preload %d bytes", buf[:self._preload_size].nbytes)
-        buf[:self._preload_size].tofile(self.file)
-        self.file.flush() # it can block here if we preload too much
-        
-        self.thread = threading.Thread(name="SEMComedi writer", target=self._thread)
+        with self._lock:
+            self.duration = duration
+            self.buf = buf
+            self.cancelled = False
+            self.file.seek(0)
+            
+            # preload the buffer with enough data first
+            dev_buf_size = comedi.get_buffer_size(self._device, self._subdevice)
+            self._preload_size = dev_buf_size / buf.itemsize
+            logging.debug("Going to preload %d bytes", buf[:self._preload_size].nbytes)
+            buf[:self._preload_size].tofile(self.file)
+            self.file.flush() # it can block here if we preload too much
+            
+            self.thread = threading.Thread(name="SEMComedi writer", target=self._thread)
     
     def run(self):
         self._expected_end = time.time() + self.duration 
@@ -1806,7 +1832,19 @@ class Writer(Accesser):
         except:
             logging.exception("Unhandled error in reading thread")
         
-        # Wait until the buffer is fully emptied to state the output is over 
+        # TODO: investigate further this issue and report upstream.
+        # Need a C sample code (also seems to work ok if period is min_period)
+        # There seems to be is a bug in the NI comedi driver that cause writes
+        # of only one scan to never finish. So we force the stop by cancelling
+        # after enough time.
+        if self.buf.size <= 2:
+            left = self._expected_end - time.time()
+            if left > 0:
+                time.sleep(left)
+            comedi.cancel(self._device, self._subdevice)
+            return
+        
+        # Wait until the buffer is fully emptied to state the output is over
         while (comedi.get_subdevice_flags(self._device, self._subdevice)
                & comedi.SDF_RUNNING):
             # sleep longer if the end is far away
@@ -1828,7 +1866,7 @@ class Writer(Accesser):
                 else:
                     raise IOError("Write timeout while device is idle")
             elif self.cancelled:
-                raise CancelledError("Reading thread was cancelled")
+                raise CancelledError("Writer thread was cancelled")
 
         finally:
             # According to https://groups.google.com/forum/?fromgroups=#!topic/comedi_list/yr2U179x8VI
@@ -1837,9 +1875,14 @@ class Writer(Accesser):
             comedi.cancel(self._device, self._subdevice)
 
     def cancel(self):
+        """
+        Warning: it's not possible to cancel a thread which has not already been 
+         prepared.
+        """
         try:
-            comedi.cancel(self._device, self._subdevice)
-            self.cancelled = True
+            with self._lock:
+                comedi.cancel(self._device, self._subdevice)
+                self.cancelled = True
         except comedi.ComediError:
             logging.debug("Failed to cancel write")
 
@@ -1850,7 +1893,7 @@ class FakeWriter(Accesser):
     """
     def __init__(self, parent):
         self.duration = None
-        self.must_stop = threading.Event()
+        self._must_stop = threading.Event()
         self._expected_end = 0
     
     def close(self):
@@ -1858,7 +1901,7 @@ class FakeWriter(Accesser):
     
     def prepare(self, buf, duration):
         self.duration = duration
-        self.must_stop.clear()
+        self._must_stop.clear()
     
     def run(self):
         self._expected_end = time.time() + self.duration
@@ -1867,10 +1910,10 @@ class FakeWriter(Accesser):
         left = self._expected_end - time.time()
         if left > 0:
             logging.debug("simulating a write for another %g s", left)
-            self.must_stop.wait(left)
+            self._must_stop.wait(left)
     
     def cancel(self):
-        self.must_stop.set()
+        self._must_stop.set()
 
 class Scanner(model.Emitter):
     """
@@ -1937,7 +1980,6 @@ class Scanner(model.Emitter):
         # which is probably sufficient for most usages and almost always reachable
         # shapeX = (diff_limitsX / diff_bestrangeX) * maxdataX
         self._shape = (2048, 2048)
-        # FIXME: resolution should not change the scale
         # .resolution is the number of pixels actually scanned. If it's less than
         # the whole possible area, it's centered.
         resolution = (256, 256) # small resolution to get a fast display
