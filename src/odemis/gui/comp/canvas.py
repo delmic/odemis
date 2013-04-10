@@ -636,15 +636,22 @@ class DraggableCanvas(wx.Panel):
         dc.DrawBitmapPoint(wx.BitmapFromImage(imscaled), tl)
 
     def _draw_background(self, dc):
-        """ TODO: make it fixed, cache image etc.
+        """ TODO: make it fixed or at least create a compensating offset after
+        dragging to prevent 'jumps', cache image etc.
         """
         ctx = wx.lib.wxcairo.ContextFromDC(dc)
 
         # image = cairo.ImageSurface.create_from_png("src/odemis/gui/img/canvasbg.png")
         image = wx.lib.wxcairo.ImageSurfaceFromBitmap(imgdata.getcanvasbgBitmap())
-        pattern = cairo.SurfacePattern (image)
-        pattern.set_extend (cairo.EXTEND_REPEAT)
-        ctx.set_source (pattern)
+        pattern = cairo.SurfacePattern(image)
+        pattern.set_extend(cairo.EXTEND_REPEAT)
+        ctx.set_source(pattern)
+
+        # print (self.drag_shift[0], self.drag_shift[0] % 20)
+        # print (self.drag_shift[1], self.drag_shift[1] % 20)
+
+        # offset = (self.drag_shift[0] % 20, self.drag_shift[1] % 20)
+        # ctx.set_device_offset(offset)
 
         ctx.rectangle(
             0,
@@ -652,6 +659,7 @@ class DraggableCanvas(wx.Panel):
             self._bmp_buffer_size[0],
             self._bmp_buffer_size[1]
         )
+
         ctx.fill ()
 
 

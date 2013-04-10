@@ -33,7 +33,6 @@ import re
 import wx.combo
 from wx.lib.pubsub import pub
 
-
 import odemis.gui
 import odemis.gui.comp.text as text
 import odemis.gui.img.data as img
@@ -43,48 +42,11 @@ from odemis.model import getVAs, NotApplicableError, VigilantAttributeBase
 from odemis.gui.comp.foldpanelbar import FoldPanelItem
 from odemis.gui.comp.radio import GraphicalRadioButtonControl
 from odemis.gui.comp.slider import UnitIntegerSlider, UnitFloatSlider
-from odemis.gui.util import call_after
+from odemis.gui.conf.settingspanel import CONFIG
 from odemis.gui.util.widgets import VigilantAttributeConnector
 from odemis.gui.util.units import readable_str
 
 ####### Utility functions #######
-
-def _resolution_from_range(va, conf):
-    """ Try and get the maximum value of range and use
-    that to construct a list of resolutions
-    """
-    try:
-        logging.debug("Generating resolutions...")
-        choices = set([va.value])
-        res = va.range[1] # start with max resolution
-
-        for dummy in range(3):
-            choices.add(res)
-            res = (res[0] // 2, res[1] // 2)
-
-        return sorted(choices) # return a list, to be sure it's in order
-    except NotApplicableError:
-        return [va.value]
-
-def _binning_1d_from_2d(va, conf):
-    """
-    Find simple binnings available in one dimension (pixel always square)
-    binning provided by a camera is normally a 2-tuple of int
-    """
-    try:
-        choices = set([va.value[0]])
-        minbin = max(va.range[0])
-        maxbin = min(va.range[1])
-
-        # remove choices not available
-        for b in [1, 2, 4]: # all we want at best
-            if minbin <= b and b <= maxbin:
-                choices.add(b)
-
-        return sorted(choices) # return a list, to be sure it's in order
-    except NotApplicableError:
-        return [va.value[0]]
-
 
 def choice_to_str(choice):
     if not isinstance(choice, collections.Iterable):
@@ -102,7 +64,8 @@ def traverse(seq_val):
 def bind_menu(se):
     """
     Add a menu to reset a setting entry to the original (current) value
-    se (SettingEntry)
+    :param se: (SettingEntry)
+
     Note: se must have a valid label, ctrl and va at least
     """
     orig_val = se.va.value
@@ -127,88 +90,6 @@ def bind_menu(se):
 
     se.ctrl.Bind(wx.EVT_CONTEXT_MENU, show_reset_menu)
     se.label.Bind(wx.EVT_CONTEXT_MENU, show_reset_menu)
-
-
-
-# Default settings for the different components.
-# Values in the settings dictionary will be used to steer the default
-# behaviours in representing values and the way in which they can be altered.
-# All values are optional
-# Format:
-#   role of component
-#       vigilant attribute name
-#           label
-#              control_type (CONTROL_NONE to hide it)
-#              range
-#              choices
-#              scale
-#              type
-#              format
-
-# TODO: special settings for the acquisition window? (higher ranges)
-SETTINGS = {
-            "ccd":
-            {
-                "exposureTime":
-                {
-                    "control_type": odemis.gui.CONTROL_SLIDER,
-                    "scale": "log",
-                    "range": (0.01, 3.00),
-                    "type": "float",
-                },
-                "binning":
-                {
-                    "control_type": odemis.gui.CONTROL_RADIO,
-                    "choices": _binning_1d_from_2d,
-                    "type": "1d_binning", # means will make sure both dimensions are treated as one
-                },
-                "resolution":
-                {
-                    "control_type": odemis.gui.CONTROL_COMBO,
-                    "choices": _resolution_from_range,
-                },
-                # what we don't want to display:
-                "targetTemperature":
-                {
-                    "control_type": odemis.gui.CONTROL_NONE,
-                },
-                "fanSpeed":
-                {
-                    "control_type": odemis.gui.CONTROL_NONE,
-                },
-                "pixelSize":
-                {
-                    "control_type": odemis.gui.CONTROL_NONE,
-                },
-            },
-            "e-beam":
-            {
-                "energy":
-                {
-                    "format": True
-                },
-                "spotSize":
-                {
-                    "format": True
-                },
-                "dwellTime":
-                {
-                    "control_type": odemis.gui.CONTROL_SLIDER,
-                    "range": (1e-9, 0.1),
-                    "scale": "log",
-                    "type": "float",
-                },
-                "resolution":
-                {
-                    "control_type": odemis.gui.CONTROL_COMBO,
-                    "choices": _resolution_from_range,
-                },
-                "magnification": # force using just a text field => it's for copy-paste
-                {
-                    "control_type": odemis.gui.CONTROL_FLT,
-                },
-            }
-        }
 
 
 ####### Classes #######
@@ -558,6 +439,7 @@ class SettingsPanel(object):
                                                    labels=choices_formatted,
                                                    units=unit)
 
+            # TODO: Move to secom specific module/class
             if conf.get('type', None) == "1d_binning":
                 # need to convert back and forth between 1D and 2D
                 # from 2D to 1D (just pick X)
@@ -735,8 +617,8 @@ class SettingsBarController(object):
 
             vigil_attrs = getVAs(comp)
             for name, value in vigil_attrs.items():
-                if comp.role in SETTINGS and name in SETTINGS[comp.role]:
-                    conf = SETTINGS[comp.role][name]
+                if comp.role in CONFIG and name in CONFIG[comp.role]:
+                    conf = CONFIG[comp.role][name]
                 else:
                     conf = None
                 self._optical_panel.add_value(name, value, comp, conf)
@@ -745,12 +627,12 @@ class SettingsBarController(object):
         #pylint: disable=E1101
         if isinstance(self._sem_panel, SemSettingsPanel):
             self._sem_panel.add_label("SEM", comp.name)
-
             vigil_attrs = getVAs(comp)
             for name, value in vigil_attrs.items():
-                if comp.role in SETTINGS and name in SETTINGS[comp.role]:
-                    conf = SETTINGS[comp.role][name]
+                if comp.role in CONFIG and name in CONFIG[comp.role]:
+                    conf = CONFIG[comp.role][name]
                 else:
+                    logging.warn("No config found for %s: %s", comp.role, name)
                     conf = None
                 self._sem_panel.add_value(name, value, comp, conf)
 
