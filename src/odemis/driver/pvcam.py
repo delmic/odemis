@@ -68,9 +68,14 @@ class PVCamDLL(CDLL):
         else:
             # Global so that other libraries can access it
             # need to have firewire loaded, even if not used
-            self.raw1394 = CDLL("libraw1394.so", RTLD_GLOBAL)
-            #self.pthread = CDLL("libpthread.so.0", RTLD_GLOBAL) # python already loads libpthread
-            CDLL.__init__(self, "libpvcam.so", RTLD_GLOBAL)
+            try:
+                self.raw1394 = CDLL("libraw1394.so.11", RTLD_GLOBAL)
+                #self.pthread = CDLL("libpthread.so.0", RTLD_GLOBAL) # python already loads libpthread
+                CDLL.__init__(self, "libpvcam.so", RTLD_GLOBAL)
+            except OSError:
+                logging.exception("Failed to find the PVCam driver. You need to "
+                                  "check that libraw1394 and libpvcam are installed.")
+                raise
             try:
                 self.pl_pvcam_init()
             except PVCamError:
@@ -128,7 +133,10 @@ class PVCamDLL(CDLL):
             pass # whatever
 
     def __del__(self):
-        self.pl_pvcam_uninit()
+        try:
+            self.pl_pvcam_uninit()
+        except:
+            pass
 
 # all the values that say the acquisition is in progress 
 STATUS_IN_PROGRESS = [pv.ACQUISITION_IN_PROGRESS, pv.EXPOSURE_IN_PROGRESS, 
@@ -1054,7 +1062,7 @@ class PVCam(model.DigitalCamera):
                         while status in STATUS_IN_PROGRESS:
                             now = time.time()
                             if now > timeout:
-                                raise IOError("Timeout after %g s" % (now - timeout))
+                                raise IOError("Timeout after %g s" % (now - start))
                             # check if we should stop (sleeping less and less)
                             left = expected_end - now
                             if self.acquire_must_stop.wait(max(0.01, left/2)):
