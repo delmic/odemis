@@ -405,7 +405,7 @@ def set_attr(comp_name, attr_name, str_val):
 MAX_DISTANCE = 0.01 #m
 def move(comp_name, axis_name, str_distance):
     """
-    move (relatively) the axis of the given component by the specified about of µm
+    move (relatively) the axis of the given component by the specified amount of µm
     """
     # for safety reason, we use µm instead of meters, as it's harder to type a
     # huge distance
@@ -429,13 +429,55 @@ def move(comp_name, axis_name, str_distance):
         return 127
 
     if abs(distance) > MAX_DISTANCE:
-        logging.error("Distance of %f m is too big (> %f m)", distance, MAX_DISTANCE)
+        logging.error("Distance of %f m is too big (> %f m)", abs(distance), MAX_DISTANCE)
         return 129
 
     try:
-        move = component.moveRel({axis_name: distance})
-        move.result()
+        m = component.moveRel({axis_name: distance})
+        m.result()
+    except Exception:
+        logging.error("Failed to move axis %s of component %s", axis_name, comp_name)
+        return 127
+
+    return 0
+
+def move_abs(comp_name, axis_name, str_position):
+    """
+    move (in absolute) the axis of the given component to the specified position in µm
+    """
+    # for safety reason, we use µm instead of meters, as it's harder to type a
+    # huge distance
+    try:
+        component = get_actuator(comp_name)
+    except LookupError:
+        logging.error("Failed to find actuator '%s'", comp_name)
+        return 127
     except:
+        logging.error("Failed to contact the back-end")
+        return 127
+
+    if axis_name not in component.axes:
+        logging.error("Actuator %s has not axis '%s'", comp_name, axis_name)
+        return 129
+
+    # TODO: check whether the component supports absolute positioning
+
+    try:
+        position = float(str_position) * 1e-6 # µm -> m
+    except ValueError:
+        logging.error("Distance '%s' cannot be converted to a number", str_position)
+        return 127
+
+    # compare to the current position, to see if the new position sounds reasonable
+    cur_pos = component.position.value[axis_name]
+    if abs(cur_pos - position) > MAX_DISTANCE:
+        logging.error("Distance of move of %g m is too big (> %g m)", abs(cur_pos - position), MAX_DISTANCE)
+        return 129
+
+    try:
+        m = component.moveAbs({axis_name: position})
+        m.result()
+    except Exception:
         logging.error("Failed to move axis %s of component %s", axis_name, comp_name)
         return 127
 
@@ -449,7 +491,7 @@ def stop_move():
     try:
         microscope = model.getMicroscope()
         actuators = microscope.actuators
-    except:
+    except Exception:
         logging.error("Failed to contact the back-end")
         return 127
 
@@ -457,7 +499,7 @@ def stop_move():
     for actuator in actuators:
         try:
             actuator.stop()
-        except:
+        except Exception:
             logging.error("Failed to stop actuator %s", actuator.name)
             ret = 127
 
@@ -636,6 +678,9 @@ def main(args):
     dm_grpe.add_argument("--move", "-m", dest="move", nargs=3, action='append',
                          metavar=("<component>", "<axis>", "<distance>"),
                          help=u"move the axis by the amount of µm.")
+    dm_grpe.add_argument("--position", "-p", dest="position", nargs=3, action='append',
+                         metavar=("<component>", "<axis>", "<position>"),
+                         help=u"move the axis to the given position in µm.")
     dm_grpe.add_argument("--stop", "-S", dest="stop", action="store_true", default=False,
                          help="Immediately stop all the actuators in all directions.")
     dm_grpe.add_argument("--acquire", "-a", dest="acquire", nargs="+",
@@ -671,6 +716,7 @@ def main(args):
     # anything to do?
     if (not options.check and not options.kill and not options.scan
         and not options.list and not options.stop and options.move is None
+        and options.position is None
         and options.listprop is None and options.setattr is None
         and options.acquire is None and options.live is None):
         logging.error("no action specified.")
@@ -721,6 +767,14 @@ def main(args):
                     return ret
             return 0
 
+        if options.position is not None:
+            for c, a, d in options.position:
+                ret = move_abs(c, a, d)
+                # TODO warn if same axis multiple times
+                if ret != 0:
+                    return ret
+            return 0
+        
         if options.move is not None:
             for c, a, d in options.move:
                 ret = move(c, a, d)
