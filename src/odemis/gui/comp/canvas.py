@@ -100,6 +100,7 @@ class DraggableCanvas(wx.Panel):
         self._bmp_buffer_size = (1, 1)
         self.ResizeBuffer(self._bmp_buffer_size)
         # When resizing, margin to put around the current size
+        # TODO: Maybe make the margin related to the canvas size?
         self.margin = 512
         self.margins = (self.margin, self.margin)
 
@@ -235,8 +236,21 @@ class DraggableCanvas(wx.Panel):
     def OnMouseMotion(self, event):
         if self.dragging:
             pos = event.GetPositionTuple()
-            self.drag_shift = (pos[0] - self.drag_init_pos[0],
-                               pos[1] - self.drag_init_pos[1])
+
+            drag_shift = (pos[0] - self.drag_init_pos[0],
+                          pos[1] - self.drag_init_pos[1])
+
+            # Limit the amount of pixels that the canvas can be dragged
+            self.drag_shift = (
+                min(
+                    max(drag_shift[0], -self.margins[0]),
+                    self.margins[0]
+                ),
+                min(
+                    max(drag_shift[1], -self.margin),
+                    self.margins[1])
+            )
+
             self.Refresh()
         elif self._rdragging:
             # TODO: make it non-linear:
@@ -340,16 +354,8 @@ class DraggableCanvas(wx.Panel):
         self.margins = ((self._bmp_buffer_size[0] - self.ClientSize[0])/2,
                         (self._bmp_buffer_size[1] - self.ClientSize[1])/2)
 
-        src_pos =  (
-                        min(
-                            max(self.margins[0] - self.drag_shift[0], 0),
-                            2 * self.margins[0]
-                        ),
-                        min(
-                            max(self.margins[1] - self.drag_shift[1], 0),
-                            2 * self.margins[1]
-                        )
-                    )
+        src_pos =  (self.margins[0] - self.drag_shift[0],
+                    self.margins[1] - self.drag_shift[1])
 
         # Blit the appropriate area from the buffer to the view port
         dc_view.BlitPointSize(
