@@ -75,8 +75,6 @@ class CrossHairOverlay(ViewOverlay):
         shift (2-tuple float): shift for the coordinate conversion
         scale (float): scale for the coordinate conversion
         """
-        dc.SetPen(self.pen)
-
         tl = (self.center[0] - self.size,
               self.center[1] - self.size)
         br = (self.center[0] + self.size,
@@ -85,8 +83,17 @@ class CrossHairOverlay(ViewOverlay):
         br_s = canvas.world_to_buffer_pos(br, shift, scale)
         center = canvas.world_to_buffer_pos(self.center, shift, scale)
 
+        # Draw black contrast cross first
+        pen = wx.Pen(wx.BLACK)
+        dc.SetPen(pen)
+        dc.DrawLine(tl_s[0] + 1, center[1] + 1, br_s[0] + 1, center[1] + 1)
+        dc.DrawLine(center[0] + 1, tl_s[1] + 1, center[0] + 1, br_s[1] + 1)
+
+        dc.SetPen(self.pen)
         dc.DrawLine(tl_s[0], center[1], br_s[0], center[1])
         dc.DrawLine(center[0], tl_s[1], center[0], br_s[1])
+
+
 
 class SelectionMixin(object):
 
