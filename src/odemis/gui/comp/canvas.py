@@ -29,12 +29,13 @@ import ctypes
 import logging
 import math
 import os
-import threading
 import time
 
+import cairo
 import wx
 import wx.lib.wxcairo
-import cairo
+
+import odemis.gui.img.data as imgdata
 
 # A class for smooth, flicker-less display of anything on a window, with drag
 # and zoom capability a bit like: wx.canvas, wx.BufferedWindow, BufferedCanvas,
@@ -48,6 +49,21 @@ import cairo
 #    the canvas close from the area. (Rinze: ???)
 #  * Built-in optimised zoom/transparency for 2 images
 # Maybe could be replaced by a GLCanvas + magic, or a Cairo Canvas
+#
+#
+# * Canvas rendering
+# ------------------
+#
+# OnDrawTimer
+#     UpdateDrawing
+#         Draw(dc_buffer)
+#             _DrawMergedImages
+#                 _DrawImageTransparentRescaled
+#                     _RescaleImageOptimized
+#         Refresh/Update
+#
+# DrawTimer is set by ShouldUpdateDrawing
+
 
 class DraggableCanvas(wx.Panel):
     """ A draggable, buffered window class.
@@ -99,6 +115,7 @@ class DraggableCanvas(wx.Panel):
         self._bmp_buffer_size = (1, 1)
         self.ResizeBuffer(self._bmp_buffer_size)
         # When resizing, margin to put around the current size
+        # TODO: Maybe make the margin related to the canvas size?
         self.margin = 512
         self.margins = (self.margin, self.margin)
 
@@ -234,8 +251,21 @@ class DraggableCanvas(wx.Panel):
     def OnMouseMotion(self, event):
         if self.dragging:
             pos = event.GetPositionTuple()
-            self.drag_shift = (pos[0] - self.drag_init_pos[0],
-                               pos[1] - self.drag_init_pos[1])
+
+            drag_shift = (pos[0] - self.drag_init_pos[0],
+                          pos[1] - self.drag_init_pos[1])
+
+            # Limit the amount of pixels that the canvas can be dragged
+            self.drag_shift = (
+                min(
+                    max(drag_shift[0], -self.margins[0]),
+                    self.margins[0]
+                ),
+                min(
+                    max(drag_shift[1], -self.margin),
+                    self.margins[1])
+            )
+
             self.Refresh()
         elif self._rdragging:
             # TODO: make it non-linear:
@@ -339,16 +369,8 @@ class DraggableCanvas(wx.Panel):
         self.margins = ((self._bmp_buffer_size[0] - self.ClientSize[0])/2,
                         (self._bmp_buffer_size[1] - self.ClientSize[1])/2)
 
-        src_pos =  (
-                        min(
-                            max(self.margins[0] - self.drag_shift[0], 0),
-                            2 * self.margins[0]
-                        ),
-                        min(
-                            max(self.margins[1] - self.drag_shift[1], 0),
-                            2 * self.margins[1]
-                        )
-                    )
+        src_pos =  (self.margins[0] - self.drag_shift[0],
+                    self.margins[1] - self.drag_shift[1])
 
         # Blit the appropriate area from the buffer to the view port
         dc_view.BlitPointSize(
@@ -635,14 +657,22 @@ class DraggableCanvas(wx.Panel):
         dc.DrawBitmapPoint(wx.BitmapFromImage(imscaled), tl)
 
     def _draw_background(self, dc):
-        """ TODO: make it fixed, cache image etc.
+        """ TODO: make it fixed or at least create a compensating offset after
+        dragging to prevent 'jumps', cache image etc.
         """
         ctx = wx.lib.wxcairo.ContextFromDC(dc)
 
-        image = cairo.ImageSurface.create_from_png("src/odemis/gui/img/canvasbg.png")
-        pattern = cairo.SurfacePattern (image)
-        pattern.set_extend (cairo.EXTEND_REPEAT)
-        ctx.set_source (pattern)
+        # image = cairo.ImageSurface.create_from_png("src/odemis/gui/img/canvasbg.png")
+        image = wx.lib.wxcairo.ImageSurfaceFromBitmap(imgdata.getcanvasbgBitmap())
+        pattern = cairo.SurfacePattern(image)
+        pattern.set_extend(cairo.EXTEND_REPEAT)
+        ctx.set_source(pattern)
+
+        # print (self.drag_shift[0], self.drag_shift[0] % 20)
+        # print (self.drag_shift[1], self.drag_shift[1] % 20)
+
+        # offset = (self.drag_shift[0] % 20, self.drag_shift[1] % 20)
+        # ctx.set_device_offset(offset)
 
         ctx.rectangle(
             0,
@@ -650,6 +680,7 @@ class DraggableCanvas(wx.Panel):
             self._bmp_buffer_size[0],
             self._bmp_buffer_size[1]
         )
+
         ctx.fill ()
 
 
@@ -677,7 +708,7 @@ class DraggableCanvas(wx.Panel):
 
         t_start = time.time()
 
-        #self._draw_background(dc_buffer)
+        self._draw_background(dc_buffer)
 
         # The idea:
         # * display the first image (SEM) last, with the given mergeratio (or 1 if

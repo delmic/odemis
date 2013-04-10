@@ -75,8 +75,6 @@ class CrossHairOverlay(ViewOverlay):
         shift (2-tuple float): shift for the coordinate conversion
         scale (float): scale for the coordinate conversion
         """
-        dc.SetPen(self.pen)
-
         tl = (self.center[0] - self.size,
               self.center[1] - self.size)
         br = (self.center[0] + self.size,
@@ -85,8 +83,17 @@ class CrossHairOverlay(ViewOverlay):
         br_s = canvas.world_to_buffer_pos(br, shift, scale)
         center = canvas.world_to_buffer_pos(self.center, shift, scale)
 
+        # Draw black contrast cross first
+        pen = wx.Pen(wx.BLACK)
+        dc.SetPen(pen)
+        dc.DrawLine(tl_s[0] + 1, center[1] + 1, br_s[0] + 1, center[1] + 1)
+        dc.DrawLine(center[0] + 1, tl_s[1] + 1, center[0] + 1, br_s[1] + 1)
+
+        dc.SetPen(self.pen)
         dc.DrawLine(tl_s[0], center[1], br_s[0], center[1])
         dc.DrawLine(center[0], tl_s[1], center[0], br_s[1])
+
+
 
 class SelectionMixin(object):
 
@@ -277,15 +284,17 @@ class SelectionMixin(object):
     def get_size(self):
         return (self.get_width(), self.get_height())
 
+    def contains_selection(self):
+        return None not in (self.v_start_pos, self.v_end_pos)
 
-class ZoomOverlay(ViewOverlay, SelectionMixin):
+class ViewSelectOverlay(ViewOverlay, SelectionMixin):
 
     def __init__(self, base, label,
                  sel_cur=None,
                  color=gui.SELECTION_COLOR,
                  center=(0, 0)):
 
-        super(ZoomOverlay, self).__init__(base, label)
+        super(ViewSelectOverlay, self).__init__(base, label)
         SelectionMixin.__init__(self, sel_cur, color, center)
 
     def Draw(self, dc, shift=(0, 0), scale=1.0):
@@ -353,14 +362,14 @@ class ZoomOverlay(ViewOverlay, SelectionMixin):
                 ctx.move_to(10, 20)
                 ctx.show_text(msg)
 
-class UpdateOverlay(WorldOverlay, SelectionMixin):
+class WorldSelectOverlay(WorldOverlay, SelectionMixin):
 
     def __init__(self, base, label,
                  sel_cur=None,
                  color=gui.SELECTION_COLOR,
                  center=(0, 0)):
 
-        super(UpdateOverlay, self).__init__(base, label)
+        super(WorldSelectOverlay, self).__init__(base, label)
         SelectionMixin.__init__(self, sel_cur, color, center)
 
         self.w_start_pos = None

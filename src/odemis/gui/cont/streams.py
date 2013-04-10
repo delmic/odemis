@@ -47,7 +47,28 @@ from odemis.gui.instrmodel import STATE_OFF, STATE_PAUSE, STATE_ON
 # the stream panels directly update the VA's
 
 
-class StreamController(object):
+class SparcStreamController(object):
+
+    def __init__(self, microscope_model, stream_bar):
+        """
+        microscope_model (MicroscopeModel): the representation of the microscope Model
+        stream_bar (StreamBar): an empty stream panel
+        """
+        self._microscope = microscope_model
+        self._stream_bar = stream_bar
+
+    def add_spectro_stream(self):
+        """
+        Creates a new SED stream and panel in the stream bar
+        returns (StreamPanel): the panel created
+        """
+        stream = model.stream.SEMStream("Secondary electrons",
+                  self.microscope.sed, self.microscope.sed.data,
+                  self.microscope.ebeam)
+        return self._addStream(stream, comp.stream.SecomStreamPanel, add_to_all_views)
+
+
+class SecomStreamController(object):
     """
     Manages the insertion/suppression of streams (with their corresponding
     stream panels in the stream bar), and the de/activation of the
@@ -143,7 +164,7 @@ class StreamController(object):
         stream = model.stream.BrightfieldStream("Bright-field",
                   self.microscope.ccd, self.microscope.ccd.data,
                   self.microscope.light)
-        return self._addStream(stream, comp.stream.StandardStreamPanel, add_to_all_views)
+        return self._addStream(stream, comp.stream.SecomStreamPanel, add_to_all_views)
 
     def addSEMSED(self, add_to_all_views=False):
         """
@@ -153,7 +174,7 @@ class StreamController(object):
         stream = model.stream.SEMStream("Secondary electrons",
                   self.microscope.sed, self.microscope.sed.data,
                   self.microscope.ebeam)
-        return self._addStream(stream, comp.stream.StandardStreamPanel, add_to_all_views)
+        return self._addStream(stream, comp.stream.SecomStreamPanel, add_to_all_views)
 
     def addStatic(self, name, image, cls=model.stream.StaticStream, add_to_all_views=False, ):
         """
@@ -165,7 +186,7 @@ class StreamController(object):
         returns (StreamPanel): the panel created
         """
         stream = cls(name, image)
-        return self._addStream(stream, comp.stream.StandardStreamPanel, add_to_all_views)
+        return self._addStream(stream, comp.stream.SecomStreamPanel, add_to_all_views)
 
 
     def _addStream(self, stream, spanel_cls, add_to_all_views=False):
@@ -224,7 +245,7 @@ class StreamController(object):
         if isinstance(stream, model.stream.FluoStream):
             cls = comp.stream.DyeStreamPanel
         else:
-            cls = comp.stream.StandardStreamPanel
+            cls = comp.stream.SecomStreamPanel
 
         sp = cls(self._stream_bar, stream, self.microscope)
         self._stream_bar.add_stream(sp, True)

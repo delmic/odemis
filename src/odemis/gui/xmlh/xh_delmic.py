@@ -47,7 +47,7 @@ HANDLER_CLASS_LIST = []
 # Fold Panel Bar related Handlers
 ##################################
 
-class StandardStreamPanelXmlHandler(xrc.XmlResourceHandler):
+class SecomStreamPanelXmlHandler(xrc.XmlResourceHandler):
     def __init__(self):
         xrc.XmlResourceHandler.__init__(self)
         # Specify the styles recognized by objects of this type
@@ -68,7 +68,7 @@ class StandardStreamPanelXmlHandler(xrc.XmlResourceHandler):
 
         parent_window = self.GetParentAsWindow()
         # Now create the object
-        panel = strm.StandardStreamPanel(parent_window,
+        panel = strm.SecomStreamPanel(parent_window,
                                          self.GetID(),
                                          self.GetText('label'),
                                          self.GetPosition(),
@@ -90,7 +90,7 @@ class StandardStreamPanelXmlHandler(xrc.XmlResourceHandler):
         #self.CreateChildren(panel.get_panel())
 
         return panel
-HANDLER_CLASS_LIST.append(StandardStreamPanelXmlHandler)
+HANDLER_CLASS_LIST.append(SecomStreamPanelXmlHandler)
 
 class DyeStreamPanelXmlHandler(xrc.XmlResourceHandler):
     def __init__(self):
@@ -104,7 +104,7 @@ class DyeStreamPanelXmlHandler(xrc.XmlResourceHandler):
 
     # This method and the next one are required for XmlResourceHandlers
     def CanHandle(self, node):
-        return self.IsOfClass(node, "CustomStreamPanelEntry")
+        return self.IsOfClass(node, "DyeStreamPanel")
 
     def DoCreateResource(self):
         assert self.GetInstance() is None

@@ -26,12 +26,11 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 import logging
 
 import wx
-from wx.lib.pubsub import pub
 
-from odemis.gui.cont.acquisition import AcquisitionController
+from odemis.gui.cont.acquisition import SecomAcquiController, SparcAcquiController
 from odemis.gui.cont.microscope import MicroscopeController
 from odemis.gui.cont import settings
-from odemis.gui.cont.streams import StreamController
+from odemis.gui.cont.streams import SecomStreamController
 from odemis.gui.cont.views import SecomViewController, ViewSelector
 
 main_tab_controller = None
@@ -100,7 +99,7 @@ class SecomStreamsTab(Tab):
                                     self.main_frame
                                 )
 
-        self._stream_controller = StreamController(
+        self._stream_controller = SecomStreamController(
                                         self.interface_model,
                                         self.main_frame.pnl_secom_streams
                                   )
@@ -110,7 +109,7 @@ class SecomStreamsTab(Tab):
                                     self.main_frame
                               )
 
-        self._acquisition_controller = AcquisitionController(
+        self._acquisition_controller = SecomAcquiController(
                                             self.interface_model,
                                             self.main_frame
                                        )
@@ -149,6 +148,11 @@ class SparcAcquisitionTab(Tab):
         self._settings_controller = settings.SparcSettingsController(
                                         self.interface_model,
                                         self.main_frame)
+
+        self._acquisition_controller = SparcAcquiController(
+                                            self.interface_model,
+                                            self.main_frame
+                                       )
 
 class TabBarController(object):
 
