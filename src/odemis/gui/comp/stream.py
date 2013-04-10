@@ -180,11 +180,9 @@ class Expander(wx.PyControl):
         """ This method hides or makes read-only any button or data that should
         not be changed during acquisition.
         """
-
         self._btn_rem.Hide()
         # Insert spacer to add some left side padding.
         self._sz.InsertSpacer(0, (5, 16))
-
         self._btn_play.Hide()
 
 
@@ -365,6 +363,10 @@ class StreamPanel(wx.PyPanel):
 
         self._panel.SetSizer(border_sizer)
 
+        # Counter that keeps track of the number of rows containing controls
+        # inside this panel
+        self.row_count = 0
+
         self._expander = None
 
         self._sz = wx.BoxSizer(wx.HORIZONTAL)
@@ -377,115 +379,10 @@ class StreamPanel(wx.PyPanel):
 
 
     def finalize(self):
-        """ This method builds all the child controls
-        A delay was needed in order for all the settings to be loaded from the
-        XRC file (i.e. Font and background/foreground colours).
+        """ Controls should be added to the panel using this method. This
+        so timing issues will not rise when the panel is instantiated.
         """
-
-        self.row_count = 0
-
-        # ====== Add an expander button
-
-        self.set_expander_button(self.expander_class(self, self.stream))
-        self._sz.Add(self._expander, 0, wx.EXPAND)
-
-
-        self._expander.Bind(wx.EVT_PAINT, self.on_draw_expander)
-        if wx.Platform == "__WXMSW__":
-            self._expander.Bind(wx.EVT_LEFT_DCLICK, self.on_button)
-
-        self._expander.Bind(wx.EVT_LEFT_UP, self.OnToggle)
-
-        # ====== Build panel controls
-        self._panel.SetBackgroundColour(BG_COLOUR_PANEL)
-        self._panel.SetForegroundColour(FOREGROUND_COLOUR)
-        self._panel.SetFont(self.GetFont())
-
-        # ====== Top row, auto contrast toggle button
-
-        self._btn_auto_contrast = buttons.ImageTextToggleButton(self._panel, -1,
-                                                img.getbtn_contrastBitmap(),
-                                                label="Auto",
-                                                size=(68, 26),
-                                                style=wx.ALIGN_RIGHT,)
-
-        tooltip = "Toggle auto brightness and contrast"
-
-        self._btn_auto_contrast.SetToolTipString(tooltip)
-        self._btn_auto_contrast.SetBitmaps(
-                                        bmp_h=img.getbtn_contrast_hBitmap(),
-                                        bmp_sel=img.getbtn_contrast_aBitmap())
-        self._btn_auto_contrast.SetForegroundColour("#000000")
-        self._gbs.Add(self._btn_auto_contrast, (self.row_count, 0),
-                      flag=wx.LEFT|wx.TOP, border=5)
-        self.row_count += 1
-
-        # ====== Second row, brightness label, slider and value
-
-        lbl_brightness = wx.StaticText(self._panel, -1, "Brightness")
-        self._gbs.Add(lbl_brightness, (self.row_count, 0),
-                      flag=wx.ALL,
-                      border=5)
-
-        self._sld_brightness = UnitIntegerSlider(
-                                    self._panel,
-                                    value=self.stream.brightness.value,
-                                    val_range=self.stream.brightness.range,
-                                    t_size=(40, -1),
-                                    unit=None,
-                                    name="brightness_slider")
-
-        self._vac_brightness = VigilantAttributeConnector(self.stream.brightness,
-                                             self._sld_brightness,
-                                             events=wx.EVT_SLIDER)
-        # span is 2, because emission/excitation have 2 controls
-        self._gbs.Add(self._sld_brightness, pos=(self.row_count, 1),
-                      span=(1, 2), flag=wx.EXPAND | wx.ALL, border=5)
-        self.row_count += 1
-
-        # ====== Third row, contrast label, slider and value
-
-        lbl_contrast = wx.StaticText(self._panel, -1, "Contrast")
-        self._gbs.Add(lbl_contrast, (self.row_count, 0),
-                      flag=wx.ALL, border=5)
-
-        self._sld_contrast = UnitIntegerSlider(
-                             self._panel,
-                             value=self.stream.contrast.value,
-                             val_range=self.stream.contrast.range,
-                             t_size=(40, -1),
-                             unit=None,
-                             name="contrast_slider")
-
-        self._vac_contrast = VigilantAttributeConnector(self.stream.contrast,
-                                             self._sld_contrast,
-                                             events=wx.EVT_SLIDER)
-
-        self._gbs.Add(self._sld_contrast, pos=(self.row_count, 1),
-                      span=(1, 2), flag=wx.EXPAND | wx.ALL, border=5)
-        self.row_count += 1
-
-        self._gbs.AddGrowableCol(1)
-
-        # ==== Bind events
-
-        # Expander
-
-        self._expander._btn_rem.Bind(wx.EVT_BUTTON, self.on_remove_btn)
-        self._expander._btn_vis.Bind(wx.EVT_BUTTON, self.on_visibility_btn)
-        self._expander._btn_play.Bind(wx.EVT_BUTTON, self.on_play_btn)
-        self.stream.should_update.subscribe(self.onUpdatedChanged, init=True)
-
-        # initialise _btn_play
-        self.setVisible(self.stream in self._microscope.focussedView.value.getStreams())
-
-        # Panel controls
-        # TODO reuse VigilantAttributeConnector, or at least refactor
-
-        self._btn_auto_contrast.Bind(wx.EVT_BUTTON, self.on_toggle_autocontrast)
-
-        self._btn_auto_contrast.SetToggle(self.stream.auto_bc.value)
-        self.on_toggle_autocontrast(None)  # to ensure the controls are disabled if necessary
+        raise NotImplementedError
 
     def set_expander_button(self, button):
         """ Assign a new expander button to the stream panel.
@@ -639,17 +536,6 @@ class StreamPanel(wx.PyPanel):
     def hide_stream(self):
         self._expander._btn_vis.SetToggle(False)
 
-
-    def on_toggle_autocontrast(self, evt):
-        enabled = self._btn_auto_contrast.GetToggle()
-        # disable the manual controls if it's on
-        ctrl_enabled = not enabled
-        self._sld_brightness.Enable(ctrl_enabled)
-        self._sld_contrast.Enable(ctrl_enabled)
-
-        self.stream.auto_bc.value = enabled
-
-
     def OnToggle(self, evt):
         """ Toggle the StreamPanel """
 
@@ -685,6 +571,156 @@ class StreamPanel(wx.PyPanel):
         dc.Clear()
 
         self._expander.OnDrawExpander(dc)
+
+    def to_acquisition_mode(self):
+        """ This method hides or makes read-only any button or data that should
+        not be changed during acquisition.
+        """
+        raise NotImplementedError
+
+
+
+class SpectroStreamPanel(StreamPanel):
+
+    expander_class = StandardExpander
+
+    def __init__(self, *args, **kwargs):
+        StreamPanel.__init__(self, *args, **kwargs)
+
+    def finalize(self):
+        pass
+
+    def to_acquisition_mode(self):
+        pass
+
+
+
+class SecomStreamPanel(StreamPanel):  # pylint: disable=R0901
+    """ A pre-defined stream panel """
+
+    expander_class = StandardExpander
+
+    def __init__(self, *args, **kwargs):
+        StreamPanel.__init__(self, *args, **kwargs)
+
+
+    def on_toggle_autocontrast(self, evt):
+        enabled = self._btn_auto_contrast.GetToggle()
+        # disable the manual controls if it's on
+        ctrl_enabled = not enabled
+        self._sld_brightness.Enable(ctrl_enabled)
+        self._sld_contrast.Enable(ctrl_enabled)
+
+        self.stream.auto_bc.value = enabled
+
+    def finalize(self):
+        """ This method builds all the child controls
+        A delay was needed in order for all the settings to be loaded from the
+        XRC file (i.e. Font and background/foreground colours).
+        """
+
+        # ====== Add an expander button
+
+        self.set_expander_button(self.expander_class(self, self.stream))
+        self._sz.Add(self._expander, 0, wx.EXPAND)
+
+
+        self._expander.Bind(wx.EVT_PAINT, self.on_draw_expander)
+        if wx.Platform == "__WXMSW__":
+            self._expander.Bind(wx.EVT_LEFT_DCLICK, self.on_button)
+
+        self._expander.Bind(wx.EVT_LEFT_UP, self.OnToggle)
+
+        # ====== Build panel controls
+        self._panel.SetBackgroundColour(BG_COLOUR_PANEL)
+        self._panel.SetForegroundColour(FOREGROUND_COLOUR)
+        self._panel.SetFont(self.GetFont())
+
+        # ====== Top row, auto contrast toggle button
+
+        self._btn_auto_contrast = buttons.ImageTextToggleButton(self._panel, -1,
+                                                img.getbtn_contrastBitmap(),
+                                                label="Auto",
+                                                size=(68, 26),
+                                                style=wx.ALIGN_RIGHT,)
+
+        tooltip = "Toggle auto brightness and contrast"
+
+        self._btn_auto_contrast.SetToolTipString(tooltip)
+        self._btn_auto_contrast.SetBitmaps(
+                                        bmp_h=img.getbtn_contrast_hBitmap(),
+                                        bmp_sel=img.getbtn_contrast_aBitmap())
+        self._btn_auto_contrast.SetForegroundColour("#000000")
+        self._gbs.Add(self._btn_auto_contrast, (self.row_count, 0),
+                      flag=wx.LEFT|wx.TOP, border=5)
+        self.row_count += 1
+
+        # ====== Second row, brightness label, slider and value
+
+        lbl_brightness = wx.StaticText(self._panel, -1, "Brightness")
+        self._gbs.Add(lbl_brightness, (self.row_count, 0),
+                      flag=wx.ALL,
+                      border=5)
+
+        self._sld_brightness = UnitIntegerSlider(
+                                    self._panel,
+                                    value=self.stream.brightness.value,
+                                    val_range=self.stream.brightness.range,
+                                    t_size=(40, -1),
+                                    unit=None,
+                                    name="brightness_slider")
+
+        self._vac_brightness = VigilantAttributeConnector(self.stream.brightness,
+                                             self._sld_brightness,
+                                             events=wx.EVT_SLIDER)
+        # span is 2, because emission/excitation have 2 controls
+        self._gbs.Add(self._sld_brightness, pos=(self.row_count, 1),
+                      span=(1, 2), flag=wx.EXPAND | wx.ALL, border=5)
+        self.row_count += 1
+
+        # ====== Third row, contrast label, slider and value
+
+        lbl_contrast = wx.StaticText(self._panel, -1, "Contrast")
+        self._gbs.Add(lbl_contrast, (self.row_count, 0),
+                      flag=wx.ALL, border=5)
+
+        self._sld_contrast = UnitIntegerSlider(
+                             self._panel,
+                             value=self.stream.contrast.value,
+                             val_range=self.stream.contrast.range,
+                             t_size=(40, -1),
+                             unit=None,
+                             name="contrast_slider")
+
+        self._vac_contrast = VigilantAttributeConnector(self.stream.contrast,
+                                             self._sld_contrast,
+                                             events=wx.EVT_SLIDER)
+
+        self._gbs.Add(self._sld_contrast, pos=(self.row_count, 1),
+                      span=(1, 2), flag=wx.EXPAND | wx.ALL, border=5)
+        self.row_count += 1
+
+        self._gbs.AddGrowableCol(1)
+
+        # ==== Bind events
+
+        # Expander
+
+        self._expander._btn_rem.Bind(wx.EVT_BUTTON, self.on_remove_btn)
+        self._expander._btn_vis.Bind(wx.EVT_BUTTON, self.on_visibility_btn)
+        self._expander._btn_play.Bind(wx.EVT_BUTTON, self.on_play_btn)
+        self.stream.should_update.subscribe(self.onUpdatedChanged, init=True)
+
+        # initialise _btn_play
+        self.setVisible(self.stream in self._microscope.focussedView.value.getStreams())
+
+        # Panel controls
+        # TODO reuse VigilantAttributeConnector, or at least refactor
+
+        self._btn_auto_contrast.Bind(wx.EVT_BUTTON, self.on_toggle_autocontrast)
+
+        self._btn_auto_contrast.SetToggle(self.stream.auto_bc.value)
+        self.on_toggle_autocontrast(None)  # to ensure the controls are disabled if necessary
 
     def to_acquisition_mode(self):
         """ This method hides or makes read-only any button or data that should
@@ -748,21 +784,6 @@ class StreamPanel(wx.PyPanel):
         self.row_count += 1
 
         #self._gbs.AddSpacer((5, 5), (self.row_count, 0))
-
-
-
-class StandardStreamPanel(StreamPanel):  # pylint: disable=R0901
-    """ A pre-defined stream panel """
-
-    expander_class = StandardExpander
-
-    def __init__(self, *args, **kwargs):
-        StreamPanel.__init__(self, *args, **kwargs)
-
-
-    def finalize(self):
-        StreamPanel.finalize(self)
-
 
 class DyeStreamPanel(StreamPanel):
     """ A stream panel which can be altered by the user """
@@ -947,6 +968,8 @@ class DyeStreamPanel(StreamPanel):
         colour = wave2rgb(value)
         # logging.debug("Changing colour to %s", colour)
         self._btn_emission.set_colour(colour)
+
+
 
 
 class StreamBar(wx.Panel):

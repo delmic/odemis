@@ -18,8 +18,8 @@ You should have received a copy of the GNU General Public License along with Ode
 #===============================================================================
 
 from odemis import model
-from odemis.gui import instrmodel, util
-from odemis.gui.comp.stream import StandardStreamPanel, CustomStreamPanelEntry
+from odemis.gui import instrmodel, model, util
+from odemis.gui.comp.stream import SecomStreamPanel, DyeStreamPanel
 from odemis.gui.instrmodel import Stream
 from odemis.gui.xmlh import odemis_get_test_resources
 from wx.lib.inspection import InspectionTool
@@ -33,7 +33,7 @@ if os.getcwd().endswith('test'):
     print "Working directory changed to", os.getcwd()
 
 
-class FakeBrightfieldStream(instrmodel.BrightfieldStream):
+class FakeBrightfieldStream(model.stream.BrightfieldStream):
     """
     A fake stream, which receives no data. Only for testing purposes.
     """
@@ -48,7 +48,7 @@ class FakeBrightfieldStream(instrmodel.BrightfieldStream):
         pass
 
 
-class FakeSEMStream(instrmodel.SEMStream):
+class FakeSEMStream(model.stream.SEMStream):
     """
     A fake stream, which receives no data. Only for testing purposes.
     """
@@ -63,7 +63,7 @@ class FakeSEMStream(instrmodel.SEMStream):
         pass
 
 
-class FakeFluoStream(instrmodel.FluoStream):
+class FakeFluoStream(model.stream.FluoStream):
     """
     A fake stream, which receives no data. Only for testing purposes.
     """
@@ -179,7 +179,7 @@ class FoldPanelBarTestCase(unittest.TestCase):
         # Add an editable entry
         wx.MilliSleep(SLEEP_TIME)
         fake_cstream = FakeFluoStream("First Custom Stream")
-        custom_entry = CustomStreamPanelEntry(self.frm.stream_panel,
+        custom_entry = DyeStreamPanel(self.frm.stream_panel,
                                               fake_cstream, livegui)
         self.frm.stream_panel.add_stream(custom_entry)
         loop()
@@ -192,7 +192,7 @@ class FoldPanelBarTestCase(unittest.TestCase):
         # Add a fixed stream
         wx.MilliSleep(SLEEP_TIME)
         fake_fstream1 = FakeSEMStream("First Fixed Stream")
-        fixed_entry = StandardStreamPanel(self.frm.stream_panel,
+        fixed_entry = SecomStreamPanel(self.frm.stream_panel,
                                            fake_fstream1, livegui)
         self.frm.stream_panel.add_stream(fixed_entry)
         loop()
@@ -208,7 +208,7 @@ class FoldPanelBarTestCase(unittest.TestCase):
         # Add a fixed stream
         wx.MilliSleep(SLEEP_TIME)
         fake_fstream2 = FakeSEMStream("Second Fixed Stream")
-        fixed_entry2 = StandardStreamPanel(self.frm.stream_panel,
+        fixed_entry2 = SecomStreamPanel(self.frm.stream_panel,
                                            fake_fstream2, livegui)
         self.frm.stream_panel.add_stream(fixed_entry2)
         loop()
@@ -263,7 +263,7 @@ class FoldPanelBarTestCase(unittest.TestCase):
         # Add a callback/name combo to the add button
         def brightfield_callback():
             fake_stream = FakeBrightfieldStream("Brightfield")
-            fixed_entry = StandardStreamPanel(self.frm.stream_panel,
+            fixed_entry = SecomStreamPanel(self.frm.stream_panel,
                                                 fake_stream, livegui)
             self.frm.stream_panel.add_stream(fixed_entry)
 
@@ -278,7 +278,7 @@ class FoldPanelBarTestCase(unittest.TestCase):
         # Add another callback/name combo to the add button
         def sem_callback():
             fake_stream = FakeSEMStream("SEM:EDT")
-            fixed_entry = StandardStreamPanel(self.frm.stream_panel,
+            fixed_entry = SecomStreamPanel(self.frm.stream_panel,
                                            fake_stream, livegui)
             self.frm.stream_panel.add_stream(fixed_entry)
 
@@ -300,7 +300,7 @@ class FoldPanelBarTestCase(unittest.TestCase):
         # Add another callback/name combo to the add button
         def custom_callback():
             fake_stream = FakeFluoStream("Custom")
-            custom_entry = CustomStreamPanelEntry(self.frm.stream_panel,
+            custom_entry = DyeStreamPanel(self.frm.stream_panel,
                                                  fake_stream, livegui)
             self.frm.stream_panel.add_stream(custom_entry)
 

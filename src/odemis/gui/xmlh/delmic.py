@@ -70,14 +70,14 @@ component.Manager.register(c)
 component.Manager.addXmlHandler(xh_delmic.StreamPanelXmlHandler)
 component.Manager.setMenu(c, 'Delmic', 'Stream Panel', 'StreamBar', 3)
 
-c = component.Container('StandardStreamPanel',
+c = component.Container('SecomStreamPanel',
     ['window', 'top_level', 'control'],
     ['pos', 'size', 'label', 'collapsed'])
 c.setParamClass('collapsed', params.ParamBool)
 c.addEvents('EVT_COMMAND_COLLPANE_CHANGED')
 component.Manager.register(c)
-component.Manager.addXmlHandler(xh_delmic.StandardStreamPanelXmlHandler)
-component.Manager.setMenu(c, 'Delmic', 'Standard Stream', 'StandardStreamPanel', 4)
+component.Manager.addXmlHandler(xh_delmic.SecomStreamPanelXmlHandler)
+component.Manager.setMenu(c, 'Delmic', 'Standard Stream', 'SecomStreamPanel', 4)
 
 c = component.Container('DyeStreamPanel',
     ['window', 'top_level', 'control'],
