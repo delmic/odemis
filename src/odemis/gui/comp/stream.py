@@ -580,7 +580,7 @@ class StreamPanel(wx.PyPanel):
 
 
 
-class SpectroStreamPanel(StreamPanel):
+class SpectrumStreamPanel(StreamPanel):
 
     expander_class = StandardExpander
 

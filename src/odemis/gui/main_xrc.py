@@ -90,6 +90,8 @@ class xrcfr_main(wx.Frame):
         self.fp_settings_sparc_sem = xrc.XRCCTRL(self, "fp_settings_sparc_sem")
         self.fp_settings_sparc_optical = xrc.XRCCTRL(self, "fp_settings_sparc_optical")
         self.fp_settings_sparc_spectro = xrc.XRCCTRL(self, "fp_settings_sparc_spectro")
+        self.lbl_sparc_acq_estimate = xrc.XRCCTRL(self, "lbl_sparc_acq_estimate")
+        self.gauge_sparc_acq = xrc.XRCCTRL(self, "gauge_sparc_acq")
         self.btn_sparc_acquire = xrc.XRCCTRL(self, "btn_sparc_acquire")
         self.pnl_tab_sparc_analysis = xrc.XRCCTRL(self, "pnl_tab_sparc_analysis")
         self.sparc_ana_tool_menu = xrc.XRCCTRL(self, "sparc_ana_tool_menu")
@@ -165,7 +167,7 @@ def __init_resources():
     wx.FileSystem.AddHandler(wx.MemoryFSHandler())
 
     main_xrc = '''\
-<?xml version="1.0" ?><resource class="wxPanel" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
+<?xml version="1.0" ?><resource class="ImageToggleButton" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
   <object class="wxFrame" name="fr_main">
     <object class="wxMenuBar">
       <object class="wxMenu">
@@ -941,6 +943,7 @@ def __init_resources():
                                   <bitmap>img_btn_view_sel_png</bitmap>
                                   <hover>img_btn_view_sel_h_png</hover>
                                   <selected>img_btn_view_sel_a_png</selected>
+                                  <tooltip>Select region of interest</tooltip>
                                   <XRCED>
                                     <assign_var>1</assign_var>
                                   </XRCED>
@@ -1136,6 +1139,41 @@ def __init_resources():
                       <object class="wxBoxSizer">
                         <orient>wxVERTICAL</orient>
                         <object class="sizeritem">
+                          <object class="wxStaticText" name="lbl_sparc_acq_estimate">
+                            <label>Waiting for region of interest...</label>
+                            <fg>#DDDDDD</fg>
+                            <font>
+                              <size>12</size>
+                              <style>normal</style>
+                              <weight>normal</weight>
+                              <underlined>0</underlined>
+                              <family>default</family>
+                              <face>Ubuntu</face>
+                              <encoding>UTF-8</encoding>
+                            </font>
+                            <style>wxALIGN_RIGHT</style>
+                            <XRCED>
+                              <assign_var>1</assign_var>
+                            </XRCED>
+                          </object>
+                          <flag>wxTOP|wxLEFT|wxRIGHT</flag>
+                          <border>12</border>
+                        </object>
+                        <object class="sizeritem">
+                          <object class="wxGauge" name="gauge_sparc_acq">
+                            <size>-1,10</size>
+                            <range>100</range>
+                            <value>0</value>
+                            <bg>#333333</bg>
+                            <style>wxGA_SMOOTH</style>
+                            <XRCED>
+                              <assign_var>1</assign_var>
+                            </XRCED>
+                          </object>
+                          <flag>wxTOP|wxLEFT|wxRIGHT|wxEXPAND</flag>
+                          <border>10</border>
+                        </object>
+                        <object class="sizeritem">
                           <object class="ImageTextButton" name="btn_sparc_acquire">
                             <size>382,-1</size>
                             <label>ACQUIRE IMAGE</label>
@@ -1176,7 +1214,6 @@ def __init_resources():
             </object>
           </object>
           <bg>#333333</bg>
-          <hidden>1</hidden>
           <XRCED>
             <assign_var>1</assign_var>
           </XRCED>

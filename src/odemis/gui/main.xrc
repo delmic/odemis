@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<resource class="wxPanel" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
+<resource class="ImageToggleButton" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
   <object class="wxFrame" name="fr_main">
     <object class="wxMenuBar">
       <object class="wxMenu">
@@ -775,6 +775,7 @@
                                   <bitmap>img/btn_view_sel.png</bitmap>
                                   <hover>img/btn_view_sel_h.png</hover>
                                   <selected>img/btn_view_sel_a.png</selected>
+                                  <tooltip>Select region of interest</tooltip>
                                   <XRCED>
                                     <assign_var>1</assign_var>
                                   </XRCED>
@@ -970,6 +971,41 @@
                       <object class="wxBoxSizer">
                         <orient>wxVERTICAL</orient>
                         <object class="sizeritem">
+                          <object class="wxStaticText" name="lbl_sparc_acq_estimate">
+                            <label>Waiting for region of interest...</label>
+                            <fg>#DDDDDD</fg>
+                            <font>
+                              <size>12</size>
+                              <style>normal</style>
+                              <weight>normal</weight>
+                              <underlined>0</underlined>
+                              <family>default</family>
+                              <face>Ubuntu</face>
+                              <encoding>UTF-8</encoding>
+                            </font>
+                            <style>wxALIGN_RIGHT</style>
+                            <XRCED>
+                              <assign_var>1</assign_var>
+                            </XRCED>
+                          </object>
+                          <flag>wxTOP|wxLEFT|wxRIGHT</flag>
+                          <border>12</border>
+                        </object>
+                        <object class="sizeritem">
+                          <object class="wxGauge" name="gauge_sparc_acq">
+                            <size>-1,10</size>
+                            <range>100</range>
+                            <value>0</value>
+                            <bg>#333333</bg>
+                            <style>wxGA_SMOOTH</style>
+                            <XRCED>
+                              <assign_var>1</assign_var>
+                            </XRCED>
+                          </object>
+                          <flag>wxTOP|wxLEFT|wxRIGHT|wxEXPAND</flag>
+                          <border>10</border>
+                        </object>
+                        <object class="sizeritem">
                           <object class="ImageTextButton" name="btn_sparc_acquire">
                             <size>382,-1</size>
                             <label>ACQUIRE IMAGE</label>
@@ -1010,7 +1046,6 @@
             </object>
           </object>
           <bg>#333333</bg>
-          <hidden>1</hidden>
           <XRCED>
             <assign_var>1</assign_var>
           </XRCED>
