@@ -90,7 +90,11 @@ class OdemisGUIApp(wx.App):
 
         try:
             self.microscope = model.getMicroscope()
-            self.interface_model = instrmodel.MicroscopeModel(self.microscope)
+
+            import pprint
+            pprint.pprint(self.microscope)
+
+            self.interface_model = instrmodel.SecomMicroscopeModel(self.microscope)
         except (IOError, Pyro4.errors.CommunicationError), e:
             logging.exception("Failed to connect to back-end")
             msg = ("The Odemis GUI could not connect to the Odemis back-end:\n\n"
@@ -318,10 +322,10 @@ class OdemisGUIApp(wx.App):
                   }
             # first dim is the wavelength, then Y, X
             specdata = scipy.io.loadmat(name2)["spectraldat"]
-            specdatai = model.DataArray(numpy.array(specdata-specdata.min(), 
+            specdatai = model.DataArray(numpy.array(specdata-specdata.min(),
                                                     dtype=numpy.uint16),
                                         mdspec)
-            
+
             mtc = get_main_tab_controller()
             stream_controller = mtc['sparc_analysis'].stream_controller
 

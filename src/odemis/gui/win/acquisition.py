@@ -177,10 +177,10 @@ class AcquisitionDialog(xrcfr_acq):
 
     def duplicate_interface_model(self, orig):
         """
-        Duplicate a MicroscopeModel and adapt it for the acquisition window
+        Duplicate a SecomMicroscopeModel and adapt it for the acquisition window
         The streams will be shared, but not the views
-        orig (MicroscopeModel)
-        return (MicroscopeModel)
+        orig (SecomMicroscopeModel)
+        return (SecomMicroscopeModel)
         """
         new = copy.copy(orig) # shallow copy
 

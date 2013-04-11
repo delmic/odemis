@@ -56,7 +56,7 @@ class SecomAcquiController(object):
 
     def __init__(self, micgui, main_frame):
         """
-        micgui (MicroscopeModel): the representation of the microscope GUI
+        micgui (SecomMicroscopeModel): the representation of the microscope GUI
         main_frame: (wx.Frame): the frame which contains the 4 viewports
         """
         self._microscope = micgui
@@ -338,7 +338,7 @@ class SparcAcquiController(object):
 
     def __init__(self, micgui, main_frame):
         """
-        micgui (MicroscopeModel): the representation of the microscope GUI
+        micgui (SecomMicroscopeModel): the representation of the microscope GUI
         main_frame: (wx.Frame): the frame which contains the 4 viewports
         """
         self._microscope = micgui

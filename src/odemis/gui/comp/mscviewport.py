@@ -54,7 +54,7 @@ class MicroscopeViewport(wx.Panel):
         wx.Panel.__init__(self, *args, **kwargs)
 
         self._microscope_view = None  # instrmodel.MicroscopeView
-        self._microscope_model = None # instrmodel.MicroscopeModel
+        self._microscope_model = None # instrmodel.SecomMicroscopeModel
 
         # Keep track of this panel's pseudo focus
         self._has_focus = False
@@ -192,7 +192,7 @@ class MicroscopeViewport(wx.Panel):
         *Important*: Should be called only once, at initialisation.
 
         :param microscope_view:(instrmodel.MicroscopeView)
-        :param microscope_model: (instrmodel.MicroscopeModel)
+        :param microscope_model: (instrmodel.SecomMicroscopeModel)
         """
 
         # This is a kind of a kludge, as it'd be best to have the viewport

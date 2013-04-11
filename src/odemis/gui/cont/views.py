@@ -52,7 +52,7 @@ class SecomViewController(object):
 
     def __init__(self, micgui, main_frame):
         """
-        micgui (MicroscopeModel) -- the representation of the microscope GUI
+        micgui (SecomMicroscopeModel) -- the representation of the microscope GUI
         main_frame: (wx.Frame) -- the frame which contains the 4 viewports
         """
 
@@ -233,7 +233,7 @@ class ViewSelector(object):
 
     def __init__(self, micgui, main_frame):
         """
-        micgui (MicroscopeModel): the representation of the microscope GUI
+        micgui (SecomMicroscopeModel): the representation of the microscope GUI
         main_frame: (wx.Frame): the frame which contains the 4 viewports
         """
         self._microscope_gui = micgui
@@ -292,7 +292,7 @@ class ViewSelector(object):
             self._subscriptions.append(onName)
 
         # Select the overview by default
-        # Fixme: should be related to the layout in MicroscopeModel and/or the
+        # Fixme: should be related to the layout in SecomMicroscopeModel and/or the
         # focussed viewport. ('None' selects the overview button)
         self.toggleButtonForView(None)
 

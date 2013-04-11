@@ -86,7 +86,7 @@ class FakeFluoStream(model.stream.FluoStream):
 
 class FakeMicroscopeGUI(object):
     """
-    Imitates a MicroscopeModel wrt stream entry: it just needs a focussedView
+    Imitates a SecomMicroscopeModel wrt stream entry: it just needs a focussedView
     """
     def __init__(self):
         fview = instrmodel.MicroscopeView("fakeview")

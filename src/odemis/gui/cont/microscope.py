@@ -30,7 +30,7 @@ class MicroscopeController(object):
     """
     def __init__(self, interface_model, main_frame):
         """
-        interface_model: MicroscopeModel
+        interface_model: SecomMicroscopeModel
         main_frame: (wx.Frame): the frame which contains the 4 viewports
         """
         self.interface_model = interface_model

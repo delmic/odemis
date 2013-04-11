@@ -41,7 +41,7 @@ VIEW_LAYOUT_ONE = 0 # one big view
 VIEW_LAYOUT_22 = 1 # 2x2 layout
 VIEW_LAYOUT_FULLSCREEN = 2 # Fullscreen view (not yet supported)
 
-class MicroscopeModel(object):
+class SparcMicroscopeModel(object):
     """ Represent a microscope directly for a graphical user interface.
 
     Provides direct reference to the HwComponents.
@@ -115,7 +115,7 @@ class MicroscopeModel(object):
 
         # MicroscopeViews available, (handled by SecomViewController)
         # The SecomViewController cares about position (top left, etc),
-        # MicroscopeModel cares about what's what.
+        # SecomMicroscopeModel cares about what's what.
         self.views = {
             "sem_view": None,
             "opt_view": None,
@@ -232,6 +232,196 @@ class MicroscopeModel(object):
                     # Too bad. let's just do nothing then (and hope it's on)
                     logging.debug("Ebeam doesn't support setting energy")
 
+class SecomMicroscopeModel(object):
+    """ Represent a microscope directly for a graphical user interface.
+
+    Provides direct reference to the HwComponents.
+    """
+
+    def __init__(self, microscope):
+        """
+        microscope (model.Microscope): the root of the HwComponent tree provided
+            by the back-end
+        """
+        self.microscope = microscope
+
+        # These are either HwComponents or None (if not available)
+        self.ccd = None
+        self.stage = None
+        self.focus = None # actuator to change the camera focus
+        self.light = None
+        self.light_filter = None # emission light filter for fluorescence micro.
+        self.ebeam = None
+        self.sed = None # secondary electron detector
+        self.bsd = None # back-scatter electron detector
+
+        for d in microscope.detectors:
+            if d.role == "ccd":
+                self.ccd = d
+            elif d.role == "se-detector":
+                self.sed = d
+            elif d.role == "bs-detector":
+                self.bsd = d
+        if not self.ccd and not self.sed and not self.bsd:
+            msg = "no camera nor electron detector found in the microscope"
+            raise Exception(msg)
+
+        for a in microscope.actuators:
+            if a.role == "stage":
+                self.stage = a
+                # TODO: viewports should subscribe to the stage
+            elif a.role == "focus":
+                self.focus = a
+        if not self.stage and microscope.role == "secom":
+            raise Exception("no stage found in the microscope")
+
+        # it's not an error to not have focus
+        if not self.focus:
+            logging.info("No focus actuator found for the microscope")
+
+        for e in microscope.emitters:
+            if e.role == "light":
+                self.light = e
+                # pick a nice value to turn on the light
+                if self.light.power.value > 0:
+                    self._light_power_on = self.light.power.value
+                else:
+                    try:
+                        self._light_power_on = max(self.light.power.range)
+                    except (AttributeError, model.NotApplicableError):
+                        try:
+                            self._light_power_on = max(self.light.power.choices)
+                        except (AttributeError, model.NotApplicableError):
+                            self._light_power_on = 1
+                            logging.warning("Unknown light power value")
+            elif e.role == "filter":
+                self.light_filter = e
+            elif e.role == "e-beam":
+                self.ebeam = e
+
+        if not self.light and not self.ebeam:
+            raise Exception("No emitter found in the microscope")
+
+        self.streams = set() # Streams available (handled by SecomStreamController)
+
+        # MicroscopeViews available, (handled by SecomViewController)
+        # The SecomViewController cares about position (top left, etc),
+        # SecomMicroscopeModel cares about what's what.
+        self.views = {
+            "sem_view": None,
+            "opt_view": None,
+            "combo1_view": None,
+            "combo2_view": None,
+        }
+
+        # The MicroscopeView currently focused
+        self.focussedView = VigilantAttribute(None)
+
+        layouts = set([VIEW_LAYOUT_ONE, VIEW_LAYOUT_22, VIEW_LAYOUT_FULLSCREEN])
+        hw_states = set([STATE_OFF, STATE_ON, STATE_PAUSE])
+
+        self.viewLayout = model.IntEnumerated(VIEW_LAYOUT_22, choices=layouts)
+
+        self.opticalState = model.IntEnumerated(STATE_OFF, choices=hw_states)
+        self.opticalState.subscribe(self.onOpticalState)
+
+        self.emState = model.IntEnumerated(STATE_OFF, choices=hw_states)
+        self.emState.subscribe(self.onEMState)
+
+    # Getters and Setters
+
+    @property
+    def optical_view(self):
+        return self.views["opt_view"]
+
+    @optical_view.setter #pylint: disable=E1101
+    def optical_view(self, value): #pylint: disable=E0102
+        self.views["opt_view"] = value
+
+    @property
+    def sem_view(self):
+        return self.views["sem_view"]
+
+    @sem_view.setter #pylint: disable=E1101
+    def sem_view(self, value): #pylint: disable=E0102
+        self.views["sem_view"] = value
+
+    @property
+    def combo1_view(self):
+        return self.views["combo1_view"]
+
+    @combo1_view.setter #pylint: disable=E1101
+    def combo1_view(self, value): #pylint: disable=E0102
+        self.views["combo1_view"] = value
+
+    @property
+    def combo2_view(self):
+        return self.views["combo2_view"]
+
+    @combo2_view.setter #pylint: disable=E1101
+    def combo2_view(self, value): #pylint: disable=E0102
+        self.views["combo2_view"] = value
+
+    def stopMotion(self):
+        """ Immediately stops all movement on all axis """
+        self.stage.stop()
+        self.focus.stop()
+        logging.info("Stopped motion on all axes")
+
+    def onOpticalState(self, state):
+        """ Event handler for when the state of the optical microscope changes
+        """
+        # only called when it changes
+
+        if state in (STATE_OFF, STATE_PAUSE):
+            # Turn off the optical path. All the streams using it should be
+            # already deactivated.
+            if self.light:
+                if self.light.power.value > 0:
+                    # save the value only if it makes sense
+                    self._light_power_on = self.light.power.value
+                self.light.power.value = 0
+        elif state == STATE_ON:
+            # the image acquisition from the camera is handled solely by the
+            # streams
+            if self.light:
+                self.light.power.value = self._light_power_on
+
+    def onEMState(self, state):
+        """ Event handler for when the state of the electron microscope changes
+        """
+        if state == STATE_OFF:
+            # TODO: actually turn off the ebeam and detector
+            if self.ebeam:
+                try:
+                    # TODO save the previous value
+                    # blank the ebeam
+                    self.ebeam.energy.value = 0
+                except VA_EXCEPTIONS:
+                    # Too bad. let's just do nothing then.
+                    logging.debug("Ebeam doesn't support setting energy to 0")
+        elif state == STATE_PAUSE:
+            if self.ebeam:
+                try:
+                    # TODO save the previous value
+                    # blank the ebeam
+                    self.ebeam.energy.value = 0
+                except VA_EXCEPTIONS:
+                    # Too bad. let's just do nothing then.
+                    logging.debug("Ebeam doesn't support setting energy to 0")
+
+        elif state == STATE_ON:
+            # TODO anything else to turn on?
+            if self.ebeam:
+                try:
+                    # TODO use the previous value
+                    if hasattr(self.ebeam.energ, "choice"):
+                        if isinstance(self.ebeam.energy.choices,
+                                      collections.Iterable):
+                            self.ebeam.energy.value = self.ebeam.energy.choices[1]
+                except VA_EXCEPTIONS:
+                    # Too bad. let's just do nothing then (and hope it's on)
+                    logging.debug("Ebeam doesn't support setting energy")
 
 class MicroscopeView(object):
     """ Represents a view from a microscope and ways to alter it.
@@ -274,7 +464,7 @@ class MicroscopeView(object):
 
             # the current center of the view, which might be different from
             # the stage
-            # TODO: we might need to have it on the MicroscopeModel, if all the
+            # TODO: we might need to have it on the SecomMicroscopeModel, if all the
             # viewports must display the same location
             pos = self.stage_pos.value
             view_pos_init = (pos["x"], pos["y"])
