@@ -38,6 +38,7 @@ import odemis.gui.comp.text as text
 import odemis.gui.img.data as img
 import odemis.gui.util.units as utun
 
+import odemis.gui.model
 from odemis.model import getVAs, NotApplicableError, VigilantAttributeBase
 from odemis.gui.comp.foldpanelbar import FoldPanelItem
 from odemis.gui.comp.radio import GraphicalRadioButtonControl
@@ -144,8 +145,10 @@ class SettingsPanel(object):
     """
 
     def __init__(self, fold_panel, default_msg, highlight_change=False):
+
+        assert isinstance(fold_panel, FoldPanelItem)
+
         self.fold_panel = fold_panel
-        assert isinstance(self.fold_panel, FoldPanelItem)
 
         self.panel = wx.Panel(self.fold_panel)
 
@@ -296,13 +299,25 @@ class SettingsPanel(object):
         ne = SettingEntry(name=label, label=lbl_ctrl, ctrl=value_ctrl)
         self.entries.append(ne)
 
+    def add_divider(self):
+        line = wx.StaticLine(self.panel, size=(-1, 1))
+        self._gb_sizer.Add(
+                line,
+                (self.num_entries, 0),
+                span=(1, 2),
+                flag=wx.ALL|wx.EXPAND,
+                border=5
+        )
+        self.num_entries += 1
+
+
     def add_value(self, name, vigil_attr, comp, conf=None):
         """ Add a name/value pair to the settings panel.
 
-        name (string): name of the value
-        vigil_attr (VigilantAttribute)
-        comp (Component): the component that contains this VigilantAttribute
-        conf {dict}: Configuration items that may override default settings
+        :param name: (string): name of the value
+        :param vigil_attr: (VigilantAttribute)
+        :param comp: (Component): the component that contains this VigilantAttribute
+        :pram conf: ({}): Configuration items that may override default settings
         """
         assert isinstance(vigil_attr, VigilantAttributeBase)
 
@@ -630,10 +645,14 @@ class SettingsBarController(object):
             msg = "Error adding %s setting for: %s"
             logging.exception(msg, comp.name, name)
 
+    def add_stream(self, stream):
+        pass
+
+
 class SecomSettingsController(SettingsBarController):
 
-    def __init__(self, interface_model, parent_frame, highlight_change=False):
-        super(SecomSettingsController, self).__init__(interface_model,
+    def __init__(self, parent_frame, microscope_model, highlight_change=False):
+        super(SecomSettingsController, self).__init__(microscope_model,
                                                       highlight_change)
 
         self._sem_panel = SemSettingsPanel(
@@ -647,17 +666,18 @@ class SecomSettingsController(SettingsBarController):
                                     highlight_change)
 
         # Query Odemis daemon (Should move this to separate thread)
-        if interface_model.ccd:
-            self.add_component("Camera", interface_model.ccd, self._optical_panel)
+        if microscope_model.ccd:
+            self.add_component("Camera", microscope_model.ccd, self._optical_panel)
         # TODO allow to change light.power
 
-        if interface_model.ebeam:
-            self.add_component("SEM", interface_model.ebeam, self._sem_panel )
+        if microscope_model.ebeam:
+            self.add_component("SEM", microscope_model.ebeam, self._sem_panel )
+
 
 class SparcSettingsController(SettingsBarController):
 
-    def __init__(self, interface_model, parent_frame, highlight_change=False):
-        super(SparcSettingsController, self).__init__(interface_model,
+    def __init__(self, parent_frame, microscope_model, highlight_change=False):
+        super(SparcSettingsController, self).__init__(microscope_model,
                                                       highlight_change)
 
         self._sem_panel = SemSettingsPanel(
@@ -675,24 +695,46 @@ class SparcSettingsController(SettingsBarController):
                                     "No spectrometer found",
                                     highlight_change)
 
-
-        if interface_model.ccd:
+        if microscope_model.ccd:
             self.add_component(
                     "Angular Camera",
-                    interface_model.ccd,
+                    microscope_model.ccd,
                     self._angular_panel
             )
 
-        if interface_model.ebeam:
+        if microscope_model.ebeam:
             self.add_component(
                     "SEM",
-                    interface_model.ebeam,
+                    microscope_model.ebeam,
                     self._sem_panel
             )
 
-        if interface_model.spectrometer:
+        if microscope_model.spectrometer:
             self.add_component(
                     "Spectrometer",
-                    interface_model.spectrometer,
+                    microscope_model.spectrometer,
                     self._spectrum_panel
             )
+
+
+            # Here Stream can be added manunally
+            self._spectrum_panel.add_divider()
+
+            self._spectrum_stream = odemis.gui.model.stream.SpectrumStream(
+                                        "Spectrum",
+                                        microscope_model.spectrometer,
+                                        microscope_model.spectrometer.data,
+                                        microscope_model.ebeam)
+
+            self._spectrum_panel.add_value(
+                    "repetition",
+                    self._spectrum_stream.repetition,
+                    None,  #component
+                    CONFIG["spectrometer"]["repetition"])
+
+            # Added for debug only
+            self._spectrum_panel.add_value(
+                    "roi (debug)",
+                    self._spectrum_stream.roi,
+                    None,  #component
+                    CONFIG["spectrometer"]["roi"])

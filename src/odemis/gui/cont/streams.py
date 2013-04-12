@@ -60,6 +60,7 @@ class StreamController(object):
         stream_bar (StreamBar): an empty stream panel
         """
         self.microscope = microscope_model
+
         self._stream_bar = stream_bar
         self.setMicroscope(self.microscope)
         self._scheduler_subscriptions = {} # stream -> callable
@@ -158,7 +159,7 @@ class StreamController(object):
     def addSpectrumStream(self):
         """ Method not needed/used """
         stream = model.stream.SpectrumStream(
-                    "Spectrum",
+                    "Spectrometer",
                     self.microscope.spccd,
                     self.microscope.spccd.data,
                     self.microscope.ebeam)

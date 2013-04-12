@@ -155,5 +155,26 @@ CONFIG = {
                 {
                     "control_type": odemis.gui.CONTROL_TEXT,
                 },
+            },
+            "spectrometer":
+            {
+                "readoutRate":
+                {
+                    "control_type": odemis.gui.CONTROL_INT,
+                },
+                "pixelSize":
+                {
+                    "control_type": odemis.gui.CONTROL_TEXT,
+                },
+                # For testing purposes only, roi must be hidding in production
+                "roi":
+                {
+                    "control_type": odemis.gui.CONTROL_TEXT,
+                },
+                "repetition":
+                {
+                    "control_type": odemis.gui.CONTROL_COMBO,
+                    "choices": _resolution_from_range,
+                },
             }
         }

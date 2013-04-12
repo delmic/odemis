@@ -336,7 +336,7 @@ class SparcAcquiController(object):
     """ Acquisition controller for the Sparc platform
     """
 
-    def __init__(self, micgui, main_frame):
+    def __init__(self, main_frame, micgui):
         """
         micgui (MicroscopeModel): the representation of the microscope GUI
         main_frame: (wx.Frame): the frame which contains the 4 viewports
@@ -371,8 +371,8 @@ class SparcAcquiController(object):
 
         pub.subscribe(self.on_selection_changed, 'sparc.acq.selection.changed')
 
-    def on_selection_changed(self, selection_present):
-        self._main_frame.btn_sparc_acquire.Enable(selection_present)
+    def on_selection_changed(self, selection):
+        self._main_frame.btn_sparc_acquire.Enable(selection is not None)
 
     def on_acquisition(self, evt):
         print "Acquisition Commentcing"
