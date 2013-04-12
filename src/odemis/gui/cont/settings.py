@@ -573,6 +573,12 @@ class SemSettingsPanel(SettingsPanel):
 class OpticalSettingsPanel(SettingsPanel):
     pass
 
+class AngularSettingsPanel(SettingsPanel):
+    pass
+
+class SpectrumSettingsPanel(SettingsPanel):
+    pass
+
 class SettingsBarController(object):
     """ The main controller class for the settings panel in the live view and
     acquisition frame.
@@ -583,9 +589,6 @@ class SettingsBarController(object):
 
     def __init__(self, interface_model, parent_frame, highlight_change=False):
         self._interface_model = interface_model
-
-        self._sem_panel = []
-        self._optical_panel = []
         self.settings_panels = []
 
 
@@ -602,46 +605,30 @@ class SettingsBarController(object):
     @property
     def entries(self):
         """
-        All the setting entries of all the panels
+        A list of all the setting entries of all the panels
         """
         entries = []
         for panel in self.settings_panels:
             entries.extend(panel.entries)
         return entries
 
-    def add_ccd(self, comp):
-        #pylint: disable=E1101
-        if isinstance(self._optical_panel, OpticalSettingsPanel):
-            try:
-                self._optical_panel.add_label("Camera", comp.name)
-                vigil_attrs = getVAs(comp)
-                for name, value in vigil_attrs.items():
-                    if comp.role in CONFIG and name in CONFIG[comp.role]:
-                        conf = CONFIG[comp.role][name]
-                    else:
-                        logging.warn("No config found for %s: %s", comp.role, name)
-                        conf = None
-                    self._optical_panel.add_value(name, value, comp, conf)
-            except TypeError:
-                msg = "Error adding ccd setting for: %s"
-                logging.exception(msg, name)
+    def add_component(self, label, comp, panel):
 
-    def add_ebeam(self, comp):
-        #pylint: disable=E1101
-        if isinstance(self._sem_panel, SemSettingsPanel):
-            try:
-                self._sem_panel.add_label("SEM", comp.name)
-                vigil_attrs = getVAs(comp)
-                for name, value in vigil_attrs.items():
-                    if comp.role in CONFIG and name in CONFIG[comp.role]:
-                        conf = CONFIG[comp.role][name]
-                    else:
-                        logging.warn("No config found for %s: %s", comp.role, name)
-                        conf = None
-                    self._sem_panel.add_value(name, value, comp, conf)
-            except TypeError:
-                msg = "Error adding ebeam setting for: %s"
-                logging.exception(msg, name)
+        self.settings_panels.append(panel)
+
+        try:
+            panel.add_label(label, comp.name)
+            vigil_attrs = getVAs(comp)
+            for name, value in vigil_attrs.items():
+                if comp.role in CONFIG and name in CONFIG[comp.role]:
+                    conf = CONFIG[comp.role][name]
+                else:
+                    logging.warn("No config found for %s: %s", comp.role, name)
+                    conf = None
+                panel.add_value(name, value, comp, conf)
+        except TypeError:
+            msg = "Error adding %s setting for: %s"
+            logging.exception(msg, comp.name, name)
 
 class SecomSettingsController(SettingsBarController):
 
@@ -659,15 +646,13 @@ class SecomSettingsController(SettingsBarController):
                                     "No optical microscope found",
                                     highlight_change)
 
-        self.settings_panels = [self._sem_panel, self._optical_panel]
-
         # Query Odemis daemon (Should move this to separate thread)
         if interface_model.ccd:
-            self.add_ccd(interface_model.ccd)
+            self.add_component("Camera", interface_model.ccd, self._optical_panel)
         # TODO allow to change light.power
 
         if interface_model.ebeam:
-            self.add_ebeam(interface_model.ebeam)
+            self.add_component("SEM", interface_model.ebeam, self._sem_panel )
 
 class SparcSettingsController(SettingsBarController):
 
@@ -680,18 +665,34 @@ class SparcSettingsController(SettingsBarController):
                                     "No SEM found",
                                     highlight_change)
 
-        self._optical_panel = OpticalSettingsPanel(
-                                    parent_frame.fp_settings_sparc_optical,
-                                    "No optical microscope found",
+        self._angular_panel = AngularSettingsPanel(
+                                    parent_frame.fp_settings_sparc_angular,
+                                    "No angular camera found",
                                     highlight_change)
 
-        self.settings_panels = [self._sem_panel]
+        self._spectrum_panel = SpectrumSettingsPanel(
+                                    parent_frame.fp_settings_sparc_spectrum,
+                                    "No spectrometer found",
+                                    highlight_change)
 
-        # Query Odemis daemon (Should move this to separate thread)
+
         if interface_model.ccd:
-            self.add_ccd(interface_model.ccd)
-        # TODO allow to change light.power
+            self.add_component(
+                    "Angular Camera",
+                    interface_model.ccd,
+                    self._angular_panel
+            )
 
         if interface_model.ebeam:
-            self.add_ebeam(interface_model.ebeam)
+            self.add_component(
+                    "SEM",
+                    interface_model.ebeam,
+                    self._sem_panel
+            )
 
+        if interface_model.spectrometer:
+            self.add_component(
+                    "Spectrometer",
+                    interface_model.spectrometer,
+                    self._spectrum_panel
+            )

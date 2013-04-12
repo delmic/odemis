@@ -47,78 +47,7 @@ from odemis.gui.instrmodel import STATE_OFF, STATE_PAUSE, STATE_ON
 # the stream panels directly update the VA's
 
 
-class SparcStreamController(object):
-
-    def __init__(self, microscope_model, stream_bar):
-        """
-        microscope_model (SecomMicroscopeModel): the representation of the microscope
-                Model
-        stream_bar (StreamBar): an empty stream panel
-        """
-        self.microscope = microscope_model
-        self._stream_bar = stream_bar
-
-    def add_spectrum_stream(self):
-        """
-        Creates a new SED stream and panel in the stream bar
-        returns (StreamPanel): the panel created
-        """
-        stream = model.stream.SEMStream(
-                                "SEM",
-                                self.microscope.sed,
-                                self.microscope.sed.data,
-                                self.microscope.ebeam)
-
-        return self._add_stream(stream, comp.stream.SecomStreamPanel)
-
-    def _add_stream(self, stream_mod, stream_panel_cls):
-        """
-        Adds a stream.
-
-        stream (Stream): the new stream to add
-        spanel_cls (class): the type of stream panel to create
-        add_to_all_views (boolean): if True, add the stream to all the compatible
-          views, otherwise add only to the current view
-        returns the StreamPanel of subclass 'spanel_cls' that was created
-        """
-        self.microscope.streams.add(stream_mod)
-        if add_to_all_views:
-            for v in self.microscope.views.values():
-                if isinstance(stream, v.stream_classes):
-                    v.addStream(stream)
-        else:
-            v = self.microscope.focussedView.value
-            if isinstance(stream, v.stream_classes):
-                logging.warning("Adding stream incompatible with the current view")
-            v.addStream(stream)
-
-        # TODO create a StreamScheduler
-        # call it like self._scheduler.addStream(stream)
-        # create an adapted subscriber for the scheduler
-        def detectUpdate(updated):
-            self._onStreamUpdate(stream, updated)
-
-        self._scheduler_subscriptions[stream] = detectUpdate
-        stream.should_update.subscribe(detectUpdate)
-
-        # show the stream right now
-        stream.should_update.value = True
-
-        spanel = spanel_cls(self._stream_bar, stream, self.microscope)
-
-        show = isinstance(spanel.stream,
-                          self._microscope.focussedView.value.stream_classes)
-        self._stream_bar.add_stream(spanel, show)
-
-        logging.debug("Sending stream.ctrl.added message")
-        pub.sendMessage('stream.ctrl.added',
-                        streams_present=True,
-                        streams_visible=self._has_visible_streams())
-
-        return spanel
-
-
-class SecomStreamController(object):
+class StreamController(object):
     """
     Manages the insertion/suppression of streams (with their corresponding
     stream panels in the stream bar), and the de/activation of the
@@ -127,7 +56,7 @@ class SecomStreamController(object):
 
     def __init__(self, microscope_model, stream_bar):
         """
-        microscope_model (SecomMicroscopeModel): the representation of the microscope Model
+        microscope_model (MicroscopeModel): the representation of the microscope Model
         stream_bar (StreamBar): an empty stream panel
         """
         self.microscope = microscope_model
@@ -225,6 +154,15 @@ class SecomStreamController(object):
                   self.microscope.sed, self.microscope.sed.data,
                   self.microscope.ebeam)
         return self._addStream(stream, comp.stream.SecomStreamPanel, add_to_all_views)
+
+    def addSpectrumStream(self):
+        """ Method not needed/used """
+        stream = model.stream.SpectrumStream(
+                    "Spectrum",
+                    self.microscope.spccd,
+                    self.microscope.spccd.data,
+                    self.microscope.ebeam)
+        return self._addStream(stream, comp.stream.SparcAcquiStreamPanel)
 
     def addStatic(self, name, image, cls=model.stream.StaticStream, add_to_all_views=False, ):
         """

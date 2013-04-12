@@ -30,8 +30,8 @@ import wx
 from odemis.gui.cont.acquisition import SecomAcquiController, SparcAcquiController
 from odemis.gui.cont.microscope import MicroscopeController
 from odemis.gui.cont import settings
-from odemis.gui.cont.streams import SecomStreamController
-from odemis.gui.cont.views import SecomViewController, ViewSelector
+from odemis.gui.cont.streams import StreamController
+from odemis.gui.cont.views import ViewController, ViewSelector
 
 main_tab_controller = None
 
@@ -94,12 +94,12 @@ class SecomStreamsTab(Tab):
 
         # Order matters!
         # First we create the views, then the streams
-        self._view_controller = SecomViewController(
+        self._view_controller = ViewController(
                                     self.interface_model,
                                     self.main_frame
                                 )
 
-        self._stream_controller = SecomStreamController(
+        self._stream_controller = StreamController(
                                         self.interface_model,
                                         self.main_frame.pnl_secom_streams
                                   )

@@ -43,8 +43,8 @@ from odemis.gui.comp.buttons import ImageButton, ImageToggleButton
 # from odemis.gui.cont.acquisition import SecomAcquiController
 # from odemis.gui.cont.microscope import MicroscopeController
 # from odemis.gui.cont import settings
-# from odemis.gui.cont.streams import SecomStreamController
-# from odemis.gui.cont.views import SecomViewController, ViewSelector
+# from odemis.gui.cont.streams import StreamController
+# from odemis.gui.cont.views import ViewController, ViewSelector
 
 class ToolMenu(wx.Panel):
     """ Tool Menu base class responsible for the general buttons states """
