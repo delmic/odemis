@@ -332,7 +332,7 @@ class StreamPanel(wx.PyPanel):
                  collapsed=True):
         """
         stream (Stream): the data model to be displayed (and modified by the user)
-        microscope_model (SecomMicroscopeModel): the microscope GUI, where there is
+        microscope_model (MicroscopeModel): the microscope GUI, where there is
                          focussedView
         """
 
@@ -580,7 +580,7 @@ class StreamPanel(wx.PyPanel):
 
 
 
-class SpectrumStreamPanel(StreamPanel):
+class SparcAcquiStreamPanel(StreamPanel):
 
     expander_class = StandardExpander
 
@@ -1000,7 +1000,7 @@ class StreamBar(wx.Panel):
 
         wx.Panel.__init__(self, *args, **kwargs)
 
-        self._microscope = None # SecomMicroscopeModel
+        self._microscope = None # MicroscopeModel
 
         self.stream_panels = []
         self.menu_actions = collections.OrderedDict()  # title => callback

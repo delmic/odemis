@@ -29,14 +29,19 @@ Detector, Emiter and Dataflow associations.
 """
 
 from __future__ import division
+
+import logging
+import inspect
+
+import numpy
 from numpy.polynomial import polynomial
+from wx.lib.pubsub import pub
+
 from odemis import model
 from odemis.gui import util
+from odemis.model import VigilantAttribute, VigilantAttributeBase, \
+    MD_POS, MD_PIXEL_SIZE, MD_SENSOR_PIXEL_SIZE, MD_WL_POLYNOMIAL
 from odemis.gui.model.img import InstrumentalImage
-from odemis.model import VigilantAttribute, MD_POS, MD_PIXEL_SIZE, \
-    MD_SENSOR_PIXEL_SIZE, MD_WL_POLYNOMIAL
-import logging
-import numpy
 
 
 
@@ -228,6 +233,15 @@ class Stream(object):
             self.raw.pop()
         self.raw.insert(0, data)
         self._updateImage()
+
+    def show_vigilant_attributes(self):
+        vas = inspect.getmembers(
+                    self,
+                    lambda x: isinstance(x, VigilantAttributeBase)
+        )
+
+        print vas
+
 
 
 class SEMStream(Stream):
@@ -499,7 +513,7 @@ class SpectrumStream(Stream):
     not be used for live view. So it has no .image (for now).
     See StaticSpectrumStream for displaying a stream.
     """
-    
+
     def __init__(self, name, detector, dataflow, emitter):
         self.name = model.StringVA(name)
 
@@ -508,17 +522,18 @@ class SpectrumStream(Stream):
         self._emitter = emitter # the e-beam
         # To acquire simultaneously other detector (ex: SEM secondary electrons)
         # a separate stream must be used, and the acquisition manager will take
-        # care of doing both at the same time 
-         
+        # care of doing both at the same time
+
         # data-flow of the spectrometer
         self._dataflow = dataflow
-        
-        # all the information needed to acquire an image (in addition to the 
+
+        # all the information needed to acquire an image (in addition to the
         # hardware component settings which can be directly set).
-        
-        # Region of interest as left, top, right, bottom (in ratio from the 
+
+        self._default_roi = (0, 0, 1, 1)
+        # Region of interest as left, top, right, bottom (in ratio from the
         # whole area of the emitter => between 0 and 1)
-        self.roi = model.TupleContinuous((0, 0, 1, 1), 
+        self.roi = model.TupleContinuous(self._default_roi,
                                          range=[(0, 0, 0, 0), (1, 1, 1, 1)],
                                          cls=(int, long, float))
         # the number of pixels acquired in each dimension
@@ -527,10 +542,18 @@ class SpectrumStream(Stream):
         # the stream).
         self.repetition = model.ResolutionVA(emitter.resolution.value,
                                              emitter.resolution.range)
-        
+
         # exposure time of each pixel is the exposure time of the detector,
         # the dwell time of the emitter will be adapted before acquisition.
-        
+
+        pub.subscribe(self.on_selection_changed, 'sparc.acq.selection.changed')
+
+    def on_selection_changed(self, selection):
+
+        # START HERE
+        self.roi.value = selection or self._default_roi
+
+
     def estimateAcquisitionTime(self):
         try:
             res = list(self.repetition.value)
@@ -542,12 +565,12 @@ class SpectrumStream(Stream):
             else:
                 logging.warning(("Resolution of scanner is not 2 dimensional, "
                                  "time estimation might be wrong"))
-            
+
             # Each pixel x the exposure time (of the detector) + readout time + 10% overhead
             exp = self._detector.exposureTime.value
             try:
                 ro_rate = self._detector.readoutRate.value
-                readout = numpy.prod(self._detector.resolution.value) / ro_rate 
+                readout = numpy.prod(self._detector.resolution.value) / ro_rate
             except:
                 readout = 0
             duration = (exp + readout) * numpy.prod(res) * 1.10
@@ -570,7 +593,7 @@ class StaticStream(Stream):
     def __init__(self, name, image):
         """
         Note: parameters are different from the base class.
-        image (InstrumentalImage or DataArray): image to display or raw data. 
+        image (InstrumentalImage or DataArray): image to display or raw data.
           If it is a DataArray, the metadata should contain at least MD_POS and
           MD_PIXEL_SIZE.
         """
@@ -588,9 +611,9 @@ class StaticStream(Stream):
                 if minv < 0:  # signed?
                     self._depth += -minv
                     # FIXME: probably need to fix DataArray2wxImage() for such cases
-                
+
             self.onNewImage(None, image)
-            
+
     def onActive(self, active):
         # don't do anything
         pass
@@ -613,7 +636,7 @@ class StaticSpectrumStream(StaticStream):
     The main difference from the normal streams is that the data is 3D (a cube)
     The metadata should have a MD_WL_POLYNOMIAL
     Note that the data received should be of the (numpy) shape CYX. (where YX might be missing)
-    When saving, the data will be converted to CTZYX (where TZ is 11)  
+    When saving, the data will be converted to CTZYX (where TZ is 11)
     """
     def __init__(self, name, image):
         # Spectrum stream has in addition to normal stream:
@@ -621,7 +644,7 @@ class StaticSpectrumStream(StaticStream):
         #  * information about the current bandwidth displayed (avg. spectrum)
         #  * coordinates of 1st point (1-point, line)
         #  * coordinates of 2nd point (line)
-        
+
         # default to showing all the data
         if isinstance(image, InstrumentalImage):
             minb, maxb = 0, 1 # unknown/unused
@@ -630,13 +653,13 @@ class StaticSpectrumStream(StaticStream):
             pn = image.metadata[MD_WL_POLYNOMIAL]
             minb = polynomial.polyval(0, pn)
             maxb = polynomial.polyval(image.shape[0]-1, pn)
-        
+
         # TODO: get rid of this, if not necessary
-#        self.bandwidth = model.BandwidthVA((minb, maxb), 
+#        self.bandwidth = model.BandwidthVA((minb, maxb),
 #                                           range=((minb, minb), (maxb, maxb)),
 #                                           unit="m")
-#        
-        
+#
+
         # VAs: center wavelength + bandwidth (=center + width)
         # they might represent wavelength out of the possible values, but they
         # will automatically be clipped to fine values
@@ -649,19 +672,19 @@ class StaticSpectrumStream(StaticStream):
                                                unit="m")
         # TODO: how to export the average spectrum of the whole image (for the
         # bandwidth selector)? a separate method?
-        
+
         # TODO: min/max: tl and br points of the image in physical coordinates
         # TODO: also need the size of a point (and density?)
 #        self.point1 = model.ResolutionVA(unit="m") # FIXME: float
 #        self.point2 = model.ResolutionVA(unit="m") # FIXME: float
-        
 
-        self.projection = model.IntEnumerated(PROJ_AVERAGE_SPECTRUM, 
+
+        self.projection = model.IntEnumerated(PROJ_AVERAGE_SPECTRUM,
           choices=set([PROJ_ONE_POINT, PROJ_ALONG_LINE, PROJ_AVERAGE_SPECTRUM]))
-        
+
         # this will call _updateImage(), which needs bandwidth
         StaticStream.__init__(self, name, image)
-        
+
         # TODO: to convert to final raw data: raw = raw[:,numpy.newaxis,numpy.newaxis,:,:]
 
     def _get_bandwith_in_pixel(self):
@@ -674,8 +697,8 @@ class StaticSpectrumStream(StaticStream):
         low = center - width / 2
         high = center + width / 2
         # no need to clip, because searchsorted will do it anyway
-        
-        # In theory it's a very complex question because you need to find the 
+
+        # In theory it's a very complex question because you need to find the
         # solution for the polynomial at the bandwidth borders. In reality, the
         # world constraints help a lot: the polynomial is monotonic in the range
         # observed. In addition, the degree of the polynomial is very small (<5).
@@ -683,31 +706,31 @@ class StaticSpectrumStream(StaticStream):
         # So an easy way is to just compute the polynomial for each pixel on the
         # spectrum axis and take the closest ones (with the adapted rounding).
         data = self.raw[0]
-        pn = polynomial.Polynomial(data.metadata[MD_WL_POLYNOMIAL], 
+        pn = polynomial.Polynomial(data.metadata[MD_WL_POLYNOMIAL],
                                    domain=[0, data.shape[0]-1])
         n, px_values = pn.linspace(data.shape[0]) # TODO: cache it, as the polynomial is rarely updated!
-        
+
         low_px = numpy.searchsorted(px_values, low, side="left")
         if high == low:
             high_px = low_px
         else:
             high_px = numpy.searchsorted(px_values, high, side="right")
-        
+
         assert low_px <= high_px
         return low_px, high_px
-        
+
     def _updateImage(self):
         """ Recomputes the image with all the raw data available
           Note: for spectrum-based data, it mostly computes a projection of the
-          3D data to a 2D array. The type of projection used depends on 
+          3D data to a 2D array. The type of projection used depends on
           self.projection.
         """
         # FIXME: check that this API makes sense (projection...)
-        
+
         data = self.raw[0]
         if self.projection.value == PROJ_AVERAGE_SPECTRUM:
             if self.auto_bc.value:
-                # FIXME: need to fix the brightness/contrast to the min/max of 
+                # FIXME: need to fix the brightness/contrast to the min/max of
                 # the _entire_ image (not just the current slice)
                 # b, c = util.img.FindOptimalBC(self.raw[0], self._depth)
                 brightness = None
@@ -715,36 +738,36 @@ class StaticSpectrumStream(StaticStream):
             else:
                 brightness = self.brightness.value / 100
                 contrast = self.contrast.value / 100
-            
+
             # pick only the data inside the bandwidth
             spec_range = self._get_bandwith_in_pixel()
             # TODO: use better intermediary type if possible?, cf semcomedi
             av_data = numpy.mean(data[spec_range[0]:spec_range[1]], axis=0)
-            
+
             im = util.img.DataArray2wxImage(av_data,
                                             self._depth,
                                             brightness,
                                             contrast)
-    
+
             im.InitAlpha() # it's a different buffer so useless to do it in numpy
-    
+
             try:
                 pos = data.metadata[MD_POS]
             except KeyError:
                 logging.warning("Position of image unknown")
                 pos = (0, 0)
-    
+
             try:
                 mpp = data.metadata[MD_PIXEL_SIZE][0]
             except KeyError:
                 logging.warning("pixel density of image unknown")
                 # Hopefully it'll be within the same magnitude
                 mpp = data.metadata[MD_SENSOR_PIXEL_SIZE][0] / 10
-    
+
             self.image.value = InstrumentalImage(im, mpp, pos)
         else:
             raise NotImplementedError("Need to handle other projection types")
-            
+
 
 class StreamTree(object):
     """ Object which contains a set of streams, and how they are merged to

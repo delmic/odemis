@@ -18,7 +18,6 @@ from concurrent.futures._base import CancelledError
 from odemis import model
 from odemis.gui import instrmodel
 from odemis.gui.acqmng import ProgressiveFuture, startAcquisition
-from unittest.case import skip
 import logging
 import subprocess
 import time
@@ -89,7 +88,7 @@ class TestWithBackend(unittest.TestCase):
 
         # create some streams connected to the backend
         cls.microscope = model.getMicroscope()
-        cls.imodel = instrmodel.SecomMicroscopeModel(cls.microscope)
+        cls.imodel = instrmodel.MicroscopeModel(cls.microscope)
         s1 = instrmodel.FluoStream("fluo1",
                   cls.imodel.ccd, cls.imodel.ccd.data,
                   cls.imodel.light, cls.imodel.light_filter)

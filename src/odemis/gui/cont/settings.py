@@ -38,6 +38,7 @@ import odemis.gui.comp.text as text
 import odemis.gui.img.data as img
 import odemis.gui.util.units as utun
 
+import odemis.gui.model
 from odemis.model import getVAs, NotApplicableError, VigilantAttributeBase
 from odemis.gui.comp.foldpanelbar import FoldPanelItem
 from odemis.gui.comp.radio import GraphicalRadioButtonControl
@@ -144,8 +145,10 @@ class SettingsPanel(object):
     """
 
     def __init__(self, fold_panel, default_msg, highlight_change=False):
+
+        assert isinstance(fold_panel, FoldPanelItem)
+
         self.fold_panel = fold_panel
-        assert isinstance(self.fold_panel, FoldPanelItem)
 
         self.panel = wx.Panel(self.fold_panel)
 
@@ -296,13 +299,25 @@ class SettingsPanel(object):
         ne = SettingEntry(name=label, label=lbl_ctrl, ctrl=value_ctrl)
         self.entries.append(ne)
 
+    def add_divider(self):
+        line = wx.StaticLine(self.panel, size=(-1, 1))
+        self._gb_sizer.Add(
+                line,
+                (self.num_entries, 0),
+                span=(1, 2),
+                flag=wx.ALL|wx.EXPAND,
+                border=5
+        )
+        self.num_entries += 1
+
+
     def add_value(self, name, vigil_attr, comp, conf=None):
         """ Add a name/value pair to the settings panel.
 
-        name (string): name of the value
-        vigil_attr (VigilantAttribute)
-        comp (Component): the component that contains this VigilantAttribute
-        conf {dict}: Configuration items that may override default settings
+        :param name: (string): name of the value
+        :param vigil_attr: (VigilantAttribute)
+        :param comp: (Component): the component that contains this VigilantAttribute
+        :pram conf: ({}): Configuration items that may override default settings
         """
         assert isinstance(vigil_attr, VigilantAttributeBase)
 
@@ -573,6 +588,12 @@ class SemSettingsPanel(SettingsPanel):
 class OpticalSettingsPanel(SettingsPanel):
     pass
 
+class AngularSettingsPanel(SettingsPanel):
+    pass
+
+class SpectrumSettingsPanel(SettingsPanel):
+    pass
+
 class SettingsBarController(object):
     """ The main controller class for the settings panel in the live view and
     acquisition frame.
@@ -583,9 +604,6 @@ class SettingsBarController(object):
 
     def __init__(self, interface_model, parent_frame, highlight_change=False):
         self._interface_model = interface_model
-
-        self._sem_panel = []
-        self._optical_panel = []
         self.settings_panels = []
 
 
@@ -602,51 +620,39 @@ class SettingsBarController(object):
     @property
     def entries(self):
         """
-        All the setting entries of all the panels
+        A list of all the setting entries of all the panels
         """
         entries = []
         for panel in self.settings_panels:
             entries.extend(panel.entries)
         return entries
 
-    def add_ccd(self, comp):
-        #pylint: disable=E1101
-        if isinstance(self._optical_panel, OpticalSettingsPanel):
-            try:
-                self._optical_panel.add_label("Camera", comp.name)
-                vigil_attrs = getVAs(comp)
-                for name, value in vigil_attrs.items():
-                    if comp.role in CONFIG and name in CONFIG[comp.role]:
-                        conf = CONFIG[comp.role][name]
-                    else:
-                        logging.warn("No config found for %s: %s", comp.role, name)
-                        conf = None
-                    self._optical_panel.add_value(name, value, comp, conf)
-            except TypeError:
-                msg = "Error adding ccd setting for: %s"
-                logging.exception(msg, name)
+    def add_component(self, label, comp, panel):
 
-    def add_ebeam(self, comp):
-        #pylint: disable=E1101
-        if isinstance(self._sem_panel, SemSettingsPanel):
-            try:
-                self._sem_panel.add_label("SEM", comp.name)
-                vigil_attrs = getVAs(comp)
-                for name, value in vigil_attrs.items():
-                    if comp.role in CONFIG and name in CONFIG[comp.role]:
-                        conf = CONFIG[comp.role][name]
-                    else:
-                        logging.warn("No config found for %s: %s", comp.role, name)
-                        conf = None
-                    self._sem_panel.add_value(name, value, comp, conf)
-            except TypeError:
-                msg = "Error adding ebeam setting for: %s"
-                logging.exception(msg, name)
+        self.settings_panels.append(panel)
+
+        try:
+            panel.add_label(label, comp.name)
+            vigil_attrs = getVAs(comp)
+            for name, value in vigil_attrs.items():
+                if comp.role in CONFIG and name in CONFIG[comp.role]:
+                    conf = CONFIG[comp.role][name]
+                else:
+                    logging.warn("No config found for %s: %s", comp.role, name)
+                    conf = None
+                panel.add_value(name, value, comp, conf)
+        except TypeError:
+            msg = "Error adding %s setting for: %s"
+            logging.exception(msg, comp.name, name)
+
+    def add_stream(self, stream):
+        pass
+
 
 class SecomSettingsController(SettingsBarController):
 
-    def __init__(self, interface_model, parent_frame, highlight_change=False):
-        super(SecomSettingsController, self).__init__(interface_model,
+    def __init__(self, parent_frame, microscope_model, highlight_change=False):
+        super(SecomSettingsController, self).__init__(microscope_model,
                                                       highlight_change)
 
         self._sem_panel = SemSettingsPanel(
@@ -659,20 +665,19 @@ class SecomSettingsController(SettingsBarController):
                                     "No optical microscope found",
                                     highlight_change)
 
-        self.settings_panels = [self._sem_panel, self._optical_panel]
-
         # Query Odemis daemon (Should move this to separate thread)
-        if interface_model.ccd:
-            self.add_ccd(interface_model.ccd)
+        if microscope_model.ccd:
+            self.add_component("Camera", microscope_model.ccd, self._optical_panel)
         # TODO allow to change light.power
 
-        if interface_model.ebeam:
-            self.add_ebeam(interface_model.ebeam)
+        if microscope_model.ebeam:
+            self.add_component("SEM", microscope_model.ebeam, self._sem_panel )
+
 
 class SparcSettingsController(SettingsBarController):
 
-    def __init__(self, interface_model, parent_frame, highlight_change=False):
-        super(SparcSettingsController, self).__init__(interface_model,
+    def __init__(self, parent_frame, microscope_model, highlight_change=False):
+        super(SparcSettingsController, self).__init__(microscope_model,
                                                       highlight_change)
 
         self._sem_panel = SemSettingsPanel(
@@ -680,18 +685,56 @@ class SparcSettingsController(SettingsBarController):
                                     "No SEM found",
                                     highlight_change)
 
-        self._optical_panel = OpticalSettingsPanel(
-                                    parent_frame.fp_settings_sparc_optical,
-                                    "No optical microscope found",
+        self._angular_panel = AngularSettingsPanel(
+                                    parent_frame.fp_settings_sparc_angular,
+                                    "No angular camera found",
                                     highlight_change)
 
-        self.settings_panels = [self._sem_panel]
+        self._spectrum_panel = SpectrumSettingsPanel(
+                                    parent_frame.fp_settings_sparc_spectrum,
+                                    "No spectrometer found",
+                                    highlight_change)
 
-        # Query Odemis daemon (Should move this to separate thread)
-        if interface_model.ccd:
-            self.add_ccd(interface_model.ccd)
-        # TODO allow to change light.power
+        if microscope_model.ccd:
+            self.add_component(
+                    "Angular Camera",
+                    microscope_model.ccd,
+                    self._angular_panel
+            )
 
-        if interface_model.ebeam:
-            self.add_ebeam(interface_model.ebeam)
+        if microscope_model.ebeam:
+            self.add_component(
+                    "SEM",
+                    microscope_model.ebeam,
+                    self._sem_panel
+            )
 
+        if microscope_model.spectrometer:
+            self.add_component(
+                    "Spectrometer",
+                    microscope_model.spectrometer,
+                    self._spectrum_panel
+            )
+
+
+            # Here Stream can be added manunally
+            self._spectrum_panel.add_divider()
+
+            self._spectrum_stream = odemis.gui.model.stream.SpectrumStream(
+                                        "Spectrum",
+                                        microscope_model.spectrometer,
+                                        microscope_model.spectrometer.data,
+                                        microscope_model.ebeam)
+
+            self._spectrum_panel.add_value(
+                    "repetition",
+                    self._spectrum_stream.repetition,
+                    None,  #component
+                    CONFIG["spectrometer"]["repetition"])
+
+            # Added for debug only
+            self._spectrum_panel.add_value(
+                    "roi (debug)",
+                    self._spectrum_stream.roi,
+                    None,  #component
+                    CONFIG["spectrometer"]["roi"])

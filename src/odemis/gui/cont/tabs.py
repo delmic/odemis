@@ -30,8 +30,8 @@ import wx
 from odemis.gui.cont.acquisition import SecomAcquiController, SparcAcquiController
 from odemis.gui.cont.microscope import MicroscopeController
 from odemis.gui.cont import settings
-from odemis.gui.cont.streams import SecomStreamController
-from odemis.gui.cont.views import SecomViewController, ViewSelector
+from odemis.gui.cont.streams import StreamController
+from odemis.gui.cont.views import ViewController, ViewSelector
 
 main_tab_controller = None
 
@@ -89,17 +89,18 @@ class SecomStreamsTab(Tab):
             return
 
         self._settings_controller = settings.SecomSettingsController(
-                                        self.interface_model,
-                                        self.main_frame)
+                                        self.main_frame,
+                                        self.interface_model
+                                    )
 
         # Order matters!
         # First we create the views, then the streams
-        self._view_controller = SecomViewController(
+        self._view_controller = ViewController(
                                     self.interface_model,
                                     self.main_frame
                                 )
 
-        self._stream_controller = SecomStreamController(
+        self._stream_controller = StreamController(
                                         self.interface_model,
                                         self.main_frame.pnl_secom_streams
                                   )
@@ -132,7 +133,7 @@ class SparcAcquisitionTab(Tab):
     def __init__(self, group, name, button, panel, main_frame, interface_model):
         super(SparcAcquisitionTab, self).__init__(group, name, button, panel)
 
-        self.interface_model = interface_model
+        self.microscope_model = interface_model
         self.main_frame = main_frame
 
         # Various controllers used for the live view and acquisition of images
@@ -142,16 +143,17 @@ class SparcAcquisitionTab(Tab):
     def _initialize(self):
         """ This method is called when the tab is first shown """
 
-        if not self.interface_model:
+        if not self.microscope_model:
             return
 
         self._settings_controller = settings.SparcSettingsController(
-                                        self.interface_model,
-                                        self.main_frame)
+                                        self.main_frame,
+                                        self.microscope_model
+                                    )
 
         self._acquisition_controller = SparcAcquiController(
-                                            self.interface_model,
-                                            self.main_frame
+                                            self.main_frame,
+                                            self.microscope_model
                                        )
 
 class TabBarController(object):

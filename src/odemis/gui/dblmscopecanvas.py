@@ -537,7 +537,7 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
                 self.select_overlay.clear_selection()
                 pub.sendMessage(
                     'sparc.acq.selection.changed',
-                    selection_present=self.select_overlay.contains_selection()
+                    selection=self.select_overlay.get_world_selection_pos()
                 )
                 self.ShouldUpdateDrawing()
             self.current_mode = mode
@@ -591,7 +591,7 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
                 pub.sendMessage('sparc.acq.select.end')
                 pub.sendMessage(
                     'sparc.acq.selection.changed',
-                    selection_present=self.select_overlay.contains_selection()
+                    selection=self.select_overlay.get_world_selection_pos()
                 )
             else:
                 self.active_overlay.clear_selection()

@@ -88,8 +88,8 @@ class xrcfr_main(wx.Frame):
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
         self.fpb_settings = xrc.XRCCTRL(self, "fpb_settings")
         self.fp_settings_sparc_sem = xrc.XRCCTRL(self, "fp_settings_sparc_sem")
-        self.fp_settings_sparc_optical = xrc.XRCCTRL(self, "fp_settings_sparc_optical")
-        self.fp_settings_sparc_spectro = xrc.XRCCTRL(self, "fp_settings_sparc_spectro")
+        self.fp_settings_sparc_angular = xrc.XRCCTRL(self, "fp_settings_sparc_angular")
+        self.fp_settings_sparc_spectrum = xrc.XRCCTRL(self, "fp_settings_sparc_spectrum")
         self.lbl_sparc_acq_estimate = xrc.XRCCTRL(self, "lbl_sparc_acq_estimate")
         self.gauge_sparc_acq = xrc.XRCCTRL(self, "gauge_sparc_acq")
         self.btn_sparc_acquire = xrc.XRCCTRL(self, "btn_sparc_acquire")
@@ -167,7 +167,7 @@ def __init_resources():
     wx.FileSystem.AddHandler(wx.MemoryFSHandler())
 
     main_xrc = '''\
-<?xml version="1.0" ?><resource class="ImageToggleButton" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
+<?xml version="1.0" ?><resource class="wxStaticLine" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
   <object class="wxFrame" name="fr_main">
     <object class="wxMenuBar">
       <object class="wxMenu">
@@ -1078,6 +1078,7 @@ def __init_resources():
                       </object>
                       <size>400,-1</size>
                       <bg>#4D4D4D</bg>
+                      <hidden>1</hidden>
                     </object>
                     <flag>wxEXPAND</flag>
                   </object>
@@ -1095,8 +1096,8 @@ def __init_resources():
                                 <assign_var>1</assign_var>
                               </XRCED>
                             </object>
-                            <object class="FoldPanelItem" name="fp_settings_sparc_optical">
-                              <label>OPTICAL SETTINGS</label>
+                            <object class="FoldPanelItem" name="fp_settings_sparc_angular">
+                              <label>ANGULAR CAMERA SETTINGS</label>
                               <fg>#1A1A1A</fg>
                               <bg>#555555</bg>
                               <XRCED>
@@ -1110,7 +1111,7 @@ def __init_resources():
                             <XRCED>
                               <assign_var>1</assign_var>
                             </XRCED>
-                            <object class="FoldPanelItem" name="fp_settings_sparc_spectro">
+                            <object class="FoldPanelItem" name="fp_settings_sparc_spectrum">
                               <label>SPECTROMETER SETTINGS</label>
                               <fg>#1A1A1A</fg>
                               <bg>#555555</bg>

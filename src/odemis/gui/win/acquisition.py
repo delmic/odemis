@@ -13,7 +13,7 @@ from odemis import model, dataio
 from odemis.gui import acqmng, instrmodel
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.cont.settings import SecomSettingsController
-from odemis.gui.cont.streams import SecomStreamController
+from odemis.gui.cont.streams import StreamController
 from odemis.gui.instrmodel import VIEW_LAYOUT_ONE
 from odemis.gui.main_xrc import xrcfr_acq
 from odemis.gui.util import units, call_after
@@ -148,7 +148,7 @@ class AcquisitionDialog(xrcfr_acq):
         orig_view = interface_model.focussedView.value
         view = self.interface_model.focussedView.value
 
-        self.stream_controller = SecomStreamController(self.interface_model,
+        self.stream_controller = StreamController(self.interface_model,
                                                   self.pnl_secom_streams)
         # The streams currently displayed are the one
         self.add_all_streams(orig_view.getStreams())
@@ -177,10 +177,10 @@ class AcquisitionDialog(xrcfr_acq):
 
     def duplicate_interface_model(self, orig):
         """
-        Duplicate a SecomMicroscopeModel and adapt it for the acquisition window
+        Duplicate a MicroscopeModel and adapt it for the acquisition window
         The streams will be shared, but not the views
-        orig (SecomMicroscopeModel)
-        return (SecomMicroscopeModel)
+        orig (MicroscopeModel)
+        return (MicroscopeModel)
         """
         new = copy.copy(orig) # shallow copy
 
