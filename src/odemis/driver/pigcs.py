@@ -1029,18 +1029,19 @@ class Controller(object):
         return True
     
     @staticmethod
-    def scan(port, max_add=16):
+    def scan(port, max_add=16, baudrate=38400):
         """
-        Scan the serial network for all the PI C-170 available.
+        Scan the serial network for all the PI GCS compatible devices available.
+        Note this is the low-level part, you probably want to use Controller.scan()
+         for scanning devices on a computer.
         port (string): name of the serial port
         max_add (1<=int<=16): maximum address to scan
         return (dict int -> tuple): addresses of available controllers associated
             to number of axes, and presence of limit switches/sensor
         """
-        ser = Controller.openSerialPort(port)
+        ser = Controller.openSerialPort(port, baudrate)
         ctrl = Controller(ser)
         
-        logging.info("Serial network scanning for PI-GCS controllers in progress...")
         present = {}
         for i in range(1, max_add+1):
             # ask for controller #i
@@ -1086,7 +1087,7 @@ class Controller(object):
 
 class Bus(model.Actuator):
     """
-    Represent a chain of PI controller over a serial port
+    Represent a chain of PIGCS controllers over a serial port
     """
     def __init__(self, name, role, port, axes, baudrate=38400, **kwargs):
         """
@@ -1300,25 +1301,31 @@ class Bus(model.Actuator):
             else:
                 ports = glob.glob('/dev/ttyS?*') + glob.glob('/dev/ttyUSB?*')
         
+        logging.info("Serial network scanning for PI-GCS controllers in progress...")
         axes_names = "xyzabcdefghijklmnopqrstuvw"
         found = []  # (list of 2-tuple): name, args (port, axes(channel -> CL?)
         for p in ports:
             try:
-                controllers = Controller.scan(p)
+                # check all possible baud rates, in the most likely order
+                for br in [38400, 9600, 19200, 115200]:
+                    logging.debug("Trying port %s at baud rate %d", p, br)
+                    controllers = Controller.scan(p, baudrate=br)
+                    if controllers:
+                        axis_num = 0
+                        arg = {}
+                        for add, axes in controllers.items():
+                            for a, cl in axes.items():
+                                arg[axes_names[axis_num]] = (add, a, cl)
+                                axis_num += 1
+                        found.append(("Actuator " + os.path.basename(p),
+                                     {"port": p, "baudrate": br, "axes": arg}))
+                        # it implies the baud rate was correct, and as it's impossible
+                        # to have devices on different devices, we are done
+                        break
             except serial.SerialException:
                 # not possible to use this port? next one!
-                continue
-            
-            if controllers:
-                axis_num = 0
-                arg = {}
-                for add, axes in controllers.items():
-                    for a, cl in axes.items():
-                        arg[axes_names[axis_num]] = (add, a, cl)
-                        axis_num += 1
-                found.append(("Actuator " + os.path.basename(p),
-                             {"port": p, "axes": arg}))
-        
+                pass
+
         return found
 
 
