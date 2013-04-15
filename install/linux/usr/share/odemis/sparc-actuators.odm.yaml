@@ -1,0 +1,35 @@
+# Configuration for on the actuators of the SPARC system. 
+SPARC-Actuators: {
+    class: Microscope,
+    role: mover,
+    emitters: [],
+    detectors: [],
+    actuators: ["MirrorMover"],
+}
+
+# PI E-861 jumpers (. = off):
+# X          = 1234.6..
+# Y          = 123..6..
+# RZ (yaw)   = 12.4.6..
+# RY (pitch) = 12...6..
+MirrorMover: {
+    class: pigcs.Bus,
+    role: mirror,
+    init: {
+        port: "/dev/ttyPIGCS",
+        baudrate: 9600,
+        # X/Y are same axes as SEM
+        # yaw/pitch are axes according to Mirror's orientation
+        # rz = yaw, ry = pitch (from Mirror's point of view)
+        # axis -> controller, channel, closed-loop?
+        axes: {"y":  [1, 1, False],
+               "x":  [2, 1, False],
+               "ry": [3, 1, False],
+               "rz": [4, 1, False]},
+        inverted: ["y", "ry"],
+    },
+    properties: {
+        speed: {"x": 0.1, "y": 0.1, "rz": 0.1, "ry": 0.1} #m/s
+    }
+}
+
