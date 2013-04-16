@@ -203,38 +203,34 @@ class MicroscopeModel(object):
     def onEMState(self, state):
         """ Event handler for when the state of the electron microscope changes
         """
-        if state == STATE_OFF:
+        if state == STATE_OFF and self.ebeam:
             # TODO: actually turn off the ebeam and detector
-            if self.ebeam:
-                try:
-                    # TODO save the previous value
-                    # blank the ebeam
-                    self.ebeam.energy.value = 0
-                except VA_EXCEPTIONS:
-                    # Too bad. let's just do nothing then.
-                    logging.debug("Ebeam doesn't support setting energy to 0")
-        elif state == STATE_PAUSE:
-            if self.ebeam:
-                try:
-                    # TODO save the previous value
-                    # blank the ebeam
-                    self.ebeam.energy.value = 0
-                except VA_EXCEPTIONS:
-                    # Too bad. let's just do nothing then.
-                    logging.debug("Ebeam doesn't support setting energy to 0")
+            try:
+                # TODO save the previous value
+                # blank the ebeam
+                self.ebeam.energy.value = 0
+            except VA_EXCEPTIONS:
+                # Too bad. let's just do nothing then.
+                logging.debug("Ebeam doesn't support setting energy to 0")
+        elif state == STATE_PAUSE and self.ebeam:
+            try:
+                # TODO save the previous value
+                # blank the ebeam
+                self.ebeam.energy.value = 0
+            except VA_EXCEPTIONS:
+                # Too bad. let's just do nothing then.
+                logging.debug("Ebeam doesn't support setting energy to 0")
 
-        elif state == STATE_ON:
-            # TODO anything else to turn on?
-            if self.ebeam:
-                try:
-                    # TODO use the previous value
-                    if hasattr(self.ebeam.energ, "choice"):
-                        if isinstance(self.ebeam.energy.choices,
-                                      collections.Iterable):
-                            self.ebeam.energy.value = self.ebeam.energy.choices[1]
-                except VA_EXCEPTIONS:
-                    # Too bad. let's just do nothing then (and hope it's on)
-                    logging.debug("Ebeam doesn't support setting energy")
+        elif state == STATE_ON and self.ebeam:
+            try:
+                # TODO use the previous value
+                if hasattr(self.ebeam.energ, "choice"):
+                    if isinstance(self.ebeam.energy.choices,
+                                  collections.Iterable):
+                        self.ebeam.energy.value = self.ebeam.energy.choices[1]
+            except VA_EXCEPTIONS:
+                # Too bad. let's just do nothing then (and hope it's on)
+                logging.debug("Ebeam doesn't support setting energy")
 
 class MicroscopeView(object):
     """ Represents a view from a microscope and ways to alter it.

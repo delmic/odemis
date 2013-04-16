@@ -114,12 +114,12 @@ class DblMicroscopeCanvas(DraggableCanvas):
         # mpp == mpwu => 1 world coord == 1 px => scale == 1
         self.mpwu = self.microscope_view.mpp.value  #m/wu
         # Should not be changed!
-        # FIXME!! => have a PhyscicalCanvas which directly use physical units
+        # FIXME: have a PhyscicalCanvas which directly use physical units
 
         self.microscope_view.mpp.subscribe(self._onMPP)
 
-        # TODO subscribe to view_pos to synchronize with the other views
-        # TODO subscribe to stage_pos as well/instead.
+        # TODO: subscribe to view_pos to synchronize with the other views
+        # TODO: subscribe to stage_pos as well/instead.
         if hasattr(self.microscope_view, "stage_pos"):
             self.microscope_view.stage_pos.subscribe(self._onStagePos, init=True)
 
@@ -133,7 +133,6 @@ class DblMicroscopeCanvas(DraggableCanvas):
             canvas currently expects.
         """
         streams = self.microscope_view.streams.streams
-
         # create a list of of each stream's image, but re-ordered so that SEM is
         #first
         images = []
@@ -145,6 +144,7 @@ class DblMicroscopeCanvas(DraggableCanvas):
                 continue
 
             iim = s.image.value
+
             if iim is None or iim.image is None:
                 continue
 

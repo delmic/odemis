@@ -549,8 +549,6 @@ class SpectrumStream(Stream):
         pub.subscribe(self.on_selection_changed, 'sparc.acq.selection.changed')
 
     def on_selection_changed(self, selection):
-
-        # START HERE
         self.roi.value = selection or self._default_roi
 
 

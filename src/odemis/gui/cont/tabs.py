@@ -32,6 +32,7 @@ from odemis.gui.cont.microscope import MicroscopeController
 from odemis.gui.cont import settings
 from odemis.gui.cont.streams import StreamController
 from odemis.gui.cont.views import ViewController, ViewSelector
+from odemis.gui.instrmodel import STATE_ON
 
 main_tab_controller = None
 
@@ -146,6 +147,12 @@ class SparcAcquisitionTab(Tab):
         if not self.microscope_model:
             return
 
+        self._view_controller = ViewController(
+                                    self.microscope_model,
+                                    self.main_frame,
+                                    [self.main_frame.vp_sparc_acq_view]
+                                )
+
         self._settings_controller = settings.SparcSettingsController(
                                         self.main_frame,
                                         self.microscope_model
@@ -155,6 +162,9 @@ class SparcAcquisitionTab(Tab):
                                             self.main_frame,
                                             self.microscope_model
                                        )
+
+        self.microscope_model.emState.value = STATE_ON
+        #print self.microscope_model.emState.value
 
 class TabBarController(object):
 

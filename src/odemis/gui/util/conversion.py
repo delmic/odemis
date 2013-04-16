@@ -74,16 +74,3 @@ def hex_to_rgb(hex_str):
 def hex_to_rgba(hex_str, af=1.0):
     """ Convert a Hexadecimal color representation into an 3-tuple of floats """
     return hex_to_rgb(hex_str) + (af,)
-
-
-def show_vigilant_attributes(obj):
-    """ This little function prints all vigilant attributes of the given object
-    and their names.
-    """
-    vas = inspect.getmembers(
-                obj,
-                lambda x: isinstance(x, odemis.model.VigilantAttributeBase)
-    )
-
-    for va in vas:
-        print "{}: {}\n".format(va[0], va[1].value)
