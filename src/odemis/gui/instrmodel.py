@@ -75,7 +75,7 @@ class MicroscopeModel(object):
                 self.bsd = d
             elif d.role == "spectrometer":
                 self.spectrometer = d
-        if not self.ccd and not self.sed and not self.bsd:
+        if not any((self.ccd, self.sed, self.bsd, self.spectrometer)):
             msg = "no camera nor electron detector found in the microscope"
             raise Exception(msg)
 
@@ -135,11 +135,23 @@ class MicroscopeModel(object):
 
         self.viewLayout = model.IntEnumerated(VIEW_LAYOUT_22, choices=layouts)
 
-        self.opticalState = model.IntEnumerated(STATE_OFF, choices=hw_states)
-        self.opticalState.subscribe(self.onOpticalState)
-
-        self.emState = model.IntEnumerated(STATE_OFF, choices=hw_states)
-        self.emState.subscribe(self.onEMState)
+        if self.ccd:
+            # not so nice to hard code it here, but that should do it for now...
+            if self.microscope.role == "sparc":
+                self.arState = model.IntEnumerated(STATE_OFF, choices=hw_states)
+                self.arState.subscribe(self.onARState)
+            else:
+                self.opticalState = model.IntEnumerated(STATE_OFF, choices=hw_states)
+                self.opticalState.subscribe(self.onOpticalState)
+        
+        if self.ebeam:
+            self.emState = model.IntEnumerated(STATE_OFF, choices=hw_states)
+            self.emState.subscribe(self.onEMState)
+        
+        if self.spectrometer:
+            self.specState = model.IntEnumerated(STATE_OFF, choices=hw_states)
+            self.specState.subscribe(self.onSpecState)
+                
 
     # Getters and Setters
 
@@ -235,6 +247,14 @@ class MicroscopeModel(object):
                 except VA_EXCEPTIONS:
                     # Too bad. let's just do nothing then (and hope it's on)
                     logging.debug("Ebeam doesn't support setting energy")
+
+    def onARState(self, state):
+        # nothing to do here, the SPARC GUI will just hide the options
+        pass  
+
+    def onSpecState(self, state):
+        # nothing to do here, the SPARC GUI will just hide the options
+        pass
 
 class MicroscopeView(object):
     """ Represents a view from a microscope and ways to alter it.

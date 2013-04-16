@@ -366,8 +366,8 @@ class OdemisGUIApp(wx.App):
             info.Developers += ["", "Dye database from http://fluorophores.org"]
             info.Licence += ("""
 The dye database is provided as-is, from the Fluorobase consortium.
-The Fluorobase consortium provide this data and software in good faith, but make
-no warranty, expressed or implied, nor assume any legal liability or
+The Fluorobase consortium provides this data and software in good faith, but makes
+no warranty, expressed or implied, nor assumes any legal liability or
 responsibility for any purpose for which they are used. For further information
 see http://www.fluorophores.org/disclaimer/.
 """)
@@ -402,21 +402,33 @@ see http://www.fluorophores.org/disclaimer/.
 
         logging.info("Exiting Odemis")
 
-        if self.interface_model:
-            # Put cleanup actions here (like disconnect from odemisd)
-            self.interface_model.opticalState.value = instrmodel.STATE_OFF
-            self.interface_model.emState.value = instrmodel.STATE_OFF
+        try:
+            if self.interface_model:
+                # Put cleanup actions here (like disconnect from odemisd)
+                # TODO: move to tab controller?
+                try:
+                    self.interface_model.opticalState.value = instrmodel.STATE_OFF
+                except AttributeError:
+                    pass # just no such microscope present
+                try:
+                    self.interface_model.emState.value = instrmodel.STATE_OFF
+                except AttributeError:
+                    pass
 
-        #self.dlg_startup.Destroy()
-        self.main_frame.Destroy()
-        if self.http_proc:
-            self.http_proc.terminate()  #pylint: disable=E1101
+            #self.dlg_startup.Destroy()
+            self.main_frame.Destroy()
+            if self.http_proc:
+                self.http_proc.terminate()  #pylint: disable=E1101
+        except Exception:
+            logging.exception("Error during GUI shutdown")
+            sys.exit(1)
+            
         sys.exit(0)
 
     def excepthook(self, type, value, trace): #pylint: disable=W0622
         """ Method to intercept unexpected errors that are not caught
         anywhere else and redirects them to the logger. """
-        # in case of error here, don't call again, it'd create infinite recurssion
+        # in case of error here, don't call again, it'd create infinite recursion
         sys.excepthook = sys.__excepthook__
 
         try:

@@ -2,7 +2,7 @@
 """
 @author: Rinze de Laat
 
-Copyright © 2012 Rinze de Laat, Delmic
+Copyright © 2012-2013 Rinze de Laat, Éric Piel, Delmic
 
 This file is part of Odemis.
 
@@ -23,10 +23,9 @@ import logging
 import odemis.gui.instrmodel as instrmodel
 import wx
 
-
 class MicroscopeController(object):
-    """ This controller class controls the main microscope buttons and allow
-    querying of various status attributes.
+    """ This controller class controls the main microscope buttons and updates
+    the model. To query/change the status of a special microscope, use the model.
     """
     def __init__(self, interface_model, main_frame):
         """
@@ -36,59 +35,37 @@ class MicroscopeController(object):
         self.interface_model = interface_model
 
         # Microscope buttons
-
-        self.btn_pressure = main_frame.btn_toggle_press
-        self.btn_optical = main_frame.btn_toggle_opt
-        self.btn_sem = main_frame.btn_toggle_sem
         self.btn_pause = main_frame.btn_toggle_pause
+        self.btn_pressure = main_frame.btn_toggle_press
 
-        # FIXME: special _bitmap_ toggle button doesn't seem to generate
-        # EVT_TOGGLEBUTTON
-        # self.btn_optical.Bind(wx.EVT_TOGGLEBUTTON, self.on_toggle_opt)
-        self.btn_optical.Bind(wx.EVT_BUTTON, self.on_toggle_optical)
-        self.btn_sem.Bind(wx.EVT_BUTTON, self.on_toggle_sem)
-
-    # Event handlers
-
-    def on_toggle_optical(self, event):
-        logging.debug("Optical toggle button pressed")
-        if self.interface_model:
-            if event.isDown:
-                self.interface_model.opticalState.value = instrmodel.STATE_ON
-            else:
-                self.interface_model.opticalState.value = instrmodel.STATE_OFF
-
-    def on_toggle_sem(self, event):
-        logging.debug("SEM toggle button pressed")
-        if self.interface_model:
-            if event.isDown:
-                self.interface_model.emState.value = instrmodel.STATE_ON
-            else:
-                self.interface_model.emState.value = instrmodel.STATE_OFF
-
-    # Status checking methods
-    # TODO: only use MicroscopeGUI object for that
-    def is_pressurizing(self):
-        """ For now it returns if the pressure button is on, but later it
-        probably should check if the button is on *and* if the desired pressure
-        is reached. (Or, the button should automatically turn off when the
-        desired pressure is reached?)
-        """
-
-        return self.btn_pressure.IsEnabled() and self.btn_pressure.GetToggle()
-
-    def optical_is_on(self):
-        """ Returns True if the optical microscope button is toggled
-        """
-
-        return self.btn_optical.IsEnabled() and self.btn_optical.GetToggle()
-
-    def sem_is_on(self):
-        """ Returns True if the scanning elecltron microscope button is toggled
-        """
-
-        return self.btn_sem.IsEnabled() and self.btn_sem.GetToggle()
-
-    def is_pauzed(self):
-        return self.btn_pause.IsEnabled() and self.btn_pause.GetToggle()
-
+        # TODO: for the Sparc, if only one microscope: hide everything, as this
+        # microscope should always be ON.
+        
+        # GUI toggle button -> VA name 
+        # cannot be directly the VA, because it might not exists 
+        btn_to_va = {main_frame.btn_toggle_sem: "emState",
+                     main_frame.btn_toggle_opt: "opticalState",
+                     main_frame.btn_toggle_spectrometer: "specState",
+                     main_frame.btn_toggle_angular: "arState",
+                     }
+        for btn, vaname in btn_to_va.items():
+            try:
+                va = getattr(vaname, interface_model)
+            except AttributeError:
+                # This microscope is not available
+                btn.Hide()
+                # TODO: need to update layout?
+                continue
+            
+            # Event handler
+            def on_toggle(self, event, va=va, vaname=vaname):
+                logging.debug("%s toggle button pressed", vaname)
+                if event.isDown:
+                    va.value = instrmodel.STATE_ON
+                else:
+                    va.value = instrmodel.STATE_OFF
+            # FIXME: special _bitmap_ toggle button doesn't seem to generate
+            # EVT_TOGGLEBUTTON
+            btn.Bind(wx.EVT_BUTTON, on_toggle)
+                    
+        # TODO: do something with pause and pressure

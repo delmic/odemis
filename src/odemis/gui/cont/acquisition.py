@@ -411,6 +411,36 @@ class SparcAcquiController(AcquisitionController):
         """ Handler for pubsub 'stream.changed' messages """
         self.btn_acquire.Enable(streams_present and streams_visible)
         
+    def update_acquisition_time(self):
+        st = self.interface_model.focussedView.value.streams
+        if st.streams:
+            acq_time = acqmng.estimateAcquistionTime(st)
+            self.gauge_acq.Range = 100 * acq_time
+            acq_time = math.ceil(acq_time) # round a bit pessimistically
+            txt = "The estimated acquisition time is {}."
+            txt = txt.format(units.readable_time(acq_time))
+        else:
+            txt = "No streams present."
+
+        self.lbl_acqestimate.SetLabel(txt)
+
+    def _getStreamTree(self):
+        """
+        create a StreamTree for the current streams to acquire 
+        returns StreamTree: a StreamTree with at least one stream (the SEM)
+        """
+        streams = list(self._microscope.streams)
+        if not streams:
+            # normally, there should be at least 3 streams: 1 for the whole SEM
+            # area, 1 for the ROI SEM, and 1 or 2 for the CCDs.
+            logging.error("Unexpected empty stream list for the microscope")
+        
+        # put the ROI SEM stream as the first and only stream non-transparent,
+        # to get a nice thumbnail.
+        # FIXME: have a special .acqusitionView which contains all the streams
+        # as they should be acquired
+        return self._microscope.acquisitionView.streams
+        
     def on_acquisition(self, evt):
         mtc = get_main_tab_controller()
 
