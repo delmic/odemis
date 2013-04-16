@@ -548,9 +548,8 @@ class SpectrumStream(Stream):
 
         pub.subscribe(self.on_selection_changed, 'sparc.acq.selection.changed')
 
-    def on_selection_changed(self, selection):
-        self.roi.value = selection or self._default_roi
-
+    def on_selection_changed(self, region_of_interest):
+        self.roi.value = region_of_interest or self._default_roi
 
     def estimateAcquisitionTime(self):
         try:

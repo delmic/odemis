@@ -371,7 +371,7 @@ class SparcAcquiController(object):
 
         pub.subscribe(self.on_selection_changed, 'sparc.acq.selection.changed')
 
-    def on_selection_changed(self, selection):
+    def on_selection_changed(self, region_of_interest):
         self._main_frame.btn_sparc_acquire.Enable(selection is not None)
 
     def on_acquisition(self, evt):

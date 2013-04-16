@@ -181,10 +181,10 @@ class SparcAcquisitionTab(Tab):
                                             self.microscope_model
                                        )
 
+        # TODO: Not sure if 'should_update' and 'STATE_ON' are neces
         self.microscope_model.emState.value = STATE_ON
         sem_stream.is_active.value = True
         sem_stream.should_update.value = True
-        #print self.microscope_model.emState.value
 
 class TabBarController(object):
 
