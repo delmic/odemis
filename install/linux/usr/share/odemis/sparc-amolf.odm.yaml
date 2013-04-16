@@ -81,22 +81,26 @@ SP2300i: {
 # X          = 1234.6..
 # Y          = 123..6..
 # RZ (yaw)   = 12.4.6..
-# RX (pitch) = 12...6..
+# RY (pitch) = 12...6..
 MirrorMover: {
     class: pigcs.Bus,
     role: mirror,
-    affects: [SpecCam, ARCam],
     init: {
         port: "/dev/ttyPIGCS",
-        # rz = yaw, ry = pitch
+        baudrate: 9600,
+        # X/Y are same axes as SEM
+        # yaw/pitch are axes according to Mirror's orientation
+        # rz = yaw, ry = pitch (from Mirror's point of view)
         # axis -> controller, channel, closed-loop?
-        axes: {"x":  [1, 1, False],
-               "y":  [2, 1, False],
-               "rz": [3, 1, False],
-               "rx": [4, 1, False]} 
+        axes: {"y":  [1, 1, False],
+               "x":  [2, 1, False],
+               "ry": [3, 1, False],
+               "rz": [4, 1, False]},
+        inverted: ["y", "ry"],
     },
     properties: {
-        speed: {"x": 0.1, "y": 0.1, "rz": 0.1, "rx": 0.1} #m/s
+        speed: {"x": 0.1, "y": 0.1, "rz": 0.1, "ry": 0.1} #m/s
     }
 }
+
 

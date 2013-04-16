@@ -78,12 +78,12 @@ trade-off between simplicity of development and complexity of the task to
 automate.
 
 For the easiest tasks, a shell script calling the cli program might be the
-most appropriate way. See the cli "--help" command for a list of all possible
-commands.
+most appropriate way. See the CLI help command for a list of all possible
+commands ("odemis-cli --help").
 
 For more complex tasks, it might be easier to write a specialised python program.
 In this case, the program directly access the backend. A good way to start is to
-look at the source code of the cli. It shows examples of the most common tasks.
+look at the source code of the CLI. It shows examples of the most common tasks.
 
 Alternatively you may want to add the automated task as one option to the GUI.
 See later section about extending the GUI.
@@ -93,7 +93,7 @@ See later section about extending the GUI.
 
 Like every complex piece of software, Odemis contains bugs, even though we do
 our best to minimize their amount. In the event you are facing a bug, we advise
-you first to report it to us (info@delmic.com). We might have already solved it
+you first to report it to us (bugreport@delmic.com). We might have already solved it
 or might be able to fix it for you. If neither of these two options work out,
 you can try to fix it yourself. When reporting a bug, please include a
 description of what is happening compared to what you expect to happen, the log
@@ -139,5 +139,5 @@ command.
    odemis/doc/code/_build.
 
 *Important note:* Hand-made documentation files should be stored in
-odemis/doc/code and odemis/doc/code/_gen should *onlly* contain automatically
+odemis/doc/code and odemis/doc/code/_gen should *only* contain automatically
 generated files!

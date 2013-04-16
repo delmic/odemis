@@ -38,6 +38,27 @@ class TestOpticalLens(unittest.TestCase):
         comp = static.OpticalLens("test", "lens", mag)
         self.assertEqual(mag, comp.magnification.value)
         comp.terminate()
+
+class TestSpectrograph(unittest.TestCase):
+    def test_fake(self):
+        """
+        Just makes sure we more or less follow the behaviour of a spectrograph
+        """
+        wlp = [500e-9, 1/1e6]
+        sp = static.Spectrograph("test", "spectrograph", wlp=wlp)
+        self.assertEqual(wlp, sp.getPolyToWavelength())
+        
+        f = sp.moveAbs({"wavelength":300e-9})
+        f.result()
+        self.assertAlmostEqual(sp.position.value["wavelength"], 300e-9)
+        
+        wlp[0] = 300e-9
+        self.assertEqual(wlp, sp.getPolyToWavelength())
+
+        sp.stop()
+        
+        self.assertTrue(sp.selfTest(), "self test failed.")
+        sp.terminate()
         
 if __name__ == "__main__":
     #import sys;sys.argv = ['', 'Test.testName']

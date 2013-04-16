@@ -14,8 +14,8 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
-from odemis import __version__
-from odemis import model
+from Pyro4.core import isasync
+from odemis import __version__, model
 import collections
 
 """
@@ -104,3 +104,76 @@ class LightFilter(model.HwComponent):
     def getMetadata(self):
         return self._metadata
     
+
+class Spectrograph(model.Actuator):
+    """
+    A very simple spectrograph component for spectrographs which cannot be 
+    controlled by software.
+    Just get a polynomial describing the light position on the CCD as init,
+    and an axis which  
+    """
+    def __init__(self, name, role, wlp, **kwargs):
+        """
+        wlp (list of floats): polynomial for conversion from distance from the 
+          center of the CCD to wavelength (in m). So, typically, a first order
+          polynomial contains as first element the center wavelength, and as
+          second element the light dispersion (in m/m).
+        """
+        if kwargs.get("inverted", None):
+            raise ValueError("Axis of spectrograph cannot be inverted")
+        
+        if not isinstance(wlp, list) or len(wlp) < 1:
+            raise ValueError("wlp need to be a list of at least one float")
+        
+        self._swVersion = "N/A (Odemis %s)" % __version__.version
+        self._hwVersion = name
+        
+        self._wlp = wlp
+        pos = {"wavelength": self._wlp[0]}
+        model.Actuator.__init__(self, name, role, axes=["wavelength"], 
+                                ranges={"wavelength": (0, 2400e-9)}, **kwargs)
+        self.position = model.VigilantAttribute(pos, unit="m", readonly=True)
+        
+    
+    # we simulate the axis, to give the same interface as a fully controllable
+    # spectrograph, but it has to actually reflect the state of the hardware.
+    @isasync
+    def moveRel(self, shift):
+        # convert to a call to moveAbs
+        new_pos = {}
+        for axis, value in shift.items():
+            new_pos[axis] = self.position.value[axis] + value
+        return self.moveAbs(new_pos)
+        
+    @isasync
+    def moveAbs(self, pos):
+        for axis, value in pos.items():
+            if axis == "wavelength":
+                # it's read-only, so we change it via _value
+                self.position._value[axis] = value
+                self.position.notify(self.position.value)
+            else:
+                raise LookupError("Axis '%s' doesn't exist", axis)
+        
+        return model.InstantaneousFuture()
+    
+    def stop(self):
+        # nothing to do
+        pass
+    
+    def getPolyToWavelength(self):
+        """
+        Compute the right polynomial to convert from a position on the sensor to the
+          wavelength detected. It depends on the current grating, center 
+          wavelength (and focal length of the spectrometer). 
+        Note: It will return the polynomial given as init + the shift from the
+          original center wavelength.
+        returns (list of float): polynomial coefficients to apply to get the current
+          wavelength corresponding to a given distance from the center: 
+          w = p[0] + p[1] * x + p[2] * x²... 
+          where w is the wavelength (in m), x is the position from the center
+          (in m, negative are to the left), and p is the polynomial (in m, m^0, m^-1...).
+        """
+        pl = list(self._wlp)
+        pl[0] = self.position.value["wavelength"]
+        return pl
