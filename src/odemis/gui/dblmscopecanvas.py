@@ -132,7 +132,7 @@ class DblMicroscopeCanvas(DraggableCanvas):
         Temporary function to convert the StreamTree to a list of images as the
             canvas currently expects.
         """
-        streams = self.microscope_view.streams.streams
+        streams = self.microscope_view.stream_tree.streams
         # create a list of of each stream's image, but re-ordered so that SEM is
         #first
         images = []
@@ -173,7 +173,7 @@ class DblMicroscopeCanvas(DraggableCanvas):
             self.SetImage(i, iim.image, pos, scale)
 
         # set merge_ratio
-        self.merge_ratio = self.microscope_view.streams.kwargs.get("merge", 0.5)
+        self.merge_ratio = self.microscope_view.stream_tree.kwargs.get("merge", 0.5)
 
     def _onViewImageUpdate(self, t):
         # TODO use the real streamtree functions

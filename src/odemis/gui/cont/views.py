@@ -73,10 +73,6 @@ class ViewController(object):
         self._microscope.viewLayout.subscribe(self._onViewLayout, init=True)
         self._microscope.focussedView.subscribe(self._onView, init=False)
 
-        if viewports and len(viewports) > 1:
-            # Focus defaults to the top right viewport
-            self._microscope.focussedView.value = self._viewports[1].mic_view
-
     def _createViews(self):
         """
         Create the different views displayed, according to the current microscope.
@@ -85,6 +81,7 @@ class ViewController(object):
 
         # If SEM only: all SEM
         if self._microscope.ebeam and not self._microscope.light:
+            logging.info("Creating SEM only viewport layout")
             i = 1
             for viewport in self._viewports:
                 view = instrmodel.MicroscopeView(
@@ -101,6 +98,7 @@ class ViewController(object):
         # If Optical only: all Optical
         # TODO: first one is brightfield only?
         elif not self._microscope.ebeam and self._microscope.light:
+            logging.info("Creating Optical only viewport layout")
             i = 1
             for viewport in self._viewports:
                 view = instrmodel.MicroscopeView(
@@ -157,7 +155,8 @@ class ViewController(object):
             self._microscope.combo2_view = view
 
             # Start off with the 2x2 view
-            self._microscope.focussedView.value = None
+            # Focus defaults to the top right viewport
+            self._microscope.focussedView.value = self._viewports[1].mic_view
 
         else:
             logging.warning("No known microscope configuration, creating 4 generic views")
