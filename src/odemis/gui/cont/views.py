@@ -92,7 +92,6 @@ class ViewController(object):
                          )
                 viewport.setView(view, self._microscope)
                 i += 1
-            #print dir(self._viewports[0])
             self._microscope.focussedView.value = self._viewports[0].mic_view
 
         # If Optical only: all Optical
@@ -157,7 +156,6 @@ class ViewController(object):
             # Start off with the 2x2 view
             # Focus defaults to the top right viewport
             self._microscope.focussedView.value = self._viewports[1].mic_view
-
         else:
             logging.warning("No known microscope configuration, creating 4 generic views")
             i = 1

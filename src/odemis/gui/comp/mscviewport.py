@@ -200,6 +200,9 @@ class MicroscopeViewport(wx.Panel):
         # via XRC.
         assert(self._microscope_view is None)
 
+        # import traceback
+        # traceback.print_stack()
+
         self._microscope_view = microscope_view
         self._microscope_model = microscope_model
 
@@ -283,9 +286,10 @@ class MicroscopeViewport(wx.Panel):
         # get all the mpps
         mpps = set()
         for s in self._microscope_view.getStreams():
-            im = s.image.value
-            if im and im.mpp:
-                mpps.add(im.mpp)
+            if hasattr(s, "image"):
+                im = s.image.value
+                if im and im.mpp:
+                    mpps.add(im.mpp)
 
         if len(mpps) == 1:
             # two magnifications

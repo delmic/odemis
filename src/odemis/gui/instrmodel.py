@@ -382,11 +382,14 @@ class MicroscopeView(object):
             self.stream_tree.streams.append(stream)
 
         # subscribe to the stream's image
-        stream.image.subscribe(self._onNewImage)
+        if hasattr(stream, "image"):
+            stream.image.subscribe(self._onNewImage)
 
-        # if the stream already has an image, update now
-        if stream.image.value and stream.image.value.image:
-            self._onNewImage(stream.image.value)
+            # if the stream already has an image, update now
+            if stream.image.value and stream.image.value.image:
+                self._onNewImage(stream.image.value)
+        else:
+            logging.warn("No image found for stream %s", type(stream))
 
     def removeStream(self, stream):
         """

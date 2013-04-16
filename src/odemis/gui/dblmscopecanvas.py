@@ -143,20 +143,21 @@ class DblMicroscopeCanvas(DraggableCanvas):
                 logging.error("StreamTree has a None stream")
                 continue
 
-            iim = s.image.value
+            if hasattr(s, "image"):
+                iim = s.image.value
 
-            if iim is None or iim.image is None:
-                continue
+                if iim is None or iim.image is None:
+                    continue
 
-            if isinstance(s, EM_STREAMS):
-                # as first
-                images.insert(0, iim)
-                if has_sem_image:
-                    logging.warning(("Multiple SEM images are not handled "
-                                     "correctly for now"))
-                has_sem_image = True
-            else:
-                images.append(iim)
+                if isinstance(s, EM_STREAMS):
+                    # as first
+                    images.insert(0, iim)
+                    if has_sem_image:
+                        logging.warning(("Multiple SEM images are not handled "
+                                         "correctly for now"))
+                    has_sem_image = True
+                else:
+                    images.append(iim)
 
         if not has_sem_image: # make sure there is always a SEM image
             images.insert(0, None)

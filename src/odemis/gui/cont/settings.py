@@ -38,12 +38,12 @@ import odemis.gui.comp.text as text
 import odemis.gui.img.data as img
 import odemis.gui.util.units as utun
 
-import odemis.gui.model
 from odemis.model import getVAs, NotApplicableError, VigilantAttributeBase
 from odemis.gui.comp.foldpanelbar import FoldPanelItem
 from odemis.gui.comp.radio import GraphicalRadioButtonControl
 from odemis.gui.comp.slider import UnitIntegerSlider, UnitFloatSlider
 from odemis.gui.conf.settingspanel import CONFIG
+from odemis.gui.model.stream import SpectrumStream
 from odemis.gui.util.widgets import VigilantAttributeConnector
 from odemis.gui.util.units import readable_str
 
@@ -676,7 +676,7 @@ class SecomSettingsController(SettingsBarController):
 
 class SparcSettingsController(SettingsBarController):
 
-    def __init__(self, parent_frame, microscope_model, highlight_change=False):
+    def __init__(self, parent_frame, microscope_model, streams, highlight_change=False):
         super(SparcSettingsController, self).__init__(microscope_model,
                                                       highlight_change)
 
@@ -716,25 +716,21 @@ class SparcSettingsController(SettingsBarController):
                     self._spectrum_panel
             )
 
+            spectrum_streams = [s for s in streams if isinstance(s, SpectrumStream)]
 
-            # Here Stream can be added manunally
-            self._spectrum_panel.add_divider()
+            if spectrum_streams:
+                self._spectrum_panel.add_divider()
 
-            self._spectrum_stream = odemis.gui.model.stream.SpectrumStream(
-                                        "Spectrum",
-                                        microscope_model.spectrometer,
-                                        microscope_model.spectrometer.data,
-                                        microscope_model.ebeam)
+                for spectrum_stream in spectrum_streams:
+                    self._spectrum_panel.add_value(
+                            "repetition",
+                            spectrum_stream.repetition,
+                            None,  #component
+                            CONFIG["spectrometer"]["repetition"])
 
-            self._spectrum_panel.add_value(
-                    "repetition",
-                    self._spectrum_stream.repetition,
-                    None,  #component
-                    CONFIG["spectrometer"]["repetition"])
-
-            # Added for debug only
-            self._spectrum_panel.add_value(
-                    "roi (debug)",
-                    self._spectrum_stream.roi,
-                    None,  #component
-                    CONFIG["spectrometer"]["roi"])
+                    # Added for debug only
+                    self._spectrum_panel.add_value(
+                            "roi (debug)",
+                            spectrum_stream.roi,
+                            None,  #component
+                            CONFIG["spectrometer"]["roi"])
