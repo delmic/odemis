@@ -545,7 +545,9 @@ class SpectrumStream(Stream):
 
         # exposure time of each pixel is the exposure time of the detector,
         # the dwell time of the emitter will be adapted before acquisition.
-
+        
+        # FIXME: we should do the opposite, the interface controller updates this
+        # value when needed
         pub.subscribe(self.on_selection_changed, 'sparc.acq.selection.changed')
 
     def on_selection_changed(self, selection):
@@ -581,6 +583,72 @@ class SpectrumStream(Stream):
             logging.exception(msg, self.name.value)
             return Stream.estimateAcquisitionTime(self)
 
+class ARStream(Stream):
+    """
+    An angular-resolved stream. Be aware that acquisition can be very long so should
+    not be used for live view. So it has no .image (for now).
+    See StaticARStream for displaying a stream.
+    """
+
+    def __init__(self, name, detector, dataflow, emitter):
+        self.name = model.StringVA(name)
+
+        # Hardware Components
+        self._detector = detector # the CCD
+        self._emitter = emitter # the e-beam
+        # To acquire simultaneously other detector (ex: SEM secondary electrons)
+        # a separate stream must be used, and the acquisition manager will take
+        # care of doing both at the same time
+
+        # data-flow of the spectrometer
+        self._dataflow = dataflow
+
+        # all the information needed to acquire an image (in addition to the
+        # hardware component settings which can be directly set).
+
+        # Region of interest as left, top, right, bottom (in ratio from the
+        # whole area of the emitter => between 0 and 1)
+        self.roi = model.TupleContinuous((0, 0, 1, 1),
+                                         range=[(0, 0, 0, 0), (1, 1, 1, 1)],
+                                         cls=(int, long, float))
+        # the number of pixels acquired in each dimension
+        # it will be assigned to the resolution of the emitter (but cannot be
+        # directly set, as one might want to use the emitter while configuring
+        # the stream).
+        self.repetition = model.ResolutionVA(emitter.resolution.value,
+                                             emitter.resolution.range)
+
+        # exposure time of each pixel is the exposure time of the detector,
+        # the dwell time of the emitter will be adapted before acquisition.
+
+    def estimateAcquisitionTime(self):
+        try:
+            res = list(self.repetition.value)
+            # Typically there is few more pixels inserted at the beginning of each
+            # line for the settle time of the beam. We guesstimate by just adding
+            # 1 pixel to each line
+            if len(res) == 2:
+                res[1] += 1
+            else:
+                logging.warning(("Resolution of scanner is not 2 dimensional, "
+                                 "time estimation might be wrong"))
+
+            # Each pixel x the exposure time (of the detector) + readout time + 10% overhead
+            exp = self._detector.exposureTime.value
+            try:
+                ro_rate = self._detector.readoutRate.value
+                readout = numpy.prod(self._detector.resolution.value) / ro_rate
+            except:
+                readout = 0
+            duration = (exp + readout) * numpy.prod(res) * 1.10
+            # Add the setup time
+            duration += self.SETUP_OVERHEAD
+
+            return duration
+        except:
+            msg = "Exception while estimating acquisition time of %s"
+            logging.exception(msg, self.name.value)
+            return Stream.estimateAcquisitionTime(self)
 
 class StaticStream(Stream):
     """ Stream containing one static image.

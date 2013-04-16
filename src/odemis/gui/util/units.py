@@ -124,10 +124,12 @@ def readable_str(value, unit=None):
       used to make the value more readable, unless None is given.
     return (string)
     """
+    # TODO: add a optional parameter to select the number of significant numbers, default to 3
     # TODO: if unit="s", and value > 1 use readable_time? getting ks is weird
     if unit is None:
         # don't put SI scaling prefix
         if isinstance(value, collections.Iterable):
+            # Could use "×" , but less readable than "x"
             return u" x ".join([to_string_pretty(v) for v in value])
         else:
             return to_string_pretty(value)
