@@ -116,7 +116,7 @@ def main(*args):
         neid = int(eid) # should be a int (also ensures that there is no trick in the name)
         ename = OUT_DIR + "environment/%d.json" % neid
         logging.debug("Downloading environment %s", eid)
-        #download(eurl, ename)
+        download(eurl, ename)
         try:
             open_json_or_remove(ename)
         except ValueError:
@@ -134,8 +134,7 @@ def main(*args):
         substances[nsid] = surl
         logging.debug("Downloading substance %d", nsid)
         sname = OUT_DIR + "substance/%d.json" % nsid
-        if nsid == 58:
-            download(surl, sname)
+        download(surl, sname)
         
         # gif/png file too, if it is there
         try:
