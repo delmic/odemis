@@ -200,6 +200,9 @@ class MicroscopeViewport(wx.Panel):
         # via XRC.
         assert(self._microscope_view is None)
 
+        # import traceback
+        # traceback.print_stack()
+
         self._microscope_view = microscope_view
         self._microscope_model = microscope_model
 
@@ -283,9 +286,10 @@ class MicroscopeViewport(wx.Panel):
         # get all the mpps
         mpps = set()
         for s in self._microscope_view.getStreams():
-            im = s.image.value
-            if im and im.mpp:
-                mpps.add(im.mpp)
+            if hasattr(s, "image"):
+                im = s.image.value
+                if im and im.mpp:
+                    mpps.add(im.mpp)
 
         if len(mpps) == 1:
             # two magnifications
@@ -346,7 +350,7 @@ class MicroscopeViewport(wx.Panel):
         # TODO: Just depend on the "merge" argument on the streamTree
         # For now we just duplicate the logic in _convertStreamsToImages():
         #  display iif both EM and OPT streams
-        streams = self._microscope_view.streams.getStreams()
+        streams = self._microscope_view.stream_tree.getStreams()
         has_opt = any(isinstance(s, OPTICAL_STREAMS) for s in streams)
         has_em = any(isinstance(s, EM_STREAMS) for s in streams)
 
@@ -358,8 +362,8 @@ class MicroscopeViewport(wx.Panel):
         # MergeSlider is displayed iif:
         # * Root operator of StreamTree accepts merge argument
         # * (and) Root operator of StreamTree has >= 2 images
-#        if ("merge" in self._microscope_view.streams.kwargs and
-#            len(self._microscope_view.streams.streams) >= 2):
+#        if ("merge" in self._microscope_view.stream_tree.kwargs and
+#            len(self._microscope_view.stream_tree.streams) >= 2):
 #            self.ShowMergeSlider(True)
 #        else:
 #            self.ShowMergeSlider(False)

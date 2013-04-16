@@ -14,6 +14,7 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
+import odemis.gui.model.stream as stream
 from concurrent.futures._base import CancelledError
 from odemis import model
 from odemis.gui import instrmodel
@@ -89,13 +90,13 @@ class TestWithBackend(unittest.TestCase):
         # create some streams connected to the backend
         cls.microscope = model.getMicroscope()
         cls.imodel = instrmodel.MicroscopeModel(cls.microscope)
-        s1 = instrmodel.FluoStream("fluo1",
+        s1 = stream.FluoStream("fluo1",
                   cls.imodel.ccd, cls.imodel.ccd.data,
                   cls.imodel.light, cls.imodel.light_filter)
-        s2 = instrmodel.FluoStream("fluo2",
+        s2 = stream.FluoStream("fluo2",
                   cls.imodel.ccd, cls.imodel.ccd.data,
                   cls.imodel.light, cls.imodel.light_filter)
-        s3 = instrmodel.BrightfieldStream("bf",
+        s3 = stream.BrightfieldStream("bf",
                   cls.imodel.ccd, cls.imodel.ccd.data,
                   cls.imodel.light)
         cls.streams = [s1, s2, s3]

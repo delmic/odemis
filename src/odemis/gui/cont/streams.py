@@ -264,7 +264,7 @@ class StreamController(object):
 
         # update the "visible" icon of each stream panel to match the list
         # of streams in the view
-        visible_streams = view.streams.getStreams()
+        visible_streams = view.stream_tree.getStreams()
 
         for e in self._stream_bar.stream_panels:
             e.setVisible(e.stream in visible_streams)

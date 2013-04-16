@@ -215,38 +215,34 @@ class MicroscopeModel(object):
     def onEMState(self, state):
         """ Event handler for when the state of the electron microscope changes
         """
-        if state == STATE_OFF:
+        if state == STATE_OFF and self.ebeam:
             # TODO: actually turn off the ebeam and detector
-            if self.ebeam:
-                try:
-                    # TODO save the previous value
-                    # blank the ebeam
-                    self.ebeam.energy.value = 0
-                except VA_EXCEPTIONS:
-                    # Too bad. let's just do nothing then.
-                    logging.debug("Ebeam doesn't support setting energy to 0")
-        elif state == STATE_PAUSE:
-            if self.ebeam:
-                try:
-                    # TODO save the previous value
-                    # blank the ebeam
-                    self.ebeam.energy.value = 0
-                except VA_EXCEPTIONS:
-                    # Too bad. let's just do nothing then.
-                    logging.debug("Ebeam doesn't support setting energy to 0")
+            try:
+                # TODO save the previous value
+                # blank the ebeam
+                self.ebeam.energy.value = 0
+            except VA_EXCEPTIONS:
+                # Too bad. let's just do nothing then.
+                logging.debug("Ebeam doesn't support setting energy to 0")
+        elif state == STATE_PAUSE and self.ebeam:
+            try:
+                # TODO save the previous value
+                # blank the ebeam
+                self.ebeam.energy.value = 0
+            except VA_EXCEPTIONS:
+                # Too bad. let's just do nothing then.
+                logging.debug("Ebeam doesn't support setting energy to 0")
 
-        elif state == STATE_ON:
-            # TODO anything else to turn on?
-            if self.ebeam:
-                try:
-                    # TODO use the previous value
-                    if hasattr(self.ebeam.energ, "choice"):
-                        if isinstance(self.ebeam.energy.choices,
-                                      collections.Iterable):
-                            self.ebeam.energy.value = self.ebeam.energy.choices[1]
-                except VA_EXCEPTIONS:
-                    # Too bad. let's just do nothing then (and hope it's on)
-                    logging.debug("Ebeam doesn't support setting energy")
+        elif state == STATE_ON and self.ebeam:
+            try:
+                # TODO use the previous value
+                if hasattr(self.ebeam.energ, "choice"):
+                    if isinstance(self.ebeam.energy.choices,
+                                  collections.Iterable):
+                        self.ebeam.energy.value = self.ebeam.energy.choices[1]
+            except VA_EXCEPTIONS:
+                # Too bad. let's just do nothing then (and hope it's on)
+                logging.debug("Ebeam doesn't support setting energy")
 
     def onARState(self, state):
         # nothing to do here, the SPARC GUI will just hide the options
@@ -318,7 +314,7 @@ class MicroscopeView(object):
         # Streams to display (can be considered an implementation detail in most
         # cases)
         # Note: use addStream/removeStream for simple modifications
-        self.streams = StreamTree(merge=self.merge_ratio.value)
+        self.stream_tree = StreamTree(merge=self.merge_ratio.value)
         # Only modify with this lock acquired:
         # TODO: Is this the source of the intermittent locking of the GUI when
         # Streams are active? If so, is there another/better way?
@@ -383,7 +379,7 @@ class MicroscopeView(object):
         Do not modify directly, use addStream(), and removeStream().
         Note: use .streams for getting the raw StreamTree
         """
-        return self.streams.getStreams()
+        return self.stream_tree.getStreams()
 
     def addStream(self, stream):
         """
@@ -393,7 +389,7 @@ class MicroscopeView(object):
         If the stream is already present, nothing happens
         """
         # check if the stream is already present
-        if stream in self.streams.getStreams():
+        if stream in self.stream_tree.getStreams():
             return
 
         if not isinstance(stream, self.stream_classes):
@@ -403,14 +399,17 @@ class MicroscopeView(object):
         # FIXME: manage sub-trees, with different merge operations
         # For now we just add it to the list of streams, with the only merge operation possible
         with self._streams_lock:
-            self.streams.streams.append(stream)
+            self.stream_tree.streams.append(stream)
 
         # subscribe to the stream's image
-        stream.image.subscribe(self._onNewImage)
+        if hasattr(stream, "image"):
+            stream.image.subscribe(self._onNewImage)
 
-        # if the stream already has an image, update now
-        if stream.image.value and stream.image.value.image:
-            self._onNewImage(stream.image.value)
+            # if the stream already has an image, update now
+            if stream.image.value and stream.image.value.image:
+                self._onNewImage(stream.image.value)
+        else:
+            logging.warn("No image found for stream %s", type(stream))
 
     def removeStream(self, stream):
         """
@@ -423,12 +422,12 @@ class MicroscopeView(object):
 
         with self._streams_lock:
             # check if the stream is already removed
-            if not stream in self.streams.getStreams():
+            if not stream in self.stream_tree.getStreams():
                 return
 
             # remove stream from the StreamTree()
             # TODO handle more complex trees
-            self.streams.streams.remove(stream)
+            self.stream_tree.streams.remove(stream)
 
         # let everyone know that the view has changed
         self.lastUpdate.value = time.time()
@@ -454,7 +453,7 @@ class MicroscopeView(object):
         # It has effect only if the operator can do something with the "merge"
         # argument
         with self._streams_lock:
-            self.streams.kwargs["merge"] = ratio
+            self.stream_tree.kwargs["merge"] = ratio
 
         # just let everyone that the composited image has changed
         self.lastUpdate.value = time.time()

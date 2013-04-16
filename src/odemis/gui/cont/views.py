@@ -50,7 +50,7 @@ class ViewController(object):
     """ Manages the microscope view updates, change of viewport focus, etc.
     """
 
-    def __init__(self, micgui, main_frame):
+    def __init__(self, micgui, main_frame, viewports=None):
         """
         micgui (MicroscopeModel) -- the representation of the microscope GUI
         main_frame: (wx.Frame) -- the frame which contains the 4 viewports
@@ -60,8 +60,11 @@ class ViewController(object):
         self._main_frame = main_frame
 
         # list of all the viewports (widgets that show the views)
-        self._viewports = [main_frame.vp_secom_tl, main_frame.vp_secom_tr,
-                           main_frame.vp_secom_bl, main_frame.vp_secom_br]
+        if viewports:
+            self._viewports = viewports
+        else:
+            self._viewports = [main_frame.vp_secom_tl, main_frame.vp_secom_tr,
+                               main_frame.vp_secom_bl, main_frame.vp_secom_br]
 
         # create the (default) views and set focussedView
         self._createViews()
@@ -69,9 +72,6 @@ class ViewController(object):
         # subscribe to layout and view changes
         self._microscope.viewLayout.subscribe(self._onViewLayout, init=True)
         self._microscope.focussedView.subscribe(self._onView, init=False)
-
-        # Focus defaults to the top right viewport
-        self._microscope.focussedView.value = self._viewports[1].mic_view
 
     def _createViews(self):
         """
@@ -81,6 +81,7 @@ class ViewController(object):
 
         # If SEM only: all SEM
         if self._microscope.ebeam and not self._microscope.light:
+            logging.info("Creating SEM only viewport layout")
             i = 1
             for viewport in self._viewports:
                 view = instrmodel.MicroscopeView(
@@ -91,11 +92,12 @@ class ViewController(object):
                          )
                 viewport.setView(view, self._microscope)
                 i += 1
-            self._microscope.focussedView.value = self._viewports[0].view
+            self._microscope.focussedView.value = self._viewports[0].mic_view
 
         # If Optical only: all Optical
         # TODO: first one is brightfield only?
         elif not self._microscope.ebeam and self._microscope.light:
+            logging.info("Creating Optical only viewport layout")
             i = 1
             for viewport in self._viewports:
                 view = instrmodel.MicroscopeView(
@@ -106,7 +108,7 @@ class ViewController(object):
                          )
                 viewport.setView(view, self._microscope)
                 i += 1
-            self._microscope.focussedView.value = self._viewports[0].view
+            self._microscope.focussedView.value = self._viewports[0].mic_view
 
         # If both SEM and Optical: SEM/Optical/2x combined
         elif self._microscope.ebeam and self._microscope.light:
@@ -152,8 +154,8 @@ class ViewController(object):
             self._microscope.combo2_view = view
 
             # Start off with the 2x2 view
-            self._microscope.focussedView.value = None
-
+            # Focus defaults to the top right viewport
+            self._microscope.focussedView.value = self._viewports[1].mic_view
         else:
             logging.warning("No known microscope configuration, creating 4 generic views")
             i = 1
@@ -165,7 +167,7 @@ class ViewController(object):
                          )
                 viewport.setView(view, self._microscope)
                 i += 1
-            self._microscope.focussedView.value = self._viewports[0].view
+            self._microscope.focussedView.value = self._viewports[0].mic_view
 
         # TODO: if chamber camera: br is just chamber, and it's the focussedView
 

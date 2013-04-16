@@ -47,7 +47,7 @@ class InstrumentalImage(object):
         rotation is applied from the center of the image.
         """
         self.image = wx_img
-        # TODO should be a tuple (x/y)
+        # TODO: should be a tuple (x/y)
         assert(mpp is None or (mpp > 0))
         self.mpp = mpp
         assert(center is None or (len(center) == 2))

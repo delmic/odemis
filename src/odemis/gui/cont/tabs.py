@@ -32,6 +32,8 @@ from odemis.gui.cont.microscope import MicroscopeController
 from odemis.gui.cont import settings
 from odemis.gui.cont.streams import StreamController
 from odemis.gui.cont.views import ViewController, ViewSelector
+from odemis.gui.model.stream import SpectrumStream, SEMStream
+from odemis.gui.instrmodel import STATE_ON
 
 main_tab_controller = None
 
@@ -146,15 +148,43 @@ class SparcAcquisitionTab(Tab):
         if not self.microscope_model:
             return
 
+        sem_stream = SEMStream(
+                        "SEM",
+                        self.microscope_model.sed,
+                        self.microscope_model.sed.data,
+                        self.microscope_model.ebeam)
+
+        spectrum_stream = SpectrumStream(
+                                    "Spectrum",
+                                    self.microscope_model.spectrometer,
+                                    self.microscope_model.spectrometer.data,
+                                    self.microscope_model.ebeam)
+
+        self._view_controller = ViewController(
+                                    self.microscope_model,
+                                    self.main_frame,
+                                    [self.main_frame.vp_sparc_acq_view]
+                                )
+
+        mic_view = self._view_controller._viewports[0].mic_view
+        mic_view.addStream(sem_stream)
+        mic_view.addStream(spectrum_stream)
+
         self._settings_controller = settings.SparcSettingsController(
                                         self.main_frame,
-                                        self.microscope_model
+                                        self.microscope_model,
+                                        [sem_stream, spectrum_stream]
                                     )
 
         self._acquisition_controller = SparcAcquiController(
                                             self.main_frame,
                                             self.microscope_model
                                        )
+
+        self.microscope_model.emState.value = STATE_ON
+        sem_stream.is_active.value = True
+        sem_stream.should_update.value = True
+        #print self.microscope_model.emState.value
 
 class TabBarController(object):
 
