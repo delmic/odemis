@@ -473,8 +473,9 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
                 #buf_pos = self.b_to_buffer_pos((9, 19))
 
                 ctx.set_source_rgb(0.0, 0.0, 0.0)
-                ctx.move_to(9, 19)
+                buffer_pos = self.base.view_to_buffer_pos((9, 19))
+                ctx.move_to(*buffer_pos)
                 ctx.show_text(msg)
                 ctx.set_source_rgb(1.0, 1.0, 1.0)
-                ctx.move_to(10, 20)
+                ctx.move_to(buffer_pos[0] + 1, buffer_pos[1] + 1)
                 ctx.show_text(msg)
