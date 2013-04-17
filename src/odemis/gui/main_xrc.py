@@ -1092,7 +1092,7 @@ def __init_resources():
                         <object class="sizeritem">
                           <object class="FoldPanelBar" name="fpb_settings">
                             <object class="FoldPanelItem" name="fp_settings_sparc_sem">
-                              <label>SEM SETTINGS</label>
+                              <label>SEM</label>
                               <fg>#1A1A1A</fg>
                               <bg>#555555</bg>
                               <XRCED>
@@ -1100,7 +1100,7 @@ def __init_resources():
                               </XRCED>
                             </object>
                             <object class="FoldPanelItem" name="fp_settings_sparc_angular">
-                              <label>ANGULAR CAMERA SETTINGS</label>
+                              <label>ANGLE RESOLVED</label>
                               <fg>#1A1A1A</fg>
                               <bg>#555555</bg>
                               <XRCED>
@@ -1115,7 +1115,7 @@ def __init_resources():
                               <assign_var>1</assign_var>
                             </XRCED>
                             <object class="FoldPanelItem" name="fp_settings_sparc_spectrum">
-                              <label>SPECTROMETER SETTINGS</label>
+                              <label>SPECTROMETER</label>
                               <fg>#1A1A1A</fg>
                               <bg>#555555</bg>
                               <XRCED>
@@ -1144,7 +1144,7 @@ def __init_resources():
                         <orient>wxVERTICAL</orient>
                         <object class="sizeritem">
                           <object class="CaptionBar">
-                            <label>FILE SETTINGS</label>
+                            <label>AQCUISITION</label>
                             <fg>#1A1A1A</fg>
                           </object>
                           <option>0</option>
