@@ -17,72 +17,12 @@ You should have received a copy of the GNU General Public License along with Ode
 '''
 from Pyro4.core import oneway
 from odemis import model
-import Queue
 import logging
 import pickle
 import threading
 import time
 import unittest
 
-# unused, alternative implementation to model.Event
-class EventQueue(object):
-    """
-    Event implementation using queues. Avoids blocking but latency ~1ms.
-    """
-    def __init__(self):
-        self._queues = {} # listener -> Queue (of boolean)
-    
-    def subscribe(self, listener, callback=None):
-        # TODO: handle when changing callback or queue
-        if (listener not in self._queues or 
-            (callback and self._queues[listener] != callback) or
-            (callback is None and not isinstance(self._queues[listener], Queue.Queue))):
-            if callback:
-                self._queues[listener] = callback
-            else:
-                self._queues[listener] = Queue.Queue(10) # bounded to detect over-run
-    
-    def unsubscribe(self, listener):
-        try:
-            if isinstance(self._queues[listener], Queue.Queue):
-                self._queues[listener].put(False) # event to say it's being unsubscribed
-            else:
-                self._queues[listener](False)
-            del self._queues[listener]
-        except KeyError:
-            # listener not in the queue -> it's fine
-            pass
-
-    def trigger(self):
-        for l, q in self._queues.items():
-            if isinstance(q, Queue.Queue):
-                if q.full():
-                    logging.warning("Over-run for listener %r of event %r", l, q)
-                    # TODO: skip, or ensure it still gets it eventually?
-                    continue # don't delay the rest of the listeners
-    #            q.put(True)
-                q.put(time.time())
-                time.sleep(0) # yield, so that the other threads get it faster
-            else:
-                q(time.time())
-    
-    def wait(self, listener, timeout=None):
-        """
-        Wait for the event to trigger
-        returns (boolean): True if the event has happened, False if timeout or 
-         unsubscribed (unsynchronized).
-        Note: works only if the subscription was without callback
-        """
-        try:
-            return self._queues[listener].get(timeout=timeout)
-        except (Queue.Empty, KeyError):
-            return False
-    
-    def clear(self, listener):
-        # TODO: if listener is None, clear all queues?
-        if isinstance(self._queues[listener], Queue.Queue):
-            self._queues[listener].clear()
-            
 class SimpleDataFlow(model.DataFlow):
     # very basic dataflow
     def __init__(self, *args, **kwargs):
@@ -178,8 +118,6 @@ class SynchronizableDataFlow(model.DataFlow):
             must_stop = self._wait_event_or_stop_cb()
             if must_stop:
                 break
-#            if self._sync_event:
-#                self._sync_event.wait(self)
             
 #            time.sleep(1) #DEBUG: for test over-run
             data = model.DataArray([[i, 0],[0, 0]], metadata={"a": 2, "num": i})
@@ -350,6 +288,7 @@ class TestDataFlow(unittest.TestCase):
             time.sleep(0.2) # 0.2s should be more than enough in any case
         
         self.assertEqual(self.left, 0)
+
         
 if __name__ == "__main__":
     unittest.main()

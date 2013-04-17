@@ -1319,14 +1319,17 @@ class SEMComedi(model.HwComponent):
         Note 2: this method returns immediately (and the emulation is run in a
          separate thread).
         """
-        if n <= 0:
+        # no need if no one's listening
+        if not self._scanner.newPosition.hasListeners():
             return
         
+        if n <= 0:
+            return
+                    
         if period < 10e-6:
             # don't even try: that's the time it'd take to have just one loop
             # doing nothing
-            if self._scanner.newPosition.hasListeners():
-                logging.error("Cannot generate newPosition events at such a "
+            logging.error("Cannot generate newPosition events at such a "
                               "small period of %s µs", period * 1e6)
             return
             
@@ -1431,7 +1434,7 @@ class SEMComedi(model.HwComponent):
             self._acquisition_thread.join(10) # 10s timeout for safety
             if self._acquisition_thread.isAlive():
                 raise OSError("Failed to stop the acquisition thread")
-            # ensure it's not set, even if the thread died prematurately
+            # ensure it's not set, even if the thread died prematurely
             self._acquisition_must_stop.clear()
         
     def _acquisition_run(self):
@@ -1519,7 +1522,11 @@ class SEMComedi(model.HwComponent):
         except:
             logging.exception("Unexpected failure during image acquisition")
         finally:
-            self.set_to_resting_position()
+            try:
+                self.set_to_resting_position()
+            except comedi.ComediError:
+                # can happen if the driver already terminated
+                pass
             logging.debug("Acquisition thread closed")
             self._acquisition_must_stop.clear()      
     
@@ -1538,7 +1545,7 @@ class SEMComedi(model.HwComponent):
             comedi.close(self._device)
             self._device = None
 
-            # need to be done explicitely to catch exceptions            
+            # need to be done explicitly to catch exceptions            
             self._reader.close()
             self._writer.close()
     

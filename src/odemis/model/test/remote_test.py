@@ -32,13 +32,13 @@ import threading
 import time
 import unittest
 
-#logging.getLogger().setLevel(logging.DEBUG)
+logging.getLogger().setLevel(logging.DEBUG)
 #gc.set_debug(gc.DEBUG_LEAK | gc.DEBUG_STATS)
 
 # Use processes or threads? Threads are easier to debug, but less real
 USE_THREADS = True
 
-#@unittest.skip("simple")
+@unittest.skip("simple")
 class ContainerTest(unittest.TestCase):
     def test_empty_container(self):
         container = model.createNewContainer("testempty")
@@ -98,7 +98,7 @@ class ContainerTest(unittest.TestCase):
         rdaemon.ping()
         
     
-#@unittest.skip("simple")
+# @unittest.skip("simple")
 class SerializerTest(unittest.TestCase):
     
     def test_recursive(self):
@@ -231,7 +231,7 @@ class ProxyOfProxyTest(unittest.TestCase):
         comp2.terminate()
         model.getContainer("testscont").terminate()
         model.getContainer("testscont2").terminate()
-    
+
     def test_dataflow(self):
         comp = model.createInNewContainer("testscont", MyComponent, 
                                           {"name":"MyComp"})
@@ -264,13 +264,49 @@ class ProxyOfProxyTest(unittest.TestCase):
         model.getContainer("testscont2").terminate()
         time.sleep(0.1) # give it some time to terminate
     
+    def test_dataflow_unsub(self):
+        """
+        Check the dataflow is automatically unsubscribed when the subscriber
+        disappears.
+        """
+        comp = model.createInNewContainer("testscont", MyComponent, 
+                                          {"name":"MyComp"})
+        comp2 = model.createInNewContainer("testscont2", MyComponent, 
+                                           {"name":"MyComp2"})
+        
+        self.count = 0
+        self.data_arrays_sent = 0
+        comp.data.reset()
+        # special hidden function that will directly ask the original DF
+        nlisteners = comp.data._count_listeners()
+        self.assertEqual(nlisteners, 0)
+        
+        comp2.sub(comp.data)
+        time.sleep(0.5)
+#         comp2.unsub()
+        count_arrays = comp2.get_data_count()
+        logging.info("received %d arrays", count_arrays)
+        nlisteners = comp.data._count_listeners()
+        logging.info("orig has %d listeners", nlisteners)
+        comp2.terminate()
+        model.getContainer("testscont2").terminate()
+        logging.info("comp2 should now be disappeared")
+        
+        time.sleep(0.4)
+        nlisteners = comp.data._count_listeners()
+        self.assertEqual(nlisteners, 0)
+
+        comp.terminate()
+        model.getContainer("testscont").terminate()
+        time.sleep(0.1) # give it some time to terminate
+        
     def receive_data(self, dataflow, data):
         self.count += 1
         self.assertEqual(data.shape, (2048, 2048))
         self.data_arrays_sent = data[0][0]
         self.assertGreaterEqual(self.data_arrays_sent, self.count)
 
-#@unittest.skip("simple")
+# @unittest.skip("simple")
 class RemoteTest(unittest.TestCase):
     """
     Test the Component, DataFlow, and VAs when shared remotely.
@@ -701,6 +737,10 @@ class MyComponent(model.Component):
         self.startAcquire = model.Event() # triggers when the acquisition of .data starts
         self.data = FakeDataFlow(sae=self.startAcquire)
         self.datas = SynchronizableDataFlow()
+        
+        self.data_count = 0
+        self._df = None
+        
         # TODO automatically register the property when serializing the Component
         self.prop = model.IntVA(42)
         self.cont = model.FloatContinuous(2.0, [-1, 3.4], unit="C")
@@ -710,6 +750,7 @@ class MyComponent(model.Component):
     def _setCut(self, value):
         self.data.cut = value
         return self.data.cut
+    
     
     @roattribute
     def my_value(self):
@@ -760,6 +801,20 @@ class MyComponent(model.Component):
     
     def _on_end_long(self, future):
         self.number_futures += 1
+
+    def sub(self, df):
+        self._df = df
+        df.subscribe(self.data_receive)
+    
+    def unsub(self):
+        self._df.unsubscribe(self.data_receive)
+    
+    def data_receive(self, df, data):
+        logging.info("Received data of shape %r", data.shape)
+        self.data_count += 1
+    
+    def get_data_count(self):
+        return self.data_count
     
     # it'll never be able to answer back if everything goes fine
     @oneway

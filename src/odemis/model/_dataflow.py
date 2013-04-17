@@ -436,10 +436,13 @@ class DataFlowProxy(DataFlowBase, Pyro4.Proxy):
             if self._thread.is_alive():
                 if len(self._listeners):
                     logging.warning("Stopping subscription while there are still subscribers because dataflow '%s' is going out of context", self._global_name)
+                    Pyro4.Proxy.__getattr__(self, "unsubscribe")(self._global_name)
                 self._commands.send("STOP")
                 self._thread.join()
             self._commands.close()
             self._ctx.term()
+        
+        Pyro4.Proxy.__del__(self)
 
 
 class SubscribeProxyThread(threading.Thread):
@@ -520,7 +523,8 @@ class SubscribeProxyThread(threading.Thread):
                     return
         
 def unregister_dataflows(self):
-    for name, value in inspect.getmembers(self, lambda x: isinstance(x, DataFlowBase)):
+    # Only for the "DataFlow"s, the real objects, not the proxys
+    for name, value in inspect.getmembers(self, lambda x: isinstance(x, DataFlow)):
         value._unregister()
 
 def dump_dataflows(self):

@@ -165,7 +165,7 @@ class Component(ComponentBase):
     def terminate(self):
         """
         Stop the Component from executing.
-        The component shouldn't be used afterward.
+        The component shouldn't be used afterwards.
         """
         for c in self.children:
             c.terminate()

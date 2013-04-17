@@ -434,7 +434,7 @@ class SubscribeProxyThread(threading.Thread):
 
 
 def unregister_vigilant_attributes(self):
-    for _, value in inspect.getmembers(self, lambda x: isinstance(x, VigilantAttributeBase)):
+    for _, value in inspect.getmembers(self, lambda x: isinstance(x, VigilantAttribute)):
         value._unregister()
 
 def dump_vigilant_attributes(self):
