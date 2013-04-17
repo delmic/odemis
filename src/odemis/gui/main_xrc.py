@@ -90,6 +90,9 @@ class xrcfr_main(wx.Frame):
         self.fp_settings_sparc_sem = xrc.XRCCTRL(self, "fp_settings_sparc_sem")
         self.fp_settings_sparc_angular = xrc.XRCCTRL(self, "fp_settings_sparc_angular")
         self.fp_settings_sparc_spectrum = xrc.XRCCTRL(self, "fp_settings_sparc_spectrum")
+        self.txt_sparc_filename = xrc.XRCCTRL(self, "txt_sparc_filename")
+        self.btn_sparc_change_file = xrc.XRCCTRL(self, "btn_sparc_change_file")
+        self.lbl_sparc_acq_estimate = xrc.XRCCTRL(self, "lbl_sparc_acq_estimate")
         self.lbl_sparc_acq_estimate = xrc.XRCCTRL(self, "lbl_sparc_acq_estimate")
         self.gauge_sparc_acq = xrc.XRCCTRL(self, "gauge_sparc_acq")
         self.btn_sparc_acquire = xrc.XRCCTRL(self, "btn_sparc_acquire")
@@ -167,7 +170,7 @@ def __init_resources():
     wx.FileSystem.AddHandler(wx.MemoryFSHandler())
 
     main_xrc = '''\
-<?xml version="1.0" ?><resource class="wxStaticLine" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
+<?xml version="1.0" ?><resource class="wxStaticText" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
   <object class="wxFrame" name="fr_main">
     <object class="wxMenuBar">
       <object class="wxMenu">
@@ -1089,7 +1092,7 @@ def __init_resources():
                         <object class="sizeritem">
                           <object class="FoldPanelBar" name="fpb_settings">
                             <object class="FoldPanelItem" name="fp_settings_sparc_sem">
-                              <label>SEM SETTINGS</label>
+                              <label>SEM</label>
                               <fg>#1A1A1A</fg>
                               <bg>#555555</bg>
                               <XRCED>
@@ -1097,7 +1100,7 @@ def __init_resources():
                               </XRCED>
                             </object>
                             <object class="FoldPanelItem" name="fp_settings_sparc_angular">
-                              <label>ANGULAR CAMERA SETTINGS</label>
+                              <label>ANGLE RESOLVED</label>
                               <fg>#1A1A1A</fg>
                               <bg>#555555</bg>
                               <XRCED>
@@ -1112,7 +1115,7 @@ def __init_resources():
                               <assign_var>1</assign_var>
                             </XRCED>
                             <object class="FoldPanelItem" name="fp_settings_sparc_spectrum">
-                              <label>SPECTROMETER SETTINGS</label>
+                              <label>SPECTROMETER</label>
                               <fg>#1A1A1A</fg>
                               <bg>#555555</bg>
                               <XRCED>
@@ -1140,40 +1143,144 @@ def __init_resources():
                       <object class="wxBoxSizer">
                         <orient>wxVERTICAL</orient>
                         <object class="sizeritem">
-                          <object class="wxStaticText" name="lbl_sparc_acq_estimate">
-                            <label>Waiting for region of interest...</label>
-                            <fg>#DDDDDD</fg>
-                            <font>
-                              <size>12</size>
-                              <style>normal</style>
-                              <weight>normal</weight>
-                              <underlined>0</underlined>
-                              <family>default</family>
-                              <face>Ubuntu</face>
-                              <encoding>UTF-8</encoding>
-                            </font>
-                            <style>wxALIGN_RIGHT</style>
-                            <XRCED>
-                              <assign_var>1</assign_var>
-                            </XRCED>
+                          <object class="CaptionBar">
+                            <label>AQCUISITION</label>
+                            <fg>#1A1A1A</fg>
                           </object>
-                          <flag>wxTOP|wxLEFT|wxRIGHT</flag>
-                          <border>12</border>
+                          <option>0</option>
+                          <flag>wxEXPAND</flag>
                         </object>
                         <object class="sizeritem">
-                          <object class="wxGauge" name="gauge_sparc_acq">
-                            <size>-1,10</size>
-                            <range>100</range>
-                            <value>0</value>
+                          <object class="wxPanel">
+                            <object class="wxBoxSizer">
+                              <orient>wxVERTICAL</orient>
+                              <object class="sizeritem">
+                                <object class="wxFlexGridSizer">
+                                  <object class="sizeritem">
+                                    <object class="wxStaticText">
+                                      <label>Filename</label>
+                                      <fg>#E5E5E5</fg>
+                                    </object>
+                                    <flag>wxTOP</flag>
+                                    <border>4</border>
+                                  </object>
+                                  <object class="sizeritem">
+                                    <object class="wxBoxSizer">
+                                      <object class="sizeritem">
+                                        <object class="wxTextCtrl" name="txt_sparc_filename">
+                                          <size>-1,20</size>
+                                          <value>Select a destination file</value>
+                                          <fg>#2FA7D4</fg>
+                                          <bg>#333333</bg>
+                                          <style>wxBORDER_NONE|wxTE_READONLY</style>
+                                          <XRCED>
+                                            <assign_var>1</assign_var>
+                                          </XRCED>
+                                        </object>
+                                        <option>1</option>
+                                        <flag>wxTOP|wxEXPAND</flag>
+                                        <border>2</border>
+                                      </object>
+                                      <object class="sizeritem">
+                                        <object class="ImageTextButton" name="btn_sparc_change_file">
+                                          <size>64,18</size>
+                                          <label>change…</label>
+                                          <delta>1</delta>
+                                          <bitmap>img_btn_64x16_png</bitmap>
+                                          <hover>img_btn_64x16_h_png</hover>
+                                          <selected>img_btn_64x16_a_png</selected>
+                                          <fg>#111111</fg>
+                                          <font>
+                                            <size>9</size>
+                                            <style>normal</style>
+                                            <weight>normal</weight>
+                                            <underlined>0</underlined>
+                                            <family>default</family>
+                                            <face>Ubuntu</face>
+                                            <encoding>UTF-8</encoding>
+                                          </font>
+                                          <tooltip>Choose a filename and destination of the next scan</tooltip>
+                                          <XRCED>
+                                            <assign_var>1</assign_var>
+                                          </XRCED>
+                                        </object>
+                                      </object>
+                                      <orient>wxHORIZONTAL</orient>
+                                    </object>
+                                    <flag>wxEXPAND</flag>
+                                  </object>
+                                  <object class="sizeritem">
+                                    <object class="wxStaticText">
+                                      <label>Destination</label>
+                                      <fg>#E5E5E5</fg>
+                                    </object>
+                                    <flag>wxTOP</flag>
+                                    <border>2</border>
+                                  </object>
+                                  <object class="sizeritem">
+                                    <object class="wxTextCtrl" name="lbl_sparc_acq_estimate">
+                                      <size>200,20</size>
+                                      <value>...</value>
+                                      <fg>#BFBFBF</fg>
+                                      <bg>#333333</bg>
+                                      <style>wxBORDER_NONE|wxTE_READONLY</style>
+                                      <XRCED>
+                                        <assign_var>1</assign_var>
+                                      </XRCED>
+                                    </object>
+                                  </object>
+                                  <cols>2</cols>
+                                  <rows>3</rows>
+                                  <vgap>5</vgap>
+                                  <hgap>10</hgap>
+                                  <growablecols>1</growablecols>
+                                </object>
+                                <flag>wxALL|wxEXPAND</flag>
+                                <border>10</border>
+                              </object>
+                              <object class="sizeritem">
+                                <object class="wxStaticText" name="lbl_sparc_acq_estimate">
+                                  <label>No region of interest selected.</label>
+                                  <fg>#DDDDDD</fg>
+                                  <font>
+                                    <size>12</size>
+                                    <style>normal</style>
+                                    <weight>normal</weight>
+                                    <underlined>0</underlined>
+                                    <family>default</family>
+                                    <face>Ubuntu</face>
+                                    <encoding>UTF-8</encoding>
+                                  </font>
+                                  <style>wxALIGN_RIGHT</style>
+                                  <XRCED>
+                                    <assign_var>1</assign_var>
+                                  </XRCED>
+                                </object>
+                                <flag>wxTOP|wxLEFT|wxRIGHT</flag>
+                                <border>12</border>
+                              </object>
+                              <object class="sizeritem">
+                                <object class="wxGauge" name="gauge_sparc_acq">
+                                  <size>-1,10</size>
+                                  <range>100</range>
+                                  <value>0</value>
+                                  <bg>#7C9FAD</bg>
+                                  <style>wxGA_SMOOTH</style>
+                                  <XRCED>
+                                    <assign_var>1</assign_var>
+                                  </XRCED>
+                                </object>
+                                <flag>wxALL|wxEXPAND</flag>
+                                <border>10</border>
+                              </object>
+                            </object>
                             <bg>#333333</bg>
-                            <style>wxGA_SMOOTH</style>
-                            <XRCED>
-                              <assign_var>1</assign_var>
-                            </XRCED>
                           </object>
-                          <flag>wxTOP|wxLEFT|wxRIGHT|wxEXPAND</flag>
-                          <border>10</border>
+                          <option>0</option>
+                          <flag>wxEXPAND</flag>
                         </object>
+                        
+                        
                         <object class="sizeritem">
                           <object class="ImageTextButton" name="btn_sparc_acquire">
                             <size>382,-1</size>
@@ -3198,6 +3305,48 @@ $\x04\xec\x01(\x85\xec\x01\x08\x84\xf2\x1e\xe0N0d\xb9G\x02|q\x13j*y\xff\
 \xed\xdb\xb6\xbd\xed\xfb\xfe\x99\xce7B"\xa3[x\x9e\xbc\xfd\x01\xcc\xb5s\
 \x9b\xfeW\x19\xec\x00\x00\x00\x00IEND\xaeB`\x82'''
 
+    img_btn_64x16_png = '''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00@\x00\x00\x00\x10\x08\x06\x00\x00\x00\xa6\
+\xe7y)\x00\x00\x00\xa8IDATX\x09\xe5\xcf!
+\x84\x00\x14E\xd1\x97\\\xb7\xc8\x8822\x06\xc1 \x18\x04A\x055\xd8D\x8c\x06\
+\x17"\x08n\xe2\xcd\xffa61/\x9cr\xdb\xc5\xbe\xef\xc1q\x1c\xaf\xf3</C\x11\
+\x97?\xfb;\xd6uM\xb6m\xe3\xb2,\x9c\xa6\x89\xe38\xfe5\xf4W\xf6wXx\xe6y\
+\xe60\x0cR\xfc\xd9\xdf\xd1\xf7=]\xd7uR~\xdfh\xdb\x96\xca\xd04\x0d\x95\xa1\
+\xaek*CUUT\x86\xb2,\xa9\x0cEQP\x19\xf2<\xa72dYFeH\xd3\x94\xca\x10\xc7\xf1\
+c(\xeaA\x14E\x89\xa1\xa87\xc20\x0c\xcc\xc7\xdc\x86"\xfc\xd5\x9f\x83/\xd1\
+_\x1b\x05\xb1\xa2\xee\xdc\x00\x00\x00\x00IEND\xaeB`\x82'''
+
+    img_btn_64x16_h_png = '''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00@\x00\x00\x00\x10\x08\x06\x00\x00\x00\xa6\
+\xe7y)\x00\x00\x00\xa7IDATX\x09\xe5\xcf!
+\x84P\x00\x84\xe1I\x9e|AX\x10\xc4 \x18\x0c\x06\x83\xc1 \x18T\xd0`\x111\
+\x09\x1eAX\xf0\x12\xb3o\xc2^bg\xe0+\xd3~\x1c\xc7\x11\x9d\xe7\xf9\xba\xae\
+\xeb\x0eh\xe2V\xb3\xda\xb1m[\xbc\xef;\xd7u\xe5\xb2,\x9c\xe7\xf9\xaf\xa9\
+Q\xadjV;\xc2\xf1\xe8\x9c\xa6\xc9\x8a\x9a\xd5\x8eq\x1c)\xc30X\xf9u\xa3\xef\
+{:C\xd7ut\x86\xb6m\xe9\x0cM\xd3\xd0\x19\xea\xba\xa63TUEg(\xcb\x92\xceP\x14\
+\x05\x9d!\xcfs:C\x96eO@S\x0f\xd24\x8d\x03\x9az#I\x92(\xd0>\x01M\xa8U\x8b\
+\xbe1g\xd4-J\xc4\xa7\xc7\x00\x00\x00\x00IEND\xaeB`\x82'''
+
+    img_btn_64x16_a_png = '''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00@\x00\x00\x00\x10\x08\x06\x00\x00\x00\xa6\
+\xe7y)\x00\x00\x00\xdbIDATX\xc3\xed\xd51
+\x83@\x10\x85\xe1q\x90\xed,\x14\x82\xe8\x8a\xcd\xda\xdbx\xa3\x1c#\x81\x10\
+H\x9d\x1b\x04r8\x0b\xc1\x0b\x88\xa8\x9by\x12C\x8a\x9c\xc0I\xf17\xdb}\xb3\
+\xb3,WUe\xa4\x9b\xd4J^I\xed\xdbl8\x0c\xc3k\x14E\xa74Mm\x9e\xe7d\xad\xdd\
+u0\xc2
+3\xec\x1c\xc7\xf1Q&Au]S\xd34*\x82\x15f\xd8\xb9(\x8a\x83s\x8e\xca\xb2\xa4\
+,\xcbT\x04+\xcc\xb0s\x92$$\xeb@A\x10\xd0\xb2,4\xcf\xf3\xae\x83\x11V\x98\
+agc\xcc\x07\xaf)\x98a\xe7\xed`\xef7\xffk\x13\x10k\xc4\x0f\x81\xb5\xe2\xb7\
+\xd6\x01L\xd3\xa4\xb2u\x00\xff\x27\xa0\xfd\x09x\xef\xd5}\x81[\xb0c\x03z\
+\xc5\x1b\xd0c\x03\x1e\x98\x84\xd2\x9e<\x0c\xc3e\x1c\xc7\xbbL\xa3St\xf3\x1d\
+\xccb?\xbf\x00\x06\x94x\xf4\xde\xb3\xdf\x9a\x00\x00\x00\x00IEND\xaeB`\x82'''
+
     img_test_pattern_s_png = '''\
 \x89PNG\x0d
 \x1a
@@ -3749,48 +3898,6 @@ AjH\xfcR\xc5\x9e\x17\x04\x89\xe2\xcb\x0b \x93 \xc4\x8f\xf9\xf6\xd7\xbf\xfe\
 \xcdsw=\x19>\xf3\x82\xed\xdb\xea(\xb6\xbf\x04\x00\x00\x00\x00IEND\xaeB\
 `\x82'''
 
-    img_btn_64x16_png = '''\
-\x89PNG\x0d
-\x1a
-\x00\x00\x00\x0dIHDR\x00\x00\x00@\x00\x00\x00\x10\x08\x06\x00\x00\x00\xa6\
-\xe7y)\x00\x00\x00\xa8IDATX\x09\xe5\xcf!
-\x84\x00\x14E\xd1\x97\\\xb7\xc8\x8822\x06\xc1 \x18\x04A\x055\xd8D\x8c\x06\
-\x17"\x08n\xe2\xcd\xffa61/\x9cr\xdb\xc5\xbe\xef\xc1q\x1c\xaf\xf3</C\x11\
-\x97?\xfb;\xd6uM\xb6m\xe3\xb2,\x9c\xa6\x89\xe38\xfe5\xf4W\xf6wXx\xe6y\
-\xe60\x0cR\xfc\xd9\xdf\xd1\xf7=]\xd7uR~\xdfh\xdb\x96\xca\xd04\x0d\x95\xa1\
-\xaek*CUUT\x86\xb2,\xa9\x0cEQP\x19\xf2<\xa72dYFeH\xd3\x94\xca\x10\xc7\xf1\
-c(\xeaA\x14E\x89\xa1\xa87\xc20\x0c\xcc\xc7\xdc\x86"\xfc\xd5\x9f\x83/\xd1\
-_\x1b\x05\xb1\xa2\xee\xdc\x00\x00\x00\x00IEND\xaeB`\x82'''
-
-    img_btn_64x16_h_png = '''\
-\x89PNG\x0d
-\x1a
-\x00\x00\x00\x0dIHDR\x00\x00\x00@\x00\x00\x00\x10\x08\x06\x00\x00\x00\xa6\
-\xe7y)\x00\x00\x00\xa7IDATX\x09\xe5\xcf!
-\x84P\x00\x84\xe1I\x9e|AX\x10\xc4 \x18\x0c\x06\x83\xc1 \x18T\xd0`\x111\
-\x09\x1eAX\xf0\x12\xb3o\xc2^bg\xe0+\xd3~\x1c\xc7\x11\x9d\xe7\xf9\xba\xae\
-\xeb\x0eh\xe2V\xb3\xda\xb1m[\xbc\xef;\xd7u\xe5\xb2,\x9c\xe7\xf9\xaf\xa9\
-Q\xadjV;\xc2\xf1\xe8\x9c\xa6\xc9\x8a\x9a\xd5\x8eq\x1c)\xc30X\xf9u\xa3\xef\
-{:C\xd7ut\x86\xb6m\xe9\x0cM\xd3\xd0\x19\xea\xba\xa63TUEg(\xcb\x92\xceP\x14\
-\x05\x9d!\xcfs:C\x96eO@S\x0f\xd24\x8d\x03\x9az#I\x92(\xd0>\x01M\xa8U\x8b\
-\xbe1g\xd4-J\xc4\xa7\xc7\x00\x00\x00\x00IEND\xaeB`\x82'''
-
-    img_btn_64x16_a_png = '''\
-\x89PNG\x0d
-\x1a
-\x00\x00\x00\x0dIHDR\x00\x00\x00@\x00\x00\x00\x10\x08\x06\x00\x00\x00\xa6\
-\xe7y)\x00\x00\x00\xdbIDATX\xc3\xed\xd51
-\x83@\x10\x85\xe1q\x90\xed,\x14\x82\xe8\x8a\xcd\xda\xdbx\xa3\x1c#\x81\x10\
-H\x9d\x1b\x04r8\x0b\xc1\x0b\x88\xa8\x9by\x12C\x8a\x9c\xc0I\xf17\xdb}\xb3\
-\xb3,WUe\xa4\x9b\xd4J^I\xed\xdbl8\x0c\xc3k\x14E\xa74Mm\x9e\xe7d\xad\xdd\
-u0\xc2
-3\xec\x1c\xc7\xf1Q&Au]S\xd34*\x82\x15f\xd8\xb9(\x8a\x83s\x8e\xca\xb2\xa4\
-,\xcbT\x04+\xcc\xb0s\x92$$\xeb@A\x10\xd0\xb2,4\xcf\xf3\xae\x83\x11V\x98\
-agc\xcc\x07\xaf)\x98a\xe7\xed`\xef7\xffk\x13\x10k\xc4\x0f\x81\xb5\xe2\xb7\
-\xd6\x01L\xd3\xa4\xb2u\x00\xff\x27\xa0\xfd\x09x\xef\xd5}\x81[\xb0c\x03z\
-\xc5\x1b\xd0c\x03\x1e\x98\x84\xd2\x9e<\x0c\xc3e\x1c\xc7\xbbL\xa3St\xf3\x1d\
-\xccb?\xbf\x00\x06\x94x\xf4\xde\xb3\xdf\x9a\x00\x00\x00\x00IEND\xaeB`\x82'''
-
     img_btn_acq_img_sml_png = '''\
 \x89PNG\x0d
 \x1a
@@ -4052,10 +4159,10 @@ Z\xb9A\x04\xc6\x89\x00\x00\x00\x00IEND\xaeB`\x82'''
     wx.MemoryFSHandler.AddFile('XRC/main/img_btn_128x48_png', img_btn_128x48_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_btn_128x48_h_png', img_btn_128x48_h_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_btn_128x48_a_png', img_btn_128x48_a_png)
-    wx.MemoryFSHandler.AddFile('XRC/main/img_test_pattern_s_png', img_test_pattern_s_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_btn_64x16_png', img_btn_64x16_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_btn_64x16_h_png', img_btn_64x16_h_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_btn_64x16_a_png', img_btn_64x16_a_png)
+    wx.MemoryFSHandler.AddFile('XRC/main/img_test_pattern_s_png', img_test_pattern_s_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_btn_acq_img_sml_png', img_btn_acq_img_sml_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_btn_acq_img_sml_h_png', img_btn_acq_img_sml_h_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_btn_acq_img_sml_a_png', img_btn_acq_img_sml_a_png)

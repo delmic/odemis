@@ -171,6 +171,32 @@ class FoldPanelBarXmlHandler(xrc.XmlResourceHandler):
 HANDLER_CLASS_LIST.append(FoldPanelBarXmlHandler)
 
 
+class CaptionBarXmlHandler(xrc.XmlResourceHandler):
+    def __init__(self):
+        xrc.XmlResourceHandler.__init__(self)
+        # Standard styles
+        self.AddWindowStyles()
+        # Custom styles
+
+    def CanHandle(self, node):
+        return self.IsOfClass(node, 'CaptionBar')
+
+
+    # Process XML parameters and create the object
+    def DoCreateResource(self):
+
+        if self.GetClass() == 'CaptionBar':
+            #print "Creating CaptionBar"
+            parent = self.GetParentAsWindow()
+            w = fpb.CaptionBar(
+                            parent,
+                            self.GetText('label'),
+                            self.GetBool('collapsed')
+            )
+            self.SetupWindow(w)
+            return w
+HANDLER_CLASS_LIST.append(CaptionBarXmlHandler)
+
 class FoldPanelItemXmlHandler(xrc.XmlResourceHandler):
     def __init__(self):
         xrc.XmlResourceHandler.__init__(self)

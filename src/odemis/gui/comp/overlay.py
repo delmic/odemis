@@ -394,14 +394,22 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
         self.w_start_pos = None
         self.w_end_pos = None
 
+    def _center_view_origin(self, vpos):
+        #view_size = self.base._bmp_buffer_size
+        view_size = self.base.GetSize()
+        return (vpos[0] - (view_size[0] / 2),
+                vpos[1] - (view_size[1] / 2))
+
     def _calc_world_pos(self):
 
         if self.v_start_pos and self.v_end_pos:
-            origin_pos = tuple(d / 2 for d in self.base._bmp_buffer_size)
+            offset = tuple(v / 2 for v in self.base._bmp_buffer_size)
             self.w_start_pos = self.base.view_to_world_pos(
-                                                self.v_start_pos - origin_pos[0])
+                                            self.v_start_pos,
+                                            offset)
             self.w_end_pos = self.base.view_to_world_pos(
-                                                self.v_end_pos - origin_pos[1])
+                                            self.v_end_pos,
+                                            offset)
 
             # logging.warn(
             #         "world from view: %s, %s to %s. %s",
@@ -420,10 +428,14 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
     def Draw(self, dc, shift=(0, 0), scale=1.0):
 
         if self.w_start_pos and self.w_end_pos:
-            #pylint: disable=E1103
 
-            start_pos = self.base.world_to_buffer_pos(self.w_start_pos)
-            end_pos = self.base.world_to_buffer_pos(self.w_end_pos)
+            offset = tuple(v / 2 for v in self.base._bmp_buffer_size)
+            start_pos = self.base.world_to_buffer_pos(
+                                        self.w_start_pos,
+                                        offset)
+            end_pos = self.base.world_to_buffer_pos(
+                                        self.w_end_pos,
+                                        offset)
 
             # logging.debug("Drawing from %s, %s to %s. %s", start_pos[0],
             #                                                start_pos[1],
@@ -431,6 +443,10 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
             #                                                end_pos[1] )
 
             ctx = wx.lib.wxcairo.ContextFromDC(dc)
+
+            # view_size = self.base.GetSize()
+
+            #ctx.translate(view_size[0] / 2, view_size[1] / 2)
 
             ctx.set_line_width(1.5)
             ctx.set_source_rgba(0, 0, 0, 1)
@@ -459,17 +475,24 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
             ctx.stroke()
 
             if self.dragging or True:
+                #ctx.translate(-view_size[0] / 2, -view_size[1] / 2)
                 msg = """{}
-                         world: {} x {},
-                         center: {}
-                         scale: {}
+                         view: {} x {}
                          buffer: {} x {}
+                         world: {} x {}
+                         center: {}
+                         offset: {}
+                         scale: {}
+                         shift: {},
                       """.format(
                             self.label,
+                            self.v_start_pos, self.v_end_pos,
+                            start_pos, end_pos,
                             self.w_start_pos, self.w_end_pos,
                             self.base.buffer_center_world_pos,
+                            offset,
                             scale,
-                            start_pos, end_pos)
+                            shift)
 
                 ctx.select_font_face(
                     "Courier",
@@ -480,10 +503,11 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
 
                 #buf_pos = self.b_to_buffer_pos((9, 19))
 
+                x = 9
                 y = 19
                 for line in [l.strip() for l in msg.splitlines()]:
                     ctx.set_source_rgb(0.0, 0.0, 0.0)
-                    buffer_pos = self.base.view_to_buffer_pos((9, y))
+                    buffer_pos = self.base.view_to_buffer_pos((x, y))
                     ctx.move_to(*buffer_pos)
                     ctx.show_text(line)
                     ctx.set_source_rgb(1.0, 1.0, 1.0)

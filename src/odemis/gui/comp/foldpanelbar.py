@@ -276,7 +276,8 @@ class CaptionBar(wx.Window):
         self._mouse_is_over = False
 
         self.Bind(wx.EVT_PAINT, self.OnPaint)
-        self.Bind(wx.EVT_MOUSE_EVENTS, self.OnMouseEvent)
+        if hasattr(self.Parent, "grandparent"):
+            self.Bind(wx.EVT_MOUSE_EVENTS, self.OnMouseEvent)
         # self.Bind(wx.EVT_CHAR, self.OnChar)
 
 
@@ -339,7 +340,10 @@ class CaptionBar(wx.Window):
         caption_font = self.parent.GetFont()
         dc.SetFont(caption_font)
 
-        dc.SetTextForeground(self.parent.GetForegroundColour())
+        if hasattr(self.Parent, "grandparent"):
+            dc.SetTextForeground(self.parent.GetForegroundColour())
+        else:
+            dc.SetTextForeground(self.GetForegroundColour())
         #dc.SetTextForeground("#000000")
 
         y_pos = (wndRect.GetHeight() - \
@@ -352,13 +356,18 @@ class CaptionBar(wx.Window):
 
         index = self._collapsed
 
-        x_pos = self.Parent.grandparent.GetSize().GetWidth() - \
-                self._iconWidth - CAPTION_PADDING_RIGHT
+        if hasattr(self.Parent, "grandparent"):
+            x_pos = self.Parent.grandparent.GetSize().GetWidth() - \
+                    self._iconWidth - CAPTION_PADDING_RIGHT
+        else:
+            x_pos = 10
 
-        if self.Parent.has_vert_scrollbar():
+        if hasattr(self.Parent, "has_vert_scrollbar") and \
+           self.Parent.has_vert_scrollbar():
             x_pos -= SCROLLBAR_WIDTH
 
-        self._foldIcons.Draw(index, dc, x_pos,
+        if hasattr(self.Parent, "grandparent"):
+            self._foldIcons.Draw(index, dc, x_pos,
                              (wndRect.GetHeight() - self._iconHeight) / 2,
                              wx.IMAGELIST_DRAW_TRANSPARENT)
 
