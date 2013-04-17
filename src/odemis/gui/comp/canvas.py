@@ -24,7 +24,6 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
-
 import ctypes
 import logging
 import math
@@ -503,13 +502,13 @@ class DraggableCanvas(wx.Panel):
         # addition, as coordinates are int, there is rounding error on zooming.
         self._DrawMergedImages(dc_buffer, self.Images, self.merge_ratio)
 
+        dc_buffer.SetDeviceOriginPoint((0, 0))
 
         # Each overlay draws itself
         # Remember that the device context being passed belongs to the *buffer*
         for o in self.WorldOverlays:
             o.Draw(dc_buffer, self.buffer_center_world_pos, self.scale)
 
-        dc_buffer.SetDeviceOriginPoint((0, 0))
 
 
     def DrawStaticOverlays(self, dc):
@@ -747,7 +746,7 @@ class DraggableCanvas(wx.Panel):
         fps = 1.0 / float(t_now - t_start) #pylint: disable=W0612
         #logging.debug("Display speed: %s fps", fps)
 
-    def world_to_buffer_pos(self, pos):
+    def world_to_buffer_pos(self, pos, offset=None):
         """ Converts a position from world coordinates to buffer coordinates
         using the current values
 
@@ -756,29 +755,33 @@ class DraggableCanvas(wx.Panel):
         return world_to_buffer_pos(
                     pos,
                     self.buffer_center_world_pos,
-                    self.scale
+                    self.scale,
+                    offset
         )
 
-    def buffer_to_world_pos(self, pos):
+    def buffer_to_world_pos(self, pos, offset=None):
         return buffer_to_world_pos(
                     pos,
                     self.buffer_center_world_pos,
-                    self.scale
+                    self.scale,
+                    offset
         )
 
-    def view_to_world_pos(self, pos):
+    def view_to_world_pos(self, pos, offset=None):
         return view_to_world_pos(
                     pos,
                     self.buffer_center_world_pos,
                     self.margins,
-                    self.scale)
+                    self.scale,
+                    offset)
 
-    def world_to_view_pos(self, pos):
+    def world_to_view_pos(self, pos, offset=None):
         return world_to_view_pos(
                     pos,
                     self.buffer_center_world_pos,
                     self.margins,
-                    self.scale)
+                    self.scale,
+                    offset)
 
     def view_to_buffer_pos(self, pos):
         return view_to_buffer_pos(pos, self.margins)
@@ -788,7 +791,24 @@ class DraggableCanvas(wx.Panel):
 
 # World <-> Buffer
 
-def world_to_buffer_pos(world_pos, world_buffer_center, scale):
+def world_to_buffer_pos(world_pos, world_buffer_center, scale, offset=None):
+    """
+    Converts a position from world coordinates to buffer coordinates
+    This function assumes that the originis of both the world coordinate system
+    and the buffer coordinate system are aligned.
+
+    :param world_pos: (2-tuple float) the coordinates in the world
+    :param world_buffer_center: the center of the buffer in world coordinates
+    :param scale: how much zoomed is the buffer compared to the world
+    """
+    buff_pos = (round((world_pos[0] - world_buffer_center[0]) * scale),
+                round((world_pos[1] - world_buffer_center[1]) * scale))
+    if offset:
+        return (buff_pos[0] + offset[0], buff_pos[1] + offset[1])
+    else:
+        return buff_pos
+
+def buffer_to_world_pos(buff_pos, world_buffer_center, scale, offset=None):
     """
     Converts a position from world coordinates to buffer coordinates
 
@@ -796,18 +816,8 @@ def world_to_buffer_pos(world_pos, world_buffer_center, scale):
     :param world_buffer_center: the center of the buffer in world coordinates
     :param scale: how much zoomed is the buffer compared to the world
     """
-    return (round((world_pos[0] - world_buffer_center[0]) * scale),
-            round((world_pos[1] - world_buffer_center[1]) * scale))
-
-def buffer_to_world_pos(buff_pos, world_buffer_center, scale):
-    """
-    Converts a position from world coordinates to buffer coordinates
-
-    :param world_pos: (2-tuple float) the coordinates in the world
-    :param world_buffer_center: the center of the buffer in world coordinates
-    :param scale: how much zoomed is the buffer compared to the world
-    """
-
+    if offset:
+        buff_pos = (buff_pos[0] - offset[0], buff_pos[1] - offset[1])
     return ((buff_pos[0] / scale) + world_buffer_center[0],
             (buff_pos[1] / scale) + world_buffer_center[1])
 
@@ -834,17 +844,20 @@ def buffer_to_view_pos(buffer_pos, margins):
 
 # View <-> World
 
-def view_to_world_pos(view_pos, world_buffer_center, margins, scale):
+def view_to_world_pos(view_pos, world_buffer_center, margins, scale, offset=None):
+    """ This function assumes that the origins of the various coordinate systems
+    are *not* aligned."""
 
     return buffer_to_world_pos(
                 view_to_buffer_pos(view_pos, margins),
                 world_buffer_center,
-                scale
+                scale,
+                offset
     )
 
-def world_to_view_pos(world_pos, world_buffer_center, margins, scale):
+def world_to_view_pos(world_pos, world_buffer_center, margins, scale, offset=None):
 
     return buffer_to_view_pos(
-                world_to_buffer_pos(world_pos, world_buffer_center, scale),
+                world_to_buffer_pos(world_pos, world_buffer_center, scale, offset),
                 margins
     )
