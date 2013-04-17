@@ -137,7 +137,7 @@ class DataFlowBase(object):
         with self._lock:
             count_before = len(self._listeners)
             self._listeners.add(WeakMethod(listener))
-            logging.debug("Listener %r subscribed, now %d subscribers", listener, count_before + 1)
+            logging.debug("Listener %r subscribed, now %d subscribers", listener, len(self._listeners))
             if count_before == 0:
                 self.start_generate()
         
@@ -317,7 +317,7 @@ class DataFlow(DataFlowBase):
                 assert callable(listener)
                 self._listeners.add(WeakMethod(listener))
 
-            logging.debug("Listener %r subscribed, now %d subscribers", listener, count_before + 1)
+            logging.debug("Listener %r subscribed, now %d subscribers", listener, self._count_listeners())
             if count_before == 0:
                 self.start_generate()
             
@@ -329,7 +329,6 @@ class DataFlow(DataFlowBase):
                 # remove string from listeners  
                 self._remote_listeners.discard(listener)
             else:
-                assert callable(listener)
                 self._listeners.discard(WeakMethod(listener))
     
             count_after = self._count_listeners()
@@ -659,7 +658,7 @@ class EventProxy(EventBase, Pyro4.Proxy):
 
 
 def unregister_events(self):
-    for name, value in inspect.getmembers(self, lambda x: isinstance(x, EventBase)):
+    for name, value in inspect.getmembers(self, lambda x: isinstance(x, Event)):
         daemon = getattr(value, "_pyroDaemon", None)
         if daemon:
             daemon.unregister(value)
