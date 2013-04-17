@@ -53,12 +53,17 @@ c = component.Container('FoldPanelItem',
     ['window', 'top_level', 'control'],
     ['pos', 'size', 'label', 'collapsed'],
     params={'label': params.ParamText, 'collapsed': params.ParamBool})
-#c.addStyles('FPB_SINGLE_FOLD', 'FPB_COLLAPSE_TO_BOTTOM',
-#            'FPB_EXCLUSIVE_FOLD', 'FPB_HORIZONTAL', 'FPB_VERTICAL')
 component.Manager.register(c)
 component.Manager.addXmlHandler(xh_delmic.FoldPanelItemXmlHandler)
 component.Manager.setMenu(c, 'Delmic', 'Fold Panel Item', 'FoldPanelItem', 2)
 
+c = component.Container('CaptionBar',
+    ['window', 'top_level', 'control'],
+    ['pos', 'size', 'label', 'collapsed'],
+    params={'label': params.ParamText, 'collapsed': params.ParamBool})
+component.Manager.register(c)
+component.Manager.addXmlHandler(xh_delmic.CaptionBarXmlHandler)
+component.Manager.setMenu(c, 'Delmic', 'Caption Bar', 'CaptionBar', 2)
 
 ### StreamBar
 

@@ -92,7 +92,7 @@ class xrcfr_main(wx.Frame):
         self.fp_settings_sparc_spectrum = xrc.XRCCTRL(self, "fp_settings_sparc_spectrum")
         self.txt_sparc_filename = xrc.XRCCTRL(self, "txt_sparc_filename")
         self.btn_sparc_change_file = xrc.XRCCTRL(self, "btn_sparc_change_file")
-        self.txt_sparc_destination = xrc.XRCCTRL(self, "txt_sparc_destination")
+        self.lbl_sparc_acq_estimate = xrc.XRCCTRL(self, "lbl_sparc_acq_estimate")
         self.lbl_sparc_acq_estimate = xrc.XRCCTRL(self, "lbl_sparc_acq_estimate")
         self.gauge_sparc_acq = xrc.XRCCTRL(self, "gauge_sparc_acq")
         self.btn_sparc_acquire = xrc.XRCCTRL(self, "btn_sparc_acquire")
@@ -170,7 +170,7 @@ def __init_resources():
     wx.FileSystem.AddHandler(wx.MemoryFSHandler())
 
     main_xrc = '''\
-<?xml version="1.0" ?><resource class="wxStaticLine" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
+<?xml version="1.0" ?><resource class="wxStaticText" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
   <object class="wxFrame" name="fr_main">
     <object class="wxMenuBar">
       <object class="wxMenu">
@@ -1143,125 +1143,144 @@ def __init_resources():
                       <object class="wxBoxSizer">
                         <orient>wxVERTICAL</orient>
                         <object class="sizeritem">
-                          <object class="wxFlexGridSizer">
-                      
-                      
-                            <object class="sizeritem">
-                              <object class="wxStaticText">
-                                <label>Filename</label>
-                                <fg>#E5E5E5</fg>
-                              </object>
-                              <flag>wxTOP</flag>
-                              <border>4</border>
-                            </object>
-                            <object class="sizeritem">
-                              <object class="wxBoxSizer">
-                                <object class="sizeritem">
-                                  <object class="wxTextCtrl" name="txt_sparc_filename">
-                                    <size>-1,20</size>
-                                    <value>Select a destination file</value>
-                                    <fg>#2FA7D4</fg>
-                                    <bg>#4D4D4D</bg>
-                                    <style>wxBORDER_NONE|wxTE_READONLY</style>
-                                    <XRCED>
-                                      <assign_var>1</assign_var>
-                                    </XRCED>
-                                  </object>
-                                  <option>1</option>
-                                  <flag>wxTOP|wxEXPAND</flag>
-                                  <border>2</border>
-                                </object>
-                                <object class="sizeritem">
-                                  <object class="ImageTextButton" name="btn_sparc_change_file">
-                                    <size>64,18</size>
-                                    <label>change…</label>
-                                    <delta>1</delta>
-                                    <bitmap>img_btn_64x16_png</bitmap>
-                                    <hover>img_btn_64x16_h_png</hover>
-                                    <selected>img_btn_64x16_a_png</selected>
-                                    <fg>#111111</fg>
-                                    <font>
-                                      <size>9</size>
-                                      <style>normal</style>
-                                      <weight>normal</weight>
-                                      <underlined>0</underlined>
-                                      <family>default</family>
-                                      <face>Ubuntu</face>
-                                      <encoding>UTF-8</encoding>
-                                    </font>
-                                    <tooltip>Choose a filename and destination of the next scan</tooltip>
-                                    <XRCED>
-                                      <assign_var>1</assign_var>
-                                    </XRCED>
-                                  </object>
-                                </object>
-                                <orient>wxHORIZONTAL</orient>
-                              </object>
-                              <flag>wxEXPAND</flag>
-                            </object>
-                            <object class="sizeritem">
-                              <object class="wxStaticText">
-                                <label>Destination</label>
-                              </object>
-                              <flag>wxTOP</flag>
-                              <border>2</border>
-                            </object>
-                            <object class="sizeritem">
-                              <object class="wxTextCtrl" name="txt_sparc_destination">
-                                <size>200,20</size>
-                                <value>...</value>
-                                <fg>#BFBFBF</fg>
-                                <bg>#4D4D4D</bg>
-                                <style>wxBORDER_NONE|wxTE_READONLY</style>
-                                <XRCED>
-                                  <assign_var>1</assign_var>
-                                </XRCED>
-                              </object>
-                            </object>
-                            <cols>2</cols>
-                            <rows>3</rows>
-                            <vgap>5</vgap>
-                            <hgap>10</hgap>
-                            <growablecols>1</growablecols>
+                          <object class="CaptionBar">
+                            <label>FILE SETTINGS</label>
+                            <fg>#1A1A1A</fg>
                           </object>
-                          <flag>wxALL|wxEXPAND</flag>
-                          <border>10</border>
+                          <option>0</option>
+                          <flag>wxEXPAND</flag>
                         </object>
                         <object class="sizeritem">
-                          <object class="wxStaticText" name="lbl_sparc_acq_estimate">
-                            <label>Select a region of interest...</label>
-                            <fg>#DDDDDD</fg>
-                            <font>
-                              <size>12</size>
-                              <style>normal</style>
-                              <weight>normal</weight>
-                              <underlined>0</underlined>
-                              <family>default</family>
-                              <face>Ubuntu</face>
-                              <encoding>UTF-8</encoding>
-                            </font>
-                            <style>wxALIGN_RIGHT</style>
-                            <XRCED>
-                              <assign_var>1</assign_var>
-                            </XRCED>
-                          </object>
-                          <flag>wxTOP|wxLEFT|wxRIGHT</flag>
-                          <border>12</border>
-                        </object>
-                        <object class="sizeritem">
-                          <object class="wxGauge" name="gauge_sparc_acq">
-                            <size>-1,10</size>
-                            <range>100</range>
-                            <value>0</value>
+                          <object class="wxPanel">
+                            <object class="wxBoxSizer">
+                              <orient>wxVERTICAL</orient>
+                              <object class="sizeritem">
+                                <object class="wxFlexGridSizer">
+                                  <object class="sizeritem">
+                                    <object class="wxStaticText">
+                                      <label>Filename</label>
+                                      <fg>#E5E5E5</fg>
+                                    </object>
+                                    <flag>wxTOP</flag>
+                                    <border>4</border>
+                                  </object>
+                                  <object class="sizeritem">
+                                    <object class="wxBoxSizer">
+                                      <object class="sizeritem">
+                                        <object class="wxTextCtrl" name="txt_sparc_filename">
+                                          <size>-1,20</size>
+                                          <value>Select a destination file</value>
+                                          <fg>#2FA7D4</fg>
+                                          <bg>#333333</bg>
+                                          <style>wxBORDER_NONE|wxTE_READONLY</style>
+                                          <XRCED>
+                                            <assign_var>1</assign_var>
+                                          </XRCED>
+                                        </object>
+                                        <option>1</option>
+                                        <flag>wxTOP|wxEXPAND</flag>
+                                        <border>2</border>
+                                      </object>
+                                      <object class="sizeritem">
+                                        <object class="ImageTextButton" name="btn_sparc_change_file">
+                                          <size>64,18</size>
+                                          <label>change…</label>
+                                          <delta>1</delta>
+                                          <bitmap>img_btn_64x16_png</bitmap>
+                                          <hover>img_btn_64x16_h_png</hover>
+                                          <selected>img_btn_64x16_a_png</selected>
+                                          <fg>#111111</fg>
+                                          <font>
+                                            <size>9</size>
+                                            <style>normal</style>
+                                            <weight>normal</weight>
+                                            <underlined>0</underlined>
+                                            <family>default</family>
+                                            <face>Ubuntu</face>
+                                            <encoding>UTF-8</encoding>
+                                          </font>
+                                          <tooltip>Choose a filename and destination of the next scan</tooltip>
+                                          <XRCED>
+                                            <assign_var>1</assign_var>
+                                          </XRCED>
+                                        </object>
+                                      </object>
+                                      <orient>wxHORIZONTAL</orient>
+                                    </object>
+                                    <flag>wxEXPAND</flag>
+                                  </object>
+                                  <object class="sizeritem">
+                                    <object class="wxStaticText">
+                                      <label>Destination</label>
+                                      <fg>#E5E5E5</fg>
+                                    </object>
+                                    <flag>wxTOP</flag>
+                                    <border>2</border>
+                                  </object>
+                                  <object class="sizeritem">
+                                    <object class="wxTextCtrl" name="lbl_sparc_acq_estimate">
+                                      <size>200,20</size>
+                                      <value>...</value>
+                                      <fg>#BFBFBF</fg>
+                                      <bg>#333333</bg>
+                                      <style>wxBORDER_NONE|wxTE_READONLY</style>
+                                      <XRCED>
+                                        <assign_var>1</assign_var>
+                                      </XRCED>
+                                    </object>
+                                  </object>
+                                  <cols>2</cols>
+                                  <rows>3</rows>
+                                  <vgap>5</vgap>
+                                  <hgap>10</hgap>
+                                  <growablecols>1</growablecols>
+                                </object>
+                                <flag>wxALL|wxEXPAND</flag>
+                                <border>10</border>
+                              </object>
+                              <object class="sizeritem">
+                                <object class="wxStaticText" name="lbl_sparc_acq_estimate">
+                                  <label>No region of interest selected.</label>
+                                  <fg>#DDDDDD</fg>
+                                  <font>
+                                    <size>12</size>
+                                    <style>normal</style>
+                                    <weight>normal</weight>
+                                    <underlined>0</underlined>
+                                    <family>default</family>
+                                    <face>Ubuntu</face>
+                                    <encoding>UTF-8</encoding>
+                                  </font>
+                                  <style>wxALIGN_RIGHT</style>
+                                  <XRCED>
+                                    <assign_var>1</assign_var>
+                                  </XRCED>
+                                </object>
+                                <flag>wxTOP|wxLEFT|wxRIGHT</flag>
+                                <border>12</border>
+                              </object>
+                              <object class="sizeritem">
+                                <object class="wxGauge" name="gauge_sparc_acq">
+                                  <size>-1,10</size>
+                                  <range>100</range>
+                                  <value>0</value>
+                                  <bg>#7C9FAD</bg>
+                                  <style>wxGA_SMOOTH</style>
+                                  <XRCED>
+                                    <assign_var>1</assign_var>
+                                  </XRCED>
+                                </object>
+                                <flag>wxALL|wxEXPAND</flag>
+                                <border>10</border>
+                              </object>
+                            </object>
                             <bg>#333333</bg>
-                            <style>wxGA_SMOOTH</style>
-                            <XRCED>
-                              <assign_var>1</assign_var>
-                            </XRCED>
                           </object>
-                          <flag>wxTOP|wxLEFT|wxRIGHT|wxEXPAND</flag>
-                          <border>10</border>
+                          <option>0</option>
+                          <flag>wxEXPAND</flag>
                         </object>
+                        
+                        
                         <object class="sizeritem">
                           <object class="ImageTextButton" name="btn_sparc_acquire">
                             <size>382,-1</size>
