@@ -675,24 +675,15 @@ class SparcSettingsController(SettingsBarController):
                                     parent_frame.fp_settings_sparc_sem,
                                     "No SEM found",
                                     highlight_change)
-
         self._angular_panel = AngularSettingsPanel(
                                     parent_frame.fp_settings_sparc_angular,
                                     "No angular camera found",
                                     highlight_change)
-
         self._spectrum_panel = SpectrumSettingsPanel(
                                     parent_frame.fp_settings_sparc_spectrum,
                                     "No spectrometer found",
                                     highlight_change)
-
-        if microscope_model.ccd:
-            self.add_component(
-                    "Angular Camera",
-                    microscope_model.ccd,
-                    self._angular_panel
-            )
-
+        
         if microscope_model.ebeam:
             self.add_component(
                     "SEM",
@@ -725,3 +716,14 @@ class SparcSettingsController(SettingsBarController):
                             spectrum_stream.roi,
                             None,  #component
                             CONFIG["spectrometer"]["roi"])
+        else:
+            parent_frame.fp_settings_sparc_spectrum.Hide()
+
+        if microscope_model.ccd:
+            self.add_component(
+                    "Angular Camera",
+                    microscope_model.ccd,
+                    self._angular_panel
+            )
+        else:
+            parent_frame.fp_settings_sparc_angular.Hide()
