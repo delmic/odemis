@@ -503,13 +503,13 @@ class DraggableCanvas(wx.Panel):
         # addition, as coordinates are int, there is rounding error on zooming.
         self._DrawMergedImages(dc_buffer, self.Images, self.merge_ratio)
 
-        dc_buffer.SetDeviceOriginPoint((0, 0))
 
         # Each overlay draws itself
         # Remember that the device context being passed belongs to the *buffer*
         for o in self.WorldOverlays:
             o.Draw(dc_buffer, self.buffer_center_world_pos, self.scale)
 
+        dc_buffer.SetDeviceOriginPoint((0, 0))
 
 
     def DrawStaticOverlays(self, dc):

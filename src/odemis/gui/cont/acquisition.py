@@ -311,6 +311,7 @@ class SecomAcquiController(AcquisitionController):
             self.start_snapshot_viewport)
 
         # Link "acquire image" button to image acquisition
+        self._main_frame.btn_secom_acquire.Bind(
                                             wx.EVT_BUTTON,
                                             self.on_acquisition
         )
@@ -414,8 +415,8 @@ class SparcAcquiController(AcquisitionController):
         # Link "acquire image" button to image acquisition
         self.btn_acquire.Bind(wx.EVT_BUTTON, self.on_acquisition)
 
-    def on_selection_changed(self, selection):
-        self.btn_acquire.Enable(selection is not None)
+    def on_selection_changed(self, region_of_interest):
+        self.btn_acquire.Enable(region_of_interest is not None)
 
     # TODO: delete?
     def on_stream_changed(self, streams_present, streams_visible):

@@ -397,8 +397,11 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
     def _calc_world_pos(self):
 
         if self.v_start_pos and self.v_end_pos:
-            self.w_start_pos = self.base.view_to_world_pos(self.v_start_pos)
-            self.w_end_pos = self.base.view_to_world_pos(self.v_end_pos)
+            origin_pos = tuple(d / 2 for d in self.base._bmp_buffer_size)
+            self.w_start_pos = self.base.view_to_world_pos(
+                                                self.v_start_pos - origin_pos[0])
+            self.w_end_pos = self.base.view_to_world_pos(
+                                                self.v_end_pos - origin_pos[1])
 
             # logging.warn(
             #         "world from view: %s, %s to %s. %s",
