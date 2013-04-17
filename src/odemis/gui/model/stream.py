@@ -24,7 +24,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 ### Purpose ###
 
 This module contains classes that describe Streams, which are basically
-Detector, Emiter and Dataflow associations.
+Detector, Emitter and Dataflow associations.
 
 """
 
@@ -44,6 +44,8 @@ from odemis.model import VigilantAttribute, VigilantAttributeBase, \
 from odemis.gui.model.img import InstrumentalImage
 
 
+# to identify a ROI which must still be defined by the user
+UNDEFINED_ROI = (0, 0, 0, 0)
 
 class Stream(object):
     """ A stream combines a Detector, its associated Dataflow and an Emitter.
@@ -102,6 +104,12 @@ class Stream(object):
         self.should_update = model.BooleanVA(False)
         self.is_active = model.BooleanVA(False)
         self.is_active.subscribe(self.onActive)
+
+        # Region of interest as left, top, right, bottom (in ratio from the
+        # whole area of the emitter => between 0 and 1)
+        self.roi = model.TupleContinuous((0, 0, 1, 1),
+                                         range=[(0, 0, 0, 0), (1, 1, 1, 1)],
+                                         cls=(int, long, float))
 
         self._depth = 0
 
@@ -529,10 +537,9 @@ class SpectrumStream(Stream):
         # all the information needed to acquire an image (in addition to the
         # hardware component settings which can be directly set).
 
-        self._default_roi = (0, 0, 1, 1)
         # Region of interest as left, top, right, bottom (in ratio from the
         # whole area of the emitter => between 0 and 1)
-        self.roi = model.TupleContinuous(self._default_roi,
+        self.roi = model.TupleContinuous((0, 0, 1, 1),
                                          range=[(0, 0, 0, 0), (1, 1, 1, 1)],
                                          cls=(int, long, float))
         # the number of pixels acquired in each dimension
@@ -551,7 +558,7 @@ class SpectrumStream(Stream):
 
     def on_selection_changed(self, region_of_interest):
         #self.roi.value = region_of_interest or self._default_roi
-        self.roi.value = self._default_roi
+        self.roi.value = UNDEFINED_ROI
 
     def estimateAcquisitionTime(self):
         try:
@@ -604,6 +611,7 @@ class ARStream(Stream):
 
         # all the information needed to acquire an image (in addition to the
         # hardware component settings which can be directly set).
+
 
         # Region of interest as left, top, right, bottom (in ratio from the
         # whole area of the emitter => between 0 and 1)

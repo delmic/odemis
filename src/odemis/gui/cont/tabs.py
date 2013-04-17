@@ -23,7 +23,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 
-from odemis.gui import instrmodel
 from odemis.gui.cont import settings
 from odemis.gui.cont.acquisition import SecomAcquiController, \
     SparcAcquiController
@@ -31,13 +30,11 @@ from odemis.gui.cont.microscope import MicroscopeController
 from odemis.gui.cont.streams import StreamController
 from odemis.gui.cont.views import ViewController, ViewSelector
 from odemis.gui.instrmodel import STATE_ON, STATE_OFF, STATE_PAUSE
-from odemis.gui.model.stream import SpectrumStream, SEMStream, ARStream
+from odemis.gui.model.stream import SpectrumStream, SEMStream, ARStream, \
+    UNDEFINED_ROI
 import logging
 import wx
 
-
-
-main_tab_controller = None
 
 class Tab(object):
     """ Small helper class representing a tab (tab button + panel) """
@@ -143,6 +140,7 @@ class SparcAcquisitionTab(Tab):
         # Various controllers used for the live view and acquisition of images
 
         self._settings_controller = None
+        self._roi_streams = [] # stream which must have the same ROI as the SEM CL
 
     def _initialize(self):
         """ This method is called when the tab is first shown """
@@ -168,12 +166,13 @@ class SparcAcquisitionTab(Tab):
         acq_view.addStream(sem_stream) # it should also be saved
 
         # the SEM acquisition simultaneous to the CCDs
-        semroi_stream = SEMStream(
-                        "SEM ROI",
+        semcl_stream = SEMStream(
+                        "SEM CL", # name matters, used to find the stream for the ROI 
                         self.microscope_model.sed,
                         self.microscope_model.sed.data,
                         self.microscope_model.ebeam)
-        acq_view.addStream(semroi_stream)
+        acq_view.addStream(semcl_stream)
+        self._sem_cl_stream = semcl_stream
 
         if self.microscope_model.spectrometer:
             spec_stream = SpectrumStream(
@@ -182,6 +181,7 @@ class SparcAcquisitionTab(Tab):
                                         self.microscope_model.spectrometer.data,
                                         self.microscope_model.ebeam)
             acq_view.addStream(spec_stream)
+            self._roi_streams.append(spec_stream)
 
         if self.microscope_model.ccd:
             ar_stream = ARStream(
@@ -190,21 +190,22 @@ class SparcAcquisitionTab(Tab):
                                 self.microscope_model.ccd.data,
                                 self.microscope_model.ebeam)
             acq_view.addStream(ar_stream)
+            self._roi_streams.append(ar_stream)
 
+        # indicate ROI must still be defined by the user
+        semcl_stream.roi.value = UNDEFINED_ROI
+        semcl_stream.roi.subscribe(self.onROIUpdate)
 
         # TODO: don't pass the streams as arguments, just use acquisitionView
         self._settings_controller = settings.SparcSettingsController(
                                         self.main_frame,
                                         self.microscope_model,
-                                        [sem_stream, spec_stream]
                                     )
 
         self._acquisition_controller = SparcAcquiController(
                                             self.main_frame,
                                             self.microscope_model
                                        )
-
-
 
         # Turn on the live SEM stream
         self.microscope_model.emState.value = STATE_ON
@@ -221,6 +222,14 @@ class SparcAcquisitionTab(Tab):
             self._sem_live_stream.should_update.value = True
             self._sem_live_stream.is_active.value = True
 
+    def onROIUpdate(self, roi):
+        """
+        Synchronize the ROI of the Spectrometer and AR camera to the same value
+         as the acquisition ROI defined by the SEM CL.
+        """
+        for s in self._roi_streams:
+            s.roi.value = roi
+             
 class TabBarController(object):
 
     def __init__(self, tab_list, main_frame, interface_model):

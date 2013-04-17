@@ -26,26 +26,26 @@ setting column of the user interface.
 
 """
 
-import collections
-import logging
-import re
-
-import wx.combo
-from wx.lib.pubsub import pub
-
-import odemis.gui
-import odemis.gui.comp.text as text
-import odemis.gui.img.data as img
-import odemis.gui.util.units as utun
-
-from odemis.model import getVAs, NotApplicableError, VigilantAttributeBase
 from odemis.gui.comp.foldpanelbar import FoldPanelItem
 from odemis.gui.comp.radio import GraphicalRadioButtonControl
 from odemis.gui.comp.slider import UnitIntegerSlider, UnitFloatSlider
 from odemis.gui.conf.settingspanel import CONFIG
-from odemis.gui.model.stream import SpectrumStream
-from odemis.gui.util.widgets import VigilantAttributeConnector
+from odemis.gui.model.stream import SpectrumStream, ARStream
 from odemis.gui.util.units import readable_str
+from odemis.gui.util.widgets import VigilantAttributeConnector
+from odemis.model import getVAs, NotApplicableError, VigilantAttributeBase
+from wx.lib.pubsub import pub
+import collections
+import logging
+import odemis.gui
+import odemis.gui.comp.text as text
+import odemis.gui.img.data as img
+import odemis.gui.util.units as utun
+import re
+import wx.combo
+
+
+
 
 ####### Utility functions #######
 
@@ -667,7 +667,7 @@ class SecomSettingsController(SettingsBarController):
 
 class SparcSettingsController(SettingsBarController):
 
-    def __init__(self, parent_frame, microscope_model, streams, highlight_change=False):
+    def __init__(self, parent_frame, microscope_model, highlight_change=False):
         super(SparcSettingsController, self).__init__(microscope_model,
                                                       highlight_change)
 
@@ -691,6 +691,8 @@ class SparcSettingsController(SettingsBarController):
                     self._sem_panel
             )
 
+        acq_streams = microscope_model.acquisitionView.getStreams()
+        
         if microscope_model.spectrometer:
             self.add_component(
                     "Spectrometer",
@@ -698,32 +700,47 @@ class SparcSettingsController(SettingsBarController):
                     self._spectrum_panel
             )
 
-            spectrum_streams = [s for s in streams if isinstance(s, SpectrumStream)]
+            self._spectrum_panel.add_divider()
+            spectrum_streams = [s for s in acq_streams if isinstance(s, SpectrumStream)]
+            assert spectrum_streams # there should be just one
+            for s in spectrum_streams:
+                self._spectrum_panel.add_value(
+                        "repetition",
+                        s.repetition,
+                        None,  #component
+                        CONFIG["spectrometer"]["repetition"])
 
-            if spectrum_streams:
-                self._spectrum_panel.add_divider()
-
-                for spectrum_stream in spectrum_streams:
-                    self._spectrum_panel.add_value(
-                            "repetition",
-                            spectrum_stream.repetition,
-                            None,  #component
-                            CONFIG["spectrometer"]["repetition"])
-
-                    # Added for debug only
-                    self._spectrum_panel.add_value(
-                            "roi (debug)",
-                            spectrum_stream.roi,
-                            None,  #component
-                            CONFIG["spectrometer"]["roi"])
+                # Added for debug only
+                self._spectrum_panel.add_value(
+                        "roi (debug)",
+                        s.roi,
+                        None,  #component
+                        CONFIG["spectrometer"]["roi"])
         else:
             parent_frame.fp_settings_sparc_spectrum.Hide()
 
         if microscope_model.ccd:
             self.add_component(
-                    "Angular Camera",
+                    "Camera",
                     microscope_model.ccd,
                     self._angular_panel
             )
+            
+            self._angular_panel.add_divider()
+            ar_streams = [s for s in acq_streams if isinstance(s, ARStream)]
+            assert ar_streams # there should be just one
+            for s in ar_streams:
+                self._angular_panel.add_value(
+                        "repetition",
+                        s.repetition,
+                        None,  #component
+                        CONFIG["spectrometer"]["repetition"])
+
+                # Added for debug only
+                self._angular_panel.add_value(
+                        "roi (debug)",
+                        s.roi,
+                        None,  #component
+                        CONFIG["spectrometer"]["roi"])
         else:
             parent_frame.fp_settings_sparc_angular.Hide()

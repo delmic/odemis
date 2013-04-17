@@ -48,6 +48,7 @@ import sys
 import threading
 import time
 import wx
+from odemis.gui.model.stream import UNDEFINED_ROI
 
 
 
@@ -414,25 +415,40 @@ class SparcAcquiController(AcquisitionController):
 
         # Link "acquire image" button to image acquisition
         self.btn_acquire.Bind(wx.EVT_BUTTON, self.on_acquisition)
-
+        
+        # look for the SEM CL stream 
+        self._sem_cl = None # SEM CL stream
+        for s in self._microscope.acquisitionView.getStreams():
+            if s.name.value == "SEM CL":
+                self._sem_cl = s
+                break
+        else:
+            raise KeyError("Failed to find SEM CL stream, required for the Sparc acquisition")
+        
     def on_selection_changed(self, region_of_interest):
-        self.btn_acquire.Enable(region_of_interest is not None)
+        #FIXME
+        pass
 
     # TODO: delete?
     def on_stream_changed(self, streams_present, streams_visible):
         """ Handler for pubsub 'stream.changed' messages """
         self.btn_acquire.Enable(streams_present and streams_visible)
+        
+        self.btn_acquire.Enable(self._sem_cl.roi.value != UNDEFINED_ROI)
+        self.update_acquisition_time()
+        
 
     def update_acquisition_time(self):
-        st = self.interface_model.focussedView.value.streams
-        if st.streams:
-            acq_time = acqmng.estimateAcquistionTime(st)
+        
+        if self._sem_cl.roi.value == UNDEFINED_ROI:
+            # TODO: update the default text to be the same
+            txt = "Region of acquisition needs to be selected"
+        else:
+            acq_time = acqmng.estimateAcquistionTime(self._microscope.acquisitionView.streams)
             self.gauge_acq.Range = 100 * acq_time
             acq_time = math.ceil(acq_time) # round a bit pessimistically
             txt = "The estimated acquisition time is {}."
             txt = txt.format(units.readable_time(acq_time))
-        else:
-            txt = "No streams present."
 
         self.lbl_acqestimate.SetLabel(txt)
 
