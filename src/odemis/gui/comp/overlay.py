@@ -400,17 +400,17 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
             self.w_start_pos = self.base.view_to_world_pos(self.v_start_pos)
             self.w_end_pos = self.base.view_to_world_pos(self.v_end_pos)
 
-            logging.warn(
-                    "world from view: %s, %s to %s. %s",
-                    self.v_end_pos[0],
-                    self.v_end_pos[1],
-                    self.w_end_pos[0],
-                    self.w_end_pos[1]
-            )
+            # logging.warn(
+            #         "world from view: %s, %s to %s. %s",
+            #         self.v_end_pos[0],
+            #         self.v_end_pos[1],
+            #         self.w_end_pos[0],
+            #         self.w_end_pos[1]
+            # )
 
     def get_world_selection_pos(self):
         if self.w_start_pos and self.w_end_pos:
-            return self.w_start_pos, self.w_end_pos
+            return self.w_start_pos + self.w_end_pos
         else:
             return None
 
@@ -456,12 +456,17 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
             ctx.stroke()
 
             if self.dragging or True:
-                msg = "{}: {} to {}, {} to {} unscaled".format(
-                                            self.label,
-                                            self.w_start_pos,
-                                            self.w_end_pos,
-                                            start_pos,
-                                            end_pos)
+                msg = """{}
+                         world: {} x {},
+                         center: {}
+                         scale: {}
+                         buffer: {} x {}
+                      """.format(
+                            self.label,
+                            self.w_start_pos, self.w_end_pos,
+                            self.base.buffer_center_world_pos,
+                            scale,
+                            start_pos, end_pos)
 
                 ctx.select_font_face(
                     "Courier",
@@ -472,10 +477,13 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
 
                 #buf_pos = self.b_to_buffer_pos((9, 19))
 
-                ctx.set_source_rgb(0.0, 0.0, 0.0)
-                buffer_pos = self.base.view_to_buffer_pos((9, 19))
-                ctx.move_to(*buffer_pos)
-                ctx.show_text(msg)
-                ctx.set_source_rgb(1.0, 1.0, 1.0)
-                ctx.move_to(buffer_pos[0] + 1, buffer_pos[1] + 1)
-                ctx.show_text(msg)
+                y = 19
+                for line in [l.strip() for l in msg.splitlines()]:
+                    ctx.set_source_rgb(0.0, 0.0, 0.0)
+                    buffer_pos = self.base.view_to_buffer_pos((9, y))
+                    ctx.move_to(*buffer_pos)
+                    ctx.show_text(line)
+                    ctx.set_source_rgb(1.0, 1.0, 1.0)
+                    ctx.move_to(buffer_pos[0] + 1, buffer_pos[1] + 1)
+                    ctx.show_text(line)
+                    y += 20

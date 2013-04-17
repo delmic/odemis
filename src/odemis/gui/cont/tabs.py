@@ -154,6 +154,8 @@ class SparcAcquisitionTab(Tab):
                         self.microscope_model.sed.data,
                         self.microscope_model.ebeam)
 
+        print sem_stream.image.value
+
         spectrum_stream = SpectrumStream(
                                     "Spectrum",
                                     self.microscope_model.spectrometer,

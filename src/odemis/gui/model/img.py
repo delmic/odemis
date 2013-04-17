@@ -53,3 +53,6 @@ class InstrumentalImage(object):
         assert(center is None or (len(center) == 2))
         self.center = center
         self.rotation = rotation
+
+    def get_size(self):
+        return self.image.GetSizeTupel()

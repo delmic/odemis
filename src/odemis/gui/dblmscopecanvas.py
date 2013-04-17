@@ -240,7 +240,7 @@ class DblMicroscopeCanvas(DraggableCanvas):
         """
         super(DblMicroscopeCanvas, self).ReCenterBuffer(pos)
 
-        # TODO check it works fine
+        # TODO: check it works fine
         if not self.microscope_view:
             return
         new_pos = self.requested_world_pos
@@ -518,8 +518,8 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
     def __init__(self, *args, **kwargs):
         super(SparcAcquiCanvas, self).__init__(*args, **kwargs)
 
-        self.select_overlay = WorldSelectOverlay(self, "Acquisition Select")
-        self.WorldOverlays.append(self.select_overlay)
+        self.roi_overlay = WorldSelectOverlay(self, "Region of Interst")
+        self.WorldOverlays.append(self.roi_overlay)
 
         self.active_overlay = None
 
@@ -535,10 +535,10 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
             self.ShouldUpdateDrawing()
         elif not self.dragging and enabled:
             if mode == MODE_SPARC_SELECT:
-                self.select_overlay.clear_selection()
+                self.roi_overlay.clear_selection()
                 pub.sendMessage(
                     'sparc.acq.selection.changed',
-                    region_of_interest=self.select_overlay.get_world_selection_pos()
+                    region_of_interest=self.roi_overlay.get_world_selection_pos()
                 )
                 self.ShouldUpdateDrawing()
             self.current_mode = mode
@@ -551,7 +551,7 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
         """ This method is called using pubsub, usually when a menu button is
         toggled. """
         logging.debug("Update mode %s", self)
-        self._toggle_mode(enabled, self.select_overlay, MODE_SPARC_SELECT)
+        self._toggle_mode(enabled, self.roi_overlay, MODE_SPARC_SELECT)
 
     def OnLeftDown(self, event):
 
@@ -592,7 +592,7 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
                 pub.sendMessage('sparc.acq.select.end')
                 pub.sendMessage(
                     'sparc.acq.selection.changed',
-                    region_of_interest=self.select_overlay.get_world_selection_pos()
+                    region_of_interest=self.roi_overlay.get_world_selection_pos()
                 )
             else:
                 self.active_overlay.clear_selection()

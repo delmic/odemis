@@ -796,7 +796,6 @@ def world_to_buffer_pos(world_pos, world_buffer_center, scale):
     :param world_buffer_center: the center of the buffer in world coordinates
     :param scale: how much zoomed is the buffer compared to the world
     """
-    print scale
     return (round((world_pos[0] - world_buffer_center[0]) * scale),
             round((world_pos[1] - world_buffer_center[1]) * scale))
 
