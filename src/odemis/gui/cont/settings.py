@@ -573,15 +573,6 @@ class SettingsPanel(object):
         wx.CallAfter(pub.sendMessage, 'setting.changed', setting_ctrl=evt_obj)
         evt.Skip()
 
-def set_on_notify(v):
-    logging.warn("def")
-
-def get_func(ctrl_func):
-    def _listener(v):
-        logging.warn("funcy")
-        ctrl_func(v)
-    return _listener
-
 class SemSettingsPanel(SettingsPanel):
     pass
 

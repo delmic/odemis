@@ -118,6 +118,7 @@ class TestApp(wx.App):
         wx.App.__init__(self, redirect=False)
 
     def OnInit(self):
+        # FIXME: no xrcstream_frame exists
         self.test_frame = odemis.gui.test.test_gui.xrcstream_frame(None)
         self.test_frame.SetSize((400, 400))
         self.test_frame.Center()
@@ -162,6 +163,7 @@ class FoldPanelBarTestCase(unittest.TestCase):
         wx.MilliSleep(SLEEP_TIME)
 
         livegui = FakeMicroscopeGUI()
+        # FIXME: need to use the stream controller
         self.frm.stream_panel.setMicroscope(livegui, None)
 
         # Hide the Stream add button

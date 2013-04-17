@@ -23,13 +23,14 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 
+from odemis.gui import instrmodel
 from odemis.gui.cont import settings
 from odemis.gui.cont.acquisition import SecomAcquiController, \
     SparcAcquiController
 from odemis.gui.cont.microscope import MicroscopeController
 from odemis.gui.cont.streams import StreamController
 from odemis.gui.cont.views import ViewController, ViewSelector
-from odemis.gui.instrmodel import STATE_ON
+from odemis.gui.instrmodel import STATE_ON, STATE_OFF, STATE_PAUSE
 from odemis.gui.model.stream import SpectrumStream, SEMStream, ARStream
 import logging
 import wx
@@ -162,6 +163,7 @@ class SparcAcquisitionTab(Tab):
                         self.microscope_model.sed,
                         self.microscope_model.sed.data,
                         self.microscope_model.ebeam)
+        self._sem_live_stream = sem_stream
         mic_view.addStream(sem_stream)
         acq_view.addStream(sem_stream) # it should also be saved
 
@@ -202,11 +204,22 @@ class SparcAcquisitionTab(Tab):
                                             self.microscope_model
                                        )
 
-        # TODO: Not sure if 'should_update' and 'STATE_ON' are neces
+
+
         # Turn on the live SEM stream
         self.microscope_model.emState.value = STATE_ON
-        sem_stream.is_active.value = True
-        sem_stream.should_update.value = True
+        # and subscribe to activate the live stream accordingly
+        # (especially needed to ensure at exit, all the streams are unsubscribed)
+        # TODO: maybe should be handled by a simple stream controller?
+        self.microscope_model.emState.subscribe(self.onEMState, init=True)
+        
+    def onEMState(self, state):
+        if state == STATE_OFF or state == STATE_PAUSE:
+            self._sem_live_stream.is_active.value = False
+            self._sem_live_stream.should_update.value = False
+        elif state == STATE_ON:
+            self._sem_live_stream.should_update.value = True
+            self._sem_live_stream.is_active.value = True
 
 class TabBarController(object):
 
