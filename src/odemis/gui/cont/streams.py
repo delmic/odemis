@@ -59,10 +59,10 @@ class StreamController(object):
         microscope_model (MicroscopeModel): the representation of the microscope Model
         stream_bar (StreamBar): an empty stream panel
         """
-        self.microscope = microscope_model
-
+        self._microscope = microscope_model
+        self._microscope.focussedView.subscribe(self._onView, init=True)
         self._stream_bar = stream_bar
-        self.setMicroscope(self.microscope)
+        
         self._scheduler_subscriptions = {} # stream -> callable
 
         # TODO probably need a lock to access it correctly
@@ -78,8 +78,8 @@ class StreamController(object):
         self._opticalWasTurnedOn = False
         self._semWasTurnedOn = False
 
-        self.microscope.opticalState.subscribe(self.onOpticalState)
-        self.microscope.emState.subscribe(self.onEMState)
+        self._microscope.opticalState.subscribe(self.onOpticalState)
+        self._microscope.emState.subscribe(self.onEMState)
 
         pub.subscribe(self.removeStream, 'stream.remove')
 
@@ -98,8 +98,8 @@ class StreamController(object):
         # Basically one action per type of stream
 
         # First: Fluorescent stream (for dyes)
-        if (self.microscope.light and self.microscope.light_filter
-            and self.microscope.ccd):
+        if (self._microscope.light and self._microscope.light_filter
+            and self._microscope.ccd):
             # TODO: how to know it's _fluorescent_ microscope?
             #  => multiple source? filter?
             self._stream_bar.add_action("Filtered colour",
@@ -107,13 +107,13 @@ class StreamController(object):
                                     self.optical_was_turned_on)
 
         # Bright-field
-        if self.microscope.light and self.microscope.ccd:
+        if self._microscope.light and self._microscope.ccd:
             self._stream_bar.add_action("Bright-field",
                                     self.addBrightfield,
                                     self.optical_was_turned_on)
 
         # SED
-        if self.microscope.ebeam and self.microscope.sed:
+        if self._microscope.ebeam and self._microscope.sed:
             self._stream_bar.add_action("Secondary electrons",
                                     self.addSEMSED,
                                     self.sem_was_turned_on)
@@ -125,15 +125,15 @@ class StreamController(object):
         returns (StreamPanel): the panel created
         """
         # Find a name not already taken
-        existing_names = [s.name.value for s in self.microscope.streams]
+        existing_names = [s.name.value for s in self._microscope.streams]
         for i in range(1000):
             name = "Filtered colour %d" % i
             if not name in existing_names:
                 break
 
         stream = model.stream.FluoStream(name,
-                  self.microscope.ccd, self.microscope.ccd.data,
-                  self.microscope.light, self.microscope.light_filter)
+                  self._microscope.ccd, self._microscope.ccd.data,
+                  self._microscope.light, self._microscope.light_filter)
         return self._addStream(stream, comp.stream.DyeStreamPanel, add_to_all_views)
 
     def addBrightfield(self, add_to_all_views=False):
@@ -142,8 +142,8 @@ class StreamController(object):
         returns (StreamPanel): the stream panel created
         """
         stream = model.stream.BrightfieldStream("Bright-field",
-                  self.microscope.ccd, self.microscope.ccd.data,
-                  self.microscope.light)
+                  self._microscope.ccd, self._microscope.ccd.data,
+                  self._microscope.light)
         return self._addStream(stream, comp.stream.SecomStreamPanel, add_to_all_views)
 
     def addSEMSED(self, add_to_all_views=False):
@@ -152,17 +152,17 @@ class StreamController(object):
         returns (StreamPanel): the panel created
         """
         stream = model.stream.SEMStream("Secondary electrons",
-                  self.microscope.sed, self.microscope.sed.data,
-                  self.microscope.ebeam)
+                  self._microscope.sed, self._microscope.sed.data,
+                  self._microscope.ebeam)
         return self._addStream(stream, comp.stream.SecomStreamPanel, add_to_all_views)
 
     def addSpectrumStream(self):
         """ Method not needed/used """
         stream = model.stream.SpectrumStream(
                     "Spectrometer",
-                    self.microscope.spccd,
-                    self.microscope.spccd.data,
-                    self.microscope.ebeam)
+                    self._microscope.spccd,
+                    self._microscope.spccd.data,
+                    self._microscope.ebeam)
         return self._addStream(stream, comp.stream.SparcAcquiStreamPanel)
 
     def addStatic(self, name, image, cls=model.stream.StaticStream, add_to_all_views=False, ):
@@ -188,13 +188,13 @@ class StreamController(object):
           views, otherwise add only to the current view
         returns the StreamPanel of subclass 'spanel_cls' that was created
         """
-        self.microscope.streams.add(stream)
+        self._microscope.streams.add(stream)
         if add_to_all_views:
-            for v in self.microscope.views.values():
+            for v in self._microscope.views.values():
                 if isinstance(stream, v.stream_classes):
                     v.addStream(stream)
         else:
-            v = self.microscope.focussedView.value
+            v = self._microscope.focussedView.value
             if isinstance(stream, v.stream_classes):
                 logging.warning("Adding stream incompatible with the current view")
             v.addStream(stream)
@@ -211,7 +211,7 @@ class StreamController(object):
         # show the stream right now
         stream.should_update.value = True
 
-        spanel = spanel_cls(self._stream_bar, stream, self.microscope)
+        spanel = spanel_cls(self._stream_bar, stream, self._microscope)
 
         show = isinstance(spanel.stream,
                           self._microscope.focussedView.value.stream_classes)
@@ -236,7 +236,7 @@ class StreamController(object):
         else:
             cls = comp.stream.SecomStreamPanel
 
-        sp = cls(self._stream_bar, stream, self.microscope)
+        sp = cls(self._stream_bar, stream, self._microscope)
         self._stream_bar.add_stream(sp, True)
         sp.to_acquisition_mode()
 
@@ -274,9 +274,6 @@ class StreamController(object):
                         streams_present=True,
                         streams_visible=self._has_visible_streams())
 
-    def setMicroscope(self, microscope):
-        self._microscope = microscope
-        self._microscope.focussedView.subscribe(self._onView, init=True)
 
     # def __del__(self):
     #     logging.debug("%s Desctructor", self.__class__.__name__)
@@ -336,7 +333,7 @@ class StreamController(object):
         elif state == STATE_ON:
             if not self._semWasTurnedOn:
                 self._semWasTurnedOn = True
-                if self.microscope.sed:
+                if self._microscope.sed:
                     self.addSEMSED(add_to_all_views=True)
 
             self.resumeStreams(self._streams_to_restart_em)
@@ -349,7 +346,7 @@ class StreamController(object):
         returns (set of Stream): streams which were actually paused
         """
         streams = set() # stream paused
-        for s in self.microscope.streams:
+        for s in self._microscope.streams:
             if isinstance(s, classes):
                 if s.should_update.value:
                     streams.add(s)
@@ -384,12 +381,12 @@ class StreamController(object):
             stream.should_update.unsubscribe(callback)
 
         # Remove from the views
-        for v in self.microscope.views.values():
+        for v in self._microscope.views.values():
             v.removeStream(stream)
 
         self._streams_to_restart_opt.discard(stream)
         self._streams_to_restart_em.discard(stream)
-        self.microscope.streams.discard(stream)
+        self._microscope.streams.discard(stream)
 
         logging.debug("Sending stream.ctrl.removed message")
         pub.sendMessage('stream.ctrl.removed',

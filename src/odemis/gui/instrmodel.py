@@ -180,7 +180,7 @@ class MicroscopeModel(object):
     def onEMState(self, state):
         """ Event handler for when the state of the electron microscope changes
         """
-        if state == STATE_OFF and self.ebeam:
+        if state == STATE_OFF:
             # TODO: actually turn off the ebeam and detector
             try:
                 # TODO save the previous value
@@ -189,7 +189,7 @@ class MicroscopeModel(object):
             except VA_EXCEPTIONS:
                 # Too bad. let's just do nothing then.
                 logging.debug("Ebeam doesn't support setting energy to 0")
-        elif state == STATE_PAUSE and self.ebeam:
+        elif state == STATE_PAUSE:
             try:
                 # TODO save the previous value
                 # blank the ebeam
@@ -198,7 +198,7 @@ class MicroscopeModel(object):
                 # Too bad. let's just do nothing then.
                 logging.debug("Ebeam doesn't support setting energy to 0")
 
-        elif state == STATE_ON and self.ebeam:
+        elif state == STATE_ON:
             try:
                 # TODO use the previous value
                 if hasattr(self.ebeam.energ, "choice"):
