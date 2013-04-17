@@ -359,6 +359,7 @@ class VigilantAttributeProxy(VigilantAttributeBase, Pyro4.Proxy):
             if self._thread.is_alive():
                 if len(self._listeners):
                     logging.warning("Stopping subscription while there are still subscribers because VA '%s' is going out of context", self._global_name)
+                    Pyro4.Proxy.__getattr__(self, "unsubscribe")(self._global_name)
                 self.commands.send("STOP")
                 self._thread.join()
             self.commands.close()
