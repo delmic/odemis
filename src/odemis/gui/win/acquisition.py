@@ -261,17 +261,13 @@ class AcquisitionDialog(xrcfr_acq):
         self.cmb_presets.SetValue(preset_name)
 
     def estimate_acquisition_time(self):
-        seconds = 0
-
-        str_panels = self.stream_controller.get_stream_panels()
-        if str_panels:
-            for str_pan in str_panels:
-                seconds += str_pan.stream.estimateAcquisitionTime()
-
-            self.gauge_acq.Range = 100 * seconds
-            seconds = math.ceil(seconds) # round a bit pessimistically
+        st = self.interface_model.focussedView.value.streams
+        if st.streams:
+            acq_time = acqmng.estimateAcquistionTime(st)
+            self.gauge_acq.Range = 100 * acq_time
+            acq_time = math.ceil(acq_time) # round a bit pessimistically
             txt = "The estimated acquisition time is {}."
-            txt = txt.format(units.readable_time(seconds))
+            txt = txt.format(units.readable_time(acq_time))
         else:
             txt = "No streams present."
 

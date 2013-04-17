@@ -75,6 +75,19 @@ def startAcquisition(streamTree):
     # return the interface to manipulate the task
     return future
 
+def estimateAcquistionTime(streamTree):
+    """
+    Computes the approximate time it will take to run the acquisition for the
+     given streamTree (same arguments as startAcquisition())
+    streamTree (instrmodel.StreamTree): the streams to acquire.
+    return (0 <= float): estimated time in s.
+    """
+    tot_time = 0
+    for s in streamTree.getStreams():
+        tot_time += s.estimateAcquisitionTime()
+
+    return tot_time
+
 def _executeTask(future, fn, *args, **kwargs):
     """
     Executes a task represented by a future

@@ -23,17 +23,18 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 
-import logging
-
-import wx
-
-from odemis.gui.cont.acquisition import SecomAcquiController, SparcAcquiController
-from odemis.gui.cont.microscope import MicroscopeController
 from odemis.gui.cont import settings
+from odemis.gui.cont.acquisition import SecomAcquiController, \
+    SparcAcquiController
+from odemis.gui.cont.microscope import MicroscopeController
 from odemis.gui.cont.streams import StreamController
 from odemis.gui.cont.views import ViewController, ViewSelector
-from odemis.gui.model.stream import SpectrumStream, SEMStream
 from odemis.gui.instrmodel import STATE_ON
+from odemis.gui.model.stream import SpectrumStream, SEMStream, ARStream
+import logging
+import wx
+
+
 
 main_tab_controller = None
 
@@ -144,23 +145,7 @@ class SparcAcquisitionTab(Tab):
 
     def _initialize(self):
         """ This method is called when the tab is first shown """
-
-        if not self.microscope_model:
-            return
-
-        sem_stream = SEMStream(
-                        "SEM",
-                        self.microscope_model.sed,
-                        self.microscope_model.sed.data,
-                        self.microscope_model.ebeam)
-
-        print sem_stream.image.value
-
-        spectrum_stream = SpectrumStream(
-                                    "Spectrum",
-                                    self.microscope_model.spectrometer,
-                                    self.microscope_model.spectrometer.data,
-                                    self.microscope_model.ebeam)
+        assert self.microscope_model is not None
 
         self._view_controller = ViewController(
                                     self.microscope_model,
@@ -168,14 +153,48 @@ class SparcAcquisitionTab(Tab):
                                     [self.main_frame.vp_sparc_acq_view]
                                 )
 
-        mic_view = self._view_controller._viewports[0].mic_view
-        mic_view.addStream(sem_stream)
-        mic_view.addStream(spectrum_stream)
+        mic_view = self.microscope_model.focussedView.value
+        acq_view = self.microscope_model.acquisitionView # list of streams for acquisition
 
+        # create the streams
+        sem_stream = SEMStream(
+                        "SEM live",
+                        self.microscope_model.sed,
+                        self.microscope_model.sed.data,
+                        self.microscope_model.ebeam)
+        mic_view.addStream(sem_stream)
+        acq_view.addStream(sem_stream) # it should also be saved
+
+        # the SEM acquisition simultaneous to the CCDs
+        semroi_stream = SEMStream(
+                        "SEM ROI",
+                        self.microscope_model.sed,
+                        self.microscope_model.sed.data,
+                        self.microscope_model.ebeam)
+        acq_view.addStream(semroi_stream)
+
+        if self.microscope_model.spectrometer:
+            spec_stream = SpectrumStream(
+                                        "Spectrum",
+                                        self.microscope_model.spectrometer,
+                                        self.microscope_model.spectrometer.data,
+                                        self.microscope_model.ebeam)
+            acq_view.addStream(spec_stream)
+
+        if self.microscope_model.ccd:
+            ar_stream = ARStream(
+                                "Angular",
+                                self.microscope_model.ccd,
+                                self.microscope_model.ccd.data,
+                                self.microscope_model.ebeam)
+            acq_view.addStream(ar_stream)
+
+
+        # TODO: don't pass the streams as arguments, just use acquisitionView
         self._settings_controller = settings.SparcSettingsController(
                                         self.main_frame,
                                         self.microscope_model,
-                                        [sem_stream, spectrum_stream]
+                                        [sem_stream, spec_stream]
                                     )
 
         self._acquisition_controller = SparcAcquiController(
@@ -184,6 +203,7 @@ class SparcAcquisitionTab(Tab):
                                        )
 
         # TODO: Not sure if 'should_update' and 'STATE_ON' are neces
+        # Turn on the live SEM stream
         self.microscope_model.emState.value = STATE_ON
         sem_stream.is_active.value = True
         sem_stream.should_update.value = True

@@ -75,7 +75,7 @@ class MicroscopeModel(object):
                 self.bsd = d
             elif d.role == "spectrometer":
                 self.spectrometer = d
-        if not self.ccd and not self.sed and not self.bsd:
+        if not any((self.ccd, self.sed, self.bsd, self.spectrometer)):
             msg = "no camera nor electron detector found in the microscope"
             raise Exception(msg)
 
@@ -118,63 +118,40 @@ class MicroscopeModel(object):
         self.streams = set() # Streams available (handled by StreamController)
 
         # MicroscopeViews available, (handled by ViewController)
-        # The ViewController cares about position (top left, etc),
-        # MicroscopeModel cares about what's what.
-        self.views = {
-            "sem_view": None,
-            "opt_view": None,
-            "combo1_view": None,
-            "combo2_view": None,
-        }
+        # The ViewController cares about position: they are top-left, top-right
+        # bottom-left, bottom-right. 
+        self.views = []
 
-        # The MicroscopeView currently focused
+        # The MicroscopeView currently focused, it is one of the .views (or None)
         self.focussedView = VigilantAttribute(None)
+        
+        # Very special view which is used only as a container to save which stream
+        # will be acquired (for the Sparc acquisition interface only).
+        # The tab controller will take care of filling it
+        self.acquisitionView = MicroscopeView("Acquisition", stage=self.stage) 
 
         layouts = set([VIEW_LAYOUT_ONE, VIEW_LAYOUT_22, VIEW_LAYOUT_FULLSCREEN])
         hw_states = set([STATE_OFF, STATE_ON, STATE_PAUSE])
 
         self.viewLayout = model.IntEnumerated(VIEW_LAYOUT_22, choices=layouts)
 
-        self.opticalState = model.IntEnumerated(STATE_OFF, choices=hw_states)
-        self.opticalState.subscribe(self.onOpticalState)
-
-        self.emState = model.IntEnumerated(STATE_OFF, choices=hw_states)
-        self.emState.subscribe(self.onEMState)
-
-    # Getters and Setters
-
-    @property
-    def optical_view(self):
-        return self.views["opt_view"]
-
-    @optical_view.setter #pylint: disable=E1101
-    def optical_view(self, value): #pylint: disable=E0102
-        self.views["opt_view"] = value
-
-    @property
-    def sem_view(self):
-        return self.views["sem_view"]
-
-    @sem_view.setter #pylint: disable=E1101
-    def sem_view(self, value): #pylint: disable=E0102
-        self.views["sem_view"] = value
-
-    @property
-    def combo1_view(self):
-        return self.views["combo1_view"]
-
-    @combo1_view.setter #pylint: disable=E1101
-    def combo1_view(self, value): #pylint: disable=E0102
-        self.views["combo1_view"] = value
-
-    @property
-    def combo2_view(self):
-        return self.views["combo2_view"]
-
-    @combo2_view.setter #pylint: disable=E1101
-    def combo2_view(self, value): #pylint: disable=E0102
-        self.views["combo2_view"] = value
-
+        if self.ccd:
+            # not so nice to hard code it here, but that should do it for now...
+            if self.microscope.role == "sparc":
+                self.arState = model.IntEnumerated(STATE_OFF, choices=hw_states)
+                self.arState.subscribe(self.onARState)
+            else:
+                self.opticalState = model.IntEnumerated(STATE_OFF, choices=hw_states)
+                self.opticalState.subscribe(self.onOpticalState)
+        
+        if self.ebeam:
+            self.emState = model.IntEnumerated(STATE_OFF, choices=hw_states)
+            self.emState.subscribe(self.onEMState)
+        
+        if self.spectrometer:
+            self.specState = model.IntEnumerated(STATE_OFF, choices=hw_states)
+            self.specState.subscribe(self.onSpecState)
+                
     def stopMotion(self):
         """ Immediately stops all movement on all axis """
         self.stage.stop()
@@ -231,6 +208,14 @@ class MicroscopeModel(object):
             except VA_EXCEPTIONS:
                 # Too bad. let's just do nothing then (and hope it's on)
                 logging.debug("Ebeam doesn't support setting energy")
+
+    def onARState(self, state):
+        # nothing to do here, the settings controller will just hide the stream/settings
+        pass  
+
+    def onSpecState(self, state):
+        # nothing to do here, the settings controller will just hide the stream/settings
+        pass
 
 class MicroscopeView(object):
     """ Represents a view from a microscope and ways to alter it.
@@ -389,7 +374,7 @@ class MicroscopeView(object):
             if stream.image.value and stream.image.value.image:
                 self._onNewImage(stream.image.value)
         else:
-            logging.warn("No image found for stream %s", type(stream))
+            logging.debug("No image found for stream %s", type(stream))
 
     def removeStream(self, stream):
         """

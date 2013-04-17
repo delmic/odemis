@@ -54,6 +54,7 @@ class ViewController(object):
         """
         micgui (MicroscopeModel) -- the representation of the microscope GUI
         main_frame: (wx.Frame) -- the frame which contains the 4 viewports
+        viewports (list of MicroscopeViewport): the viewports to update
         """
 
         self._microscope = micgui
@@ -80,6 +81,8 @@ class ViewController(object):
         """
 
         # If SEM only: all SEM
+        # Works also for the Sparc, as there is no other emitter, and we don't
+        # need to display anything else anyway 
         if self._microscope.ebeam and not self._microscope.light:
             logging.info("Creating SEM only viewport layout")
             i = 1
@@ -90,9 +93,10 @@ class ViewController(object):
                             focus0=None, # TODO: SEM focus or focus1?
                             stream_classes=(SEMStream,)
                          )
+                self._microscope.views.append(view)
                 viewport.setView(view, self._microscope)
                 i += 1
-            self._microscope.focussedView.value = self._viewports[0].mic_view
+            self._microscope.focussedView.value = self._microscope.views[0]
 
         # If Optical only: all Optical
         # TODO: first one is brightfield only?
@@ -106,12 +110,15 @@ class ViewController(object):
                             focus0=self._microscope.focus,
                             stream_classes=(BrightfieldStream, FluoStream)
                          )
+                self._microscope.views.append(view)
                 viewport.setView(view, self._microscope)
                 i += 1
-            self._microscope.focussedView.value = self._viewports[0].mic_view
+            self._microscope.focussedView.value = self._microscope.views[0]
 
         # If both SEM and Optical: SEM/Optical/2x combined
         elif self._microscope.ebeam and self._microscope.light:
+            assert len(self._viewports) == 4
+            assert not self._microscope.views # should still be empty
             logging.info("Creating combined SEM/Optical viewport layout")
 
             view = instrmodel.MicroscopeView(
@@ -120,9 +127,8 @@ class ViewController(object):
                         focus0=None, # TODO: SEM focus
                         stream_classes=EM_STREAMS
                      )
+            self._microscope.views.append(view)
             self._viewports[0].setView(view, self._microscope)
-            self._microscope.sem_view = view
-
 
             view = instrmodel.MicroscopeView(
                         "Optical",
@@ -130,9 +136,8 @@ class ViewController(object):
                         focus0=self._microscope.focus,
                         stream_classes=OPTICAL_STREAMS
                      )
+            self._microscope.views.append(view)
             self._viewports[1].setView(view, self._microscope)
-            self._microscope.optical_view = view
-
 
             view = instrmodel.MicroscopeView(
                         "Combined 1",
@@ -140,9 +145,8 @@ class ViewController(object):
                         focus0=self._microscope.focus,
                         focus1=None, # TODO: SEM focus
                      )
+            self._microscope.views.append(view)
             self._viewports[2].setView(view, self._microscope)
-            self._microscope.combo1_view = view
-
 
             view = instrmodel.MicroscopeView(
                         "Combined 2",
@@ -150,8 +154,8 @@ class ViewController(object):
                         focus0=self._microscope.focus,
                         focus1=None, # TODO: SEM focus
                      )
+            self._microscope.views.append(view)
             self._viewports[3].setView(view, self._microscope)
-            self._microscope.combo2_view = view
 
             # Start off with the 2x2 view
             # Focus defaults to the top right viewport
@@ -167,7 +171,7 @@ class ViewController(object):
                          )
                 viewport.setView(view, self._microscope)
                 i += 1
-            self._microscope.focussedView.value = self._viewports[0].mic_view
+            self._microscope.focussedView.value = self._microscope.views[0]
 
         # TODO: if chamber camera: br is just chamber, and it's the focussedView
 

@@ -155,6 +155,19 @@ CONFIG = {
                 {
                     "control_type": odemis.gui.CONTROL_TEXT,
                 },
+                # what we don't want to display:
+                "scale":
+                {
+                    "control_type": odemis.gui.CONTROL_NONE,
+                },
+                "translation":
+                {
+                    "control_type": odemis.gui.CONTROL_NONE,
+                },
+                "rotation":
+                {
+                    "control_type": odemis.gui.CONTROL_NONE,
+                },
             },
             "spectrometer":
             {
@@ -162,11 +175,7 @@ CONFIG = {
                 {
                     "control_type": odemis.gui.CONTROL_INT,
                 },
-                "pixelSize":
-                {
-                    "control_type": odemis.gui.CONTROL_TEXT,
-                },
-                # For testing purposes only, roi must be hidding in production
+                # For testing purposes only, roi must be hidden in production
                 "roi":
                 {
                     "control_type": odemis.gui.CONTROL_TEXT,
@@ -175,6 +184,19 @@ CONFIG = {
                 {
                     "control_type": odemis.gui.CONTROL_COMBO,
                     "choices": _resolution_from_range,
+                },
+                 # what we don't want to display:
+                "targetTemperature":
+                {
+                    "control_type": odemis.gui.CONTROL_NONE,
+                },
+                "fanSpeed":
+                {
+                    "control_type": odemis.gui.CONTROL_NONE,
+                },
+                "pixelSize":
+                {
+                    "control_type": odemis.gui.CONTROL_NONE,
                 },
             }
         }
