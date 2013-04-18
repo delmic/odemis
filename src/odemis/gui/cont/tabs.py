@@ -78,7 +78,6 @@ class SecomStreamsTab(Tab):
 
         self._settings_controller = None
         self._view_controller = None
-        self._vstream_controller = None
         self._view_selector = None
         self._acquisition_controller = None
         self._microscope_controller = None
@@ -194,9 +193,9 @@ class SparcAcquisitionTab(Tab):
 
         # indicate ROI must still be defined by the user
         semcl_stream.roi.value = UNDEFINED_ROI
-        semcl_stream.roi.subscribe(self.onROIUpdate)
+        semcl_stream.roi.subscribe(self.onROI, init=True)
 
-        # TODO: don't pass the streams as arguments, just use acquisitionView
+        # needs to have the AR and Spectrum streams on the acquisition view 
         self._settings_controller = settings.SparcSettingsController(
                                         self.main_frame,
                                         self.microscope_model,
@@ -207,13 +206,23 @@ class SparcAcquisitionTab(Tab):
                                             self.microscope_model
                                        )
 
+        # FIXME: for now we disable the AR from the acquisition view, because we
+        # don't want to always acquire it, so we never acquire it. The good way
+        # is to add/remove the stream according to the "instrument" state, in the
+        # microscope controller
+        acq_view.removeStream(ar_stream)
+
         # Turn on the live SEM stream
         self.microscope_model.emState.value = STATE_ON
         # and subscribe to activate the live stream accordingly
         # (especially needed to ensure at exit, all the streams are unsubscribed)
         # TODO: maybe should be handled by a simple stream controller?
         self.microscope_model.emState.subscribe(self.onEMState, init=True)
-        
+    
+    @property
+    def settings_controller(self):
+        return self._settings_controller
+
     def onEMState(self, state):
         if state == STATE_OFF or state == STATE_PAUSE:
             self._sem_live_stream.is_active.value = False
@@ -222,7 +231,7 @@ class SparcAcquisitionTab(Tab):
             self._sem_live_stream.should_update.value = True
             self._sem_live_stream.is_active.value = True
 
-    def onROIUpdate(self, roi):
+    def onROI(self, roi):
         """
         Synchronize the ROI of the Spectrometer and AR camera to the same value
          as the acquisition ROI defined by the SEM CL.

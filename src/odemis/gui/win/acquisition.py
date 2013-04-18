@@ -290,22 +290,22 @@ class AcquisitionDialog(xrcfr_acq):
         """
         Start the acquisition (really)
         """
-        st = self.interface_model.focussedView.value.streams
-        # It should never be possible to reach here with an empty streamTree
-
-        # start acquisition + connect events to callback
-        self.acq_future = acqmng.startAcquisition(st)
-        self.acq_future.add_update_callback(self.on_acquisition_upd)
-        self.acq_future.add_done_callback(self.on_acquisition_done)
-
         self.btn_secom_acquire.Disable()
-        self.btn_cancel.Bind(wx.EVT_BUTTON, self.on_cancel)
-
+        
         # the range of the progress bar was already set in
         # update_acquisition_time()
         self.gauge_acq.Value = 0
         self.gauge_acq.Show()
         self.Layout() # to put the gauge at the right place
+        
+        # start acquisition + connect events to callback
+        st = self.interface_model.focussedView.value.streams
+        # It should never be possible to reach here with an empty streamTree
+        self.acq_future = acqmng.startAcquisition(st)
+        self.acq_future.add_update_callback(self.on_acquisition_upd)
+        self.acq_future.add_done_callback(self.on_acquisition_done)
+
+        self.btn_cancel.Bind(wx.EVT_BUTTON, self.on_cancel)
 
     def on_cancel(self, evt):
         """

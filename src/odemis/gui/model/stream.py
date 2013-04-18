@@ -258,7 +258,14 @@ class SEMStream(Stream):
     """
     def __init__(self, name, detector, dataflow, emitter):
         Stream.__init__(self, name, detector, dataflow, emitter)
-
+        
+        # TODO: drift correction
+        # .driftCorrection: Boolean
+        # .driftROI: the region used for the drift correction
+        # .driftCorrectionPeriod: time in s between each correction (approximate,
+        #   tries to do it after every N lines, or every N pixels) 
+        # Need to see  
+        
         try:
             self._prevDwellTime = emitter.dwellTime.value
             emitter.dwellTime.subscribe(self.onDwellTime)

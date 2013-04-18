@@ -383,7 +383,8 @@ class MicroscopeView(object):
         If the stream is not present, nothing happens
         """
         # Stop listening to the stream changes
-        stream.image.unsubscribe(self._onNewImage)
+        if hasattr(stream, "image"):
+            stream.image.unsubscribe(self._onNewImage)
 
         with self._streams_lock:
             # check if the stream is already removed

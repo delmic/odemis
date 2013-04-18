@@ -92,7 +92,7 @@ CONFIG = {
                 {
                     "control_type": odemis.gui.CONTROL_SLIDER,
                     "scale": "log",
-                    "range": (0.01, 3.00),
+                    "range": (0.01, 10.0),
                     "type": "float",
                 },
                 "binning":
@@ -138,7 +138,7 @@ CONFIG = {
                 "dwellTime":
                 {
                     "control_type": odemis.gui.CONTROL_SLIDER,
-                    "range": (1e-9, 0.1),
+                    "range": (1e-9, 1),
                     "scale": "log",
                     "type": "float",
                 },
@@ -171,6 +171,13 @@ CONFIG = {
             },
             "spectrometer":
             {
+                "exposureTime":
+                {
+                    "control_type": odemis.gui.CONTROL_SLIDER,
+                    "scale": "log",
+                    "range": (0.01, 10.0),
+                    "type": "float",
+                },
                 "readoutRate":
                 {
                     "control_type": odemis.gui.CONTROL_INT,

@@ -361,14 +361,6 @@ class SparcAcquiController(AcquisitionController):
         """
         AcquisitionController.__init__(self, micgui, main_frame)
 
-        # Event binding
-
-
-        # FIXME: this should not listen to on selection changed, but on_stream_changed
-        # and then check if all the activated
-        pub.subscribe(self.on_selection_changed, 'sparc.acq.selection.changed')
-
-
         # For file selection
         # FIXME: we need a file selection gui
         self.conf = conf.get_acqui_conf()
@@ -406,6 +398,9 @@ class SparcAcquiController(AcquisitionController):
         self.btn_acquire.Bind(wx.EVT_BUTTON, self.on_acquisition)
         self.btn_change_file.Bind(wx.EVT_BUTTON, self.on_change_file)
         
+        self.gauge_acq.Hide()
+        self._main_frame.Layout()
+        
         # TODO: we need to be informed if the user closes suddenly the window
         # self.Bind(wx.EVT_CLOSE, self.on_close)
         
@@ -419,10 +414,10 @@ class SparcAcquiController(AcquisitionController):
         else:
             raise KeyError("Failed to find SEM CL stream, required for the Sparc acquisition")
         
-    def on_selection_changed(self, region_of_interest):
-        #FIXME
-        pass
-    
+        # Event binding
+        self._sem_cl.roi.subscribe(self.onROI)
+        pub.subscribe(self.on_setting_change, 'setting.changed')
+        
 
     def _onFilename(self, name):
         """ updates the GUI when the filename is updated """
@@ -433,12 +428,13 @@ class SparcAcquiController(AcquisitionController):
         self._main_frame.txt_destination.SetInsertionPointEnd()
         self._main_frame.txt_filename.SetValue(unicode(base))
     
-    # TODO: delete?
-    def on_stream_changed(self, streams_present, streams_visible):
-        """ Handler for pubsub 'stream.changed' messages """
-#         self.btn_acquire.Enable(streams_present and streams_visible)
-        
-        self.btn_acquire.Enable(self._sem_cl.roi.value != UNDEFINED_ROI)
+    def onROI(self, roi):
+        """ updates the acquire button according to the acquisition ROI """
+        self.btn_acquire.Enable(roi != UNDEFINED_ROI)
+        self.update_acquisition_time() # to update the message
+    
+    def on_setting_change(self, setting_ctrl):
+        """ Handler for pubsub 'setting.changed' messages """
         self.update_acquisition_time()
         
     def on_change_file(self, evt):
@@ -449,6 +445,9 @@ class SparcAcquiController(AcquisitionController):
         """
         new_name = ShowAcquisitionFileDialog(self._main_frame, self.filename.value)
         self.filename.value = new_name
+        
+        # FIXME: this is a hack to try the ROI without selecting it
+        self._sem_cl.roi.value = (0.1, 0.1, 0.9, 0.8)
         
     def update_acquisition_time(self):
         
@@ -472,19 +471,21 @@ class SparcAcquiController(AcquisitionController):
         main_settings_controller = mtc['sparc_acqui'].settings_controller
         orig_settings = preset_as_is(main_settings_controller.entries)
         main_settings_controller.pause()
-        # TODO: also pause the MicroscopeView
 
+        # TODO: also freeze the MicroscopeView (for now we just pause the streams)
         # pause all the live acquisitions
-        main_stream_controller = mtc['sparc_acqui'].stream_controller
-        paused_streams = main_stream_controller.pauseStreams()
-
-        self.btn_acquire.Disable()
+        live_streams = self._microscope.focussedView.value.getStreams()
+        for s in live_streams:
+            s.is_active.value = False
+            s.should_update.value = False
 
         # run the acquisition
         try:
             self.run_acquisition()
         finally:
-            main_stream_controller.resumeStreams(paused_streams)
+            for s in live_streams:
+                s.should_update.value = True
+                s.is_active.value = True
 
             for se, value in orig_settings.items():
                 se.va.value = value
@@ -498,13 +499,19 @@ class SparcAcquiController(AcquisitionController):
         Start the acquisition (really)
         Similar to win.acquisition.on_acquire()
         """
-        # TODO: create a StreamTree with each stream to acquire, but the full
-        # SEM is first and only visible one (for the thumbnail).
-        streams = self._microscope.streams
-        st = stream.StreamTree(streams) # FIXME streams is a set
-        # It should never be possible to reach here with an empty streamTree
+        self.btn_acquire.Disable()
+        # FIXME: catch "close the window" event and cancel acquisition before
+        # fully closing.
 
+        # the range of the progress bar was already set in
+        # update_acquisition_time()
+        self.gauge_acq.Value = 0
+        self.gauge_acq.Show()
+        # FIXME: probably not the whole window is required, just the file settings
+        self._main_frame.Layout() # to put the gauge at the right place
+        
         # start acquisition + connect events to callback
+        st = self._microscope.acquisitionView.stream_tree
         self.acq_future = acqmng.startAcquisition(st)
         self.acq_future.add_update_callback(self.on_acquisition_upd)
         self.acq_future.add_done_callback(self.on_acquisition_done)
@@ -512,20 +519,11 @@ class SparcAcquiController(AcquisitionController):
         # TODO: cancel button
         # self.btn_cancel.Bind(wx.EVT_BUTTON, self.on_cancel)
 
-        # the range of the progress bar was already set in
-        # estimate_acquisition_time()
-        self.gauge_acq.Value = 0
-        self.gauge_acq.Show()
-        # FIXME: probably not the whole window is required, just the file settings
-        self._main_frame.Layout() # to put the gauge at the right place
-
-        # FIXME: catch "close the window" event and cancel acquisition before
-        # fully closing.
-
     def on_cancel(self, evt):
         """
         Called during acquisition when pressing the cancel button
         """
+        # FIXME: need to have a cancel button
         if not self.acq_future:
             msg = "Tried to cancel acquisition while it was not started"
             logging.warning(msg)
