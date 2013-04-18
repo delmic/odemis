@@ -52,7 +52,11 @@ class Overlay(object):
         switched in the function call, so we need to sort them before clipping.
         """
 
-        tl, br = sorted([tl, br])
+        ttl = (min(tl[0], br[0]), min(tl[1], br[1]))
+        tbr = (max(tl[0], br[0]), max(tl[1], br[1]))
+        tl, br = ttl, tbr
+
+        # logging.warn("%s %s %s %s", tl[0] >= bbr[0], br[0] <= btl[0], br[1] <= btl[1], tl[1] >= bbr[1])
 
         # When the selection is completely outside the bounding box
         if tl[0] >= bbr[0] or br[0] <= btl[0] or br[1] <= btl[1] or tl[1] >= bbr[1]:
@@ -407,9 +411,16 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
 
     def stop_selection(self):
         """ End the creation of the current selection """
-
         SelectionMixin.stop_selection(self)
         self._calc_world_pos()
+
+        clipped = self._clip(
+                        self.w_start_pos,
+                        self.w_end_pos,
+                        *self.base.world_image_area)
+
+        if clipped:
+            self.w_start_pos, self.w_end_pos = clipped
 
     def clear_selection(self):
         SelectionMixin.clear_selection(self)
@@ -426,17 +437,12 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
 
         if self.v_start_pos and self.v_end_pos:
             offset = tuple(v / 2 for v in self.base._bmp_buffer_size)
-            sp = self.base.view_to_world_pos(
+            self.w_start_pos = self.base.view_to_world_pos(
                                             self.v_start_pos,
                                             offset)
-            ep = self.base.view_to_world_pos(
+            self.w_end_pos = self.base.view_to_world_pos(
                                             self.v_end_pos,
                                             offset)
-
-            self.w_start_pos, self.w_end_pos =  self._clip(
-                                                    sp,
-                                                    ep,
-                                                    *self.base.world_image_area)
 
     def get_world_selection_pos(self):
         if self.w_start_pos and self.w_end_pos:
