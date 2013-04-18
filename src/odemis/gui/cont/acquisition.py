@@ -387,6 +387,7 @@ class SparcAcquiController(AcquisitionController):
         # For acquisition
         # a ProgressiveFuture if the acquisition is going on
         self.btn_acquire = self._main_frame.btn_sparc_acquire
+        self.btn_change_file = self._main_frame.btn_sparc_change_file
         self.acq_future = None
         self.gauge_acq = self._main_frame.gauge_sparc_acq
         self.lbl_acqestimate = self._main_frame.lbl_sparc_acq_estimate
@@ -420,6 +421,7 @@ class SparcAcquiController(AcquisitionController):
     def on_selection_changed(self, region_of_interest):
         #FIXME
         pass
+    
 
     def _onFilename(self, name):
         """ updates the GUI when the filename is updated """
@@ -438,7 +440,10 @@ class SparcAcquiController(AcquisitionController):
         self.btn_acquire.Enable(self._sem_cl.roi.value != UNDEFINED_ROI)
         self.update_acquisition_time()
         
-
+    def on_change_file(self, evt):
+        # TODO: call the file dialog
+        pass
+    
     def update_acquisition_time(self):
         
         if self._sem_cl.roi.value == UNDEFINED_ROI:
