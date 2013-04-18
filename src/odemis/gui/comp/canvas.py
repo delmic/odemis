@@ -618,7 +618,6 @@ class DraggableCanvas(wx.Panel):
                        center[1] + (actual_size[1] / 2))
 
         self.world_image_area = (tl_unscaled, br_unscaled)
-        print self.world_image_area
 
         tl = self.world_to_buffer_pos(tl_unscaled)
         final_size = (actual_size[0] * self.scale,

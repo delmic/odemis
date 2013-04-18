@@ -26,6 +26,17 @@ setting column of the user interface.
 
 """
 
+import collections
+import logging
+import re
+
+import wx.combo
+from wx.lib.pubsub import pub
+
+import odemis.gui
+import odemis.gui.comp.text as text
+import odemis.gui.img.data as img
+import odemis.gui.util.units as utun
 from odemis.gui.comp.foldpanelbar import FoldPanelItem
 from odemis.gui.comp.radio import GraphicalRadioButtonControl
 from odemis.gui.comp.slider import UnitIntegerSlider, UnitFloatSlider
@@ -34,15 +45,7 @@ from odemis.gui.model.stream import SpectrumStream, ARStream
 from odemis.gui.util.units import readable_str
 from odemis.gui.util.widgets import VigilantAttributeConnector
 from odemis.model import getVAs, NotApplicableError, VigilantAttributeBase
-from wx.lib.pubsub import pub
-import collections
-import logging
-import odemis.gui
-import odemis.gui.comp.text as text
-import odemis.gui.img.data as img
-import odemis.gui.util.units as utun
-import re
-import wx.combo
+
 
 
 
@@ -685,7 +688,7 @@ class SparcSettingsController(SettingsBarController):
                                     parent_frame.fp_settings_sparc_spectrum,
                                     "No spectrometer found",
                                     highlight_change)
-        
+
         if microscope_model.ebeam:
             self.add_component(
                     "SEM",
@@ -694,7 +697,7 @@ class SparcSettingsController(SettingsBarController):
             )
 
         acq_streams = microscope_model.acquisitionView.getStreams()
-        
+
         if microscope_model.spectrometer:
             self.add_component(
                     "Spectrometer",
@@ -727,7 +730,7 @@ class SparcSettingsController(SettingsBarController):
                     microscope_model.ccd,
                     self._angular_panel
             )
-            
+
             self._angular_panel.add_divider()
             ar_streams = [s for s in acq_streams if isinstance(s, ARStream)]
             assert ar_streams # there should be just one
