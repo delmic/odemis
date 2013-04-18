@@ -123,15 +123,17 @@ class AcquisitionDialog(xrcfr_acq):
         # TODO: record and reuse the preset used?
         self.cmb_presets.Select(0)
 
-        self.set_default_filename_and_path()
+        self.filename = model.StringVA(self._get_default_filename())
+        self.filename.subscribe(self._onFilename, init=True)
 
         # a ProgressiveFuture if the acquisition is going on
         self.acq_future = None
 
         # Create a new settings controller for the acquisition dialog
-        self.settings_controller = SecomSettingsController(interface_model,
-                                                         self,
-                                                         True)
+        self.settings_controller = SecomSettingsController(self,
+                                                           interface_model,
+                                                           True)
+        # FIXME: pass the fold_panels
 
         # Compute the preset values for each preset
         self._preset_values = {} # dict string ->  dict (SettingEntries -> value)
@@ -240,7 +242,7 @@ class AcquisitionDialog(xrcfr_acq):
             self.gauge_acq.Hide()
             self.Layout()
 
-        self.estimate_acquisition_time()
+        self.update_acquisition_time()
 
         # update highlight
         for se, value in self._orig_settings.items():
@@ -260,8 +262,8 @@ class AcquisitionDialog(xrcfr_acq):
 
         self.cmb_presets.SetValue(preset_name)
 
-    def estimate_acquisition_time(self):
-        st = self.interface_model.focussedView.value.streams
+    def update_acquisition_time(self):
+        st = self.interface_model.focussedView.value.stream_tree
         if st.streams:
             acq_time = acqmng.estimateAcquistionTime(st)
             self.gauge_acq.Range = 100 * acq_time
@@ -273,10 +275,23 @@ class AcquisitionDialog(xrcfr_acq):
 
         self.lbl_acqestimate.SetLabel(txt)
 
-    def set_default_filename_and_path(self):
-        self.txt_filename.SetValue(u"%s%s" % (time.strftime("%Y%m%d-%H%M%S"),
-                                              self.conf.last_extension))
-        self.txt_destination.SetValue(self.conf.last_path)
+    def _get_default_filename(self):
+        """
+        Return a good default filename
+        """
+        return os.path.join(self.conf.last_path, 
+                            u"%s%s" % (time.strftime("%Y%m%d-%H%M%S"),
+                                             self.conf.last_extension)
+                            )
+
+    def _onFilename(self, name):
+        """ updates the GUI when the filename is updated """
+        # decompose into path/file
+        path, base = os.path.split(name)
+        self.txt_destination.SetValue(unicode(path))
+        # show the end of the path (usually more important)
+        self.txt_destination.SetInsertionPointEnd() 
+        self.txt_filename.SetValue(unicode(base))
 
     def on_preset(self, evt):
         preset_name = self.cmb_presets.GetValue()
@@ -319,7 +334,7 @@ class AcquisitionDialog(xrcfr_acq):
     def _convert_formats_to_wildcards(formats2ext):
         """Convert formats into wildcards string compatible with wx.FileDialog()
 
-        formats2ext (dict {string: list of strings}): format names and lists of
+        formats2ext (dict (string -> list of strings)): format names and lists of
             their possible extensions.
 
         returns (tuple (string, list of strings)): wildcards, name of the format
@@ -337,22 +352,31 @@ class AcquisitionDialog(xrcfr_acq):
         return "|".join(wildcards), formats
 
     def on_change_file(self, evt):
-
+        """
+        Shows a dialog to change the path, name, and format of the acquisition
+        file.
+        returns nothing, but updates .filename and .conf
+        """
+        # Find the available formats (and corresponding extensions)
+        formats_to_ext = dataio.get_available_formats()
+        
+        # current filename
+        path, base = os.path.split(self.filename.value)
+        
         # Note: When setting 'defaultFile' when creating the file dialog, the
         #   first filter will automatically be added to the name. Since it
         #   cannot be changed by selecting a different file type, this is big
         #   nono. Also, extensions with multiple periods ('.') are not correctly
         #   handled. The solution is to use the SetFilename method instead.
-        formats = dataio.get_available_formats()
-        wildcards, formats = self._convert_formats_to_wildcards(formats)
+        wildcards, formats = self._convert_formats_to_wildcards(formats_to_ext)
         dialog = wx.FileDialog(self,
                                message="Choose a filename and destination",
-                               defaultDir=self.conf.last_path,
+                               defaultDir=path,
                                defaultFile="",
                                style=wx.FD_SAVE|wx.FD_OVERWRITE_PROMPT,
                                wildcard=wildcards)
 
-        # Get and select the last extension used.
+        # Select the last format used
         prev_fmt = self.conf.last_format
         try:
             idx = formats.index(self.conf.last_format)
@@ -362,10 +386,9 @@ class AcquisitionDialog(xrcfr_acq):
 
         # Strip the extension, so that if the user changes the file format,
         # it will not have 2 extensions in a row.
-        fn = self.txt_filename.GetValue()
-        if fn.endswith(self.conf.last_extension):
-            fn = fn[:-len(self.conf.last_extension)]
-        dialog.SetFilename(fn)
+        if base.endswith(self.conf.last_extension):
+            base = base[:-len(self.conf.last_extension)]
+        dialog.SetFilename(base)
 
         # Show the dialog and check whether is was accepted or cancelled
         if dialog.ShowModal() != wx.ID_OK:
@@ -373,9 +396,8 @@ class AcquisitionDialog(xrcfr_acq):
 
         # New location and name have been selected...
         # Store the path
-        dest_dir = dialog.GetDirectory()
-        self.txt_destination.SetValue(dest_dir)
-        self.conf.last_path = dest_dir
+        path = dialog.GetDirectory()
+        self.conf.last_path = path
 
         # Store the format
         fmt = formats[dialog.GetFilterIndex()]
@@ -384,24 +406,24 @@ class AcquisitionDialog(xrcfr_acq):
         # Check the filename has a good extension, or add the default one
         fn = dialog.GetFilename()
         ext = None
-        for extension in formats[fmt]:
+        for extension in formats_to_ext[fmt]:
             if fn.endswith(extension) and len(extension) > len(ext or ""):
                 ext = extension
 
         if ext is None:
-            if fmt == prev_fmt and self.conf.last_extension in formats[fmt]:
+            if fmt == prev_fmt and self.conf.last_extension in formats_to_ext[fmt]:
                 # if the format is the same (and extension is compatible): keep
                 # the extension. This avoid changing the extension if it's not
                 # the default one.
                 ext = self.conf.last_extension
             else:
-                ext = formats[fmt][0] # default extension
+                ext = formats_to_ext[fmt][0] # default extension
             fn += ext
 
         self.conf.last_extension = ext
 
         # save the filename
-        self.txt_filename.SetValue(unicode(fn))
+        self.filename.value = os.path.join(path, fn)
 
         self.conf.write()
 
@@ -437,7 +459,7 @@ class AcquisitionDialog(xrcfr_acq):
         self.btn_cancel.Bind(wx.EVT_BUTTON, self.on_cancel)
 
         # the range of the progress bar was already set in
-        # estimate_acquisition_time()
+        # update_acquisition_time()
         self.gauge_acq.Value = 0
         self.gauge_acq.Show()
         self.Layout() # to put the gauge at the right place
@@ -473,7 +495,7 @@ class AcquisitionDialog(xrcfr_acq):
             self.btn_secom_acquire.Enable()
 
             # hide progress bar (+ put pack estimated time)
-            self.estimate_acquisition_time()
+            self.update_acquisition_time()
             self.gauge_acq.Hide()
             self.Layout()
             return
@@ -487,8 +509,7 @@ class AcquisitionDialog(xrcfr_acq):
 
         # save result to file
         try:
-            filename = os.path.join(self.txt_destination.Value,
-                                    self.txt_filename.Value)
+            filename = self.filename.value
             exporter = dataio.get_exporter(self.conf.last_format)
             exporter.export(filename, data, thumb)
             logging.info("Acquisition saved as file '%s'.", filename)

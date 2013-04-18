@@ -50,7 +50,7 @@ class MicroscopeController(object):
                      }
         for btn, vaname in btn_to_va.items():
             try:
-                va = getattr(vaname, interface_model)
+                va = getattr(interface_model, vaname)
             except AttributeError:
                 # This microscope is not available
                 btn.Hide()
@@ -58,7 +58,7 @@ class MicroscopeController(object):
                 continue
             
             # Event handler
-            def on_toggle(self, event, va=va, vaname=vaname):
+            def on_toggle(event, va=va, vaname=vaname):
                 logging.debug("%s toggle button pressed", vaname)
                 if event.isDown:
                     va.value = instrmodel.STATE_ON

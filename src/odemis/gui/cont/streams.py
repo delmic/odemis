@@ -60,7 +60,6 @@ class StreamController(object):
         stream_bar (StreamBar): an empty stream panel
         """
         self._microscope = microscope_model
-        self._microscope.focussedView.subscribe(self._onView, init=True)
         self._stream_bar = stream_bar
         
         self._scheduler_subscriptions = {} # stream -> callable
@@ -81,6 +80,7 @@ class StreamController(object):
         self._microscope.opticalState.subscribe(self.onOpticalState)
         self._microscope.emState.subscribe(self.onEMState)
 
+        self._microscope.focussedView.subscribe(self._onView, init=True)
         pub.subscribe(self.removeStream, 'stream.remove')
 
     def optical_was_turned_on(self):
@@ -190,7 +190,7 @@ class StreamController(object):
         """
         self._microscope.streams.add(stream)
         if add_to_all_views:
-            for v in self._microscope.views.values():
+            for v in self._microscope.views:
                 if isinstance(stream, v.stream_classes):
                     v.addStream(stream)
         else:
@@ -381,7 +381,7 @@ class StreamController(object):
             stream.should_update.unsubscribe(callback)
 
         # Remove from the views
-        for v in self._microscope.views.values():
+        for v in self._microscope.views:
             v.removeStream(stream)
 
         self._streams_to_restart_opt.discard(stream)

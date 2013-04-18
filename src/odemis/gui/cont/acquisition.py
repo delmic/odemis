@@ -36,6 +36,7 @@ from odemis import model, dataio
 from odemis.gui import acqmng, conf
 from odemis.gui.cont import get_main_tab_controller
 from odemis.gui.model import stream
+from odemis.gui.model.stream import UNDEFINED_ROI
 from odemis.gui.util import img, get_picture_folder, call_after, units
 from odemis.gui.win.acquisition import preset_as_is, AcquisitionDialog
 from wx.lib.pubsub import pub
@@ -48,7 +49,6 @@ import sys
 import threading
 import time
 import wx
-from odemis.gui.model.stream import UNDEFINED_ROI
 
 
 
@@ -71,10 +71,8 @@ class AcquisitionController(object):
         # nice default paths
         # Snapshots: always the "Pictures" user folder
         self._snapshot_folder = get_picture_folder()
-        # High-res: last folder selected, and default to same as snapshot
-        self._acquisition_folder = self._snapshot_folder
 
-        # find the names of the active (=connected) screens
+        # For snapshot animation find the names of the active (=connected) screens
         # it's slow, so do it only at init (=expect not to change screen during
         # acquisition)
         self._outputs = self.get_display_outputs()
@@ -311,21 +309,8 @@ class SecomAcquiController(AcquisitionController):
             self._main_frame.menu_item_qacquire.GetId(),
             self.start_snapshot_viewport)
 
-        # Link "acquire image" button to image acquisition
-        self._main_frame.btn_secom_acquire.Bind(
-                                            wx.EVT_BUTTON,
-                                            self.on_acquisition
-        )
-
-        # find the names of the active (=connected) screens
-        # it's slow, so do it only at init (=expect not to change screen during
-        # acquisition)
-        self._outputs = self.get_display_outputs()
-
-        pub.subscribe(self.on_selection_changed, 'sparc.acq.selection.changed')
-
-    def on_selection_changed(self, region_of_interest):
-        self._main_frame.btn_sparc_acquire.Enable(region_of_interest is not None)
+        # Listen to "acquire image" button
+        self._main_frame.btn_secom_acquire.Bind( wx.EVT_BUTTON, self.on_acquire)
 
         pub.subscribe(self.on_stream_changed, 'stream.ctrl')
 
@@ -333,7 +318,10 @@ class SecomAcquiController(AcquisitionController):
         """ Handler for pubsub 'stream.changed' messages """
         self._main_frame.btn_secom_acquire.Enable(streams_present and streams_visible)
 
-    def open_acquisition_dialog(self, evt):
+    def on_acquire(self, evt):
+        self.open_acquisition_dialog()
+        
+    def open_acquisition_dialog(self):
         mtc = get_main_tab_controller()
 
         # save the original settings
@@ -388,14 +376,17 @@ class SparcAcquiController(AcquisitionController):
         # FIXME: we need a file selection gui
         self.conf = conf.get_acqui_conf()
 
-        # FIXME: it would make more sense to have these 2 values as VA handled
-        # by the "file_controller".
         # FIXME: this should be the date at which the user presses the acquire
-        # button! At least, we must ensure it's a new date after the acquisition
+        # button (or when the last settings were changed)!
+        # At least, we must ensure it's a new date after the acquisition
         # is done.
-#         self.txt_filename.SetValue(u"%s%s" % (time.strftime("%Y%m%d-%H%M%S"),
-#                                               self.conf.last_extension))
-#         self.txt_destination.SetValue(self.conf.last_path)
+        # Filename to save the acquisition 
+        default_fn = os.path.join(self.conf.last_path, 
+                                  u"%s%s" % (time.strftime("%Y%m%d-%H%M%S"),
+                                             self.conf.last_extension)
+                                  )
+        self.filename = model.StringVA(default_fn)
+        self.filename.subscribe(self._onFilename, init=True)
 
         # For acquisition
         # a ProgressiveFuture if the acquisition is going on
@@ -413,8 +404,13 @@ class SparcAcquiController(AcquisitionController):
             self._main_frame.menu_item_qacquire.GetId(),
             self.start_snapshot_viewport)
 
-        # Link "acquire image" button to image acquisition
+        # Link buttons
         self.btn_acquire.Bind(wx.EVT_BUTTON, self.on_acquisition)
+        self.btn_change_file.Bind(wx.EVT_BUTTON, self.on_change_file)
+        
+        # TODO: we need to be informed if the user closes suddenly the window
+        # self.Bind(wx.EVT_CLOSE, self.on_close)
+        
         
         # look for the SEM CL stream 
         self._sem_cl = None # SEM CL stream
@@ -429,6 +425,15 @@ class SparcAcquiController(AcquisitionController):
         #FIXME
         pass
 
+    def _onFilename(self, name):
+        """ updates the GUI when the filename is updated """
+        # decompose into path/file
+        path, base = os.path.split(name)
+        self._main_frame.txt_destination.SetValue(unicode(path))
+        # show the end of the path (usually more important)
+        self._main_frame.txt_destination.SetInsertionPointEnd()
+        self._main_frame.txt_filename.SetValue(unicode(base))
+    
     # TODO: delete?
     def on_stream_changed(self, streams_present, streams_visible):
         """ Handler for pubsub 'stream.changed' messages """
@@ -444,7 +449,8 @@ class SparcAcquiController(AcquisitionController):
             # TODO: update the default text to be the same
             txt = "Region of acquisition needs to be selected"
         else:
-            acq_time = acqmng.estimateAcquistionTime(self._microscope.acquisitionView.streams)
+            st = self._microscope.acquisitionView.stream_tree
+            acq_time = acqmng.estimateAcquistionTime(st)
             self.gauge_acq.Range = 100 * acq_time
             acq_time = math.ceil(acq_time) # round a bit pessimistically
             txt = "The estimated acquisition time is {}."
@@ -467,7 +473,7 @@ class SparcAcquiController(AcquisitionController):
         # to get a nice thumbnail.
         # FIXME: have a special .acqusitionView which contains all the streams
         # as they should be acquired
-        return self._microscope.acquisitionView.streams
+        return self._microscope.acquisitionView.stream_tree
 
     def on_acquisition(self, evt):
         mtc = get_main_tab_controller()

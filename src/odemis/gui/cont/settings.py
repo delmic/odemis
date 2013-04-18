@@ -197,8 +197,10 @@ class SettingsPanel(object):
             self.panel.GetChildren()[0].Destroy()
 
     def _label_to_human(self, label):
-        """ Converts a camel-case label into a human readible one
+        """ Converts a camel-case label into a human readable one
         """
+        # add space after each upper case
+        # then, make the first letter uppercase and all the other ones lowercase
         return re.sub(r"([A-Z])", r" \1", label).capitalize()
 
     def _determine_default_control(self, value):
@@ -593,7 +595,7 @@ class SettingsBarController(object):
     of the setting panel.
     """
 
-    def __init__(self, interface_model, parent_frame, highlight_change=False):
+    def __init__(self, interface_model, highlight_change=False):
         self._interface_model = interface_model
         self.settings_panels = []
 
@@ -629,7 +631,7 @@ class SettingsBarController(object):
                 if comp.role in CONFIG and name in CONFIG[comp.role]:
                     conf = CONFIG[comp.role][name]
                 else:
-                    logging.warn("No config found for %s: %s", comp.role, name)
+                    logging.info("No config found for %s: %s", comp.role, name)
                     conf = None
                 panel.add_value(name, value, comp, conf)
         except TypeError:
