@@ -90,9 +90,9 @@ class xrcfr_main(wx.Frame):
         self.fp_settings_sparc_sem = xrc.XRCCTRL(self, "fp_settings_sparc_sem")
         self.fp_settings_sparc_angular = xrc.XRCCTRL(self, "fp_settings_sparc_angular")
         self.fp_settings_sparc_spectrum = xrc.XRCCTRL(self, "fp_settings_sparc_spectrum")
-        self.txt_sparc_filename = xrc.XRCCTRL(self, "txt_sparc_filename")
+        self.txt_filename = xrc.XRCCTRL(self, "txt_filename")
         self.btn_sparc_change_file = xrc.XRCCTRL(self, "btn_sparc_change_file")
-        self.lbl_sparc_acq_estimate = xrc.XRCCTRL(self, "lbl_sparc_acq_estimate")
+        self.txt_destination = xrc.XRCCTRL(self, "txt_destination")
         self.lbl_sparc_acq_estimate = xrc.XRCCTRL(self, "lbl_sparc_acq_estimate")
         self.gauge_sparc_acq = xrc.XRCCTRL(self, "gauge_sparc_acq")
         self.btn_sparc_acquire = xrc.XRCCTRL(self, "btn_sparc_acquire")
@@ -1167,7 +1167,7 @@ def __init_resources():
                                   <object class="sizeritem">
                                     <object class="wxBoxSizer">
                                       <object class="sizeritem">
-                                        <object class="wxTextCtrl" name="txt_sparc_filename">
+                                        <object class="wxTextCtrl" name="txt_filename">
                                           <size>-1,20</size>
                                           <value>Select a destination file</value>
                                           <fg>#2FA7D4</fg>
@@ -1218,7 +1218,7 @@ def __init_resources():
                                     <border>2</border>
                                   </object>
                                   <object class="sizeritem">
-                                    <object class="wxTextCtrl" name="lbl_sparc_acq_estimate">
+                                    <object class="wxTextCtrl" name="txt_destination">
                                       <size>200,20</size>
                                       <value>...</value>
                                       <fg>#BFBFBF</fg>

@@ -21,6 +21,18 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 
+import logging
+import numpy
+import os.path
+import sys
+import threading
+import traceback
+
+import Pyro4.errors
+import scipy.io
+import wx
+
+import odemis.gui.cont.tabs as tabs
 from odemis import __version__, model
 from odemis.gui import main_xrc, instrmodel, log
 from odemis.gui.conf import get_general_conf
@@ -30,16 +42,8 @@ from odemis.gui.model.img import InstrumentalImage
 from odemis.gui.model.stream import StaticSEMStream, StaticSpectrumStream
 from odemis.gui.xmlh import odemis_get_resources
 from odemis.model._dataflow import MD_PIXEL_SIZE, MD_POS
-import Pyro4.errors
-import logging
-import numpy
-import odemis.gui.cont.tabs as tabs
-import os.path
-import scipy.io
-import sys
-import threading
-import traceback
-import wx
+
+
 
 
 
@@ -422,7 +426,7 @@ see http://www.fluorophores.org/disclaimer/.
         except Exception:
             logging.exception("Error during GUI shutdown")
             sys.exit(1)
-            
+
         sys.exit(0)
 
     def excepthook(self, type, value, trace): #pylint: disable=W0622

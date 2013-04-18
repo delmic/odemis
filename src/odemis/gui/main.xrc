@@ -996,7 +996,7 @@
                                   <object class="sizeritem">
                                     <object class="wxBoxSizer">
                                       <object class="sizeritem">
-                                        <object class="wxTextCtrl" name="txt_sparc_filename">
+                                        <object class="wxTextCtrl" name="txt_filename">
                                           <size>-1,20</size>
                                           <value>Select a destination file</value>
                                           <fg>#2FA7D4</fg>
@@ -1047,7 +1047,7 @@
                                     <border>2</border>
                                   </object>
                                   <object class="sizeritem">
-                                    <object class="wxTextCtrl" name="lbl_sparc_acq_estimate">
+                                    <object class="wxTextCtrl" name="txt_destination">
                                       <size>200,20</size>
                                       <value>...</value>
                                       <fg>#BFBFBF</fg>
