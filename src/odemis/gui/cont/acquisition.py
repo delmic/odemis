@@ -35,7 +35,8 @@ from odemis.gui.cont import get_main_tab_controller
 from odemis.gui.model import stream
 from odemis.gui.model.stream import UNDEFINED_ROI
 from odemis.gui.util import img, get_picture_folder, call_after, units
-from odemis.gui.win.acquisition import AcquisitionDialog
+from odemis.gui.win.acquisition import AcquisitionDialog, \
+    ShowAcquisitionFileDialog
 from wx.lib.pubsub import pub
 import logging
 import math
@@ -441,9 +442,14 @@ class SparcAcquiController(AcquisitionController):
         self.update_acquisition_time()
         
     def on_change_file(self, evt):
-        # TODO: call the file dialog
-        pass
-    
+        """
+        Shows a dialog to change the path, name, and format of the acquisition
+        file.
+        returns nothing, but updates .filename and .conf
+        """
+        new_name = ShowAcquisitionFileDialog(self._main_frame, self.filename.value)
+        self.filename.value = new_name
+        
     def update_acquisition_time(self):
         
         if self._sem_cl.roi.value == UNDEFINED_ROI:

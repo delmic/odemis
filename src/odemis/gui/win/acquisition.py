@@ -261,103 +261,15 @@ class AcquisitionDialog(xrcfr_acq):
         else:
             evt.Skip()
 
-    @staticmethod
-    def _convert_formats_to_wildcards(formats2ext):
-        """Convert formats into wildcards string compatible with wx.FileDialog()
-
-        formats2ext (dict (string -> list of strings)): format names and lists of
-            their possible extensions.
-
-        returns (tuple (string, list of strings)): wildcards, name of the format
-            in the same order as in the wildcards
-        """
-        wildcards = []
-        formats = []
-        for fmt, extensions in formats2ext.items():
-            ext_wildcards = ";".join(["*" + e for e in extensions])
-            wildcard = "%s files (%s)|%s" % (fmt, ext_wildcards, ext_wildcards)
-            formats.append(fmt)
-            wildcards.append(wildcard)
-
-        # the whole importance is that they are in the same order
-        return "|".join(wildcards), formats
-
     def on_change_file(self, evt):
         """
         Shows a dialog to change the path, name, and format of the acquisition
         file.
         returns nothing, but updates .filename and .conf
         """
-        # Find the available formats (and corresponding extensions)
-        formats_to_ext = dataio.get_available_formats()
+        new_name = ShowAcquisitionFileDialog(self, self.filename.value)
+        self.filename.value = new_name
         
-        # current filename
-        path, base = os.path.split(self.filename.value)
-        
-        # Note: When setting 'defaultFile' when creating the file dialog, the
-        #   first filter will automatically be added to the name. Since it
-        #   cannot be changed by selecting a different file type, this is big
-        #   nono. Also, extensions with multiple periods ('.') are not correctly
-        #   handled. The solution is to use the SetFilename method instead.
-        wildcards, formats = self._convert_formats_to_wildcards(formats_to_ext)
-        dialog = wx.FileDialog(self,
-                               message="Choose a filename and destination",
-                               defaultDir=path,
-                               defaultFile="",
-                               style=wx.FD_SAVE|wx.FD_OVERWRITE_PROMPT,
-                               wildcard=wildcards)
-
-        # Select the last format used
-        prev_fmt = self.conf.last_format
-        try:
-            idx = formats.index(self.conf.last_format)
-        except ValueError:
-            idx = 0
-        dialog.SetFilterIndex(idx)
-
-        # Strip the extension, so that if the user changes the file format,
-        # it will not have 2 extensions in a row.
-        if base.endswith(self.conf.last_extension):
-            base = base[:-len(self.conf.last_extension)]
-        dialog.SetFilename(base)
-
-        # Show the dialog and check whether is was accepted or cancelled
-        if dialog.ShowModal() != wx.ID_OK:
-            return
-
-        # New location and name have been selected...
-        # Store the path
-        path = dialog.GetDirectory()
-        self.conf.last_path = path
-
-        # Store the format
-        fmt = formats[dialog.GetFilterIndex()]
-        self.conf.last_format = fmt
-
-        # Check the filename has a good extension, or add the default one
-        fn = dialog.GetFilename()
-        ext = None
-        for extension in formats_to_ext[fmt]:
-            if fn.endswith(extension) and len(extension) > len(ext or ""):
-                ext = extension
-
-        if ext is None:
-            if fmt == prev_fmt and self.conf.last_extension in formats_to_ext[fmt]:
-                # if the format is the same (and extension is compatible): keep
-                # the extension. This avoid changing the extension if it's not
-                # the default one.
-                ext = self.conf.last_extension
-            else:
-                ext = formats_to_ext[fmt][0] # default extension
-            fn += ext
-
-        self.conf.last_extension = ext
-
-        # save the filename
-        self.filename.value = os.path.join(path, fn)
-
-        self.conf.write()
-
     def on_close(self, evt):
         """ Close event handler that executes various cleanup actions
         """
@@ -478,3 +390,102 @@ class AcquisitionDialog(xrcfr_acq):
         else:
             # don't be too precise
             self.lbl_acqestimate.SetLabel("a few seconds left.")
+
+
+def _convert_formats_to_wildcards(formats2ext):
+    """Convert formats into wildcards string compatible with wx.FileDialog()
+
+    formats2ext (dict (string -> list of strings)): format names and lists of
+        their possible extensions.
+
+    returns (tuple (string, list of strings)): wildcards, name of the format
+        in the same order as in the wildcards
+    """
+    wildcards = []
+    formats = []
+    for fmt, extensions in formats2ext.items():
+        ext_wildcards = ";".join(["*" + e for e in extensions])
+        wildcard = "%s files (%s)|%s" % (fmt, ext_wildcards, ext_wildcards)
+        formats.append(fmt)
+        wildcards.append(wildcard)
+
+    # the whole importance is that they are in the same order
+    return "|".join(wildcards), formats
+        
+def ShowAcquisitionFileDialog(parent, filename):
+    """
+    parent (wxFrame): parent window
+    filename (string): full filename to propose by default
+    Note: updates the acquisition configuration if the user did pick a new file 
+    return (string): the new filename (or the old one if the user cancelled)
+    """
+    conf = get_acqui_conf()
+    
+    # Find the available formats (and corresponding extensions)
+    formats_to_ext = dataio.get_available_formats()
+    
+    # current filename
+    path, base = os.path.split(filename)
+    
+    # Note: When setting 'defaultFile' when creating the file dialog, the
+    #   first filter will automatically be added to the name. Since it
+    #   cannot be changed by selecting a different file type, this is big
+    #   nono. Also, extensions with multiple periods ('.') are not correctly
+    #   handled. The solution is to use the SetFilename method instead.
+    wildcards, formats = _convert_formats_to_wildcards(formats_to_ext)
+    dialog = wx.FileDialog(parent,
+                           message="Choose a filename and destination",
+                           defaultDir=path,
+                           defaultFile="",
+                           style=wx.FD_SAVE|wx.FD_OVERWRITE_PROMPT,
+                           wildcard=wildcards)
+
+    # Select the last format used
+    prev_fmt = conf.last_format
+    try:
+        idx = formats.index(conf.last_format)
+    except ValueError:
+        idx = 0
+    dialog.SetFilterIndex(idx)
+
+    # Strip the extension, so that if the user changes the file format,
+    # it will not have 2 extensions in a row.
+    if base.endswith(conf.last_extension):
+        base = base[:-len(conf.last_extension)]
+    dialog.SetFilename(base)
+
+    # Show the dialog and check whether is was accepted or cancelled
+    if dialog.ShowModal() != wx.ID_OK:
+        return filename
+
+    # New location and name have been selected...
+    # Store the path
+    path = dialog.GetDirectory()
+    conf.last_path = path
+
+    # Store the format
+    fmt = formats[dialog.GetFilterIndex()]
+    conf.last_format = fmt
+
+    # Check the filename has a good extension, or add the default one
+    fn = dialog.GetFilename()
+    ext = None
+    for extension in formats_to_ext[fmt]:
+        if fn.endswith(extension) and len(extension) > len(ext or ""):
+            ext = extension
+
+    if ext is None:
+        if fmt == prev_fmt and conf.last_extension in formats_to_ext[fmt]:
+            # if the format is the same (and extension is compatible): keep
+            # the extension. This avoid changing the extension if it's not
+            # the default one.
+            ext = conf.last_extension
+        else:
+            ext = formats_to_ext[fmt][0] # default extension
+        fn += ext
+
+    conf.last_extension = ext
+    conf.write()
+    
+    return os.path.join(path, fn)
+
