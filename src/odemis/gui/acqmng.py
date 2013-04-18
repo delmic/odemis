@@ -20,21 +20,19 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
 from __future__ import division
-
-import logging
-import sys
-import threading
-import time
+from collections import OrderedDict
 from concurrent import futures
 from concurrent.futures._base import CANCELLED, FINISHED, RUNNING, \
     CANCELLED_AND_NOTIFIED, CancelledError, PENDING
-
-import numpy
-
 from odemis import model
 from odemis.gui.model import OPTICAL_STREAMS, EM_STREAMS
 from odemis.gui.model.stream import FluoStream
 from odemis.gui.util import img
+import logging
+import numpy
+import sys
+import threading
+import time
 
 
 # This is the "manager" of an acquisition. The basic idea is that you give it
@@ -393,3 +391,96 @@ class ProgressiveFuture(futures.Future):
         with self._condition:
             self._end_time = time.time()
         self._invoke_upd_callbacks()
+        
+        
+
+# Quality setting presets
+def preset_hq(entries):
+    """
+    Preset for highest quality image
+    entries (list of SettingEntries): each value as originally set
+    returns (dict SettingEntries -> value): new value for each SettingEntry that should be modified
+    """
+    ret = {}
+    for entry in entries:
+        if not entry.va or entry.va.readonly:
+            # not a real setting, just info
+            logging.debug("Skipping the value %s", entry.name)
+            continue
+
+
+        value = entry.va.value
+        if entry.name == "resolution":
+            # if resolution => get the best one
+            try:
+                value = entry.va.range[1] # max
+            except (AttributeError, model.NotApplicableError):
+                pass
+        elif entry.name in ("exposureTime", "dwellTime"):
+            # if exposureTime/dwellTime => x10
+            value = entry.va.value * 10
+
+            # make sure it still fits
+            if isinstance(entry.va.range, tuple):
+                value = sorted(entry.va.range + (value,))[1] # clip
+
+        elif entry.name == "binning":
+            # if binning => smallest
+            try:
+                value = entry.va.range[0] # min
+            except (AttributeError, model.NotApplicableError):
+                try:
+                    value = min(entry.va.choices)
+                except (AttributeError, model.NotApplicableError):
+                    pass
+            # TODO: multiply exposuretime by the original binning
+        elif entry.name == "readoutRate":
+            # if readoutrate => smallest
+            try:
+                value = entry.va.range[0] # min
+            except (AttributeError, model.NotApplicableError):
+                try:
+                    value = min(entry.va.choices)
+                except (AttributeError, model.NotApplicableError):
+                    pass
+        # rest => as is
+
+        logging.debug("Adapting value %s from %s to %s", entry.name, entry.va.value, value)
+        ret[entry] = value
+
+    return ret
+
+def preset_as_is(entries):
+    """
+    Preset which don't change anything (exactly as live)
+    entries (list of SettingEntries): each value as originally set
+    returns (dict SettingEntries -> value): new value for each SettingEntry that
+        should be modified
+    """
+    ret = {}
+    for entry in entries:
+        if not entry.va or entry.va.readonly:
+            # not a real setting, just info
+            logging.debug("Skipping the value %s", entry.name)
+            continue
+
+        # everything as-is
+        logging.debug("Copying value %s = %s", entry.name, entry.va.value)
+        ret[entry] = entry.va.value
+
+    return ret
+
+def preset_no_change(entries):
+    """
+    Special preset which matches everything and doesn't change anything
+    """
+    return {}
+
+
+# Name -> callable (list of SettingEntries -> dict (SettingEntries -> value))
+presets = OrderedDict(
+            (   (u"High quality", preset_hq),
+                (u"Fast", preset_as_is),
+                (u"Custom", preset_no_change)
+            )
+)

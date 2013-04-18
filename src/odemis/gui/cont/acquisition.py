@@ -25,20 +25,17 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 This module contains classes to control the actions related to the acquisition
 of microscope images.
-
-TODO: Go over the methods in both SecomAcquiController and the AcquisitionDialog
-and see what method belongs where.
-
 """
 
 from concurrent.futures._base import CancelledError
 from odemis import model, dataio
 from odemis.gui import acqmng, conf
+from odemis.gui.acqmng import preset_as_is
 from odemis.gui.cont import get_main_tab_controller
 from odemis.gui.model import stream
 from odemis.gui.model.stream import UNDEFINED_ROI
 from odemis.gui.util import img, get_picture_folder, call_after, units
-from odemis.gui.win.acquisition import preset_as_is, AcquisitionDialog
+from odemis.gui.win.acquisition import AcquisitionDialog
 from wx.lib.pubsub import pub
 import logging
 import math
@@ -49,7 +46,6 @@ import sys
 import threading
 import time
 import wx
-
 
 
 class AcquisitionController(object):
@@ -437,7 +433,7 @@ class SparcAcquiController(AcquisitionController):
     # TODO: delete?
     def on_stream_changed(self, streams_present, streams_visible):
         """ Handler for pubsub 'stream.changed' messages """
-        self.btn_acquire.Enable(streams_present and streams_visible)
+#         self.btn_acquire.Enable(streams_present and streams_visible)
         
         self.btn_acquire.Enable(self._sem_cl.roi.value != UNDEFINED_ROI)
         self.update_acquisition_time()
@@ -457,23 +453,6 @@ class SparcAcquiController(AcquisitionController):
             txt = txt.format(units.readable_time(acq_time))
 
         self.lbl_acqestimate.SetLabel(txt)
-
-    def _getStreamTree(self):
-        """
-        create a StreamTree for the current streams to acquire
-        returns StreamTree: a StreamTree with at least one stream (the SEM)
-        """
-        streams = list(self._microscope.streams)
-        if not streams:
-            # normally, there should be at least 3 streams: 1 for the whole SEM
-            # area, 1 for the ROI SEM, and 1 or 2 for the CCDs.
-            logging.error("Unexpected empty stream list for the microscope")
-
-        # put the ROI SEM stream as the first and only stream non-transparent,
-        # to get a nice thumbnail.
-        # FIXME: have a special .acqusitionView which contains all the streams
-        # as they should be acquired
-        return self._microscope.acquisitionView.stream_tree
 
     def on_acquisition(self, evt):
         mtc = get_main_tab_controller()
@@ -563,7 +542,7 @@ class SparcAcquiController(AcquisitionController):
             self.btn_acquire.Enable()
 
             # hide progress bar (+ put pack estimated time)
-            self._update_estimated_time()
+            self.update_acquisition_time()
             self.gauge_acq.Hide()
             self._main_frame.Layout()
             return
@@ -577,8 +556,7 @@ class SparcAcquiController(AcquisitionController):
 
         # save result to file
         try:
-            filename = os.path.join(self.txt_destination.Value,
-                                    self.txt_filename.Value)
+            filename = self.filename.value
             exporter = dataio.get_exporter(self.conf.last_format)
             exporter.export(filename, data, thumb)
             logging.info("Acquisition saved as file '%s'.", filename)
@@ -614,4 +592,5 @@ class SparcAcquiController(AcquisitionController):
         else:
             # don't be too precise
             self.lbl_acqestimate.SetLabel("a few seconds left.")
+
 

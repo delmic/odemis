@@ -1,112 +1,43 @@
-import copy
-import logging
-import math
-import os.path
-import time
-from collections import OrderedDict
+# -*- coding: utf-8 -*-
+"""
+Created on 12 Apr 2013
+
+@author: Rinze de Laat
+
+Copyright © 2013 Éric Piel, Rinze de Laat, Delmic
+
+This file is part of Odemis.
+
+Odemis is free software: you can redistribute it and/or modify it under the
+terms of the GNU General Public License as published by the Free Software
+Foundation, either version 2 of the License, or (at your option) any later
+version.
+
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with
+Odemis. If not, see http://www.gnu.org/licenses/.
+"""
+
 from concurrent.futures._base import CancelledError
-
-import wx
-from wx.lib.pubsub import pub
-
 from odemis import model, dataio
 from odemis.gui import acqmng, instrmodel
+from odemis.gui.acqmng import presets, preset_as_is
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.cont.settings import SecomSettingsController
 from odemis.gui.cont.streams import StreamController
 from odemis.gui.instrmodel import VIEW_LAYOUT_ONE
 from odemis.gui.main_xrc import xrcfr_acq
 from odemis.gui.util import units, call_after
-
-def preset_hq(entries):
-    """
-    Preset for highest quality image
-    entries (list of SettingEntries): each value as originally set
-    returns (dict SettingEntries -> value): new value for each SettingEntry that should be modified
-    """
-    ret = {}
-    for entry in entries:
-        if not entry.va or entry.va.readonly:
-            # not a real setting, just info
-            logging.debug("Skipping the value %s", entry.name)
-            continue
-
-
-        value = entry.va.value
-        if entry.name == "resolution":
-            # if resolution => get the best one
-            try:
-                value = entry.va.range[1] # max
-            except (AttributeError, model.NotApplicableError):
-                pass
-        elif entry.name in ("exposureTime", "dwellTime"):
-            # if exposureTime/dwellTime => x10
-            value = entry.va.value * 10
-
-            # make sure it still fits
-            if isinstance(entry.va.range, tuple):
-                value = sorted(entry.va.range + (value,))[1] # clip
-
-        elif entry.name == "binning":
-            # if binning => smallest
-            try:
-                value = entry.va.range[0] # min
-            except (AttributeError, model.NotApplicableError):
-                try:
-                    value = min(entry.va.choices)
-                except (AttributeError, model.NotApplicableError):
-                    pass
-            # TODO: multiply exposuretime by the original binning
-        elif entry.name == "readoutRate":
-            # if readoutrate => smallest
-            try:
-                value = entry.va.range[0] # min
-            except (AttributeError, model.NotApplicableError):
-                try:
-                    value = min(entry.va.choices)
-                except (AttributeError, model.NotApplicableError):
-                    pass
-        # rest => as is
-
-        logging.debug("Adapting value %s from %s to %s", entry.name, entry.va.value, value)
-        ret[entry] = value
-
-    return ret
-
-def preset_as_is(entries):
-    """
-    Preset which don't change anything (exactly as live)
-    entries (list of SettingEntries): each value as originally set
-    returns (dict SettingEntries -> value): new value for each SettingEntry that
-        should be modified
-    """
-    ret = {}
-    for entry in entries:
-        if not entry.va or entry.va.readonly:
-            # not a real setting, just info
-            logging.debug("Skipping the value %s", entry.name)
-            continue
-
-        # everything as-is
-        logging.debug("Copying value %s = %s", entry.name, entry.va.value)
-        ret[entry] = entry.va.value
-
-    return ret
-
-def preset_no_change(entries):
-    """
-    Special preset which matches everything and doesn't change anything
-    """
-    return {}
-
-
-# Name -> callable (list of SettingEntries -> dict (SettingEntries -> value))
-presets = OrderedDict(
-            (   (u"High quality", preset_hq),
-                (u"Fast", preset_as_is),
-                (u"Custom", preset_no_change)
-            )
-)
+from wx.lib.pubsub import pub
+import copy
+import logging
+import math
+import os.path
+import time
+import wx
 
 class AcquisitionDialog(xrcfr_acq):
     """ Wrapper class responsible for additional initialization of the
