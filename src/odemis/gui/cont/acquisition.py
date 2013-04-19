@@ -370,11 +370,7 @@ class SparcAcquiController(AcquisitionController):
         # At least, we must ensure it's a new date after the acquisition
         # is done.
         # Filename to save the acquisition 
-        default_fn = os.path.join(self.conf.last_path, 
-                                  u"%s%s" % (time.strftime("%Y%m%d-%H%M%S"),
-                                             self.conf.last_extension)
-                                  )
-        self.filename = model.StringVA(default_fn)
+        self.filename = model.StringVA(self._get_default_filename())
         self.filename.subscribe(self._onFilename, init=True)
 
         # For acquisition
@@ -417,7 +413,15 @@ class SparcAcquiController(AcquisitionController):
         # Event binding
         self._sem_cl.roi.subscribe(self.onROI)
         pub.subscribe(self.on_setting_change, 'setting.changed')
-        
+
+    def _get_default_filename(self):
+        """
+        Return a good default filename
+        """
+        return os.path.join(self.conf.last_path, 
+                            u"%s%s" % (time.strftime("%Y%m%d-%H%M%S"),
+                                             self.conf.last_extension)
+                            )
 
     def _onFilename(self, name):
         """ updates the GUI when the filename is updated """
@@ -432,6 +436,8 @@ class SparcAcquiController(AcquisitionController):
         """ updates the acquire button according to the acquisition ROI """
         self.btn_acquire.Enable(roi != UNDEFINED_ROI)
         self.update_acquisition_time() # to update the message
+
+
     
     def on_setting_change(self, setting_ctrl):
         """ Handler for pubsub 'setting.changed' messages """
@@ -512,6 +518,9 @@ class SparcAcquiController(AcquisitionController):
         
         # start acquisition + connect events to callback
         st = self._microscope.acquisitionView.stream_tree
+        # TODO: specify that the acquisition should be done simultaneously
+        # => special function of acqmng??
+        
         self.acq_future = acqmng.startAcquisition(st)
         self.acq_future.add_update_callback(self.on_acquisition_upd)
         self.acq_future.add_done_callback(self.on_acquisition_done)
@@ -554,6 +563,7 @@ class SparcAcquiController(AcquisitionController):
             self.update_acquisition_time()
             self.gauge_acq.Hide()
             self._main_frame.Layout()
+            # don't change filename => we can reuse it
             return
         except Exception:
             # We cannot do much: just warn the user and pretend it was cancelled
@@ -571,12 +581,18 @@ class SparcAcquiController(AcquisitionController):
             logging.info("Acquisition saved as file '%s'.", filename)
         except Exception:
             logging.exception("Saving acquisition failed")
-            self.btn_acquire.Enable()
             self.lbl_acqestimate.SetLabel("Saving acquisition file failed.")
-            return
-
-        self.lbl_acqestimate.SetLabel("Acquisition completed.")
-
+        finally:
+            # hide progress bar (+ put pack estimated time)
+            self.update_acquisition_time()
+            self.gauge_acq.Hide()
+            self._main_frame.Layout()
+            
+            self.btn_acquire.Enable()
+            # change filename, to ensure not overwriting anything
+            self.filename.value = self._get_default_filename()
+        
+        # TODO: switch to analysis tab automatically?
 
     @call_after
     def on_acquisition_upd(self, future, past, left):

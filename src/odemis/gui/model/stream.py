@@ -266,6 +266,11 @@ class SEMStream(Stream):
         #   tries to do it after every N lines, or every N pixels) 
         # Need to see  
         
+        # TODO: Anti-aliasing/Pixel fuzzing
+        # .fuzzing: boolean
+        # Might be better to automatically activate it for Spectrum, and disable
+        # it for AR (without asking the user) 
+        
         try:
             self._prevDwellTime = emitter.dwellTime.value
             emitter.dwellTime.subscribe(self.onDwellTime)

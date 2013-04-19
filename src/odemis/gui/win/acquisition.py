@@ -210,6 +210,8 @@ class AcquisitionDialog(xrcfr_acq):
         """
         Return a good default filename
         """
+        # TODO: check the file doesn't yet exist (if the computer clock is
+        # correct it's unlikely) 
         return os.path.join(self.conf.last_path, 
                             u"%s%s" % (time.strftime("%Y%m%d-%H%M%S"),
                                              self.conf.last_extension)
