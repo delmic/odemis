@@ -241,15 +241,6 @@ class Stream(object):
         self.raw.insert(0, data)
         self._updateImage()
 
-    def show_vigilant_attributes(self):
-        vas = inspect.getmembers(
-                    self,
-                    lambda x: isinstance(x, VigilantAttributeBase)
-        )
-
-        print vas
-
-
 
 class SEMStream(Stream):
     """ Stream containing images obtained via Scanning electron microscope.

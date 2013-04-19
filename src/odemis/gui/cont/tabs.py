@@ -161,6 +161,7 @@ class SparcAcquisitionTab(Tab):
                         self.microscope_model.sed.data,
                         self.microscope_model.ebeam)
         self._sem_live_stream = sem_stream
+        sem_stream.should_update.value = True
         mic_view.addStream(sem_stream)
         acq_view.addStream(sem_stream) # it should also be saved
 
@@ -226,9 +227,7 @@ class SparcAcquisitionTab(Tab):
     def onEMState(self, state):
         if state == STATE_OFF or state == STATE_PAUSE:
             self._sem_live_stream.is_active.value = False
-            self._sem_live_stream.should_update.value = False
         elif state == STATE_ON:
-            self._sem_live_stream.should_update.value = True
             self._sem_live_stream.is_active.value = True
 
     def onROI(self, roi):
