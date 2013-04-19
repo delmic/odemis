@@ -39,7 +39,7 @@ from wx.lib.pubsub import pub
 
 from odemis import model
 from odemis.gui import util
-from odemis.model import VigilantAttribute, VigilantAttributeBase, \
+from odemis.model import VigilantAttribute, \
     MD_POS, MD_PIXEL_SIZE, MD_SENSOR_PIXEL_SIZE, MD_WL_POLYNOMIAL
 from odemis.gui.model.img import InstrumentalImage
 
@@ -101,7 +101,10 @@ class Stream(object):
         # start/stop acquisition, and one VA "updated" to stated that the user
         # want this stream updated (as often as possible while other streams are
         # also updated)
+        # should_update has no effect direct effect, it's just a flag to indicate
+        # the user would like to have the stream updated (live)
         self.should_update = model.BooleanVA(False)
+        # is_active set to True will keep the acquisition going on
         self.is_active = model.BooleanVA(False)
         self.is_active.subscribe(self.onActive)
 
@@ -582,7 +585,7 @@ class SpectrumStream(Stream):
                 readout = numpy.prod(self._detector.resolution.value) / ro_rate
             except:
                 readout = 0
-            duration = (exp + readout) * numpy.prod(res) * 1.10
+            duration = (exp + readout + 0.01) * numpy.prod(res) * 1.10
             # Add the setup time
             duration += self.SETUP_OVERHEAD
 
@@ -844,6 +847,108 @@ class StaticSpectrumStream(StaticStream):
         else:
             raise NotImplementedError("Need to handle other projection types")
 
+class MultipleDetectorStream(Stream):
+    """
+    Abstract class for all specialized streams which are actually a combination 
+    of multiple streams acquired simultaneously. The main difference from a
+    normal stream is the init arguments are Streams, and .raw is composed of all
+    the .raw from the sub-streams.
+    """
+    def __init__(self, name, streams):
+        """
+        streams (list of Streams): all the sub-streams that are used to decompose
+        """
+        self.name = model.StringVA(name)
+        self.raw = []
+
+class SEMSpectrumMDStream(MultipleDetectorStream):
+    """
+    Multiple detector Stream made of SEM + Spectrum.
+    It handles acquisition, but not rendering (so .image always returns an empty
+    image). 
+    """
+    def __init__(self, name, sem_stream, spec_stream):
+        MultipleDetectorStream.__init__(self, name, [sem_stream, spec_stream])
+        
+        self._sem_stream = sem_stream
+        self._spec_stream = spec_stream
+        
+        assert sem_stream._emitter == spec_stream._emitter 
+        self._emitter = sem_stream._emitter
+        self._semd = self._sem_stream._detector # probably secondary electron detector
+        self._semd_df = self._sem_stream._dataflow
+        self._spec = self._spec_stream._detector # spectrometer
+        self._spec_df = self._spec_stream._dataflow
+        
+        # it will always be an empty image, but a different one every time a new
+        # acquisition is finished (so subscribing to it, will at least work).
+        self.image = VigilantAttribute(InstrumentalImage(None))
+
+        self.should_update = model.BooleanVA(False)
+        self.is_active = model.BooleanVA(False)
+        self.is_active.subscribe(self.onActive)
+        
+    def estimateAcquisitionTime(self):
+        # that's the same as the spec stream (and SEM stream, once the hardware
+        # settings are correct)
+        return self._spec_stream.estimateAcquisitionTime()
+        
+    def _adjustHardwareSettings(self):
+        """
+        Read the SEM and Spectrum stream settings and adapt the SEM scanner accordingly.
+        """
+        # ROI
+        repetition = self._spec_stream.repetition.value
+        roi = self._sem_stream.roi.value
+        center = ((roi[0] + roi[2]) / 2, roi[3] - roi[1])
+        width = (roi[2] - roi[0], roi[3] - roi[1])
+        
+        shape = self._emitter.shape
+        scale = (1 / width[0], 1/width[1])
+        trans = (shape[0] * center[0], shape[1] * center[1]) # can be floats
+         
+        # always in this order
+        self._emitter.scale.value = scale
+        self._emitter.resolution.value = repetition
+        self._emitter.translation.value = trans
+        
+        # Dwell Time: a "little bit" more than the exposure time 
+        exp = self._spec.exposureTime.value #s
+        spec_size = self._spec.resolution.value
+        assert spec_size[1] == 1 # it's supposed to be a band
+        
+        # magical formula to get a long enough dwell time.
+        # works with PVCam and Andorcam2, but not fool proof at all!
+        readout = numpy.prod(spec_size) / self._spec.readoutRate.value + 0.01
+        self._emitter.dwellTime.value = (exp + readout) * 1.1 + 0.05 # 50ms to account for the overhead and extra image acquisition 
+        
+    def onActive(self, active):
+        """ Called when the Stream is activated or deactivated by setting the
+        is_active attribute
+        """
+        # called only when the value _changes_
+        if active:
+            # beginning of (constant) acquisition
+            self._adjustHardwareSettings()
+            self._acq_spect_buf = []
+            self._acq_left = numpy.prod(self._spec_stream.repetition.value)
+            
+            logging.debug("Subscribing to dataflow of components %s", self._detector.name)
+            if not self.should_update.value:
+                logging.warning("Trying to activate stream while it's not supposed to update")
+            self._spec_df.synchronizedOn(self._emitter.newPosition)
+            self._spec_df.subscribe(self._onSpecImage)
+            self._semd_df.subscribe(self._onSEMImage)
+        else:
+            
+            logging.debug("Unsubscribing from dataflow of component %s", self._detector.name)
+            self._semd_df.unsubscribe(self._onSEMImage)
+            self._spec_df.unsubscribe(self._onSpecImage)
+            self._spec_df.synchronizedOn(None)
+    
+    # XXX
+    
+    
 
 class StreamTree(object):
     """ Object which contains a set of streams, and how they are merged to
