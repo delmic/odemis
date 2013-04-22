@@ -68,7 +68,7 @@ def get_si_scale(x):
     """
     if x == 0:
         return (1, u"")
-    
+
     most_significant = math.floor(math.log10(abs(x)))
     prefix_order = (most_significant // 3) * 3 # rounding to multiple of 3
     prefix_order = max(-12, min(prefix_order, 9)) # clamping
@@ -89,7 +89,7 @@ def si_scale_list(values):
         return [v / divisor for v in values], prefix
     return None, u""
 
-def to_string_si_prefix(x):
+def to_string_si_prefix(x, sig=None):
     """
     Convert a number to a string with the most appropriate SI prefix appended
     ex: 0.0012 -> "1.2 m"
@@ -97,48 +97,55 @@ def to_string_si_prefix(x):
     return (string)
     """
     value, prefix = to_si_scale(x)
-    return u"%s %s" % (to_string_pretty(value), prefix)
+    return u"%s %s" % (to_string_pretty(value, sig), prefix)
 
-def to_string_pretty(x):
+def to_string_pretty(x, sig=None):
     """
     Convert a number to a string as int or float as most appropriate
+    :param sig: (int) The number of significant decimals
     """
     if x == 0:
         # don't consider this a float
         return u"0"
-     
-    if abs(x) < 1:
-        # just a float
-        return u"%r" % x
-    
+
     # so close from an int that it's very likely one?
     if abs(x - round(x)) < 1e-5:
         x = int(round(x)) # avoid the .0
+
+    if abs(x) < 1 or isinstance(x, float):
+        # just a float
+        if sig:
+            fmt = "{0:0.%sf}" % sig
+            return fmt.format(x)
+        else:
+            return u"%r" % x
+
     return u"%s" % x
 
-def readable_str(value, unit=None):
+def readable_str(value, unit=None, sig=3):
     """
     Convert a value with a unit into a displayable string for the user
-    value (number or list of number): value(s) to display
-    unit (None or string): unit of the values. If necessary a SI prefix will be
-      used to make the value more readable, unless None is given.
+
+    :param value: (number or [number...]): value(s) to display
+    :param unit: (None or string): unit of the values. If necessary a SI prefix
+        will be used to make the value more readable, unless None is given.
+    :param sig: (int) The number of significant decimals
+
     return (string)
     """
-    # TODO: add a optional parameter to select the number of significant numbers, default to 3
-    # TODO: if unit="s", and value > 1 use readable_time? getting ks is weird
     if unit is None:
         # don't put SI scaling prefix
         if isinstance(value, collections.Iterable):
             # Could use "×" , but less readable than "x"
-            return u" x ".join([to_string_pretty(v) for v in value])
+            return u" x ".join([to_string_pretty(v, sig) for v in value])
         else:
-            return to_string_pretty(value)
-        
+            return to_string_pretty(value, sig)
+
     if isinstance(value, collections.Iterable):
         values, prefix = si_scale_list(value)
-        return u"%s %s%s" % (u" x ".join([to_string_pretty(v) for v in values]), prefix, unit)
+        return u"%s %s%s" % (u" x ".join([to_string_pretty(v, sig) for v in values]), prefix, unit)
     else:
-        return u"%s%s" % (to_string_si_prefix(value), unit)
+        return u"%s%s" % (to_string_si_prefix(value, sig), unit)
 
 
 def readable_time(seconds):
@@ -149,18 +156,18 @@ def readable_time(seconds):
     # TODO: a way to indicate some kind of significant number? (If it's going to
     # last 5 days, the number of seconds is generally pointless)
     result = []
-    
+
     sign = 1
     if seconds < 0:
         # it's just plain weird, but let's do as well as we can
         logging.warning("Asked to display negative time %f", seconds)
         sign = -1
         seconds = -seconds
-        
+
     if seconds > 60 * 60 * 24 * 30:
-        # just for us to remember to extend the function 
+        # just for us to remember to extend the function
         logging.debug("Converting time longer than a month.")
-    
+
     second, subsec = divmod(seconds, 1)
     msec = round(subsec * 1e3)
     if msec == 1000:
@@ -169,7 +176,7 @@ def readable_time(seconds):
     if second == 0 and msec == 0:
         # exactly 0 => special case
         return "0 second"
-    
+
     minute, second = divmod(second, 60)
     hour, minute = divmod(minute, 60)
     day, hour = divmod(hour, 24)
@@ -185,10 +192,10 @@ def readable_time(seconds):
 
     if second:
         result.append("%d second%s" % (second, "" if second == 1 else "s"))
-    
+
     if msec:
         result.append("%d ms" % msec)
-    
+
     if len(result) == 1:
         # simple case
         ret = result[0]
@@ -198,7 +205,7 @@ def readable_time(seconds):
 
     if sign == -1:
         ret = "minus " + ret
-        
+
     return ret
 
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:
