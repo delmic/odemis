@@ -1256,7 +1256,7 @@ def __init_resources():
                                     <assign_var>1</assign_var>
                                   </XRCED>
                                 </object>
-                                <flag>wxTOP|wxLEFT|wxRIGHT</flag>
+                                <flag>wxALL</flag>
                                 <border>12</border>
                               </object>
                               <object class="sizeritem">
@@ -1270,7 +1270,7 @@ def __init_resources():
                                     <assign_var>1</assign_var>
                                   </XRCED>
                                 </object>
-                                <flag>wxALL|wxEXPAND</flag>
+                                <flag>wxBOTTOM|wxLEFT|wxRIGHT|wxEXPAND</flag>
                                 <border>10</border>
                               </object>
                             </object>
@@ -1279,8 +1279,6 @@ def __init_resources():
                           <option>0</option>
                           <flag>wxEXPAND</flag>
                         </object>
-                        
-                        
                         <object class="sizeritem">
                           <object class="ImageTextButton" name="btn_sparc_acquire">
                             <size>382,-1</size>
