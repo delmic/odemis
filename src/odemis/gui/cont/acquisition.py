@@ -461,11 +461,11 @@ class SparcAcquiController(AcquisitionController):
             # TODO: update the default text to be the same
             txt = "Region of acquisition needs to be selected"
         else:
-            st = self._microscope.acquisitionView.stream_tree
-            acq_time = acqmng.estimateAcquistionTime(st)
+            streams = self._microscope.focussedView.value.getStreams()
+            acq_time = acqmng.estimateAcquistionTime(streams)
             self.gauge_acq.Range = 100 * acq_time
             acq_time = math.ceil(acq_time) # round a bit pessimistically
-            txt = "The estimated acquisition time is {}."
+            txt = "Estimated time is {}."
             txt = txt.format(units.readable_time(acq_time))
 
         self.lbl_acqestimate.SetLabel(txt)
@@ -517,11 +517,9 @@ class SparcAcquiController(AcquisitionController):
         self._main_frame.Layout() # to put the gauge at the right place
         
         # start acquisition + connect events to callback
-        st = self._microscope.acquisitionView.stream_tree
-        # TODO: specify that the acquisition should be done simultaneously
-        # => special function of acqmng??
+        streams = self._microscope.focussedView.value.getStreams()
         
-        self.acq_future = acqmng.startAcquisition(st)
+        self.acq_future = acqmng.startAcquisition(streams)
         self.acq_future.add_update_callback(self.on_acquisition_upd)
         self.acq_future.add_done_callback(self.on_acquisition_done)
 
@@ -551,7 +549,7 @@ class SparcAcquiController(AcquisitionController):
 #         self.btn_cancel.SetLabel("Close")
 
         try:
-            data, thumb = future.result(1) # timeout is just for safety
+            data = future.result(1) # timeout is just for safety
             # make sure the progress bar is at 100%
             self.gauge_acq.Value = self.gauge_acq.Range
         except CancelledError:
@@ -575,6 +573,8 @@ class SparcAcquiController(AcquisitionController):
 
         # save result to file
         try:
+            thumb = acqmng.computeThumbnail(self._microscope.focussedView.value.stream_tree,
+                                            future)
             filename = self.filename.value
             exporter = dataio.get_exporter(self.conf.last_format)
             exporter.export(filename, data, thumb)

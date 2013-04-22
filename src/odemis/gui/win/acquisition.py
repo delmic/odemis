@@ -194,9 +194,9 @@ class AcquisitionDialog(xrcfr_acq):
         self.cmb_presets.SetValue(preset_name)
 
     def update_acquisition_time(self):
-        st = self.interface_model.focussedView.value.stream_tree
-        if st.streams:
-            acq_time = acqmng.estimateAcquistionTime(st)
+        streams = self.interface_model.focussedView.value.getStreams()
+        if streams:
+            acq_time = acqmng.estimateAcquistionTime(streams)
             self.gauge_acq.Range = 100 * acq_time
             acq_time = math.ceil(acq_time) # round a bit pessimistically
             txt = "The estimated acquisition time is {}."
@@ -301,9 +301,9 @@ class AcquisitionDialog(xrcfr_acq):
         self.Layout() # to put the gauge at the right place
         
         # start acquisition + connect events to callback
-        st = self.interface_model.focussedView.value.streams
-        # It should never be possible to reach here with an empty streamTree
-        self.acq_future = acqmng.startAcquisition(st)
+        streams = self.interface_model.focussedView.value.getStreams()
+        # It should never be possible to reach here with no streams
+        self.acq_future = acqmng.startAcquisition(streams)
         self.acq_future.add_update_callback(self.on_acquisition_upd)
         self.acq_future.add_done_callback(self.on_acquisition_done)
 
@@ -331,7 +331,7 @@ class AcquisitionDialog(xrcfr_acq):
         self.btn_cancel.Bind(wx.EVT_BUTTON, self.on_close)
 
         try:
-            data, thumb = future.result(1) # timeout is just for safety
+            data = future.result(1) # timeout is just for safety
             # make sure the progress bar is at 100%
             self.gauge_acq.Value = self.gauge_acq.Range
         except CancelledError:
@@ -354,6 +354,8 @@ class AcquisitionDialog(xrcfr_acq):
 
         # save result to file
         try:
+            thumb = acqmng.computeThumbnail(self.interface_model.focussedView.value.stream_tree,
+                                            future)
             filename = self.filename.value
             exporter = dataio.get_exporter(self.conf.last_format)
             exporter.export(filename, data, thumb)

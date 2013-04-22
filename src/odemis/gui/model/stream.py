@@ -29,19 +29,20 @@ Detector, Emitter and Dataflow associations.
 """
 
 from __future__ import division
-
-import logging
-import inspect
-
-import numpy
 from numpy.polynomial import polynomial
-from wx.lib.pubsub import pub
-
 from odemis import model
 from odemis.gui import util
-from odemis.model import VigilantAttribute, \
-    MD_POS, MD_PIXEL_SIZE, MD_SENSOR_PIXEL_SIZE, MD_WL_POLYNOMIAL
 from odemis.gui.model.img import InstrumentalImage
+from odemis.model import VigilantAttribute, MD_POS, MD_PIXEL_SIZE, \
+    MD_SENSOR_PIXEL_SIZE, MD_WL_POLYNOMIAL
+from wx.lib.pubsub import pub
+import inspect
+import logging
+import numpy
+import threading
+
+
+
 
 
 # to identify a ROI which must still be defined by the user
@@ -858,8 +859,17 @@ class MultipleDetectorStream(Stream):
         """
         streams (list of Streams): all the sub-streams that are used to decompose
         """
+        # don't call the init of Stream, or it will override .raw
         self.name = model.StringVA(name)
-        self.raw = []
+        self._streams = streams
+    
+    @property
+    def raw(self):
+        # build the .raw from all the substreams
+        r = []
+        for s in self._streams:
+            r.extend(s.raw)
+        return r
 
 class SEMSpectrumMDStream(MultipleDetectorStream):
     """
@@ -883,6 +893,12 @@ class SEMSpectrumMDStream(MultipleDetectorStream):
         # it will always be an empty image, but a different one every time a new
         # acquisition is finished (so subscribing to it, will at least work).
         self.image = VigilantAttribute(InstrumentalImage(None))
+
+        # for the acquisition
+        self._acq_left = 0
+        self._acq_repetition = None
+        self._acq_complete = threading.Event()
+        self._acq_waiter = None # thread
 
         self.should_update = model.BooleanVA(False)
         self.is_active = model.BooleanVA(False)
@@ -925,30 +941,123 @@ class SEMSpectrumMDStream(MultipleDetectorStream):
     def onActive(self, active):
         """ Called when the Stream is activated or deactivated by setting the
         is_active attribute
+        Note: due to the duration of the acquisition, the stream will automatically 
+         reset itself to inactive after one acquisition fully acquired. 
         """
         # called only when the value _changes_
         if active:
-            # beginning of (constant) acquisition
+            # reset everything (ready for one acquisition)
             self._adjustHardwareSettings()
-            self._acq_spect_buf = []
-            self._acq_left = numpy.prod(self._spec_stream.repetition.value)
             
-            logging.debug("Subscribing to dataflow of components %s", self._detector.name)
+            self._acq_spect_buf = []
+            repetition = self._spec_stream.repetition.value
+            self._acq_left = numpy.prod(repetition)
+            self._acq_repetition = repetition
+            self._acq_complete.clear()
+            if self._acq_waiter:
+                self._acq_waiter.join(10)
+            self._acq_waiter = threading.Thread(target=self._waitTillAcquisition,
+                                    name="SEM-Spectrum acquisition waiter")
+            # will be started at the end of the SEM acquisition
+            
+            logging.debug("Subscribing to dataflow of components %s and %s",
+                          self._semd.name, self._spec.name)
             if not self.should_update.value:
                 logging.warning("Trying to activate stream while it's not supposed to update")
             self._spec_df.synchronizedOn(self._emitter.newPosition)
             self._spec_df.subscribe(self._onSpecImage)
             self._semd_df.subscribe(self._onSEMImage)
         else:
-            
-            logging.debug("Unsubscribing from dataflow of component %s", self._detector.name)
+            # TODO: detect the current acquisition is being cancelled and handle 
+            # it specifically
+            if not self._acq_complete.is_set():
+                logging.debug("Cancelling acquisition from dataflow of components %s and %s",
+                          self._semd.name, self._spec.name)
             self._semd_df.unsubscribe(self._onSEMImage)
             self._spec_df.unsubscribe(self._onSpecImage)
             self._spec_df.synchronizedOn(None)
+            self._acq_spect_buf = [] # not necessary, but helps to free some memory quickly
     
-    # XXX
+    def _waitTillAcquisition(self):
+        """
+        Wait until the acquisition is complete, to update the data and stop the
+        updates.
+        To be run as a separate thread, after the SEM data has arrived.
+        """
+        # this is called after the SEM image has arrived, so almost at the very 
+        # end of the acquisition. The last spectrum data has already just
+        # arrived, or will arrive really soon. However, there is a very small 
+        # chance that while waiting for the spectrum data, the acquisition is
+        # cancelled (is_active.value = False)  
+        try:
+            # SEM data has arrived, so spectrum should arrive real soon
+            is_complete = self._acq_complete.wait(5)
+            # TODO: handle better cancellation during the very end?
+            # need to wait for a cancel event, and then don't complain
+            if not is_complete:
+                logging.warning("Spectrometer data not fully acquired in time")
+                self.is_active.value = False
+                return
+            
+            # create a spectrum cube from all the data
+            self._assembleSpecData(self._acq_spect_buf)
+            
+            # update the image to a new empty one to signal everything is received 
+            self.image.value = InstrumentalImage(None)
+            
+            self.is_active.value = False
+        finally:
+            self._acq_waiter = None
+        
+    def _onSEMImage(self, df, data):
+        # unsubscribe to stop immediately
+        df.unsubscribe(self._onSEMImage)
+        self._sem_stream.raw = [data]
+        self._acq_waiter.start()
     
-    
+    def _onSpecImage(self, df, data):
+        # the data array subscribers must be fast, so the real processing
+        # takes place in a separate thread.
+        self._acq_spect_buf.append(data)
+        
+        self._acq_left -= 1
+        if self._acq_left <= 0:
+            # unsubscribe to stop immediately
+            df.unsubscribe(self._onSpecImage)
+            self._acq_complete.set()
+
+    def _assembleSpecData(self, data_list):
+        """
+        Take all the data received from the spectrometer and assemble it in a cube
+        data_list (list of M DataArray of shape (1, N)): all the data received
+        the result goes into .raw, and a new empty .image is added to inform
+        there is a new data.
+        """
+        assert len(data_list) > 0
+        
+        # each element of acq_spect_buf has a shape of (1, N)
+        # reshape to (N, 1)
+        for e in data_list:
+            e.shape = e.shape[-1::-1]
+        # concatenate into one big array of (N, number of pixels)
+        spec_data = numpy.concatenate(data_list, axis=1)
+        # reshape to (N, Y, X)
+        repetition = self._acq_repetition
+        spec_res = data_list[0].shape[0]
+        spec_data.shape = (spec_res, repetition[1], repetition[0])
+        # copy the metadata from the first point
+        spec_data = model.DataArray(spec_data, metadata=data_list[0].metadata)
+
+        # save the new data        
+        self._spec_stream.raw = [spec_data]
+
+# On the SPARC, it's possible that both the AR and Spectrum are acquired in the
+# same acquisition, but it doesn't make much sense to acquire them simultaneously
+# because the two optical detectors need the same light, and a mirror is used
+# to select which path is taken. In addition, the AR stream will typically have
+# a lower repetition (even if it has same ROI). So it's easier and faster to
+# acquire them sequentially. The only trick is that if drift correction is used,
+# the same correction must be used for the entire acquisition.  
 
 class StreamTree(object):
     """ Object which contains a set of streams, and how they are merged to

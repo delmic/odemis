@@ -26,7 +26,8 @@ from concurrent.futures._base import CANCELLED, FINISHED, RUNNING, \
     CANCELLED_AND_NOTIFIED, CancelledError, PENDING
 from odemis import model
 from odemis.gui.model import OPTICAL_STREAMS, EM_STREAMS
-from odemis.gui.model.stream import FluoStream
+from odemis.gui.model.stream import FluoStream, ARStream, SpectrumStream,\
+    SEMSpectrumMDStream
 from odemis.gui.util import img
 import logging
 import numpy
@@ -46,23 +47,22 @@ import time
 # execution.
 
 
-def startAcquisition(streamTree):
+def startAcquisition(streams):
     """
     Starts an acquisition task for the given streams. It will decide in which
       order the stream must be acquired.
       Note: it is highly recommended to not have any other acquisition going on.
-    streamTree (instrmodel.StreamTree): the streams to acquire.
+    streams (list of Stream): the streams to acquire
     returns (ProgressiveFuture): an object that represents the task, allow to
       know how much time before it is over and to cancel it. It also permits to
       receive the result of the task, which is:
-      (list of model.DataArray, model.DataArray or None): the raw acquisition data, and
-        a thumbnail.
+      (list of model.DataArray): the raw acquisition data
     """
     # create a future
     future = ProgressiveFuture()
 
     # create a task
-    task = AcquisitionTask(streamTree, future)
+    task = AcquisitionTask(_mergeStreams(streams), future)
     future.task_canceller = task.cancel # let the future cancel the task
 
     # run executeTask in a thread
@@ -73,18 +73,83 @@ def startAcquisition(streamTree):
     # return the interface to manipulate the task
     return future
 
-def estimateAcquistionTime(streamTree):
+def estimateAcquistionTime(streams):
     """
     Computes the approximate time it will take to run the acquisition for the
-     given streamTree (same arguments as startAcquisition())
-    streamTree (instrmodel.StreamTree): the streams to acquire.
+     given streams (same arguments as startAcquisition())
+    streams (list of Stream): the streams to acquire
     return (0 <= float): estimated time in s.
     """
     tot_time = 0
-    for s in streamTree.getStreams():
+    for s in _mergeStreams(streams):
         tot_time += s.estimateAcquisitionTime()
 
     return tot_time
+
+def computeThumbnail(streamTree, acqTask):
+    """
+    compute the thumbnail of a given (finished) acquisition according to a 
+    streamTree
+    streamTree (StreamTree): the tree of rendering
+    acqTask (Future): a Future specifically returned by startAcquisition(), 
+      representing an acquisition task
+    returns model.DataArray: the thumbnail with metadata
+    """
+    raw_data = acqTask.result() # get all the raw data from the acquisition
+    
+    # FIXME: need to use the raw images of the acqTask as the source in the 
+    # streams of the streamTree 
+    
+    # FIXME: this call now doesn't work. We need a hack to call the canvas
+    # method from outside the canvas, or use a canvas to render everything
+#   thumbnail = self._streamTree.getImage()
+
+    # poor man's implementation: take the first image of the streams, hoping
+    # it actually has a renderer (.image)
+    streams = sorted(streamTree.getStreams(), key=secom_weight_stream,
+                               reverse=True)
+    iim = streams[0].image.value
+    
+    # convert the RGB image into a DataArray
+    thumbnail = img.wxImage2NDImage(iim.image, keep_alpha=False)
+    # add some basic info to the image
+    metadata = {model.MD_POS: iim.center,
+                model.MD_PIXEL_SIZE: (iim.mpp, iim.mpp),
+                model.MD_DESCRIPTION: "Composited image preview"}
+    return model.DataArray(thumbnail, metadata=metadata)
+
+def _mergeStreams(streams):
+    """
+    Modifies a list of streams by merging possible streams into 
+    MultipleDetectorStreams
+    streams (list of streams): the original list of streams
+    return (list of streams): the same list or a shorter one  
+    """
+    # TODO: move the logic to all the MDStreams? Each class would be able to 
+    # say whether it finds some potential streams to merge?
+    
+    merged = list(streams)
+    # For now, this applies only to the SPARC streams
+    # SEM CL + Spectrum => SEMSpectrumMD
+    # SEM CL + AR => SEMARMD
+    semcls = [s for s in streams if isinstance(s, EM_STREAMS) and s.name == "SEM CL"]
+    specs = [s for s in streams if isinstance(s, SpectrumStream)]
+    ars = [s for s in streams if isinstance(s, ARStream)]
+    if semcls:
+        if len(semcls) > 1:
+            logging.warning("More than one SEM CL stream, not sure how to use them")
+        semcl = semcls[0]
+        
+        for s in specs:
+            mds = SEMSpectrumMDStream("SEM CL - " + s.name, semcl, s)
+            merged.remove(s)
+            if semcl in merged:
+                merged.remove(semcl)
+            merged.append(mds)
+        
+        # TODO: same thing for AR
+    
+    return merged
 
 def _executeTask(future, fn, *args, **kwargs):
     """
@@ -111,30 +176,40 @@ def secom_weight_stream(stream):
     stream (instrmodel.Stream): a stream to weight
     returns (number): priority (the higher the more it should be done first)
     """
+    # TODO: this also works for SPARC, need to change the name, or do something
+    # more clever.
+    
     # SECOM: Optical before SEM to avoid bleaching
     if isinstance(stream, FluoStream):
         return 100 # Fluorescence ASAP to avoid bleaching
     elif isinstance(stream, OPTICAL_STREAMS):
         return 90 # any other kind of optical after fluorescence
     elif isinstance(stream, EM_STREAMS):
-        return 50 # can be done after
+        if stream.name.value == "SEM CL": # special name on Sparc
+            return 40 # should be done after SEM live
+        else:
+            return 50 # can be done after any light
+    elif isinstance(stream, SEMSpectrumMDStream):
+        return 40 # at the same time as SEM CL
+    elif isinstance(stream, ARStream):
+        return 40 # at the same time as SEM CL
+    elif isinstance(stream, SpectrumStream):
+        return 40 # at the same time as SEM CL
     else:
         logging.debug("Unexpected stream of type %s for SECOM", stream.__class__.__name__)
         return 0
 
 class AcquisitionTask(object):
 
-    # TODO: this all make sense for the SECOM, but for systems where multiple
-    # acquisitions are running in parallel (ex: SPARC), it needs a better handling
-    # of the stream dependencies. Similarly, features like drift-compensation
-    # might need a special handling.
-    def __init__(self, streamTree, future):
-        self._streamTree = streamTree
+    # TODO: needs a better handling of the stream dependencies. Also, features 
+    # like drift-compensation might need a special handling.
+    def __init__(self, streams, future):
+        self._streams = streams
         self._future = future
 
         # get the estimated time for each streams
         self._streamTimes = {} # Stream -> float (estimated time)
-        for s in streamTree.getStreams():
+        for s in streams:
             self._streamTimes[s] = s.estimateAcquisitionTime()
 
         # order the streams for optimal acquisition
@@ -193,20 +268,9 @@ class AcquisitionTask(object):
             expected_time -= self._streamTimes[s]
             self._future.set_end_time(time.time() + expected_time)
 
-        # compute the thumbnail
-        # FIXME: this call now doesn't work. We need a hack to call the canvas
-        # method from outside the canvas, or use a canvas to render everything
-#        thumbnail = self._streamTree.getImage()
-        iim = self._streams[0].image.value
-        thumbnail = img.wxImage2NDImage(iim.image, keep_alpha=False)
-        # add some basic info to the image
-        metadata = {model.MD_POS: iim.center,
-                    model.MD_PIXEL_SIZE: (iim.mpp, iim.mpp),
-                    model.MD_DESCRIPTION: "Composited image preview"}
-        thumbnail = model.DataArray(thumbnail, metadata=metadata)
 
-        # return all
-        return (raw_images, thumbnail)
+        # return all the raw data
+        return raw_images
 
     def _future_time_upd(self, period):
         """
