@@ -31,6 +31,7 @@ import wx
 
 import odemis.gui as gui
 import odemis.gui.comp.canvas as canvas
+from odemis.gui.util.units import readable_str
 from ..util.conversion import hex_to_rgba
 
 class Overlay(object):
@@ -52,21 +53,39 @@ class Overlay(object):
         switched in the function call, so we need to sort them before clipping.
         """
 
-        ttl = (min(tl[0], br[0]), min(tl[1], br[1]))
-        tbr = (max(tl[0], br[0]), max(tl[1], br[1]))
-        tl, br = ttl, tbr
+        if None not in (tl, br, btl, bbr):
+            # Make sure that tl is actually top left
+            ttl = (min(tl[0], br[0]), min(tl[1], br[1]))
+            tbr = (max(tl[0], br[0]), max(tl[1], br[1]))
+            tl, br = ttl, tbr
 
-        # logging.warn("%s %s %s %s", tl[0] >= bbr[0], br[0] <= btl[0], br[1] <= btl[1], tl[1] >= bbr[1])
+            # logging.warn("%s %s %s %s", tl[0] >= bbr[0], br[0] <= btl[0], br[1] <= btl[1], tl[1] >= bbr[1])
 
-        # When the selection is completely outside the bounding box
-        if tl[0] >= bbr[0] or br[0] <= btl[0] or br[1] <= btl[1] or tl[1] >= bbr[1]:
-            return None
+            # When the selection is completely outside the bounding box
+            if tl[0] >= bbr[0] or br[0] <= btl[0] or br[1] <= btl[1] or tl[1] >= bbr[1]:
+                return None
 
-        tl = (max(tl[0], btl[0]), max(tl[1], btl[1]))
-        br = (min(br[0], bbr[0]), min(br[1], bbr[1]))
+            tl = (max(tl[0], btl[0]), max(tl[1], btl[1]))
+            br = (min(br[0], bbr[0]), min(br[1], bbr[1]))
 
         return tl, br
 
+    @classmethod
+    def write_label(cls, ctx, vpos, label):
+        ctx.select_font_face(
+                "Courier",
+                cairo.FONT_SLANT_NORMAL,
+                cairo.FONT_WEIGHT_NORMAL
+        )
+        ctx.set_font_size(12)
+
+        ctx.set_source_rgb(0.0, 0.0, 0.0)
+        ctx.move_to(vpos[0] + 5, vpos[1] - 10)
+        ctx.show_text(label)
+
+        ctx.set_source_rgb(1.0, 1.0, 1.0)
+        ctx.move_to(vpos[0] + 6, vpos[1] - 9)
+        ctx.show_text(label)
 
     def _clip_viewport_pos(self, pos):
         """ Return the given pos, clipped by the base's viewport """
@@ -75,6 +94,7 @@ class Overlay(object):
         pos.y = max(1, min(pos.y, self.base.ClientSize.y - 1))
 
         return pos
+
 
 class ViewOverlay(Overlay):
     """ This class displays an overlay on the view port """
@@ -152,9 +172,6 @@ class SelectionMixin(object):
         self.center = center
 
         self.scale = 1.0
-
-        # # Dictionary containing values for the inner and outer edges
-        # self.edges = {}
 
     ##### selection methods  #####
 
@@ -450,6 +467,9 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
         else:
             return None
 
+    def get_real_selection_size(self):
+        return u"{0:0.2f}x{0:0.2f}".format(*self.w_end_pos)
+
     def Draw(self, dc, shift=(0, 0), scale=1.0):
 
         if self.w_start_pos and self.w_end_pos:
@@ -499,43 +519,67 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
 
             ctx.stroke()
 
-            if self.dragging or True:
-                #ctx.translate(-view_size[0] / 2, -view_size[1] / 2)
-                msg = """{}
-                         view: {} x {}
-                         buffer: {} x {}
-                         world: {} x {}
-                         center: {}
-                         offset: {}
-                         scale: {}
-                         shift: {},
-                      """.format(
-                            self.label,
-                            self.v_start_pos, self.v_end_pos,
-                            start_pos, end_pos,
-                            self.w_start_pos, self.w_end_pos,
-                            self.base.buffer_center_world_pos,
-                            offset,
-                            scale,
-                            shift)
+            if self.dragging:
+                stream = self.base.microscope_view.stream_tree.streams[0]
+                emm = stream.emitter
+                # sel = self.w_end_pos
+                # sel = tuple([e * self.base.scale for e in sel])
+                w = abs(self.w_start_pos[0] - self.w_end_pos[0]) * self.base.scale
+                w = readable_str(w * self.base.microscope_view.mpp.value, 'm')
 
-                ctx.select_font_face(
-                    "Courier",
-                    cairo.FONT_SLANT_NORMAL,
-                    cairo.FONT_WEIGHT_NORMAL
+                h = abs(self.w_start_pos[1] - self.w_end_pos[1]) * self.base.scale
+                h = readable_str(h * self.base.microscope_view.mpp.value, 'm')
+
+                size_lbl = u"{} x {}".format(
+                    w, h
+                    # readable_str(emm.shape[0] * emm.pixelSize.value[0], 'm'),
+                    # readable_str(emm.shape[1] * emm.pixelSize.value[1], 'm')
                 )
-                ctx.set_font_size(12)
 
-                #buf_pos = self.b_to_buffer_pos((9, 19))
+                msg =  u"{}".format(size_lbl)
+                self.write_label(
+                        ctx,
+                        self.base.view_to_buffer_pos(self.v_end_pos),
+                        msg #self.get_real_selection_size()
+                )
 
-                x = 9
-                y = 19
-                for line in [l.strip() for l in msg.splitlines()]:
-                    ctx.set_source_rgb(0.0, 0.0, 0.0)
-                    buffer_pos = self.base.view_to_buffer_pos((x, y))
-                    ctx.move_to(*buffer_pos)
-                    ctx.show_text(line)
-                    ctx.set_source_rgb(1.0, 1.0, 1.0)
-                    ctx.move_to(buffer_pos[0] + 1, buffer_pos[1] + 1)
-                    ctx.show_text(line)
-                    y += 20
+            # if self.dragging:
+            #     #ctx.translate(-view_size[0] / 2, -view_size[1] / 2)
+            #     msg = """{}
+            #              view: {} x {}
+            #              buffer: {} x {}
+            #              world: {} x {}
+            #              center: {}
+            #              offset: {}
+            #              scale: {}
+            #              shift: {},
+            #           """.format(
+            #                 self.label,
+            #                 self.v_start_pos, self.v_end_pos,
+            #                 start_pos, end_pos,
+            #                 self.w_start_pos, self.w_end_pos,
+            #                 self.base.buffer_center_world_pos,
+            #                 offset,
+            #                 scale,
+            #                 shift)
+
+            #     ctx.select_font_face(
+            #         "Courier",
+            #         cairo.FONT_SLANT_NORMAL,
+            #         cairo.FONT_WEIGHT_NORMAL
+            #     )
+            #     ctx.set_font_size(12)
+
+            #     #buf_pos = self.b_to_buffer_pos((9, 19))
+
+            #     x = 9
+            #     y = 19
+            #     for line in [l.strip() for l in msg.splitlines()]:
+            #         ctx.set_source_rgb(0.0, 0.0, 0.0)
+            #         buffer_pos = self.base.view_to_buffer_pos((x, y))
+            #         ctx.move_to(*buffer_pos)
+            #         ctx.show_text(line)
+            #         ctx.set_source_rgb(1.0, 1.0, 1.0)
+            #         ctx.move_to(buffer_pos[0] + 1, buffer_pos[1] + 1)
+            #         ctx.show_text(line)
+            #         y += 20

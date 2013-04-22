@@ -139,6 +139,10 @@ class Stream(object):
         # TODO should be a set
         self.warnings = model.ListVA([]) # should only contains WARNING_*
 
+    @property
+    def emitter(self):
+        return self._emitter
+
     def estimateAcquisitionTime(self):
         """ Estimate the time it will take to acquire one image with the current
         settings of the detector and emitter.
@@ -253,19 +257,19 @@ class SEMStream(Stream):
     """
     def __init__(self, name, detector, dataflow, emitter):
         Stream.__init__(self, name, detector, dataflow, emitter)
-        
+
         # TODO: drift correction
         # .driftCorrection: Boolean
         # .driftROI: the region used for the drift correction
         # .driftCorrectionPeriod: time in s between each correction (approximate,
-        #   tries to do it after every N lines, or every N pixels) 
-        # Need to see  
-        
+        #   tries to do it after every N lines, or every N pixels)
+        # Need to see
+
         # TODO: Anti-aliasing/Pixel fuzzing
         # .fuzzing: boolean
         # Might be better to automatically activate it for Spectrum, and disable
-        # it for AR (without asking the user) 
-        
+        # it for AR (without asking the user)
+
         try:
             self._prevDwellTime = emitter.dwellTime.value
             emitter.dwellTime.subscribe(self.onDwellTime)
@@ -558,7 +562,7 @@ class SpectrumStream(Stream):
 
         # exposure time of each pixel is the exposure time of the detector,
         # the dwell time of the emitter will be adapted before acquisition.
-        
+
         # FIXME: we should do the opposite, the interface controller updates this
         # value when needed
         pub.subscribe(self.on_selection_changed, 'sparc.acq.selection.changed')

@@ -124,7 +124,7 @@ class DblMicroscopeCanvas(DraggableCanvas):
             self.microscope_view.stage_pos.subscribe(self._onStagePos, init=True)
 
         # any image changes
-        microscope_view.lastUpdate.subscribe(self._onViewImageUpdate, init=True)
+        self.microscope_view.lastUpdate.subscribe(self._onViewImageUpdate, init=True)
 
 
     def _convertStreamsToImages(self):
@@ -152,6 +152,7 @@ class DblMicroscopeCanvas(DraggableCanvas):
                 if isinstance(s, EM_STREAMS):
                     # as first
                     images.insert(0, iim)
+                    # FIXME: See the log warning
                     if has_sem_image:
                         logging.warning(("Multiple SEM images are not handled "
                                          "correctly for now"))
@@ -432,7 +433,7 @@ class SecomCanvas(DblMicroscopeCanvas):
                 if self.HasCapture():
                     self.ReleaseMouse()
             else:
-                print "ZOOM! ZOOM!"
+                # TODO: Put actual zoom function here
                 self.active_overlay.clear_selection()
                 pub.sendMessage('secom.canvas.zoom.end')
 
@@ -528,17 +529,19 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
         self.cursor = wx.STANDARD_CURSOR
 
     def _toggle_mode(self, enabled, overlay, mode):
+        # If same mode, but disabled
         if self.current_mode == mode and not enabled:
             self.current_mode = None
             self.active_overlay = None
             self.cursor = wx.STANDARD_CURSOR
             self.ShouldUpdateDrawing()
+        # if not dragging and we need to enable
         elif not self.dragging and enabled:
             if mode == MODE_SPARC_SELECT:
                 self.roi_overlay.clear_selection()
                 pub.sendMessage(
-                    'sparc.acq.selection.changed',
-                    region_of_interest=self.roi_overlay.get_world_selection_pos()
+                   'sparc.acq.selection.changed',
+                   region_of_interest=self.roi_overlay.get_world_selection_pos()
                 )
                 self.ShouldUpdateDrawing()
             self.current_mode = mode
