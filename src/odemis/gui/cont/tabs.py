@@ -34,6 +34,7 @@ from odemis.gui.model.stream import SpectrumStream, SEMStream, ARStream, \
     UNDEFINED_ROI
 import logging
 import wx
+from wx.lib.pubsub import pub
 
 
 class Tab(object):
@@ -141,6 +142,8 @@ class SparcAcquisitionTab(Tab):
         self._settings_controller = None
         self._roi_streams = [] # stream which must have the same ROI as the SEM CL
 
+        pub.subscribe(self.on_roi_changed, 'sparc.acq.selection.changed')
+
     def _initialize(self):
         """ This method is called when the tab is first shown """
         assert self.microscope_model is not None
@@ -159,7 +162,7 @@ class SparcAcquisitionTab(Tab):
 
         # the SEM acquisition simultaneous to the CCDs
         semcl_stream = SEMStream(
-                        "SEM CL", # name matters, used to find the stream for the ROI 
+                        "SEM CL", # name matters, used to find the stream for the ROI
                         self.microscope_model.sed,
                         self.microscope_model.sed.data,
                         self.microscope_model.ebeam)
@@ -185,8 +188,8 @@ class SparcAcquisitionTab(Tab):
             self._roi_streams.append(ar_stream)
 
         # indicate ROI must still be defined by the user
-        semcl_stream.roi.value = UNDEFINED_ROI
-        semcl_stream.roi.subscribe(self.onROI, init=True)
+        #semcl_stream.roi.value = UNDEFINED_ROI
+        #semcl_stream.roi.subscribe(self.onROI, init=True)
 
         # create a view on the microscope model
         # Needs SEM CL stream (could be avoided if we had a .roa on the microscope model)
@@ -221,7 +224,7 @@ class SparcAcquisitionTab(Tab):
         # (especially needed to ensure at exit, all the streams are unsubscribed)
         # TODO: maybe should be handled by a simple stream controller?
         self.microscope_model.emState.subscribe(self.onEMState, init=True)
-    
+
     @property
     def settings_controller(self):
         return self._settings_controller
@@ -232,14 +235,18 @@ class SparcAcquisitionTab(Tab):
         elif state == STATE_ON:
             self._sem_live_stream.is_active.value = True
 
-    def onROI(self, roi):
-        """
-        Synchronize the ROI of the Spectrometer and AR camera to the same value
-         as the acquisition ROI defined by the SEM CL.
-        """
-        for s in self._roi_streams:
-            s.roi.value = roi
-             
+    def on_roi_changed(self, real_selection):
+
+        roi = UNDEFINED_ROI
+
+        if real_selection:
+            stream_image = self._sem_live_stream.image.value
+            roi = stream_image.real_selection_to_unit(*real_selection)
+            self._sem_cl_stream.roi.value = roi
+            for s in self._roi_streams:
+                s.roi.value = roi
+
+
 class TabBarController(object):
 
     def __init__(self, tab_list, main_frame, interface_model):

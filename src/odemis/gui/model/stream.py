@@ -35,18 +35,14 @@ from odemis.gui import util
 from odemis.gui.model.img import InstrumentalImage
 from odemis.model import VigilantAttribute, MD_POS, MD_PIXEL_SIZE, \
     MD_SENSOR_PIXEL_SIZE, MD_WL_POLYNOMIAL
-from wx.lib.pubsub import pub
-import inspect
 import logging
 import numpy
 import threading
 
 
-
-
-
 # to identify a ROI which must still be defined by the user
 UNDEFINED_ROI = (0, 0, 0, 0)
+
 
 class Stream(object):
     """ A stream combines a Detector, its associated Dataflow and an Emitter.
@@ -563,14 +559,6 @@ class SpectrumStream(Stream):
         # exposure time of each pixel is the exposure time of the detector,
         # the dwell time of the emitter will be adapted before acquisition.
 
-        # FIXME: we should do the opposite, the interface controller updates this
-        # value when needed
-        pub.subscribe(self.on_selection_changed, 'sparc.acq.selection.changed')
-
-    def on_selection_changed(self, region_of_interest):
-        #self.roi.value = region_of_interest or self._default_roi
-        self.roi.value = UNDEFINED_ROI
-
     def estimateAcquisitionTime(self):
         try:
             res = list(self.repetition.value)
@@ -854,7 +842,7 @@ class StaticSpectrumStream(StaticStream):
 
 class MultipleDetectorStream(Stream):
     """
-    Abstract class for all specialized streams which are actually a combination 
+    Abstract class for all specialized streams which are actually a combination
     of multiple streams acquired simultaneously. The main difference from a
     normal stream is the init arguments are Streams, and .raw is composed of all
     the .raw from the sub-streams.
@@ -866,7 +854,7 @@ class MultipleDetectorStream(Stream):
         # don't call the init of Stream, or it will override .raw
         self.name = model.StringVA(name)
         self._streams = streams
-    
+
     @property
     def raw(self):
         # build the .raw from all the substreams
@@ -879,21 +867,21 @@ class SEMSpectrumMDStream(MultipleDetectorStream):
     """
     Multiple detector Stream made of SEM + Spectrum.
     It handles acquisition, but not rendering (so .image always returns an empty
-    image). 
+    image).
     """
     def __init__(self, name, sem_stream, spec_stream):
         MultipleDetectorStream.__init__(self, name, [sem_stream, spec_stream])
-        
+
         self._sem_stream = sem_stream
         self._spec_stream = spec_stream
-        
-        assert sem_stream._emitter == spec_stream._emitter 
+
+        assert sem_stream._emitter == spec_stream._emitter
         self._emitter = sem_stream._emitter
         self._semd = self._sem_stream._detector # probably secondary electron detector
         self._semd_df = self._sem_stream._dataflow
         self._spec = self._spec_stream._detector # spectrometer
         self._spec_df = self._spec_stream._dataflow
-        
+
         # it will always be an empty image, but a different one every time a new
         # acquisition is finished (so subscribing to it, will at least work).
         self.image = VigilantAttribute(InstrumentalImage(None))
@@ -907,12 +895,12 @@ class SEMSpectrumMDStream(MultipleDetectorStream):
         self.should_update = model.BooleanVA(False)
         self.is_active = model.BooleanVA(False)
         self.is_active.subscribe(self.onActive)
-        
+
     def estimateAcquisitionTime(self):
         # that's the same as the spec stream (and SEM stream, once the hardware
         # settings are correct)
         return self._spec_stream.estimateAcquisitionTime()
-        
+
     def _adjustHardwareSettings(self):
         """
         Read the SEM and Spectrum stream settings and adapt the SEM scanner accordingly.
@@ -922,37 +910,37 @@ class SEMSpectrumMDStream(MultipleDetectorStream):
         roi = self._sem_stream.roi.value
         center = ((roi[0] + roi[2]) / 2, roi[3] - roi[1])
         width = (roi[2] - roi[0], roi[3] - roi[1])
-        
+
         shape = self._emitter.shape
-        scale = (1 / width[0], 1/width[1])
+        scale = (1 / width[0], 1 / width[1])
         trans = (shape[0] * center[0], shape[1] * center[1]) # can be floats
-         
+
         # always in this order
         self._emitter.scale.value = scale
         self._emitter.resolution.value = repetition
         self._emitter.translation.value = trans
-        
-        # Dwell Time: a "little bit" more than the exposure time 
+
+        # Dwell Time: a "little bit" more than the exposure time
         exp = self._spec.exposureTime.value #s
         spec_size = self._spec.resolution.value
         assert spec_size[1] == 1 # it's supposed to be a band
-        
+
         # magical formula to get a long enough dwell time.
         # works with PVCam and Andorcam2, but not fool proof at all!
         readout = numpy.prod(spec_size) / self._spec.readoutRate.value + 0.01
-        self._emitter.dwellTime.value = (exp + readout) * 1.1 + 0.05 # 50ms to account for the overhead and extra image acquisition 
-        
+        self._emitter.dwellTime.value = (exp + readout) * 1.1 + 0.05 # 50ms to account for the overhead and extra image acquisition
+
     def onActive(self, active):
         """ Called when the Stream is activated or deactivated by setting the
         is_active attribute
-        Note: due to the duration of the acquisition, the stream will automatically 
-         reset itself to inactive after one acquisition fully acquired. 
+        Note: due to the duration of the acquisition, the stream will automatically
+         reset itself to inactive after one acquisition fully acquired.
         """
         # called only when the value _changes_
         if active:
             # reset everything (ready for one acquisition)
             self._adjustHardwareSettings()
-            
+
             self._acq_spect_buf = []
             repetition = self._spec_stream.repetition.value
             self._acq_left = numpy.prod(repetition)
@@ -963,7 +951,7 @@ class SEMSpectrumMDStream(MultipleDetectorStream):
             self._acq_waiter = threading.Thread(target=self._waitTillAcquisition,
                                     name="SEM-Spectrum acquisition waiter")
             # will be started at the end of the SEM acquisition
-            
+
             logging.debug("Subscribing to dataflow of components %s and %s",
                           self._semd.name, self._spec.name)
             if not self.should_update.value:
@@ -972,7 +960,7 @@ class SEMSpectrumMDStream(MultipleDetectorStream):
             self._spec_df.subscribe(self._onSpecImage)
             self._semd_df.subscribe(self._onSEMImage)
         else:
-            # TODO: detect the current acquisition is being cancelled and handle 
+            # TODO: detect the current acquisition is being cancelled and handle
             # it specifically
             if not self._acq_complete.is_set():
                 logging.debug("Cancelling acquisition from dataflow of components %s and %s",
@@ -981,18 +969,18 @@ class SEMSpectrumMDStream(MultipleDetectorStream):
             self._spec_df.unsubscribe(self._onSpecImage)
             self._spec_df.synchronizedOn(None)
             self._acq_spect_buf = [] # not necessary, but helps to free some memory quickly
-    
+
     def _waitTillAcquisition(self):
         """
         Wait until the acquisition is complete, to update the data and stop the
         updates.
         To be run as a separate thread, after the SEM data has arrived.
         """
-        # this is called after the SEM image has arrived, so almost at the very 
+        # this is called after the SEM image has arrived, so almost at the very
         # end of the acquisition. The last spectrum data has already just
-        # arrived, or will arrive really soon. However, there is a very small 
+        # arrived, or will arrive really soon. However, there is a very small
         # chance that while waiting for the spectrum data, the acquisition is
-        # cancelled (is_active.value = False)  
+        # cancelled (is_active.value = False)
         try:
             # SEM data has arrived, so spectrum should arrive real soon
             is_complete = self._acq_complete.wait(5)
@@ -1002,28 +990,28 @@ class SEMSpectrumMDStream(MultipleDetectorStream):
                 logging.warning("Spectrometer data not fully acquired in time")
                 self.is_active.value = False
                 return
-            
+
             # create a spectrum cube from all the data
             self._assembleSpecData(self._acq_spect_buf)
-            
-            # update the image to a new empty one to signal everything is received 
+
+            # update the image to a new empty one to signal everything is received
             self.image.value = InstrumentalImage(None)
-            
+
             self.is_active.value = False
         finally:
             self._acq_waiter = None
-        
+
     def _onSEMImage(self, df, data):
         # unsubscribe to stop immediately
         df.unsubscribe(self._onSEMImage)
         self._sem_stream.raw = [data]
         self._acq_waiter.start()
-    
+
     def _onSpecImage(self, df, data):
         # the data array subscribers must be fast, so the real processing
         # takes place in a separate thread.
         self._acq_spect_buf.append(data)
-        
+
         self._acq_left -= 1
         if self._acq_left <= 0:
             # unsubscribe to stop immediately
@@ -1038,7 +1026,7 @@ class SEMSpectrumMDStream(MultipleDetectorStream):
         there is a new data.
         """
         assert len(data_list) > 0
-        
+
         # each element of acq_spect_buf has a shape of (1, N)
         # reshape to (N, 1)
         for e in data_list:
@@ -1052,7 +1040,7 @@ class SEMSpectrumMDStream(MultipleDetectorStream):
         # copy the metadata from the first point
         spec_data = model.DataArray(spec_data, metadata=data_list[0].metadata)
 
-        # save the new data        
+        # save the new data
         self._spec_stream.raw = [spec_data]
 
 # On the SPARC, it's possible that both the AR and Spectrum are acquired in the
@@ -1061,7 +1049,7 @@ class SEMSpectrumMDStream(MultipleDetectorStream):
 # to select which path is taken. In addition, the AR stream will typically have
 # a lower repetition (even if it has same ROI). So it's easier and faster to
 # acquire them sequentially. The only trick is that if drift correction is used,
-# the same correction must be used for the entire acquisition.  
+# the same correction must be used for the entire acquisition.
 
 class StreamTree(object):
     """ Object which contains a set of streams, and how they are merged to

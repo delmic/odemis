@@ -24,22 +24,17 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
 from __future__ import division
-from .comp.canvas import DraggableCanvas
-from .comp.overlay import CrossHairOverlay, ViewSelectOverlay, \
-    WorldSelectOverlay
+from .comp.canvas import DraggableCanvas, world_to_real_pos
+from .comp.overlay import CrossHairOverlay, ViewSelectOverlay, WorldSelectOverlay
 from decorator import decorator
 from odemis.gui.model import EM_STREAMS
 from odemis.gui.model.stream import UNDEFINED_ROI
-from odemis.gui.util import call_after
 from wx.lib.pubsub import pub
 import logging
 import odemis.gui as gui
 import threading
 import time
 import wx
-
-
-
 
 
 # Various modes canvas elements can go into.
@@ -376,6 +371,14 @@ class DblMicroscopeCanvas(DraggableCanvas):
         logging.debug("Moving focus1 by %f μm", shift * 1e6)
         self.microscope_view.get_focus(1).moveRel({"z": shift})
 
+    def world_to_real_pos(self, pos):
+        return world_to_real_pos(pos, self.mpwu)
+
+    def selection_to_real_size(self, start_w_pos, end_w_pos):
+        w = abs(start_w_pos[0] - end_w_pos[0]) * self.mpwu
+        h = abs(start_w_pos[1] - end_w_pos[1]) * self.mpwu
+        return w, h
+
 class SecomCanvas(DblMicroscopeCanvas):
 
     def __init__(self, *args, **kwargs):
@@ -541,7 +544,7 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
                 # TODO update roi?
                 pub.sendMessage(
                    'sparc.acq.selection.changed',
-                   region_of_interest=overlay.get_world_selection_pos()
+                   real_selection=self.roi_overlay.get_real_selection()
                 )
                 self.ShouldUpdateDrawing()
             # TODO handle ZOOM
@@ -601,7 +604,7 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
                 pub.sendMessage('sparc.acq.select.end')
                 pub.sendMessage(
                     'sparc.acq.selection.changed',
-                    region_of_interest=self.roi_overlay.get_world_selection_pos()
+                    real_selection=self.roi_overlay.get_real_selection()
                 )
                 logging.debug("ROA = %s", self.roi_overlay.get_world_selection_pos())
                 self._updateROA()
