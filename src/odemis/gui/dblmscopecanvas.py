@@ -32,7 +32,7 @@ from wx.lib.pubsub import pub
 from decorator import decorator
 
 import odemis.gui as gui
-from .comp.canvas import DraggableCanvas
+from .comp.canvas import DraggableCanvas, world_to_real_pos
 from .comp.overlay import CrossHairOverlay, ViewSelectOverlay, WorldSelectOverlay
 from odemis.gui.model import EM_STREAMS
 
@@ -345,6 +345,14 @@ class DblMicroscopeCanvas(DraggableCanvas):
         logging.debug("Moving focus1 by %f μm", shift * 1e6)
         self.microscope_view.get_focus(1).moveRel({"z": shift})
 
+    def world_to_real_pos(self, pos):
+        return world_to_real_pos(pos, self.mpwu)
+
+    def selection_to_real_size(self, start_w_pos, end_w_pos):
+        w = abs(start_w_pos[0] - end_w_pos[0]) * self.mpwu
+        h = abs(start_w_pos[1] - end_w_pos[1]) * self.mpwu
+        return w, h
+
 class SecomCanvas(DblMicroscopeCanvas):
 
     def __init__(self, *args, **kwargs):
@@ -541,7 +549,7 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
                 self.roi_overlay.clear_selection()
                 pub.sendMessage(
                    'sparc.acq.selection.changed',
-                   region_of_interest=self.roi_overlay.get_world_selection_pos()
+                   real_selection=self.roi_overlay.get_real_selection()
                 )
                 self.ShouldUpdateDrawing()
             self.current_mode = mode
@@ -595,7 +603,7 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
                 pub.sendMessage('sparc.acq.select.end')
                 pub.sendMessage(
                     'sparc.acq.selection.changed',
-                    region_of_interest=self.roi_overlay.get_world_selection_pos()
+                    real_selection=self.roi_overlay.get_real_selection()
                 )
             else:
                 self.active_overlay.clear_selection()

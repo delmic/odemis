@@ -462,14 +462,12 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
                                             self.v_end_pos,
                                             offset)
 
-    def get_world_selection_pos(self):
+    def get_real_selection(self):
         if self.w_start_pos and self.w_end_pos:
-            return self.w_start_pos + self.w_end_pos
+            return (self.base.world_to_real_pos(self.w_start_pos),
+                    self.base.world_to_real_pos(self.w_end_pos))
         else:
             return None
-
-    def get_real_selection_size(self):
-        return u"{0:0.2f}x{0:0.2f}".format(*self.w_end_pos)
 
     def Draw(self, dc, shift=(0, 0), scale=1.0):
 
@@ -523,22 +521,24 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
             # Label
             # stream = self.base.microscope_view.stream_tree.streams[0]
             # emm = stream.emitter
+            #emm.shape, emm.scale.value
+
             # sel = tuple([e * self.base.scale for e in self.w_end_pos])
 
-            w = abs(self.w_start_pos[0] - self.w_end_pos[0]) * self.base.scale
-            w = readable_str(w * self.base.microscope_view.mpp.value, 'm')
+            w, h = self.base.selection_to_real_size(
+                                        self.w_start_pos,
+                                        self.w_end_pos
+            )
 
-            h = abs(self.w_start_pos[1] - self.w_end_pos[1]) * self.base.scale
-            h = readable_str(h * self.base.microscope_view.mpp.value, 'm')
+            w = readable_str(w, 'm')
+            h = readable_str(h, 'm')
 
             size_lbl = u"{} x {}".format(w, h)
 
-            msg =  u"{}".format(size_lbl)
-
             if self.dragging:
-                self.write_label(ctx, b_end_pos, msg)
+                self.write_label(ctx, b_end_pos, size_lbl)
             else:
-                self.write_label(ctx, b_start_pos, msg)
+                self.write_label(ctx, b_start_pos, size_lbl)
 
             # if self.dragging:
             #     #ctx.translate(-view_size[0] / 2, -view_size[1] / 2)
