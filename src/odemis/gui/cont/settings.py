@@ -717,7 +717,7 @@ class SparcSettingsController(SettingsBarController):
 
                 # Added for debug only
                 self._spectrum_panel.add_value(
-                        "roi (debug)",
+                        "roi",
                         s.roi,
                         None,  #component
                         CONFIG["spectrometer"]["roi"])
@@ -741,11 +741,5 @@ class SparcSettingsController(SettingsBarController):
                         None,  #component
                         CONFIG["spectrometer"]["repetition"])
 
-                # Added for debug only
-                self._angular_panel.add_value(
-                        "roi (debug)",
-                        s.roi,
-                        None,  #component
-                        CONFIG["spectrometer"]["roi"])
         else:
             parent_frame.fp_settings_sparc_angular.Hide()

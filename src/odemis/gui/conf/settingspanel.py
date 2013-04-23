@@ -28,7 +28,7 @@ panel
 import logging
 import odemis.gui
 
-from odemis.model import  NotApplicableError
+from odemis.model import NotApplicableError
 
 
 # Default settings for the different components.
@@ -185,7 +185,7 @@ CONFIG = {
                 # For testing purposes only, roi must be hidden in production
                 "roi":
                 {
-                    "control_type": odemis.gui.CONTROL_TEXT,
+                    "control_type": odemis.gui.CONTROL_LABEL,
                 },
                 "repetition":
                 {
