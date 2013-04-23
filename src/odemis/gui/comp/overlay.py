@@ -431,13 +431,14 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
         SelectionMixin.stop_selection(self)
         self._calc_world_pos()
 
-        clipped = self._clip(
+        w_clipped = self._clip(
                         self.w_start_pos,
                         self.w_end_pos,
                         *self.base.world_image_area)
 
-        if clipped:
-            self.w_start_pos, self.w_end_pos = clipped
+        if w_clipped:
+            self.w_start_pos, self.w_end_pos = w_clipped
+
 
     def clear_selection(self):
         SelectionMixin.clear_selection(self)
@@ -475,36 +476,32 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
         if self.w_start_pos and self.w_end_pos:
 
             offset = tuple(v / 2 for v in self.base._bmp_buffer_size)
-            start_pos = self.base.world_to_buffer_pos(
+
+            b_start_pos = self.base.world_to_buffer_pos(
                                         self.w_start_pos,
                                         offset)
-            end_pos = self.base.world_to_buffer_pos(
+
+            b_end_pos = self.base.world_to_buffer_pos(
                                         self.w_end_pos,
                                         offset)
 
-            # logging.debug("Drawing from %s, %s to %s. %s", start_pos[0],
-            #                                                start_pos[1],
-            #                                                end_pos[0],
-            #                                                end_pos[1] )
+            # logging.debug("Drawing from %s, %s to %s. %s", b_start_pos[0],
+            #                                                b_start_pos[1],
+            #                                                b_end_pos[0],
+            #                                                b_end_pos[1] )
 
             ctx = wx.lib.wxcairo.ContextFromDC(dc)
 
-            # view_size = self.base.GetSize()
-
-            #ctx.translate(view_size[0] / 2, view_size[1] / 2)
 
             ctx.set_line_width(1.5)
             ctx.set_source_rgba(0, 0, 0, 1)
 
             #logging.warn("%s %s", shift, world_to_buffer_pos(shift))
 
-            #start_pos.x, start_pos.y = 100, 100
-            #end_pos.x, end_pos.y = 200, 200
-
-            rect = (start_pos[0] + 0.5,
-                    start_pos[1] + 0.5,
-                    end_pos[0] - start_pos[0],
-                    end_pos[1] - start_pos[1])
+            rect = (b_start_pos[0] + 0.5,
+                    b_start_pos[1] + 0.5,
+                    b_end_pos[0] - b_start_pos[0],
+                    b_end_pos[1] - b_start_pos[1])
 
             ctx.rectangle(*rect)
 
@@ -519,29 +516,29 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
 
             ctx.stroke()
 
+            # No need for size label
+            if not self.base.microscope_view:
+                return
+
+            # Label
+            # stream = self.base.microscope_view.stream_tree.streams[0]
+            # emm = stream.emitter
+            # sel = tuple([e * self.base.scale for e in self.w_end_pos])
+
+            w = abs(self.w_start_pos[0] - self.w_end_pos[0]) * self.base.scale
+            w = readable_str(w * self.base.microscope_view.mpp.value, 'm')
+
+            h = abs(self.w_start_pos[1] - self.w_end_pos[1]) * self.base.scale
+            h = readable_str(h * self.base.microscope_view.mpp.value, 'm')
+
+            size_lbl = u"{} x {}".format(w, h)
+
+            msg =  u"{}".format(size_lbl)
+
             if self.dragging:
-                stream = self.base.microscope_view.stream_tree.streams[0]
-                emm = stream.emitter
-                # sel = self.w_end_pos
-                # sel = tuple([e * self.base.scale for e in sel])
-                w = abs(self.w_start_pos[0] - self.w_end_pos[0]) * self.base.scale
-                w = readable_str(w * self.base.microscope_view.mpp.value, 'm')
-
-                h = abs(self.w_start_pos[1] - self.w_end_pos[1]) * self.base.scale
-                h = readable_str(h * self.base.microscope_view.mpp.value, 'm')
-
-                size_lbl = u"{} x {}".format(
-                    w, h
-                    # readable_str(emm.shape[0] * emm.pixelSize.value[0], 'm'),
-                    # readable_str(emm.shape[1] * emm.pixelSize.value[1], 'm')
-                )
-
-                msg =  u"{}".format(size_lbl)
-                self.write_label(
-                        ctx,
-                        self.base.view_to_buffer_pos(self.v_end_pos),
-                        msg #self.get_real_selection_size()
-                )
+                self.write_label(ctx, b_end_pos, msg)
+            else:
+                self.write_label(ctx, b_start_pos, msg)
 
             # if self.dragging:
             #     #ctx.translate(-view_size[0] / 2, -view_size[1] / 2)
