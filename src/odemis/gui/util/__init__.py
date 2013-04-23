@@ -15,9 +15,10 @@ from decorator import decorator
 
 #### Decorators ########
 
+# TODO: rename to something more clear, like "call_in_wx_main"
 @decorator
 def call_after(f, self, *args, **kwargs):
-    """ This method decorator makes sure the method is called form the main
+    """ This method decorator makes sure the method is called from the main
     (GUI) thread.
     """
     return wx.CallAfter(f, self, *args, **kwargs)
