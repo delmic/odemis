@@ -518,16 +518,13 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
     def __init__(self, *args, **kwargs):
         super(SparcAcquiCanvas, self).__init__(*args, **kwargs)
 
+        self._roa = None # The ROI VA of SEM CL stream, initialized on setView()
         self.roi_overlay = WorldSelectOverlay(self, "Region of acquisition")
         self.WorldOverlays.append(self.roi_overlay)
-
         self.active_overlay = None
+        self.cursor = wx.STANDARD_CURSOR
 
         pub.subscribe(self.toggle_select_mode, 'sparc.acq.tool.select.click')
-
-        self.cursor = wx.STANDARD_CURSOR
-        
-        self._roa = None # The ROI VA of SEM CL stream, initialized on setView()
 
     def _toggle_mode(self, enabled, overlay, mode):
         # If same mode, but disabled
@@ -541,12 +538,6 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
             if mode == MODE_SPARC_SELECT:
                 if self._roa:
                     self._roa.value = UNDEFINED_ROI
-                # TODO update roi?
-                pub.sendMessage(
-                   'sparc.acq.selection.changed',
-                   real_selection=self.roi_overlay.get_real_selection()
-                )
-                self.ShouldUpdateDrawing()
             # TODO handle ZOOM
             self.current_mode = mode
             self.active_overlay = overlay
@@ -602,17 +593,13 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
                 if self.HasCapture():
                     self.ReleaseMouse()
                 pub.sendMessage('sparc.acq.select.end')
-                pub.sendMessage(
-                    'sparc.acq.selection.changed',
-                    real_selection=self.roi_overlay.get_real_selection()
-                )
-                logging.debug("ROA = %s", self.roi_overlay.get_world_selection_pos())
+                logging.debug("ROA = %s", self.roi_overlay.get_real_selection())
                 self._updateROA()
+                self.ShouldUpdateDrawing()
             else:
                 if self._roa:
                     self._roa.value = UNDEFINED_ROI
 
-            self.ShouldUpdateDrawing()
         else:
             DraggableCanvas.OnLeftUp(self, event)
 
@@ -685,14 +672,14 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
             return
         
         # Get the position of the overlay in physical coordinates
-        phys_rect = self.roi_overlay.get_world_selection_pos()
+        phys_rect = self.roi_overlay.get_real_selection()
         if phys_rect is None:
             self._roa.value = UNDEFINED_ROI
-            return 
+            return
         # reorder
         phys_rect = [min(phys_rect[0], phys_rect[2]),
-                     max(phys_rect[1], phys_rect[3]),
-                     min(phys_rect[0], phys_rect[2]),
+                     min(phys_rect[1], phys_rect[3]),
+                     max(phys_rect[0], phys_rect[2]),
                      max(phys_rect[1], phys_rect[3])]
         
         # Position of the complete SEM scan in physical coordinates
@@ -711,11 +698,20 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
                     sem_center[0] + sem_width[0]/2, # bottom
                     sem_center[1] + sem_width[1]/2] # right
     
+    
         # Convert the ROI into relative value compared to the SEM scan
         rel_rect = [(phys_rect[0] - sem_rect[0]) / sem_width[0], 
                     (phys_rect[1] - sem_rect[1]) / sem_width[1],
                     (phys_rect[2] - sem_rect[0]) / sem_width[0],
                     (phys_rect[3] - sem_rect[1]) / sem_width[1]]
+    
+        # if not intersecting => no region
+        if ((rel_rect[0] < 0 and rel_rect[2] < 0) or
+            (rel_rect[0] > 1 and rel_rect[2] > 1) or
+            (rel_rect[1] < 0 and rel_rect[3] < 0) or
+            (rel_rect[1] > 1 and rel_rect[3] > 1)):
+            self._roa.value = UNDEFINED_ROI
+            return
         
         # clamp so that that ROA is always inside the SEM scan
         rel_rect = [max(0, min(1, v)) for v in rel_rect]

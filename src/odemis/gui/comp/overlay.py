@@ -441,8 +441,11 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
                                             offset)
 
     def get_real_selection(self):
+        """
+        return (tuple of 4 floats): position in m
+        """
         if self.w_start_pos and self.w_end_pos:
-            return (self.base.world_to_real_pos(self.w_start_pos),
+            return (self.base.world_to_real_pos(self.w_start_pos) +
                     self.base.world_to_real_pos(self.w_end_pos))
         else:
             return None
@@ -487,31 +490,23 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
             ctx.rectangle(*rect)
             ctx.stroke()
 
-            # No need for size label
-            if not self.base.microscope_view:
-                return
-
             # Label
-            # stream = self.base.microscope_view.stream_tree.streams[0]
-            # emm = stream.emitter
-            #emm.shape, emm.scale.value
-
-            # sel = tuple([e * self.base.scale for e in self.w_end_pos])
-
-            w, h = self.base.selection_to_real_size(
-                                        self.w_start_pos,
-                                        self.w_end_pos
-            )
-
-            w = readable_str(w, 'm')
-            h = readable_str(h, 'm')
-
-            size_lbl = u"{} x {}".format(w, h)
-
             if self.dragging:
-                self.write_label(ctx, b_end_pos, size_lbl)
-            else:
-                self.write_label(ctx, b_start_pos, size_lbl)
+                # No need for size label
+                if not self.base.microscope_view:
+                    return
+    
+                w, h = self.base.selection_to_real_size(
+                                            self.w_start_pos,
+                                            self.w_end_pos
+                )
+    
+                w = readable_str(w, 'm')
+                h = readable_str(h, 'm')
+                size_lbl = u"{} x {}".format(w, h)
+
+                pos = (b_end_pos[0] + 5, b_end_pos[1] - 5) 
+                self.write_label(ctx, pos, size_lbl)
 
             # if self.dragging:
             #     #ctx.translate(-view_size[0] / 2, -view_size[1] / 2)
