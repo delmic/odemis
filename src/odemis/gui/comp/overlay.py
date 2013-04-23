@@ -410,13 +410,13 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
         SelectionMixin.stop_selection(self)
         self._calc_world_pos()
 
-        clipped = self._clip(
-                        self.w_start_pos,
-                        self.w_end_pos,
-                        *self.base.world_image_area)
-
-        if clipped:
-            self.w_start_pos, self.w_end_pos = clipped
+#         clipped = self._clip(
+#                         self.w_start_pos,
+#                         self.w_end_pos,
+#                         *self.base.world_image_area)
+# 
+#         if clipped:
+#             self.w_start_pos, self.w_end_pos = clipped
 
     def clear_selection(self):
         SelectionMixin.clear_selection(self)

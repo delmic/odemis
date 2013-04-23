@@ -217,7 +217,7 @@ class MicroscopeViewport(wx.Panel):
         #self.ShowMergeSlider(self.canvas.image_count > 1)
 
         # canvas handles also directly some of the view properties
-        self.canvas.setView(microscope_view)
+        self.canvas.setView(microscope_view, microscope_model)
 
         # TODO: that should not be the current values, but the values of
         # the current image (so, taken from the metadata).
