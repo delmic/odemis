@@ -35,6 +35,7 @@ import odemis.gui as gui
 from .comp.canvas import DraggableCanvas
 from .comp.overlay import CrossHairOverlay, ViewSelectOverlay, WorldSelectOverlay
 from odemis.gui.model import EM_STREAMS
+from odemis.gui.model.stream import UNDEFINED_ROI
 
 
 
@@ -125,7 +126,31 @@ class DblMicroscopeCanvas(DraggableCanvas):
 
         # any image changes
         self.microscope_view.lastUpdate.subscribe(self._onViewImageUpdate, init=True)
+        
+        # handle crosshair
+        self.microscope_view.show_crosshair.subscribe(self._onCrossHair, init=True)
 
+    def _onCrossHair(self, activated):
+        """ Activate or disable the display of a cross in the middle of the view
+        activated = true if the cross should be displayed
+        """
+        # We don't specifically know about the crosshair, so look for it in the
+        # static overlays
+        ch = None
+        for o in self.ViewOverlays:
+            if isinstance(o, CrossHairOverlay):
+                ch = o
+                break
+
+        if activated:
+            if not ch:
+                ch = CrossHairOverlay(self)
+                self.ViewOverlays.append(ch)
+                self.Refresh(eraseBackground=False)
+        else:
+            if ch:
+                self.ViewOverlays.remove(ch)
+                self.Refresh(eraseBackground=False)
 
     def _convertStreamsToImages(self):
         """
@@ -480,46 +505,11 @@ class SecomCanvas(DblMicroscopeCanvas):
         if self.current_mode not in SECOM_MODES:
             super(SecomCanvas, self).OnRightUp(event)
 
-    def setView(self, microscope_view):
-        """
-        Set the microscope_view that this canvas is displaying/representing
-        Can be called only once, at initialisation.
-
-        :param microscope_view:(instrmodel.MicroscopeView)
-        """
-        super(SecomCanvas, self).setView(microscope_view)
-        self.microscope_view.show_crosshair.subscribe(
-                                            self._onCrossHair,
-                                            init=True
-        )
-
-    def _onCrossHair(self, activated):
-        """ Activate or disable the display of a cross in the middle of the view
-        activated = true if the cross should be displayed
-        """
-        # We don't specifically know about the crosshair, so look for it in the
-        # static overlays
-        ch = None
-        for o in self.ViewOverlays:
-            if isinstance(o, CrossHairOverlay):
-                ch = o
-                break
-
-        if activated:
-            if not ch:
-                ch = CrossHairOverlay(self)
-                self.ViewOverlays.append(ch)
-                self.Refresh(eraseBackground=False)
-        else:
-            if ch:
-                self.ViewOverlays.remove(ch)
-                self.Refresh(eraseBackground=False)
-
 class SparcAcquiCanvas(DblMicroscopeCanvas):
     def __init__(self, *args, **kwargs):
         super(SparcAcquiCanvas, self).__init__(*args, **kwargs)
 
-        self.roi_overlay = WorldSelectOverlay(self, "Region of Interst")
+        self.roi_overlay = WorldSelectOverlay(self, "Region of acquisition")
         self.WorldOverlays.append(self.roi_overlay)
 
         self.active_overlay = None
@@ -527,6 +517,8 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
         pub.subscribe(self.toggle_select_mode, 'sparc.acq.tool.select.click')
 
         self.cursor = wx.STANDARD_CURSOR
+        
+        self._roa = None # The ROI VA of SEM CL stream, initialized on setView()
 
     def _toggle_mode(self, enabled, overlay, mode):
         # If same mode, but disabled
@@ -651,26 +643,29 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
         :param microscope_view:(instrmodel.MicroscopeView)
         """
         super(SparcAcquiCanvas, self).setView(microscope_view)
-        self.microscope_view.show_crosshair.subscribe(self._onCrossHair, init=True)
-
-    def _onCrossHair(self, activated):
-        """ Activate or disable the display of a cross in the middle of the view
-        activated = true if the cross should be displayed
+        
+#         # Associate the ROI of the SEM CL stream to the region of acquisition
+#         for s in microscope_view.acquisitionView.getStreams():
+#             if s.name.value == "SEM CL":
+#                 self._roa = s.roi
+#                 break
+#         else:
+#             raise KeyError("Failed to find SEM CL stream, required for the Sparc acquisition")
+#         
+#         self._roa.subscribe(self._onROA, init=True)
+    
+    def _onROA(self, roi):
         """
-        # We don't specifically know about the crosshair, so look for it in the
-        # static overlays
-        ch = None
-        for o in self.ViewOverlays:
-            if isinstance(o, CrossHairOverlay):
-                ch = o
-                break
-
-        if activated:
-            if not ch:
-                ch = CrossHairOverlay(self)
-                self.ViewOverlays.append(ch)
-                self.Refresh(eraseBackground=False)
+        Called when the ROI of the SEM CL is updated (that's our region of 
+         acquisition).
+        roi (tuple of 4 floats): top, left, bottom, right position relative to 
+          the SEM image
+        """
+        # TODO: need to actually update the overlay according to the value
+        # but for now, it's not a big deal as the only way to change the ROI is
+        # via this class anyway.
+        if roi == UNDEFINED_ROI:
+            # TODO: remove the overlay
+            logging.debug("Should remove ROA")
         else:
-            if ch:
-                self.ViewOverlays.remove(ch)
-                self.Refresh(eraseBackground=False)
+            logging.debug("ROA should be set to %s", roi)
