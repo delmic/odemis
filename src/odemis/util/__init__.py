@@ -42,7 +42,33 @@ def index_closest(val, l):
     else:
         return min(enumerate(l), key=lambda x:abs(x[1] - val))[0]
 
+def rect_intersect(ra, rb):
+    """
+    Computes the rectangle representing the intersection area of two rectangles
+    (aligned along the axes).
+    ra (tuple of 4 floats): position of the first rectangle top, left, bottom, right
+    rb (tuple of 4 floats): position of the second rectangle
+    return (None or tuple of 4 floats): None if there is no intersection, or
+     the rectangle representing the intersection 
+    Note that the rectangles can have the top/bottom and left/right in any order,
+    but the return value will always have top < bottom and left < right.
+    """
 
+    # Make sure that t<b and l<r
+    ra = (min(ra[0], ra[2]), min(ra[1], ra[3]),
+          max(ra[0], ra[2]), max(ra[1], ra[3]))
+
+    rb = (min(rb[0], rb[2]), min(rb[1], rb[3]),
+          max(rb[0], rb[2]), max(rb[1], rb[3]))
+
+    # Any intersection?
+    if ra[0] >= rb[2] or ra[2] <= rb[0] or ra[1] >= rb[3] or ra[3] <= rb[1]:
+        return None
+
+    inter = (max(ra[0], rb[0]), max(ra[1], rb[1]),
+             min(ra[2], rb[2]), min(ra[3], rb[3]))
+
+    return inter
 
 class TimeoutError(Exception):
     pass

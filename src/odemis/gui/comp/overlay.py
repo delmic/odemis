@@ -44,34 +44,8 @@ class Overlay(object):
         self.base = base
         self.label = label
 
-    @classmethod
-    def _clip(cls, tl, br, btl, bbr):
-        """ Generic clipping method clipping the rectangle descibred by tuples
-        tl/br by bounding box btl/bbr.
-
-        It's important to realise that the tl and br parameters might be
-        switched in the function call, so we need to sort them before clipping.
-        """
-
-        if None not in (tl, br, btl, bbr):
-            # Make sure that tl is actually top left
-            ttl = (min(tl[0], br[0]), min(tl[1], br[1]))
-            tbr = (max(tl[0], br[0]), max(tl[1], br[1]))
-            tl, br = ttl, tbr
-
-            # logging.warn("%s %s %s %s", tl[0] >= bbr[0], br[0] <= btl[0], br[1] <= btl[1], tl[1] >= bbr[1])
-
-            # When the selection is completely outside the bounding box
-            if tl[0] >= bbr[0] or br[0] <= btl[0] or br[1] <= btl[1] or tl[1] >= bbr[1]:
-                return None
-
-            tl = (max(tl[0], btl[0]), max(tl[1], btl[1]))
-            br = (min(br[0], bbr[0]), min(br[1], bbr[1]))
-
-        return tl, br
-
-    @classmethod
-    def write_label(cls, ctx, vpos, label):
+    @staticmethod
+    def write_label(ctx, vpos, label):
         font = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT)
         ctx.select_font_face(
                 font.GetFaceName(),
@@ -440,7 +414,9 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
                 vpos[1] - (view_size[1] / 2))
 
     def _calc_world_pos(self):
-
+        """
+        update the world position to reflect the view position
+        """
         if self.v_start_pos and self.v_end_pos:
             offset = tuple(v / 2 for v in self.base._bmp_buffer_size)
             self.w_start_pos = self.base.view_to_world_pos(
@@ -449,8 +425,21 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
             self.w_end_pos = self.base.view_to_world_pos(
                                             self.v_end_pos,
                                             offset)
+    def _calc_view_pos(self):
+        """
+        update the view position to reflect the world position
+        """
+        if not self.w_start_pos or not self.w_end_pos:
+            logging.warning("Asking to convert non-existing world positions")
+            return
+        offset = tuple(v / 2 for v in self.base._bmp_buffer_size)
+        v_start = self.base.world_to_view_pos(self.w_start_pos, offset)
+        self.v_start_pos = wx.Point(*v_start)
+        v_end = self.base.world_to_view_pos(self.w_end_pos, offset)
+        self.v_end_pos = wx.Point(*v_end)
+        self._calc_edges() # TODO move to Mixin??
 
-    def get_real_selection(self):
+    def get_selection_phys(self):
         """
         return (tuple of 4 floats): position in m
         """
@@ -459,6 +448,17 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
                     self.base.world_to_real_pos(self.w_end_pos))
         else:
             return None
+
+    def set_selection_phys(self, rect):
+        """
+        rect (tuple of 4 floats): t, l, b, r positions in m
+        """
+        if rect is None:
+            self.clear_selection()
+        else:
+            self.w_start_pos = self.base.real_to_world_pos(rect[:2])
+            self.w_end_pos = self.base.real_to_world_pos(rect[2:4])
+            self._calc_view_pos()
 
     def Draw(self, dc, shift=(0, 0), scale=1.0):
 
