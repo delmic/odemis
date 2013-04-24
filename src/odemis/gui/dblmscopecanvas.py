@@ -25,8 +25,10 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 from .comp.canvas import DraggableCanvas, world_to_real_pos
-from .comp.overlay import CrossHairOverlay, ViewSelectOverlay, WorldSelectOverlay
+from .comp.overlay import CrossHairOverlay, ViewSelectOverlay, \
+    WorldSelectOverlay
 from decorator import decorator
+from odemis import util
 from odemis.gui.model import EM_STREAMS
 from odemis.gui.model.stream import UNDEFINED_ROI
 from wx.lib.pubsub import pub
@@ -662,27 +664,17 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
          
         self._roa.subscribe(self._onROA, init=True)
     
-    def _updateROA(self):
+    def _getSEMRect(self):
         """
-        Update the value of the ROA in the GUI according to the roi_overlay 
-        """ 
+        Returns the (theoretical) scanning area of the SEM. Works even if the
+        SEM has not send any image yet.
+        returns (tuple of 4 floats): position in m (t, l, b, r)
+        raises AttributeError in case no SEM is found
+        """
         sem = self._microscope_model.ebeam
-        if not self._roa or not sem:
-            logging.warning("ROA is supposed to be updated, but no ROA/SEM attribute")
-            return
-        
-        # Get the position of the overlay in physical coordinates
-        phys_rect = self.roi_overlay.get_real_selection()
-        if phys_rect is None:
-            self._roa.value = UNDEFINED_ROI
-            return
-        # reorder
-        phys_rect = [min(phys_rect[0], phys_rect[2]),
-                     min(phys_rect[1], phys_rect[3]),
-                     max(phys_rect[0], phys_rect[2]),
-                     max(phys_rect[1], phys_rect[3])]
-        
-        # Position of the complete SEM scan in physical coordinates
+        if not sem:
+            raise AttributeError("No SEM on the microscope")
+         
         try:
             sem_center = self.microscope_view.stage_pos.value
         except AttributeError:
@@ -698,23 +690,38 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
                     sem_center[0] + sem_width[0]/2, # bottom
                     sem_center[1] + sem_width[1]/2] # right
     
+        return sem_rect
     
-        # Convert the ROI into relative value compared to the SEM scan
-        rel_rect = [(phys_rect[0] - sem_rect[0]) / sem_width[0], 
-                    (phys_rect[1] - sem_rect[1]) / sem_width[1],
-                    (phys_rect[2] - sem_rect[0]) / sem_width[0],
-                    (phys_rect[3] - sem_rect[1]) / sem_width[1]]
-    
-        # if not intersecting => no region
-        if ((rel_rect[0] < 0 and rel_rect[2] < 0) or
-            (rel_rect[0] > 1 and rel_rect[2] > 1) or
-            (rel_rect[1] < 0 and rel_rect[3] < 0) or
-            (rel_rect[1] > 1 and rel_rect[3] > 1)):
+    def _updateROA(self):
+        """
+        Update the value of the ROA in the GUI according to the roi_overlay 
+        """ 
+        sem = self._microscope_model.ebeam
+        if not self._roa or not sem:
+            logging.warning("ROA is supposed to be updated, but no ROA/SEM attribute")
+            return
+        
+        # Get the position of the overlay in physical coordinates
+        phys_rect = self.roi_overlay.get_real_selection()
+        if phys_rect is None:
             self._roa.value = UNDEFINED_ROI
             return
         
-        # clamp so that that ROA is always inside the SEM scan
-        rel_rect = [max(0, min(1, v)) for v in rel_rect]
+        # Position of the complete SEM scan in physical coordinates
+        sem_rect = self._getSEMRect()
+    
+        # Take only the intersection so that that ROA is always inside the SEM scan
+        phys_rect = util.rect_intersect(phys_rect, sem_rect)
+        if phys_rect is None:
+            self._roa.value = UNDEFINED_ROI
+            return
+            
+        # Convert the ROI into relative value compared to the SEM scan
+        rel_rect = [(phys_rect[0] - sem_rect[0]) / (sem_rect[2] - sem_rect[0]), 
+                    (phys_rect[1] - sem_rect[1]) / (sem_rect[3] - sem_rect[1]),
+                    (phys_rect[2] - sem_rect[0]) / (sem_rect[2] - sem_rect[0]),
+                    (phys_rect[3] - sem_rect[1]) / (sem_rect[3] - sem_rect[1])]
+    
         # and is at least one pixel big
         rel_pixel_size = (1 / sem.shape[0], 1 / sem.shape[1])
         rel_rect[2] = max(rel_rect[2], rel_rect[0] + rel_pixel_size[0])
@@ -740,9 +747,7 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
         # but for now, it's not a big deal as the only way to change the ROI is
         # via this class anyway.
         if roi == UNDEFINED_ROI:
-            # TODO: remove the overlay
             self.roi_overlay.clear_selection()
             self.ShouldUpdateDrawing()
-            logging.debug("Should remove ROA")
         else:
             logging.debug("ROA should be set to %s", roi)

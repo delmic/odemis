@@ -45,32 +45,6 @@ class Overlay(object):
         self.label = label
 
     @classmethod
-    def _clip(cls, tl, br, btl, bbr):
-        """ Generic clipping method clipping the rectangle descibred by tuples
-        tl/br by bounding box btl/bbr.
-
-        It's important to realise that the tl and br parameters might be
-        switched in the function call, so we need to sort them before clipping.
-        """
-
-        if None not in (tl, br, btl, bbr):
-            # Make sure that tl is actually top left
-            ttl = (min(tl[0], br[0]), min(tl[1], br[1]))
-            tbr = (max(tl[0], br[0]), max(tl[1], br[1]))
-            tl, br = ttl, tbr
-
-            # logging.warn("%s %s %s %s", tl[0] >= bbr[0], br[0] <= btl[0], br[1] <= btl[1], tl[1] >= bbr[1])
-
-            # When the selection is completely outside the bounding box
-            if tl[0] >= bbr[0] or br[0] <= btl[0] or br[1] <= btl[1] or tl[1] >= bbr[1]:
-                return None
-
-            tl = (max(tl[0], btl[0]), max(tl[1], btl[1]))
-            br = (min(br[0], bbr[0]), min(br[1], bbr[1]))
-
-        return tl, br
-
-    @classmethod
     def write_label(cls, ctx, vpos, label):
         font = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT)
         ctx.select_font_face(
