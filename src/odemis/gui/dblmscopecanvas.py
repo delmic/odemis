@@ -616,7 +616,8 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
             else:
                 hover = self.active_overlay.is_hovering(pos)
                 if hover == gui.HOVER_SELECTION:
-                    self.SetCursor(wx.StockCursor(wx.CURSOR_MAGNIFIER))
+                    # No special cusor needed
+                    self.SetCursor(self.cursor)
                 elif hover in (gui.HOVER_LEFT_EDGE, gui.HOVER_RIGHT_EDGE):
                     self.SetCursor(wx.StockCursor(wx.CURSOR_SIZEWE))
                 elif hover in (gui.HOVER_TOP_EDGE, gui.HOVER_BOTTOM_EDGE):
