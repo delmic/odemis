@@ -23,6 +23,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 
+from collections import namedtuple
 from odemis.gui.cont import settings
 from odemis.gui.cont.acquisition import SecomAcquiController, \
     SparcAcquiController
@@ -98,17 +99,44 @@ class SecomStreamsTab(Tab):
         # First we create the views, then the streams
         self._view_controller = ViewController(
                                     self.interface_model,
-                                    self.main_frame
+                                    self.main_frame,
+                                    [self.main_frame.vp_secom_tl,
+                                     self.main_frame.vp_secom_tr,
+                                     self.main_frame.vp_secom_bl,
+                                     self.main_frame.vp_secom_br]
                                 )
 
         self._stream_controller = StreamController(
                                         self.interface_model,
                                         self.main_frame.pnl_secom_streams
                                   )
+        # btn -> (viewport, label)
+        ViewportLabel = namedtuple('ViewportLabel', ['vp', 'lbl'])
+
+        buttons = {
+            self.main_frame.btn_secom_view_all:
+                ViewportLabel(None, self.main_frame.lbl_secom_view_all),
+            self.main_frame.btn_secom_view_tl:
+                ViewportLabel(
+                    self.main_frame.vp_secom_tl,
+                    self.main_frame.lbl_secom_view_tl),
+            self.main_frame.btn_secom_view_tr:
+                ViewportLabel(
+                    self.main_frame.vp_secom_tr,
+                    self.main_frame.lbl_secom_view_tr),
+            self.main_frame.btn_secom_view_bl:
+                ViewportLabel(
+                    self.main_frame.vp_secom_bl,
+                    self.main_frame.lbl_secom_view_bl),
+            self.main_frame.btn_secom_view_br:
+                ViewportLabel(
+                    self.main_frame.vp_secom_br,
+                    self.main_frame.lbl_secom_view_br)}
 
         self._view_selector = ViewSelector(
                                     self.interface_model,
-                                    self.main_frame
+                                    self.main_frame,
+                                    buttons
                               )
 
         self._acquisition_controller = SecomAcquiController(
@@ -199,7 +227,7 @@ class SparcAcquisitionTab(Tab):
         mic_view = self.microscope_model.focussedView.value
         mic_view.addStream(sem_stream)
 
-        # needs to have the AR and Spectrum streams on the acquisition view 
+        # needs to have the AR and Spectrum streams on the acquisition view
         self._settings_controller = settings.SparcSettingsController(
                                         self.main_frame,
                                         self.microscope_model,
@@ -240,6 +268,72 @@ class SparcAcquisitionTab(Tab):
         for s in self._roi_streams:
             s.roi.value = roi
 
+class SparcAnalysisTab(Tab):
+
+    def __init__(self, group, name, button, panel, main_frame, interface_model):
+        super(SparcAnalysisTab, self).__init__(group, name, button, panel)
+
+        self.microscope_model = interface_model
+        self.main_frame = main_frame
+        self.interface_model = interface_model
+
+        # Various controllers used for the live view and acquisition of images
+
+        self._settings_controller = None
+
+        # pub.subscribe(self.on_roi_changed, 'sparc.acq.selection.changed')
+
+    def _initialize(self):
+        """ This method is called when the tab is first shown """
+        assert self.microscope_model is not None
+
+        self._view_controller = ViewController(
+                                    self.microscope_model,
+                                    self.main_frame,
+                                    [self.main_frame.vp_sparc_analysis_tl,
+                                     self.main_frame.vp_sparc_analysis_tr,
+                                     self.main_frame.vp_sparc_analysis_bl,
+                                     self.main_frame.vp_sparc_analysis_br]
+                                )
+
+        self._stream_controller = StreamController(
+                                        self.microscope_model,
+                                        self.main_frame.pnl_sparc_streams
+                                  )
+
+        # btn -> (viewport, label)
+        ViewportLabel = namedtuple('ViewportLabel', ['vp', 'lbl'])
+
+        buttons = {
+            self.main_frame.btn_sparc_view_all:
+                ViewportLabel(None, self.main_frame.lbl_sparc_view_all),
+            self.main_frame.btn_sparc_view_tl:
+                ViewportLabel(
+                    self.main_frame.vp_sparc_analysis_tl,
+                    self.main_frame.lbl_sparc_view_tl),
+            self.main_frame.btn_sparc_view_tr:
+                ViewportLabel(
+                    self.main_frame.vp_sparc_analysis_tr,
+                    self.main_frame.lbl_sparc_view_tr),
+            self.main_frame.btn_sparc_view_bl:
+                ViewportLabel(
+                    self.main_frame.vp_sparc_analysis_bl,
+                    self.main_frame.lbl_sparc_view_bl),
+            self.main_frame.btn_sparc_view_br:
+                ViewportLabel(
+                    self.main_frame.vp_sparc_analysis_br,
+                    self.main_frame.lbl_sparc_view_br)}
+
+        self._view_selector = ViewSelector(
+                                    self.interface_model,
+                                    self.main_frame,
+                                    buttons
+                              )
+
+
+    @property
+    def stream_controller(self):
+        return self._stream_controller
 
 class TabBarController(object):
 

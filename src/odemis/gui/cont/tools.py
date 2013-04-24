@@ -49,7 +49,7 @@ from odemis.gui.comp.buttons import ImageButton, ImageToggleButton
 
 # TODO: need refactoring, to use MicroscopeGUI.tool VA to change the tool
 # TODO: need more generic version, which just takes a list of buttons and
-# create it 
+# create it
 
 class ToolMenu(wx.Panel):
     """ Tool Menu base class responsible for the general buttons states """
@@ -179,11 +179,12 @@ class SparcAcquisitionToolMenu(ToolMenu):
         evt.Skip()
 
     def on_select_end(self):
-        self.btn_select.SetToggle(False)
-        pub.sendMessage(
-            'sparc.acq.tool.select.click',
-            enabled=self.btn_select.GetToggle()
-        )
+        pass
+        # self.btn_select.SetToggle(False)
+        # pub.sendMessage(
+        #     'sparc.acq.tool.select.click',
+        #     enabled=self.btn_select.GetToggle()
+        # )
 
     def on_pick(self, evt):
         logging.debug("Pick tool clicked")
