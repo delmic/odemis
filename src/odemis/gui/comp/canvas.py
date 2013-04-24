@@ -872,3 +872,8 @@ def world_to_view_pos(world_pos, world_buffer_center, margins, scale, offset=Non
 def world_to_real_pos(world_pos, mpwu):
     real_pos = tuple([v * mpwu for v in world_pos])
     return real_pos
+
+
+def real_to_world_pos(real_pos, mpwu):
+    world_pos = tuple([v / mpwu for v in real_pos])
+    return world_pos

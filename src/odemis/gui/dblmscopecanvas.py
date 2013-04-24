@@ -29,6 +29,7 @@ from .comp.overlay import CrossHairOverlay, ViewSelectOverlay, \
     WorldSelectOverlay
 from decorator import decorator
 from odemis import util
+from odemis.gui.comp.canvas import real_to_world_pos
 from odemis.gui.model import EM_STREAMS
 from odemis.gui.model.stream import UNDEFINED_ROI
 from wx.lib.pubsub import pub
@@ -255,10 +256,9 @@ class DblMicroscopeCanvas(DraggableCanvas):
         """
         # this can be caused by any viewport which has requested to recenter
         # the buffer
-        pos = (value["x"] / self.mpwu, value["y"] / self.mpwu)
-        # self.ReCenterBuffer(pos)
+        pos = (self.real_to_world_pos(value["x"]), self.real_to_world_pos(value["y"]))
         # skip ourself, to avoid asking the stage to move to (almost) the same
-        #position
+        # position
         wx.CallAfter(super(DblMicroscopeCanvas, self).ReCenterBuffer, pos)
 
     def ReCenterBuffer(self, pos):
@@ -375,6 +375,9 @@ class DblMicroscopeCanvas(DraggableCanvas):
 
     def world_to_real_pos(self, pos):
         return world_to_real_pos(pos, self.mpwu)
+
+    def real_to_world_pos(self, pos):
+        return real_to_world_pos(pos, self.mpwu)
 
     def selection_to_real_size(self, start_w_pos, end_w_pos):
         w = abs(start_w_pos[0] - end_w_pos[0]) * self.mpwu
@@ -538,6 +541,9 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
         # if not dragging and we need to enable
         elif not self.dragging and enabled:
             if mode == MODE_SPARC_SELECT:
+                # reset ROA on beginning
+                # TODO: that's the only way to remove the ROA for the user...
+                # but is it useful? 
                 if self._roa:
                     self._roa.value = UNDEFINED_ROI
             # TODO handle ZOOM
@@ -595,7 +601,7 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
                 if self.HasCapture():
                     self.ReleaseMouse()
                 pub.sendMessage('sparc.acq.select.end')
-                logging.debug("ROA = %s", self.roi_overlay.get_real_selection())
+                logging.debug("ROA = %s", self.roi_overlay.get_selection_phys())
                 self._updateROA()
                 self.ShouldUpdateDrawing()
             else:
@@ -702,7 +708,7 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
             return
         
         # Get the position of the overlay in physical coordinates
-        phys_rect = self.roi_overlay.get_real_selection()
+        phys_rect = self.roi_overlay.get_selection_phys()
         if phys_rect is None:
             self._roa.value = UNDEFINED_ROI
             return
@@ -735,7 +741,29 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
         
         # update roa
         self._roa.value = rel_rect
-        
+    
+    def _updateSelection(self):
+        """
+        updates the selection overlay position according to the current ROA value
+        """
+        # convert relative position to physical position
+        try:
+            sem_rect = self._getSEMRect()
+        except AttributeError:
+            return # no SEM => ROA is not meaningful
+    
+        rel_rect = self._roa.value
+        if rel_rect == UNDEFINED_ROI:
+            phys_rect = None
+        else:
+            phys_rect = (sem_rect[0] + rel_rect[0] * (sem_rect[2] - sem_rect[0]),
+                         sem_rect[1] + rel_rect[1] * (sem_rect[3] - sem_rect[1]),
+                         sem_rect[0] + rel_rect[2] * (sem_rect[2] - sem_rect[0]),
+                         sem_rect[1] + rel_rect[3] * (sem_rect[3] - sem_rect[1]))
+
+        logging.debug("Selection now set to %s", phys_rect)        
+        self.roi_overlay.set_selection_phys(phys_rect)
+    
     def _onROA(self, roi):
         """
         Called when the ROI of the SEM CL is updated (that's our region of 
@@ -751,3 +779,5 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
             self.ShouldUpdateDrawing()
         else:
             logging.debug("ROA should be set to %s", roi)
+            self._updateSelection()
+            self.ShouldUpdateDrawing()
