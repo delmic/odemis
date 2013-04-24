@@ -59,6 +59,46 @@ def resize_bmp(btn_size, bmp):
 
     return bmp
 
+
+def DarkenImage(anImage):
+    """
+    Convert the given image (in place) to a grayed-out
+    version, appropriate for a 'disabled' appearance.
+    """
+
+    if anImage.HasAlpha():
+        alpha = anImage.GetAlphaData()
+    else:
+        alpha = None
+
+    data = [ord(d) for d in list(anImage.GetData())]
+
+    for i in range(0, len(data), 3):
+        pixel = (data[i], data[i+1], data[i+2])
+        pixel = tuple([int(p * 0.4)  for p in pixel])
+        for x in range(3):
+            data[i+x] = pixel[x]
+    anImage.SetData(''.join([chr(d) for d in data]))
+    if alpha:
+        anImage.SetAlphaData(alpha)
+
+def SetBitmapLabel(self, bitmap, createOthers=True):
+    """
+    Set the bitmap to display normally.
+    This is the only one that is required. If
+    createOthers is True, then the other bitmaps
+    will be generated on the fly.  Currently,
+    only the disabled bitmap is generated.
+    """
+    self.bmpLabel = bitmap
+    if bitmap is not None and createOthers:
+        image = wx.ImageFromBitmap(bitmap)
+        DarkenImage(image)
+        self.SetBitmapDisabled(wx.BitmapFromImage(image))
+
+
+GenBitmapButton.SetBitmapLabel = SetBitmapLabel
+
 class ImageButton(GenBitmapButton):
     """ Graphical button with hover effect.
 

@@ -564,7 +564,7 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
             hover = self.active_overlay.is_hovering(pos)
 
             # Clicked outside selection
-            if not hover:
+            if not hover or hover == gui.HOVER_SELECTION:
                 self.dragging = True
                 self.active_overlay.start_selection(pos, self.scale)
                 pub.sendMessage('sparc.acq.select.start', canvas=self)
@@ -616,7 +616,8 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
             else:
                 hover = self.active_overlay.is_hovering(pos)
                 if hover == gui.HOVER_SELECTION:
-                    self.SetCursor(wx.StockCursor(wx.CURSOR_MAGNIFIER))
+                    # No special cusor needed
+                    self.SetCursor(self.cursor)
                 elif hover in (gui.HOVER_LEFT_EDGE, gui.HOVER_RIGHT_EDGE):
                     self.SetCursor(wx.StockCursor(wx.CURSOR_SIZEWE))
                 elif hover in (gui.HOVER_TOP_EDGE, gui.HOVER_BOTTOM_EDGE):
@@ -689,7 +690,7 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
         sem = self._microscope_model.ebeam
         if not sem:
             raise AttributeError("No SEM on the microscope")
-         
+
         try:
             sem_center = self.microscope_view.stage_pos.value
         except AttributeError:
@@ -704,39 +705,39 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
                     sem_center[1] - sem_width[1]/2, # left
                     sem_center[0] + sem_width[0]/2, # bottom
                     sem_center[1] + sem_width[1]/2] # right
-    
+
         return sem_rect
-    
+
     def _updateROA(self):
         """
-        Update the value of the ROA in the GUI according to the roi_overlay 
-        """ 
+        Update the value of the ROA in the GUI according to the roi_overlay
+        """
         sem = self._microscope_model.ebeam
         if not self._roa or not sem:
             logging.warning("ROA is supposed to be updated, but no ROA/SEM attribute")
             return
-        
+
         # Get the position of the overlay in physical coordinates
         phys_rect = self.roi_overlay.get_selection_phys()
         if phys_rect is None:
             self._roa.value = UNDEFINED_ROI
             return
-        
+
         # Position of the complete SEM scan in physical coordinates
         sem_rect = self._getSEMRect()
-    
+
         # Take only the intersection so that that ROA is always inside the SEM scan
         phys_rect = util.rect_intersect(phys_rect, sem_rect)
         if phys_rect is None:
             self._roa.value = UNDEFINED_ROI
             return
-            
+
         # Convert the ROI into relative value compared to the SEM scan
-        rel_rect = [(phys_rect[0] - sem_rect[0]) / (sem_rect[2] - sem_rect[0]), 
+        rel_rect = [(phys_rect[0] - sem_rect[0]) / (sem_rect[2] - sem_rect[0]),
                     (phys_rect[1] - sem_rect[1]) / (sem_rect[3] - sem_rect[1]),
                     (phys_rect[2] - sem_rect[0]) / (sem_rect[2] - sem_rect[0]),
                     (phys_rect[3] - sem_rect[1]) / (sem_rect[3] - sem_rect[1])]
-    
+
         # and is at least one pixel big
         rel_pixel_size = (1 / sem.shape[0], 1 / sem.shape[1])
         rel_rect[2] = max(rel_rect[2], rel_rect[0] + rel_pixel_size[0])
@@ -750,7 +751,7 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
 
         # update roa
         self._roa.value = rel_rect
-     
+
     def _onROA(self, roi):
         """
         Called when the ROI of the SEM CL is updated (that's our region of
