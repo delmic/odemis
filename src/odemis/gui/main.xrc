@@ -1072,7 +1072,7 @@
                                   <label>No region of interest selected.</label>
                                   <fg>#DDDDDD</fg>
                                   <font>
-                                    <size>12</size>
+                                    <size>10</size>
                                     <style>normal</style>
                                     <weight>normal</weight>
                                     <underlined>0</underlined>
@@ -1109,32 +1109,63 @@
                           <flag>wxEXPAND</flag>
                         </object>
                         <object class="sizeritem">
-                          <object class="ImageTextButton" name="btn_sparc_acquire">
-                            <size>382,-1</size>
-                            <label>ACQUIRE IMAGE</label>
-                            <delta>1</delta>
-                            <bitmap>img/btn_acquire_image.png</bitmap>
-                            <hover>img/btn_acquire_image_h.png</hover>
-                            <selected>img/btn_acquire_image_a.png</selected>
-                            <disabled>img/btn_acquire_image_d.png</disabled>
-                            <fg>#E5E5E5</fg>
-                            <font>
-                              <size>14</size>
-                              <style>normal</style>
-                              <weight>normal</weight>
-                              <underlined>0</underlined>
-                              <family>default</family>
-                              <face>Ubuntu</face>
-                              <encoding>UTF-8</encoding>
-                            </font>
-                            <enabled>0</enabled>
-                            <style>wxALIGN_CENTRE</style>
-                            <XRCED>
-                              <assign_var>1</assign_var>
-                            </XRCED>
+                          <object class="wxBoxSizer">
+                            <orient>wxHORIZONTAL</orient>
+                            <object class="sizeritem">
+                              <object class="ImageTextButton" name="btn_sparc_cancel">
+                                <label>Cancel</label>
+                                <delta>1</delta>
+                                <bitmap>img/btn_128x48.png</bitmap>
+                                <hover>img/btn_128x48_h.png</hover>
+                                <selected>img/btn_128x48_a.png</selected>
+                                <fg>#1A1A1A</fg>
+                                <font>
+                                  <size>14</size>
+                                  <style>normal</style>
+                                  <weight>normal</weight>
+                                  <underlined>0</underlined>
+                                  <family>default</family>
+                                  <face>Ubuntu</face>
+                                  <encoding>UTF-8</encoding>
+                                </font>
+                                <enabled>0</enabled>
+                                <style>wxALIGN_CENTRE</style>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                              </object>
+                              <flag>wxTOP|wxBOTTOM|wxLEFT</flag>
+                              <border>10</border>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="ImageTextButton" name="btn_sparc_acquire">
+                                <size>242,48</size>
+                                <label>START</label>
+                                <delta>1</delta>
+                                <bitmap>img/btn_acq_img_sml.png</bitmap>
+                                <hover>img/btn_acq_img_sml_h.png</hover>
+                                <selected>img/btn_acq_img_sml_a.png</selected>
+                                <disabled>img/btn_acq_img_sml_d.png</disabled>
+                                <fg>#E5E5E5</fg>
+                                <font>
+                                  <size>15</size>
+                                  <style>normal</style>
+                                  <weight>normal</weight>
+                                  <underlined>0</underlined>
+                                  <family>default</family>
+                                  <face>Ubuntu</face>
+                                  <encoding>UTF-8</encoding>
+                                </font>
+                                <enabled>0</enabled>
+                                <style>wxALIGN_CENTRE</style>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                              </object>
+                              <flag>wxALL</flag>
+                              <border>10</border>
+                            </object>
                           </object>
-                          <flag>wxALL</flag>
-                          <border>10</border>
                         </object>
                       </object>
                       <bg>#4D4D4D</bg>
