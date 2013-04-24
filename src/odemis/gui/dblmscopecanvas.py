@@ -90,13 +90,6 @@ class DblMicroscopeCanvas(DraggableCanvas):
         self._lastThumbnailUpdate = 0
         self._thumbnailUpdatePeriod = 2 # s, minimal period before updating again
 
-        # self.WorldOverlays.append(CrossHairOverlay("Blue",
-        #                                            CROSSHAIR_SIZE,
-        #                                            (-10, -10)))
-        # self.WorldOverlays.append(CrossHairOverlay("Red",
-        #                                            CROSSHAIR_SIZE,
-        #                                            (-10, -10)))
-
         self.current_mode = None
 
     def setView(self, microscope_view, microscope_model):
@@ -505,7 +498,7 @@ class SecomCanvas(DblMicroscopeCanvas):
         else:
             DraggableCanvas.OnMouseMotion(self, event)
 
-    # Capture onwanted events when a tool is active.
+    # Capture unwanted events when a tool is active.
 
     def OnWheel(self, event):
         if self.current_mode not in SECOM_MODES:
@@ -540,13 +533,9 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
             self.ShouldUpdateDrawing()
         # if not dragging and we need to enable
         elif not self.dragging and enabled:
-            if mode == MODE_SPARC_SELECT:
-                # reset ROA on beginning
-                # TODO: that's the only way to remove the ROA for the user...
-                # but is it useful? 
-                if self._roa:
-                    self._roa.value = UNDEFINED_ROI
-            # TODO handle ZOOM
+#             if mode == MODE_SPARC_SELECT:
+                # nothing special to do
+            # TODO handle ZOOM selection as well
             self.current_mode = mode
             self.active_overlay = overlay
             self.cursor = wx.StockCursor(wx.CURSOR_CROSS)
@@ -602,7 +591,9 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
                 pub.sendMessage('sparc.acq.select.end')
                 logging.debug("ROA = %s", self.roi_overlay.get_selection_phys())
                 self._updateROA()
-                self.ShouldUpdateDrawing()
+                # force it to redraw the selection, even if the ROA hasn't changed
+                # because the selection is clipped identically
+                self._onROA(self._roa.value)
             else:
                 if self._roa:
                     self._roa.value = UNDEFINED_ROI
@@ -740,29 +731,7 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
 
         # update roa
         self._roa.value = rel_rect
-    
-    def _updateSelection(self):
-        """
-        updates the selection overlay position according to the current ROA value
-        """
-        # convert relative position to physical position
-        try:
-            sem_rect = self._getSEMRect()
-        except AttributeError:
-            return # no SEM => ROA is not meaningful
-    
-        rel_rect = self._roa.value
-        if rel_rect == UNDEFINED_ROI:
-            phys_rect = None
-        else:
-            phys_rect = (sem_rect[0] + rel_rect[0] * (sem_rect[2] - sem_rect[0]),
-                         sem_rect[1] + rel_rect[1] * (sem_rect[3] - sem_rect[1]),
-                         sem_rect[0] + rel_rect[2] * (sem_rect[2] - sem_rect[0]),
-                         sem_rect[1] + rel_rect[3] * (sem_rect[3] - sem_rect[1]))
-
-        logging.debug("Selection now set to %s", phys_rect)        
-        self.roi_overlay.set_selection_phys(phys_rect)
-    
+     
     def _onROA(self, roi):
         """
         Called when the ROI of the SEM CL is updated (that's our region of
@@ -770,13 +739,20 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
         roi (tuple of 4 floats): top, left, bottom, right position relative to
           the SEM image
         """
-        # TODO: need to actually update the overlay according to the value
-        # but for now, it's not a big deal as the only way to change the ROI is
-        # via this class anyway.
         if roi == UNDEFINED_ROI:
-            self.roi_overlay.clear_selection()
-            self.ShouldUpdateDrawing()
+            phys_rect = None
         else:
-            logging.debug("ROA should be set to %s", roi)
-            self._updateSelection()
-            self.ShouldUpdateDrawing()
+            # convert relative position to physical position
+            try:
+                sem_rect = self._getSEMRect()
+            except AttributeError:
+                return # no SEM => ROA is not meaningful
+        
+            phys_rect = (sem_rect[0] + roi[0] * (sem_rect[2] - sem_rect[0]),
+                         sem_rect[1] + roi[1] * (sem_rect[3] - sem_rect[1]),
+                         sem_rect[0] + roi[2] * (sem_rect[2] - sem_rect[0]),
+                         sem_rect[1] + roi[3] * (sem_rect[3] - sem_rect[1]))
+
+        logging.debug("Selection now set to %s", phys_rect)        
+        self.roi_overlay.set_selection_phys(phys_rect)
+        self.ShouldUpdateDrawing()
