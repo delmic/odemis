@@ -222,11 +222,13 @@ class OdemisGUIApp(wx.App):
                             self.main_frame.pnl_tab_sparc_acqui,
                             self.main_frame,
                             self.interface_model),
-                        tabs.Tab(
+                        tabs.SparcAnalysisTab(
                             "sparc",
                             "sparc_analysis",
                             self.main_frame.btn_tab_sparc_analysis,
-                            self.main_frame.pnl_tab_sparc_analysis),
+                            self.main_frame.pnl_tab_sparc_analysis,
+                            self.main_frame,
+                            self.interface_model),
                         ]
 
             # Create the main tab controller and store a global reference
@@ -301,8 +303,9 @@ class OdemisGUIApp(wx.App):
         """
         # It uses raw data, not images
         try:
-            name1 = os.path.join(os.path.dirname(__file__),
-                                 "img/example/s1-sem-bse.mat")
+            name1 = os.path.join(
+                            os.path.dirname(__file__),
+                            "img/example/s1-sem-bse.mat")
             mdsem = {model.MD_PIXEL_SIZE: (178e-9, 178e-9),
                   model.MD_POS: (0,0)}
             semdata = scipy.io.loadmat(name1)["sem"]
@@ -324,13 +327,14 @@ class OdemisGUIApp(wx.App):
                                         mdspec)
 
             mtc = get_main_tab_controller()
+
             stream_controller = mtc['sparc_analysis'].stream_controller
 
             stream_controller.addStatic("Secondary electrons", semdatas,
                                         cls=StaticSEMStream)
             stream_controller.addStatic("Spectrogram", specdatai,
                                         cls=StaticSpectrumStream)
-        except Exception:
+        except e:
             logging.exception("Failed to load example")
 
 

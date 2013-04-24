@@ -61,7 +61,7 @@ class StreamController(object):
         """
         self._microscope = microscope_model
         self._stream_bar = stream_bar
-        
+
         self._scheduler_subscriptions = {} # stream -> callable
 
         # TODO probably need a lock to access it correctly
@@ -77,8 +77,11 @@ class StreamController(object):
         self._opticalWasTurnedOn = False
         self._semWasTurnedOn = False
 
-        self._microscope.opticalState.subscribe(self.onOpticalState)
-        self._microscope.emState.subscribe(self.onEMState)
+        if hasattr(self._microscope, 'opticalState'):
+            self._microscope.opticalState.subscribe(self.onOpticalState)
+
+        if hasattr(self._microscope, 'emState'):
+            self._microscope.emState.subscribe(self.onEMState)
 
         self._microscope.focussedView.subscribe(self._onView, init=True)
         pub.subscribe(self.removeStream, 'stream.remove')

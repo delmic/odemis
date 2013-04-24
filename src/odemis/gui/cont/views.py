@@ -25,7 +25,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from __future__ import division
 
 import logging
-from collections import namedtuple
 
 import wx
 
@@ -47,10 +46,11 @@ from odemis.gui.model.stream import SEMStream, BrightfieldStream, FluoStream
 # in charge of changing the "hair-cross" display
 
 class ViewController(object):
+
     """ Manages the microscope view updates, change of viewport focus, etc.
     """
 
-    def __init__(self, micgui, main_frame, viewports=None):
+    def __init__(self, micgui, main_frame, viewports):
         """
         micgui (MicroscopeModel) -- the representation of the microscope GUI
         main_frame: (wx.Frame) -- the frame which contains the 4 viewports
@@ -61,11 +61,7 @@ class ViewController(object):
         self._main_frame = main_frame
 
         # list of all the viewports (widgets that show the views)
-        if viewports:
-            self._viewports = viewports
-        else:
-            self._viewports = [main_frame.vp_secom_tl, main_frame.vp_secom_tr,
-                               main_frame.vp_secom_bl, main_frame.vp_secom_br]
+        self._viewports = viewports
 
         # create the (default) views and set focussedView
         self._createViews()
@@ -76,13 +72,15 @@ class ViewController(object):
 
     def _createViews(self):
         """
-        Create the different views displayed, according to the current microscope.
+        Create the different views displayed, according to the current
+        microscope.
+
         To be executed only once, at initialisation.
         """
 
         # If SEM only: all SEM
         # Works also for the Sparc, as there is no other emitter, and we don't
-        # need to display anything else anyway 
+        # need to display anything else anyway
         if self._microscope.ebeam and not self._microscope.light:
             logging.info("Creating SEM only viewport layout")
             i = 1
@@ -161,7 +159,8 @@ class ViewController(object):
             # Focus defaults to the top right viewport
             self._microscope.focussedView.value = self._viewports[1].mic_view
         else:
-            logging.warning("No known microscope configuration, creating 4 generic views")
+            msg = "No known microscope configuration, creating 4 generic views"
+            logging.warning(msg)
             i = 1
             for viewport in self._viewports:
                 view = instrmodel.MicroscopeView(
@@ -183,7 +182,7 @@ class ViewController(object):
         logging.debug("Changing focus to view %s", view.name.value)
         layout = self._microscope.viewLayout.value
 
-        self._main_frame.pnl_tab_secom_streams.Freeze()
+        self._viewports[0].Parent.Freeze()
 
         for viewport in self._viewports:
             if viewport.mic_view == view:
@@ -196,16 +195,17 @@ class ViewController(object):
                     viewport.Hide()
 
         if layout == instrmodel.VIEW_LAYOUT_ONE:
-            self._main_frame.pnl_tab_secom_streams.Layout() # resize viewport
+            self._viewports[0].Parent.Layout() # resize viewport
 
-        self._main_frame.pnl_tab_secom_streams.Thaw()
+
+        self._viewports[0].Parent.Thaw()
 
     def _onViewLayout(self, layout):
         """
         Called when the view layout of the GUI must be changed
         """
         # only called when changed
-        self._main_frame.pnl_tab_secom_streams.Freeze()
+        self._viewports[0].Parent.Freeze()
 
         if layout == instrmodel.VIEW_LAYOUT_ONE:
             logging.debug("Showing only one view")
@@ -227,8 +227,8 @@ class ViewController(object):
         else:
             raise NotImplementedError()
 
-        self._main_frame.pnl_tab_secom_streams.Layout()  # resize the viewports
-        self._main_frame.pnl_tab_secom_streams.Thaw()
+        self._viewports[0].Parent.Layout()  # resize the viewports
+        self._viewports[0].Parent.Thaw()
 
 
 class ViewSelector(object):
@@ -237,7 +237,7 @@ class ViewSelector(object):
     them.
     """
 
-    def __init__(self, micgui, main_frame):
+    def __init__(self, micgui, main_frame, buttons):
         """
         micgui (MicroscopeModel): the representation of the microscope GUI
         main_frame: (wx.Frame): the frame which contains the 4 viewports
@@ -245,21 +245,7 @@ class ViewSelector(object):
         self._microscope_gui = micgui
         self._main_frame = main_frame
 
-        # TODO: should create buttons according to micgui views
-
-        # btn -> (viewport, label)
-        ViewportLabel = namedtuple('ViewportLabel', ['vp', 'lbl'])
-
-        self.buttons = {main_frame.btn_secom_view_all:
-                            ViewportLabel(None, main_frame.lbl_secom_view_all), # 2x2 layout
-                        main_frame.btn_secom_view_tl:
-                            ViewportLabel(main_frame.vp_secom_tl, main_frame.lbl_secom_view_tl),
-                        main_frame.btn_secom_view_tr:
-                            ViewportLabel(main_frame.vp_secom_tr, main_frame.lbl_secom_view_tr),
-                        main_frame.btn_secom_view_bl:
-                            ViewportLabel(main_frame.vp_secom_bl, main_frame.lbl_secom_view_bl),
-                        main_frame.btn_secom_view_br:
-                            ViewportLabel(main_frame.vp_secom_br, main_frame.lbl_secom_view_br)}
+        self.buttons = buttons
 
         for btn in self.buttons:
             btn.Bind(wx.EVT_BUTTON, self.OnClick)
@@ -272,8 +258,13 @@ class ViewSelector(object):
 
         # subscribe to thumbnails
         self._subscriptions = [] # list of functions
-        for btn in [self._main_frame.btn_secom_view_tl, self._main_frame.btn_secom_view_tr,
-                    self._main_frame.btn_secom_view_bl, self._main_frame.btn_secom_view_br]:
+
+        # subscribe to change of name
+        for btn, view_label in self.buttons.items():
+            if view_label.vp is None: # 2x2 layout
+                view_label.lbl.SetLabel("Overview")
+                continue
+
             def onThumbnail(im, btn=btn): # save btn in scope
                 btn.set_overlay(im)
 
@@ -283,13 +274,6 @@ class ViewSelector(object):
 
             # also subscribe for updating the 2x2 button
             self.buttons[btn].vp.mic_view.thumbnail.subscribe(self._update22Thumbnail)
-        #self._update22Thumbnail(None)
-
-        # subscribe to change of name
-        for btn, view_label in self.buttons.items():
-            if view_label.vp is None: # 2x2 layout
-                view_label.lbl.SetLabel("Overview")
-                continue
 
             def onName(name, view_label=view_label): # save view_label
                 view_label.lbl.SetLabel(name)
@@ -326,8 +310,10 @@ class ViewSelector(object):
         the first button.
         im (unused)
         """
-        # Create an image from the 4 thumbnails in a 2x2 layout with small border
-        btn_all = self._main_frame.btn_secom_view_all
+        # Create an image from the 4 thumbnails in a 2x2 layout with small
+        # border. The button without a viewport attached is assumed to be the
+        # one assigned to the 2x2 view
+        btn_all = [b for b, vl in self.buttons.items() if vl.vp is None][0]
         border_width = 2 # px
         size = max(1, btn_all.overlay_width), max(1, btn_all.overlay_height)
         size_sub = (max(1, (size[0] - border_width) // 2),
@@ -336,10 +322,11 @@ class ViewSelector(object):
         im_22 = wx.EmptyImage(*size, clear=False)
         im_22.SetRGBRect(wx.Rect(0, 0, *size), *btn_all.GetBackgroundColour().Get())
 
-        for i, btn in enumerate([self._main_frame.btn_secom_view_tl, self._main_frame.btn_secom_view_tr,
-                                 self._main_frame.btn_secom_view_bl, self._main_frame.btn_secom_view_br]):
+        for i, (_, view_label) in enumerate(self.buttons.items()):
+            if view_label.vp is None: # 2x2 layout
+                continue
 
-            im = self.buttons[btn].vp.mic_view.thumbnail.value
+            im = view_label.vp.mic_view.thumbnail.value
             if im:
                 # im doesn't have the same aspect ratio as the actual thumbnail
                 # => rescale and crop on the center
