@@ -79,7 +79,7 @@ class Overlay(object):
                 cairo.FONT_WEIGHT_NORMAL
         )
         ctx.set_font_size(font.GetPointSize())
- 
+
 #         shift = font.GetPixelSize()
         ctx.set_source_rgb(0.0, 0.0, 0.0)
         ctx.move_to(vpos[0], vpos[1])
@@ -360,7 +360,7 @@ class ViewSelectOverlay(ViewOverlay, SelectionMixin):
                     start_pos[1] + 0.5,
                     end_pos[0] - start_pos[0],
                     end_pos[1] - start_pos[1])
-            
+
             # draws a light black background for the rectangle
             ctx.set_line_width(2)
             ctx.set_source_rgba(0, 0, 0, 0.5)
@@ -397,6 +397,8 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
         self.w_start_pos = None
         self.w_end_pos = None
 
+    # Selection creation
+
     def start_selection(self, start_pos, scale):
         SelectionMixin.start_selection(self, start_pos, scale)
         self._calc_world_pos()
@@ -410,13 +412,21 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
         SelectionMixin.stop_selection(self)
         self._calc_world_pos()
 
-#         w_clipped = self._clip(
-#                         self.w_start_pos,
-#                         self.w_end_pos,
-#                         *self.base.world_image_area)
-# 
-#         if w_clipped:
-#             self.w_start_pos, self.w_end_pos = w_clipped
+    # Selection modification
+
+    def start_edit(self, start_pos, edge):
+        SelectionMixin.start_edit(self, start_pos, edge)
+        self._calc_world_pos()
+
+    def update_edit(self, current_pos):
+        SelectionMixin.update_edit(self, current_pos)
+        self._calc_world_pos()
+
+    def stop_edit(self):
+        SelectionMixin.stop_edit(self)
+        self._calc_world_pos()
+
+    # Selection clearing
 
     def clear_selection(self):
         SelectionMixin.clear_selection(self)
@@ -475,7 +485,7 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
                     b_start_pos[1] + 0.5,
                     b_end_pos[0] - b_start_pos[0],
                     b_end_pos[1] - b_start_pos[1])
-            
+
             # draws a light black background for the rectangle
             ctx.set_line_width(2.5)
             ctx.set_source_rgba(0, 0, 0, 0.5)
@@ -491,21 +501,21 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
             ctx.stroke()
 
             # Label
-            if self.dragging:
+            if self.dragging or self.edit:
                 # No need for size label
                 if not self.base.microscope_view:
                     return
-    
+
                 w, h = self.base.selection_to_real_size(
                                             self.w_start_pos,
                                             self.w_end_pos
                 )
-    
+
                 w = readable_str(w, 'm')
                 h = readable_str(h, 'm')
                 size_lbl = u"{} x {}".format(w, h)
 
-                pos = (b_end_pos[0] + 5, b_end_pos[1] - 5) 
+                pos = (b_end_pos[0] + 5, b_end_pos[1] - 5)
                 self.write_label(ctx, pos, size_lbl)
 
             # if self.dragging:

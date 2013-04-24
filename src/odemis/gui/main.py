@@ -436,7 +436,7 @@ see http://www.fluorophores.org/disclaimer/.
     def excepthook(self, type, value, trace): #pylint: disable=W0622
         """ Method to intercept unexpected errors that are not caught
         anywhere else and redirects them to the logger. """
-        # in case of error here, don't call again, it'd create infinite recursion
+        # in case of error here, don't call again, it creates infinite recursion
         sys.excepthook = sys.__excepthook__
 
         try:

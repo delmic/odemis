@@ -578,7 +578,6 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
                 self.active_overlay.start_edit(pos, hover)
                 if not self.HasCapture():
                     self.CaptureMouse()
-
             self.ShouldUpdateDrawing()
 
         else:
