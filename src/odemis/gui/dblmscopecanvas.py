@@ -38,6 +38,7 @@ import odemis.gui as gui
 import threading
 import time
 import wx
+from odemis.model._vattributes import VigilantAttributeBase
 
 
 # Various modes canvas elements can go into.
@@ -659,6 +660,24 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
             raise KeyError("Failed to find SEM CL stream, required for the Sparc acquisition")
 
         self._roa.subscribe(self._onROA, init=True)
+        
+        sem = microscope_model.ebeam
+        if not sem:
+            raise AttributeError("No SEM on the microscope")
+        
+        if isinstance(sem.magnification, VigilantAttributeBase):
+            sem.magnification.subscribe(self._onSEMMag)
+        
+    def _onSEMMag(self, mag):
+        """
+        Called when the magnification of the SEM changes
+        """
+        # That means the pixelSize changes, so the (relative) ROA is different
+        # Either we update the ROA so that physically it stays the same, or 
+        # we update the selection so that the ROA stays the same. It's probably
+        # that the user has forgotten to set the magnification before, so let's
+        # pick solution 2.
+        self._onROA(self._roa.value)
     
     def _getSEMRect(self):
         """
@@ -755,4 +774,4 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
 
         logging.debug("Selection now set to %s", phys_rect)        
         self.roi_overlay.set_selection_phys(phys_rect)
-        self.ShouldUpdateDrawing()
+        wx.CallAfter(self.ShouldUpdateDrawing)

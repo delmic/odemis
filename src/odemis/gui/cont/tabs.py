@@ -23,6 +23,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 
+from __future__ import division
 from collections import namedtuple
 from odemis.gui.cont import settings
 from odemis.gui.cont.acquisition import SecomAcquiController, \
@@ -33,9 +34,11 @@ from odemis.gui.cont.views import ViewController, ViewSelector
 from odemis.gui.instrmodel import STATE_ON, STATE_OFF, STATE_PAUSE
 from odemis.gui.model.stream import SpectrumStream, SEMStream, ARStream, \
     UNDEFINED_ROI
-import logging
-import wx
 from wx.lib.pubsub import pub
+import logging
+import math
+import wx
+
 
 
 class Tab(object):
@@ -169,6 +172,9 @@ class SparcAcquisitionTab(Tab):
 
         self._settings_controller = None
         self._roi_streams = [] # stream which must have the same ROI as the SEM CL
+        self._prev_rois = {} # stream -> roi (tuple of4 floats)
+        self._spec_stream = None
+        self._ar_stream = None
 
     def _initialize(self):
         """ This method is called when the tab is first shown """
@@ -203,6 +209,8 @@ class SparcAcquisitionTab(Tab):
                                         self.microscope_model.ebeam)
             acq_view.addStream(spec_stream)
             self._roi_streams.append(spec_stream)
+            spec_stream.roi.subscribe(self.onSpecROI)
+            self._spec_stream = spec_stream
 
         if self.microscope_model.ccd:
             ar_stream = ARStream(
@@ -212,6 +220,8 @@ class SparcAcquisitionTab(Tab):
                                 self.microscope_model.ebeam)
             acq_view.addStream(ar_stream)
             self._roi_streams.append(ar_stream)
+            ar_stream.roi.subscribe(self.onARROI)
+            self._ar_stream = ar_stream
 
         # indicate ROI must still be defined by the user
         semcl_stream.roi.value = UNDEFINED_ROI
@@ -268,6 +278,47 @@ class SparcAcquisitionTab(Tab):
         for s in self._roi_streams:
             s.roi.value = roi
 
+    # TODO: is it the best place to put it? 
+    # We could also try to subclass the SpectrumStream with a special one GUI-aware
+    # or put this code in the stream controller?
+    def _adaptRepetitionFromROI(self, stream, roi):
+        """
+        Adapts the repetition of the given stream according to the new ROI
+        It tries to keep the pixel size identical, by changing the repetition
+         the same way the ROI has been changed.
+        """
+        # TODO: actually, what we might want is to save the size of a pixel
+        # (instead of the repetition). So the repetition would adapt to the 
+        # closest size whenever the ROI changes, without rounding problems. 
+        # The user should also be able to change the repetition number, but it
+        # would then actually change the pixel size accordingly.
+        
+        # update the repetition, so that the approximate pixel size would stay
+        # the same as before
+        if roi == UNDEFINED_ROI:
+            return # no need to do anything
+        
+        # if nothing before, consider the repetition was for the whole area
+        prev_roi = self._prev_rois.get(stream, (0, 0, 1, 1))
+        
+        change = ((roi[2] - roi[0]) / (prev_roi[2] - prev_roi[0]),
+                  (roi[3] - roi[1]) / (prev_roi[3] - prev_roi[1])) 
+        rep = stream.repetition.value
+        new_rep = (int(math.ceil(rep[0] * change[0])),
+                   int(math.ceil(rep[1] * change[1])))
+        
+        stream.repetition.value = new_rep
+        self._prev_rois[stream] = roi
+    
+    def onSpecROI(self, roi):
+        """
+        called when the Spectrometer roi is changed
+        """
+        self._adaptRepetitionFromROI(self._spec_stream, roi)
+
+    def onARROI(self, roi):
+        self._adaptRepetitionFromROI(self._ar_stream, roi)
+    
 class SparcAnalysisTab(Tab):
 
     def __init__(self, group, name, button, panel, main_frame, interface_model):
