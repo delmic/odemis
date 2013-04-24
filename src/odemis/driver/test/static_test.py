@@ -15,11 +15,13 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from odemis.driver import static
+from odemis.util import timeout
 import unittest
 
 # Simple test cases, for the very simple static components
 
 class TestLightFilter(unittest.TestCase):
+    @timeout(1.2) # this is to test timeout
     def test_simple(self):
         band = [(480e-9, 651e-9), (700e-9, 800e-9)]
         comp = static.LightFilter("test", "filter", band)
@@ -40,6 +42,7 @@ class TestOpticalLens(unittest.TestCase):
         comp.terminate()
 
 class TestSpectrograph(unittest.TestCase):
+    @timeout(3)
     def test_fake(self):
         """
         Just makes sure we more or less follow the behaviour of a spectrograph

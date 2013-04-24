@@ -23,19 +23,18 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 
-import logging
-import threading
-import time
-
-import wx
-from wx.lib.pubsub import pub
-from decorator import decorator
-
-import odemis.gui as gui
+from __future__ import division
 from .comp.canvas import DraggableCanvas, world_to_real_pos
 from .comp.overlay import CrossHairOverlay, ViewSelectOverlay, WorldSelectOverlay
+from decorator import decorator
 from odemis.gui.model import EM_STREAMS
-
+from odemis.gui.model.stream import UNDEFINED_ROI
+from wx.lib.pubsub import pub
+import logging
+import odemis.gui as gui
+import threading
+import time
+import wx
 
 
 # Various modes canvas elements can go into.
@@ -71,6 +70,7 @@ class DblMicroscopeCanvas(DraggableCanvas):
     def __init__(self, *args, **kwargs):
         DraggableCanvas.__init__(self, *args, **kwargs)
         self.microscope_view = None
+        self._microscope_model = None
 
         self.Bind(wx.EVT_MOUSEWHEEL, self.OnWheel)
 
@@ -96,18 +96,20 @@ class DblMicroscopeCanvas(DraggableCanvas):
 
         self.current_mode = None
 
-    def setView(self, microscope_view):
+    def setView(self, microscope_view, microscope_model):
         """
         Set the microscope_view that this canvas is displaying/representing
         Can be called only once, at initialisation.
 
         :param microscope_view:(instrmodel.MicroscopeView)
+        :param microscope_model: (instrmodel.MicroscopeModel)
         """
         # This is a kind of kludge, see mscviewport.MicroscopeViewport for
         # details
         assert(self.microscope_view is None)
 
         self.microscope_view = microscope_view
+        self._microscope_model = microscope_model
 
         # meter per "world unit"
         # for conversion between "world pos" in the canvas and a real unit
@@ -125,7 +127,31 @@ class DblMicroscopeCanvas(DraggableCanvas):
 
         # any image changes
         self.microscope_view.lastUpdate.subscribe(self._onViewImageUpdate, init=True)
+        
+        # handle crosshair
+        self.microscope_view.show_crosshair.subscribe(self._onCrossHair, init=True)
 
+    def _onCrossHair(self, activated):
+        """ Activate or disable the display of a cross in the middle of the view
+        activated = true if the cross should be displayed
+        """
+        # We don't specifically know about the crosshair, so look for it in the
+        # static overlays
+        ch = None
+        for o in self.ViewOverlays:
+            if isinstance(o, CrossHairOverlay):
+                ch = o
+                break
+
+        if activated:
+            if not ch:
+                ch = CrossHairOverlay(self)
+                self.ViewOverlays.append(ch)
+                self.Refresh(eraseBackground=False)
+        else:
+            if ch:
+                self.ViewOverlays.remove(ch)
+                self.Refresh(eraseBackground=False)
 
     def _convertStreamsToImages(self):
         """
@@ -170,7 +196,7 @@ class DblMicroscopeCanvas(DraggableCanvas):
         for i, iim in enumerate(images):
             if iim is None:
                 continue
-            scale = float(iim.mpp) / self.mpwu
+            scale = iim.mpp / self.mpwu
             pos = (iim.center[0] / self.mpwu, iim.center[1] / self.mpwu)
             self.SetImage(i, iim.image, pos, scale)
 
@@ -210,8 +236,8 @@ class DblMicroscopeCanvas(DraggableCanvas):
         dc.SelectObject(bitmap)
 
         # simplified version of OnPaint()
-        margin = ((self._bmp_buffer_size[0] - self.ClientSize[0])/2,
-                  (self._bmp_buffer_size[1] - self.ClientSize[1])/2)
+        margin = ((self._bmp_buffer_size[0] - self.ClientSize[0]) // 2,
+                  (self._bmp_buffer_size[1] - self.ClientSize[1]) // 2)
 
         dc.BlitPointSize((0, 0), self.ClientSize, self._dc_buffer, margin)
 
@@ -488,53 +514,17 @@ class SecomCanvas(DblMicroscopeCanvas):
         if self.current_mode not in SECOM_MODES:
             super(SecomCanvas, self).OnRightUp(event)
 
-    def setView(self, microscope_view):
-        """
-        Set the microscope_view that this canvas is displaying/representing
-        Can be called only once, at initialisation.
-
-        :param microscope_view:(instrmodel.MicroscopeView)
-        """
-        super(SecomCanvas, self).setView(microscope_view)
-        self.microscope_view.show_crosshair.subscribe(
-                                            self._onCrossHair,
-                                            init=True
-        )
-
-    def _onCrossHair(self, activated):
-        """ Activate or disable the display of a cross in the middle of the view
-        activated = true if the cross should be displayed
-        """
-        # We don't specifically know about the crosshair, so look for it in the
-        # static overlays
-        ch = None
-        for o in self.ViewOverlays:
-            if isinstance(o, CrossHairOverlay):
-                ch = o
-                break
-
-        if activated:
-            if not ch:
-                ch = CrossHairOverlay(self)
-                self.ViewOverlays.append(ch)
-                self.Refresh(eraseBackground=False)
-        else:
-            if ch:
-                self.ViewOverlays.remove(ch)
-                self.Refresh(eraseBackground=False)
-
 class SparcAcquiCanvas(DblMicroscopeCanvas):
     def __init__(self, *args, **kwargs):
         super(SparcAcquiCanvas, self).__init__(*args, **kwargs)
 
-        self.roi_overlay = WorldSelectOverlay(self, "Region of Interst")
+        self._roa = None # The ROI VA of SEM CL stream, initialized on setView()
+        self.roi_overlay = WorldSelectOverlay(self, "Region of acquisition")
         self.WorldOverlays.append(self.roi_overlay)
-
         self.active_overlay = None
+        self.cursor = wx.STANDARD_CURSOR
 
         pub.subscribe(self.toggle_select_mode, 'sparc.acq.tool.select.click')
-
-        self.cursor = wx.STANDARD_CURSOR
 
     def _toggle_mode(self, enabled, overlay, mode):
         # If same mode, but disabled
@@ -546,15 +536,17 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
         # if not dragging and we need to enable
         elif not self.dragging and enabled:
             if mode == MODE_SPARC_SELECT:
-                self.roi_overlay.clear_selection()
-                pub.sendMessage(
-                   'sparc.acq.selection.changed',
-                   real_selection=self.roi_overlay.get_real_selection()
-                )
-                self.ShouldUpdateDrawing()
+                if self._roa:
+                    self._roa.value = UNDEFINED_ROI
+            # TODO handle ZOOM
             self.current_mode = mode
             self.active_overlay = overlay
             self.cursor = wx.StockCursor(wx.CURSOR_CROSS)
+        else:
+            # dragging (=> pretty unlikely as it's not possible to click on the tool) 
+            # or new mode and asking to disable (=> we should have received the request to enable the new mode first)
+            # or ...
+            logging.warning("Unhandled case tool toggle")
 
         self.SetCursor(self.cursor)
 
@@ -601,14 +593,13 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
                 if self.HasCapture():
                     self.ReleaseMouse()
                 pub.sendMessage('sparc.acq.select.end')
-                pub.sendMessage(
-                    'sparc.acq.selection.changed',
-                    real_selection=self.roi_overlay.get_real_selection()
-                )
+                logging.debug("ROA = %s", self.roi_overlay.get_real_selection())
+                self._updateROA()
+                self.ShouldUpdateDrawing()
             else:
-                self.active_overlay.clear_selection()
+                if self._roa:
+                    self._roa.value = UNDEFINED_ROI
 
-            self.ShouldUpdateDrawing()
         else:
             DraggableCanvas.OnLeftUp(self, event)
 
@@ -637,7 +628,7 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
         else:
             DraggableCanvas.OnMouseMotion(self, event)
 
-    # Capture onwanted events when a tool is active.
+    # Capture unwanted events when a tool is active.
 
     def OnWheel(self, event):
         if self.current_mode not in SPARC_MODES:
@@ -651,34 +642,107 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
         if self.current_mode not in SPARC_MODES:
             super(SparcAcquiCanvas, self).OnRightUp(event)
 
-    def setView(self, microscope_view):
+    def setView(self, microscope_view, microscope_model):
         """
         Set the microscope_view that this canvas is displaying/representing
         Can be called only once, at initialisation.
 
         :param microscope_view:(instrmodel.MicroscopeView)
+        :param microscope_model: (instrmodel.MicroscopeModel)
         """
-        super(SparcAcquiCanvas, self).setView(microscope_view)
-        self.microscope_view.show_crosshair.subscribe(self._onCrossHair, init=True)
-
-    def _onCrossHair(self, activated):
-        """ Activate or disable the display of a cross in the middle of the view
-        activated = true if the cross should be displayed
-        """
-        # We don't specifically know about the crosshair, so look for it in the
-        # static overlays
-        ch = None
-        for o in self.ViewOverlays:
-            if isinstance(o, CrossHairOverlay):
-                ch = o
+        super(SparcAcquiCanvas, self).setView(microscope_view, microscope_model)
+        
+        # Associate the ROI of the SEM CL stream to the region of acquisition
+        for s in microscope_model.acquisitionView.getStreams():
+            if s.name.value == "SEM CL":
+                self._roa = s.roi
                 break
-
-        if activated:
-            if not ch:
-                ch = CrossHairOverlay(self)
-                self.ViewOverlays.append(ch)
-                self.Refresh(eraseBackground=False)
         else:
-            if ch:
-                self.ViewOverlays.remove(ch)
-                self.Refresh(eraseBackground=False)
+            raise KeyError("Failed to find SEM CL stream, required for the Sparc acquisition")
+         
+        self._roa.subscribe(self._onROA, init=True)
+    
+    def _updateROA(self):
+        """
+        Update the value of the ROA in the GUI according to the roi_overlay 
+        """ 
+        sem = self._microscope_model.ebeam
+        if not self._roa or not sem:
+            logging.warning("ROA is supposed to be updated, but no ROA/SEM attribute")
+            return
+        
+        # Get the position of the overlay in physical coordinates
+        phys_rect = self.roi_overlay.get_real_selection()
+        if phys_rect is None:
+            self._roa.value = UNDEFINED_ROI
+            return
+        # reorder
+        phys_rect = [min(phys_rect[0], phys_rect[2]),
+                     min(phys_rect[1], phys_rect[3]),
+                     max(phys_rect[0], phys_rect[2]),
+                     max(phys_rect[1], phys_rect[3])]
+        
+        # Position of the complete SEM scan in physical coordinates
+        try:
+            sem_center = self.microscope_view.stage_pos.value
+        except AttributeError:
+            # no stage => pos is always 0,0
+            sem_center = (0, 0)
+        # TODO: pixelSize will be updated when the SEM magnification changes,
+        # so we might want to recompute this ROA whenever pixelSize changes so
+        # that it's always correct (but maybe not here in the view)  
+        sem_width = (sem.shape[0] * sem.pixelSize.value[0],
+                     sem.shape[1] * sem.pixelSize.value[1])
+        sem_rect = [sem_center[0] - sem_width[0]/2, # top
+                    sem_center[1] - sem_width[1]/2, # left
+                    sem_center[0] + sem_width[0]/2, # bottom
+                    sem_center[1] + sem_width[1]/2] # right
+    
+    
+        # Convert the ROI into relative value compared to the SEM scan
+        rel_rect = [(phys_rect[0] - sem_rect[0]) / sem_width[0], 
+                    (phys_rect[1] - sem_rect[1]) / sem_width[1],
+                    (phys_rect[2] - sem_rect[0]) / sem_width[0],
+                    (phys_rect[3] - sem_rect[1]) / sem_width[1]]
+    
+        # if not intersecting => no region
+        if ((rel_rect[0] < 0 and rel_rect[2] < 0) or
+            (rel_rect[0] > 1 and rel_rect[2] > 1) or
+            (rel_rect[1] < 0 and rel_rect[3] < 0) or
+            (rel_rect[1] > 1 and rel_rect[3] > 1)):
+            self._roa.value = UNDEFINED_ROI
+            return
+        
+        # clamp so that that ROA is always inside the SEM scan
+        rel_rect = [max(0, min(1, v)) for v in rel_rect]
+        # and is at least one pixel big
+        rel_pixel_size = (1 / sem.shape[0], 1 / sem.shape[1])
+        rel_rect[2] = max(rel_rect[2], rel_rect[0] + rel_pixel_size[0])
+        if rel_rect[2] > 1: # if went too far
+            rel_rect[0] -= rel_rect[2] - 1
+            rel_rect[2] = 1
+        rel_rect[3] = max(rel_rect[3], rel_rect[1] + rel_pixel_size[1])
+        if rel_rect[3] > 1:
+            rel_rect[1] -= rel_rect[3] - 1
+            rel_rect[3] = 1
+        
+        # update roa
+        self._roa.value = rel_rect
+        
+    def _onROA(self, roi):
+        """
+        Called when the ROI of the SEM CL is updated (that's our region of 
+         acquisition).
+        roi (tuple of 4 floats): top, left, bottom, right position relative to 
+          the SEM image
+        """
+        # TODO: need to actually update the overlay according to the value
+        # but for now, it's not a big deal as the only way to change the ROI is
+        # via this class anyway.
+        if roi == UNDEFINED_ROI:
+            # TODO: remove the overlay
+            self.roi_overlay.clear_selection()
+            self.ShouldUpdateDrawing()
+            logging.debug("Should remove ROA")
+        else:
+            logging.debug("ROA should be set to %s", roi)

@@ -438,7 +438,6 @@ class SparcAcquiController(AcquisitionController):
         self.update_acquisition_time() # to update the message
 
 
-    
     def on_setting_change(self, setting_ctrl):
         """ Handler for pubsub 'setting.changed' messages """
         self.update_acquisition_time()
@@ -461,8 +460,8 @@ class SparcAcquiController(AcquisitionController):
             # TODO: update the default text to be the same
             txt = "Region of acquisition needs to be selected"
         else:
-            streams = self._microscope.focussedView.value.getStreams()
-            acq_time = acqmng.estimateAcquistionTime(streams)
+            streams = self._microscope.acquisitionView.getStreams()
+            acq_time = acqmng.estimateTime(streams)
             self.gauge_acq.Range = 100 * acq_time
             acq_time = math.ceil(acq_time) # round a bit pessimistically
             txt = "Estimated time is {}."
@@ -517,7 +516,7 @@ class SparcAcquiController(AcquisitionController):
         self._main_frame.Layout() # to put the gauge at the right place
         
         # start acquisition + connect events to callback
-        streams = self._microscope.focussedView.value.getStreams()
+        streams = self._microscope.acquisitionView.getStreams()
         
         self.acq_future = acqmng.startAcquisition(streams)
         self.acq_future.add_update_callback(self.on_acquisition_upd)
@@ -573,7 +572,7 @@ class SparcAcquiController(AcquisitionController):
 
         # save result to file
         try:
-            thumb = acqmng.computeThumbnail(self._microscope.focussedView.value.stream_tree,
+            thumb = acqmng.computeThumbnail(self._microscope.acquisitionView.stream_tree,
                                             future)
             filename = self.filename.value
             exporter = dataio.get_exporter(self.conf.last_format)

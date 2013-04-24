@@ -46,6 +46,11 @@ from odemis.gui.comp.buttons import ImageButton, ImageToggleButton
 # from odemis.gui.cont.streams import StreamController
 # from odemis.gui.cont.views import ViewController, ViewSelector
 
+
+# TODO: need refactoring, to use MicroscopeGUI.tool VA to change the tool
+# TODO: need more generic version, which just takes a list of buttons and
+# create it 
+
 class ToolMenu(wx.Panel):
     """ Tool Menu base class responsible for the general buttons states """
 

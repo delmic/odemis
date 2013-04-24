@@ -142,19 +142,10 @@ class SparcAcquisitionTab(Tab):
         self._settings_controller = None
         self._roi_streams = [] # stream which must have the same ROI as the SEM CL
 
-        pub.subscribe(self.on_roi_changed, 'sparc.acq.selection.changed')
-
     def _initialize(self):
         """ This method is called when the tab is first shown """
         assert self.microscope_model is not None
 
-        self._view_controller = ViewController(
-                                    self.microscope_model,
-                                    self.main_frame,
-                                    [self.main_frame.vp_sparc_acq_view]
-                                )
-
-        mic_view = self.microscope_model.focussedView.value
         acq_view = self.microscope_model.acquisitionView # list of streams for acquisition
 
         # create the streams
@@ -165,7 +156,6 @@ class SparcAcquisitionTab(Tab):
                         self.microscope_model.ebeam)
         self._sem_live_stream = sem_stream
         sem_stream.should_update.value = True
-        mic_view.addStream(sem_stream)
         acq_view.addStream(sem_stream) # it should also be saved
 
         # the SEM acquisition simultaneous to the CCDs
@@ -196,10 +186,20 @@ class SparcAcquisitionTab(Tab):
             self._roi_streams.append(ar_stream)
 
         # indicate ROI must still be defined by the user
-        #semcl_stream.roi.value = UNDEFINED_ROI
-        #semcl_stream.roi.subscribe(self.onROI, init=True)
+        semcl_stream.roi.value = UNDEFINED_ROI
+        semcl_stream.roi.subscribe(self.onROI, init=True)
 
-        # needs to have the AR and Spectrum streams on the acquisition view
+        # create a view on the microscope model
+        # Needs SEM CL stream (could be avoided if we had a .roa on the microscope model)
+        self._view_controller = ViewController(
+                                    self.microscope_model,
+                                    self.main_frame,
+                                    [self.main_frame.vp_sparc_acq_view]
+                                )
+        mic_view = self.microscope_model.focussedView.value
+        mic_view.addStream(sem_stream)
+
+        # needs to have the AR and Spectrum streams on the acquisition view 
         self._settings_controller = settings.SparcSettingsController(
                                         self.main_frame,
                                         self.microscope_model,
@@ -233,16 +233,12 @@ class SparcAcquisitionTab(Tab):
         elif state == STATE_ON:
             self._sem_live_stream.is_active.value = True
 
-    def on_roi_changed(self, real_selection):
-
-        roi = UNDEFINED_ROI
-
-        if real_selection:
-            stream_image = self._sem_live_stream.image.value
-            roi = stream_image.real_selection_to_unit(*real_selection)
-            self._sem_cl_stream.roi.value = roi
-            for s in self._roi_streams:
-                s.roi.value = roi
+    def onROI(self, roi):
+        """
+        called when the SEM CL roi (region of acquisition) is changed
+        """
+        for s in self._roi_streams:
+            s.roi.value = roi
 
 
 class TabBarController(object):

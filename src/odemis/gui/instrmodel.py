@@ -30,6 +30,7 @@ import time
 from odemis import model
 from odemis.gui.model.stream import Stream, StreamTree
 from odemis.model import FloatContinuous, VigilantAttribute, VA_EXCEPTIONS
+from odemis.model._vattributes import IntEnumerated
 
 # The different states of a microscope
 STATE_OFF = 0
@@ -41,9 +42,17 @@ VIEW_LAYOUT_ONE = 0 # one big view
 VIEW_LAYOUT_22 = 1 # 2x2 layout
 VIEW_LAYOUT_FULLSCREEN = 2 # Fullscreen view (not yet supported)
 
+# The different tools (selectable in the tool bar). Actually, only the ones which
+# have a mode, the ones which have a direct action don't need to be known
+# explicitly. 
+TOOL_NONE = 0 # No tool (normal)
+TOOL_ZOOM = 1 # Select the region to zoom in
+TOOL_ROI = 2 # Select the region of interest (sub-area to be updated)
+TOOL_ROA = 3 # Select the region of acquisition (area to be acquired, SPARC-only)
 
 class MicroscopeModel(object):
-    """ Represent a microscope directly for a graphical user interface.
+    """
+    Represents the graphical user interface for a microscope
 
     Provides direct reference to the HwComponents.
     """
@@ -129,6 +138,10 @@ class MicroscopeModel(object):
         # will be acquired (for the Sparc acquisition interface only).
         # The tab controller will take care of filling it
         self.acquisitionView = MicroscopeView("Acquisition", stage=self.stage) 
+
+        # TODO: use it (cf cont.tools)
+        tools = set([TOOL_NONE, TOOL_ZOOM, TOOL_ROI, TOOL_ROA])
+        self.tool = IntEnumerated(TOOL_NONE, choices=tools)
 
         layouts = set([VIEW_LAYOUT_ONE, VIEW_LAYOUT_22, VIEW_LAYOUT_FULLSCREEN])
         hw_states = set([STATE_OFF, STATE_ON, STATE_PAUSE])

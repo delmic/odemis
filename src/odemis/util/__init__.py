@@ -18,7 +18,12 @@ You should have received a copy of the GNU General Public License along with Ode
 # Warning: do not put anything that has dependencies on non default python modules
 
 from __future__ import division
+from functools import wraps
 from odemis import model
+import errno
+import math
+import os
+import signal
 import threading
 
 def find_closest(val, l):
@@ -37,6 +42,38 @@ def index_closest(val, l):
     else:
         return min(enumerate(l), key=lambda x:abs(x[1] - val))[0]
 
+
+
+class TimeoutError(Exception):
+    pass
+
+# TODO: only works on Unix, needs a fallback on windows (at least, don't complain)
+# from http://stackoverflow.com/questions/2281850/timeout-function-if-it-takes-too-long-to-finish
+# see http://code.activestate.com/recipes/577853-timeout-decorator-with-multiprocessing/
+# for other implementation
+def timeout(seconds):
+    """
+    timeout decorator. Stops a function from executing after a given time. The
+      function will raise an exception in this case.
+    seconds (0 < float): time in second before the timeout
+    """
+    assert seconds > 0
+    def decorator(func):
+        def handle_timeout(signum, frame):
+            raise TimeoutError("Function took more than %g s to execute" % seconds)
+
+        def wrapper(*args, **kwargs):
+            signal.signal(signal.SIGALRM, handle_timeout)
+            signal.setitimer(signal.ITIMER_REAL, seconds) # same as alarm, but accepts float
+            try:
+                result = func(*args, **kwargs)
+            finally:
+                signal.setitimer(signal.ITIMER_REAL, 0)
+            return result
+
+        return wraps(func)(wrapper)
+
+    return decorator
 
 class RepeatingTimer(threading.Thread):
     """

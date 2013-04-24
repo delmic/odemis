@@ -73,7 +73,7 @@ def startAcquisition(streams):
     # return the interface to manipulate the task
     return future
 
-def estimateAcquistionTime(streams):
+def estimateTime(streams):
     """
     Computes the approximate time it will take to run the acquisition for the
      given streams (same arguments as startAcquisition())

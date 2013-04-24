@@ -72,19 +72,21 @@ class Overlay(object):
 
     @classmethod
     def write_label(cls, ctx, vpos, label):
+        font = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT)
         ctx.select_font_face(
-                "Courier",
+                font.GetFaceName(),
                 cairo.FONT_SLANT_NORMAL,
                 cairo.FONT_WEIGHT_NORMAL
         )
-        ctx.set_font_size(12)
-
+        ctx.set_font_size(font.GetPointSize())
+ 
+#         shift = font.GetPixelSize()
         ctx.set_source_rgb(0.0, 0.0, 0.0)
-        ctx.move_to(vpos[0] + 5, vpos[1] - 10)
+        ctx.move_to(vpos[0], vpos[1])
         ctx.show_text(label)
 
         ctx.set_source_rgb(1.0, 1.0, 1.0)
-        ctx.move_to(vpos[0] + 6, vpos[1] - 9)
+        ctx.move_to(vpos[0] + 1, vpos[1] + 1)
         ctx.show_text(label)
 
     def _clip_viewport_pos(self, pos):
@@ -344,41 +346,33 @@ class ViewSelectOverlay(ViewOverlay, SelectionMixin):
 
         if self.v_start_pos and self.v_end_pos:
             #pylint: disable=E1103
-
             start_pos = self.v_start_pos
             end_pos = self.v_end_pos
 
-            # logging.debug("Drawing from %s, %s to %s. %s", start_pos.x,
-            #                                                start_pos.y,
-            #                                                end_pos.x,
-            #                                                end_pos.y )
+            # logging.debug("Drawing from %s, %s to %s. %s", start_pos[0],
+            #                                                start_pos[1],
+            #                                                end_pos[0],
+            #                                                end_pos[1] )
 
             ctx = wx.lib.wxcairo.ContextFromDC(dc)
 
-            ctx.set_line_width(1.5)
-            ctx.set_source_rgba(0, 0, 0, 1)
-
-            #logging.warn("%s %s", shift, world_to_buffer_pos(shift))
-
-            #start_pos.x, start_pos.y = 100, 100
-            #end_pos.x, end_pos.y = 200, 200
-
-            rect = (start_pos.x + 0.5,
-                    start_pos.y + 0.5,
-                    end_pos.x - start_pos.x,
-                    end_pos.y - start_pos.y)
-
+            rect = (start_pos[0] + 0.5,
+                    start_pos[1] + 0.5,
+                    end_pos[0] - start_pos[0],
+                    end_pos[1] - start_pos[1])
+            
+            # draws a light black background for the rectangle
+            ctx.set_line_width(2)
+            ctx.set_source_rgba(0, 0, 0, 0.5)
             ctx.rectangle(*rect)
-
             ctx.stroke()
 
-            ctx.set_line_width(1)
-            ctx.set_dash([1.5,])
+            # draws the dotted line
+            ctx.set_line_width(1.5)
+            ctx.set_dash([2,])
             ctx.set_line_join(cairo.LINE_JOIN_MITER)
-
             ctx.set_source_rgba(*self.color)
             ctx.rectangle(*rect)
-
             ctx.stroke()
 
             if self.dragging or True:
@@ -388,22 +382,7 @@ class ViewSelectOverlay(ViewOverlay, SelectionMixin):
                                             self.v_end_pos,
                                             start_pos,
                                             end_pos)
-
-                ctx.select_font_face(
-                    "Courier",
-                    cairo.FONT_SLANT_NORMAL,
-                    cairo.FONT_WEIGHT_NORMAL
-                )
-                ctx.set_font_size(12)
-
-                #buf_pos = self.v_to_buffer_pos((9, 19))
-
-                ctx.set_source_rgb(0.0, 0.0, 0.0)
-                ctx.move_to(9, 19)
-                ctx.show_text(msg)
-                ctx.set_source_rgb(1.0, 1.0, 1.0)
-                ctx.move_to(10, 20)
-                ctx.show_text(msg)
+                self.write_label(ctx, (10, 10), msg)
 
 class WorldSelectOverlay(WorldOverlay, SelectionMixin):
 
@@ -431,14 +410,13 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
         SelectionMixin.stop_selection(self)
         self._calc_world_pos()
 
-        w_clipped = self._clip(
-                        self.w_start_pos,
-                        self.w_end_pos,
-                        *self.base.world_image_area)
-
-        if w_clipped:
-            self.w_start_pos, self.w_end_pos = w_clipped
-
+#         w_clipped = self._clip(
+#                         self.w_start_pos,
+#                         self.w_end_pos,
+#                         *self.base.world_image_area)
+# 
+#         if w_clipped:
+#             self.w_start_pos, self.w_end_pos = w_clipped
 
     def clear_selection(self):
         SelectionMixin.clear_selection(self)
@@ -463,8 +441,11 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
                                             offset)
 
     def get_real_selection(self):
+        """
+        return (tuple of 4 floats): position in m
+        """
         if self.w_start_pos and self.w_end_pos:
-            return (self.base.world_to_real_pos(self.w_start_pos),
+            return (self.base.world_to_real_pos(self.w_start_pos) +
                     self.base.world_to_real_pos(self.w_end_pos))
         else:
             return None
@@ -472,9 +453,7 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
     def Draw(self, dc, shift=(0, 0), scale=1.0):
 
         if self.w_start_pos and self.w_end_pos:
-
             offset = tuple(v / 2 for v in self.base._bmp_buffer_size)
-
             b_start_pos = self.base.world_to_buffer_pos(
                                         self.w_start_pos,
                                         offset)
@@ -491,54 +470,43 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
             ctx = wx.lib.wxcairo.ContextFromDC(dc)
 
 
-            ctx.set_line_width(1.5)
-            ctx.set_source_rgba(0, 0, 0, 1)
-
             #logging.warn("%s %s", shift, world_to_buffer_pos(shift))
-
             rect = (b_start_pos[0] + 0.5,
                     b_start_pos[1] + 0.5,
                     b_end_pos[0] - b_start_pos[0],
                     b_end_pos[1] - b_start_pos[1])
-
+            
+            # draws a light black background for the rectangle
+            ctx.set_line_width(2.5)
+            ctx.set_source_rgba(0, 0, 0, 0.5)
             ctx.rectangle(*rect)
-
             ctx.stroke()
 
-            ctx.set_line_width(1)
-            ctx.set_dash([1.5,])
+            # draws the dotted line
+            ctx.set_line_width(2)
+            ctx.set_dash([3,])
             ctx.set_line_join(cairo.LINE_JOIN_MITER)
-
             ctx.set_source_rgba(*self.color)
             ctx.rectangle(*rect)
-
             ctx.stroke()
 
-            # No need for size label
-            if not self.base.microscope_view:
-                return
-
             # Label
-            # stream = self.base.microscope_view.stream_tree.streams[0]
-            # emm = stream.emitter
-            #emm.shape, emm.scale.value
-
-            # sel = tuple([e * self.base.scale for e in self.w_end_pos])
-
-            w, h = self.base.selection_to_real_size(
-                                        self.w_start_pos,
-                                        self.w_end_pos
-            )
-
-            w = readable_str(w, 'm')
-            h = readable_str(h, 'm')
-
-            size_lbl = u"{} x {}".format(w, h)
-
             if self.dragging:
-                self.write_label(ctx, b_end_pos, size_lbl)
-            else:
-                self.write_label(ctx, b_start_pos, size_lbl)
+                # No need for size label
+                if not self.base.microscope_view:
+                    return
+    
+                w, h = self.base.selection_to_real_size(
+                                            self.w_start_pos,
+                                            self.w_end_pos
+                )
+    
+                w = readable_str(w, 'm')
+                h = readable_str(h, 'm')
+                size_lbl = u"{} x {}".format(w, h)
+
+                pos = (b_end_pos[0] + 5, b_end_pos[1] - 5) 
+                self.write_label(ctx, pos, size_lbl)
 
             # if self.dragging:
             #     #ctx.translate(-view_size[0] / 2, -view_size[1] / 2)

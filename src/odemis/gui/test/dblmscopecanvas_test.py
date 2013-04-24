@@ -59,9 +59,10 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
     def setUp(self):
         self.app = wx.PySimpleApp()
         self.frame = wx.Frame(None)
-        self.view = instrmodel.MicroscopeView("fake view")
+        self.mmodel = FakeMicroscopeGUI()
+        self.view = self.mmodel.focussedView.value
         self.canvas = DblMicroscopeCanvas(self.frame)
-        self.canvas.setView(self.view)
+        self.canvas.setView(self.view, self.mmodel)
 
         self.frame.SetSize((124, 124))
         loop()

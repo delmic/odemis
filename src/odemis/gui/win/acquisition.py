@@ -196,7 +196,7 @@ class AcquisitionDialog(xrcfr_acq):
     def update_acquisition_time(self):
         streams = self.interface_model.focussedView.value.getStreams()
         if streams:
-            acq_time = acqmng.estimateAcquistionTime(streams)
+            acq_time = acqmng.estimateTime(streams)
             self.gauge_acq.Range = 100 * acq_time
             acq_time = math.ceil(acq_time) # round a bit pessimistically
             txt = "The estimated acquisition time is {}."
