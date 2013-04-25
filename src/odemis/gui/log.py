@@ -37,14 +37,11 @@ def init_logger():
     """
     logging.basicConfig(format=" - %(levelname)s \t%(message)s")
     l = logging.getLogger()
-    # TODO: only INFO, and let gui change to DEBUG if debug mode?
     l.setLevel(logging.DEBUG)
-    frm= "%(asctime)s  %(levelname)-7s %(module)-15s: %(message)s"
+    frm = "%(asctime)s  %(levelname)-7s %(module)-15s: %(message)s"
     l.handlers[0].setFormatter(logging.Formatter(frm))
 
 def create_gui_logger(log_field):
-    log = logging.getLogger()
-
     # Create file handler
 
     # Path to the log file
@@ -116,9 +113,9 @@ class TextFieldHandler(logging.Handler):
     def write_to_field(self, record, color):
 
         while self.textfield.GetNumberOfLines() > LOG_LINES:
-            # Removes the characters from position 0 up to and including the first line break
+            # Removes the characters from position 0 up to and including the
+            # first line break
             self.textfield.Remove(0, self.textfield.GetValue().find('\n') + 1)
-            #self.textfield.Remove(self.textfield.GetValue().rfind('\n'), len(self.textfield.GetValue()))
 
         self.textfield.SetDefaultStyle(wx.TextAttr(color, None))
         self.textfield.AppendText(''.join([self.format(record), '\n']))
