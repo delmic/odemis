@@ -1145,7 +1145,7 @@ def __init_resources():
                         <orient>wxVERTICAL</orient>
                         <object class="sizeritem">
                           <object class="CaptionBar">
-                            <label>AQCUISITION</label>
+                            <label>ACQUISITION</label>
                             <fg>#1A1A1A</fg>
                           </object>
                           <option>0</option>
