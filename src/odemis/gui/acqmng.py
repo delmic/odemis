@@ -132,7 +132,7 @@ def _mergeStreams(streams):
     # For now, this applies only to the SPARC streams
     # SEM CL + Spectrum => SEMSpectrumMD
     # SEM CL + AR => SEMARMD
-    semcls = [s for s in streams if isinstance(s, EM_STREAMS) and s.name == "SEM CL"]
+    semcls = [s for s in streams if isinstance(s, EM_STREAMS) and s.name.value == "SEM CL"]
     specs = [s for s in streams if isinstance(s, SpectrumStream)]
     ars = [s for s in streams if isinstance(s, ARStream)]
     if semcls:
@@ -141,7 +141,8 @@ def _mergeStreams(streams):
         semcl = semcls[0]
         
         for s in specs:
-            mds = SEMSpectrumMDStream("SEM CL - " + s.name, semcl, s)
+            mds = SEMSpectrumMDStream("%s - %s" % (semcl.name.value, s.name.value),
+                                      semcl, s)
             merged.remove(s)
             if semcl in merged:
                 merged.remove(semcl)
@@ -456,7 +457,10 @@ class ProgressiveFuture(futures.Future):
             self._end_time = time.time()
         self._invoke_upd_callbacks()
         
-        
+
+# TODO: presets shouldn't work on SettingEntries (GUI-only objects), but on
+# Stream (and HwComponents). Warning: some hw require the VAs to be set in a
+# specific order, otherwise the other VAs will change (eg, binning<->resolution)  
 
 # Quality setting presets
 def preset_hq(entries):

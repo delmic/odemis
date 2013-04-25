@@ -299,10 +299,9 @@ class SettingsPanel(object):
                             flag=wx.ALL, border=5)
             self.panel.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR)
 
-        self.num_entries += 1
-        # XXX
         ne = SettingEntry(name=label, label=lbl_ctrl, ctrl=value_ctrl)
         self.entries.append(ne)
+        self.num_entries += 1
 
     def add_divider(self):
         line = wx.StaticLine(self.panel, size=(-1, 1))
@@ -349,6 +348,10 @@ class SettingsPanel(object):
         # Special case, early stop
         if control_type == odemis.gui.CONTROL_NONE:
             # No value, not even label
+            # Just an empty entry, so that the settings are saved during acquisition
+            ne = SettingEntry(name, vigil_attr, comp)
+            self.entries.append(ne)
+            # don't increase num_entries, as it doesn't add any graphical element
             return
         # TODO: if choices has len == 1 => don't provide choice at all
         #  => either display the value as a text, or don't display at all.
@@ -487,7 +490,7 @@ class SettingsPanel(object):
             new_ctrl.Bind(wx.EVT_BUTTON, self.on_setting_changed)
 
         elif control_type == odemis.gui.CONTROL_COMBO:
-
+            # TODO: have 2 types of combo-box: only from selection and free entry
             new_ctrl = wx.combo.OwnerDrawnComboBox(self.panel,
                                                    -1,
                                                    value='',

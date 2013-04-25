@@ -362,10 +362,9 @@ class SparcAcquiController(AcquisitionController):
         AcquisitionController.__init__(self, micgui, main_frame)
 
         # For file selection
-        # FIXME: we need a file selection gui
         self.conf = conf.get_acqui_conf()
 
-        # FIXME: this should be the date at which the user presses the acquire
+        # TODO: this should be the date at which the user presses the acquire
         # button (or when the last settings were changed)!
         # At least, we must ensure it's a new date after the acquisition
         # is done.
@@ -377,6 +376,7 @@ class SparcAcquiController(AcquisitionController):
         # a ProgressiveFuture if the acquisition is going on
         self.btn_acquire = self._main_frame.btn_sparc_acquire
         self.btn_change_file = self._main_frame.btn_sparc_change_file
+        self.btn_cancel = self._main_frame.btn_sparc_cancel
         self.acq_future = None
         self.gauge_acq = self._main_frame.gauge_sparc_acq
         self.lbl_acqestimate = self._main_frame.lbl_sparc_acq_estimate
@@ -393,6 +393,7 @@ class SparcAcquiController(AcquisitionController):
         # Link buttons
         self.btn_acquire.Bind(wx.EVT_BUTTON, self.on_acquisition)
         self.btn_change_file.Bind(wx.EVT_BUTTON, self.on_change_file)
+        self.btn_cancel.Bind(wx.EVT_BUTTON, self.on_cancel)
         
         self.gauge_acq.Hide()
         self._main_frame.Layout()
@@ -451,9 +452,6 @@ class SparcAcquiController(AcquisitionController):
         new_name = ShowAcquisitionFileDialog(self._main_frame, self.filename.value)
         self.filename.value = new_name
         
-        # FIXME: this is a hack to try the ROI without selecting it
-        self._sem_cl.roi.value = (0.1, 0.1, 0.9, 0.8)
-        
     def update_acquisition_time(self):
         
         if self._sem_cl.roi.value == UNDEFINED_ROI:
@@ -505,6 +503,7 @@ class SparcAcquiController(AcquisitionController):
         Similar to win.acquisition.on_acquire()
         """
         self.btn_acquire.Disable()
+        self.btn_cancel.Enable()
         # FIXME: catch "close the window" event and cancel acquisition before
         # fully closing.
 
@@ -512,6 +511,7 @@ class SparcAcquiController(AcquisitionController):
         # update_acquisition_time()
         self.gauge_acq.Value = 0
         self.gauge_acq.Show()
+        self.btn_cancel.Show()
         # FIXME: probably not the whole window is required, just the file settings
         self._main_frame.Layout() # to put the gauge at the right place
         
@@ -522,14 +522,10 @@ class SparcAcquiController(AcquisitionController):
         self.acq_future.add_update_callback(self.on_acquisition_upd)
         self.acq_future.add_done_callback(self.on_acquisition_done)
 
-        # TODO: cancel button
-        # self.btn_cancel.Bind(wx.EVT_BUTTON, self.on_cancel)
-
     def on_cancel(self, evt):
         """
         Called during acquisition when pressing the cancel button
         """
-        # FIXME: need to have a cancel button
         if not self.acq_future:
             msg = "Tried to cancel acquisition while it was not started"
             logging.warning(msg)
@@ -544,9 +540,6 @@ class SparcAcquiController(AcquisitionController):
         Callback called when the acquisition is finished (either successfully or
         cancelled)
         """
-        # TODO: hide the "cancel" button
-#         self.btn_cancel.SetLabel("Close")
-
         try:
             data = future.result(1) # timeout is just for safety
             # make sure the progress bar is at 100%
@@ -559,6 +552,7 @@ class SparcAcquiController(AcquisitionController):
             # hide progress bar (+ put pack estimated time)
             self.update_acquisition_time()
             self.gauge_acq.Hide()
+            self.btn_cancel.Hide()
             self._main_frame.Layout()
             # don't change filename => we can reuse it
             return
@@ -566,6 +560,7 @@ class SparcAcquiController(AcquisitionController):
             # We cannot do much: just warn the user and pretend it was cancelled
             logging.exception("Acquisition failed")
             self.btn_acquire.Enable()
+            self.btn_cancel.Disable()
             self.lbl_acqestimate.SetLabel("Acquisition failed.")
             # leave the gauge, to give a hint on what went wrong.
             return
@@ -585,6 +580,7 @@ class SparcAcquiController(AcquisitionController):
             # hide progress bar (+ put pack estimated time)
             self.update_acquisition_time()
             self.gauge_acq.Hide()
+            self.btn_cancel.Hide()
             self._main_frame.Layout()
             
             self.btn_acquire.Enable()

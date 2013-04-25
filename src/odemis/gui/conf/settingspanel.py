@@ -156,11 +156,14 @@ CONFIG = {
                 {
                     "control_type": odemis.gui.CONTROL_TEXT,
                 },
-                # what we don't want to display:
                 "scale":
                 {
-                    "control_type": odemis.gui.CONTROL_NONE,
+                 # same as binning (but accepts floats)
+                    "control_type": odemis.gui.CONTROL_RADIO,
+                    "choices": _binning_1d_from_2d,
+                    "type": "1d_binning", # means will make sure both dimensions are treated as one
                 },
+                # what we don't want to display:
                 "translation":
                 {
                     "control_type": odemis.gui.CONTROL_NONE,
