@@ -303,6 +303,9 @@ class OdemisGUIApp(wx.App):
         """
         # It uses raw data, not images
         try:
+            mtc = get_main_tab_controller()
+            mtc.switch("sparc_analysis")
+
             name1 = os.path.join(
                             os.path.dirname(__file__),
                             "img/example/s1-sem-bse.mat")
@@ -326,7 +329,6 @@ class OdemisGUIApp(wx.App):
                                                     dtype=numpy.uint16),
                                         mdspec)
 
-            mtc = get_main_tab_controller()
 
             stream_controller = mtc['sparc_analysis'].stream_controller
 
