@@ -37,9 +37,10 @@ def init_logger():
     """
     logging.basicConfig(format=" - %(levelname)s \t%(message)s")
     l = logging.getLogger()
-    l.setLevel(logging.DEBUG) # TODO: only INFO, and let gui change to DEBUG if debug mode?
-    l.handlers[0].setFormatter(
-      logging.Formatter("%(asctime)s (%(module)s) %(levelname)s: %(message)s"))
+    # TODO: only INFO, and let gui change to DEBUG if debug mode?
+    l.setLevel(logging.DEBUG)
+    frm= "%(asctime)s  %(levelname)-7s %(module)-15s: %(message)s"
+    l.handlers[0].setFormatter(logging.Formatter(frm))
 
 def create_gui_logger(log_field):
     log = logging.getLogger()
@@ -53,7 +54,8 @@ def create_gui_logger(log_field):
     # Maximum number of (rotated) log files
     max_logfile_count = 5
     # Formatting string for logging messages to file
-    file_format = logging.Formatter("%(asctime)s (%(module)s(%(lineno)d)) %(levelname)s: %(message)s")
+    frm = "%(asctime)s %(levelname)-7s %(lineno)4d:%(module)-15s: %(message)s"
+    file_format = logging.Formatter(frm)
 
     file_handler = RotatingFileHandler(logfile_path, 'w',
                                        max_logfile_size,
@@ -62,7 +64,8 @@ def create_gui_logger(log_field):
     file_handler.setFormatter(file_format)
 
     # Create gui handler
-    gui_format = logging.Formatter('%(asctime)s (%(module)s) %(levelname)s: %(message)s', '%H:%M:%S')
+    frm = "%(asctime)s %(levelname)-7s %(module)-15s: %(message)s"
+    gui_format = logging.Formatter(frm, '%H:%M:%S')
     text_field_handler = TextFieldHandler()
     text_field_handler.setTextField(log_field)
     text_field_handler.setFormatter(gui_format)

@@ -438,23 +438,25 @@ see http://www.fluorophores.org/disclaimer/.
 
         sys.exit(0)
 
-    def excepthook(self, type, value, trace): #pylint: disable=W0622
+    def excepthook(self, etype, value, trace): #pylint: disable=W0622
         """ Method to intercept unexpected errors that are not caught
         anywhere else and redirects them to the logger. """
         # in case of error here, don't call again, it creates infinite recursion
-        import sys
-        sys.excepthook = sys.__excepthook__
+        if sys and traceback:
+            sys.excepthook = sys.__excepthook__
 
-        try:
-            exc = traceback.format_exception(type, value, trace)
-            logging.error("".join(exc))
+            try:
+                exc = traceback.format_exception(etype, value, trace)
+                logging.error("".join(exc))
 
-            # When an exception occurs, automatically got to debug mode.
-            if not isinstance(value, NotImplementedError):
-                self.goto_debug_mode()
-        finally:
-            # put us back
-            sys.excepthook = self.excepthook
+                # When an exception occurs, automatically got to debug mode.
+                if not isinstance(value, NotImplementedError):
+                    self.goto_debug_mode()
+            finally:
+                # put us back
+                sys.excepthook = self.excepthook
+        else:
+            print etype, value, trace
 
 class OdemisOutputWindow(object):
     """ Helper class which allows ``wx`` to display uncaught
