@@ -799,46 +799,51 @@ class StaticSpectrumStream(StaticStream):
         """
         # FIXME: check that this API makes sense (projection...)
 
-        data = self.raw[0]
-        if self.projection.value == PROJ_AVERAGE_SPECTRUM:
-            if self.auto_bc.value:
-                # FIXME: need to fix the brightness/contrast to the min/max of
-                # the _entire_ image (not just the current slice)
-                # b, c = util.img.FindOptimalBC(self.raw[0], self._depth)
-                brightness = None
-                contrast = None
+        try:
+            data = self.raw[0]
+            if self.projection.value == PROJ_AVERAGE_SPECTRUM:
+                if self.auto_bc.value:
+                    # FIXME: need to fix the brightness/contrast to the min/max of
+                    # the _entire_ image (not just the current slice)
+                    # b, c = util.img.FindOptimalBC(self.raw[0], self._depth)
+                    brightness = None
+                    contrast = None
+                else:
+                    brightness = self.brightness.value / 100
+                    contrast = self.contrast.value / 100
+
+                # pick only the data inside the bandwidth
+                spec_range = self._get_bandwith_in_pixel()
+                # TODO: use better intermediary type if possible?, cf semcomedi
+                logging.warn("Setting AV data")
+                av_data = numpy.mean(data[spec_range[0]:spec_range[1]], axis=0)
+                # av_data = data[0]
+
+                im = util.img.DataArray2wxImage(av_data,
+                                                self._depth,
+                                                brightness,
+                                                contrast)
+
+                im.InitAlpha() # it's a different buffer so useless to do it in numpy
+
+                try:
+                    pos = data.metadata[MD_POS]
+                except KeyError:
+                    logging.warning("Position of image unknown")
+                    pos = (0, 0)
+
+                try:
+                    mpp = data.metadata[MD_PIXEL_SIZE][0]
+                except KeyError:
+                    logging.warning("pixel density of image unknown")
+                    # Hopefully it'll be within the same magnitude
+                    mpp = data.metadata[MD_SENSOR_PIXEL_SIZE][0] / 10
+
+                self.image.value = InstrumentalImage(im, mpp, pos)
             else:
-                brightness = self.brightness.value / 100
-                contrast = self.contrast.value / 100
-
-            # pick only the data inside the bandwidth
-            spec_range = self._get_bandwith_in_pixel()
-            # TODO: use better intermediary type if possible?, cf semcomedi
-            av_data = numpy.mean(data[spec_range[0]:spec_range[1]], axis=0)
-
-            im = util.img.DataArray2wxImage(av_data,
-                                            self._depth,
-                                            brightness,
-                                            contrast)
-
-            im.InitAlpha() # it's a different buffer so useless to do it in numpy
-
-            try:
-                pos = data.metadata[MD_POS]
-            except KeyError:
-                logging.warning("Position of image unknown")
-                pos = (0, 0)
-
-            try:
-                mpp = data.metadata[MD_PIXEL_SIZE][0]
-            except KeyError:
-                logging.warning("pixel density of image unknown")
-                # Hopefully it'll be within the same magnitude
-                mpp = data.metadata[MD_SENSOR_PIXEL_SIZE][0] / 10
-
-            self.image.value = InstrumentalImage(im, mpp, pos)
-        else:
-            raise NotImplementedError("Need to handle other projection types")
+                raise NotImplementedError("Need to handle other projection types")
+        except Exception:
+            logging.exception("Error while updating %s image", self.__class__.__name__)
 
 class MultipleDetectorStream(Stream):
     """
