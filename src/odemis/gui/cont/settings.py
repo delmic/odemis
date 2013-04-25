@@ -26,17 +26,6 @@ setting column of the user interface.
 
 """
 
-import collections
-import logging
-import re
-
-import wx.combo
-from wx.lib.pubsub import pub
-
-import odemis.gui
-import odemis.gui.comp.text as text
-import odemis.gui.img.data as img
-import odemis.gui.util.units as utun
 from odemis.gui.comp.foldpanelbar import FoldPanelItem
 from odemis.gui.comp.radio import GraphicalRadioButtonControl
 from odemis.gui.comp.slider import UnitIntegerSlider, UnitFloatSlider
@@ -45,6 +34,18 @@ from odemis.gui.model.stream import SpectrumStream, ARStream
 from odemis.gui.util.units import readable_str
 from odemis.gui.util.widgets import VigilantAttributeConnector
 from odemis.model import getVAs, NotApplicableError, VigilantAttributeBase
+from odemis.util.driver import reproduceTypedValue
+from wx.lib.pubsub import pub
+import collections
+import logging
+import odemis.gui
+import odemis.gui.comp.text as text
+import odemis.gui.img.data as img
+import odemis.gui.util.units as utun
+import re
+import wx.combo
+
+
 
 
 
@@ -490,7 +491,7 @@ class SettingsPanel(object):
             new_ctrl.Bind(wx.EVT_BUTTON, self.on_setting_changed)
 
         elif control_type == odemis.gui.CONTROL_COMBO:
-            # TODO: have 2 types of combo-box: only from selection and free entry
+            # TODO: allow free entry
             new_ctrl = wx.combo.OwnerDrawnComboBox(self.panel,
                                                    -1,
                                                    value='',
@@ -498,8 +499,7 @@ class SettingsPanel(object):
                                                    size=(100, 16),
                                                    style=wx.NO_BORDER |
                                                          wx.CB_DROPDOWN |
-                                                         wx.TE_PROCESS_ENTER |
-                                                         wx.CB_READONLY)
+                                                         wx.TE_PROCESS_ENTER)
 
 
             # Set colours
@@ -528,22 +528,33 @@ class SettingsPanel(object):
 
             # A small wrapper function makes sure that the value can
             # be set by passing the actual value (As opposed to the text label)
-            def cb_set(value, ctrl=new_ctrl):
+            def cb_set(value, ctrl=new_ctrl, unit=unit):
                 for i in range(ctrl.Count):
                     if ctrl.GetClientData(i) == value:
                         logging.debug("Setting ComboBox value to %s", ctrl.Items[i])
                         return ctrl.SetValue(ctrl.Items[i])
-                logging.warning("No matching label found for value %s!", value)
+                else:
+                    logging.debug("No existing label found for value %s", value)
+                    # entering value as free text
+                    txt = readable_str(value, unit)
+                    return ctrl.SetValue(txt)
 
             # equivalent wrapper function to retrieve the actual value
-            def cb_get(ctrl=new_ctrl):
+            def cb_get(ctrl=new_ctrl, va=vigil_attr):
                 value = ctrl.GetValue()
+                # Try to use the predefined value if it's available
                 for i in range(ctrl.Count):
                     if ctrl.Items[i] == value:
-                        logging.debug("Getting ComboBox value %s",
-                                  ctrl.GetClientData(i))
+                        logging.debug("Getting CB value %s", ctrl.GetClientData(i))
                         return ctrl.GetClientData(i)
-
+                else:
+                    logging.debug("Trying to parse CB free value %s", value)
+                    # Try to find a good corresponding value inside the string
+                    # TODO: this one is very picky. Should try to reduce to the
+                    # right number of elements?
+                    new_val = reproduceTypedValue(va.value, value)
+#                    raise TypeError("Cannot convert value '%s'", value)
+                    return new_val
 
             vac = VigilantAttributeConnector(
                     vigil_attr,
@@ -554,7 +565,6 @@ class SettingsPanel(object):
 
             new_ctrl.Bind(wx.EVT_COMBOBOX, self.on_setting_changed)
             new_ctrl.Bind(wx.EVT_TEXT_ENTER, self.on_setting_changed)
-
 
         else:
             txt = readable_str(vigil_attr.value, unit)

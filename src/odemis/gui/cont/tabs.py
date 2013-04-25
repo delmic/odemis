@@ -246,9 +246,11 @@ class SparcAcquisitionTab(Tab):
                                         self.microscope_model,
                                     )
 
+        # needs settings_controller
         self._acquisition_controller = SparcAcquiController(
                                             self.main_frame,
-                                            self.microscope_model
+                                            self.microscope_model,
+                                            self.settings_controller
                                        )
 
         # FIXME: for now we disable the AR from the acquisition view, because we
