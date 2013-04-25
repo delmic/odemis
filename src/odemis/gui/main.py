@@ -271,7 +271,8 @@ class OdemisGUIApp(wx.App):
             stream_controller.addStatic("Fluorescence", im1)
             stream_controller.addStatic("Secondary electrons", im2,
                                         cls=StaticSEMStream)
-        except e:
+        except Exception:
+            self.goto_debug_mode()
             logging.exception("Failed to load example")
 
     def on_load_example_secom2(self, e):
@@ -294,7 +295,8 @@ class OdemisGUIApp(wx.App):
             stream_controller.addStatic("Fluorescence", im1)
             stream_controller.addStatic("Secondary electrons", im2,
                                         cls=StaticSEMStream)
-        except e:
+        except Exception:
+            self.goto_debug_mode()
             logging.exception("Failed to load example")
 
     def on_load_example_sparc1(self, e):
@@ -336,7 +338,8 @@ class OdemisGUIApp(wx.App):
                                         cls=StaticSEMStream)
             stream_controller.addStatic("Spectrogram", specdatai,
                                         cls=StaticSpectrumStream)
-        except e:
+        except KeyError:
+            self.goto_debug_mode()
             logging.exception("Failed to load example")
 
 
@@ -439,6 +442,7 @@ see http://www.fluorophores.org/disclaimer/.
         """ Method to intercept unexpected errors that are not caught
         anywhere else and redirects them to the logger. """
         # in case of error here, don't call again, it creates infinite recursion
+        import sys
         sys.excepthook = sys.__excepthook__
 
         try:

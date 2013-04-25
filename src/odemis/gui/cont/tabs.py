@@ -451,17 +451,22 @@ class TabBarController(object):
 
     def show(self, tab_name_or_index):
         for i, tab in enumerate(self.tab_list):
-            if i == tab_name_or_index or tab.name == tab_name_or_index:
+            if tab_name_or_index in (i, tab.name):
                 tab.show()
-            else:
-                tab.hide()
+                return
+
+        raise KeyError("Tab '{}' not found".format(tab_name_or_index))
 
     def switch(self, tab_name_or_index):
-        self.hide_all()
-        self.main_frame.Freeze()
-        self.show(tab_name_or_index)
-        self.main_frame.Layout()
-        self.main_frame.Thaw()
+        try:
+            self.hide_all()
+            self.main_frame.Freeze()
+            self.show(tab_name_or_index)
+        except KeyError:
+            raise
+        finally:
+            self.main_frame.Layout()
+            self.main_frame.Thaw()
 
     def hide_all(self):
         for tab in self.tab_list:
