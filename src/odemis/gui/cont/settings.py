@@ -401,7 +401,8 @@ class SettingsPanel(object):
                              val_range=rng,
                              scale=conf.get('scale', None),
                              unit=unit,
-                             t_size=(50, -1))
+                             t_size=(50, -1),
+                             accuracy=conf.get('accuracy', None))
 
             vac = VigilantAttributeConnector(vigil_attr,
                                              new_ctrl,

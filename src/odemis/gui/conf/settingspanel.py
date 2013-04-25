@@ -141,6 +141,7 @@ CONFIG = {
                     "range": (1e-9, 1),
                     "scale": "log",
                     "type": "float",
+                    "accuracy": 2,
                 },
                 "resolution":
                 {

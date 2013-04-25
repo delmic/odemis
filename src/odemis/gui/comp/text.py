@@ -796,7 +796,7 @@ class UnitNumberCtrl(NumberTextCtrl):
             str_val = units.readable_str(self.number, self.unit)
         else:
             v = units.round_significant(self.number, self.accuracy)
-            str_val = units.readable_str(v, self.unit)
+            str_val = units.readable_str(v, self.unit, self.accuracy)
 
         wx.TextCtrl.ChangeValue(self, str_val)
 
