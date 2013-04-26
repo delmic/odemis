@@ -23,14 +23,14 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
 from __future__ import division
-
+from odemis.gui import instrmodel
+from odemis.gui.model import OPTICAL_STREAMS, EM_STREAMS, SPECTRUM_STREAMS
+from odemis.gui.model.stream import SEMStream, BrightfieldStream, FluoStream
 import logging
-
 import wx
 
-from odemis.gui import instrmodel
-from odemis.gui.model import OPTICAL_STREAMS, EM_STREAMS
-from odemis.gui.model.stream import SEMStream, BrightfieldStream, FluoStream
+
+
 
 # TODO: The next comments were copied from instrmodel. Read/implement/remove
 # viewport controller (to be merged with stream controller?)
@@ -78,10 +78,54 @@ class ViewController(object):
         To be executed only once, at initialisation.
         """
 
+        # If StaticSparc: SEM/Spec/AR/SEM
+        if self._microscope.microscope.role == "staticsparc":
+            assert len(self._viewports) == 4
+            assert not self._microscope.views # should still be empty
+            logging.info("Creating (static) SPARC viewport layout")
+
+            view = instrmodel.MicroscopeView(
+                        "SEM",
+                        self._microscope.stage,
+                        stream_classes=EM_STREAMS
+                     )
+            self._microscope.views.append(view)
+            self._viewports[0].setView(view, self._microscope)
+
+            view = instrmodel.MicroscopeView(
+                        "Spectrum",
+                        self._microscope.stage,
+                        focus0=self._microscope.focus, # TODO: change center wavelength?
+                        stream_classes=SPECTRUM_STREAMS
+                     )
+            self._microscope.views.append(view)
+            self._viewports[1].setView(view, self._microscope)
+
+            view = instrmodel.MicroscopeView(
+                        "Angle Resolved",
+                        self._microscope.stage,
+                        focus0=self._microscope.focus,
+                        stream_classes=SPECTRUM_STREAMS # FIXME: AR
+                     )
+            self._microscope.views.append(view)
+            self._viewports[2].setView(view, self._microscope)
+
+            view = instrmodel.MicroscopeView(
+                        "SEM CL",
+                        self._microscope.stage,
+                        stream_classes=EM_STREAMS
+                     )
+            self._microscope.views.append(view)
+            self._viewports[3].setView(view, self._microscope)
+
+            # Start off with the 2x2 view
+            # Focus defaults to the top right viewport
+            self._microscope.focussedView.value = self._viewports[1].mic_view
+
         # If SEM only: all SEM
         # Works also for the Sparc, as there is no other emitter, and we don't
         # need to display anything else anyway
-        if self._microscope.ebeam and not self._microscope.light:
+        elif self._microscope.ebeam and not self._microscope.light:
             logging.info("Creating SEM only viewport layout")
             i = 1
             for viewport in self._viewports:
@@ -113,7 +157,7 @@ class ViewController(object):
                 i += 1
             self._microscope.focussedView.value = self._microscope.views[0]
 
-        # If both SEM and Optical: SEM/Optical/2x combined
+        # If both SEM and Optical (=SECOM): SEM/Optical/2x combined
         elif self._microscope.ebeam and self._microscope.light:
             assert len(self._viewports) == 4
             assert not self._microscope.views # should still be empty
@@ -168,6 +212,7 @@ class ViewController(object):
                             self._microscope.stage,
                             focus0=self._microscope.focus
                          )
+                self._microscope.views.append(view)
                 viewport.setView(view, self._microscope)
                 i += 1
             self._microscope.focussedView.value = self._microscope.views[0]
@@ -339,7 +384,7 @@ class ViewSelector(object):
                 sim = im.Scale(*rsize, quality=wx.IMAGE_QUALITY_HIGH)
 
                 # crop to the right shape
-                lt = ((size_sub[0] - sim.Width)//2, (size_sub[1] - sim.Height)//2)
+                lt = ((size_sub[0] - sim.Width) // 2, (size_sub[1] - sim.Height) // 2)
                 sim.Resize(size_sub, lt)
 
                 # compute placement

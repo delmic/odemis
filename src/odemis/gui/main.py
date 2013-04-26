@@ -66,7 +66,6 @@ class OdemisGUIApp(wx.App):
         self.http_proc = None
 
         self.microscope = None
-        self.interface_model = None
         self.main_frame = None
 
         # Output catcher using a helper class
@@ -91,7 +90,6 @@ class OdemisGUIApp(wx.App):
 
         try:
             self.microscope = model.getMicroscope()
-            self.interface_model = instrmodel.MicroscopeModel(self.microscope)
         except (IOError, Pyro4.errors.CommunicationError), e:
             logging.exception("Failed to connect to back-end")
             msg = ("The Odemis GUI could not connect to the Odemis back-end:\n\n"
@@ -100,7 +98,7 @@ class OdemisGUIApp(wx.App):
 
             answer = wx.MessageBox(msg,
                                    "Connection error",
-                                    style=wx.YES|wx.NO|wx.ICON_ERROR)
+                                    style=wx.YES | wx.NO | wx.ICON_ERROR)
             if answer == wx.NO:
                 sys.exit(1)
 
@@ -168,7 +166,7 @@ class OdemisGUIApp(wx.App):
                         self.main_frame.menu_item_halt.GetId(),
                         self.on_stop_axes)
 
-            if self.interface_model.microscope.role == "secom":
+            if self.microscope.role == "secom":
                 # TODO: only activate if we are in the live view tab
                 wx.EVT_MENU(self.main_frame,
                             self.main_frame.menu_item_load1.GetId(),
@@ -177,7 +175,7 @@ class OdemisGUIApp(wx.App):
                 wx.EVT_MENU(self.main_frame,
                             self.main_frame.menu_item_load2.GetId(),
                             self.on_load_example_secom2)
-            elif self.interface_model.microscope.role == "sparc":
+            elif self.microscope.role == "sparc":
                 # TODO only activate if we are in the analysis tab? Or automatically switch?
                 wx.EVT_MENU(self.main_frame,
                             self.main_frame.menu_item_load1.GetId(),
@@ -203,13 +201,14 @@ class OdemisGUIApp(wx.App):
 
 
             # List of all possible tabs used in Odemis' main GUI
+            # TODO: move to tab controller, and only initialize the needed tabs
             tab_list = [tabs.SecomStreamsTab(
                             "secom",
                             "secom_live",
                             self.main_frame.btn_tab_secom_streams,
                             self.main_frame.pnl_tab_secom_streams,
                             self.main_frame,
-                            self.interface_model),
+                            self.microscope),
                         tabs.Tab(
                             "secom",
                             "secom_gallery",
@@ -221,21 +220,21 @@ class OdemisGUIApp(wx.App):
                             self.main_frame.btn_tab_sparc_acqui,
                             self.main_frame.pnl_tab_sparc_acqui,
                             self.main_frame,
-                            self.interface_model),
+                            self.microscope),
                         tabs.SparcAnalysisTab(
                             "sparc",
                             "sparc_analysis",
                             self.main_frame.btn_tab_sparc_analysis,
                             self.main_frame.pnl_tab_sparc_analysis,
                             self.main_frame,
-                            self.interface_model),
+                            self.microscope),
                         ]
 
             # Create the main tab controller and store a global reference
             # in the odemis.gui.cont package
             set_main_tab_controller(tabs.TabBarController(tab_list,
                                                           self.main_frame,
-                                                          self.interface_model))
+                                                          self.microscope))
 
         except Exception:  #pylint: disable=W0703
             self.excepthook(*sys.exc_info())
@@ -254,8 +253,11 @@ class OdemisGUIApp(wx.App):
     def on_load_example_secom1(self, e):
         """ Open the two files for example """
         try:
+            mtc = get_main_tab_controller()
+            secom_tab = mtc['secom_live']
+
             #pylint: disable=E1103
-            pos = self.interface_model.focussedView.value.view_pos.value
+            pos = secom_tab.interface_model.focussedView.value.view_pos.value
             name1 = os.path.join(os.path.dirname(__file__),
                                  "img/example/1-optical-rot7.png")
             im1 = InstrumentalImage(wx.Image(name1), 7.14286e-7, pos)
@@ -265,8 +267,7 @@ class OdemisGUIApp(wx.App):
                                  "img/example/1-sem-bse.png")
             im2 = InstrumentalImage(wx.Image(name2), 4.54545e-7, pos)
 
-            mtc = get_main_tab_controller()
-            stream_controller = mtc['secom_live'].stream_controller
+            stream_controller = secom_tab.stream_controller
 
             stream_controller.addStatic("Fluorescence", im1)
             stream_controller.addStatic("Secondary electrons", im2,
@@ -278,8 +279,11 @@ class OdemisGUIApp(wx.App):
     def on_load_example_secom2(self, e):
         """ Open the two files for example """
         try:
+            mtc = get_main_tab_controller()
+            secom_tab = mtc['secom_live']
+
             #pylint: disable=E1103
-            pos = self.interface_model.focussedView.value.view_pos.value
+            pos = secom_tab.interface_model.focussedView.value.view_pos.value
             name2 = os.path.join(os.path.dirname(__file__),
                                  "img/example/3-sem.png")
             im2 = InstrumentalImage(wx.Image(name2), 2.5e-07, pos)
@@ -289,8 +293,7 @@ class OdemisGUIApp(wx.App):
                                  "img/example/3-optical.png")
             im1 = InstrumentalImage(wx.Image(name1), 1.34e-07, pos)
 
-            mtc = get_main_tab_controller()
-            stream_controller = mtc['secom_live'].stream_controller
+            stream_controller = secom_tab.stream_controller
 
             stream_controller.addStatic("Fluorescence", im1)
             stream_controller.addStatic("Secondary electrons", im2,
@@ -312,7 +315,7 @@ class OdemisGUIApp(wx.App):
                             os.path.dirname(__file__),
                             "img/example/s1-sem-bse.mat")
             mdsem = {model.MD_PIXEL_SIZE: (178e-9, 178e-9),
-                  model.MD_POS: (0,0)}
+                  model.MD_POS: (0, 0)}
             semdata = scipy.io.loadmat(name1)["sem"]
             semdatas = model.DataArray(numpy.array(semdata - semdata.min(),
                                                    dtype=numpy.float32),
@@ -321,13 +324,13 @@ class OdemisGUIApp(wx.App):
             name2 = os.path.join(os.path.dirname(__file__),
                                  "img/example/s1-spectrum.mat")
             mdspec = {model.MD_PIXEL_SIZE: (178e-9, 178e-9),
-                  model.MD_POS: (0,0),
+                  model.MD_POS: (0, 0),
                   # 335px : 409nm -> 695 nm (about linear)
                   model.MD_WL_POLYNOMIAL: [552e-9, 0.85373e-9]
                   }
             # first dim is the wavelength, then Y, X
             specdata = scipy.io.loadmat(name2)["spectraldat"]
-            specdatai = model.DataArray(numpy.array(specdata-specdata.min(),
+            specdatai = model.DataArray(numpy.array(specdata - specdata.min(),
                                                     dtype=numpy.uint16),
                                         mdspec)
 
@@ -354,8 +357,12 @@ class OdemisGUIApp(wx.App):
         pass
 
     def on_stop_axes(self, evt):
-        if self.interface_model:
-            self.interface_model.stopMotion()
+        if self.microscope:
+            for actuator in self.microscope.actuators:
+                try:
+                    actuator.stop()
+                except Exception:
+                    logging.error("Failed to stop actuator %s", actuator.name)
         else:
             evt.Skip()
 
@@ -416,15 +423,17 @@ see http://www.fluorophores.org/disclaimer/.
         logging.info("Exiting Odemis")
 
         try:
-            if self.interface_model:
+            mtc = get_main_tab_controller()
+            secom_tab = mtc['secom_live']
+            if secom_tab and secom_tab.interface_model:
                 # Put cleanup actions here (like disconnect from odemisd)
                 # TODO: move to tab controller?
                 try:
-                    self.interface_model.opticalState.value = instrmodel.STATE_OFF
+                    secom_tab.interface_model.opticalState.value = instrmodel.STATE_OFF
                 except AttributeError:
                     pass # just no such microscope present
                 try:
-                    self.interface_model.emState.value = instrmodel.STATE_OFF
+                    secom_tab.interface_model.emState.value = instrmodel.STATE_OFF
                 except AttributeError:
                     pass
 
