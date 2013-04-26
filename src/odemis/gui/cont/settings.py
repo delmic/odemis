@@ -173,7 +173,7 @@ class SettingsPanel(object):
         self.panel.SetSizer(self._main_sizer)
         self._main_sizer.Add(self._gb_sizer,
                              proportion=1,
-                             flag=wx.RIGHT|wx.LEFT|wx.EXPAND,
+                             flag=wx.RIGHT | wx.LEFT | wx.EXPAND,
                              border=5)
 
         self.fold_panel.add_item(self.panel)
@@ -277,7 +277,7 @@ class SettingsPanel(object):
             pass
 
         # Get unit from config, vattribute or use an empty one
-        unit =  conf.get('unit', va.unit or "")
+        unit = conf.get('unit', va.unit or "")
 
         return rng, choices, unit
 
@@ -310,7 +310,7 @@ class SettingsPanel(object):
                 line,
                 (self.num_entries, 0),
                 span=(1, 2),
-                flag=wx.ALL|wx.EXPAND,
+                flag=wx.ALL | wx.EXPAND,
                 border=5
         )
         self.num_entries += 1
@@ -456,7 +456,7 @@ class SettingsPanel(object):
 
         elif control_type == odemis.gui.CONTROL_RADIO:
             new_ctrl = GraphicalRadioButtonControl(self.panel,
-                                                   -1,
+                                                   - 1,
                                                    size=(-1, 16),
                                                    choices=choices,
                                                    style=wx.NO_BORDER,
@@ -491,16 +491,13 @@ class SettingsPanel(object):
             new_ctrl.Bind(wx.EVT_BUTTON, self.on_setting_changed)
 
         elif control_type == odemis.gui.CONTROL_COMBO:
-            # TODO: allow free entry
-            new_ctrl = wx.combo.OwnerDrawnComboBox(self.panel,
-                                                   -1,
-                                                   value='',
-                                                   pos=(0, 0),
-                                                   size=(100, 16),
-                                                   style=wx.NO_BORDER |
-                                                         wx.CB_DROPDOWN |
-                                                         wx.TE_PROCESS_ENTER)
-
+            # wx.ComboBox would be fine if only it was not so ugly using the
+            # default Ubuntu theme and a small heigh.
+            # One problem of OwnerDrawnComboBox is that left/right keys don't
+            # move the text caret.
+            new_ctrl = wx.combo.OwnerDrawnComboBox(self.panel, wx.ID_ANY,
+                           value='', pos=(0, 0), size=(100, 16),
+                           style=wx.BORDER_NONE | wx.CB_DROPDOWN | wx.TE_PROCESS_ENTER)
 
             # Set colours
             new_ctrl.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_EDIT)
@@ -549,11 +546,17 @@ class SettingsPanel(object):
                         return ctrl.GetClientData(i)
                 else:
                     logging.debug("Trying to parse CB free value %s", value)
+                    cur_val = va.value
                     # Try to find a good corresponding value inside the string
-                    # TODO: this one is very picky. Should try to reduce to the
-                    # right number of elements?
-                    new_val = reproduceTypedValue(va.value, value)
-#                    raise TypeError("Cannot convert value '%s'", value)
+                    new_val = reproduceTypedValue(cur_val, value)
+                    if isinstance(new_val, collections.Iterable):
+                        # be less picky, by shortening the number of values if it's too many
+                        new_val = new_val[:len(cur_val)]
+
+                    # if it ends up being the same value as before the CB will
+                    # not update, so force it now
+                    if cur_val == new_val:
+                        cb_set(cur_val)
                     return new_val
 
             vac = VigilantAttributeConnector(
@@ -570,11 +573,8 @@ class SettingsPanel(object):
             txt = readable_str(vigil_attr.value, unit)
             new_ctrl = wx.StaticText(self.panel, -1, txt)
 
-        #if self.highlight_change and hasattr(new_ctrl, 'SetValue'):
-        #    new_ctrl.SetForegroundColour(FOREGROUND_COLOUR_HIGHLIGHT)
-
         self._gb_sizer.Add(new_ctrl, (self.num_entries, 1),
-                        flag=wx.ALL|wx.EXPAND, border=5)
+                        flag=wx.ALL | wx.EXPAND, border=5)
 
         ne = SettingEntry(name, vigil_attr, comp, lbl_ctrl, new_ctrl, vac)
         self.entries.append(ne)
@@ -681,7 +681,7 @@ class SecomSettingsController(SettingsBarController):
         # TODO allow to change light.power
 
         if microscope_model.ebeam:
-            self.add_component("SEM", microscope_model.ebeam, self._sem_panel )
+            self.add_component("SEM", microscope_model.ebeam, self._sem_panel)
 
 
 class SparcSettingsController(SettingsBarController):
