@@ -380,13 +380,8 @@ class SettingsPanel(object):
             new_ctrl = wx.StaticText(self.panel, -1, size=(200, -1))
             self.panel.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR)
 
-            def format_label(value):
-                if isinstance(value, tuple):
-                    # Maximum number of chars per value
-                    txt = " x ".join(["%s %s" % (v, unit) for v in value])
-                else:
-                    txt = u"%s %s" % (value, unit)
-                new_ctrl.SetLabel(txt)
+            def format_label(value, unit=unit):
+                new_ctrl.SetLabel(readable_str(value, unit, sig=2))
 
             vac = VigilantAttributeConnector(vigil_attr,
                                              new_ctrl,
@@ -463,7 +458,6 @@ class SettingsPanel(object):
                                                    labels=choices_formatted,
                                                    units=unit)
 
-            # TODO: Move to secom specific module/class
             if conf.get('type', None) == "1d_binning":
                 # need to convert back and forth between 1D and 2D
                 # from 2D to 1D (just pick X)
@@ -478,6 +472,22 @@ class SettingsPanel(object):
                 def radio_get(ctrl=new_ctrl):
                     value = ctrl.GetValue()
                     return (value, value)
+            elif conf.get('type', None) == "1std_binning":
+                # need to convert back and forth between 1D and 2D
+                # from 2D to 1D (just pick X)
+                def radio_set(value, ctrl=new_ctrl):
+                    v = value[0]
+                    logging.debug("Setting Radio value to %d", v)
+                    # it's fine to set a value not in the choices, it will
+                    # just not set any of the buttons.
+                    return ctrl.SetValue(v)
+
+                # from 1D to 2D (don't change dimensions >1)
+                def radio_get(ctrl=new_ctrl, va=vigil_attr):
+                    value = ctrl.GetValue()
+                    new_val = list(va.value)
+                    new_val[0] = value
+                    return new_val
             else:
                 radio_get = None
                 radio_set = None
@@ -570,8 +580,14 @@ class SettingsPanel(object):
             new_ctrl.Bind(wx.EVT_TEXT_ENTER, self.on_setting_changed)
 
         else:
-            txt = readable_str(vigil_attr.value, unit)
-            new_ctrl = wx.StaticText(self.panel, -1, txt)
+            # TODO: should be a free entry text, like combobox
+            def format_label(value, unit=unit):
+                new_ctrl.SetLabel(readable_str(value, unit, sig=2))
+
+            new_ctrl = wx.StaticText(self.panel, wx.ID_ANY, "")
+            vac = VigilantAttributeConnector(vigil_attr,
+                                             new_ctrl,
+                                             format_label)
 
         self._gb_sizer.Add(new_ctrl, (self.num_entries, 1),
                         flag=wx.ALL | wx.EXPAND, border=5)

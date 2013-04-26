@@ -511,8 +511,8 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
                                             self.w_end_pos
                 )
 
-                w = readable_str(w, 'm')
-                h = readable_str(h, 'm')
+                w = readable_str(w, 'm', sig=2)
+                h = readable_str(h, 'm', sig=2)
                 size_lbl = u"{} x {}".format(w, h)
 
                 pos = (b_end_pos[0] + 5, b_end_pos[1] - 5)
