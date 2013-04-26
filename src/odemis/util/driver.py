@@ -17,6 +17,7 @@ You should have received a copy of the GNU General Public License along with Ode
 import collections
 import logging
 import os
+import re
 import sys
 
 def getSerialDriver(name):
@@ -45,7 +46,7 @@ def boolify(s):
 def reproduceTypedValue(real_val, str_val):
     """
     Tries to convert a string to the type of the given value
-    real_val (object): value with the type that must be converted to
+    real_val (object): example value with the type that must be converted to
     str_val (string): string that will be converted
     return the value contained in the string with the type of the real value
     raises
@@ -72,7 +73,8 @@ def reproduceTypedValue(real_val, str_val):
         dict_val = {}
         for sub_str in str_val.split(','):
             item = sub_str.split(':')
-            assert(len(item) == 2)
+            if len(item) != 2:
+                raise ValueError("Cannot convert '%s' to a dictionary item" % item)
             key = reproduceTypedValue(key_real_val, item[0]) # TODO Should warn if len(item) != 2
             value = reproduceTypedValue(value_real_val, item[1])
             dict_val[key] = value
@@ -84,8 +86,17 @@ def reproduceTypedValue(real_val, str_val):
             logging.warning("Type of attribute is unknown, using string")
             sub_real_val = ""
 
-        iter_val = [] # the most preserving iterable
-        for sub_str in str_val.split(','): # TODO accept at least "x", or even any value which is not a number (if we know inside is a number)
+        # Try to be open-minded if the sub-type is a number (so that things like
+        # " 3 x 5 px" returns (3, 5)
+        if isinstance(sub_real_val, int):
+            pattern = "[+-]?[\d]+" # ex: -15
+        elif isinstance(sub_real_val, float):
+            pattern = "[+-]?[\d.]+(?:[eE][+-]?[\d]+)?" # ex: -156.41e-9
+        else:
+            pattern = "[^,]+"
+
+        iter_val = []
+        for sub_str in re.findall(pattern, str_val):
             iter_val.append(reproduceTypedValue(sub_real_val, sub_str))
         final_val = type(real_val)(iter_val) # cast to real type
         return final_val
