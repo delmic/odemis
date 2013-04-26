@@ -48,27 +48,39 @@ from odemis.model import NotApplicableError
 
 
 def _resolution_from_range(va, conf):
-    """ Try and get the maximum value of range and use
-    that to construct a list of resolutions
+    """ Get the maximum range and current value and use that to construct a list
+      of resolutions.
     """
+    cur_val = va.value
+    if len(cur_val) != 2:
+        logging.warning("Got a resolution not of length 2: %s", cur_val)
+        return [cur_val]
+
     try:
-        logging.debug("Generating resolutions...")
-        choices = set([va.value])
+        choices = set([cur_val])
+        num_pixels = cur_val[0] * cur_val[1]
         res = va.range[1] # start with max resolution
 
-        for dummy in range(3):
+        for dummy in range(10):
             choices.add(res)
             res = (res[0] // 2, res[1] // 2)
 
+            if len(choices) >= 4 and (res[0] * res[1] < num_pixels):
+                break
+
         return sorted(choices) # return a list, to be sure it's in order
     except NotApplicableError:
-        return [va.value]
+        return [cur_val]
 
 def _binning_1d_from_2d(va, conf):
     """
     Find simple binnings available in one dimension (pixel always square)
     binning provided by a camera is normally a 2-tuple of int
     """
+    cur_val = va.value
+    if len(cur_val) != 2:
+        logging.warning("Got a binning not of length 2: %s, will try anyway", cur_val)
+
     try:
         choices = set([va.value[0]])
         minbin = max(va.range[0])
