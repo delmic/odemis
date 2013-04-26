@@ -34,7 +34,8 @@ from odemis.gui.acqmng import preset_as_is
 from odemis.gui.cont import get_main_tab_controller
 from odemis.gui.model import stream
 from odemis.gui.model.stream import UNDEFINED_ROI
-from odemis.gui.util import img, get_picture_folder, call_after, units
+from odemis.gui.util import img, get_picture_folder, call_after, units, \
+    limit_invocation
 from odemis.gui.win.acquisition import AcquisitionDialog, \
     ShowAcquisitionFileDialog
 from wx.lib.pubsub import pub
@@ -419,6 +420,8 @@ class SparcAcquiController(AcquisitionController):
         # Event binding
         pub.subscribe(self.on_setting_change, 'setting.changed')
         self._sem_cl.roi.subscribe(self.onROI, init=True)
+        # We should also listen to repetition, in case it's modified after we've
+        # received the new ROI. Or maybe always compute acquisition time a bit delayed?
 
     def _get_default_filename(self):
         """
@@ -457,6 +460,8 @@ class SparcAcquiController(AcquisitionController):
         new_name = ShowAcquisitionFileDialog(self._main_frame, self.filename.value)
         self.filename.value = new_name
 
+    @limit_invocation(1) # max 1/s
+    @call_after
     def update_acquisition_time(self):
 
         if self._sem_cl.roi.value == UNDEFINED_ROI:

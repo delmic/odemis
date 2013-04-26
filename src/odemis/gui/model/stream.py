@@ -917,8 +917,13 @@ class SEMSpectrumMDStream(MultipleDetectorStream):
         width = (roi[2] - roi[0], roi[3] - roi[1])
 
         shape = self._emitter.shape
-        scale = (1 / width[0], 1 / width[1])
         trans = (shape[0] * center[0], shape[1] * center[1]) # can be floats
+        # scale is how big is a pixel compared to the minimum pixel size (1/shape)
+        scale = (max(1, (shape[0] * width[0]) / repetition[0]),
+                 max(1, (shape[1] * width[1]) / repetition[1]))
+
+        logging.debug("Setting SEM ROI to resolution = %s, translation = %s, and "
+                      "scale = %s", repetition, trans, scale)
 
         # always in this order
         self._emitter.scale.value = scale

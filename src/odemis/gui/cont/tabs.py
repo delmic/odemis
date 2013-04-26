@@ -312,7 +312,7 @@ class SparcAcquisitionTab(Tab):
         new_rep = (int(math.ceil(rep[0] * change[0])),
                    int(math.ceil(rep[1] * change[1])))
 
-        max_rep = stream.repetition.range[1] 
+        max_rep = stream.repetition.range[1]
         new_rep = (min(new_rep[0], max_rep[0]), min(new_rep[1], max_rep[1]))
 
         stream.repetition.value = new_rep
