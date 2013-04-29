@@ -25,10 +25,11 @@ Provides the, partial dynamically generated, configuration for the settings
 panel
 
 """
+from odemis.model import NotApplicableError
 import logging
+import math
 import odemis.gui
 
-from odemis.model import NotApplicableError
 
 
 # Default settings for the different components.
@@ -48,40 +49,87 @@ from odemis.model import NotApplicableError
 
 
 def _resolution_from_range(va, conf):
-    """ Try and get the maximum value of range and use
-    that to construct a list of resolutions
+    """ Get the maximum range and current value and use that to construct a list
+      of resolutions.
     """
+    cur_val = va.value
+    if len(cur_val) != 2:
+        logging.warning("Got a resolution not of length 2: %s", cur_val)
+        return [cur_val]
+
     try:
-        logging.debug("Generating resolutions...")
-        choices = set([va.value])
+        choices = set([cur_val])
+        num_pixels = cur_val[0] * cur_val[1]
         res = va.range[1] # start with max resolution
 
-        for dummy in range(3):
+        for dummy in range(10):
             choices.add(res)
             res = (res[0] // 2, res[1] // 2)
 
+            if len(choices) >= 4 and (res[0] * res[1] < num_pixels):
+                break
+
         return sorted(choices) # return a list, to be sure it's in order
     except NotApplicableError:
-        return [va.value]
+        return [cur_val]
 
 def _binning_1d_from_2d(va, conf):
     """
     Find simple binnings available in one dimension (pixel always square)
     binning provided by a camera is normally a 2-tuple of int
     """
+    cur_val = va.value
+    if len(cur_val) != 2:
+        logging.warning("Got a binning not of length 2: %s, will try anyway", cur_val)
+
     try:
-        choices = set([va.value[0]])
+        choices = set([cur_val[0]])
         minbin = max(va.range[0])
         maxbin = min(va.range[1])
 
-        # remove choices not available
-        for b in [1, 2, 4]: # all we want at best
+        # add up to 5 binnings
+        b = int(math.ceil(minbin)) # in most cases, that's 1
+        for i in range(5):
             if minbin <= b and b <= maxbin:
                 choices.add(b)
 
+            if len(choices) >= 4 and b >= cur_val[0]:
+                break
+
+            b *= 2
+
         return sorted(choices) # return a list, to be sure it's in order
     except NotApplicableError:
-        return [va.value[0]]
+        return [cur_val[0]]
+
+def _binning_firstd_only(va, conf):
+    """
+    Find simple binnings available in the first dimension (second dimension
+     stays fixed size).
+    """
+    cur_val = va.value[0]
+
+    try:
+        choices = set([cur_val])
+        minbin = va.range[0][0]
+        maxbin = va.range[1][0]
+
+        # add up to 5 binnings
+        b = int(math.ceil(minbin)) # in most cases, that's 1
+        for i in range(5):
+            if minbin <= b and b <= maxbin:
+                choices.add(b)
+
+            if len(choices) >= 4 and b >= cur_val:
+                break
+
+            b *= 2
+
+        return sorted(choices) # return a list, to be sure it's in order
+    except NotApplicableError:
+        return [cur_val]
+
+
 
 # TODO: special settings for the acquisition window? (higher ranges)
 
@@ -94,6 +142,7 @@ CONFIG = {
                     "scale": "log",
                     "range": (0.01, 10.0),
                     "type": "float",
+                    "accuracy": 2,
                 },
                 "binning":
                 {
@@ -156,11 +205,14 @@ CONFIG = {
                 {
                     "control_type": odemis.gui.CONTROL_TEXT,
                 },
-                # what we don't want to display:
                 "scale":
                 {
-                    "control_type": odemis.gui.CONTROL_NONE,
+                 # same as binning (but accepts floats)
+                    "control_type": odemis.gui.CONTROL_RADIO,
+                    "choices": _binning_1d_from_2d,
+                    "type": "1d_binning", # means will make sure both dimensions are treated as one
                 },
+                # what we don't want to display:
                 "translation":
                 {
                     "control_type": odemis.gui.CONTROL_NONE,
@@ -178,6 +230,7 @@ CONFIG = {
                     "scale": "log",
                     "range": (0.01, 10.0),
                     "type": "float",
+                    "accuracy": 2,
                 },
                 "readoutRate":
                 {
@@ -188,11 +241,18 @@ CONFIG = {
                 {
                     "control_type": odemis.gui.CONTROL_LABEL,
                 },
-                "repetition":
+                "repetition": # TODO: 1D only
                 {
                     "control_type": odemis.gui.CONTROL_COMBO,
                     "choices": _resolution_from_range,
                 },
+                "binning": #TODO: 1D only
+                {
+                    "control_type": odemis.gui.CONTROL_RADIO,
+                    "choices": _binning_firstd_only,
+                    "type": "1std_binning", # means only 1st dimension can change
+                },
+
                  # what we don't want to display:
                 "targetTemperature":
                 {

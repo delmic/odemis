@@ -44,7 +44,7 @@ VIEW_LAYOUT_FULLSCREEN = 2 # Fullscreen view (not yet supported)
 
 # The different tools (selectable in the tool bar). Actually, only the ones which
 # have a mode, the ones which have a direct action don't need to be known
-# explicitly. 
+# explicitly.
 TOOL_NONE = 0 # No tool (normal)
 TOOL_ZOOM = 1 # Select the region to zoom in
 TOOL_ROI = 2 # Select the region of interest (sub-area to be updated)
@@ -56,6 +56,8 @@ class MicroscopeModel(object):
 
     Provides direct reference to the HwComponents.
     """
+    # TODO: rename to something like MicroscopeGUIModel
+    # TODO: subclass for each different type of tabs (eg: live/acquisition/analysis/actuators)
 
     def __init__(self, microscope):
         """
@@ -84,7 +86,8 @@ class MicroscopeModel(object):
                 self.bsd = d
             elif d.role == "spectrometer":
                 self.spectrometer = d
-        if not any((self.ccd, self.sed, self.bsd, self.spectrometer)):
+        if (not any((self.ccd, self.sed, self.bsd, self.spectrometer))
+            and not microscope.role.startswith("static")):
             msg = "no camera nor electron detector found in the microscope"
             raise Exception(msg)
 
@@ -121,33 +124,34 @@ class MicroscopeModel(object):
             elif e.role == "e-beam":
                 self.ebeam = e
 
-        if not self.light and not self.ebeam:
+        if (not self.light and not self.ebeam
+            and not microscope.role.startswith("static")):
             raise Exception("No emitter found in the microscope")
 
         self.streams = set() # Streams available (handled by StreamController)
 
         # MicroscopeViews available, (handled by ViewController)
         # The ViewController cares about position: they are top-left, top-right
-        # bottom-left, bottom-right. 
+        # bottom-left, bottom-right.
         self.views = []
 
         # The MicroscopeView currently focused, it is one of the .views (or None)
         self.focussedView = VigilantAttribute(None)
-        
+
         # Very special view which is used only as a container to save which stream
         # will be acquired (for the Sparc acquisition interface only).
         # The tab controller will take care of filling it
-        self.acquisitionView = MicroscopeView("Acquisition", stage=self.stage) 
+        self.acquisitionView = MicroscopeView("Acquisition", stage=self.stage)
 
         # TODO: use it (cf cont.tools)
+        # Current tool selected (from the toolbar)
         tools = set([TOOL_NONE, TOOL_ZOOM, TOOL_ROI, TOOL_ROA])
         self.tool = IntEnumerated(TOOL_NONE, choices=tools)
 
         layouts = set([VIEW_LAYOUT_ONE, VIEW_LAYOUT_22, VIEW_LAYOUT_FULLSCREEN])
-        hw_states = set([STATE_OFF, STATE_ON, STATE_PAUSE])
-
         self.viewLayout = model.IntEnumerated(VIEW_LAYOUT_22, choices=layouts)
 
+        hw_states = set([STATE_OFF, STATE_ON, STATE_PAUSE])
         if self.ccd:
             # not so nice to hard code it here, but that should do it for now...
             if self.microscope.role == "sparc":
@@ -156,17 +160,18 @@ class MicroscopeModel(object):
             else:
                 self.opticalState = model.IntEnumerated(STATE_OFF, choices=hw_states)
                 self.opticalState.subscribe(self.onOpticalState)
-        
+
         if self.ebeam:
             self.emState = model.IntEnumerated(STATE_OFF, choices=hw_states)
             self.emState.subscribe(self.onEMState)
-        
+
         if self.spectrometer:
             self.specState = model.IntEnumerated(STATE_OFF, choices=hw_states)
             self.specState.subscribe(self.onSpecState)
-                
+
     def stopMotion(self):
         """ Immediately stops all movement on all axis """
+        # FIXME: should have a list of all actuators?
         self.stage.stop()
         self.focus.stop()
         logging.info("Stopped motion on all axes")
@@ -224,7 +229,7 @@ class MicroscopeModel(object):
 
     def onARState(self, state):
         # nothing to do here, the settings controller will just hide the stream/settings
-        pass  
+        pass
 
     def onSpecState(self, state):
         # nothing to do here, the settings controller will just hide the stream/settings

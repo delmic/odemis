@@ -268,7 +268,7 @@ class MicroscopeViewport(wx.Panel):
             return
         hfw = self._microscope_view.mpp.value * self.GetClientSize()[0]
         hfw = units.round_significant(hfw, 4)
-        label = "HFW: %s" % units.readable_str(hfw, "m")
+        label = u"HFW: %s" % units.readable_str(hfw, "m")
         self.hfwDisplay.SetLabel(label)
         self.legend_panel.Layout()
 
@@ -276,7 +276,7 @@ class MicroscopeViewport(wx.Panel):
         # TODO: shall we use the real density of the screen?
         # We could use real density but how much important is it?
         mppScreen = 0.00025 # 0.25 mm/px
-        label = "Mag: "
+        label = u"Mag: "
 
         # three possibilities:
         # * no image => total mag (using current mpp)
@@ -298,19 +298,19 @@ class MicroscopeViewport(wx.Panel):
             if magIm >= 1:
                 label += u"×" + units.readable_str(units.round_significant(magIm, 3))
             else:
-                label += u"÷" + units.readable_str(units.round_significant(1.0/magIm, 3))
+                label += u"÷" + units.readable_str(units.round_significant(1.0 / magIm, 3))
             magDig = im_mpp / self._microscope_view.mpp.value
             if magDig >= 1:
                 label += u" ×" + units.readable_str(units.round_significant(magDig, 3))
             else:
-                label += u" ÷" + units.readable_str(units.round_significant(1.0/magDig, 3))
+                label += u" ÷" + units.readable_str(units.round_significant(1.0 / magDig, 3))
         else:
             # one magnification
             mag = mppScreen / self._microscope_view.mpp.value
             if mag >= 1:
                 label += u"×" + units.readable_str(units.round_significant(mag, 3))
             else:
-                label += u"÷" + units.readable_str(units.round_significant(1.0/mag, 3))
+                label += u"÷" + units.readable_str(units.round_significant(1.0 / mag, 3))
 
         self.LegendMag.SetLabel(label)
         self.legend_panel.Layout()

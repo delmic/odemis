@@ -26,17 +26,6 @@ setting column of the user interface.
 
 """
 
-import collections
-import logging
-import re
-
-import wx.combo
-from wx.lib.pubsub import pub
-
-import odemis.gui
-import odemis.gui.comp.text as text
-import odemis.gui.img.data as img
-import odemis.gui.util.units as utun
 from odemis.gui.comp.foldpanelbar import FoldPanelItem
 from odemis.gui.comp.radio import GraphicalRadioButtonControl
 from odemis.gui.comp.slider import UnitIntegerSlider, UnitFloatSlider
@@ -45,6 +34,18 @@ from odemis.gui.model.stream import SpectrumStream, ARStream
 from odemis.gui.util.units import readable_str
 from odemis.gui.util.widgets import VigilantAttributeConnector
 from odemis.model import getVAs, NotApplicableError, VigilantAttributeBase
+from odemis.util.driver import reproduceTypedValue
+from wx.lib.pubsub import pub
+import collections
+import logging
+import odemis.gui
+import odemis.gui.comp.text as text
+import odemis.gui.img.data as img
+import odemis.gui.util.units as utun
+import re
+import wx.combo
+
+
 
 
 
@@ -172,7 +173,7 @@ class SettingsPanel(object):
         self.panel.SetSizer(self._main_sizer)
         self._main_sizer.Add(self._gb_sizer,
                              proportion=1,
-                             flag=wx.RIGHT|wx.LEFT|wx.EXPAND,
+                             flag=wx.RIGHT | wx.LEFT | wx.EXPAND,
                              border=5)
 
         self.fold_panel.add_item(self.panel)
@@ -276,7 +277,7 @@ class SettingsPanel(object):
             pass
 
         # Get unit from config, vattribute or use an empty one
-        unit =  conf.get('unit', va.unit or "")
+        unit = conf.get('unit', va.unit or "")
 
         return rng, choices, unit
 
@@ -299,10 +300,9 @@ class SettingsPanel(object):
                             flag=wx.ALL, border=5)
             self.panel.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR)
 
-        self.num_entries += 1
-        # XXX
         ne = SettingEntry(name=label, label=lbl_ctrl, ctrl=value_ctrl)
         self.entries.append(ne)
+        self.num_entries += 1
 
     def add_divider(self):
         line = wx.StaticLine(self.panel, size=(-1, 1))
@@ -310,7 +310,7 @@ class SettingsPanel(object):
                 line,
                 (self.num_entries, 0),
                 span=(1, 2),
-                flag=wx.ALL|wx.EXPAND,
+                flag=wx.ALL | wx.EXPAND,
                 border=5
         )
         self.num_entries += 1
@@ -349,6 +349,10 @@ class SettingsPanel(object):
         # Special case, early stop
         if control_type == odemis.gui.CONTROL_NONE:
             # No value, not even label
+            # Just an empty entry, so that the settings are saved during acquisition
+            ne = SettingEntry(name, vigil_attr, comp)
+            self.entries.append(ne)
+            # don't increase num_entries, as it doesn't add any graphical element
             return
         # TODO: if choices has len == 1 => don't provide choice at all
         #  => either display the value as a text, or don't display at all.
@@ -376,13 +380,8 @@ class SettingsPanel(object):
             new_ctrl = wx.StaticText(self.panel, -1, size=(200, -1))
             self.panel.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR)
 
-            def format_label(value):
-                if isinstance(value, tuple):
-                    # Maximum number of chars per value
-                    txt = " x ".join(["%s %s" % (v, unit) for v in value])
-                else:
-                    txt = u"%s %s" % (value, unit)
-                new_ctrl.SetLabel(txt)
+            def format_label(value, unit=unit):
+                new_ctrl.SetLabel(readable_str(value, unit, sig=2))
 
             vac = VigilantAttributeConnector(vigil_attr,
                                              new_ctrl,
@@ -452,14 +451,13 @@ class SettingsPanel(object):
 
         elif control_type == odemis.gui.CONTROL_RADIO:
             new_ctrl = GraphicalRadioButtonControl(self.panel,
-                                                   -1,
+                                                   - 1,
                                                    size=(-1, 16),
                                                    choices=choices,
                                                    style=wx.NO_BORDER,
                                                    labels=choices_formatted,
                                                    units=unit)
 
-            # TODO: Move to secom specific module/class
             if conf.get('type', None) == "1d_binning":
                 # need to convert back and forth between 1D and 2D
                 # from 2D to 1D (just pick X)
@@ -474,6 +472,22 @@ class SettingsPanel(object):
                 def radio_get(ctrl=new_ctrl):
                     value = ctrl.GetValue()
                     return (value, value)
+            elif conf.get('type', None) == "1std_binning":
+                # need to convert back and forth between 1D and 2D
+                # from 2D to 1D (just pick X)
+                def radio_set(value, ctrl=new_ctrl):
+                    v = value[0]
+                    logging.debug("Setting Radio value to %d", v)
+                    # it's fine to set a value not in the choices, it will
+                    # just not set any of the buttons.
+                    return ctrl.SetValue(v)
+
+                # from 1D to 2D (don't change dimensions >1)
+                def radio_get(ctrl=new_ctrl, va=vigil_attr):
+                    value = ctrl.GetValue()
+                    new_val = list(va.value)
+                    new_val[0] = value
+                    return new_val
             else:
                 radio_get = None
                 radio_set = None
@@ -487,17 +501,13 @@ class SettingsPanel(object):
             new_ctrl.Bind(wx.EVT_BUTTON, self.on_setting_changed)
 
         elif control_type == odemis.gui.CONTROL_COMBO:
-
-            new_ctrl = wx.combo.OwnerDrawnComboBox(self.panel,
-                                                   -1,
-                                                   value='',
-                                                   pos=(0, 0),
-                                                   size=(100, 16),
-                                                   style=wx.NO_BORDER |
-                                                         wx.CB_DROPDOWN |
-                                                         wx.TE_PROCESS_ENTER |
-                                                         wx.CB_READONLY)
-
+            # wx.ComboBox would be fine if only it was not so ugly using the
+            # default Ubuntu theme and a small heigh.
+            # One problem of OwnerDrawnComboBox is that left/right keys don't
+            # move the text caret.
+            new_ctrl = wx.combo.OwnerDrawnComboBox(self.panel, wx.ID_ANY,
+                           value='', pos=(0, 0), size=(100, 16),
+                           style=wx.BORDER_NONE | wx.CB_DROPDOWN | wx.TE_PROCESS_ENTER)
 
             # Set colours
             new_ctrl.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_EDIT)
@@ -525,22 +535,39 @@ class SettingsPanel(object):
 
             # A small wrapper function makes sure that the value can
             # be set by passing the actual value (As opposed to the text label)
-            def cb_set(value, ctrl=new_ctrl):
+            def cb_set(value, ctrl=new_ctrl, unit=unit):
                 for i in range(ctrl.Count):
                     if ctrl.GetClientData(i) == value:
                         logging.debug("Setting ComboBox value to %s", ctrl.Items[i])
                         return ctrl.SetValue(ctrl.Items[i])
-                logging.warning("No matching label found for value %s!", value)
+                else:
+                    logging.debug("No existing label found for value %s", value)
+                    # entering value as free text
+                    txt = readable_str(value, unit)
+                    return ctrl.SetValue(txt)
 
             # equivalent wrapper function to retrieve the actual value
-            def cb_get(ctrl=new_ctrl):
+            def cb_get(ctrl=new_ctrl, va=vigil_attr):
                 value = ctrl.GetValue()
+                # Try to use the predefined value if it's available
                 for i in range(ctrl.Count):
                     if ctrl.Items[i] == value:
-                        logging.debug("Getting ComboBox value %s",
-                                  ctrl.GetClientData(i))
+                        logging.debug("Getting CB value %s", ctrl.GetClientData(i))
                         return ctrl.GetClientData(i)
+                else:
+                    logging.debug("Trying to parse CB free value %s", value)
+                    cur_val = va.value
+                    # Try to find a good corresponding value inside the string
+                    new_val = reproduceTypedValue(cur_val, value)
+                    if isinstance(new_val, collections.Iterable):
+                        # be less picky, by shortening the number of values if it's too many
+                        new_val = new_val[:len(cur_val)]
 
+                    # if it ends up being the same value as before the CB will
+                    # not update, so force it now
+                    if cur_val == new_val:
+                        cb_set(cur_val)
+                    return new_val
 
             vac = VigilantAttributeConnector(
                     vigil_attr,
@@ -552,16 +579,18 @@ class SettingsPanel(object):
             new_ctrl.Bind(wx.EVT_COMBOBOX, self.on_setting_changed)
             new_ctrl.Bind(wx.EVT_TEXT_ENTER, self.on_setting_changed)
 
-
         else:
-            txt = readable_str(vigil_attr.value, unit)
-            new_ctrl = wx.StaticText(self.panel, -1, txt)
+            # TODO: should be a free entry text, like combobox
+            def format_label(value, unit=unit):
+                new_ctrl.SetLabel(readable_str(value, unit, sig=2))
 
-        #if self.highlight_change and hasattr(new_ctrl, 'SetValue'):
-        #    new_ctrl.SetForegroundColour(FOREGROUND_COLOUR_HIGHLIGHT)
+            new_ctrl = wx.StaticText(self.panel, wx.ID_ANY, "")
+            vac = VigilantAttributeConnector(vigil_attr,
+                                             new_ctrl,
+                                             format_label)
 
         self._gb_sizer.Add(new_ctrl, (self.num_entries, 1),
-                        flag=wx.ALL|wx.EXPAND, border=5)
+                        flag=wx.ALL | wx.EXPAND, border=5)
 
         ne = SettingEntry(name, vigil_attr, comp, lbl_ctrl, new_ctrl, vac)
         self.entries.append(ne)
@@ -668,7 +697,7 @@ class SecomSettingsController(SettingsBarController):
         # TODO allow to change light.power
 
         if microscope_model.ebeam:
-            self.add_component("SEM", microscope_model.ebeam, self._sem_panel )
+            self.add_component("SEM", microscope_model.ebeam, self._sem_panel)
 
 
 class SparcSettingsController(SettingsBarController):

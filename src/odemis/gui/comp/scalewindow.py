@@ -238,7 +238,7 @@ class ScaleWindow(BufferedWindow):
         height = self.gap + charSize[1] + self.nod
         main_line_y = vmiddle - (height /2) + self.nod
 
-        dc.DrawText(units.readable_str(actual, "m"),
+        dc.DrawText(units.readable_str(actual, "m", sig=2),
                     0, main_line_y + self.gap)
 
         # Draw the scale itself

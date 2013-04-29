@@ -575,10 +575,10 @@ class SpectrumStream(Stream):
             exp = self._detector.exposureTime.value
             try:
                 ro_rate = self._detector.readoutRate.value
-                readout = numpy.prod(self._detector.resolution.value) / ro_rate
+                readout = numpy.prod(self._detector.resolution.value) / ro_rate + 0.05
             except:
-                readout = 0
-            duration = (exp + readout + 0.01) * numpy.prod(res) * 1.10
+                readout = 0.05
+            duration = numpy.prod(res) * (exp + readout + 0.01) * 1.10
             # Add the setup time
             duration += self.SETUP_OVERHEAD
 
@@ -643,10 +643,10 @@ class ARStream(Stream):
             exp = self._detector.exposureTime.value
             try:
                 ro_rate = self._detector.readoutRate.value
-                readout = numpy.prod(self._detector.resolution.value) / ro_rate
+                readout = numpy.prod(self._detector.resolution.value) / ro_rate + 0.05
             except:
-                readout = 0
-            duration = (exp + readout) * numpy.prod(res) * 1.10
+                readout = 0.05
+            duration = numpy.prod(res) * (exp + readout + 0.01) * 1.10
             # Add the setup time
             duration += self.SETUP_OVERHEAD
 
@@ -917,8 +917,13 @@ class SEMSpectrumMDStream(MultipleDetectorStream):
         width = (roi[2] - roi[0], roi[3] - roi[1])
 
         shape = self._emitter.shape
-        scale = (1 / width[0], 1 / width[1])
         trans = (shape[0] * center[0], shape[1] * center[1]) # can be floats
+        # scale is how big is a pixel compared to the minimum pixel size (1/shape)
+        scale = (max(1, (shape[0] * width[0]) / repetition[0]),
+                 max(1, (shape[1] * width[1]) / repetition[1]))
+
+        logging.debug("Setting SEM ROI to resolution = %s, translation = %s, and "
+                      "scale = %s", repetition, trans, scale)
 
         # always in this order
         self._emitter.scale.value = scale
@@ -998,7 +1003,8 @@ class SEMSpectrumMDStream(MultipleDetectorStream):
 
             # create a spectrum cube from all the data
             self._assembleSpecData(self._acq_spect_buf)
-
+            logging.debug("raw data is now of shape %s",
+                          ",".join([str(d.shape) for d in self.raw]))
             # update the image to a new empty one to signal everything is received
             self.image.value = InstrumentalImage(None)
 
@@ -1016,8 +1022,11 @@ class SEMSpectrumMDStream(MultipleDetectorStream):
         # the data array subscribers must be fast, so the real processing
         # takes place in a separate thread.
         self._acq_spect_buf.append(data)
+        # TODO: update the estimated time based on how long it takes per pixel
+        # in reality
 
         self._acq_left -= 1
+        logging.debug("%d spec images left to acquire", self._acq_left)
         if self._acq_left <= 0:
             # unsubscribe to stop immediately
             df.unsubscribe(self._onSpecImage)

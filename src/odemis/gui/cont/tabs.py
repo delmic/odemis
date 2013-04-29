@@ -25,6 +25,8 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 from collections import namedtuple
+from odemis import model
+from odemis.gui import instrmodel
 from odemis.gui.cont import settings
 from odemis.gui.cont.acquisition import SecomAcquiController, \
     SparcAcquiController
@@ -34,7 +36,6 @@ from odemis.gui.cont.views import ViewController, ViewSelector
 from odemis.gui.instrmodel import STATE_ON, STATE_OFF, STATE_PAUSE
 from odemis.gui.model.stream import SpectrumStream, SEMStream, ARStream, \
     UNDEFINED_ROI
-from wx.lib.pubsub import pub
 import logging
 import math
 import wx
@@ -73,10 +74,10 @@ class Tab(object):
 
 class SecomStreamsTab(Tab):
 
-    def __init__(self, group, name, button, panel, main_frame, interface_model):
+    def __init__(self, group, name, button, panel, main_frame, microscope):
         super(SecomStreamsTab, self).__init__(group, name, button, panel)
 
-        self.interface_model = interface_model
+        self.interface_model = instrmodel.MicroscopeModel(microscope)
         self.main_frame = main_frame
 
         # Various controllers used for the live view and acquisition of images
@@ -162,10 +163,10 @@ class SecomStreamsTab(Tab):
 
 class SparcAcquisitionTab(Tab):
 
-    def __init__(self, group, name, button, panel, main_frame, interface_model):
+    def __init__(self, group, name, button, panel, main_frame, microscope):
         super(SparcAcquisitionTab, self).__init__(group, name, button, panel)
 
-        self.microscope_model = interface_model
+        self.interface_model = instrmodel.MicroscopeModel(microscope)
         self.main_frame = main_frame
 
         # Various controllers used for the live view and acquisition of images
@@ -181,16 +182,16 @@ class SparcAcquisitionTab(Tab):
 
     def _initialize(self):
         """ This method is called when the tab is first shown """
-        assert self.microscope_model is not None
+        assert self.interface_model is not None
 
-        acq_view = self.microscope_model.acquisitionView # list of streams for acquisition
+        acq_view = self.interface_model.acquisitionView # list of streams for acquisition
 
         # create the streams
         sem_stream = SEMStream(
                         "SEM live",
-                        self.microscope_model.sed,
-                        self.microscope_model.sed.data,
-                        self.microscope_model.ebeam)
+                        self.interface_model.sed,
+                        self.interface_model.sed.data,
+                        self.interface_model.ebeam)
         self._sem_live_stream = sem_stream
         sem_stream.should_update.value = True
         acq_view.addStream(sem_stream) # it should also be saved
@@ -198,29 +199,29 @@ class SparcAcquisitionTab(Tab):
         # the SEM acquisition simultaneous to the CCDs
         semcl_stream = SEMStream(
                         "SEM CL", # name matters, used to find the stream for the ROI
-                        self.microscope_model.sed,
-                        self.microscope_model.sed.data,
-                        self.microscope_model.ebeam)
+                        self.interface_model.sed,
+                        self.interface_model.sed.data,
+                        self.interface_model.ebeam)
         acq_view.addStream(semcl_stream)
         self._sem_cl_stream = semcl_stream
 
-        if self.microscope_model.spectrometer:
+        if self.interface_model.spectrometer:
             spec_stream = SpectrumStream(
                                         "Spectrum",
-                                        self.microscope_model.spectrometer,
-                                        self.microscope_model.spectrometer.data,
-                                        self.microscope_model.ebeam)
+                                        self.interface_model.spectrometer,
+                                        self.interface_model.spectrometer.data,
+                                        self.interface_model.ebeam)
             acq_view.addStream(spec_stream)
             self._roi_streams.append(spec_stream)
             spec_stream.roi.subscribe(self.onSpecROI)
             self._spec_stream = spec_stream
 
-        if self.microscope_model.ccd:
+        if self.interface_model.ccd:
             ar_stream = ARStream(
                                 "Angular",
-                                self.microscope_model.ccd,
-                                self.microscope_model.ccd.data,
-                                self.microscope_model.ebeam)
+                                self.interface_model.ccd,
+                                self.interface_model.ccd.data,
+                                self.interface_model.ebeam)
             acq_view.addStream(ar_stream)
             self._roi_streams.append(ar_stream)
             ar_stream.roi.subscribe(self.onARROI)
@@ -233,22 +234,24 @@ class SparcAcquisitionTab(Tab):
         # create a view on the microscope model
         # Needs SEM CL stream (could be avoided if we had a .roa on the microscope model)
         self._view_controller = ViewController(
-                                    self.microscope_model,
+                                    self.interface_model,
                                     self.main_frame,
                                     [self.main_frame.vp_sparc_acq_view]
                                 )
-        mic_view = self.microscope_model.focussedView.value
+        mic_view = self.interface_model.focussedView.value
         mic_view.addStream(sem_stream)
 
         # needs to have the AR and Spectrum streams on the acquisition view
         self._settings_controller = settings.SparcSettingsController(
                                         self.main_frame,
-                                        self.microscope_model,
+                                        self.interface_model,
                                     )
 
+        # needs settings_controller
         self._acquisition_controller = SparcAcquiController(
                                             self.main_frame,
-                                            self.microscope_model
+                                            self.interface_model,
+                                            self.settings_controller
                                        )
 
         # FIXME: for now we disable the AR from the acquisition view, because we
@@ -258,11 +261,11 @@ class SparcAcquisitionTab(Tab):
         acq_view.removeStream(ar_stream)
 
         # Turn on the live SEM stream
-        self.microscope_model.emState.value = STATE_ON
+        self.interface_model.emState.value = STATE_ON
         # and subscribe to activate the live stream accordingly
         # (especially needed to ensure at exit, all the streams are unsubscribed)
         # TODO: maybe should be handled by a simple stream controller?
-        self.microscope_model.emState.subscribe(self.onEMState, init=True)
+        self.interface_model.emState.subscribe(self.onEMState, init=True)
 
     @property
     def settings_controller(self):
@@ -310,6 +313,9 @@ class SparcAcquisitionTab(Tab):
         new_rep = (int(math.ceil(rep[0] * change[0])),
                    int(math.ceil(rep[1] * change[1])))
 
+        max_rep = stream.repetition.range[1]
+        new_rep = (min(new_rep[0], max_rep[0]), min(new_rep[1], max_rep[1]))
+
         stream.repetition.value = new_rep
         self._prev_rois[stream] = roi
 
@@ -324,12 +330,13 @@ class SparcAcquisitionTab(Tab):
 
 class SparcAnalysisTab(Tab):
 
-    def __init__(self, group, name, button, panel, main_frame, interface_model):
+    def __init__(self, group, name, button, panel, main_frame, microscope):
         super(SparcAnalysisTab, self).__init__(group, name, button, panel)
 
-        self.microscope_model = interface_model
+        # we don't use the current microscope, but a "static sparc"
+        static_sparc = model.Microscope("SPARC", "staticsparc")
+        self.interface_model = instrmodel.MicroscopeModel(static_sparc)
         self.main_frame = main_frame
-        self.interface_model = interface_model
 
         # Various controllers used for the live view and acquisition of images
 
@@ -338,14 +345,12 @@ class SparcAnalysisTab(Tab):
         self._acquisition_controller = None
         self._stream_controller = None
 
-        # pub.subscribe(self.on_roi_changed, 'sparc.acq.selection.changed')
-
     def _initialize(self):
         """ This method is called when the tab is first shown """
-        assert self.microscope_model is not None
+        assert self.interface_model is not None
 
         self._view_controller = ViewController(
-                                    self.microscope_model,
+                                    self.interface_model,
                                     self.main_frame,
                                     [self.main_frame.vp_sparc_analysis_tl,
                                      self.main_frame.vp_sparc_analysis_tr,
@@ -354,7 +359,7 @@ class SparcAnalysisTab(Tab):
                                 )
 
         self._stream_controller = StreamController(
-                                        self.microscope_model,
+                                        self.interface_model,
                                         self.main_frame.pnl_sparc_streams
                                   )
 
@@ -394,7 +399,7 @@ class SparcAnalysisTab(Tab):
 
 class TabBarController(object):
 
-    def __init__(self, tab_list, main_frame, interface_model):
+    def __init__(self, tab_list, main_frame, microscope):
 
         self.main_frame = main_frame
 
@@ -402,8 +407,8 @@ class TabBarController(object):
 
         self.hide_all()
 
-        if interface_model:
-            self._filter_tabs(interface_model)
+        if microscope:
+            self._filter_tabs(microscope)
 
         for tab in self.tab_list:
             tab.button.Bind(wx.EVT_BUTTON, self.OnClick)
@@ -422,14 +427,14 @@ class TabBarController(object):
 
         main_frame.SetMinSize((1400, 550))
 
-    def _filter_tabs(self, interface_model):
-        """ Filter the tabs according to the current interface model.
+    def _filter_tabs(self, microscope):
+        """ Filter the tabs according to the role of the microscope.
 
         Tabs that are not wanted or needed will be removed from the list and
         the associated buttons will be hidden in the user interface.
         """
 
-        needed_group = interface_model.microscope.role
+        needed_group = microscope.role
 
         logging.debug("Hiding tabs not belonging to the '%s' interface",
                       needed_group)

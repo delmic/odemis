@@ -34,7 +34,8 @@ from odemis.gui.acqmng import preset_as_is
 from odemis.gui.cont import get_main_tab_controller
 from odemis.gui.model import stream
 from odemis.gui.model.stream import UNDEFINED_ROI
-from odemis.gui.util import img, get_picture_folder, call_after, units
+from odemis.gui.util import img, get_picture_folder, call_after, units, \
+    limit_invocation
 from odemis.gui.win.acquisition import AcquisitionDialog, \
     ShowAcquisitionFileDialog
 from wx.lib.pubsub import pub
@@ -108,7 +109,7 @@ class AcquisitionController(object):
 
         #Blit (in this case copy) the actual screen on the memory DC
         #and thus the Bitmap
-        memDC.Blit( 0, #Copy to this X coordinate
+        memDC.Blit(0, #Copy to this X coordinate
                     0, #Copy to this Y coordinate
                     rect.width, #Copy this width
                     rect.height, #Copy this height
@@ -235,7 +236,7 @@ class AcquisitionController(object):
                 # it should decrease quickly at the beginning and slowly at the
                 # end => 1/x (x 1/max->1)
                 pos = (now - start) / duration
-                brightness = 1/(1/brightness_max + (1 - 1/brightness_max) * pos)
+                brightness = 1 / (1 / brightness_max + (1 - 1 / brightness_max) * pos)
                 self.set_output_brightness(self._outputs, brightness)
                 time.sleep(0.05) # ensure not to use too much CPU
                 now = time.time()
@@ -307,7 +308,7 @@ class SecomAcquiController(AcquisitionController):
             self.start_snapshot_viewport)
 
         # Listen to "acquire image" button
-        self._main_frame.btn_secom_acquire.Bind( wx.EVT_BUTTON, self.on_acquire)
+        self._main_frame.btn_secom_acquire.Bind(wx.EVT_BUTTON, self.on_acquire)
 
         pub.subscribe(self.on_stream_changed, 'stream.ctrl')
 
@@ -317,7 +318,7 @@ class SecomAcquiController(AcquisitionController):
 
     def on_acquire(self, evt):
         self.open_acquisition_dialog()
-        
+
     def open_acquisition_dialog(self):
         mtc = get_main_tab_controller()
 
@@ -354,22 +355,26 @@ class SparcAcquiController(AcquisitionController):
     """ Acquisition controller for the Sparc platform
     """
 
-    def __init__(self, main_frame, micgui):
+    def __init__(self, main_frame, micgui, settings_controller):
         """
-        micgui (MicroscopeModel): the representation of the microscope GUI
         main_frame: (wx.Frame): the frame which contains the 4 viewports
+        micgui (MicroscopeModel): the representation of the microscope GUI
+        settings_controller (SettingsController)
         """
         AcquisitionController.__init__(self, micgui, main_frame)
 
         # For file selection
-        # FIXME: we need a file selection gui
         self.conf = conf.get_acqui_conf()
 
-        # FIXME: this should be the date at which the user presses the acquire
+        # for saving/restoring the settings
+        self._settings_controller = settings_controller
+        self._orig_settings = {} # Entry -> value to restore
+
+        # TODO: this should be the date at which the user presses the acquire
         # button (or when the last settings were changed)!
         # At least, we must ensure it's a new date after the acquisition
         # is done.
-        # Filename to save the acquisition 
+        # Filename to save the acquisition
         self.filename = model.StringVA(self._get_default_filename())
         self.filename.subscribe(self._onFilename, init=True)
 
@@ -377,6 +382,7 @@ class SparcAcquiController(AcquisitionController):
         # a ProgressiveFuture if the acquisition is going on
         self.btn_acquire = self._main_frame.btn_sparc_acquire
         self.btn_change_file = self._main_frame.btn_sparc_change_file
+        self.btn_cancel = self._main_frame.btn_sparc_cancel
         self.acq_future = None
         self.gauge_acq = self._main_frame.gauge_sparc_acq
         self.lbl_acqestimate = self._main_frame.lbl_sparc_acq_estimate
@@ -393,15 +399,16 @@ class SparcAcquiController(AcquisitionController):
         # Link buttons
         self.btn_acquire.Bind(wx.EVT_BUTTON, self.on_acquisition)
         self.btn_change_file.Bind(wx.EVT_BUTTON, self.on_change_file)
-        
+        self.btn_cancel.Bind(wx.EVT_BUTTON, self.on_cancel)
+
         self.gauge_acq.Hide()
         self._main_frame.Layout()
-        
+
         # TODO: we need to be informed if the user closes suddenly the window
         # self.Bind(wx.EVT_CLOSE, self.on_close)
-        
-        
-        # look for the SEM CL stream 
+
+
+        # look for the SEM CL stream
         self._sem_cl = None # SEM CL stream
         for s in self._microscope.acquisitionView.getStreams():
             if s.name.value == "SEM CL":
@@ -409,16 +416,18 @@ class SparcAcquiController(AcquisitionController):
                 break
         else:
             raise KeyError("Failed to find SEM CL stream, required for the Sparc acquisition")
-        
+
         # Event binding
-        self._sem_cl.roi.subscribe(self.onROI)
         pub.subscribe(self.on_setting_change, 'setting.changed')
+        self._sem_cl.roi.subscribe(self.onROI, init=True)
+        # We should also listen to repetition, in case it's modified after we've
+        # received the new ROI. Or maybe always compute acquisition time a bit delayed?
 
     def _get_default_filename(self):
         """
         Return a good default filename
         """
-        return os.path.join(self.conf.last_path, 
+        return os.path.join(self.conf.last_path,
                             u"%s%s" % (time.strftime("%Y%m%d-%H%M%S"),
                                              self.conf.last_extension)
                             )
@@ -431,7 +440,7 @@ class SparcAcquiController(AcquisitionController):
         # show the end of the path (usually more important)
         self._main_frame.txt_destination.SetInsertionPointEnd()
         self._main_frame.txt_filename.SetValue(unicode(base))
-    
+
     def onROI(self, roi):
         """ updates the acquire button according to the acquisition ROI """
         self.btn_acquire.Enable(roi != UNDEFINED_ROI)
@@ -441,7 +450,7 @@ class SparcAcquiController(AcquisitionController):
     def on_setting_change(self, setting_ctrl):
         """ Handler for pubsub 'setting.changed' messages """
         self.update_acquisition_time()
-        
+
     def on_change_file(self, evt):
         """
         Shows a dialog to change the path, name, and format of the acquisition
@@ -450,12 +459,11 @@ class SparcAcquiController(AcquisitionController):
         """
         new_name = ShowAcquisitionFileDialog(self._main_frame, self.filename.value)
         self.filename.value = new_name
-        
-        # FIXME: this is a hack to try the ROI without selecting it
-        self._sem_cl.roi.value = (0.1, 0.1, 0.9, 0.8)
-        
+
+    @limit_invocation(1) # max 1/s
+    @call_after
     def update_acquisition_time(self):
-        
+
         if self._sem_cl.roi.value == UNDEFINED_ROI:
             # TODO: update the default text to be the same
             txt = "Region of acquisition needs to be selected"
@@ -469,13 +477,14 @@ class SparcAcquiController(AcquisitionController):
 
         self.lbl_acqestimate.SetLabel(txt)
 
-    def on_acquisition(self, evt):
-        mtc = get_main_tab_controller()
 
+    def _pause_settings(self):
+        """
+        Pause the settings of the GUI and save the values for restoring them later
+        """
         # save the original settings
-        main_settings_controller = mtc['sparc_acqui'].settings_controller
-        orig_settings = preset_as_is(main_settings_controller.entries)
-        main_settings_controller.pause()
+        self._orig_settings = preset_as_is(self._settings_controller.entries)
+        self._settings_controller.pause()
 
         # TODO: also freeze the MicroscopeView (for now we just pause the streams)
         # pause all the live acquisitions
@@ -484,27 +493,31 @@ class SparcAcquiController(AcquisitionController):
             s.is_active.value = False
             s.should_update.value = False
 
-        # run the acquisition
-        try:
-            self.run_acquisition()
-        finally:
-            for s in live_streams:
-                s.should_update.value = True
-                s.is_active.value = True
+    def _resume_settings(self):
+        """
+        Resume (unfreeze) the settings in the GUI and make sure the value are 
+        back to the previous value
+        """
+        live_streams = self._microscope.focussedView.value.getStreams()
+        for s in live_streams:
+            s.should_update.value = True
+            s.is_active.value = True
 
-            for se, value in orig_settings.items():
-                se.va.value = value
-            main_settings_controller.resume()
+        for se, value in self._orig_settings.items():
+            se.va.value = value
+        self._settings_controller.resume()
 
-            # Make sure that the acquisition button is enabled again.
-            self._main_frame.btn_sparc_acquire.Enable()
+        # Make sure that the acquisition button is enabled again.
+        self._main_frame.btn_sparc_acquire.Enable()
 
-    def run_acquisition(self):
+    def on_acquisition(self, evt):
         """
         Start the acquisition (really)
         Similar to win.acquisition.on_acquire()
         """
+        self._pause_settings()
         self.btn_acquire.Disable()
+        self.btn_cancel.Enable()
         # FIXME: catch "close the window" event and cancel acquisition before
         # fully closing.
 
@@ -512,24 +525,21 @@ class SparcAcquiController(AcquisitionController):
         # update_acquisition_time()
         self.gauge_acq.Value = 0
         self.gauge_acq.Show()
+        self.btn_cancel.Show()
         # FIXME: probably not the whole window is required, just the file settings
         self._main_frame.Layout() # to put the gauge at the right place
-        
+
         # start acquisition + connect events to callback
         streams = self._microscope.acquisitionView.getStreams()
-        
+
         self.acq_future = acqmng.startAcquisition(streams)
         self.acq_future.add_update_callback(self.on_acquisition_upd)
         self.acq_future.add_done_callback(self.on_acquisition_done)
-
-        # TODO: cancel button
-        # self.btn_cancel.Bind(wx.EVT_BUTTON, self.on_cancel)
 
     def on_cancel(self, evt):
         """
         Called during acquisition when pressing the cancel button
         """
-        # FIXME: need to have a cancel button
         if not self.acq_future:
             msg = "Tried to cancel acquisition while it was not started"
             logging.warning(msg)
@@ -544,54 +554,56 @@ class SparcAcquiController(AcquisitionController):
         Callback called when the acquisition is finished (either successfully or
         cancelled)
         """
-        # TODO: hide the "cancel" button
-#         self.btn_cancel.SetLabel("Close")
-
+        new_lbl = None # If a string, will use it instead of the acquisition time
         try:
-            data = future.result(1) # timeout is just for safety
-            # make sure the progress bar is at 100%
-            self.gauge_acq.Value = self.gauge_acq.Range
-        except CancelledError:
-            # put back to original state:
-            # re-enable the acquire button
-            self.btn_acquire.Enable()
+            try:
+                data = future.result(1) # timeout is just for safety
+                # make sure the progress bar is at 100%
+                self.gauge_acq.Value = self.gauge_acq.Range
+            except CancelledError:
+                # hide progress bar (+ put pack estimated time)
+                self.gauge_acq.Hide()
+                self.btn_cancel.Hide()
+                # don't change filename => we can reuse it
+                return
+            except Exception:
+                # We cannot do much: just warn the user and pretend it was cancelled
+                logging.exception("Acquisition failed")
+                new_lbl = "Acquisition failed."
 
-            # hide progress bar (+ put pack estimated time)
-            self.update_acquisition_time()
-            self.gauge_acq.Hide()
-            self._main_frame.Layout()
-            # don't change filename => we can reuse it
-            return
-        except Exception:
-            # We cannot do much: just warn the user and pretend it was cancelled
-            logging.exception("Acquisition failed")
-            self.btn_acquire.Enable()
-            self.lbl_acqestimate.SetLabel("Acquisition failed.")
-            # leave the gauge, to give a hint on what went wrong.
-            return
+                # leave the gauge, to give a hint on what went wrong.
+                self.btn_cancel.Disable()
+                return
 
-        # save result to file
-        try:
-            thumb = acqmng.computeThumbnail(self._microscope.acquisitionView.stream_tree,
-                                            future)
-            filename = self.filename.value
-            exporter = dataio.get_exporter(self.conf.last_format)
-            exporter.export(filename, data, thumb)
-            logging.info("Acquisition saved as file '%s'.", filename)
-        except Exception:
-            logging.exception("Saving acquisition failed")
-            self.lbl_acqestimate.SetLabel("Saving acquisition file failed.")
-        finally:
-            # hide progress bar (+ put pack estimated time)
-            self.update_acquisition_time()
-            self.gauge_acq.Hide()
-            self._main_frame.Layout()
-            
-            self.btn_acquire.Enable()
+            # save result to file
+            try:
+                thumb = acqmng.computeThumbnail(self._microscope.acquisitionView.stream_tree,
+                                                future)
+                filename = self.filename.value
+                exporter = dataio.get_exporter(self.conf.last_format)
+                exporter.export(filename, data, thumb)
+                logging.info("Acquisition saved as file '%s'.", filename)
+                # TODO: switch to analysis tab automatically?
+            except Exception:
+                logging.exception("Saving acquisition failed")
+                new_lbl = "Saving acquisition file failed"
+                return
+            finally:
+                # hide progress bar (+ put pack estimated time)
+                self.gauge_acq.Hide()
+                self.btn_cancel.Hide()
+
             # change filename, to ensure not overwriting anything
             self.filename.value = self._get_default_filename()
-        
-        # TODO: switch to analysis tab automatically?
+        finally:
+            self.btn_acquire.Enable()
+            self._main_frame.Layout()
+            self._resume_settings()
+            if new_lbl is not None:
+                self.lbl_acqestimate.SetLabel(new_lbl)
+            else:
+                self.update_acquisition_time()
+
 
     @call_after
     def on_acquisition_upd(self, future, past, left):

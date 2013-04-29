@@ -38,3 +38,6 @@ OPTICAL_STREAMS = (stream.FluoStream,
 # All the stream types related to electron microscope
 EM_STREAMS = (stream.SEMStream,
               stream.StaticSEMStream)
+
+SPECTRUM_STREAMS = (stream.SpectrumStream,
+                    stream.StaticSpectrumStream)

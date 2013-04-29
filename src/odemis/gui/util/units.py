@@ -32,10 +32,10 @@ SI_PREFIXES = {9: u"G",
                6: u"M",
                3: u"k",
                0: u"",
-               -3: u"m",
-               -6: u"µ",
-               -9: u"n",
-               -12: u"p"}
+               - 3: u"m",
+               - 6: u"µ",
+               - 9: u"n",
+               - 12: u"p"}
 
 def round_significant(x, n):
     """
@@ -122,24 +122,31 @@ def to_string_pretty(x, sig=None):
 
     return u"%s" % x
 
-def readable_str(value, unit=None, sig=3):
+def readable_str(value, unit=None, sig=None):
     """
     Convert a value with a unit into a displayable string for the user
 
     :param value: (number or [number...]): value(s) to display
     :param unit: (None or string): unit of the values. If necessary a SI prefix
         will be used to make the value more readable, unless None is given.
-    :param sig: (int) The number of significant decimals
+    :param sig: (int or None) The number of significant decimals
 
     return (string)
     """
-    if unit is None:
+    # check against our black list of units which don't support SI prefix
+    if unit in (None, "", "px", "C", "rad"):
         # don't put SI scaling prefix
+        if unit in (None, ""):
+            sunit = u""
+        else:
+            sunit = u" %s" % unit
         if isinstance(value, collections.Iterable):
             # Could use "×" , but less readable than "x"
-            return u" x ".join([to_string_pretty(v, sig) for v in value])
+            return u"%s%s" % (u" x ".join([to_string_pretty(v, sig) for v in value]), sunit)
         else:
-            return to_string_pretty(value, sig)
+            return u"%s%s" % (to_string_pretty(value, sig), sunit)
+
+    # TODO: special case for s: only if < 10
 
     if isinstance(value, collections.Iterable):
         values, prefix = si_scale_list(value)
