@@ -395,7 +395,7 @@ class AcquisitionDialog(xrcfr_acq):
             # don't be too precise
             self.lbl_acqestimate.SetLabel("a few seconds left.")
 
-
+# dialogue to select a new file
 def _convert_formats_to_wildcards(formats2ext):
     """Convert formats into wildcards string compatible with wx.FileDialog()
 

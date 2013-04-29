@@ -22,15 +22,16 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
+from abc import ABCMeta
+from odemis import model
+from odemis.gui.model.stream import Stream, StreamTree
+from odemis.model import FloatContinuous, VigilantAttribute
+from odemis.model._vattributes import IntEnumerated, NotSettableError
 import collections
 import logging
 import threading
 import time
 
-from odemis import model
-from odemis.gui.model.stream import Stream, StreamTree
-from odemis.model import FloatContinuous, VigilantAttribute
-from odemis.model._vattributes import IntEnumerated, NotSettableError
 
 # The different states of a microscope
 STATE_OFF = 0
@@ -50,19 +51,36 @@ TOOL_ZOOM = 1 # Select the region to zoom in
 TOOL_ROI = 2 # Select the region of interest (sub-area to be updated)
 TOOL_ROA = 3 # Select the region of acquisition (area to be acquired, SPARC-only)
 
-class MicroscopeModel(object):
-    """
-    Represents the graphical user interface for a microscope
 
-    Provides direct reference to the HwComponents.
+class MicroscopeGUIModel(object):
     """
-    # TODO: rename to something like MicroscopeGUIModel
-    # TODO: subclass for each different type of tabs (eg: live/acquisition/analysis/actuators)
+    Represents the graphical user interface for a microscope. In Odemis GUI, 
+    there's basically one per tab (and for each window without tab).
+    This is a meta-class. You actually want to use one of the sub-classes to 
+    represent a specific type of interface. Not all interfaces have all the 
+    same attributes. However, there is always:
+    .microscope: The HwComponent root of all the other components (can be None
+    if there is no microscope available, like an interface to display recorded
+    acquisition). There are also many .ccd, .stage, etc, which can be used to 
+    directly access the sub-components. .microscope.role (string) should be used
+    to find out the generic type of microscope connected. Normally, all the 
+    interfaces of the same execution will have the same .microscope or None (
+    there are never multiple microscopes manipulated simultaneously). 
+    .view and .focusedView: represent the available/currently selected views
+    (graphical image/data display).
+    .viewLayout: the current way on how the views are organized (the choices
+     give all the possibilities of this GUI)
+    .streams: all the stream/data available to the user to manipulate.
+    .tool: the current "mode" in which the user is (the choices give all the 
+     available tools for this GUI).
+    """
+    __metaclass__ = ABCMeta
 
     def __init__(self, microscope):
         """
-        microscope (model.Microscope): the root of the HwComponent tree provided
-            by the back-end
+        microscope (model.Microscope or None): the root of the HwComponent tree
+         provided by the back-end. If None, it means the interface is not 
+         connected to a microscope (and displays a recorded acqusition). 
         """
         self.microscope = microscope
 
@@ -70,6 +88,8 @@ class MicroscopeModel(object):
         self.ccd = None
         self.stage = None
         self.focus = None # actuator to change the camera focus
+        self.aligner = None # actuator to align ebeam/ccd
+        self.mirror = None # actuator to change the mirror position (on SPARC)
         self.light = None
         self.light_filter = None # emission light filter for fluorescence micro.
         self.ebeam = None
@@ -77,56 +97,46 @@ class MicroscopeModel(object):
         self.bsd = None # back-scatter electron detector
         self.spectrometer = None # spectrometer
 
-        for d in microscope.detectors:
-            if d.role == "ccd":
-                self.ccd = d
-            elif d.role == "se-detector":
-                self.sed = d
-            elif d.role == "bs-detector":
-                self.bsd = d
-            elif d.role == "spectrometer":
-                self.spectrometer = d
-        if (not any((self.ccd, self.sed, self.bsd, self.spectrometer))
-            and not microscope.role.startswith("static")):
-            msg = "no camera nor electron detector found in the microscope"
-            raise Exception(msg)
+        if microscope:
+            for d in microscope.detectors:
+                if d.role == "ccd":
+                    self.ccd = d
+                elif d.role == "se-detector":
+                    self.sed = d
+                elif d.role == "bs-detector":
+                    self.bsd = d
+                elif d.role == "spectrometer":
+                    self.spectrometer = d
 
-        for a in microscope.actuators:
-            if a.role == "stage":
-                self.stage = a
-                # TODO: viewports should subscribe to the stage
-            elif a.role == "focus":
-                self.focus = a
-        if not self.stage and microscope.role == "secom":
-            raise Exception("no stage found in the microscope")
+            for a in microscope.actuators:
+                if a.role == "stage":
+                    self.stage = a # most views move this actuator when moving
+                elif a.role == "focus":
+                    self.focus = a
+                elif a.role == "mirror":
+                    self.mirror = a
+                elif a.role == "align":
+                    self.aligner = a
 
-        # it's not an error to not have focus
-        if not self.focus:
-            logging.info("No focus actuator found for the microscope")
-
-        for e in microscope.emitters:
-            if e.role == "light":
-                self.light = e
-                # pick a nice value to turn on the light
-                if self.light.power.value > 0:
-                    self._light_power_on = self.light.power.value
-                else:
-                    try:
-                        self._light_power_on = max(self.light.power.range)
-                    except (AttributeError, model.NotApplicableError):
+            for e in microscope.emitters:
+                if e.role == "light":
+                    self.light = e
+                    # pick a nice value to turn on the light
+                    if self.light.power.value > 0:
+                        self._light_power_on = self.light.power.value
+                    else:
                         try:
-                            self._light_power_on = max(self.light.power.choices)
+                            self._light_power_on = max(self.light.power.range)
                         except (AttributeError, model.NotApplicableError):
-                            self._light_power_on = 1
-                            logging.warning("Unknown light power value")
-            elif e.role == "filter":
-                self.light_filter = e
-            elif e.role == "e-beam":
-                self.ebeam = e
-
-        if (not self.light and not self.ebeam
-            and not microscope.role.startswith("static")):
-            raise Exception("No emitter found in the microscope")
+                            try:
+                                self._light_power_on = max(self.light.power.choices)
+                            except (AttributeError, model.NotApplicableError):
+                                self._light_power_on = 1
+                                logging.warning("Unknown light power value")
+                elif e.role == "filter":
+                    self.light_filter = e
+                elif e.role == "e-beam":
+                    self.ebeam = e
 
         self.streams = set() # Streams available (handled by StreamController)
 
@@ -135,22 +145,17 @@ class MicroscopeModel(object):
         # bottom-left, bottom-right.
         self.views = []
 
-        # The MicroscopeView currently focused, it is one of the .views (or None)
-        self.focussedView = VigilantAttribute(None)
-
-        # Very special view which is used only as a container to save which stream
-        # will be acquired (for the Sparc acquisition interface only).
-        # The tab controller will take care of filling it
-        self.acquisitionView = MicroscopeView("Acquisition", stage=self.stage)
-
         # TODO: use it (cf cont.tools)
         # Current tool selected (from the toolbar)
-        tools = set([TOOL_NONE, TOOL_ZOOM, TOOL_ROI, TOOL_ROA])
-        self.tool = IntEnumerated(TOOL_NONE, choices=tools)
+        self.tool = None # Needs to be overridden by a IntEnumerated
+
+        # The MicroscopeView currently focused, it is one of the .views (or None)
+        self.focussedView = VigilantAttribute(None)
 
         layouts = set([VIEW_LAYOUT_ONE, VIEW_LAYOUT_22, VIEW_LAYOUT_FULLSCREEN])
         self.viewLayout = model.IntEnumerated(VIEW_LAYOUT_22, choices=layouts)
 
+        # Handle turning on/off the instruments
         hw_states = set([STATE_OFF, STATE_ON, STATE_PAUSE])
         if self.ccd:
             # not so nice to hard code it here, but that should do it for now...
@@ -169,12 +174,6 @@ class MicroscopeModel(object):
             self.specState = model.IntEnumerated(STATE_OFF, choices=hw_states)
             self.specState.subscribe(self.onSpecState)
 
-    def stopMotion(self):
-        """ Immediately stops all movement on all axis """
-        # FIXME: should have a list of all actuators?
-        self.stage.stop()
-        self.focus.stop()
-        logging.info("Stopped motion on all axes")
 
     def onOpticalState(self, state):
         """ Event handler for when the state of the optical microscope changes
@@ -234,6 +233,140 @@ class MicroscopeModel(object):
     def onSpecState(self, state):
         # nothing to do here, the settings controller will just hide the stream/settings
         pass
+
+class LiveGUIModel(MicroscopeGUIModel):
+    """
+    Represent an interface used to only show the current data from the
+    microscope. It should be able to handle SEM-only, optical-only, and SECOM 
+    systems.
+    """
+    # TODO check it can also handle SPARC?
+    def __init__(self, microscope):
+        assert microscope is not None
+        MicroscopeGUIModel.__init__(self, microscope)
+
+        # Do some typical checks on expectations from an actual microscope
+        if not any((self.ccd, self.sed, self.bsd, self.spectrometer)):
+            raise KeyError("No detector found in the microscope")
+
+        if not self.light and not self.ebeam:
+            raise KeyError("No emitter found in the microscope")
+
+        if microscope.role == "secom":
+            if not self.stage:
+                raise KeyError("No stage found in the SECOM microscope")
+            # it's not an error to not have focus but it's weird
+            if not self.focus:
+                logging.warning("No focus actuator found for the microscope")
+        elif microscope.role == "sparc" and not self.mirror:
+            raise KeyError("No mirror found in the SPARC microscope")
+
+        # Current tool selected (from the toolbar)
+        tools = set([TOOL_NONE, TOOL_ZOOM, TOOL_ROI])
+        self.tool = IntEnumerated(TOOL_NONE, choices=tools)
+
+
+class AcquisitionGUIModel(MicroscopeGUIModel):
+    """
+    Represent an interface used to show the current data from the microscope and
+    select different settings for a (high quality) acquisition. It should be
+    able to handle SPARC systems (at least).
+    """
+    # TODO: use it for the SECOM acquisition dialogue as well
+    def __init__(self, microscope):
+        assert microscope is not None
+        MicroscopeGUIModel.__init__(self, microscope)
+
+        # Do some typical checks on expectations from an actual microscope
+        if not any((self.ccd, self.sed, self.bsd, self.spectrometer)):
+            raise KeyError("No detector found in the microscope")
+
+        if not self.light and not self.ebeam:
+            raise KeyError("No emitter found in the microscope")
+
+        if microscope.role == "secom":
+            if not self.stage:
+                raise KeyError("No stage found in the SECOM microscope")
+            # it's not an error to not have focus but it's weird
+            if not self.focus:
+                logging.warning("No focus actuator found for the microscope")
+        elif microscope.role == "sparc" and not self.mirror:
+            raise KeyError("No mirror found in the SPARC microscope")
+
+
+        # more tools: for selecting the sub-region of acquisition
+        tools = set([TOOL_NONE, TOOL_ZOOM, TOOL_ROI, TOOL_ROA])
+        self.tool = IntEnumerated(TOOL_NONE, choices=tools)
+
+        # Very special view which is used only as a container to save which stream
+        # will be acquired (for the Sparc acquisition interface only).
+        # The tab controller will take care of filling it
+        self.acquisitionView = MicroscopeView("Acquisition")
+
+class AnalysisGUIModel(MicroscopeGUIModel):
+    """
+    Represent an interface used to show the recorded microscope data. Typically
+    it represents all the data present in a specific file.
+    All the streams should be StaticStreams
+    """
+    def __init__(self, role=None):
+        # create a fake empty microscope, with just a role
+        fake_mic = model.Microscope("fake", role=role)
+        MicroscopeGUIModel.__init__(self, fake_mic)
+
+        # only tool to zoom
+        tools = set([TOOL_NONE, TOOL_ZOOM])
+        self.tool = IntEnumerated(TOOL_NONE, choices=tools)
+
+        # The current file it displays. If None, it means there is no file
+        # associated to the data displayed
+        self.fileinfo = VigilantAttribute(None) # a FileInfo
+
+# TODO: use it for FirstStep and SPARC manual mirror calibration
+class ActuatorGUIModel(MicroscopeGUIModel):
+    """
+    Represent an interface used to move the actuators of a microscope. It might
+    also display one or more views, but it's not required.
+    """
+    def __init__(self, microscope):
+        assert microscope is not None
+        MicroscopeGUIModel.__init__(self, microscope)
+
+        # check there is something to move
+        if not microscope.actuators:
+            raise KeyError("No actuators found in the microscope")
+
+        # No tools
+        tools = set([TOOL_NONE])
+        self.tool = IntEnumerated(TOOL_NONE, choices=tools, readonly=True)
+
+class FileInfo(object):
+    """
+    Represent all the information about a microscope acquisition recorded 
+    inside a file. It's mostly aimed at containing information, and its attributes
+    should be considered readonly after initialisation.
+    """
+    def __init__(self, acqfile):
+        """
+        acqfile (File or None): the File that contains the acquisition, some
+        fields will be automatically filled in if provided
+        """
+        self.file = acqfile
+        try:
+            self.filename = acqfile.name
+        except Exception:
+            self.filename = None
+
+        self.time = None # acquisition time (second from epoch)
+        if self.filename:
+            # automatically fill in with not too bad info
+            try:
+                self.time = os.stat(self.filename).st_ctime
+            except Exception:
+                pass
+
+        # TODO: settings of the instruments for the acquisition?
+        # Might be per stream
 
 class MicroscopeView(object):
     """ Represents a view from a microscope and ways to alter it.
@@ -348,12 +481,12 @@ class MicroscopeView(object):
 
         return self._stage.moveRel(move)
 
-   # def onStagePos(self, pos):
-   #     # we want to recenter the viewports whenever the stage moves
-   #     # Not sure whether that's really the right way to do it though...
-   #     # TODO: avoid it to move the view when the user is dragging the view
-   #     #  => might require cleverness
-   #     # self.view_pos = model.ListVA((pos["x"], pos["y"]), unit="m")
+# def onStagePos(self, pos):
+#     # we want to recenter the viewports whenever the stage moves
+#     # Not sure whether that's really the right way to do it though...
+#     # TODO: avoid it to move the view when the user is dragging the view
+#     #  => might require cleverness
+#     # self.view_pos = model.ListVA((pos["x"], pos["y"]), unit="m")
 
     def getStreams(self):
         """

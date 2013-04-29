@@ -341,7 +341,7 @@ class StreamPanel(wx.PyPanel):
         self.SetForegroundColour(FOREGROUND_COLOUR)
 
         self.stream = stream
-        self._microscope = microscope_model
+        self._interface_model = microscope_model
         self._collapsed = True
         self._agwStyle = agwStyle | wx.CP_NO_TLW_RESIZE  # |wx.CP_GTK_EXPANDER
 
@@ -495,7 +495,7 @@ class StreamPanel(wx.PyPanel):
     def on_visibility_btn(self, evt):
         # TODO: Move to controller. Screen widget should not need to know about
         # microscopes and focussed views.
-        view = self._microscope.focussedView.value
+        view = self._interface_model.focussedView.value
         if not view:
             return
         if self._expander._btn_vis.GetToggle():
@@ -711,7 +711,7 @@ class SecomStreamPanel(StreamPanel):  # pylint: disable=R0901
         self.stream.should_update.subscribe(self.onUpdatedChanged, init=True)
 
         # initialise _btn_play
-        self.setVisible(self.stream in self._microscope.focussedView.value.getStreams())
+        self.setVisible(self.stream in self._interface_model.focussedView.value.getStreams())
 
         # Panel controls
         # TODO reuse VigilantAttributeConnector, or at least refactor
@@ -999,7 +999,7 @@ class StreamBar(wx.Panel):
 
         wx.Panel.__init__(self, *args, **kwargs)
 
-        self._microscope = None # MicroscopeModel
+        self._interface_model = None # MicroscopeModel
 
         self.stream_panels = []
         self.menu_actions = collections.OrderedDict()  # title => callback
