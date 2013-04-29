@@ -505,9 +505,11 @@ class SettingsPanel(object):
             # default Ubuntu theme and a small heigh.
             # One problem of OwnerDrawnComboBox is that left/right keys don't
             # move the text caret.
-            new_ctrl = wx.combo.OwnerDrawnComboBox(self.panel, wx.ID_ANY,
-                           value='', pos=(0, 0), size=(100, 16),
-                           style=wx.BORDER_NONE | wx.CB_DROPDOWN | wx.TE_PROCESS_ENTER)
+            new_ctrl = wx.combo.OwnerDrawnComboBox(
+                    self.panel,
+                    wx.ID_ANY,
+                    value='', pos=(0, 0), size=(100, 16),
+                    style=wx.BORDER_NONE | wx.CB_DROPDOWN | wx.TE_PROCESS_ENTER)
 
             # Set colours
             new_ctrl.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_EDIT)
