@@ -43,6 +43,7 @@ import threading
 # to identify a ROI which must still be defined by the user
 UNDEFINED_ROI = (0, 0, 0, 0)
 
+#pylint: disable=W0221
 
 class Stream(object):
     """ A stream combines a Detector, its associated Dataflow and an Emitter.
@@ -53,8 +54,8 @@ class Stream(object):
     This is an abstract class, unless the emitter doesn't need any configuration
     (always on, with the right settings).
 
-    Note: If a Stream needs multiple Emitters, then this should be implemented in
-    a subclass of Stream.
+    Note: If a Stream needs multiple Emitters, then this should be implemented
+    in a subclass of Stream.
     """
 
     WARNING_EXCITATION_NOT_OPT = ("The excitation wavelength selected cannot "
@@ -98,8 +99,8 @@ class Stream(object):
         # start/stop acquisition, and one VA "updated" to stated that the user
         # want this stream updated (as often as possible while other streams are
         # also updated)
-        # should_update has no effect direct effect, it's just a flag to indicate
-        # the user would like to have the stream updated (live)
+        # should_update has no effect direct effect, it's just a flag to
+        # indicate the user would like to have the stream updated (live)
         self.should_update = model.BooleanVA(False)
         # is_active set to True will keep the acquisition going on
         self.is_active = model.BooleanVA(False)
@@ -171,12 +172,16 @@ class Stream(object):
         is_active attribute
         """
         if active:
-            logging.debug("Subscribing to dataflow of component %s", self._detector.name)
+            msg = "Subscribing to dataflow of component %s"
+            logging.debug(msg, self._detector.name)
             if not self.should_update.value:
-                logging.warning("Trying to activate stream while it's not supposed to update")
+                msg = ("Trying to activate stream while it's not supposed to "
+                       "update")
+                logging.warning(msg)
             self._dataflow.subscribe(self.onNewImage)
         else:
-            logging.debug("Unsubscribing from dataflow of component %s", self._detector.name)
+            msg = "Unsubscribing from dataflow of component %s"
+            logging.debug(msg, self._detector.name)
             self._dataflow.unsubscribe(self.onNewImage)
 
     # No __del__: subscription should be automatically stopped when the object
@@ -232,14 +237,16 @@ class Stream(object):
 
     def onBrightnessContrast(self, unused):
         # called whenever brightness/contrast changes
-        # => needs to recompute the image (but not too often, so we do it in a timer)
+        # => needs to recompute the image (but not too often, so we do it in a
+        # timer)
 
         if self.raw:
             self._updateImage()
 
     def onNewImage(self, dataflow, data):
         # For now, raw images are pretty simple: we only have one
-        # (in the future, we could keep the old ones which are not fully overlapped
+        # (in the future, we could keep the old ones which are not fully
+        # overlapped
         if self.raw:
             self.raw.pop()
         self.raw.insert(0, data)
@@ -257,8 +264,8 @@ class SEMStream(Stream):
         # TODO: drift correction
         # .driftCorrection: Boolean
         # .driftROI: the region used for the drift correction
-        # .driftCorrectionPeriod: time in s between each correction (approximate,
-        #   tries to do it after every N lines, or every N pixels)
+        # .driftCorrectionPeriod: time in s between each correction (approximate
+        #   ,tries to do it after every N lines, or every N pixels)
         # Need to see
 
         # TODO: Anti-aliasing/Pixel fuzzing
@@ -277,9 +284,9 @@ class SEMStream(Stream):
 
         try:
             res = list(self._emitter.resolution.value)
-            # Typically there is few more pixels inserted at the beginning of each
-            # line for the settle time of the beam. We guesstimate by just adding
-            # 1 pixel to each line
+            # Typically there is few more pixels inserted at the beginning of
+            # each line for the settle time of the beam. We guesstimate by just
+            # adding 1 pixel to each line
             if len(res) == 2:
                 res[1] += 1
             else:
@@ -291,7 +298,8 @@ class SEMStream(Stream):
             duration += self.SETUP_OVERHEAD
 
             return duration
-        except:
+        # TODO: Remove 'catch-all' with realistic exception
+        except Exception:  #pylint: disable=W0703
             msg = "Exception while estimating acquisition time of %s"
             logging.exception(msg, self.name.value)
             return Stream.estimateAcquisitionTime(self)
@@ -343,7 +351,8 @@ class CameraStream(Stream):
         try:
             exp = self._detector.exposureTime.value
             res = self._detector.resolution.value
-            if isinstance(self._detector.readoutRate, model.VigilantAttributeBase):
+            if isinstance(self._detector.readoutRate,
+                          model.VigilantAttributeBase):
                 readout = 1 / self._detector.readoutRate.value
             else:
                 # let's assume it's super fast
@@ -409,7 +418,9 @@ class FluoStream(CameraStream):
         # TODO: what should be nice default value of the light and filter?
         exc_range = [min([s[0] for s in emitter.spectra.value]),
                      max([s[4] for s in emitter.spectra.value])]
-        self.excitation = model.FloatContinuous(488e-9, range=exc_range, unit="m")
+        self.excitation = model.FloatContinuous(488e-9,
+                                                range=exc_range,
+                                                unit="m")
         self.excitation.subscribe(self.onExcitation)
 
         em_range = [min([s[0] for s in em_filter.band.value]),
@@ -562,16 +573,17 @@ class SpectrumStream(Stream):
     def estimateAcquisitionTime(self):
         try:
             res = list(self.repetition.value)
-            # Typically there is few more pixels inserted at the beginning of each
-            # line for the settle time of the beam. We guesstimate by just adding
-            # 1 pixel to each line
+            # Typically there is few more pixels inserted at the beginning of
+            # each line for the settle time of the beam. We guesstimate by just
+            # adding 1 pixel to each line
             if len(res) == 2:
                 res[1] += 1
             else:
                 logging.warning(("Resolution of scanner is not 2 dimensional, "
                                  "time estimation might be wrong"))
 
-            # Each pixel x the exposure time (of the detector) + readout time + 10% overhead
+            # Each pixel x the exposure time (of the detector) + readout time +
+            # 10% overhead
             exp = self._detector.exposureTime.value
             try:
                 ro_rate = self._detector.readoutRate.value
@@ -590,8 +602,8 @@ class SpectrumStream(Stream):
 
 class ARStream(Stream):
     """
-    An angular-resolved stream. Be aware that acquisition can be very long so should
-    not be used for live view. So it has no .image (for now).
+    An angular-resolved stream. Be aware that acquisition can be very long so
+    should not be used for live view. So it has no .image (for now).
     See StaticARStream for displaying a stream.
     """
 
@@ -630,16 +642,17 @@ class ARStream(Stream):
     def estimateAcquisitionTime(self):
         try:
             res = list(self.repetition.value)
-            # Typically there is few more pixels inserted at the beginning of each
-            # line for the settle time of the beam. We guesstimate by just adding
-            # 1 pixel to each line
+            # Typically there is few more pixels inserted at the beginning of
+            # each line for the settle time of the beam. We guesstimate by just
+            # adding 1 pixel to each line
             if len(res) == 2:
                 res[1] += 1
             else:
                 logging.warning(("Resolution of scanner is not 2 dimensional, "
                                  "time estimation might be wrong"))
 
-            # Each pixel x the exposure time (of the detector) + readout time + 10% overhead
+            # Each pixel x the exposure time (of the detector) + readout time +
+            # 10% overhead
             exp = self._detector.exposureTime.value
             try:
                 ro_rate = self._detector.readoutRate.value
@@ -682,7 +695,8 @@ class StaticStream(Stream):
                 minv = image.min()
                 if minv < 0:  # signed?
                     self._depth += -minv
-                    # FIXME: probably need to fix DataArray2wxImage() for such cases
+                    # FIXME: probably need to fix DataArray2wxImage() for such
+                    # cases
 
             self.onNewImage(None, image)
 
@@ -707,7 +721,8 @@ class StaticSpectrumStream(StaticStream):
     A Spectrum stream which displays only one static image/data.
     The main difference from the normal streams is that the data is 3D (a cube)
     The metadata should have a MD_WL_POLYNOMIAL
-    Note that the data received should be of the (numpy) shape CYX. (where YX might be missing)
+    Note that the data received should be of the (numpy) shape CYX. (where YX
+    might be missing)
     When saving, the data will be converted to CTZYX (where TZ is 11)
     """
     def __init__(self, name, image):
@@ -757,7 +772,8 @@ class StaticSpectrumStream(StaticStream):
         # this will call _updateImage(), which needs bandwidth
         StaticStream.__init__(self, name, image)
 
-        # TODO: to convert to final raw data: raw = raw[:,numpy.newaxis,numpy.newaxis,:,:]
+        # TODO: to convert to final
+        #   raw data: raw = raw[:,numpy.newaxis,numpy.newaxis,:,:]
 
     def _get_bandwith_in_pixel(self):
         """
@@ -780,7 +796,8 @@ class StaticSpectrumStream(StaticStream):
         data = self.raw[0]
         pn = polynomial.Polynomial(data.metadata[MD_WL_POLYNOMIAL],
                                    domain=[0, data.shape[0]-1])
-        n, px_values = pn.linspace(data.shape[0]) # TODO: cache it, as the polynomial is rarely updated!
+        # TODO: cache it, as the polynomial is rarely updated!
+        n, px_values = pn.linspace(data.shape[0])
 
         low_px = numpy.searchsorted(px_values, low, side="left")
         if high == low:
@@ -803,8 +820,8 @@ class StaticSpectrumStream(StaticStream):
             data = self.raw[0]
             if self.projection.value == PROJ_AVERAGE_SPECTRUM:
                 if self.auto_bc.value:
-                    # FIXME: need to fix the brightness/contrast to the min/max of
-                    # the _entire_ image (not just the current slice)
+                    # FIXME: need to fix the brightness/contrast to the min/max
+                    # of the _entire_ image (not just the current slice)
                     # b, c = util.img.FindOptimalBC(self.raw[0], self._depth)
                     brightness = None
                     contrast = None
@@ -815,7 +832,6 @@ class StaticSpectrumStream(StaticStream):
                 # pick only the data inside the bandwidth
                 spec_range = self._get_bandwith_in_pixel()
                 # TODO: use better intermediary type if possible?, cf semcomedi
-                logging.warn("Setting AV data")
                 av_data = numpy.mean(data[spec_range[0]:spec_range[1]], axis=0)
                 # av_data = data[0]
 
@@ -824,7 +840,8 @@ class StaticSpectrumStream(StaticStream):
                                                 brightness,
                                                 contrast)
 
-                im.InitAlpha() # it's a different buffer so useless to do it in numpy
+                # it's a different buffer so useless to do it in numpy
+                im.InitAlpha()
 
                 try:
                     pos = data.metadata[MD_POS]
@@ -841,9 +858,11 @@ class StaticSpectrumStream(StaticStream):
 
                 self.image.value = InstrumentalImage(im, mpp, pos)
             else:
-                raise NotImplementedError("Need to handle other projection types")
+                msg = "Need to handle other projection types"
+                raise NotImplementedError(msg)
         except Exception:
-            logging.exception("Error while updating %s image", self.__class__.__name__)
+            msg = "Error while updating %s image"
+            logging.exception(msg, self.__class__.__name__)
 
 class MultipleDetectorStream(Stream):
     """
@@ -854,7 +873,8 @@ class MultipleDetectorStream(Stream):
     """
     def __init__(self, name, streams):
         """
-        streams (list of Streams): all the sub-streams that are used to decompose
+        streams (list of Streams): all the sub-streams that are used to
+            decompose
         """
         # don't call the init of Stream, or it will override .raw
         self.name = model.StringVA(name)
@@ -882,7 +902,8 @@ class SEMSpectrumMDStream(MultipleDetectorStream):
 
         assert sem_stream._emitter == spec_stream._emitter
         self._emitter = sem_stream._emitter
-        self._semd = self._sem_stream._detector # probably secondary electron detector
+         # probably secondary electron detector
+        self._semd = self._sem_stream._detector
         self._semd_df = self._sem_stream._dataflow
         self._spec = self._spec_stream._detector # spectrometer
         self._spec_df = self._spec_stream._dataflow
@@ -908,7 +929,8 @@ class SEMSpectrumMDStream(MultipleDetectorStream):
 
     def _adjustHardwareSettings(self):
         """
-        Read the SEM and Spectrum stream settings and adapt the SEM scanner accordingly.
+        Read the SEM and Spectrum stream settings and adapt the SEM scanner
+        accordingly.
         """
         # ROI
         repetition = self._spec_stream.repetition.value
@@ -938,13 +960,15 @@ class SEMSpectrumMDStream(MultipleDetectorStream):
         # magical formula to get a long enough dwell time.
         # works with PVCam and Andorcam2, but not fool proof at all!
         readout = numpy.prod(spec_size) / self._spec.readoutRate.value + 0.01
-        self._emitter.dwellTime.value = (exp + readout) * 1.1 + 0.05 # 50ms to account for the overhead and extra image acquisition
+        # 50ms to account for the overhead and extra image acquisition
+        self._emitter.dwellTime.value = (exp + readout) * 1.1 + 0.05
 
     def onActive(self, active):
         """ Called when the Stream is activated or deactivated by setting the
         is_active attribute
-        Note: due to the duration of the acquisition, the stream will automatically
-         reset itself to inactive after one acquisition fully acquired.
+        Note: due to the duration of the acquisition, the stream will
+            automatically reset itself to inactive after one acquisition fully
+            acquired.
         """
         # called only when the value _changes_
         if active:
@@ -958,14 +982,17 @@ class SEMSpectrumMDStream(MultipleDetectorStream):
             self._acq_complete.clear()
             if self._acq_waiter:
                 self._acq_waiter.join(10)
-            self._acq_waiter = threading.Thread(target=self._waitTillAcquisition,
+            self._acq_waiter = threading.Thread(
+                                    target=self._waitTillAcquisition,
                                     name="SEM-Spectrum acquisition waiter")
             # will be started at the end of the SEM acquisition
 
             logging.debug("Subscribing to dataflow of components %s and %s",
                           self._semd.name, self._spec.name)
             if not self.should_update.value:
-                logging.warning("Trying to activate stream while it's not supposed to update")
+                msg = ("Trying to activate stream while it's not supposed to "
+                       "update")
+                logging.warning(msg)
             self._spec_df.synchronizedOn(self._emitter.newPosition)
             self._spec_df.subscribe(self._onSpecImage)
             self._semd_df.subscribe(self._onSEMImage)
@@ -973,12 +1000,14 @@ class SEMSpectrumMDStream(MultipleDetectorStream):
             # TODO: detect the current acquisition is being cancelled and handle
             # it specifically
             if not self._acq_complete.is_set():
-                logging.debug("Cancelling acquisition from dataflow of components %s and %s",
-                          self._semd.name, self._spec.name)
+                msg = ("Cancelling acquisition from dataflow of components %s "
+                       "and %s")
+                logging.debug(msg, self._semd.name, self._spec.name)
             self._semd_df.unsubscribe(self._onSEMImage)
             self._spec_df.unsubscribe(self._onSpecImage)
             self._spec_df.synchronizedOn(None)
-            self._acq_spect_buf = [] # not necessary, but helps to free some memory quickly
+            # not necessary, but helps to free some memory quickly
+            self._acq_spect_buf = []
 
     def _waitTillAcquisition(self):
         """
@@ -1003,9 +1032,13 @@ class SEMSpectrumMDStream(MultipleDetectorStream):
 
             # create a spectrum cube from all the data
             self._assembleSpecData(self._acq_spect_buf)
+
             logging.debug("raw data is now of shape %s",
                           ",".join([str(d.shape) for d in self.raw]))
-            # update the image to a new empty one to signal everything is received
+
+            # update the image to a new empty one to signal everything is
+            # received
+
             self.image.value = InstrumentalImage(None)
 
             self.is_active.value = False
@@ -1034,7 +1067,9 @@ class SEMSpectrumMDStream(MultipleDetectorStream):
 
     def _assembleSpecData(self, data_list):
         """
-        Take all the data received from the spectrometer and assemble it in a cube
+        Take all the data received from the spectrometer and assemble it in a
+        cube
+
         data_list (list of M DataArray of shape (1, N)): all the data received
         the result goes into .raw, and a new empty .image is added to inform
         there is a new data.
@@ -1058,12 +1093,13 @@ class SEMSpectrumMDStream(MultipleDetectorStream):
         self._spec_stream.raw = [spec_data]
 
 # On the SPARC, it's possible that both the AR and Spectrum are acquired in the
-# same acquisition, but it doesn't make much sense to acquire them simultaneously
-# because the two optical detectors need the same light, and a mirror is used
-# to select which path is taken. In addition, the AR stream will typically have
-# a lower repetition (even if it has same ROI). So it's easier and faster to
-# acquire them sequentially. The only trick is that if drift correction is used,
-# the same correction must be used for the entire acquisition.
+# same acquisition, but it doesn't make much sense to acquire them
+# simultaneously because the two optical detectors need the same light, and a
+# mirror is used to select which path is taken. In addition, the AR stream will
+# typically have a lower repetition (even if it has same ROI). So it's easier
+# and faster to acquire them sequentially. The only trick is that if drift
+# correction is used, the same correction must be used for the entire
+# acquisition.
 
 class StreamTree(object):
     """ Object which contains a set of streams, and how they are merged to
@@ -1121,7 +1157,8 @@ class StreamTree(object):
         #  it will likely need as argument a wx.Bitmap, and view rectangle
         #  that will define where to save the result
 
-        # TODO: cache with the given rect and mpp and last update time of each image
+        # TODO: cache with the given rect and mpp and last update time of each
+        # image
 
         # create the arguments list for operator
         images = []

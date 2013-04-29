@@ -355,7 +355,8 @@ class SparcAnalysisTab(Tab):
                                     [self.main_frame.vp_sparc_analysis_tl,
                                      self.main_frame.vp_sparc_analysis_tr,
                                      self.main_frame.vp_sparc_analysis_bl,
-                                     self.main_frame.vp_sparc_analysis_br]
+                                     self.main_frame.vp_sparc_analysis_br],
+                                    role= "staticsparc"
                                 )
 
         self._stream_controller = StreamController(

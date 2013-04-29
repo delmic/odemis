@@ -348,12 +348,12 @@ class MicroscopeView(object):
 
         return self._stage.moveRel(move)
 
-        #    def onStagePos(self, pos):
-        #        # we want to recenter the viewports whenever the stage moves
-        #        # Not sure whether that's really the right way to do it though...
-        #        # TODO: avoid it to move the view when the user is dragging the view
-        #        #  => might require cleverness
-        # self.view_pos = model.ListVA((pos["x"], pos["y"]), unit="m")
+   # def onStagePos(self, pos):
+   #     # we want to recenter the viewports whenever the stage moves
+   #     # Not sure whether that's really the right way to do it though...
+   #     # TODO: avoid it to move the view when the user is dragging the view
+   #     #  => might require cleverness
+   #     # self.view_pos = model.ListVA((pos["x"], pos["y"]), unit="m")
 
     def getStreams(self):
         """
@@ -376,11 +376,17 @@ class MicroscopeView(object):
             return
 
         if not isinstance(stream, self.stream_classes):
-            logging.warning("Adding incompatible stream %s to view %s", stream.name.value, self.name.value)
+            msg = "Adding incompatible stream '%s' to view '%s'. %s needed"
+            logging.error(msg,
+                          stream.name.value,
+                          self.name.value,
+                          self.stream_classes)
+            raise Exception("Grrr")
 
         # Find out where the stream should go in the streamTree
         # FIXME: manage sub-trees, with different merge operations
-        # For now we just add it to the list of streams, with the only merge operation possible
+        # For now we just add it to the list of streams, with the only merge
+        # operation possible
         with self._streams_lock:
             self.stream_tree.streams.append(stream)
 

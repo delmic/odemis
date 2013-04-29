@@ -168,17 +168,21 @@ class StreamController(object):
                     self._microscope.ebeam)
         return self._addStream(stream, comp.stream.SparcAcquiStreamPanel)
 
-    def addStatic(self, name, image, cls=model.stream.StaticStream, add_to_all_views=False, ):
+    def addStatic(self, name, image,
+                  cls=model.stream.StaticStream, add_to_all_views=False):
         """
         Creates a new static stream and panel in the stream bar
         Note: only for debugging/testing
-        name (string)
-        image (InstrumentalImage)
-        cls (class of Stream)
-        returns (StreamPanel): the panel created
+
+        :param name: (string)
+        :param image: (InstrumentalImage)
+        :param cls: (class of Stream)
+        :param returns: (StreamPanel): the panel created
         """
         stream = cls(name, image)
-        return self._addStream(stream, comp.stream.SecomStreamPanel, add_to_all_views)
+        return self._addStream(stream,
+                               comp.stream.SecomStreamPanel,
+                               add_to_all_views)
 
 
     def _addStream(self, stream, spanel_cls, add_to_all_views=False):

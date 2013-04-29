@@ -25,12 +25,10 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from __future__ import division
 from odemis.gui import instrmodel
 from odemis.gui.model import OPTICAL_STREAMS, EM_STREAMS, SPECTRUM_STREAMS
-from odemis.gui.model.stream import SEMStream, BrightfieldStream, FluoStream
+from odemis.gui.model.stream import SEMStream, BrightfieldStream, FluoStream, \
+    StaticSpectrumStream
 import logging
 import wx
-
-
-
 
 # TODO: The next comments were copied from instrmodel. Read/implement/remove
 # viewport controller (to be merged with stream controller?)
@@ -50,11 +48,13 @@ class ViewController(object):
     """ Manages the microscope view updates, change of viewport focus, etc.
     """
 
-    def __init__(self, micgui, main_frame, viewports):
+    def __init__(self, micgui, main_frame, viewports, role=None):
         """
         micgui (MicroscopeModel) -- the representation of the microscope GUI
         main_frame: (wx.Frame) -- the frame which contains the 4 viewports
         viewports (list of MicroscopeViewport): the viewports to update
+        role (str): A little 'cheat' for the time being where we can override
+            the role of the micgui
         """
 
         self._microscope = micgui
@@ -64,13 +64,13 @@ class ViewController(object):
         self._viewports = viewports
 
         # create the (default) views and set focussedView
-        self._createViews()
+        self._createViews(role)
 
         # subscribe to layout and view changes
         self._microscope.viewLayout.subscribe(self._onViewLayout, init=True)
         self._microscope.focussedView.subscribe(self._onView, init=False)
 
-    def _createViews(self):
+    def _createViews(self, role):
         """
         Create the different views displayed, according to the current
         microscope.
