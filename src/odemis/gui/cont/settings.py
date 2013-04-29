@@ -505,18 +505,29 @@ class SettingsPanel(object):
             # default Ubuntu theme and a small heigh.
             # One problem of OwnerDrawnComboBox is that left/right keys don't
             # move the text caret.
-            new_ctrl = wx.combo.OwnerDrawnComboBox(
-                    self.panel,
-                    wx.ID_ANY,
-                    value='', pos=(0, 0), size=(100, 16),
-                    style=wx.BORDER_NONE | wx.CB_DROPDOWN | wx.TE_PROCESS_ENTER)
 
-            # Set colours
-            new_ctrl.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_EDIT)
-            new_ctrl.SetBackgroundColour(self.panel.GetBackgroundColour())
+            class OdemisComboBox(wx.combo.OwnerDrawnComboBox):
 
-            new_ctrl.SetButtonBitmaps(img.getbtn_downBitmap(),
-                                      pushButtonBg=False)
+                def __init__(self, *args, **kwargs):
+                    wx.combo.OwnerDrawnComboBox.__init__(self, *args, **kwargs)
+                    self.SetMargins(0, 0)
+                    self.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_EDIT)
+                    self.SetBackgroundColour(self.Parent.GetBackgroundColour())
+                    self.SetButtonBitmaps(img.getbtn_downBitmap(),
+                                          pushButtonBg=False)
+
+                    self.Bind(wx.EVT_SIZE, self.on_size)
+
+                def on_size(self, evt):
+                    txt_ctrl = new_ctrl.GetTextCtrl()
+                    wx.CallAfter(txt_ctrl.SetSize, (-1, 16))
+                    evt.Skip()
+
+            new_ctrl = OdemisComboBox(
+                        self.panel,
+                        wx.ID_ANY,
+                        value='', pos=(0, 0), size=(100, 16),
+                        style=wx.BORDER_NONE | wx.TE_PROCESS_ENTER)
 
             def _eat_event(evt):
                 """ Quick and dirty empty function used to 'eat'
@@ -602,6 +613,18 @@ class SettingsPanel(object):
             bind_menu(ne)
 
         self.fold_panel.Parent.Layout()
+
+        # if hasattr(new_ctrl, 'GetTextCtrl'):
+        #     txt_ctrl = new_ctrl.GetTextCtrl()
+        #     txt_ctrl.SetSizeWH(274, 18)
+        #     print txt_ctrl, txt_ctrl.GetSize()
+
+            # new_ctrl.SetBackgroundColour(wx.RED)
+            # print new_ctrl.GetBackgroundColour()
+            # new_ctrl.SetBackgroundColour(wx.RED)
+
+
+
 
     def on_setting_changed(self, evt):
         logging.debug("Setting has changed")

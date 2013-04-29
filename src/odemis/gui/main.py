@@ -41,7 +41,6 @@ from odemis.gui.model.dye import DyeDatabase
 from odemis.gui.model.img import InstrumentalImage
 from odemis.gui.model.stream import StaticSEMStream, StaticSpectrumStream
 from odemis.gui.xmlh import odemis_get_resources
-from odemis.model._dataflow import MD_PIXEL_SIZE, MD_POS
 
 
 
