@@ -501,10 +501,7 @@ class SettingsPanel(object):
             new_ctrl.Bind(wx.EVT_BUTTON, self.on_setting_changed)
 
         elif control_type == odemis.gui.CONTROL_COMBO:
-            # wx.ComboBox would be fine if only it was not so ugly using the
-            # default Ubuntu theme and a small heigh.
-            # One problem of OwnerDrawnComboBox is that left/right keys don't
-            # move the text caret.
+
 
             class OdemisComboBox(wx.combo.OwnerDrawnComboBox):
 
@@ -517,11 +514,25 @@ class SettingsPanel(object):
                                           pushButtonBg=False)
 
                     self.Bind(wx.EVT_SIZE, self.on_size)
+                    self.Bind(wx.EVT_KEY_DOWN, self.on_key)
+
+                    self.txt_ctrl = self.GetTextCtrl()
 
                 def on_size(self, evt):
-                    txt_ctrl = new_ctrl.GetTextCtrl()
-                    wx.CallAfter(txt_ctrl.SetSize, (-1, 16))
+                    wx.CallAfter(self.txt_ctrl.SetSize, (-1, 16))
                     evt.Skip()
+
+                def on_key(self, evt):
+                    key = evt.GetKeyCode()
+                    ip = self.txt_ctrl.GetInsertionPoint()
+
+                    if key == wx.WXK_RIGHT:
+                        self.txt_ctrl.SetInsertionPoint(ip + 1)
+                    elif key == wx.WXK_LEFT and ip > 0:
+                        self.txt_ctrl.SetInsertionPoint(ip - 1)
+                    else:
+                        evt.Skip()
+
 
             new_ctrl = OdemisComboBox(
                         self.panel,
