@@ -42,10 +42,6 @@ from odemis.gui.model.img import InstrumentalImage
 from odemis.gui.model.stream import StaticSEMStream, StaticSpectrumStream
 from odemis.gui.xmlh import odemis_get_resources
 
-
-
-
-
 class OdemisGUIApp(wx.App):
     """ This is Odemis' main GUI application class
     """
@@ -57,9 +53,6 @@ class OdemisGUIApp(wx.App):
 
         # Declare attributes BEFORE calling the super class constructor
         # because it will call 'OnInit' which uses them.
-
-        # Startup Dialog frame
-        self.dlg_startup = None
 
         # HTTP documentation http server process
         self.http_proc = None
@@ -200,38 +193,27 @@ class OdemisGUIApp(wx.App):
 
 
             # List of all possible tabs used in Odemis' main GUI
-            # TODO: move to tab controller, and only initialize the needed tabs
-            tab_list = [tabs.SecomStreamsTab(
-                            "secom",
-                            "secom_live",
-                            self.main_frame.btn_tab_secom_streams,
-                            self.main_frame.pnl_tab_secom_streams,
-                            self.main_frame,
-                            self.microscope),
-                        tabs.Tab(
-                            "secom",
-                            "secom_gallery",
-                            self.main_frame.btn_tab_secom_gallery,
-                            self.main_frame.pnl_tab_secom_gallery),
-                        tabs.SparcAcquisitionTab(
-                            "sparc",
-                            "sparc_acqui",
-                            self.main_frame.btn_tab_sparc_acqui,
-                            self.main_frame.pnl_tab_sparc_acqui,
-                            self.main_frame,
-                            self.microscope),
-                        tabs.SparcAnalysisTab(
-                            "sparc",
-                            "sparc_analysis",
-                            self.main_frame.btn_tab_sparc_analysis,
-                            self.main_frame.pnl_tab_sparc_analysis,
-                            self.main_frame,
-                            self.microscope),
+            # microscope role(s), internal name, class, tab btn, tab panel
+            tab_rules = [("secom", "secom_live", tabs.SecomStreamsTab,
+                         self.main_frame.btn_tab_secom_streams,
+                         self.main_frame.pnl_tab_secom_streams),
+                        # TODO: merge secom_gallery and sparc_analysis, once
+                        # the tab can adapt the views depending on the acquisition
+                        # content
+                        ("secom", "secom_gallery", tabs.AnalysisTab,
+                         self.main_frame.btn_tab_secom_gallery,
+                         self.main_frame.pnl_tab_secom_gallery),
+                        ("sparc", "sparc_acqui", tabs.SparcAcquisitionTab,
+                         self.main_frame.btn_tab_sparc_acqui,
+                         self.main_frame.pnl_tab_sparc_acqui),
+                        ("sparc", "sparc_analysis", tabs.AnalysisTab,
+                          self.main_frame.btn_tab_sparc_analysis,
+                          self.main_frame.pnl_tab_sparc_analysis),
                         ]
 
             # Create the main tab controller and store a global reference
             # in the odemis.gui.cont package
-            set_main_tab_controller(tabs.TabBarController(tab_list,
+            set_main_tab_controller(tabs.TabBarController(tab_rules,
                                                           self.main_frame,
                                                           self.microscope))
 
@@ -358,10 +340,12 @@ class OdemisGUIApp(wx.App):
     def on_stop_axes(self, evt):
         if self.microscope:
             for actuator in self.microscope.actuators:
+                # TODO: run each of them in a separate thread, to call the stop
+                # ASAP? (or all but the last one?)
                 try:
                     actuator.stop()
                 except Exception:
-                    logging.error("Failed to stop actuator %s", actuator.name)
+                    logging.exception("Failed to stop actuator %s", actuator.name)
         else:
             evt.Skip()
 
@@ -436,7 +420,6 @@ see http://www.fluorophores.org/disclaimer/.
                 except AttributeError:
                     pass
 
-            #self.dlg_startup.Destroy()
             self.main_frame.Destroy()
             if self.http_proc:
                 self.http_proc.terminate()  #pylint: disable=E1101

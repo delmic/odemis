@@ -62,7 +62,7 @@ class AcquisitionController(object):
         main_frame: (wx.Frame): the frame which contains the 4 viewports
         """
         # TODO: get tab_controller from arguments or setting and stream controller
-        self._microscope = micgui
+        self._interface_model = micgui
         self._main_frame = main_frame
         self._anim_thread = None # for snapshot animation
 
@@ -151,7 +151,7 @@ class AcquisitionController(object):
             return
 
         # get currently focused view
-        view = self._microscope.focussedView.value
+        view = self._interface_model.focussedView.value
         if not view:
             logging.warning("Failed to take snapshot, no view is selected")
             return
@@ -333,7 +333,7 @@ class SecomAcquiController(AcquisitionController):
         paused_streams = main_stream_controller.pauseStreams()
 
         # create the dialog
-        acq_dialog = AcquisitionDialog(self._main_frame, self._microscope)
+        acq_dialog = AcquisitionDialog(self._main_frame, self._interface_model)
         parent_size = [v * 0.66 for v in self._main_frame.GetSize()]
 
         try:
@@ -410,7 +410,7 @@ class SparcAcquiController(AcquisitionController):
 
         # look for the SEM CL stream
         self._sem_cl = None # SEM CL stream
-        for s in self._microscope.acquisitionView.getStreams():
+        for s in self._interface_model.acquisitionView.getStreams():
             if s.name.value == "SEM CL":
                 self._sem_cl = s
                 break
@@ -468,7 +468,7 @@ class SparcAcquiController(AcquisitionController):
             # TODO: update the default text to be the same
             txt = "Region of acquisition needs to be selected"
         else:
-            streams = self._microscope.acquisitionView.getStreams()
+            streams = self._interface_model.acquisitionView.getStreams()
             acq_time = acqmng.estimateTime(streams)
             self.gauge_acq.Range = 100 * acq_time
             acq_time = math.ceil(acq_time) # round a bit pessimistically
@@ -488,7 +488,7 @@ class SparcAcquiController(AcquisitionController):
 
         # TODO: also freeze the MicroscopeView (for now we just pause the streams)
         # pause all the live acquisitions
-        live_streams = self._microscope.focussedView.value.getStreams()
+        live_streams = self._interface_model.focussedView.value.getStreams()
         for s in live_streams:
             s.is_active.value = False
             s.should_update.value = False
@@ -498,7 +498,7 @@ class SparcAcquiController(AcquisitionController):
         Resume (unfreeze) the settings in the GUI and make sure the value are 
         back to the previous value
         """
-        live_streams = self._microscope.focussedView.value.getStreams()
+        live_streams = self._interface_model.focussedView.value.getStreams()
         for s in live_streams:
             s.should_update.value = True
             s.is_active.value = True
@@ -530,7 +530,7 @@ class SparcAcquiController(AcquisitionController):
         self._main_frame.Layout() # to put the gauge at the right place
 
         # start acquisition + connect events to callback
-        streams = self._microscope.acquisitionView.getStreams()
+        streams = self._interface_model.acquisitionView.getStreams()
 
         self.acq_future = acqmng.startAcquisition(streams)
         self.acq_future.add_update_callback(self.on_acquisition_upd)
@@ -577,7 +577,7 @@ class SparcAcquiController(AcquisitionController):
 
             # save result to file
             try:
-                thumb = acqmng.computeThumbnail(self._microscope.acquisitionView.stream_tree,
+                thumb = acqmng.computeThumbnail(self._interface_model.acquisitionView.stream_tree,
                                                 future)
                 filename = self.filename.value
                 exporter = dataio.get_exporter(self.conf.last_format)

@@ -643,7 +643,7 @@ class RemoteTest(unittest.TestCase):
         try:
             prop.value = 7.5
             self.fail("Assigning float to a int should not be allowed.")
-        except model.InvalidTypeError:
+        except TypeError:
             pass # as it should be
         
     def receive_va_update(self, value):
@@ -662,7 +662,7 @@ class RemoteTest(unittest.TestCase):
         try:
             self.comp.enum.value = "wfds"
             self.fail("Assigning out of bound should not be allowed.")
-        except model.OutOfBoundError:
+        except IndexError:
             pass # as it should be
         
         # continuous
@@ -675,7 +675,7 @@ class RemoteTest(unittest.TestCase):
         try:
             self.comp.cont.value = 4.0
             self.fail("Assigning out of bound should not be allowed.")
-        except model.OutOfBoundError:
+        except IndexError:
             pass # as it should be
         
 # a basic server (component container)

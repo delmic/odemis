@@ -25,7 +25,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 from collections import namedtuple
-from odemis import model
 from odemis.gui import instrmodel
 from odemis.gui.cont import settings
 from odemis.gui.cont.acquisition import SecomAcquiController, \
@@ -45,21 +44,12 @@ import wx
 class Tab(object):
     """ Small helper class representing a tab (tab button + panel) """
 
-    def __init__(self, group, name, button, panel):
-        self.group = group
+    def __init__(self, name, button, panel):
         self.name = name
         self.button = button
         self.panel = panel
-        self.active = True
-
-        self.initialized = False
 
     def _show(self, show):
-
-        if show and not self.initialized:
-            self._initialize()
-            self.initialized = True
-
         self.button.SetToggle(show)
         self.panel.Show(show)
 
@@ -74,10 +64,10 @@ class Tab(object):
 
 class SecomStreamsTab(Tab):
 
-    def __init__(self, group, name, button, panel, main_frame, microscope):
-        super(SecomStreamsTab, self).__init__(group, name, button, panel)
+    def __init__(self, name, button, panel, main_frame, microscope):
+        super(SecomStreamsTab, self).__init__(name, button, panel)
 
-        self.interface_model = instrmodel.MicroscopeModel(microscope)
+        self.interface_model = instrmodel.LiveGUIModel(microscope)
         self.main_frame = main_frame
 
         # Various controllers used for the live view and acquisition of images
@@ -87,12 +77,6 @@ class SecomStreamsTab(Tab):
         self._view_selector = None
         self._acquisition_controller = None
         self._microscope_controller = None
-
-    def _initialize(self):
-        """ This method is called when the tab is first shown """
-
-        if not self.interface_model:
-            return
 
         self._settings_controller = settings.SecomSettingsController(
                                         self.main_frame,
@@ -163,10 +147,10 @@ class SecomStreamsTab(Tab):
 
 class SparcAcquisitionTab(Tab):
 
-    def __init__(self, group, name, button, panel, main_frame, microscope):
-        super(SparcAcquisitionTab, self).__init__(group, name, button, panel)
+    def __init__(self, name, button, panel, main_frame, microscope):
+        super(SparcAcquisitionTab, self).__init__(name, button, panel)
 
-        self.interface_model = instrmodel.MicroscopeModel(microscope)
+        self.interface_model = instrmodel.AcquisitionGUIModel(microscope)
         self.main_frame = main_frame
 
         # Various controllers used for the live view and acquisition of images
@@ -179,10 +163,6 @@ class SparcAcquisitionTab(Tab):
         self._prev_rois = {} # stream -> roi (tuple of4 floats)
         self._spec_stream = None
         self._ar_stream = None
-
-    def _initialize(self):
-        """ This method is called when the tab is first shown """
-        assert self.interface_model is not None
 
         acq_view = self.interface_model.acquisitionView # list of streams for acquisition
 
@@ -328,26 +308,27 @@ class SparcAcquisitionTab(Tab):
     def onARROI(self, roi):
         self._adaptRepetitionFromROI(self._ar_stream, roi)
 
-class SparcAnalysisTab(Tab):
+class AnalysisTab(Tab):
 
-    def __init__(self, group, name, button, panel, main_frame, microscope):
-        super(SparcAnalysisTab, self).__init__(group, name, button, panel)
+    def __init__(self, name, button, panel, main_frame, microscope=None):
+        """
+        microscope will be used only to select the type of views
+        """
+        super(AnalysisTab, self).__init__(name, button, panel)
 
-        # we don't use the current microscope, but a "static sparc"
-        static_sparc = model.Microscope("SPARC", "staticsparc")
-        self.interface_model = instrmodel.MicroscopeModel(static_sparc)
+        # Doesn't need a microscope
+        if microscope:
+            role = microscope.role
+        else:
+            role = None
+        self.interface_model = instrmodel.AnalysisGUIModel(role=role)
         self.main_frame = main_frame
 
         # Various controllers used for the live view and acquisition of images
-
         self._settings_controller = None
         self._view_controller = None
         self._acquisition_controller = None
         self._stream_controller = None
-
-    def _initialize(self):
-        """ This method is called when the tab is first shown """
-        assert self.interface_model is not None
 
         self._view_controller = ViewController(
                                     self.interface_model,
@@ -356,7 +337,6 @@ class SparcAnalysisTab(Tab):
                                      self.main_frame.vp_sparc_analysis_tr,
                                      self.main_frame.vp_sparc_analysis_bl,
                                      self.main_frame.vp_sparc_analysis_br],
-                                    role= "staticsparc"
                                 )
 
         self._stream_controller = StreamController(
@@ -398,78 +378,79 @@ class SparcAnalysisTab(Tab):
     def stream_controller(self):
         return self._stream_controller
 
+
+
 class TabBarController(object):
 
-    def __init__(self, tab_list, main_frame, microscope):
-
+    def __init__(self, tab_rules, main_frame, microscope):
+        """
+        tab_rules (list of 5-tuples (string, string, Tab class, button, panel): list
+          of all the possible tabs. Each tuple is:
+          microscope role(s), internal name, class, tab btn, tab panel
+        """
         self.main_frame = main_frame
 
-        self.tab_list = tab_list
-
-        self.hide_all()
-
+        # create all the tabs that fit the microscope role
         if microscope:
-            self._filter_tabs(microscope)
+            self.tab_list = self._filter_tabs(tab_rules, main_frame, microscope)
+
+        self.switch(0) # show the first tab
 
         for tab in self.tab_list:
             tab.button.Bind(wx.EVT_BUTTON, self.OnClick)
-            tab.button.Bind(wx.EVT_KEY_UP, self.OnKeyUp)
-
-        self.show(0)
 
         # IMPORTANT NOTE:
         #
         # When all tab panels are hidden on start-up, the MinSize attribute
-        # of the main GUI frame will be set to such a low value, that most of
-        # the interface will be invisible if the user takes the interface off of
+        # of the main GUI frame will be set to such a low value that most of
+        # the interface will be invisible if the user takes the interface out of
         # 'full screen' view.
         # Also, Gnome's GDK library will start spewing error messages, saying
         # it cannot draw certain images, because the dimensions are 0x0.
 
         main_frame.SetMinSize((1400, 550))
 
-    def _filter_tabs(self, microscope):
-        """ Filter the tabs according to the role of the microscope.
+    def _filter_tabs(self, rules, main_frame, microscope):
+        """
+        Filter the tabs according to the role of the microscope, and creates
+         the needed ones.
 
         Tabs that are not wanted or needed will be removed from the list and
         the associated buttons will be hidden in the user interface.
+        returns (list of Tabs): 
         """
+        role = microscope.role
+        logging.debug("Creating tabs belonging to the '%s' interface", role)
 
-        needed_group = microscope.role
+        tabs = [] # Tabs
+        for trole, tname, tclass, tbtn, tpnl in rules:
+            if trole == role:
+                tabs.append(tclass(tname, tbtn, tpnl, main_frame, microscope))
+            else:
+                # hide the widgets of the tabs not needed
+                tbtn.Hide()
+                tpnl.Hide()
 
-        logging.debug("Hiding tabs not belonging to the '%s' interface",
-                      needed_group)
-
-        for tab in [tab for tab in self.tab_list if tab.group != needed_group]:
-            tab.button.Hide()
-            self.tab_list.remove(tab)
-
+        return tabs
 
     def __getitem__(self, name):
-        return self.get_tab(name)
+        return self._get_tab(name)
 
-    def get_tab(self, tab_name_or_index):
+    def _get_tab(self, tab_name_or_index):
         for i, tab in enumerate(self.tab_list):
             if i == tab_name_or_index or tab.name == tab_name_or_index:
                 return tab
 
-        raise LookupError
+        raise LookupError("Tab '{}' not found".format(tab_name_or_index))
 
     def show(self, tab_name_or_index):
-        for i, tab in enumerate(self.tab_list):
-            if tab_name_or_index in (i, tab.name):
-                tab.show()
-                return
-
-        raise KeyError("Tab '{}' not found".format(tab_name_or_index))
+        self._get_tab(tab_name_or_index).show()
 
     def switch(self, tab_name_or_index):
         try:
-            self.hide_all()
             self.main_frame.Freeze()
+            self.hide_all()
             self.show(tab_name_or_index)
-        except KeyError:
-            raise
         finally:
             self.main_frame.Layout()
             self.main_frame.Thaw()
@@ -478,39 +459,17 @@ class TabBarController(object):
         for tab in self.tab_list:
             tab.hide()
 
-    def OnKeyUp(self, evt):
-        evt_btn = evt.GetEventObject()
-
-        if evt_btn.hasFocus and evt.GetKeyCode() == ord(" "):
-            self.hide_all()
-            self.main_frame.Freeze()
-
-            for tab in self.tab_list:
-                if evt_btn == tab.button:
-                    tab.show()
-                else:
-                    tab.hide()
-
-            self.main_frame.Layout()
-            self.main_frame.Thaw()
-
     def OnClick(self, evt):
+        # ie, mouse click or space pressed
         logging.debug("Tab button click")
 
         evt_btn = evt.GetEventObject()
-
-        self.hide_all()
-
-        self.main_frame.Freeze()
-
         for tab in self.tab_list:
             if evt_btn == tab.button:
-                tab.show()
-            else:
-                tab.hide()
+                self.switch(tab.name)
+                break
+        else:
+            logging.warning("Couldn't find the tab associated to the button %s",
+                            evt_btn)
 
-        self.main_frame.Layout()
-        self.main_frame.Thaw()
-
-        #if not btn.GetToggle():
         evt.Skip()

@@ -26,22 +26,11 @@ import numbers
 import threading
 import zmq
 
-class InvalidTypeError(Exception):
-    pass
-
-class OutOfBoundError(Exception):
-    pass
-
 class NotSettableError(Exception):
     pass
 
 class NotApplicableError(Exception):
     pass
-
-VA_EXCEPTIONS = (InvalidTypeError,
-                 OutOfBoundError,
-                 NotSettableError,
-                 NotApplicableError)
 
 class VigilantAttributeBase(object):
     '''
@@ -484,7 +473,7 @@ class StringVA(VigilantAttribute):
 
     def _check(self, value):
         if not isinstance(value, basestring):
-            raise InvalidTypeError("Value '%r' is not a string." % value)
+            raise TypeError("Value '%r' is not a string." % value)
 
 class FloatVA(VigilantAttribute):
     """
@@ -498,7 +487,7 @@ class FloatVA(VigilantAttribute):
     def _check(self, value):
         # can be anything that looks more or less like a float
         if not isinstance(value, numbers.Real):
-            raise InvalidTypeError("Value '%r' is not a float." % value)
+            raise TypeError("Value '%r' is not a float." % value)
 
 class IntVA(VigilantAttribute):
     """
@@ -511,7 +500,7 @@ class IntVA(VigilantAttribute):
     def _check(self, value):
         # we really accept only int, to avoid hiding lose of precision
         if not isinstance(value, int):
-            raise InvalidTypeError("Value '%r' is not a int." % value)
+            raise TypeError("Value '%r' is not a int." % value)
 
 class ListVA(VigilantAttribute):
     """
@@ -523,7 +512,7 @@ class ListVA(VigilantAttribute):
 
     def _check(self, value):
         if not isinstance(value, collections.Iterable):
-            raise InvalidTypeError("Value '%r' is not a list." % value)
+            raise TypeError("Value '%r' is not a list." % value)
         # TODO we need to also detect whenever this list is modified
         # or at least force the value to be a tuple (= read-only)
 
@@ -539,7 +528,7 @@ class BooleanVA(VigilantAttribute):
     def _check(self, value):
         # we really accept only boolean, to avoid hiding lose of data
         if not isinstance(value, bool):
-            raise InvalidTypeError("Value '%r' is not a boolean." % value)
+            raise TypeError("Value '%r' is not a boolean." % value)
 
 # TODO maybe should provide a factory that can take a VigilantAttributeBase class and return it
 # either Continuous or Enumerated
@@ -573,14 +562,14 @@ class Continuous(object):
         Override to do more checking on the range.
         """
         if len(new_range) != 2:
-            raise InvalidTypeError("Range '%s' is not a 2-tuple." % str(new_range))
+            raise TypeError("Range '%s' is not a 2-tuple." % str(new_range))
         if new_range[0] > new_range[1]:
-            raise InvalidTypeError("Range min (%s) should be smaller than max (%s)."
+            raise TypeError("Range min (%s) should be smaller than max (%s)."
                                    % (str(new_range[0]), str(new_range[1])))
         if hasattr(self, "value"):
             #pylint: disable=E1101
             if self.value < new_range[0] or self.value > new_range[1]:
-                raise OutOfBoundError("Current value '%s' is outside of the range %s→%s." %
+                raise IndexError("Current value '%s' is outside of the range %s→%s." %
                             (self.value, str(new_range[0]), str(new_range[1])))
         self._range = tuple(new_range)
 
@@ -598,10 +587,10 @@ class Continuous(object):
         Should be called _in addition_ to the ._set() of VigilantAttributeBase
         returns nothing
         Raises:
-            OutOfBoundError if the value is not within the authorised range
+            IndexError if the value is not within the authorised range
         """
         if value < self._range[0] or value > self._range[1]:
-            raise OutOfBoundError("Trying to assign value '%s' outside of the range %s→%s." %
+            raise IndexError("Trying to assign value '%s' outside of the range %s→%s." %
                         (str(value), str(self._range[0]), str(self._range[1])))
 
 class Enumerated(object):
@@ -621,7 +610,7 @@ class Enumerated(object):
 
     def _check(self, value):
         if not value in self._choices:
-            raise OutOfBoundError("Value %s is not part of possible choices: %s." %
+            raise IndexError("Value %s is not part of possible choices: %s." %
                         (str(value), ", ".join([str(c) for c in self._choices])))
 
     def _get_choices(self):
@@ -637,11 +626,11 @@ class Enumerated(object):
         elif isinstance(new_choices_raw, dict):
             new_choices = dict(new_choices_raw)
         else:
-            raise InvalidTypeError("Choices %s is not a set." % str(new_choices_raw))
+            raise TypeError("Choices %s is not a set." % str(new_choices_raw))
         if hasattr(self, "value"):
             #pylint: disable=E1101
             if not self.value in new_choices:
-                raise OutOfBoundError("Current value %s is not part of possible choices: %s." %
+                raise IndexError("Current value %s is not part of possible choices: %s." %
                             (self.value, ", ".join([str(c) for c in new_choices])))
         self._choices = new_choices
 
@@ -718,11 +707,11 @@ class MultiSpeedVA(VigilantAttribute, Continuous):
     def _check(self, value):
         # a dict
         if not isinstance(value, dict):
-            raise InvalidTypeError("Value '%s' is not a dict." % str(value))
+            raise TypeError("Value '%s' is not a dict." % str(value))
         for axis, v in value.items():
             # It has to be within the range, but also > 0
             if v <= 0 or v < self._range[0] or v > self._range[1]:
-                raise OutOfBoundError("Trying to assign axis '%s' value '%s' outside of the range %s→%s." %
+                raise IndexError("Trying to assign axis '%s' value '%s' outside of the range %s→%s." %
                             (str(axis), str(value), str(self._range[0]), str(self._range[1])))
 
 class TupleContinuous(VigilantAttribute, Continuous):
@@ -750,31 +739,31 @@ class TupleContinuous(VigilantAttribute, Continuous):
         Override to do more checking on the range.
         """
         if len(new_range) != 2:
-            raise InvalidTypeError("Range '%s' is not a 2-tuple." % (new_range,))
+            raise TypeError("Range '%s' is not a 2-tuple." % (new_range,))
         if any([mn > mx for mn, mx in zip(new_range[0], new_range[1])]):
-            raise InvalidTypeError("Range min %s should be smaller than max %s."
+            raise TypeError("Range min %s should be smaller than max %s."
                                    % (str(new_range[0]), str(new_range[1])))
         if hasattr(self, "value"):
             if (any([v < mn for v, mn in zip(self.value, new_range[0])]) or
                 any([v > mx for v, mx in zip(self.value, new_range[1])])):
-                raise OutOfBoundError("Current value '%s' is outside of the range %s→%s." %
+                raise IndexError("Current value '%s' is outside of the range %s→%s." %
                             (self.value, new_range[0], new_range[1]))
         self._range = tuple(new_range)
 
     def _check(self, value):
         """
         Raises:
-            OutOfBoundError if the value is not within the authorised range
+            IndexError if the value is not within the authorised range
         """
         if len(value) != self._len:
-            raise InvalidTypeError("Value '%s' is not a %d-tuple." % (value, self._len))
+            raise TypeError("Value '%s' is not a %d-tuple." % (value, self._len))
 
         if not all([isinstance(v, self._cls) for v in value]):
-            raise InvalidTypeError("Value '%s' is not a tuple of %s." % (value, self._cls))
+            raise TypeError("Value '%s' is not a tuple of %s." % (value, self._cls))
 
         if (any([v < mn for v, mn in zip(value, self._range[0])]) or
             any([v > mx for v, mx in zip(value, self._range[1])])):
-            raise OutOfBoundError("Trying to assign value '%s' outside of the range %s→%s." %
+            raise IndexError("Trying to assign value '%s' outside of the range %s→%s." %
                         (value, self._range[0], self._range[1]))
 
     def _set_value(self, value):

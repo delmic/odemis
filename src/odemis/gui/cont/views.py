@@ -24,9 +24,9 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 from odemis.gui import instrmodel
-from odemis.gui.model import OPTICAL_STREAMS, EM_STREAMS, SPECTRUM_STREAMS
-from odemis.gui.model.stream import SEMStream, BrightfieldStream, FluoStream, \
-    StaticSpectrumStream
+from odemis.gui.model import OPTICAL_STREAMS, EM_STREAMS, SPECTRUM_STREAMS, \
+    AR_STREAMS
+from odemis.gui.model.stream import SEMStream, BrightfieldStream, FluoStream
 import logging
 import wx
 
@@ -48,29 +48,27 @@ class ViewController(object):
     """ Manages the microscope view updates, change of viewport focus, etc.
     """
 
-    def __init__(self, micgui, main_frame, viewports, role=None):
+    def __init__(self, micgui, main_frame, viewports):
         """
         micgui (MicroscopeModel) -- the representation of the microscope GUI
         main_frame: (wx.Frame) -- the frame which contains the 4 viewports
         viewports (list of MicroscopeViewport): the viewports to update
-        role (str): A little 'cheat' for the time being where we can override
-            the role of the micgui
         """
 
-        self._microscope = micgui
+        self._interface_model = micgui
         self._main_frame = main_frame
 
         # list of all the viewports (widgets that show the views)
         self._viewports = viewports
 
         # create the (default) views and set focussedView
-        self._createViews(role)
+        self._createViews()
 
         # subscribe to layout and view changes
-        self._microscope.viewLayout.subscribe(self._onViewLayout, init=True)
-        self._microscope.focussedView.subscribe(self._onView, init=False)
+        self._interface_model.viewLayout.subscribe(self._onViewLayout, init=True)
+        self._interface_model.focussedView.subscribe(self._onView, init=False)
 
-    def _createViews(self, role):
+    def _createViews(self):
         """
         Create the different views displayed, according to the current
         microscope.
@@ -78,130 +76,133 @@ class ViewController(object):
         To be executed only once, at initialisation.
         """
 
-        # If StaticSparc: SEM/Spec/AR/SEM
-        if self._microscope.microscope.role == "staticsparc":
+        # If AnalysisTab for Sparc: SEM/Spec/AR/SEM
+        if (isinstance(self._interface_model, instrmodel.AnalysisGUIModel)
+            and self._interface_model.microscope.role == "sparc"):
+            # TODO: should be dependent on the type of acquisition, and so
+            # updated every time the .file changes
             assert len(self._viewports) == 4
-            assert not self._microscope.views # should still be empty
+            assert not self._interface_model.views # should still be empty
             logging.info("Creating (static) SPARC viewport layout")
 
             view = instrmodel.MicroscopeView(
                         "SEM",
-                        self._microscope.stage,
+                        self._interface_model.stage,
                         stream_classes=EM_STREAMS
                      )
-            self._microscope.views.append(view)
-            self._viewports[0].setView(view, self._microscope)
+            self._interface_model.views.append(view)
+            self._viewports[0].setView(view, self._interface_model)
 
             view = instrmodel.MicroscopeView(
                         "Spectrum",
-                        self._microscope.stage,
-                        focus0=self._microscope.focus, # TODO: change center wavelength?
+                        self._interface_model.stage,
+                        focus0=self._interface_model.focus, # TODO: change center wavelength?
+                        # TODO: focus1 changes bandwidth?
                         stream_classes=SPECTRUM_STREAMS
                      )
-            self._microscope.views.append(view)
-            self._viewports[1].setView(view, self._microscope)
+            self._interface_model.views.append(view)
+            self._viewports[1].setView(view, self._interface_model)
 
             view = instrmodel.MicroscopeView(
                         "Angle Resolved",
-                        self._microscope.stage,
-                        focus0=self._microscope.focus,
-                        stream_classes=SPECTRUM_STREAMS # FIXME: AR
+                        self._interface_model.stage,
+                        stream_classes=AR_STREAMS
                      )
-            self._microscope.views.append(view)
-            self._viewports[2].setView(view, self._microscope)
+            self._interface_model.views.append(view)
+            self._viewports[2].setView(view, self._interface_model)
 
             view = instrmodel.MicroscopeView(
                         "SEM CL",
-                        self._microscope.stage,
+                        self._interface_model.stage,
                         stream_classes=EM_STREAMS
                      )
-            self._microscope.views.append(view)
-            self._viewports[3].setView(view, self._microscope)
+            self._interface_model.views.append(view)
+            self._viewports[3].setView(view, self._interface_model)
 
             # Start off with the 2x2 view
             # Focus defaults to the top right viewport
-            self._microscope.focussedView.value = self._viewports[1].mic_view
+            self._interface_model.focussedView.value = self._viewports[1].mic_view
 
         # If SEM only: all SEM
         # Works also for the Sparc, as there is no other emitter, and we don't
         # need to display anything else anyway
-        elif self._microscope.ebeam and not self._microscope.light:
+        elif self._interface_model.ebeam and not self._interface_model.light:
             logging.info("Creating SEM only viewport layout")
             i = 1
             for viewport in self._viewports:
                 view = instrmodel.MicroscopeView(
                             "SEM %d" % i,
-                            self._microscope.stage,
+                            self._interface_model.stage,
                             focus0=None, # TODO: SEM focus or focus1?
                             stream_classes=(SEMStream,)
                          )
-                self._microscope.views.append(view)
-                viewport.setView(view, self._microscope)
+                self._interface_model.views.append(view)
+                viewport.setView(view, self._interface_model)
                 i += 1
-            self._microscope.focussedView.value = self._microscope.views[0]
+            self._interface_model.focussedView.value = self._interface_model.views[0]
 
         # If Optical only: all Optical
         # TODO: first one is brightfield only?
-        elif not self._microscope.ebeam and self._microscope.light:
+        elif not self._interface_model.ebeam and self._interface_model.light:
             logging.info("Creating Optical only viewport layout")
             i = 1
             for viewport in self._viewports:
                 view = instrmodel.MicroscopeView(
                             "Optical %d" % i,
-                            self._microscope.stage,
-                            focus0=self._microscope.focus,
+                            self._interface_model.stage,
+                            focus0=self._interface_model.focus,
                             stream_classes=(BrightfieldStream, FluoStream)
                          )
-                self._microscope.views.append(view)
-                viewport.setView(view, self._microscope)
+                self._interface_model.views.append(view)
+                viewport.setView(view, self._interface_model)
                 i += 1
-            self._microscope.focussedView.value = self._microscope.views[0]
+            self._interface_model.focussedView.value = self._interface_model.views[0]
 
         # If both SEM and Optical (=SECOM): SEM/Optical/2x combined
-        elif self._microscope.ebeam and self._microscope.light:
+        elif self._interface_model.ebeam and self._interface_model.light:
             assert len(self._viewports) == 4
-            assert not self._microscope.views # should still be empty
+            assert not self._interface_model.views # should still be empty
             logging.info("Creating combined SEM/Optical viewport layout")
 
             view = instrmodel.MicroscopeView(
                         "SEM",
-                        self._microscope.stage,
+                        self._interface_model.stage,
                         focus0=None, # TODO: SEM focus
                         stream_classes=EM_STREAMS
                      )
-            self._microscope.views.append(view)
-            self._viewports[0].setView(view, self._microscope)
+            self._interface_model.views.append(view)
+            self._viewports[0].setView(view, self._interface_model)
 
             view = instrmodel.MicroscopeView(
                         "Optical",
-                        self._microscope.stage,
-                        focus0=self._microscope.focus,
+                        self._interface_model.stage,
+                        focus0=self._interface_model.focus,
                         stream_classes=OPTICAL_STREAMS
                      )
-            self._microscope.views.append(view)
-            self._viewports[1].setView(view, self._microscope)
+            self._interface_model.views.append(view)
+            self._viewports[1].setView(view, self._interface_model)
 
             view = instrmodel.MicroscopeView(
                         "Combined 1",
-                        self._microscope.stage,
-                        focus0=self._microscope.focus,
+                        self._interface_model.stage,
+                        focus0=self._interface_model.focus,
                         focus1=None, # TODO: SEM focus
                      )
-            self._microscope.views.append(view)
-            self._viewports[2].setView(view, self._microscope)
+            self._interface_model.views.append(view)
+            self._viewports[2].setView(view, self._interface_model)
 
             view = instrmodel.MicroscopeView(
                         "Combined 2",
-                        self._microscope.stage,
-                        focus0=self._microscope.focus,
+                        self._interface_model.stage,
+                        focus0=self._interface_model.focus,
                         focus1=None, # TODO: SEM focus
                      )
-            self._microscope.views.append(view)
-            self._viewports[3].setView(view, self._microscope)
+            self._interface_model.views.append(view)
+            self._viewports[3].setView(view, self._interface_model)
 
             # Start off with the 2x2 view
             # Focus defaults to the top right viewport
-            self._microscope.focussedView.value = self._viewports[1].mic_view
+            self._interface_model.focussedView.value = self._viewports[1].mic_view
         else:
             msg = "No known microscope configuration, creating 4 generic views"
             logging.warning(msg)
@@ -209,13 +210,13 @@ class ViewController(object):
             for viewport in self._viewports:
                 view = instrmodel.MicroscopeView(
                             "View %d" % i,
-                            self._microscope.stage,
-                            focus0=self._microscope.focus
+                            self._interface_model.stage,
+                            focus0=self._interface_model.focus
                          )
-                self._microscope.views.append(view)
-                viewport.setView(view, self._microscope)
+                self._interface_model.views.append(view)
+                viewport.setView(view, self._interface_model)
                 i += 1
-            self._microscope.focussedView.value = self._microscope.views[0]
+            self._interface_model.focussedView.value = self._interface_model.views[0]
 
         # TODO: if chamber camera: br is just chamber, and it's the focussedView
 
@@ -225,7 +226,7 @@ class ViewController(object):
         Called when another view is focused
         """
         logging.debug("Changing focus to view %s", view.name.value)
-        layout = self._microscope.viewLayout.value
+        layout = self._interface_model.viewLayout.value
 
         self._viewports[0].Parent.Freeze()
 
@@ -257,7 +258,7 @@ class ViewController(object):
             # TODO resize all the viewports now, so that there is no flickering
             # when just changing view
             for viewport in self._viewports:
-                if viewport.mic_view == self._microscope.focussedView.value:
+                if viewport.mic_view == self._interface_model.focussedView.value:
                     viewport.Show()
                 else:
                     viewport.Hide()

@@ -26,7 +26,6 @@ import logging
 import collections
 
 from odemis.gui.util import call_after_wrapper
-from odemis.model._vattributes import OutOfBoundError
 
 def get_all_children(widget, klass=None):
     """ Recursively get all the child widgets of the given widget
@@ -63,7 +62,7 @@ class VigilantAttributeConnector(object):
         ctrl_2_va (None or callable ((None) -> value)): a function to be called
             when the widget is updated, to update the VA. If None, try to use
             the default GetValue().
-            Can raise ValueError, TypeError or OutOfBoundError if data is incorrect
+            Can raise ValueError, TypeError or IndexError if data is incorrect
         events (None or wx.EVT_* or tuple of wx.EVT_*): events to bind to update
             the value of the VA
         """
@@ -92,7 +91,7 @@ class VigilantAttributeConnector(object):
             logging.debug("Assign value %s to vigilant attribute", value)
 
             self.vigilattr.value = value
-        except (ValueError, TypeError, OutOfBoundError), exc:
+        except (ValueError, TypeError, IndexError), exc:
             logging.error("Illegal value: %s", exc)
         finally:
             evt.Skip()

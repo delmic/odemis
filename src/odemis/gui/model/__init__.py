@@ -41,3 +41,6 @@ EM_STREAMS = (stream.SEMStream,
 
 SPECTRUM_STREAMS = (stream.SpectrumStream,
                     stream.StaticSpectrumStream)
+
+AR_STREAMS = (stream.ARStream,
+              stream.StaticStream) # TODO: StaticARStream
