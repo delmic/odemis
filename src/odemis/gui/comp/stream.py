@@ -46,7 +46,6 @@ from odemis.gui.comp.text import SuggestTextCtrl, UnitIntegerCtrl, \
 from odemis.gui.util import call_after
 from odemis.gui.util.conversion import wave2rgb
 from odemis.gui.util.widgets import VigilantAttributeConnector
-from odemis.model import OutOfBoundError
 
 
 stream_remove_event, EVT_STREAM_REMOVE = wx.lib.newevent.NewEvent()
@@ -357,7 +356,7 @@ class StreamPanel(wx.PyPanel):
         border_sizer.AddSpacer((5, -1))
         border_sizer.Add(self._gbs,
                          border=0,
-                         flag=wx.RIGHT|wx.EXPAND,
+                         flag=wx.RIGHT | wx.EXPAND,
                          proportion=1)
         border_sizer.AddSpacer((5, -1))
 
@@ -652,7 +651,7 @@ class SecomStreamPanel(StreamPanel):  # pylint: disable=R0901
                                         bmp_sel=img.getbtn_contrast_aBitmap())
         self._btn_auto_contrast.SetForegroundColour("#000000")
         self._gbs.Add(self._btn_auto_contrast, (self.row_count, 0),
-                      flag=wx.LEFT|wx.TOP, border=5)
+                      flag=wx.LEFT | wx.TOP, border=5)
         self.row_count += 1
 
         # ====== Second row, brightness label, slider and value
@@ -736,7 +735,7 @@ class SecomStreamPanel(StreamPanel):  # pylint: disable=R0901
                       flag=wx.ALL, border=5)
 
         self._txt_accum = IntegerTextCtrl(self._panel,
-                                          size=(-1,14),
+                                          size=(-1, 14),
                                           value=1,
                                           min_val=1,
                                           key_inc=True,
@@ -746,7 +745,7 @@ class SecomStreamPanel(StreamPanel):  # pylint: disable=R0901
         self._txt_accum.SetBackgroundColour(self._panel.GetBackgroundColour())
 
         self._gbs.Add(self._txt_accum, (self.row_count, 1),
-                                        flag=wx.EXPAND|wx.ALL,
+                                        flag=wx.EXPAND | wx.ALL,
                                         border=5)
 
         self.row_count += 1
@@ -759,14 +758,14 @@ class SecomStreamPanel(StreamPanel):  # pylint: disable=R0901
 
         choices = ["None", "Linear", "Cubic"]
         self._cmb_interp = wx.combo.OwnerDrawnComboBox(self._panel,
-                                                   -1,
+                                                   - 1,
                                                    value=choices[0],
                                                    pos=(0, 0),
                                                    size=(100, 16),
-                                                   style=wx.NO_BORDER|
-                                                         wx.CB_DROPDOWN|
-                                                         wx.TE_PROCESS_ENTER|
-                                                         wx.CB_READONLY|
+                                                   style=wx.NO_BORDER |
+                                                         wx.CB_DROPDOWN |
+                                                         wx.TE_PROCESS_ENTER |
+                                                         wx.CB_READONLY |
                                                          wx.EXPAND,
                                                     choices=choices)
 
@@ -777,7 +776,7 @@ class SecomStreamPanel(StreamPanel):  # pylint: disable=R0901
 
 
         self._gbs.Add(self._cmb_interp, (self.row_count, 1),
-                                         flag=wx.EXPAND|wx.ALL,
+                                         flag=wx.EXPAND | wx.ALL,
                                          border=5,
                                          span=(1, 2))
 
@@ -822,7 +821,7 @@ class DyeStreamPanel(StreamPanel):
             self._txt_excitation.SetBackgroundColour(BG_COLOUR_PANEL)
 
             self._gbs.Add(self._txt_excitation, (self.row_count, 1),
-                          flag=wx.ALL|wx.ALIGN_CENTRE_VERTICAL,
+                          flag=wx.ALL | wx.ALIGN_CENTRE_VERTICAL,
                           border=5)
 
             # A button, but not clickable, just to show the wavelength
@@ -833,7 +832,7 @@ class DyeStreamPanel(StreamPanel):
             self._btn_excitation.SetToolTipString("Wavelength colour")
 
             self._gbs.Add(self._btn_excitation, (self.row_count, 2),
-                          flag=wx.RIGHT|wx.ALIGN_RIGHT,
+                          flag=wx.RIGHT | wx.ALIGN_RIGHT,
                           border=5)
             self.row_count += 1
 
@@ -862,7 +861,7 @@ class DyeStreamPanel(StreamPanel):
             self._txt_emission.SetBackgroundColour(BG_COLOUR_PANEL)
 
             self._gbs.Add(self._txt_emission, (self.row_count, 1),
-                          flag=wx.ALL|wx.ALIGN_CENTRE_VERTICAL,
+                          flag=wx.ALL | wx.ALIGN_CENTRE_VERTICAL,
                           border=5)
 
             self._btn_emission = buttons.ColourButton(self._panel, -1,
@@ -872,7 +871,7 @@ class DyeStreamPanel(StreamPanel):
             self._btn_emission.SetToolTipString("Wavelength colour")
 
             self._gbs.Add(self._btn_emission, (self.row_count, 2),
-                          flag=wx.RIGHT|wx.ALIGN_RIGHT,
+                          flag=wx.RIGHT | wx.ALIGN_RIGHT,
                           border=5)
             self.row_count += 1
 
@@ -912,14 +911,14 @@ class DyeStreamPanel(StreamPanel):
             xwl, ewl = model.dye.DyeDatabase[txt]
             try:
                 self.stream.excitation.value = xwl
-            except OutOfBoundError:
+            except IndexError:
                 logging.info("Excitation at %g nm is out of bound", xwl * 1e9)
             try:
                 self.stream.emission.value = ewl
                 colour = wave2rgb(self.stream.emission.value)
                 # changing emission should also change the tint
                 self.stream.tint.value = colour
-            except OutOfBoundError:
+            except IndexError:
                 logging.info("Emission at %g nm is out of bound", ewl * 1e9)
 
     def _excitation_2_va(self):

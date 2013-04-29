@@ -44,7 +44,7 @@ class VigilantAttributeTest(unittest.TestCase):
         try:
             prop.value = 7.5
             self.fail("Assigning float to a int should not be allowed.")
-        except model.InvalidTypeError:
+        except TypeError:
             pass # as it should be
         prop.unsubscribe(self.callback_test_notify)
 
@@ -62,7 +62,7 @@ class VigilantAttributeTest(unittest.TestCase):
         try:
             prop.value = "coucou"
             self.fail("Assigning string to a float should not be allowed.")
-        except model.InvalidTypeError:
+        except TypeError:
             pass # as it should be
         prop.unsubscribe(self.callback_test_notify)
 
@@ -92,7 +92,7 @@ class VigilantAttributeTest(unittest.TestCase):
         try:
             prop.value = 45
             self.fail("Assigning int to a list should not be allowed.")
-        except model.InvalidTypeError:
+        except TypeError:
             pass # as it should be
         prop.unsubscribe(self.callback_test_notify)
 
@@ -115,19 +115,19 @@ class VigilantAttributeTest(unittest.TestCase):
         try:
             prop.value = 4.0
             self.fail("Assigning out of bound should not be allowed.")
-        except model.OutOfBoundError:
+        except IndexError:
             pass # as it should be
 
         try:
             prop.range = [-4.0, 1]
             self.fail("Assigning range not containing current value should not be allowed.")
-        except model.OutOfBoundError:
+        except IndexError:
             pass # as it should be
 
         try:
             prop.range = [12]
             self.fail("Range should be allowed only if it's a 2-tuple.")
-        except model.InvalidTypeError:
+        except TypeError:
             pass # as it should be
 
         prop.unsubscribe(self.callback_test_notify)
@@ -148,7 +148,7 @@ class VigilantAttributeTest(unittest.TestCase):
         try:
             prop.value = "wfds"
             self.fail("Assigning out of bound should not be allowed.")
-        except model.OutOfBoundError:
+        except IndexError:
             pass # as it should be
 
         prop.choices = set(["a", "c", "b", 5])
@@ -156,19 +156,19 @@ class VigilantAttributeTest(unittest.TestCase):
         try:
             prop.choices = set(["a", "b"])
             self.fail("Assigning choices not containing current value should not be allowed.")
-        except model.OutOfBoundError:
+        except IndexError:
             pass # as it should be
 
         try:
             prop.value = 5
             self.fail("Assigning an int to a string should not be allowed.")
-        except model.InvalidTypeError:
+        except TypeError:
             pass # as it should be
 
         try:
             prop.choices = 5
             self.fail("Choices should be allowed only if it's a set.")
-        except model.InvalidTypeError:
+        except TypeError:
             pass # as it should be
 
         prop.unsubscribe(self.callback_test_notify)
@@ -188,20 +188,20 @@ class VigilantAttributeTest(unittest.TestCase):
         try:
             va.value = (8., 160)
             self.fail("Assigning non int values should not be allowed.")
-        except model.InvalidTypeError:
+        except TypeError:
             pass # as it should be
 
         # must not accept resolutions outside of the range
         try:
             va.value = (80, 160)
             self.fail("Assigning value not in range should not be allowed.")
-        except model.OutOfBoundError:
+        except IndexError:
             pass # as it should be
 
         try:
             va.value = (10,10,10)
             self.fail("Assigning a 3-tuple to a resolution should not be allowed.")
-        except model.InvalidTypeError:
+        except TypeError:
             pass # as it should be
 
     def test_tc(self):
@@ -220,13 +220,13 @@ class VigilantAttributeTest(unittest.TestCase):
         try:
             va.value = (-1., 160., .5)
             self.fail("Assigning value not in range should not be allowed.")
-        except model.OutOfBoundError:
+        except IndexError:
             pass # as it should be
 
         try:
             va.value = (10.,10.)
             self.fail("Assigning a 2-tuple to a 3-tuple should not be allowed.")
-        except model.InvalidTypeError:
+        except TypeError:
             pass # as it should be
 
     def test_weakref(self):

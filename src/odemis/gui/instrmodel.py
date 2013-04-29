@@ -29,8 +29,8 @@ import time
 
 from odemis import model
 from odemis.gui.model.stream import Stream, StreamTree
-from odemis.model import FloatContinuous, VigilantAttribute, VA_EXCEPTIONS
-from odemis.model._vattributes import IntEnumerated
+from odemis.model import FloatContinuous, VigilantAttribute
+from odemis.model._vattributes import IntEnumerated, NotSettableError
 
 # The different states of a microscope
 STATE_OFF = 0
@@ -204,7 +204,7 @@ class MicroscopeModel(object):
                 # TODO save the previous value
                 # blank the ebeam
                 self.ebeam.energy.value = 0
-            except VA_EXCEPTIONS:
+            except NotSettableError:
                 # Too bad. let's just do nothing then.
                 logging.debug("Ebeam doesn't support setting energy to 0")
         elif state == STATE_PAUSE:
@@ -212,18 +212,18 @@ class MicroscopeModel(object):
                 # TODO save the previous value
                 # blank the ebeam
                 self.ebeam.energy.value = 0
-            except VA_EXCEPTIONS:
+            except NotSettableError:
                 # Too bad. let's just do nothing then.
                 logging.debug("Ebeam doesn't support setting energy to 0")
 
         elif state == STATE_ON:
             try:
                 # TODO use the previous value
-                if hasattr(self.ebeam.energ, "choice"):
+                if hasattr(self.ebeam.energy, "choice"):
                     if isinstance(self.ebeam.energy.choices,
                                   collections.Iterable):
-                        self.ebeam.energy.value = self.ebeam.energy.choices[1]
-            except VA_EXCEPTIONS:
+                        self.ebeam.energy.value = max(self.ebeam.energy.choices)
+            except NotSettableError:
                 # Too bad. let's just do nothing then (and hope it's on)
                 logging.debug("Ebeam doesn't support setting energy")
 
