@@ -26,6 +26,7 @@ setting column of the user interface.
 
 """
 
+from odemis.gui.comp.combo import ComboBox
 from odemis.gui.comp.foldpanelbar import FoldPanelItem
 from odemis.gui.comp.radio import GraphicalRadioButtonControl
 from odemis.gui.comp.slider import UnitIntegerSlider, UnitFloatSlider
@@ -40,15 +41,9 @@ import collections
 import logging
 import odemis.gui
 import odemis.gui.comp.text as text
-import odemis.gui.img.data as img
 import odemis.gui.util.units as utun
 import re
 import wx.combo
-
-
-
-
-
 
 
 ####### Utility functions #######
@@ -101,7 +96,7 @@ def bind_menu(se):
 
 class SettingEntry(object):
     """
-    Represents an setting entry in the panel. It merely associates the VA to
+    Represents a setting entry in the panel. It merely associates the VA to
     the widgets that allow to control it.
     """
     # TODO: merge with VAC?
@@ -502,39 +497,7 @@ class SettingsPanel(object):
 
         elif control_type == odemis.gui.CONTROL_COMBO:
 
-
-            class OdemisComboBox(wx.combo.OwnerDrawnComboBox):
-
-                def __init__(self, *args, **kwargs):
-                    wx.combo.OwnerDrawnComboBox.__init__(self, *args, **kwargs)
-                    self.SetMargins(0, 0)
-                    self.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_EDIT)
-                    self.SetBackgroundColour(self.Parent.GetBackgroundColour())
-                    self.SetButtonBitmaps(img.getbtn_downBitmap(),
-                                          pushButtonBg=False)
-
-                    self.Bind(wx.EVT_SIZE, self.on_size)
-                    self.Bind(wx.EVT_KEY_DOWN, self.on_key)
-
-                    self.txt_ctrl = self.GetTextCtrl()
-
-                def on_size(self, evt):
-                    wx.CallAfter(self.txt_ctrl.SetSize, (-1, 16))
-                    evt.Skip()
-
-                def on_key(self, evt):
-                    key = evt.GetKeyCode()
-                    ip = self.txt_ctrl.GetInsertionPoint()
-
-                    if key == wx.WXK_RIGHT:
-                        self.txt_ctrl.SetInsertionPoint(ip + 1)
-                    elif key == wx.WXK_LEFT and ip > 0:
-                        self.txt_ctrl.SetInsertionPoint(ip - 1)
-                    else:
-                        evt.Skip()
-
-
-            new_ctrl = OdemisComboBox(
+            new_ctrl = ComboBox(
                         self.panel,
                         wx.ID_ANY,
                         value='', pos=(0, 0), size=(100, 16),
