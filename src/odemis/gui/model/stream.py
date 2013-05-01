@@ -688,11 +688,12 @@ class StaticStream(Stream):
             self.image = VigilantAttribute(image)
         else: # raw data
             try:
-                self._depth = 2**image.metadata[model.MD_BPP]
+                self._depth = 2 ** image.metadata[model.MD_BPP]
             except KeyError: # no MD_MPP
                 # guess out of the data
-                self._depth = image.max()
-                minv = image.min()
+                # cast to numpy.array to ensure it becomes a scalar (instead of a DataArray)
+                self._depth = numpy.array(image).max()
+                minv = numpy.array(image).min()
                 if minv < 0:  # signed?
                     self._depth += -minv
                     # FIXME: probably need to fix DataArray2wxImage() for such
@@ -734,12 +735,15 @@ class StaticSpectrumStream(StaticStream):
 
         # default to showing all the data
         if isinstance(image, InstrumentalImage):
+            # TODO: simplify, by never accepting InstrumentalImage?
             minb, maxb = 0, 1 # unknown/unused
+            pixel_width = 0.01
         else: # raw data
             assert len(image.shape) == 3
             pn = image.metadata[MD_WL_POLYNOMIAL]
             minb = polynomial.polyval(0, pn)
-            maxb = polynomial.polyval(image.shape[0]-1, pn)
+            maxb = polynomial.polyval(image.shape[0] - 1, pn)
+            pixel_width = (maxb - minb) / image.shape[0]
 
         # TODO: get rid of this, if not necessary
 #        self.bandwidth = model.BandwidthVA((minb, maxb),
@@ -755,7 +759,7 @@ class StaticSpectrumStream(StaticStream):
                                                       unit="m")
         max_bw = maxb - minb
         self.bandwidth = model.FloatContinuous(max_bw / 12,
-                                               range=(max_bw/200, max_bw),
+                                               range=(pixel_width, max_bw),
                                                unit="m")
         # TODO: how to export the average spectrum of the whole image (for the
         # bandwidth selector)? a separate method?
@@ -778,7 +782,7 @@ class StaticSpectrumStream(StaticStream):
     def _get_bandwith_in_pixel(self):
         """
         Return the current bandwidth in pixels index
-        returns (2-tuple of int): low and high pixel coordinates
+        returns (2-tuple of int): low and high pixel coordinates (included)
         """
         center = self.centerWavelength.value
         width = self.bandwidth.value
@@ -795,15 +799,18 @@ class StaticSpectrumStream(StaticStream):
         # spectrum axis and take the closest ones (with the adapted rounding).
         data = self.raw[0]
         pn = polynomial.Polynomial(data.metadata[MD_WL_POLYNOMIAL],
-                                   domain=[0, data.shape[0]-1])
-        # TODO: cache it, as the polynomial is rarely updated!
+                                   domain=[0, data.shape[0] - 1],
+                                   window=[0, data.shape[0] - 1])
+        # TODO: cache it, as the polynomial is rarely/never updated!
         n, px_values = pn.linspace(data.shape[0])
 
         low_px = numpy.searchsorted(px_values, low, side="left")
+        low_px = min(low_px, data.shape[0] - 1) # make sure it fits inside
         if high == low:
             high_px = low_px
         else:
             high_px = numpy.searchsorted(px_values, high, side="right")
+            high_px = min(high_px, data.shape[0] - 1)
 
         assert low_px <= high_px
         return low_px, high_px
@@ -831,9 +838,10 @@ class StaticSpectrumStream(StaticStream):
 
                 # pick only the data inside the bandwidth
                 spec_range = self._get_bandwith_in_pixel()
+                logging.debug("Spectrum range picked: %s px", spec_range)
                 # TODO: use better intermediary type if possible?, cf semcomedi
-                av_data = numpy.mean(data[spec_range[0]:spec_range[1]], axis=0)
-                # av_data = data[0]
+                av_data = numpy.mean(data[spec_range[0]:spec_range[1] + 1], axis=0)
+#                av_data = data[0] # FIXME
 
                 im = util.img.DataArray2wxImage(av_data,
                                                 self._depth,
@@ -902,7 +910,7 @@ class SEMSpectrumMDStream(MultipleDetectorStream):
 
         assert sem_stream._emitter == spec_stream._emitter
         self._emitter = sem_stream._emitter
-         # probably secondary electron detector
+        # probably secondary electron detector
         self._semd = self._sem_stream._detector
         self._semd_df = self._sem_stream._dataflow
         self._spec = self._spec_stream._detector # spectrometer
