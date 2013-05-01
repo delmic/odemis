@@ -30,13 +30,15 @@ Detector, Emitter and Dataflow associations.
 
 from __future__ import division
 from numpy.polynomial import polynomial
-from odemis import model
-from odemis.gui import util
 from odemis.gui.model.img import InstrumentalImage
 from odemis.model import VigilantAttribute, MD_POS, MD_PIXEL_SIZE, \
     MD_SENSOR_PIXEL_SIZE, MD_WL_POLYNOMIAL
 import logging
 import numpy
+import odemis.gui.util.conversion as conversion
+import odemis.gui.util.img as img
+import odemis.gui.util.units as units
+import odemis.model as model
 import threading
 
 
@@ -93,7 +95,7 @@ class Stream(object):
         # every time it's modified, image is also modified
         self.raw = []
         # the most important attribute
-        self.image = VigilantAttribute(InstrumentalImage(None))
+        self.image = model.VigilantAttribute(InstrumentalImage(None))
 
         # TODO: should maybe to 2 methods activate/deactivate to explicitly
         # start/stop acquisition, and one VA "updated" to stated that the user
@@ -202,7 +204,7 @@ class Stream(object):
             brightness = self.brightness.value / 100
             contrast = self.contrast.value / 100
 
-        im = util.img.DataArray2wxImage(data,
+        im = img.DataArray2wxImage(data,
                                         self._depth,
                                         brightness,
                                         contrast,
@@ -228,7 +230,7 @@ class Stream(object):
         if self.raw:
             # if changing to manual: need to set the current (automatic) B/C
             if enabled == False:
-                b, c = util.img.FindOptimalBC(self.raw[0], self._depth)
+                b, c = img.FindOptimalBC(self.raw[0], self._depth)
                 self.brightness.value = b * 100
                 self.contrast.value = c * 100
             else:
@@ -429,8 +431,8 @@ class FluoStream(CameraStream):
         self.emission.subscribe(self.onEmission)
 
         # colouration of the image
-        defaultTint = util.conversion.wave2rgb(self.emission.value)
-        self.tint = model.ListVA(defaultTint, unit="RGB") # 3-tuple R,G,B
+        default_tint = conversion.wave2rgb(self.emission.value)
+        self.tint = model.ListVA(default_tint, unit="RGB") # 3-tuple R,G,B
         self.tint.subscribe(self.onTint)
 
     def onActive(self, active):
@@ -477,7 +479,7 @@ class FluoStream(CameraStream):
                              Stream.WARNING_EMISSION_NOT_OPT)
         if not fitting:
             logging.warning("Emission wavelength %s doesn't fit the filter",
-                            util.units.readable_str(wave_length, "m"))
+                            units.readable_str(wave_length, "m"))
             self._addWarning(Stream.WARNING_EMISSION_IMPOSSIBLE)
             # TODO: detect no optimal situation (within 10% band of border?)
         return
@@ -829,7 +831,7 @@ class StaticSpectrumStream(StaticStream):
                 if self.auto_bc.value:
                     # FIXME: need to fix the brightness/contrast to the min/max
                     # of the _entire_ image (not just the current slice)
-                    # b, c = util.img.FindOptimalBC(self.raw[0], self._depth)
+                    # b, c = img.FindOptimalBC(self.raw[0], self._depth)
                     brightness = None
                     contrast = None
                 else:
@@ -843,7 +845,7 @@ class StaticSpectrumStream(StaticStream):
                 av_data = numpy.mean(data[spec_range[0]:spec_range[1] + 1], axis=0)
 #                av_data = data[0] # FIXME
 
-                im = util.img.DataArray2wxImage(av_data,
+                im = img.DataArray2wxImage(av_data,
                                                 self._depth,
                                                 brightness,
                                                 contrast)
@@ -1128,7 +1130,8 @@ class StreamTree(object):
             passed as an InstrumentalImage.
         :param kwargs: any argument to be given to the operator function
         """
-        self.operator = operator or util.img.Average
+
+        self.operator = operator or img.Average
 
         streams = streams or []
         assert(isinstance(streams, list))

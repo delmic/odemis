@@ -72,8 +72,8 @@ c = component.Container('StreamBar',
     ['pos', 'size', 'label', 'add_button'])
 c.setParamClass('add_button', params.ParamBool)
 component.Manager.register(c)
-component.Manager.addXmlHandler(xh_delmic.StreamPanelXmlHandler)
-component.Manager.setMenu(c, 'Delmic', 'Stream Panel', 'StreamBar', 3)
+component.Manager.addXmlHandler(xh_delmic.StreamBarXmlHandler)
+component.Manager.setMenu(c, 'Delmic', 'Stream Bar', 'StreamBar', 3)
 
 c = component.Container('SecomStreamPanel',
     ['window', 'top_level', 'control'],

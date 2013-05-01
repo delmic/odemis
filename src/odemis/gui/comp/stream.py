@@ -37,8 +37,10 @@ from wx.lib.pubsub import pub
 import odemis.gui
 import odemis.gui.comp.buttons as buttons
 import odemis.gui.img.data as img
+import odemis.gui.model as model
+import odemis.gui.model.dye as dye
 
-from odemis.gui import model, FOREGROUND_COLOUR_EDIT, FOREGROUND_COLOUR
+from odemis.gui import FOREGROUND_COLOUR_EDIT, FOREGROUND_COLOUR
 from odemis.gui.comp.foldpanelbar import FoldPanelItem
 from odemis.gui.comp.slider import UnitIntegerSlider
 from odemis.gui.comp.text import SuggestTextCtrl, UnitIntegerCtrl, \
@@ -52,6 +54,10 @@ stream_remove_event, EVT_STREAM_REMOVE = wx.lib.newevent.NewEvent()
 
 BG_COLOUR_EXPANDER = "#4D4D4D"
 BG_COLOUR_PANEL = "#333333"
+
+# Expanders are the stream controls that are always visible. They allow for
+# the showing and hiding of sub-controls and they might offer controls and
+# information themselves.
 
 class Expander(wx.PyControl):
     """ This class describes a clickable control responsible for showing and
@@ -784,6 +790,12 @@ class SecomStreamPanel(StreamPanel):  # pylint: disable=R0901
 
         #self._gbs.AddSpacer((5, 5), (self.row_count, 0))
 
+class BandwithStreamPanel(StreamPanel):
+    """ A base stream panel that can be used for the selection of bandwidths, or
+    more specifically a center value and a range around that."""
+
+
+
 class DyeStreamPanel(StreamPanel):
     """ A stream panel which can be altered by the user """
 
@@ -793,13 +805,19 @@ class DyeStreamPanel(StreamPanel):
         StreamPanel.__init__(self, *args, **kwargs)
 
     def finalize(self):
-        StreamPanel.finalize(self)
+        # TODO: It looks like this method call should go
+        # StreamPanel.finalize(self)
+        self.set_expander_button(self.expander_class(self, self.stream))
 
         if hasattr(self.stream, "excitation") and hasattr(self.stream, "emission"):
             # handle the auto-completion of dye names
-            # TODO: shall we do something better than remove the incompatible dyes?
-            # * mark them a different colour in the list (don't know how to do that)?
+            # TODO: shall we do something better than remove the incompatible
+            # dyes?
+            # * mark them a different colour in the list (don't know how to do
+            #   that)?
             # * show a warning message when they are picked?
+
+
             self._expander.SetChoices(self._getCompatibleDyes())
             self._expander.onLabelChange = self._onNewName
 
@@ -895,7 +913,7 @@ class DyeStreamPanel(StreamPanel):
         e_range = self.stream.emission.range
 
         dyes = []
-        for name, (xwl, ewl) in model.dye.DyeDatabase.items():
+        for name, (xwl, ewl) in dye.DyeDatabase.items():
             if (x_range[0] <= xwl and xwl <= x_range[1] and
                 e_range[0] <= ewl and ewl <= e_range[1]):
                 dyes.append(name)
@@ -907,8 +925,8 @@ class DyeStreamPanel(StreamPanel):
         self.stream.name.value = txt
 
         # update the excitation and emission wavelength
-        if txt in model.dye.DyeDatabase:
-            xwl, ewl = model.dye.DyeDatabase[txt]
+        if txt in dye.DyeDatabase:
+            xwl, ewl = dye.DyeDatabase[txt]
             try:
                 self.stream.excitation.value = xwl
             except IndexError:
@@ -1109,7 +1127,7 @@ class StreamBar(wx.Panel):
         """ Return the number of stream contained withing the StreamBar """
         return len(self.stream_panels)
 
-    def add_stream(self, spanel, show):
+    def add_stream(self, spanel, show=True):
         """
         This method adds a stream panel to the stream bar. The appropriate
         position is automatically determined.

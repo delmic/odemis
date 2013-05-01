@@ -534,8 +534,6 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
             self.ShouldUpdateDrawing()
         # if not dragging and we need to enable
         elif not self.dragging and enabled:
-#             if mode == MODE_SPARC_SELECT:
-                # nothing special to do
             # TODO handle ZOOM selection as well
             self.current_mode = mode
             self.active_overlay = overlay
@@ -631,8 +629,8 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
     # Capture unwanted events when a tool is active.
 
     def OnWheel(self, event):
-        if self.current_mode not in SPARC_MODES:
-            super(SparcAcquiCanvas, self).OnWheel(event)
+        #if self.current_mode not in SPARC_MODES:
+        super(SparcAcquiCanvas, self).OnWheel(event)
 
     def OnRightDown(self, event):
         if self.current_mode not in SPARC_MODES:
@@ -661,25 +659,25 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
             raise KeyError("Failed to find SEM CL stream, required for the Sparc acquisition")
 
         self._roa.subscribe(self._onROA, init=True)
-        
+
         sem = microscope_model.ebeam
         if not sem:
             raise AttributeError("No SEM on the microscope")
-        
+
         if isinstance(sem.magnification, VigilantAttributeBase):
             sem.magnification.subscribe(self._onSEMMag)
-        
+
     def _onSEMMag(self, mag):
         """
         Called when the magnification of the SEM changes
         """
         # That means the pixelSize changes, so the (relative) ROA is different
-        # Either we update the ROA so that physically it stays the same, or 
+        # Either we update the ROA so that physically it stays the same, or
         # we update the selection so that the ROA stays the same. It's probably
         # that the user has forgotten to set the magnification before, so let's
         # pick solution 2.
         self._onROA(self._roa.value)
-    
+
     def _getSEMRect(self):
         """
         Returns the (theoretical) scanning area of the SEM. Works even if the
@@ -767,12 +765,12 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
                 sem_rect = self._getSEMRect()
             except AttributeError:
                 return # no SEM => ROA is not meaningful
-        
+
             phys_rect = (sem_rect[0] + roi[0] * (sem_rect[2] - sem_rect[0]),
                          sem_rect[1] + roi[1] * (sem_rect[3] - sem_rect[1]),
                          sem_rect[0] + roi[2] * (sem_rect[2] - sem_rect[0]),
                          sem_rect[1] + roi[3] * (sem_rect[3] - sem_rect[1]))
 
-        logging.debug("Selection now set to %s", phys_rect)        
+        logging.debug("Selection now set to %s", phys_rect)
         self.roi_overlay.set_selection_phys(phys_rect)
         wx.CallAfter(self.ShouldUpdateDrawing)

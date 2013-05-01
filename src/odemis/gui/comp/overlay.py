@@ -54,7 +54,7 @@ class Overlay(object):
         )
         ctx.set_font_size(font.GetPointSize())
 
-#         shift = font.GetPixelSize()
+        #t = font.GetPixelSize()
         ctx.set_source_rgb(0.0, 0.0, 0.0)
         ctx.move_to(vpos[0], vpos[1])
         ctx.show_text(label)
