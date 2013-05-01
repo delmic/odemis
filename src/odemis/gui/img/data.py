@@ -1556,6 +1556,69 @@ getbtn_smlImage = btn_sml.GetImage
 getbtn_smlBitmap = btn_sml.GetBitmap
 
 #----------------------------------------------------------------------
+btn_spectrum_a = PyEmbeddedImage(
+    "iVBORw0KGgoAAAANSUhEUgAAAEQAAAAaCAYAAAAOl/o1AAACrUlEQVRYR+2Y30taYRjHD5Qp"
+    "K3CEwcArczJ3E4whMh0UA1ldmIFNTUr8eRQVJZFQm85fEAzG6G7XY39QbLD7wSDouvtn5/tC"
+    "T/Qey2g3R04vfG583+8D3w8Hzw9FeVz6tbq6uqAx1virQSYDndF9gYV4PJ6TtbU18vv9FAgE"
+    "KBgMmgJ0RWd0hwMW4vP5LiKRCOXzeapUKlStVk0BuqIzusMBC9nZ2aHDw0Pq9/s0Go1oPB6b"
+    "AnRFZ3SHAxaSzWap1+vRcDg0JegOByykVCoJU4PB4E7a7bYwubGxcQP8hj35/KyA7nCgE3IX"
+    "m5ubZLPZEJoI9nBGzs0KN4Soqioum9tYX1/n4q+983T2c5me/lE0fpHSI1Lm3/E+zsr5WQAO"
+    "WEihUKButzuR7e1tLnuaXKKzH8t6IYvfyWcRf0oCZOQ5RgcOWAhuPcfHxzpwa7oq2X75hC6/"
+    "rdwqpKrxwfaJzyMrzzMycMBCcrkcdTodHdq9WZR7q1joMroyVchX+296YQmKDLLyPCMDBywk"
+    "k8lQq9XSYbfbRblLZeXeQqKLH0UGWXmekYEDFpJOp+no6EgHij1UCJDnGRk4YCGpVIqazaaO"
+    "/xUizzMycMBCDg4OqNFo6LBarQ8Wgqw8z8jAAQvZ398Xz/MybrdblIsr1nsLeTb3XGSQlecZ"
+    "GThgIclkkur1uo5QKMSX/+mrpalC3lvLfB5ZeZ6RgQMWsre3R7VabSJOp/Nayj0fzJCR5xgd"
+    "OGAhiURC963gCjzBORwOLjvx0X3uDe/jLDLyHKMDBywkHo+LjyV34fV6ufRt4IycmxXggIXE"
+    "YjEql8tT2draIpfLpROB37Ann58l4ICF7O7uXuD118zAAQuJRqMnxWKRzIzm4DMLCYfDC9rL"
+    "zRdVVc/xXcBknKM7HLCQx3W9/gEUp5WAwcFm2AAAAABJRU5ErkJggg==")
+index.append('btn_spectrum_a')
+catalog['btn_spectrum_a'] = btn_spectrum_a
+getbtn_spectrum_aData = btn_spectrum_a.GetData
+getbtn_spectrum_aImage = btn_spectrum_a.GetImage
+getbtn_spectrum_aBitmap = btn_spectrum_a.GetBitmap
+
+#----------------------------------------------------------------------
+btn_spectrum_h = PyEmbeddedImage(
+    "iVBORw0KGgoAAAANSUhEUgAAAEQAAAAaCAYAAAAOl/o1AAACRElEQVRYR+2ZzYtSYRTGL8zo"
+    "pDNQDAotXCbVQjAiJGrVJpfBoEErF27M/oEgahMMhB9cRRxFEFNEVPzCjboS/AOGgvbBQDBr"
+    "90/33GGOdNRRptXL9YXf5r7nOfD8Nl5V03Zn+UwmE/t0Ov06m80uDGAxLqj7eDy2s5DRaHRq"
+    "PMBwOES/30ev17ME1JU6U3dywEIGg8GlAbrdriWh7uSAhVxfdDodS3LdnYW0221solKpIB6P"
+    "IxwO/wM9ozs5ryIspNVq4SYikQicTicFVkJ3NCNzqsFCms0m1hEKhbj400f7OP9xjHu/NYOf"
+    "0D4D2v4rvqdZmVcJFtJoNLCKWCzGZfV3RzivHS8LOfyOZ7Y3PEcZuUcVWEi9XodE13Uu+fGx"
+    "E/Mz91ohHwxCd74s5BlZuU8FWEitVoMkGAya5V5qNsxP3BuFpO/+wkPbCzNDWblPBVhItVqF"
+    "xOVymeXmmntrISeHn8wMZeU+FWAh9LEpoWK3FULIfSrAQsrlMiT/K0TuUwEWUiqVIHE4HLcW"
+    "Qlm5TwVYSLFYhMTv95vl3moHWwu5v/fAzFBW7lMBFlIoFCChN08qR+hPjjYKeX3wnucpK/ep"
+    "AAvJ5/NYhdfrXUjZ8sWMMnKPKrCQXC6HVSQSCXg8Hi678tV97znf0yxl5B5VYCHZbBY3EQgE"
+    "uPQ6aEbmVIOFZDIZbCIajcLn8y2JoGd0J+dVhIXQd48d5ne3q5NOpy8NYHEWPyGmUqlTA1ic"
+    "bywkmUzak1fnjwEsBnWms/gbYncW5y94ct7fvfYmrAAAAABJRU5ErkJggg==")
+index.append('btn_spectrum_h')
+catalog['btn_spectrum_h'] = btn_spectrum_h
+getbtn_spectrum_hData = btn_spectrum_h.GetData
+getbtn_spectrum_hImage = btn_spectrum_h.GetImage
+getbtn_spectrum_hBitmap = btn_spectrum_h.GetBitmap
+
+#----------------------------------------------------------------------
+btn_spectrum = PyEmbeddedImage(
+    "iVBORw0KGgoAAAANSUhEUgAAAEQAAAAaCAYAAAAOl/o1AAACXUlEQVRYR+2Zu4saURSHB3Z1"
+    "o7uQsIsQWwkkEZsYUoRsFYu0yhIiYidYhPwDgZCoiIMREUFERURjfICPzkrQwlbwSfrAQsDa"
+    "/mTOFGfIUVfZVJfxwocw9/wOnI8Lcxkl6bg213g8Ni6Xy+hisbidzWYwnU51wXw+B2Xu28lk"
+    "Eh2NRkYSMhwO5X6/D51OB5rNJjQaDV3QarWg1+vBYDAAZX6ZhHS73RVu1ut13YEHAA9Cu91e"
+    "kRC0VavVdAuKwV8SUq1WYR/5fB6CwSB4PJ5/wGe4x+tFhIRUKhW4C5/PB2azGQNbwT2s4TnR"
+    "ICHlchl24Xa7afCXz05hOr+ER78lhQVIXwGk07e0j7U8LxIkpFQqwTYCgQANm/ZdwPTn5aaQ"
+    "8x/wyqBJwwzvIwokpFgsAicej9OQn5+bYZ2z7BTySeH9g29Uj1neTwRISKFQAI7L5VKHu5YM"
+    "sL6x7BWSevgLnhreqBnM8n4iQEJyuRxwrq6u1OHWkuVgITfnX9QMZnk/ESAh2WwWODjYfYUg"
+    "vJ8IkJBMJgOc/xXC+4kACUmn08AxmUz3FoJZ3k8ESEgqlQKOw+FQh/sgnR0s5PHJEzWDWd5P"
+    "BEhIMpkEjtfrpeOffnGxV8i7s49Uj1neTwRISCKRgG3YbDZNyoEXM8zwPqJAQvAitY1QKARW"
+    "q5WG3Xp1P3lN+1iLGd5HFEiILMtwF06nk4beBdbwnGiQkFgsBvvw+/1gt9s3ROAz3OP1IkJC"
+    "otEoHIlqQiKRyEoBdI72CTEcDssKoHO+kxDlzWBUSCr8wbeEzsCZcXbtb4jj0tZfgEw/KP1s"
+    "Xy4AAAAASUVORK5CYII=")
+index.append('btn_spectrum')
+catalog['btn_spectrum'] = btn_spectrum
+getbtn_spectrumData = btn_spectrum.GetData
+getbtn_spectrumImage = btn_spectrum.GetImage
+getbtn_spectrumBitmap = btn_spectrum.GetBitmap
+
+#----------------------------------------------------------------------
 btn_view_pick_a = PyEmbeddedImage(
     "iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAAbklEQVRIx2O4e/cuGxBPBOK3"
     "QPyfSvgd1Ew2BiAxgYoGo+MOBiq7HB2/ZaCh4WA8eCxYs2bNf2NjYzA96oNRH+C3AOZCdBrk"
