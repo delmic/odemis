@@ -232,7 +232,7 @@ class FoldPanelItemXmlHandler(xrc.XmlResourceHandler):
 HANDLER_CLASS_LIST.append(FoldPanelItemXmlHandler)
 
 
-class StreamPanelXmlHandler(xrc.XmlResourceHandler):
+class StreamBarXmlHandler(xrc.XmlResourceHandler):
     def __init__(self):
         xrc.XmlResourceHandler.__init__(self)
         # Standard styles
@@ -261,7 +261,7 @@ class StreamPanelXmlHandler(xrc.XmlResourceHandler):
                 w.btn_add_stream.SetBackgroundColour(w.GetBackgroundColour())
             parent.add_item(w)
             return w
-HANDLER_CLASS_LIST.append(StreamPanelXmlHandler)
+HANDLER_CLASS_LIST.append(StreamBarXmlHandler)
 
 
 ################################

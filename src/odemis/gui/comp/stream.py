@@ -53,6 +53,10 @@ stream_remove_event, EVT_STREAM_REMOVE = wx.lib.newevent.NewEvent()
 BG_COLOUR_EXPANDER = "#4D4D4D"
 BG_COLOUR_PANEL = "#333333"
 
+# Expanders are the stream controls that are always visible. They allow for
+# the showing and hiding of sub-controls and they might offer controls and
+# information themselves.
+
 class Expander(wx.PyControl):
     """ This class describes a clickable control responsible for showing and
     hiding stream data.
@@ -783,6 +787,12 @@ class SecomStreamPanel(StreamPanel):  # pylint: disable=R0901
         self.row_count += 1
 
         #self._gbs.AddSpacer((5, 5), (self.row_count, 0))
+
+class BandwithStreamPanel(StreamPanel):
+    """ A base stream panel that can be used for the selection of bandwidths, or
+    more specifically a center value and a range around that."""
+
+
 
 class DyeStreamPanel(StreamPanel):
     """ A stream panel which can be altered by the user """
