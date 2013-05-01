@@ -188,25 +188,24 @@ class OdemisGUIApp(wx.App):
             self.main_frame.SetAcceleratorTable(accel_tbl)
 
             self.main_frame.Bind(wx.EVT_CLOSE, self.on_close_window)
-            self.main_frame.Maximize()
-            self.main_frame.Show()
-
+            self.main_frame.Maximize() # must be done before Show()
 
             # List of all possible tabs used in Odemis' main GUI
             # microscope role(s), internal name, class, tab btn, tab panel
+            # order matters, as the first matching tab is be the default one
             tab_rules = [("secom", "secom_live", tabs.SecomStreamsTab,
                          self.main_frame.btn_tab_secom_streams,
                          self.main_frame.pnl_tab_secom_streams),
                         # TODO: merge secom_gallery and sparc_analysis, once
                         # the tab can adapt the views depending on the acquisition
                         # content
-                        ("secom", "secom_gallery", tabs.AnalysisTab,
+                        ("booooo", "secom_gallery", tabs.AnalysisTab,
                          self.main_frame.btn_tab_secom_gallery,
-                         self.main_frame.pnl_tab_secom_gallery),
+                         self.main_frame.pnl_tab_secom_gallery), # we want to hide this
                         ("sparc", "sparc_acqui", tabs.SparcAcquisitionTab,
                          self.main_frame.btn_tab_sparc_acqui,
                          self.main_frame.pnl_tab_sparc_acqui),
-                        ("sparc", "sparc_analysis", tabs.AnalysisTab,
+                        (("secom", "sparc"), "sparc_analysis", tabs.AnalysisTab,
                           self.main_frame.btn_tab_sparc_analysis,
                           self.main_frame.pnl_tab_sparc_analysis),
                         ]
@@ -216,6 +215,8 @@ class OdemisGUIApp(wx.App):
             set_main_tab_controller(tabs.TabBarController(tab_rules,
                                                           self.main_frame,
                                                           self.microscope))
+            # after managing the tabs seems to make it more smooth
+            self.main_frame.Show()
 
         except Exception:  #pylint: disable=W0703
             self.excepthook(*sys.exc_info())

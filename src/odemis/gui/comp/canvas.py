@@ -875,5 +875,9 @@ def world_to_real_pos(world_pos, mpwu):
 
 
 def real_to_world_pos(real_pos, mpwu):
+    """
+    real_pos (tuple of float): "physical" coordinates in m
+    return (tuple of float)
+    """
     world_pos = tuple([v / mpwu for v in real_pos])
     return world_pos

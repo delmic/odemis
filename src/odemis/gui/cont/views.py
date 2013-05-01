@@ -77,8 +77,8 @@ class ViewController(object):
         """
 
         # If AnalysisTab for Sparc: SEM/Spec/AR/SEM
-        if (isinstance(self._interface_model, instrmodel.AnalysisGUIModel)
-            and self._interface_model.microscope.role == "sparc"):
+        if (isinstance(self._interface_model, instrmodel.AnalysisGUIModel) and
+            self._interface_model.microscope.role == "sparc"):
             # TODO: should be dependent on the type of acquisition, and so
             # updated every time the .file changes
             assert len(self._viewports) == 4
@@ -122,7 +122,7 @@ class ViewController(object):
             # Start off with the 2x2 view
             # Focus defaults to the top right viewport
             self._interface_model.focussedView.value = self._viewports[1].mic_view
-
+            
         # If SEM only: all SEM
         # Works also for the Sparc, as there is no other emitter, and we don't
         # need to display anything else anyway
@@ -159,7 +159,9 @@ class ViewController(object):
             self._interface_model.focussedView.value = self._interface_model.views[0]
 
         # If both SEM and Optical (=SECOM): SEM/Optical/2x combined
-        elif self._interface_model.ebeam and self._interface_model.light:
+        elif ((self._interface_model.ebeam and self._interface_model.light) or
+              (isinstance(self._interface_model, instrmodel.AnalysisGUIModel) and
+              self._interface_model.microscope.role == "secom")):
             assert len(self._viewports) == 4
             assert not self._interface_model.views # should still be empty
             logging.info("Creating combined SEM/Optical viewport layout")

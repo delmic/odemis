@@ -386,15 +386,13 @@ class TabBarController(object):
         """
         tab_rules (list of 5-tuples (string, string, Tab class, button, panel): list
           of all the possible tabs. Each tuple is:
-          microscope role(s), internal name, class, tab btn, tab panel
+          microscope role(s) (string or tuple of strings), internal name, class, tab btn, tab panel
         """
         self.main_frame = main_frame
 
         # create all the tabs that fit the microscope role
-        if microscope:
-            self.tab_list = self._filter_tabs(tab_rules, main_frame, microscope)
-
-        self.switch(0) # show the first tab
+        self.tab_list = self._filter_tabs(tab_rules, main_frame, microscope)
+        self.switch(0)
 
         for tab in self.tab_list:
             tab.button.Bind(wx.EVT_BUTTON, self.OnClick)
@@ -407,7 +405,6 @@ class TabBarController(object):
         # 'full screen' view.
         # Also, Gnome's GDK library will start spewing error messages, saying
         # it cannot draw certain images, because the dimensions are 0x0.
-
         main_frame.SetMinSize((1400, 550))
 
     def _filter_tabs(self, rules, main_frame, microscope):
@@ -424,11 +421,15 @@ class TabBarController(object):
 
         tabs = [] # Tabs
         for trole, tname, tclass, tbtn, tpnl in rules:
-            if trole == role:
+            if isinstance(trole, basestring):
+                trole = (trole,) # force trole to be a tuple
+            if role in trole:
                 tabs.append(tclass(tname, tbtn, tpnl, main_frame, microscope))
+#                tbtn.Show() # no needed as it's shown by default
             else:
                 # hide the widgets of the tabs not needed
-                tbtn.Hide()
+                logging.debug("Discarding tab %s", tname)
+                tbtn.Hide() # this actually removes the tab
                 tpnl.Hide()
 
         return tabs
@@ -443,21 +444,18 @@ class TabBarController(object):
 
         raise LookupError("Tab '{}' not found".format(tab_name_or_index))
 
-    def show(self, tab_name_or_index):
-        self._get_tab(tab_name_or_index).show()
-
     def switch(self, tab_name_or_index):
         try:
             self.main_frame.Freeze()
-            self.hide_all()
-            self.show(tab_name_or_index)
+            for tab in self.tab_list:
+                tab.hide()
         finally:
-            self.main_frame.Layout()
             self.main_frame.Thaw()
-
-    def hide_all(self):
-        for tab in self.tab_list:
-            tab.hide()
+        # It seems there is a bug in wxWidgets which makes the first .Show() not
+        # work when the frame is frozen. So always call it after Thaw(). Doesn't
+        # seem to cause too much flickering.
+        self._get_tab(tab_name_or_index).show()
+        self.main_frame.Layout()
 
     def OnClick(self, evt):
         # ie, mouse click or space pressed
