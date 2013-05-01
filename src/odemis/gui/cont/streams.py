@@ -220,8 +220,9 @@ class StreamController(object):
 
         spanel = spanel_cls(self._stream_bar, stream, self._interface_model)
 
-        show = isinstance(spanel.stream,
-                          self._interface_model.focussedView.value.stream_classes)
+        show = isinstance(
+                    spanel.stream,
+                    self._interface_model.focussedView.value.stream_classes)
         self._stream_bar.add_stream(spanel, show)
 
         logging.debug("Sending stream.ctrl.added message")

@@ -23,29 +23,27 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 # Test module for Odemis' stream module in gui.comp
 #===============================================================================
 
-from odemis import model
 from odemis.gui import instrmodel, model, util
 from odemis.gui.comp.stream import SecomStreamPanel, DyeStreamPanel
 from odemis.gui.instrmodel import Stream
+from odemis.gui.cont.streams import StreamController
 from odemis.gui.xmlh import odemis_get_test_resources
 from wx.lib.inspection import InspectionTool
+import odemis.model as model
+import odemis.gui.model.stream as stream
 import odemis.gui.test.test_gui
-import os
 import unittest
 import wx
 
-if os.getcwd().endswith('test'):
-    os.chdir('../..')
-    print "Working directory changed to", os.getcwd()
 
 
-class FakeBrightfieldStream(model.stream.BrightfieldStream):
+class FakeBrightfieldStream(stream.BrightfieldStream):
     """
     A fake stream, which receives no data. Only for testing purposes.
     """
 
     def __init__(self, name):
-        Stream.__init__(self, name, None, None, None)
+        Stream.__init__(self, name, None, None, None) #pylint: disable=W0233
 
     def _updateImage(self, tint=(255, 255, 255)):
         pass
@@ -54,13 +52,13 @@ class FakeBrightfieldStream(model.stream.BrightfieldStream):
         pass
 
 
-class FakeSEMStream(model.stream.SEMStream):
+class FakeSEMStream(stream.SEMStream):
     """
     A fake stream, which receives no data. Only for testing purposes.
     """
 
     def __init__(self, name):
-        Stream.__init__(self, name, None, None, None)
+        Stream.__init__(self, name, None, None, None) #pylint: disable=W0233
 
     def _updateImage(self, tint=(255, 255, 255)):
         pass
@@ -69,34 +67,46 @@ class FakeSEMStream(model.stream.SEMStream):
         pass
 
 
-class FakeFluoStream(model.stream.FluoStream):
+class FakeFluoStream(stream.FluoStream):
     """
     A fake stream, which receives no data. Only for testing purposes.
     """
 
     def __init__(self, name):
-        Stream.__init__(self, name, None, None, None)
+        Stream.__init__(self, name, None, None, None) #pylint: disable=W0233
 
         # For imitating also a FluoStream
-        self.excitation = model.FloatContinuous(488e-9, range=[200e-9, 1000e-9], unit="m")
-        self.emission = model.FloatContinuous(507e-9, range=[200e-9, 1000e-9], unit="m")
+        self.excitation = model.FloatContinuous(
+                                488e-9,
+                                range=[200e-9, 1000e-9],
+                                unit="m")
+        self.emission = model.FloatContinuous(
+                                507e-9,
+                                range=[200e-9, 1000e-9],
+                                unit="m")
         defaultTint = util.conversion.wave2rgb(self.emission.value)
         self.tint = model.VigilantAttribute(defaultTint, unit="RGB")
 
-    def _updateImage(self, tint=(255, 255, 255)):
+    def _updateImage(self, tint=(255, 255, 255)):  #pylint: disable=W0221
         pass
 
     def onActive(self, active):
         pass
 
 
-class FakeMicroscopeGUI(object):
+class FakeMicroscopeModel(object):
     """
     Imitates a MicroscopeModel wrt stream entry: it just needs a focussedView
     """
     def __init__(self):
         fview = instrmodel.MicroscopeView("fakeview")
         self.focussedView = model.VigilantAttribute(fview)
+
+        self.light = None
+        self.light_filter = None
+        self.ccd = None
+        self.sed = None
+        self.ebeam = None
 
 # Sleep timer in milliseconds
 SLEEP_TIME = 100
@@ -168,9 +178,10 @@ class FoldPanelBarTestCase(unittest.TestCase):
         loop()
         wx.MilliSleep(SLEEP_TIME)
 
-        livegui = FakeMicroscopeGUI()
-        # FIXME: need to use the stream controller
-        self.frm.stream_bar.setMicroscope(livegui, None)
+        mic_mod = FakeMicroscopeModel()
+        # FIXME: need to use StreamController stream controller
+        stream_cont = StreamController(mic_mod, self.frm.stream_bar)
+        # self.frm.stream_bar.setMicroscope(mic_mod, None)
 
         # Hide the Stream add button
         self.assertEqual(self.frm.stream_bar.btn_add_stream.IsShown(), True)
@@ -188,52 +199,52 @@ class FoldPanelBarTestCase(unittest.TestCase):
         wx.MilliSleep(SLEEP_TIME)
         fake_cstream = FakeFluoStream("First Custom Stream")
         custom_entry = DyeStreamPanel(self.frm.stream_bar,
-                                              fake_cstream, livegui)
+                                      fake_cstream, mic_mod)
         self.frm.stream_bar.add_stream(custom_entry)
         loop()
 
         self.assertEqual(self.frm.stream_bar.get_size(), 1)
         self.assertEqual(
-            self.frm.stream_bar.entries.index(custom_entry),
+            self.frm.stream_bar.stream_panels.index(custom_entry),
             0)
 
         # Add a fixed stream
         wx.MilliSleep(SLEEP_TIME)
         fake_fstream1 = FakeSEMStream("First Fixed Stream")
         fixed_entry = SecomStreamPanel(self.frm.stream_bar,
-                                           fake_fstream1, livegui)
+                                           fake_fstream1, mic_mod)
         self.frm.stream_bar.add_stream(fixed_entry)
         loop()
 
         self.assertEqual(self.frm.stream_bar.get_size(), 2)
         self.assertEqual(
-            self.frm.stream_bar.entries.index(fixed_entry),
+            self.frm.stream_bar.stream_panels.index(fixed_entry),
             0)
         self.assertEqual(
-            self.frm.stream_bar.entries.index(custom_entry),
+            self.frm.stream_bar.stream_panels.index(custom_entry),
             1)
 
         # Add a fixed stream
         wx.MilliSleep(SLEEP_TIME)
         fake_fstream2 = FakeSEMStream("Second Fixed Stream")
         fixed_entry2 = SecomStreamPanel(self.frm.stream_bar,
-                                           fake_fstream2, livegui)
+                                           fake_fstream2, mic_mod)
         self.frm.stream_bar.add_stream(fixed_entry2)
         loop()
 
         self.assertEqual(self.frm.stream_bar.get_size(), 3)
         self.assertEqual(
-            self.frm.stream_bar.entries.index(fixed_entry2),
+            self.frm.stream_bar.stream_panels.index(fixed_entry2),
             1)
         self.assertEqual(
-            self.frm.stream_bar.entries.index(custom_entry),
+            self.frm.stream_bar.stream_panels.index(custom_entry),
             2)
 
         # Hide first stream by changing to a view that only show SEM streams
         wx.MilliSleep(SLEEP_TIME)
-        semview = instrmodel.MicroscopeView("SEM view", stream_classes=(instrmodel.SEMStream,))
-#        self.frm.stream_bar.hide_stream(0)
-        livegui.focussedView.value = semview
+        semview = instrmodel.MicroscopeView("SEM view", stream_classes=(stream.SEMStream,))
+        # self.frm.stream_bar.hide_stream(0)
+        mic_mod.focussedView.value = semview
         loop()
         self.assertEqual(self.frm.stream_bar.get_size(), 3)
         self.assertFalse(custom_entry.IsShown())
@@ -248,7 +259,7 @@ class FoldPanelBarTestCase(unittest.TestCase):
         # Clear remainging streams
         wx.MilliSleep(SLEEP_TIME)
         # internal access to avoid reseting the whole window
-        for e in list(self.frm.stream_bar.entries):
+        for e in list(self.frm.stream_bar.stream_panels):
             self.frm.stream_bar.remove_stream_panel(e)
         loop()
 
@@ -259,8 +270,9 @@ class FoldPanelBarTestCase(unittest.TestCase):
         loop()
         wx.MilliSleep(SLEEP_TIME)
 
-        livegui = FakeMicroscopeGUI()
-        self.frm.stream_bar.setMicroscope(livegui, None)
+        mic_mod = FakeMicroscopeModel()
+        stream_cont = StreamController(mic_mod, self.frm.stream_bar)
+        # self.frm.stream_bar.setMicroscope(mic_mod, None)
 
         self.assertEqual(self.frm.stream_bar.btn_add_stream.IsShown(), True)
 
@@ -272,7 +284,7 @@ class FoldPanelBarTestCase(unittest.TestCase):
         def brightfield_callback():
             fake_stream = FakeBrightfieldStream("Brightfield")
             fixed_entry = SecomStreamPanel(self.frm.stream_bar,
-                                                fake_stream, livegui)
+                                                fake_stream, mic_mod)
             self.frm.stream_bar.add_stream(fixed_entry)
 
         self.frm.stream_bar.add_action("Brightfield", brightfield_callback)
@@ -287,7 +299,7 @@ class FoldPanelBarTestCase(unittest.TestCase):
         def sem_callback():
             fake_stream = FakeSEMStream("SEM:EDT")
             fixed_entry = SecomStreamPanel(self.frm.stream_bar,
-                                           fake_stream, livegui)
+                                           fake_stream, mic_mod)
             self.frm.stream_bar.add_stream(fixed_entry)
 
         self.frm.stream_bar.add_action("SEM:EDT", sem_callback)
@@ -309,7 +321,7 @@ class FoldPanelBarTestCase(unittest.TestCase):
         def custom_callback():
             fake_stream = FakeFluoStream("Custom")
             custom_entry = DyeStreamPanel(self.frm.stream_bar,
-                                                 fake_stream, livegui)
+                                                 fake_stream, mic_mod)
             self.frm.stream_bar.add_stream(custom_entry)
 
         self.frm.stream_bar.add_action("Custom", custom_callback)
@@ -317,7 +329,7 @@ class FoldPanelBarTestCase(unittest.TestCase):
         # Clear remainging streams
         wx.MilliSleep(SLEEP_TIME)
         # internal access to avoid reseting the whole window
-        for e in list(self.frm.stream_bar.entries):
+        for e in list(self.frm.stream_bar.stream_panels):
             self.frm.stream_bar.remove_stream_panel(e)
         loop()
 
