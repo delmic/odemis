@@ -66,7 +66,7 @@ class ViewController(object):
 
         # subscribe to layout and view changes
         self._interface_model.viewLayout.subscribe(self._onViewLayout, init=True)
-        self._interface_model.focussedView.subscribe(self._onView, init=False)
+        self._interface_model.focussedView.subscribe(self._onView, init=True)
 
     def _createViews(self):
         """
@@ -122,7 +122,7 @@ class ViewController(object):
             # Start off with the 2x2 view
             # Focus defaults to the top right viewport
             self._interface_model.focussedView.value = self._viewports[1].mic_view
-            
+
         # If SEM only: all SEM
         # Works also for the Sparc, as there is no other emitter, and we don't
         # need to display anything else anyway
@@ -236,6 +236,7 @@ class ViewController(object):
             if viewport.mic_view == view:
                 viewport.SetFocus(True)
                 if layout == instrmodel.VIEW_LAYOUT_ONE:
+                    # TODO: maybe in that case, it's not necessary to display the focus frame around?
                     viewport.Show()
             else:
                 viewport.SetFocus(False)
@@ -244,7 +245,6 @@ class ViewController(object):
 
         if layout == instrmodel.VIEW_LAYOUT_ONE:
             self._viewports[0].Parent.Layout() # resize viewport
-
 
         self._viewports[0].Parent.Thaw()
 
