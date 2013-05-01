@@ -29,6 +29,7 @@ from odemis.model import FloatContinuous, VigilantAttribute
 from odemis.model._vattributes import IntEnumerated, NotSettableError
 import collections
 import logging
+import os
 import threading
 import time
 
@@ -510,11 +511,10 @@ class MicroscopeView(object):
 
         if not isinstance(stream, self.stream_classes):
             msg = "Adding incompatible stream '%s' to view '%s'. %s needed"
-            logging.error(msg,
+            logging.warning(msg,
                           stream.name.value,
                           self.name.value,
                           self.stream_classes)
-            raise Exception("Grrr")
 
         # Find out where the stream should go in the streamTree
         # FIXME: manage sub-trees, with different merge operations

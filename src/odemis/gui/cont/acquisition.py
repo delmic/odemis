@@ -29,11 +29,12 @@ of microscope images.
 
 from concurrent.futures._base import CancelledError
 from odemis import model, dataio
-from odemis.gui import acqmng, conf
+from odemis.gui import acqmng, conf, instrmodel
 from odemis.gui.acqmng import preset_as_is
 from odemis.gui.cont import get_main_tab_controller
 from odemis.gui.model import stream
-from odemis.gui.model.stream import UNDEFINED_ROI
+from odemis.gui.model.stream import UNDEFINED_ROI, StaticSEMStream, \
+    StaticSpectrumStream
 from odemis.gui.util import img, get_picture_folder, call_after, units, \
     limit_invocation
 from odemis.gui.win.acquisition import AcquisitionDialog, \
@@ -486,6 +487,8 @@ class SparcAcquiController(AcquisitionController):
         self._orig_settings = preset_as_is(self._settings_controller.entries)
         self._settings_controller.pause()
 
+        # FIXME: it doesn't seem to the freeze the settings
+
         # TODO: also freeze the MicroscopeView (for now we just pause the streams)
         # pause all the live acquisitions
         live_streams = self._interface_model.focussedView.value.getStreams()
@@ -509,6 +512,39 @@ class SparcAcquiController(AcquisitionController):
 
         # Make sure that the acquisition button is enabled again.
         self._main_frame.btn_sparc_acquire.Enable()
+
+
+    def _show_acquisition(self, data, file):
+        """
+        Show the acquired data (saved into a file) in the analysis tab.
+        data (list of DataFlow): all the raw data acquired
+        file (File): file object to which the data was saved
+        """
+
+        # get the analysis tab
+        mtc = get_main_tab_controller()
+
+        analysis_interface = mtc['sparc_analysis'].interface_model
+        stream_controller = mtc['sparc_analysis'].stream_controller
+
+        # clear the analysis tab
+        stream_controller.clear()
+
+        # add streams
+        # for each stream, get the data and convert? .getStatic()?
+        # FIXME
+        # TODO: might need more info, to know which stream is which raw data (or
+        # we need to put clever code on parsing the metadata) => streamTree?/List of streams?
+#        stream_controller.addStatic("Secondary electrons", semdatas,
+#                                        cls=StaticSEMStream)
+#        stream_controller.addStatic("Spectrogram", specdatai,
+#                                        cls=StaticSpectrumStream)
+
+        # add the file info
+        analysis_interface.fileinfo.value = instrmodel.FileInfo(file)
+
+        # show the new tab
+        mtc.switch("sparc_analysis")
 
     def on_acquisition(self, evt):
         """
@@ -575,6 +611,8 @@ class SparcAcquiController(AcquisitionController):
                 self.btn_cancel.Disable()
                 return
 
+
+
             # save result to file
             try:
                 thumb = acqmng.computeThumbnail(self._interface_model.acquisitionView.stream_tree,
@@ -595,6 +633,9 @@ class SparcAcquiController(AcquisitionController):
 
             # change filename, to ensure not overwriting anything
             self.filename.value = self._get_default_filename()
+
+            # TODO display in the analysis tab
+            self._show_acquisition(data, open(filename))
         finally:
             self.btn_acquire.Enable()
             self._main_frame.Layout()
