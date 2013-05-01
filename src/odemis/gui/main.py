@@ -121,14 +121,7 @@ class OdemisGUIApp(wx.App):
                                             wx.BITMAP_TYPE_ANY)
             self.main_frame.SetIcons(ib)
 
-            #logging.debug("Setting frame size to %sx%s", w, h)
-
-            #self.main_frame.SetSize((w, h))
-            #self.main_frame.SetPosition((0, 0))
-
-
             # Menu events
-
             wx.EVT_MENU(self.main_frame,
                         self.main_frame.menu_item_quit.GetId(),
                         self.on_close_window)
@@ -215,8 +208,8 @@ class OdemisGUIApp(wx.App):
             set_main_tab_controller(tabs.TabBarController(tab_rules,
                                                           self.main_frame,
                                                           self.microscope))
-            # after managing the tabs seems to make it more smooth
-            self.main_frame.Show()
+            # making it very late seems to make it smoother
+            wx.CallAfter(self.main_frame.Show)
 
         except Exception:  #pylint: disable=W0703
             self.excepthook(*sys.exc_info())
