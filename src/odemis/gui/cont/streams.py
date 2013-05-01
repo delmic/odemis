@@ -133,6 +133,9 @@ class StreamController(object):
             name = "Filtered colour %d" % i
             if not name in existing_names:
                 break
+        else:
+            logging.error("Failed to find a new unique name for stream")
+            name = "Filtered colour"
 
         stream = model.stream.FluoStream(name,
                   self._interface_model.ccd, self._interface_model.ccd.data,
@@ -208,15 +211,7 @@ class StreamController(object):
 
         # TODO create a StreamScheduler
         # call it like self._scheduler.addStream(stream)
-        # create an adapted subscriber for the scheduler
-        def detectUpdate(updated):
-            self._onStreamUpdate(stream, updated)
-
-        self._scheduler_subscriptions[stream] = detectUpdate
-        stream.should_update.subscribe(detectUpdate)
-
-        # show the stream right now
-        stream.should_update.value = True
+        self._scheduleStream(stream)
 
         spanel = spanel_cls(self._stream_bar, stream, self._interface_model)
 
@@ -323,6 +318,35 @@ class StreamController(object):
             # activate this stream
             stream.is_active.value = True
 
+    def _scheduleStream(self, stream):
+        """
+        Add a stream to be managed by the update scheduler.
+        stream (Stream): the stream to add. If it's already scheduled, it's fine.
+        """
+        # create an adapted subscriber for the scheduler
+        def detectUpdate(updated, stream=stream):
+            self._onStreamUpdate(stream, updated)
+
+        self._scheduler_subscriptions[stream] = detectUpdate
+        stream.should_update.subscribe(detectUpdate)
+
+        # show the stream right now
+        stream.should_update.value = True
+
+    def _unscheduleStream(self, stream):
+        """
+        Remove a stream from being managed by the scheduler. It will also be 
+        stopped from updating.
+        stream (Stream): the stream to remove. If it's not currently scheduled,
+          it's fine.
+        """
+        stream.is_active.value = False
+        stream.should_update.value = False
+        if stream in self._scheduler_subscriptions:
+            callback = self._scheduler_subscriptions.pop(stream)
+            stream.should_update.unsubscribe(callback)
+
+
     def onOpticalState(self, state):
         # only called when it changes
         if state == STATE_OFF or state == STATE_PAUSE:
@@ -381,11 +405,7 @@ class StreamController(object):
         It's ok to call if the stream has already been removed
         """
         # don't schedule any more
-        stream.is_active.value = False
-        stream.should_update.value = False
-        if stream in self._scheduler_subscriptions:
-            callback = self._scheduler_subscriptions.pop(stream)
-            stream.should_update.unsubscribe(callback)
+        self._unscheduleStream(stream)
 
         # Remove from the views
         for v in self._interface_model.views:
@@ -399,6 +419,39 @@ class StreamController(object):
         pub.sendMessage('stream.ctrl.removed',
                         streams_present=self._has_streams(),
                         streams_visible=self._has_visible_streams())
+
+    def clear(self):
+        """
+        Remove all the streams (from the model and the GUI)
+        """
+        # We could go for each stream, and call removeStream(), but it's
+        # as simple to reset all the lists
+
+        # clear the graphical part
+        for spanel in self._stream_bar.stream_panels:
+            self._stream_bar.remove_stream_panel(spanel)
+
+        # clear the interface model
+        # (should handle cases where a new stream is added simultaneously)
+        while self._interface_model.streams:
+            stream = self._interface_model.streams.pop()
+            self._unscheduleStream(stream)
+
+            # Remove from the views
+            for v in self._interface_model.views:
+                v.removeStream(stream)
+
+        # reset lists
+        self._streams_to_restart_opt = set()
+        self._streams_to_restart_em = set()
+
+        if self._has_streams() or self._has_visible_streams():
+            logging.warning("Failed to remove all streams")
+
+        logging.debug("Sending stream.ctrl.removed message")
+        pub.sendMessage('stream.ctrl.removed',
+                        streams_present=False,
+                        streams_visible=False)
 
     def _has_streams(self):
         return len(self._stream_bar.stream_panels) > 0

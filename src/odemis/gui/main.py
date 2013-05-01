@@ -290,7 +290,6 @@ class OdemisGUIApp(wx.App):
         # It uses raw data, not images
         try:
             mtc = get_main_tab_controller()
-            mtc.switch("sparc_analysis")
 
             name1 = os.path.join(
                             os.path.dirname(__file__),
@@ -315,13 +314,18 @@ class OdemisGUIApp(wx.App):
                                                     dtype=numpy.uint16),
                                         mdspec)
 
-
+            # put only these streams and switch to the analysis tab
             stream_controller = mtc['sparc_analysis'].stream_controller
+            stream_controller.clear()
 
             stream_controller.addStatic("Secondary electrons", semdatas,
                                         cls=StaticSEMStream)
             stream_controller.addStatic("Spectrogram", specdatai,
                                         cls=StaticSpectrumStream)
+
+            analysis_interface = mtc['sparc_analysis'].interface_model
+            analysis_interface.fileinfo.value = instrmodel.FileInfo(open(name2))
+            mtc.switch("sparc_analysis")
         except KeyError:
             self.goto_debug_mode()
             logging.exception("Failed to load example")
@@ -407,18 +411,21 @@ see http://www.fluorophores.org/disclaimer/.
 
         try:
             mtc = get_main_tab_controller()
-            secom_tab = mtc['secom_live']
-            if secom_tab and secom_tab.interface_model:
+            try:
+                interface_model = mtc['secom_live'].interface_model
                 # Put cleanup actions here (like disconnect from odemisd)
                 # TODO: move to tab controller?
                 try:
-                    secom_tab.interface_model.opticalState.value = instrmodel.STATE_OFF
+                    interface_model.opticalState.value = instrmodel.STATE_OFF
                 except AttributeError:
                     pass # just no such microscope present
                 try:
-                    secom_tab.interface_model.emState.value = instrmodel.STATE_OFF
+                    interface_model.emState.value = instrmodel.STATE_OFF
                 except AttributeError:
                     pass
+            except LookupError:
+                # tab not present => nothing to do
+                pass
 
             self.main_frame.Destroy()
             if self.http_proc:
