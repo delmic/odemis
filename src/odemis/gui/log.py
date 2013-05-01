@@ -51,7 +51,7 @@ def create_gui_logger(log_field):
     # Maximum number of (rotated) log files
     max_logfile_count = 5
     # Formatting string for logging messages to file
-    frm = "%(asctime)s %(levelname)-7s %(lineno)4d:%(module)-15s: %(message)s"
+    frm = "%(asctime)s %(levelname)-7s %(module)s:%(lineno)d: %(message)s"
     file_format = logging.Formatter(frm)
 
     file_handler = RotatingFileHandler(logfile_path, 'w',
