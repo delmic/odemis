@@ -250,7 +250,7 @@ class DblMicroscopeCanvas(DraggableCanvas):
         """
         # this can be caused by any viewport which has requested to recenter
         # the buffer
-        pos = (self.real_to_world_pos(value["x"]), self.real_to_world_pos(value["y"]))
+        pos = self.real_to_world_pos((value["x"], value["y"]))
         # skip ourself, to avoid asking the stage to move to (almost) the same
         # position
         wx.CallAfter(super(DblMicroscopeCanvas, self).ReCenterBuffer, pos)
@@ -261,13 +261,13 @@ class DblMicroscopeCanvas(DraggableCanvas):
         pos (2-tuple float): the coordinates of the center of the buffer in
                              fake units
         """
+        # it will update self.requested_world_pos
         super(DblMicroscopeCanvas, self).ReCenterBuffer(pos)
 
         # TODO: check it works fine
         if not self.microscope_view:
             return
-        new_pos = self.requested_world_pos
-        physical_pos = (new_pos[0] * self.mpwu, new_pos[1] * self.mpwu)
+        physical_pos = self.real_to_world_pos(self.requested_world_pos)
         # this should be done even when dragging
         self.microscope_view.view_pos.value = physical_pos
 
