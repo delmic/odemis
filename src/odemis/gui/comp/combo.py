@@ -58,8 +58,7 @@ class ComboBox(wx.combo.OwnerDrawnComboBox):
         self.SetMargins(0, 0)
         self.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_EDIT)
         self.SetBackgroundColour(self.Parent.GetBackgroundColour())
-        self.SetButtonBitmaps(img.getbtn_downBitmap(),
-                              pushButtonBg=False)
+        self.SetButtonBitmaps(img.getbtn_downBitmap(), pushButtonBg=False)
 
         self.Bind(wx.EVT_SIZE, self.on_size)
         self.Bind(wx.EVT_KEY_DOWN, self.on_key)

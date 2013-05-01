@@ -74,8 +74,7 @@ def _resolution_from_range(va, conf):
         return [cur_val]
 
 def _binning_1d_from_2d(va, conf):
-    """
-    Find simple binnings available in one dimension (pixel always square)
+    """ Find simple binnings available in one dimension (pixel always square)
     binning provided by a camera is normally a 2-tuple of int
     """
     cur_val = va.value
@@ -89,7 +88,7 @@ def _binning_1d_from_2d(va, conf):
 
         # add up to 5 binnings
         b = int(math.ceil(minbin)) # in most cases, that's 1
-        for i in range(5):
+        for _ in range(5):
             if minbin <= b and b <= maxbin:
                 choices.add(b)
 
@@ -97,6 +96,8 @@ def _binning_1d_from_2d(va, conf):
                 break
 
             b *= 2
+            # logging.error(choices)
+
 
         return sorted(choices) # return a list, to be sure it's in order
     except NotApplicableError:
@@ -207,7 +208,7 @@ CONFIG = {
                 },
                 "scale":
                 {
-                 # same as binning (but accepts floats)
+                    # same as binning (but accepts floats)
                     "control_type": odemis.gui.CONTROL_RADIO,
                     "choices": _binning_1d_from_2d,
                     "type": "1d_binning", # means will make sure both dimensions are treated as one
