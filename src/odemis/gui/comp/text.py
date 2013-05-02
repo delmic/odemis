@@ -320,6 +320,7 @@ class SuggestTextCtrl (wx.TextCtrl, listmix.ColumnSorterMixin):
                           for x in xrange(dd.GetColumnCount())]
                 self._selectCallback(values)
             self.SetValue(itemtext)
+            self.SetToolTip(wx.ToolTip(itemtext))
             self.SetInsertionPointEnd()
             self.SetSelection(-1, -1)
             self._showDropDown(False)
@@ -700,8 +701,8 @@ class NumberTextCtrl(wx.TextCtrl):
             # set new value even if not validated, so that we reach the boundaries
             self.number = self.GetValidator().GetNumber(str_val)
             # TODO: turn the text red temporarily if not valid?
-#            if not validated:
-#                logging.debug("Value '%s' not valid, using '%s'", str_val, val)
+            # if not validated:
+            # logging.debug("Value '%s' not valid, using '%s'", str_val, val)
 
         if prev_num != self.number:
             self._send_change_event()
@@ -752,8 +753,8 @@ class NumberTextCtrl(wx.TextCtrl):
 
         val = u"%r" % num # GetNumber needs a string
         self.number = self.GetValidator().GetNumber(val)
-#        if not validated:
-#            logging.debug("Reached invalid value %s", val)
+        # if not validated:
+        #     logging.debug("Reached invalid value %s", val)
 
         if prev_num != self.number:
             self._display_raw() # we assume we have the focus
