@@ -40,6 +40,7 @@ import odemis.gui.util.img as img
 import odemis.gui.util.units as units
 import odemis.model as model
 import threading
+from odemis.model._dataflow import MD_PIXEL_SIZE
 
 
 # to identify a ROI which must still be defined by the user
@@ -597,14 +598,14 @@ class SpectrumStream(Stream):
             try:
                 ro_rate = self._detector.readoutRate.value
                 readout = numpy.prod(self._detector.resolution.value) / ro_rate + 0.05
-            except:
+            except Exception:
                 readout = 0.05
             duration = numpy.prod(res) * (exp + readout + 0.01) * 1.20
             # Add the setup time
             duration += self.SETUP_OVERHEAD
 
             return duration
-        except:
+        except Exception:
             msg = "Exception while estimating acquisition time of %s"
             logging.exception(msg, self.name.value)
             return Stream.estimateAcquisitionTime(self)
@@ -674,14 +675,14 @@ class ARStream(Stream):
             try:
                 ro_rate = self._detector.readoutRate.value
                 readout = numpy.prod(self._detector.resolution.value) / ro_rate + 0.05
-            except:
+            except Exception:
                 readout = 0.05
             duration = numpy.prod(res) * (exp + readout + 0.01) * 1.20
             # Add the setup time
             duration += self.SETUP_OVERHEAD
 
             return duration
-        except:
+        except Exception:
             msg = "Exception while estimating acquisition time of %s"
             logging.exception(msg, self.name.value)
             return Stream.estimateAcquisitionTime(self)
@@ -1069,19 +1070,25 @@ class SEMSpectrumMDStream(MultipleDetectorStream):
                 self.is_active.value = False
                 return
 
+            # create metadata for the spectrum cube from the SEM CL
+            md_sem = self._sem_stream.raw[0].metadata
+            md = {}
+            for m in [MD_PIXEL_SIZE, MD_POS]:
+                if m in md_sem:
+                    md[m] = md_sem[m]
+
             # create a spectrum cube from all the data
-            self._assembleSpecData(self._acq_spect_buf)
+            self._assembleSpecData(self._acq_spect_buf, md)
 
             logging.debug("raw data is now of shape %s",
-                          ",".join([str(d.shape) for d in self.raw]))
+                          ", ".join([str(d.shape) for d in self.raw]))
 
             # update the image to a new empty one to signal everything is
             # received
 
             self.image.value = InstrumentalImage(None)
-
-            self.is_active.value = False
         finally:
+            self.is_active.value = False
             self._acq_waiter = None
 
     def _onSEMImage(self, df, data):
@@ -1104,7 +1111,7 @@ class SEMSpectrumMDStream(MultipleDetectorStream):
             df.unsubscribe(self._onSpecImage)
             self._acq_complete.set()
 
-    def _assembleSpecData(self, data_list):
+    def _assembleSpecData(self, data_list, metadata):
         """
         Take all the data received from the spectrometer and assemble it in a
         cube
@@ -1112,6 +1119,7 @@ class SEMSpectrumMDStream(MultipleDetectorStream):
         data_list (list of M DataArray of shape (1, N)): all the data received
         the result goes into .raw, and a new empty .image is added to inform
         there is a new data.
+        metadata (dict of string -> Value): the metadata values to be overridden 
         """
         assert len(data_list) > 0
 
@@ -1125,8 +1133,10 @@ class SEMSpectrumMDStream(MultipleDetectorStream):
         repetition = self._acq_repetition
         spec_res = data_list[0].shape[0]
         spec_data.shape = (spec_res, repetition[1], repetition[0])
-        # copy the metadata from the first point
-        spec_data = model.DataArray(spec_data, metadata=data_list[0].metadata)
+        # copy the metadata from the first point and add the ones from metadata
+        md = data_list[0].metadata
+        md.update(metadata)
+        spec_data = model.DataArray(spec_data, metadata=md)
 
         # save the new data
         self._spec_stream.raw = [spec_data]
