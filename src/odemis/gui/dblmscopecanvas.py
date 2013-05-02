@@ -194,7 +194,7 @@ class DblMicroscopeCanvas(DraggableCanvas):
             if iim is None:
                 continue
             scale = iim.mpp / self.mpwu
-            pos = (iim.center[0] / self.mpwu, iim.center[1] / self.mpwu)
+            pos = self.real_to_world_pos(iim.center)
             self.SetImage(i, iim.image, pos, scale)
 
         # set merge_ratio
@@ -267,7 +267,7 @@ class DblMicroscopeCanvas(DraggableCanvas):
         # TODO: check it works fine
         if not self.microscope_view:
             return
-        physical_pos = self.real_to_world_pos(self.requested_world_pos)
+        physical_pos = self.world_to_real_pos(self.requested_world_pos)
         # this should be done even when dragging
         self.microscope_view.view_pos.value = physical_pos
 

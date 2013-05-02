@@ -282,7 +282,7 @@ class DraggableCanvas(wx.Panel):
                 if abs(shift) <= linear_zone:
                     value = shift
                 else:
-                    ssquare = cmp(shift, 0) * (shift - linear_zone)**2
+                    ssquare = cmp(shift, 0) * (shift - linear_zone) ** 2
                     value = shift + ssquare / linear_zone
                 change = value - self._rdrag_prev_value[i]
                 if change:
@@ -323,7 +323,7 @@ class DraggableCanvas(wx.Panel):
         pass
 
     # Change picture one/two
-    def SetImage(self, index, im, pos = None, scale = None):
+    def SetImage(self, index, im, pos=None, scale=None):
         """ Set (or update)  image
 
         index (0<=int): index number of the image, can be up to 1 more than the
@@ -365,10 +365,10 @@ class DraggableCanvas(wx.Panel):
         """
         dc_view = wx.PaintDC(self)
 
-        self.margins = ((self._bmp_buffer_size[0] - self.ClientSize[0])/2,
-                        (self._bmp_buffer_size[1] - self.ClientSize[1])/2)
+        self.margins = ((self._bmp_buffer_size[0] - self.ClientSize[0]) / 2,
+                        (self._bmp_buffer_size[1] - self.ClientSize[1]) / 2)
 
-        src_pos =  (self.margins[0] - self.drag_shift[0],
+        src_pos = (self.margins[0] - self.drag_shift[0],
                     self.margins[1] - self.drag_shift[1])
 
         # Blit the appropriate area from the buffer to the view port
@@ -515,7 +515,7 @@ class DraggableCanvas(wx.Panel):
         """ Draws all the static overlays on the DC dc (wx.DC)
         """
         # center the coordinates
-        dc.SetDeviceOrigin(self.ClientSize[0]/2, self.ClientSize[1]/2)
+        dc.SetDeviceOrigin(self.ClientSize[0] / 2, self.ClientSize[1] / 2)
         for o in self.ViewOverlays:
             o.Draw(dc)
 
