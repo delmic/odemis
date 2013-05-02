@@ -1170,9 +1170,6 @@ class StreamBar(wx.Panel):
         self._fitStreams()
 
 
-    def get_stream_panels(self):
-        return self.stream_panels
-
     def remove_stream_panel(self, spanel):
         """
         Removes a stream panel

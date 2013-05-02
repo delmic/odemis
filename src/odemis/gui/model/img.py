@@ -47,7 +47,7 @@ class InstrumentalImage(object):
         rotation is applied from the center of the image.
         """
         self.image = wx_img
-        # TODO: should be a tuple (x/y)
+        # TODO: should be a tuple (x/y) to support images like acquisition from SPARC
         assert(mpp is None or (mpp > 0))
         self.mpp = mpp
         assert(center is None or (len(center) == 2))
@@ -60,20 +60,3 @@ class InstrumentalImage(object):
     def get_real_size(self):
         return tuple([d * self.mpp for d in self.image.GetSize()])
 
-    def real_selection_to_unit(self, start, end):
-        """ Translate selection of real coordinates into a unit selection
-        FIXME: is it ok to assume a center of 0,0?
-        """
-        p_width, p_height = self.image.GetSize()
-        r_width, r_height = p_width * self.mpp, p_height * self.mpp
-
-        r_left = self.center[0] - (r_width / 2.0)
-        r_top = self.center[1] - (r_height / 2.0)
-
-        def t_x(p):
-            return (p[0] - r_left) / r_width
-
-        def t_y(p):
-            return (p[1] - r_top) / r_height
-
-        return t_x(start), t_y(start), t_x(end), t_y(end)

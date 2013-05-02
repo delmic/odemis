@@ -440,11 +440,12 @@ class StreamController(object):
         """
         Remove all the streams (from the model and the GUI)
         """
-        # We could go for each stream, and call removeStream(), but it's
+        # We could go for each stream panel, and call removeStream(), but it's
         # as simple to reset all the lists
 
         # clear the graphical part
-        for spanel in self._stream_bar.stream_panels:
+        while self._stream_bar.stream_panels:
+            spanel = self._stream_bar.stream_panels[0]
             self._stream_bar.remove_stream_panel(spanel)
 
         # clear the interface model
@@ -474,7 +475,4 @@ class StreamController(object):
 
     def _has_visible_streams(self):
         return any(s.IsShown() for s in self._stream_bar.stream_panels)
-
-    def get_stream_panels(self):
-        return self._stream_bar.get_stream_panels()
 
