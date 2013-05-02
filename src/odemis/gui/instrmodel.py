@@ -29,6 +29,7 @@ from odemis.model import FloatContinuous, VigilantAttribute
 from odemis.model._vattributes import IntEnumerated, NotSettableError
 import collections
 import logging
+import math
 import os
 import threading
 import time
@@ -369,6 +370,7 @@ class FileInfo(object):
         # TODO: settings of the instruments for the acquisition?
         # Might be per stream
 
+MAX_SAFE_MOVE_DISTANCE = 10e-3 # 1 cm
 class MicroscopeView(object):
     """ Represents a view from a microscope and ways to alter it.
 
@@ -456,7 +458,7 @@ class MicroscopeView(object):
     def moveStageToView(self):
         """ Move the stage to the current view_pos
 
-        :return: a future (that allows to know when the move is finished)
+        :return (None or Future): a future (that allows to know when the move is finished)
 
         Note: once the move is finished stage_pos will be updated (by the
         back-end)
@@ -479,6 +481,13 @@ class MicroscopeView(object):
             "x": view_pos[0] - prev_pos["x"],
             "y": view_pos[1] - prev_pos["y"]
         }
+
+        # Check it makes sense (=> not too big)
+        distance = math.sqrt(sum([v*v for v in move.values()]))
+        if distance > MAX_SAFE_MOVE_DISTANCE:
+            logging.error("Cancelling request to move by %f m (because > %f m)",
+                          distance, MAX_SAFE_MOVE_DISTANCE)
+            return
 
         return self._stage.moveRel(move)
 
