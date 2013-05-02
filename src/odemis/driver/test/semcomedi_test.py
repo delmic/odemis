@@ -265,7 +265,7 @@ class TestSEM(unittest.TestCase):
             self.assertLess(ai_period, min_ai_period * 5, 
                             "Got osr=%d, while expected something around %s" % (osr, period/min_ai_period))
 
-#     @unittest.skip("too long")
+#    @unittest.skip("too long")
     def test_acquire_high_osr(self):
         """
         small resolution, but large osr, to force acquisition not by whole array
@@ -283,7 +283,7 @@ class TestSEM(unittest.TestCase):
         self.assertGreaterEqual(duration, expected_duration, "Error execution took %f s, less than exposure time %d." % (duration, expected_duration))
         self.assertIn(model.MD_DWELL_TIME, im.metadata)
 
-#     @unittest.skip("too long")
+#    @unittest.skip("too long")
     def test_acquire_long_short(self):
         """
         test being able to cancel image acquisition if dwell time is too long
@@ -351,7 +351,7 @@ class TestSEM(unittest.TestCase):
         self.sed.data.unsubscribe(self.receive_image) # just in case it failed
         self.assertEqual(self.left, 0)
 
-#     @unittest.skip("simple")
+#    @unittest.skip("simple")
     def test_df_fast_sub_unsub(self):
         """
         Test the dataflow on a very fast cycle subscribing/unsubscribing
@@ -427,6 +427,7 @@ class TestSEM(unittest.TestCase):
         self.assertEqual(self.events, numbert)
         
         self.scanner.newPosition.unsubscribe(self)
+        self.sed.data.get()
         time.sleep(0.1)
         self.assertEqual(self.events, numbert)
 
@@ -448,7 +449,7 @@ class TestSEM(unittest.TestCase):
             self.acq_done.set()
     
     
-# @unittest.skip("simple")
+#@unittest.skip("simple")
 class TestSEM2(unittest.TestCase):
     """
     Tests which can share one SEM device with 2 detectors
