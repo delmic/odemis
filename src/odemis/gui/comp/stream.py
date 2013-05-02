@@ -54,6 +54,8 @@ stream_remove_event, EVT_STREAM_REMOVE = wx.lib.newevent.NewEvent()
 
 BG_COLOUR_EXPANDER = "#4D4D4D"
 BG_COLOUR_PANEL = "#333333"
+BUTTON_BORDER = 8
+BUTTON_SIZE = (18, 18)
 
 # Expanders are the stream controls that are always visible. They allow for
 # the showing and hiding of sub-controls and they might offer controls and
@@ -61,10 +63,17 @@ BG_COLOUR_PANEL = "#333333"
 
 class Expander(wx.PyControl):
     """ This class describes a clickable control responsible for showing and
-    hiding stream data.
+    hiding settings belonging to a specific stream.
 
     It functions both as a header and a button that expands or collapses a
-    panel containg controls.
+    StreamPanel containing controls.
+
+    The default buttons present are:
+
+     * A remove button, which can be used to remove the StreamPanel
+     * A visibility button, idicating whether the stream data should be/is shown
+     * A play button, controling whether or not 'live' data from the stream is
+       to be used.
 
     Structure:
 
@@ -74,17 +83,26 @@ class Expander(wx.PyControl):
         |-- ImageToggleButton (show/hide button)
         |-- ImageToggleButton (capture/pause button)
 
-    The triangular fold icons are drawn in a separate routine.
+    The triangular fold icons are directly drawn on the background.
 
     """
 
-    def __init__(self, parent, stream, wid=wx.ID_ANY, pos=wx.DefaultPosition,
-                 size=wx.DefaultSize, style=wx.NO_BORDER):
+    def __init__(self,
+                 parent,
+                 stream,
+                 wid=wx.ID_ANY,
+                 pos=wx.DefaultPosition,
+                 size=wx.DefaultSize,
+                 style=wx.NO_BORDER):
+
         wx.PyControl.__init__(self, parent, wid, pos, size, style)
+
+        assert(isinstance(parent, StreamPanel))
 
         # This style *needs* to be set on MS Windows
         self.SetBackgroundStyle(wx.BG_STYLE_CUSTOM)
 
+        # Stream details will be necessary in subclasses
         self._stream = stream
         self._label_ctrl = None
 
@@ -102,7 +120,7 @@ class Expander(wx.PyControl):
                                             wx.ID_ANY,
                                             img.getico_rem_strBitmap(),
                                             (10, 8),
-                                            (18, 18),
+                                            BUTTON_SIZE,
                                             background_parent=parent)
         self._btn_rem.SetBitmaps(img.getico_rem_str_hBitmap())
         self._btn_rem.SetToolTipString("Remove stream")
@@ -113,7 +131,7 @@ class Expander(wx.PyControl):
                                                   wx.ID_ANY,
                                                   img.getico_eye_closedBitmap(),
                                                   (10, 8),
-                                                  (18, 18),
+                                                  BUTTON_SIZE,
                                                   background_parent=parent)
         self._btn_vis.SetBitmaps(img.getico_eye_closed_hBitmap(),
                                  img.getico_eye_openBitmap(),
@@ -126,7 +144,7 @@ class Expander(wx.PyControl):
                                                    wx.ID_ANY,
                                                    img.getico_pauseBitmap(),
                                                    (10, 8),
-                                                   (18, 18),
+                                                   BUTTON_SIZE,
                                                    background_parent=parent)
         self._btn_play.SetBitmaps(img.getico_pause_hBitmap(),
                                   img.getico_playBitmap(),
@@ -137,25 +155,40 @@ class Expander(wx.PyControl):
         # Create and add sizer and populate with controls
         self._sz = wx.BoxSizer(wx.HORIZONTAL)
 
-        self._sz.Add(self._btn_rem, 0, wx.ALL | wx.ALIGN_CENTRE_VERTICAL, 8)
-        # If a label is to be inserted, it can replace this spacer (index = 1)
+        self._sz.Add(self._btn_rem,
+                     0,
+                     (wx.ALL | wx.ALIGN_CENTRE_VERTICAL |
+                      wx.RESERVE_SPACE_EVEN_IF_HIDDEN),
+                     BUTTON_BORDER)
+
+        # Adding a stretch spaces that may be replaced by any other control,
+        # e.g. a text lable
         self._sz.AddStretchSpacer(0)
-        self._sz.Add(self._btn_vis, 0, wx.RIGHT | wx.ALIGN_CENTRE_VERTICAL, 8)
-        self._sz.Add(self._btn_play, 0, wx.RIGHT | wx.ALIGN_CENTRE_VERTICAL, 8)
+
+        self._sz.Add(self._btn_vis,
+                     0,
+                     (wx.RIGHT | wx.ALIGN_CENTRE_VERTICAL |
+                      wx.RESERVE_SPACE_EVEN_IF_HIDDEN),
+                     BUTTON_BORDER)
+        self._sz.Add(self._btn_play,
+                     0,
+                     (wx.RIGHT | wx.ALIGN_CENTRE_VERTICAL |
+                      wx.RESERVE_SPACE_EVEN_IF_HIDDEN),
+                     BUTTON_BORDER)
         self._sz.AddSpacer((64, 16))
+
 
         self.SetSizer(self._sz)
         self._sz.Fit(self)
         self.Layout()
 
+    ###### Methods needed for layout and painting
+
     def DoGetBestSize(self, *args, **kwargs):
         """ Return the best size, which is the width of the parent and the
         height or the content (determined through the sizer).
         """
-        width, _ = self.Parent.GetSize()
-        _, height = self._sz.GetSize()
-
-        return wx.Size(width, height)
+        return wx.Size(self.Parent.GetSize()[0], self._sz.GetSize()[1])
 
     def OnSize(self, event):
         """ Handles the wx.EVT_SIZE event for the Expander class.
@@ -177,22 +210,44 @@ class Expander(wx.PyControl):
         win_rect = self.GetRect()
         x_pos = win_rect.GetRight() - ICON_WIDTH - CAPTION_PADDING_RIGHT
 
-        self._foldIcons.Draw(self.Parent._collapsed, dc, x_pos,
+        if self._foldIcons:
+            self._foldIcons.Draw(self.Parent._collapsed, dc, x_pos,
                              (win_rect.GetHeight() - ICON_HEIGHT) / 2,
                              wx.IMAGELIST_DRAW_TRANSPARENT)
+
+
+    ###### Methods to show and hide the default buttons
+
+    def _show_item(self, item, show):
+        if show:
+            self._sz.Show(item)
+        else:
+            self._sz.Hide(item)
+        self._sz.Layout()
+
+    def show_play_btn(self, show):
+        """ This method show or hides the play button """
+        self._show_item(self._btn_play, show)
+
+    def show_remove_btn(self, show):
+        """ This method show or hides the remove button """
+        self._show_item(self._btn_rem, show)
+
+    def show_visibility_btn(self, show):
+        """ This method show or hides the remove button """
+        self._show_item(self._btn_vis, show)
 
     def to_acquisition_mode(self):
         """ This method hides or makes read-only any button or data that should
         not be changed during acquisition.
         """
-        self._btn_rem.Hide()
-        # Insert spacer to add some left side padding.
-        self._sz.InsertSpacer(0, (5, 16))
-        self._btn_play.Hide()
+        self.show_remove_btn(False)
+        self.show_play_btn(False)
 
 
 class StandardExpander(Expander):
-    """ Expander with a fixed name label """
+    """ Expander with a fixed name label displaying the name of the
+    attached stream by default. """
 
     def __init__(self, parent, stream, wid=wx.ID_ANY):
         Expander.__init__(self, parent, stream, wid)
@@ -200,11 +255,24 @@ class StandardExpander(Expander):
         self._label_ctrl = wx.StaticText(self, -1, stream.name.value)
         # Replace spacer with control
         self._sz.Remove(1)
-        self._sz.Insert(1, self._label_ctrl, 1,
-                       wx.RIGHT | wx.ALIGN_CENTRE_VERTICAL, 8)
+        self._sz.Insert(1,
+                        self._label_ctrl,
+                        1,
+                        (wx.RIGHT | wx.ALIGN_CENTRE_VERTICAL |
+                         wx.RESERVE_SPACE_EVEN_IF_HIDDEN),
+                        8)
 
+    def show_label(self, show):
+        """ This method show or hides the play button """
+        self._show_item(self._label_ctrl, show)
 
-class DyeExpander(Expander):
+    def get_label(self):
+        return self._label_ctrl.GetLabel()
+
+    def set_label(self, label):
+        self._label_ctrl.SetLabel(label)
+
+class DyeExpander(StandardExpander):
     """ Expander with a editable name label, linked to a predefined list of
     dyes.
 
@@ -212,49 +280,71 @@ class DyeExpander(Expander):
     """
 
     def __init__(self, parent, stream, wid=wx.ID_ANY):
-        Expander.__init__(self, parent, stream, wid)
+        # We don't call the constructor of the parent class, because
+        # we want to insert our own type of label control.
+        Expander.__init__(self, parent, stream, wid)  #pylint: disable=W0233
 
-        # add a colour button if the stream has a "tint" VA
+        # Add a colour button if the stream has a "tint" VA
+
         if hasattr(stream, "tint"):
-            self._btn_color = buttons.ColourButton(self, -1,
+            self._btn_tint = buttons.ColourButton(self, -1,
                                            bitmap=img.getemptyBitmap(),
                                            size=(18, 18),
                                            colour=stream.tint.value,
                                            background_parent=parent,
                                            use_hover=True)
-            self._btn_color.SetToolTipString("Select colour")
-            self._sz.Insert(2, self._btn_color, 0,
-                            wx.RIGHT | wx.ALIGN_CENTRE_VERTICAL, 8)
-            self._btn_color.Bind(wx.EVT_BUTTON, self.on_color_click)
+            self._btn_tint.SetToolTipString("Select colour")
+            self._sz.Insert(2,
+                            self._btn_tint,
+                            0,
+                            (wx.RIGHT | wx.ALIGN_CENTRE_VERTICAL |
+                             wx.RESERVE_SPACE_EVEN_IF_HIDDEN),
+                            8)
+            self._btn_tint.Bind(wx.EVT_BUTTON, self.on_color_click)
             stream.tint.subscribe(self.set_tint)
+        else:
+            logging.warn("Expected 'tint' attribute not found!")
 
-        self._label_ctrl = SuggestTextCtrl(self, id= -1, value=stream.name.value)
+
+        self._label_ctrl = SuggestTextCtrl(
+                                self,
+                                id=-1,
+                                value=stream.name.value)
         self._label_ctrl.SetBackgroundColour(self.Parent.GetBackgroundColour())
         self._label_ctrl.SetForegroundColour(FOREGROUND_COLOUR_EDIT)
         self._label_ctrl.Bind(wx.EVT_COMMAND_ENTER, self._on_label_change)
 
-        # Replace spacer with control
+        # Replace spacer with control. 'Replace' cannot be used, because
+        # it does not allow for flags to be passed
         self._sz.Remove(1)
-        self._sz.Insert(1, self._label_ctrl, 1,
-                        wx.RIGHT | wx.ALIGN_CENTRE_VERTICAL, 8)
+        self._sz.Insert(1,
+                        self._label_ctrl,
+                        1,
+                        (wx.RIGHT | wx.ALIGN_CENTRE_VERTICAL |
+                             wx.RESERVE_SPACE_EVEN_IF_HIDDEN),
+                        8)
 
         # Callback when the label changes: (string (text) -> None)
         self.onLabelChange = None
 
+    def show_tint_btn(self, show):
+        """ This method show or hides the tint button """
+        self._show_item(self._btn_tint, show)
+
     # GUI event handlers
     def _on_label_change(self, evt):
         if self.onLabelChange:
-            self.onLabelChange(self._label_ctrl.GetValue())  #pylint: disable=E1102
+            self.onLabelChange(self._label_ctrl.GetValue()) #pylint: disable=E1102
 
     @call_after
     def set_tint(self, colour):
         """ Update the colour button to reflect the provided colour """
-        self._btn_color.set_colour(colour)
+        self._btn_tint.set_colour(colour)
         logging.debug("Changing tint of button to %s", colour)
 
     def on_color_click(self, evt):
         # Remove the hover effect
-        self._btn_color.OnLeave(evt)
+        self._btn_tint.OnLeave(evt)
 
         # set default colour to the current value
         cldata = wx.ColourData()
@@ -272,21 +362,21 @@ class DyeExpander(Expander):
         """ This method hides or makes read-only any button or data that should
         not be changed during acquisition.
         """
-
         Expander.to_acquisition_mode(self)
 
-        self._sz.Remove(1)
+        self.show_remove_btn(False)
         self._label_ctrl.Destroy()
-
         self._label_ctrl = wx.StaticText(self, -1, self._stream.name.value)
-        # Replace spacer with control
+
+        # Replace spacer with control. 'Replace' cannot be used, because
+        # it does not allow for flags to be passed
         self._sz.Remove(1)
         self._sz.Insert(1, self._label_ctrl, 1,
                        wx.RIGHT | wx.ALIGN_CENTRE_VERTICAL, 8)
 
         if hasattr(self._stream, "tint"):
-            self._btn_color.SetBitmapHover(None)
-            self._btn_color.Unbind(wx.EVT_BUTTON)
+            self._btn_tint.SetBitmapHover(None)
+            self._btn_tint.Unbind(wx.EVT_BUTTON)
 
     def SetChoices(self, choices):
         """
@@ -295,7 +385,11 @@ class DyeExpander(Expander):
         """
         self._label_ctrl.SetChoices(choices)
 
+### END EXPANDERS
 
+
+
+### STREAMPANELS
 
 class StreamPanel(wx.PyPanel):
     """ The StreamPanel super class, a special case collapsible panel.
@@ -330,10 +424,17 @@ class StreamPanel(wx.PyPanel):
 
     expander_class = StandardExpander
 
-    def __init__(self, parent, stream, microscope_model, wid=wx.ID_ANY,
-                 pos=wx.DefaultPosition, size=wx.DefaultSize,
-                 style=wx.CP_DEFAULT_STYLE, agwStyle=0,
-                 validator=wx.DefaultValidator, name="CollapsiblePane",
+    def __init__(self,
+                 parent,
+                 stream,
+                 microscope_model,
+                 wid=wx.ID_ANY,
+                 pos=wx.DefaultPosition,
+                 size=wx.DefaultSize,
+                 style=wx.CP_DEFAULT_STYLE,
+                 agwStyle=0,
+                 validator=wx.DefaultValidator,
+                 name="CollapsiblePane",
                  collapsed=True):
         """
         stream (Stream): the data model to be displayed (and modified by the user)
@@ -387,7 +488,24 @@ class StreamPanel(wx.PyPanel):
         """ Controls should be added to the panel using this method. This
         so timing issues will not rise when the panel is instantiated.
         """
-        raise NotImplementedError
+        # ====== Add an expander button
+
+        self.set_expander_button(self.expander_class(self, self.stream))
+        self._sz.Add(self._expander, 0, wx.EXPAND)
+
+        self._expander.Bind(wx.EVT_PAINT, self.on_draw_expander)
+        self._expander._btn_rem.Bind(wx.EVT_BUTTON, self.on_remove_btn)
+        self._expander._btn_vis.Bind(wx.EVT_BUTTON, self.on_visibility_btn)
+        self._expander._btn_play.Bind(wx.EVT_BUTTON, self.on_play_btn)
+
+        if wx.Platform == "__WXMSW__":
+            self._expander.Bind(wx.EVT_LEFT_DCLICK, self.on_button)
+
+        # ====== Build panel controls
+        self._panel.SetBackgroundColour(BG_COLOUR_PANEL)
+        self._panel.SetForegroundColour(FOREGROUND_COLOUR)
+        self._panel.SetFont(self.GetFont())
+
 
     def set_expander_button(self, button):
         """ Assign a new expander button to the stream panel.
@@ -399,8 +517,10 @@ class StreamPanel(wx.PyPanel):
             self._expander.Destroy()
 
         self._expander = button
+
         self.SetLabel(button.GetLabel())
         self.Bind(wx.EVT_BUTTON, self.on_button, self._expander)
+        self._expander.Bind(wx.EVT_LEFT_UP, self.OnToggle)
 
         if self._panel:
             self._expander.MoveBeforeInTabOrder(self._panel)
@@ -541,6 +661,21 @@ class StreamPanel(wx.PyPanel):
     def hide_stream(self):
         self._expander._btn_vis.SetToggle(False)
 
+    # Manipulate expander buttons
+
+    def show_play_btn(self, show):
+        self._expander.show_play_btn(show)
+
+    def show_remove_btn(self, show):
+        self._expander.show_remove_btn(show)
+
+    def show_visibility_btn(self, show):
+        self._expander.show_visibility_btn(show)
+
+    def show_label(self, show):
+        self._expander.show_label(show)
+
+
     def OnToggle(self, evt):
         """ Toggle the StreamPanel """
 
@@ -581,7 +716,7 @@ class StreamPanel(wx.PyPanel):
         """ This method hides or makes read-only any button or data that should
         not be changed during acquisition.
         """
-        raise NotImplementedError
+        self._expander.to_acquisition_mode()
 
 
 
@@ -593,11 +728,7 @@ class SparcAcquiStreamPanel(StreamPanel):
         StreamPanel.__init__(self, *args, **kwargs)
 
     def finalize(self):
-        pass
-
-    def to_acquisition_mode(self):
-        pass
-
+        StreamPanel.finalize(self)
 
 
 class SecomStreamPanel(StreamPanel):  # pylint: disable=R0901
@@ -623,23 +754,7 @@ class SecomStreamPanel(StreamPanel):  # pylint: disable=R0901
         A delay was needed in order for all the settings to be loaded from the
         XRC file (i.e. Font and background/foreground colours).
         """
-
-        # ====== Add an expander button
-
-        self.set_expander_button(self.expander_class(self, self.stream))
-        self._sz.Add(self._expander, 0, wx.EXPAND)
-
-
-        self._expander.Bind(wx.EVT_PAINT, self.on_draw_expander)
-        if wx.Platform == "__WXMSW__":
-            self._expander.Bind(wx.EVT_LEFT_DCLICK, self.on_button)
-
-        self._expander.Bind(wx.EVT_LEFT_UP, self.OnToggle)
-
-        # ====== Build panel controls
-        self._panel.SetBackgroundColour(BG_COLOUR_PANEL)
-        self._panel.SetForegroundColour(FOREGROUND_COLOUR)
-        self._panel.SetFont(self.GetFont())
+        StreamPanel.finalize(self)
 
         # ====== Top row, auto contrast toggle button
 
@@ -709,11 +824,7 @@ class SecomStreamPanel(StreamPanel):  # pylint: disable=R0901
 
         # ==== Bind events
 
-        # Expander
 
-        self._expander._btn_rem.Bind(wx.EVT_BUTTON, self.on_remove_btn)
-        self._expander._btn_vis.Bind(wx.EVT_BUTTON, self.on_visibility_btn)
-        self._expander._btn_play.Bind(wx.EVT_BUTTON, self.on_play_btn)
         self.stream.should_update.subscribe(self.onUpdatedChanged, init=True)
 
         # initialise _btn_play
@@ -731,8 +842,7 @@ class SecomStreamPanel(StreamPanel):  # pylint: disable=R0901
         """ This method hides or makes read-only any button or data that should
         not be changed during acquisition.
         """
-
-        self._expander.to_acquisition_mode()
+        StreamPanel.to_acquisition_mode(self)
 
         # ====== Fourth row, accumulation label, text field and value
 
@@ -794,7 +904,8 @@ class BandwithStreamPanel(StreamPanel):
     """ A base stream panel that can be used for the selection of bandwidths, or
     more specifically a center value and a range around that."""
 
-
+    def finalize(self):
+        StreamPanel.finalize(self)
 
 class DyeStreamPanel(StreamPanel):
     """ A stream panel which can be altered by the user """
@@ -806,8 +917,7 @@ class DyeStreamPanel(StreamPanel):
 
     def finalize(self):
         # TODO: It looks like this method call should go
-        # StreamPanel.finalize(self)
-        self.set_expander_button(self.expander_class(self, self.stream))
+        StreamPanel.finalize(self)
 
         if hasattr(self.stream, "excitation") and hasattr(self.stream, "emission"):
             # handle the auto-completion of dye names
