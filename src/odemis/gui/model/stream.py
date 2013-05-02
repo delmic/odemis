@@ -342,6 +342,13 @@ class SEMStream(Stream):
         finally:
             self._prevDwellTime = value
 
+    def getStatic(self):
+        """
+        return (StaticSEMStream): similar stream, but static
+        """
+        ss = StaticSEMStream(self.name.value, self.raw[0])
+        return ss
+
 class CameraStream(Stream):
     """ Abstract class representing streams which have a digital camera as a
     detector.
@@ -585,14 +592,14 @@ class SpectrumStream(Stream):
                                  "time estimation might be wrong"))
 
             # Each pixel x the exposure time (of the detector) + readout time +
-            # 10% overhead
+            # 20% overhead
             exp = self._detector.exposureTime.value
             try:
                 ro_rate = self._detector.readoutRate.value
                 readout = numpy.prod(self._detector.resolution.value) / ro_rate + 0.05
             except:
                 readout = 0.05
-            duration = numpy.prod(res) * (exp + readout + 0.01) * 1.10
+            duration = numpy.prod(res) * (exp + readout + 0.01) * 1.20
             # Add the setup time
             duration += self.SETUP_OVERHEAD
 
@@ -601,6 +608,14 @@ class SpectrumStream(Stream):
             msg = "Exception while estimating acquisition time of %s"
             logging.exception(msg, self.name.value)
             return Stream.estimateAcquisitionTime(self)
+
+    def getStatic(self):
+        """
+        return (StaticSpectrumStream): similar stream, but static
+        """
+        ss = StaticSpectrumStream(self.name.value, self.raw[0])
+        return ss
+
 
 class ARStream(Stream):
     """
@@ -654,14 +669,14 @@ class ARStream(Stream):
                                  "time estimation might be wrong"))
 
             # Each pixel x the exposure time (of the detector) + readout time +
-            # 10% overhead
+            # 20% overhead
             exp = self._detector.exposureTime.value
             try:
                 ro_rate = self._detector.readoutRate.value
                 readout = numpy.prod(self._detector.resolution.value) / ro_rate + 0.05
             except:
                 readout = 0.05
-            duration = numpy.prod(res) * (exp + readout + 0.01) * 1.10
+            duration = numpy.prod(res) * (exp + readout + 0.01) * 1.20
             # Add the setup time
             duration += self.SETUP_OVERHEAD
 
@@ -670,6 +685,13 @@ class ARStream(Stream):
             msg = "Exception while estimating acquisition time of %s"
             logging.exception(msg, self.name.value)
             return Stream.estimateAcquisitionTime(self)
+
+    def getStatic(self):
+        """
+        return (StaticARStream): similar stream, but static
+        """
+        ss = StaticARStream(self.name.value, self.raw[0])
+        return ss
 
 class StaticStream(Stream):
     """ Stream containing one static image.
@@ -710,6 +732,12 @@ class StaticStream(Stream):
 class StaticSEMStream(StaticStream):
     """
     Same as a StaticStream, but considered a SEM stream
+    """
+    pass
+
+class StaticARStream(StaticStream):
+    """
+    Same as a StaticStream, but considered a AR stream
     """
     pass
 
@@ -945,11 +973,12 @@ class SEMSpectrumMDStream(MultipleDetectorStream):
         # ROI
         repetition = self._spec_stream.repetition.value
         roi = self._sem_stream.roi.value
-        center = ((roi[0] + roi[2]) / 2, roi[3] - roi[1])
+        center = ((roi[0] + roi[2]) / 2, (roi[1] + roi[3]) / 2)
         width = (roi[2] - roi[0], roi[3] - roi[1])
 
         shape = self._emitter.shape
-        trans = (shape[0] * center[0], shape[1] * center[1]) # can be floats
+        # translation is distance from center (situated at 0.5, 0.5), can be floats
+        trans = (shape[0] * (center[0] - 0.5), shape[1] * (center[1] - 0.5))
         # scale is how big is a pixel compared to the minimum pixel size (1/shape)
         scale = (max(1, (shape[0] * width[0]) / repetition[0]),
                  max(1, (shape[1] * width[1]) / repetition[1]))

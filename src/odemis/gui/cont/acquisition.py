@@ -531,17 +531,27 @@ class SparcAcquiController(AcquisitionController):
         stream_controller.clear()
 
         # add streams
-        # for each stream, get the data and convert? .getStatic()?
-        # FIXME
-        # TODO: might need more info, to know which stream is which raw data (or
-        # we need to put clever code on parsing the metadata) => streamTree?/List of streams?
-#        stream_controller.addStatic("Secondary electrons", semdatas,
-#                                        cls=StaticSEMStream)
-#        stream_controller.addStatic("Spectrogram", specdatai,
-#                                        cls=StaticSpectrumStream)
+        for s in self._interface_model.acquisitionView.getStreams():
+            # Get a static version of the stream
+            statics = s.getStatic()
+            # TODO: how to associate the data we got back to the streams?
+            # in most cases, the stream still contains the .raw as acquired,
+            # but not always (eg, live streams, multiple time acquired streams...)
+            stream_controller.addStream(statics, add_to_all_views=True)
 
         # add the file info
-        analysis_interface.fileinfo.value = instrmodel.FileInfo(file)
+        finfo = instrmodel.FileInfo(file)
+        # find the precise acquisition time as the earliest of all
+        acq_time = finfo.time # the time of the file creation
+        for r in data:
+            try:
+                r_time = r.metadata[model.MD_ACQ_DATE]
+                acq_time = min(r_time, acq_time)
+            except KeyError:
+                continue # no date known
+        finfo.time = acq_time
+
+        analysis_interface.fileinfo.value = finfo
 
         # show the new tab
         mtc.switch("sparc_analysis")
