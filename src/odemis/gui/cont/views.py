@@ -103,9 +103,9 @@ class ViewController(object):
             self._interface_model.views.append(view)
             self._viewports[1].setView(view, self._interface_model)
 
+            # TODO: need a special View?
             view = instrmodel.MicroscopeView(
                         "Angle Resolved",
-                        self._interface_model.stage,
                         stream_classes=AR_STREAMS
                      )
             self._interface_model.views.append(view)
@@ -114,7 +114,7 @@ class ViewController(object):
             view = instrmodel.MicroscopeView(
                         "SEM CL",
                         self._interface_model.stage,
-                        stream_classes=EM_STREAMS
+                        stream_classes=(EM_STREAMS + SPECTRUM_STREAMS)
                      )
             self._interface_model.views.append(view)
             self._viewports[3].setView(view, self._interface_model)
