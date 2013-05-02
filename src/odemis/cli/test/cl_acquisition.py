@@ -29,6 +29,7 @@ odemis-cli --set-attr ARCam binning "2, 2"
 from __future__ import division
 from odemis import model
 from odemis.cli import main as cli
+from odemis.model._dataflow import MD_PIXEL_SIZE, MD_POS
 import logging
 import numpy
 import sys
@@ -70,12 +71,13 @@ class Acquirer(object):
     def set_roi(self, rect):
         # save the resolution
         res = self.escan.resolution.value
-        center = ((rect[0] + rect[2]) / 2, rect[3] - rect[1])
+        center = ((rect[0] + rect[2]) / 2, (rect[1] - rect[3]) / 2)
         width = (rect[2] - rect[0], rect[3] - rect[1])
         
         shape = self.escan.shape
-        scale = (1 / width[0], 1/width[1])
-        trans = (shape[0] * center[0], shape[1] * center[1]) # can be floats 
+        scale = (1 / width[0], 1 / width[1])
+        # translation is distance from center (situated at 0.5, 0.5), can be floats
+        trans = (shape[0] * (center[0] - 0.5), shape[1] * (center[1] - 0.5))
         # always in this order
         self.escan.scale.value = scale # might update the resolution & translation
         self.escan.resolution.value = res
@@ -120,6 +122,19 @@ class Acquirer(object):
         logging.info("Took %g s", endt - startt)
         self.spect.data.synchronizedOn(None)
         
+
+        # create metadata for the spectrum cube from the SEM CL
+        # Could be computed also like this:
+#       eps = self._emitter.pixelSize.value
+#       scale = self._emitter.scale.value
+#       ps = (eps[0] * scale[0], eps[1] * scale[1])
+#       md = {MD_PIXEL_SIZE: ps}
+        md_sem = sed_data.metadata
+        md = {}
+        for m in [MD_PIXEL_SIZE, MD_POS]:
+            if m in md_sem:
+                md[m] = md_sem[m]
+
         # create a cube out of the spectral data acquired
         # dimensions must be wavelength, Y, X 
         assert len(self.acq_spect_buf) == numberp
@@ -132,7 +147,9 @@ class Acquirer(object):
         # reshape to (N, Y, X)
         spect_data.shape = (spect_size[0], sem_size[1], sem_size[0])
         # copy the metadata from the first point
-        spect_data = model.DataArray(spect_data, metadata=self.acq_spect_buf[0].metadata)
+        md_spect = self.acq_spect_buf[0].metadata
+        md_spect.update(md)
+        spect_data = model.DataArray(spect_data, metadata=md_spect)
         
         return sed_data, spect_data
 

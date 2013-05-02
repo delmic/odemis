@@ -313,9 +313,11 @@ class OdemisGUIApp(wx.App):
             stream_controller.clear()
 
             stream_controller.addStatic("Secondary electrons", semdatas,
-                                        cls=StaticSEMStream)
+                                        cls=StaticSEMStream,
+                                        add_to_all_views=True)
             stream_controller.addStatic("Spectrogram", specdatai,
-                                        cls=StaticSpectrumStream)
+                                        cls=StaticSpectrumStream,
+                                        add_to_all_views=True)
 
             analysis_interface = mtc['sparc_analysis'].interface_model
             analysis_interface.fileinfo.value = instrmodel.FileInfo(open(name2))

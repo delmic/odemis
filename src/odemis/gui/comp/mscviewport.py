@@ -268,7 +268,7 @@ class MicroscopeViewport(wx.Panel):
             return
         hfw = self._microscope_view.mpp.value * self.GetClientSize()[0]
         hfw = units.round_significant(hfw, 4)
-        label = u"HFW: %s" % units.readable_str(hfw, "m")
+        label = u"HFW: %s" % units.readable_str(hfw, "m", sig=3)
         self.hfwDisplay.SetLabel(label)
         self.legend_panel.Layout()
 
