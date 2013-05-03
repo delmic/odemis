@@ -27,27 +27,27 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 
-import collections
-import logging
-import math
-
-import wx
-from wx.lib.pubsub import pub
-
-import odemis.gui
-import odemis.gui.comp.buttons as buttons
-import odemis.gui.img.data as img
-import odemis.gui.model as model
-import odemis.gui.model.dye as dye
-
 from odemis.gui import FOREGROUND_COLOUR_EDIT, FOREGROUND_COLOUR
 from odemis.gui.comp.foldpanelbar import FoldPanelItem
-from odemis.gui.comp.slider import UnitIntegerSlider
+from odemis.gui.comp.slider import UnitIntegerSlider, UnitFloatSlider
 from odemis.gui.comp.text import SuggestTextCtrl, UnitIntegerCtrl, \
     IntegerTextCtrl
 from odemis.gui.util import call_after
 from odemis.gui.util.conversion import wave2rgb
 from odemis.gui.util.widgets import VigilantAttributeConnector
+from wx.lib.pubsub import pub
+import collections
+import logging
+import math
+import odemis.gui
+import odemis.gui.comp.buttons as buttons
+import odemis.gui.img.data as img
+import odemis.gui.model as model
+import odemis.gui.model.dye as dye
+import wx
+
+
+
 
 
 stream_remove_event, EVT_STREAM_REMOVE = wx.lib.newevent.NewEvent()
@@ -310,7 +310,7 @@ class DyeExpander(StandardExpander):
 
         self._label_ctrl = SuggestTextCtrl(
                                 self,
-                                id=-1,
+                                id= -1,
                                 value=stream.name.value)
         self._label_ctrl.SetBackgroundColour(self.Parent.GetBackgroundColour())
         self._label_ctrl.SetForegroundColour(FOREGROUND_COLOUR_EDIT)
@@ -859,9 +859,7 @@ class SecomStreamPanel(StreamPanel):  # pylint: disable=R0901
 
         # Panel controls
         # TODO reuse VigilantAttributeConnector, or at least refactor
-
         self._btn_auto_contrast.Bind(wx.EVT_BUTTON, self.on_toggle_autocontrast)
-
         self._btn_auto_contrast.SetToggle(self.stream.auto_bc.value)
         self.on_toggle_autocontrast(None)  # to ensure the controls are disabled if necessary
 
@@ -927,6 +925,7 @@ class SecomStreamPanel(StreamPanel):  # pylint: disable=R0901
 
         #self._gbs.AddSpacer((5, 5), (self.row_count, 0))
 
+# TODO: don't make it special, just adapt if the VAs are available
 class BandwithStreamPanel(StreamPanel):
     """ A base stream panel that can be used for the selection of bandwidths, or
     more specifically a center value and a range around that."""
@@ -945,29 +944,29 @@ class BandwithStreamPanel(StreamPanel):
     def finalize(self):
         StreamPanel.finalize(self)
 
-        # ====== Top row, auto contrast toggle button
+        # ====== Top row, fit RGB toggle button
 
-        self._btn_auto_bandwidth = buttons.ImageTextToggleButton(
+        self._btn_fit_rgb = buttons.ImageTextToggleButton(
                                                 self._panel,
-                                                -1,
+                                                - 1,
                                                 img.getbtn_spectrumBitmap(),
-                                                label="Auto",
+                                                label="RGB",
                                                 size=(68, 26),
-                                                style=wx.ALIGN_RIGHT,)
-
-        tooltip = "Toggle auto bandwidth selection"
-
-
-        self._btn_auto_bandwidth.SetToolTipString(tooltip)
-        self._btn_auto_bandwidth.SetBitmaps(
-                                        bmp_h=img.getbtn_spectrum_hBitmap(),
-                                        bmp_sel=img.getbtn_spectrum_aBitmap())
-        self._btn_auto_bandwidth.SetForegroundColour("#000000")
-        self._gbs.Add(self._btn_auto_bandwidth,
+                                                style=wx.ALIGN_RIGHT)
+        tooltip = "Toggle sub-bandwidths to Red/Green/Blue display"
+        self._btn_fit_rgb.SetToolTipString(tooltip)
+        self._btn_fit_rgb.SetBitmaps(bmp_h=img.getbtn_spectrum_hBitmap(),
+                                     bmp_sel=img.getbtn_spectrum_aBitmap())
+        self._btn_fit_rgb.SetForegroundColour("#000000")
+        self._gbs.Add(self._btn_fit_rgb,
                       (self.row_count, 0),
                       flag=wx.LEFT | wx.TOP,
                       border=5)
         self.row_count += 1
+
+        # TODO: need to use VA connector for this toggle button
+        self._btn_fit_rgb.Bind(wx.EVT_BUTTON, self.on_toggle_fit_rgb)
+        self._btn_fit_rgb.SetToggle(self.stream.fitToRGB.value)
 
         # ====== Second row, center label, slider and value
 
@@ -977,12 +976,12 @@ class BandwithStreamPanel(StreamPanel):
                       flag=wx.ALL,
                       border=5)
 
-        self._sld_center = UnitIntegerSlider(
+        self._sld_center = UnitFloatSlider(
                                     self._panel,
                                     value=self.stream.centerWavelength.value,
                                     val_range=self.stream.centerWavelength.range,
                                     t_size=(40, -1),
-                                    unit=None,
+                                    unit=self.stream.centerWavelength.unit,
                                     name="center_slider")
 
         self._vac_center = VigilantAttributeConnector(
@@ -1002,12 +1001,12 @@ class BandwithStreamPanel(StreamPanel):
                       (self.row_count, 0),
                       flag=wx.ALL, border=5)
 
-        self._sld_bandwidth = UnitIntegerSlider(
+        self._sld_bandwidth = UnitFloatSlider(
                              self._panel,
                              value=self.stream.bandwidth.value,
                              val_range=self.stream.bandwidth.range,
                              t_size=(40, -1),
-                             unit=None,
+                             unit=self.stream.bandwidth.unit,
                              name="contrast_slider")
 
         self._vac_bandwidth = VigilantAttributeConnector(self.stream.bandwidth,
@@ -1018,7 +1017,7 @@ class BandwithStreamPanel(StreamPanel):
                       span=(1, 2), flag=wx.EXPAND | wx.ALL, border=5)
         self.row_count += 1
 
-        self._gbs.AddGrowableCol(1)
+        self._gbs.AddGrowableCol(1) # FIXME: what does this do?
 
         # ==== Bind events
 
@@ -1027,22 +1026,9 @@ class BandwithStreamPanel(StreamPanel):
         # initialise _btn_play
         self.setVisible(self.stream in self._interface_model.focussedView.value.getStreams())
 
-        # Panel controls
-        self._btn_auto_bandwidth.Bind(wx.EVT_BUTTON, self.on_toggle_autobandwidth)
-
-        # TODO: re-enable this when the stream has and auto bandwidth property
-        #self._btn_auto_contrast.SetToggle(self.stream.auto_bc.value)
-        self.on_toggle_autobandwidth(None)  # to ensure the controls are disabled if necessary
-
-    def on_toggle_autobandwidth(self, evt):
-        enabled = self._btn_auto_bandwidth.GetToggle()
-        # disable the manual controls if it's on
-        ctrl_enabled = not enabled
-        self._sld_center.Enable(ctrl_enabled)
-        self._sld_bandwidth.Enable(ctrl_enabled)
-
-        # TODO: re-enable this when the stream has and auto bandwidth property
-        #self.stream.auto_bc.value = enabled
+    def on_toggle_fit_rgb(self, evt):
+        enabled = self._btn_fit_rgb.GetToggle()
+        self.stream.fitToRGB.value = enabled
 
 class DyeStreamPanel(StreamPanel):
     """ A stream panel which can be altered by the user """
