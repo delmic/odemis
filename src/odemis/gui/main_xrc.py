@@ -1980,7 +1980,6 @@ def __init_resources():
           <bg>#333333</bg>
           <style>wxBORDER_NONE</style>
         </object>
-        <option>-1</option>
         <flag>wxEXPAND</flag>
       </object>
       <object class="sizeritem">

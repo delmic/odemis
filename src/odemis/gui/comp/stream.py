@@ -198,6 +198,7 @@ class Expander(wx.PyControl):
         self.SetSize((width, -1))
         self.Layout()
         self.Refresh()
+        event.Skip()
 
     def OnDrawExpander(self, dc):
         """ This method draws the expand/collapse icons.
@@ -209,6 +210,7 @@ class Expander(wx.PyControl):
 
         win_rect = self.GetRect()
         x_pos = win_rect.GetRight() - ICON_WIDTH - CAPTION_PADDING_RIGHT
+
 
         if self._foldIcons:
             self._foldIcons.Draw(self.Parent._collapsed, dc, x_pos,
@@ -279,7 +281,7 @@ class DyeExpander(StandardExpander):
     This widget also contains an changeable colour indicator.
     """
 
-    def __init__(self, parent, stream, wid=wx.ID_ANY):
+    def __init__(self, parent, stream, wid=wx.ID_ANY):  #pylint: disable=W0231
         # We don't call the constructor of the parent class, because
         # we want to insert our own type of label control.
         Expander.__init__(self, parent, stream, wid)  #pylint: disable=W0233
@@ -360,7 +362,7 @@ class DyeExpander(StandardExpander):
 
     def to_acquisition_mode(self):
         """ This method hides or makes read-only any button or data that should
-        not be changed during acquisition.
+        not be manipulated during acquisition.
         """
         Expander.to_acquisition_mode(self)
 
@@ -371,14 +373,18 @@ class DyeExpander(StandardExpander):
         # Replace spacer with control. 'Replace' cannot be used, because
         # it does not allow for flags to be passed
         self._sz.Remove(1)
-        self._sz.Insert(1, self._label_ctrl, 1,
-                       wx.RIGHT | wx.ALIGN_CENTRE_VERTICAL, 8)
+        self._sz.Insert(1,
+                        self._label_ctrl,
+                        1,
+                        (wx.RIGHT | wx.ALIGN_CENTRE_VERTICAL |
+                         wx.RESERVE_SPACE_EVEN_IF_HIDDEN),
+                        8)
 
         if hasattr(self._stream, "tint"):
             self._btn_tint.SetBitmapHover(None)
             self._btn_tint.Unbind(wx.EVT_BUTTON)
 
-    def SetChoices(self, choices):
+    def set_choices(self, choices):
         """
         Set a list of choices from which the user can pick a pre-defined name
         choices (list of string)
@@ -396,30 +402,23 @@ class StreamPanel(wx.PyPanel):
 
     The StreamPanel consists of the following widgets:
 
-        + StreamPanel
-        |--- StandardExpander
-        |--+ Panel
-           |-- ImageTextToggleButton
-           |-- StaticText (contrast)
-           |-- Slider
-           |-- IntegerTextCtrl
-           |-- StaticText (brightness)
-           |-- Slider
-           |-- IntegerTextCtrl
-           |-- StaticText (excitation)
-           |-- UnitIntegerCtrl
-           |-- StaticText (emission)
-           |-- UnitIntegerCtrl
+        ├ StreamPanel
+        └┬ StandardExpander
+         ├ Panel
+         └┬ BoxSizer
+          └─ GridBagSizer
 
-    The expander_class class attribute contains the Expander subclass to be
-    used when constructing an object.
+    Additional controls can be added to the GridBagSizer in subclasses.
+
+    The expander_class class attribute contains an Expander subclass to be
+    used when constructing StreamPanel.
 
     Most of the component's construction is done in the finalize() method, so
     we can allow for a delay. This is necessary when construction the component
     through an XML handler.
 
-    It tries to represent the stream object as well as possible, so do not shows
-    controls if the vigilant attributes are not there.
+    The controls contained within a StreamPanel are typically connected to the
+    VigilantAttribute properties of the Stream it's representing.
     """
 
     expander_class = StandardExpander
@@ -434,38 +433,48 @@ class StreamPanel(wx.PyPanel):
                  style=wx.CP_DEFAULT_STYLE,
                  agwStyle=0,
                  validator=wx.DefaultValidator,
-                 name="CollapsiblePane",
+                 name="StreamPanel",
                  collapsed=True):
         """
-        stream (Stream): the data model to be displayed (and modified by the user)
-        microscope_model (MicroscopeModel): the microscope GUI, where there is
-                         focussedView
+        :param parent: (StreamBar) The parent widget.
+        :param stream: (Stream) The stream data model to be displayed to and
+            modified by the user.
+        :param microscope_model: (MicroscopeModel) The microscope data model,
+            TODO: This parameter and related property should be moved to the
+            stream controller!
         """
+        assert(isinstance(parent, StreamBar))
 
         wx.PyPanel.__init__(self, parent, wid, pos, size, style, name)
 
+        # Data models
+        self.stream = stream
+        self._interface_model = microscope_model
+
+        # Appearance
+        self._agwStyle = agwStyle | wx.CP_NO_TLW_RESIZE  # |wx.CP_GTK_EXPANDER
         self.SetBackgroundColour(BG_COLOUR_EXPANDER)
         self.SetForegroundColour(FOREGROUND_COLOUR)
 
-        self.stream = stream
-        self._interface_model = microscope_model
+        # State
         self._collapsed = True
-        self._agwStyle = agwStyle | wx.CP_NO_TLW_RESIZE  # |wx.CP_GTK_EXPANDER
 
+        # Child widgets
 
         self._panel = wx.Panel(self, style=wx.TAB_TRAVERSAL | wx.NO_BORDER)
         self._panel.Hide()
 
+        # Main sizer for control layout
         self._gbs = wx.GridBagSizer(0, 0)
 
-        # Add a simple sizer so we can create padding at the bottom of the panel
+        # Add a simple sizer so we can create padding for the panel
         border_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        border_sizer.AddSpacer((5, -1))
+        #border_sizer.AddSpacer((5, -1))
         border_sizer.Add(self._gbs,
-                         border=0,
-                         flag=wx.RIGHT | wx.EXPAND,
+                         border=5,
+                         flag=wx.ALL | wx.EXPAND,
                          proportion=1)
-        border_sizer.AddSpacer((5, -1))
+        #border_sizer.AddSpacer((5, -1))
 
         self._panel.SetSizer(border_sizer)
 
@@ -690,6 +699,7 @@ class StreamPanel(wx.PyPanel):
         """ Handles the wx.EVT_SIZE event for StreamPanel
         """
         self.Layout()
+        event.Skip()
 
     def on_button(self, event):
         """ Handles the wx.EVT_BUTTON event for StreamPanel
@@ -732,7 +742,24 @@ class SparcAcquiStreamPanel(StreamPanel):
 
 
 class SecomStreamPanel(StreamPanel):  # pylint: disable=R0901
-    """ A pre-defined stream panel """
+    """ A pre-defined stream panel
+
+        ├ StreamPanel
+        └┬ StandardExpander
+         └┬ Panel
+          ├ ImageTextToggleButton
+          ├ StaticText (contrast)
+          ├ Slider
+          ├ IntegerTextCtrl
+          ├ StaticText (brightness)
+          ├ Slider
+          ├ IntegerTextCtrl
+          ├ StaticText (excitation)
+          ├ UnitIntegerCtrl
+          ├ StaticText (emission)
+          └ UnitIntegerCtrl
+
+    """
 
     expander_class = StandardExpander
 
@@ -904,8 +931,118 @@ class BandwithStreamPanel(StreamPanel):
     """ A base stream panel that can be used for the selection of bandwidths, or
     more specifically a center value and a range around that."""
 
+    expander_class = StandardExpander
+
+    def __init__(self, *args, **kwargs):
+        StreamPanel.__init__(self, *args, **kwargs)
+
+        self._btn_auto_bandwidth = None
+        self._sld_center = None
+        self._vac_center = None
+        self._sld_bandwidth = None
+        self._vac_bandwidth = None
+
     def finalize(self):
         StreamPanel.finalize(self)
+
+        # ====== Top row, auto contrast toggle button
+
+        self._btn_auto_bandwidth = buttons.ImageTextToggleButton(
+                                                self._panel,
+                                                -1,
+                                                img.getbtn_spectrumBitmap(),
+                                                label="Auto",
+                                                size=(68, 26),
+                                                style=wx.ALIGN_RIGHT,)
+
+        tooltip = "Toggle auto bandwidth selection"
+
+
+        self._btn_auto_bandwidth.SetToolTipString(tooltip)
+        self._btn_auto_bandwidth.SetBitmaps(
+                                        bmp_h=img.getbtn_spectrum_hBitmap(),
+                                        bmp_sel=img.getbtn_spectrum_aBitmap())
+        self._btn_auto_bandwidth.SetForegroundColour("#000000")
+        self._gbs.Add(self._btn_auto_bandwidth,
+                      (self.row_count, 0),
+                      flag=wx.LEFT | wx.TOP,
+                      border=5)
+        self.row_count += 1
+
+        # ====== Second row, center label, slider and value
+
+        lbl_center = wx.StaticText(self._panel, -1, "Center")
+        self._gbs.Add(lbl_center,
+                      (self.row_count, 0),
+                      flag=wx.ALL,
+                      border=5)
+
+        self._sld_center = UnitIntegerSlider(
+                                    self._panel,
+                                    value=self.stream.centerWavelength.value,
+                                    val_range=self.stream.centerWavelength.range,
+                                    t_size=(40, -1),
+                                    unit=None,
+                                    name="center_slider")
+
+        self._vac_center = VigilantAttributeConnector(
+                                            self.stream.centerWavelength,
+                                            self._sld_center,
+                                            events=wx.EVT_SLIDER)
+
+        # span is 2, because emission/excitation have 2 controls
+        self._gbs.Add(self._sld_center, pos=(self.row_count, 1),
+                      span=(1, 2), flag=wx.EXPAND | wx.ALL, border=5)
+        self.row_count += 1
+
+        # ====== Third row, bandwidth label, slider and value
+
+        lbl_bandwidth = wx.StaticText(self._panel, -1, "Bandwidth")
+        self._gbs.Add(lbl_bandwidth,
+                      (self.row_count, 0),
+                      flag=wx.ALL, border=5)
+
+        self._sld_bandwidth = UnitIntegerSlider(
+                             self._panel,
+                             value=self.stream.bandwidth.value,
+                             val_range=self.stream.bandwidth.range,
+                             t_size=(40, -1),
+                             unit=None,
+                             name="contrast_slider")
+
+        self._vac_bandwidth = VigilantAttributeConnector(self.stream.bandwidth,
+                                             self._sld_bandwidth,
+                                             events=wx.EVT_SLIDER)
+
+        self._gbs.Add(self._sld_bandwidth, pos=(self.row_count, 1),
+                      span=(1, 2), flag=wx.EXPAND | wx.ALL, border=5)
+        self.row_count += 1
+
+        self._gbs.AddGrowableCol(1)
+
+        # ==== Bind events
+
+        self.stream.should_update.subscribe(self.onUpdatedChanged, init=True)
+
+        # initialise _btn_play
+        self.setVisible(self.stream in self._interface_model.focussedView.value.getStreams())
+
+        # Panel controls
+        self._btn_auto_bandwidth.Bind(wx.EVT_BUTTON, self.on_toggle_autobandwidth)
+
+        # TODO: re-enable this when the stream has and auto bandwidth property
+        #self._btn_auto_contrast.SetToggle(self.stream.auto_bc.value)
+        self.on_toggle_autobandwidth(None)  # to ensure the controls are disabled if necessary
+
+    def on_toggle_autobandwidth(self, evt):
+        enabled = self._btn_auto_bandwidth.GetToggle()
+        # disable the manual controls if it's on
+        ctrl_enabled = not enabled
+        self._sld_center.Enable(ctrl_enabled)
+        self._sld_bandwidth.Enable(ctrl_enabled)
+
+        # TODO: re-enable this when the stream has and auto bandwidth property
+        #self.stream.auto_bc.value = enabled
 
 class DyeStreamPanel(StreamPanel):
     """ A stream panel which can be altered by the user """
@@ -928,7 +1065,7 @@ class DyeStreamPanel(StreamPanel):
             # * show a warning message when they are picked?
 
 
-            self._expander.SetChoices(self._getCompatibleDyes())
+            self._expander.set_choices(self._getCompatibleDyes())
             self._expander.onLabelChange = self._onNewName
 
             # Excitation and emission are a text input + a color display
