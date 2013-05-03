@@ -97,6 +97,38 @@ class TestSP(unittest.TestCase):
         f.result() # wait for the move to finish
         self.assertGreater(self.sp.position.value["wavelength"], self.orig_pos["wavelength"])
     
+    def test_fail_move(self):
+        """
+        Check that you cannot move more than allowed
+        """
+        # wrong axis
+        with self.assertRaises(LookupError):
+            pos = {"boo": 0}
+            f = self.sp.moveAbs(pos)
+            f.result()
+        
+        # absolute (easy)
+        with self.assertRaises(ValueError):
+            pos = {"wavelength": self.sp.ranges["wavelength"][1] + 1e-9}
+            f = self.sp.moveAbs(pos)
+            f.result()
+        
+        # big relative (easy) 
+        with self.assertRaises(ValueError):
+            pos = {"wavelength": -(self.sp.ranges["wavelength"][1] + 1e-9)}
+            f = self.sp.moveRel(pos)
+            f.result() # wait for the move to finish
+        
+        # small relative (harder)
+        # move very close from the edge 
+        pos = {"wavelength": self.sp.ranges["wavelength"][1] - 1e-9}
+        f = self.sp.moveAbs(pos) # don't even wait for it to be done
+        with self.assertRaises(ValueError):
+            pos = {"wavelength": 5e-9} # a bit after the edge
+            f = self.sp.moveRel(pos)
+            f.result() # will fail here normally
+            
+    
     def test_grating(self):
         cg = self.sp.grating.value
         choices = self.sp.grating.choices

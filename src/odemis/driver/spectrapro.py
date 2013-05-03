@@ -172,8 +172,8 @@ class SpectraPro(model.Actuator):
         # store focal length and inclusion angle for the polynomial computation
         try:
             self._focal_length = FOCAL_LENGTH_OFFICIAL[model_name]
-            self._inclusion_angle = INCLUSION_ANGLE_OFFICIAL[model_name]
-        except IOError:
+            self._inclusion_angle = math.radians(INCLUSION_ANGLE_OFFICIAL[model_name])
+        except KeyError:
             self._focal_length = None
             self._inclusion_angle = None
                 
@@ -509,14 +509,23 @@ class SpectraPro(model.Actuator):
         shift dict(string-> float): name of the axis and shift in m
         returns (Future): future that control the asynchronous move
         """
+        # light check it's in the ranges (can only check it's not too huge)    
+        for axis, value in shift.items():
+            if not axis in self._axes:
+                raise LookupError("Axis '%s' doesn't exist", axis)
+                
+            minp, maxp = self._ranges[axis] 
+            if abs(value) > maxp:
+                raise ValueError("Move by %f of axis '%s' bigger than %f",
+                                 value, axis, maxp) 
+        
         for axis in shift:
             if axis == "wavelength":
                 # cannot convert it directly to an absolute move, because
                 # several in a row must mean they accumulate. So we queue a 
-                # special task.
+                # special task. That also means the range check is delayed until
+                # the actual position is known. 
                 return self._executor.submit(self._doSetWavelengthRel, shift[axis])
-            else:
-                raise LookupError("Axis '%s' doesn't exist", axis)
     
     @isasync
     def moveAbs(self, pos):
@@ -525,11 +534,19 @@ class SpectraPro(model.Actuator):
         pos dict(string-> float): name of the axis and new position in m
         returns (Future): future that control the asynchronous move
         """
+        # check it's in the ranges    
+        for axis, value in pos.items():
+            if not axis in self._axes:
+                raise LookupError("Axis '%s' doesn't exist", axis)
+                
+            minp, maxp = self._ranges[axis] 
+            if value < minp or maxp < value:
+                raise ValueError("Position %f of axis '%s' not within range %f→%f",
+                                 value, axis, minp, maxp) 
+    
         for axis in pos:
             if axis == "wavelength":
                 return self._executor.submit(self._doSetWavelengthAbs, pos[axis])
-            else:
-                raise LookupError("Axis '%s' doesn't exist", axis)
     
     
     def _doSetWavelengthRel(self, shift):
@@ -538,6 +555,11 @@ class SpectraPro(model.Actuator):
         """
         with self._ser_access:
             pos = self.GetWavelength() + shift
+            # it's only now that we can check the absolute position is wrong
+            minp, maxp = self._ranges["wavelength"]
+            if pos < minp or maxp < pos:
+                raise ValueError("Position %f of axis '%s' not within range %f→%f",
+                                 pos, "wavelength", minp, maxp)
             self.SetWavelength(pos)
         self._updatePosition()
         
@@ -590,16 +612,16 @@ class SpectraPro(model.Actuator):
         # INCLUSION_ANGLE_1  =   30.3
         # FOCAL_LENGTH_1     =   301.2 mm
         # DETECTOR_ANGLE_1   =   0.324871
-        fl = self._focal_length
-        ia = math.radians(self._inclusion_angle)
-        cw = self.position.value["wavelength"]
+        fl = self._focal_length # m
+        ia = self._inclusion_angle # rad
+        cw = self.position.value["wavelength"] # m
         if not fl:
             # "very very bad" calibration
             return [cw]
         
         # When no calibration available, fallback to theoretical computation
         # based on http://www.roperscientific.de/gratingcalcmaster.html
-        gl = self._getGrooveDensity(self.grating.value)
+        gl = self._getGrooveDensity(self.grating.value) # g/m
         # fL = focal length (mm)
         # wE = inclusion angle (°) = the angle between the incident and the reflected beam for the center wavelength of the grating
         # gL = grating lines (l/mm)
