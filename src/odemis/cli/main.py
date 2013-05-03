@@ -24,10 +24,12 @@ from odemis.dataio import tiff #pylint: disable=W0611
 from odemis.util.driver import reproduceTypedValue
 import argparse
 import collections
+import gc
 import inspect
 import logging
 import os
 import sys
+import time
 
 BACKEND_RUNNING = "RUNNING"
 BACKEND_DEAD = "DEAD"
@@ -255,18 +257,6 @@ def get_component(comp_name):
     return get_component_from_set(comp_name, model.getComponents())
 
 
-def get_actuator(comp_name):
-    """
-    return the actuator component with the given name
-    comp_name (string): name of the component to find
-    raises
-        LookupError if the component doesn't exist
-        other exception if there is an error while contacting the backend
-    """
-    # isinstance() doesn't work, so we just list every component in microscope.actuators
-    microscope = model.getMicroscope()
-    return get_component_from_set(comp_name, microscope.actuators)
-
 def get_detector(comp_name):
     """
     return the actuator component with the given name
@@ -355,7 +345,7 @@ def move(comp_name, axis_name, str_distance):
     # for safety reason, we use µm instead of meters, as it's harder to type a
     # huge distance
     try:
-        component = get_actuator(comp_name)
+        component = get_component(comp_name)
     except LookupError:
         logging.error("Failed to find actuator '%s'", comp_name)
         return 127
@@ -363,9 +353,13 @@ def move(comp_name, axis_name, str_distance):
         logging.error("Failed to contact the back-end")
         return 127
 
-    if axis_name not in component.axes:
-        logging.error("Actuator %s has not axis '%s'", comp_name, axis_name)
-        return 129
+    try:
+        if axis_name not in component.axes:
+            logging.error("Actuator %s has not axis '%s'", comp_name, axis_name)
+            return 129
+    except (TypeError, AttributeError):
+        logging.error("Component %s is not an actuator", comp_name)
+        return 127
 
     try:
         distance = float(str_distance) * 1e-6 # µm -> m
@@ -393,7 +387,7 @@ def move_abs(comp_name, axis_name, str_position):
     # for safety reason, we use µm instead of meters, as it's harder to type a
     # huge distance
     try:
-        component = get_actuator(comp_name)
+        component = get_component(comp_name)
     except LookupError:
         logging.error("Failed to find actuator '%s'", comp_name)
         return 127
@@ -401,9 +395,13 @@ def move_abs(comp_name, axis_name, str_position):
         logging.error("Failed to contact the back-end")
         return 127
 
-    if axis_name not in component.axes:
-        logging.error("Actuator %s has not axis '%s'", comp_name, axis_name)
-        return 129
+    try:
+        if axis_name not in component.axes:
+            logging.error("Actuator %s has not axis '%s'", comp_name, axis_name)
+            return 129
+    except (TypeError, AttributeError):
+        logging.error("Component %s is not an actuator", comp_name)
+        return 127
 
     # TODO: check whether the component supports absolute positioning
 
@@ -718,6 +716,7 @@ def main(args):
                 # TODO warn if same axis multiple times
                 if ret != 0:
                     return ret
+            time.sleep(0.5)
             return 0
         
         if options.move is not None:
@@ -726,6 +725,7 @@ def main(args):
                 # TODO move commands to the same actuator should be agglomerated
                 if ret != 0:
                     return ret
+            time.sleep(0.5) # wait a bit for the futures to close nicely
             return 0
 
         if options.stop:
