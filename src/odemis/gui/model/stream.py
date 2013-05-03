@@ -764,34 +764,49 @@ class StaticSpectrumStream(StaticStream):
         #  * coordinates of 1st point (1-point, line)
         #  * coordinates of 2nd point (line)
 
+        # TODO: support either 3D or 5D (CTZYX with TZ = 11)
+        #   raw data: raw = raw[:,numpy.newaxis,numpy.newaxis,:,:]
+
         # default to showing all the data
         if isinstance(image, InstrumentalImage):
-            # TODO: simplify, by never accepting InstrumentalImage?
-            minb, maxb = 0, 1 # unknown/unused
-            pixel_width = 0.01
-        else: # raw data
-            assert len(image.shape) == 3
-            pn = image.metadata[MD_WL_POLYNOMIAL]
+            raise NotImplementedError("SpectrumStream needs a raw cube data")
+        assert len(image.shape) == 3
+
+        ### this is for "average spectrum" projection
+        # VAs: center wavelength + bandwidth (=center + width)
+        pn = image.metadata[MD_WL_POLYNOMIAL]
+        if len(pn) >= 2:
             minb = polynomial.polyval(0, pn)
             maxb = polynomial.polyval(image.shape[0] - 1, pn)
-            pixel_width = (maxb - minb) / image.shape[0]
+            # they might represent wavelength out of the possible values, but they
+            # will automatically be clipped to fine values
+            self.centerWavelength = model.FloatContinuous((maxb + minb) / 2,
+                                                          range=(minb, maxb),
+                                                          unit="m")
+            max_bw = maxb - minb
+            min_bw = (maxb - minb) / image.shape[0] # one pixel width
+            self.bandwidth = model.FloatContinuous(max_bw / 12,
+                                                   range=(min_bw, max_bw),
+                                                   unit="m")
+        else:
+            # useless polynomial => just show pixels values (ex: -50 -> +50 px)
+            # TODO: try to make them always int?
+            maxb = image.shape[0] // 2
+            minb = (maxb - image.shape[0]) + 1
+            self.centerWavelength = model.FloatContinuous(0,
+                                                          range=(minb, maxb),
+                                                          unit="px")
+            max_bw = image.shape[0]
+            self.bandwidth = model.FloatContinuous(max_bw // 12,
+                                                   range=(1, max_bw),
+                                                   unit="px")
 
-        # TODO: get rid of this, if not necessary
-#        self.bandwidth = model.BandwidthVA((minb, maxb),
-#                                           range=((minb, minb), (maxb, maxb)),
-#                                           unit="m")
-#
+        self._pn_px_values = None # cached list of wavelength for each pixel pos
 
-        # VAs: center wavelength + bandwidth (=center + width)
-        # they might represent wavelength out of the possible values, but they
-        # will automatically be clipped to fine values
-        self.centerWavelength = model.FloatContinuous((maxb + minb) / 2,
-                                                      range=(minb, maxb),
-                                                      unit="m")
-        max_bw = maxb - minb
-        self.bandwidth = model.FloatContinuous(max_bw / 12,
-                                               range=(pixel_width, max_bw),
-                                               unit="m")
+        # Whether the (per bandwidth) display should be split intro 3 sub-bands
+        # which are applied to RGB
+        self.fitToRGB = model.BooleanVA(False)
+
         # TODO: how to export the average spectrum of the whole image (for the
         # bandwidth selector)? a separate method?
 
@@ -807,8 +822,9 @@ class StaticSpectrumStream(StaticStream):
         # this will call _updateImage(), which needs bandwidth
         StaticStream.__init__(self, name, image)
 
-        # TODO: to convert to final
-        #   raw data: raw = raw[:,numpy.newaxis,numpy.newaxis,:,:]
+        self.fitToRGB.subscribe(self.onFitToRGB)
+        self.centerWavelength.subscribe(self.onWavelengthChange)
+        self.bandwidth.subscribe(self.onWavelengthChange)
 
     def _get_bandwith_in_pixel(self):
         """
@@ -829,20 +845,32 @@ class StaticSpectrumStream(StaticStream):
         # So an easy way is to just compute the polynomial for each pixel on the
         # spectrum axis and take the closest ones (with the adapted rounding).
         data = self.raw[0]
-        pn = polynomial.Polynomial(data.metadata[MD_WL_POLYNOMIAL],
-                                   domain=[0, data.shape[0] - 1],
-                                   window=[0, data.shape[0] - 1])
-        # TODO: cache it, as the polynomial is rarely/never updated!
-        n, px_values = pn.linspace(data.shape[0])
+        if self._pn_px_values is None:
+            # as the polynomial is rarely/never updated, we cache it
+            pn = data.metadata[MD_WL_POLYNOMIAL]
+            if len(pn) >= 2:
+                npn = polynomial.Polynomial(pn,
+                                            domain=[0, data.shape[0] - 1],
+                                            window=[0, data.shape[0] - 1])
+                n, self._pn_px_values = npn.linspace(data.shape[0])
+            else:
+                maxb = data.shape[0] // 2
+                minb = (maxb - data.shape[0]) + 1
+                self._pn_px_values = range(minb, maxb + 1)
 
-        low_px = numpy.searchsorted(px_values, low, side="left")
+        low_px = numpy.searchsorted(self._pn_px_values, low, side="left")
         low_px = min(low_px, data.shape[0] - 1) # make sure it fits inside
+        # TODO: might need better handling to show just one pixel (in case it's
+        # useful) as in almost all cases, it will end up displaying 2 pixels at
+        # least
         if high == low:
             high_px = low_px
         else:
-            high_px = numpy.searchsorted(px_values, high, side="right")
+            high_px = numpy.searchsorted(self._pn_px_values, high, side="right")
             high_px = min(high_px, data.shape[0] - 1)
 
+        logging.debug("Showing between %g -> %g nm = %d -> %d px",
+                      low * 1e9, high * 1e9, low_px, high_px)
         assert low_px <= high_px
         return low_px, high_px
 
@@ -867,12 +895,13 @@ class StaticSpectrumStream(StaticStream):
                     brightness = self.brightness.value / 100
                     contrast = self.contrast.value / 100
 
+                # TODO: support fitToRGB
+
                 # pick only the data inside the bandwidth
                 spec_range = self._get_bandwith_in_pixel()
                 logging.debug("Spectrum range picked: %s px", spec_range)
                 # TODO: use better intermediary type if possible?, cf semcomedi
                 av_data = numpy.mean(data[spec_range[0]:spec_range[1] + 1], axis=0)
-#                av_data = data[0] # FIXME
 
                 im = img.DataArray2wxImage(av_data,
                                                 self._depth,
@@ -902,6 +931,23 @@ class StaticSpectrumStream(StaticStream):
         except Exception:
             msg = "Error while updating %s image"
             logging.exception(msg, self.__class__.__name__)
+
+
+    def onFitToRGB(self, value):
+        """
+        called when fitToRGB is changed
+        """
+        if value:
+            logging.warning("FitToRGB projection not supported")
+        if self.raw:
+            self._updateImage()
+
+    def onWavelengthChange(self, value):
+        """
+        called when centerWavelength or bandwidth are changed
+        """
+        if self.raw:
+            self._updateImage()
 
 class MultipleDetectorStream(Stream):
     """
@@ -1133,6 +1179,10 @@ class SEMSpectrumMDStream(MultipleDetectorStream):
         repetition = self._acq_repetition
         spec_res = data_list[0].shape[0]
         spec_data.shape = (spec_res, repetition[1], repetition[0])
+
+        # TODO: insert 2 dimensions, to indicate spec_res is the channel
+        #   raw data: raw = raw[:,numpy.newaxis,numpy.newaxis,:,:]
+
         # copy the metadata from the first point and add the ones from metadata
         md = data_list[0].metadata
         md.update(metadata)

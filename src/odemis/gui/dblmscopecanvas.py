@@ -274,6 +274,17 @@ class DblMicroscopeCanvas(DraggableCanvas):
         self.microscope_view.moveStageToView()
         # stage_pos will be updated once the move is completed
 
+    def fitViewToContent(self, recenter=None):
+        """
+        Adapts the MPP and center to fit to the current content
+        recenter (None or boolean): If True, also recenter the view. If None, it
+         will try to be clever, and only recenter if no stage is connected, as
+         otherwise, it could cause an unexcepted move. 
+        """
+        # TODO
+        # Note: we need 2 different mechanisms: with and without recenter
+        pass
+
     def _onMPP(self, mpp):
         """
         Called when the view.mpp is updated

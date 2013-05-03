@@ -29,6 +29,7 @@ from wx.lib.pubsub import pub
 
 from odemis.gui import comp, instrmodel, model
 from odemis.gui.instrmodel import STATE_OFF, STATE_PAUSE, STATE_ON
+from odemis.gui.model import SPECTRUM_STREAMS
 
 # stream controller:
 # create the default streams when a part of the microscope is turned on, and
@@ -169,7 +170,7 @@ class StreamController(object):
                     self._interface_model.spccd,
                     self._interface_model.spccd.data,
                     self._interface_model.ebeam)
-        return self._addStream(stream, comp.stream.SparcAcquiStreamPanel)
+        return self._addStream(stream, comp.stream.BandwidthStreamPanel)
 
     def addStatic(self, name, image,
                   cls=model.stream.StaticStream, add_to_all_views=False):
@@ -183,10 +184,7 @@ class StreamController(object):
         :param returns: (StreamPanel): the panel created
         """
         stream = cls(name, image)
-        return self._addStream(stream,
-                               comp.stream.SecomStreamPanel,
-                               add_to_all_views)
-
+        return self.addStream(stream, add_to_all_views)
 
     def _addStream(self, stream, spanel_cls, add_to_all_views=False):
         """
@@ -236,6 +234,8 @@ class StreamController(object):
         # find the right panel type
         if isinstance(stream, model.stream.FluoStream):
             cls = comp.stream.DyeStreamPanel
+        elif isinstance(stream, SPECTRUM_STREAMS):
+            cls = comp.stream.BandwithStreamPanel
         else:
             cls = comp.stream.SecomStreamPanel
 
@@ -247,7 +247,7 @@ class StreamController(object):
         :return StreamPanel:
 
         """
-        # TODO: generalise AddStream() to support this case too
+        # TODO: generalise addStream() to support this case too
         # find the right panel type
         if isinstance(stream, model.stream.FluoStream):
             cls = comp.stream.DyeStreamPanel
