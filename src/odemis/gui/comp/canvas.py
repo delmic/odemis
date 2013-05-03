@@ -574,8 +574,10 @@ class DraggableCanvas(wx.Panel):
                 math.ceil(unsc_rect[1] + unsc_rect[3]) - int(unsc_rect[1])
                 )
 
-            assert(unsc_rnd_rect[0] + unsc_rnd_rect[2] <= orig_size[0])
-            assert(unsc_rnd_rect[1] + unsc_rnd_rect[3] <= orig_size[1])
+            # FIXME: seems to trigger when very small image (5x8 px) shifted and zoomed in?
+            # the bottom right should still fit in the image
+            assert(unsc_rnd_rect[0] + unsc_rnd_rect[2] < orig_size[0])
+            assert(unsc_rnd_rect[1] + unsc_rnd_rect[3] < orig_size[1])
 
             imcropped = im.GetSubImage(unsc_rnd_rect)
 
