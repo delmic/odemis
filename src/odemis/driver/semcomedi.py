@@ -234,7 +234,8 @@ class SEMComedi(model.HwComponent):
         self._device = comedi.open(self._device_name)
         self._fileno = comedi.fileno(self._device)
         self._reader = Reader(self)
-        self._writer = Writer(self)
+        if not self._test:
+            self._writer = Writer(self)
 
     def _init_calibration(self):
         """
