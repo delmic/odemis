@@ -15,7 +15,9 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 
-from odemis.util.driver import getSerialDriver, reproduceTypedValue
+from odemis import model
+from odemis.util.driver import getSerialDriver, reproduceTypedValue, \
+    speedUpPyroConnect
 import logging
 import unittest
 
@@ -77,3 +79,5 @@ class TestDriver(unittest.TestCase):
             with self.assertRaises((ValueError, TypeError)):
                 out = reproduceTypedValue(ex_val, str_val)
 
+    def test_speedUpPyroConnect(self):
+        speedUpPyroConnect(model.getMicroscope())

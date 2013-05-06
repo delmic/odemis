@@ -30,12 +30,17 @@ import weakref
 BACKEND_FILE = _core.BASE_DIRECTORY + "/backend.ipc" # the official ipc file for backend (just to detect status)
 BACKEND_NAME = "backend" # the official name for the backend container
 
+_microscope = None
+
 def getMicroscope():
     """
     return the microscope component managed by the backend
     """
-    backend = _core.getContainer(BACKEND_NAME)
-    return backend.getRoot()
+    global _microscope # cached at the module level
+    if _microscope is None:
+        backend = _core.getContainer(BACKEND_NAME)
+        _microscope = backend.getRoot()
+    return _microscope
 
 def getComponents():
     """

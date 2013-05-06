@@ -21,18 +21,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 
-import logging
-import numpy
-import os.path
-import sys
-import threading
-import traceback
-
-import Pyro4.errors
-import scipy.io
-import wx
-
-import odemis.gui.cont.tabs as tabs
 from odemis import __version__, model
 from odemis.gui import main_xrc, instrmodel, log
 from odemis.gui.conf import get_general_conf
@@ -41,6 +29,17 @@ from odemis.gui.model.dye import DyeDatabase
 from odemis.gui.model.img import InstrumentalImage
 from odemis.gui.model.stream import StaticSEMStream, StaticSpectrumStream
 from odemis.gui.xmlh import odemis_get_resources
+from odemis.util import driver
+import Pyro4.errors
+import logging
+import numpy
+import odemis.gui.cont.tabs as tabs
+import os.path
+import scipy.io
+import sys
+import threading
+import traceback
+import wx
 
 class OdemisGUIApp(wx.App):
     """ This is Odemis' main GUI application class
@@ -60,6 +59,12 @@ class OdemisGUIApp(wx.App):
         self.microscope = None
         self.main_frame = None
 
+        logging.debug("Starting GUI")
+        try:
+            driver.speedUpPyroConnect(model.getMicroscope())
+        except Exception:
+            logging.exception("Failed to speed up start up")    
+        
         # Output catcher using a helper class
         wx.App.outputWindowClass = OdemisOutputWindow
 
@@ -210,7 +215,7 @@ class OdemisGUIApp(wx.App):
                                                           self.microscope))
             # making it very late seems to make it smoother
             wx.CallAfter(self.main_frame.Show)
-
+            logging.debug("Frame will be displayed soon")
         except Exception:  #pylint: disable=W0703
             self.excepthook(*sys.exc_info())
             #raise

@@ -27,6 +27,7 @@ import collections
 import gc
 import inspect
 import logging
+import odemis.util.driver
 import os
 import sys
 import time
@@ -274,6 +275,7 @@ def list_properties(comp_name):
     print the data-flows and vattributes of a component
     comp_name (string): name of the component
     """
+    logging.debug("Looking for component %s", comp_name)
     try:
         component = get_component(comp_name)
     except LookupError:
@@ -668,7 +670,8 @@ def main(args):
         logging.error("name of the output file must be specified.")
         return 127
 
-
+    
+    logging.debug("Trying to find the backend")
     status = get_backend_status()
     if options.check:
         logging.info("Status of back-end is %s", status)
@@ -696,7 +699,10 @@ def main(args):
     try:
         if options.kill:
             return kill_backend()
-
+        
+        logging.debug("Executing the actions")
+        odemis.util.driver.speedUpPyroConnect(model.getMicroscope())
+        
         if options.list:
             return list_components()
 

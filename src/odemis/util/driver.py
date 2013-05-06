@@ -14,11 +14,13 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
+from odemis import model
 import collections
 import logging
 import os
 import re
 import sys
+import threading
 
 def getSerialDriver(name):
     """
@@ -102,3 +104,44 @@ def reproduceTypedValue(real_val, str_val):
         return final_val
 
     raise TypeError("Type %r is not supported to convert %s" % (type(real_val), str_val))
+
+
+# Special trick functions for speeding up Pyro start-up
+def _speedUpPyroVAConnect(comp):
+    """
+    Ensures that all the VAs of the component will be quick to access
+    comp (Component)
+    """
+    # Force the creation of the connection
+    # If the connection already exists it's very fast, otherwise, we wait
+    # for the connection to be created in a separate thread
+    
+    for va in model.getVAs(comp).values():
+        t = threading.Thread(target=va._pyroBind)
+        t.start()
+
+def speedUpPyroConnect(comp):
+    """
+    Ensures that all the children of the component will be quick to access.
+    It does nothing but speed up later access.
+    comp (Component)
+    """
+    # each connection is pretty fast (~10ms) but when listing all the VAs of
+    # all the components, it can easily add up to 1s if done sequentially.
+    
+    def bind_obj(obj):
+#        logging.debug("binding comp %s", obj.name)
+        obj._pyroBind()
+        speedUpPyroConnect(obj)
+    
+    for child in getattr(comp, "children", []):
+        t = threading.Thread(target=bind_obj, args=(child,))
+        t.start()
+
+    _speedUpPyroVAConnect(comp)
+    
+    # cannot check for Microscope because it's a proxy
+    if isinstance(comp.detectors, collections.Set):
+        for child in (comp.detectors | comp.emitters | comp.actuators):
+            t = threading.Thread(target=bind_obj, args=(child,))
+            t.start()
