@@ -237,24 +237,13 @@ CONFIG = {
                 {
                     "control_type": odemis.gui.CONTROL_INT,
                 },
-                # For testing purposes only, roi must be hidden in production
-                "roi":
-                {
-                    "control_type": odemis.gui.CONTROL_LABEL,
-                },
-                "repetition": # TODO: 1D only
-                {
-                    "control_type": odemis.gui.CONTROL_COMBO,
-                    "choices": _resolution_from_range,
-                },
-                "binning": #TODO: 1D only
+                "binning":
                 {
                     "control_type": odemis.gui.CONTROL_RADIO,
                     "choices": _binning_firstd_only,
                     "type": "1std_binning", # means only 1st dimension can change
                 },
-
-                 # what we don't want to display:
+                # what we don't want to display:
                 "targetTemperature":
                 {
                     "control_type": odemis.gui.CONTROL_NONE,
@@ -267,5 +256,28 @@ CONFIG = {
                 {
                     "control_type": odemis.gui.CONTROL_NONE,
                 },
-            }
+                # VAs from the stream, temporarily here
+                "repetition":
+                {
+                    "control_type": odemis.gui.CONTROL_COMBO,
+                    "choices": _resolution_from_range,
+                },
+                # For testing purposes only, roi must be hidden in production
+                "roi":
+                {
+                    "control_type": odemis.gui.CONTROL_LABEL,
+                },
+            },
+            "spectrograph":
+            {
+                "wavelength":
+                {
+                    "control_type": odemis.gui.CONTROL_SLIDER,
+                    "accuracy": 3,
+                },
+                "grating": # that select the bandwidth observed
+                {
+                    "control_type": odemis.gui.CONTROL_COMBO,
+                },
+            },
         }

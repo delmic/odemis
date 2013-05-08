@@ -43,8 +43,7 @@ import odemis.gui
 import odemis.gui.comp.text as text
 import odemis.gui.util.units as utun
 import re
-import wx.combo
-
+import wx
 
 ####### Utility functions #######
 
@@ -330,12 +329,17 @@ class SettingsPanel(object):
         format = conf.get("format", False)
 
         if choices:
+            # choice_fmt is an iterable of tuples choice -> formatted choice
+            # (like a dict, but keeps order)
             if format and all([isinstance(c, (int, float)) for c in choices]):
-                choices_formatted, prefix = utun.si_scale_list(choices)
-                choices_formatted = [u"%g" % c for c in choices_formatted]
+                fmt, prefix = utun.si_scale_list(choices)
+                choices_fmt = zip(choices, [u"%g" % c for c in fmt])
                 unit = prefix + unit
+            elif isinstance(choices, dict):
+                # it's then already value -> string (user-friendly display)
+                choices_fmt = choices.items()
             else:
-                choices_formatted = [choice_to_str(c) for c in choices]
+                choices_fmt = [(c, choice_to_str(c)) for c in choices]
 
         # Get the defined type of control or assign a default one
         control_type = conf.get('control_type',
@@ -376,7 +380,7 @@ class SettingsPanel(object):
             self.panel.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR)
 
             def format_label(value, unit=unit):
-                new_ctrl.SetLabel(readable_str(value, unit, sig=2))
+                new_ctrl.SetLabel(readable_str(value, unit, sig=3))
 
             vac = VigilantAttributeConnector(vigil_attr,
                                              new_ctrl,
@@ -434,7 +438,7 @@ class SettingsPanel(object):
                                           min_val=rng[0],
                                           max_val=rng[1],
                                           choices=choices,
-                                          accuracy=6)
+                                          accuracy=conf.get('accuracy', 5))
             new_ctrl.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_EDIT)
             new_ctrl.SetBackgroundColour(self.panel.GetBackgroundColour())
 
@@ -449,9 +453,9 @@ class SettingsPanel(object):
             new_ctrl = GraphicalRadioButtonControl(self.panel,
                                                    - 1,
                                                    size=(-1, 16),
-                                                   choices=choices,
+                                                   choices=[c for c, _ in choices_fmt],
                                                    style=wx.NO_BORDER,
-                                                   labels=choices_formatted,
+                                                   labels=[f for _, f in choices_fmt],
                                                    units=unit)
 
             if conf.get('type', None) == "1d_binning":
@@ -518,7 +522,7 @@ class SettingsPanel(object):
             new_ctrl.Bind(wx.EVT_MOUSEWHEEL, _eat_event)
 
             # Set choices
-            for choice, formatted in zip(choices, choices_formatted):
+            for choice, formatted in choices_fmt:
                 new_ctrl.Append(u"%s %s" % (formatted, unit), choice)
 
             # A small wrapper function makes sure that the value can
@@ -570,7 +574,7 @@ class SettingsPanel(object):
         else:
             # TODO: should be a free entry text, like combobox
             def format_label(value, unit=unit):
-                new_ctrl.SetLabel(readable_str(value, unit, sig=2))
+                new_ctrl.SetLabel(readable_str(value, unit, sig=3))
 
             new_ctrl = wx.StaticText(self.panel, wx.ID_ANY, "")
             vac = VigilantAttributeConnector(vigil_attr,
@@ -814,9 +818,19 @@ class SparcSettingsController(SettingsBarController):
                 if "wavelength" in microscope_model.spectrograph.axes:
                     self._spectrum_panel.add_axis(
                         "wavelength",
-                        microscope_model.spectrograph)
-#                        CONFIG["spectrograph"]["wavelength"])
-                # TODO: add grating selector too (as a combox box)
+                        microscope_model.spectrograph,
+                        CONFIG["spectrograph"]["wavelength"])
+                # FIXME: grating is a VA, but actually should be an actuator
+                # changing the value can be very slow, and blocking all the GUI!
+                if (hasattr(microscope_model.spectrograph, "grating") and
+                    isinstance(microscope_model.spectrograph.grating,
+                               VigilantAttributeBase)):
+                    self._spectrum_panel.add_value(
+                        "grating",
+                        microscope_model.spectrograph.grating,
+                        microscope_model.spectrograph,
+                        CONFIG["spectrograph"]["grating"])
+                    
         else:
             parent_frame.fp_settings_sparc_spectrum.Hide()
 
