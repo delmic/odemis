@@ -33,7 +33,7 @@ from odemis.gui.comp.slider import UnitIntegerSlider, UnitFloatSlider
 from odemis.gui.conf.settingspanel import CONFIG
 from odemis.gui.model.stream import SpectrumStream, ARStream
 from odemis.gui.util.units import readable_str
-from odemis.gui.util.widgets import VigilantAttributeConnector
+from odemis.gui.util.widgets import VigilantAttributeConnector, AxisConnector
 from odemis.model import getVAs, NotApplicableError, VigilantAttributeBase
 from odemis.util.driver import reproduceTypedValue
 from wx.lib.pubsub import pub
@@ -317,7 +317,7 @@ class SettingsPanel(object):
         :param name: (string): name of the value
         :param vigil_attr: (VigilantAttribute)
         :param comp: (Component): the component that contains this VigilantAttribute
-        :pram conf: ({}): Configuration items that may override default settings
+        :param conf: ({}): Configuration items that may override default settings
         """
         assert isinstance(vigil_attr, VigilantAttributeBase)
 
@@ -420,8 +420,8 @@ class SettingsPanel(object):
                                              new_ctrl,
                                              events=wx.EVT_COMMAND_ENTER)
 
-            new_ctrl.Bind(wx.EVT_TEXT, self.on_setting_changed)
             new_ctrl.Bind(wx.EVT_COMMAND_ENTER, self.on_setting_changed)
+#            new_ctrl.Bind(wx.EVT_TEXT, self.on_setting_changed)
 
 
         elif control_type == odemis.gui.CONTROL_FLT:
@@ -442,7 +442,7 @@ class SettingsPanel(object):
                                              events=wx.EVT_COMMAND_ENTER)
 
             new_ctrl.Bind(wx.EVT_COMMAND_ENTER, self.on_setting_changed)
-            new_ctrl.Bind(wx.EVT_TEXT, self.on_setting_changed)
+#            new_ctrl.Bind(wx.EVT_TEXT, self.on_setting_changed)
 
         elif control_type == odemis.gui.CONTROL_RADIO:
             new_ctrl = GraphicalRadioButtonControl(self.panel,
@@ -598,7 +598,62 @@ class SettingsPanel(object):
             # new_ctrl.SetBackgroundColour(wx.RED)
 
 
+    def add_axis(self, name, comp, conf=None):
+        """
+        Add a widget to the setting panel to control an axis
+        
+        :param name: (string): name of the axis
+        :param comp: (Component): the component that contains this axis
+        :param conf: ({}): Configuration items that may override default settings
+        """
+        # If no conf provided, set it to an empty dictionary
+        conf = conf or {}
 
+        # TODO: how to differentiate axes that can do moveAbs() from the ones
+        # which can only do moveRel()? => need to implement .canAbs VA
+
+        # Format label
+        label = conf.get('label', self._label_to_human(name))
+        # Add the label to the panel
+        lbl_ctrl = wx.StaticText(self.panel, -1, "%s" % label)
+        self._gb_sizer.Add(lbl_ctrl, (self.num_entries, 0), flag=wx.ALL, border=5)
+
+        logging.debug("Adding Axis control %s", label)
+
+        # For now, it's very simple: always assume it can do absolute positioning
+        # with a range, and always create a float slider out of it.
+
+        pos = comp.position.value[name]
+        unit = comp.position.unit
+        rng = comp.ranges[name]
+
+        new_ctrl = UnitFloatSlider(self.panel,
+                         value=pos,
+                         val_range=rng,
+                         unit=unit,
+                         t_size=(50, -1),
+                         accuracy=conf.get('accuracy', 3))
+
+        # don't bind to wx.EVT_SLIDER, which happens as soon as the slider moves,
+        # but to EVT_SCROLL_CHANGED, which happens when the user has made his
+        # mind. This avoid too many unnecessary actuator moves and disabling the
+        # widget too early.
+        ac = AxisConnector(name, comp, new_ctrl, events=wx.EVT_SCROLL_CHANGED)
+        new_ctrl.Bind(wx.EVT_SCROLL_CHANGED, self.on_setting_changed)
+
+        self._gb_sizer.Add(new_ctrl, (self.num_entries, 1),
+                        flag=wx.ALL | wx.EXPAND, border=5)
+
+        # AxisConnector follows VigilantAttributeConnector interface, so can be
+        # used (duck typing).
+        ne = SettingEntry(name, None, comp, lbl_ctrl, new_ctrl, ac)
+        self.entries.append(ne)
+        self.num_entries += 1
+
+        if self.highlight_change:
+            bind_menu(ne)
+
+        self.fold_panel.Parent.Layout()
 
     def on_setting_changed(self, evt):
         logging.debug("Setting has changed")
@@ -750,6 +805,16 @@ class SparcSettingsController(SettingsBarController):
                         s.roi,
                         None,  #component
                         CONFIG["spectrometer"]["roi"])
+
+            # Add spectrograph control if available
+            if microscope_model.spectrograph:
+                # Without the "wavelength" axis, it's boring
+                if "wavelength" in microscope_model.spectrograph.axes:
+                    self._spectrum_panel.add_axis(
+                        "wavelength",
+                        microscope_model.spectrograph)
+#                        CONFIG["spectrograph"]["wavelength"])
+                # TODO: add grating selector too (as a combox box)
         else:
             parent_frame.fp_settings_sparc_spectrum.Hide()
 

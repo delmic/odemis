@@ -98,6 +98,7 @@ class MicroscopeGUIModel(object):
         self.sed = None # secondary electron detector
         self.bsd = None # back-scatter electron detector
         self.spectrometer = None # spectrometer
+        self.spectrograph = None # actuator to change the wavelength
 
         if microscope:
             for d in microscope.detectors:
@@ -119,6 +120,12 @@ class MicroscopeGUIModel(object):
                     self.mirror = a
                 elif a.role == "align":
                     self.aligner = a
+
+            # Spectrograph is not directly an actuator, but a sub-comp of spectrometer
+            if self.spectrometer:
+                for child in self.spectrometer.children:
+                    if child.role == "spectrograph":
+                        self.spectrograph = child     
 
             for e in microscope.emitters:
                 if e.role == "light":

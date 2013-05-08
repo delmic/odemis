@@ -22,10 +22,10 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 
-import logging
+from odemis.gui.util import call_after_wrapper, call_after
 import collections
+import logging
 
-from odemis.gui.util import call_after_wrapper
 
 def get_all_children(widget, klass=None):
     """ Recursively get all the child widgets of the given widget
@@ -115,3 +115,103 @@ class VigilantAttributeConnector(object):
         for event in self.change_events:
             self.ctrl.Unbind(event, self._on_value_change)
         self.vigilattr.unsubscribe(self.va_2_ctrl)
+
+
+
+class AxisConnector(object):
+    """ This class connects the axis of an actuator with a wxPython control,
+    making sure that the changes in one are automatically reflected in the
+    other.
+    """
+    def __init__(self, axis, comp, ctrl, pos_2_ctrl=None, ctrl_2_pos=None, events=None):
+        """
+        axis (string): the name of the axis to connect with
+        comp (Actuator): the component that contains the axis
+        ctrl (wx.Window): a wx widget to connect to
+        pos_2_ctrl (None or callable ((value) -> None)): a function to be called
+            when the position is updated, to update the widget. If None, try to use
+            the default SetValue().
+        ctrl_2_pos (None or callable ((None) -> value)): a function to be called
+            when the widget is updated, to update the VA. If None, try to use
+            the default GetValue().
+            Can raise ValueError, TypeError or IndexError if data is incorrect
+        events (None or wx.EVT_* or tuple of wx.EVT_*): events to bind to update
+            the value of the VA
+        """
+        self.axis = axis
+        self.comp = comp
+        self.ctrl = ctrl
+        self.pos_2_ctrl = pos_2_ctrl or ctrl.SetValue
+        self.ctrl_2_pos = ctrl_2_pos or ctrl.GetValue
+        if events is None:
+            self.change_events = ()
+        elif not isinstance(events, collections.Iterable):
+            self.change_events = (events,)
+        else:
+            self.change_events = events
+
+        # Subscribe to the position and initialize
+        self._connect(init=True)
+
+    def _on_value_change(self, evt):
+        """ This method is called when the value of the control is changed.
+        it moves the axis to the new value.
+        """
+        try:
+            value = self.ctrl_2_pos()
+            logging.debug("Requesting axis %s to move to %f", self.axis, value)
+
+            # expect absolute move works
+            move = {self.axis: value}
+            future = self.comp.moveAbs(move)
+        except (ValueError, TypeError, IndexError), exc:
+            logging.error("Illegal value: %s", exc)
+            return
+        finally:
+            evt.Skip()
+
+        if not future.done():
+            # disable the control until the move is finished => gives user
+            # feedback and avoids accumulating moves
+            self.ctrl.Disable()
+            future.add_done_callback(self._on_move_done)
+
+    @call_after
+    def _on_move_done(self, future):
+        """
+        Called after the end of a move
+        """
+        # _on_pos_change() is almost always called as well, but not if the move
+        # was so small that the position didn't change. So need to be separate.
+        self.ctrl.Enable()
+        logging.debug("Axis %s finished moving", self.axis)
+
+    @call_after
+    def _on_pos_change(self, positions):
+        """
+        Called when position changes
+        """
+        position = positions[self.axis]
+        logging.debug("Axis has moved to position %f", position)
+        self.pos_2_ctrl(position)
+
+    def pause(self):
+        """ Temporarily prevent position from updating controls """
+        self.comp.position.unsubscribe(self._on_pos_change)
+
+    def resume(self):
+        """ Resume updating controls """
+        self.comp.position.subscribe(self._on_pos_change, init=True)
+
+    def _connect(self, init):
+        logging.debug("Connecting AxisConnector")
+        self.comp.position.subscribe(self._on_pos_change, init)
+        for event in self.change_events:
+            self.ctrl.Bind(event, self._on_value_change)
+
+    def disconnect(self):
+        logging.debug("Disconnecting AxisConnector")
+        for event in self.change_events:
+            self.ctrl.Unbind(event, self._on_value_change)
+        self.comp.position.unsubscribe(self._on_pos_change)
+
