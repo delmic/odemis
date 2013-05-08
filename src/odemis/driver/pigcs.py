@@ -1092,12 +1092,13 @@ class Bus(model.Actuator):
     def __init__(self, name, role, port, axes, baudrate=38400, **kwargs):
         """
         port (string): name of the serial port to connect to the controllers
-        axes (dict string=> 3-tuple(1<=int<=16, 1<=int, boolean): the configuration
+        axes (dict string -> 3-tuple(1<=int<=16, 1<=int, boolean): the configuration
          of the network. For each axis name associates the controller address,
          channel, and whether it's closed-loop (absolute positioning) or not.
          Note that even if it's made of several controllers, each controller is 
          _not_ seen as a child from the odemis model point of view.
-        baudrate (int): baudrate of the serial port (default is the recommended 38400)
+        baudrate (int): baudrate of the serial port (default is the recommended 
+          38400). Use .scan() to detect it.
         """
         # this set ._axes and ._ranges
         model.Actuator.__init__(self, name, role, axes=axes.keys(), **kwargs)
