@@ -380,7 +380,8 @@ class SettingsPanel(object):
 
             vac = VigilantAttributeConnector(vigil_attr,
                                              new_ctrl,
-                                             format_label)
+                                             format_label,
+                                             new_ctrl.GetLabel)
 
         elif control_type == odemis.gui.CONTROL_SLIDER:
             # The slider is accompanied by an extra number text field
@@ -574,7 +575,8 @@ class SettingsPanel(object):
             new_ctrl = wx.StaticText(self.panel, wx.ID_ANY, "")
             vac = VigilantAttributeConnector(vigil_attr,
                                              new_ctrl,
-                                             format_label)
+                                             format_label,
+                                             new_ctrl.GetLabel)
 
         self._gb_sizer.Add(new_ctrl, (self.num_entries, 1),
                         flag=wx.ALL | wx.EXPAND, border=5)

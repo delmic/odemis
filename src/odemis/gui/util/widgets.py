@@ -69,7 +69,7 @@ class VigilantAttributeConnector(object):
         self.vigilattr = va
         self.ctrl = ctrl
         self.va_2_ctrl = call_after_wrapper(va_2_ctrl or ctrl.SetValue)
-        self.ctrl_2_va = ctrl_2_va
+        self.ctrl_2_va = ctrl_2_va or ctrl.GetValue
         if events is None:
             self.change_events = ()
         elif not isinstance(events, collections.Iterable):
@@ -84,10 +84,7 @@ class VigilantAttributeConnector(object):
         """ This method is called when the value of the control is changed.
         """
         try:
-            if self.ctrl_2_va is not None:
-                value = self.ctrl_2_va()
-            else:
-                value = self.ctrl.GetValue()
+            value = self.ctrl_2_va()
             logging.debug("Assign value %s to vigilant attribute", value)
 
             self.vigilattr.value = value
