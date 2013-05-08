@@ -793,11 +793,8 @@ class UnitNumberCtrl(NumberTextCtrl):
     def _display_pretty(self):
         if self.number is None:
             str_val = u""
-        elif self.accuracy is None:
-            str_val = units.readable_str(self.number, self.unit)
         else:
-            v = units.round_significant(self.number, self.accuracy)
-            str_val = units.readable_str(v, self.unit, self.accuracy)
+            str_val = units.readable_str(self.number, self.unit, self.accuracy)
 
         wx.TextCtrl.ChangeValue(self, str_val)
 

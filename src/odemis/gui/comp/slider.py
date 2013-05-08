@@ -102,11 +102,11 @@ class Slider(wx.PyControl):
         self.Bind(wx.EVT_MOTION, self.OnMotion)
         self.Bind(wx.EVT_LEFT_DOWN, self.OnLeftDown)
         self.Bind(wx.EVT_LEFT_UP, self.OnLeftUp)
+        self.Bind(wx.EVT_MOUSE_CAPTURE_LOST, self.OnCaptureLost)
 
         # Layout Events
         self.Bind(wx.EVT_PAINT, self.OnPaint)
         self.Bind(wx.EVT_SIZE, self.OnSize)
-        self.Bind( wx.EVT_SET_FOCUS, self.OnFocus)
 
     def __del__(self):
         # FIXME: put here to try and prevent PyDeadObject exceptions. Might
@@ -115,11 +115,11 @@ class Slider(wx.PyControl):
         self.Unbind(wx.EVT_MOTION, self.OnMotion)
         self.Unbind(wx.EVT_LEFT_DOWN, self.OnLeftDown)
         self.Unbind(wx.EVT_LEFT_UP, self.OnLeftUp)
+        self.Unbind(wx.EVT_MOUSE_CAPTURE_LOST, self.OnCaptureLost)
 
         # Layout Events
         self.Unbind(wx.EVT_PAINT, self.OnPaint)
         self.Unbind(wx.EVT_SIZE, self.OnSize)
-        #print "Slider unbound"
 
     @staticmethod
     def _log_val_to_perc(r0, r1, v):
@@ -134,7 +134,7 @@ class Slider(wx.PyControl):
 
         assert(r0 < r1)
         assert(r0 > 0 and r1 > 0)
-        p = math.log(v/r0, r1/r0)
+        p = math.log(v / r0, r1 / r0)
         return p
 
     @staticmethod
@@ -147,7 +147,7 @@ class Slider(wx.PyControl):
 
         assert(r0 < r1)
         assert(r0 > 0 and r1 > 0)
-        v = r0 * ((r1/r0)**p)
+        v = r0 * ((r1 / r0) ** p)
         return v
 
     @staticmethod
@@ -157,7 +157,7 @@ class Slider(wx.PyControl):
         """
         assert(r0 < r1)
         p = abs(float(v - r0) / (r1 - r0))
-        p = p**(1/3.0)
+        p = p ** (1 / 3.0)
         return p
 
     @staticmethod
@@ -166,7 +166,7 @@ class Slider(wx.PyControl):
         a cube.
         """
         assert(r0 < r1)
-        p = p**3
+        p = p ** 3
         v = (r1 - r0) * p + r0
         return v
 
@@ -182,7 +182,7 @@ class Slider(wx.PyControl):
         """ This paint event handler draws the actual control """
         dc = wx.BufferedPaintDC(self)
         width, height = self.GetWidth(), self.GetHeight()
-        _, half_height = width / 2, height / 2
+        half_height = height // 2
 
         bgc = self.Parent.GetBackgroundColour()
         dc.SetBackground(wx.Brush(bgc, wx.SOLID))
@@ -231,10 +231,7 @@ class Slider(wx.PyControl):
         self.handlePos = self._val_to_pixel()
         self.Refresh()
 
-    def OnFocus(self, evt):
-        pass
-
-    def OnLeftDown(self, event=None):
+    def OnLeftDown(self, event):
         """ This event handler fires when the left mouse button is pressed down
         when the  mouse cursor is over the slide bar.
 
@@ -242,12 +239,11 @@ class Slider(wx.PyControl):
         button is released.
 
         """
-
         self.CaptureMouse()
         self.set_position_value(event.GetX())
         self.SetFocus()
 
-    def OnLeftUp(self, event=None):
+    def OnLeftUp(self, event):
         """ This event handler is called when the left mouse button is released
         while the mouse cursor is over the slide bar.
 
@@ -257,8 +253,25 @@ class Slider(wx.PyControl):
 
         if self.HasCapture():
             self.ReleaseMouse()
+            self.send_scroll_event()
 
         event.Skip()
+
+    def OnCaptureLost(self, evt):
+        """
+        Applications which capture the mouse, must listen to MouseCaptureLost
+         event.
+        """
+        logging.debug("Lost mouse capture")
+        self.ReleaseMouse() # TODO: needed?
+
+        evt.Skip()
+
+    def Disable(self, *args, **kwargs):
+        # ensure we don't keep the capture (as LeftUp will never be received)
+        if self.HasCapture():
+            self.ReleaseMouse()
+        return super(Slider, self).Disable(*args, **kwargs)
 
     def OnMotion(self, event=None):
         """ Mouse motion event handler """
@@ -308,19 +321,27 @@ class Slider(wx.PyControl):
 
     @limit_invocation(0.07)  #pylint: disable=E1120
     def send_slider_update_event(self):
-        logging.debug("Firing change event for value %s", self.current_value)
+        """
+        Send EVT_COMMAND_SLIDER_UPDATED, which is received as EVT_SLIDER.
+        Means that the value has changed (even when the user is moving the slider)
+        """
+        logging.debug("Firing slider event for value %s", self.current_value)
 
-        # now = time.time()
-        # # Prevent this event from firing too often.
-        # if self.HasCapture() and (now - self._fire_time) < self._fire_rate:
-        #     return
+        evt = wx.CommandEvent(wx.wxEVT_COMMAND_SLIDER_UPDATED)
+        evt.SetEventObject(self)
+        self.GetEventHandler().ProcessEvent(evt)
 
-        # self._fire_time = now
+    def send_scroll_event(self):
+        """
+        Send EVT_SCROLL_CHANGED.
+        Means that the value has changed to a definite position (only sent when
+        the user is done moving the slider).
+        """
+        logging.debug("Firing scroll event for value %s", self.current_value)
 
-        change_evt = wx.CommandEvent(wx.wxEVT_COMMAND_SLIDER_UPDATED)
-        change_evt.SetEventObject(self)
-        self.GetEventHandler().ProcessEvent(change_evt)
-
+        evt = wx.ScrollEvent(wx.wxEVT_SCROLL_CHANGED, pos=self.current_value)
+        evt.SetEventObject(self)
+        self.GetEventHandler().ProcessEvent(evt)
 
     def SetValue(self, value):
         """ Set the value of the slider
@@ -343,9 +364,9 @@ class Slider(wx.PyControl):
         if not isinstance(value, (int, long, float)):
             raise TypeError("Illegal data type %s" % type(value))
 
-        # if self.current_value == value:
-        #     logging.debug("Identical value %s ignored", value)
-        #     return
+        if self.current_value == value:
+            logging.debug("Identical value %s ignored", value)
+            return
 
         logging.debug("Setting slider value to %s", value)
 
@@ -363,7 +384,10 @@ class Slider(wx.PyControl):
         self.Refresh()
 
     def GetValue(self):
-        """ Get the value of the slider """
+        """ 
+        Get the value of the slider 
+        return (float or int)
+        """
         return self.current_value
 
     def GetWidth(self):
@@ -408,7 +432,7 @@ class NumberSlider(Slider):
 
         self.linked_field.Bind(wx.EVT_COMMAND_ENTER, self._update_slider)
 
-    def SetForegroundColour(self,  colour, *args, **kwargs):
+    def SetForegroundColour(self, colour, *args, **kwargs):
         Slider.SetForegroundColour(self, colour)
         self.linked_field.SetForegroundColour(colour)
 
@@ -430,8 +454,9 @@ class NumberSlider(Slider):
             text_val = self.linked_field.GetValue()
             if self.GetValue() != text_val:
                 logging.debug("Updating slider value to %s", text_val)
-                self._SetValue(text_val)
+                Slider._SetValue(self, text_val) # avoid to update link field again
                 self.send_slider_update_event()
+                self.send_scroll_event()
                 evt.Skip()
 
     def _update_linked_field(self, value):
@@ -454,7 +479,7 @@ class NumberSlider(Slider):
         Slider._SetValue(self, val)
         self._update_linked_field(val)
 
-    def OnLeftUp(self, event=None):
+    def OnLeftUp(self, event):
         """ Overridden method, so the linked field update could be added
         """
 
