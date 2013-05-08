@@ -206,8 +206,12 @@ def print_vattribute(name, va):
         str_range = ""
 
     try:
-        vachoices = va.choices
-        str_choices = " (choices: %s)" % ", ".join([str(c) for c in vachoices])
+        vachoices = va.choices # set or dict
+        if isinstance(va.choices, dict):
+            str_choices = " (choices: %s)" % ", ".join(
+                            ["%s: '%s'" % i for i in vachoices.items()])
+        else:
+            str_choices = " (choices: %s)" % ", ".join([str(c) for c in vachoices])
     except (AttributeError, model.NotApplicableError):
         str_choices = ""
 
