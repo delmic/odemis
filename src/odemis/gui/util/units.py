@@ -108,17 +108,17 @@ def to_string_pretty(x, sig=None):
         # don't consider this a float
         return u"0"
 
+    if sig is not None:
+        x = round_significant(x, sig)
+        
     # so close from an int that it's very likely one?
-    if abs(x - round(x)) < 1e-5:
+    if abs(x - round(x)) < 1e-5 and abs(x) >= 1:
         x = int(round(x)) # avoid the .0
 
-    if abs(x) < 1 or isinstance(x, float):
+    if isinstance(x, float):
         # just a float
-        if sig:
-            fmt = "{0:0.%sf}" % sig
-            return fmt.format(x)
-        else:
-            return u"%r" % x
+        return u"%r" % x
+    # TODO: if very big or very small, use e-N notation, with N a multiple of 3
 
     return u"%s" % x
 
@@ -129,7 +129,7 @@ def readable_str(value, unit=None, sig=None):
     :param value: (number or [number...]): value(s) to display
     :param unit: (None or string): unit of the values. If necessary a SI prefix
         will be used to make the value more readable, unless None is given.
-    :param sig: (int or None) The number of significant decimals
+    :param sig: (int or None) The number of significant numbers
 
     return (string)
     """
@@ -182,36 +182,36 @@ def readable_time(seconds):
         second += 1
     if second == 0 and msec == 0:
         # exactly 0 => special case
-        return "0 second"
+        return u"0 second"
 
     minute, second = divmod(second, 60)
     hour, minute = divmod(minute, 60)
     day, hour = divmod(hour, 24)
 
     if day:
-        result.append("%d day%s" % (day, "" if day == 1 else "s"))
+        result.append(u"%d day%s" % (day, u"" if day == 1 else u"s"))
 
     if hour:
-        result.append("%d hour%s" % (hour, "" if hour == 1 else "s"))
+        result.append(u"%d hour%s" % (hour, u"" if hour == 1 else u"s"))
 
     if minute:
-        result.append("%d minute%s" % (minute, "" if minute == 1 else "s"))
+        result.append(u"%d minute%s" % (minute, u"" if minute == 1 else u"s"))
 
     if second:
-        result.append("%d second%s" % (second, "" if second == 1 else "s"))
+        result.append(u"%d second%s" % (second, u"" if second == 1 else u"s"))
 
     if msec:
-        result.append("%d ms" % msec)
+        result.append(u"%d ms" % msec)
 
     if len(result) == 1:
         # simple case
         ret = result[0]
     else:
         # make them "x, x, x and x"
-        ret = "{} and {}".format(", ".join(result[:-1]), result[-1])
+        ret = u"{} and {}".format(u", ".join(result[:-1]), result[-1])
 
     if sign == -1:
-        ret = "minus " + ret
+        ret = u"minus " + ret
 
     return ret
 
