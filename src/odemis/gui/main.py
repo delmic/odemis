@@ -411,11 +411,19 @@ see http://www.fluorophores.org/disclaimer/.
         logging.info("Exiting Odemis")
 
         try:
+            # Put cleanup actions here (like disconnect from odemisd)
+            
+            # TODO: move to tab controller?
+            # Stop live view
             mtc = get_main_tab_controller()
             try:
                 interface_model = mtc['secom_live'].interface_model
-                # Put cleanup actions here (like disconnect from odemisd)
-                # TODO: move to tab controller?
+            except LookupError:
+                try:
+                    interface_model = mtc['sparc_acqui'].interface_model
+                except LookupError:
+                    interface_model = None
+            if interface_model:
                 try:
                     interface_model.opticalState.value = instrmodel.STATE_OFF
                 except AttributeError:
@@ -424,9 +432,6 @@ see http://www.fluorophores.org/disclaimer/.
                     interface_model.emState.value = instrmodel.STATE_OFF
                 except AttributeError:
                     pass
-            except LookupError:
-                # tab not present => nothing to do
-                pass
 
             self.main_frame.Destroy()
             if self.http_proc:
