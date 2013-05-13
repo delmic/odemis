@@ -344,6 +344,12 @@ class AnalysisTab(Tab):
                                         self.main_frame.pnl_sparc_streams
                                   )
 
+
+        self._settings_controller = settings.AnalysiSettingsController(
+                                        self.main_frame,
+                                        self.interface_model
+                                    )
+
         # btn -> (viewport, label)
         ViewportLabel = namedtuple('ViewportLabel', ['vp', 'lbl'])
 
@@ -414,7 +420,7 @@ class TabBarController(object):
 
         Tabs that are not wanted or needed will be removed from the list and
         the associated buttons will be hidden in the user interface.
-        returns (list of Tabs): 
+        returns (list of Tabs):
         """
         role = microscope.role
         logging.debug("Creating tabs belonging to the '%s' interface", role)

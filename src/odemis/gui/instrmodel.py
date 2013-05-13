@@ -56,24 +56,24 @@ TOOL_ROA = 3 # Select the region of acquisition (area to be acquired, SPARC-only
 
 class MicroscopeGUIModel(object):
     """
-    Represents the graphical user interface for a microscope. In Odemis GUI, 
+    Represents the graphical user interface for a microscope. In Odemis GUI,
     there's basically one per tab (and for each window without tab).
-    This is a meta-class. You actually want to use one of the sub-classes to 
-    represent a specific type of interface. Not all interfaces have all the 
+    This is a meta-class. You actually want to use one of the sub-classes to
+    represent a specific type of interface. Not all interfaces have all the
     same attributes. However, there is always:
     .microscope: The HwComponent root of all the other components (can be None
     if there is no microscope available, like an interface to display recorded
-    acquisition). There are also many .ccd, .stage, etc, which can be used to 
+    acquisition). There are also many .ccd, .stage, etc, which can be used to
     directly access the sub-components. .microscope.role (string) should be used
-    to find out the generic type of microscope connected. Normally, all the 
+    to find out the generic type of microscope connected. Normally, all the
     interfaces of the same execution will have the same .microscope or None (
-    there are never multiple microscopes manipulated simultaneously). 
+    there are never multiple microscopes manipulated simultaneously).
     .view and .focusedView: represent the available/currently selected views
     (graphical image/data display).
     .viewLayout: the current way on how the views are organized (the choices
      give all the possibilities of this GUI)
     .streams: all the stream/data available to the user to manipulate.
-    .tool: the current "mode" in which the user is (the choices give all the 
+    .tool: the current "mode" in which the user is (the choices give all the
      available tools for this GUI).
     """
     __metaclass__ = ABCMeta
@@ -81,8 +81,8 @@ class MicroscopeGUIModel(object):
     def __init__(self, microscope):
         """
         microscope (model.Microscope or None): the root of the HwComponent tree
-         provided by the back-end. If None, it means the interface is not 
-         connected to a microscope (and displays a recorded acqusition). 
+         provided by the back-end. If None, it means the interface is not
+         connected to a microscope (and displays a recorded acqusition).
         """
         self.microscope = microscope
 
@@ -125,7 +125,7 @@ class MicroscopeGUIModel(object):
             if self.spectrometer:
                 for child in self.spectrometer.children:
                     if child.role == "spectrograph":
-                        self.spectrograph = child     
+                        self.spectrograph = child
 
             for e in microscope.emitters:
                 if e.role == "light":
@@ -246,7 +246,7 @@ class MicroscopeGUIModel(object):
 class LiveGUIModel(MicroscopeGUIModel):
     """
     Represent an interface used to only show the current data from the
-    microscope. It should be able to handle SEM-only, optical-only, and SECOM 
+    microscope. It should be able to handle SEM-only, optical-only, and SECOM
     systems.
     """
     # TODO check it can also handle SPARC?
@@ -296,7 +296,7 @@ class AcquisitionGUIModel(MicroscopeGUIModel):
         if microscope.role == "secom":
             if not self.stage:
                 raise KeyError("No stage found in the SECOM microscope")
-            # it's not an error to not have focus but it's weird
+                # it's not an error to not have focus but it's weird
             if not self.focus:
                 logging.warning("No focus actuator found for the microscope")
         elif microscope.role == "sparc" and not self.mirror:
@@ -351,31 +351,50 @@ class ActuatorGUIModel(MicroscopeGUIModel):
 
 class FileInfo(object):
     """
-    Represent all the information about a microscope acquisition recorded 
+    Represent all the information about a microscope acquisition recorded
     inside a file. It's mostly aimed at containing information, and its attributes
     should be considered readonly after initialisation.
     """
-    def __init__(self, acqfile):
-        """
-        acqfile (File or None): the File that contains the acquisition, some
-        fields will be automatically filled in if provided
-        """
-        self.file = acqfile
-        try:
-            self.filename = acqfile.name
-        except Exception:
-            self.filename = None
 
-        self.time = None # acquisition time (second from epoch)
-        if self.filename:
-            # automatically fill in with not too bad info
-            try:
-                self.time = os.stat(self.filename).st_ctime
-            except Exception:
-                pass
+    def __init__(self, mic_file, meta_data=None):
+        """
+        mic_file (File or None): the File that contains the acquisition, some
+            fields will be automatically filled in if provided.
+        meta_data (dict): A dictionary of (nested) meta data.
+        """
+
+        assert mic_file is None or isinstance(mic_file, file)
+
+        self._mic_file = mic_file # file object
+
+        # Extract file path, file name and path
+        self._file_path = mic_file.name if mic_file and mic_file.name else None
+
+        self._file_name = None
+        self._path = None
+        self._time = None # acquisition time (second from epoch)
+
+        if self._file_path:
+            self._file_name = os.path.basename(self._file_path)
+            self._path = os.path.dirname(self._file_path)
+            self._time = os.stat(self._file_path).st_ctime
 
         # TODO: settings of the instruments for the acquisition?
         # Might be per stream
+
+        self.meta_data = meta_data or {}
+
+    @property
+    def file_path(self):
+        return self._file_path
+
+    @property
+    def file_name(self):
+        return self._file_name
+
+    @property
+    def path(self):
+        return self._path
 
 MAX_SAFE_MOVE_DISTANCE = 10e-3 # 1 cm
 class MicroscopeView(object):

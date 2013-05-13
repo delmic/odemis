@@ -63,8 +63,8 @@ class OdemisGUIApp(wx.App):
         try:
             driver.speedUpPyroConnect(model.getMicroscope())
         except Exception:
-            logging.exception("Failed to speed up start up")    
-        
+            logging.exception("Failed to speed up start up")
+
         # Output catcher using a helper class
         wx.App.outputWindowClass = OdemisOutputWindow
 
@@ -218,7 +218,10 @@ class OdemisGUIApp(wx.App):
             logging.debug("Frame will be displayed soon")
         except Exception:  #pylint: disable=W0703
             self.excepthook(*sys.exc_info())
-            #raise
+            # Re-raise the exception, so the program will exit. If this is not
+            # done and exception will prevent the GUI from being shown, while
+            # the program keeps running in the background.
+            raise
 
 
     def init_config(self):
@@ -412,7 +415,7 @@ see http://www.fluorophores.org/disclaimer/.
 
         try:
             # Put cleanup actions here (like disconnect from odemisd)
-            
+
             # TODO: move to tab controller?
             # Stop live view
             mtc = get_main_tab_controller()

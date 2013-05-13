@@ -159,15 +159,15 @@ class SettingsPanel(object):
         self._main_sizer = wx.BoxSizer()
         self._gb_sizer = wx.GridBagSizer(0, 0)
 
+        self._gb_sizer.Add(wx.StaticText(self.panel, -1, default_msg), (0, 1))
+
         self.panel.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_DIS)
-        self._gb_sizer.Add(wx.StaticText(self.panel, -1, default_msg),
-                        (0, 1))
         self.panel.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR)
 
         self.panel.SetSizer(self._main_sizer)
         self._main_sizer.Add(self._gb_sizer,
                              proportion=1,
-                             flag=wx.RIGHT | wx.LEFT | wx.EXPAND,
+                             flag=wx.ALL | wx.EXPAND,
                              border=5)
 
         self.fold_panel.add_item(self.panel)
@@ -607,7 +607,7 @@ class SettingsPanel(object):
     def add_axis(self, name, comp, conf=None):
         """
         Add a widget to the setting panel to control an axis
-        
+
         :param name: (string): name of the axis
         :param comp: (Component): the component that contains this axis
         :param conf: ({}): Configuration items that may override default settings
@@ -678,6 +678,9 @@ class AngularSettingsPanel(SettingsPanel):
     pass
 
 class SpectrumSettingsPanel(SettingsPanel):
+    pass
+
+class FileInfoSettingsPanel(SettingsPanel):
     pass
 
 class SettingsBarController(object):
@@ -753,7 +756,9 @@ class SecomSettingsController(SettingsBarController):
 
         # Query Odemis daemon (Should move this to separate thread)
         if microscope_model.ccd:
-            self.add_component("Camera", microscope_model.ccd, self._optical_panel)
+            self.add_component("Camera",
+                                microscope_model.ccd,
+                                self._optical_panel)
         # TODO allow to change light.power
 
         if microscope_model.ebeam:
@@ -830,7 +835,7 @@ class SparcSettingsController(SettingsBarController):
                         microscope_model.spectrograph.grating,
                         microscope_model.spectrograph,
                         CONFIG["spectrograph"]["grating"])
-                    
+
         else:
             parent_frame.fp_settings_sparc_spectrum.Hide()
 
@@ -853,3 +858,28 @@ class SparcSettingsController(SettingsBarController):
 
         else:
             parent_frame.fp_settings_sparc_angular.Hide()
+
+
+
+class AnalysiSettingsController(SettingsBarController):
+
+    def __init__(self, parent_frame, microscope_model):
+        super(AnalysiSettingsController, self).__init__(microscope_model)
+
+        self._file_panel = FileInfoSettingsPanel(
+                                    parent_frame.fp_sparc_file_info,
+                                    "No file loaded")
+
+        microscope_model.fileinfo.subscribe(self.on_fileinfo_change, init=True)
+
+    def on_fileinfo_change(self, fi):
+        """ Update the data we wish to display from the FileInfo object """
+        if fi:
+            self._file_panel.add_label("File", fi.file_name)
+            self._file_panel.add_label("Path", fi.path)
+
+            for label, value in fi.meta_data.iteritems():
+                self._file_panel.add_label(label, value)
+
+
+
