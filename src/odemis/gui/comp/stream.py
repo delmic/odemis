@@ -1412,6 +1412,11 @@ class StreamBar(wx.Panel):
         wx.CallAfter(spanel.Destroy)
         self._set_warning()
 
+    def clear(self):
+        """ Remove all stream panels """
+        for p in list(self.stream_panels):
+            self.remove_stream_panel(p)
+
     def _set_warning(self):
         """ Display a warning text when no streams are present, or show it
         otherwise.

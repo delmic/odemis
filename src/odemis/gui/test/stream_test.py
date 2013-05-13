@@ -7,15 +7,15 @@ Copyright © 2012 Rinze de Laat, Delmic
 This file is part of Odemis.
 
 Odemis is free software: you can redistribute it and/or modify it under the
-terms of xthe GNU General Public License as published by the Free Software
-Foundation, either version 2 of xthe License, or (at your option) any later
+terms of the GNU General Public License as published by the Free Software
+Foundation, either version 2 of the License, or (at your option) any later
 version.
 
 Odemis is distributed in the hope that it will be useful, but WITHOUT ANY
 WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
 PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of xthe GNU General Public License along with
+You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
@@ -84,7 +84,10 @@ class FakeSpectrumStream(stream_mod.StaticSpectrumStream):
         self.bandwidth = model.FloatContinuous(max_bw / 12,
                                                range=(pixel_width, max_bw),
                                                unit="m")
-    def _updateImage(self, tint=(255, 255, 255)):
+
+        self.fitToRGB = model.BooleanVA(True)
+
+    def _updateImage(self, tint=(255, 255, 255)):  #pylint: disable=W0221
         pass
 
     def onActive(self, active):
@@ -195,7 +198,7 @@ class FoldPanelBarTestCase(unittest.TestCase):
             print "."*indent, child.__class__.__name__
             cls.dump_win_tree(child, indent + 2)
 
-    def xtest_expander(self):
+    def test_expander(self):
 
         loop()
         wx.MilliSleep(SLEEP_TIME)
@@ -291,14 +294,12 @@ class FoldPanelBarTestCase(unittest.TestCase):
 
         # Clear remainging streams
         wx.MilliSleep(SLEEP_TIME)
-        # internal access to avoid reseting the whole window
-        for e in list(self.frm.stream_bar.stream_panels):
-            self.frm.stream_bar.remove_stream_panel(e)
+        self.frm.stream_bar.clear()
         loop()
 
         self.assertEqual(self.frm.stream_bar.get_size(), 0)
 
-    def xtest_standardexpander(self):
+    def test_standardexpander(self):
 
         mic_mod = FakeMicroscopeModel()
         _ = StreamController(mic_mod, self.frm.stream_bar)
@@ -345,18 +346,14 @@ class FoldPanelBarTestCase(unittest.TestCase):
 
         self.assertEqual(old_vbtn_pos, new_vbtn_pos)
 
-        return
-
         # Clear remainging streams
         wx.MilliSleep(SLEEP_TIME)
-        # internal access to avoid reseting the whole window
-        for e in list(self.frm.stream_bar.stream_panels):
-            self.frm.stream_bar.remove_stream_panel(e)
+        self.frm.stream_bar.clear()
         loop()
 
         self.assertEqual(self.frm.stream_bar.get_size(), 0)
 
-    def xtest_dyeexpander(self):
+    def test_dyeexpander(self):
 
         mic_mod = FakeMicroscopeModel()
         _ = StreamController(mic_mod, self.frm.stream_bar)
@@ -402,9 +399,7 @@ class FoldPanelBarTestCase(unittest.TestCase):
 
         # Clear remainging streams
         wx.MilliSleep(SLEEP_TIME)
-        # internal access to avoid reseting the whole window
-        for e in list(self.frm.stream_bar.stream_panels):
-            self.frm.stream_bar.remove_stream_panel(e)
+        self.frm.stream_bar.clear()
         loop()
 
         self.assertEqual(self.frm.stream_bar.get_size(), 0)
@@ -422,7 +417,7 @@ class FoldPanelBarTestCase(unittest.TestCase):
         self.frm.stream_bar.add_stream(stream_panel)
         loop()
 
-    def xtest_stream_interface(self):
+    def test_stream_interface(self):
 
         loop()
         wx.MilliSleep(SLEEP_TIME)
@@ -506,14 +501,12 @@ class FoldPanelBarTestCase(unittest.TestCase):
 
         # Clear remainging streams
         wx.MilliSleep(SLEEP_TIME)
-        # internal access to avoid reseting the whole window
-        for e in list(self.frm.stream_bar.stream_panels):
-            self.frm.stream_bar.remove_stream_panel(e)
+        self.frm.stream_bar.clear()
         loop()
 
         self.assertEqual(self.frm.stream_bar.get_size(), 0)
 
-    def xtest_add_stream(self):
+    def test_add_stream(self):
 
         loop()
         wx.MilliSleep(SLEEP_TIME)
@@ -576,9 +569,7 @@ class FoldPanelBarTestCase(unittest.TestCase):
 
         # Clear remainging streams
         wx.MilliSleep(SLEEP_TIME)
-        # internal access to avoid reseting the whole window
-        for e in list(self.frm.stream_bar.stream_panels):
-            self.frm.stream_bar.remove_stream_panel(e)
+        self.frm.stream_bar.clear()
         loop()
 
 if __name__ == "__main__":
