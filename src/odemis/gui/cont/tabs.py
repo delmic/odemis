@@ -193,6 +193,7 @@ class SparcAcquisitionTab(Tab):
                                         self.interface_model.ebeam)
             acq_view.addStream(spec_stream)
             self._roi_streams.append(spec_stream)
+            spec_stream.roi.subscribe(self.onSpecROI)
             self._spec_stream = spec_stream
 
         if self.interface_model.ccd:
@@ -203,6 +204,7 @@ class SparcAcquisitionTab(Tab):
                                 self.interface_model.ebeam)
             acq_view.addStream(ar_stream)
             self._roi_streams.append(ar_stream)
+            ar_stream.roi.subscribe(self.onARROI)
             self._ar_stream = ar_stream
 
         # indicate ROI must still be defined by the user
@@ -261,6 +263,19 @@ class SparcAcquisitionTab(Tab):
         """
         for s in self._roi_streams:
             s.roi.value = roi
+
+    def onSpecROI(self, roi):
+        """
+        called when the Spectrometer roi is changed
+        """
+        # TODO: update SEM CL ROI (aka ROA)
+        # if only one stream
+        pass
+
+    def onARROI(self, roi):
+        # TODO: update SEM CL ROI (aka ROA)
+        # if only one stream
+        pass
 
 class AnalysisTab(Tab):
 
