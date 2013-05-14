@@ -34,13 +34,13 @@ from odemis.gui.model.img import InstrumentalImage
 from odemis.model import VigilantAttribute, MD_POS, MD_PIXEL_SIZE, \
     MD_SENSOR_PIXEL_SIZE, MD_WL_POLYNOMIAL
 import logging
+import math
 import numpy
 import odemis.gui.util.conversion as conversion
 import odemis.gui.util.img as img
 import odemis.gui.util.units as units
 import odemis.model as model
 import threading
-from odemis.model._dataflow import MD_PIXEL_SIZE
 
 
 # to identify a ROI which must still be defined by the user
@@ -565,20 +565,190 @@ class SpectrumStream(Stream):
         # all the information needed to acquire an image (in addition to the
         # hardware component settings which can be directly set).
 
+        # ROI + repetition is sufficient, but pixel size is nicer for the user
+        # and allow us to ensure each pixel is square. (Non-square pixels are
+        # not a problem for the hardware, but annoying to display data in normal
+        # software).
+
+        # We ensure in the setters that all the data is always consistent:
+        # roi set: roi + pxs → repetition + roi
+        # pxs set: roi + pxs → repetition + roi (small changes)
+        # repetition set: repetition + roi + pxs → repetition + pxs + roi (small changes)
+
         # Region of interest as left, top, right, bottom (in ratio from the
         # whole area of the emitter => between 0 and 1)
         self.roi = model.TupleContinuous((0, 0, 1, 1),
                                          range=[(0, 0, 0, 0), (1, 1, 1, 1)],
-                                         cls=(int, long, float))
+                                         cls=(int, long, float),
+                                         setter=self._setROI)
         # the number of pixels acquired in each dimension
         # it will be assigned to the resolution of the emitter (but cannot be
         # directly set, as one might want to use the emitter while configuring
         # the stream).
         self.repetition = model.ResolutionVA(emitter.resolution.value,
-                                             emitter.resolution.range)
+                                             emitter.resolution.range,
+                                             setter=self._setRepetition)
+
+        # the size of the pixel, horizontally and vertically
+        # actual range is dynamic, as it changes with the magnification
+        self.pixelSize = model.FloatContinuous(emitter.pixelSize.value[0],
+                           range=[0, 1], unit="m", setter=self._setPixelSize)
 
         # exposure time of each pixel is the exposure time of the detector,
         # the dwell time of the emitter will be adapted before acquisition.
+
+
+    def _updateROIAndPixelSize(self, roi, pxs):
+        """
+        roi : ROI wanted (might be slightly changed)
+        pxs (float): new pixel size (must be within allowed range, always respected)
+        Returns new ROI and repetition, but set internal value of .roi and .repetition, without
+         notify 
+        """
+        # If ROI is undefined => everything is fine
+        if roi == UNDEFINED_ROI:
+            return roi, self.repetition.value
+
+        epxs = self.emitter.pixelSize.value
+        eshape = self.emitter.shape
+        phy_size = [epxs[0] * eshape[0], epxs[1] * eshape[1]] # max physical ROI
+
+        # find maximum repetition
+        roi_size = [roi[2] - roi[0], roi[3] - roi[1]]
+        max_rep = [max(1, math.ceil(eshape[0] * roi_size[0])),
+                   max(1, math.ceil(eshape[1] * roi_size[1]))]
+
+        # compute the repetition (ints) that fits the ROI with the pixel size
+        rep = [round(phy_size[0] * roi_size[0] / pxs),
+               round(phy_size[1] * roi_size[1] / pxs)]
+        rep = [int(max(1, min(rep[0], max_rep[0]))),
+               int(max(1, min(rep[1], max_rep[1])))]
+
+        # update the ROI so that it's _exactly_ pixel size * repetition,
+        # while keeping its center fixed
+        roi_center = [(roi[0] + roi[2]) / 2,
+                      (roi[1] + roi[3]) / 2]
+        roi_size = [rep[0] * pxs / phy_size[0],
+                    rep[1] * pxs / phy_size[1]]
+        roi = [roi_center[0] - roi_size[0] / 2,
+               roi_center[1] - roi_size[1] / 2,
+               roi_center[0] + roi_size[0] / 2,
+               roi_center[1] + roi_size[1] / 2]
+
+        # shift the ROI if it's now slightly outside the possible area
+        if roi[0] < 0:
+            roi[2] += roi[0]
+            roi[0] = 0
+        elif roi[2] > 1:
+            roi[0] -= roi[2] - 1
+            roi[2] = 1
+
+        if roi[1] < 0:
+            roi[3] += roi[1]
+            roi[1] = 0
+        elif roi[3] > 1:
+            roi[1] -= roi[3] - 1
+            roi[3] = 1
+
+        return roi, rep
+
+    def _setROI(self, roi):
+        """
+        Ensures that the ROI is always an exact number of pixels, and update
+         repetition to be the correct number of pixels
+        roi (tuple of 4 floats)
+        returns (tuple of 4 floats): new ROI
+        """
+        roi, rep = self._updateROIAndPixelSize(roi, self.pixelSize.value)
+        # update repetition without going through the checks
+        self.repetition._value = rep
+        self.repetition.notify(rep)
+
+        return roi
+
+    def _setPixelSize(self, pxs):
+        """
+        Ensures pixel size is within the current allowed range, and updates
+         ROI and repetition.
+        return (float): new pixel size
+        """
+        # clamp
+        pxs_range = self._getPixelSizeRange()
+        pxs = max(pxs_range[0], min(pxs, pxs_range[1]))
+
+        roi, rep = self._updateROIAndPixelSize(self.roi.value, pxs)
+
+        # update roi and rep without going through the checks
+        self.roi._value = roi
+        self.roi.notify(roi)
+        self.repetition._value = rep
+        self.repetition.notify(rep)
+
+        return pxs
+
+    def _setRepetition(self, repetition):
+        """
+        Find a fitting repetition and update pixel size and ROI, using the 
+         current ROI making sure that the repetition is ints (pixelSize and roi 
+        changes are notified but the setter is not called).
+        repetition (tuple of 2 ints): new repetition wanted (might be clamped)
+        returns (tuple of 2 ints): new (valid) repetition
+        """
+        roi = self.roi.value
+        # If ROI is undefined => everything is fine
+        if roi == UNDEFINED_ROI:
+            return repetition
+
+        prev_rep = self.repetition.value
+        epxs = self.emitter.pixelSize.value
+        eshape = self.emitter.shape
+
+        # The basic principle is that the ROI stays the same, and the pixel size
+        # is modified to fit the repetition. So it's basically an indirect way
+        # to change the pixel size.
+
+        # clamp horizontal repetition to be sure it's correct
+        max_full_rep = self.repetition.range[1] # same as emitter.shape
+        roi_size = [roi[2] - roi[0], roi[3] - roi[1]]
+        max_rep = [max(1, math.ceil(max_full_rep[0] * roi_size[0])),
+                   max(1, math.ceil(max_full_rep[1] * roi_size[1]))]
+
+        repetition = [min(repetition[0], max_rep[0]),
+                      min(repetition[1], max_rep[1])]
+
+        # update the pixel size according to horizontal or vertical repetition,
+        # depending on what the user "asked" (changed)
+        if prev_rep[0] == repetition[0]:
+            # TODO: move the computations inside
+            pxs = (epxs[1] * roi_size[1] * eshape[1]) / repetition[1]
+        else:
+            pxs = (epxs[0] * roi_size[0] * eshape[0]) / repetition[0]
+
+        # TODO: is this sufficient to adapt correctly H or V? might need change in ROI
+        roi, rep = self._updateROIAndPixelSize(roi, pxs)
+        # update roi and pixel size without going through the checks
+        self.roi._value = roi
+        self.roi.notify(roi)
+        self.pixelSize._value = pxs
+        self.pixelSize.notify(pxs)
+
+        return rep
+
+    def _getPixelSizeRange(self):
+        """
+        return (tuple of floats): min and max value of the pixel size at the 
+          current magnification, in m.
+        """
+        # Two things to take care of:
+        # * current pixel size of the emitter (which depends on the magnification)
+        # * merge horizontal/vertical dimensions into one fits-all
+
+        # The current emitter pixel size is the minimum size
+        epxs = self.emitter.pixelSize.value
+        min_pxs = max(epxs)
+        shape = self.emitter.shape
+        max_pxs = min(epxs[0] * shape[0], epxs[1] * shape[1])
+        return (min_pxs, max_pxs)
 
     def estimateAcquisitionTime(self):
         try:

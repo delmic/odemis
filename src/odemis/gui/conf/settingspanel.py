@@ -256,11 +256,18 @@ CONFIG = {
                 {
                     "control_type": odemis.gui.CONTROL_NONE,
                 },
+            },
+            "streamspec":
+            {
                 # VAs from the stream, temporarily here
                 "repetition":
                 {
                     "control_type": odemis.gui.CONTROL_COMBO,
                     "choices": _resolution_from_range,
+                },
+               "pixelSize":
+                {
+                    "control_type": odemis.gui.CONTROL_FLT,
                 },
                 # For testing purposes only, roi must be hidden in production
                 "roi":

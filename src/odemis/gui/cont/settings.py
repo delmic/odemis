@@ -808,14 +808,21 @@ class SparcSettingsController(SettingsBarController):
                         "repetition",
                         s.repetition,
                         None,  #component
-                        CONFIG["spectrometer"]["repetition"])
+                        CONFIG["streamspec"]["repetition"])
+
+                # Added for debug only
+                self._spectrum_panel.add_value(
+                        "pixelSize",
+                        s.pixelSize,
+                        None,  #component
+                        CONFIG["streamspec"]["pixelSize"])
 
                 # Added for debug only
                 self._spectrum_panel.add_value(
                         "roi",
                         s.roi,
                         None,  #component
-                        CONFIG["spectrometer"]["roi"])
+                        CONFIG["streamspec"]["roi"])
 
             # Add spectrograph control if available
             if microscope_model.spectrograph:
@@ -854,7 +861,7 @@ class SparcSettingsController(SettingsBarController):
                         "repetition",
                         s.repetition,
                         None,  #component
-                        CONFIG["spectrometer"]["repetition"])
+                        CONFIG["streamspec"]["repetition"])
 
         else:
             parent_frame.fp_settings_sparc_angular.Hide()
