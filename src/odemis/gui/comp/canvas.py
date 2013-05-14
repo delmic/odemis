@@ -32,7 +32,7 @@ import time
 
 import cairo
 import wx
-import wx.lib.wxcairo
+import wx.lib.wxcairo as wxcairo
 
 import odemis.gui.img.data as imgdata
 
@@ -57,7 +57,7 @@ import odemis.gui.img.data as imgdata
 #     UpdateDrawing
 #         Draw(dc_buffer)
 #             _DrawMergedImages
-#                 _DrawImageTransparentRescaled
+#                 _DrawImage
 #                     _RescaleImageOptimized
 #         Refresh/Update
 #
@@ -522,49 +522,64 @@ class DraggableCanvas(wx.Panel):
     # TODO: see if with Numpy it's faster (~less memory copy),
     # cf http://wiki.wxpython.org/WorkingWithImages
     # Could also see gdk_pixbuf_composite()
-    def _RescaleImageOptimized(self, dc, im, scale, center):
+    def _RescaleImageOptimized(self, dc_buffer, im, scale, center):
         """Rescale an image considering it will be displayed on the buffer
 
-        Does not modify the original image
-        scale: the scale of the picture to fit the world
-        center: position of the image in world coordinates
-        return a tuple of
+        *IMPORTANT*: The origin (0, 0) of the dc_buffer is in the center!
+
+        Does not modify the original image.
+
+        :param scale: the scale of the picture to fit the world
+        :param center: position of the image in world coordinates
+        :return: a (wx.Image, (x, y)) tuple of
            * a copy of the image rescaled, it can be of any size
            * a 2-tuple representing the top-left point on the buffer coordinate
         """
-        full_rect = self._GetImageRectOnBuffer(dc, im, scale, center)
+
+        # The buffer area the image would occupy.
+        buff_rect = self._GetImageRectOnBuffer(dc_buffer, im, scale, center)
+
+        # Combine the zoom and image scales.
         total_scale = scale * self.scale
+
         if total_scale == 1.0:
             # TODO: should see how to avoid (it slows down quite a bit)
             ret = im.Copy()
-            tl = full_rect[0:2]
+            tl = buff_rect[0:2]
         elif total_scale < 1.0:
             # Scaling to values smaller than 1.0 was throwing exceptions
-            w, h = full_rect[2:4]
+            w, h = buff_rect[2:4]
             if w >= 1 and h >= 1:
                 logging.debug("Scaling to %s, %s", w, h)
-                ret = im.Scale(*full_rect[2:4])
-                tl = full_rect[0:2]
+                ret = im.Scale(*buff_rect[2:4])
+                tl = buff_rect[0:2]
             else:
-                logging.warn("Illegal image scale %s, %s", w, h)
+                logging.warn("Illegal image scale %s for size %s, %s",
+                             total_scale,
+                             w,
+                             h)
                 return (None, None)
         elif total_scale > 1.0:
             # We could end-up with a lot of the up-scaling useless, so crop it
             orig_size = im.GetSize()
+
             # where is the buffer in the world?
-            buffer_rect = (dc.DeviceToLogicalX(0),
-                           dc.DeviceToLogicalY(0),
+            buffer_rect = (dc_buffer.DeviceToLogicalX(0),
+                           dc_buffer.DeviceToLogicalY(0),
                            self._bmp_buffer_size[0],
                            self._bmp_buffer_size[1])
-            goal_rect = wx.IntersectRect(full_rect, buffer_rect)
+
+            goal_rect = wx.IntersectRect(buff_rect, buffer_rect)
+
             if not goal_rect: # no intersection
                 return (None, None)
 
             # where is this rect in the original image?
-            unsc_rect = ((goal_rect[0] - full_rect[0]) / total_scale,
-                             (goal_rect[1] - full_rect[1]) / total_scale,
-                             goal_rect[2] / total_scale,
-                             goal_rect[3] / total_scale)
+            unsc_rect = ((goal_rect[0] - buff_rect[0]) / total_scale,
+                         (goal_rect[1] - buff_rect[1]) / total_scale,
+                          goal_rect[2] / total_scale,
+                          goal_rect[3] / total_scale)
+
             # Note that width and length must be "double rounded" to account
             # for the round down of the origin and round up of the bottom left
             unsc_rnd_rect = (
@@ -574,17 +589,14 @@ class DraggableCanvas(wx.Panel):
                 math.ceil(unsc_rect[1] + unsc_rect[3]) - int(unsc_rect[1])
                 )
 
-            # FIXME: seems to trigger when image doesn't fit the screen (too zoomed in)?
-            # regression from ~2013-05-03?
-            # the bottom right should still fit in the image
-            assert(unsc_rnd_rect[0] + unsc_rnd_rect[2] < orig_size[0])
-            assert(unsc_rnd_rect[1] + unsc_rnd_rect[3] < orig_size[1])
+            assert(unsc_rnd_rect[0] + unsc_rnd_rect[2] <= orig_size[0])
+            assert(unsc_rnd_rect[1] + unsc_rnd_rect[3] <= orig_size[1])
 
             imcropped = im.GetSubImage(unsc_rnd_rect)
 
             # like goal_rect but taking into account rounding
-            final_rect = ((unsc_rnd_rect[0] * total_scale) + full_rect[0],
-                          (unsc_rnd_rect[1] * total_scale) + full_rect[1],
+            final_rect = ((unsc_rnd_rect[0] * total_scale) + buff_rect[0],
+                          (unsc_rnd_rect[1] * total_scale) + buff_rect[1],
                           int(unsc_rnd_rect[2] * total_scale),
                           int(unsc_rnd_rect[3] * total_scale))
 
@@ -599,12 +611,15 @@ class DraggableCanvas(wx.Panel):
             ret = imcropped.Rescale(*final_rect[2:4])
             # need to save it as the cropped part is not centred anymore
             tl = final_rect[0:2]
+
         return (ret, tl)
 
-    def _GetImageRectOnBuffer(self, dc, im, scale, center):
-        """
-        Computes the rectangle containing the image on the buffer coordinates
-        return rect (4-tuple of floats)
+    def _GetImageRectOnBuffer(self, dc_buffer, im, scale, center):
+        """ Computes the rectangle containing the image in buffer coordinates.
+
+        *IMPORTANT*: The origin (0, 0) of the dc_buffer is in the center!
+
+        :return: (float, float, float, float) top-left and size
         """
         # There are two scales:
         # * the scale of the image (dependent on the size of what the image
@@ -614,6 +629,7 @@ class DraggableCanvas(wx.Panel):
         size = im.GetSize()
 
         actual_size = size[0] * scale, size[1] * scale
+
         tl_unscaled = (center[0] - (actual_size[0] / 2),
                        center[1] - (actual_size[1] / 2))
 
@@ -623,8 +639,11 @@ class DraggableCanvas(wx.Panel):
         self.world_image_area = (tl_unscaled, br_unscaled)
 
         tl = self.world_to_buffer_pos(tl_unscaled)
+
+        # scale according to zoom
         final_size = (actual_size[0] * self.scale,
                       actual_size[1] * self.scale)
+
         return tl + final_size
 
     @staticmethod
@@ -638,40 +657,43 @@ class DraggableCanvas(wx.Panel):
         )
         ctypes.memset(data, value, size.value)
 
-    def _DrawImageTransparentRescaled(self, dc, im, center, ratio=1.0, scale=1.0):
+    def _DrawImage(self, dc_buffer, im, center, opacity=1.0, scale=1.0):
+        """ Draws one image with the given scale and opacity on the dc_buffer.
+
+        *IMPORTANT*: The origin (0, 0) of the dc_buffer is in the center!
+
+        :param dc_buffer: (wx.DC) Device context to draw on
+        :param im: (wx.Image) Image to draw
+        :param center: (2-tuple float)
+        :param opacity: (float) [0..1] => [transparent..opaque]
+        :param scale: (float)
         """
-        Draws one image with the given scale and opacity on the dc
-        dc wx.DC
-        im wx.Image
-        center (2-tuple float)
-        ratio (float)
-        scale (float)
-        """
-        if ratio <= 0.0:
+
+        if opacity <= 0.0:
             return
 
-        imscaled, tl = self._RescaleImageOptimized(dc, im, scale, center)
+        imscaled, tl = self._RescaleImageOptimized(dc_buffer, im, scale, center)
+
         if not imscaled:
             return
 
-        if ratio < 1.0:
-            # im2merged = im2scaled.AdjustChannels(1.0,1.0,1.0,ratio)
+        if opacity < 1.0:
+            # im2merged = im2scaled.AdjustChannels(1.0,1.0,1.0,opacity)
             # TODO: Check if we could speed up by caching the alphabuffer
             abuf = imscaled.GetAlphaBuffer()
-            self.memsetObject(abuf, int(255 * ratio))
+            self.memsetObject(abuf, int(255 * opacity))
 
         # TODO: the conversion from Image to Bitmap should be done only once,
         # after all the images are merged
-        dc.DrawBitmapPoint(wx.BitmapFromImage(imscaled), tl)
+        dc_buffer.DrawBitmapPoint(wx.BitmapFromImage(imscaled), tl)
 
     def _draw_background(self, dc):
         """ TODO: make it fixed or at least create a compensating offset after
         dragging to prevent 'jumps', cache image etc.
         """
-        ctx = wx.lib.wxcairo.ContextFromDC(dc)
+        ctx = wxcairo.ContextFromDC(dc)
 
-        # image = cairo.ImageSurface.create_from_png("src/odemis/gui/img/canvasbg.png")
-        image = wx.lib.wxcairo.ImageSurfaceFromBitmap(imgdata.getcanvasbgBitmap())
+        image = wxcairo.ImageSurfaceFromBitmap(imgdata.getcanvasbgBitmap())
         pattern = cairo.SurfacePattern(image)
         pattern.set_extend(cairo.EXTEND_REPEAT)
         ctx.set_source(pattern)
@@ -693,17 +715,20 @@ class DraggableCanvas(wx.Panel):
 
 
     def _DrawMergedImages(self, dc_buffer, images, mergeratio=0.5):
-        """ Draw the two images on the DC, centred around their _dc_center, with
-        their own scale and an opacity of "mergeratio" for im1.
+        """ Draw the two images on the buffer DC, centred around their
+        _dc_center, with their own scale and an opacity of "mergeratio" for im1.
+
+        *IMPORTANT*: The origin (0, 0) of the dc_buffer is in the center!
 
         Both _dc_center's should be close in order to have the parts with only
         one picture drawn without transparency
 
-        :param dc_buffer: (wx.DC) The buffer device context which will be drawn to
+        :param dc_buffer: (wx.DC) The buffer device context which will be drawn
+            to
         :param images: (list of wx.Image): The images to be drawn or a list with
             a sinle 'None' element.
-        :parma mergeratio: (float [0..1]): How to merge the images (between 1st and
-            all others)
+        :parma mergeratio: (float [0..1]): How to merge the images (between 1st
+            and all others)
         :parma scale: (float > 0): the scaling of the images in addition to
             their own scale.
 
@@ -719,8 +744,8 @@ class DraggableCanvas(wx.Panel):
         self._draw_background(dc_buffer)
 
         # The idea:
-        # * display the first image (SEM) last, with the given mergeratio (or 1 if
-        #   it's the only one)
+        # * display the first image (SEM) last, with the given mergeratio (or 1
+        #   if it's the only one)
         # * display all the other images (fluo) as if they were average
         #   N images -> mergeratio = 1-0/N, 1-1/N,... 1-(N-1)/N
 
@@ -730,7 +755,7 @@ class DraggableCanvas(wx.Panel):
 
         for i, im in enumerate(fluo): # display the fluo images first
             r = 1.0 - i / float(nb_fluo)
-            self._DrawImageTransparentRescaled(
+            self._DrawImage(
                 dc_buffer,
                 im,
                 im._dc_center,
@@ -743,7 +768,7 @@ class DraggableCanvas(wx.Panel):
                 continue
             if nb_fluo == 0:
                 mergeratio = 1.0 # no transparency if it's alone
-            self._DrawImageTransparentRescaled(
+            self._DrawImage(
                 dc_buffer,
                 im,
                 im._dc_center,
@@ -853,22 +878,22 @@ def buffer_to_view_pos(buffer_pos, margins):
 
 # View <-> World
 
-def view_to_world_pos(view_pos, world_buffer_center, margins, scale, offset=None):
+def view_to_world_pos(view_pos, world_buff_cent, margins, scale, offset=None):
     """ This function assumes that the origins of the various coordinate systems
     are *not* aligned."""
 
     return buffer_to_world_pos(
                 view_to_buffer_pos(view_pos, margins),
-                world_buffer_center,
+                world_buff_cent,
                 scale,
                 offset
     )
 
-def world_to_view_pos(world_pos, world_buffer_center, margins, scale, offset=None):
+def world_to_view_pos(world_pos, world_buff_cent, margins, scale, offset=None):
 
     return buffer_to_view_pos(
-                world_to_buffer_pos(world_pos, world_buffer_center, scale, offset),
-                margins
+            world_to_buffer_pos(world_pos, world_buff_cent, scale, offset),
+            margins
     )
 
 
