@@ -637,14 +637,14 @@ class SpectrumStream(Stream):
 
         # shift the ROI if it's now slightly outside the possible area
         if roi[0] < 0:
-            roi[2] += roi[0]
+            roi[2] -= roi[0]
             roi[0] = 0
         elif roi[2] > 1:
             roi[0] -= roi[2] - 1
             roi[2] = 1
 
         if roi[1] < 0:
-            roi[3] += roi[1]
+            roi[3] -= roi[1]
             roi[1] = 0
         elif roi[3] > 1:
             roi[1] -= roi[3] - 1

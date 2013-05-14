@@ -802,7 +802,7 @@ class SparcSettingsController(SettingsBarController):
 
             self._spectrum_panel.add_divider()
             spectrum_streams = [s for s in acq_streams if isinstance(s, SpectrumStream)]
-            assert spectrum_streams # there should be just one
+            assert len(spectrum_streams) <= 1 # there should be one or none
             for s in spectrum_streams:
                 self._spectrum_panel.add_value(
                         "repetition",
@@ -855,7 +855,7 @@ class SparcSettingsController(SettingsBarController):
 
             self._angular_panel.add_divider()
             ar_streams = [s for s in acq_streams if isinstance(s, ARStream)]
-            assert ar_streams # there should be just one
+            assert len(ar_streams) <= 1 # there should be one or none
             for s in ar_streams:
                 self._angular_panel.add_value(
                         "repetition",

@@ -185,6 +185,10 @@ class SparcAcquisitionTab(Tab):
         acq_view.addStream(semcl_stream)
         self._sem_cl_stream = semcl_stream
 
+        # TODO: link the Spectrometer/Angle resolved buttons to add/remove the
+        # streams. Both from the setting panels, the acquisition view and
+        # from ._roi_streams .
+
         if self.interface_model.spectrometer:
             spec_stream = SpectrumStream(
                                         "Spectrum",
@@ -193,6 +197,7 @@ class SparcAcquisitionTab(Tab):
                                         self.interface_model.ebeam)
             acq_view.addStream(spec_stream)
             self._roi_streams.append(spec_stream)
+            spec_stream.roi.subscribe(self.onSpecROI)
             self._spec_stream = spec_stream
 
         if self.interface_model.ccd:
@@ -203,6 +208,7 @@ class SparcAcquisitionTab(Tab):
                                 self.interface_model.ebeam)
             acq_view.addStream(ar_stream)
             self._roi_streams.append(ar_stream)
+            ar_stream.roi.subscribe(self.onARROI)
             self._ar_stream = ar_stream
 
         # indicate ROI must still be defined by the user
@@ -225,18 +231,22 @@ class SparcAcquisitionTab(Tab):
                                         self.interface_model,
                                     )
 
+        # FIXME: for now we disable the AR from the acquisition view, because we
+        # don't want to always acquire it, so we never acquire it. The good way
+        # is to add/remove the stream according to the "instrument" state, in the
+        # microscope controller.
+        # We always create ar_stream because the setting controller needs to
+        # initialise the widgets with it.
+        if self._ar_stream:
+            self._roi_streams.remove(ar_stream)
+            acq_view.removeStream(ar_stream)
+
         # needs settings_controller
         self._acquisition_controller = SparcAcquiController(
                                             self.main_frame,
                                             self.interface_model,
                                             self.settings_controller
                                        )
-
-        # FIXME: for now we disable the AR from the acquisition view, because we
-        # don't want to always acquire it, so we never acquire it. The good way
-        # is to add/remove the stream according to the "instrument" state, in the
-        # microscope controller
-        acq_view.removeStream(ar_stream)
 
         # Turn on the live SEM stream
         self.interface_model.emState.value = STATE_ON
@@ -259,8 +269,34 @@ class SparcAcquisitionTab(Tab):
         """
         called when the SEM CL roi (region of acquisition) is changed
         """
+        # Updating the ROI requires a bit of care, because the streams might
+        # update back their ROI with a modified value. It should normally
+        # converge, but we must absolutely ensure it will never cause infinite
+        # loops.
         for s in self._roi_streams:
             s.roi.value = roi
+
+    def onSpecROI(self, roi):
+        """
+        called when the Spectrometer roi is changed
+        """
+        # if only one stream => copy to ROI, otherwise leave it as is
+        if len(self._roi_streams) == 1 and self._spec_stream in self._roi_streams:
+            # unsubscribe to be sure it won't call us back directly
+            self._sem_cl_stream.roi.unsubscribe(self.onROI)
+            self._sem_cl_stream.roi.value = roi
+            self._sem_cl_stream.roi.subscribe(self.onROI)
+
+    def onARROI(self, roi):
+        """
+        called when the Angle resolved roi is changed
+        """
+        # if only one stream => copy to ROI, otherwise leave it as is
+        if len(self._roi_streams) == 1 and self._ar_stream in self._roi_streams:
+            # unsubscribe to be sure it won't call us back directly
+            self._sem_cl_stream.roi.unsubscribe(self.onROI)
+            self._sem_cl_stream.roi.value = roi
+            self._sem_cl_stream.roi.subscribe(self.onROI)
 
 class AnalysisTab(Tab):
 
