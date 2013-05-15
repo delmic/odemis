@@ -190,9 +190,19 @@ class SettingsPanel(object):
                 entry.vac.resume()
 
     def _clear(self):
-        # Remove default 'no content' label
+        """ Remove default 'no content' label """
         if self.num_entries == 0:
-            self.panel.GetChildren()[0].Destroy()
+            cl = self.panel.GetChildren()
+            if cl:
+                cl[0].Destroy()
+
+    def clear(self):
+        """ Remove all entries"""
+        if self.num_entries > 0:
+            for c in self.panel.GetChildren():
+                c.Destroy()
+            self.num_entries = 0
+
 
     def _label_to_human(self, label):
         """ Converts a camel-case label into a human readable one
@@ -881,9 +891,11 @@ class AnalysisSettingsController(SettingsBarController):
 
     def on_fileinfo_change(self, fi):
         """ Update the data we wish to display from the FileInfo object """
-        # FIXME: need to remove the previous labels
+        self._file_panel.clear()
+
         if fi:
             self._file_panel.add_label("File", fi.basename)
+            # TODO: make long path scrollable and right align text
             self._file_panel.add_label("Path", fi.path)
 
             for label, value in fi.metadata.items():

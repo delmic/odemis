@@ -352,18 +352,19 @@ class ActuatorGUIModel(MicroscopeGUIModel):
 class FileInfo(object):
     """
     Represent all the information about a microscope acquisition recorded
-    inside a file. It's mostly aimed at containing information, and its attributes
-    should be considered readonly after initialisation.
+    inside a file. It's mostly aimed at containing information, and its
+    attributes should be considered readonly after initialisation.
     """
 
     def __init__(self, acq_file, metadata=None):
         """
         acq_file (String or File or None): the full name of the file or 
-         the File that contains the acquisition. If provided (and the file 
+         a File that contains the acquisition. If provided (and the file 
          exists), some fields will be automatically filled in.
         metadata (dict String -> value): The meta-data as model.MD_*.
         """
         self._acq_file = None
+
         if isinstance(acq_file, basestring):
             # the name of the file
             self.file_name = acq_file
