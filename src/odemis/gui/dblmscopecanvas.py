@@ -37,6 +37,7 @@ import logging
 import odemis.gui as gui
 import threading
 import time
+import sys
 import wx
 from odemis.model._vattributes import VigilantAttributeBase
 
@@ -151,9 +152,8 @@ class DblMicroscopeCanvas(DraggableCanvas):
                 self.Refresh(eraseBackground=False)
 
     def _convertStreamsToImages(self):
-        """
-        Temporary function to convert the StreamTree to a list of images as the
-            canvas currently expects.
+        """ Temporary function to convert the StreamTree to a list of images as
+        the canvas currently expects.
         """
         streams = self.microscope_view.stream_tree.streams
         # create a list of of each stream's image, but re-ordered so that SEM is
@@ -186,7 +186,7 @@ class DblMicroscopeCanvas(DraggableCanvas):
         if not has_sem_image: # make sure there is always a SEM image
             images.insert(0, None)
 
-        # remove all the images (so that the images deleted go away)
+        # remove all the images (so they can be garbage collected)
         self.Images = [None]
 
         # add the images in order
@@ -222,7 +222,7 @@ class DblMicroscopeCanvas(DraggableCanvas):
             self._updateThumbnail()
             self._lastThumbnailUpdate = now
 
-    # TODO use rate limiting decorator
+    # TODO: use rate limiting decorator
     def _updateThumbnail(self):
         # TODO avoid doing 2 copies, by using directly the wxImage from the
         # result of the StreamTree
@@ -279,7 +279,7 @@ class DblMicroscopeCanvas(DraggableCanvas):
         Adapts the MPP and center to fit to the current content
         recenter (None or boolean): If True, also recenter the view. If None, it
          will try to be clever, and only recenter if no stage is connected, as
-         otherwise, it could cause an unexcepted move. 
+         otherwise, it could cause an unexcepted move.
         """
         # TODO
         # Note: we need 2 different mechanisms: with and without recenter
@@ -441,20 +441,20 @@ class SecomCanvas(DblMicroscopeCanvas):
     def OnLeftDown(self, event):
         # If one of the Secom tools is activated...
         if self.current_mode in SECOM_MODES:
-            pos = event.GetPosition()
-            hover = self.active_overlay.is_hovering(pos)
+            vpos = event.GetPosition()
+            hover = self.active_overlay.is_hovering(vpos)
 
             # Clicked outside selection
             if not hover:
                 self.dragging = True
-                self.active_overlay.start_selection(pos, self.scale)
+                self.active_overlay.start_selection(vpos, self.scale)
                 pub.sendMessage('secom.canvas.zoom.start', canvas=self)
                 if not self.HasCapture():
                     self.CaptureMouse()
             # Clicked on edge
             elif hover != gui.HOVER_SELECTION:
                 self.dragging = True
-                self.active_overlay.start_edit(pos, hover)
+                self.active_overlay.start_edit(vpos, hover)
                 if not self.HasCapture():
                     self.CaptureMouse()
             # Clicked inside selection
@@ -487,17 +487,17 @@ class SecomCanvas(DblMicroscopeCanvas):
 
     def OnMouseMotion(self, event):
         if self.current_mode in SECOM_MODES and self.active_overlay:
-            pos = event.GetPosition()
+            vpos = event.GetPosition()
 
             if self.dragging:
                 if self.active_overlay.dragging:
-                    self.active_overlay.update_selection(pos)
+                    self.active_overlay.update_selection(vpos)
                 else:
-                    self.active_overlay.update_edit(pos)
+                    self.active_overlay.update_edit(vpos)
                 self.ShouldUpdateDrawing()
                 #self.Draw(wx.PaintDC(self))
             else:
-                hover = self.active_overlay.is_hovering(pos)
+                hover = self.active_overlay.is_hovering(vpos)
                 if hover == gui.HOVER_SELECTION:
                     self.SetCursor(wx.StockCursor(wx.CURSOR_MAGNIFIER))
                 elif hover in (gui.HOVER_LEFT_EDGE, gui.HOVER_RIGHT_EDGE):
@@ -569,20 +569,20 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
         # current_mode is set through 'toggle_select_mode', which in
         # turn if activated by a pubsub event
         if self.current_mode in SPARC_MODES:
-            pos = event.GetPosition()
-            hover = self.active_overlay.is_hovering(pos)
+            vpos = event.GetPosition()
+            hover = self.active_overlay.is_hovering(vpos)
 
             # Clicked outside selection
             if not hover or hover == gui.HOVER_SELECTION:
                 self.dragging = True
-                self.active_overlay.start_selection(pos, self.scale)
+                self.active_overlay.start_selection(vpos, self.scale)
                 pub.sendMessage('sparc.acq.select.start', canvas=self)
                 if not self.HasCapture():
                     self.CaptureMouse()
             # Clicked on edge
             elif hover != gui.HOVER_SELECTION:
                 self.dragging = True
-                self.active_overlay.start_edit(pos, hover)
+                self.active_overlay.start_edit(vpos, hover)
                 if not self.HasCapture():
                     self.CaptureMouse()
             self.ShouldUpdateDrawing()
@@ -599,7 +599,7 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
                 if self.HasCapture():
                     self.ReleaseMouse()
                 pub.sendMessage('sparc.acq.select.end')
-                logging.debug("ROA = %s", self.roi_overlay.get_selection_phys())
+                logging.debug("ROA = %s", self.roi_overlay.get_physical_sel())
                 self._updateROA()
                 # force it to redraw the selection, even if the ROA hasn't changed
                 # because the selection is clipped identically
@@ -613,17 +613,17 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
 
     def OnMouseMotion(self, event):
         if self.current_mode in SPARC_MODES and self.active_overlay:
-            pos = event.GetPosition()
+            vpos = event.GetPosition()
 
             if self.dragging:
                 if self.active_overlay.dragging:
-                    self.active_overlay.update_selection(pos)
+                    self.active_overlay.update_selection(vpos)
                 else:
-                    self.active_overlay.update_edit(pos)
+                    self.active_overlay.update_edit(vpos)
                 self.ShouldUpdateDrawing()
                 #self.Draw(wx.PaintDC(self))
             else:
-                hover = self.active_overlay.is_hovering(pos)
+                hover = self.active_overlay.is_hovering(vpos)
                 if hover == gui.HOVER_SELECTION:
                     # No special cusor needed
                     self.SetCursor(self.cursor)
@@ -727,7 +727,7 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
             return
 
         # Get the position of the overlay in physical coordinates
-        phys_rect = self.roi_overlay.get_selection_phys()
+        phys_rect = self.roi_overlay.get_physical_sel()
         if phys_rect is None:
             self._roa.value = UNDEFINED_ROI
             return
@@ -783,5 +783,5 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
                          sem_rect[1] + roi[3] * (sem_rect[3] - sem_rect[1]))
 
         logging.debug("Selection now set to %s", phys_rect)
-        self.roi_overlay.set_selection_phys(phys_rect)
+        self.roi_overlay.set_physical_sel(phys_rect)
         wx.CallAfter(self.ShouldUpdateDrawing)
