@@ -245,6 +245,7 @@ class SelectionMixin(object):
         the hover margin
         """
 
+        logging.debug("Calculating selection edges")
         l, r = sorted([self.v_start_pos.x, self.v_end_pos.x])
         t, b = sorted([self.v_start_pos.y, self.v_end_pos.y])
 
@@ -262,7 +263,7 @@ class SelectionMixin(object):
             "i_b": i_b
         }
 
-    def is_hovering(self, pos):  #pylint: disable=R0911
+    def is_hovering(self, vpos):  #pylint: disable=R0911
         """ Check if the given position is on/near a selection edge or inside
         the selection.
 
@@ -271,24 +272,24 @@ class SelectionMixin(object):
 
         if self.edges:
             # If position outside outer box
-            if not self.edges["o_l"] < pos.x < self.edges["o_r"] or \
-                not self.edges["o_t"] < pos.y < self.edges["o_b"]:
+            if not self.edges["o_l"] < vpos.x < self.edges["o_r"] or \
+                not self.edges["o_t"] < vpos.y < self.edges["o_b"]:
                 return False
             # If position inside inner box
-            elif self.edges["i_l"] < pos.x < self.edges["i_r"] and \
-                self.edges["i_t"] < pos.y < self.edges["i_b"]:
+            elif self.edges["i_l"] < vpos.x < self.edges["i_r"] and \
+                self.edges["i_t"] < vpos.y < self.edges["i_b"]:
                 logging.debug("Selection hover")
                 return gui.HOVER_SELECTION
-            elif pos.x < self.edges["i_l"]:
+            elif vpos.x < self.edges["i_l"]:
                 logging.debug("Left edge hover")
                 return gui.HOVER_LEFT_EDGE
-            elif pos.x > self.edges["i_r"]:
+            elif vpos.x > self.edges["i_r"]:
                 logging.debug("Right edge hover")
                 return gui.HOVER_RIGHT_EDGE
-            elif pos.y < self.edges["i_t"]:
+            elif vpos.y < self.edges["i_t"]:
                 logging.debug("Top edge hover")
                 return gui.HOVER_TOP_EDGE
-            elif pos.y > self.edges["i_b"]:
+            elif vpos.y > self.edges["i_b"]:
                 logging.debug("Bottom edge hover")
                 return gui.HOVER_BOTTOM_EDGE
 
@@ -414,8 +415,7 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
                 vpos[1] - (view_size[1] / 2))
 
     def _calc_world_pos(self):
-        """
-        update the world position to reflect the view position
+        """ Update the world position to reflect the view position
         """
         if self.v_start_pos and self.v_end_pos:
             offset = tuple(v / 2 for v in self.base._bmp_buffer_size)
@@ -426,8 +426,7 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
                                             self.v_end_pos,
                                             offset)
     def _calc_view_pos(self):
-        """
-        update the view position to reflect the world position
+        """ Update the view position to reflect the world position
         """
         if not self.w_start_pos or not self.w_end_pos:
             logging.warning("Asking to convert non-existing world positions")
@@ -439,7 +438,7 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
         self.v_end_pos = wx.Point(*v_end)
         self._calc_edges() # TODO move to Mixin??
 
-    def get_selection_phys(self):
+    def get_physical_sel(self):
         """
         return (tuple of 4 floats): position in m
         """
@@ -449,7 +448,7 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
         else:
             return None
 
-    def set_selection_phys(self, rect):
+    def set_physical_sel(self, rect):
         """
         rect (tuple of 4 floats): t, l, b, r positions in m
         """

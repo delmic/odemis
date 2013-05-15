@@ -764,7 +764,7 @@ class DraggableCanvas(wx.Panel):
             )
 
         for im in images[:1]: # the first image (or nothing)
-            print "dmerge", im
+            #print "dmerge", im
             if im is None:
                 continue
             if nb_fluo == 0:
