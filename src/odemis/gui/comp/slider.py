@@ -383,6 +383,16 @@ class Slider(wx.PyControl):
 
         self.Refresh()
 
+    def set_to_min_val(self):
+        self.current_value = self.value_range[0]
+        self.handlePos = self._val_to_pixel()
+        self.Refresh()
+
+    def set_to_max_val(self):
+        self.current_value = self.value_range[1]
+        self.handlePos = self._val_to_pixel()
+        self.Refresh()
+
     def GetValue(self):
         """ 
         Get the value of the slider 
