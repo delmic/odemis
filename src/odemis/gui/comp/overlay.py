@@ -142,6 +142,9 @@ class SelectionMixin(object):
         self.dragging = False
         self.edit = False
 
+        # This attribute can be used to see if the base has shifted or scaled
+        self._last_shiftscale = None
+
         self.edges = {}
 
         self.color = hex_to_rgba(color)
@@ -238,6 +241,23 @@ class SelectionMixin(object):
         self.stop_selection()
 
     ##### END edit methods  #####
+
+
+    def update_from_buffer(self, b_start_pos, b_end_pos, shiftscale):
+        """ Update the view positions of the selection if the base view has
+        shifted or scaled compared to the last time this method was called.
+        """
+
+        if self._last_shiftscale != shiftscale:
+            logging.warn("Updating view position of selection")
+            self._last_shiftscale = shiftscale
+
+            self.v_start_pos = wx.Point(
+                                    *self.base.buffer_to_view_pos(b_start_pos))
+            self.v_end_pos = wx.Point(
+                                    *self.base.buffer_to_view_pos(b_end_pos))
+            self._calc_edges()
+
 
 
     def _calc_edges(self):
@@ -459,7 +479,7 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
             self.w_end_pos = self.base.real_to_world_pos(rect[2:4])
             self._calc_view_pos()
 
-    def Draw(self, dc, shift=(0, 0), scale=1.0):
+    def Draw(self, dc_buffer, shift=(0, 0), scale=1.0):
 
         if self.w_start_pos and self.w_end_pos:
             offset = tuple(v / 2 for v in self.base._bmp_buffer_size)
@@ -476,7 +496,9 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
             #                                                b_end_pos[0],
             #                                                b_end_pos[1] )
 
-            ctx = wx.lib.wxcairo.ContextFromDC(dc)
+            self.update_from_buffer(b_start_pos, b_end_pos, shift + (scale,))
+
+            ctx = wx.lib.wxcairo.ContextFromDC(dc_buffer)
 
 
             #logging.warn("%s %s", shift, world_to_buffer_pos(shift))
