@@ -266,7 +266,7 @@ class OdemisGUIApp(wx.App):
         secom_tab = mtc['secom_live']
 
         #pylint: disable=E1103
-        pos = self.interface_model.focussedView.value.view_pos.value
+        pos = secom_tab.interface_model.focussedView.value.view_pos.value
         name2 = os.path.join(os.path.dirname(__file__),
                              "img/example/3-sem.png")
         im2 = InstrumentalImage(wx.Image(name2), 2.5e-07, pos)
