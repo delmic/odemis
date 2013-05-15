@@ -769,7 +769,7 @@ class SpectrumStream(Stream):
                 readout = numpy.prod(self._detector.resolution.value) / ro_rate + 0.05
             except Exception:
                 readout = 0.05
-            duration = numpy.prod(res) * (exp + readout + 0.01) * 1.20
+            duration = numpy.prod(res) * (exp + readout + 0.01) * 1.40
             # Add the setup time
             duration += self.SETUP_OVERHEAD
 
@@ -846,7 +846,7 @@ class ARStream(Stream):
                 readout = numpy.prod(self._detector.resolution.value) / ro_rate + 0.05
             except Exception:
                 readout = 0.05
-            duration = numpy.prod(res) * (exp + readout + 0.01) * 1.20
+            duration = numpy.prod(res) * (exp + readout + 0.01) * 1.40
             # Add the setup time
             duration += self.SETUP_OVERHEAD
 

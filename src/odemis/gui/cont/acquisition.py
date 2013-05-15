@@ -32,9 +32,7 @@ from odemis import model, dataio
 from odemis.gui import acqmng, conf, instrmodel
 from odemis.gui.acqmng import preset_as_is
 from odemis.gui.cont import get_main_tab_controller
-from odemis.gui.model import stream
-from odemis.gui.model.stream import UNDEFINED_ROI, StaticSEMStream, \
-    StaticSpectrumStream
+from odemis.gui.model.stream import UNDEFINED_ROI
 from odemis.gui.util import img, get_picture_folder, call_after, units, \
     limit_invocation
 from odemis.gui.win.acquisition import AcquisitionDialog, \
@@ -514,11 +512,11 @@ class SparcAcquiController(AcquisitionController):
         self._main_frame.btn_sparc_acquire.Enable()
 
 
-    def _show_acquisition(self, data, file):
+    def _show_acquisition(self, data, acqfile):
         """
         Show the acquired data (saved into a file) in the analysis tab.
         data (list of DataFlow): all the raw data acquired
-        file (File): file object to which the data was saved
+        acqfile (File): file object to which the data was saved
         """
 
         # get the analysis tab
@@ -540,16 +538,16 @@ class SparcAcquiController(AcquisitionController):
             stream_controller.addStream(statics, add_to_all_views=True)
 
         # add the file info
-        finfo = instrmodel.FileInfo(file)
+        finfo = instrmodel.FileInfo(acqfile)
         # find the precise acquisition time as the earliest of all
-        acq_time = finfo.time # the time of the file creation
+        acq_time = finfo.metadata.get(model.MD_ACQ_DATE, time.time()) # ctime
         for r in data:
             try:
                 r_time = r.metadata[model.MD_ACQ_DATE]
                 acq_time = min(r_time, acq_time)
             except KeyError:
                 continue # no date known
-        finfo.time = acq_time
+        finfo.metadata[model.MD_ACQ_DATE] = acq_time
 
         analysis_interface.fileinfo.value = finfo
 

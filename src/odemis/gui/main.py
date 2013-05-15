@@ -328,7 +328,7 @@ class OdemisGUIApp(wx.App):
                                         add_to_all_views=True)
 
             analysis_interface = mtc['sparc_analysis'].interface_model
-            analysis_interface.fileinfo.value = instrmodel.FileInfo(open(name2))
+            analysis_interface.fileinfo.value = instrmodel.FileInfo(name2)
             mtc.switch("sparc_analysis")
         except KeyError:
             self.goto_debug_mode()

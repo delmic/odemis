@@ -868,10 +868,10 @@ class SparcSettingsController(SettingsBarController):
 
 
 
-class AnalysiSettingsController(SettingsBarController):
+class AnalysisSettingsController(SettingsBarController):
 
     def __init__(self, parent_frame, microscope_model):
-        super(AnalysiSettingsController, self).__init__(microscope_model)
+        super(AnalysisSettingsController, self).__init__(microscope_model)
 
         self._file_panel = FileInfoSettingsPanel(
                                     parent_frame.fp_sparc_file_info,
@@ -881,11 +881,12 @@ class AnalysiSettingsController(SettingsBarController):
 
     def on_fileinfo_change(self, fi):
         """ Update the data we wish to display from the FileInfo object """
+        # FIXME: need to remove the previous labels
         if fi:
-            self._file_panel.add_label("File", fi.file_name)
+            self._file_panel.add_label("File", fi.basename)
             self._file_panel.add_label("Path", fi.path)
 
-            for label, value in fi.meta_data.iteritems():
+            for label, value in fi.metadata.items():
                 self._file_panel.add_label(label, value)
 
 

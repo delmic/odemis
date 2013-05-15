@@ -356,45 +356,52 @@ class FileInfo(object):
     should be considered readonly after initialisation.
     """
 
-    def __init__(self, mic_file, meta_data=None):
+    def __init__(self, acq_file, metadata=None):
         """
-        mic_file (File or None): the File that contains the acquisition, some
+        acq_file (String or File or None): the full name of the file or 
+         the File that contains the acquisition. If provided (and the file existssome
             fields will be automatically filled in if provided.
-        meta_data (dict): A dictionary of (nested) meta data.
+        metadata (dict String -> value): The meta-data as model.MD_*.
         """
 
-        assert mic_file is None or isinstance(mic_file, file)
-
-        self._mic_file = mic_file # file object
-
-        # Extract file path, file name and path
-        self._file_path = mic_file.name if mic_file and mic_file.name else None
-
-        self._file_name = None
-        self._path = None
-        self._time = None # acquisition time (second from epoch)
-
-        if self._file_path:
-            self._file_name = os.path.basename(self._file_path)
-            self._path = os.path.dirname(self._file_path)
-            self._time = os.stat(self._file_path).st_ctime
+        self._acq_file = None
+        if isinstance(acq_file, basestring):
+            # the name of the file
+            self.file_name = acq_file
+        elif acq_file is not None:
+            # a File object
+            self.file_name = acq_file.name
+            self._acq_file = acq_file # file object
+        else:
+            self.file_name = None
 
         # TODO: settings of the instruments for the acquisition?
         # Might be per stream
+        self.metadata = metadata or {}
 
-        self.meta_data = meta_data or {}
-
-    @property
-    def file_path(self):
-        return self._file_path
-
-    @property
-    def file_name(self):
-        return self._file_name
+        if not model.MD_ACQ_DATE in self.metadata and self.file_name:
+            # try to auto fill acquisition time (second from epoch)
+            try:
+                acq_date = os.stat(self.file_name).st_ctime
+                self.metadata[model.MD_ACQ_DATE] = acq_date
+            except OSError:
+                # can't open the file => just cannot guess the time
+                pass
 
     @property
     def path(self):
-        return self._path
+        """
+        the name of the directory containing the file
+        """
+        return os.path.dirname(self.file_name)
+
+    @property
+    def basename(self):
+        """
+        the base name of the file
+        """
+        return os.path.basename(self.file_name)
+
 
 MAX_SAFE_MOVE_DISTANCE = 10e-3 # 1 cm
 class MicroscopeView(object):
@@ -509,7 +516,7 @@ class MicroscopeView(object):
         }
 
         # Check it makes sense (=> not too big)
-        distance = math.sqrt(sum([v*v for v in move.values()]))
+        distance = math.sqrt(sum([v * v for v in move.values()]))
         if distance > MAX_SAFE_MOVE_DISTANCE:
             logging.error("Cancelling request to move by %f m (because > %f m)",
                           distance, MAX_SAFE_MOVE_DISTANCE)

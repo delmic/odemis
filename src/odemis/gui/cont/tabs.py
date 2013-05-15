@@ -333,7 +333,7 @@ class AnalysisTab(Tab):
                                   )
 
 
-        self._settings_controller = settings.AnalysiSettingsController(
+        self._settings_controller = settings.AnalysisSettingsController(
                                         self.main_frame,
                                         self.interface_model
                                     )
