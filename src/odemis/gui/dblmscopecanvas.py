@@ -37,6 +37,7 @@ import logging
 import odemis.gui as gui
 import threading
 import time
+import sys
 import wx
 from odemis.model._vattributes import VigilantAttributeBase
 
@@ -151,9 +152,8 @@ class DblMicroscopeCanvas(DraggableCanvas):
                 self.Refresh(eraseBackground=False)
 
     def _convertStreamsToImages(self):
-        """
-        Temporary function to convert the StreamTree to a list of images as the
-            canvas currently expects.
+        """ Temporary function to convert the StreamTree to a list of images as
+        the canvas currently expects.
         """
         streams = self.microscope_view.stream_tree.streams
         # create a list of of each stream's image, but re-ordered so that SEM is
@@ -186,7 +186,7 @@ class DblMicroscopeCanvas(DraggableCanvas):
         if not has_sem_image: # make sure there is always a SEM image
             images.insert(0, None)
 
-        # remove all the images (so that the images deleted go away)
+        # remove all the images (so they can be garbage collected)
         self.Images = [None]
 
         # add the images in order
@@ -222,7 +222,7 @@ class DblMicroscopeCanvas(DraggableCanvas):
             self._updateThumbnail()
             self._lastThumbnailUpdate = now
 
-    # TODO use rate limiting decorator
+    # TODO: use rate limiting decorator
     def _updateThumbnail(self):
         # TODO avoid doing 2 copies, by using directly the wxImage from the
         # result of the StreamTree
@@ -279,7 +279,7 @@ class DblMicroscopeCanvas(DraggableCanvas):
         Adapts the MPP and center to fit to the current content
         recenter (None or boolean): If True, also recenter the view. If None, it
          will try to be clever, and only recenter if no stage is connected, as
-         otherwise, it could cause an unexcepted move. 
+         otherwise, it could cause an unexcepted move.
         """
         # TODO
         # Note: we need 2 different mechanisms: with and without recenter

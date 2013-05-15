@@ -261,29 +261,27 @@ class OdemisGUIApp(wx.App):
 
     def on_load_example_secom2(self, e):
         """ Open the two files for example """
-        try:
-            mtc = get_main_tab_controller()
-            secom_tab = mtc['secom_live']
 
-            #pylint: disable=E1103
-            pos = secom_tab.interface_model.focussedView.value.view_pos.value
-            name2 = os.path.join(os.path.dirname(__file__),
-                                 "img/example/3-sem.png")
-            im2 = InstrumentalImage(wx.Image(name2), 2.5e-07, pos)
+        mtc = get_main_tab_controller()
+        secom_tab = mtc['secom_live']
 
-            pos = (pos[0] + 5.5e-06, pos[1] + 1e-6)
-            name1 = os.path.join(os.path.dirname(__file__),
-                                 "img/example/3-optical.png")
-            im1 = InstrumentalImage(wx.Image(name1), 1.34e-07, pos)
+        #pylint: disable=E1103
+        pos = self.interface_model.focussedView.value.view_pos.value
+        name2 = os.path.join(os.path.dirname(__file__),
+                             "img/example/3-sem.png")
+        im2 = InstrumentalImage(wx.Image(name2), 2.5e-07, pos)
 
-            stream_controller = secom_tab.stream_controller
+        pos = (pos[0] + 5.5e-06, pos[1] + 1e-6)
+        name1 = os.path.join(os.path.dirname(__file__),
+                             "img/example/3-optical.png")
+        im1 = InstrumentalImage(wx.Image(name1), 1.34e-07, pos)
 
-            stream_controller.addStatic("Fluorescence", im1)
-            stream_controller.addStatic("Secondary electrons", im2,
-                                        cls=StaticSEMStream)
-        except Exception:
-            self.goto_debug_mode()
-            logging.exception("Failed to load example")
+        mtc = get_main_tab_controller()
+        stream_controller = secom_tab.stream_controller
+
+        stream_controller.addStatic("Fluorescence", im1)
+        stream_controller.addStatic("Secondary electrons", im2,
+                                    cls=StaticSEMStream)
 
     def on_load_example_sparc1(self, e):
         """ Open a SEM view and spectrum cube for example
@@ -448,12 +446,12 @@ see http://www.fluorophores.org/disclaimer/.
     def excepthook(self, etype, value, trace): #pylint: disable=W0622
         """ Method to intercept unexpected errors that are not caught
         anywhere else and redirects them to the logger. """
-        # in case of error here, don't call again, it creates infinite recursion
+        # in case of error here, don't call again, it'd create infinite recurssion
         if sys and traceback:
             sys.excepthook = sys.__excepthook__
 
             try:
-                exc = traceback.format_exception(etype, value, trace)
+                exc = traceback.format_exception(type, value, trace)
                 logging.error("".join(exc))
 
                 # When an exception occurs, automatically got to debug mode.
