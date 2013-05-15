@@ -36,9 +36,7 @@ from odemis.gui.instrmodel import STATE_ON, STATE_OFF, STATE_PAUSE
 from odemis.gui.model.stream import SpectrumStream, SEMStream, ARStream, \
     UNDEFINED_ROI
 import logging
-import math
 import wx
-
 
 
 class Tab(object):

@@ -613,10 +613,10 @@ class SpectrumStream(Stream):
         eshape = self.emitter.shape
         phy_size = [epxs[0] * eshape[0], epxs[1] * eshape[1]] # max physical ROI
 
-        # find maximum repetition
+        # maximum repetition: either depends on minimum pxs or maximum roi
         roi_size = [roi[2] - roi[0], roi[3] - roi[1]]
-        max_rep = [max(1, math.ceil(eshape[0] * roi_size[0])),
-                   max(1, math.ceil(eshape[1] * roi_size[1]))]
+        max_rep = [max(1, min(int(eshape[0] * roi_size[0]), int(phy_size[0] / pxs))),
+                   max(1, min(int(eshape[1] * roi_size[1]), int(phy_size[1] / pxs)))]
 
         # compute the repetition (ints) that fits the ROI with the pixel size
         rep = [round(phy_size[0] * roi_size[0] / pxs),
@@ -637,17 +637,17 @@ class SpectrumStream(Stream):
 
         # shift the ROI if it's now slightly outside the possible area
         if roi[0] < 0:
-            roi[2] -= roi[0]
+            roi[2] = min(1, roi[2] - roi[0])
             roi[0] = 0
         elif roi[2] > 1:
-            roi[0] -= roi[2] - 1
+            roi[0] = max(0, roi[0] - (roi[2] - 1))
             roi[2] = 1
 
         if roi[1] < 0:
-            roi[3] -= roi[1]
+            roi[3] = min(1, roi[3] - roi[1])
             roi[1] = 0
         elif roi[3] > 1:
-            roi[1] -= roi[3] - 1
+            roi[1] = max(0, roi[1] - (roi[3] - 1))
             roi[3] = 1
 
         return roi, rep
@@ -708,10 +708,9 @@ class SpectrumStream(Stream):
         # to change the pixel size.
 
         # clamp horizontal repetition to be sure it's correct
-        max_full_rep = self.repetition.range[1] # same as emitter.shape
         roi_size = [roi[2] - roi[0], roi[3] - roi[1]]
-        max_rep = [max(1, math.ceil(max_full_rep[0] * roi_size[0])),
-                   max(1, math.ceil(max_full_rep[1] * roi_size[1]))]
+        max_rep = [max(1, math.ceil(eshape[0] * roi_size[0])),
+                   max(1, math.ceil(eshape[1] * roi_size[1]))]
 
         repetition = [min(repetition[0], max_rep[0]),
                       min(repetition[1], max_rep[1])]
@@ -720,9 +719,9 @@ class SpectrumStream(Stream):
         # depending on what the user "asked" (changed)
         if prev_rep[0] == repetition[0]:
             # TODO: move the computations inside
-            pxs = (epxs[1] * roi_size[1] * eshape[1]) / repetition[1]
+            pxs = (epxs[1] * eshape[1] * roi_size[1]) / repetition[1]
         else:
-            pxs = (epxs[0] * roi_size[0] * eshape[0]) / repetition[0]
+            pxs = (epxs[0] * eshape[0] * roi_size[0]) / repetition[0]
 
         # TODO: is this sufficient to adapt correctly H or V? might need change in ROI
         roi, rep = self._updateROIAndPixelSize(roi, pxs)
@@ -736,7 +735,7 @@ class SpectrumStream(Stream):
 
     def _getPixelSizeRange(self):
         """
-        return (tuple of floats): min and max value of the pixel size at the 
+        return (tuple of 2 floats): min and max value of the pixel size at the 
           current magnification, in m.
         """
         # Two things to take care of:
