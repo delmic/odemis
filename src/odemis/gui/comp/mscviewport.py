@@ -84,32 +84,45 @@ class MicroscopeViewport(wx.Panel):
                     50,
                     (0, 100),
                     size=(100, 12),
-                    style=wx.SL_HORIZONTAL | wx.SL_AUTOTICKS | wx.SL_TICKS | wx.NO_BORDER)
+                    style=(wx.SL_HORIZONTAL |
+                           wx.SL_AUTOTICKS |
+                           wx.SL_TICKS |
+                           wx.NO_BORDER))
 
         self.mergeSlider.SetBackgroundColour(self.legend_panel.GetBackgroundColour())
         self.mergeSlider.SetForegroundColour("#4d4d4d")
         self.mergeSlider.SetToolTipString("Merge ratio")
 
-        self.bmpIconOpt = wx.StaticBitmap(self.legend_panel, wx.ID_ANY, getico_blending_optBitmap())
-        self.bmpIconSem = wx.StaticBitmap(self.legend_panel, wx.ID_ANY, getico_blending_semBitmap())
+        self.bmpIconOpt = wx.StaticBitmap(
+                                    self.legend_panel,
+                                    wx.ID_ANY,
+                                    getico_blending_optBitmap())
+        self.bmpIconSem = wx.StaticBitmap(
+                                    self.legend_panel,
+                                    wx.ID_ANY,
+                                    getico_blending_semBitmap())
 
-        self.ShowMergeSlider(False)
+        # Make sure that mouse clicks on the icons set the correct focus
+        self.bmpIconOpt.Bind(wx.EVT_LEFT_DOWN, self.OnChildFocus)
+        self.bmpIconSem.Bind(wx.EVT_LEFT_DOWN, self.OnChildFocus)
 
-
-        # TODO: should make sure that a click _anywhere_ on the legend brings
-        # the focus to the view
-
-        # # Make sure that mouse clicks on the icons set the correct focus
-        # self.bmpIconOpt.Bind(wx.EVT_LEFT_DOWN, self.OnChildFocus)
-        # self.bmpIconSem.Bind(wx.EVT_LEFT_DOWN, self.OnChildFocus)
+        # Set slider to min/max
+        self.bmpIconOpt.Bind(wx.EVT_LEFT_UP, self.OnSliderIconClick)
+        self.bmpIconSem.Bind(wx.EVT_LEFT_UP, self.OnSliderIconClick)
 
         self.mergeSlider.Bind(wx.EVT_LEFT_UP, self.OnSlider)
-        # FIXME: dragging the slider should have immediate effect on the merge ratio
-        # Need to bind on EVT_SLIDER (seems to be the new way, on any type of change),
-        # EVT_SCROLL_CHANGED (seems to work only on windows and gtk, and only at the end)
-        # EVT_SCROLL_THUMBTRACK (seems to work always, but only dragging, not key press)
-        # Maybe our Slider control need to generate wx.wxEVT_COMMAND_SLIDER_UPDATED
+
+        # Need to bind on EVT_SLIDER (seems to be the new way, on any type of
+        # change).
+        # EVT_SCROLL_CHANGED (seems to work only on windows and gtk, and only at
+        # the end)
+        # EVT_SCROLL_THUMBTRACK (seems to work always, but only dragging, not
+        # key press)
+        # Maybe our Slider control need to generate
+        # wx.wxEVT_COMMAND_SLIDER_UPDATED
         # when value is changed by user in order to have EVT_SLIDER passed?
+
+        self.mergeSlider.Bind(wx.EVT_SLIDER, self.OnSlider)
 
         # Dragging the slider should set the focus to the right view
         self.mergeSlider.Bind(wx.EVT_LEFT_DOWN, self.OnChildFocus)
@@ -415,7 +428,7 @@ class MicroscopeViewport(wx.Panel):
 
         evt.Skip()
 
-    def OnSlider(self, event):
+    def OnSlider(self, evt):
         """
         Merge ratio slider
         """
@@ -423,11 +436,25 @@ class MicroscopeViewport(wx.Panel):
             return
 
         self._microscope_view.merge_ratio.value = self.mergeSlider.GetValue() / 100
-        event.Skip()
+        evt.Skip()
 
-    def OnSize(self, event):
-        event.Skip() # processed also by the parent
+    def OnSize(self, evt):
+        evt.Skip() # processed also by the parent
         self.UpdateHFWLabel()
+
+    def OnSliderIconClick(self, evt):
+        evt.Skip()
+
+        if self._microscope_view is None:
+            return
+
+        if(evt.GetEventObject() == self.bmpIconOpt):
+            self.mergeSlider.set_to_min_val()
+        else:
+            self.mergeSlider.set_to_max_val()
+
+        self._microscope_view.merge_ratio.value = self.mergeSlider.GetValue() / 100
+        evt.Skip()
 
     ## END Event handling
 
