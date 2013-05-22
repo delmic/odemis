@@ -4,15 +4,16 @@ Priority: optional
 Maintainer: Éric Piel <piel@delmic.com>
 Standards-Version: 3.9.2
 Build-Depends: debhelper (>= 7),
-               python-support (>= 0.6),
-               python
+               python (>= 2.7.1),
+               python-all
+X-Python-Version: >= 2.7
 Homepage: http://www.delmic.com
 Vcs-Git: git://github.com/delmic/odemis.git
 Vcs-Browser: https://github.com/delmic/odemis
 
 Package: odemis
 Architecture: all
-Depends: python >= 2.7.1,
+Depends: python (>= 2.7.1),
          python-wxgtk2.8,
          python-yaml,
          python-serial,
