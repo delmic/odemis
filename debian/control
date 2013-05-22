@@ -1,0 +1,37 @@
+Source: odemis
+Section: science
+Priority: optional
+Maintainer: Éric Piel <piel@delmic.com>
+Standards-Version: 3.9.2
+Build-Depends: debhelper (>= 7),
+               python-support (>= 0.6),
+               python
+Homepage: http://www.delmic.com
+Vcs-Git: git://github.com/delmic/odemis.git
+Vcs-Browser: https://github.com/delmic/odemis
+
+Package: odemis
+Architecture: all
+Depends: python >= 2.7.1,
+         python-wxgtk2.8,
+         python-yaml,
+         python-serial,
+         python-imaging,
+         python-zmq,
+         python-concurrent.future,
+         python-scipy,
+         python-decorator,
+         python-libtiff,
+         python-comedilib,
+         python-h5py,
+         python-xdg,
+         cgroup-bin,
+         ${misc:Depends},
+         ${python:Depends}
+Suggests: imagej
+Description: Open Delmic Microscope Software
+ Odemis is the acquisition software for the Delmic microscopes. In particular,
+ it supports the SECOM and SPARC systems. Odemis provides a simple graphical
+ interface to manipulates the microscopes settings and acquire an image. It
+ also provides a command line interface and Python bindings for advanced 
+ usage.
