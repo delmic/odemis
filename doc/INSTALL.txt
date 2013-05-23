@@ -123,11 +123,11 @@ sudo adduser replace_by_login_name odemis
 
 On Linux, install the files this way:
 cd odemis
-sudo cp -dr --preserve=mode,xattr,timestamps install/linux/* /
-sudo desktop-file-install install/linux/usr/share/applications/odemis.desktop
+sudo python ./setup.py install
 
 To get the fluorophores database, you can run this command:
 ./util/getfluodb.py
+Then copy all the fluodb directory to /usr/share/odemis/fluodb/
 
 = Installing the vendor device drivers =
 
