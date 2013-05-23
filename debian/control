@@ -26,6 +26,7 @@ Depends: python (>= 2.7.1),
          python-comedilib,
          python-h5py,
          python-xdg,
+         pyro,
          cgroup-bin,
          ${misc:Depends},
          ${python:Depends}
