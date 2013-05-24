@@ -35,6 +35,7 @@ dist = setup(name='Odemis',
       packages=find_packages('src', exclude=["*.test"]),
       # TODO should be dependent on os
       data_files=[('/etc/', ['install/linux/etc/odemis.conf']),
+                  # TODO udev rules might actually be better off in /lib/udev/rules.d/
                   ('/etc/udev/rules.d', glob.glob('install/linux/etc/udev/rules.d/*.rules')), # TODO: use os.path.join for /
                   ('share/odemis/', glob.glob('install/linux/usr/share/odemis/*.odm.yaml')),
                   # TODO: need to run desktop-file-install in addition to update-desktop-database?
