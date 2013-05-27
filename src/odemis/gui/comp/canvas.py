@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
 """
@@ -133,6 +132,7 @@ class DraggableCanvas(wx.Panel):
 
         # px, px: Current shift to world_pos_buffer in the actual view
         self.drag_shift = (0, 0)
+        self.bg_offset = self.drag_shift
         self.dragging = False
         # px, px: initial position of mouse when started dragging
         self.drag_init_pos = (0, 0)
@@ -239,6 +239,8 @@ class DraggableCanvas(wx.Panel):
         if self.HasCapture():
             self.ReleaseMouse()
 
+        self.bg_offset = (self.drag_shift[0] % 40,
+                          self.drag_shift[1] % 40)
         # Update the position of the buffer to where the view is centered
         # self.drag_shift is the delta we want to apply
         new_pos = (
@@ -265,7 +267,10 @@ class DraggableCanvas(wx.Panel):
                     self.margins[1])
             )
 
+            self.UpdateDrawing()
+
             self.Refresh()
+
         elif self._rdragging:
             # TODO: make it non-linear:
             # the further from the original point, the more it moves for one
@@ -369,7 +374,7 @@ class DraggableCanvas(wx.Panel):
                         (self._bmp_buffer_size[1] - self.ClientSize[1]) / 2)
 
         src_pos = (self.margins[0] - self.drag_shift[0],
-                    self.margins[1] - self.drag_shift[1])
+                   self.margins[1] - self.drag_shift[1])
 
         # Blit the appropriate area from the buffer to the view port
         dc_view.BlitPointSize(
@@ -687,22 +692,17 @@ class DraggableCanvas(wx.Panel):
         # after all the images are merged
         dc_buffer.DrawBitmapPoint(wx.BitmapFromImage(imscaled), tl)
 
-    def _draw_background(self, dc):
-        """ TODO: make it fixed or at least create a compensating offset after
-        dragging to prevent 'jumps', cache image etc.
-        """
-        ctx = wxcairo.ContextFromDC(dc)
+    def _draw_background(self, dc_buffer):
+        """ Draw checkered background """
+        ctx = wxcairo.ContextFromDC(dc_buffer)
+        surface = wxcairo.ImageSurfaceFromBitmap(imgdata.getcanvasbgBitmap())
 
-        image = wxcairo.ImageSurfaceFromBitmap(imgdata.getcanvasbgBitmap())
-        pattern = cairo.SurfacePattern(image)
+        if not self.dragging:
+            surface.set_device_offset(-self.bg_offset[0], -self.bg_offset[1])
+
+        pattern = cairo.SurfacePattern(surface)
         pattern.set_extend(cairo.EXTEND_REPEAT)
         ctx.set_source(pattern)
-
-        # print (self.drag_shift[0], self.drag_shift[0] % 20)
-        # print (self.drag_shift[1], self.drag_shift[1] % 20)
-
-        # offset = (self.drag_shift[0] % 20, self.drag_shift[1] % 20)
-        # ctx.set_device_offset(offset)
 
         ctx.rectangle(
             0,
@@ -711,7 +711,7 @@ class DraggableCanvas(wx.Panel):
             self._bmp_buffer_size[1]
         )
 
-        ctx.fill ()
+        ctx.fill()
 
 
     def _DrawMergedImages(self, dc_buffer, images, mergeratio=0.5):
@@ -732,16 +732,22 @@ class DraggableCanvas(wx.Panel):
         :parma scale: (float > 0): the scaling of the images in addition to
             their own scale.
 
+        :return: (int) Frames per second
+
         Note: this is a very rough implementation. It's not fully optimized and
         uses only a basic averaging algorithm.
 
         """
 
+        self._draw_background(dc_buffer)
+
+        if not images or (len(images) == 1 and None in images):
+            return 0
+
         # TODO: Move Secom specific stuff to subclass
 
         t_start = time.time()
 
-        self._draw_background(dc_buffer)
 
         # The idea:
         # * display the first image (SEM) last, with the given mergeratio (or 1
@@ -777,9 +783,10 @@ class DraggableCanvas(wx.Panel):
                 scale=im._dc_scale
             )
 
+
+
         t_now = time.time()
-        fps = 1.0 / float(t_now - t_start) #pylint: disable=W0612
-        #logging.debug("Display speed: %s fps", fps)
+        return 1.0 / float(t_now - t_start)
 
     def world_to_buffer_pos(self, pos, offset=None):
         """ Converts a position from world coordinates to buffer coordinates

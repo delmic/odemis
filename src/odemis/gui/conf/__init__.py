@@ -36,7 +36,6 @@ from odemis import dataio
 from odemis.dataio import tiff
 from odemis.gui.util import get_picture_folder, get_home_folder
 
-
 CONF_PATH = os.path.join(get_home_folder(), r".config/odemis")
 ACQUI_PATH = get_picture_folder()
 

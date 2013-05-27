@@ -80,6 +80,21 @@ class WorldOverlay(Overlay):
     """ This class displays an overlay on the buffer """
     pass
 
+class TextViewOverlay(ViewOverlay):
+
+    def __init__(self, base, vpos=((10, 16))):
+        super(TextViewOverlay, self).__init__(base)
+        self.label = ""
+        self.vpos = vpos
+
+    def set_label(self, label):
+        self.label = label
+
+    def Draw(self, dc, shift=(0, 0), scale=1.0):
+        if self.label:
+            ctx = wx.lib.wxcairo.ContextFromDC(dc)
+            self.write_label(ctx, self.vpos, self.label)
+
 class CrossHairOverlay(ViewOverlay):
     def __init__(self, base,
                  color=gui.CROSSHAIR_COLOR, size=gui.CROSSHAIR_SIZE, center=(0, 0)):
