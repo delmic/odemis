@@ -361,6 +361,14 @@ class DraggableCanvas(wx.Panel):
                 # replace
                 self.Images[index] = im
 
+            # Sort by size.
+            self.Images.sort(
+                lambda a, b: cmp(
+                    (b.GetSize()[0] * b.GetSize()[1]) * b._dc_scale if b else 0,
+                    (a.GetSize()[0] * a.GetSize()[1]) * a._dc_scale if a else 0
+                )
+            )
+
     def OnPaint(self, event):
         """ Quick update of the window content with the buffer + the static
         overlays
@@ -741,7 +749,7 @@ class DraggableCanvas(wx.Panel):
 
         self._draw_background(dc_buffer)
 
-        if not images or (len(images) == 1 and None in images):
+        if not images or images == [None]:
             return 0
 
         # TODO: Move Secom specific stuff to subclass
@@ -749,40 +757,65 @@ class DraggableCanvas(wx.Panel):
         t_start = time.time()
 
 
-        # The idea:
+        # The old idea:
         # * display the first image (SEM) last, with the given mergeratio (or 1
         #   if it's the only one)
         # * display all the other images (fluo) as if they were average
         #   N images -> mergeratio = 1-0/N, 1-1/N,... 1-(N-1)/N
 
-        # Fluo images to actually display (ie, remove None)
-        fluo = [im for im in images[1:] if im is not None]
-        nb_fluo = len(fluo)
+        # fluo = [im for im in images[1:] if im is not None]
+        # nb_fluo = len(fluo)
 
-        for i, im in enumerate(fluo): # display the fluo images first
-            r = 1.0 - i / float(nb_fluo)
-            self._DrawImage(
-                dc_buffer,
-                im,
-                im._dc_center,
-                r,
-                scale=im._dc_scale
-            )
+        # for i, im in enumerate(fluo): # display the fluo images first
+        #     r = 1.0 - i / float(nb_fluo)
+        #     self._DrawImage(
+        #         dc_buffer,
+        #         im,
+        #         im._dc_center,
+        #         r,
+        #         scale=im._dc_scale
+        #     )
+
+        # for im in images[:1]: # the first image (or nothing)
+        #     if im is None:
+        #         continue
+        #     if nb_fluo == 0:
+        #         mergeratio = 1.0 # no transparency if it's alone
+        #     self._DrawImage(
+        #         dc_buffer,
+        #         im,
+        #         im._dc_center,
+        #         mergeratio,
+        #         scale=im._dc_scale
+        #     )
+
+
+        # The new idea:
+        # Images are sorted by size, where the biggest image is painted first
+        # with no transpaency. All other images are painted over that afterwards
+        # where each get an opacity of 1/N
+        #
+        # It migh be a good idea to devise a way in which we can define
+        # different strategies for different scenarios.
 
         for im in images[:1]: # the first image (or nothing)
-            #print "dmerge", im
-            if im is None:
-                continue
-            if nb_fluo == 0:
-                mergeratio = 1.0 # no transparency if it's alone
-            self._DrawImage(
-                dc_buffer,
-                im,
-                im._dc_center,
-                mergeratio,
-                scale=im._dc_scale
-            )
+            if im:
+                self._DrawImage(
+                    dc_buffer,
+                    im,
+                    im._dc_center,
+                    1.0,
+                    scale=im._dc_scale
+                )
 
+        for _, im in enumerate([m for m in images[1:] if m is not None]):
+            self._DrawImage(
+               dc_buffer,
+               im,
+               im._dc_center,
+               mergeratio,
+               scale=im._dc_scale
+            )
 
 
         t_now = time.time()
