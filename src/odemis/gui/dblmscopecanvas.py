@@ -26,20 +26,22 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from __future__ import division
 from .comp.canvas import DraggableCanvas, world_to_real_pos
 from .comp.overlay import CrossHairOverlay, ViewSelectOverlay, \
-    WorldSelectOverlay
+    WorldSelectOverlay, TextViewOverlay
 from decorator import decorator
 from odemis import util
 from odemis.gui.comp.canvas import real_to_world_pos
 from odemis.gui.model import EM_STREAMS
 from odemis.gui.model.stream import UNDEFINED_ROI
 from wx.lib.pubsub import pub
+import odemis.gui.main
+import odemis.gui.conf
 import logging
 import odemis.gui as gui
 import threading
 import time
-import sys
 import wx
 from odemis.model._vattributes import VigilantAttributeBase
+
 
 
 # Various modes canvas elements can go into.
@@ -397,6 +399,9 @@ class SecomCanvas(DblMicroscopeCanvas):
         self.zoom_overlay = ViewSelectOverlay(self, "Zoom")
         self.ViewOverlays.append(self.zoom_overlay)
 
+        self.fps_overlay = TextViewOverlay(self)
+        self.ViewOverlays.append(self.fps_overlay)
+
         self.update_overlay = WorldSelectOverlay(self, "Update")
         self.WorldOverlays.append(self.update_overlay)
 
@@ -523,6 +528,15 @@ class SecomCanvas(DblMicroscopeCanvas):
     def OnRightUp(self, event):
         if self.current_mode not in SECOM_MODES:
             super(SecomCanvas, self).OnRightUp(event)
+
+    def _DrawMergedImages(self, dc_buffer, images, mergeratio=0.5):
+        fps = super(SecomCanvas, self)._DrawMergedImages(dc_buffer,
+                                                        images,
+                                                        mergeratio)
+
+        debug_mode = wx.GetTopLevelParent(self).menu_item_debug.IsChecked()
+        if debug_mode or True:
+            self.fps_overlay.set_label("%d fps" % fps)
 
 class SparcAcquiCanvas(DblMicroscopeCanvas):
     def __init__(self, *args, **kwargs):
