@@ -60,7 +60,6 @@ class OdemisGUIApp(wx.App):
         self.microscope = None
         self.main_frame = None
 
-        logging.debug("Starting GUI")
         try:
             driver.speedUpPyroConnect(model.getMicroscope())
         except Exception:
