@@ -86,7 +86,7 @@ class DblMicroscopeCanvas(DraggableCanvas):
         # FIXME: "stop all axes" should also cancel the next timer
         self._moveFocusLock = threading.Lock()
         self._moveFocusDistance = [0, 0]
-        # TODO deduplicate!
+        # TODO: deduplicate!
         self._moveFocus0Timer = wx.PyTimer(self._moveFocus0)
         self._moveFocus1Timer = wx.PyTimer(self._moveFocus1)
 
@@ -531,8 +531,8 @@ class SecomCanvas(DblMicroscopeCanvas):
 
     def _DrawMergedImages(self, dc_buffer, images, mergeratio=0.5):
         fps = super(SecomCanvas, self)._DrawMergedImages(dc_buffer,
-                                                        images,
-                                                        mergeratio)
+                                                         images,
+                                                         mergeratio)
 
         debug_mode = wx.GetTopLevelParent(self).menu_item_debug.IsChecked()
         if debug_mode or True:
