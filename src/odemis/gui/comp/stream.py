@@ -1288,7 +1288,6 @@ class StreamBar(wx.Panel):
     def _fitStreams(self):
         h = self._sz.GetMinSize().GetHeight()
 
-        logging.debug("Setting StreamBar height to %s", h)
         self.SetSize((-1, h))
 
         # The panel size is cached in the _PanelSize attribute.
