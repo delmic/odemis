@@ -43,6 +43,7 @@ launch_daemon
 xrced
 swap.sh
 *.autosave
+*.profile # profile data files
 
 #HTML documentation files
 doc/code/_build
