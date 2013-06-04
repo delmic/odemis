@@ -4,7 +4,7 @@ SECOM: {
     role: sem,
     emitters: ["EBeam ExtXY"],
     detectors: ["SED ExtXY", "BSD ExtXY"],
-    actuators: ["Redstone Stage"],
+    actuators: [],
 }
 
 # Quanta SEM driven via external X/Y connection, using a DAQ board
@@ -60,22 +60,4 @@ SECOM: {
     },
 }
 
-# PI RedStone jumpers (.=off):
-# X,Y = 1234...8
-# X => Ch1
-# Y => Ch2
-# Axes should be synchronized with the camera
-"Redstone Stage": {
-    class: pi.StageRedStone,
-    role: stage,
-    affects: ["EBeam ExtXY"],
-    init: {
-        port: /dev/ttyS0, # serial port on the board
-        # port: /dev/ttyPIRS, # USB serial port
-        axes: {x: [0, 1], y: [0, 0]}, # axis -> controller, channel
-        inverted: ["y"],
-    }, 
-    properties: {
-        speed: {'x': 0.001, 'y': 0.001} #m/s
-    }
-}
+
