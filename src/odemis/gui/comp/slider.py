@@ -24,13 +24,16 @@ import logging
 import math
 import time
 
+import cairo
 import wx
+import wx.lib.wxcairo as wxcairo
 from wx.lib.agw.aui.aui_utilities import StepColour
 
 import odemis.gui
 from .text import UnitFloatCtrl, UnitIntegerCtrl
 from odemis.gui.img.data import getsliderBitmap, getslider_disBitmap
 from odemis.gui.util import limit_invocation
+from ..util.conversion import hex_to_rgb, hex_to_rgba, wxcol_to_rgb
 
 
 
@@ -394,8 +397,8 @@ class Slider(wx.PyControl):
         self.Refresh()
 
     def GetValue(self):
-        """ 
-        Get the value of the slider 
+        """
+        Get the value of the slider
         return (float or int)
         """
         return self.current_value
@@ -530,4 +533,136 @@ class UnitFloatSlider(NumberSlider):
         kwargs['accuracy'] = kwargs.get('accuracy', 3)
 
         NumberSlider.__init__(self, *args, **kwargs)
+
+
+class VisualRangeSlider(wx.PyControl):
+
+    def __init__(self, *args, **kwargs):
+        kwargs['style'] |= wx.NO_BORDER
+
+        wx.PyControl.__init__(self, *args, **kwargs)
+
+        if kwargs.get('size', None) == (-1, -1):
+            self.SetMinSize((-1, 40))
+
+        self.content_list = []
+        self.len_content = 0
+        self.dirty_conent = False
+        self.content_bmp = None
+
+        # The minimum and maximum values
+        self.val_range = ()
+        # The selected range (within self.range)
+        self.value = ()
+
+        # Layout Events
+        self.Bind(wx.EVT_PAINT, self.OnPaint)
+        self.Bind(wx.EVT_SIZE, self.OnSize)
+
+        # Same code as in other slider. Merge?
+        self._percentage_to_val = lambda r0, r1, p: (r1 - r0) * p + r0
+        self._val_to_percentage = lambda r0, r1, v: (float(v) - r0) / (r1 - r0)
+
+    def set_value(self, val):
+        try:
+            if all([self.val_range[0] <= i <= self.val_range[1] for i in val]):
+                self.value = val
+                self.Refresh()
+            else:
+                msg = "Illegal value %s for range %s" % (val, self.val_range)
+                raise ValueError(msg)
+        except IndexError:
+            if not self.val_range:
+                raise IndexError("Value range not set!")
+            else:
+                raise
+
+    def set_range(self, val_range):
+        self.val_range = val_range
+
+    def set_content(self, content_list):
+        self.content_list = content_list
+        self.len_content = len(content_list)
+        self.dirty_conent = True
+        self.Refresh()
+
+    def _draw_line(self, ctx, a, b, c, d):
+        ctx.move_to(a, b)
+        ctx.line_to(c, d)
+        ctx.stroke()
+
+    def _draw_selection(self, ctx):
+        if self.value:
+            color = (1.0, 1.0, 1.0, 0.5)
+            ctx.set_source_rgba(*color)
+            #print self.value[0], self.val_range, self._val_to_pixel(self.value[0])
+            #print self.value[1], self.val_range, self._val_to_pixel(self.value[1])
+            _, height = self.GetSize()
+
+            left = self._val_to_pixel(self.value[0])
+            right = self._val_to_pixel(self.value[1])
+            rect = (left,
+                    0.0,
+                    right - left,
+                    height,
+            )
+            ctx.rectangle(*rect)
+            ctx.fill()
+
+
+
+    def _val_to_pixel(self, val=None):
+        """ Convert a slider value into a pixel position """
+        width, _ = self.GetSize()
+        prcnt = self._val_to_percentage(self.val_range[0],
+                                        self.val_range[1],
+                                        val)
+        return int(width * prcnt)
+
+    def _pixel_to_val(self, pixel):
+        """ Convert the current handle position into a value """
+        width, _ = self.GetSize()
+        prcnt = float(pixel) / width
+        return self._percentage_to_val(self.val_range[0],
+                                       self.val_range[1],
+                                       prcnt)
+
+    def OnPaint(self, event=None):
+        if self.content_list:
+            width, height = self.GetSize()
+
+            ctx = wxcairo.ContextFromDC(wx.PaintDC(self))
+
+            #if self.dirty_conent:
+            #surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, width, height)
+            #ctx = cairo.Context(surface)
+
+            line_width = float(width) / self.len_content
+            ctx.set_line_width(line_width + 0.5)
+            color = wxcol_to_rgb(self.GetForegroundColour())
+            ctx.set_source_rgb(*color)
+
+            for i, v in enumerate(self.content_list):
+                x = i * line_width
+                self._draw_line(ctx, x, height, x, v * float(height))
+
+            self.dirty_conent = False
+            #self.bmp = wxcairo.BitmapFromImageSurface(surface)
+            self.ctx = ctx
+            self.ctx.save()
+            #else:
+            #    ctx = wxcairo.ContextFromDC(wx.PaintDC(self))
+            #    ctx.set_source(self.surface)
+
+            self._draw_selection(ctx)
+
+            #wx.PaintDC(self).DrawBitmap(self.bmp)
+
+
+    def OnSize(self, event=None):
+        self.dirty_conent = True
+        self.Refresh()
+
+
+
 

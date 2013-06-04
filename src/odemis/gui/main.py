@@ -397,7 +397,6 @@ see http://www.fluorophores.org/disclaimer/.
         import webbrowser
         webbrowser.open('http://localhost:8000')
 
-
         #subprocess.call(('xdg-open', HTML_DOC))
 
     def on_debug(self, evt=None): #pylint: disable=W0613
