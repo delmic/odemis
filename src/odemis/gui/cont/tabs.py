@@ -101,7 +101,9 @@ class SecomStreamsTab(Tab):
 
         buttons = {
             self.main_frame.btn_secom_view_all:
-                ViewportLabel(None, self.main_frame.lbl_secom_view_all),
+                ViewportLabel(
+                    None,
+                    self.main_frame.lbl_secom_view_all),
             self.main_frame.btn_secom_view_tl:
                 ViewportLabel(
                     self.main_frame.vp_secom_tl,
