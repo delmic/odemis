@@ -32,13 +32,11 @@ from odemis import util
 from odemis.gui.comp.canvas import real_to_world_pos
 from odemis.gui.model import EM_STREAMS
 from odemis.gui.model.stream import UNDEFINED_ROI
+from odemis.gui.util import limit_invocation, call_after
 from wx.lib.pubsub import pub
-import odemis.gui.main
-import odemis.gui.conf
 import logging
 import odemis.gui as gui
 import threading
-import time
 import wx
 from odemis.model._vattributes import VigilantAttributeBase
 
@@ -89,10 +87,6 @@ class DblMicroscopeCanvas(DraggableCanvas):
         # TODO: deduplicate!
         self._moveFocus0Timer = wx.PyTimer(self._moveFocus0)
         self._moveFocus1Timer = wx.PyTimer(self._moveFocus1)
-
-        # for thumbnail update (might need a timer, instead of a minimum period
-        self._lastThumbnailUpdate = 0
-        self._thumbnailUpdatePeriod = 2 # s, minimal period before updating again
 
         self.current_mode = None
 
@@ -213,21 +207,28 @@ class DblMicroscopeCanvas(DraggableCanvas):
         # override just in order to detect when it's just finished redrawn
 
         # TODO: detect that the canvas is not visible, and so should no/less
-        # frequently
-        # be updated?
+        # frequently be updated?
         super(DblMicroscopeCanvas, self).UpdateDrawing()
 
         if not self.microscope_view:
             return
-        now = time.time()
-        if (self._lastThumbnailUpdate + self._thumbnailUpdatePeriod) < now:
-            self._updateThumbnail()
-            self._lastThumbnailUpdate = now
 
-    # TODO: use rate limiting decorator
+        # now = time.time()
+        # if (self._lastThumbnailUpdate + self._thumbnailUpdatePeriod) < now:
+        #     self._updateThumbnail()
+        #     self._lastThumbnailUpdate = now
+
+        self._updateThumbnail()
+
+    # TODO: use rate limiting decorator NOTE: `limit_invocation` causes an X
+    # server error! Investigate further
+    @limit_invocation(2) # max 1/2s
+    @call_after
     def _updateThumbnail(self):
         # TODO avoid doing 2 copies, by using directly the wxImage from the
         # result of the StreamTree
+
+        logging.debug("Updating thumbnail")
 
         # new bitmap to copy the DC
         bitmap = wx.EmptyBitmap(*self.ClientSize)
