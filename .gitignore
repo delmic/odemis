@@ -43,6 +43,7 @@ launch_daemon
 xrced
 swap.sh
 *.autosave
+odemis..profile
 
 #HTML documentation files
 doc/code/_build

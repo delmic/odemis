@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
 """
@@ -22,6 +21,36 @@ details.
 
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
+
+
+
+Canvas Rendering Pipeline
+-------------------------
+
+Attributes of interest:
+
+* buffer_center_world_pos: The center of the buffer in world coordinates.
+When the user moves or drags the view, the buffer is recentered around a new
+set of world coordinates.
+
+
+* ShouldUpdateDrawing
+    This method triggers the OnDrawTimer handler, but only if time delay
+    criteria are met, so drawing doesn't happen too often or too infrequently.
+
+    * OnDrawTimer
+        Simply calls the next function.
+
+        * UpdateDrawing
+
+
+            Draw(dc_buffer)
+                _DrawMergedImages
+                    _DrawImage
+                        _RescaleImageOptimized
+            Refresh/Update
+
+DrawTimer is set by ShouldUpdateDrawing
 
 """
 import ctypes
@@ -49,20 +78,6 @@ import odemis.gui.img.data as imgdata
 #  * Built-in optimised zoom/transparency for 2 images
 # Maybe could be replaced by a GLCanvas + magic, or a Cairo Canvas
 #
-#
-# * Canvas rendering
-# ------------------
-#
-# OnDrawTimer
-#     UpdateDrawing
-#         Draw(dc_buffer)
-#             _DrawMergedImages
-#                 _DrawImage
-#                     _RescaleImageOptimized
-#         Refresh/Update
-#
-# DrawTimer is set by ShouldUpdateDrawing
-
 
 class DraggableCanvas(wx.Panel):
     """ A draggable, buffered window class.
@@ -133,6 +148,7 @@ class DraggableCanvas(wx.Panel):
 
         # px, px: Current shift to world_pos_buffer in the actual view
         self.drag_shift = (0, 0)
+        self.bg_offset = self.drag_shift
         self.dragging = False
         # px, px: initial position of mouse when started dragging
         self.drag_init_pos = (0, 0)
@@ -224,6 +240,7 @@ class DraggableCanvas(wx.Panel):
         logging.debug("Drag started at %s", self.drag_init_pos)
 
         self.SetCursor(wx.StockCursor(wx.CURSOR_SIZENESW))
+
         if not self.HasCapture():
             self.CaptureMouse()
 
@@ -265,7 +282,13 @@ class DraggableCanvas(wx.Panel):
                     self.margins[1])
             )
 
+            self.bg_offset = (self.drag_shift[0] % 40,
+                              self.drag_shift[1] % 40)
+
+            self.UpdateDrawing()
+
             self.Refresh()
+
         elif self._rdragging:
             # TODO: make it non-linear:
             # the further from the original point, the more it moves for one
@@ -356,6 +379,14 @@ class DraggableCanvas(wx.Panel):
                 # replace
                 self.Images[index] = im
 
+            # Sort by size.
+            self.Images.sort(
+                lambda a, b: cmp(
+                    (b.GetSize()[0] * b.GetSize()[1]) * b._dc_scale if b else 0,
+                    (a.GetSize()[0] * a.GetSize()[1]) * a._dc_scale if a else 0
+                )
+            )
+
     def OnPaint(self, event):
         """ Quick update of the window content with the buffer + the static
         overlays
@@ -369,7 +400,7 @@ class DraggableCanvas(wx.Panel):
                         (self._bmp_buffer_size[1] - self.ClientSize[1]) / 2)
 
         src_pos = (self.margins[0] - self.drag_shift[0],
-                    self.margins[1] - self.drag_shift[1])
+                   self.margins[1] - self.drag_shift[1])
 
         # Blit the appropriate area from the buffer to the view port
         dc_view.BlitPointSize(
@@ -392,7 +423,6 @@ class DraggableCanvas(wx.Panel):
             max(self._bmp_buffer_size[1], self.ClientSize[1] + self.margin * 2)
         )
 
-        # recenter the view
         if (new_size != self._bmp_buffer_size):
             self.ResizeBuffer(new_size)
             # self.ReCenterBuffer((new_size[0]/2, new_size[1]/2))
@@ -432,17 +462,17 @@ class DraggableCanvas(wx.Panel):
             # outside region
             self.ShouldUpdateDrawing()
 
-    def ShouldUpdateDrawing(self, period=0.1):
+    def ShouldUpdateDrawing(self, delay=0.1):
         """ Schedule the update of the buffer
 
-        period (second): maximum time to wait before it will be updated
+        delay (seconds): maximum time to wait before it will be updated
 
         Warning: always call from the main GUI thread. So if you're not sure
          in which thread you are, do:
          wx.CallAfter(canvas.ShouldUpdateDrawing)
         """
         if not self.DrawTimer.IsRunning():
-            self.DrawTimer.Start(period * 1000.0, oneShot=True)
+            self.DrawTimer.Start(delay * 1000.0, oneShot=True)
 
     def OnDrawTimer(self):
         # thrd_name = threading.current_thread().name
@@ -453,19 +483,26 @@ class DraggableCanvas(wx.Panel):
         """ Redraws everything (that is viewed in the buffer)
         """
         prev_world_pos = self.buffer_center_world_pos
-        self.Draw(self._dc_buffer)
 
+        self.buffer_center_world_pos = self.requested_world_pos
+
+        self.Draw()
+
+        # Calculate the amount the view has shifted in pixels
         shift_view = (
             (self.buffer_center_world_pos[0] - prev_world_pos[0]) * self.scale,
             (self.buffer_center_world_pos[1] - prev_world_pos[1]) * self.scale,
         )
 
-        # everything is redrawn centred, so reset drag_shift
+        # Adjust the dragging attributes according to the change in
+        # buffer center
         if self.dragging:
             self.drag_init_pos = (self.drag_init_pos[0] - shift_view[0],
                                   self.drag_init_pos[1] - shift_view[1])
             self.drag_shift = (self.drag_shift[0] + shift_view[0],
                                self.drag_shift[1] + shift_view[1])
+            # self.bg_offset = (self.drag_shift[0] % 40,
+            #               self.drag_shift[1] % 40)
         else:
             # in theory, it's the same, but just to be sure we reset to 0,0
             # exactly
@@ -478,36 +515,31 @@ class DraggableCanvas(wx.Panel):
         # makes it slightly sooner, so smoother
         self.Update()
 
-    def Draw(self, dc_buffer):
+    def Draw(self):
         """ Redraw the buffer with the images and overlays
 
         Overlays must have a `Draw(dc_buffer, shift, scale)` method.
-
-        :param dc_buffer: (wx.DC) The buffer device context
         """
 
-        self.buffer_center_world_pos = self.requested_world_pos
-        #logging.debug("New drawing at %s", self.buffer_center_world_pos)
-
-        dc_buffer.Clear()
+        self._dc_buffer.Clear()
 
         # set and reset the origin here because Blit in onPaint gets "confused"
         # with values > 2048
         # centred on self.buffer_center_world_pos
         origin_pos = tuple(d / 2 for d in self._bmp_buffer_size)
-        dc_buffer.SetDeviceOriginPoint(origin_pos)
+        self._dc_buffer.SetDeviceOriginPoint(origin_pos)
 
         # we do not use the UserScale of the DC here because it would lead
         # to scaling computation twice when the image has a scale != 1. In
         # addition, as coordinates are int, there is rounding error on zooming.
-        self._DrawMergedImages(dc_buffer, self.Images, self.merge_ratio)
+        self._DrawMergedImages(self._dc_buffer, self.Images, self.merge_ratio)
 
-        dc_buffer.SetDeviceOriginPoint((0, 0))
+        self._dc_buffer.SetDeviceOriginPoint((0, 0))
 
         # Each overlay draws itself
         # Remember that the device context being passed belongs to the *buffer*
         for o in self.WorldOverlays:
-            o.Draw(dc_buffer, self.buffer_center_world_pos, self.scale)
+            o.Draw(self._dc_buffer, self.buffer_center_world_pos, self.scale)
 
 
 
@@ -536,7 +568,7 @@ class DraggableCanvas(wx.Panel):
            * a 2-tuple representing the top-left point on the buffer coordinate
         """
 
-        # The buffer area the image would occupy.
+        # The buffer area the image would occupy (top, left, width, height)
         buff_rect = self._GetImageRectOnBuffer(dc_buffer, im, scale, center)
 
         # Combine the zoom and image scales.
@@ -544,6 +576,7 @@ class DraggableCanvas(wx.Panel):
 
         if total_scale == 1.0:
             # TODO: should see how to avoid (it slows down quite a bit)
+            # Maybe just return a reference to im?
             ret = im.Copy()
             tl = buff_rect[0:2]
         elif total_scale < 1.0:
@@ -657,6 +690,134 @@ class DraggableCanvas(wx.Panel):
         )
         ctypes.memset(data, value, size.value)
 
+
+    def _DrawMergedImages(self, dc_buffer, images, mergeratio=0.5):
+        """ Draw the two images on the buffer DC, centred around their
+        _dc_center, with their own scale and an opacity of "mergeratio" for im1.
+
+        *IMPORTANT*: The origin (0, 0) of the dc_buffer is in the center!
+
+        Both _dc_center's should be close in order to have the parts with only
+        one picture drawn without transparency
+
+        :param dc_buffer: (wx.DC) The buffer device context which will be drawn
+            to
+        :param images: (list of wx.Image): The images to be drawn or a list with
+            a sinle 'None' element.
+        :parma mergeratio: (float [0..1]): How to merge the images (between 1st
+            and all others)
+        :parma scale: (float > 0): the scaling of the images in addition to
+            their own scale.
+
+        :return: (int) Frames per second
+
+        Note: this is a very rough implementation. It's not fully optimized and
+        uses only a basic averaging algorithm.
+
+        """
+
+        self._draw_background(dc_buffer)
+
+        if not images or images == [None]:
+            return 0
+
+        # TODO: Move Secom specific stuff to subclass
+
+        t_start = time.time()
+
+
+        # The old idea:
+        # * display the first image (SEM) last, with the given mergeratio (or 1
+        #   if it's the only one)
+        # * display all the other images (fluo) as if they were average
+        #   N images -> mergeratio = 1-0/N, 1-1/N,... 1-(N-1)/N
+
+        # fluo = [im for im in images[1:] if im is not None]
+        # nb_fluo = len(fluo)
+
+        # for i, im in enumerate(fluo): # display the fluo images first
+        #     r = 1.0 - i / float(nb_fluo)
+        #     self._DrawImage(
+        #         dc_buffer,
+        #         im,
+        #         im._dc_center,
+        #         r,
+        #         scale=im._dc_scale
+        #     )
+
+        # for im in images[:1]: # the first image (or nothing)
+        #     if im is None:
+        #         continue
+        #     if nb_fluo == 0:
+        #         mergeratio = 1.0 # no transparency if it's alone
+        #     self._DrawImage(
+        #         dc_buffer,
+        #         im,
+        #         im._dc_center,
+        #         mergeratio,
+        #         scale=im._dc_scale
+        #     )
+
+
+        # The new idea:
+        # Images are sorted by size, where the biggest image is painted first
+        # with no transpaency. All other images are painted over that afterwards
+        # where each get an opacity of 1/N
+        #
+        # It migh be a good idea to devise a way in which we can define
+        # different strategies for different scenarios.
+
+        for im in images[:1]: # the first image (or nothing)
+            if im:
+                self._DrawImage(
+                    dc_buffer,
+                    im,
+                    im._dc_center,
+                    1.0,
+                    scale=im._dc_scale
+                )
+
+        for _, im in enumerate([m for m in images[1:] if m is not None]):
+            self._DrawImage(
+               dc_buffer,
+               im,
+               im._dc_center,
+               mergeratio,
+               scale=im._dc_scale
+            )
+
+
+        t_now = time.time()
+        return 1.0 / float(t_now - t_start)
+
+
+    def _draw_background(self, dc_buffer):
+        """ Draw checkered background """
+        ctx = wxcairo.ContextFromDC(dc_buffer)
+        surface = wxcairo.ImageSurfaceFromBitmap(imgdata.getcanvasbgBitmap())
+
+        if not self.dragging:
+            if self.Parent._has_focus:
+                print "drag offsetting {}".format(self.bg_offset)
+            surface.set_device_offset(-self.bg_offset[0], -self.bg_offset[1])
+        else:
+            if self.Parent._has_focus:
+                print "no dragoffsetting {}".format(self.bg_offset)
+
+        pattern = cairo.SurfacePattern(surface)
+        pattern.set_extend(cairo.EXTEND_REPEAT)
+        ctx.set_source(pattern)
+
+        ctx.rectangle(
+            0,
+            0,
+            self._bmp_buffer_size[0],
+            self._bmp_buffer_size[1]
+        )
+
+        ctx.fill()
+
+
     def _DrawImage(self, dc_buffer, im, center, opacity=1.0, scale=1.0):
         """ Draws one image with the given scale and opacity on the dc_buffer.
 
@@ -687,99 +848,58 @@ class DraggableCanvas(wx.Panel):
         # after all the images are merged
         dc_buffer.DrawBitmapPoint(wx.BitmapFromImage(imscaled), tl)
 
-    def _draw_background(self, dc):
-        """ TODO: make it fixed or at least create a compensating offset after
-        dragging to prevent 'jumps', cache image etc.
-        """
-        ctx = wxcairo.ContextFromDC(dc)
 
-        image = wxcairo.ImageSurfaceFromBitmap(imgdata.getcanvasbgBitmap())
-        pattern = cairo.SurfacePattern(image)
-        pattern.set_extend(cairo.EXTEND_REPEAT)
-        ctx.set_source(pattern)
-
-        # print (self.drag_shift[0], self.drag_shift[0] % 20)
-        # print (self.drag_shift[1], self.drag_shift[1] % 20)
-
-        # offset = (self.drag_shift[0] % 20, self.drag_shift[1] % 20)
-        # ctx.set_device_offset(offset)
-
-        ctx.rectangle(
-            0,
-            0,
-            self._bmp_buffer_size[0],
-            self._bmp_buffer_size[1]
-        )
-
-        ctx.fill ()
-
-
-    def _DrawMergedImages(self, dc_buffer, images, mergeratio=0.5):
-        """ Draw the two images on the buffer DC, centred around their
-        _dc_center, with their own scale and an opacity of "mergeratio" for im1.
+    def _xDrawImage(self, dc_buffer, im, center, opacity=1.0, scale=1.0):
+        """ Draws one image with the given scale and opacity on the dc_buffer.
 
         *IMPORTANT*: The origin (0, 0) of the dc_buffer is in the center!
 
-        Both _dc_center's should be close in order to have the parts with only
-        one picture drawn without transparency
-
-        :param dc_buffer: (wx.DC) The buffer device context which will be drawn
-            to
-        :param images: (list of wx.Image): The images to be drawn or a list with
-            a sinle 'None' element.
-        :parma mergeratio: (float [0..1]): How to merge the images (between 1st
-            and all others)
-        :parma scale: (float > 0): the scaling of the images in addition to
-            their own scale.
-
-        Note: this is a very rough implementation. It's not fully optimized and
-        uses only a basic averaging algorithm.
-
+        :param dc_buffer: (wx.DC) Device context to draw on
+        :param im: (wx.Image) Image to draw
+        :param center: (2-tuple float)
+        :param opacity: (float) [0..1] => [transparent..opaque]
+        :param scale: (float)
         """
 
-        # TODO: Move Secom specific stuff to subclass
 
-        t_start = time.time()
+        if opacity <= 0.0:
+            return
 
-        self._draw_background(dc_buffer)
+        ctx = wx.lib.wxcairo.ContextFromDC(dc_buffer)
+        imscaled, tl = self._RescaleImageOptimized(dc_buffer, im, scale, center)
 
-        # The idea:
-        # * display the first image (SEM) last, with the given mergeratio (or 1
-        #   if it's the only one)
-        # * display all the other images (fluo) as if they were average
-        #   N images -> mergeratio = 1-0/N, 1-1/N,... 1-(N-1)/N
+        if not imscaled:
+            return
 
-        # Fluo images to actually display (ie, remove None)
-        fluo = [im for im in images[1:] if im is not None]
-        nb_fluo = len(fluo)
+        if opacity < 1.0:
+            # im2merged = im2scaled.AdjustChannels(1.0,1.0,1.0,opacity)
+            # TODO: Check if we could speed up by caching the alphabuffer
+            abuf = imscaled.GetAlphaBuffer()
+            self.memsetObject(abuf, int(255 * opacity))
 
-        for i, im in enumerate(fluo): # display the fluo images first
-            r = 1.0 - i / float(nb_fluo)
-            self._DrawImage(
-                dc_buffer,
-                im,
-                im._dc_center,
-                r,
-                scale=im._dc_scale
-            )
+        # TODO: the conversion from Image to Bitmap should be done only once,
+        # after all the images are merged
 
-        for im in images[:1]: # the first image (or nothing)
-            #print "dmerge", im
-            if im is None:
-                continue
-            if nb_fluo == 0:
-                mergeratio = 1.0 # no transparency if it's alone
-            self._DrawImage(
-                dc_buffer,
-                im,
-                im._dc_center,
-                mergeratio,
-                scale=im._dc_scale
-            )
+        image_surface = wx.lib.wxcairo.ImageSurfaceFromBitmap(
+                                                wx.BitmapFromImage(imscaled))
+        # calculate proportional scaling
+        #img_height = image_surface.get_height()
+        #img_width = image_surface.get_width()
+        #width_ratio = float(width) / float(img_width)
+        #height_ratio = float(height) / float(img_height)
+        #scale_xy = min(height_ratio, width_ratio)
+        # scale image and add it
+        ctx.save()
+        #ctx.scale(scale_xy, scale_xy)
+        ctx.translate(tl[0] + (self._bmp_buffer_size[0] / 2),
+                      tl[1] + (self._bmp_buffer_size[1] / 2))
+        ctx.set_source_surface(image_surface)
 
-        t_now = time.time()
-        fps = 1.0 / float(t_now - t_start) #pylint: disable=W0612
-        #logging.debug("Display speed: %s fps", fps)
+        ctx.paint()
+        ctx.restore()
+
+        #dc_buffer.DrawBitmapPoint(wx.BitmapFromImage(imscaled), tl)
+
 
     def world_to_buffer_pos(self, pos, offset=None):
         """ Converts a position from world coordinates to buffer coordinates

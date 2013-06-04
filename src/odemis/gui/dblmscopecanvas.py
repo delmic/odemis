@@ -26,20 +26,23 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from __future__ import division
 from .comp.canvas import DraggableCanvas, world_to_real_pos
 from .comp.overlay import CrossHairOverlay, ViewSelectOverlay, \
-    WorldSelectOverlay
+    WorldSelectOverlay, TextViewOverlay
 from decorator import decorator
 from odemis import util
 from odemis.gui.comp.canvas import real_to_world_pos
 from odemis.gui.model import EM_STREAMS
 from odemis.gui.model.stream import UNDEFINED_ROI
+from odemis.gui.util import limit_invocation, call_after
 from wx.lib.pubsub import pub
+import odemis.gui.main
+import odemis.gui.conf
 import logging
 import odemis.gui as gui
 import threading
-import time
 import sys
 import wx
 from odemis.model._vattributes import VigilantAttributeBase
+
 
 
 # Various modes canvas elements can go into.
@@ -84,15 +87,14 @@ class DblMicroscopeCanvas(DraggableCanvas):
         # FIXME: "stop all axes" should also cancel the next timer
         self._moveFocusLock = threading.Lock()
         self._moveFocusDistance = [0, 0]
-        # TODO deduplicate!
+        # TODO: deduplicate!
         self._moveFocus0Timer = wx.PyTimer(self._moveFocus0)
         self._moveFocus1Timer = wx.PyTimer(self._moveFocus1)
 
-        # for thumbnail update (might need a timer, instead of a minimum period
-        self._lastThumbnailUpdate = 0
-        self._thumbnailUpdatePeriod = 2 # s, minimal period before updating again
-
+        # Current (tool) mode. TODO: Make platform (secom/sparc) independant
         self.current_mode = None
+        # meter per "world unit"
+        self.mpwu = None
 
     def setView(self, microscope_view, microscope_model):
         """
@@ -211,21 +213,28 @@ class DblMicroscopeCanvas(DraggableCanvas):
         # override just in order to detect when it's just finished redrawn
 
         # TODO: detect that the canvas is not visible, and so should no/less
-        # frequently
-        # be updated?
+        # frequently be updated?
         super(DblMicroscopeCanvas, self).UpdateDrawing()
 
         if not self.microscope_view:
             return
-        now = time.time()
-        if (self._lastThumbnailUpdate + self._thumbnailUpdatePeriod) < now:
-            self._updateThumbnail()
-            self._lastThumbnailUpdate = now
 
-    # TODO: use rate limiting decorator
+        # now = time.time()
+        # if (self._lastThumbnailUpdate + self._thumbnailUpdatePeriod) < now:
+        #     self._updateThumbnail()
+        #     self._lastThumbnailUpdate = now
+
+        self._updateThumbnail()
+
+    # TODO: use rate limiting decorator NOTE: `limit_invocation` causes an X
+    # server error! Investigate further
+    @limit_invocation(2) # max 1/2s
+    @call_after
     def _updateThumbnail(self):
         # TODO avoid doing 2 copies, by using directly the wxImage from the
         # result of the StreamTree
+
+        logging.debug("Updating thumbnail")
 
         # new bitmap to copy the DC
         bitmap = wx.EmptyBitmap(*self.ClientSize)
@@ -397,6 +406,9 @@ class SecomCanvas(DblMicroscopeCanvas):
         self.zoom_overlay = ViewSelectOverlay(self, "Zoom")
         self.ViewOverlays.append(self.zoom_overlay)
 
+        self.fps_overlay = TextViewOverlay(self)
+        self.ViewOverlays.append(self.fps_overlay)
+
         self.update_overlay = WorldSelectOverlay(self, "Update")
         self.WorldOverlays.append(self.update_overlay)
 
@@ -523,6 +535,15 @@ class SecomCanvas(DblMicroscopeCanvas):
     def OnRightUp(self, event):
         if self.current_mode not in SECOM_MODES:
             super(SecomCanvas, self).OnRightUp(event)
+
+    def _DrawMergedImages(self, dc_buffer, images, mergeratio=0.5):
+        fps = super(SecomCanvas, self)._DrawMergedImages(dc_buffer,
+                                                         images,
+                                                         mergeratio)
+
+        debug_mode = wx.GetTopLevelParent(self).menu_item_debug.IsChecked()
+        if debug_mode or True:
+            self.fps_overlay.set_label("%d fps" % fps)
 
 class SparcAcquiCanvas(DblMicroscopeCanvas):
     def __init__(self, *args, **kwargs):

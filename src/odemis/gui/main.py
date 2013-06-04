@@ -23,7 +23,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from odemis import __version__, model
 from odemis.gui import main_xrc, instrmodel, log
-from odemis.gui.conf import get_general_conf
 from odemis.gui.cont import set_main_tab_controller, get_main_tab_controller
 from odemis.gui.model.dye import DyeDatabase
 from odemis.gui.model.img import InstrumentalImage
@@ -34,12 +33,14 @@ import Pyro4.errors
 import logging
 import numpy
 import odemis.gui.cont.tabs as tabs
+import odemis.gui.conf
 import os.path
 import scipy.io
 import sys
 import threading
 import traceback
 import wx
+
 
 class OdemisGUIApp(wx.App):
     """ This is Odemis' main GUI application class
@@ -59,7 +60,6 @@ class OdemisGUIApp(wx.App):
         self.microscope = None
         self.main_frame = None
 
-        logging.debug("Starting GUI")
         try:
             driver.speedUpPyroConnect(model.getMicroscope())
         except Exception:
@@ -135,7 +135,7 @@ class OdemisGUIApp(wx.App):
                         self.main_frame.menu_item_debug.GetId(),
                         self.on_debug)
 
-            gc = get_general_conf()
+            gc = odemis.gui.conf.get_general_conf()
 
             if os.path.exists(gc.html_dev_doc):
                 self.main_frame.menu_item_htmldoc.Enable(True)
@@ -392,7 +392,7 @@ see http://www.fluorophores.org/disclaimer/.
             ["python", "-m", "SimpleHTTPServer"],
             stderr=subprocess.STDOUT,
             stdout=subprocess.PIPE,
-            cwd=os.path.dirname(get_general_conf().html_dev_doc))
+            cwd=os.path.dirname(odemis.gui.conf.get_general_conf().html_dev_doc))
 
         import webbrowser
         webbrowser.open('http://localhost:8000')
