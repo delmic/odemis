@@ -358,6 +358,7 @@ class ViewSelector(object):
         the first button.
         im (unused)
         """
+
         # Create an image from the 4 thumbnails in a 2x2 layout with small
         # border. The button without a viewport attached is assumed to be the
         # one assigned to the 2x2 view

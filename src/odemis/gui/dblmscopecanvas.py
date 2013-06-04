@@ -88,7 +88,10 @@ class DblMicroscopeCanvas(DraggableCanvas):
         self._moveFocus0Timer = wx.PyTimer(self._moveFocus0)
         self._moveFocus1Timer = wx.PyTimer(self._moveFocus1)
 
+        # Current (tool) mode. TODO: Make platform (secom/sparc) independant
         self.current_mode = None
+        # meter per "world unit"
+        self.mpwu = None
 
     def setView(self, microscope_view, microscope_model):
         """
