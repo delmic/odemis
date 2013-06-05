@@ -438,9 +438,8 @@ see http://www.fluorophores.org/disclaimer/.
                 self.http_proc.terminate()  #pylint: disable=E1101
         except Exception:
             logging.exception("Error during GUI shutdown")
-            sys.exit(1)
 
-        sys.exit(0)
+        self.main_frame.Destroy()
 
     def excepthook(self, etype, value, trace): #pylint: disable=W0622
         """ Method to intercept unexpected errors that are not caught
