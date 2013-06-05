@@ -113,9 +113,9 @@ class xrcslider_frame(wx.Frame):
 
         # Define variables for the controls, bind event handlers
         self.slider_panel = xrc.XRCCTRL(self, "slider_panel")
-        self.vrslider = xrc.XRCCTRL(self, "vrslider")
-        self.vrslider = xrc.XRCCTRL(self, "vrslider")
-        self.vrslider = xrc.XRCCTRL(self, "vrslider")
+        self.vrslider1 = xrc.XRCCTRL(self, "vrslider1")
+        self.vrslider2 = xrc.XRCCTRL(self, "vrslider2")
+        self.vrslider3 = xrc.XRCCTRL(self, "vrslider3")
 
 
 
@@ -341,7 +341,7 @@ def __init_resources():
       <object class="wxBoxSizer">
         <orient>wxVERTICAL</orient>
         <object class="sizeritem">
-          <object class="VisualRangeSlider" name="vrslider">
+          <object class="VisualRangeSlider" name="vrslider1">
             <size>-1, 60</size>
             <fg>#BFBFBF</fg>
             <bg>#4D4D4D</bg>
@@ -352,7 +352,7 @@ def __init_resources():
           <flag>wxEXPAND</flag>
         </object>
         <object class="sizeritem">
-          <object class="VisualRangeSlider" name="vrslider">
+          <object class="VisualRangeSlider" name="vrslider2">
             <size>-1, 40</size>
             <fg>#BFBFBF</fg>
             <bg>#4D4D4D</bg>
@@ -363,7 +363,7 @@ def __init_resources():
           <flag>wxEXPAND</flag>
         </object>
         <object class="sizeritem">
-          <object class="VisualRangeSlider" name="vrslider">
+          <object class="VisualRangeSlider" name="vrslider3">
             <size>-1, 20</size>
             <fg>#BFBFBF</fg>
             <bg>#4D4D4D</bg>

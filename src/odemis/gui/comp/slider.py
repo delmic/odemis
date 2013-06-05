@@ -621,14 +621,14 @@ class VisualRangeSlider(wx.PyControl):
     def Disable(self):  #pylint: disable=W0221
         wx.PyControl.Disable(self)
         self.hist_color = change_brightness(self.hist_color, -0.5)
-        self.select_color != change_brightness(self.select_color, -0.4)
+        self.select_color = change_brightness(self.select_color, -0.4)
         #print self.hist_color
         self.Refresh()
 
     def Enable(self, enable=True):  #pylint: disable=W0221
         wx.PyControl.Enable(self, enable)
         self.hist_color = wxcol_to_rgb(self.GetForegroundColour())
-        self.select_color != change_brightness(self.select_color, 0.4)
+        self.select_color = change_brightness(self.select_color, 0.4)
         self.Refresh()
 
     def set_content(self, content_list):
@@ -684,40 +684,42 @@ class VisualRangeSlider(wx.PyControl):
                                        prcnt)
 
     def _hover(self, x):
-        left, right = self.pixel_value
+        if self.pixel_value:
+            left, right = self.pixel_value
 
-        if (left - 10) < x < (left + 10):
-            return gui.HOVER_LEFT_EDGE
-        elif (right - 10) < x < (right + 10):
-            return gui.HOVER_RIGHT_EDGE
-        elif left < x < right:
-            return gui.HOVER_SELECTION
-        else:
-            return None
+            if (left - 10) < x < (left + 10):
+                return gui.HOVER_LEFT_EDGE
+            elif (right - 10) < x < (right + 10):
+                return gui.HOVER_RIGHT_EDGE
+            elif left < x < right:
+                return gui.HOVER_SELECTION
+
+        return None
 
     def _calc_drag(self, x):
-        drag_x = x - self.drag_start_x
-        left, right = self.pixel_value
-        width, _ = self.GetSize()
+        if self.pixel_value:
+            left, right = self.pixel_value
+            drag_x = x - self.drag_start_x
+            width, _ = self.GetSize()
 
-        if self.mode == gui.HOVER_SELECTION:
-            if left + drag_x < 0:
-                drag_x = -left
-            elif right + drag_x > width:
-                drag_x = width - right
-        elif self.mode == gui.HOVER_LEFT_EDGE:
-            if left + drag_x > right - 10:
-                drag_x = right - left - 10
-            elif left + drag_x < 0:
-                drag_x = -left
-        elif self.mode == gui.HOVER_RIGHT_EDGE:
-            if right + drag_x < left + 10:
-                drag_x = left + 10 - right
-            elif right + drag_x > width:
-                drag_x = width - right
+            if self.mode == gui.HOVER_SELECTION:
+                if left + drag_x < 0:
+                    drag_x = -left
+                elif right + drag_x > width:
+                    drag_x = width - right
+            elif self.mode == gui.HOVER_LEFT_EDGE:
+                if left + drag_x > right - 10:
+                    drag_x = right - left - 10
+                elif left + drag_x < 0:
+                    drag_x = -left
+            elif self.mode == gui.HOVER_RIGHT_EDGE:
+                if right + drag_x < left + 10:
+                    drag_x = left + 10 - right
+                elif right + drag_x > width:
+                    drag_x = width - right
 
-        self.drag_x = drag_x
-        self.Refresh()
+            self.drag_x = drag_x
+            self.Refresh()
 
     def OnLeave(self, event):
 
@@ -732,7 +734,7 @@ class VisualRangeSlider(wx.PyControl):
 
     def OnMotion(self, event):
 
-        if not self.Enabled or not self.content_list:
+        if not self.Enabled:
             return
 
         x = event.GetX()
@@ -788,10 +790,11 @@ class VisualRangeSlider(wx.PyControl):
                 self.mode = None
 
     def OnPaint(self, event=None):
+        ctx = wxcairo.ContextFromDC(wx.PaintDC(self))
+
         if self.content_list:
             width, height = self.GetSize()
 
-            ctx = wxcairo.ContextFromDC(wx.PaintDC(self))
 
             #if self.dirty_conent:
             #surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, width, height)
@@ -803,7 +806,7 @@ class VisualRangeSlider(wx.PyControl):
 
             for i, v in enumerate(self.content_list):
                 x = i * line_width
-                self._draw_line(ctx, x, height, x, v * float(height))
+                self._draw_line(ctx, x, height, x, (1 - v) * float(height))
 
             self.dirty_conent = False
             #self.bmp = wxcairo.BitmapFromImageSurface(surface)
@@ -813,9 +816,9 @@ class VisualRangeSlider(wx.PyControl):
             #    ctx = wxcairo.ContextFromDC(wx.PaintDC(self))
             #    ctx.set_source(self.surface)
 
-            self._draw_selection(ctx)
+        self._draw_selection(ctx)
 
-            #wx.PaintDC(self).DrawBitmap(self.bmp)
+        #wx.PaintDC(self).DrawBitmap(self.bmp)
 
 
     def OnSize(self, event=None):

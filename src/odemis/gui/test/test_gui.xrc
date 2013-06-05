@@ -186,7 +186,7 @@
       <object class="wxBoxSizer">
         <orient>wxVERTICAL</orient>
         <object class="sizeritem">
-          <object class="VisualRangeSlider" name="vrslider">
+          <object class="VisualRangeSlider" name="vrslider1">
             <size>-1, 60</size>
             <fg>#BFBFBF</fg>
             <bg>#4D4D4D</bg>
@@ -197,7 +197,7 @@
           <flag>wxEXPAND</flag>
         </object>
         <object class="sizeritem">
-          <object class="VisualRangeSlider" name="vrslider">
+          <object class="VisualRangeSlider" name="vrslider2">
             <size>-1, 40</size>
             <fg>#BFBFBF</fg>
             <bg>#4D4D4D</bg>
@@ -208,7 +208,7 @@
           <flag>wxEXPAND</flag>
         </object>
         <object class="sizeritem">
-          <object class="VisualRangeSlider" name="vrslider">
+          <object class="VisualRangeSlider" name="vrslider3">
             <size>-1, 20</size>
             <fg>#BFBFBF</fg>
             <bg>#4D4D4D</bg>
