@@ -196,6 +196,28 @@
           </object>
           <flag>wxEXPAND</flag>
         </object>
+        <object class="sizeritem">
+          <object class="VisualRangeSlider" name="vrslider">
+            <size>-1, 40</size>
+            <fg>#BFBFBF</fg>
+            <bg>#4D4D4D</bg>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <flag>wxEXPAND</flag>
+        </object>
+        <object class="sizeritem">
+          <object class="VisualRangeSlider" name="vrslider">
+            <size>-1, 20</size>
+            <fg>#BFBFBF</fg>
+            <bg>#4D4D4D</bg>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <flag>wxEXPAND</flag>
+        </object>
       </object>
       <size>400,400</size>
       <fg>#E6E6FA</fg>

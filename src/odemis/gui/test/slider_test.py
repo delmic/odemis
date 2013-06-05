@@ -181,6 +181,14 @@ class SliderTestCase(unittest.TestCase):
             loop()
             wx.MilliSleep(SLEEP_TIME)
 
+        vrs.Disable()
+        loop()
+
+        wx.MilliSleep(SLEEP_TIME * 10)
+
+        vrs.Enable()
+        loop()
+
         for i in xrange(1000):
             vrs.set_value((i / 10.0, 100))
             loop()

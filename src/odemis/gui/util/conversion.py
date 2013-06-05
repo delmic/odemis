@@ -78,3 +78,12 @@ def hex_to_rgba(hex_str, af=1.0):
 
 def wxcol_to_rgb(wxcol):
     return (wxcol.Red() / 255.0, wxcol.Green() / 255.0, wxcol.Blue() / 255.0)
+
+def change_brightness(col_tup, step):
+    col_list = []
+    f, lim = (min, 1.0) if step > 0 else (max, 0.0)
+
+    for c in col_tup[:3]:
+        col_list.append(f(c + step, lim))
+
+    return tuple(col_list + list(col_tup[3:]))
