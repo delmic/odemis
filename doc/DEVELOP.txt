@@ -141,3 +141,13 @@ command.
 *Important note:* Hand-made documentation files should be stored in
 odemis/doc/code and odemis/doc/code/_gen should *only* contain automatically
 generated files!
+
+= Improving the speed =
+First, you need to profile the code to see where is the bottleneck.
+PYTHONPATH=./src/:../Pyro4/src/ python -m cProfile -o odemis.profile src/odemis/gui/main.py
+# run the typical usage you want to measure
+
+python -m pstats odemis.profile
+> sort time
+> stats
+
