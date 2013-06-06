@@ -190,7 +190,8 @@ class OdemisGUIApp(wx.App):
             # List of all possible tabs used in Odemis' main GUI
             # microscope role(s), internal name, class, tab btn, tab panel
             # order matters, as the first matching tab is be the default one
-            tab_rules = [("secom", "secom_live", tabs.SecomStreamsTab,
+            tab_rules = [(("secom", "sem", "optical"), "secom_live",
+                         tabs.SecomStreamsTab,
                          self.main_frame.btn_tab_secom_streams,
                          self.main_frame.pnl_tab_secom_streams),
                         # TODO: merge secom_gallery and sparc_analysis, once
