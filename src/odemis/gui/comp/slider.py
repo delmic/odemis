@@ -790,31 +790,38 @@ class VisualRangeSlider(wx.PyControl):
                 self.mode = None
 
     def OnPaint(self, event=None):
-        ctx = wxcairo.ContextFromDC(wx.PaintDC(self))
+        pdc = wx.PaintDC(self)
+        ctx = wxcairo.ContextFromDC(pdc)
 
         if self.content_list:
             width, height = self.GetSize()
 
 
-            #if self.dirty_conent:
-            #surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, width, height)
-            #ctx = cairo.Context(surface)
+            if self.dirty_conent:
+                line_width = float(width) / self.len_content
+                ctx.set_line_width(line_width + 0.5)
+                ctx.set_source_rgb(*self.hist_color)
 
-            line_width = float(width) / self.len_content
-            ctx.set_line_width(line_width + 0.5)
-            ctx.set_source_rgb(*self.hist_color)
+                for i, v in enumerate(self.content_list):
+                    x = i * line_width
+                    self._draw_line(ctx, x, height, x, (1 - v) * float(height))
 
-            for i, v in enumerate(self.content_list):
-                x = i * line_width
-                self._draw_line(ctx, x, height, x, (1 - v) * float(height))
+                self.dirty_conent = False
 
-            self.dirty_conent = False
-            #self.bmp = wxcairo.BitmapFromImageSurface(surface)
-            self.ctx = ctx
-            self.ctx.save()
-            #else:
-            #    ctx = wxcairo.ContextFromDC(wx.PaintDC(self))
-            #    ctx.set_source(self.surface)
+                self.content_bmp = wx.EmptyBitmap(width, height)
+                memDC = wx.MemoryDC()
+                memDC.SelectObject(self.content_bmp)
+                memDC.Blit(0, #Copy to this X coordinate
+                           0, #Copy to this Y coordinate
+                           width, #Copy this width
+                           height, #Copy this height
+                           pdc, #From where do we copy?
+                           0, #What's the X offset in the original DC?
+                           0  #What's the Y offset in the original DC?
+                           )
+                memDC.SelectObject(wx.NullBitmap)
+            else:
+                pdc.DrawBitmap(self.content_bmp, 0, 0)
 
         self._draw_selection(ctx)
 
