@@ -507,6 +507,17 @@ component.Manager.setMenu(c, 'Delmic control', 'Integer Slider', 'UnitIntegerSli
 component.Manager.setTool(c, 'Controls', pos=(0, 2))
 
 
+### VisualRangeSlider
+
+c = component.Component('VisualRangeSlider', ['control','tool'],
+              ['pos', 'size'],
+              image=images.TreeTextCtrl.GetImage())
+
+component.Manager.register(c)
+component.Manager.addXmlHandler(xh_delmic.VisualRangeSliderHandler)
+component.Manager.setMenu(c, 'Delmic control', 'Visual Range Slider', 'VisualRangeSlider', 1)
+component.Manager.setTool(c, 'Controls', pos=(0, 2))
+
 ### wxOwnerDrawnComboBox
 # This component is present in the default XRCed setup, but was added here
 # because the original did not allow for the setting of the down button

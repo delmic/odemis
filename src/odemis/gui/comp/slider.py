@@ -24,13 +24,17 @@ import logging
 import math
 import time
 
+import cairo
 import wx
+import wx.lib.wxcairo as wxcairo
 from wx.lib.agw.aui.aui_utilities import StepColour
 
-import odemis.gui
+import odemis.gui as gui
 from .text import UnitFloatCtrl, UnitIntegerCtrl
 from odemis.gui.img.data import getsliderBitmap, getslider_disBitmap
 from odemis.gui.util import limit_invocation
+from ..util.conversion import hex_to_rgb, hex_to_rgba, wxcol_to_rgb, \
+    change_brightness
 
 
 
@@ -394,8 +398,8 @@ class Slider(wx.PyControl):
         self.Refresh()
 
     def GetValue(self):
-        """ 
-        Get the value of the slider 
+        """
+        Get the value of the slider
         return (float or int)
         """
         return self.current_value
@@ -437,7 +441,7 @@ class NumberSlider(Slider):
                                     unit=unit,
                                     accuracy=accuracy)
 
-        self.linked_field.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_EDIT)
+        self.linked_field.SetForegroundColour(gui.FOREGROUND_COLOUR_EDIT)
         self.linked_field.SetBackgroundColour(parent.GetBackgroundColour())
 
         self.linked_field.Bind(wx.EVT_COMMAND_ENTER, self._update_slider)
@@ -530,4 +534,297 @@ class UnitFloatSlider(NumberSlider):
         kwargs['accuracy'] = kwargs.get('accuracy', 3)
 
         NumberSlider.__init__(self, *args, **kwargs)
+
+
+class VisualRangeSlider(wx.PyControl):
+
+    sel_alpha = 0.5
+    sel_alpha_h = 0.7
+
+    def __init__(self, *args, **kwargs):
+
+        kwargs['style'] |= wx.NO_BORDER
+
+        wx.PyControl.__init__(self, *args, **kwargs)
+
+        self.hist_color = wxcol_to_rgb(self.GetForegroundColour())
+        self.select_color = (1.0, 1.0, 1.0, self.sel_alpha)
+
+        if kwargs.get('size', None) == (-1, -1):
+            self.SetMinSize((-1, 40))
+
+        self.content_list = []
+        self.len_content = 0
+        self.dirty_conent = False
+        self.content_bmp = None
+
+        # The minimum and maximum values
+        self.val_range = ()
+        # The selected range (within self.range)
+        self.value = ()
+        # Selected range in pixels
+        self.pixel_value = ()
+
+        # Layout Events
+        self.Bind(wx.EVT_PAINT, self.OnPaint)
+        self.Bind(wx.EVT_SIZE, self.OnSize)
+
+        # Data events
+        self.Bind(wx.EVT_MOTION, self.OnMotion)
+        self.Bind(wx.EVT_LEFT_DOWN, self.OnLeftDown)
+        self.Bind(wx.EVT_LEFT_UP, self.OnLeftUp)
+        self.Bind(wx.EVT_LEAVE_WINDOW, self.OnLeave)
+        self.Bind(wx.EVT_ENTER_WINDOW, self.OnEnter)
+        #self.Bind(wx.EVT_MOUSE_CAPTURE_LOST, self.OnCaptureLost)
+
+        self.mode = None
+
+        self.drag_start_x = None
+        self.drag_x = 0
+
+        # Same code as in other slider. Merge?
+        self._percentage_to_val = lambda r0, r1, p: (r1 - r0) * p + r0
+        self._val_to_percentage = lambda r0, r1, v: (float(v) - r0) / (r1 - r0)
+
+    def SetForegroundColour(self, col):  #pylint: disable=W0221
+        wx.PyControl.SetForegroundColour(self, col)
+        self.hist_color = wxcol_to_rgb(self.GetForegroundColour())
+
+    def set_value(self, val):
+        try:
+            if all([self.val_range[0] <= i <= self.val_range[1] for i in val]):
+                if val[0] <= val[1]:
+                    self.value = val
+                    self.pixel_value = tuple(self._val_to_pixel(i) for i in val)
+                    self.Refresh()
+                else:
+                    msg = "Illegal value order %s, should be (low, high)" % val
+                    raise ValueError(msg)
+            else:
+                msg = "Illegal value %s for range %s" % (val, self.val_range)
+                raise ValueError(msg)
+        except IndexError:
+            if not self.val_range:
+                raise IndexError("Value range not set!")
+            else:
+                raise
+
+    def get_value(self):
+        return self.value
+
+    def set_range(self, val_range):
+        self.val_range = val_range
+
+    def get_range(self):
+        return self.val_range
+
+    def Disable(self):  #pylint: disable=W0221
+        wx.PyControl.Disable(self)
+        self.hist_color = change_brightness(self.hist_color, -0.5)
+        self.select_color = change_brightness(self.select_color, -0.4)
+        #print self.hist_color
+        self.Refresh()
+
+    def Enable(self, enable=True):  #pylint: disable=W0221
+        wx.PyControl.Enable(self, enable)
+        self.hist_color = wxcol_to_rgb(self.GetForegroundColour())
+        self.select_color = change_brightness(self.select_color, 0.4)
+        self.Refresh()
+
+    def set_content(self, content_list):
+        self.content_list = content_list
+        self.len_content = len(content_list)
+        self.dirty_conent = True
+        self.Refresh()
+
+    def _draw_line(self, ctx, a, b, c, d):
+        ctx.move_to(a, b)
+        ctx.line_to(c, d)
+        ctx.stroke()
+
+    def _draw_selection(self, ctx):
+        if self.value:
+            ctx.set_source_rgba(*self.select_color)
+            #print self.value[0], self.val_range, self._val_to_pixel(self.value[0])
+            #print self.value[1], self.val_range, self._val_to_pixel(self.value[1])
+            _, height = self.GetSize()
+
+            left, right = self.pixel_value
+
+            if self.mode in (gui.HOVER_SELECTION, gui.HOVER_LEFT_EDGE):
+                left = self.pixel_value[0] + self.drag_x
+
+            if self.mode in (gui.HOVER_SELECTION, gui.HOVER_RIGHT_EDGE):
+                right = self.pixel_value[1] + self.drag_x
+
+            rect = (left,
+                    0.0,
+                    right - left,
+                    height,
+            )
+
+            ctx.rectangle(*rect)
+            ctx.fill()
+
+
+    def _val_to_pixel(self, val=None):
+        """ Convert a slider value into a pixel position """
+        width, _ = self.GetSize()
+        prcnt = self._val_to_percentage(self.val_range[0],
+                                        self.val_range[1],
+                                        val)
+        return int(width * prcnt)
+
+    def _pixel_to_val(self, pixel):
+        """ Convert the current handle position into a value """
+        width, _ = self.GetSize()
+        prcnt = float(pixel) / width
+        return self._percentage_to_val(self.val_range[0],
+                                       self.val_range[1],
+                                       prcnt)
+
+    def _hover(self, x):
+        if self.pixel_value:
+            left, right = self.pixel_value
+
+            if (left - 10) < x < (left + 10):
+                return gui.HOVER_LEFT_EDGE
+            elif (right - 10) < x < (right + 10):
+                return gui.HOVER_RIGHT_EDGE
+            elif left < x < right:
+                return gui.HOVER_SELECTION
+
+        return None
+
+    def _calc_drag(self, x):
+        if self.pixel_value:
+            left, right = self.pixel_value
+            drag_x = x - self.drag_start_x
+            width, _ = self.GetSize()
+
+            if self.mode == gui.HOVER_SELECTION:
+                if left + drag_x < 0:
+                    drag_x = -left
+                elif right + drag_x > width:
+                    drag_x = width - right
+            elif self.mode == gui.HOVER_LEFT_EDGE:
+                if left + drag_x > right - 10:
+                    drag_x = right - left - 10
+                elif left + drag_x < 0:
+                    drag_x = -left
+            elif self.mode == gui.HOVER_RIGHT_EDGE:
+                if right + drag_x < left + 10:
+                    drag_x = left + 10 - right
+                elif right + drag_x > width:
+                    drag_x = width - right
+
+            self.drag_x = drag_x
+            self.Refresh()
+
+    def OnLeave(self, event):
+
+        if self.select_color[-1] != self.sel_alpha:
+            self.select_color = self.select_color[:3] + (self.sel_alpha,)
+            self.Refresh()
+
+    def OnEnter(self, event):
+        if self.HasCapture() and self.select_color[-1] != self.sel_alpha_h:
+            self.select_color = self.select_color[:3] + (self.sel_alpha_h,)
+            self.Refresh()
+
+    def OnMotion(self, event):
+
+        if not self.Enabled:
+            return
+
+        x = event.GetX()
+
+        if not self.HasCapture():
+            hover = self._hover(x)
+            if hover in (gui.HOVER_LEFT_EDGE, gui.HOVER_RIGHT_EDGE):
+                self.SetCursor(wx.StockCursor(wx.CURSOR_SIZEWE))
+            elif hover == gui.HOVER_SELECTION:
+                self.SetCursor(wx.StockCursor(wx.CURSOR_HAND))
+            else:
+                self.SetCursor(wx.STANDARD_CURSOR)
+
+            if hover and self.select_color[-1] != self.sel_alpha_h:
+                self.select_color = self.select_color[:3] + (self.sel_alpha_h,)
+                self.Refresh()
+            elif not hover and self.select_color[-1] != self.sel_alpha:
+                self.select_color = self.select_color[:3] + (self.sel_alpha,)
+                self.Refresh()
+
+
+            self.drag_x = 0
+        else:
+            self._calc_drag(x)
+
+    def OnLeftDown(self, event):
+        if self.Enabled:
+            self.CaptureMouse()
+            self.SetFocus()
+            self.drag_start_x = event.GetX()
+            self.mode = self._hover(self.drag_start_x)
+
+
+    def OnLeftUp(self, event):
+        if self.Enabled:
+            if self.HasCapture():
+                self.ReleaseMouse()
+                if self.drag_x:
+                    if self.mode == gui.HOVER_SELECTION:
+                        pv = tuple(v + self.drag_x for v in self.pixel_value)
+                        self.pixel_value = pv
+                    elif self.mode == gui.HOVER_LEFT_EDGE:
+                        self.pixel_value = (self.pixel_value[0] + self.drag_x,
+                                            self.pixel_value[1])
+                    elif self.mode == gui.HOVER_RIGHT_EDGE:
+                        self.pixel_value = (self.pixel_value[0],
+                                            self.pixel_value[1] + self.drag_x)
+
+                    self.value = tuple(self._pixel_to_val(i) for i in self.pixel_value)
+                    self.drag_x = 0
+
+                self.drag_start_x = None
+                self.mode = None
+
+    def OnPaint(self, event=None):
+        ctx = wxcairo.ContextFromDC(wx.PaintDC(self))
+
+        if self.content_list:
+            width, height = self.GetSize()
+
+
+            #if self.dirty_conent:
+            #surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, width, height)
+            #ctx = cairo.Context(surface)
+
+            line_width = float(width) / self.len_content
+            ctx.set_line_width(line_width + 0.5)
+            ctx.set_source_rgb(*self.hist_color)
+
+            for i, v in enumerate(self.content_list):
+                x = i * line_width
+                self._draw_line(ctx, x, height, x, (1 - v) * float(height))
+
+            self.dirty_conent = False
+            #self.bmp = wxcairo.BitmapFromImageSurface(surface)
+            self.ctx = ctx
+            self.ctx.save()
+            #else:
+            #    ctx = wxcairo.ContextFromDC(wx.PaintDC(self))
+            #    ctx.set_source(self.surface)
+
+        self._draw_selection(ctx)
+
+        #wx.PaintDC(self).DrawBitmap(self.bmp)
+
+
+    def OnSize(self, event=None):
+        self.dirty_conent = True
+        self.Refresh()
+
+
+
 

@@ -27,28 +27,64 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 Canvas Rendering Pipeline
 -------------------------
 
-Attributes of interest:
+** Attributes of interest:
 
 * buffer_center_world_pos: The center of the buffer in world coordinates.
 When the user moves or drags the view, the buffer is recentered around a new
 set of world coordinates.
 
+* _dc_buffer: The buffer into which is drawn. Its size is typically the size
+of the view window, with an added margin all around it.
+
+* requested_world_pos: The requested new center of the buffer in world
+coordinates, which is set from ReCenterBuffer, a method called whenever
+a drag action is complete or when the view is otherwise
+changed.
+
+
+** Method calls:
 
 * ShouldUpdateDrawing
     This method triggers the OnDrawTimer handler, but only if time delay
     criteria are met, so drawing doesn't happen too often or too infrequently.
 
     * OnDrawTimer
+
         Simply calls the next function.
 
         * UpdateDrawing
 
+            Update buffer_center_world_pos to requested_world_pos.
 
-            Draw(dc_buffer)
-                _DrawMergedImages
-                    _DrawImage
-                        _RescaleImageOptimized
+            * Draw
+
+                Move the origin to the _dc_buffer from the top left to its
+                center.
+
+                * _DrawMergedImages
+
+                    Draw the background using
+
+                    * _draw_background
+
+                    Draw each image in the stack using...
+
+                    * _DrawImage
+
+                        Rescales the image using...
+
+                        * _RescaleImageOptimized
+
+                        Set image opacity using...
+
+                        * memsetObject
+
+                        Draw the image to the _dc_buffer
+
+                Reset the origin to the top left (0, 0)
+
             Refresh/Update
+
 
 DrawTimer is set by ShouldUpdateDrawing
 

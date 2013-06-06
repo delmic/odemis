@@ -34,12 +34,9 @@ from odemis.gui.model import EM_STREAMS
 from odemis.gui.model.stream import UNDEFINED_ROI
 from odemis.gui.util import limit_invocation, call_after
 from wx.lib.pubsub import pub
-import odemis.gui.main
-import odemis.gui.conf
 import logging
 import odemis.gui as gui
 import threading
-import sys
 import wx
 from odemis.model._vattributes import VigilantAttributeBase
 

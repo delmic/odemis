@@ -67,7 +67,7 @@ def wave2rgb(wavelength):
 def hex_to_rgb(hex_str):
     """
     Convert a Hexadecimal color representation into an 3-tuple of floats
-    return (tuple of 3 (0<float<1): R, G, and B 
+    return (tuple of 3 (0<float<1): R, G, and B
     """
     hex_str = hex_str[-6:]
     return tuple(int(hex_str[i:i+2], 16) / 255 for i in [0, 2, 4])
@@ -75,3 +75,15 @@ def hex_to_rgb(hex_str):
 def hex_to_rgba(hex_str, af=1.0):
     """ Convert a Hexadecimal color representation into an 4-tuple of floats """
     return hex_to_rgb(hex_str) + (af,)
+
+def wxcol_to_rgb(wxcol):
+    return (wxcol.Red() / 255.0, wxcol.Green() / 255.0, wxcol.Blue() / 255.0)
+
+def change_brightness(col_tup, step):
+    col_list = []
+    f, lim = (min, 1.0) if step > 0 else (max, 0.0)
+
+    for c in col_tup[:3]:
+        col_list.append(f(c + step, lim))
+
+    return tuple(col_list + list(col_tup[3:]))
