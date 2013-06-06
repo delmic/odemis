@@ -5,22 +5,18 @@
 :copyright: © 2012 Rinze de Laat, Delmic
 
 .. license::
-
     This file is part of Odemis.
-
-    Odemis is free software: you can redistribute it and/or modify it under
-    the terms of the GNU General Public License as published by the Free
-    Software Foundation, either version 2 of the License, or (at your
-    option) any later version.
-
-    Odemis is distributed in the hope that it will be useful, but WITHOUT
-    ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
-    FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
-    more details.
-
-    You should have received a copy of the GNU General Public License along
-    with Odemis. If not, see http://www.gnu.org/licenses/.
-
+    
+    Odemis is free software: you can redistribute it and/or modify it under the terms 
+    of the GNU General Public License version 2 as published by the Free Software 
+    Foundation.
+    
+    Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
+    without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR 
+    PURPOSE. See the GNU General Public License for more details.
+    
+    You should have received a copy of the GNU General Public License along with 
+    Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
 # This module contains various custom button classes used throughout the odemis
@@ -74,10 +70,10 @@ def DarkenImage(anImage):
     data = [ord(d) for d in list(anImage.GetData())]
 
     for i in range(0, len(data), 3):
-        pixel = (data[i], data[i+1], data[i+2])
+        pixel = (data[i], data[i + 1], data[i + 2])
         pixel = tuple([int(p * 0.4)  for p in pixel])
         for x in range(3):
-            data[i+x] = pixel[x]
+            data[i + x] = pixel[x]
     anImage.SetData(''.join([chr(d) for d in data]))
     if alpha:
         anImage.SetAlphaData(alpha)
@@ -809,7 +805,7 @@ class ViewButton(ImageTextToggleButton):
             sim = image.Scale(*rsize, quality=wx.IMAGE_QUALITY_HIGH)
 
             # crop to the right shape
-            lt = ((size_tn[0] - sim.Width)//2, (size_tn[1] - sim.Height)//2)
+            lt = ((size_tn[0] - sim.Width) // 2, (size_tn[1] - sim.Height) // 2)
             sim.Resize(size_tn, lt)
         else:
             # black image
