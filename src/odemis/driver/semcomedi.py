@@ -2257,13 +2257,16 @@ class Scanner(model.Emitter):
             ratio = (shape[i] * scale[i]) / area_shape[i]
             assert ratio <= 1 # cannot be bigger than the whole area
             pxv = width / area_shape[i] # V/px
-            shift = translation[i] * pxv
             # pxv/2 is to ensure the point scanned of each pixel is at the center
             # of the area of each pixel
-            roi_lim = (center - width * ratio + shift + pxv / 2,
-                       center + width * ratio + shift - pxv / 2)
+            roi_hwidth = (width * ratio - pxv) / 2
+            shift = translation[i] * pxv
+            roi_lim = (center + shift - roi_hwidth,
+                       center + shift + roi_hwidth)
             assert roi_lim[0] <= roi_lim[1]
+            assert roi_lim[0] >= lim[0] and roi_lim[1] <= lim[1]
             roi_limits.append(roi_lim)
+        logging.debug("ranges X = %sV, Y = %sV", roi_limits[0], roi_limits[1])
 
         # if the conversion polynom is order <= 1, it's as precise and
         # much faster to generate directly the raw data.
