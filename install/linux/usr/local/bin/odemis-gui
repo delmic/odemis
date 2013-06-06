@@ -5,4 +5,4 @@
 
 export PYTHONPATH
 
-python2.7 $ODEMISPATH/$GUI "$@"
+python2.7 -m $GUI "$@"
