@@ -8,15 +8,15 @@ Copyright © 2012 Éric Piel, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms 
-of the GNU General Public License version 2 as published by the Free Software 
+Odemis is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
 Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR 
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
 PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with 
+You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
@@ -67,7 +67,7 @@ class MicroscopeMgr(object):
             a = getattr(self, an)
             if a:
                 for axis in a.axes:
-                    self.axis_to_actuator[axis] = an 
+                    self.axis_to_actuator[axis] = an
 
 
     def stopMotion(self):
@@ -88,35 +88,35 @@ class MicroscopeMgr(object):
                 self.aligner.stop()
             except:
                 logging.exception("Failed to stop alignment actuators")
-        
+
         logging.info("stopped motion on every axes")
 
 
     def step(self, axis, factor, sync=False):
         """
         Moves a given axis by a one step (of stepsizes).
-        axis (str): name of the axis to move
-        factor (float): amount to which multiply the stepsizes. -1 makes it goes 
-          one step backward.
-        sync (boolean): wait until the move is over before returning
-        raises:
-            KeyError if the axis doesn't exist
+
+        :param axis: (str) name of the axis to move
+        :param factor: (float) amount to which multiply the stepsizes. -1 makes
+            it goes one step backward.
+        :param sync: (bool) wait until the move is over before returning
+
+        :raises: KeyError if the axis doesn't exist
         """
         an = self.axis_to_actuator[axis]
         a = getattr(self, an)
         if a is None:
             logging.debug("Trying to move axis %s of '%s' which is not connected", axis, an)
-    
+
         ss = factor * self.stepsizes[an].value
-        
+
         if abs(ss) > 10e-3:
             # more than a cm is too dangerous
             logging.info("Not moving axis %s because a distance of %g m is too big.", axis, ss)
 
         move = {axis: ss}
         f = a.moveRel(move)
-        
+
         if sync:
             f.result() # wait until the future is complete
-        
-        
+
