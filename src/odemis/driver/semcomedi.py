@@ -1949,7 +1949,7 @@ class Scanner(model.Emitter):
     
     Note that the .resolution, .translation, .scale and .rotation VAs are 
       linked, so that the region of interest stays approximately the same (in
-      terms of physical space). So to change them to specific vaules, it is 
+      terms of physical space). So to change them to specific values, it is 
       recommended to set them in the following order: Rotation > Scale > 
       Resolution > Translation.  
     """
@@ -1963,7 +1963,7 @@ class Scanner(model.Emitter):
           voltage for the max value of X. 
         settle_time (0<=float<=1e-3): time in s for the signal to settle after
           each scan line
-        hfw_nomag (0<float<=1): (theoritical) distance between horizontal borders 
+        hfw_nomag (0<float<=1): (theoretical) distance between horizontal borders 
           (lower/upper limit in X) if magnification is 1 (in m)
         """
         if len(channels) != 2:
@@ -1997,7 +1997,7 @@ class Scanner(model.Emitter):
                 raise ValueError("Data range between %g and %g V is too high for hardware." %
                                  (data_lim[0], data_lim[1]))
 
-        # TODO: only set this to True if the order of the convertion polynomial <=1
+        # TODO: only set this to True if the order of the conversion polynomial <=1
         self._can_generate_raw_directly = True
 
         # It will set up ._shape and .parent
@@ -2063,7 +2063,7 @@ class Scanner(model.Emitter):
         self.dwellTime = model.FloatContinuous(range_dwell[0], range_dwell,
                                                unit="s", setter=self._setDwellTime)
 
-        # event to allow another component to synchronize on the begginning of
+        # event to allow another component to synchronize on the beginning of
         # a pixel position. Only sent during an actual pixel of a scan, not for
         # the beam settling time or when put to rest.
         self.newPosition = model.Event()
@@ -2113,7 +2113,7 @@ class Scanner(model.Emitter):
     def _setScale(self, value):
         """
         value (1 < float, 1 < float): increase of size between pixels compared to
-         the orginal pixel size. It will adapt the translation and resolution to
+         the original pixel size. It will adapt the translation and resolution to
          have the same ROI (just different amount of pixels scanned)
         return the actual value used
         """
@@ -2215,7 +2215,7 @@ class Scanner(model.Emitter):
           ranges: the range index of each output channel
           osr: over-sampling rate, how many input samples should be acquired by pixel 
         Note: it only recomputes the scanning array if the settings have changed
-        Note: it's not thread-safe, you must ensure no simulaneous calls.
+        Note: it's not thread-safe, you must ensure no simultaneous calls.
         """
         dwell_time = self.dwellTime.value
         resolution = self.resolution.value
@@ -2268,7 +2268,7 @@ class Scanner(model.Emitter):
             roi_limits.append(roi_lim)
         logging.debug("ranges X = %sV, Y = %sV", roi_limits[0], roi_limits[1])
 
-        # if the conversion polynom is order <= 1, it's as precise and
+        # if the conversion polynomial has degree <= 1, it's as precise and
         # much faster to generate directly the raw data.
         if self._can_generate_raw_directly:
             # Compute the best ranges for each channel
