@@ -123,7 +123,8 @@ sudo adduser replace_by_login_name odemis
 
 On Linux, install the files this way:
 cd odemis
-sudo python ./setup.py install
+python ./setup.py build
+sudo ./setup.py install --root=/ --install-scripts=/usr/local/bin/ --install-data=/usr/ --single-version-externally-managed
 
 To get the fluorophores database, you can run this command:
 ./util/getfluodb.py
@@ -228,4 +229,14 @@ This file describes the available hardware for Odemis. Basically, it lists for e
 hardware, which driver to use and the parameters required. It's following the
 YAML format (similar to JSON). See the back-end specification for precise syntax
 and example files.
+
+To get inspired when starting a new file, you can use "odemis-cli --scan" to
+detect some of the hardware connected.
+
+If you're using an SEM and another detector, it is recommended to first 
+configure the X/Y axes of the SEM to orient the image identically to the vendor
+software, and then adjust the orientation of the other detectors.
+  
+
+ 
 
