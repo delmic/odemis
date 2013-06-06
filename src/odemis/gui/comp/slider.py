@@ -6,15 +6,15 @@ Copyright © 2012 Rinze de Laat, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms 
-of the GNU General Public License version 2 as published by the Free Software 
+Odemis is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
 Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR 
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
 PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with 
+You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
@@ -543,10 +543,12 @@ class VisualRangeSlider(wx.PyControl):
     def __init__(self, *args, **kwargs):
 
         kwargs['style'] |= wx.NO_BORDER
+        kwargs['style'] |= wx.NO_FULL_REPAINT_ON_RESIZE
 
         wx.PyControl.__init__(self, *args, **kwargs)
 
         self.hist_color = wxcol_to_rgb(self.GetForegroundColour())
+        print kwargs
         self.select_color = (1.0, 1.0, 1.0, self.sel_alpha)
 
         if kwargs.get('size', None) == (-1, -1):
@@ -585,12 +587,18 @@ class VisualRangeSlider(wx.PyControl):
         self._percentage_to_val = lambda r0, r1, p: (r1 - r0) * p + r0
         self._val_to_percentage = lambda r0, r1, v: (float(v) - r0) / (r1 - r0)
 
-    def SetForegroundColour(self, col):  #pylint: disable=W0221
-        wx.PyControl.SetForegroundColour(self, col)
+    def SetForegroundColour(self, col=None):  #pylint: disable=W0221
+        if col:
+            wx.PyControl.SetForegroundColour(self, col)
         self.hist_color = wxcol_to_rgb(self.GetForegroundColour())
 
     def set_value(self, val):
         try:
+            if not val:
+                self.value = ()
+                self.pixel_value = ()
+                return
+
             if all([self.val_range[0] <= i <= self.val_range[1] for i in val]):
                 if val[0] <= val[1]:
                     self.value = val
@@ -612,7 +620,15 @@ class VisualRangeSlider(wx.PyControl):
         return self.value
 
     def set_range(self, val_range):
+        if self.value:
+            if not all([val_range[0] <= i <= val_range[1] for i in self.value]):
+                msg = "Illegal range %s for value %s" % (val_range, self.value)
+                raise ValueError(msg)
+
         self.val_range = val_range
+        self.pixel_value = tuple(self._val_to_pixel(i) for i in self.value)
+        self.Refresh()
+
 
     def get_range(self):
         return self.val_range
@@ -634,6 +650,7 @@ class VisualRangeSlider(wx.PyControl):
         self.content_list = content_list
         self.len_content = len(content_list)
         self.dirty_conent = True
+        self.content_bmp = None
         self.Refresh()
 
     def _draw_line(self, ctx, a, b, c, d):
@@ -644,8 +661,6 @@ class VisualRangeSlider(wx.PyControl):
     def _draw_selection(self, ctx):
         if self.value:
             ctx.set_source_rgba(*self.select_color)
-            #print self.value[0], self.val_range, self._val_to_pixel(self.value[0])
-            #print self.value[1], self.val_range, self._val_to_pixel(self.value[1])
             _, height = self.GetSize()
 
             left, right = self.pixel_value
@@ -788,28 +803,31 @@ class VisualRangeSlider(wx.PyControl):
                 self.drag_start_x = None
                 self.mode = None
 
+    def _draw_histogram(self, ctx, width, height):
+        line_width = float(width) / self.len_content
+        ctx.set_line_width(line_width + 0.5)
+        ctx.set_source_rgb(*self.hist_color)
+
+        for i, v in enumerate(self.content_list):
+            x = i * line_width
+            self._draw_line(ctx, x, height, x, (1 - v) * float(height))
+
     def OnPaint(self, event=None):
         pdc = wx.PaintDC(self)
         ctx = wxcairo.ContextFromDC(pdc)
+        width, height = self.GetSize()
 
         if self.content_list:
-            width, height = self.GetSize()
-
-
             if self.dirty_conent:
-                line_width = float(width) / self.len_content
-                ctx.set_line_width(line_width + 0.5)
-                ctx.set_source_rgb(*self.hist_color)
-
-                for i, v in enumerate(self.content_list):
-                    x = i * line_width
-                    self._draw_line(ctx, x, height, x, (1 - v) * float(height))
-
+                print "fresh"
+                self._draw_histogram(ctx, width, height)
                 self.dirty_conent = False
 
                 self.content_bmp = wx.EmptyBitmap(width, height)
+
                 memDC = wx.MemoryDC()
                 memDC.SelectObject(self.content_bmp)
+
                 memDC.Blit(0, #Copy to this X coordinate
                            0, #Copy to this Y coordinate
                            width, #Copy this width
@@ -817,19 +835,26 @@ class VisualRangeSlider(wx.PyControl):
                            pdc, #From where do we copy?
                            0, #What's the X offset in the original DC?
                            0  #What's the Y offset in the original DC?
-                           )
+                )
                 memDC.SelectObject(wx.NullBitmap)
-            else:
+            elif self.content_bmp:
+                print "cached"
                 pdc.DrawBitmap(self.content_bmp, 0, 0)
 
         self._draw_selection(ctx)
 
-        #wx.PaintDC(self).DrawBitmap(self.bmp)
-
-
     def OnSize(self, event=None):
         self.dirty_conent = True
-        self.Refresh()
+        self.Update()
+        #self.content_bmp = wx.EmptyBitmap(*self.GetSize())
+
+        #
+        # pdc = wx.PaintDC(self)
+        # pdc.Clear()
+        # ctx = wxcairo.ContextFromDC(pdc)
+        # self._draw_histogram(ctx, pdc)
+
+        # self.Refresh()
 
 
 

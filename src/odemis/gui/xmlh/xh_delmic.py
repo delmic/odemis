@@ -867,8 +867,8 @@ class VisualRangeSliderHandler(xrc.XmlResourceHandler):
                                          pos=self.GetPosition(),
                                          size=self.GetSize(),
                                          style=self.GetStyle())
-
         self.SetupWindow(slider)
+        slider.SetForegroundColour()
         return slider
 HANDLER_CLASS_LIST.append(VisualRangeSliderHandler)
 
