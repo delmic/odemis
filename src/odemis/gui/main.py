@@ -20,7 +20,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 
-from odemis import __version__, model
+from odemis import model
 from odemis.gui import main_xrc, instrmodel, log
 from odemis.gui.cont import set_main_tab_controller, get_main_tab_controller
 from odemis.gui.model.dye import DyeDatabase
@@ -31,8 +31,8 @@ from odemis.util import driver
 import Pyro4.errors
 import logging
 import numpy
-import odemis.gui.cont.tabs as tabs
 import odemis.gui.conf
+import odemis.gui.cont.tabs as tabs
 import os.path
 import scipy.io
 import sys
@@ -359,12 +359,12 @@ class OdemisGUIApp(wx.App):
         info = wx.AboutDialogInfo()
         info.SetIcon(wx.Icon(os.path.join(self._module_path(), "img/icon128.png"),
                              wx.BITMAP_TYPE_PNG))
-        info.Name = __version__.shortname
-        info.Version = __version__.version
-        info.Description = __version__.name
-        info.Copyright = __version__.copyright
+        info.Name = odemis.__shortname__
+        info.Version = odemis.__version__
+        info.Description = odemis.__fullname__
+        info.Copyright = odemis.__copyright__
         info.WebSite = ("http://delmic.com", "delmic.com")
-        info.Licence = __version__.license_summary
+        info.Licence = odemis.__licensetxt__
         info.Developers = ["Éric Piel", "Rinze de Laat"]
         # info.DocWriter = '???'
         # info.Artist = '???'

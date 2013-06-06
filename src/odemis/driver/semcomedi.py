@@ -21,13 +21,14 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
 from numpy.core import umath
-from odemis import model, __version__
+from odemis import model
 from odemis.model._core import roattribute
 import gc
 import glob
 import logging
 import math
 import numpy
+import odemis
 import odemis.driver.comedi_simple as comedi
 import os
 import threading
@@ -157,7 +158,7 @@ class SEMComedi(model.HwComponent):
         self._writer = Writer(self)
 
         self._metadata = {model.MD_HW_NAME: self.getHwName()}
-        self._swVersion = "%s (driver %s)" % (__version__.version, self.getSwVersion())
+        self._swVersion = "%s (driver %s)" % (odemis.__version__, self.getSwVersion())
         self._metadata[model.MD_SW_VERSION] = self._swVersion
         self._metadata[model.MD_HW_VERSION] = self._hwVersion # unknown
 

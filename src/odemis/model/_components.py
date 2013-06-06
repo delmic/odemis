@@ -23,11 +23,11 @@ from . import _core, _dataflow, _vattributes
 from ._core import roattribute
 from Pyro4.core import isasync
 from abc import ABCMeta, abstractmethod
-from odemis import __version__
 import Pyro4
 import collections
 import inspect
 import logging
+import odemis
 import threading
 import urllib
 import weakref
@@ -269,7 +269,7 @@ class HwComponent(Component):
         Component.__init__(self, name, *args, **kwargs)
         self._role = role
         self._affects = frozenset()
-        self._swVersion = "Unknown (Odemis %s)" % __version__.version
+        self._swVersion = "Unknown (Odemis %s)" % odemis.__version__
         self._hwVersion = "Unknown"
 
     @roattribute

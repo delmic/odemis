@@ -20,11 +20,12 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from concurrent import futures
-from odemis import __version__, model
+from odemis import model
 from odemis.model import isasync
 import collections
 import glob
 import logging
+import odemis
 import os
 import re
 import serial
@@ -1158,7 +1159,7 @@ class Bus(model.Actuator):
         self._setSpeed(speed)
         
         # set HW and SW version
-        self._swVersion = "%s (serial driver: %s)" % (__version__.version, self.getSerialDriver(port))
+        self._swVersion = "%s (serial driver: %s)" % (odemis.__version__, self.getSerialDriver(port))
         hwversions = []
         for axis, (ctrl, channel) in self._axis_to_cc.items():
             hwversions.append("'%s': %s (GCS %s) for %s" % (axis, ctrl.GetIdentification(), ctrl.GetSyntaxVersion(), ctrl.GetStageName()))
