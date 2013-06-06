@@ -22,12 +22,13 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from __future__ import division
 from Pyro4.core import isasync
 from concurrent.futures.thread import ThreadPoolExecutor
-from odemis import model, __version__
+from odemis import model
 from odemis.util import driver
 import collections
 import glob
 import logging
 import math
+import odemis
 import os
 import re
 import serial
@@ -141,7 +142,7 @@ class SpectraPro(model.Actuator):
                                 ranges={"wavelength": (0, 2400e-9)}, **kwargs)
     
         # set HW and SW version
-        self._swVersion = "%s (serial driver: %s)" % (__version__.version, driver.getSerialDriver(port))
+        self._swVersion = "%s (serial driver: %s)" % (odemis.__version__, driver.getSerialDriver(port))
         self._hwVersion = "%s (s/n: %s)" % (model_name, (self.GetSerialNumber() or "Unknown"))
     
         # will take care of executing axis move asynchronously

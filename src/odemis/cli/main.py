@@ -23,7 +23,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 # This is a basic command line interface to the odemis back-end
 
 from Pyro4.errors import CommunicationError
-from odemis import __version__, model, dataio, util
+from odemis import model, dataio, util
 from odemis.cli.video_displayer import VideoDisplayer
 from odemis.dataio import tiff #pylint: disable=W0611
 from odemis.util.driver import reproduceTypedValue
@@ -606,7 +606,7 @@ def main(args):
     """
 
     # arguments handling
-    parser = argparse.ArgumentParser(description=__version__.name)
+    parser = argparse.ArgumentParser(description=odemis.__fullname__)
 
     parser.add_argument('--version', dest="version", action='store_true',
                         help="show program's version number and exit")
@@ -650,9 +650,9 @@ def main(args):
 
     # Cannot use the internal feature, because it doesn't support multiline
     if options.version:
-        print (__version__.name + " " + __version__.version + "\n" +
-               __version__.copyright + "\n" +
-               "Licensed under the " + __version__.license)
+        print (odemis.__fullname__ + " " + odemis.__version__ + "\n" +
+               odemis.__copyright__ + "\n" +
+               "Licensed under the " + odemis.__license__)
         return 0
 
     # Set up logging before everything else

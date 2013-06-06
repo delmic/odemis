@@ -21,13 +21,13 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 
+from odemis import model
 from odemis.odemisd import modelgen
 from odemis.odemisd.mdupdater import MetadataUpdater
-from odemis import __version__
-from odemis import model
 import argparse
 import grp
 import logging
+import odemis
 import os
 import signal
 import stat
@@ -63,7 +63,7 @@ class BackendContainer(model.Container):
         model.Container.__init__(self, name)
         self.components = set() # to be updated later on
         self.sub_containers = set() # to be updated later on
-    
+
     def terminate(self):
         # Stop all the components
         for comp in self.components:
@@ -71,26 +71,26 @@ class BackendContainer(model.Container):
                 comp.terminate()
             except:
                 logging.warning("Failed to terminate component '%s'", comp.name)
-        
+
         # end all the (sub-)containers
         for container in self.sub_containers:
             try:
                 container.terminate()
             except:
                 logging.warning("Failed to terminate container %r", container)
-    
+
         # end ourself
         model.Container.terminate(self)
-    
+
     def setMicroscope(self, component):
         self.rootId = component._pyroId
 
 
 class BackendRunner(object):
-    CONTAINER_DISABLE="0" # only for debugging: everything is created in the process: no backend accessible
-    CONTAINER_ALL_IN_ONE="1" # one backend container for everything
-    CONTAINER_SEPARATED="+" # each component is started in a separate container
-    
+    CONTAINER_DISABLE = "0" # only for debugging: everything is created in the process: no backend accessible
+    CONTAINER_ALL_IN_ONE = "1" # one backend container for everything
+    CONTAINER_SEPARATED = "+" # each component is started in a separate container
+
     def __init__(self, model_file, daemon=False, dry_run=False, containement=CONTAINER_SEPARATED):
         """
         containement (CONTAINER_*): the type of container policy to use
@@ -99,12 +99,12 @@ class BackendRunner(object):
         self.daemon = daemon
         self.dry_run = dry_run
         self.containement = containement
-        
+
         self._container = None
         self._components = set()
-        
+
         signal.signal(signal.SIGINT, self.handle_signal)
-    
+
     def set_base_group(self):
         """
         Change the current process to be running in the base group (odemis)
@@ -116,14 +116,14 @@ class BackendRunner(object):
         except KeyError:
             logging.exception(model.BASE_GROUP + " group doesn't exists.")
             raise
-        
+
         try:
             os.setgid(gid_base)
         except OSError:
             logging.warning("Not enough permissions to run in group " + model.BASE_GROUP + ", trying anyway...")
-            
+
         # everything created after must be rw by group
-        os.umask(~(stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IWGRP)) 
+        os.umask(~(stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IWGRP))
 
     def mk_base_dir(self):
         """
@@ -135,7 +135,7 @@ class BackendRunner(object):
         if not os.path.exists(model.BASE_DIRECTORY):
             # it will raise an appropriate exception if it fails to create it
             os.mkdir(model.BASE_DIRECTORY)
-            
+
     #        # change the group
     #        gid_base = grp.getgrnam(model.BASE_GROUP).gr_gid
     #        os.chown(model.BASE_DIRECTORY, -1, gid_base)
@@ -149,7 +149,7 @@ class BackendRunner(object):
     def handle_signal(self, signum, frame):
         logging.warning("Received signal %d: quitting", signum)
         self.stop()
-    
+
     def terminate_all_components(self):
         """
         try to terminate all the components given as much as possible
@@ -159,18 +159,18 @@ class BackendRunner(object):
             try:
                 comp.terminate()
             except:
-                # can happen if it was already terminated 
+                # can happen if it was already terminated
                 logging.warning("Failed to terminate component '%s'", comp.name)
-    
+
     def stop(self):
         if self._container:
             self._container.terminate()
             self._container.close()
         else:
             self.terminate_all_components()
-            
+
     def run(self):
-        # parse the instantiation file 
+        # parse the instantiation file
         try:
             logging.debug("model instantiation file is: %s", self.model.name)
             inst_model = modelgen.get_instantiation_model(self.model)
@@ -178,20 +178,20 @@ class BackendRunner(object):
         except modelgen.ParseError:
             logging.exception("Error while parsing file %s", self.model.name)
             return 127
-    
+
         # change to odemis group and create the base directory
         try:
             self.set_base_group()
         except:
             logging.exception("Failed to get group " + model.BASE_GROUP)
             return 127
-    
+
         try:
-            self.mk_base_dir() 
+            self.mk_base_dir()
         except:
             logging.exception("Failed to create back-end directory " + model.BASE_DIRECTORY)
             return 127
-    
+
         # create the root container
         try:
             # create daemon for containing the backend container
@@ -206,14 +206,14 @@ class BackendRunner(object):
         except:
             logging.exception("Failed to create back-end container")
             return 127
-        
+
         try:
-            if self.containement == BackendRunner.CONTAINER_SEPARATED: 
+            if self.containement == BackendRunner.CONTAINER_SEPARATED:
                 create_sub_containers = True
             else:
                 create_sub_containers = False
             mic, comps, sub_containers = modelgen.instantiate_model(
-                                            inst_model, self._container, 
+                                            inst_model, self._container,
                                             create_sub_containers,
                                             dry_run=self.dry_run)
             # save the model
@@ -222,35 +222,35 @@ class BackendRunner(object):
                 self._container.sub_containers |= sub_containers
             self._components = comps
             logging.info("model has been successfully instantiated")
-            logging.debug("model microscope is %s", mic.name) 
-            logging.debug("model components are %s", ", ".join([c.name for c in comps])) 
+            logging.debug("model microscope is %s", mic.name)
+            logging.debug("model components are %s", ", ".join([c.name for c in comps]))
         except:
             logging.exception("When instantiating file %s", self.model.name)
             self.stop()
             return 127
-        
+
         if self.dry_run:
             logging.info("model has been successfully validated, exiting")
             self.stop()
             return 0    # everything went fine
-        
+
         try:
             # special "meta" component
-            mdUpdater = self._container.instantiate(MetadataUpdater, 
+            mdUpdater = self._container.instantiate(MetadataUpdater,
              {"name": "Metadata Updater", "microscope": mic, "components": comps})
             self._components.add(mdUpdater)
         except:
             logging.exception("When starting the metadata updater")
             self.stop()
             return 127
-        
+
         if self.containement == BackendRunner.CONTAINER_DISABLE:
             # in case it was not clear it's only for debug!
             logging.warning("Going to wait for an hour and die")
             time.sleep(3600)
             self.stop()
             return 0
-        
+
         try:
             self._container.components = self._components
             logging.info("Microscope is now available in container '%s'", model.BACKEND_NAME)
@@ -260,7 +260,7 @@ class BackendRunner(object):
             logging.exception("When running back-end container")
             self.stop()
             return 127
-        
+
         return 0
 
 BACKEND_RUNNING = "RUNNING"
@@ -287,7 +287,7 @@ status_to_xtcode = {BACKEND_RUNNING: 0,
 
 # This is the cli interface of odemisd, which allows to start the back-end
 # It parses the command line and accordingly reads the microscope instantiation
-# file, generates a model out of it, and then provides it to the front-end 
+# file, generates a model out of it, and then provides it to the front-end
 def main(args):
     """
     Contains the console handling code for the daemon
@@ -296,11 +296,11 @@ def main(args):
     """
 
     #print args
-    # arguments handling 
-    parser = argparse.ArgumentParser(description=__version__.name)
+    # arguments handling
+    parser = argparse.ArgumentParser(description=odemis.__fullname__)
 
-    parser.add_argument('--version', action='version', 
-                        version=__version__.name + " " + __version__.version + " – " + __version__.copyright)
+    parser.add_argument('--version', dest="version", action='store_true',
+                        help="show program's version number and exit")
     dm_grp = parser.add_argument_group('Daemon management')
     dm_grpe = dm_grp.add_mutually_exclusive_group()
     dm_grpe.add_argument("--kill", "-k", dest="kill", action="store_true", default=False,
@@ -318,18 +318,25 @@ def main(args):
                          default=0, help="Set verbosity level (0-2, default = 0)")
     opt_grp.add_argument("--log-target", dest="logtarget", metavar="{auto,stderr,filename}",
                          default="auto", help="Specify the log target (auto, stderr, filename)")
-    parser.add_argument("model", metavar="file.odm.yaml", nargs='?', type=open, 
+    parser.add_argument("model", metavar="file.odm.yaml", nargs='?', type=open,
                         help="Microscope model instantiation file (*.odm.yaml)")
 
     options = parser.parse_args(args[1:])
-    
+
+    # Cannot use the internal feature, because it doesn't support multiline
+    if options.version:
+        print (odemis.__fullname__ + " " + odemis.__version__ + "\n" +
+               odemis.__copyright__ + "\n" +
+               "Licensed under the " + odemis.__license__)
+        return 0
+
     # Set up logging before everything else
     if options.loglev < 0:
         parser.error("log-level must be positive.")
     loglev_names = [logging.WARNING, logging.INFO, logging.DEBUG]
     loglev = loglev_names[min(len(loglev_names) - 1, options.loglev)]
-    
-    # auto = {odemis.log if daemon, stderr otherwise} 
+
+    # auto = {odemis.log if daemon, stderr otherwise}
     if options.logtarget == "auto":
         # default to SysLogHandler ?
         if options.daemon:
@@ -343,11 +350,11 @@ def main(args):
     logging.getLogger().setLevel(loglev)
     handler.setFormatter(logging.Formatter('%(asctime)s (%(module)s) %(levelname)s: %(message)s'))
     logging.getLogger().addHandler(handler)
-    
+
     if options.validate and (options.kill or options.check or options.daemon):
         logging.error("Impossible to validate a model and manage the daemon simultaneously")
         return 127
-    
+
     # Daemon management
     # python-daemon is a fancy library but seems to do too many things for us.
     # We just need to contact the backend and see what happens
@@ -366,28 +373,28 @@ def main(args):
     elif options.check:
         logging.info("Status of back-end is %s", status)
         return status_to_xtcode[status]
-    
+
     # check if there is already a backend running
     if status == BACKEND_RUNNING:
         logging.error("Back-end already running, cannot start a new one")
-    
+
     if options.model is None:
         logging.error("No microscope model instantiation file provided")
         return 127
-    
+
     if options.debug:
         #cont_pol = BackendRunner.CONTAINER_DISABLE
         cont_pol = BackendRunner.CONTAINER_ALL_IN_ONE
     else:
         cont_pol = BackendRunner.CONTAINER_SEPARATED
-    
+
     # let's become the back-end for real
     runner = BackendRunner(options.model, options.daemon, options.validate, cont_pol)
     return runner.run()
 
 if __name__ == '__main__':
     ret = main(sys.argv)
-    logging.shutdown() 
+    logging.shutdown()
     exit(ret)
-    
+
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:

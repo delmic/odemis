@@ -21,10 +21,11 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 
 from ctypes import *
-from odemis import __version__, model, util
+from odemis import model, util
 import gc
 import logging
 import numpy
+import odemis
 import os
 import re
 import threading
@@ -177,7 +178,7 @@ class AndorCam3(model.DigitalCamera):
         self._metadata = {model.MD_HW_NAME: self.getModelName()}
         
         # odemis + sdk
-        self._swVersion = "%s (driver %s)" % (__version__.version, self.getSDKVersion()) 
+        self._swVersion = "%s (driver %s)" % (odemis.__version__, self.getSDKVersion())
         self._metadata[model.MD_SW_VERSION] = self._swVersion
         self._hwVersion = self.getHwVersion()
         self._metadata[model.MD_HW_VERSION] = self._hwVersion

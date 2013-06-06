@@ -20,10 +20,11 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
-from odemis import model, __version__, util
+from odemis import model, util
 from odemis.util import driver
 import glob
 import logging
+import odemis
 import os
 import serial
 import threading
@@ -161,7 +162,7 @@ class LLE(model.Emitter):
         
         self.power.subscribe(self._updatePower)
         # set HW and SW version
-        self._swVersion = "%s (serial driver: %s)" % (__version__.version, driver.getSerialDriver(port))
+        self._swVersion = "%s (serial driver: %s)" % (odemis.__version__, driver.getSerialDriver(port))
         self._hwVersion = "Lumencor Light Engine" # hardware doesn't report any version
         
         

@@ -21,13 +21,14 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
 from libtiff import TIFF
-from odemis import __version__, model
+from odemis import model
 import libtiff.libtiff_ctypes as T # for the constant names
-#pylint: disable=E1101
 import logging
 import numpy
+import odemis
 import time
 import xml.etree.ElementTree as ET
+#pylint: disable=E1101
 
 # Note concerning the image format: it follows the numpy convention. The first
 # dimension is the height, and second one is the width. (This is so because
@@ -72,7 +73,7 @@ def _convertToTiffTag(metadata):
     tiffmd[T.TIFFTAG_RESOLUTIONUNIT] = T.RESUNIT_CENTIMETER
     for key, val in metadata.items():
         if key == model.MD_SW_VERSION:
-            tiffmd[T.TIFFTAG_SOFTWARE] = __version__.shortname + " " + val
+            tiffmd[T.TIFFTAG_SOFTWARE] = odemis.__shortname__ + " " + val
         elif key == model.MD_HW_NAME:
             tiffmd[T.TIFFTAG_MAKE] = val
         elif key == model.MD_HW_VERSION:

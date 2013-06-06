@@ -19,12 +19,13 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
-from odemis import __version__, model
+from odemis import model
 from odemis.firststep import main_xrc, instrmodel
 from odemis.gui.util.widgets import VigilantAttributeConnector
 from odemis.gui.xmlh import odemis_get_firststep_resources
 import Pyro4.errors
 import logging
+import odemis
 import os.path
 import sys
 import threading
@@ -214,10 +215,10 @@ class FirstStepApp(wx.App):
 
     def on_about(self, evt):
         message = ("%s\nVersion %s.\n\n%s.\nLicensed under the %s." %
-                   (__version__.name,
-                    __version__.version,
-                    __version__.copyright,
-                    __version__.license))
+                   (odemis.__fullname__,
+                    odemis.__version__,
+                    odemis.__copyright__,
+                    odemis.__license__))
         dlg = wx.MessageDialog(self.main_frame, message,
                                "About FirstStep", wx.OK) # TODO use main_frame.title
         dlg.ShowModal() # blocking

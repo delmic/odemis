@@ -39,4 +39,4 @@ if [ $status -ne 0 ]; then
     fi
 fi
 
-python2.7 $ODEMISPATH/$FIRSTSTEP "$@"
+python2.7 -m $FIRSTSTEP "$@"

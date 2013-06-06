@@ -20,8 +20,9 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from Pyro4.core import isasync
-from odemis import __version__, model
+from odemis import model
 import collections
+import odemis
 
 """
 Provides various components which are not actually drivers but just representing
@@ -29,8 +30,8 @@ physical components which cannot be modified by software. It's mostly used for
 computing the right metadata/behaviour of the system.
 """
 
-# TODO what is the best type? Emitter? Or something else? 
-# Detector needs a specific .data and .shape 
+# TODO what is the best type? Emitter? Or something else?
+# Detector needs a specific .data and .shape
 class OpticalLens(model.HwComponent):
     """
     A very simple class which just represent a lens with a given magnification.
@@ -43,14 +44,14 @@ class OpticalLens(model.HwComponent):
         """
         assert (mag > 0)
         model.HwComponent.__init__(self, name, role, **kwargs)
-        
-        self._swVersion = "N/A (Odemis %s)" % __version__.version
+
+        self._swVersion = "N/A (Odemis %s)" % odemis.__version__
         self._hwVersion = name
-        
+
         # allow the user to modify the value, if the lens is manually changed
         self.magnification = model.FloatContinuous(mag, range=[1e-3, 1e6], unit="")
-    
-    
+
+
 class LightFilter(model.HwComponent):
     """
     A very simple class which just represent a light filter (blocks a wavelength 
@@ -68,10 +69,10 @@ class LightFilter(model.HwComponent):
         """
         model.HwComponent.__init__(self, name, role, **kwargs)
 
-        self._swVersion = "N/A (Odemis %s)" % __version__.version
+        self._swVersion = "N/A (Odemis %s)" % odemis.__version__
         self._hwVersion = name
-        
-        # Create a 2-tuple or a set of 2-tuples 
+
+        # Create a 2-tuple or a set of 2-tuples
         if not isinstance(band, collections.Iterable) or len(band) == 0:
             raise TypeError("band must be a (list of a) list of 2 floats")
         # is it a list of list?
@@ -92,23 +93,23 @@ class LightFilter(model.HwComponent):
             if band[0] > band[1]:
                 raise TypeError("Min of band must be first in list")
             band = frozenset([tuple(band)])
-        
+
         # Check that the values are in m: they are typically within nm (< um!)
         max_val = 1e-6
         for low, high in band:
             if low > max_val or high > max_val:
                 raise ValueError("Band contains very high values for light wavelength, ensure the value is in meters: %r.", band)
-        
+
         # not readonly to allow the user to change manually the filter
         self.band = model.ListVA(band, unit="m")
-        
+
         # TODO: MD_OUT_WL or MD_IN_WL depending on affect
         self._metadata = {model.MD_FILTER_NAME: name,
                           model.MD_OUT_WL: band}
-        
+
     def getMetadata(self):
         return self._metadata
-    
+
 
 class Spectrograph(model.Actuator):
     """
@@ -126,20 +127,20 @@ class Spectrograph(model.Actuator):
         """
         if kwargs.get("inverted", None):
             raise ValueError("Axis of spectrograph cannot be inverted")
-        
+
         if not isinstance(wlp, list) or len(wlp) < 1:
             raise ValueError("wlp need to be a list of at least one float")
-        
-        self._swVersion = "N/A (Odemis %s)" % __version__.version
+
+        self._swVersion = "N/A (Odemis %s)" % odemis.__version__
         self._hwVersion = name
-        
+
         self._wlp = wlp
         pos = {"wavelength": self._wlp[0]}
-        model.Actuator.__init__(self, name, role, axes=["wavelength"], 
+        model.Actuator.__init__(self, name, role, axes=["wavelength"],
                                 ranges={"wavelength": (0, 2400e-9)}, **kwargs)
         self.position = model.VigilantAttribute(pos, unit="m", readonly=True)
-        
-    
+
+
     # we simulate the axis, to give the same interface as a fully controllable
     # spectrograph, but it has to actually reflect the state of the hardware.
     @isasync
@@ -149,7 +150,7 @@ class Spectrograph(model.Actuator):
         for axis, value in shift.items():
             new_pos[axis] = self.position.value[axis] + value
         return self.moveAbs(new_pos)
-        
+
     @isasync
     def moveAbs(self, pos):
         for axis, value in pos.items():
@@ -159,13 +160,13 @@ class Spectrograph(model.Actuator):
                 self.position.notify(self.position.value)
             else:
                 raise LookupError("Axis '%s' doesn't exist", axis)
-        
+
         return model.InstantaneousFuture()
-    
+
     def stop(self):
         # nothing to do
         pass
-    
+
     def getPolyToWavelength(self):
         """
         Compute the right polynomial to convert from a position on the sensor to the

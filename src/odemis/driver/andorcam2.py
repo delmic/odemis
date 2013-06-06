@@ -23,12 +23,13 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from __future__ import division
 from Pyro4.core import oneway
 from ctypes import *
-from odemis import __version__, model, util
+from odemis import model, util
 import collections
 import ctypes # for fake AndorV2DLL
 import gc
 import logging
 import numpy
+import odemis
 import os
 import threading
 import time
@@ -378,7 +379,7 @@ class AndorCam2(model.DigitalCamera):
             logging.warning("This driver has not been tested for this camera type")
 
         # odemis + drivers
-        self._swVersion = "%s (%s)" % (__version__.version, self.getSwVersion()) 
+        self._swVersion = "%s (%s)" % (odemis.__version__, self.getSwVersion())
         self._metadata[model.MD_SW_VERSION] = self._swVersion
         hwv = self.getHwVersion()
         self._metadata[model.MD_HW_VERSION] = hwv

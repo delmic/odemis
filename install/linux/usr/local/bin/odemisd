@@ -35,4 +35,4 @@ if [ "$RUNNER" == "" ]; then
 fi
 
 export PYTHONPATH
-$RUNNER python2.7 $ODEMISPATH/$BACKEND "$@"
+$RUNNER python2.7 -m $BACKEND "$@"
