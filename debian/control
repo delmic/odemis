@@ -4,6 +4,7 @@ Priority: optional
 Maintainer: Éric Piel <piel@delmic.com>
 Standards-Version: 3.9.2
 Build-Depends: debhelper (>= 9),
+               python-setuptools,
                python (>= 2.7.1),
                python-all
 X-Python-Version: >= 2.7
@@ -15,6 +16,7 @@ Package: odemis
 Architecture: all
 Depends: python (>= 2.7.1),
          python-wxgtk2.9,
+         python-pkg-resources,
          python-yaml,
          python-serial,
          python-imaging,
