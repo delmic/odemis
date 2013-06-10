@@ -7,15 +7,15 @@ Copyright © 2012 Rinze de Laat, Éric Piel, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms 
-of the GNU General Public License version 2 as published by the Free Software 
+Odemis is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
 Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR 
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
 PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with 
+You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
@@ -28,6 +28,7 @@ from odemis.gui.model.img import InstrumentalImage
 from odemis.gui.model.stream import StaticSEMStream, StaticSpectrumStream
 from odemis.gui.xmlh import odemis_get_resources
 from odemis.util import driver
+from wx.lib.pubsub import pub
 import Pyro4.errors
 import logging
 import numpy
@@ -107,6 +108,7 @@ class OdemisGUIApp(wx.App):
         logging.info("***********************************************")
         logging.info("************  Starting Odemis GUI  ************")
         logging.info("***********************************************")
+        logging.info(wx.version())
 
         self.init_gui()
 
@@ -413,6 +415,8 @@ see http://www.fluorophores.org/disclaimer/.
         try:
             # Put cleanup actions here (like disconnect from odemisd)
 
+            pub.unsubAll()
+
             # TODO: move to tab controller?
             # Stop live view
             mtc = get_main_tab_controller()
@@ -433,9 +437,11 @@ see http://www.fluorophores.org/disclaimer/.
                 except AttributeError:
                     pass
 
-            self.main_frame.Destroy()
             if self.http_proc:
                 self.http_proc.terminate()  #pylint: disable=E1101
+
+            self.main_frame.Destroy()
+
         except Exception:
             logging.exception("Error during GUI shutdown")
 

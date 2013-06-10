@@ -83,7 +83,9 @@ def limit_invocation(delay_s):
 
 def call_after_wrapper(f, *args, **kwargs):
     def wrapzor(*args, **kwargs):
-        return wx.CallAfter(f, *args, **kwargs)
+        app = wx.GetApp()
+        if app:
+            return wx.CallAfter(f, *args, **kwargs)
     return wrapzor
 
 def dead_object_wrapper(f, *args, **kwargs):
@@ -92,7 +94,9 @@ def dead_object_wrapper(f, *args, **kwargs):
     """
     def wrapzor(*args, **kwargs):
         try:
-            return f(*args, **kwargs)
+            app = wx.GetApp()
+            if app:
+                return f(*args, **kwargs)
         except wx.PyDeadObjectError:
             logging.debug("PyDeadObjectError avoided")
     return wrapzor
