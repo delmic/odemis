@@ -8,15 +8,15 @@ Copyright © 2012-2013 Rinze de Laat and Éric Piel, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms 
-of the GNU General Public License version 2 as published by the Free Software 
+Odemis is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
 Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR 
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
 PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with 
+You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
@@ -370,7 +370,9 @@ class ViewSelector(object):
         im_22 = wx.EmptyImage(*size, clear=False)
         im_22.SetRGBRect(wx.Rect(0, 0, *size), *btn_all.GetBackgroundColour().Get())
 
-        for i, (_, view_label) in enumerate(self.buttons.items()):
+        i = 0
+
+        for _, view_label in self.buttons.items():
             if view_label.vp is None: # 2x2 layout
                 continue
 
@@ -398,6 +400,8 @@ class ViewSelector(object):
                 # black image
                 # Should never happen
                 pass #sim = wx.EmptyImage(*size_sub)
+
+            i += 1
 
         # set_overlay will rescale to the correct button size
         btn_all.set_overlay(im_22)

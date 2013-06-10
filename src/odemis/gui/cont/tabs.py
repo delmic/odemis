@@ -9,20 +9,23 @@ Custom (graphical) radio button control.
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms 
-of the GNU General Public License version 2 as published by the Free Software 
+Odemis is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
 Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR 
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
 PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with 
+You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 
 from __future__ import division
+
+from collections import OrderedDict
+
 from collections import namedtuple
 from odemis.gui import instrmodel
 from odemis.gui.cont import settings
@@ -98,27 +101,30 @@ class SecomStreamsTab(Tab):
         # btn -> (viewport, label)
         ViewportLabel = namedtuple('ViewportLabel', ['vp', 'lbl'])
 
-        buttons = {
-            self.main_frame.btn_secom_view_all:
-                ViewportLabel(
-                    None,
-                    self.main_frame.lbl_secom_view_all),
-            self.main_frame.btn_secom_view_tl:
-                ViewportLabel(
-                    self.main_frame.vp_secom_tl,
-                    self.main_frame.lbl_secom_view_tl),
-            self.main_frame.btn_secom_view_tr:
-                ViewportLabel(
-                    self.main_frame.vp_secom_tr,
-                    self.main_frame.lbl_secom_view_tr),
-            self.main_frame.btn_secom_view_bl:
-                ViewportLabel(
-                    self.main_frame.vp_secom_bl,
-                    self.main_frame.lbl_secom_view_bl),
-            self.main_frame.btn_secom_view_br:
-                ViewportLabel(
-                    self.main_frame.vp_secom_br,
-                    self.main_frame.lbl_secom_view_br)}
+        buttons = OrderedDict(
+            [
+                (self.main_frame.btn_secom_view_all,
+                    ViewportLabel(
+                        None,
+                        self.main_frame.lbl_secom_view_all)),
+                (self.main_frame.btn_secom_view_tl,
+                        ViewportLabel(
+                            self.main_frame.vp_secom_tl,
+                            self.main_frame.lbl_secom_view_tl)),
+                (self.main_frame.btn_secom_view_tr,
+                        ViewportLabel(
+                            self.main_frame.vp_secom_tr,
+                            self.main_frame.lbl_secom_view_tr)),
+                (self.main_frame.btn_secom_view_bl,
+                        ViewportLabel(
+                            self.main_frame.vp_secom_bl,
+                            self.main_frame.lbl_secom_view_bl)),
+                (self.main_frame.btn_secom_view_br,
+                        ViewportLabel(
+                            self.main_frame.vp_secom_br,
+                            self.main_frame.lbl_secom_view_br))
+            ]
+        )
 
         self._view_selector = ViewSelector(
                                     self.interface_model,
