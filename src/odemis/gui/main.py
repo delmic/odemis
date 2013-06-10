@@ -202,6 +202,9 @@ class OdemisGUIApp(wx.App):
                         ("booooo", "secom_gallery", tabs.AnalysisTab,
                          self.main_frame.btn_tab_secom_gallery,
                          self.main_frame.pnl_tab_secom_gallery), # we want to hide this
+                        ("sparc", "sparc_align", tabs.MirrorAlignTab,
+                         self.main_frame.btn_tab_sparc_align,
+                         self.main_frame.pnl_tab_sparc_align),
                         ("sparc", "sparc_acqui", tabs.SparcAcquisitionTab,
                          self.main_frame.btn_tab_sparc_acqui,
                          self.main_frame.pnl_tab_sparc_acqui),

@@ -47,6 +47,7 @@ class xrcfr_main(wx.Frame):
         self.menu_item_about = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_about"))
         self.btn_tab_secom_streams = xrc.XRCCTRL(self, "btn_tab_secom_streams")
         self.btn_tab_secom_gallery = xrc.XRCCTRL(self, "btn_tab_secom_gallery")
+        self.btn_tab_sparc_align = xrc.XRCCTRL(self, "btn_tab_sparc_align")
         self.btn_tab_sparc_acqui = xrc.XRCCTRL(self, "btn_tab_sparc_acqui")
         self.btn_tab_sparc_analysis = xrc.XRCCTRL(self, "btn_tab_sparc_analysis")
         self.pnl_tab_secom_streams = xrc.XRCCTRL(self, "pnl_tab_secom_streams")
@@ -78,6 +79,9 @@ class xrcfr_main(wx.Frame):
         self.fp_annotations = xrc.XRCCTRL(self, "fp_annotations")
         self.btn_secom_acquire = xrc.XRCCTRL(self, "btn_secom_acquire")
         self.pnl_tab_secom_gallery = xrc.XRCCTRL(self, "pnl_tab_secom_gallery")
+        self.pnl_tab_sparc_align = xrc.XRCCTRL(self, "pnl_tab_sparc_align")
+        self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
+        self.fp_sparc_settings = xrc.XRCCTRL(self, "fp_sparc_settings")
         self.pnl_tab_sparc_acqui = xrc.XRCCTRL(self, "pnl_tab_sparc_acqui")
         self.sparc_acq_tool_menu = xrc.XRCCTRL(self, "sparc_acq_tool_menu")
         self.btn_sparc_acq_view_select = xrc.XRCCTRL(self, "btn_sparc_acq_view_select")
@@ -171,7 +175,7 @@ def __init_resources():
     wx.FileSystem.AddHandler(wx.MemoryFSHandler())
 
     main_xrc = '''\
-<?xml version="1.0" ?><resource class="wxStaticText" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
+<?xml version="1.0" ?><resource class="FoldPanelItem" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
   <object class="wxFrame" name="fr_main">
     <object class="wxMenuBar">
       <object class="wxMenu">
@@ -281,6 +285,31 @@ def __init_resources():
               <object class="TabButton" name="btn_tab_secom_gallery">
                 <size>160,30</size>
                 <label>GALLERY</label>
+                <bitmap>img_tab_inactive_png</bitmap>
+                <hover>img_tab_hover_png</hover>
+                <selected>img_tab_active_png</selected>
+                <fg>#E5E5E5</fg>
+                <font>
+                  <size>11</size>
+                  <style>normal</style>
+                  <weight>normal</weight>
+                  <underlined>0</underlined>
+                  <family>default</family>
+                  <face>Ubuntu</face>
+                  <encoding>UTF-8</encoding>
+                </font>
+                <style>wxALIGN_CENTRE</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxLEFT|wxALIGN_BOTTOM</flag>
+              <border>20</border>
+            </object>
+            <object class="sizeritem">
+              <object class="TabButton" name="btn_tab_sparc_align">
+                <size>160,30</size>
+                <label>MIRROR ALIGNMENT</label>
                 <bitmap>img_tab_inactive_png</bitmap>
                 <hover>img_tab_hover_png</hover>
                 <selected>img_tab_active_png</selected>
@@ -650,7 +679,7 @@ def __init_resources():
               <flag>wxEXPAND</flag>
             </object>
             <object class="sizeritem">
-              <object class="wxPanel" name="pnl_right">
+              <object class="wxPanel">
                 <object class="wxBoxSizer">
                   <object class="sizeritem">
                     <object class="wxPanel" name="main_buttons">
@@ -919,6 +948,81 @@ def __init_resources():
         <flag>wxEXPAND</flag>
       </object>
       <object class="sizeritem">
+        <object class="wxPanel" name="pnl_tab_sparc_align">
+          <object class="wxBoxSizer">
+            <object class="sizeritem">
+              <object class="wxPanel">
+                <object class="wxBoxSizer">
+                  <orient>wxVERTICAL</orient>
+                </object>
+                <size>200,-1</size>
+                <bg>#333333</bg>
+              </object>
+              <flag>wxEXPAND</flag>
+            </object>
+            <object class="sizeritem">
+              <object class="SparcAlignViewport" name="vp_sparc_align">
+                <size>400,-1</size>
+              </object>
+              <option>1</option>
+              <flag>wxEXPAND</flag>
+              <ratio>1</ratio>
+            </object>
+            <object class="sizeritem">
+              <object class="wxPanel">
+                <object class="wxBoxSizer">
+                  <object class="sizeritem">
+                    <object class="wxScrolledWindow" name="scr_win_right">
+                      <object class="wxBoxSizer">
+                        <orient>wxVERTICAL</orient>
+                        <object class="sizeritem">
+                          <object class="FoldPanelBar">
+                            <object class="FoldPanelItem" name="fp_sparc_settings">
+                              <label>INSTRUMENT SETTINGS</label>
+                              <fg>#1A1A1A</fg>
+                              <bg>#555555</bg>
+                              <XRCED>
+                                <assign_var>1</assign_var>
+                              </XRCED>
+                            </object>
+                            <spacing>0</spacing>
+                            <leftspacing>0</leftspacing>
+                            <rightspacing>0</rightspacing>
+                            <bg>#333333</bg>
+                          </object>
+                          <flag>wxEXPAND</flag>
+                        </object>
+                      </object>
+                      <size>400,-1</size>
+                      <bg>#333333</bg>
+                      <style>wxVSCROLL</style>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <option>1</option>
+                    <flag>wxEXPAND</flag>
+                    <minsize>400,400</minsize>
+                  </object>
+                  <orient>wxVERTICAL</orient>
+                </object>
+                <size>400,-1</size>
+                <bg>#333333</bg>
+                <style>wxBORDER_NONE</style>
+              </object>
+              <flag>wxEXPAND</flag>
+            </object>
+            <orient>wxHORIZONTAL</orient>
+          </object>
+          <bg>#333333</bg>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
+        <option>1</option>
+        <flag>wxEXPAND</flag>
+      </object>
+      <object class="sizeritem">
         <object class="wxPanel" name="pnl_tab_sparc_acqui">
           <object class="wxBoxSizer">
             <orient>wxHORIZONTAL</orient>
@@ -1020,7 +1124,7 @@ def __init_resources():
               <flag>wxEXPAND</flag>
             </object>
             <object class="sizeritem">
-              <object class="wxPanel" name="pnl_right">
+              <object class="wxPanel">
                 <object class="wxBoxSizer">
                   <object class="sizeritem">
                     <object class="wxPanel" name="main_buttons">
@@ -1362,10 +1466,6 @@ def __init_resources():
       </object>
       <object class="sizeritem">
         <object class="wxPanel" name="pnl_tab_sparc_analysis">
-          <bg>#333333</bg>
-          <XRCED>
-            <assign_var>1</assign_var>
-          </XRCED>
           <object class="wxBoxSizer">
             <object class="sizeritem">
               <object class="wxPanel">
@@ -1663,7 +1763,7 @@ def __init_resources():
               <flag>wxEXPAND</flag>
             </object>
             <object class="sizeritem">
-              <object class="wxPanel" name="pnl_right">
+              <object class="wxPanel">
                 <object class="wxBoxSizer">
                   <object class="sizeritem">
                     <object class="wxPanel" name="main_buttons">
@@ -1741,6 +1841,10 @@ def __init_resources():
             </object>
             <orient>wxHORIZONTAL</orient>
           </object>
+          <bg>#333333</bg>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
         </object>
         <option>1</option>
         <flag>wxEXPAND</flag>
@@ -1811,7 +1915,7 @@ def __init_resources():
         <flag>wxEXPAND</flag>
       </object>
       <object class="sizeritem">
-        <object class="wxPanel" name="pnl_right">
+        <object class="wxPanel">
           <object class="wxBoxSizer">
             <object class="sizeritem">
               <object class="wxPanel" name="main_buttons">

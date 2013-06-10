@@ -379,6 +379,25 @@ class AnalysisTab(Tab):
     def stream_controller(self):
         return self._stream_controller
 
+class MirrorAlignTab(Tab):
+
+    def __init__(self, name, button, panel, main_frame, microscope=None):
+        super(MirrorAlignTab, self).__init__(name, button, panel)
+
+        # Doesn't need a microscope
+        if microscope:
+            role = microscope.role
+        else:
+            role = None
+        self.interface_model = instrmodel.AnalysisGUIModel(role=role)
+        self.main_frame = main_frame
+
+        # Various controllers used for the live view and acquisition of images
+        self._settings_controller = None
+        self._view_controller = None
+        self._acquisition_controller = None
+        self._stream_controller = None
+
 
 
 class TabBarController(object):
@@ -413,7 +432,7 @@ class TabBarController(object):
     def _filter_tabs(self, rules, main_frame, microscope):
         """
         Filter the tabs according to the role of the microscope, and creates
-         the needed ones.
+        the ones needed.
 
         Tabs that are not wanted or needed will be removed from the list and
         the associated buttons will be hidden in the user interface.
@@ -426,9 +445,10 @@ class TabBarController(object):
         for trole, tname, tclass, tbtn, tpnl in rules:
             if isinstance(trole, basestring):
                 trole = (trole,) # force trole to be a tuple
+
             if role in trole:
                 tabs.append(tclass(tname, tbtn, tpnl, main_frame, microscope))
-#                tbtn.Show() # no needed as it's shown by default
+                # tbtn.Show() # no needed as it's shown by default
             else:
                 # hide the widgets of the tabs not needed
                 logging.debug("Discarding tab %s", tname)
@@ -439,6 +459,18 @@ class TabBarController(object):
 
     def __getitem__(self, name):
         return self._get_tab(name)
+
+    def __setitem__(self, name, tab):
+        self.tab_list.append(tab)
+
+    def __delitem__(self, name):
+        for tab in self.tab_list:
+            if tab.name == name:
+                tab.remove(tab)
+                break
+
+    def __len__(self):
+        return len(self.tab_list)
 
     def _get_tab(self, tab_name_or_index):
         for i, tab in enumerate(self.tab_list):

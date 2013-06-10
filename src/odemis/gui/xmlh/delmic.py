@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Created:      2012-5-15
+Created: 2012-5-15
 
 @author: Rinze de Laat
 
@@ -8,15 +8,15 @@ Copyright © 2012 Rinze de Laat, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms 
-of the GNU General Public License version 2 as published by the Free Software 
-Foundation.
+Odemis is free software: you can redistribute it and/or modify it under the
+terms of the GNU General Public License version 2 as published by the Free
+Software Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR 
-PURPOSE. See the GNU General Public License for more details.
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with 
+You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
@@ -95,17 +95,21 @@ component.Manager.setMenu(c, 'Delmic', 'Dye Stream', 'DyeStreamPanel', 5)
 
 ### gui.dblmscopepanel.MicroscopeViewport and subclasses
 
-msvps  = [('MicroscopeViewport', xh_delmic.MicroscopeViewportXmlHandler),
-          ('SecomViewport', xh_delmic.SecomViewportXmlHandler),
-          ('SparcAcquisitionViewport', xh_delmic.SparcAcquisitionViewportXmlHandler),
-          ('SparcAnalysisViewport', xh_delmic.SparcAnalysisViewportXmlHandler),]
+msvps  = [
+    ('MicroscopeViewport', xh_delmic.MicroscopeViewportXmlHandler),
+    ('SecomViewport', xh_delmic.SecomViewportXmlHandler),
+    ('SparcAcquisitionViewport', xh_delmic.SparcAcquisitionViewportXmlHandler),
+    ('SparcAnalysisViewport', xh_delmic.SparcAnalysisViewportXmlHandler),
+    ('SparcAlignViewport', xh_delmic.SparcAlignViewportXmlHandler),
+]
 
 for i, (name, handler) in enumerate(msvps):
     c = component.Container(
-                        name,
-                        ['window', 'top_level', 'control'],
-                        ['pos', 'size'],
-                        image=images.TreePanel.GetImage())
+            name,
+            ['window', 'top_level', 'control'],
+            ['pos', 'size'],
+            image=images.TreePanel.GetImage()
+    )
     c.addStyles('wxTAB_TRAVERSAL')
     component.Manager.register(c)
     component.Manager.addXmlHandler(handler)
@@ -135,7 +139,13 @@ c.setParamClass('disabled', params.ParamBitmap)
 c.addEvents('EVT_BUTTON')
 component.Manager.register(c)
 component.Manager.addXmlHandler(xh_delmic.GenBitmapButtonHandler)
-component.Manager.setMenu(c, 'Delmic button', 'Generic Bitmap Button', 'wx.lib.buttons.GenBitmapButton', 1)
+component.Manager.setMenu(
+    c,
+    'Delmic button',
+    'Generic Bitmap Button',
+    'wx.lib.buttons.GenBitmapButton',
+    1
+)
 component.Manager.setTool(c, 'Controls', pos=(1, 1))
 
 
@@ -198,7 +208,13 @@ c.setParamClass('disabled', params.ParamBitmap)
 c.addEvents('EVT_BUTTON')
 component.Manager.register(c)
 component.Manager.addXmlHandler(xh_delmic.ImageToggleButtonHandler)
-component.Manager.setMenu(c, 'Delmic button', 'Bitmap Toggle Button', 'ImageToggleButton', 2)
+component.Manager.setMenu(
+    c,
+    'Delmic button',
+    'Bitmap Toggle Button',
+    'ImageToggleButton',
+    2
+)
 component.Manager.setTool(c, 'Controls', pos=(1, 1))
 
 
@@ -231,7 +247,13 @@ c.setParamClass('disabled', params.ParamBitmap)
 c.addEvents('EVT_BUTTON')
 component.Manager.register(c)
 component.Manager.addXmlHandler(xh_delmic.ImageTextButtonHandler)
-component.Manager.setMenu(c, 'Delmic button', 'Bitmap Text Button', 'ImageTextButton', 3)
+component.Manager.setMenu(
+    c,
+    'Delmic button',
+    'Bitmap Text Button',
+    'ImageTextButton',
+    3
+)
 component.Manager.setTool(c, 'Controls', pos=(1, 1))
 
 ### ImageTextToggleButton
@@ -263,7 +285,13 @@ c.setParamClass('disabled', params.ParamBitmap)
 c.addEvents('EVT_BUTTON')
 component.Manager.register(c)
 component.Manager.addXmlHandler(xh_delmic.ImageTextToggleButtonHandler)
-component.Manager.setMenu(c, 'Delmic button', 'Bitmap Text Toggle Button', 'ImageTextToggleButton', 4)
+component.Manager.setMenu(
+    c,
+    'Delmic button',
+    'Bitmap Text Toggle Button',
+    'ImageTextToggleButton',
+    4
+)
 component.Manager.setTool(c, 'Controls', pos=(1, 1))
 
 ### TabButton
@@ -356,7 +384,13 @@ c.setParamClass('disabled', params.ParamBitmap)
 c.addEvents('EVT_BUTTON')
 component.Manager.register(c)
 component.Manager.addXmlHandler(xh_delmic.PopupImageButtonHandler)
-component.Manager.setMenu(c, 'Delmic button', 'Popup Button', 'PopupImageButton', 7)
+component.Manager.setMenu(
+    c,
+    'Delmic button',
+    'Popup Button',
+    'PopupImageButton',
+    7
+)
 component.Manager.setTool(c, 'Controls', pos=(1, 1))
 
 
@@ -388,7 +422,13 @@ c.setParamClass('value', params.ParamMultilineText)
 c.addEvents('EVT_TEXT', 'EVT_TEXT_ENTER', 'EVT_TEXT_URL', 'EVT_TEXT_MAXLEN')
 component.Manager.register(c)
 component.Manager.addXmlHandler(xh_delmic.SuggestTextCtrlHandler)
-component.Manager.setMenu(c, 'Delmic control', 'Suggest Text', 'SuggestTextCtrl', 1)
+component.Manager.setMenu(
+    c,
+    'Delmic control',
+    'Suggest Text',
+    'SuggestTextCtrl',
+    1
+)
 component.Manager.setTool(c, 'Controls', pos=(0, 2))
 
 
@@ -423,7 +463,13 @@ c.setParamClass('unit', params.MetaParamText(10))
 c.addEvents('EVT_TEXT', 'EVT_TEXT_ENTER', 'EVT_TEXT_URL', 'EVT_TEXT_MAXLEN')
 component.Manager.register(c)
 component.Manager.addXmlHandler(xh_delmic.UnitIntegerCtrlHandler)
-component.Manager.setMenu(c, 'Delmic control', 'Integer Text', 'UnitIntegerCtrl', 1)
+component.Manager.setMenu(
+    c,
+    'Delmic control',
+    'Integer Text',
+    'UnitIntegerCtrl',
+    1
+)
 component.Manager.setTool(c, 'Controls', pos=(0, 2))
 
 ### UnitFloatCtrl
@@ -470,10 +516,12 @@ class ParamScale(params.RadioBox):
     choices = {'Linear': 'linear', 'Cubic': 'cubic'}
     default = 'linear'
 
-c = component.Component('UnitFloatSlider', ['control','tool'],
-              ['pos', 'size', 'value', 'min', 'max', 'unit', 'scale', 'text_size'],
-              image=images.TreeTextCtrl.GetImage())
-
+c = component.Component(
+        'UnitFloatSlider',
+        ['control','tool'],
+        ['pos', 'size', 'value', 'min', 'max', 'unit', 'scale', 'text_size'],
+        image=images.TreeTextCtrl.GetImage()
+)
 c.setParamClass('value', params.ParamText)
 c.setParamClass('min', params.ParamInt)
 c.setParamClass('max', params.ParamInt)
@@ -483,16 +531,24 @@ c.setParamClass('text_size', params.ParamPosSize)
 
 component.Manager.register(c)
 component.Manager.addXmlHandler(xh_delmic.UnitFloatSliderHandler)
-component.Manager.setMenu(c, 'Delmic control', 'Float Slider', 'UnitFloatSlider', 1)
+component.Manager.setMenu(
+    c,
+    'Delmic control',
+    'Float Slider',
+    'UnitFloatSlider',
+    1
+)
 component.Manager.setTool(c, 'Controls', pos=(0, 2))
 
 
 ### UnitIntegerSlider
 
-c = component.Component('UnitIntegerSlider', ['control','tool'],
-              ['pos', 'size', 'value', 'min', 'max', 'unit', 'scale', 'text_size'],
-              image=images.TreeTextCtrl.GetImage())
-
+c = component.Component(
+        'UnitIntegerSlider',
+        ['control','tool'],
+        ['pos', 'size', 'value', 'min', 'max', 'unit', 'scale', 'text_size'],
+        image=images.TreeTextCtrl.GetImage()
+)
 c.setParamClass('value', params.ParamText)
 c.setParamClass('min', params.ParamInt)
 c.setParamClass('max', params.ParamInt)
@@ -502,7 +558,13 @@ c.setParamClass('text_size', params.ParamPosSize)
 
 component.Manager.register(c)
 component.Manager.addXmlHandler(xh_delmic.UnitIntegerSliderHandler)
-component.Manager.setMenu(c, 'Delmic control', 'Integer Slider', 'UnitIntegerSlider', 1)
+component.Manager.setMenu(
+    c,
+    'Delmic control',
+    'Integer Slider',
+    'UnitIntegerSlider',
+    1
+)
 component.Manager.setTool(c, 'Controls', pos=(0, 2))
 
 
@@ -514,7 +576,13 @@ c = component.Component('VisualRangeSlider', ['control','tool'],
 
 component.Manager.register(c)
 component.Manager.addXmlHandler(xh_delmic.VisualRangeSliderHandler)
-component.Manager.setMenu(c, 'Delmic control', 'Visual Range Slider', 'VisualRangeSlider', 1)
+component.Manager.setMenu(
+    c,
+    'Delmic control',
+    'Visual Range Slider',
+    'VisualRangeSlider',
+    1
+)
 component.Manager.setTool(c, 'Controls', pos=(0, 2))
 
 ### wxOwnerDrawnComboBox
@@ -525,10 +593,23 @@ component.Manager.setTool(c, 'Controls', pos=(0, 2))
 c = component.Component('OwnerDrawnComboBox', ['control','tool'],
               ['pos', 'size'],
               image=images.TreeComboBox.GetImage())
-c.addStyles('wxCB_SIMPLE', 'wxCB_DROPDOWN', 'wxCB_READONLY', 'wxCB_SORT',
-            'wxODCB_STD_CONTROL_PAINT', 'wxODCB_DCLICK_CYCLES', 'wxTE_PROCESS_ENTER')
+c.addStyles(
+    'wxCB_SIMPLE',
+    'wxCB_DROPDOWN',
+    'wxCB_READONLY',
+    'wxCB_SORT',
+    'wxODCB_STD_CONTROL_PAINT',
+    'wxODCB_DCLICK_CYCLES',
+    'wxTE_PROCESS_ENTER'
+)
 c.setSpecial('content',  attribute.ContentAttribute)
 c.addEvents('EVT_COMBOBOX', 'EVT_TEXT', 'EVT_TEXT_ENTER')
 component.Manager.register(c)
 component.Manager.addXmlHandler(xh_delmic.OwnerDrawnComboBoxHandler)
-component.Manager.setMenu(c, 'Delmic control', 'Owner-Drawn Combo Box', 'OwnerDrawnComboBox', 21)
+component.Manager.setMenu(
+    c,
+    'Delmic control',
+    'Owner-Drawn Combo Box',
+    'OwnerDrawnComboBox',
+    21
+)
