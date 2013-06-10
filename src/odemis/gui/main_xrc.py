@@ -381,7 +381,7 @@ def __init_resources():
                     <flag>wxEXPAND</flag>
                   </object>
                   <object class="sizeritem">
-                    <object class="wxPanel" name="secom_tool_menu" subclass="cont.tools.SemToolMenu">
+                    <object class="wxPanel" name="secom_tool_menu" subclass="odemis.gui.cont.tools.SemToolMenu">
                       <object class="wxBoxSizer">
                         <object class="sizeritem">
                           <object class="wxStaticBitmap">
@@ -930,7 +930,7 @@ def __init_resources():
                     <flag>wxEXPAND</flag>
                   </object>
                   <object class="sizeritem">
-                    <object class="wxPanel" name="sparc_acq_tool_menu" subclass="cont.tools.SparcAcquisitionToolMenu">
+                    <object class="wxPanel" name="sparc_acq_tool_menu" subclass="odemis.gui.cont.tools.SparcAcquisitionToolMenu">
                       <object class="wxBoxSizer">
                         <object class="sizeritem">
                           <object class="wxStaticBitmap">
@@ -1392,7 +1392,7 @@ def __init_resources():
                     <flag>wxEXPAND</flag>
                   </object>
                   <object class="sizeritem">
-                    <object class="wxPanel" name="sparc_ana_tool_menu" subclass="cont.tools.SparcAnalysisToolMenu">
+                    <object class="wxPanel" name="sparc_ana_tool_menu" subclass="odemis.gui.cont.tools.SparcAnalysisToolMenu">
                       <object class="wxBoxSizer">
                         <object class="sizeritem">
                           <object class="wxStaticBitmap">

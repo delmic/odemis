@@ -387,6 +387,8 @@ class TabBarController(object):
 
         # create all the tabs that fit the microscope role
         self.tab_list = self._filter_tabs(tab_rules, main_frame, microscope)
+        if not self.tab_list:
+            raise LookupError("No interface known for microscope %s" % microscope.role)
         self.switch(0)
 
         for tab in self.tab_list:
