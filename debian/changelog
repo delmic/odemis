@@ -1,5 +1,5 @@
-odemis (1.2~alpha1-1) unstable; urgency=low
+odemis (1.2~alpha1-1) precise; urgency=low
 
   * Initial release (alpha release pre 1.2)
 
- -- Éric Piel (Delmic) <piel@delmic.com>  Wed, 22 May 2013 16:19:03 +0600
+ -- Éric Piel (Delmic) <piel@delmic.com>  Mon, 10 Jun 2013 16:19:03 +0600
