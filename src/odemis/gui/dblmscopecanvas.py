@@ -215,22 +215,15 @@ class DblMicroscopeCanvas(DraggableCanvas):
         if not self.microscope_view:
             return
 
-        # now = time.time()
-        # if (self._lastThumbnailUpdate + self._thumbnailUpdatePeriod) < now:
-        #     self._updateThumbnail()
-        #     self._lastThumbnailUpdate = now
-
         self._updateThumbnail()
 
-    # TODO: use rate limiting decorator NOTE: `limit_invocation` causes an X
-    # server error! Investigate further
     @limit_invocation(2) # max 1/2s
     @call_after
     def _updateThumbnail(self):
-        # TODO avoid doing 2 copies, by using directly the wxImage from the
+        # TODO: avoid doing 2 copies, by using directly the wxImage from the
         # result of the StreamTree
 
-        logging.debug("Updating thumbnail")
+        #logging.debug("Updating thumbnail")
 
         # new bitmap to copy the DC
         bitmap = wx.EmptyBitmap(*self.ClientSize)
@@ -246,7 +239,8 @@ class DblMicroscopeCanvas(DraggableCanvas):
         # close the DC, to be sure the bitmap can be used safely
         del dc
 
-        self.microscope_view.thumbnail.value = wx.ImageFromBitmap(bitmap)
+        img = wx.ImageFromBitmap(bitmap)
+        self.microscope_view.thumbnail.value = img
 
     def _onStagePos(self, value):
         """
