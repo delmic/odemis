@@ -58,6 +58,8 @@ class Slider(wx.PyControl):
         :param style:  use wx.Panel styles
         :param name:   Window name.
         :param scale:  'linear' (default), 'cubic' or 'log'
+            *Note*: Make sure to add any new option to the Slider ParamScale in
+            xmlh.delmic !
         """
 
         wx.PyControl.__init__(self, parent, id, pos, size, style)

@@ -513,7 +513,7 @@ component.Manager.setTool(c, 'Controls', pos=(0, 2))
 ### UnitFloatSlider
 
 class ParamScale(params.RadioBox):
-    choices = {'Linear': 'linear', 'Cubic': 'cubic'}
+    choices = {'Linear': 'linear', 'Cubic': 'cubic', 'Log': 'log'}
     default = 'linear'
 
 c = component.Component(
