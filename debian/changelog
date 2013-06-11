@@ -1,3 +1,9 @@
+odemis (1.2~alpha1-1ubuntu1) precise; urgency=low
+
+  * Fix build dependencies
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Tue, 11 Jun 2013 10:07:33 +0200
+
 odemis (1.2~alpha1-1) precise; urgency=low
 
   * Initial release (alpha release pre 1.2)
