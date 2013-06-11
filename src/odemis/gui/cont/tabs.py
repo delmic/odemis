@@ -380,6 +380,10 @@ class AnalysisTab(Tab):
         return self._stream_controller
 
 class MirrorAlignTab(Tab):
+    """ TODO: If this tab is not initially hidden in the XRC file, gtk error
+    will show up when the GUI is launched. Even further (odemis) errors may
+    occur. The reason for this is still unknown.
+    """
 
     def __init__(self, name, button, panel, main_frame, microscope=None):
         super(MirrorAlignTab, self).__init__(name, button, panel)
@@ -452,6 +456,7 @@ class TabBarController(object):
             else:
                 # hide the widgets of the tabs not needed
                 logging.debug("Discarding tab %s", tname)
+
                 tbtn.Hide() # this actually removes the tab
                 tpnl.Hide()
 

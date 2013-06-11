@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<resource class="FoldPanelItem" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
+<resource class="wxPanel" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
   <object class="wxFrame" name="fr_main">
     <object class="wxMenuBar">
       <object class="wxMenu">
@@ -1353,6 +1353,7 @@
             <orient>wxHORIZONTAL</orient>
           </object>
           <bg>#333333</bg>
+          <hidden>1</hidden>
           <XRCED>
             <assign_var>1</assign_var>
           </XRCED>
