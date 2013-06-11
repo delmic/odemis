@@ -410,7 +410,10 @@ class TabBarController(object):
         """
         tab_rules (list of 5-tuples (string, string, Tab class, button, panel): list
           of all the possible tabs. Each tuple is:
-          microscope role(s) (string or tuple of strings), internal name, class, tab btn, tab panel
+          microscope role(s) (string or tuple of strings/None), internal name,
+          class, tab btn, tab panel. If role is None, it will match when there
+          is no microscope (microscope is None). TODO: support "*" for matching
+          anything?
         """
         self.main_frame = main_frame
 
@@ -442,8 +445,12 @@ class TabBarController(object):
         the associated buttons will be hidden in the user interface.
         returns (list of Tabs):
         """
-        role = microscope.role
-        logging.debug("Creating tabs belonging to the '%s' interface", role)
+        if microscope:
+            role = microscope.role
+        else:
+            role = None
+        logging.debug("Creating tabs belonging to the '%s' interface",
+                      role or "no backend")
 
         tabs = [] # Tabs
         for trole, tname, tclass, tbtn, tpnl in rules:

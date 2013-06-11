@@ -4,6 +4,7 @@ Priority: optional
 Maintainer: Éric Piel <piel@delmic.com>
 Standards-Version: 3.9.2
 Build-Depends: debhelper (>= 9),
+               python-setuptools,
                python (>= 2.7.1),
                python-all
 X-Python-Version: >= 2.7
@@ -14,7 +15,8 @@ Vcs-Browser: https://github.com/delmic/odemis
 Package: odemis
 Architecture: all
 Depends: python (>= 2.7.1),
-         python-wxgtk29,
+         python-wxgtk2.9,
+         python-pkg-resources,
          python-yaml,
          python-serial,
          python-imaging,
@@ -26,7 +28,7 @@ Depends: python (>= 2.7.1),
          python-comedilib (>= 0.10.0),
          python-h5py (>= 2.1),
          python-xdg,
-         pyro4,
+         pyro4-delmic,
          cgroup-bin,
          ${misc:Depends},
          ${python:Depends}
