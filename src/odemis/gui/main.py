@@ -157,8 +157,15 @@ class OdemisGUIApp(wx.App):
                         self.main_frame.menu_item_halt.GetId(),
                         self.on_stop_axes)
 
-            if self.microscope.role == "secom":
-                # TODO: only activate if we are in the live view tab
+            if not self.microscope or self.microscope.role == "sparc":
+                # works with the analysis tab
+                wx.EVT_MENU(self.main_frame,
+                            self.main_frame.menu_item_load1.GetId(),
+                            self.on_load_example_sparc1)
+                self.main_frame.menu_item_load2.Enable(False)
+            elif self.microscope.role == "secom":
+                # Displayed in the SECOM live view tab
+                # TODO: display in the analysis tab?
                 wx.EVT_MENU(self.main_frame,
                             self.main_frame.menu_item_load1.GetId(),
                             self.on_load_example_secom1)
@@ -166,12 +173,6 @@ class OdemisGUIApp(wx.App):
                 wx.EVT_MENU(self.main_frame,
                             self.main_frame.menu_item_load2.GetId(),
                             self.on_load_example_secom2)
-            elif self.microscope.role == "sparc":
-                # TODO only activate if we are in the analysis tab? Or automatically switch?
-                wx.EVT_MENU(self.main_frame,
-                            self.main_frame.menu_item_load1.GetId(),
-                            self.on_load_example_sparc1)
-                self.main_frame.menu_item_load2.Enable(False)
             else:
                 self.main_frame.menu_item_load1.Enable(False)
                 self.main_frame.menu_item_load2.Enable(False)
@@ -205,7 +206,8 @@ class OdemisGUIApp(wx.App):
                         ("sparc", "sparc_acqui", tabs.SparcAcquisitionTab,
                          self.main_frame.btn_tab_sparc_acqui,
                          self.main_frame.pnl_tab_sparc_acqui),
-                        (("secom", "sparc"), "sparc_analysis", tabs.AnalysisTab,
+                        # None = displayed when no backend found
+                        ((None, "secom", "sparc"), "sparc_analysis", tabs.AnalysisTab,
                           self.main_frame.btn_tab_sparc_analysis,
                           self.main_frame.pnl_tab_sparc_analysis),
                         ]
