@@ -47,12 +47,14 @@
                 <object class="wxGridBagSizer">
                   <object class="sizeritem">
                     <object class="UnitFloatSlider" name="slider_stage">
+                      <size>-1,16</size>
                       <value>100</value>
                       <min>0.01</min>
                       <max>1000</max>
                       <unit>μm</unit>
-                      <accuracy>2</accuracy>
                       <scale>log</scale>
+                      <accuracy>2</accuracy>
+                      <style>wxBORDER_NONE</style>
                       <XRCED>
                         <assign_var>1</assign_var>
                       </XRCED>
@@ -299,12 +301,14 @@
                 <object class="wxGridBagSizer">
                   <object class="sizeritem">
                     <object class="UnitFloatSlider" name="slider_focus">
+                      <size>-1,16</size>
                       <value>10</value>
                       <min>0.01</min>
                       <max>100</max>
                       <unit>μm</unit>
-                      <accuracy>2</accuracy>
                       <scale>log</scale>
+                      <accuracy>2</accuracy>
+                      <style>wxBORDER_NONE</style>
                       <XRCED>
                         <assign_var>1</assign_var>
                       </XRCED>
@@ -451,12 +455,14 @@
                 <object class="wxGridBagSizer">
                   <object class="sizeritem">
                     <object class="UnitFloatSlider" name="slider_aligner">
+                      <size>-1,16</size>
                       <value>100</value>
                       <min>0.01</min>
                       <max>1000</max>
                       <unit>μm</unit>
-                      <accuracy>2</accuracy>
                       <scale>log</scale>
+                      <accuracy>2</accuracy>
+                      <style>wxBORDER_NONE</style>
                       <XRCED>
                         <assign_var>1</assign_var>
                       </XRCED>
