@@ -378,7 +378,7 @@ class FileInfo(object):
         self.metadata = metadata or {}
 
         if not model.MD_ACQ_DATE in self.metadata and self.file_name:
-            # try to auto fill acquisition time (second from epoch)
+            # try to auto fill acquisition time (seconds from epoch)
             try:
                 acq_date = os.stat(self.file_name).st_ctime
                 self.metadata[model.MD_ACQ_DATE] = acq_date

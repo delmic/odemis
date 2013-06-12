@@ -25,6 +25,7 @@ setting column of the user interface.
 
 """
 
+from odemis import model
 from odemis.gui.comp.combo import ComboBox
 from odemis.gui.comp.foldpanelbar import FoldPanelItem
 from odemis.gui.comp.radio import GraphicalRadioButtonControl
@@ -37,6 +38,7 @@ from odemis.model import getVAs, NotApplicableError, VigilantAttributeBase
 from odemis.util.driver import reproduceTypedValue
 from wx.lib.pubsub import pub
 import collections
+import datetime
 import logging
 import odemis.gui
 import odemis.gui.comp.text as text
@@ -210,29 +212,31 @@ class SettingsPanel(object):
         # then, make the first letter uppercase and all the other ones lowercase
         return re.sub(r"([A-Z])", r" \1", label).capitalize()
 
-    def _determine_default_control(self, value):
+    def _determine_default_control(self, va):
         """ Determine the default control to use to represent a vigilant
         attribute in the settings panel.
+        va (VigillantAttribute)
+        return (odemis.gui.CONTROL_*)
         """
-        if not value:
-            logging.warn("No value provided!")
+        if not va:
+            logging.warn("No VA provided!")
             return odemis.gui.CONTROL_NONE
 
-        if value.readonly:
+        if va.readonly:
             return odemis.gui.CONTROL_LABEL
         else:
             try:
                 # This statement will raise an exception when no choices are
                 # present
-                logging.debug("found choices %s", value.choices)
+                logging.debug("found choices %s", va.choices)
 
                 max_items = 5
                 max_len = 5
                 # If there are too many choices, or their values are too long
                 # in string representation, use a dropdown box
 
-                choices_str = "".join([str(c) for c in value.choices])
-                if len(value.choices) < max_items and \
+                choices_str = "".join([str(c) for c in va.choices])
+                if len(va.choices) < max_items and \
                    len(choices_str) < max_items * max_len:
                     return odemis.gui.CONTROL_RADIO
                 else:
@@ -242,9 +246,9 @@ class SettingsPanel(object):
 
             try:
                 # An exception will be raised if no range attribute is found
-                logging.debug("found range %s", value.range)
+                logging.debug("found range %s", va.range)
                 # TODO: if unit is "s" => scale=exp
-                if isinstance(value.value, (int, float)):
+                if isinstance(va.value, (int, float)):
                     return odemis.gui.CONTROL_SLIDER
             except (AttributeError, NotApplicableError):
                 pass
@@ -284,28 +288,41 @@ class SettingsPanel(object):
 
         return rng, choices, unit
 
-    def add_label(self, label, value=None):
+    def add_label(self, label, value=None, selectable=True):
         """ Adds a label to the settings panel, accompanied by an immutable
         value if one's provided.
+        value (None or stringable): value to display after the label
+        selectable (boolean): whether the value can be selected by the user
+          (iow, copy/pasted)
+        returns (SettingEntry): the new SettingEntry created 
         """
         self._clear()
         # Create label
-        lbl_ctrl = wx.StaticText(self.panel, -1, "%s" % label)
-        self._gb_sizer.Add(lbl_ctrl, (self.num_entries, 0), flag=wx.ALL, border=5)
+        lbl_ctrl = wx.StaticText(self.panel, wx.ID_ANY, unicode(label))
+        self._gb_sizer.Add(lbl_ctrl, (self.num_entries, 0),
+                           flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
 
-        value_ctrl = None
-
-        if value:
-            self.panel.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_DIS)
-
-            value_ctrl = wx.StaticText(self.panel, -1, unicode(value))
+        if value and not selectable:
+            value_ctrl = wx.StaticText(self.panel, label=unicode(value))
+            value_ctrl.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_DIS)
             self._gb_sizer.Add(value_ctrl, (self.num_entries, 1),
-                            flag=wx.ALL, border=5)
-            self.panel.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR)
+                               flag=wx.ALL, border=5)
+        elif value and selectable:
+            value_ctrl = wx.TextCtrl(self.panel, value=unicode(value),
+                                     style=wx.BORDER_NONE | wx.TE_READONLY)
+            value_ctrl.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_DIS)
+            value_ctrl.SetBackgroundColour(odemis.gui.BACKGROUND_COLOUR)
+            self._gb_sizer.Add(value_ctrl, (self.num_entries, 1),
+                               flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL,
+                               border=5)
+        else:
+            value_ctrl = None
 
         ne = SettingEntry(name=label, label=lbl_ctrl, ctrl=value_ctrl)
         self.entries.append(ne)
         self.num_entries += 1
+
+        return ne
 
     def add_divider(self):
         line = wx.StaticLine(self.panel, size=(-1, 1))
@@ -351,8 +368,10 @@ class SettingsPanel(object):
                 choices_fmt = [(c, choice_to_str(c)) for c in choices]
 
         # Get the defined type of control or assign a default one
-        control_type = conf.get('control_type',
-                                self._determine_default_control(vigil_attr))
+        try:
+            control_type = conf['control_type']
+        except KeyError:
+            control_type = self._determine_default_control(vigil_attr)
 
         # Special case, early stop
         if control_type == odemis.gui.CONTROL_NONE:
@@ -372,7 +391,7 @@ class SettingsPanel(object):
         label = conf.get('label', self._label_to_human(name))
         # Add the label to the panel
         lbl_ctrl = wx.StaticText(self.panel, -1, "%s" % label)
-        self._gb_sizer.Add(lbl_ctrl, (self.num_entries, 0), flag=wx.ALL, border=5)
+        self._gb_sizer.Add(lbl_ctrl, (self.num_entries, 0), flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
 
         # the Vigilant Attribute Connector connects the wx control to the
         # vigilant attribute.
@@ -382,19 +401,41 @@ class SettingsPanel(object):
         # Create the needed wxPython controls
         if control_type == odemis.gui.CONTROL_LABEL:
             # Read only value
-            # In this case the value need to be transformed into a string
+            new_ctrl = wx.TextCtrl(self.panel, style=wx.BORDER_NONE | wx.TE_READONLY)
+            new_ctrl.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_DIS)
+            new_ctrl.SetBackgroundColour(odemis.gui.BACKGROUND_COLOUR)
 
-            self.panel.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_DIS)
-            new_ctrl = wx.StaticText(self.panel, -1, size=(200, -1))
-            self.panel.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR)
-
-            def format_label(value, unit=unit):
-                new_ctrl.SetLabel(readable_str(value, unit, sig=3))
-
+            val = vigil_attr.value # only format if it's a number
+            if (isinstance(val, (int, float)) or
+                (isinstance(val, collections.Iterable) and len(val) > 0
+                  and isinstance(val[0], (int, float)))
+                ):
+                def format_value(value, unit=unit):
+                    new_ctrl.SetValue(readable_str(value, unit, sig=3))
+            else:
+                format_value = None
             vac = VigilantAttributeConnector(vigil_attr,
                                              new_ctrl,
-                                             format_label,
-                                             new_ctrl.GetLabel)
+                                             format_value)
+
+        elif control_type == odemis.gui.CONTROL_TEXT:
+            # TODO: should be a free entry text, like combobox
+            new_ctrl = wx.TextCtrl(self.panel, style=wx.BORDER_NONE | wx.TE_READONLY)
+            new_ctrl.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_DIS)
+            new_ctrl.SetBackgroundColour(odemis.gui.BACKGROUND_COLOUR)
+
+            val = vigil_attr.value # only format if it's a number
+            if (isinstance(val, (int, float)) or
+                (isinstance(val, collections.Iterable) and len(val) > 0
+                  and isinstance(val[0], (int, float)))
+                ):
+                def format_value(value, unit=unit):
+                    new_ctrl.SetValue(readable_str(value, unit, sig=3))
+            else:
+                format_value = None
+            vac = VigilantAttributeConnector(vigil_attr,
+                                             new_ctrl,
+                                             format_value)
 
         elif control_type == odemis.gui.CONTROL_SLIDER:
             # The slider is accompanied by an extra number text field
@@ -581,18 +622,10 @@ class SettingsPanel(object):
             new_ctrl.Bind(wx.EVT_TEXT_ENTER, self.on_setting_changed)
 
         else:
-            # TODO: should be a free entry text, like combobox
-            def format_label(value, unit=unit):
-                new_ctrl.SetLabel(readable_str(value, unit, sig=3))
-
-            new_ctrl = wx.StaticText(self.panel, wx.ID_ANY, "")
-            vac = VigilantAttributeConnector(vigil_attr,
-                                             new_ctrl,
-                                             format_label,
-                                             new_ctrl.GetLabel)
+            logging.error("Unknown control type %s", control_type)
 
         self._gb_sizer.Add(new_ctrl, (self.num_entries, 1),
-                        flag=wx.ALL | wx.EXPAND, border=5)
+                        flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
 
         ne = SettingEntry(name, vigil_attr, comp, lbl_ctrl, new_ctrl, vac)
         self.entries.append(ne)
@@ -631,7 +664,8 @@ class SettingsPanel(object):
         label = conf.get('label', self._label_to_human(name))
         # Add the label to the panel
         lbl_ctrl = wx.StaticText(self.panel, -1, "%s" % label)
-        self._gb_sizer.Add(lbl_ctrl, (self.num_entries, 0), flag=wx.ALL, border=5)
+        self._gb_sizer.Add(lbl_ctrl, (self.num_entries, 0),
+                           flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
 
         logging.debug("Adding Axis control %s", label)
 
@@ -657,7 +691,8 @@ class SettingsPanel(object):
         new_ctrl.Bind(wx.EVT_SCROLL_CHANGED, self.on_setting_changed)
 
         self._gb_sizer.Add(new_ctrl, (self.num_entries, 1),
-                        flag=wx.ALL | wx.EXPAND, border=5)
+                           flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL,
+                           border=5)
 
         # AxisConnector follows VigilantAttributeConnector interface, so can be
         # used (duck typing).
@@ -669,6 +704,37 @@ class SettingsPanel(object):
             bind_menu(ne)
 
         self.fold_panel.Parent.Layout()
+
+    def add_metadata(self, key, value):
+        """
+        Adds an entry representing a specific metadata. According to the 
+         metadata key, the right representation is used for the value.
+        key (model.MD_*): the metadata key
+        value (depends on the metadata): the value to display
+        """
+        # By default the key is a nice user-readable string
+        label = unicode(key)
+
+        # Convert value to a nice string according to the metadata type
+        try:
+            if key == model.MD_ACQ_DATE:
+                # convert to a date using the user's preferences
+                ad = datetime.datetime.utcfromtimestamp(value)
+                nice_str = ad.strftime("%c")
+            else:
+                # Still try to beautify a bit if it's a number
+                if (isinstance(value, (int, float)) or
+                    (isinstance(value, collections.Iterable) and len(value) > 0
+                      and isinstance(value[0], (int, float)))
+                    ):
+                    nice_str = readable_str(value, sig=3)
+                else:
+                    nice_str = unicode(value)
+        except Exception:
+            logging.exception("Trying to convert metadata %s", key)
+            nice_str = "N/A"
+
+        self.add_label(label, nice_str)
 
     def on_setting_changed(self, evt):
         logging.debug("Setting has changed")
@@ -730,7 +796,8 @@ class SettingsBarController(object):
         self.settings_panels.append(panel)
 
         try:
-            panel.add_label(label, comp.name)
+            name = "Name" # for exception handling only
+            panel.add_label(label, comp.name, selectable=False)
             vigil_attrs = getVAs(comp)
             for name, value in vigil_attrs.items():
                 if comp.role in CONFIG and name in CONFIG[comp.role]:
@@ -894,11 +961,12 @@ class AnalysisSettingsController(SettingsBarController):
 
         if fi:
             self._file_panel.add_label("File", fi.basename)
-            # TODO: make long path scrollable and right align text
-            self._file_panel.add_label("Path", fi.path)
+            se_path = self._file_panel.add_label("Path", fi.path)
+            # show the end of the path (usually more important)
+            se_path.ctrl.SetInsertionPointEnd()
 
-            for label, value in fi.metadata.items():
-                self._file_panel.add_label(label, value)
+            for key, value in fi.metadata.items():
+                self._file_panel.add_metadata(key, value)
 
 
 
