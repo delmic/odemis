@@ -1080,11 +1080,14 @@ def __init_resources():
                         <cellpos>2,0</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="wxButton" name="btn_align_py">
-                          <size>40,40</size>
+                        <object class="ImageTextButton" name="btn_align_py">
                           <label>▵</label>
+                          <delta>1</delta>
+                          <bitmap>img_btn_64x48_png</bitmap>
+                          <hover>img_btn_64x48_h_png</hover>
+                          <selected>img_btn_64x48_a_png</selected>
                           <font>
-                            <size>16</size>
+                            <size>24</size>
                             <style>normal</style>
                             <weight>bold</weight>
                             <underlined>0</underlined>
@@ -1092,6 +1095,7 @@ def __init_resources():
                             <face>Ubuntu</face>
                             <encoding>UTF-8</encoding>
                           </font>
+                          <style>wxALIGN_CENTRE</style>
                           <XRCED>
                             <assign_var>1</assign_var>
                           </XRCED>
@@ -1101,11 +1105,14 @@ def __init_resources():
                         <cellpos>1,2</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="wxButton" name="btn_align_my">
-                          <size>40,40</size>
+                        <object class="ImageTextButton" name="btn_align_my">
                           <label>▿</label>
+                          <delta>1</delta>
+                          <bitmap>img_btn_64x48_png</bitmap>
+                          <hover>img_btn_64x48_h_png</hover>
+                          <selected>img_btn_64x48_a_png</selected>
                           <font>
-                            <size>16</size>
+                            <size>24</size>
                             <style>normal</style>
                             <weight>bold</weight>
                             <underlined>0</underlined>
@@ -1113,6 +1120,7 @@ def __init_resources():
                             <face>Ubuntu</face>
                             <encoding>UTF-8</encoding>
                           </font>
+                          <style>wxALIGN_CENTRE</style>
                           <XRCED>
                             <assign_var>1</assign_var>
                           </XRCED>
@@ -1122,11 +1130,14 @@ def __init_resources():
                         <cellpos>3,2</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="wxButton" name="btn_align_mx">
-                          <size>40,40</size>
+                        <object class="ImageTextButton" name="btn_align_mx">
                           <label>◃</label>
+                          <delta>1</delta>
+                          <bitmap>img_btn_64x48_png</bitmap>
+                          <hover>img_btn_64x48_h_png</hover>
+                          <selected>img_btn_64x48_a_png</selected>
                           <font>
-                            <size>16</size>
+                            <size>24</size>
                             <style>normal</style>
                             <weight>bold</weight>
                             <underlined>0</underlined>
@@ -1134,6 +1145,7 @@ def __init_resources():
                             <face>Ubuntu</face>
                             <encoding>UTF-8</encoding>
                           </font>
+                          <style>wxALIGN_CENTRE</style>
                           <XRCED>
                             <assign_var>1</assign_var>
                           </XRCED>
@@ -1141,11 +1153,14 @@ def __init_resources():
                         <cellpos>2,1</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="wxButton" name="btn_align_px">
-                          <size>40,40</size>
+                        <object class="ImageTextButton" name="btn_align_px">
                           <label>▹</label>
+                          <delta>1</delta>
+                          <bitmap>img_btn_64x48_png</bitmap>
+                          <hover>img_btn_64x48_h_png</hover>
+                          <selected>img_btn_64x48_a_png</selected>
                           <font>
-                            <size>16</size>
+                            <size>24</size>
                             <style>normal</style>
                             <weight>bold</weight>
                             <underlined>0</underlined>
@@ -1153,6 +1168,7 @@ def __init_resources():
                             <face>Ubuntu</face>
                             <encoding>UTF-8</encoding>
                           </font>
+                          <style>wxALIGN_CENTRE</style>
                           <XRCED>
                             <assign_var>1</assign_var>
                           </XRCED>
@@ -1280,11 +1296,14 @@ def __init_resources():
                         <cellpos>2,0</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="wxButton" name="btn_align_pya">
-                          <size>40,40</size>
+                        <object class="ImageTextButton" name="btn_align_pya">
                           <label>▵</label>
+                          <delta>1</delta>
+                          <bitmap>img_btn_64x48_png</bitmap>
+                          <hover>img_btn_64x48_h_png</hover>
+                          <selected>img_btn_64x48_a_png</selected>
                           <font>
-                            <size>16</size>
+                            <size>24</size>
                             <style>normal</style>
                             <weight>bold</weight>
                             <underlined>0</underlined>
@@ -1292,6 +1311,7 @@ def __init_resources():
                             <face>Ubuntu</face>
                             <encoding>UTF-8</encoding>
                           </font>
+                          <style>wxALIGN_CENTRE</style>
                           <XRCED>
                             <assign_var>1</assign_var>
                           </XRCED>
@@ -1301,11 +1321,14 @@ def __init_resources():
                         <cellpos>1,2</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="wxButton" name="btn_align_mya">
-                          <size>40,40</size>
+                        <object class="ImageTextButton" name="btn_align_mya">
                           <label>▿</label>
+                          <delta>1</delta>
+                          <bitmap>img_btn_64x48_png</bitmap>
+                          <hover>img_btn_64x48_h_png</hover>
+                          <selected>img_btn_64x48_a_png</selected>
                           <font>
-                            <size>16</size>
+                            <size>24</size>
                             <style>normal</style>
                             <weight>bold</weight>
                             <underlined>0</underlined>
@@ -1313,6 +1336,7 @@ def __init_resources():
                             <face>Ubuntu</face>
                             <encoding>UTF-8</encoding>
                           </font>
+                          <style>wxALIGN_CENTRE</style>
                           <XRCED>
                             <assign_var>1</assign_var>
                           </XRCED>
@@ -1322,11 +1346,14 @@ def __init_resources():
                         <cellpos>3,2</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="wxButton" name="btn_align_mpi">
-                          <size>40,40</size>
+                        <object class="ImageTextButton" name="btn_align_mpi">
                           <label>◃</label>
+                          <delta>1</delta>
+                          <bitmap>img_btn_64x48_png</bitmap>
+                          <hover>img_btn_64x48_h_png</hover>
+                          <selected>img_btn_64x48_a_png</selected>
                           <font>
-                            <size>16</size>
+                            <size>24</size>
                             <style>normal</style>
                             <weight>bold</weight>
                             <underlined>0</underlined>
@@ -1334,6 +1361,7 @@ def __init_resources():
                             <face>Ubuntu</face>
                             <encoding>UTF-8</encoding>
                           </font>
+                          <style>wxALIGN_CENTRE</style>
                           <XRCED>
                             <assign_var>1</assign_var>
                           </XRCED>
@@ -1341,11 +1369,14 @@ def __init_resources():
                         <cellpos>2,1</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="wxButton" name="btn_align_ppi">
-                          <size>40,40</size>
+                        <object class="ImageTextButton" name="btn_align_ppi">
                           <label>▹</label>
+                          <delta>1</delta>
+                          <bitmap>img_btn_64x48_png</bitmap>
+                          <hover>img_btn_64x48_h_png</hover>
+                          <selected>img_btn_64x48_a_png</selected>
                           <font>
-                            <size>16</size>
+                            <size>24</size>
                             <style>normal</style>
                             <weight>bold</weight>
                             <underlined>0</underlined>
@@ -1353,6 +1384,7 @@ def __init_resources():
                             <face>Ubuntu</face>
                             <encoding>UTF-8</encoding>
                           </font>
+                          <style>wxALIGN_CENTRE</style>
                           <XRCED>
                             <assign_var>1</assign_var>
                           </XRCED>
@@ -3728,6 +3760,58 @@ y\x9e\xd7\xe17\xcf\x01\x00h\xa7\xc3\xff\xc8
 \xf7\xc3}\x96S\xcb\x99E\x00\x00\x81\xa0\x9a\xae\xda\xde\xd7\xc3b\xb1X\xac\
 \xeb\xb9\xfe\x07$\x96\x11\xc8%x(\x88\x00\x00\x00\x00IEND\xaeB`\x82'''
 
+    img_btn_64x48_png = '''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00@\x00\x00\x000\x08\x06\x00\x00\x00\xa1\
+K|\x1f\x00\x00\x00\xe3IDATh\xde\xed\xda=
+\xc20\x18\xc6\xf1\x90\xc1\x1b8y<\x8f\xa1 \x82\xb37\x10<H\xc7\x0e=H
+\xa5\xdd\x13\xe8W\xcc#\xea\xe0\x11\xfa\xfe\x03\x0f\x14:=?\xf2&\x1d\xea\
+\xab\xaa\xda\xd5u}k\x9a&\x94d#\x09\xea\xac\xee~Y\x96kJ\xe9\xd4\xf7\xfd\xa1\
+m[\x17B\xd8t\xd4Q]\xd5Y\xdd}y8\xc6\x18\xdd8\x8e.\xe7\xec\xb6\xbe\xd4Q]\xd5\
+Y\xdd\xfd<\xcf\xfbi\x9a\xde/,E\x9d\xd5\xdd\xaf\xeb\xea\x14k\x00\xdf\xde\
+\xde\x19_\xbf\x1d`5\xec\x00k\xb3\xff\x1f\x00\x00\x00\x00\x00\x00\x00\x00\
+\xc00\x80\xf9OaF\x00\x00\x00\x00\xe0\x16\xe0\x16`\x04\x00\x00\x80C\x90C\
+\x90\x11\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\
+\xc0
+\x00?I\xe5<\x18\xde\x01\x83\x00\x1e\x86\x01\x9e\x1a\x81K\xc9\xbd\xa43\xb4\
+\xf3\xbbO\xe7\xf3\x0b\x85s@;\xac\xd7\x8e\xb9\x00\x00\x00\x00IEND\xaeB`\x82'''
+
+    img_btn_64x48_h_png = '''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00@\x00\x00\x000\x08\x06\x00\x00\x00\xa1\
+K|\x1f\x00\x00\x00\xe4IDATh\xde\xed\x9a\xbd\x0d\xc20\x18D-\x17l@\xc5x\x8c\
+\x01\x12B\xa2f\x03$\xf6Ie)#\xa4\x88\xe2\xc2\xad\xa3\xfc\x18\x1f"\x0d#\xe4\
+{\x91\xaeJ\xf5\x9e|\xe7\xc6\xbei\x9aC\x08\xe1\xd1\xb6mWS\x8c\xa4\x13\xb3\
+\xd8\xfd\xb2,\xf7\x9c\xf3%\xa5t\x8a1\xbaa\x18v\x1d1\x8aU\xccb\xf7\xe38\x9e\
+k\xdc4M\xae\x94\xe2\xf6\xfe\x89Q\xacb\x16\xbbN\xc0q\x9e\xe7\xef\x0fK\x11\
+\xb3\xd8\xfd\xba\xaeN\xb1&`\xe3\xf6\xd6\xc0\xff\x83\x00g\xfc\xe3\x04 \xc0\
+\xba\x80\xed:\xb0\x1aN\x00\x02\x10\x80\x00n\x01n\x01*\x80\x006\xc0\xec\x06\
+0\x82l\x00\x1b@\x05\xa8\x00\x15\xa0\x02T\x00\x01l\x00\x1b@\x05\x10\x80\x00\
+\x04p\x0bp\x0bP\x01\x04\xf0D\x86\x272T\xc0\x96\x80hX@\x94\x80\x97a\x01o\
+\x8d\xe0\xad\xe6Y\xd3\x1b\xda\xbe\xfe\xc7|\xfd\x00\x1a2
+
+"`R\xa3\x00\x00\x00\x00IEND\xaeB`\x82'''
+
+    img_btn_64x48_a_png = '''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00@\x00\x00\x000\x08\x06\x00\x00\x00\xa1\
+K|\x1f\x00\x00\x01\x1bIDATh\xde\xed\x98A\x8a\x83P\x10D\xdbF\xe2J\x10A\x04\
+G]\xe9\x05\\x\xa1\x1cc\x06\x86\x81Y\xcf\x0d\x06\xe6pY\x04r\x04\xd1\x9f_\
+!\xd9$0\x07\xb0\xaa\xa1\x16\xf9\x8a\xee\xeaV\x1f\x86\xe1\x10\xf5\x1du\x8a
+$:\xdd\x99\x0f\x9e\xa6\xe9W\x9e\xe7\xefu]\xbf\xc5\xb2\xb6mw-0\x82\x15\xcc\
+`\xf7\xb2,\x8f\xe38\xda4M6\xcf3\x85\xc0
+f\xb0{\xd7u\x15\x1e}\xdf[\xd34\x14\x02+\x98\xc1\xeeUUYQ\x14\x16\xdb\xc1\
+P!\x84]\x0b\x05V0\x83\xdd\xb3,3w\xdf=\xf8\xb3\xc0|c\x87#I\x92\x18[=\x98\
+\xdd\xc8\xcb\xd9Z\xffe\x14\x18\x82\xef\xbf@T\x07\xc8\x00\x19\xa0\x10\xe4\
+\x0eA\xdd\x01\xec#\xb0m\x9b1K#\xa0-\xa0SX!\xc8\x1d\x82\xca\x00m\x81@\xdb\
+\xfe\xfa\x18\x92\x012@\x06\xe8\x12\xa4_\x83\xba\x04\x95\x01\xba\x04\xd5\
+\x01\xfa\x1f\xa0CH\x06\xc8\x00\xadA\xd65\xa8;@#\xa0;\xe0B\xdc\x01\x17\x18\
+\xf0\xcb:\xff\x91\xfd\xcf\x97e\xf9\\\xd7\xf5\x27\xbe\xcfD\xecg0G\xf6\x8f\
++\x0d\xb1"$\xa9\x8a`\x0c\x00\x00\x00\x00IEND\xaeB`\x82'''
+
     img_btn_view_sel_png = '''\
 \x89PNG\x0d
 \x1a
@@ -4751,6 +4835,9 @@ Z\xb9A\x04\xc6\x89\x00\x00\x00\x00IEND\xaeB`\x82'''
     wx.MemoryFSHandler.AddFile('XRC/main/img_btn_acquire_image_h_png', img_btn_acquire_image_h_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_btn_acquire_image_a_png', img_btn_acquire_image_a_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_btn_acquire_image_d_png', img_btn_acquire_image_d_png)
+    wx.MemoryFSHandler.AddFile('XRC/main/img_btn_64x48_png', img_btn_64x48_png)
+    wx.MemoryFSHandler.AddFile('XRC/main/img_btn_64x48_h_png', img_btn_64x48_h_png)
+    wx.MemoryFSHandler.AddFile('XRC/main/img_btn_64x48_a_png', img_btn_64x48_a_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_btn_view_sel_png', img_btn_view_sel_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_btn_view_sel_h_png', img_btn_view_sel_h_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_btn_view_sel_a_png', img_btn_view_sel_a_png)
