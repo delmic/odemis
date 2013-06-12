@@ -20,12 +20,12 @@ class xrcfr_main(wx.Frame):
 #!XRCED:begin-block:xrcfr_main.PreCreate
     def PreCreate(self, pre):
         """ This function is called during the class's initialization.
-        
+
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
         pass
-        
+
 #!XRCED:end-block:xrcfr_main.PreCreate
 
     def __init__(self, parent):
@@ -47,6 +47,7 @@ class xrcfr_main(wx.Frame):
         self.menu_item_about = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_about"))
         self.btn_tab_secom_streams = xrc.XRCCTRL(self, "btn_tab_secom_streams")
         self.btn_tab_secom_gallery = xrc.XRCCTRL(self, "btn_tab_secom_gallery")
+        self.btn_tab_sparc_align = xrc.XRCCTRL(self, "btn_tab_sparc_align")
         self.btn_tab_sparc_acqui = xrc.XRCCTRL(self, "btn_tab_sparc_acqui")
         self.btn_tab_sparc_analysis = xrc.XRCCTRL(self, "btn_tab_sparc_analysis")
         self.pnl_tab_secom_streams = xrc.XRCCTRL(self, "pnl_tab_secom_streams")
@@ -78,6 +79,19 @@ class xrcfr_main(wx.Frame):
         self.fp_annotations = xrc.XRCCTRL(self, "fp_annotations")
         self.btn_secom_acquire = xrc.XRCCTRL(self, "btn_secom_acquire")
         self.pnl_tab_secom_gallery = xrc.XRCCTRL(self, "pnl_tab_secom_gallery")
+        self.pnl_tab_sparc_align = xrc.XRCCTRL(self, "pnl_tab_sparc_align")
+        self.slider_stage = xrc.XRCCTRL(self, "slider_stage")
+        self.btn_align_py = xrc.XRCCTRL(self, "btn_align_py")
+        self.btn_align_my = xrc.XRCCTRL(self, "btn_align_my")
+        self.btn_align_mx = xrc.XRCCTRL(self, "btn_align_mx")
+        self.btn_align_px = xrc.XRCCTRL(self, "btn_align_px")
+        self.slider_stage = xrc.XRCCTRL(self, "slider_stage")
+        self.btn_align_pya = xrc.XRCCTRL(self, "btn_align_pya")
+        self.btn_align_mya = xrc.XRCCTRL(self, "btn_align_mya")
+        self.btn_align_mpi = xrc.XRCCTRL(self, "btn_align_mpi")
+        self.btn_align_ppi = xrc.XRCCTRL(self, "btn_align_ppi")
+        self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
+        self.fp_sparc_settings = xrc.XRCCTRL(self, "fp_sparc_settings")
         self.pnl_tab_sparc_acqui = xrc.XRCCTRL(self, "pnl_tab_sparc_acqui")
         self.sparc_acq_tool_menu = xrc.XRCCTRL(self, "sparc_acq_tool_menu")
         self.btn_sparc_acq_view_select = xrc.XRCCTRL(self, "btn_sparc_acq_view_select")
@@ -128,12 +142,12 @@ class xrcfr_acq(wx.Dialog):
 #!XRCED:begin-block:xrcfr_acq.PreCreate
     def PreCreate(self, pre):
         """ This function is called during the class's initialization.
-        
+
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
         pass
-        
+
 #!XRCED:end-block:xrcfr_acq.PreCreate
 
     def __init__(self, parent):
@@ -171,7 +185,7 @@ def __init_resources():
     wx.FileSystem.AddHandler(wx.MemoryFSHandler())
 
     main_xrc = '''\
-<?xml version="1.0" ?><resource class="wxStaticText" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
+<?xml version="1.0" ?><resource class="wxPanel" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
   <object class="wxFrame" name="fr_main">
     <object class="wxMenuBar">
       <object class="wxMenu">
@@ -281,6 +295,31 @@ def __init_resources():
               <object class="TabButton" name="btn_tab_secom_gallery">
                 <size>160,30</size>
                 <label>GALLERY</label>
+                <bitmap>img_tab_inactive_png</bitmap>
+                <hover>img_tab_hover_png</hover>
+                <selected>img_tab_active_png</selected>
+                <fg>#E5E5E5</fg>
+                <font>
+                  <size>11</size>
+                  <style>normal</style>
+                  <weight>normal</weight>
+                  <underlined>0</underlined>
+                  <family>default</family>
+                  <face>Ubuntu</face>
+                  <encoding>UTF-8</encoding>
+                </font>
+                <style>wxALIGN_CENTRE</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxLEFT|wxALIGN_BOTTOM</flag>
+              <border>20</border>
+            </object>
+            <object class="sizeritem">
+              <object class="TabButton" name="btn_tab_sparc_align">
+                <size>160,30</size>
+                <label>MIRROR ALIGNMENT</label>
                 <bitmap>img_tab_inactive_png</bitmap>
                 <hover>img_tab_hover_png</hover>
                 <selected>img_tab_active_png</selected>
@@ -650,7 +689,7 @@ def __init_resources():
               <flag>wxEXPAND</flag>
             </object>
             <object class="sizeritem">
-              <object class="wxPanel" name="pnl_right">
+              <object class="wxPanel">
                 <object class="wxBoxSizer">
                   <object class="sizeritem">
                     <object class="wxPanel" name="main_buttons">
@@ -919,6 +958,517 @@ def __init_resources():
         <flag>wxEXPAND</flag>
       </object>
       <object class="sizeritem">
+        <object class="wxPanel" name="pnl_tab_sparc_align">
+          <object class="wxBoxSizer">
+            <object class="sizeritem">
+              <object class="wxPanel">
+                <object class="wxBoxSizer">
+                  <orient>wxVERTICAL</orient>
+                  <object class="sizeritem">
+                    <object class="wxStaticText">
+                      <label>Translation</label>
+                      <font>
+                        <size>16</size>
+                        <style>normal</style>
+                        <weight>normal</weight>
+                        <underlined>0</underlined>
+                        <family>default</family>
+                        <face>Ubuntu</face>
+                        <encoding>UTF-8</encoding>
+                      </font>
+                    </object>
+                    <flag>wxBOTTOM</flag>
+                    <border>10</border>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxStaticText">
+                      <label>Step size</label>
+                    </object>
+                    <flag>wxBOTTOM</flag>
+                    <border>5</border>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="UnitFloatSlider" name="slider_stage">
+                      <size>-1,20</size>
+                      <value>0.000001</value>
+                      <min>0.0000001</min>
+                      <max>0.0001</max>
+                      <unit>m</unit>
+                      <scale>log</scale>
+                      <accuracy>1</accuracy>
+                      <fg>#E5E5E5</fg>
+                      <style>wxBORDER_NONE</style>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <flag>wxEXPAND</flag>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxGridBagSizer">
+                      <object class="sizeritem">
+                        <object class="wxStaticText" name="lbl_py">
+                          <label>+Y</label>
+                          <fg>#E5E5E5</fg>
+                          <font>
+                            <size>16</size>
+                            <style>normal</style>
+                            <weight>bold</weight>
+                            <underlined>0</underlined>
+                            <family>default</family>
+                            <face>Ubuntu</face>
+                            <encoding>UTF-8</encoding>
+                          </font>
+                        </object>
+                        <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
+                        <border>5</border>
+                        <cellpos>0,2</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="wxStaticText" name="lbl_my">
+                          <label>-Y</label>
+                          <fg>#E5E5E5</fg>
+                          <font>
+                            <size>16</size>
+                            <style>normal</style>
+                            <weight>bold</weight>
+                            <underlined>0</underlined>
+                            <family>default</family>
+                            <face>Ubuntu</face>
+                            <encoding>UTF-8</encoding>
+                          </font>
+                        </object>
+                        <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
+                        <border>5</border>
+                        <cellpos>4,2</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="wxStaticText" name="lbl_px">
+                          <label>+X</label>
+                          <fg>#E5E5E5</fg>
+                          <font>
+                            <size>16</size>
+                            <style>normal</style>
+                            <weight>bold</weight>
+                            <underlined>0</underlined>
+                            <family>default</family>
+                            <face>Ubuntu</face>
+                            <encoding>UTF-8</encoding>
+                          </font>
+                          <style>wxALIGN_LEFT</style>
+                        </object>
+                        <flag>wxLEFT|wxALIGN_CENTRE_VERTICAL</flag>
+                        <border>5</border>
+                        <cellpos>2,4</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="wxStaticText" name="lbl_mx">
+                          <label>-X</label>
+                          <fg>#E5E5E5</fg>
+                          <font>
+                            <size>16</size>
+                            <style>normal</style>
+                            <weight>bold</weight>
+                            <underlined>0</underlined>
+                            <family>default</family>
+                            <face>Ubuntu</face>
+                            <encoding>UTF-8</encoding>
+                          </font>
+                        </object>
+                        <flag>wxRIGHT|wxALIGN_RIGHT|wxALIGN_CENTRE_VERTICAL</flag>
+                        <border>5</border>
+                        <cellpos>2,0</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="ImageTextButton" name="btn_align_py">
+                          <label>▵</label>
+                          <delta>1</delta>
+                          <bitmap>img_btn_64x48_png</bitmap>
+                          <hover>img_btn_64x48_h_png</hover>
+                          <selected>img_btn_64x48_a_png</selected>
+                          <font>
+                            <size>24</size>
+                            <style>normal</style>
+                            <weight>bold</weight>
+                            <underlined>0</underlined>
+                            <family>default</family>
+                            <face>Ubuntu</face>
+                            <encoding>UTF-8</encoding>
+                          </font>
+                          <style>wxALIGN_CENTRE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <flag>wxLEFT|wxRIGHT</flag>
+                        <border>7</border>
+                        <cellpos>1,2</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="ImageTextButton" name="btn_align_my">
+                          <label>▿</label>
+                          <delta>1</delta>
+                          <bitmap>img_btn_64x48_png</bitmap>
+                          <hover>img_btn_64x48_h_png</hover>
+                          <selected>img_btn_64x48_a_png</selected>
+                          <font>
+                            <size>24</size>
+                            <style>normal</style>
+                            <weight>bold</weight>
+                            <underlined>0</underlined>
+                            <family>default</family>
+                            <face>Ubuntu</face>
+                            <encoding>UTF-8</encoding>
+                          </font>
+                          <style>wxALIGN_CENTRE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <flag>wxLEFT|wxRIGHT</flag>
+                        <border>7</border>
+                        <cellpos>3,2</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="ImageTextButton" name="btn_align_mx">
+                          <label>◃</label>
+                          <delta>1</delta>
+                          <bitmap>img_btn_64x48_png</bitmap>
+                          <hover>img_btn_64x48_h_png</hover>
+                          <selected>img_btn_64x48_a_png</selected>
+                          <font>
+                            <size>24</size>
+                            <style>normal</style>
+                            <weight>bold</weight>
+                            <underlined>0</underlined>
+                            <family>default</family>
+                            <face>Ubuntu</face>
+                            <encoding>UTF-8</encoding>
+                          </font>
+                          <style>wxALIGN_CENTRE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <cellpos>2,1</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="ImageTextButton" name="btn_align_px">
+                          <label>▹</label>
+                          <delta>1</delta>
+                          <bitmap>img_btn_64x48_png</bitmap>
+                          <hover>img_btn_64x48_h_png</hover>
+                          <selected>img_btn_64x48_a_png</selected>
+                          <font>
+                            <size>24</size>
+                            <style>normal</style>
+                            <weight>bold</weight>
+                            <underlined>0</underlined>
+                            <family>default</family>
+                            <face>Ubuntu</face>
+                            <encoding>UTF-8</encoding>
+                          </font>
+                          <style>wxALIGN_CENTRE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <cellpos>2,3</cellpos>
+                      </object>
+                      <vgap>0</vgap>
+                      <hgap>5</hgap>
+                      <growablecols/>
+                      <growablerows/>
+                    </object>
+                    <flag>wxALIGN_CENTRE</flag>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxStaticText">
+                      <label>Rotation</label>
+                      <fg>#E5E5E5</fg>
+                      <font>
+                        <size>16</size>
+                        <style>normal</style>
+                        <weight>normal</weight>
+                        <underlined>0</underlined>
+                        <family>default</family>
+                        <face>Ubuntu</face>
+                        <encoding>UTF-8</encoding>
+                      </font>
+                    </object>
+                    <flag>wxBOTTOM</flag>
+                    <border>10</border>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxStaticText">
+                      <label>Step size</label>
+                    </object>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="UnitFloatSlider" name="slider_stage">
+                      <size>-1,20</size>
+                      <value>0.000001</value>
+                      <min>0.0000001</min>
+                      <max>0.0001</max>
+                      <unit>m</unit>
+                      <scale>log</scale>
+                      <accuracy>1</accuracy>
+                      <style>wxBORDER_NONE</style>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <flag>wxEXPAND</flag>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxGridBagSizer">
+                      <object class="sizeritem">
+                        <object class="wxStaticText" name="lbl_py">
+                          <label>+Yaw</label>
+                          <fg>#E5E5E5</fg>
+                          <font>
+                            <size>16</size>
+                            <style>normal</style>
+                            <weight>bold</weight>
+                            <underlined>0</underlined>
+                            <family>default</family>
+                            <face>Ubuntu</face>
+                            <encoding>UTF-8</encoding>
+                          </font>
+                        </object>
+                        <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
+                        <border>5</border>
+                        <cellpos>0,2</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="wxStaticText" name="lbl_my">
+                          <label>-Yaw</label>
+                          <fg>#E5E5E5</fg>
+                          <font>
+                            <size>16</size>
+                            <style>normal</style>
+                            <weight>bold</weight>
+                            <underlined>0</underlined>
+                            <family>default</family>
+                            <face>Ubuntu</face>
+                            <encoding>UTF-8</encoding>
+                          </font>
+                        </object>
+                        <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
+                        <border>5</border>
+                        <cellpos>4,2</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="wxStaticText" name="lbl_px">
+                          <label>+Pitch</label>
+                          <fg>#E5E5E5</fg>
+                          <font>
+                            <size>16</size>
+                            <style>normal</style>
+                            <weight>bold</weight>
+                            <underlined>0</underlined>
+                            <family>default</family>
+                            <face>Ubuntu</face>
+                            <encoding>UTF-8</encoding>
+                          </font>
+                          <style>wxALIGN_LEFT</style>
+                        </object>
+                        <flag>wxLEFT|wxALIGN_CENTRE_VERTICAL</flag>
+                        <border>5</border>
+                        <cellpos>2,4</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="wxStaticText" name="lbl_mx">
+                          <label>-Pitch</label>
+                          <fg>#E5E5E5</fg>
+                          <font>
+                            <size>16</size>
+                            <style>normal</style>
+                            <weight>bold</weight>
+                            <underlined>0</underlined>
+                            <family>default</family>
+                            <face>Ubuntu</face>
+                            <encoding>UTF-8</encoding>
+                          </font>
+                        </object>
+                        <flag>wxRIGHT|wxALIGN_RIGHT|wxALIGN_CENTRE_VERTICAL</flag>
+                        <border>5</border>
+                        <cellpos>2,0</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="ImageTextButton" name="btn_align_pya">
+                          <label>▵</label>
+                          <delta>1</delta>
+                          <bitmap>img_btn_64x48_png</bitmap>
+                          <hover>img_btn_64x48_h_png</hover>
+                          <selected>img_btn_64x48_a_png</selected>
+                          <font>
+                            <size>24</size>
+                            <style>normal</style>
+                            <weight>bold</weight>
+                            <underlined>0</underlined>
+                            <family>default</family>
+                            <face>Ubuntu</face>
+                            <encoding>UTF-8</encoding>
+                          </font>
+                          <style>wxALIGN_CENTRE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <flag>wxLEFT|wxRIGHT</flag>
+                        <border>7</border>
+                        <cellpos>1,2</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="ImageTextButton" name="btn_align_mya">
+                          <label>▿</label>
+                          <delta>1</delta>
+                          <bitmap>img_btn_64x48_png</bitmap>
+                          <hover>img_btn_64x48_h_png</hover>
+                          <selected>img_btn_64x48_a_png</selected>
+                          <font>
+                            <size>24</size>
+                            <style>normal</style>
+                            <weight>bold</weight>
+                            <underlined>0</underlined>
+                            <family>default</family>
+                            <face>Ubuntu</face>
+                            <encoding>UTF-8</encoding>
+                          </font>
+                          <style>wxALIGN_CENTRE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <flag>wxLEFT|wxRIGHT</flag>
+                        <border>7</border>
+                        <cellpos>3,2</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="ImageTextButton" name="btn_align_mpi">
+                          <label>◃</label>
+                          <delta>1</delta>
+                          <bitmap>img_btn_64x48_png</bitmap>
+                          <hover>img_btn_64x48_h_png</hover>
+                          <selected>img_btn_64x48_a_png</selected>
+                          <font>
+                            <size>24</size>
+                            <style>normal</style>
+                            <weight>bold</weight>
+                            <underlined>0</underlined>
+                            <family>default</family>
+                            <face>Ubuntu</face>
+                            <encoding>UTF-8</encoding>
+                          </font>
+                          <style>wxALIGN_CENTRE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <cellpos>2,1</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="ImageTextButton" name="btn_align_ppi">
+                          <label>▹</label>
+                          <delta>1</delta>
+                          <bitmap>img_btn_64x48_png</bitmap>
+                          <hover>img_btn_64x48_h_png</hover>
+                          <selected>img_btn_64x48_a_png</selected>
+                          <font>
+                            <size>24</size>
+                            <style>normal</style>
+                            <weight>bold</weight>
+                            <underlined>0</underlined>
+                            <family>default</family>
+                            <face>Ubuntu</face>
+                            <encoding>UTF-8</encoding>
+                          </font>
+                          <style>wxALIGN_CENTRE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <cellpos>2,3</cellpos>
+                      </object>
+                      <vgap>0</vgap>
+                      <hgap>5</hgap>
+                      <growablecols/>
+                      <growablerows/>
+                    </object>
+                    <flag>wxALIGN_CENTRE</flag>
+                  </object>
+                </object>
+                <fg>#E5E5E5</fg>
+                <bg>#333333</bg>
+              </object>
+              <flag>wxALL|wxEXPAND</flag>
+              <border>10</border>
+            </object>
+            <object class="sizeritem">
+              <object class="SparcAlignViewport" name="vp_sparc_align">
+                <size>400,-1</size>
+              </object>
+              <option>1</option>
+              <flag>wxEXPAND</flag>
+              <ratio>1</ratio>
+            </object>
+            <object class="sizeritem">
+              <object class="wxPanel">
+                <object class="wxBoxSizer">
+                  <object class="sizeritem">
+                    <object class="wxScrolledWindow" name="scr_win_right">
+                      <object class="wxBoxSizer">
+                        <orient>wxVERTICAL</orient>
+                        <object class="sizeritem">
+                          <object class="FoldPanelBar">
+                            <object class="FoldPanelItem" name="fp_sparc_settings">
+                              <label>INSTRUMENT SETTINGS</label>
+                              <fg>#1A1A1A</fg>
+                              <bg>#555555</bg>
+                              <XRCED>
+                                <assign_var>1</assign_var>
+                              </XRCED>
+                            </object>
+                            <spacing>0</spacing>
+                            <leftspacing>0</leftspacing>
+                            <rightspacing>0</rightspacing>
+                            <bg>#333333</bg>
+                          </object>
+                          <flag>wxEXPAND</flag>
+                        </object>
+                      </object>
+                      <size>400,-1</size>
+                      <bg>#333333</bg>
+                      <style>wxVSCROLL</style>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <option>1</option>
+                    <flag>wxEXPAND</flag>
+                    <minsize>400,400</minsize>
+                  </object>
+                  <orient>wxVERTICAL</orient>
+                </object>
+                <size>400,-1</size>
+                <bg>#333333</bg>
+                <style>wxBORDER_NONE</style>
+              </object>
+              <flag>wxEXPAND</flag>
+            </object>
+            <orient>wxHORIZONTAL</orient>
+          </object>
+          <bg>#333333</bg>
+          <hidden>1</hidden>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
+        <option>1</option>
+        <flag>wxEXPAND</flag>
+      </object>
+      <object class="sizeritem">
         <object class="wxPanel" name="pnl_tab_sparc_acqui">
           <object class="wxBoxSizer">
             <orient>wxHORIZONTAL</orient>
@@ -1020,7 +1570,7 @@ def __init_resources():
               <flag>wxEXPAND</flag>
             </object>
             <object class="sizeritem">
-              <object class="wxPanel" name="pnl_right">
+              <object class="wxPanel">
                 <object class="wxBoxSizer">
                   <object class="sizeritem">
                     <object class="wxPanel" name="main_buttons">
@@ -1362,10 +1912,6 @@ def __init_resources():
       </object>
       <object class="sizeritem">
         <object class="wxPanel" name="pnl_tab_sparc_analysis">
-          <bg>#333333</bg>
-          <XRCED>
-            <assign_var>1</assign_var>
-          </XRCED>
           <object class="wxBoxSizer">
             <object class="sizeritem">
               <object class="wxPanel">
@@ -1663,7 +2209,7 @@ def __init_resources():
               <flag>wxEXPAND</flag>
             </object>
             <object class="sizeritem">
-              <object class="wxPanel" name="pnl_right">
+              <object class="wxPanel">
                 <object class="wxBoxSizer">
                   <object class="sizeritem">
                     <object class="wxPanel" name="main_buttons">
@@ -1741,6 +2287,10 @@ def __init_resources():
             </object>
             <orient>wxHORIZONTAL</orient>
           </object>
+          <bg>#333333</bg>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
         </object>
         <option>1</option>
         <flag>wxEXPAND</flag>
@@ -1811,7 +2361,7 @@ def __init_resources():
         <flag>wxEXPAND</flag>
       </object>
       <object class="sizeritem">
-        <object class="wxPanel" name="pnl_right">
+        <object class="wxPanel">
           <object class="wxBoxSizer">
             <object class="sizeritem">
               <object class="wxPanel" name="main_buttons">
@@ -3210,6 +3760,58 @@ y\x9e\xd7\xe17\xcf\x01\x00h\xa7\xc3\xff\xc8
 \xf7\xc3}\x96S\xcb\x99E\x00\x00\x81\xa0\x9a\xae\xda\xde\xd7\xc3b\xb1X\xac\
 \xeb\xb9\xfe\x07$\x96\x11\xc8%x(\x88\x00\x00\x00\x00IEND\xaeB`\x82'''
 
+    img_btn_64x48_png = '''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00@\x00\x00\x000\x08\x06\x00\x00\x00\xa1\
+K|\x1f\x00\x00\x00\xe3IDATh\xde\xed\xda=
+\xc20\x18\xc6\xf1\x90\xc1\x1b8y<\x8f\xa1 \x82\xb37\x10<H\xc7\x0e=H
+\xa5\xdd\x13\xe8W\xcc#\xea\xe0\x11\xfa\xfe\x03\x0f\x14:=?\xf2&\x1d\xea\
+\xab\xaa\xda\xd5u}k\x9a&\x94d#\x09\xea\xac\xee~Y\x96kJ\xe9\xd4\xf7\xfd\xa1\
+m[\x17B\xd8t\xd4Q]\xd5Y\xdd}y8\xc6\x18\xdd8\x8e.\xe7\xec\xb6\xbe\xd4Q]\xd5\
+Y\xdd\xfd<\xcf\xfbi\x9a\xde/,E\x9d\xd5\xdd\xaf\xeb\xea\x14k\x00\xdf\xde\
+\xde\x19_\xbf\x1d`5\xec\x00k\xb3\xff\x1f\x00\x00\x00\x00\x00\x00\x00\x00\
+\xc00\x80\xf9OaF\x00\x00\x00\x00\xe0\x16\xe0\x16`\x04\x00\x00\x80C\x90C\
+\x90\x11\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\
+\xc0
+\x00?I\xe5<\x18\xde\x01\x83\x00\x1e\x86\x01\x9e\x1a\x81K\xc9\xbd\xa43\xb4\
+\xf3\xbbO\xe7\xf3\x0b\x85s@;\xac\xd7\x8e\xb9\x00\x00\x00\x00IEND\xaeB`\x82'''
+
+    img_btn_64x48_h_png = '''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00@\x00\x00\x000\x08\x06\x00\x00\x00\xa1\
+K|\x1f\x00\x00\x00\xe4IDATh\xde\xed\x9a\xbd\x0d\xc20\x18D-\x17l@\xc5x\x8c\
+\x01\x12B\xa2f\x03$\xf6Ie)#\xa4\x88\xe2\xc2\xad\xa3\xfc\x18\x1f"\x0d#\xe4\
+{\x91\xaeJ\xf5\x9e|\xe7\xc6\xbei\x9aC\x08\xe1\xd1\xb6mWS\x8c\xa4\x13\xb3\
+\xd8\xfd\xb2,\xf7\x9c\xf3%\xa5t\x8a1\xbaa\x18v\x1d1\x8aU\xccb\xf7\xe38\x9e\
+k\xdc4M\xae\x94\xe2\xf6\xfe\x89Q\xacb\x16\xbbN\xc0q\x9e\xe7\xef\x0fK\x11\
+\xb3\xd8\xfd\xba\xaeN\xb1&`\xe3\xf6\xd6\xc0\xff\x83\x00g\xfc\xe3\x04 \xc0\
+\xba\x80\xed:\xb0\x1aN\x00\x02\x10\x80\x00n\x01n\x01*\x80\x006\xc0\xec\x06\
+0\x82l\x00\x1b@\x05\xa8\x00\x15\xa0\x02T\x00\x01l\x00\x1b@\x05\x10\x80\x00\
+\x04p\x0bp\x0bP\x01\x04\xf0D\x86\x272T\xc0\x96\x80hX@\x94\x80\x97a\x01o\
+\x8d\xe0\xad\xe6Y\xd3\x1b\xda\xbe\xfe\xc7|\xfd\x00\x1a2
+
+"`R\xa3\x00\x00\x00\x00IEND\xaeB`\x82'''
+
+    img_btn_64x48_a_png = '''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00@\x00\x00\x000\x08\x06\x00\x00\x00\xa1\
+K|\x1f\x00\x00\x01\x1bIDATh\xde\xed\x98A\x8a\x83P\x10D\xdbF\xe2J\x10A\x04\
+G]\xe9\x05\\x\xa1\x1cc\x06\x86\x81Y\xcf\x0d\x06\xe6pY\x04r\x04\xd1\x9f_\
+!\xd9$0\x07\xb0\xaa\xa1\x16\xf9\x8a\xee\xeaV\x1f\x86\xe1\x10\xf5\x1du\x8a
+$:\xdd\x99\x0f\x9e\xa6\xe9W\x9e\xe7\xefu]\xbf\xc5\xb2\xb6mw-0\x82\x15\xcc\
+`\xf7\xb2,\x8f\xe38\xda4M6\xcf3\x85\xc0
+f\xb0{\xd7u\x15\x1e}\xdf[\xd34\x14\x02+\x98\xc1\xeeUUYQ\x14\x16\xdb\xc1\
+P!\x84]\x0b\x05V0\x83\xdd\xb3,3w\xdf=\xf8\xb3\xc0|c\x87#I\x92\x18[=\x98\
+\xdd\xc8\xcb\xd9Z\xffe\x14\x18\x82\xef\xbf@T\x07\xc8\x00\x19\xa0\x10\xe4\
+\x0eA\xdd\x01\xec#\xb0m\x9b1K#\xa0-\xa0SX!\xc8\x1d\x82\xca\x00m\x81@\xdb\
+\xfe\xfa\x18\x92\x012@\x06\xe8\x12\xa4_\x83\xba\x04\x95\x01\xba\x04\xd5\
+\x01\xfa\x1f\xa0CH\x06\xc8\x00\xadA\xd65\xa8;@#\xa0;\xe0B\xdc\x01\x17\x18\
+\xf0\xcb:\xff\x91\xfd\xcf\x97e\xf9\\\xd7\xf5\x27\xbe\xcfD\xecg0G\xf6\x8f\
++\x0d\xb1"$\xa9\x8a`\x0c\x00\x00\x00\x00IEND\xaeB`\x82'''
+
     img_btn_view_sel_png = '''\
 \x89PNG\x0d
 \x1a
@@ -4233,6 +4835,9 @@ Z\xb9A\x04\xc6\x89\x00\x00\x00\x00IEND\xaeB`\x82'''
     wx.MemoryFSHandler.AddFile('XRC/main/img_btn_acquire_image_h_png', img_btn_acquire_image_h_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_btn_acquire_image_a_png', img_btn_acquire_image_a_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_btn_acquire_image_d_png', img_btn_acquire_image_d_png)
+    wx.MemoryFSHandler.AddFile('XRC/main/img_btn_64x48_png', img_btn_64x48_png)
+    wx.MemoryFSHandler.AddFile('XRC/main/img_btn_64x48_h_png', img_btn_64x48_h_png)
+    wx.MemoryFSHandler.AddFile('XRC/main/img_btn_64x48_a_png', img_btn_64x48_a_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_btn_view_sel_png', img_btn_view_sel_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_btn_view_sel_h_png', img_btn_view_sel_h_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_btn_view_sel_a_png', img_btn_view_sel_a_png)

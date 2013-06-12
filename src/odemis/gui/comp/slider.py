@@ -58,6 +58,8 @@ class Slider(wx.PyControl):
         :param style:  use wx.Panel styles
         :param name:   Window name.
         :param scale:  'linear' (default), 'cubic' or 'log'
+            *Note*: Make sure to add any new option to the Slider ParamScale in
+            xmlh.delmic !
         """
 
         wx.PyControl.__init__(self, parent, id, pos, size, style)
@@ -112,17 +114,18 @@ class Slider(wx.PyControl):
         self.Bind(wx.EVT_SIZE, self.OnSize)
 
     def __del__(self):
-        # FIXME: put here to try and prevent PyDeadObject exceptions. Might
-        # become superfluous.
-        # Data events
-        self.Unbind(wx.EVT_MOTION, self.OnMotion)
-        self.Unbind(wx.EVT_LEFT_DOWN, self.OnLeftDown)
-        self.Unbind(wx.EVT_LEFT_UP, self.OnLeftUp)
-        self.Unbind(wx.EVT_MOUSE_CAPTURE_LOST, self.OnCaptureLost)
+        try:
+            # Data events
+            self.Unbind(wx.EVT_MOTION, self.OnMotion)
+            self.Unbind(wx.EVT_LEFT_DOWN, self.OnLeftDown)
+            self.Unbind(wx.EVT_LEFT_UP, self.OnLeftUp)
+            self.Unbind(wx.EVT_MOUSE_CAPTURE_LOST, self.OnCaptureLost)
 
-        # Layout Events
-        self.Unbind(wx.EVT_PAINT, self.OnPaint)
-        self.Unbind(wx.EVT_SIZE, self.OnSize)
+            # Layout Events
+            self.Unbind(wx.EVT_PAINT, self.OnPaint)
+            self.Unbind(wx.EVT_SIZE, self.OnSize)
+        except wx.PyDeadObjectError:
+            pass
 
     @staticmethod
     def _log_val_to_perc(r0, r1, v):
@@ -451,10 +454,10 @@ class NumberSlider(Slider):
 
 
     def __del__(self):
-        # FIXME: put here to try and prevent PyDeadObject exceptions. Might
-        # become superfluous.
-        self.linked_field.Unbind(wx.EVT_COMMAND_ENTER, self._update_slider)
-        print "NumberSlider unbound"
+        try:
+            self.linked_field.Unbind(wx.EVT_COMMAND_ENTER, self._update_slider)
+        except wx.PyDeadObjectError:
+            pass
 
     def _update_slider(self, evt):
         """ Private event handler called when the slider should be updated, for

@@ -9,15 +9,15 @@ Copyright © 2012 Éric Piel, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms 
-of the GNU General Public License version 2 as published by the Free Software 
+Odemis is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
 Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR 
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
 PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with 
+You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
@@ -215,22 +215,15 @@ class DblMicroscopeCanvas(DraggableCanvas):
         if not self.microscope_view:
             return
 
-        # now = time.time()
-        # if (self._lastThumbnailUpdate + self._thumbnailUpdatePeriod) < now:
-        #     self._updateThumbnail()
-        #     self._lastThumbnailUpdate = now
-
         self._updateThumbnail()
 
-    # TODO: use rate limiting decorator NOTE: `limit_invocation` causes an X
-    # server error! Investigate further
     @limit_invocation(2) # max 1/2s
     @call_after
     def _updateThumbnail(self):
-        # TODO avoid doing 2 copies, by using directly the wxImage from the
+        # TODO: avoid doing 2 copies, by using directly the wxImage from the
         # result of the StreamTree
 
-        logging.debug("Updating thumbnail")
+        #logging.debug("Updating thumbnail")
 
         # new bitmap to copy the DC
         bitmap = wx.EmptyBitmap(*self.ClientSize)
@@ -246,7 +239,8 @@ class DblMicroscopeCanvas(DraggableCanvas):
         # close the DC, to be sure the bitmap can be used safely
         del dc
 
-        self.microscope_view.thumbnail.value = wx.ImageFromBitmap(bitmap)
+        img = wx.ImageFromBitmap(bitmap)
+        self.microscope_view.thumbnail.value = img
 
     def _onStagePos(self, value):
         """
@@ -802,3 +796,8 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
         logging.debug("Selection now set to %s", phys_rect)
         self.roi_overlay.set_physical_sel(phys_rect)
         wx.CallAfter(self.ShouldUpdateDrawing)
+
+class SparcAlignCanvas(DblMicroscopeCanvas):
+
+    def __init__(self, *args, **kwargs):
+        super(SparcAlignCanvas, self).__init__(*args, **kwargs)

@@ -193,30 +193,57 @@ class OdemisGUIApp(wx.App):
             # List of all possible tabs used in Odemis' main GUI
             # microscope role(s), internal name, class, tab btn, tab panel
             # order matters, as the first matching tab is be the default one
-            tab_rules = [(("secom", "sem", "optical"), "secom_live",
-                         tabs.SecomStreamsTab,
-                         self.main_frame.btn_tab_secom_streams,
-                         self.main_frame.pnl_tab_secom_streams),
-                        # TODO: merge secom_gallery and sparc_analysis, once
-                        # the tab can adapt the views depending on the acquisition
-                        # content
-                        ("booooo", "secom_gallery", tabs.AnalysisTab,
-                         self.main_frame.btn_tab_secom_gallery,
-                         self.main_frame.pnl_tab_secom_gallery), # we want to hide this
-                        ("sparc", "sparc_acqui", tabs.SparcAcquisitionTab,
-                         self.main_frame.btn_tab_sparc_acqui,
-                         self.main_frame.pnl_tab_sparc_acqui),
-                        # None = displayed when no backend found
-                        ((None, "secom", "sparc"), "sparc_analysis", tabs.AnalysisTab,
-                          self.main_frame.btn_tab_sparc_analysis,
-                          self.main_frame.pnl_tab_sparc_analysis),
-                        ]
+
+            tab_rules = [
+                (
+                    ("secom", "sem", "optical"),
+                    "secom_live",
+                    tabs.SecomStreamsTab,
+                    self.main_frame.btn_tab_secom_streams,
+                    self.main_frame.pnl_tab_secom_streams
+                ),
+                # TODO: merge secom_gallery and sparc_analysis, once
+                # the tab can adapt the views depending on the acquisition
+                # content
+                (
+                    "booooo",
+                    "secom_gallery",
+                    tabs.AnalysisTab,
+                    self.main_frame.btn_tab_secom_gallery,
+                    self.main_frame.pnl_tab_secom_gallery
+                ),
+                (
+                    "sparc",
+                    "sparc_align",
+                    tabs.MirrorAlignTab,
+                    self.main_frame.btn_tab_sparc_align,
+                    self.main_frame.pnl_tab_sparc_align
+                ),
+                (
+                    "sparc",
+                    "sparc_acqui",
+                    tabs.SparcAcquisitionTab,
+                    self.main_frame.btn_tab_sparc_acqui,
+                    self.main_frame.pnl_tab_sparc_acqui
+                ),
+                (
+                    (None, "secom", "sparc"),
+                    "sparc_analysis",
+                    tabs.AnalysisTab,
+                    self.main_frame.btn_tab_sparc_analysis,
+                    self.main_frame.pnl_tab_sparc_analysis),
+            ]
 
             # Create the main tab controller and store a global reference
             # in the odemis.gui.cont package
-            set_main_tab_controller(tabs.TabBarController(tab_rules,
-                                                          self.main_frame,
-                                                          self.microscope))
+            set_main_tab_controller(
+                tabs.TabBarController(
+                    tab_rules,
+                    self.main_frame,
+                    self.microscope
+                )
+            )
+
             # making it very late seems to make it smoother
             wx.CallAfter(self.main_frame.Show)
             logging.debug("Frame will be displayed soon")
