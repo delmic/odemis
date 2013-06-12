@@ -519,7 +519,17 @@ class ParamScale(params.RadioBox):
 c = component.Component(
         'UnitFloatSlider',
         ['control','tool'],
-        ['pos', 'size', 'value', 'min', 'max', 'unit', 'scale', 'text_size'],
+        [
+            'pos',
+            'size',
+            'value',
+            'min',
+            'max',
+            'unit',
+            'scale',
+            'text_size',
+            'accuracy'
+        ],
         image=images.TreeTextCtrl.GetImage()
 )
 c.setParamClass('value', params.ParamText)
@@ -527,6 +537,7 @@ c.setParamClass('min', params.ParamInt)
 c.setParamClass('max', params.ParamInt)
 c.setParamClass('unit', params.MetaParamText(80))
 c.setParamClass('scale', ParamScale)
+c.setParamClass('accuracy', params.ParamPosSize)
 c.setParamClass('text_size', params.ParamPosSize)
 
 component.Manager.register(c)
