@@ -402,7 +402,7 @@ class MirrorAlignTab(Tab):
         # TODO: bind buttons
 
         # TODO: keybinding
-        self.main_frame.pnl_main.Bind(wx.EVT_KEY_DOWN, self.on_key)
+        self.main_frame.pnl_tab_sparc_align.Bind(wx.EVT_KEY_DOWN, self.on_key)
 
     # TODO: should be one per microscope role
     # WXK -> (args for interface_model.step)

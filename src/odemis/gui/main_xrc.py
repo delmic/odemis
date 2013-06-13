@@ -85,9 +85,9 @@ class xrcfr_main(wx.Frame):
         self.btn_align_my = xrc.XRCCTRL(self, "btn_align_my")
         self.btn_align_mx = xrc.XRCCTRL(self, "btn_align_mx")
         self.btn_align_px = xrc.XRCCTRL(self, "btn_align_px")
-        self.slider_stage = xrc.XRCCTRL(self, "slider_stage")
-        self.btn_align_prx = xrc.XRCCTRL(self, "btn_align_prx")
-        self.btn_align_mrx = xrc.XRCCTRL(self, "btn_align_mrx")
+        self.slider_mirror = xrc.XRCCTRL(self, "slider_mirror")
+        self.btn_align_pry = xrc.XRCCTRL(self, "btn_align_pry")
+        self.btn_align_mry = xrc.XRCCTRL(self, "btn_align_mry")
         self.btn_align_mrz = xrc.XRCCTRL(self, "btn_align_mrz")
         self.btn_align_prz = xrc.XRCCTRL(self, "btn_align_prz")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
@@ -1205,7 +1205,7 @@ def __init_resources():
                     </object>
                   </object>
                   <object class="sizeritem">
-                    <object class="UnitFloatSlider" name="slider_stage">
+                    <object class="UnitFloatSlider" name="slider_mirror">
                       <size>-1,20</size>
                       <value>0.000001</value>
                       <min>0.0000001</min>
@@ -1223,7 +1223,7 @@ def __init_resources():
                   <object class="sizeritem">
                     <object class="wxGridBagSizer">
                       <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_prx">
+                        <object class="wxStaticText" name="lbl_pry">
                           <label>+Pitch</label>
                           <fg>#E5E5E5</fg>
                           <font>
@@ -1241,7 +1241,7 @@ def __init_resources():
                         <cellpos>0,2</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_mrx">
+                        <object class="wxStaticText" name="lbl_mry">
                           <label>-Pitch</label>
                           <fg>#E5E5E5</fg>
                           <font>
@@ -1259,7 +1259,7 @@ def __init_resources():
                         <cellpos>4,2</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_px">
+                        <object class="wxStaticText" name="lbl_prz">
                           <label>+Yaw</label>
                           <fg>#E5E5E5</fg>
                           <font>
@@ -1278,7 +1278,7 @@ def __init_resources():
                         <cellpos>2,4</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_mx">
+                        <object class="wxStaticText" name="lbl_mrz">
                           <label>-Yaw</label>
                           <fg>#E5E5E5</fg>
                           <font>
@@ -1296,7 +1296,7 @@ def __init_resources():
                         <cellpos>2,0</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="btn_align_prx">
+                        <object class="ImageTextButton" name="btn_align_pry">
                           <label>▵</label>
                           <delta>1</delta>
                           <bitmap>img_btn_64x48_png</bitmap>
@@ -1321,7 +1321,7 @@ def __init_resources():
                         <cellpos>1,2</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="btn_align_mrx">
+                        <object class="ImageTextButton" name="btn_align_mry">
                           <label>▿</label>
                           <delta>1</delta>
                           <bitmap>img_btn_64x48_png</bitmap>
