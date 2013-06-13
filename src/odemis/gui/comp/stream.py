@@ -12,22 +12,23 @@ Copyright © 2012 Rinze de Laat, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms 
-of the GNU General Public License version 2 as published by the Free Software 
+Odemis is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
 Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR 
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
 PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with 
+You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 
 from odemis.gui import FOREGROUND_COLOUR_EDIT, FOREGROUND_COLOUR
 from odemis.gui.comp.foldpanelbar import FoldPanelItem
-from odemis.gui.comp.slider import UnitIntegerSlider, UnitFloatSlider
+from odemis.gui.comp.slider import UnitIntegerSlider, UnitFloatSlider, \
+    BandwidthSlider
 from odemis.gui.comp.text import SuggestTextCtrl, UnitIntegerCtrl, \
     IntegerTextCtrl
 from odemis.gui.util import call_after
@@ -934,10 +935,9 @@ class BandwithStreamPanel(StreamPanel):
         StreamPanel.__init__(self, *args, **kwargs)
 
         self._btn_auto_bandwidth = None
-        self._sld_center = None
         self._vac_center = None
-        self._sld_bandwidth = None
         self._vac_bandwidth = None
+        self._sld_range = None
 
     def finalize(self):
         StreamPanel.finalize(self)
@@ -968,54 +968,41 @@ class BandwithStreamPanel(StreamPanel):
 
         # ====== Second row, center label, slider and value
 
-        lbl_center = wx.StaticText(self._panel, -1, "Center")
-        self._gbs.Add(lbl_center,
-                      (self.row_count, 0),
-                      flag=wx.ALL,
-                      border=5)
+        self._sld_range = BandwidthSlider(
+                                self._panel,
+                                size=(380, 40), # FIXME: remove fixed width
+        )
 
-        self._sld_center = UnitFloatSlider(
-                                    self._panel,
-                                    value=self.stream.centerWavelength.value,
-                                    val_range=self.stream.centerWavelength.range,
-                                    t_size=(40, -1),
-                                    unit=self.stream.centerWavelength.unit,
-                                    name="center_slider")
+        self._sld_range.SetBackgroundColour(BG_COLOUR_PANEL)
+
+        self._sld_range.set_range(self.stream.centerWavelength.range)
+        # self._sld_range.set_range((5.0e-07, 7.0e-07))
+        self._sld_range.set_center_value(self.stream.centerWavelength.value)
+        # self._sld_range.set_center_value(6.0e-07)
 
         self._vac_center = VigilantAttributeConnector(
-                                            self.stream.centerWavelength,
-                                            self._sld_center,
-                                            events=wx.EVT_SLIDER)
+                                self.stream.centerWavelength,
+                                self._sld_range,
+                                va_2_ctrl=self._sld_range.set_center_value,
+                                ctrl_2_va=self._sld_range.get_center_value,
+                                events=wx.EVT_SCROLL_CHANGED)
+
+        self._sld_range.set_bandwidth_value(self.stream.bandwidth.value)
+        # self._sld_range.set_bandwidth_value(1.0e-07)
+
+        self._vac_bandwidth = VigilantAttributeConnector(
+                                self.stream.bandwidth,
+                                self._sld_range,
+                                va_2_ctrl=self._sld_range.set_bandwidth_value,
+                                ctrl_2_va=self._sld_range.get_bandwidth_value,
+                                events=wx.EVT_SCROLL_CHANGED)
 
         # span is 2, because emission/excitation have 2 controls
-        self._gbs.Add(self._sld_center, pos=(self.row_count, 1),
+        self._gbs.Add(self._sld_range, pos=(self.row_count, 0),
                       span=(1, 2), flag=wx.EXPAND | wx.ALL, border=5)
         self.row_count += 1
 
-        # ====== Third row, bandwidth label, slider and value
-
-        lbl_bandwidth = wx.StaticText(self._panel, -1, "Bandwidth")
-        self._gbs.Add(lbl_bandwidth,
-                      (self.row_count, 0),
-                      flag=wx.ALL, border=5)
-
-        self._sld_bandwidth = UnitFloatSlider(
-                             self._panel,
-                             value=self.stream.bandwidth.value,
-                             val_range=self.stream.bandwidth.range,
-                             t_size=(40, -1),
-                             unit=self.stream.bandwidth.unit,
-                             name="contrast_slider")
-
-        self._vac_bandwidth = VigilantAttributeConnector(self.stream.bandwidth,
-                                             self._sld_bandwidth,
-                                             events=wx.EVT_SLIDER)
-
-        self._gbs.Add(self._sld_bandwidth, pos=(self.row_count, 1),
-                      span=(1, 2), flag=wx.EXPAND | wx.ALL, border=5)
-        self.row_count += 1
-
-        self._gbs.AddGrowableCol(1) # FIXME: what does this do?
+        self._gbs.AddGrowableCol(1) # This makes the 2nd column's width variable
 
         # ==== Bind events
 

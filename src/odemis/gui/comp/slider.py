@@ -555,13 +555,12 @@ class VisualRangeSlider(wx.PyControl):
 
     def __init__(self, *args, **kwargs):
 
-        kwargs['style'] |= wx.NO_BORDER
+        kwargs['style'] = kwargs.get('style', 0) | wx.NO_BORDER
         kwargs['style'] |= wx.NO_FULL_REPAINT_ON_RESIZE
 
         wx.PyControl.__init__(self, *args, **kwargs)
 
         self.hist_color = wxcol_to_rgb(self.GetForegroundColour())
-        print kwargs
         self.select_color = (1.0, 1.0, 1.0, self.sel_alpha)
 
         if kwargs.get('size', None) == (-1, -1):
@@ -589,7 +588,7 @@ class VisualRangeSlider(wx.PyControl):
         self.Bind(wx.EVT_LEFT_UP, self.OnLeftUp)
         self.Bind(wx.EVT_LEAVE_WINDOW, self.OnLeave)
         self.Bind(wx.EVT_ENTER_WINDOW, self.OnEnter)
-        #self.Bind(wx.EVT_MOUSE_CAPTURE_LOST, self.OnCaptureLost)
+        self.Bind(wx.EVT_MOUSE_CAPTURE_LOST, self.OnCaptureLost)
 
         self.mode = None
 
@@ -600,10 +599,24 @@ class VisualRangeSlider(wx.PyControl):
         self._percentage_to_val = lambda r0, r1, p: (r1 - r0) * p + r0
         self._val_to_percentage = lambda r0, r1, v: (float(v) - r0) / (r1 - r0)
 
+    def OnCaptureLost(self, evt):
+        """
+        Applications which capture the mouse, must listen to MouseCaptureLost
+         event.
+        """
+        logging.debug("Lost mouse capture")
+        self.ReleaseMouse()
+        evt.Skip()
+
     def SetForegroundColour(self, col=None):  #pylint: disable=W0221
         if col:
             wx.PyControl.SetForegroundColour(self, col)
         self.hist_color = wxcol_to_rgb(self.GetForegroundColour())
+
+    ### Setting and getting of values
+
+    def SetValue(self, val):
+        self.set_value(val)
 
     def set_value(self, val):
         try:
@@ -628,6 +641,9 @@ class VisualRangeSlider(wx.PyControl):
                 raise IndexError("Value range not set!")
             else:
                 raise
+
+    def GetValue(self):
+        return self.get_value()
 
     def get_value(self):
         return self.value
@@ -782,10 +798,33 @@ class VisualRangeSlider(wx.PyControl):
                 self.select_color = self.select_color[:3] + (self.sel_alpha,)
                 self.Refresh()
 
-
             self.drag_x = 0
         else:
             self._calc_drag(x)
+
+    @limit_invocation(0.07)  #pylint: disable=E1120
+    def send_slider_update_event(self):
+        """
+        Send EVT_COMMAND_SLIDER_UPDATED, which is received as EVT_SLIDER.
+        Means that the value has changed (even when the user is moving the slider)
+        """
+        logging.error("Firing slider event for value %s", self.value)
+
+        evt = wx.CommandEvent(wx.wxEVT_COMMAND_SLIDER_UPDATED)
+        evt.SetEventObject(self)
+        self.GetEventHandler().ProcessEvent(evt)
+
+    def send_scroll_event(self):
+        """
+        Send EVT_SCROLL_CHANGED.
+        Means that the value has changed to a definite position (only sent when
+        the user is done moving the slider).
+        """
+        logging.debug("Firing scroll event for value %s", self.value)
+
+        evt = wx.ScrollEvent(wx.wxEVT_SCROLL_CHANGED)
+        evt.SetEventObject(self)
+        self.GetEventHandler().ProcessEvent(evt)
 
     def OnLeftDown(self, event):
         if self.Enabled:
@@ -812,6 +851,7 @@ class VisualRangeSlider(wx.PyControl):
 
                     self.value = tuple(self._pixel_to_val(i) for i in self.pixel_value)
                     self.drag_x = 0
+                    self.send_scroll_event()
 
                 self.drag_start_x = None
                 self.mode = None
@@ -832,7 +872,6 @@ class VisualRangeSlider(wx.PyControl):
 
         if self.content_list:
             if self.dirty_conent:
-                print "fresh"
                 self._draw_histogram(ctx, width, height)
                 self.dirty_conent = False
 
@@ -851,7 +890,6 @@ class VisualRangeSlider(wx.PyControl):
                 )
                 memDC.SelectObject(wx.NullBitmap)
             elif self.content_bmp:
-                print "cached"
                 pdc.DrawBitmap(self.content_bmp, 0, 0)
 
         self._draw_selection(ctx)
@@ -869,6 +907,41 @@ class VisualRangeSlider(wx.PyControl):
 
         # self.Refresh()
 
+class BandwidthSlider(VisualRangeSlider):
+    def __init__(self, *args, **kwargs):
+        super(BandwidthSlider, self).__init__(*args, **kwargs)
 
+        self.bandwidth = 0.0
+        self.center_val = None
 
+    def set_center_value(self, center_val):
+        print "set_center_value %s in range %s " % (center_val, self.val_range)
 
+        self.center_val = center_val
+        self._calc_value()
+
+    def get_center_value(self):
+        return self.center_val
+
+    def set_bandwidth_value(self, bandwidth):
+        print "set_bandwidth_value %s " % bandwidth
+        self.bandwidth = bandwidth
+        self._calc_value()
+
+    def get_bandwidth_value(self):
+        return self.bandwidth
+
+    def OnLeftUp(self, event):
+        super(BandwidthSlider, self).OnLeftUp(event)
+        self._calc_bandwidth_center()
+
+    def _calc_bandwidth_center(self):
+        self.bandwidth = self.value[1] - self.value[0]
+        self.center_val = self.value[0] + (self.bandwidth / 2.0)
+        self._calc_value()
+
+    def _calc_value(self):
+        spread = self.bandwidth / 2.0
+        val = (self.center_val - spread, self.center_val + spread)
+        super(BandwidthSlider, self).set_value(val)
+        print "value is [%s...%s] " % self.value
