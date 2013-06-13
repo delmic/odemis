@@ -176,13 +176,6 @@ class Slider(wx.PyControl):
         v = (r1 - r0) * p + r0
         return v
 
-    def GetMin(self):
-        """ Return this minumum value of the range """
-        return self.value_range[0]
-
-    def GetMax(self):
-        """ Return the maximum value of the range """
-        return self.value_range[1]
 
     def OnPaint(self, event=None):
         """ This paint event handler draws the actual control """
@@ -412,9 +405,25 @@ class Slider(wx.PyControl):
     def GetHeight(self):
         return self.GetSize()[1]
 
-    def GetRange(self, rng):
-        self.value_range = rng
+    def SetRange(self, minv, maxv):
+        self.value_range = (minv, maxv)
+        self.range_span = float(maxv - minv)
 
+        # To force an update of the display + check min/max
+        val = self.current_value
+        self.current_value = None
+        self._SetValue(val)
+
+    def GetRange(self):
+        return self.value_range
+
+    def GetMin(self):
+        """ Return the minimum value of the range """
+        return self.value_range[0]
+
+    def GetMax(self):
+        """ Return the maximum value of the range """
+        return self.value_range[1]
 
 class NumberSlider(Slider):
     """ A Slider with an extra linked text field showing the current value.
