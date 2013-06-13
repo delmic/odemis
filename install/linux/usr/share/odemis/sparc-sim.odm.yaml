@@ -82,9 +82,9 @@ MirrorMover: {
     class: simulated.Stage2D,
     role: mirror,
     affects: [SpecSimCam, ARSimCam],
-    init: {axes: ["x", "y", "rz", "rx"]}, # rz = yaw, ry = pitch
+    init: {axes: ["x", "y", "rz", "ry"]}, # rz = yaw, ry = pitch
     properties: {
-        speed: {"x": 0.1, "y": 0.1, "rz": 0.1, "rx": 0.1} #m/s
+        speed: {"x": 0.1, "y": 0.1, "rz": 0.1, "ry": 0.1} #m/s
     }
 }
 

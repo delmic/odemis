@@ -241,6 +241,22 @@ class MicroscopeGUIModel(object):
         # nothing to do here, the settings controller will just hide the stream/settings
         pass
 
+    def stopMotion(self):
+        """
+        Stops immediately every axis
+        """
+        for an in ["stage", "focus", "aligner", "mirror"]:
+            act = getattr(self, an)
+            if act is None:
+                continue
+            try:
+                act.stop()
+            except Exception:
+                logging.exception("Failed to stop %s actuator", an)
+
+        logging.info("Stopped motion on every axes")
+
+
 class LiveGUIModel(MicroscopeGUIModel):
     """
     Represent an interface used to only show the current data from the
@@ -343,9 +359,59 @@ class ActuatorGUIModel(MicroscopeGUIModel):
         if not microscope.actuators:
             raise KeyError("No actuators found in the microscope")
 
+        # str -> VA: name (as the name of the attribute) -> step size (m)
+        self.stepsizes = {"stage": model.FloatContinuous(1e-6, [1e-8, 1e-3]),
+                          "focus": model.FloatContinuous(1e-7, [1e-8, 1e-4]),
+                          "aligner": model.FloatContinuous(1e-6, [1e-8, 1e-3]),
+                          "mirror": model.FloatContinuous(1e-6, [1e-8, 1e-3])}
+        # remove the ones that don't have an actuator
+        for an in self.stepsizes.keys():
+            if getattr(self, an) is None:
+                del self.stepsizes[an]
+
+        # This allow the interface to not care about the name of the actuator,
+        # but just the name of the axis.
+        # str -> str: axis name ("x") -> actuator name ("stage")
+        self._axis_to_actuator = {}
+        for an in self.stepsizes.keys():
+            act = getattr(self, an)
+            for axisn in act.axes:
+                if axisn in self._axis_to_actuator:
+                    logging.error("Actuators '%s' and '%s' have both the axis '%s'",
+                                  self._axis_to_actuator[axisn], an, axisn)
+                else:
+                    self._axis_to_actuator[axisn] = an
+
         # No tools
         tools = set([TOOL_NONE])
         self.tool = IntEnumerated(TOOL_NONE, choices=tools, readonly=True)
+
+    def step(self, axis, factor, sync=False):
+        """
+        Moves a given axis by a one step (of stepsizes).
+
+        :param axis: (str) name of the axis to move
+        :param factor: (float) amount to which multiply the stepsizes. -1 makes
+            it goes one step backward.
+        :param sync: (bool) wait until the move is over before returning
+
+        :raises: KeyError if the axis doesn't exist
+        """
+        an = self._axis_to_actuator[axis]
+        a = getattr(self, an)
+        ss = factor * self.stepsizes[an].value
+
+        if abs(ss) > 10e-3:
+            # more than 1 cm is too dangerous
+            logging.warning("Not moving axis %s because a distance of %g m is too big.",
+                            axis, ss)
+
+        move = {axis: ss}
+        f = a.moveRel(move)
+
+        if sync:
+            f.result() # wait until the future is complete
+
 
 class FileInfo(object):
     """

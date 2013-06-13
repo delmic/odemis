@@ -388,20 +388,66 @@ class MirrorAlignTab(Tab):
     def __init__(self, name, button, panel, main_frame, microscope=None):
         super(MirrorAlignTab, self).__init__(name, button, panel)
 
-        # Doesn't need a microscope
-        if microscope:
-            role = microscope.role
-        else:
-            role = None
-        self.interface_model = instrmodel.AnalysisGUIModel(role=role)
+        self.interface_model = instrmodel.ActuatorGUIModel(microscope)
         self.main_frame = main_frame
 
         # Various controllers used for the live view and acquisition of images
-        self._settings_controller = None
-        self._view_controller = None
+        self._settings_controller = None #TODO (for the camera settings)
+        self._view_controller = None # TODO: for the .ccd
         self._acquisition_controller = None
         self._stream_controller = None
 
+        # Both should go to a new controller "actuator controller"?
+        # TODO: bind sizesteps
+        # TODO: bind buttons
+
+        # TODO: keybinding
+        self.main_frame.pnl_main.Bind(wx.EVT_KEY_DOWN, self.on_key)
+
+    # TODO: should be one per microscope role
+    # WXK -> (args for interface_model.step)
+    key_bindings_secom = {
+                    wx.WXK_LEFT: ("x", -1),
+                    wx.WXK_RIGHT: ("x", 1),
+                    wx.WXK_DOWN: ("y", -1),
+                    wx.WXK_UP: ("y", 1),
+                    wx.WXK_PAGEDOWN: ("z", -1),
+                    wx.WXK_PAGEUP: ("z", 1),
+                    wx.WXK_NUMPAD_LEFT: ("r", -1),
+                    wx.WXK_NUMPAD_RIGHT: ("r", 1),
+                    wx.WXK_NUMPAD_DOWN: ("l", -1),
+                    wx.WXK_NUMPAD_UP: ("l", 1),
+                    # same but with NumLock
+                    wx.WXK_NUMPAD4: ("r", -1),
+                    wx.WXK_NUMPAD6: ("r", 1),
+                    wx.WXK_NUMPAD2: ("l", -1),
+                    wx.WXK_NUMPAD8: ("l", 1),
+                    }
+    key_bindings_sparc = {
+                    wx.WXK_LEFT: ("x", -1),
+                    wx.WXK_RIGHT: ("x", 1),
+                    wx.WXK_DOWN: ("y", -1),
+                    wx.WXK_UP: ("y", 1),
+#                    wx.WXK_PAGEDOWN: ("z", -1),
+#                    wx.WXK_PAGEUP: ("z", 1),
+                    wx.WXK_NUMPAD_LEFT: ("rz", -1),
+                    wx.WXK_NUMPAD_RIGHT: ("rz", 1),
+                    wx.WXK_NUMPAD_DOWN: ("ry", -1),
+                    wx.WXK_NUMPAD_UP: ("ry", 1),
+                    # same but with NumLock
+                    wx.WXK_NUMPAD4: ("rz", -1),
+                    wx.WXK_NUMPAD6: ("rz", 1),
+                    wx.WXK_NUMPAD2: ("ry", -1),
+                    wx.WXK_NUMPAD8: ("ry", 1),
+                    }
+
+    def on_key(self, event):
+        key = event.GetKeyCode()
+        if key in self.key_bindings_sparc:
+            self.interface_model.step(*self.key_bindings_sparc[key])
+        else:
+            # everything else we don't process
+            event.Skip()
 
 
 class TabBarController(object):
