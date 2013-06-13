@@ -80,12 +80,12 @@ class xrcfr_main(wx.Frame):
         self.btn_secom_acquire = xrc.XRCCTRL(self, "btn_secom_acquire")
         self.pnl_tab_secom_gallery = xrc.XRCCTRL(self, "pnl_tab_secom_gallery")
         self.pnl_tab_sparc_align = xrc.XRCCTRL(self, "pnl_tab_sparc_align")
-        self.slider_stage = xrc.XRCCTRL(self, "slider_stage")
+        self.slider_mirror_t = xrc.XRCCTRL(self, "slider_mirror_t")
         self.btn_align_py = xrc.XRCCTRL(self, "btn_align_py")
         self.btn_align_my = xrc.XRCCTRL(self, "btn_align_my")
         self.btn_align_mx = xrc.XRCCTRL(self, "btn_align_mx")
         self.btn_align_px = xrc.XRCCTRL(self, "btn_align_px")
-        self.slider_mirror = xrc.XRCCTRL(self, "slider_mirror")
+        self.slider_mirror_r = xrc.XRCCTRL(self, "slider_mirror_r")
         self.btn_align_pry = xrc.XRCCTRL(self, "btn_align_pry")
         self.btn_align_mry = xrc.XRCCTRL(self, "btn_align_mry")
         self.btn_align_mrz = xrc.XRCCTRL(self, "btn_align_mrz")
@@ -988,14 +988,14 @@ def __init_resources():
                     <border>5</border>
                   </object>
                   <object class="sizeritem">
-                    <object class="UnitFloatSlider" name="slider_stage">
+                    <object class="UnitFloatSlider" name="slider_mirror_t">
                       <size>-1,20</size>
                       <value>0.000001</value>
                       <min>0.0000001</min>
-                      <max>0.0001</max>
+                      <max>0.001</max>
                       <unit>m</unit>
                       <scale>log</scale>
-                      <accuracy>1</accuracy>
+                      <accuracy>2</accuracy>
                       <fg>#E5E5E5</fg>
                       <style>wxBORDER_NONE</style>
                       <XRCED>
@@ -1205,14 +1205,14 @@ def __init_resources():
                     </object>
                   </object>
                   <object class="sizeritem">
-                    <object class="UnitFloatSlider" name="slider_mirror">
+                    <object class="UnitFloatSlider" name="slider_mirror_r">
                       <size>-1,20</size>
                       <value>0.000001</value>
                       <min>0.0000001</min>
-                      <max>0.0001</max>
+                      <max>0.001</max>
                       <unit>m</unit>
                       <scale>log</scale>
-                      <accuracy>1</accuracy>
+                      <accuracy>2</accuracy>
                       <style>wxBORDER_NONE</style>
                       <XRCED>
                         <assign_var>1</assign_var>
