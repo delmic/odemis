@@ -23,7 +23,6 @@ import logging
 import math
 import time
 
-import cairo
 import wx
 import wx.lib.wxcairo as wxcairo
 from wx.lib.agw.aui.aui_utilities import StepColour
@@ -32,8 +31,7 @@ import odemis.gui as gui
 from .text import UnitFloatCtrl, UnitIntegerCtrl
 from odemis.gui.img.data import getsliderBitmap, getslider_disBitmap
 from odemis.gui.util import limit_invocation
-from ..util.conversion import hex_to_rgb, hex_to_rgba, wxcol_to_rgb, \
-    change_brightness
+from ..util.conversion import wxcol_to_rgb, change_brightness
 
 
 
@@ -527,6 +525,9 @@ class NumberSlider(Slider):
 
         Slider.OnPaint(self, event)
 
+    def SetRange(self, minv, maxv):
+        self.linked_field.SetValueRange(minv, maxv)
+        super(NumberSlider, self).SetRange(minv, maxv)
 
 class UnitIntegerSlider(NumberSlider):
 

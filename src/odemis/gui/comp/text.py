@@ -411,6 +411,11 @@ class NumberValidator(wx.PyValidator):
            (choices and min(choices) < 0)):
             self.legal += "-"
 
+    def SetRange(self, minv, maxv):
+        # TODO: check values and recompute .legal as in init
+        self.min_val = minv
+        self.max_val = maxv
+
     def _validate_choices(self):
 
         if self.choices:
@@ -460,7 +465,7 @@ class NumberValidator(wx.PyValidator):
 
             if chr(key) in ('.', ','):
                 val = val.replace('..', '.')
-                val =val.replace(',,', ',') #pylint: disable=C0323
+                val = val.replace(',,', ',')
 
             logging.debug("Checking against %s", val)
 
@@ -598,7 +603,9 @@ class NumberTextCtrl(wx.TextCtrl):
           displayed. If None, it is never truncated.
         """
         # Make sure that a validator is provided
-        if not kwargs.has_key("validator"):
+        try:
+            self._validator = kwargs["validator"]
+        except AttributeError:
             raise ValueError("No validator set!")
 
         key_inc = kwargs.pop('key_inc', True)
@@ -686,6 +693,12 @@ class NumberTextCtrl(wx.TextCtrl):
 
     def ChangeValueStr(self, val):
         wx.TextCtrl.ChangeValue(self, val)
+
+    def SetValueRange(self, minv, maxv):
+        """
+        Same as SetRange of a slider
+        """
+        self.GetValidator().SetRange(minv, maxv)
 
     def _processNewText(self, str_val):
         """
