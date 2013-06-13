@@ -23,10 +23,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
 from __future__ import division
-
-from collections import OrderedDict
-
-from collections import namedtuple
+from collections import OrderedDict, namedtuple
 from odemis.gui import instrmodel
 from odemis.gui.cont import settings
 from odemis.gui.cont.acquisition import SecomAcquiController, \
@@ -37,8 +34,11 @@ from odemis.gui.cont.views import ViewController, ViewSelector
 from odemis.gui.instrmodel import STATE_ON, STATE_OFF, STATE_PAUSE
 from odemis.gui.model.stream import SpectrumStream, SEMStream, ARStream, \
     UNDEFINED_ROI
+from odemis.gui.util import widgets
 import logging
 import wx
+
+
 
 
 class Tab(object):
@@ -400,8 +400,37 @@ class MirrorAlignTab(Tab):
         # Both should go to a new controller "actuator controller"?
         # TODO: bind sizesteps
         # TODO: bind buttons
+        self.va_connectors = []
+        for an, ss in self.interface_model.stepsizes.items():
+            slider_name = "slider_" + an
+            try:
+                slider = getattr(self.main_frame, slider_name)
+            except AttributeError:
+                logging.exception("No slider in GUI found for stepsize %s", an)
+                continue
 
-        # TODO: keybinding
+            slider.SetRange(*ss.range)
+
+            vac = widgets.VigilantAttributeConnector(ss, slider,
+                                                     events=wx.EVT_SLIDER)
+            self.va_connectors.append(vac)
+
+        for axis in self.interface_model.axes:
+            for suffix, factor in [("m", -1), ("p", 1)]:
+                # something like "btn_align_pry"
+                btn_name = "btn_align_" + suffix + axis
+                try:
+                    btn = getattr(self.main_frame, btn_name)
+                except AttributeError:
+                    logging.exception("No button in GUI found for axis %s", axis)
+                    continue
+
+                def btn_action(evt, axis=axis, factor=factor):
+                    self.interface_model.step(axis, factor)
+
+                btn.Bind(wx.EVT_BUTTON, btn_action)
+
+        # Keybinding
         self.main_frame.pnl_tab_sparc_align.Bind(wx.EVT_KEY_DOWN, self.on_key)
 
     # TODO: should be one per microscope role

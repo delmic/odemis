@@ -345,7 +345,7 @@ class AnalysisGUIModel(MicroscopeGUIModel):
         # associated to the data displayed
         self.fileinfo = VigilantAttribute(None) # a FileInfo
 
-# TODO: use it for FirstStep and SPARC manual mirror calibration
+# TODO: use it for FirstStep too
 class ActuatorGUIModel(MicroscopeGUIModel):
     """
     Represent an interface used to move the actuators of a microscope. It might
@@ -363,24 +363,40 @@ class ActuatorGUIModel(MicroscopeGUIModel):
         self.stepsizes = {"stage": model.FloatContinuous(1e-6, [1e-8, 1e-3]),
                           "focus": model.FloatContinuous(1e-7, [1e-8, 1e-4]),
                           "aligner": model.FloatContinuous(1e-6, [1e-8, 1e-3]),
-                          "mirror": model.FloatContinuous(1e-6, [1e-8, 1e-3])}
+                          }
         # remove the ones that don't have an actuator
         for an in self.stepsizes.keys():
             if getattr(self, an) is None:
                 del self.stepsizes[an]
 
+        # Mirror is a bit more complicated as it has 4 axes
+        if self.mirror is not None:
+            mss = {"mirror_t": model.FloatContinuous(1e-6, [1e-8, 1e-3]),
+                   "mirror_r": model.FloatContinuous(1e-6, [1e-8, 1e-3])
+                   }
+            self.stepsizes.update(mss)
+
+        # stepsize to actuator name and axes (missing => same as stepsize)
+        ss_to_act = {"mirror_t": ("mirror", ("x", "y")),
+                     "mirror_r": ("mirror", ("ry", "rz"))}
+
         # This allow the interface to not care about the name of the actuator,
         # but just the name of the axis.
-        # str -> str: axis name ("x") -> actuator name ("stage")
-        self._axis_to_actuator = {}
-        for an in self.stepsizes.keys():
+        # str -> str: axis name ("x") -> (actuator ("mirror"), stepsize ("mirror_t"))
+        self._axis_to_act_ss = {}
+        for ssn in self.stepsizes.keys():
+            an, axes = ss_to_act.get(ssn, (ssn, None))
             act = getattr(self, an)
             for axisn in act.axes:
-                if axisn in self._axis_to_actuator:
+                if axes and axisn not in axes:
+                    continue # hopefully in another stepsize
+                if axisn in self._axis_to_act_ss:
                     logging.error("Actuators '%s' and '%s' have both the axis '%s'",
-                                  self._axis_to_actuator[axisn], an, axisn)
+                                  self._axis_to_act_ss[axisn][0], an, axisn)
                 else:
-                    self._axis_to_actuator[axisn] = an
+                    self._axis_to_act_ss[axisn] = (an, ssn)
+
+        self.axes = frozenset(self._axis_to_act_ss.keys())
 
         # No tools
         tools = set([TOOL_NONE])
@@ -390,16 +406,16 @@ class ActuatorGUIModel(MicroscopeGUIModel):
         """
         Moves a given axis by a one step (of stepsizes).
 
-        :param axis: (str) name of the axis to move
+        :param axis: (str) name of the axis to move (from .axes)
         :param factor: (float) amount to which multiply the stepsizes. -1 makes
             it goes one step backward.
         :param sync: (bool) wait until the move is over before returning
 
         :raises: KeyError if the axis doesn't exist
         """
-        an = self._axis_to_actuator[axis]
+        an, ssn = self._axis_to_act_ss[axis]
         a = getattr(self, an)
-        ss = factor * self.stepsizes[an].value
+        ss = factor * self.stepsizes[ssn].value
 
         if abs(ss) > 10e-3:
             # more than 1 cm is too dangerous
