@@ -480,8 +480,11 @@ class SparcAnalysisViewport(MicroscopeViewport):
         super(SparcAnalysisViewport, self).__init__(*args, **kwargs)
 
 class SparcAlignViewport(MicroscopeViewport):
-
+    """
+    Very simple viewport with no zoom or move allowed
+    """
     canvas_class = canvas.SparcAlignCanvas
 
     def __init__(self, *args, **kwargs):
         super(SparcAlignViewport, self).__init__(*args, **kwargs)
+        # TODO: prevent zoom/move

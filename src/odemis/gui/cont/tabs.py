@@ -32,10 +32,12 @@ from odemis.gui.cont.microscope import MicroscopeController
 from odemis.gui.cont.streams import StreamController
 from odemis.gui.cont.views import ViewController, ViewSelector
 from odemis.gui.instrmodel import STATE_ON, STATE_OFF, STATE_PAUSE
+from odemis.gui.model.img import InstrumentalImage
 from odemis.gui.model.stream import SpectrumStream, SEMStream, ARStream, \
-    UNDEFINED_ROI
+    UNDEFINED_ROI, StaticStream
 from odemis.gui.util import widgets
 import logging
+import pkg_resources
 import wx
 
 
@@ -380,10 +382,12 @@ class AnalysisTab(Tab):
         return self._stream_controller
 
 class MirrorAlignTab(Tab):
-    """ TODO: If this tab is not initially hidden in the XRC file, gtk error
-    will show up when the GUI is launched. Even further (odemis) errors may
-    occur. The reason for this is still unknown.
     """
+    Tab for the mirror alignment calibration on the Sparc
+    """
+    # TODO: If this tab is not initially hidden in the XRC file, gtk error
+    # will show up when the GUI is launched. Even further (odemis) errors may
+    # occur. The reason for this is still unknown.
 
     def __init__(self, name, button, panel, main_frame, microscope=None):
         super(MirrorAlignTab, self).__init__(name, button, panel)
@@ -392,14 +396,51 @@ class MirrorAlignTab(Tab):
         self.main_frame = main_frame
 
         # Various controllers used for the live view and acquisition of images
-        self._settings_controller = None #TODO (for the camera settings)
-        self._view_controller = None # TODO: for the .ccd
+        self._settings_controller = None
+        self._view_controller = None
         self._acquisition_controller = None
         self._stream_controller = None
 
-        # Both should go to a new controller "actuator controller"?
-        # TODO: bind sizesteps
-        # TODO: bind buttons
+        # TODO add setting and view controller (add variable vp_sparc_align)
+#        # create the stream to the AR image + goal image
+#        if self.interface_model.ccd:
+#            ar_stream = ARStream("Angular",
+#                                 self.interface_model.ccd,
+#                                 self.interface_model.ccd.data,
+#                                 self.interface_model.ebeam)
+#
+#            goal_im = pkg_resources.resource_stream("odemis.gui.img",
+#                                                    "ma_goal_image_5_13.png")
+#            mpp = 13e-6 # m
+#            # TODO: how to ensure ar_stream is the same mpp?
+#            #  * Force in the viewport?
+#            #  * Force mpp in ARStream?
+#            #  * duplicate from ar_stream?
+#            goal_iim = InstrumentalImage(wx.ImageFromStream(goal_im), mpp, (0, 0))
+#            goal_stream = StaticStream("Goal", goal_iim)
+#            # create a view on the microscope model
+#            self._view_controller = ViewController(
+#                                        self.interface_model,
+#                                        self.main_frame,
+#                                        [self.main_frame.vp_sparc_align]
+#                                    )
+#            mic_view = self.interface_model.focussedView.value
+#            mic_view.addStream(ar_stream)
+#            mic_view.addStream(goal_stream)
+#            ar_stream.should_update.value = True
+#        else:
+#            logging.warning("No CCD available for mirror alignment feedback")
+#
+#        # TODO: needs to have the AR streams on the acquisition view
+#        self._settings_controller = settings.SparcAlignSettingsController(
+#                                        self.main_frame,
+#                                        self.interface_model,
+#                                    )
+
+        # TODO: need contrast/brightness for the AR stream
+
+        # TODO: Should go to a new controller "actuator controller"?
+        # Bind sizesteps
         self.va_connectors = []
         for an, ss in self.interface_model.stepsizes.items():
             slider_name = "slider_" + an
@@ -415,6 +456,7 @@ class MirrorAlignTab(Tab):
                                                      events=wx.EVT_SLIDER)
             self.va_connectors.append(vac)
 
+        # Bind buttons
         for axis in self.interface_model.axes:
             for suffix, factor in [("m", -1), ("p", 1)]:
                 # something like "btn_align_pry"
@@ -433,7 +475,7 @@ class MirrorAlignTab(Tab):
         # Keybinding
         self.main_frame.pnl_tab_sparc_align.Bind(wx.EVT_KEY_DOWN, self.on_key)
 
-    # TODO: should be one per microscope role
+    # TODO: should be one per microscope role or axes names??
     # WXK -> (args for interface_model.step)
     key_bindings_secom = {
                     wx.WXK_LEFT: ("x", -1),

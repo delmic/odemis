@@ -970,3 +970,18 @@ class AnalysisSettingsController(SettingsBarController):
 
 
 
+class SparcAlignSettingsController(SettingsBarController):
+
+    def __init__(self, parent_frame, microscope_model):
+        super(SparcAlignSettingsController, self).__init__(microscope_model)
+
+        self._ar_panel = AngularSettingsPanel(
+                                parent_frame.fp_sparc_settings,
+                                "No angular resolved camera found")
+
+        # Query Odemis daemon (Should move this to separate thread)
+        if microscope_model.ccd:
+            self.add_component("Camera",
+                                microscope_model.ccd,
+                                self._ar_panel)
+

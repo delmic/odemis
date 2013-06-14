@@ -436,7 +436,7 @@ class FileInfo(object):
     attributes should be considered readonly after initialisation.
     """
 
-    def __init__(self, acq_file, metadata=None):
+    def __init__(self, acq_file=None, metadata=None):
         """
         acq_file (String or File or None): the full name of the file or 
          a File that contains the acquisition. If provided (and the file 
