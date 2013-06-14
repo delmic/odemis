@@ -35,6 +35,7 @@ import numpy
 import odemis.gui.conf
 import odemis.gui.cont.tabs as tabs
 import os.path
+import pkg_resources
 import scipy.io
 import sys
 import threading
@@ -266,52 +267,45 @@ class OdemisGUIApp(wx.App):
 
     def on_load_example_secom1(self, e):
         """ Open the two files for example """
-        try:
-            mtc = get_main_tab_controller()
-            secom_tab = mtc['secom_live']
-
-            #pylint: disable=E1103
-            pos = secom_tab.interface_model.focussedView.value.view_pos.value
-            name1 = os.path.join(os.path.dirname(__file__),
-                                 "img/example/1-optical-rot7.png")
-            im1 = InstrumentalImage(wx.Image(name1), 7.14286e-7, pos)
-
-            pos = (pos[0] + 2e-6, pos[1] - 1e-5)
-            name2 = os.path.join(os.path.dirname(__file__),
-                                 "img/example/1-sem-bse.png")
-            im2 = InstrumentalImage(wx.Image(name2), 4.54545e-7, pos)
-
-            stream_controller = secom_tab.stream_controller
-
-            stream_controller.addStatic("Fluorescence", im1)
-            stream_controller.addStatic("Secondary electrons", im2,
-                                        cls=StaticSEMStream)
-        except Exception:
-            self.goto_debug_mode()
-            logging.exception("Failed to load example")
-
-    def on_load_example_secom2(self, e):
-        """ Open the two files for example """
-
         mtc = get_main_tab_controller()
         secom_tab = mtc['secom_live']
 
-        #pylint: disable=E1103
         pos = secom_tab.interface_model.focussedView.value.view_pos.value
-        name2 = os.path.join(os.path.dirname(__file__),
-                             "img/example/3-sem.png")
-        im2 = InstrumentalImage(wx.Image(name2), 2.5e-07, pos)
+        opt_im = pkg_resources.resource_stream("odemis.gui.img",
+                                               "example/1-optical-rot7.png")
+        opt_iim = InstrumentalImage(wx.ImageFromStream(opt_im), 7.14286e-7, pos)
+
+        pos = (pos[0] + 2e-6, pos[1] - 1e-5)
+        sem_im = pkg_resources.resource_stream("odemis.gui.img",
+                                               "example/1-sem-bse.png")
+        sem_iim = InstrumentalImage(wx.ImageFromStream(sem_im), 4.54545e-7, pos)
+
+        stream_controller = secom_tab.stream_controller
+
+        stream_controller.addStatic("Fluorescence", opt_iim)
+        stream_controller.addStatic("Secondary electrons", sem_iim,
+                                    cls=StaticSEMStream)
+
+    def on_load_example_secom2(self, e):
+        """ Open the two files for example """
+        mtc = get_main_tab_controller()
+        secom_tab = mtc['secom_live']
+
+        sem_im = pkg_resources.resource_stream("odemis.gui.img",
+                                               "example/3-sem.png")
+        pos = secom_tab.interface_model.focussedView.value.view_pos.value
+        sem_iim = InstrumentalImage(wx.ImageFromStream(sem_im), 2.5e-07, pos)
 
         pos = (pos[0] + 5.5e-06, pos[1] + 1e-6)
-        name1 = os.path.join(os.path.dirname(__file__),
-                             "img/example/3-optical.png")
-        im1 = InstrumentalImage(wx.Image(name1), 1.34e-07, pos)
+        opt_im = pkg_resources.resource_stream("odemis.gui.img",
+                                               "example/3-optical.png")
+        opt_iim = InstrumentalImage(wx.ImageFromStream(opt_im), 1.34e-07, pos)
 
         mtc = get_main_tab_controller()
         stream_controller = secom_tab.stream_controller
 
-        stream_controller.addStatic("Fluorescence", im1)
-        stream_controller.addStatic("Secondary electrons", im2,
+        stream_controller.addStatic("Fluorescence", opt_iim)
+        stream_controller.addStatic("Secondary electrons", sem_iim,
                                     cls=StaticSEMStream)
 
     def on_load_example_sparc1(self, e):
@@ -322,25 +316,24 @@ class OdemisGUIApp(wx.App):
         try:
             mtc = get_main_tab_controller()
 
-            name1 = os.path.join(
-                            os.path.dirname(__file__),
-                            "img/example/s1-sem-bse.mat")
+            sem_mat = pkg_resources.resource_stream("odemis.gui.img",
+                                                   "example/s1-sem-bse.mat")
             mdsem = {model.MD_PIXEL_SIZE: (178e-9, 178e-9),
-                  model.MD_POS: (0, 0)}
-            semdata = scipy.io.loadmat(name1)["sem"]
+                     model.MD_POS: (0, 0)}
+            semdata = scipy.io.loadmat(sem_mat)["sem"]
             semdatas = model.DataArray(numpy.array(semdata - semdata.min(),
                                                    dtype=numpy.float32),
                                        mdsem)
 
-            name2 = os.path.join(os.path.dirname(__file__),
-                                 "img/example/s1-spectrum.mat")
+            spec_mat = pkg_resources.resource_stream("odemis.gui.img",
+                                                    "example/s1-spectrum.mat")
             mdspec = {model.MD_PIXEL_SIZE: (178e-9, 178e-9),
-                  model.MD_POS: (0, 0),
-                  # 335px : 409nm -> 695 nm (about linear)
-                  model.MD_WL_POLYNOMIAL: [552e-9, 0.85373e-9]
-                  }
+                      model.MD_POS: (0, 0),
+                      # 335px : 409nm -> 695 nm (about linear)
+                      model.MD_WL_POLYNOMIAL: [552e-9, 0.85373e-9]
+                      }
             # first dim is the wavelength, then Y, X
-            specdata = scipy.io.loadmat(name2)["spectraldat"]
+            specdata = scipy.io.loadmat(spec_mat)["spectraldat"]
             specdatai = model.DataArray(numpy.array(specdata - specdata.min(),
                                                     dtype=numpy.uint16),
                                         mdspec)
@@ -357,7 +350,12 @@ class OdemisGUIApp(wx.App):
                                         add_to_all_views=True)
 
             analysis_interface = mtc['sparc_analysis'].interface_model
-            analysis_interface.fileinfo.value = instrmodel.FileInfo(name2)
+            # This is just to fill the metadata
+            # TODO: avoid this by getting the metadata from the stream =>
+            # better metadata + avoid copy if packaged in an egg.
+            spec_fn = pkg_resources.resource_filename("odemis.gui.img",
+                                                      "example/s1-spectrum.mat")
+            analysis_interface.fileinfo.value = instrmodel.FileInfo(spec_fn)
             mtc.switch("sparc_analysis")
         except KeyError:
             self.goto_debug_mode()
