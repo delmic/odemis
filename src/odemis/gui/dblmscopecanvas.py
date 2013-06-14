@@ -303,10 +303,6 @@ class DblMicroscopeCanvas(DraggableCanvas):
         mpp = self.microscope_view.mpp.value / scale
         mpp = sorted(self.microscope_view.mpp.range + (mpp,))[1]
 
-        # FIXME: seems to crash when the mpp is very low (1 px = the whole
-        # screen)
-        # maybe in the zooming function?
-
         self.microscope_view.mpp.value = mpp # this will call _onMPP()
 
     # Zoom/merge management
@@ -346,7 +342,7 @@ class DblMicroscopeCanvas(DraggableCanvas):
 
             self.queueMoveFocus(axis, val)
 
-    def queueMoveFocus(self, axis, shift, period = 0.1):
+    def queueMoveFocus(self, axis, shift, period=0.1):
         """
         Move the focus, but at most every period, to avoid accumulating
         many slow small moves.
@@ -721,10 +717,10 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
         # that it's always correct (but maybe not here in the view)
         sem_width = (sem.shape[0] * sem.pixelSize.value[0],
                      sem.shape[1] * sem.pixelSize.value[1])
-        sem_rect = [sem_center[0] - sem_width[0]/2, # top
-                    sem_center[1] - sem_width[1]/2, # left
-                    sem_center[0] + sem_width[0]/2, # bottom
-                    sem_center[1] + sem_width[1]/2] # right
+        sem_rect = [sem_center[0] - sem_width[0] / 2, # top
+                    sem_center[1] - sem_width[1] / 2, # left
+                    sem_center[0] + sem_width[0] / 2, # bottom
+                    sem_center[1] + sem_width[1] / 2] # right
 
         return sem_rect
 
@@ -801,3 +797,35 @@ class SparcAlignCanvas(DblMicroscopeCanvas):
 
     def __init__(self, *args, **kwargs):
         super(SparcAlignCanvas, self).__init__(*args, **kwargs)
+        # TODO: always fit to AR image
+
+    def _onViewImageUpdate(self, t):
+        DblMicroscopeCanvas._onViewImageUpdate(self, t)
+        # TODO: check if image mpp has changed and if yes, refit
+
+    def OnSize(self, event):
+        DblMicroscopeCanvas.OnSize(self, event)
+        # TODO: refit image
+
+    # Disable zoom/move by doing nothing for mouse/keys
+    # Don't directly override OnWheel to still allow merge ratio change
+    def Zoom(self, inc):
+        pass
+
+    def OnLeftDown(self, event):
+        event.skip()
+
+    def OnLeftUp(self, event):
+        event.skip()
+
+    def OnRightDown(self, event):
+        event.skip()
+
+    def OnRightUp(self, event):
+        event.skip()
+
+    def OnDblClick(self, event):
+        event.skip()
+
+    def OnChar(self, event):
+        event.skip()
