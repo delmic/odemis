@@ -90,6 +90,7 @@ class xrcfr_main(wx.Frame):
         self.btn_align_mry = xrc.XRCCTRL(self, "btn_align_mry")
         self.btn_align_mrz = xrc.XRCCTRL(self, "btn_align_mrz")
         self.btn_align_prz = xrc.XRCCTRL(self, "btn_align_prz")
+        self.vp_sparc_align = xrc.XRCCTRL(self, "vp_sparc_align")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
         self.fp_sparc_settings = xrc.XRCCTRL(self, "fp_sparc_settings")
         self.pnl_tab_sparc_acqui = xrc.XRCCTRL(self, "pnl_tab_sparc_acqui")
@@ -1408,6 +1409,9 @@ def __init_resources():
             <object class="sizeritem">
               <object class="SparcAlignViewport" name="vp_sparc_align">
                 <size>400,-1</size>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
               </object>
               <option>1</option>
               <flag>wxEXPAND</flag>

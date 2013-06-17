@@ -1222,6 +1222,9 @@
             <object class="sizeritem">
               <object class="SparcAlignViewport" name="vp_sparc_align">
                 <size>400,-1</size>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
               </object>
               <option>1</option>
               <flag>wxEXPAND</flag>
