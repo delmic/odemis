@@ -487,4 +487,4 @@ class SparcAlignViewport(MicroscopeViewport):
 
     def __init__(self, *args, **kwargs):
         super(SparcAlignViewport, self).__init__(*args, **kwargs)
-        # TODO: prevent zoom/move Special canvas class? Or change canvas attribute?
+
