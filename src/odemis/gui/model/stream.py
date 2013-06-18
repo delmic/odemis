@@ -220,9 +220,14 @@ class Stream(object):
         try:
             mpp = data.metadata[MD_PIXEL_SIZE][0]
         except KeyError:
-            logging.warning("pixel density of image unknown")
-            # Hopefully it'll be within the same magnitude
-            mpp = data.metadata[MD_SENSOR_PIXEL_SIZE][0] / 10
+            try:
+                # Hopefully it'll be within the same magnitude
+                mpp = (data.metadata[MD_SENSOR_PIXEL_SIZE][0]
+                        * data.metadata.get(model.MD_BINNING, (1, 1))[0])
+                logging.warning("Pixel density of image unknown, using sensor size")
+            except KeyError:
+                logging.error("Image has no pixel density known")
+                mpp = 20e-6 # m/px (typical sensor size)
 
         self.image.value = InstrumentalImage(im, mpp, pos)
 
@@ -788,9 +793,11 @@ class SpectrumStream(Stream):
 
 class ARStream(Stream):
     """
-    An angular-resolved stream. Be aware that acquisition can be very long so
+    An angular-resolved stream, for a set of points (on the SEM).
+    Be aware that acquisition can be very long so
     should not be used for live view. So it has no .image (for now).
-    See StaticARStream for displaying a stream.
+    See StaticARStream for displaying a stream, and CameraStream for displaying
+    just the current AR view.
     """
 
     def __init__(self, name, detector, dataflow, emitter):

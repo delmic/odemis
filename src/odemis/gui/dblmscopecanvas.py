@@ -813,19 +813,19 @@ class SparcAlignCanvas(DblMicroscopeCanvas):
         pass
 
     def OnLeftDown(self, event):
-        event.skip()
+        event.Skip()
 
     def OnLeftUp(self, event):
-        event.skip()
+        event.Skip()
 
     def OnRightDown(self, event):
-        event.skip()
+        event.Skip()
 
     def OnRightUp(self, event):
-        event.skip()
+        event.Skip()
 
     def OnDblClick(self, event):
-        event.skip()
+        event.Skip()
 
     def OnChar(self, event):
-        event.skip()
+        event.Skip()
