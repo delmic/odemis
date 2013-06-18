@@ -401,6 +401,7 @@ class MirrorAlignTab(Tab):
 
         # TODO add setting and view controller (add variable vp_sparc_align)
         # create the stream to the AR image + goal image
+
         if self.interface_model.ccd:
             # Not ARStream as this is for multiple repetitions, and we just care
             # on the direct display (without even
@@ -428,6 +429,8 @@ class MirrorAlignTab(Tab):
             mic_view = self.interface_model.focussedView.value
             mic_view.addStream(ccd_stream)
             mic_view.addStream(goal_stream)
+            mic_view.show_crosshair.value = False
+            mic_view.merge_ratio.value = 1
             ccd_stream.should_update.value = True
         else:
             logging.warning("No CCD available for mirror alignment feedback")
@@ -525,7 +528,7 @@ class MirrorAlignTab(Tab):
         Tab.Show(self, show=show)
 
         # TODO: put the SEM at 0,0... or let the user pick a point
-        
+
         # Turn on the camera only when displaying this tab
         if show:
             if self._ccd_stream:

@@ -616,7 +616,7 @@ class MicroscopeView(object):
         :returns [Stream]: list of streams that are displayed in the view
 
         Do not modify directly, use addStream(), and removeStream().
-        Note: use .streams for getting the raw StreamTree
+        Note: use .stream_tree for getting the raw StreamTree
         """
         return self.stream_tree.getStreams()
 
