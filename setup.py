@@ -37,12 +37,12 @@ def _get_version_git():
     try:
         out = subprocess.check_output(args=["git", "describe", "--tags", "--dirty", "--always"],
                                       cwd=rootdir)
-        
+
         return out.strip()
     except EnvironmentError:
         raise LookupError("Unable to run git")
 
-# Check version 
+# Check version
 try:
     gver = _get_version_git()
     if "-" in gver:
@@ -52,7 +52,7 @@ try:
                          " %s <> %s\n" % (VERSION, gver))
 except LookupError:
     pass
-    
+
 
 if sys.platform.startswith('linux'):
     data_files = [('/etc/', ['install/linux/etc/odemis.conf']),
@@ -93,8 +93,11 @@ dist = setup(name='Odemis',
                          ],
              package_dir={'': 'src'},
              packages=find_packages('src', exclude=["*.test"]),
+             package_data={'odemis.gui.img': ["example/*.png", "example/*.mat",
+                                             "ma_goal_*.png"]
+                          },
              scripts=scripts,
-             data_files=data_files
+             data_files=data_files # not officially in setuptools, but works as for distutils
             )
 
 if ROOT and dist != None:

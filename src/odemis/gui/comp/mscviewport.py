@@ -91,35 +91,26 @@ class MicroscopeViewport(wx.Panel):
         self.mergeSlider.SetForegroundColour("#4d4d4d")
         self.mergeSlider.SetToolTipString("Merge ratio")
 
-        self.bmpIconOpt = wx.StaticBitmap(
+        self.bmpSliderLeft = wx.StaticBitmap(
                                     self.legend_panel,
                                     wx.ID_ANY,
                                     getico_blending_optBitmap())
-        self.bmpIconSem = wx.StaticBitmap(
+        self.bmpSliderRight = wx.StaticBitmap(
                                     self.legend_panel,
                                     wx.ID_ANY,
                                     getico_blending_semBitmap())
 
         # Make sure that mouse clicks on the icons set the correct focus
-        self.bmpIconOpt.Bind(wx.EVT_LEFT_DOWN, self.OnChildFocus)
-        self.bmpIconSem.Bind(wx.EVT_LEFT_DOWN, self.OnChildFocus)
+        self.bmpSliderLeft.Bind(wx.EVT_LEFT_DOWN, self.OnChildFocus)
+        self.bmpSliderRight.Bind(wx.EVT_LEFT_DOWN, self.OnChildFocus)
 
         # Set slider to min/max
-        self.bmpIconOpt.Bind(wx.EVT_LEFT_UP, self.OnSliderIconClick)
-        self.bmpIconSem.Bind(wx.EVT_LEFT_UP, self.OnSliderIconClick)
+        self.bmpSliderLeft.Bind(wx.EVT_LEFT_UP, self.OnSliderIconClick)
+        self.bmpSliderRight.Bind(wx.EVT_LEFT_UP, self.OnSliderIconClick)
 
         self.mergeSlider.Bind(wx.EVT_LEFT_UP, self.OnSlider)
 
-        # Need to bind on EVT_SLIDER (seems to be the new way, on any type of
-        # change).
-        # EVT_SCROLL_CHANGED (seems to work only on windows and gtk, and only at
-        # the end)
-        # EVT_SCROLL_THUMBTRACK (seems to work always, but only dragging, not
-        # key press)
-        # Maybe our Slider control need to generate
-        # wx.wxEVT_COMMAND_SLIDER_UPDATED
-        # when value is changed by user in order to have EVT_SLIDER passed?
-
+        # Bind on EVT_SLIDER to update even while the user is moving
         self.mergeSlider.Bind(wx.EVT_SLIDER, self.OnSlider)
 
         # Dragging the slider should set the focus to the right view
@@ -159,36 +150,37 @@ class MicroscopeViewport(wx.Panel):
         # +-------------------------------------------------------+
 
         leftColSizer = wx.BoxSizer(wx.HORIZONTAL)
-        leftColSizer.Add(self.LegendMag, border=10, flag=wx.ALIGN_CENTER|wx.RIGHT)
+        leftColSizer.Add(self.LegendMag, border=10, flag=wx.ALIGN_CENTER | wx.RIGHT)
         leftColSizer.Add(self.hfwDisplay, border=10, flag=wx.ALIGN_CENTER)
 
         sliderSizer = wx.BoxSizer(wx.HORIZONTAL)
-        sliderSizer.Add(self.bmpIconOpt, border=3,
-                        flag=wx.ALIGN_CENTER|wx.RIGHT|wx.RESERVE_SPACE_EVEN_IF_HIDDEN)
+        # TODO: need to have the icons updated according to the streams
+        sliderSizer.Add(self.bmpSliderLeft, border=3,
+                        flag=wx.ALIGN_CENTER | wx.RIGHT | wx.RESERVE_SPACE_EVEN_IF_HIDDEN)
         sliderSizer.Add(self.mergeSlider,
-                        flag=wx.ALIGN_CENTER|wx.EXPAND|wx.RESERVE_SPACE_EVEN_IF_HIDDEN)
-        sliderSizer.Add(self.bmpIconSem, border=3,
-                        flag=wx.ALIGN_CENTER|wx.LEFT|wx.RESERVE_SPACE_EVEN_IF_HIDDEN)
+                        flag=wx.ALIGN_CENTER | wx.EXPAND | wx.RESERVE_SPACE_EVEN_IF_HIDDEN)
+        sliderSizer.Add(self.bmpSliderRight, border=3,
+                        flag=wx.ALIGN_CENTER | wx.LEFT | wx.RESERVE_SPACE_EVEN_IF_HIDDEN)
 
         legendSizer = wx.BoxSizer(wx.HORIZONTAL)
-        legendSizer.Add(leftColSizer, 0, flag=wx.EXPAND|wx.ALIGN_CENTER)
+        legendSizer.Add(leftColSizer, 0, flag=wx.EXPAND | wx.ALIGN_CENTER)
         legendSizer.AddStretchSpacer(1)
         legendSizer.Add(self.scaleDisplay, 2, border=2,
-                        flag=wx.EXPAND|wx.ALIGN_CENTER|wx.RIGHT|wx.LEFT)
+                        flag=wx.EXPAND | wx.ALIGN_CENTER | wx.RIGHT | wx.LEFT)
         legendSizer.AddStretchSpacer(1)
-        legendSizer.Add(sliderSizer, 0, flag=wx.EXPAND|wx.ALIGN_CENTER)
+        legendSizer.Add(sliderSizer, 0, flag=wx.EXPAND | wx.ALIGN_CENTER)
 
         # legend_panel_sizer is needed to add a border around the legend
         legend_panel_sizer = wx.BoxSizer(wx.VERTICAL)
-        legend_panel_sizer.Add(legendSizer, border=10, flag=wx.ALL|wx.EXPAND)
+        legend_panel_sizer.Add(legendSizer, border=10, flag=wx.ALL | wx.EXPAND)
         self.legend_panel.SetSizerAndFit(legend_panel_sizer)
 
         # Put all together (canvas + legend)
         mainSizer = wx.BoxSizer(wx.VERTICAL)
         mainSizer.Add(self.canvas, 1,
-                border=2, flag=wx.EXPAND|wx.TOP|wx.LEFT|wx.RIGHT)
+                border=2, flag=wx.EXPAND | wx.TOP | wx.LEFT | wx.RIGHT)
         mainSizer.Add(self.legend_panel, 0,
-                border=2, flag=wx.EXPAND|wx.BOTTOM|wx.LEFT|wx.RIGHT)
+                border=2, flag=wx.EXPAND | wx.BOTTOM | wx.LEFT | wx.RIGHT)
 
         self.SetSizerAndFit(mainSizer)
         self.SetAutoLayout(True)
@@ -225,7 +217,6 @@ class MicroscopeViewport(wx.Panel):
 
         # subscribe to image, to update legend on streamtree/image change
         microscope_view.lastUpdate.subscribe(self._onImageUpdate, init=True)
-        #self.ShowMergeSlider(self.canvas.image_count > 1)
 
         # canvas handles also directly some of the view properties
         self.canvas.setView(microscope_view, microscope_model)
@@ -254,9 +245,9 @@ class MicroscopeViewport(wx.Panel):
 
     def ShowMergeSlider(self, show):
         """ Show or hide the merge slider """
-        self.bmpIconOpt.Show(show)
+        self.bmpSliderLeft.Show(show)
         self.mergeSlider.Show(show)
-        self.bmpIconSem.Show(show)
+        self.bmpSliderRight.Show(show)
 
     def HasFocus(self, *args, **kwargs):
         return self._has_focus == True
@@ -356,32 +347,27 @@ class MicroscopeViewport(wx.Panel):
         self.UpdateMagnification()
         # the MicroscopeView will send an event that the view has to be redrawn
 
-    @call_after
-    def _onImageUpdate(self, timestamp):
-        # TODO: Just depend on the "merge" argument on the streamTree
-        # For now we just duplicate the logic in _convertStreamsToImages():
-        #  display iif both EM and OPT streams
-        streams = self._microscope_view.stream_tree.getStreams()
-        has_opt = any(isinstance(s, OPTICAL_STREAMS) for s in streams)
-        has_em = any(isinstance(s, EM_STREAMS) for s in streams)
-
-        if (has_opt and has_em):
+    def _checkMergeSliderDisplay(self):
+        """
+        Update the MergeSlider display and icons depending on the state
+        """
+        # MergeSlider is displayed iif:
+        # * Root operator of StreamTree accepts merge argument
+        # * (and) Root operator of StreamTree has >= 2 images
+        if ("merge" in self._microscope_view.stream_tree.kwargs and
+            len(self._microscope_view.getStreams()) >= 2):
             self.ShowMergeSlider(True)
         else:
             self.ShowMergeSlider(False)
 
-        # MergeSlider is displayed iif:
-        # * Root operator of StreamTree accepts merge argument
-        # * (and) Root operator of StreamTree has >= 2 images
-#        if ("merge" in self._microscope_view.stream_tree.kwargs and
-#            len(self._microscope_view.stream_tree.streams) >= 2):
-#            self.ShowMergeSlider(True)
-#        else:
-#            self.ShowMergeSlider(False)
+        # TODO: update icons depending on type of streams
 
-        # magnification might have changed (eg, different number of images)
+    @call_after
+    def _onImageUpdate(self, timestamp):
+        self._checkMergeSliderDisplay()
+
+        # magnification might have changed (eg, image with different binning)
         self.UpdateMagnification()
-
 
     # @call_after
     # def avWavelength(self, value):
@@ -450,7 +436,7 @@ class MicroscopeViewport(wx.Panel):
         if self._microscope_view is None:
             return
 
-        if(evt.GetEventObject() == self.bmpIconOpt):
+        if(evt.GetEventObject() == self.bmpSliderLeft):
             self.mergeSlider.set_to_min_val()
         else:
             self.mergeSlider.set_to_max_val()
@@ -466,6 +452,19 @@ class SecomViewport(MicroscopeViewport):
 
     def __init__(self, *args, **kwargs):
         super(SecomViewport, self).__init__(*args, **kwargs)
+
+    def _checkMergeSliderDisplay(self):
+        # Overridden to avoid displaying merge slide if only SEM or only Optical
+
+        # display iif both EM and OPT streams
+        streams = self._microscope_view.getStreams()
+        has_opt = any(isinstance(s, OPTICAL_STREAMS) for s in streams)
+        has_em = any(isinstance(s, EM_STREAMS) for s in streams)
+
+        if (has_opt and has_em):
+            self.ShowMergeSlider(True)
+        else:
+            self.ShowMergeSlider(False)
 
 class SparcAcquisitionViewport(MicroscopeViewport):
 
@@ -487,4 +486,6 @@ class SparcAlignViewport(MicroscopeViewport):
 
     def __init__(self, *args, **kwargs):
         super(SparcAlignViewport, self).__init__(*args, **kwargs)
-        # TODO: prevent zoom/move Special canvas class? Or change canvas attribute?
+        # TODO: should be done on the fly by _checkMergeSliderDisplay()
+        # change SEM icon to Goal
+        self.bmpSliderRight.SetBitmap(getico_blending_optBitmap()) # FIXME: create goal icon

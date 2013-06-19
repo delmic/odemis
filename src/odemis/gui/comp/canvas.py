@@ -140,7 +140,7 @@ class DraggableCanvas(wx.Panel):
         self.WorldOverlays = []
         # on top, stays at an absolute position
         self.ViewOverlays = []
-        # should always have at least 1 element, to allow the direct additino of
+        # should always have at least 1 element, to allow the direct addition of
         # a 2nd image.
         self.Images = [None]
         self.merge_ratio = 0.3
@@ -170,13 +170,11 @@ class DraggableCanvas(wx.Panel):
         if os.name == "nt":
             # Avoids flickering on windows, but prevents black background on
             # Linux...
+            # FIXME: to check, the documentation says the opposite
             self.SetBackgroundStyle(wx.BG_STYLE_CUSTOM)
 
         self.SetBackgroundColour('black')
-
-        # DEBUG
-        #self.SetBackgroundColour('grey') # (grey is for debugging)
-        #self.margin = 2
+        self.backgroundBrush = wx.CROSS_HATCH # wx.SOLID for a plain background
 
         # view = the area displayed
 
@@ -380,7 +378,7 @@ class DraggableCanvas(wx.Panel):
         pass
 
     # Change picture one/two
-    def SetImage(self, index, im, pos=None, scale=None):
+    def SetImage(self, index, im, pos=None, scale=None, keepalpha=False):
         """ Set (or update)  image
 
         index (0<=int): index number of the image, can be up to 1 more than the
@@ -389,6 +387,7 @@ class DraggableCanvas(wx.Panel):
         pos (2-tuple of float): position of the center of the image (in world
             units)
         scale (float): scaling of the image
+        keepalpha (boolean): whether the alpha channel must be used to draw
         Note: call ShouldUpdateDrawing() to actually get the image redrawn
             afterwards
         """
@@ -404,6 +403,7 @@ class DraggableCanvas(wx.Panel):
         else:
             im._dc_center = pos
             im._dc_scale = scale
+            im._dc_keepalpha = keepalpha
             if not im.HasAlpha():
                 im.InitAlpha()
             if index == len(self.Images):
@@ -412,14 +412,6 @@ class DraggableCanvas(wx.Panel):
             else:
                 # replace
                 self.Images[index] = im
-
-            # Sort by size.
-            self.Images.sort(
-                lambda a, b: cmp(
-                    (b.GetSize()[0] * b.GetSize()[1]) * b._dc_scale if b else 0,
-                    (a.GetSize()[0] * a.GetSize()[1]) * a._dc_scale if a else 0
-                )
-            )
 
     def OnPaint(self, event):
         """ Quick update of the window content with the buffer + the static
@@ -755,7 +747,7 @@ class DraggableCanvas(wx.Panel):
         if not images or images == [None]:
             return 0
 
-        # TODO: Move Secom specific stuff to subclass
+        # TODO: Check Secom still displays correctly
 
         t_start = time.time()
 
@@ -793,33 +785,66 @@ class DraggableCanvas(wx.Panel):
         #     )
 
 
-        # The new idea:
-        # Images are sorted by size, where the biggest image is painted first
-        # with no transpaency. All other images are painted over that afterwards
-        # where each get an opacity of 1/N
-        #
-        # It migh be a good idea to devise a way in which we can define
-        # different strategies for different scenarios.
+#        # The new idea:
+#        # Images are sorted by size, where the biggest image is painted first
+#        # with no transparency. All other images are painted over that afterwards
+#        # where each get an opacity of 1/N
+#        #
+#        # It might be a good idea to devise a way in which we can define
+#        # different strategies for different scenarios.
+#
+#        for im in images[:1]: # the first image (or nothing)
+#            if im:
+#                self._DrawImage(
+#                    dc_buffer,
+#                    im,
+#                    im._dc_center,
+#                    1.0,
+#                    scale=im._dc_scale
+#                )
+#
+#        for _, im in enumerate([m for m in images[1:] if m is not None]):
+#            self._DrawImage(
+#               dc_buffer,
+#               im,
+#               im._dc_center,
+#               mergeratio,
+#               scale=im._dc_scale
+#            )
 
-        for im in images[:1]: # the first image (or nothing)
-            if im:
-                self._DrawImage(
-                    dc_buffer,
-                    im,
-                    im._dc_center,
-                    1.0,
-                    scale=im._dc_scale
-                )
+        # Very new idea:
+        # * display all the images but the last as average (fluo => expected all big)
+        #   N images -> mergeratio = 1-(0/N), 1-(1/N),... 1-((N-1)/N)
+        # * display the last image (SEM => expected smaller), with the given
+        #   mergeratio (or 1 if it's the only one)
 
-        for _, im in enumerate([m for m in images[1:] if m is not None]):
+        first_ims = [im for im in images[:-1] if im is not None]
+        nb_firsts = len(first_ims)
+
+        for i, im in enumerate(first_ims):
+            r = 1.0 - i / float(nb_firsts) # display as if they are averages
             self._DrawImage(
-               dc_buffer,
-               im,
-               im._dc_center,
-               mergeratio,
-               scale=im._dc_scale
+                dc_buffer,
+                im,
+                im._dc_center,
+                r,
+                scale=im._dc_scale,
+                keepalpha=im._dc_keepalpha
             )
 
+        for im in images[-1:]: # the last image (or nothing)
+            if im is None:
+                continue
+            if nb_firsts == 0:
+                mergeratio = 1.0 # no transparency if it's alone
+            self._DrawImage(
+                dc_buffer,
+                im,
+                im._dc_center,
+                mergeratio,
+                scale=im._dc_scale,
+                keepalpha=im._dc_keepalpha
+            )
 
         t_now = time.time()
         return 1.0 / float(t_now - t_start)
@@ -827,6 +852,10 @@ class DraggableCanvas(wx.Panel):
 
     def _draw_background(self, dc_buffer):
         """ Draw checkered background """
+        # Only support wx.SOLID, and anything else is checkered
+        if self.backgroundBrush == wx.SOLID:
+            return
+
         ctx = wxcairo.ContextFromDC(dc_buffer)
         surface = wxcairo.ImageSurfaceFromBitmap(imgdata.getcanvasbgBitmap())
 
@@ -852,7 +881,7 @@ class DraggableCanvas(wx.Panel):
         ctx.fill()
 
 
-    def _DrawImage(self, dc_buffer, im, center, opacity=1.0, scale=1.0):
+    def _DrawImage(self, dc_buffer, im, center, opacity=1.0, scale=1.0, keepalpha=False):
         """ Draws one image with the given scale and opacity on the dc_buffer.
 
         *IMPORTANT*: The origin (0, 0) of the dc_buffer is in the center!
@@ -862,6 +891,8 @@ class DraggableCanvas(wx.Panel):
         :param center: (2-tuple float)
         :param opacity: (float) [0..1] => [transparent..opaque]
         :param scale: (float)
+        :param keepalpha: (boolean) if True, will use a slow method to apply 
+               opacity that keeps the alpha channel information.
         """
 
         if opacity <= 0.0:
@@ -873,10 +904,13 @@ class DraggableCanvas(wx.Panel):
             return
 
         if opacity < 1.0:
-            # im2merged = im2scaled.AdjustChannels(1.0,1.0,1.0,opacity)
-            # TODO: Check if we could speed up by caching the alphabuffer
-            abuf = imscaled.GetAlphaBuffer()
-            self.memsetObject(abuf, int(255 * opacity))
+            if keepalpha:
+                # slow, as it does a multiplication for each pixel
+                imscaled = imscaled.AdjustChannels(1.0, 1.0, 1.0, opacity)
+            else:
+                # TODO: Check if we could speed up by caching the alphabuffer
+                abuf = imscaled.GetAlphaBuffer()
+                self.memsetObject(abuf, int(255 * opacity))
 
         # TODO: the conversion from Image to Bitmap should be done only once,
         # after all the images are merged

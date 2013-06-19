@@ -317,7 +317,7 @@ class OdemisGUIApp(wx.App):
             mtc = get_main_tab_controller()
 
             sem_mat = pkg_resources.resource_stream("odemis.gui.img",
-                                                   "example/s1-sem-bse.mat")
+                                                    "example/s1-sem-bse.mat")
             mdsem = {model.MD_PIXEL_SIZE: (178e-9, 178e-9),
                      model.MD_POS: (0, 0)}
             semdata = scipy.io.loadmat(sem_mat)["sem"]

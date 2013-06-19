@@ -34,7 +34,7 @@ from odemis.gui.cont.views import ViewController, ViewSelector
 from odemis.gui.instrmodel import STATE_ON, STATE_OFF, STATE_PAUSE
 from odemis.gui.model.img import InstrumentalImage
 from odemis.gui.model.stream import SpectrumStream, SEMStream, ARStream, \
-    UNDEFINED_ROI, StaticStream
+    UNDEFINED_ROI, StaticStream, CameraStream
 from odemis.gui.util import widgets
 import logging
 import pkg_resources
@@ -51,15 +51,12 @@ class Tab(object):
         self.button = button
         self.panel = panel
 
-    def _show(self, show):
+    def Show(self, show=True):
         self.button.SetToggle(show)
         self.panel.Show(show)
 
-    def show(self):
-        self._show(True)
-
-    def hide(self):
-        self._show(False)
+    def Hide(self):
+        self.Show(False)
 
     def _initialize(self):
         pass
@@ -400,42 +397,49 @@ class MirrorAlignTab(Tab):
         self._view_controller = None
         self._acquisition_controller = None
         self._stream_controller = None
+        self._ccd_stream = None
 
         # TODO add setting and view controller (add variable vp_sparc_align)
-#        # create the stream to the AR image + goal image
-#        if self.interface_model.ccd:
-#            ar_stream = ARStream("Angular",
-#                                 self.interface_model.ccd,
-#                                 self.interface_model.ccd.data,
-#                                 self.interface_model.ebeam)
-#
-#            goal_im = pkg_resources.resource_stream("odemis.gui.img",
-#                                                    "ma_goal_image_5_13.png")
-#            mpp = 13e-6 # m
-#            # TODO: how to ensure ar_stream is the same mpp?
-#            #  * Force in the viewport?
-#            #  * Force mpp in ARStream?
-#            #  * duplicate from ar_stream?
-#            goal_iim = InstrumentalImage(wx.ImageFromStream(goal_im), mpp, (0, 0))
-#            goal_stream = StaticStream("Goal", goal_iim)
-#            # create a view on the microscope model
-#            self._view_controller = ViewController(
-#                                        self.interface_model,
-#                                        self.main_frame,
-#                                        [self.main_frame.vp_sparc_align]
-#                                    )
-#            mic_view = self.interface_model.focussedView.value
-#            mic_view.addStream(ar_stream)
-#            mic_view.addStream(goal_stream)
-#            ar_stream.should_update.value = True
-#        else:
-#            logging.warning("No CCD available for mirror alignment feedback")
-#
-#        # TODO: needs to have the AR streams on the acquisition view
-#        self._settings_controller = settings.SparcAlignSettingsController(
-#                                        self.main_frame,
-#                                        self.interface_model,
-#                                    )
+        # create the stream to the AR image + goal image
+
+        if self.interface_model.ccd:
+            # Not ARStream as this is for multiple repetitions, and we just care
+            # on the direct display (without even
+            ccd_stream = CameraStream("Angular",
+                                 self.interface_model.ccd,
+                                 self.interface_model.ccd.data,
+                                 self.interface_model.ebeam)
+            self._ccd_stream = ccd_stream
+
+            goal_im = pkg_resources.resource_stream("odemis.gui.img",
+                                                    "ma_goal_image_5_13.png")
+            mpp = 13e-6 # m
+            # TODO: how to ensure ar_stream is the same mpp?
+            #  * Force in the viewport?
+            #  * Force mpp in ARStream?
+            #  * duplicate from ar_stream?
+            goal_iim = InstrumentalImage(wx.ImageFromStream(goal_im), mpp, (0, 0))
+            goal_stream = StaticStream("Goal", goal_iim)
+            # create a view on the microscope model
+            self._view_controller = ViewController(
+                                        self.interface_model,
+                                        self.main_frame,
+                                        [self.main_frame.vp_sparc_align]
+                                    )
+            mic_view = self.interface_model.focussedView.value
+            mic_view.addStream(ccd_stream)
+            mic_view.addStream(goal_stream)
+            mic_view.show_crosshair.value = False
+            mic_view.merge_ratio.value = 1
+            ccd_stream.should_update.value = True
+        else:
+            logging.warning("No CCD available for mirror alignment feedback")
+
+        # TODO: needs to have the AR streams on the acquisition view
+        self._settings_controller = settings.SparcAlignSettingsController(
+                                        self.main_frame,
+                                        self.interface_model,
+                                    )
 
         # TODO: need contrast/brightness for the AR stream
 
@@ -520,6 +524,18 @@ class MirrorAlignTab(Tab):
             # everything else we don't process
             event.Skip()
 
+    def Show(self, show=True):
+        Tab.Show(self, show=show)
+
+        # TODO: put the SEM at 0,0... or let the user pick a point
+
+        # Turn on the camera only when displaying this tab
+        if show:
+            if self._ccd_stream:
+                self._ccd_stream.is_active.value = True
+        else:
+            if self._ccd_stream:
+                self._ccd_stream.is_active.value = False
 
 class TabBarController(object):
 
@@ -612,13 +628,13 @@ class TabBarController(object):
         try:
             self.main_frame.Freeze()
             for tab in self.tab_list:
-                tab.hide()
+                tab.Hide()
         finally:
             self.main_frame.Thaw()
         # It seems there is a bug in wxWidgets which makes the first .Show() not
         # work when the frame is frozen. So always call it after Thaw(). Doesn't
         # seem to cause too much flickering.
-        self._get_tab(tab_name_or_index).show()
+        self._get_tab(tab_name_or_index).Show()
         self.main_frame.Layout()
 
     def OnClick(self, evt):
