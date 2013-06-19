@@ -990,12 +990,12 @@ class BandwithStreamPanel(StreamPanel):
         self._sld_range.set_bandwidth_value(self.stream.bandwidth.value)
         # self._sld_range.set_bandwidth_value(1.0e-07)
 
-        self._vac_bandwidth = VigilantAttributeConnector(
-                                self.stream.bandwidth,
-                                self._sld_range,
-                                va_2_ctrl=self._sld_range.set_bandwidth_value,
-                                ctrl_2_va=self._sld_range.get_bandwidth_value,
-                                events=wx.EVT_SCROLL_CHANGED)
+        # self._vac_bandwidth = VigilantAttributeConnector(
+        #                         self.stream.bandwidth,
+        #                         self._sld_range,
+        #                         va_2_ctrl=self._sld_range.set_bandwidth_value,
+        #                         ctrl_2_va=self._sld_range.get_bandwidth_value,
+        #                         events=wx.EVT_SCROLL_CHANGED)
 
         # span is 2, because emission/excitation have 2 controls
         self._gbs.Add(self._sld_range, pos=(self.row_count, 0),
