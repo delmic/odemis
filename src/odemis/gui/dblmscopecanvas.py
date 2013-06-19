@@ -579,10 +579,12 @@ class SecomCanvas(DblMicroscopeCanvas):
         fps = super(SecomCanvas, self)._DrawMergedImages(dc_buffer,
                                                          images,
                                                          mergeratio)
+        tlp = wx.GetTopLevelParent(self)
 
-        debug_mode = wx.GetTopLevelParent(self).menu_item_debug.IsChecked()
-        if debug_mode or True:
-            self.fps_overlay.set_label("%d fps" % fps)
+        if hasattr(tlp, "menu_item_debug"):
+            debug_mode = tlp.menu_item_debug.IsChecked()
+            if debug_mode:
+                self.fps_overlay.set_label("%d fps" % fps)
 
 class SparcAcquiCanvas(DblMicroscopeCanvas):
     def __init__(self, *args, **kwargs):
@@ -867,7 +869,7 @@ class SparcAlignCanvas(DblMicroscopeCanvas):
     def _convertStreamsToImages(self):
         """
         Same as the overridden method, but ensures the goal image keeps the alpha
-        and is displayed second. Also force the mpp to be the one of the sensor. 
+        and is displayed second. Also force the mpp to be the one of the sensor.
         """
         # remove all the images (so they can be garbage collected)
         self.Images = [None]

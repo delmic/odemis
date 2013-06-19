@@ -24,6 +24,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 from collections import OrderedDict, namedtuple
+from odemis import dataio
 from odemis.gui import instrmodel
 from odemis.gui.cont import settings
 from odemis.gui.cont.acquisition import SecomAcquiController, \
@@ -35,8 +36,10 @@ from odemis.gui.instrmodel import STATE_ON, STATE_OFF, STATE_PAUSE
 from odemis.gui.model.img import InstrumentalImage
 from odemis.gui.model.stream import SpectrumStream, SEMStream, ARStream, \
     UNDEFINED_ROI, StaticStream, CameraStream
-from odemis.gui.util import widgets
+from odemis.gui.util import widgets, get_picture_folder
+from odemis.gui.util.conversion import formats_to_wildcards
 import logging
+import os.path
 import pkg_resources
 import wx
 
@@ -46,8 +49,9 @@ import wx
 class Tab(object):
     """ Small helper class representing a tab (tab button + panel) """
 
-    def __init__(self, name, button, panel):
+    def __init__(self, name, button, panel, label=None):
         self.name = name
+        self.label = label
         self.button = button
         self.panel = panel
 
@@ -63,6 +67,13 @@ class Tab(object):
         Called when the tab is not used any more
         """
         pass
+
+    def set_label(self, label):
+        self.button.SetLabel(label)
+
+    def get_label(self):
+        return self.button.GetLabel()
+
 
 class SecomStreamsTab(Tab):
 
@@ -320,13 +331,13 @@ class SparcAcquisitionTab(Tab):
             self._sem_cl_stream.roi.value = roi
             self._sem_cl_stream.roi.subscribe(self.onROI)
 
-class AnalysisTab(Tab):
+class InspectionTab(Tab):
 
     def __init__(self, name, button, panel, main_frame, microscope=None):
         """
         microscope will be used only to select the type of views
         """
-        super(AnalysisTab, self).__init__(name, button, panel)
+        super(InspectionTab, self).__init__(name, button, panel)
 
         # Doesn't need a microscope
         if microscope:
@@ -342,13 +353,17 @@ class AnalysisTab(Tab):
         self._acquisition_controller = None
         self._stream_controller = None
 
+        # The file currently being viewed (if any, data shown might also be
+        # be a fresh acquisition)
+        self.current_file = None
+
         self._view_controller = ViewController(
                                     self.interface_model,
                                     self.main_frame,
-                                    [self.main_frame.vp_sparc_analysis_tl,
-                                     self.main_frame.vp_sparc_analysis_tr,
-                                     self.main_frame.vp_sparc_analysis_bl,
-                                     self.main_frame.vp_sparc_analysis_br],
+                                    [self.main_frame.vp_inspection_tl,
+                                     self.main_frame.vp_inspection_tr,
+                                     self.main_frame.vp_inspection_bl,
+                                     self.main_frame.vp_inspection_br],
                                 )
 
         self._stream_controller = StreamController(
@@ -370,19 +385,19 @@ class AnalysisTab(Tab):
                 ViewportLabel(None, self.main_frame.lbl_sparc_view_all),
             self.main_frame.btn_sparc_view_tl:
                 ViewportLabel(
-                    self.main_frame.vp_sparc_analysis_tl,
+                    self.main_frame.vp_inspection_tl,
                     self.main_frame.lbl_sparc_view_tl),
             self.main_frame.btn_sparc_view_tr:
                 ViewportLabel(
-                    self.main_frame.vp_sparc_analysis_tr,
+                    self.main_frame.vp_inspection_tr,
                     self.main_frame.lbl_sparc_view_tr),
             self.main_frame.btn_sparc_view_bl:
                 ViewportLabel(
-                    self.main_frame.vp_sparc_analysis_bl,
+                    self.main_frame.vp_inspection_bl,
                     self.main_frame.lbl_sparc_view_bl),
             self.main_frame.btn_sparc_view_br:
                 ViewportLabel(
-                    self.main_frame.vp_sparc_analysis_br,
+                    self.main_frame.vp_inspection_br,
                     self.main_frame.lbl_sparc_view_br)}
 
         self._view_selector = ViewSelector(
@@ -391,10 +406,63 @@ class AnalysisTab(Tab):
                                     buttons
                               )
 
+        self.main_frame.btn_open_image.Bind(
+                            wx.EVT_BUTTON,
+                            self.on_file_open_button
+        )
 
     @property
     def stream_controller(self):
         return self._stream_controller
+
+    def on_file_open_button(self, evt):
+        """ Open an image file using a file dialog box
+
+        :return: True if a file was successfully selected, False otherwise.
+        """
+
+        # Find the available formats (and corresponding extensions)
+        formats_to_ext = dataio.get_available_formats()
+
+
+        if self.current_file:
+            path, _ = os.path.split(self.current_file)
+        else:
+            path = get_picture_folder()
+
+        # Note: When setting 'defaultFile' when creating the file dialog, the
+        #   first filter will automatically be added to the name. Since it
+        #   cannot be changed by selecting a different file type, this is big
+        #   nono. Also, extensions with multiple periods ('.') are not correctly
+        #   handled. The solution is to use the SetFilename method instead.
+        wildcards, formats = formats_to_wildcards(formats_to_ext, True)
+        dialog = wx.FileDialog(self.panel,
+                               message="Choose a file to load",
+                               defaultDir=path,
+                               defaultFile="",
+                               style=wx.FD_OPEN|wx.FD_FILE_MUST_EXIST,
+                               wildcard=wildcards)
+
+        idx = 0
+
+        try:
+            if self.current_file:
+                basename = os.path.basename(self.current_file)
+                ext = os.path.splitext(basename)[1].upper()[1:]
+                idx = formats.index(ext) + 1 # +1 for added 'any file' option
+        except ValueError:
+            pass
+
+        dialog.SetFilterIndex(idx)
+
+        # Show the dialog and check whether is was accepted or cancelled
+        if dialog.ShowModal() == wx.ID_OK:
+            self.current_file = dialog.GetPath()
+            logging.debug("Current file set to %s", self.current_file)
+            return True
+
+        return False
+
 
 class MirrorAlignTab(Tab):
     """
@@ -591,7 +659,7 @@ class TabBarController(object):
         # it cannot draw certain images, because the dimensions are 0x0.
         main_frame.SetMinSize((1400, 550))
 
-    def _filter_tabs(self, rules, main_frame, microscope):
+    def _filter_tabs(self, tab_defs, main_frame, microscope):
         """
         Filter the tabs according to the role of the microscope, and creates
         the ones needed.
@@ -608,13 +676,12 @@ class TabBarController(object):
                       role or "no backend")
 
         tabs = [] # Tabs
-        for trole, tname, tclass, tbtn, tpnl in rules:
-            if isinstance(trole, basestring):
-                trole = (trole,) # force trole to be a tuple
+        for troles, tlabels, tname, tclass, tbtn, tpnl in tab_defs:
 
-            if role in trole:
-                tabs.append(tclass(tname, tbtn, tpnl, main_frame, microscope))
-                # tbtn.Show() # no needed as it's shown by default
+            if role in troles:
+                tab = tclass(tname, tbtn, tpnl, main_frame, microscope)
+                tab.set_label(tlabels[troles.index(role)])
+                tabs.append(tab)
             else:
                 # hide the widgets of the tabs not needed
                 logging.debug("Discarding tab %s", tname)
@@ -680,3 +747,4 @@ class TabBarController(object):
                             evt_btn)
 
         evt.Skip()
+

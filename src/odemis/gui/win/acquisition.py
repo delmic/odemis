@@ -8,15 +8,15 @@ Copyright © 2013 Éric Piel, Rinze de Laat, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms 
-of the GNU General Public License version 2 as published by the Free Software 
+Odemis is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
 Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR 
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
 PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with 
+You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
@@ -30,6 +30,7 @@ from odemis.gui.cont.streams import StreamController
 from odemis.gui.instrmodel import VIEW_LAYOUT_ONE
 from odemis.gui.main_xrc import xrcfr_acq
 from odemis.gui.util import units, call_after
+from odemis.gui.util.conversion import formats_to_wildcards
 from wx.lib.pubsub import pub
 import copy
 import logging
@@ -210,8 +211,8 @@ class AcquisitionDialog(xrcfr_acq):
         Return a good default filename
         """
         # TODO: check the file doesn't yet exist (if the computer clock is
-        # correct it's unlikely) 
-        return os.path.join(self.conf.last_path, 
+        # correct it's unlikely)
+        return os.path.join(self.conf.last_path,
                             u"%s%s" % (time.strftime("%Y%m%d-%H%M%S"),
                                              self.conf.last_extension)
                             )
@@ -222,7 +223,7 @@ class AcquisitionDialog(xrcfr_acq):
         path, base = os.path.split(name)
         self.txt_destination.SetValue(unicode(path))
         # show the end of the path (usually more important)
-        self.txt_destination.SetInsertionPointEnd() 
+        self.txt_destination.SetInsertionPointEnd()
         self.txt_filename.SetValue(unicode(base))
 
     def on_preset(self, evt):
@@ -270,7 +271,7 @@ class AcquisitionDialog(xrcfr_acq):
         """
         new_name = ShowAcquisitionFileDialog(self, self.filename.value)
         self.filename.value = new_name
-        
+
     def on_close(self, evt):
         """ Close event handler that executes various cleanup actions
         """
@@ -292,13 +293,13 @@ class AcquisitionDialog(xrcfr_acq):
         Start the acquisition (really)
         """
         self.btn_secom_acquire.Disable()
-        
+
         # the range of the progress bar was already set in
         # update_acquisition_time()
         self.gauge_acq.Value = 0
         self.gauge_acq.Show()
         self.Layout() # to put the gauge at the right place
-        
+
         # start acquisition + connect events to callback
         streams = self.interface_model.focussedView.value.getStreams()
         # It should never be possible to reach here with no streams
@@ -394,48 +395,27 @@ class AcquisitionDialog(xrcfr_acq):
             # don't be too precise
             self.lbl_acqestimate.SetLabel("a few seconds left.")
 
-# dialogue to select a new file
-def _convert_formats_to_wildcards(formats2ext):
-    """Convert formats into wildcards string compatible with wx.FileDialog()
-
-    formats2ext (dict (string -> list of strings)): format names and lists of
-        their possible extensions.
-
-    returns (tuple (string, list of strings)): wildcards, name of the format
-        in the same order as in the wildcards
-    """
-    wildcards = []
-    formats = []
-    for fmt, extensions in formats2ext.items():
-        ext_wildcards = ";".join(["*" + e for e in extensions])
-        wildcard = "%s files (%s)|%s" % (fmt, ext_wildcards, ext_wildcards)
-        formats.append(fmt)
-        wildcards.append(wildcard)
-
-    # the whole importance is that they are in the same order
-    return "|".join(wildcards), formats
-        
 def ShowAcquisitionFileDialog(parent, filename):
     """
     parent (wxFrame): parent window
     filename (string): full filename to propose by default
-    Note: updates the acquisition configuration if the user did pick a new file 
+    Note: updates the acquisition configuration if the user did pick a new file
     return (string): the new filename (or the old one if the user cancelled)
     """
     conf = get_acqui_conf()
-    
+
     # Find the available formats (and corresponding extensions)
     formats_to_ext = dataio.get_available_formats()
-    
+
     # current filename
     path, base = os.path.split(filename)
-    
+
     # Note: When setting 'defaultFile' when creating the file dialog, the
     #   first filter will automatically be added to the name. Since it
     #   cannot be changed by selecting a different file type, this is big
     #   nono. Also, extensions with multiple periods ('.') are not correctly
     #   handled. The solution is to use the SetFilename method instead.
-    wildcards, formats = _convert_formats_to_wildcards(formats_to_ext)
+    wildcards, formats = formats_to_wildcards(formats_to_ext)
     dialog = wx.FileDialog(parent,
                            message="Choose a filename and destination",
                            defaultDir=path,
@@ -489,6 +469,6 @@ def ShowAcquisitionFileDialog(parent, filename):
 
     conf.last_extension = ext
     conf.write()
-    
+
     return os.path.join(path, fn)
 

@@ -75,7 +75,7 @@ class ViewController(object):
         To be executed only once, at initialisation.
         """
 
-        # If AnalysisTab for Sparc: SEM/Spec/AR/SEM
+        # If InspectionTab for Sparc: SEM/Spec/AR/SEM
         if (isinstance(self._interface_model, instrmodel.AnalysisGUIModel) and
             self._interface_model.microscope.role == "sparc"):
             # TODO: should be dependent on the type of acquisition, and so

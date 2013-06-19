@@ -106,31 +106,6 @@
               <border>20</border>
             </object>
             <object class="sizeritem">
-              <object class="TabButton" name="btn_tab_secom_gallery">
-                <size>160,30</size>
-                <label>GALLERY</label>
-                <bitmap>img/tab_inactive.png</bitmap>
-                <hover>img/tab_hover.png</hover>
-                <selected>img/tab_active.png</selected>
-                <fg>#E5E5E5</fg>
-                <font>
-                  <size>11</size>
-                  <style>normal</style>
-                  <weight>normal</weight>
-                  <underlined>0</underlined>
-                  <family>default</family>
-                  <face>Ubuntu</face>
-                  <encoding>UTF-8</encoding>
-                </font>
-                <style>wxALIGN_CENTRE</style>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-              <flag>wxLEFT|wxALIGN_BOTTOM</flag>
-              <border>20</border>
-            </object>
-            <object class="sizeritem">
               <object class="TabButton" name="btn_tab_sparc_align">
                 <size>160,30</size>
                 <label>MIRROR ALIGNMENT</label>
@@ -181,7 +156,7 @@
               <border>20</border>
             </object>
             <object class="sizeritem">
-              <object class="TabButton" name="btn_tab_sparc_analysis">
+              <object class="TabButton" name="btn_tab_inspection">
                 <size>160,30</size>
                 <label>ANALYSIS</label>
                 <bitmap>img/tab_inactive.png</bitmap>
@@ -734,44 +709,6 @@
         <flag>wxEXPAND</flag>
       </object>
       <object class="sizeritem">
-        <object class="wxPanel" name="pnl_tab_secom_gallery">
-          <object class="wxBoxSizer">
-            <object class="spacer">
-              <option>1</option>
-              <flag>wxEXPAND|wxALIGN_CENTRE_VERTICAL</flag>
-            </object>
-            <object class="sizeritem">
-              <object class="wxStaticText">
-                <label>SECOM image gallery.</label>
-                <fg>#7F7F7F</fg>
-                <font>
-                  <size>8</size>
-                  <style>normal</style>
-                  <weight>normal</weight>
-                  <underlined>0</underlined>
-                  <family>default</family>
-                  <face>Ubuntu</face>
-                  <encoding>UTF-8</encoding>
-                </font>
-              </object>
-              <flag>wxALIGN_CENTRE_VERTICAL</flag>
-            </object>
-            <orient>wxHORIZONTAL</orient>
-            <object class="spacer">
-              <option>1</option>
-              <flag>wxEXPAND|wxALIGN_CENTRE_VERTICAL</flag>
-            </object>
-          </object>
-          <bg>#333333</bg>
-          <hidden>1</hidden>
-          <XRCED>
-            <assign_var>1</assign_var>
-          </XRCED>
-        </object>
-        <option>1</option>
-        <flag>wxEXPAND</flag>
-      </object>
-      <object class="sizeritem">
         <object class="wxPanel" name="pnl_tab_sparc_align">
           <object class="wxBoxSizer">
             <object class="sizeritem">
@@ -1278,6 +1215,7 @@
           </object>
           <bg>#333333</bg>
           <hidden>1</hidden>
+          <style>wxWANTS_CHARS</style>
           <XRCED>
             <assign_var>1</assign_var>
           </XRCED>
@@ -1728,15 +1666,38 @@
         <flag>wxEXPAND</flag>
       </object>
       <object class="sizeritem">
-        <object class="wxPanel" name="pnl_tab_sparc_analysis">
+        <object class="wxPanel" name="pnl_tab_inspection">
           <object class="wxBoxSizer">
             <object class="sizeritem">
               <object class="wxPanel">
                 <object class="wxBoxSizer">
-                  <orient>wxVERTICAL</orient>
+                  <object class="sizeritem">
+                    <object class="ImageTextButton" name="btn_open_image">
+                      <size>180,24</size>
+                      <label>Open Image</label>
+                      <delta>1</delta>
+                      <bitmap>img/btn_256x24.png</bitmap>
+                      <hover>img/btn_256x24_h.png</hover>
+                      <selected>img/btn_256x24_a.png</selected>
+                      <font>
+                        <size>11</size>
+                        <style>normal</style>
+                        <weight>normal</weight>
+                        <underlined>0</underlined>
+                        <family>default</family>
+                        <face>Ubuntu</face>
+                        <encoding>UTF-8</encoding>
+                      </font>
+                      <style>wxALIGN_CENTRE</style>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <flag>wxALL|wxEXPAND</flag>
+                    <border>10</border>
+                  </object>
                   <object class="sizeritem">
                     <object class="wxPanel">
-                      <bg>#1A1A1A</bg>
                       <object class="wxBoxSizer">
                         <orient>wxVERTICAL</orient>
                         <object class="sizeritem">
@@ -1748,6 +1709,8 @@
                           <border>10</border>
                         </object>
                       </object>
+                      <bg>#1A1A1A</bg>
+                      <hidden>1</hidden>
                     </object>
                   </object>
                   <object class="spacer">
@@ -1944,6 +1907,7 @@
                     <flag>wxBOTTOM|wxEXPAND</flag>
                     <border>50</border>
                   </object>
+                  <orient>wxVERTICAL</orient>
                 </object>
                 <size>200,-1</size>
                 <bg>#333333</bg>
@@ -1955,7 +1919,7 @@
                 <object class="sizeritem">
                   <object class="wxBoxSizer">
                     <object class="sizeritem">
-                      <object class="SparcAnalysisViewport" name="vp_sparc_analysis_tl">
+                      <object class="SparcAnalysisViewport" name="vp_inspection_tl">
                         <size>400,-1</size>
                         <fg>#BFBFBF</fg>
                         <bg>#000000</bg>
@@ -1968,7 +1932,7 @@
                       <ratio>1</ratio>
                     </object>
                     <object class="sizeritem">
-                      <object class="SparcAnalysisViewport" name="vp_sparc_analysis_tr">
+                      <object class="SparcAnalysisViewport" name="vp_inspection_tr">
                         <size>400,-1</size>
                         <fg>#BFBFBF</fg>
                         <bg>#000000</bg>
@@ -1989,7 +1953,7 @@
                 <object class="sizeritem">
                   <object class="wxBoxSizer">
                     <object class="sizeritem">
-                      <object class="SparcAnalysisViewport" name="vp_sparc_analysis_bl">
+                      <object class="SparcAnalysisViewport" name="vp_inspection_bl">
                         <size>400,-1</size>
                         <fg>#BFBFBF</fg>
                         <bg>#000000</bg>
@@ -2002,7 +1966,7 @@
                       <ratio>1</ratio>
                     </object>
                     <object class="sizeritem">
-                      <object class="SparcAnalysisViewport" name="vp_sparc_analysis_br">
+                      <object class="SparcAnalysisViewport" name="vp_inspection_br">
                         <size>400,-1</size>
                         <fg>#BFBFBF</fg>
                         <bg>#000000</bg>
