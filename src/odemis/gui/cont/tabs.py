@@ -485,25 +485,20 @@ class MirrorAlignTab(Tab):
         self._stream_controller = None
         self._ccd_stream = None
 
-        # TODO add setting and view controller (add variable vp_sparc_align)
         # create the stream to the AR image + goal image
-
         if self.interface_model.ccd:
             # Not ARStream as this is for multiple repetitions, and we just care
-            # on the direct display (without even
+            # about what's on the CCD
             ccd_stream = CameraStream("Angular",
                                  self.interface_model.ccd,
                                  self.interface_model.ccd.data,
                                  self.interface_model.ebeam)
             self._ccd_stream = ccd_stream
 
+            # TODO: need to know the mirror center according to the goal image (metadata using pypng?)
             goal_im = pkg_resources.resource_stream("odemis.gui.img",
                                         "calibration/ma_goal_image_5_13.png")
-            mpp = 13e-6 # m
-            # TODO: how to ensure ar_stream is the same mpp?
-            #  * Force in the viewport?
-            #  * Force mpp in ARStream?
-            #  * duplicate from ar_stream?
+            mpp = 13e-6 # m (not used if everything goes fine)
             goal_iim = InstrumentalImage(wx.ImageFromStream(goal_im), mpp, (0, 0))
             goal_stream = StaticStream("Goal", goal_iim)
             # create a view on the microscope model
