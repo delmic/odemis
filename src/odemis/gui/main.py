@@ -464,6 +464,9 @@ see http://www.fluorophores.org/disclaimer/.
                 except AttributeError:
                     pass
 
+            # let all the tabs know we are stopping
+            mtc.terminate()
+
             if self.http_proc:
                 self.http_proc.terminate()  #pylint: disable=E1101
 

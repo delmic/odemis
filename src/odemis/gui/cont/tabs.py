@@ -58,7 +58,10 @@ class Tab(object):
     def Hide(self):
         self.Show(False)
 
-    def _initialize(self):
+    def terminate(self):
+        """
+        Called when the tab is not used any more
+        """
         pass
 
 class SecomStreamsTab(Tab):
@@ -252,10 +255,12 @@ class SparcAcquisitionTab(Tab):
                                             self.settings_controller
                                        )
 
+        # TODO: maybe don't use this: just is_active + direct link of the buttons
+        # to hide/show the instrument settings
         # Turn on the live SEM stream
         self.interface_model.emState.value = STATE_ON
         # and subscribe to activate the live stream accordingly
-        # (especially needed to ensure at exit, all the streams are unsubscribed)
+        # (also needed to ensure at exit, all the streams are unsubscribed)
         # TODO: maybe should be handled by a simple stream controller?
         self.interface_model.emState.subscribe(self.onEMState, init=True)
 
@@ -264,10 +269,23 @@ class SparcAcquisitionTab(Tab):
         return self._settings_controller
 
     def onEMState(self, state):
-        if state == STATE_OFF or state == STATE_PAUSE:
+        if state in [STATE_OFF, STATE_PAUSE]:
             self._sem_live_stream.is_active.value = False
         elif state == STATE_ON:
             self._sem_live_stream.is_active.value = True
+
+    def Show(self, show=True):
+        Tab.Show(self, show=show)
+
+        # Turn on the SEM stream only when displaying this tab
+        if show:
+            self.onEMState(self.interface_model.emState.value)
+        else:
+            self._sem_live_stream.is_active.value = False
+
+    def terminate(self):
+        # ensure we are not acquiring anything
+        self._sem_live_stream.is_active.value = False
 
     def onROI(self, roi):
         """
@@ -537,6 +555,10 @@ class MirrorAlignTab(Tab):
             if self._ccd_stream:
                 self._ccd_stream.is_active.value = False
 
+    def terminate(self):
+        if self._ccd_stream:
+            self._ccd_stream.is_active.value = False
+
 class TabBarController(object):
 
     def __init__(self, tab_rules, main_frame, microscope):
@@ -636,6 +658,13 @@ class TabBarController(object):
         # seem to cause too much flickering.
         self._get_tab(tab_name_or_index).Show()
         self.main_frame.Layout()
+
+    def terminate(self):
+        """
+        Terminate each tab (i.e.,indicate they are not used anymore)
+        """
+        for tab in self.tab_list:
+            tab.terminate()
 
     def OnClick(self, evt):
         # ie, mouse click or space pressed
