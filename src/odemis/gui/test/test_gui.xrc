@@ -186,7 +186,7 @@
       <object class="wxBoxSizer">
         <orient>wxVERTICAL</orient>
         <object class="sizeritem">
-          <object class="VisualRangeSlider" name="vrslider1">
+          <object class="VisualRangeSlider" name="vrslider">
             <size>-1, 60</size>
             <fg>#1E90FF</fg>
             <bg>#4D4D4D</bg>
@@ -196,8 +196,17 @@
           </object>
           <flag>wxEXPAND</flag>
         </object>
-      
-        
+        <object class="sizeritem">
+          <object class="BandwidthSlider" name="bwslider">
+            <size>-1, 60</size>
+            <fg>#BA6DEA</fg>
+            <bg>#4D4D4D</bg>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <flag>wxEXPAND</flag>
+        </object>
       </object>
       <size>400,400</size>
       <fg>#E6E6FA</fg>

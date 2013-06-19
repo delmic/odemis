@@ -28,6 +28,7 @@ import wx.lib.wxcairo as wxcairo
 from wx.lib.agw.aui.aui_utilities import StepColour
 
 import odemis.gui as gui
+from abc import ABCMeta, abstractmethod
 from .text import UnitFloatCtrl, UnitIntegerCtrl
 from odemis.gui.img.data import getsliderBitmap, getslider_disBitmap
 from odemis.gui.util import limit_invocation
@@ -35,7 +36,60 @@ from ..util.conversion import wxcol_to_rgb, change_brightness
 
 
 
-class Slider(wx.PyControl):
+class BaseSlider(wx.PyControl):
+    __metaclass__ = ABCMeta
+
+    @abstractmethod
+    def OnPaint(self, event=None):
+        """ This method handles the actual drawing of the control """
+        pass
+
+    def OnSize(self, event=None):
+        self.Refresh()
+
+    @abstractmethod
+    def OnLeftDown(self, event):
+        pass
+
+    @abstractmethod
+    def OnLeftUp(self, event):
+        pass
+
+    @abstractmethod
+    def Disable(self, *args, **kwargs):
+        pass
+
+    @abstractmethod
+    def OnMotion(self, event):
+        pass
+
+    @abstractmethod
+    def SetValue(self, value):
+        pass
+
+    @abstractmethod
+    def _SetValue(self, value):
+        pass
+
+    @abstractmethod
+    def GetValue(self):
+        pass
+
+    def OnCaptureLost(self, evt):
+        self.ReleaseMouse()
+        evt.Skip()
+
+    def send_scroll_event(self):
+        """ Fire EVT_SCROLL_CHANGED event
+        Means that the value has changed to a definite position (only sent when
+        the user is done moving the slider).
+        """
+        evt = wx.ScrollEvent(wx.wxEVT_SCROLL_CHANGED)
+        evt.SetEventObject(self)
+        self.GetEventHandler().ProcessEvent(evt)
+
+
+class Slider(BaseSlider):
     """ This class describes a Slider control.
 
     The default value is 0.0 and the default value range is [0.0 ... 1.0]. The
@@ -60,7 +114,7 @@ class Slider(wx.PyControl):
             xmlh.delmic !
         """
 
-        wx.PyControl.__init__(self, parent, id, pos, size, style)
+        super(Slider, self).__init__(parent, id, pos, size, style)
 
         # Set minimum height
         if size == (-1, -1):
@@ -112,6 +166,7 @@ class Slider(wx.PyControl):
         self.Bind(wx.EVT_SIZE, self.OnSize)
 
     def __del__(self):
+        """ TODO: rediscover the reason why this method is here. """
         try:
             # Data events
             self.Unbind(wx.EVT_MOTION, self.OnMotion)
@@ -122,7 +177,7 @@ class Slider(wx.PyControl):
             # Layout Events
             self.Unbind(wx.EVT_PAINT, self.OnPaint)
             self.Unbind(wx.EVT_SIZE, self.OnSize)
-        except wx.PyDeadObjectError:
+        except (wx.PyDeadObjectError, AttributeError):
             pass
 
     @staticmethod
@@ -225,8 +280,8 @@ class Slider(wx.PyControl):
         If Panel is getting resize for any reason then calculate pointer's position
         based on it's new size
         """
+        super(Slider, self).OnSize(event)
         self.handlePos = self._val_to_pixel()
-        self.Refresh()
 
     def OnLeftDown(self, event):
         """ This event handler fires when the left mouse button is pressed down
@@ -247,22 +302,11 @@ class Slider(wx.PyControl):
         If the slider had the mouse captured, it will be released.
 
         """
-
         if self.HasCapture():
             self.ReleaseMouse()
             self.send_scroll_event()
 
         event.Skip()
-
-    def OnCaptureLost(self, evt):
-        """
-        Applications which capture the mouse, must listen to MouseCaptureLost
-         event.
-        """
-        logging.debug("Lost mouse capture")
-        self.ReleaseMouse() # TODO: needed?
-
-        evt.Skip()
 
     def Disable(self, *args, **kwargs):
         # ensure we don't keep the capture (as LeftUp will never be received)
@@ -328,18 +372,6 @@ class Slider(wx.PyControl):
         evt.SetEventObject(self)
         self.GetEventHandler().ProcessEvent(evt)
 
-    def send_scroll_event(self):
-        """
-        Send EVT_SCROLL_CHANGED.
-        Means that the value has changed to a definite position (only sent when
-        the user is done moving the slider).
-        """
-        logging.debug("Firing scroll event for value %s", self.current_value)
-
-        evt = wx.ScrollEvent(wx.wxEVT_SCROLL_CHANGED, pos=self.current_value)
-        evt.SetEventObject(self)
-        self.GetEventHandler().ProcessEvent(evt)
-
     def SetValue(self, value):
         """ Set the value of the slider
 
@@ -368,10 +400,14 @@ class Slider(wx.PyControl):
         logging.debug("Setting slider value to %s", value)
 
         if value < self.value_range[0]:
-            logging.warn("Value lower than minimum!")
+            logging.warn("Value %s lower than minimum %s!",
+                         value,
+                         self.value_range[0])
             self.current_value = self.value_range[0]
         elif value > self.value_range[1]:
-            logging.warn("Value higher than maximum!")
+            logging.warn("Value %s higher than maximum %s!",
+                         value,
+                         self.value_range[1])
             self.current_value = self.value_range[1]
         else:
             self.current_value = value
@@ -548,22 +584,23 @@ class UnitFloatSlider(NumberSlider):
         NumberSlider.__init__(self, *args, **kwargs)
 
 
-class VisualRangeSlider(wx.PyControl):
+class VisualRangeSlider(BaseSlider):
 
     sel_alpha = 0.5
     sel_alpha_h = 0.7
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, parent, id=wx.ID_ANY, value=0.0, val_range=(0.0, 1.0),
+                 size=(-1, -1), pos=wx.DefaultPosition, style=wx.NO_BORDER,
+                 name="VisualRangeSlider"):
 
-        kwargs['style'] = kwargs.get('style', 0) | wx.NO_BORDER
-        kwargs['style'] |= wx.NO_FULL_REPAINT_ON_RESIZE
+        style |= wx.NO_BORDER
 
-        wx.PyControl.__init__(self, *args, **kwargs)
+        super(VisualRangeSlider, self).__init__(parent, id, pos, size, style)
 
         self.hist_color = wxcol_to_rgb(self.GetForegroundColour())
         self.select_color = (1.0, 1.0, 1.0, self.sel_alpha)
 
-        if kwargs.get('size', None) == (-1, -1):
+        if size == (-1, -1):
             self.SetMinSize((-1, 40))
 
         self.content_list = []
@@ -599,15 +636,6 @@ class VisualRangeSlider(wx.PyControl):
         self._percentage_to_val = lambda r0, r1, p: (r1 - r0) * p + r0
         self._val_to_percentage = lambda r0, r1, v: (float(v) - r0) / (r1 - r0)
 
-    def OnCaptureLost(self, evt):
-        """
-        Applications which capture the mouse, must listen to MouseCaptureLost
-         event.
-        """
-        logging.debug("Lost mouse capture")
-        self.ReleaseMouse()
-        evt.Skip()
-
     def SetForegroundColour(self, col=None):  #pylint: disable=W0221
         if col:
             wx.PyControl.SetForegroundColour(self, col)
@@ -616,11 +644,13 @@ class VisualRangeSlider(wx.PyControl):
     ### Setting and getting of values
 
     def SetValue(self, val):
-        self.set_value(val)
+        if not self.HasCapture():
+            self._SetValue(val)
 
-    def set_value(self, val):
+    def _SetValue(self, val):
         try:
             if not val:
+                logging.debug("Clearing value")
                 self.value = ()
                 self.pixel_value = ()
                 return
@@ -643,9 +673,6 @@ class VisualRangeSlider(wx.PyControl):
                 raise
 
     def GetValue(self):
-        return self.get_value()
-
-    def get_value(self):
         return self.value
 
     def set_range(self, val_range):
@@ -654,10 +681,10 @@ class VisualRangeSlider(wx.PyControl):
                 msg = "Illegal range %s for value %s" % (val_range, self.value)
                 raise ValueError(msg)
 
+        logging.debug("Setting range to %s", val_range)
         self.val_range = val_range
         self.pixel_value = tuple(self._val_to_pixel(i) for i in self.value)
         self.Refresh()
-
 
     def get_range(self):
         return self.val_range
@@ -814,47 +841,36 @@ class VisualRangeSlider(wx.PyControl):
         evt.SetEventObject(self)
         self.GetEventHandler().ProcessEvent(evt)
 
-    def send_scroll_event(self):
-        """
-        Send EVT_SCROLL_CHANGED.
-        Means that the value has changed to a definite position (only sent when
-        the user is done moving the slider).
-        """
-        logging.debug("Firing scroll event for value %s", self.value)
-
-        evt = wx.ScrollEvent(wx.wxEVT_SCROLL_CHANGED)
-        evt.SetEventObject(self)
-        self.GetEventHandler().ProcessEvent(evt)
-
     def OnLeftDown(self, event):
         if self.Enabled:
             self.CaptureMouse()
-            self.SetFocus()
             self.drag_start_x = event.GetX()
             self.mode = self._hover(self.drag_start_x)
+            self.SetFocus()
 
 
     def OnLeftUp(self, event):
-        if self.Enabled:
-            if self.HasCapture():
-                self.ReleaseMouse()
-                if self.drag_x:
-                    if self.mode == gui.HOVER_SELECTION:
-                        pv = tuple(v + self.drag_x for v in self.pixel_value)
-                        self.pixel_value = pv
-                    elif self.mode == gui.HOVER_LEFT_EDGE:
-                        self.pixel_value = (self.pixel_value[0] + self.drag_x,
-                                            self.pixel_value[1])
-                    elif self.mode == gui.HOVER_RIGHT_EDGE:
-                        self.pixel_value = (self.pixel_value[0],
-                                            self.pixel_value[1] + self.drag_x)
+        if self.Enabled and self.HasCapture():
+            self.ReleaseMouse()
+            self._drag_to_value()
+            self.send_scroll_event()
 
-                    self.value = tuple(self._pixel_to_val(i) for i in self.pixel_value)
-                    self.drag_x = 0
-                    self.send_scroll_event()
+    def _drag_to_value(self):
+        if self.drag_x:
+            if self.mode == gui.HOVER_SELECTION:
+                pv = tuple(v + self.drag_x for v in self.pixel_value)
+                self.pixel_value = pv
+            elif self.mode == gui.HOVER_LEFT_EDGE:
+                self.pixel_value = (self.pixel_value[0] + self.drag_x,
+                                    self.pixel_value[1])
+            elif self.mode == gui.HOVER_RIGHT_EDGE:
+                self.pixel_value = (self.pixel_value[0],
+                                    self.pixel_value[1] + self.drag_x)
 
-                self.drag_start_x = None
-                self.mode = None
+            self.value = tuple(self._pixel_to_val(i) for i in self.pixel_value)
+            self.drag_x = 0
+        self.drag_start_x = None
+        self.mode = None
 
     def _draw_histogram(self, ctx, width, height):
         line_width = float(width) / self.len_content
@@ -862,7 +878,7 @@ class VisualRangeSlider(wx.PyControl):
         ctx.set_source_rgb(*self.hist_color)
 
         for i, v in enumerate(self.content_list):
-            x = i * line_width
+            x = (i * line_width) + (line_width / 2.0)
             self._draw_line(ctx, x, height, x, (1 - v) * float(height))
 
     def OnPaint(self, event=None):
@@ -896,16 +912,7 @@ class VisualRangeSlider(wx.PyControl):
 
     def OnSize(self, event=None):
         self.dirty_conent = True
-        self.Update()
-        #self.content_bmp = wx.EmptyBitmap(*self.GetSize())
-
-        #
-        # pdc = wx.PaintDC(self)
-        # pdc.Clear()
-        # ctx = wxcairo.ContextFromDC(pdc)
-        # self._draw_histogram(ctx, pdc)
-
-        # self.Refresh()
+        super(VisualRangeSlider, self).OnSize(event)
 
 class BandwidthSlider(VisualRangeSlider):
     def __init__(self, *args, **kwargs):
@@ -915,33 +922,60 @@ class BandwidthSlider(VisualRangeSlider):
         self.center_val = None
 
     def set_center_value(self, center_val):
-        print "set_center_value %s in range %s " % (center_val, self.val_range)
-
-        self.center_val = center_val
-        self._calc_value()
+        if not self.HasCapture():
+            logging.debug("Setting center value to %s", center_val)
+            self.center_val = center_val
+            self._calc_value()
 
     def get_center_value(self):
+        logging.debug("Getting center value %s", self.center_val)
         return self.center_val
 
     def set_bandwidth_value(self, bandwidth):
-        print "set_bandwidth_value %s " % bandwidth
-        self.bandwidth = bandwidth
-        self._calc_value()
+        if not self.HasCapture():
+            logging.debug("Setting bandwidth to %s", bandwidth)
+            self.bandwidth = bandwidth
+            self._calc_value()
 
     def get_bandwidth_value(self):
+        logging.debug("Getting bandwidth %s", self.bandwidth)
         return self.bandwidth
 
-    def OnLeftUp(self, event):
-        super(BandwidthSlider, self).OnLeftUp(event)
-        self._calc_bandwidth_center()
+    # def set_range(self, val_range):
+    #     super(BandwidthSlider, self).set_range(val_range)
+    #     if self.value:
+    #         if not all([val_range[0] <= i <= val_range[1] for i in self.value]):
+    #             msg = "Illegal range %s for value %s" % (val_range, self.value)
+    #             raise ValueError(msg)
 
-    def _calc_bandwidth_center(self):
-        self.bandwidth = self.value[1] - self.value[0]
-        self.center_val = self.value[0] + (self.bandwidth / 2.0)
-        self._calc_value()
+    #     self.val_range = val_range
+    #     self.pixel_value = tuple(self._val_to_pixel(i) for i in self.value)
+    #     self.Refresh()
+
+    def OnLeftUp(self, event):
+        if self.Enabled and self.HasCapture():
+            self.ReleaseMouse()
+            self._drag_to_value()
+            self._calc_bandwidth_center(self.value)
+            self.send_scroll_event()
+
+    def SetValue(self, value):
+        if not value:
+            self.bandwidth = 0.0
+            self.center_val = None
+        else:
+            self._calc_bandwidth_center(value)
+        super(BandwidthSlider, self).SetValue(value)
+
+    def _calc_bandwidth_center(self, value):
+        self.bandwidth = value[1] - value[0]
+        self.center_val = value[0] + (self.bandwidth / 2.0)
+        logging.debug("Calculated bandwidth and center are [%s] %s",
+                     self.bandwidth,
+                     self.center_val)
 
     def _calc_value(self):
         spread = self.bandwidth / 2.0
         val = (self.center_val - spread, self.center_val + spread)
-        super(BandwidthSlider, self).set_value(val)
-        print "value is [%s...%s] " % self.value
+        super(BandwidthSlider, self)._SetValue(val)
+        logging.debug( "Calculated value is [%s] ", self.value)
