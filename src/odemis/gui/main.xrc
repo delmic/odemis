@@ -105,31 +105,7 @@
               <flag>wxLEFT|wxALIGN_BOTTOM</flag>
               <border>20</border>
             </object>
-            <object class="sizeritem">
-              <object class="TabButton" name="btn_tab_secom_gallery">
-                <size>160,30</size>
-                <label>GALLERY</label>
-                <bitmap>img/tab_inactive.png</bitmap>
-                <hover>img/tab_hover.png</hover>
-                <selected>img/tab_active.png</selected>
-                <fg>#E5E5E5</fg>
-                <font>
-                  <size>11</size>
-                  <style>normal</style>
-                  <weight>normal</weight>
-                  <underlined>0</underlined>
-                  <family>default</family>
-                  <face>Ubuntu</face>
-                  <encoding>UTF-8</encoding>
-                </font>
-                <style>wxALIGN_CENTRE</style>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-              <flag>wxLEFT|wxALIGN_BOTTOM</flag>
-              <border>20</border>
-            </object>
+            
             <object class="sizeritem">
               <object class="TabButton" name="btn_tab_sparc_align">
                 <size>160,30</size>
@@ -181,7 +157,7 @@
               <border>20</border>
             </object>
             <object class="sizeritem">
-              <object class="TabButton" name="btn_tab_sparc_analysis">
+              <object class="TabButton" name="btn_tab_inspection">
                 <size>160,30</size>
                 <label>ANALYSIS</label>
                 <bitmap>img/tab_inactive.png</bitmap>
@@ -723,44 +699,6 @@
               <flag>wxEXPAND</flag>
             </object>
             <orient>wxHORIZONTAL</orient>
-          </object>
-          <bg>#333333</bg>
-          <hidden>1</hidden>
-          <XRCED>
-            <assign_var>1</assign_var>
-          </XRCED>
-        </object>
-        <option>1</option>
-        <flag>wxEXPAND</flag>
-      </object>
-      <object class="sizeritem">
-        <object class="wxPanel" name="pnl_tab_secom_gallery">
-          <object class="wxBoxSizer">
-            <object class="spacer">
-              <option>1</option>
-              <flag>wxEXPAND|wxALIGN_CENTRE_VERTICAL</flag>
-            </object>
-            <object class="sizeritem">
-              <object class="wxStaticText">
-                <label>SECOM image gallery.</label>
-                <fg>#7F7F7F</fg>
-                <font>
-                  <size>8</size>
-                  <style>normal</style>
-                  <weight>normal</weight>
-                  <underlined>0</underlined>
-                  <family>default</family>
-                  <face>Ubuntu</face>
-                  <encoding>UTF-8</encoding>
-                </font>
-              </object>
-              <flag>wxALIGN_CENTRE_VERTICAL</flag>
-            </object>
-            <orient>wxHORIZONTAL</orient>
-            <object class="spacer">
-              <option>1</option>
-              <flag>wxEXPAND|wxALIGN_CENTRE_VERTICAL</flag>
-            </object>
           </object>
           <bg>#333333</bg>
           <hidden>1</hidden>
@@ -1728,7 +1666,7 @@
         <flag>wxEXPAND</flag>
       </object>
       <object class="sizeritem">
-        <object class="wxPanel" name="pnl_tab_sparc_analysis">
+        <object class="wxPanel" name="pnl_tab_inspection">
           <object class="wxBoxSizer">
             <object class="sizeritem">
               <object class="wxPanel">
@@ -1955,7 +1893,7 @@
                 <object class="sizeritem">
                   <object class="wxBoxSizer">
                     <object class="sizeritem">
-                      <object class="SparcAnalysisViewport" name="vp_sparc_analysis_tl">
+                      <object class="SparcAnalysisViewport" name="vp_inspection_tl">
                         <size>400,-1</size>
                         <fg>#BFBFBF</fg>
                         <bg>#000000</bg>
@@ -1968,7 +1906,7 @@
                       <ratio>1</ratio>
                     </object>
                     <object class="sizeritem">
-                      <object class="SparcAnalysisViewport" name="vp_sparc_analysis_tr">
+                      <object class="SparcAnalysisViewport" name="vp_inspection_tr">
                         <size>400,-1</size>
                         <fg>#BFBFBF</fg>
                         <bg>#000000</bg>
@@ -1989,7 +1927,7 @@
                 <object class="sizeritem">
                   <object class="wxBoxSizer">
                     <object class="sizeritem">
-                      <object class="SparcAnalysisViewport" name="vp_sparc_analysis_bl">
+                      <object class="SparcAnalysisViewport" name="vp_inspection_bl">
                         <size>400,-1</size>
                         <fg>#BFBFBF</fg>
                         <bg>#000000</bg>
@@ -2002,7 +1940,7 @@
                       <ratio>1</ratio>
                     </object>
                     <object class="sizeritem">
-                      <object class="SparcAnalysisViewport" name="vp_sparc_analysis_br">
+                      <object class="SparcAnalysisViewport" name="vp_inspection_br">
                         <size>400,-1</size>
                         <fg>#BFBFBF</fg>
                         <bg>#000000</bg>

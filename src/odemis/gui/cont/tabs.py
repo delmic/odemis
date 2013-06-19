@@ -46,8 +46,9 @@ import wx
 class Tab(object):
     """ Small helper class representing a tab (tab button + panel) """
 
-    def __init__(self, name, button, panel):
+    def __init__(self, name, button, panel, label=None):
         self.name = name
+        self.label = label
         self.button = button
         self.panel = panel
 
@@ -57,6 +58,12 @@ class Tab(object):
 
     def Hide(self):
         self.Show(False)
+
+    def set_label(self, label):
+        self.button.SetLabel(label)
+
+    def get_label(self):
+        return self.button.GetLabel()
 
     def _initialize(self):
         pass
@@ -327,10 +334,10 @@ class AnalysisTab(Tab):
         self._view_controller = ViewController(
                                     self.interface_model,
                                     self.main_frame,
-                                    [self.main_frame.vp_sparc_analysis_tl,
-                                     self.main_frame.vp_sparc_analysis_tr,
-                                     self.main_frame.vp_sparc_analysis_bl,
-                                     self.main_frame.vp_sparc_analysis_br],
+                                    [self.main_frame.vp_inspection_tl,
+                                     self.main_frame.vp_inspection_tr,
+                                     self.main_frame.vp_inspection_bl,
+                                     self.main_frame.vp_inspection_br],
                                 )
 
         self._stream_controller = StreamController(
@@ -352,19 +359,19 @@ class AnalysisTab(Tab):
                 ViewportLabel(None, self.main_frame.lbl_sparc_view_all),
             self.main_frame.btn_sparc_view_tl:
                 ViewportLabel(
-                    self.main_frame.vp_sparc_analysis_tl,
+                    self.main_frame.vp_inspection_tl,
                     self.main_frame.lbl_sparc_view_tl),
             self.main_frame.btn_sparc_view_tr:
                 ViewportLabel(
-                    self.main_frame.vp_sparc_analysis_tr,
+                    self.main_frame.vp_inspection_tr,
                     self.main_frame.lbl_sparc_view_tr),
             self.main_frame.btn_sparc_view_bl:
                 ViewportLabel(
-                    self.main_frame.vp_sparc_analysis_bl,
+                    self.main_frame.vp_inspection_bl,
                     self.main_frame.lbl_sparc_view_bl),
             self.main_frame.btn_sparc_view_br:
                 ViewportLabel(
-                    self.main_frame.vp_sparc_analysis_br,
+                    self.main_frame.vp_inspection_br,
                     self.main_frame.lbl_sparc_view_br)}
 
         self._view_selector = ViewSelector(
@@ -569,7 +576,7 @@ class TabBarController(object):
         # it cannot draw certain images, because the dimensions are 0x0.
         main_frame.SetMinSize((1400, 550))
 
-    def _filter_tabs(self, rules, main_frame, microscope):
+    def _filter_tabs(self, tab_defs, main_frame, microscope):
         """
         Filter the tabs according to the role of the microscope, and creates
         the ones needed.
@@ -586,13 +593,12 @@ class TabBarController(object):
                       role or "no backend")
 
         tabs = [] # Tabs
-        for trole, tname, tclass, tbtn, tpnl in rules:
-            if isinstance(trole, basestring):
-                trole = (trole,) # force trole to be a tuple
+        for troles, tlabels, tname, tclass, tbtn, tpnl in tab_defs:
 
-            if role in trole:
-                tabs.append(tclass(tname, tbtn, tpnl, main_frame, microscope))
-                # tbtn.Show() # no needed as it's shown by default
+            if role in troles:
+                tab = tclass(tname, tbtn, tpnl, main_frame, microscope)
+                tab.set_label(tlabels[troles.index(role)])
+                tabs.append(tab)
             else:
                 # hide the widgets of the tabs not needed
                 logging.debug("Discarding tab %s", tname)
@@ -651,3 +657,4 @@ class TabBarController(object):
                             evt_btn)
 
         evt.Skip()
+

@@ -46,10 +46,9 @@ class xrcfr_main(wx.Frame):
         self.menu_item_debug = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_debug"))
         self.menu_item_about = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_about"))
         self.btn_tab_secom_streams = xrc.XRCCTRL(self, "btn_tab_secom_streams")
-        self.btn_tab_secom_gallery = xrc.XRCCTRL(self, "btn_tab_secom_gallery")
         self.btn_tab_sparc_align = xrc.XRCCTRL(self, "btn_tab_sparc_align")
         self.btn_tab_sparc_acqui = xrc.XRCCTRL(self, "btn_tab_sparc_acqui")
-        self.btn_tab_sparc_analysis = xrc.XRCCTRL(self, "btn_tab_sparc_analysis")
+        self.btn_tab_inspection = xrc.XRCCTRL(self, "btn_tab_inspection")
         self.pnl_tab_secom_streams = xrc.XRCCTRL(self, "pnl_tab_secom_streams")
         self.secom_tool_menu = xrc.XRCCTRL(self, "secom_tool_menu")
         self.btn_secom_view_zoom = xrc.XRCCTRL(self, "btn_secom_view_zoom")
@@ -78,7 +77,6 @@ class xrcfr_main(wx.Frame):
         self.pnl_secom_streams = xrc.XRCCTRL(self, "pnl_secom_streams")
         self.fp_annotations = xrc.XRCCTRL(self, "fp_annotations")
         self.btn_secom_acquire = xrc.XRCCTRL(self, "btn_secom_acquire")
-        self.pnl_tab_secom_gallery = xrc.XRCCTRL(self, "pnl_tab_secom_gallery")
         self.pnl_tab_sparc_align = xrc.XRCCTRL(self, "pnl_tab_sparc_align")
         self.slider_mirror_t = xrc.XRCCTRL(self, "slider_mirror_t")
         self.btn_align_py = xrc.XRCCTRL(self, "btn_align_py")
@@ -112,7 +110,7 @@ class xrcfr_main(wx.Frame):
         self.gauge_sparc_acq = xrc.XRCCTRL(self, "gauge_sparc_acq")
         self.btn_sparc_cancel = xrc.XRCCTRL(self, "btn_sparc_cancel")
         self.btn_sparc_acquire = xrc.XRCCTRL(self, "btn_sparc_acquire")
-        self.pnl_tab_sparc_analysis = xrc.XRCCTRL(self, "pnl_tab_sparc_analysis")
+        self.pnl_tab_inspection = xrc.XRCCTRL(self, "pnl_tab_inspection")
         self.sparc_ana_tool_menu = xrc.XRCCTRL(self, "sparc_ana_tool_menu")
         self.btn_sparc_ana_view_zoom = xrc.XRCCTRL(self, "btn_sparc_ana_view_zoom")
         self.btn_sparc_ana_view_update = xrc.XRCCTRL(self, "btn_sparc_ana_view_update")
@@ -126,10 +124,10 @@ class xrcfr_main(wx.Frame):
         self.btn_sparc_view_bl = xrc.XRCCTRL(self, "btn_sparc_view_bl")
         self.lbl_sparc_view_br = xrc.XRCCTRL(self, "lbl_sparc_view_br")
         self.btn_sparc_view_br = xrc.XRCCTRL(self, "btn_sparc_view_br")
-        self.vp_sparc_analysis_tl = xrc.XRCCTRL(self, "vp_sparc_analysis_tl")
-        self.vp_sparc_analysis_tr = xrc.XRCCTRL(self, "vp_sparc_analysis_tr")
-        self.vp_sparc_analysis_bl = xrc.XRCCTRL(self, "vp_sparc_analysis_bl")
-        self.vp_sparc_analysis_br = xrc.XRCCTRL(self, "vp_sparc_analysis_br")
+        self.vp_inspection_tl = xrc.XRCCTRL(self, "vp_inspection_tl")
+        self.vp_inspection_tr = xrc.XRCCTRL(self, "vp_inspection_tr")
+        self.vp_inspection_bl = xrc.XRCCTRL(self, "vp_inspection_bl")
+        self.vp_inspection_br = xrc.XRCCTRL(self, "vp_inspection_br")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
         self.fp_sparc_file_info = xrc.XRCCTRL(self, "fp_sparc_file_info")
         self.pnl_sparc_streams = xrc.XRCCTRL(self, "pnl_sparc_streams")
@@ -292,31 +290,7 @@ def __init_resources():
               <flag>wxLEFT|wxALIGN_BOTTOM</flag>
               <border>20</border>
             </object>
-            <object class="sizeritem">
-              <object class="TabButton" name="btn_tab_secom_gallery">
-                <size>160,30</size>
-                <label>GALLERY</label>
-                <bitmap>img_tab_inactive_png</bitmap>
-                <hover>img_tab_hover_png</hover>
-                <selected>img_tab_active_png</selected>
-                <fg>#E5E5E5</fg>
-                <font>
-                  <size>11</size>
-                  <style>normal</style>
-                  <weight>normal</weight>
-                  <underlined>0</underlined>
-                  <family>default</family>
-                  <face>Ubuntu</face>
-                  <encoding>UTF-8</encoding>
-                </font>
-                <style>wxALIGN_CENTRE</style>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-              <flag>wxLEFT|wxALIGN_BOTTOM</flag>
-              <border>20</border>
-            </object>
+            
             <object class="sizeritem">
               <object class="TabButton" name="btn_tab_sparc_align">
                 <size>160,30</size>
@@ -368,7 +342,7 @@ def __init_resources():
               <border>20</border>
             </object>
             <object class="sizeritem">
-              <object class="TabButton" name="btn_tab_sparc_analysis">
+              <object class="TabButton" name="btn_tab_inspection">
                 <size>160,30</size>
                 <label>ANALYSIS</label>
                 <bitmap>img_tab_inactive_png</bitmap>
@@ -910,44 +884,6 @@ def __init_resources():
               <flag>wxEXPAND</flag>
             </object>
             <orient>wxHORIZONTAL</orient>
-          </object>
-          <bg>#333333</bg>
-          <hidden>1</hidden>
-          <XRCED>
-            <assign_var>1</assign_var>
-          </XRCED>
-        </object>
-        <option>1</option>
-        <flag>wxEXPAND</flag>
-      </object>
-      <object class="sizeritem">
-        <object class="wxPanel" name="pnl_tab_secom_gallery">
-          <object class="wxBoxSizer">
-            <object class="spacer">
-              <option>1</option>
-              <flag>wxEXPAND|wxALIGN_CENTRE_VERTICAL</flag>
-            </object>
-            <object class="sizeritem">
-              <object class="wxStaticText">
-                <label>SECOM image gallery.</label>
-                <fg>#7F7F7F</fg>
-                <font>
-                  <size>8</size>
-                  <style>normal</style>
-                  <weight>normal</weight>
-                  <underlined>0</underlined>
-                  <family>default</family>
-                  <face>Ubuntu</face>
-                  <encoding>UTF-8</encoding>
-                </font>
-              </object>
-              <flag>wxALIGN_CENTRE_VERTICAL</flag>
-            </object>
-            <orient>wxHORIZONTAL</orient>
-            <object class="spacer">
-              <option>1</option>
-              <flag>wxEXPAND|wxALIGN_CENTRE_VERTICAL</flag>
-            </object>
           </object>
           <bg>#333333</bg>
           <hidden>1</hidden>
@@ -1915,7 +1851,7 @@ def __init_resources():
         <flag>wxEXPAND</flag>
       </object>
       <object class="sizeritem">
-        <object class="wxPanel" name="pnl_tab_sparc_analysis">
+        <object class="wxPanel" name="pnl_tab_inspection">
           <object class="wxBoxSizer">
             <object class="sizeritem">
               <object class="wxPanel">
@@ -2142,7 +2078,7 @@ def __init_resources():
                 <object class="sizeritem">
                   <object class="wxBoxSizer">
                     <object class="sizeritem">
-                      <object class="SparcAnalysisViewport" name="vp_sparc_analysis_tl">
+                      <object class="SparcAnalysisViewport" name="vp_inspection_tl">
                         <size>400,-1</size>
                         <fg>#BFBFBF</fg>
                         <bg>#000000</bg>
@@ -2155,7 +2091,7 @@ def __init_resources():
                       <ratio>1</ratio>
                     </object>
                     <object class="sizeritem">
-                      <object class="SparcAnalysisViewport" name="vp_sparc_analysis_tr">
+                      <object class="SparcAnalysisViewport" name="vp_inspection_tr">
                         <size>400,-1</size>
                         <fg>#BFBFBF</fg>
                         <bg>#000000</bg>
@@ -2176,7 +2112,7 @@ def __init_resources():
                 <object class="sizeritem">
                   <object class="wxBoxSizer">
                     <object class="sizeritem">
-                      <object class="SparcAnalysisViewport" name="vp_sparc_analysis_bl">
+                      <object class="SparcAnalysisViewport" name="vp_inspection_bl">
                         <size>400,-1</size>
                         <fg>#BFBFBF</fg>
                         <bg>#000000</bg>
@@ -2189,7 +2125,7 @@ def __init_resources():
                       <ratio>1</ratio>
                     </object>
                     <object class="sizeritem">
-                      <object class="SparcAnalysisViewport" name="vp_sparc_analysis_br">
+                      <object class="SparcAnalysisViewport" name="vp_inspection_br">
                         <size>400,-1</size>
                         <fg>#BFBFBF</fg>
                         <bg>#000000</bg>

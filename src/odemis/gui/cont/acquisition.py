@@ -8,15 +8,15 @@ Copyright © 2012-2013 Éric Piel, Rinze de Laat, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms 
-of the GNU General Public License version 2 as published by the Free Software 
+Odemis is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
 Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR 
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
 PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with 
+You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 
 
@@ -495,7 +495,7 @@ class SparcAcquiController(AcquisitionController):
 
     def _resume_settings(self):
         """
-        Resume (unfreeze) the settings in the GUI and make sure the value are 
+        Resume (unfreeze) the settings in the GUI and make sure the value are
         back to the previous value
         """
         live_streams = self._interface_model.focussedView.value.getStreams()
@@ -521,8 +521,8 @@ class SparcAcquiController(AcquisitionController):
         # get the analysis tab
         mtc = get_main_tab_controller()
 
-        analysis_interface = mtc['sparc_analysis'].interface_model
-        stream_controller = mtc['sparc_analysis'].stream_controller
+        analysis_interface = mtc['inspection'].interface_model
+        stream_controller = mtc['inspection'].stream_controller
 
         # clear the analysis tab
         stream_controller.clear()
@@ -551,7 +551,7 @@ class SparcAcquiController(AcquisitionController):
         analysis_interface.fileinfo.value = finfo
 
         # show the new tab
-        mtc.switch("sparc_analysis")
+        mtc.switch("inspection")
 
     def on_acquisition(self, evt):
         """
