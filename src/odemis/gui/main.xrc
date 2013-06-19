@@ -1671,10 +1671,33 @@
             <object class="sizeritem">
               <object class="wxPanel">
                 <object class="wxBoxSizer">
-                  <orient>wxVERTICAL</orient>
+                  <object class="sizeritem">
+                    <object class="ImageTextButton" name="btn_open_image">
+                      <size>180,24</size>
+                      <label>Open Image</label>
+                      <delta>1</delta>
+                      <bitmap>img/btn_256x24.png</bitmap>
+                      <hover>img/btn_256x24_h.png</hover>
+                      <selected>img/btn_256x24_a.png</selected>
+                      <font>
+                        <size>11</size>
+                        <style>normal</style>
+                        <weight>normal</weight>
+                        <underlined>0</underlined>
+                        <family>default</family>
+                        <face>Ubuntu</face>
+                        <encoding>UTF-8</encoding>
+                      </font>
+                      <style>wxALIGN_CENTRE</style>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <flag>wxALL|wxEXPAND</flag>
+                    <border>10</border>
+                  </object>
                   <object class="sizeritem">
                     <object class="wxPanel">
-                      <bg>#1A1A1A</bg>
                       <object class="wxBoxSizer">
                         <orient>wxVERTICAL</orient>
                         <object class="sizeritem">
@@ -1686,6 +1709,8 @@
                           <border>10</border>
                         </object>
                       </object>
+                      <bg>#1A1A1A</bg>
+                      <hidden>1</hidden>
                     </object>
                   </object>
                   <object class="spacer">
@@ -1882,6 +1907,7 @@
                     <flag>wxBOTTOM|wxEXPAND</flag>
                     <border>50</border>
                   </object>
+                  <orient>wxVERTICAL</orient>
                 </object>
                 <size>200,-1</size>
                 <bg>#333333</bg>

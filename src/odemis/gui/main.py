@@ -210,7 +210,7 @@ class OdemisGUIApp(wx.App):
                 # (
                 #     "booooo",
                 #     "secom_gallery",
-                #     tabs.AnalysisTab,
+                #     tabs.InspectionTab,
                 #     self.main_frame.btn_tab_secom_gallery,
                 #     self.main_frame.pnl_tab_secom_gallery
                 # ),
@@ -234,7 +234,7 @@ class OdemisGUIApp(wx.App):
                     (None, "secom", "sparc"),
                     (None, "GALLERY", "ANALYSIS"),
                     "inspection",
-                    tabs.AnalysisTab,
+                    tabs.InspectionTab,
                     self.main_frame.btn_tab_inspection,
                     self.main_frame.pnl_tab_inspection),
             ]

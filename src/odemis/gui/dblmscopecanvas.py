@@ -576,7 +576,6 @@ class SecomCanvas(DblMicroscopeCanvas):
         fps = super(SecomCanvas, self)._DrawMergedImages(dc_buffer,
                                                          images,
                                                          mergeratio)
-
         tlp = wx.GetTopLevelParent(self)
 
         if hasattr(tlp, "menu_item_debug"):

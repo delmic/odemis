@@ -24,6 +24,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 from collections import OrderedDict, namedtuple
+from odemis import dataio
 from odemis.gui import instrmodel
 from odemis.gui.cont import settings
 from odemis.gui.cont.acquisition import SecomAcquiController, \
@@ -35,8 +36,10 @@ from odemis.gui.instrmodel import STATE_ON, STATE_OFF, STATE_PAUSE
 from odemis.gui.model.img import InstrumentalImage
 from odemis.gui.model.stream import SpectrumStream, SEMStream, ARStream, \
     UNDEFINED_ROI, StaticStream, CameraStream
-from odemis.gui.util import widgets
+from odemis.gui.util import widgets, get_picture_folder
+from odemis.gui.util.conversion import formats_to_wildcards
 import logging
+import os.path
 import pkg_resources
 import wx
 
@@ -309,13 +312,13 @@ class SparcAcquisitionTab(Tab):
             self._sem_cl_stream.roi.value = roi
             self._sem_cl_stream.roi.subscribe(self.onROI)
 
-class AnalysisTab(Tab):
+class InspectionTab(Tab):
 
     def __init__(self, name, button, panel, main_frame, microscope=None):
         """
         microscope will be used only to select the type of views
         """
-        super(AnalysisTab, self).__init__(name, button, panel)
+        super(InspectionTab, self).__init__(name, button, panel)
 
         # Doesn't need a microscope
         if microscope:
@@ -330,6 +333,10 @@ class AnalysisTab(Tab):
         self._view_controller = None
         self._acquisition_controller = None
         self._stream_controller = None
+
+        # The file currently being viewed (if any, data shown might also be
+        # be a fresh acquisition)
+        self.current_file = None
 
         self._view_controller = ViewController(
                                     self.interface_model,
@@ -380,10 +387,63 @@ class AnalysisTab(Tab):
                                     buttons
                               )
 
+        self.main_frame.btn_open_image.Bind(
+                            wx.EVT_BUTTON,
+                            self.on_file_open_button
+        )
 
     @property
     def stream_controller(self):
         return self._stream_controller
+
+    def on_file_open_button(self, evt):
+        """ Open an image file using a file dialog box
+
+        :return: True if a file was successfully selected, False otherwise.
+        """
+
+        # Find the available formats (and corresponding extensions)
+        formats_to_ext = dataio.get_available_formats()
+
+
+        if self.current_file:
+            path, _ = os.path.split(self.current_file)
+        else:
+            path = get_picture_folder()
+
+        # Note: When setting 'defaultFile' when creating the file dialog, the
+        #   first filter will automatically be added to the name. Since it
+        #   cannot be changed by selecting a different file type, this is big
+        #   nono. Also, extensions with multiple periods ('.') are not correctly
+        #   handled. The solution is to use the SetFilename method instead.
+        wildcards, formats = formats_to_wildcards(formats_to_ext, True)
+        dialog = wx.FileDialog(self.panel,
+                               message="Choose a file to load",
+                               defaultDir=path,
+                               defaultFile="",
+                               style=wx.FD_OPEN|wx.FD_FILE_MUST_EXIST,
+                               wildcard=wildcards)
+
+        idx = 0
+
+        try:
+            if self.current_file:
+                basename = os.path.basename(self.current_file)
+                ext = os.path.splitext(basename)[1].upper()[1:]
+                idx = formats.index(ext) + 1 # +1 for added 'any file' option
+        except ValueError:
+            pass
+
+        dialog.SetFilterIndex(idx)
+
+        # Show the dialog and check whether is was accepted or cancelled
+        if dialog.ShowModal() == wx.ID_OK:
+            self.current_file = dialog.GetPath()
+            logging.debug("Current file set to %s", self.current_file)
+            return True
+
+        return False
+
 
 class MirrorAlignTab(Tab):
     """
