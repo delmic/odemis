@@ -291,7 +291,6 @@ def __init_resources():
               <flag>wxLEFT|wxALIGN_BOTTOM</flag>
               <border>20</border>
             </object>
-            
             <object class="sizeritem">
               <object class="TabButton" name="btn_tab_sparc_align">
                 <size>160,30</size>
@@ -1402,6 +1401,7 @@ def __init_resources():
           </object>
           <bg>#333333</bg>
           <hidden>1</hidden>
+          <style>wxWANTS_CHARS</style>
           <XRCED>
             <assign_var>1</assign_var>
           </XRCED>
