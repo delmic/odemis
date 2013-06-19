@@ -476,6 +476,7 @@ see http://www.fluorophores.org/disclaimer/.
         except Exception:
             logging.exception("Error during GUI shutdown")
 
+        log.stop_gui_logger()
         self.main_frame.Destroy()
 
     def excepthook(self, etype, value, trace): #pylint: disable=W0622

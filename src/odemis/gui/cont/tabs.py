@@ -479,7 +479,7 @@ class MirrorAlignTab(Tab):
             self._ccd_stream = ccd_stream
 
             goal_im = pkg_resources.resource_stream("odemis.gui.img",
-                                                    "ma_goal_image_5_13.png")
+                                        "calibration/ma_goal_image_5_13.png")
             mpp = 13e-6 # m
             # TODO: how to ensure ar_stream is the same mpp?
             #  * Force in the viewport?

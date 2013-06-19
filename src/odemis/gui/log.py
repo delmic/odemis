@@ -80,6 +80,17 @@ def create_gui_logger(log_field):
         logging.exception("Failed to set-up logging handlers")
         raise
 
+def stop_gui_logger():
+    """
+    Stop the logger from displaying logs to the GUI.
+    Use just before ending the GUI.
+    """
+
+    # remove whatever handler was already there
+    for handler in log.handlers:
+        if isinstance(handler, TextFieldHandler):
+            log.removeHandler(handler)
+
 class TextFieldHandler(logging.Handler):
     """ Custom log handler, used to output log entries to a text field. """
     def __init__(self):

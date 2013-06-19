@@ -21,19 +21,19 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 from __future__ import division
-
-import logging
-
-import wx
-
-import odemis.gui.dblmscopecanvas as canvas
 from odemis import gui
 from odemis.gui.comp.scalewindow import ScaleWindow
 from odemis.gui.comp.slider import Slider
-from odemis.gui.img.data import \
-    getico_blending_optBitmap, getico_blending_semBitmap
+from odemis.gui.img.data import getico_blending_optBitmap, \
+    getico_blending_semBitmap, getico_blending_goalBitmap
 from odemis.gui.model import OPTICAL_STREAMS, EM_STREAMS
 from odemis.gui.util import call_after, units
+import logging
+import odemis.gui.dblmscopecanvas as canvas
+import wx
+
+
+
 
 
 class MicroscopeViewport(wx.Panel):
@@ -488,4 +488,4 @@ class SparcAlignViewport(MicroscopeViewport):
         super(SparcAlignViewport, self).__init__(*args, **kwargs)
         # TODO: should be done on the fly by _checkMergeSliderDisplay()
         # change SEM icon to Goal
-        self.bmpSliderRight.SetBitmap(getico_blending_optBitmap()) # FIXME: create goal icon
+        self.bmpSliderRight.SetBitmap(getico_blending_goalBitmap()) # FIXME: create goal icon
