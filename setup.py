@@ -94,7 +94,7 @@ dist = setup(name='Odemis',
              package_dir={'': 'src'},
              packages=find_packages('src', exclude=["*.test"]),
              package_data={'odemis.gui.img': ["example/*.png", "example/*.mat",
-                                             "ma_goal_*.png"]
+                                              "calibration/*.png"]
                           },
              scripts=scripts,
              data_files=data_files # not officially in setuptools, but works as for distutils
