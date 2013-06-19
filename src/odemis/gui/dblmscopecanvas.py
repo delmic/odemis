@@ -27,7 +27,7 @@ from .comp.canvas import DraggableCanvas, world_to_real_pos
 from .comp.overlay import CrossHairOverlay, ViewSelectOverlay, \
     WorldSelectOverlay, TextViewOverlay
 from decorator import decorator
-from odemis import util
+from odemis import util, model
 from odemis.gui.comp.canvas import real_to_world_pos
 from odemis.gui.model import EM_STREAMS, stream
 from odemis.gui.model.stream import UNDEFINED_ROI
@@ -282,11 +282,14 @@ class DblMicroscopeCanvas(DraggableCanvas):
         Adapts the MPP and center to fit to the current content
         recenter (None or boolean): If True, also recenter the view. If None, it
          will try to be clever, and only recenter if no stage is connected, as
-         otherwise, it could cause an unexcepted move.
+         otherwise, it could cause an unexpected move.
         """
-        # TODO
-        # Note: we need 2 different mechanisms: with and without recenter
-        pass
+        # TODO: be clever about recenter
+        DraggableCanvas.fitViewToContent(self, recenter=recenter)
+
+        # this will indirectly call _onMPP(), but not have any additional effect
+        if self.microscope_view and self.mpwu:
+            self.microscope_view.mpp.value = self.mpwu / self.scale
 
     def _onMPP(self, mpp):
         """
@@ -851,16 +854,43 @@ class SparcAlignCanvas(DblMicroscopeCanvas):
 
     def __init__(self, *args, **kwargs):
         super(SparcAlignCanvas, self).__init__(*args, **kwargs)
+        self._ccd_mpp = None # tuple of 2 floats of m/px
+
+    def setView(self, microscope_view, microscope_model):
+        DblMicroscopeCanvas.setView(self, microscope_view, microscope_model)
+        # find the MPP of the sensor and use it on all images
+        try:
+            self._ccd_mpp = self.microscope_view.ccd.pixelSize.value
+        except AttributeError:
+            logging.info("Failed to find CCD for Sparc mirror alignment")
 
     def _convertStreamsToImages(self):
         """
         Same as the overridden method, but ensures the goal image keeps the alpha
-        and is displayed second 
+        and is displayed second. Also force the mpp to be the one of the sensor. 
         """
         # remove all the images (so they can be garbage collected)
         self.Images = [None]
 
         streams = self.microscope_view.getStreams()
+
+        # All the images must be displayed with the same mpp (modulo the binning)
+        if self._ccd_mpp:
+            mpp = self._ccd_mpp[0]
+        else:
+            # use the most relevant mpp from an image
+            for s in streams:
+                if s and not isinstance(s, stream.StaticStream):
+                    try:
+                        mpp = s.image.mpp
+                        break
+                    except AttributeError:
+                        pass
+            else:
+                mpp = 13e-6 # sensible fallback
+
+
+        # order and display the images
         for s in streams:
             if not s:
                 # should not happen, but let's not completely fail on this
@@ -873,8 +903,14 @@ class SparcAlignCanvas(DblMicroscopeCanvas):
             if iim is None or iim.image is None:
                 continue
 
-            scale = iim.mpp / self.mpwu
-            pos = self.real_to_world_pos(iim.center)
+            # see if image was obtained with some binning
+            try:
+                binning = s.raw[0].metadata[model.MD_BINNING][0]
+            except (AttributeError, IndexError):
+                binning = 1
+
+            scale = mpp * binning / self.mpwu
+            pos = (0, 0) # the sensor image should be centered on the sensor center
 
             if isinstance(s, stream.StaticStream):
                 # StaticStream == goal image => add at the end
@@ -884,9 +920,9 @@ class SparcAlignCanvas(DblMicroscopeCanvas):
                 self.SetImage(0, iim.image, pos, scale)
 
         # set merge_ratio
-        self.merge_ratio = self.microscope_view.stream_tree.kwargs.get("merge", 0.5)
+        self.merge_ratio = self.microscope_view.stream_tree.kwargs.get("merge", 1)
 
-        # TODO: check if image mpp has changed and if yes, refit to AR image (first)
+        # TODO: check if image size has changed and if yes, refit to AR image (first)
         self.fitViewToContent(recenter=True)
 
 
