@@ -563,7 +563,13 @@ class MirrorAlignTab(Tab):
                 btn.Bind(wx.EVT_BUTTON, btn_action)
 
         # Keybinding
-        self.main_frame.pnl_tab_sparc_align.Bind(wx.EVT_KEY_DOWN, self.on_key)
+        # Note: evt_key_* and evt_char are not passed to their parents, even if
+        # skipped. Only evt_char_hook is propagated, the problem is that it's
+        # not what the children bind to, so we always get it, even if the child
+        # handles the key events.
+        # http://article.gmane.org/gmane.comp.python.wxpython/50485
+        # http://wxpython.org/Phoenix/docs/html/KeyEvent.html
+        self.main_frame.pnl_tab_sparc_align.Bind(wx.EVT_CHAR_HOOK, self.on_key)
 
     # TODO: should be one per microscope role or axes names??
     # WXK -> (args for interface_model.step)
@@ -605,10 +611,14 @@ class MirrorAlignTab(Tab):
     def on_key(self, event):
         key = event.GetKeyCode()
         if key in self.key_bindings_sparc:
-            self.interface_model.step(*self.key_bindings_sparc[key])
-        else:
-            # everything else we don't process
-            event.Skip()
+            # check the focus is not on some children that'll handle the key
+            focusedWin = wx.Window.FindFocus()
+            if not isinstance(focusedWin, wx.TextCtrl): # TODO: need to check for more types?
+                self.interface_model.step(*self.key_bindings_sparc[key])
+                return # keep it for ourselves
+
+        # everything else we don't process
+        event.Skip()
 
     def Show(self, show=True):
         Tab.Show(self, show=show)
