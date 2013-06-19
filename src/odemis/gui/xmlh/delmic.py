@@ -596,6 +596,23 @@ component.Manager.setMenu(
 )
 component.Manager.setTool(c, 'Controls', pos=(0, 2))
 
+### BandwidthSlider
+
+c = component.Component('BandwidthSlider', ['control','tool'],
+              ['pos', 'size'],
+              image=images.TreeTextCtrl.GetImage())
+
+component.Manager.register(c)
+component.Manager.addXmlHandler(xh_delmic.BandwidthSliderHandler)
+component.Manager.setMenu(
+    c,
+    'Delmic control',
+    'BandwidthSlider Slider',
+    'BandwidthSlider',
+    1
+)
+component.Manager.setTool(c, 'Controls', pos=(0, 2))
+
 ### wxOwnerDrawnComboBox
 # This component is present in the default XRCed setup, but was added here
 # because the original did not allow for the setting of the down button

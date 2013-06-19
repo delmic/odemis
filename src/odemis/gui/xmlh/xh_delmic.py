@@ -881,6 +881,43 @@ class VisualRangeSliderHandler(xrc.XmlResourceHandler):
         return slider
 HANDLER_CLASS_LIST.append(VisualRangeSliderHandler)
 
+class BandwidthSliderHandler(xrc.XmlResourceHandler):
+    def __init__(self):
+        xrc.XmlResourceHandler.__init__(self)
+        # Specify the styles recognized by objects of this type
+        self.AddWindowStyles()
+
+    # This method and the next one are required for XmlResourceHandlers
+    def CanHandle(self, node):
+        capable = self.IsOfClass(node, "BandwidthSlider")
+        return capable
+
+    def GetFloat(self, param, defaultv=0):
+        # there is a bug in wxWidgets, which doesn't export GetFloat
+        # => recreate in Python
+        # self, String param, long defaultv=0
+
+        string = self.GetParamValue(param)
+
+        try:
+            value = float(string)
+        except ValueError:
+            logging.error("Float param incorrect %s", string)
+        return value
+
+    def DoCreateResource(self):
+        assert self.GetInstance() is None
+        # Now create the object
+        slider = slide.BandwidthSlider(self.GetParentAsWindow(),
+                                       id=self.GetID(),
+                                       pos=self.GetPosition(),
+                                       size=self.GetSize(),
+                                       style=self.GetStyle())
+        self.SetupWindow(slider)
+        slider.SetForegroundColour()
+        return slider
+HANDLER_CLASS_LIST.append(BandwidthSliderHandler)
+
 ####################################################################
 # OwnerDrawnComboBox Handlers
 #
