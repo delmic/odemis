@@ -20,16 +20,16 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
-from datetime import datetime
 from numpy.polynomial import polynomial
 from odemis import model
 import h5py
+import logging
 import numpy
 import os
 import time
 # User-friendly name
 FORMAT = "HDF5"
-# list of file-name extensions possible, the first one is the default when saving a file 
+# list of file-name extensions possible, the first one is the default when saving a file
 EXTENSIONS = [".h5", ".hdf5"]
 
 # We are trying to follow the same format as SVI, as defined here:
@@ -40,7 +40,7 @@ EXTENSIONS = [".h5", ".hdf5"]
 #     + RGB image (*) (HDF5 Image with Dimension Scales)
 #     + DimensionScale*
 #     + *Offset (position on the axis)
-#   + AcquisitionName (one per set of emitter/detector) 
+#   + AcquisitionName (one per set of emitter/detector)
 #     + ImageData
 #       + Image (HDF5 Image with Dimension Scales CTZXY)
 #       + DimensionScale*
@@ -67,7 +67,7 @@ def _create_image_dataset(group, dataset_name, image, **kwargs):
     """
     assert(len(image.shape) >= 2)
     image_dataset = group.create_dataset(dataset_name, data=image, **kwargs)
-       
+
     # numpy.string_ is to force fixed-length string (necessary for compatibility)
     image_dataset.attrs["CLASS"] = numpy.string_("IMAGE")
     # Colour image?
@@ -85,11 +85,64 @@ def _create_image_dataset(group, dataset_name, image, **kwargs):
         image_dataset.attrs["IMAGE_SUBCLASS"] = numpy.string_("IMAGE_GRAYSCALE")
         image_dataset.attrs["IMAGE_WHITE_IS_ZERO"] = numpy.array(0, dtype="uint8")
         image_dataset.attrs["IMAGE_MINMAXRANGE"] = [image.min(), image.max()]
-    
+
     image_dataset.attrs["DISPLAY_ORIGIN"] = numpy.string_("UL") # not rotated
     image_dataset.attrs["IMAGE_VERSION"] = numpy.string_("1.2")
-   
+
     return image_dataset
+
+def _read_image_dataset(dataset):
+    """
+    Get a numpy array from a dataset respecting the HDF5 image specification.
+    returns (numpy.ndimage): it has at least 2 dimensions and if RGB, it has
+     a shape of (Y, X, 3).
+    raises
+     IOError: if it doesn't conform to the standard
+     NotImplementedError: if the image uses so fancy standard features
+    """
+    # check basic format
+    if len(dataset.shape) < 2:
+        raise IOError("Image has a shape of %s", dataset.shape)
+
+    if dataset.attrs.get("IMAGE_VERSION") != "1.2":
+        logging.info("Trying to read an HDF5 image of unsupported version")
+
+    # conversion is almost entirely different depending on subclass
+    subclass = dataset.attrs.get("IMAGE_SUBCLASS", "IMAGE_GRAYSCALE")
+
+    if subclass == "IMAGE_GRAYSCALE":
+        image = dataset[...]
+    elif subclass == "IMAGE_TRUECOLOR":
+        if dataset.shape != 3:
+            raise IOError("Truecolor image has a shape of %s", dataset.shape)
+
+        try:
+            il_mode = dataset.attrs.get("INTERLACE_MODE")
+        except KeyError:
+            # TODO: guess il_mode from the shape
+            raise IOError("Interlace mode missing")
+
+        cm = dataset.attrs.get("IMAGE_COLORMODEL", "RGB") # optional attr
+        if cm == "RGB":
+            image = dataset[...]
+        else:
+            raise NotImplementedError("Unable to handle images of colormodel '%s'", cm)
+
+        if il_mode == "INTERLACE_PLANE":
+            # move colour from first to last dim
+            image = numpy.rollaxis(image, 2)
+        elif il_mode == "INTERLACE_PIXEL":
+            pass # nothing to do
+        else:
+            raise NotImplementedError("Unable to handle images of subclass '%s'", subclass)
+
+    else:
+        raise NotImplementedError("Unable to handle images of subclass '%s'", subclass)
+
+
+    # TODO: support DISPLAY_ORIGIN
+    return image
+
 
 def _add_image_info(group, dataset, image):
     """
@@ -103,16 +156,16 @@ def _add_image_info(group, dataset, image):
     # Dimensions
     # The order of the dimension is reversed (the slowest changing is last)
     l = len(dataset.dims)
-    dataset.dims[l-1].label = "X"
-    dataset.dims[l-2].label = "Y"
+    dataset.dims[l - 1].label = "X"
+    dataset.dims[l - 2].label = "Y"
     # support more dimensions if available:
     if l >= 3:
-        dataset.dims[l-3].label = "Z"
+        dataset.dims[l - 3].label = "Z"
     if l >= 4:
-        dataset.dims[l-4].label = "T"
+        dataset.dims[l - 4].label = "T"
     if l >= 5:
-        dataset.dims[l-5].label = "C"
-    
+        dataset.dims[l - 5].label = "C"
+
     # Offset
     if model.MD_POS in image.metadata:
         pos = image.metadata[model.MD_POS]
@@ -122,25 +175,25 @@ def _add_image_info(group, dataset, image):
         group["YOffset"] = pos[1]
         _h5svi_set_state(group["YOffset"], ST_REPORTED)
         group["YOffset"].attrs["UNIT"] = "m" # our extension
-    
+
     # Time
     # TODO:
     # Surprisingly (for such a usual type), time storage is a mess in HDF5.
-    # The documentation states that you can use H5T_TIME, but it is 
+    # The documentation states that you can use H5T_TIME, but it is
     # "is not supported. If H5T_TIME is used, the resulting data will be readable
     # and modifiable only on the originating computing platform; it will not be
     # portable to other platforms.". It appears many format are allowed.
     # In addition in h5py, it's indicated as "deprecated" (although it seems
-    # it was added in the latest version of HDF5. 
+    # it was added in the latest version of HDF5).
     # Moreover, the only types available are 32 and 64 bits integers as number
-    # of seconds since epoch. No past, no milliseconds, no time-zone. 
-    # So there are other proposals like in in F5 
+    # of seconds since epoch. No past, no milliseconds, no time-zone.
+    # So there are other proposals like in in F5
     # (http://sciviz.cct.lsu.edu/papers/2007/F5TimeSemantics.pdf) to represent
     # time with a float, a unit and an offset.
-    # KNMI uses a string like this: DD-MON-YYYY;HH:MM:SS.sss. 
+    # KNMI uses a string like this: DD-MON-YYYY;HH:MM:SS.sss.
     # (cf http://www.knmi.nl/~beekhuis/documents/publicdocs/ir2009-01_hdftag36.pdf)
-    # So, to not solve anything, we save the date as a float representing the 
-    # Unix time. At least it make Huygens happy.
+    # So, to not solve anything, we save the date as a float representing the
+    # Unix time. At least it makes Huygens happy.
     if model.MD_ACQ_DATE in image.metadata:
         # For a ISO 8601 string:
 #        ad = datetime.utcfromtimestamp(image.metadata[model.MD_ACQ_DATE])
@@ -151,10 +204,10 @@ def _add_image_info(group, dataset, image):
     else:
         group["TOffset"] = time.time()
         _h5svi_set_state(group["TOffset"], ST_DEFAULT)
-    
+
     # Scale
     if model.MD_PIXEL_SIZE in image.metadata:
-        # DimensionScales are not clearly explained in the specification to 
+        # DimensionScales are not clearly explained in the specification to
         # understand what they are supposed to represent. Surprisingly, there
         # is no official way to attach a unit.
         # Huygens seems to consider it's in m
@@ -168,8 +221,8 @@ def _add_image_info(group, dataset, image):
         # No clear what's the relation between this name and the label
         dataset.dims.create_scale(group["DimensionScaleX"], "X")
         dataset.dims.create_scale(group["DimensionScaleY"], "Y")
-        dataset.dims[l-1].attach_scale(group["DimensionScaleX"])
-        dataset.dims[l-2].attach_scale(group["DimensionScaleY"])
+        dataset.dims[l - 1].attach_scale(group["DimensionScaleX"])
+        dataset.dims[l - 2].attach_scale(group["DimensionScaleY"])
 
     # Unknown data, but SVI needs them to take the scales into consideration
     if l >= 4:
@@ -184,20 +237,20 @@ def _add_image_info(group, dataset, image):
         _h5svi_set_state(group["DimensionScaleZ"], ST_DEFAULT)
         dataset.dims.create_scale(group["DimensionScaleT"], "T")
         _h5svi_set_state(group["DimensionScaleT"], ST_DEFAULT)
-        dataset.dims[l-3].attach_scale(group["DimensionScaleZ"])
-        dataset.dims[l-4].attach_scale(group["DimensionScaleT"])
-        
+        dataset.dims[l - 3].attach_scale(group["DimensionScaleZ"])
+        dataset.dims[l - 4].attach_scale(group["DimensionScaleT"])
+
         # Put here to please Huygens
         # Seems to be the coverslip position, ie, the lower and upper glass of
-        # the sample. Not clear what's the relation with ZOffset. 
+        # the sample. Not clear what's the relation with ZOffset.
         group["PrimaryGlassMediumInterfacePosition"] = 0.0 # m?
-        _h5svi_set_state(group["PrimaryGlassMediumInterfacePosition"], ST_DEFAULT)        
+        _h5svi_set_state(group["PrimaryGlassMediumInterfacePosition"], ST_DEFAULT)
         group["SecondaryGlassMediumInterfacePosition"] = 1.0 # m?
         _h5svi_set_state(group["SecondaryGlassMediumInterfacePosition"], ST_DEFAULT)
 
     # Wavelength (for spectrograms)
     if l >= 5:
-        if (model.MD_WL_POLYNOMIAL in image.metadata and 
+        if (model.MD_WL_POLYNOMIAL in image.metadata and
             len(image.metadata[model.MD_WL_POLYNOMIAL]) > 0):
             pn = image.metadata[model.MD_WL_POLYNOMIAL]
             # polynomial of degree = 2 => linear
@@ -209,25 +262,25 @@ def _add_image_info(group, dataset, image):
                 # polynomial of degree > 2 => need to store the values of each
                 # pixel index explicitly. We follow another way to express
                 # scaling in HDF5.
-                pnl = polynomial.Polynomial(pn, domain=[0, image.shape[l-5]-1])
-                n, px_values = pnl.linspace(image.shape[l-5])
+                pnl = polynomial.Polynomial(pn, domain=[0, image.shape[l - 5] - 1])
+                n, px_values = pnl.linspace(image.shape[l - 5])
                 group["DimensionScaleC"] = px_values # m
             if len(pn) > 1:
                 group["DimensionScaleC"].attrs["UNIT"] = "m"
                 dataset.dims.create_scale(group["DimensionScaleC"], "C")
                 _h5svi_set_state(group["DimensionScaleC"], ST_REPORTED)
-                dataset.dims[l-5].attach_scale(group["DimensionScaleC"])
-            
+                dataset.dims[l - 5].attach_scale(group["DimensionScaleC"])
+
     # TODO: extension for Rotation:
 #   RotationAngle (scalar): angle in radian
-#   RotationAxis (3-scalar): X,Y,Z of the rotation vector 
-            
+#   RotationAxis (3-scalar): X,Y,Z of the rotation vector
 
-ST_INVALID=111
-ST_DEFAULT=112
-ST_ESTIMATED=113
-ST_REPORTED=114
-ST_VERIFIED=115
+
+ST_INVALID = 111
+ST_DEFAULT = 112
+ST_ESTIMATED = 113
+ST_REPORTED = 114
+ST_VERIFIED = 115
 _dtstate = h5py.special_dtype(enum=('i', {
      "Invalid":ST_INVALID, "Default":ST_DEFAULT, "Estimated":ST_ESTIMATED,
      "Reported":ST_REPORTED, "Verified":ST_VERIFIED}))
@@ -239,7 +292,7 @@ def _h5svi_set_state(dataset, state):
      as many times as the shape of the dataset. If it's a list, it will be directly
      used, as is.
     """
-    
+
     # the state should be the same shape as the dataset
     if isinstance(state, int):
         fullstate = numpy.empty(shape=dataset.shape, dtype=_dtstate)
@@ -259,7 +312,7 @@ def _h5py_enum_commit(group, name, dtype):
     enum_type = h5py.h5t.py_create(dtype, logical=True)
     enum_type.commit(group.id, name)
     #TODO: return the TypeEnumID created?
-        
+
 def _add_image_metadata(group, images):
     """
     Adds the basic metadata information about an image (scale and offset)
@@ -267,23 +320,23 @@ def _add_image_metadata(group, images):
     images (list of DataArray): list of images with metadata
     """
     gp = group.create_group("PhysicalData")
-    
+
     dtvlen_str = h5py.special_dtype(vlen=str)
     # TODO indicate correctly the State of the information (especially if it's unknown)
-    
+
     # All values are duplicated by channel, excepted for Title
     gdesc = [i.metadata.get(model.MD_DESCRIPTION, "") for i in images]
     gp["Title"] = ", ".join(gdesc)
-    
+
     cdesc = [i.metadata.get(model.MD_DESCRIPTION, "") for i in images]
     gp["ChannelDescription"] = numpy.array(cdesc, dtype=dtvlen_str)
     _h5svi_set_state(gp["ChannelDescription"], ST_ESTIMATED)
-    
+
     # TODO: if it takes the default value, the state should be ST_DEFAULT
     xwls = [numpy.mean(i.metadata.get(model.MD_IN_WL, 1e-9)) for i in images]
     gp["ExcitationWavelength"] = xwls # in m
     _h5svi_set_state(gp["ExcitationWavelength"], ST_REPORTED)
-    
+
     ewls = [numpy.mean(i.metadata.get(model.MD_OUT_WL, 1e-9)) for i in images]
     gp["EmissionWavelength"] = ewls # in m
     _h5svi_set_state(gp["EmissionWavelength"], ST_REPORTED)
@@ -294,7 +347,7 @@ def _add_image_metadata(group, images):
 
     # MicroscopeMode
     dtmm = h5py.special_dtype(enum=('i', {
-         "None":0, "Transmission":1 ,"Reflection":2, "Fluorescence":3}))
+         "None":0, "Transmission":1 , "Reflection":2, "Fluorescence":3}))
     _h5py_enum_commit(gp, "MicroscopeModeEnumeration", dtmm)
     # MicroscopeType
     dtmt = h5py.special_dtype(enum=('i', {
@@ -303,7 +356,7 @@ def _add_image_metadata(group, images):
     _h5py_enum_commit(gp, "MicroscopeTypeEnumeration", dtmt)
     # ImagingDirection
     dtid = h5py.special_dtype(enum=('i', {
-            "Upward":0, "Downward":1, "Both":2  
+            "Upward":0, "Downward":1, "Both":2
             }))
     _h5py_enum_commit(gp, "ImagingDirectionEnumeration", dtid)
     mm, mt, id = [], [], []
@@ -331,7 +384,7 @@ def _add_image_metadata(group, images):
     # all make_new_dset() by hand.
     gp["MicroscopeMode"] = numpy.array([dictmm[m] for m in mm], dtype=dtmm)
     _h5svi_set_state(gp["MicroscopeMode"], ST_REPORTED)
-    # For the *Str, Huygens expects a space separated string (scalar), _but_ 
+    # For the *Str, Huygens expects a space separated string (scalar), _but_
     # still wants an array for the state of each channel.
     gp["MicroscopeModeStr"] = " ".join([m.lower() for m in mm])
     _h5svi_set_state(gp["MicroscopeModeStr"], numpy.array([ST_REPORTED] * len(images), dtype=_dtstate))
@@ -344,15 +397,15 @@ def _add_image_metadata(group, images):
     gp["ImagingDirection"] = numpy.array([dictid[d] for d in id], dtype=dtid)
     _h5svi_set_state(gp["ImagingDirection"], ST_REPORTED)
     gp["ImagingDirectionStr"] = " ".join([d.lower() for d in id])
-    _h5svi_set_state(gp["ImagingDirectionStr"], numpy.array([ST_REPORTED] * len(images), dtype=_dtstate)) 
-    
+    _h5svi_set_state(gp["ImagingDirectionStr"], numpy.array([ST_REPORTED] * len(images), dtype=_dtstate))
+
     # Below are almost entirely made-up values, present just to please Huygens
     # TODO: should allow the user to specify it in the preferences: 1=>vacuum, 1.5 => glass/oil
     gp["RefractiveIndexLensImmersionMedium"] = [1.515] * len(images) # ratio (no unit)
     _h5svi_set_state(gp["RefractiveIndexLensImmersionMedium"], ST_DEFAULT)
     gp["RefractiveIndexSpecimenEmbeddingMedium"] = [1.515] * len(images) # ratio (no unit)
     _h5svi_set_state(gp["RefractiveIndexSpecimenEmbeddingMedium"], ST_DEFAULT)
-    
+
     # Only for confocal microscopes
     gp["BackprojectedIlluminationPinholeSpacing"] = [2.53e-6] * len(images) # unit? m?
     _h5svi_set_state(gp["BackprojectedIlluminationPinholeSpacing"], ST_DEFAULT)
@@ -360,22 +413,22 @@ def _add_image_metadata(group, images):
     _h5svi_set_state(gp["BackprojectedIlluminationPinholeRadius"], ST_DEFAULT)
     gp["BackprojectedPinholeRadius"] = [280e-9] * len(images) # unit? m?
     _h5svi_set_state(gp["BackprojectedPinholeRadius"], ST_DEFAULT)
-    
+
     # TODO: should come from the microscope model?
     gp["NumericalAperture"] = [1.4] * len(images) # ratio (no unit)
     _h5svi_set_state(gp["NumericalAperture"], ST_DEFAULT)
     gp["ObjectiveQuality"] = [80] * len(images) # unit? int [0->100] = percentage of respect to the theory?
     _h5svi_set_state(gp["ObjectiveQuality"], ST_DEFAULT)
-    
+
     # Only for confocal microscopes?
     gp["ExcitationBeamOverfillFactor"] = [2.0] * len(images) # unit?
     _h5svi_set_state(gp["ExcitationBeamOverfillFactor"], ST_DEFAULT)
-    
+
     # Only for fluorescence acquisitions. Almost always 1, excepted for super fancy techniques.
     # Number of simultaneously absorbed photons by a fluorophore in a fluorescence event
     gp["ExcitationPhotonCount"] = [1] * len(images) # photons
-    _h5svi_set_state(gp["ExcitationPhotonCount"], ST_DEFAULT) 
-    
+    _h5svi_set_state(gp["ExcitationPhotonCount"], ST_DEFAULT)
+
 def _add_svi_info(group):
     """
     Adds the information to indicate this file follows the SVI format
@@ -396,33 +449,33 @@ def _add_acquistion_svi(group, images, **kwargs):
       have the same shape.
     """
     # all image have the same shape?
-    assert all([images[0].shape == im.shape for im in images]) 
-     
+    assert all([images[0].shape == im.shape for im in images])
+
     gi = group.create_group("ImageData")
-    # The data must always be with 5 dimensions, in this order: CTZYX 
+    # The data must always be with 5 dimensions, in this order: CTZYX
     # => so we add dimensions to data if needed
     images5d = []
     for d in images:
         if len(d.shape) < 5:
-            shape5d = [1] * (5-len(d.shape)) + list(d.shape)
+            shape5d = [1] * (5 - len(d.shape)) + list(d.shape)
             d = d.reshape(shape5d)
         images5d.append(d)
-    
+
     # Then find a dimension along which they can be concatenated. That's a
-    # dimension which is of size 1. 
-    # For now, if there are many possibilities, we pick the first one. 
+    # dimension which is of size 1.
+    # For now, if there are many possibilities, we pick the first one.
     # TODO: be more clever in choosing which dimension to pick using metadata
     if not 1 in images5d[0].shape:
         raise ValueError("No dimension found to concatenate images: %s" % images5d[0].shape)
     concat_axis = images5d[0].shape.index(1)
     gdata = numpy.concatenate(images5d, axis=concat_axis)
-       
+
     # StateEnumeration
     # FIXME: should be done by _h5svi_set_state (and used)
     dtstate = h5py.special_dtype(enum=('i', {
          "Invalid":111, "Default":112, "Estimated":113, "Reported":114, "Verified":115}))
     _h5py_enum_commit(group, "StateEnumeration", dtstate)
-    
+
     ids = _create_image_dataset(gi, "Image", gdata, **kwargs)
     _add_image_info(gi, ids, images[0]) # all images should have the same info (but channel)
     _add_image_metadata(group, images)
@@ -443,9 +496,9 @@ def _findImageGroups(das):
     # * metadata that show they were acquired by the same instrument
     # * same position
     # * same density (MPP)
-    
+
     groups = []
-    
+
     for i, da in enumerate(das):
         # try to find a matching group (compare just to the first picture)
         found = False
@@ -462,12 +515,114 @@ def _findImageGroups(das):
             g.append(i)
             found = True
             break
-        
+
         if not found:
             # if not, create a new group
             groups.append([i])
-    
+
     return groups
+
+def _thumbFromHDF5(filename):
+    """
+    Read thumbnails from an HDF5 file.
+    Expects to find them as IMAGE in Preview/Image.
+    return (list of model.DataArray)
+    """
+    f = h5py.File(filename, "r")
+
+    thumbs = []
+    # look for the Preview directory
+    try:
+        grp = f["Preview"]
+    except KeyError:
+        # no thumbnail
+        return thumbs
+
+    # scan for images
+    for name, ds in grp.items():
+        # an image? (== has the attribute CLASS: IMAGE)
+        if isinstance(ds, h5py.Dataset) and ds.attrs.get("CLASS") == "IMAGE":
+            try:
+                nd = _read_image_dataset(ds)
+                thumbs.append(model.DataArray(nd))
+            except Exception:
+                logging.info("Skipping image '%s' which couldn't be read.", name)
+
+
+    return thumbs
+
+def _dataFromSVIHDF5(f):
+    """
+    Read microscopy data from an HDF5 file using the SVI convention.
+    Expects to find them as IMAGE in XXX/ImageData/Image + XXX/PhysicalData.
+    f (h5py.File): the root of the file
+    return (list of model.DataArray)
+    """
+    data = []
+
+    for obj in f.values():
+        # find all the expected and interesting objects
+        try:
+            svidata = obj["SVIData"]
+            imagedata = obj["ImageData"]
+            image = imagedata["Image"]
+            physicaldata = obj["PhysicalData"]
+            title = physicaldata["Title"]
+        except KeyError:
+            continue # not conforming => try next object
+
+        # Read the raw data
+        try:
+            nd = _read_image_dataset(image)
+        except Exception:
+            logging.exception("Failed to read data of acquisition '%s'", obj.name)
+
+        # TODO: read more metadata
+        md = {}
+        try:
+            md[model.MD_DESCRIPTION] = unicode(title[()])
+        except Exception:
+            logging.exception("Failed to parse metadata of acquisition '%s'", obj.name)
+
+        data.append(model.DataArray(nd, metadata=md))
+
+    return data
+
+def _dataFromHDF5(filename):
+    """
+    Read microscopy data from an HDF5 file.
+    filename (string): path of the file to read
+    return (list of model.DataArray)
+    """
+    f = h5py.File(filename, "r")
+
+    # if follows SVI convention => use the special function
+    # If it has at least one directory like XXX/SVIData => it follows SVI conventions
+    for obj in f.values():
+        if isinstance(obj.get("SVIData"), h5py.Group):
+            return _dataFromSVIHDF5(f)
+    
+    data = []
+    # go rough: return any dataset with numbers (and more than one element)
+    def addIfWorthy(name, obj):
+        try:
+            if not isinstance(obj, h5py.Dataset):
+                return
+            if not obj.dtype.kind in "biufc":
+                return
+            if numpy.prod(obj.shape) <= 1:
+                return
+            # TODO: if it's an image, open it as an image
+            # TODO: try to get some metadata?
+            da = model.DataArray(obj[...])
+        except Exception:
+            logging.info("Skipping '%s' as it doesn't seem a correct data", name)
+        data.append(da)
+
+    f.visititems(addIfWorthy)
+    return data
+
+
 
 def _saveAsHDF5(filename, ldata, thumbnail, compressed=True):
     """
@@ -484,34 +639,36 @@ def _saveAsHDF5(filename, ldata, thumbnail, compressed=True):
         os.remove(filename)
     except OSError:
         pass
-    f = h5py.File(filename, "w") # w will fail if file exists 
+    f = h5py.File(filename, "w") # w will fail if file exists
     if compressed:
-        # szip is not free for commercial usage and lzf doesn't seem to be 
-        # well supported yet 
+        # szip is not free for commercial usage and lzf doesn't seem to be
+        # well supported yet
         compression = "gzip"
     else:
         compression = None
-    
+
     if thumbnail is not None:
         # Save the image as-is in a special group "Preview"
         prevg = f.create_group("Preview")
         ids = _create_image_dataset(prevg, "Image", thumbnail, compression=compression)
         _add_image_info(prevg, ids, thumbnail)
         _add_svi_info(prevg)
-        
+
     # for each set of images from the same instrument, add them
     groups = _findImageGroups(ldata)
-    
+
     for g in groups:
         ga = f.create_group("Acquisition%d" % min(g)) # smallest ID of the images
         gdata = [ldata[i] for i in g]
         _add_acquistion_svi(ga, gdata, compression=compression)
-    
+
     f.close()
+
+
 
 def export(filename, data, thumbnail=None):
     '''
-    Write a HDF5 file with the given image and metadata
+    Write an HDF5 file with the given image and metadata
     filename (string): filename of the file to create (including path)
     data (list of model.DataArray, or model.DataArray): the data to export, 
         must be 2D or more of int or float. Metadata is taken directly from the data 
@@ -528,3 +685,34 @@ def export(filename, data, thumbnail=None):
         # TODO should probably not enforce it: respect duck typing
         assert(isinstance(data, model.DataArray))
         _saveAsHDF5(filename, [data], thumbnail)
+
+
+def read_data(filename):
+    """
+    Read an HDF5 file and return its content (skipping the thumbnail).
+    filename (string): filename of the file to read
+    return (list of model.DataArray): the data to import (with the metadata 
+     as .metadata). It might be empty.
+    raises:
+        IOError in case the file format is not as expected.
+    """
+    # TODO: support filename to be a File or Stream
+    data = []
+
+    return data
+
+def read_thumbnail(filename):
+    """
+    Read the thumbnail data of a given HDF5 file.
+    filename (string): filename of the file to read
+    return (list of model.DataArray): the thumbnails attached to the file. If 
+     the file contains multiple thumbnails, all of them are returned. If it 
+     contains none, an empty list is returned.
+    raises:
+        IOError in case the file format is not as expected.
+    """
+    # TODO: support filename to be a File or Stream
+    thumb = []
+
+    return thumb
+
