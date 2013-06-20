@@ -494,13 +494,13 @@ class DraggableCanvas(wx.Panel):
         # unlikely to happen anyway)
 
         # find bounding box of all the content
-        bbox = [None, None, None, None] # tlbr in wu
+        bbox = [None, None, None, None] # ltrb in wu
         for im in self.Images:
             if im is None:
                 continue
-            h, w = im.Height * im._dc_scale, im.Width * im._dc_scale
+            w, h = im.Width * im._dc_scale, im.Height * im._dc_scale
             c = im._dc_center
-            bbox_im = [c[0] - h / 2., c[1] - w / 2., c[0] + h / 2., c[1] + w / 2.]
+            bbox_im = [c[0] - w / 2., c[1] - h / 2., c[0] + w / 2., c[1] + h / 2.]
             if bbox[0] is None:
                 bbox = bbox_im
             else:
@@ -513,17 +513,17 @@ class DraggableCanvas(wx.Panel):
         # if no recenter, increase bbox so that its center is the current center
         if not recenter:
             c = self.buffer_center_world_pos
-            hh = max(abs(c[0] - bbox[0]), abs(c[2] - bbox[2]))
-            hw = max(abs(c[1] - bbox[1]), abs(c[3] - bbox[3]))
-            bbox = [c[0] - hh, c[1] - hw, c[2] + hh, c[3] + hw]
+            hw = max(abs(c[0] - bbox[0]), abs(c[2] - bbox[2]))
+            hh = max(abs(c[1] - bbox[1]), abs(c[3] - bbox[3]))
+            bbox = [c[0] - hw, c[1] - hh, c[2] + hw, c[3] + hh]
 
         # compute mpp so that the bbox fits exactly the visible part
-        h, w = bbox[2] - bbox[0], bbox[3] - bbox[1] # wu
-        if h == 0 or w == 0:
-            logging.warning("weird image of %fx%f wu", h, w)
+        w, h = bbox[2] - bbox[0], bbox[3] - bbox[1] # wu
+        if w == 0 or h == 0:
+            logging.warning("Weird image size of %fx%f wu", w, h)
             return # no image
-        ch = max(1, self.ClientSize[0]) # px
-        cw = max(1, self.ClientSize[1]) # px
+        cw = max(1, self.ClientSize[0]) # px
+        ch = max(1, self.ClientSize[1]) # px
         self.scale = min(ch / h, cw / w) # pick the dimension which is shortest
 
         if recenter:
