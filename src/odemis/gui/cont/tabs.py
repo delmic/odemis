@@ -440,7 +440,7 @@ class InspectionTab(Tab):
                                message="Choose a file to load",
                                defaultDir=path,
                                defaultFile="",
-                               style=wx.FD_OPEN|wx.FD_FILE_MUST_EXIST,
+                               style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST,
                                wildcard=wildcards)
 
         idx = 0
@@ -516,7 +516,6 @@ class MirrorAlignTab(Tab):
         else:
             logging.warning("No CCD available for mirror alignment feedback")
 
-        # TODO: needs to have the AR streams on the acquisition view
         self._settings_controller = settings.SparcAlignSettingsController(
                                         self.main_frame,
                                         self.interface_model,
