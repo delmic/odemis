@@ -113,7 +113,7 @@ def _read_image_dataset(dataset):
     if subclass == "IMAGE_GRAYSCALE":
         image = dataset[...]
     elif subclass == "IMAGE_TRUECOLOR":
-        if dataset.shape != 3:
+        if len(dataset.shape) != 3:
             raise IOError("Truecolor image has a shape of %s", dataset.shape)
 
         try:
@@ -697,9 +697,8 @@ def read_data(filename):
         IOError in case the file format is not as expected.
     """
     # TODO: support filename to be a File or Stream
-    data = []
 
-    return data
+    return _dataFromHDF5(filename)
 
 def read_thumbnail(filename):
     """
@@ -712,7 +711,6 @@ def read_thumbnail(filename):
         IOError in case the file format is not as expected.
     """
     # TODO: support filename to be a File or Stream
-    thumb = []
 
-    return thumb
+    return _thumbFromHDF5(filename)
 

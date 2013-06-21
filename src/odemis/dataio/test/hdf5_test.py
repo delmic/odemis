@@ -30,9 +30,16 @@ import os
 import time
 import unittest
 
-FILENAME = "test" + hdf5.EXTENSIONS[0] 
+FILENAME = "test" + hdf5.EXTENSIONS[0]
 class TestHDF5IO(unittest.TestCase):
-    
+
+    def tearDown(self):
+        # clean up
+        try:
+            os.remove(FILENAME)
+        except Exception:
+            pass
+
     # Be careful: numpy's notation means that the pixel coordinates are Y,X,C
     def testExportOnePage(self):
         # create a simple greyscale image
@@ -42,22 +49,20 @@ class TestHDF5IO(unittest.TestCase):
         white = (12, 52) # non symmetric position
         # less that 2**15 so that we don't have problem with PIL.getpixel() always returning an signed int
         data[white[-1:-3:-1]] = 124
-        
+
         # export
         hdf5.export(FILENAME, data)
-        
+
         # check it's here
         st = os.stat(FILENAME) # this test also that the file is created
         self.assertGreater(st.st_size, 0)
-        
+
         f = h5py.File(FILENAME, "r")
         # need to transform to a full numpy.array just to remove the dimensions
         im = numpy.array(f["Acquisition0/ImageData/Image"])
         im.shape = im.shape[3:5]
         self.assertEqual(im.shape, data.shape)
         self.assertEqual(im[white[-1:-3:-1]], data[white[-1:-3:-1]])
-        
-        os.remove(FILENAME)
 
 #    @skip("Doesn't work")
     def testExportMultiPage(self):
@@ -74,24 +79,24 @@ class TestHDF5IO(unittest.TestCase):
 
         # export
         hdf5.export(FILENAME, ldata)
-        
+
         # check it's here
         st = os.stat(FILENAME) # this test also that the file is created
         self.assertGreater(st.st_size, 0)
         f = h5py.File(FILENAME, "r")
-        
+
         # check the number of channels
         im = numpy.array(f["Acquisition0/ImageData/Image"])
         for i in range(num):
-            subim = im[i, 0, 0] # just one channel 
+            subim = im[i, 0, 0] # just one channel
             self.assertEqual(subim.shape, size[-1:-3:-1])
             self.assertEqual(subim[white[-1:-3:-1]], 124)
-            
+
         os.remove(FILENAME)
-        
+
 #    @skip("Doesn't work")
     def testExportThumbnail(self):
-        # create a simple greyscale image
+        # create 2 simple greyscale images
         size = (512, 256)
         dtype = numpy.dtype("uint16")
         ldata = []
@@ -100,34 +105,33 @@ class TestHDF5IO(unittest.TestCase):
             ldata.append(model.DataArray(numpy.zeros(size[-1:-3:-1], dtype)))
 
         # thumbnail : small RGB completely red
-        tshape = (size[1]//8, size[0]//8, 3)
+        tshape = (size[1] // 8, size[0] // 8, 3)
         tdtype = numpy.uint8
         thumbnail = model.DataArray(numpy.zeros(tshape, tdtype))
         thumbnail[:, :, 0] += 255 # red
         blue = (12, 22) # non symmetric position
-        thumbnail[blue[-1:-3:-1]] = [0,0,255]
-        
+        thumbnail[blue[-1:-3:-1]] = [0, 0, 255]
+
         # export
         hdf5.export(FILENAME, ldata, thumbnail)
-        
+
         # check it's here
         st = os.stat(FILENAME) # this test also that the file is created
         self.assertGreater(st.st_size, 0)
         f = h5py.File(FILENAME, "r")
-        
+
         # look for the thumbnail
         im = f["Preview/Image"]
         self.assertEqual(im.shape, tshape)
-        self.assertEqual(im[0,0].tolist(), [255,0,0])
-        self.assertEqual(im[blue[-1:-3:-1]].tolist(), [0,0,255])
-        
+        self.assertEqual(im[0, 0].tolist(), [255, 0, 0])
+        self.assertEqual(im[blue[-1:-3:-1]].tolist(), [0, 0, 255])
+
         # check the number of channels
         im = numpy.array(f["Acquisition0/ImageData/Image"])
         for i in range(num):
-            subim = im[i, 0, 0] # just one channel 
+            subim = im[i, 0, 0] # just one channel
             self.assertEqual(subim.shape, size[-1::-1])
-            
-        os.remove(FILENAME)
+
 
     def testExportCube(self):
         """
@@ -163,32 +167,32 @@ class TestHDF5IO(unittest.TestCase):
         ldata = []
         # 3D data generation (+ metadata): gradient along the wavelength
         data3d = numpy.empty(size3d[-1::-1], dtype=dtype)
-        end = 2**metadata3d[model.MD_BPP]
+        end = 2 ** metadata3d[model.MD_BPP]
         step = end // size3d[2]
         lin = numpy.arange(0, end, step, dtype=dtype)[:size3d[2]]
         lin.shape = (size3d[2], 1, 1) # to be able to copy it on the first dim
         data3d[:] = lin
         # introduce Time and Z dimension to state the 3rd dim is channel
-        data3d = data3d[:, numpy.newaxis, numpy.newaxis,:,:] 
+        data3d = data3d[:, numpy.newaxis, numpy.newaxis, :, :]
         ldata.append(model.DataArray(data3d, metadata3d))
-        
+
         # an additional 2D data, for the sake of it
         ldata.append(model.DataArray(numpy.zeros(size[-1::-1], dtype), metadata))
 
         # export
         hdf5.export(FILENAME, ldata)
-        
+
         # check it's here
         st = os.stat(FILENAME) # this test also that the file is created
         self.assertGreater(st.st_size, 0)
         f = h5py.File(FILENAME, "r")
-        
+
         # check the 3D data
         im = f["Acquisition0/ImageData/Image"]
-        self.assertEqual(im[1,0,0,1,1], step)
+        self.assertEqual(im[1, 0, 0, 1, 1], step)
         self.assertEqual(im.shape, data3d.shape)
         self.assertEqual(im.attrs["IMAGE_SUBCLASS"], "IMAGE_GRAYSCALE")
-        
+
         # check basic metadata
         self.assertEqual(im.dims[4].label, "X")
         self.assertEqual(im.dims[0].label, "C")
@@ -197,14 +201,13 @@ class TestHDF5IO(unittest.TestCase):
         self.assertAlmostEqual(metadata3d[model.MD_WL_POLYNOMIAL][1], cres)
         coff = f["Acquisition0/ImageData/COffset"][()]
         self.assertAlmostEqual(metadata3d[model.MD_WL_POLYNOMIAL][0], coff)
-        
+
         # check the 2D data
         im = numpy.array(f["Acquisition1/ImageData/Image"])
-        subim = im[0, 0, 0] # just one channel 
+        subim = im[0, 0, 0] # just one channel
         self.assertEqual(subim.shape, size[-1::-1])
 
-        os.remove(FILENAME) 
-        
+
     def testMetadata(self):
         """
         checks that the metadata is saved with every picture
@@ -222,20 +225,20 @@ class TestHDF5IO(unittest.TestCase):
                     model.MD_EXP_TIME: 1.2, #s
                     model.MD_IN_WL: (500e-9, 520e-9), #m
                     }
-        
-        data = model.DataArray(numpy.zeros((size[1], size[0]), dtype), metadata=metadata)     
-        
+
+        data = model.DataArray(numpy.zeros((size[1], size[0]), dtype), metadata=metadata)
+
         # thumbnail : small RGB completely red
-        tshape = (size[1]//8, size[0]//8, 3)
+        tshape = (size[1] // 8, size[0] // 8, 3)
         tdtype = numpy.uint8
         thumbnail = model.DataArray(numpy.zeros(tshape, tdtype))
         thumbnail[:, :, 0] += 255 # red
         blue = (12, 22) # non symmetric position
-        thumbnail[blue[-1:-3:-1]] = [0,0,255]
-        
+        thumbnail[blue[-1:-3:-1]] = [0, 0, 255]
+
         # export
         hdf5.export(FILENAME, data, thumbnail)
-        
+
         # check it's here
         st = os.stat(FILENAME) # this test also that the file is created
         self.assertGreater(st.st_size, 0)
@@ -244,25 +247,74 @@ class TestHDF5IO(unittest.TestCase):
         # check format
         im = f["Acquisition0/ImageData/Image"]
         self.assertEqual(im.attrs["IMAGE_SUBCLASS"], "IMAGE_GRAYSCALE")
-        
+
         # check basic metadata
         self.assertEqual(im.dims[4].label, "X")
         yres = im.dims[3][0][()] # second last dimension (Y), first scale, first and only value
         self.assertAlmostEqual(metadata[model.MD_PIXEL_SIZE][1], yres)
         ypos = f["Acquisition0/ImageData/YOffset"][()]
         self.assertAlmostEqual(metadata[model.MD_POS][1], ypos)
-        
+
         # Check physical metadata
         desc = f["Acquisition0/PhysicalData/Title"][()]
         self.assertAlmostEqual(metadata[model.MD_DESCRIPTION], desc)
-        
-        
+
+
         iwl = f["Acquisition0/PhysicalData/ExcitationWavelength"][()] # m
-        self.assertTrue((metadata[model.MD_IN_WL][0] <= iwl and 
+        self.assertTrue((metadata[model.MD_IN_WL][0] <= iwl and
                          iwl <= metadata[model.MD_IN_WL][1]))
-        
-        os.remove(FILENAME)
-        
+
+
+
+    def testExportRead(self):
+        """
+        Checks that we can read back an image and a thumbnail
+        """
+        # create 2 simple greyscale images
+        sizes = [(512, 256), (500, 400)] # different sizes to ensure different acquisitions
+        dtype = numpy.dtype("uint16")
+        white = (12, 52) # non symmetric position
+        ldata = []
+        num = 2
+        # TODO: check support for combining channels when same data shape
+        for i in range(num):
+            a = model.DataArray(numpy.zeros(sizes[i][-1:-3:-1], dtype))
+            a[white[-1:-3:-1]] = 1027
+            ldata.append(a)
+
+        # thumbnail : small RGB completely red
+        tshape = (sizes[0][1] // 8, sizes[0][0] // 8, 3)
+        tdtype = numpy.uint8
+        thumbnail = model.DataArray(numpy.zeros(tshape, tdtype))
+        thumbnail[:, :, 0] += 255 # red
+        blue = (12, 22) # non symmetric position
+        thumbnail[blue[-1:-3:-1]] = [0, 0, 255]
+
+        # export
+        hdf5.export(FILENAME, ldata, thumbnail)
+
+        # check it's here
+        st = os.stat(FILENAME) # this test also that the file is created
+        self.assertGreater(st.st_size, 0)
+
+        # check data
+        rdata = hdf5.read_data(FILENAME)
+        self.assertEqual(len(rdata), num)
+
+        for i, im in enumerate(rdata):
+            subim = im[0, 0, 0] # remove C,T,Z dimensions
+            self.assertEqual(subim.shape, sizes[i][-1::-1])
+            self.assertEqual(subim[white[-1:-3:-1]], ldata[i][white[-1:-3:-1]])
+
+        # check thumbnail
+        rthumbs = hdf5.read_thumbnail(FILENAME)
+        self.assertEqual(len(rthumbs), 1)
+        im = rthumbs[0]
+        self.assertEqual(im.shape, tshape)
+        self.assertEqual(im[0, 0].tolist(), [255, 0, 0])
+        self.assertEqual(im[blue[-1:-3:-1]].tolist(), [0, 0, 255])
+
+
 if __name__ == "__main__":
     #import sys;sys.argv = ['', 'Test.testName']
     unittest.main()
