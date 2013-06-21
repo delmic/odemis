@@ -8,15 +8,15 @@ Copyright © 2013 Rinze de Laat, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms 
-of the GNU General Public License version 2 as published by the Free Software 
+Odemis is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
 Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR 
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
 PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with 
+You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 
 
@@ -403,6 +403,7 @@ class BrightfieldStream(CameraStream):
         # Turn on all the sources? Does this always mean white?
         # At least we should set a warning if the final emission range is quite
         # different from the normal white spectrum
+        return
         em = [1] * len(self._emitter.emissions.value)
         self._emitter.emissions.value = em
 
@@ -607,7 +608,7 @@ class SpectrumStream(Stream):
         roi : ROI wanted (might be slightly changed)
         pxs (float): new pixel size (must be within allowed range, always respected)
         Returns new ROI and repetition, but set internal value of .roi and .repetition, without
-         notify 
+         notify
         """
         # If ROI is undefined => everything is fine
         if roi == UNDEFINED_ROI:
@@ -692,8 +693,8 @@ class SpectrumStream(Stream):
 
     def _setRepetition(self, repetition):
         """
-        Find a fitting repetition and update pixel size and ROI, using the 
-         current ROI making sure that the repetition is ints (pixelSize and roi 
+        Find a fitting repetition and update pixel size and ROI, using the
+         current ROI making sure that the repetition is ints (pixelSize and roi
         changes are notified but the setter is not called).
         repetition (tuple of 2 ints): new repetition wanted (might be clamped)
         returns (tuple of 2 ints): new (valid) repetition
@@ -739,7 +740,7 @@ class SpectrumStream(Stream):
 
     def _getPixelSizeRange(self):
         """
-        return (tuple of 2 floats): min and max value of the pixel size at the 
+        return (tuple of 2 floats): min and max value of the pixel size at the
           current magnification, in m.
         """
         # Two things to take care of:
@@ -1340,7 +1341,7 @@ class SEMSpectrumMDStream(MultipleDetectorStream):
         data_list (list of M DataArray of shape (1, N)): all the data received
         the result goes into .raw, and a new empty .image is added to inform
         there is a new data.
-        metadata (dict of string -> Value): the metadata values to be overridden 
+        metadata (dict of string -> Value): the metadata values to be overridden
         """
         assert len(data_list) > 0
 

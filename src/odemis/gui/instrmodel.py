@@ -8,15 +8,15 @@ Copyright © 2012-2013 Éric Piel, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms 
-of the GNU General Public License version 2 as published by the Free Software 
+Odemis is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
 Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR 
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
 PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with 
+You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
@@ -438,8 +438,8 @@ class FileInfo(object):
 
     def __init__(self, acq_file=None, metadata=None):
         """
-        acq_file (String or File or None): the full name of the file or 
-         a File that contains the acquisition. If provided (and the file 
+        acq_file (String or File or None): the full name of the file or
+         a File that contains the acquisition. If provided (and the file
          exists), some fields will be automatically filled in.
         metadata (dict String -> value): The meta-data as model.MD_*.
         """

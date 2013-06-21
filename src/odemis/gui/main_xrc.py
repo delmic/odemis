@@ -1874,11 +1874,12 @@ def __init_resources():
                   <object class="sizeritem">
                     <object class="ImageTextButton" name="btn_open_image">
                       <size>180,24</size>
-                      <label>Open Image</label>
+                      <label>Select Image</label>
                       <delta>1</delta>
                       <bitmap>img_btn_256x24_png</bitmap>
                       <hover>img_btn_256x24_h_png</hover>
                       <selected>img_btn_256x24_a_png</selected>
+                      <fg>#000000</fg>
                       <font>
                         <size>11</size>
                         <style>normal</style>
