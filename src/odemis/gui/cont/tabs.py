@@ -492,7 +492,7 @@ class MirrorAlignTab(Tab):
         if self.interface_model.ccd:
             # Not ARStream as this is for multiple repetitions, and we just care
             # about what's on the CCD
-            ccd_stream = CameraStream("Angular",
+            ccd_stream = CameraStream("Angular resolved sensor",
                                  self.interface_model.ccd,
                                  self.interface_model.ccd.data,
                                  self.interface_model.ebeam)
@@ -512,16 +512,15 @@ class MirrorAlignTab(Tab):
                                         [self.main_frame.vp_sparc_align]
                                     )
             mic_view = self.interface_model.focussedView.value
-            mic_view.addStream(ccd_stream)
-            mic_view.addStream(goal_stream)
             mic_view.show_crosshair.value = False
             mic_view.merge_ratio.value = 1
             ccd_stream.should_update.value = True
 
-            # TODO: Add correct stream. Brightfield is not shown by default
-            # because the focussed view only wants SEM streams.
-            # see gui.cont.streams:216
-            self._stream_controller.addSEMSED()
+            # TODO: Do not put goal stream in the stream panel, we don't need
+            # any settings.
+            # TODO: don't allow to be removed/hidden/paused/folded
+            self._stream_controller.addStream(ccd_stream)
+            self._stream_controller.addStream(goal_stream)
 
         else:
             logging.warning("No CCD available for mirror alignment feedback")

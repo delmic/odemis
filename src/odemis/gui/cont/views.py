@@ -122,6 +122,20 @@ class ViewController(object):
             # Focus defaults to the top right viewport
             self._interface_model.focussedView.value = self._viewports[1].mic_view
 
+        # calibration tab => allow to display anything (the tab wants)
+        elif isinstance(self._interface_model, instrmodel.ActuatorGUIModel):
+            i = 1
+            for viewport in self._viewports:
+                view = instrmodel.MicroscopeView(
+                            "View %d" % i,
+                            self._interface_model.stage,
+                            focus0=self._interface_model.focus
+                         )
+                self._interface_model.views.append(view)
+                viewport.setView(view, self._interface_model)
+                i += 1
+            self._interface_model.focussedView.value = self._interface_model.views[0]
+            
         # If SEM only: all SEM
         # Works also for the Sparc, as there is no other emitter, and we don't
         # need to display anything else anyway
@@ -205,8 +219,8 @@ class ViewController(object):
             # Focus defaults to the top right viewport
             self._interface_model.focussedView.value = self._viewports[1].mic_view
         else:
-            msg = "No known microscope configuration, creating 4 generic views"
-            logging.warning(msg)
+            logging.warning("No known microscope configuration, creating %d "
+                            "generic views", len(self._viewports))
             i = 1
             for viewport in self._viewports:
                 view = instrmodel.MicroscopeView(
