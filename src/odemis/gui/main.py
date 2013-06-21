@@ -195,9 +195,10 @@ class OdemisGUIApp(wx.App):
             # microscope role(s), internal name, class, tab btn, tab panel
             # order matters, as the first matching tab is be the default one
 
-            tab_rules = [
+            tab_defs = [
                 (
                     ("secom", "sem", "optical"),
+                    ("STREAMS", "STREAMS", "STREAMS"),
                     "secom_live",
                     tabs.SecomStreamsTab,
                     self.main_frame.btn_tab_secom_streams,
@@ -206,22 +207,24 @@ class OdemisGUIApp(wx.App):
                 # TODO: merge secom_gallery and sparc_analysis, once
                 # the tab can adapt the views depending on the acquisition
                 # content
+                # (
+                #     "booooo",
+                #     "secom_gallery",
+                #     tabs.InspectionTab,
+                #     self.main_frame.btn_tab_secom_gallery,
+                #     self.main_frame.pnl_tab_secom_gallery
+                # ),
                 (
-                    "booooo",
-                    "secom_gallery",
-                    tabs.AnalysisTab,
-                    self.main_frame.btn_tab_secom_gallery,
-                    self.main_frame.pnl_tab_secom_gallery
-                ),
-                (
-                    "sparc",
+                    ("sparc",),
+                    ("MIRROR ALIGNMENT",),
                     "sparc_align",
                     tabs.MirrorAlignTab,
                     self.main_frame.btn_tab_sparc_align,
                     self.main_frame.pnl_tab_sparc_align
                 ),
                 (
-                    "sparc",
+                    ("sparc", ),
+                    ("ACQUISITION", ),
                     "sparc_acqui",
                     tabs.SparcAcquisitionTab,
                     self.main_frame.btn_tab_sparc_acqui,
@@ -229,17 +232,18 @@ class OdemisGUIApp(wx.App):
                 ),
                 (
                     (None, "secom", "sparc"),
-                    "sparc_analysis",
-                    tabs.AnalysisTab,
-                    self.main_frame.btn_tab_sparc_analysis,
-                    self.main_frame.pnl_tab_sparc_analysis),
+                    (None, "GALLERY", "ANALYSIS"),
+                    "inspection",
+                    tabs.InspectionTab,
+                    self.main_frame.btn_tab_inspection,
+                    self.main_frame.pnl_tab_inspection),
             ]
 
             # Create the main tab controller and store a global reference
             # in the odemis.gui.cont package
             set_main_tab_controller(
                 tabs.TabBarController(
-                    tab_rules,
+                    tab_defs,
                     self.main_frame,
                     self.microscope
                 )
@@ -339,7 +343,7 @@ class OdemisGUIApp(wx.App):
                                         mdspec)
 
             # put only these streams and switch to the analysis tab
-            stream_controller = mtc['sparc_analysis'].stream_controller
+            stream_controller = mtc['inspection'].stream_controller
             stream_controller.clear()
 
             stream_controller.addStatic("Secondary electrons", semdatas,
@@ -349,14 +353,14 @@ class OdemisGUIApp(wx.App):
                                         cls=StaticSpectrumStream,
                                         add_to_all_views=True)
 
-            analysis_interface = mtc['sparc_analysis'].interface_model
+            analysis_interface = mtc['inspection'].interface_model
             # This is just to fill the metadata
             # TODO: avoid this by getting the metadata from the stream =>
             # better metadata + avoid copy if packaged in an egg.
             spec_fn = pkg_resources.resource_filename("odemis.gui.img",
                                                       "example/s1-spectrum.mat")
             analysis_interface.fileinfo.value = instrmodel.FileInfo(spec_fn)
-            mtc.switch("sparc_analysis")
+            mtc.switch("inspection")
         except KeyError:
             self.goto_debug_mode()
             logging.exception("Failed to load example")
@@ -464,6 +468,9 @@ see http://www.fluorophores.org/disclaimer/.
                 except AttributeError:
                     pass
 
+            # let all the tabs know we are stopping
+            mtc.terminate()
+
             if self.http_proc:
                 self.http_proc.terminate()  #pylint: disable=E1101
 
@@ -472,6 +479,7 @@ see http://www.fluorophores.org/disclaimer/.
         except Exception:
             logging.exception("Error during GUI shutdown")
 
+        log.stop_gui_logger()
         self.main_frame.Destroy()
 
     def excepthook(self, etype, value, trace): #pylint: disable=W0622

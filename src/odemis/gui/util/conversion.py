@@ -6,15 +6,15 @@ Copyright © 2012 Rinze de Laat, Éric Piel, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms 
-of the GNU General Public License version 2 as published by the Free Software 
+Odemis is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
 Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR 
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
 PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with 
+You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 
@@ -92,3 +92,23 @@ def change_brightness(col_tup, step):
         col_list.append(f(c + step, lim))
 
     return tuple(col_list + list(col_tup[3:]))
+
+def formats_to_wildcards(formats2ext, include_any):
+    """Convert formats into wildcards string compatible with wx.FileDialog()
+
+    formats2ext (dict (string -> list of strings)): format names and lists of
+        their possible extensions.
+
+    returns (tuple (string, list of strings)): wildcards, name of the format
+        in the same order as in the wildcards
+    """
+    wildcards = ["Any file (*.*)|*.*"] if include_any else []
+    formats = []
+    for fmt, extensions in formats2ext.items():
+        ext_wildcards = ";".join(["*" + e for e in extensions])
+        wildcard = "%s files (%s)|%s" % (fmt, ext_wildcards, ext_wildcards)
+        formats.append(fmt)
+        wildcards.append(wildcard)
+
+    # the whole importance is that they are in the same order
+    return "|".join(wildcards), formats

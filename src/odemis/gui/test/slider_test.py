@@ -38,12 +38,16 @@ import odemis.gui.test.test_gui
 import  odemis.gui.comp.slider as slidecomp
 from odemis.gui.xmlh import odemis_get_test_resources
 
+import logging
+
 SLEEP_TIME = 100 # Sleep timer in milliseconds
 MANUAL = True # If set to True, the window will be kept open after testing
 INSPECT = False
 
 DATA = [
 [],
+
+[0.1, 0.2, 0.3, 0.5, 0.6, 0.7, 0.9, 1.0],
 
 [0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3],
 [0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3],
@@ -123,6 +127,9 @@ class SliderTestCase(unittest.TestCase):
         cls.app = TestApp()
         cls.panel = cls.app.test_frame.slider_panel
         cls.sizer = cls.panel.GetSizer()
+        # NOTE!: Call Layout on the panel here, because otherwise the
+        # controls layed out using XRC will not have the right sizes!
+        cls.panel.Layout()
         loop()
 
     @classmethod
@@ -173,60 +180,119 @@ class SliderTestCase(unittest.TestCase):
 
         global DATA
 
-        vrs1 = self.app.test_frame.vrslider1
-
-        sliders = [vrs1]
+        vrs = self.app.test_frame.vrslider
+        print "%s %s" % (vrs.__class__.__name__, vrs.GetSize())
 
         loop()
 
-        for s in sliders:
-            s.set_range((0, 100))
-            s.set_value((25, 75))
+        vrs.set_range((0, 100))
+        vrs.SetValue((25, 75))
 
-            for d in DATA:
-                s.set_content(d)
-                loop()
-                wx.MilliSleep(SLEEP_TIME)
+        for d in DATA:
+            vrs.set_content(d)
+            loop()
+            wx.MilliSleep(SLEEP_TIME)
 
-        vrs1.set_content([])
-        vrs1.set_value(())
+        vrs.set_content([])
+        vrs.SetValue(())
 
-        self.assertEqual(vrs1.pixel_value, ())
-        self.assertEqual(vrs1.get_value(), ())
+        self.assertEqual(vrs.pixel_value, ())
+        self.assertEqual(vrs.GetValue(), ())
 
-        vrs1.set_range((0.2, 0.8))
+        vrs.set_range((0.2, 0.8))
         loop()
         wx.MilliSleep(SLEEP_TIME)
 
-        vrs1.set_value((0.4, 0.45))
+        vrs.SetValue((0.4, 0.45))
         loop()
         wx.MilliSleep(SLEEP_TIME)
 
-        vrs1.set_content(DATA[7])
+        vrs.set_content(DATA[7])
         loop()
         wx.MilliSleep(SLEEP_TIME)
-        vrs1.set_content(DATA[8])
-        loop()
-        wx.MilliSleep(SLEEP_TIME)
-
-        vrs1.set_range((0, 1))
+        vrs.set_content(DATA[8])
         loop()
         wx.MilliSleep(SLEEP_TIME)
 
-        vrs1.set_value((0, 1))
+        vrs.set_range((0, 1))
         loop()
         wx.MilliSleep(SLEEP_TIME)
 
-        self.assertEqual(vrs1.pixel_value, (0, vrs1.GetSize()[0]))
-        self.assertEqual(vrs1.get_value(), (0, 1))
-
-        vrs1.set_value((0, 0.5))
+        vrs.SetValue((0, 1))
         loop()
         wx.MilliSleep(SLEEP_TIME)
 
-        self.assertAlmostEqual(vrs1.pixel_value, (0, vrs1.GetSize()[0] / 2.0))
-        self.assertEqual(vrs1.get_value(), (0, 0.5))
+        self.assertEqual(vrs.pixel_value, (0, vrs.GetSize()[0]))
+        self.assertEqual(vrs.GetValue(), (0, 1))
 
+        vrs.SetValue((0, 0.5))
+        loop()
+        wx.MilliSleep(SLEEP_TIME)
+
+        self.assertAlmostEqual(vrs.pixel_value, (0, vrs.GetSize()[0] / 2.0))
+        self.assertEqual(vrs.GetValue(), (0, 0.5))
+
+    def test_bandwidthslider(self):
+
+        global DATA
+
+        logging.getLogger().setLevel(logging.DEBUG)
+
+
+        bws = self.app.test_frame.bwslider
+        print "%s %s" % (bws.__class__.__name__, bws.GetSize())
+
+        loop()
+
+        bws.set_range((0, 100))
+        bws.SetValue((25, 75))
+
+        for d in DATA:
+            bws.set_content(d)
+            loop()
+            wx.MilliSleep(SLEEP_TIME)
+
+        bws.set_content([])
+        bws.SetValue(())
+
+        bws.set_content([])
+        bws.SetValue(())
+
+        self.assertEqual(bws.pixel_value, ())
+        self.assertEqual(bws.GetValue(), ())
+
+        bws.set_range((0.2, 0.8))
+        loop()
+        wx.MilliSleep(SLEEP_TIME)
+
+        bws.set_center_value(0.2)
+        loop()
+        wx.MilliSleep(SLEEP_TIME)
+
+        bws.set_content(DATA[7])
+        loop()
+        wx.MilliSleep(SLEEP_TIME)
+        bws.set_content(DATA[8])
+        loop()
+        wx.MilliSleep(SLEEP_TIME)
+
+        bws.set_range((0, 1))
+        loop()
+        wx.MilliSleep(SLEEP_TIME)
+
+        bws.SetValue((0, 1))
+        loop()
+        wx.MilliSleep(SLEEP_TIME)
+
+        self.assertEqual(bws.pixel_value, (0, bws.GetSize()[0]))
+        self.assertEqual(bws.GetValue(), (0, 1))
+
+        bws.SetValue((0, 0.5))
+        loop()
+        wx.MilliSleep(SLEEP_TIME)
+
+        self.assertAlmostEqual(bws.pixel_value, (0, bws.GetSize()[0] / 2.0))
+        self.assertEqual(bws.GetValue(), (0, 0.5))
 
 if __name__ == "__main__":
     unittest.main()

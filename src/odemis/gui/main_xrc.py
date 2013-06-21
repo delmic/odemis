@@ -20,12 +20,12 @@ class xrcfr_main(wx.Frame):
 #!XRCED:begin-block:xrcfr_main.PreCreate
     def PreCreate(self, pre):
         """ This function is called during the class's initialization.
-
+        
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
         pass
-
+        
 #!XRCED:end-block:xrcfr_main.PreCreate
 
     def __init__(self, parent):
@@ -46,10 +46,9 @@ class xrcfr_main(wx.Frame):
         self.menu_item_debug = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_debug"))
         self.menu_item_about = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_about"))
         self.btn_tab_secom_streams = xrc.XRCCTRL(self, "btn_tab_secom_streams")
-        self.btn_tab_secom_gallery = xrc.XRCCTRL(self, "btn_tab_secom_gallery")
         self.btn_tab_sparc_align = xrc.XRCCTRL(self, "btn_tab_sparc_align")
         self.btn_tab_sparc_acqui = xrc.XRCCTRL(self, "btn_tab_sparc_acqui")
-        self.btn_tab_sparc_analysis = xrc.XRCCTRL(self, "btn_tab_sparc_analysis")
+        self.btn_tab_inspection = xrc.XRCCTRL(self, "btn_tab_inspection")
         self.pnl_tab_secom_streams = xrc.XRCCTRL(self, "pnl_tab_secom_streams")
         self.secom_tool_menu = xrc.XRCCTRL(self, "secom_tool_menu")
         self.btn_secom_view_zoom = xrc.XRCCTRL(self, "btn_secom_view_zoom")
@@ -78,7 +77,6 @@ class xrcfr_main(wx.Frame):
         self.pnl_secom_streams = xrc.XRCCTRL(self, "pnl_secom_streams")
         self.fp_annotations = xrc.XRCCTRL(self, "fp_annotations")
         self.btn_secom_acquire = xrc.XRCCTRL(self, "btn_secom_acquire")
-        self.pnl_tab_secom_gallery = xrc.XRCCTRL(self, "pnl_tab_secom_gallery")
         self.pnl_tab_sparc_align = xrc.XRCCTRL(self, "pnl_tab_sparc_align")
         self.slider_mirror_t = xrc.XRCCTRL(self, "slider_mirror_t")
         self.btn_align_py = xrc.XRCCTRL(self, "btn_align_py")
@@ -112,7 +110,8 @@ class xrcfr_main(wx.Frame):
         self.gauge_sparc_acq = xrc.XRCCTRL(self, "gauge_sparc_acq")
         self.btn_sparc_cancel = xrc.XRCCTRL(self, "btn_sparc_cancel")
         self.btn_sparc_acquire = xrc.XRCCTRL(self, "btn_sparc_acquire")
-        self.pnl_tab_sparc_analysis = xrc.XRCCTRL(self, "pnl_tab_sparc_analysis")
+        self.pnl_tab_inspection = xrc.XRCCTRL(self, "pnl_tab_inspection")
+        self.btn_open_image = xrc.XRCCTRL(self, "btn_open_image")
         self.sparc_ana_tool_menu = xrc.XRCCTRL(self, "sparc_ana_tool_menu")
         self.btn_sparc_ana_view_zoom = xrc.XRCCTRL(self, "btn_sparc_ana_view_zoom")
         self.btn_sparc_ana_view_update = xrc.XRCCTRL(self, "btn_sparc_ana_view_update")
@@ -126,10 +125,10 @@ class xrcfr_main(wx.Frame):
         self.btn_sparc_view_bl = xrc.XRCCTRL(self, "btn_sparc_view_bl")
         self.lbl_sparc_view_br = xrc.XRCCTRL(self, "lbl_sparc_view_br")
         self.btn_sparc_view_br = xrc.XRCCTRL(self, "btn_sparc_view_br")
-        self.vp_sparc_analysis_tl = xrc.XRCCTRL(self, "vp_sparc_analysis_tl")
-        self.vp_sparc_analysis_tr = xrc.XRCCTRL(self, "vp_sparc_analysis_tr")
-        self.vp_sparc_analysis_bl = xrc.XRCCTRL(self, "vp_sparc_analysis_bl")
-        self.vp_sparc_analysis_br = xrc.XRCCTRL(self, "vp_sparc_analysis_br")
+        self.vp_inspection_tl = xrc.XRCCTRL(self, "vp_inspection_tl")
+        self.vp_inspection_tr = xrc.XRCCTRL(self, "vp_inspection_tr")
+        self.vp_inspection_bl = xrc.XRCCTRL(self, "vp_inspection_bl")
+        self.vp_inspection_br = xrc.XRCCTRL(self, "vp_inspection_br")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
         self.fp_sparc_file_info = xrc.XRCCTRL(self, "fp_sparc_file_info")
         self.pnl_sparc_streams = xrc.XRCCTRL(self, "pnl_sparc_streams")
@@ -143,12 +142,12 @@ class xrcfr_acq(wx.Dialog):
 #!XRCED:begin-block:xrcfr_acq.PreCreate
     def PreCreate(self, pre):
         """ This function is called during the class's initialization.
-
+        
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
         pass
-
+        
 #!XRCED:end-block:xrcfr_acq.PreCreate
 
     def __init__(self, parent):
@@ -293,31 +292,6 @@ def __init_resources():
               <border>20</border>
             </object>
             <object class="sizeritem">
-              <object class="TabButton" name="btn_tab_secom_gallery">
-                <size>160,30</size>
-                <label>GALLERY</label>
-                <bitmap>img_tab_inactive_png</bitmap>
-                <hover>img_tab_hover_png</hover>
-                <selected>img_tab_active_png</selected>
-                <fg>#E5E5E5</fg>
-                <font>
-                  <size>11</size>
-                  <style>normal</style>
-                  <weight>normal</weight>
-                  <underlined>0</underlined>
-                  <family>default</family>
-                  <face>Ubuntu</face>
-                  <encoding>UTF-8</encoding>
-                </font>
-                <style>wxALIGN_CENTRE</style>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-              <flag>wxLEFT|wxALIGN_BOTTOM</flag>
-              <border>20</border>
-            </object>
-            <object class="sizeritem">
               <object class="TabButton" name="btn_tab_sparc_align">
                 <size>160,30</size>
                 <label>MIRROR ALIGNMENT</label>
@@ -368,7 +342,7 @@ def __init_resources():
               <border>20</border>
             </object>
             <object class="sizeritem">
-              <object class="TabButton" name="btn_tab_sparc_analysis">
+              <object class="TabButton" name="btn_tab_inspection">
                 <size>160,30</size>
                 <label>ANALYSIS</label>
                 <bitmap>img_tab_inactive_png</bitmap>
@@ -921,44 +895,6 @@ def __init_resources():
         <flag>wxEXPAND</flag>
       </object>
       <object class="sizeritem">
-        <object class="wxPanel" name="pnl_tab_secom_gallery">
-          <object class="wxBoxSizer">
-            <object class="spacer">
-              <option>1</option>
-              <flag>wxEXPAND|wxALIGN_CENTRE_VERTICAL</flag>
-            </object>
-            <object class="sizeritem">
-              <object class="wxStaticText">
-                <label>SECOM image gallery.</label>
-                <fg>#7F7F7F</fg>
-                <font>
-                  <size>8</size>
-                  <style>normal</style>
-                  <weight>normal</weight>
-                  <underlined>0</underlined>
-                  <family>default</family>
-                  <face>Ubuntu</face>
-                  <encoding>UTF-8</encoding>
-                </font>
-              </object>
-              <flag>wxALIGN_CENTRE_VERTICAL</flag>
-            </object>
-            <orient>wxHORIZONTAL</orient>
-            <object class="spacer">
-              <option>1</option>
-              <flag>wxEXPAND|wxALIGN_CENTRE_VERTICAL</flag>
-            </object>
-          </object>
-          <bg>#333333</bg>
-          <hidden>1</hidden>
-          <XRCED>
-            <assign_var>1</assign_var>
-          </XRCED>
-        </object>
-        <option>1</option>
-        <flag>wxEXPAND</flag>
-      </object>
-      <object class="sizeritem">
         <object class="wxPanel" name="pnl_tab_sparc_align">
           <object class="wxBoxSizer">
             <object class="sizeritem">
@@ -1465,6 +1401,7 @@ def __init_resources():
           </object>
           <bg>#333333</bg>
           <hidden>1</hidden>
+          <style>wxWANTS_CHARS</style>
           <XRCED>
             <assign_var>1</assign_var>
           </XRCED>
@@ -1915,15 +1852,38 @@ def __init_resources():
         <flag>wxEXPAND</flag>
       </object>
       <object class="sizeritem">
-        <object class="wxPanel" name="pnl_tab_sparc_analysis">
+        <object class="wxPanel" name="pnl_tab_inspection">
           <object class="wxBoxSizer">
             <object class="sizeritem">
               <object class="wxPanel">
                 <object class="wxBoxSizer">
-                  <orient>wxVERTICAL</orient>
+                  <object class="sizeritem">
+                    <object class="ImageTextButton" name="btn_open_image">
+                      <size>180,24</size>
+                      <label>Open Image</label>
+                      <delta>1</delta>
+                      <bitmap>img_btn_256x24_png</bitmap>
+                      <hover>img_btn_256x24_h_png</hover>
+                      <selected>img_btn_256x24_a_png</selected>
+                      <font>
+                        <size>11</size>
+                        <style>normal</style>
+                        <weight>normal</weight>
+                        <underlined>0</underlined>
+                        <family>default</family>
+                        <face>Ubuntu</face>
+                        <encoding>UTF-8</encoding>
+                      </font>
+                      <style>wxALIGN_CENTRE</style>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <flag>wxALL|wxEXPAND</flag>
+                    <border>10</border>
+                  </object>
                   <object class="sizeritem">
                     <object class="wxPanel">
-                      <bg>#1A1A1A</bg>
                       <object class="wxBoxSizer">
                         <orient>wxVERTICAL</orient>
                         <object class="sizeritem">
@@ -1935,6 +1895,8 @@ def __init_resources():
                           <border>10</border>
                         </object>
                       </object>
+                      <bg>#1A1A1A</bg>
+                      <hidden>1</hidden>
                     </object>
                   </object>
                   <object class="spacer">
@@ -2131,6 +2093,7 @@ def __init_resources():
                     <flag>wxBOTTOM|wxEXPAND</flag>
                     <border>50</border>
                   </object>
+                  <orient>wxVERTICAL</orient>
                 </object>
                 <size>200,-1</size>
                 <bg>#333333</bg>
@@ -2142,7 +2105,7 @@ def __init_resources():
                 <object class="sizeritem">
                   <object class="wxBoxSizer">
                     <object class="sizeritem">
-                      <object class="SparcAnalysisViewport" name="vp_sparc_analysis_tl">
+                      <object class="SparcAnalysisViewport" name="vp_inspection_tl">
                         <size>400,-1</size>
                         <fg>#BFBFBF</fg>
                         <bg>#000000</bg>
@@ -2155,7 +2118,7 @@ def __init_resources():
                       <ratio>1</ratio>
                     </object>
                     <object class="sizeritem">
-                      <object class="SparcAnalysisViewport" name="vp_sparc_analysis_tr">
+                      <object class="SparcAnalysisViewport" name="vp_inspection_tr">
                         <size>400,-1</size>
                         <fg>#BFBFBF</fg>
                         <bg>#000000</bg>
@@ -2176,7 +2139,7 @@ def __init_resources():
                 <object class="sizeritem">
                   <object class="wxBoxSizer">
                     <object class="sizeritem">
-                      <object class="SparcAnalysisViewport" name="vp_sparc_analysis_bl">
+                      <object class="SparcAnalysisViewport" name="vp_inspection_bl">
                         <size>400,-1</size>
                         <fg>#BFBFBF</fg>
                         <bg>#000000</bg>
@@ -2189,7 +2152,7 @@ def __init_resources():
                       <ratio>1</ratio>
                     </object>
                     <object class="sizeritem">
-                      <object class="SparcAnalysisViewport" name="vp_sparc_analysis_br">
+                      <object class="SparcAnalysisViewport" name="vp_inspection_br">
                         <size>400,-1</size>
                         <fg>#BFBFBF</fg>
                         <bg>#000000</bg>
@@ -4036,6 +3999,59 @@ K \xe5\xbf\x03(\x0bU\x02\xb5\x08\xe6\x12\xa8E\xe8\x0f\xa02\xc4\\\x02\x15\
 -7\x9f\xe7\xf9\xbc,\xcbO,\x04\x0f\xb5b\x1a\x1ep\x1e\xdd\xff\x01Z|\x840\
 v\xa3\x18\x8b\x00\x00\x00\x00IEND\xaeB`\x82'''
 
+    img_btn_256x24_png = '''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x01\x00\x00\x00\x00\x18\x08\x06\x00\x00\x00\
+\x15\x80#$\x00\x00\x00\xe3IDATx\xda\xed\xdc1j\x84@\x14\x06`\x99"7H\x95\xe3\
+\xe5\x18\x09\x84@\xea\xdc \x90\x83XZx\x10\x85\xc5m\x15\xc5Eg}\x90=D\x9c\
+\xaf\xf8\x9a)\x07\xfe\x9f\xf7F0\xd5u\xfd\xd44\xcdW\xdb\xb6\xdd!\x03\xa7\
+\xd7E\xe6#\xfbi\xdb\xb6\xcfy\x9e\xdf\x86ax\xe9\xfb\xbe\xea\xba\x0e8\xa9\
+\xc8xd=2\x1f\xd9O\xd34\xbd\x8e\xe3X-\xcbR\x1d\x07\xd5\xbe\xef\xc0IE\xc6\
+#\xeb\x91\xf9\xc8~\xba\xddn\xcf\xeb\xba\xba\x1c(Hd>\xb2\x9f\x1e\x079g\xa0\
+\x10\x8f\xdc\x27m\x08\xe5R\x00\xa0\x00\x00\x05\x00\x94U\x00\xf1Y\x00(\x93\
+\x09\x00\xac\x00\x80\x15\x00\xb0\x02\x00&\x00\xc0\x04\x00x\x04\x04\x14\x00\
+\xa0\x00\x00\x05\x00(\x00\xe0\xdf\x16\xc0\xd5E@\x91\xae)\xe7\xfc\xe3\x0f\
+)P\xa4\xdf\x98\x00>\x0e\xdf\x87\x8bF\x84"\\\xfe2\xff~\x07O\\\x87T\x05\x93\
+"j\x00\x00\x00\x00IEND\xaeB`\x82'''
+
+    img_btn_256x24_h_png = '''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x01\x00\x00\x00\x00\x18\x08\x06\x00\x00\x00\
+\x15\x80#$\x00\x00\x00\xecIDATx\xda\xed\xdc1j\x85@\x10\x06\xe0\xc5"7H\x95\
+\xe3\xe5\x18\x09\x84@\xea\xdc \x90\xfbX\x09\x1e\xe1\x15\x0f-,U\\\xdd8\x90\
+w\x09\xf7+\xbef\xcb\x81\x98\x19\xc4\xa6m\xdb\xa7\xae\xeb\xbe\xfa\xbe\xbf\
+\x9d
+py\xb7\xc8|d\xbf\xd9\xf7\xfdsY\x96\xb7i\x9a^\xc6qL\xc30\x00\x17\x15\x19\
+\x8f\xacG\xe6#\xfb\xcd<\xcf\xaf\xa7\xb4\xaek:\x1f\xd2q\x1c\xc0EE\xc6#\xeb\
+\x91\xf9\xc8~\x93s~\xde\xb6Mq\xa0"\x91\xf9\xc8~\xf3x(\xa5\x00\x95x\xe4\xbe\
+\xd1\x0d\xa1^q\x04L@\x9dL\x00P\xf3\x04\xa0\x08`\x05\x00\xac\x00@U\x13@\xce\
+9\x01u2\x01\x80\x1b\x00P\xe5\x0d@\x11\xc0\x11\x10\xb0\x02\x00&\x00\xc0\x97\
+\x80\x80\x15\x00\xb0\x02\x00\x97\x9b\x00J)\xa3\x1f$@\x95\xc6\x98\x00~tB\
+\xa8\xd2o4\x80\x8f\xd3\xf7\xe9\xae P\x85\xfb\xe6\xdf\xff\x00\x18\xcd\xae\
+T\x04\x87\x02\xa1\x00\x00\x00\x00IEND\xaeB`\x82'''
+
+    img_btn_256x24_a_png = '''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x01\x00\x00\x00\x00\x18\x08\x06\x00\x00\x00\
+\x15\x80#$\x00\x00\x01\x1eIDATx\xda\xed\xd8Aj\x84@\x10\x85\xe1\xb2\x94\xde\
+\x09
+\x06\xc1(n<\x80\x0bo4\xc7H \x04\xb2\xce\x0d\x029\xdc,\x06\xe6\x06\xa2v\
+\xba\xc2\xcc%\xac\xbf\xe0[\xb8mx\x85\xf5t\x9a\xa6\x90|%\xd7$\x028\xbd\xeb\
+#\xf3A\x8b\xa2\xf8,\xcb\xf2\xadm\xdb\xd74\xd2\xf7=\x80\x93\xb2\x8c[\xd6\
+-\xf3\x96}\xad\xeb\xfa\x926\x81\xcc\xf3,\xcb\xb2\x0089\xcb\xbae\xde\xb2\
+\xaf\xc30\xbc\xd8\xc78\x8e\xd2u\x1d\x80\x93\xb3\xac[\xe6-\xfb\xda4\x8dT\
+U%y\x9e\x8bM\x8c\x11\xc0I\xd9X\xd6-\xf3\x96}\x0d!H\x96er\x1c\x07\x00\x27\
+,\xf3\x96}}n\x06\x1e\x05\xf0\xe3\x99{%\xfc\x80\xdf%\xa0\xdcE\x80_\xca&\x04\
+\xfc\xe2\x04\x00<\x9f\x00\xfb\xbe\x0b\x00\x9f\xe8\x00\x00\xef\x1d\x00\x9b\
+\x10\xf0\xe7\xbf\x03\xe0\x16\x02(\x01\x01x,\x01y\x08\xc0\xf9\x1f\x00\x00\
+\xa7% \x27\x00\xc0\x09\x00\xc0\xe3\x09\xc0#\x00\x8e\x17\x80\x88\xdc\x85\
+a\x18\x8fs\xb7?\x80\x1f6!\xe0\xd2\xaf\xae\xeb\xfa\xb1m\xdbw\x8c\xf1F+
+\xb8p\xb3\xcc\xa7\xec\xbf\xff\x01\x8a\x98%\xf2\xff\xc2\x0b\x9a\x00\x00\
+\x00\x00IEND\xaeB`\x82'''
+
     img_test_pattern_s_png = '''\
 \x89PNG\x0d
 \x1a
@@ -4857,6 +4873,9 @@ Z\xb9A\x04\xc6\x89\x00\x00\x00\x00IEND\xaeB`\x82'''
     wx.MemoryFSHandler.AddFile('XRC/main/img_btn_128x24_png', img_btn_128x24_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_btn_128x24_h_png', img_btn_128x24_h_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_btn_128x24_a_png', img_btn_128x24_a_png)
+    wx.MemoryFSHandler.AddFile('XRC/main/img_btn_256x24_png', img_btn_256x24_png)
+    wx.MemoryFSHandler.AddFile('XRC/main/img_btn_256x24_h_png', img_btn_256x24_h_png)
+    wx.MemoryFSHandler.AddFile('XRC/main/img_btn_256x24_a_png', img_btn_256x24_a_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_test_pattern_s_png', img_test_pattern_s_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_btn_acq_img_sml_png', img_btn_acq_img_sml_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_btn_acq_img_sml_h_png', img_btn_acq_img_sml_h_png)

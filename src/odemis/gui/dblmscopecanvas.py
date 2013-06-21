@@ -27,17 +27,17 @@ from .comp.canvas import DraggableCanvas, world_to_real_pos
 from .comp.overlay import CrossHairOverlay, ViewSelectOverlay, \
     WorldSelectOverlay, TextViewOverlay
 from decorator import decorator
-from odemis import util
+from odemis import util, model
 from odemis.gui.comp.canvas import real_to_world_pos
-from odemis.gui.model import EM_STREAMS
+from odemis.gui.model import EM_STREAMS, stream
 from odemis.gui.model.stream import UNDEFINED_ROI
 from odemis.gui.util import limit_invocation, call_after
+from odemis.model._vattributes import VigilantAttributeBase
 from wx.lib.pubsub import pub
 import logging
 import odemis.gui as gui
 import threading
 import wx
-from odemis.model._vattributes import VigilantAttributeBase
 
 
 
@@ -149,16 +149,15 @@ class DblMicroscopeCanvas(DraggableCanvas):
                 self.ViewOverlays.remove(ch)
                 self.Refresh(eraseBackground=False)
 
-    def _convertStreamsToImages(self):
-        """ Temporary function to convert the StreamTree to a list of images as
-        the canvas currently expects.
+    def _orderStreamsToImages(self, streams):
         """
-        streams = self.microscope_view.stream_tree.streams
-        # create a list of of each stream's image, but re-ordered so that SEM is
-        #first
+        Create a list of each stream's image, ordered from the first one to
+        be draw to the last one (topest).
+        streams (list of Streams) the streams to order
+        return (list of InstrumentalImage)
+        """
         images = []
-        has_sem_image = False
-        for i, s in enumerate(streams):
+        for s in streams:
             if not s:
                 # should not happen, but let's not completely fail on this
                 logging.error("StreamTree has a None stream")
@@ -166,23 +165,28 @@ class DblMicroscopeCanvas(DraggableCanvas):
 
             if hasattr(s, "image"):
                 iim = s.image.value
-
                 if iim is None or iim.image is None:
                     continue
 
-                if isinstance(s, EM_STREAMS):
-                    # as first
-                    images.insert(0, iim)
-                    # FIXME: See the log warning
-                    if has_sem_image:
-                        logging.warning(("Multiple SEM images are not handled "
-                                         "correctly for now"))
-                    has_sem_image = True
-                else:
-                    images.append(iim)
+                images.append(iim)
 
-        if not has_sem_image: # make sure there is always a SEM image
-            images.insert(0, None)
+        # Sort by size, so that the biggest picture is first drawn (no opacity)
+        images.sort(
+            lambda a, b: cmp(
+                b.image.Height * b.image.Width * b.mpp if b else 0,
+                a.image.Height * a.image.Width * a.mpp if a else 0
+            )
+        )
+
+        return images
+
+    def _convertStreamsToImages(self):
+        """ Temporary function to convert the StreamTree to a list of images as
+        the canvas currently expects.
+        """
+        streams = self.microscope_view.getStreams()
+        # get the images, in order
+        images = self._orderStreamsToImages(streams)
 
         # remove all the images (so they can be garbage collected)
         self.Images = [None]
@@ -278,11 +282,14 @@ class DblMicroscopeCanvas(DraggableCanvas):
         Adapts the MPP and center to fit to the current content
         recenter (None or boolean): If True, also recenter the view. If None, it
          will try to be clever, and only recenter if no stage is connected, as
-         otherwise, it could cause an unexcepted move.
+         otherwise, it could cause an unexpected move.
         """
-        # TODO
-        # Note: we need 2 different mechanisms: with and without recenter
-        pass
+        # TODO: be clever about recenter
+        DraggableCanvas.fitViewToContent(self, recenter=recenter)
+
+        # this will indirectly call _onMPP(), but not have any additional effect
+        if self.microscope_view and self.mpwu:
+            self.microscope_view.mpp.value = self.mpwu / self.scale
 
     def _onMPP(self, mpp):
         """
@@ -406,6 +413,52 @@ class SecomCanvas(DblMicroscopeCanvas):
 
         self.cursor = wx.STANDARD_CURSOR
 
+        # TODO: once the StreamTrees can render fully, reactivate the background
+        # pattern
+        self.backgroundBrush = wx.SOLID
+
+    # Special version which put the SEM images first, as with the current
+    # display mechanism in the canvas, the fluorescent images must be displayed
+    # together last
+    def _orderStreamsToImages(self, streams):
+        """
+        Create a list of each stream's image, ordered from the first one to
+        be draw to the last one (topest).
+        streams (list of Streams) the streams to order
+        return (list of InstrumentalImage)
+        """
+        images = []
+        has_sem_image = False
+        for s in streams:
+            if not s:
+                # should not happen, but let's not completely fail on this
+                logging.error("StreamTree has a None stream")
+                continue
+
+            if hasattr(s, "image"):
+                iim = s.image.value
+
+                if iim is None or iim.image is None:
+                    continue
+
+                if isinstance(s, EM_STREAMS):
+                    # as first
+                    images.insert(0, iim)
+                    # FIXME: See the log warning
+                    if has_sem_image:
+                        logging.warning(("Multiple SEM images are not handled "
+                                         "correctly for now"))
+                    has_sem_image = True
+                else:
+                    images.append(iim)
+
+        if not has_sem_image: # make sure there is always a SEM image
+            images.insert(0, None)
+
+        return images
+
+
+
     def _toggle_mode(self, enabled, overlay, mode):
         if self.current_mode == mode and not enabled:
             self.current_mode = None
@@ -526,10 +579,12 @@ class SecomCanvas(DblMicroscopeCanvas):
         fps = super(SecomCanvas, self)._DrawMergedImages(dc_buffer,
                                                          images,
                                                          mergeratio)
+        tlp = wx.GetTopLevelParent(self)
 
-        debug_mode = wx.GetTopLevelParent(self).menu_item_debug.IsChecked()
-        if debug_mode or True:
-            self.fps_overlay.set_label("%d fps" % fps)
+        if hasattr(tlp, "menu_item_debug"):
+            debug_mode = tlp.menu_item_debug.IsChecked()
+            if debug_mode:
+                self.fps_overlay.set_label("%d fps" % fps)
 
 class SparcAcquiCanvas(DblMicroscopeCanvas):
     def __init__(self, *args, **kwargs):
@@ -794,18 +849,89 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
         wx.CallAfter(self.ShouldUpdateDrawing)
 
 class SparcAlignCanvas(DblMicroscopeCanvas):
+    """
+    Special restricted version that displays the first stream always fitting
+    the entire canvas.
+    """
 
     def __init__(self, *args, **kwargs):
         super(SparcAlignCanvas, self).__init__(*args, **kwargs)
-        # TODO: always fit to AR image
+        self._ccd_mpp = None # tuple of 2 floats of m/px
 
-    def _onViewImageUpdate(self, t):
-        DblMicroscopeCanvas._onViewImageUpdate(self, t)
-        # TODO: check if image mpp has changed and if yes, refit
+    def setView(self, microscope_view, microscope_model):
+        DblMicroscopeCanvas.setView(self, microscope_view, microscope_model)
+        # find the MPP of the sensor and use it on all images
+        try:
+            self._ccd_mpp = self.microscope_view.ccd.pixelSize.value
+        except AttributeError:
+            logging.info("Failed to find CCD for Sparc mirror alignment")
+
+    def _convertStreamsToImages(self):
+        """
+        Same as the overridden method, but ensures the goal image keeps the alpha
+        and is displayed second. Also force the mpp to be the one of the sensor.
+        """
+        # remove all the images (so they can be garbage collected)
+        self.Images = [None]
+
+        streams = self.microscope_view.getStreams()
+
+        # All the images must be displayed with the same mpp (modulo the binning)
+        if self._ccd_mpp:
+            mpp = self._ccd_mpp[0]
+        else:
+            # use the most relevant mpp from an image
+            for s in streams:
+                if s and not isinstance(s, stream.StaticStream):
+                    try:
+                        mpp = s.image.mpp
+                        break
+                    except AttributeError:
+                        pass
+            else:
+                mpp = 13e-6 # sensible fallback
+
+
+        # order and display the images
+        for s in streams:
+            if not s:
+                # should not happen, but let's not completely fail on this
+                logging.error("StreamTree has a None stream")
+                continue
+
+            if not hasattr(s, "image"):
+                continue
+            iim = s.image.value
+            if iim is None or iim.image is None:
+                continue
+
+            # see if image was obtained with some binning
+            try:
+                binning = s.raw[0].metadata[model.MD_BINNING][0]
+            except (AttributeError, IndexError):
+                binning = 1
+
+            scale = mpp * binning / self.mpwu
+            pos = (0, 0) # the sensor image should be centered on the sensor center
+
+            if isinstance(s, stream.StaticStream):
+                # StaticStream == goal image => add at the end
+                self.SetImage(len(self.Images), iim.image, pos, scale, keepalpha=True)
+            else:
+                # add at the beginning
+                self.SetImage(0, iim.image, pos, scale)
+
+        # set merge_ratio
+        self.merge_ratio = self.microscope_view.stream_tree.kwargs.get("merge", 1)
+
+        # TODO: check if image size has changed and if yes, refit to AR image (first)
+        self.fitViewToContent(recenter=True)
+
 
     def OnSize(self, event):
         DblMicroscopeCanvas.OnSize(self, event)
         # TODO: refit image
+        self.fitViewToContent(recenter=True)
 
     # Disable zoom/move by doing nothing for mouse/keys
     # Don't directly override OnWheel to still allow merge ratio change
@@ -813,19 +939,19 @@ class SparcAlignCanvas(DblMicroscopeCanvas):
         pass
 
     def OnLeftDown(self, event):
-        event.skip()
+        event.Skip()
 
     def OnLeftUp(self, event):
-        event.skip()
+        event.Skip()
 
     def OnRightDown(self, event):
-        event.skip()
+        event.Skip()
 
     def OnRightUp(self, event):
-        event.skip()
+        event.Skip()
 
     def OnDblClick(self, event):
-        event.skip()
+        event.Skip()
 
     def OnChar(self, event):
-        event.skip()
+        event.Skip()

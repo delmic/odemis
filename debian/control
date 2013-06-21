@@ -28,7 +28,7 @@ Depends: python (>= 2.7.1),
          python-comedilib (>= 0.10.0),
          python-h5py (>= 2.1),
          python-xdg,
-         pyro4-delmic,
+         python-pyro4-delmic,
          cgroup-bin,
          ${misc:Depends},
          ${python:Depends}
