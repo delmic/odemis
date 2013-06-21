@@ -403,7 +403,6 @@ class BrightfieldStream(CameraStream):
         # Turn on all the sources? Does this always mean white?
         # At least we should set a warning if the final emission range is quite
         # different from the normal white spectrum
-        return
         em = [1] * len(self._emitter.emissions.value)
         self._emitter.emissions.value = em
 
