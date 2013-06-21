@@ -1687,11 +1687,12 @@
                   <object class="sizeritem">
                     <object class="ImageTextButton" name="btn_open_image">
                       <size>180,24</size>
-                      <label>Open Image</label>
+                      <label>Select Image</label>
                       <delta>1</delta>
                       <bitmap>img/btn_256x24.png</bitmap>
                       <hover>img/btn_256x24_h.png</hover>
                       <selected>img/btn_256x24_a.png</selected>
+                      <fg>#000000</fg>
                       <font>
                         <size>11</size>
                         <style>normal</style>

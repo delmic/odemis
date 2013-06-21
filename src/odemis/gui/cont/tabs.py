@@ -482,7 +482,10 @@ class MirrorAlignTab(Tab):
         self._settings_controller = None
         self._view_controller = None
         self._acquisition_controller = None
-        self._stream_controller = None
+        self._stream_controller = StreamController(
+                                        self.interface_model,
+                                        self.main_frame.pnl_sparc_align_streams
+                                  )
         self._ccd_stream = None
 
         # create the stream to the AR image + goal image
@@ -494,6 +497,7 @@ class MirrorAlignTab(Tab):
                                  self.interface_model.ccd.data,
                                  self.interface_model.ebeam)
             self._ccd_stream = ccd_stream
+
 
             # TODO: need to know the mirror center according to the goal image (metadata using pypng?)
             goal_im = pkg_resources.resource_stream("odemis.gui.img",
@@ -513,6 +517,12 @@ class MirrorAlignTab(Tab):
             mic_view.show_crosshair.value = False
             mic_view.merge_ratio.value = 1
             ccd_stream.should_update.value = True
+
+            # TODO: Add correct stream. Brightfield is not shown by default
+            # because the focussed view only wants SEM streams.
+            # see gui.cont.streams:216
+            self._stream_controller.addSEMSED()
+
         else:
             logging.warning("No CCD available for mirror alignment feedback")
 
