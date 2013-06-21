@@ -204,6 +204,7 @@ def _add_image_info(group, dataset, image):
     else:
         group["TOffset"] = time.time()
         _h5svi_set_state(group["TOffset"], ST_DEFAULT)
+    group["TOffset"].attrs["UNIT"] = "s" # our extension
 
     # Scale
     if model.MD_PIXEL_SIZE in image.metadata:
@@ -274,6 +275,45 @@ def _add_image_info(group, dataset, image):
     # TODO: extension for Rotation:
 #   RotationAngle (scalar): angle in radian
 #   RotationAxis (3-scalar): X,Y,Z of the rotation vector
+
+def _read_image_info(group, dataset):
+    """
+    Read the basic metadata information about an image (scale and offset)
+    group (HDF Group): the group that contains the dataset
+    dataset (HDF Dataset): the image dataset
+    return (dict (MD_* -> Value)): the metadata that could be read
+    """
+    md = {}
+    # Offset
+    try:
+        pos = (float(group["XOffset"][()]), float(group["YOffset"][()]))
+        md[model.MD_POS] = pos
+    except Exception:
+        pass
+    try:
+        acq_date = float(group["TOffset"][()])
+        md[model.MD_ACQ_DATE] = acq_date
+        # TODO: add scale for each Z ??
+    except Exception:
+        pass
+    
+    # Scale
+    try:
+        pxs = [None, None]
+        for dim in dataset.dims:
+            if dim.label == "X":
+                pxs[0] = float(dim[0][()])
+            if dim.label == "Y":
+                pxs[1] = float(dim[0][()])
+
+        md[model.MD_PIXEL_SIZE] = tuple(pxs)
+    except Exception:
+        pass
+
+    # TODO  Wavelength (for spectrograms)
+    
+    return md
+
 
 
 ST_INVALID = 111
@@ -522,6 +562,7 @@ def _findImageGroups(das):
 
     return groups
 
+
 def _thumbFromHDF5(filename):
     """
     Read thumbnails from an HDF5 file.
@@ -581,6 +622,7 @@ def _dataFromSVIHDF5(f):
         md = {}
         try:
             md[model.MD_DESCRIPTION] = unicode(title[()])
+            md.update(_read_image_info(imagedata, image))
         except Exception:
             logging.exception("Failed to parse metadata of acquisition '%s'", obj.name)
 
@@ -601,7 +643,7 @@ def _dataFromHDF5(filename):
     for obj in f.values():
         if isinstance(obj.get("SVIData"), h5py.Group):
             return _dataFromSVIHDF5(f)
-    
+
     data = []
     # go rough: return any dataset with numbers (and more than one element)
     def addIfWorthy(name, obj):
@@ -673,12 +715,15 @@ def export(filename, data, thumbnail=None):
     data (list of model.DataArray, or model.DataArray): the data to export, 
         must be 2D or more of int or float. Metadata is taken directly from the data 
         object. If it's a list, a multiple page file is created. The order of the
-        dimensions is Channel, Time, Z, Y, X.
+        dimensions is Channel, Time, Z, Y, X. It tries to be smart and if 
+        multiple data appears to be the same acquisition at different C, T, Z, 
+        they will be aggregated into one single acquisition.
     thumbnail (None or model.DataArray): Image used as thumbnail for the file. Can be of any
       (reasonable) size. Must be either 2D array (greyscale) or 3D with last 
       dimension of length 3 (RGB). If the exporter doesn't support it, it will
       be dropped silently.
     '''
+    # TODO: add an argument to not do any clever data aggregation?
     if isinstance(data, list):
         _saveAsHDF5(filename, data, thumbnail)
     else:
@@ -693,10 +738,16 @@ def read_data(filename):
     filename (string): filename of the file to read
     return (list of model.DataArray): the data to import (with the metadata 
      as .metadata). It might be empty.
+     Warning: reading back a file just exported might give a smaller number of
+     DataArrays! This is because export() tries to aggregate data which seems
+     to be from the same acquisition but on different dimensions C, T, Z.
+     read_data() cannot separate them back explicitly. 
     raises:
         IOError in case the file format is not as expected.
     """
-    # TODO: support filename to be a File or Stream
+    # TODO: support filename to be a File or Stream (but it seems very difficult
+    # to do it without looking at the .filename attribute)
+    # see http://pytables.github.io/cookbook/inmemory_hdf5_files.html
 
     return _dataFromHDF5(filename)
 

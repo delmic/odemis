@@ -315,6 +315,74 @@ class TestHDF5IO(unittest.TestCase):
         self.assertEqual(im[blue[-1:-3:-1]].tolist(), [0, 0, 255])
 
 
+    def testReadMetada(self):
+        """
+        Checks that we can read back the metadata of an image
+        """
+        metadata = [{model.MD_SW_VERSION: "1.0-test",
+                     model.MD_HW_NAME: "fake hw",
+                     model.MD_DESCRIPTION: "test",
+                     model.MD_ACQ_DATE: time.time(),
+                     model.MD_BPP: 12,
+                     model.MD_BINNING: (1, 2), # px, px
+                     model.MD_PIXEL_SIZE: (1e-6, 2e-5), # m/px
+                     model.MD_POS: (1e-3, -30e-3), # m
+                     model.MD_EXP_TIME: 1.2, # s
+                     model.MD_IN_WL: (500e-9, 520e-9), # m
+                     model.MD_OUT_WL: (600e-9, 630e-9), # m
+                    },
+                    {model.MD_SW_VERSION: "1.0-test",
+                     model.MD_HW_NAME: "fake spec",
+                     model.MD_DESCRIPTION: "test3d",
+                     model.MD_ACQ_DATE: time.time(),
+                     model.MD_BPP: 12,
+                     model.MD_BINNING: (1, 1), # px, px
+                     model.MD_PIXEL_SIZE: (1e-6, 2e-5), # m/px
+                     model.MD_WL_POLYNOMIAL: [500e-9, 1e-9], # m, m/px: wl polynomial
+                     model.MD_POS: (1e-3, -30e-3), # m
+                     model.MD_EXP_TIME: 1.2, # s
+                    },
+                    ]
+        # create 2 simple greyscale images
+        sizes = [(512, 256), (500, 400)] # different sizes to ensure different acquisitions
+        dtype = numpy.dtype("uint8")
+        ldata = []
+        a = model.DataArray(numpy.zeros(sizes[0][-1:-3:-1], dtype), metadata[0])
+        ldata.append(a)
+        a = model.DataArray(numpy.zeros(sizes[1][-1:-3:-1], dtype), metadata[1])
+        ldata.append(a)
+
+        # thumbnail : small RGB completely red
+        tshape = (sizes[0][1] // 8, sizes[0][0] // 8, 3)
+        tdtype = numpy.uint8
+        thumbnail = model.DataArray(numpy.zeros(tshape, tdtype))
+        thumbnail[:, :, 1] += 255 # green
+
+        # export
+        hdf5.export(FILENAME, ldata, thumbnail)
+
+        # check it's here
+        st = os.stat(FILENAME) # this test also that the file is created
+        self.assertGreater(st.st_size, 0)
+
+        # check data
+        rdata = hdf5.read_data(FILENAME)
+        self.assertEqual(len(rdata), len(ldata))
+
+        for i, im in enumerate(rdata):
+            md = metadata[i]
+            self.assertEqual(im.metadata[model.MD_DESCRIPTION], md[model.MD_DESCRIPTION])
+            self.assertEqual(im.metadata[model.MD_POS], md[model.MD_POS])
+            self.assertEqual(im.metadata[model.MD_PIXEL_SIZE], md[model.MD_PIXEL_SIZE])
+            self.assertEqual(im.metadata[model.MD_ACQ_DATE], md[model.MD_ACQ_DATE])
+
+        # check thumbnail
+        rthumbs = hdf5.read_thumbnail(FILENAME)
+        self.assertEqual(len(rthumbs), 1)
+        im = rthumbs[0]
+        self.assertEqual(im.shape, tshape)
+        self.assertEqual(im[0, 0].tolist(), [0, 255, 0])
+
 if __name__ == "__main__":
     #import sys;sys.argv = ['', 'Test.testName']
     unittest.main()
