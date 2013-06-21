@@ -91,6 +91,7 @@ class xrcfr_main(wx.Frame):
         self.vp_sparc_align = xrc.XRCCTRL(self, "vp_sparc_align")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
         self.fp_sparc_settings = xrc.XRCCTRL(self, "fp_sparc_settings")
+        self.pnl_sparc_align_streams = xrc.XRCCTRL(self, "pnl_sparc_align_streams")
         self.pnl_tab_sparc_acqui = xrc.XRCCTRL(self, "pnl_tab_sparc_acqui")
         self.sparc_acq_tool_menu = xrc.XRCCTRL(self, "sparc_acq_tool_menu")
         self.btn_sparc_acq_view_select = xrc.XRCCTRL(self, "btn_sparc_acq_view_select")
@@ -185,7 +186,7 @@ def __init_resources():
     wx.FileSystem.AddHandler(wx.MemoryFSHandler())
 
     main_xrc = '''\
-<?xml version="1.0" ?><resource class="wxPanel" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
+<?xml version="1.0" ?><resource class="FoldPanelItem" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
   <object class="wxFrame" name="fr_main">
     <object class="wxMenuBar">
       <object class="wxMenu">
@@ -1374,6 +1375,19 @@ def __init_resources():
                             <leftspacing>0</leftspacing>
                             <rightspacing>0</rightspacing>
                             <bg>#333333</bg>
+                            <object class="FoldPanelItem">
+                              <object class="StreamBar" name="pnl_sparc_align_streams">
+                                <size>300,-1</size>
+                                <fg>#7F7F7F</fg>
+                                <bg>#333333</bg>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                              </object>
+                              <nocaption>1</nocaption>
+                              <fg>#1A1A1A</fg>
+                              <bg>#555555</bg>
+                            </object>
                           </object>
                           <flag>wxEXPAND</flag>
                         </object>
