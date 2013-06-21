@@ -48,10 +48,16 @@ component.Manager.register(c)
 component.Manager.addXmlHandler(xh_delmic.FoldPanelBarXmlHandler)
 component.Manager.setMenu(c, 'Delmic', 'Fold Panel Bar', 'FoldPanelBar', 1)
 
-c = component.Container('FoldPanelItem',
+c = component.Container(
+    'FoldPanelItem',
     ['window', 'top_level', 'control'],
-    ['pos', 'size', 'label', 'collapsed'],
-    params={'label': params.ParamText, 'collapsed': params.ParamBool})
+    ['pos', 'size', 'label', 'collapsed', 'nocaption'],
+    params={
+        'label': params.ParamText,
+        'collapsed': params.ParamBool,
+        'nocaption': params.ParamBool
+    }
+)
 component.Manager.register(c)
 component.Manager.addXmlHandler(xh_delmic.FoldPanelItemXmlHandler)
 component.Manager.setMenu(c, 'Delmic', 'Fold Panel Item', 'FoldPanelItem', 2)

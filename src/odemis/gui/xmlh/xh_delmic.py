@@ -219,7 +219,8 @@ class FoldPanelItemXmlHandler(xrc.XmlResourceHandler):
                                   self.GetSize(),
                                   self.GetStyle(),
                                   self.GetText('label'),
-                                  self.GetBool('collapsed'))
+                                  self.GetBool('collapsed'),
+                                  nocaption=self.GetBool('nocaption'))
             self.SetupWindow(w)
 
             self.CreateChildren(w, False)
