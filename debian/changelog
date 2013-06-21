@@ -1,3 +1,10 @@
+odemis (1.2~alpha2-1ubuntu1) precise; urgency=low
+
+  * Package necessary data
+  * Some improvements on the calibration tab + anaylisis tab for the SPARC
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Mon, 17 Jun 2013 17:00:40 +0200
+
 odemis (1.2~alpha1-1ubuntu1) precise; urgency=low
 
   * Fix build dependencies

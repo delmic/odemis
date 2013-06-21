@@ -57,13 +57,14 @@ except LookupError:
 if sys.platform.startswith('linux'):
     data_files = [('/etc/', ['install/linux/etc/odemis.conf']),
                   # TODO udev rules might actually be better off in /lib/udev/rules.d/
-                  ('/etc/udev/rules.d', glob.glob('install/linux/etc/udev/rules.d/*.rules')), # TODO: use os.path.join for /
+                  ('/etc/udev/rules.d', glob.glob('install/linux/etc/udev/rules.d/*.rules')),
                   ('share/odemis/', glob.glob('install/linux/usr/share/odemis/*.odm.yaml')),
                   # TODO: need to run desktop-file-install in addition to update-desktop-database?
                   ('share/applications/', ['install/linux/usr/share/applications/odemis.desktop']),
                   ('share/icons/hicolor/32x32/apps/', ['install/linux/usr/share/icons/hicolor/32x32/apps/odemis.png']),
                   ('share/icons/hicolor/64x64/apps/', ['install/linux/usr/share/icons/hicolor/64x64/apps/odemis.png']),
                   ('share/icons/hicolor/128x128/apps/', ['install/linux/usr/share/icons/hicolor/128x128/apps/odemis.png']),
+                  ('share/doc/odemis/', glob.glob('doc/*.txt')),
                   ]
     # TODO: see if we could use entry_points instead
     scripts = ['install/linux/usr/local/bin/odemisd',
