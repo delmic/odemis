@@ -53,18 +53,19 @@ def get_available_formats(mode=os.O_RDWR):
             exporter = __import__("odemis.dataio."+module_name, fromlist=[module_name])
         except:  #pylint: disable=W0702
             continue # module cannot be loaded
-        if ((mode == os.O_RDONLY and not hasattr(exporter, "get_data")) or
+        if ((mode == os.O_RDONLY and not hasattr(exporter, "read_data")) or
             (mode == os.O_WRONLY and not hasattr(exporter, "export"))):
             continue
         formats[exporter.FORMAT] = exporter.EXTENSIONS
 
     if not formats:
-        logging.error("Not file exporter found!")
+        logging.error("Not file converter found!")
     return formats
 
 # TODO: change name to imply reading is possible too:
 #  * get_converter
 #  * get_manager
+#  * get_serializer
 # ?
 def get_exporter(fmt):
     """

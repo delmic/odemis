@@ -24,7 +24,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 from collections import OrderedDict, namedtuple
-from odemis import dataio
+from odemis import dataio, model
 from odemis.gui import instrmodel
 from odemis.gui.cont import settings
 from odemis.gui.cont.acquisition import SecomAcquiController, \
@@ -35,7 +35,7 @@ from odemis.gui.cont.views import ViewController, ViewSelector
 from odemis.gui.instrmodel import STATE_ON, STATE_OFF, STATE_PAUSE
 from odemis.gui.model.img import InstrumentalImage
 from odemis.gui.model.stream import SpectrumStream, SEMStream, ARStream, \
-    UNDEFINED_ROI, StaticStream, CameraStream
+    UNDEFINED_ROI, StaticStream, CameraStream, StaticSpectrumStream, StaticSEMStream
 from odemis.gui.util import widgets, get_picture_folder
 from odemis.gui.util.conversion import formats_to_wildcards
 import logging
@@ -420,49 +420,93 @@ class InspectionTab(Tab):
 
         :return: True if a file was successfully selected, False otherwise.
         """
-
         # Find the available formats (and corresponding extensions)
-        formats_to_ext = dataio.get_available_formats()
-
+        formats_to_ext = dataio.get_available_formats(os.O_RDONLY)
 
         if self.current_file:
             path, _ = os.path.split(self.current_file)
         else:
             path = get_picture_folder()
 
-        # Note: When setting 'defaultFile' when creating the file dialog, the
-        #   first filter will automatically be added to the name. Since it
-        #   cannot be changed by selecting a different file type, this is big
-        #   nono. Also, extensions with multiple periods ('.') are not correctly
-        #   handled. The solution is to use the SetFilename method instead.
-        wildcards, formats = formats_to_wildcards(formats_to_ext, True)
+        wildcards, formats = formats_to_wildcards(formats_to_ext, include_all=True)
         dialog = wx.FileDialog(self.panel,
                                message="Choose a file to load",
                                defaultDir=path,
                                defaultFile="",
                                style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST,
                                wildcard=wildcards)
-
-        idx = 0
-
-        try:
-            if self.current_file:
-                basename = os.path.basename(self.current_file)
-                ext = os.path.splitext(basename)[1].upper()[1:]
-                idx = formats.index(ext) + 1 # +1 for added 'any file' option
-        except ValueError:
-            pass
-
-        dialog.SetFilterIndex(idx)
+#        dialog.SetFilterIndex(0)
 
         # Show the dialog and check whether is was accepted or cancelled
-        if dialog.ShowModal() == wx.ID_OK:
-            self.current_file = dialog.GetPath()
-            logging.debug("Current file set to %s", self.current_file)
-            return True
+        if dialog.ShowModal() != wx.ID_OK:
+            return False
 
-        return False
+        # Detect the format to use
+        fn = dialog.GetPath()
+        self.current_file = fn
+        logging.debug("Current file set to %s", self.current_file)
 
+        fmt = formats[dialog.GetFilterIndex()]
+        if fmt is None:
+            # Try to guess from the extension
+            for f, exts in formats_to_ext.items():
+                if any([fn.endswith(e) for e in exts]):
+                    fmt = f
+                    break
+            else:
+                # pick a random format hoping it's the right one
+                fmt = formats[1]
+                logging.warning("Couldn't guess format from filename '%s',"
+                                " will use %s.", fn, fmt)
+
+        converter = dataio.get_exporter(fmt)
+        try:
+            data = converter.read_data(fn)
+        except Exception:
+            logging.exception("Failed to open file '%s' with format %s", fn, fmt)
+
+        self._display_new_data(fn, data)
+
+        return True
+
+
+    def _display_new_data(self, filename, data):
+        """
+        Display a new data set (removing all references to the current one)
+        filename (string): Name of the file containing the data.  
+        data (list of model.DataArray): the data to display. Should have at 
+         least one DataArray.
+        """
+        fi = instrmodel.FileInfo(filename)
+
+        # remove all the previous streams
+        self._stream_controller.clear()
+
+        acq_date = fi.metadata.get(model.MD_ACQ_DATE, None)
+        # Add each data as a stream of the correct type
+        for d in data:
+            try:
+                im_acq_date = d.metadata[model.MD_ACQ_DATE]
+                acq_date = min(acq_date or im_acq_date, im_acq_date)
+            except KeyError: # no MD_ACQ_DATE
+                pass # => don't update the acq_date
+            
+            # TODO: be more clever to detect the type of stream
+            if (model.MD_WL_LIST in d.metadata or
+                model.MD_WL_POLYNOMIAL in d.metadata or
+                (len(d.shape) >= 5 and d.shape[-5] > 1)):
+                desc = d.metadata.get(model.MD_DESCRIPTION, "Spectrogram")
+                self._stream_controller.addStatic(desc, d,
+                                                  cls=StaticSpectrumStream,
+                                                  add_to_all_views=True)
+            else:
+                desc = d.metadata.get(model.MD_DESCRIPTION, "Secondary electrons")
+                self._stream_controller.addStatic(desc, d,
+                                                  cls=StaticSEMStream,
+                                                  add_to_all_views=True)
+        if acq_date:
+            fi.metadata[model.MD_ACQ_DATE] = acq_date
+        self.interface_model.fileinfo.value = fi
 
 class MirrorAlignTab(Tab):
     """

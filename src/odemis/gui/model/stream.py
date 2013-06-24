@@ -879,7 +879,8 @@ class StaticStream(Stream):
     def __init__(self, name, image):
         """
         Note: parameters are different from the base class.
-        image (InstrumentalImage or DataArray): image to display or raw data.
+        image (InstrumentalImage or DataArray of shape (111)YX): image to 
+          display or raw data.
           If it is a DataArray, the metadata should contain at least MD_POS and
           MD_PIXEL_SIZE.
         """
@@ -888,6 +889,18 @@ class StaticStream(Stream):
             # TODO: use original image as raw, to allow changing the B/C/tint
             self.image = VigilantAttribute(image)
         else: # raw data
+            # Check it's 2D
+            if len(image.shape) < 2:
+                raise ValueError("Data must be 2D")
+            # make it 2D by removing first dimensions (which must 1)
+            if len(image.shape) > 2:
+                l1d = len(image.shape) - 2
+                if image.shape[:l1d] != (1,) * l1d: # must look like (1,1,1)
+                    raise ValueError("Data must be 2D but has shape %s" %
+                                     (image.shape,))
+                image = image[(0,) * l1d]
+
+            # Find the depth
             try:
                 self._depth = 2 ** image.metadata[model.MD_BPP]
             except KeyError: # no MD_MPP
@@ -935,7 +948,7 @@ class StaticSpectrumStream(StaticStream):
     def __init__(self, name, image):
         """
         name (string)
-        image (model.DataArray of shape (CYX)). The metadata MD_WL_POLYNOMIAL
+        image (model.DataArray of shape (CYX) or (C11YX)). The metadata MD_WL_POLYNOMIAL
          should be included in order to associate the C to a wavelength.
         """
         # Spectrum stream has in addition to normal stream:
@@ -945,12 +958,17 @@ class StaticSpectrumStream(StaticStream):
         #  * coordinates of 2nd point (line)
 
         # TODO: support either 3D or 5D (CTZYX with TZ = 11)
-        #   raw data: raw = raw[:,numpy.newaxis,numpy.newaxis,:,:]
 
         # default to showing all the data
         if isinstance(image, InstrumentalImage):
             raise NotImplementedError("SpectrumStream needs a raw cube data")
-        assert len(image.shape) == 3
+
+        if len(image.shape) == 3:
+            # force 5D
+            image = image[:, numpy.newaxis, numpy.newaxis, :, :]
+        elif len(image.shape) != 5 or image.shape[1:3] != (1, 1):
+            logging.error("Cannot handle data of shape %s", image.shape)
+            raise NotImplementedError("SpectrumStream needs a cube data")
 
         ### this is for "average spectrum" projection
         # VAs: center wavelength + bandwidth (=center + width)
@@ -1078,12 +1096,13 @@ class StaticSpectrumStream(StaticStream):
         # FIXME: check that this API makes sense (projection...)
 
         try:
-            data = self.raw[0]
+            data = self.raw[0][:, 0, 0, :, :]
             if self.projection.value == PROJ_AVERAGE_SPECTRUM:
                 if self.auto_bc.value:
                     # FIXME: need to fix the brightness/contrast to the min/max
                     # of the _entire_ image (not just the current slice)
                     # b, c = img.FindOptimalBC(self.raw[0], self._depth)
+                    # or allow user to switch between whole data and current slice?
                     brightness = None
                     contrast = None
                 else:

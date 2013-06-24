@@ -93,22 +93,37 @@ def change_brightness(col_tup, step):
 
     return tuple(col_list + list(col_tup[3:]))
 
-def formats_to_wildcards(formats2ext, include_any):
+def formats_to_wildcards(formats2ext, include_all=False, include_any=False):
     """Convert formats into wildcards string compatible with wx.FileDialog()
 
     formats2ext (dict (string -> list of strings)): format names and lists of
         their possible extensions.
+    include_all (boolean): If True, also include as first wildcards for all the formats 
+    include_any (boolean): If True, also include as last the *.* wildcards 
 
     returns (tuple (string, list of strings)): wildcards, name of the format
-        in the same order as in the wildcards
+        in the same order as in the wildcards (or None if all/any format)
     """
-    wildcards = ["Any file (*.*)|*.*"] if include_any else []
     formats = []
+    wildcards = []
     for fmt, extensions in formats2ext.items():
         ext_wildcards = ";".join(["*" + e for e in extensions])
         wildcard = "%s files (%s)|%s" % (fmt, ext_wildcards, ext_wildcards)
         formats.append(fmt)
         wildcards.append(wildcard)
+
+    if include_all:
+        fmt_wildcards = []
+        for extensions in formats2ext.values():
+            fmt_wildcards.append(";".join(["*" + e for e in extensions]))
+        ext_wildcards = ";".join(fmt_wildcards)
+        wildcard = "All supported files (%s)|%s" % (ext_wildcards, ext_wildcards)
+        wildcards.insert(0, wildcard)
+        formats.insert(0, None)
+
+    if include_any:
+        wildcards.append("Any file (*.*)|*.*")
+        formats.append(None)
 
     # the whole importance is that they are in the same order
     return "|".join(wildcards), formats
