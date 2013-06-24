@@ -585,6 +585,12 @@ class UnitFloatSlider(NumberSlider):
 
 
 class VisualRangeSlider(BaseSlider):
+    """
+    This is a very advanced slider which allows to select a range (i.e, low+high
+    value) and also display some monochrome image in the background. It follows
+    mostly the normal wx.Slider API, but value is a tuple of values, and it has
+    SetContent() to update the background image.
+    """
 
     sel_alpha = 0.5
     sel_alpha_h = 0.7
@@ -597,7 +603,7 @@ class VisualRangeSlider(BaseSlider):
 
         super(VisualRangeSlider, self).__init__(parent, id, pos, size, style)
 
-        self.hist_color = wxcol_to_rgb(self.GetForegroundColour())
+        self.content_color = wxcol_to_rgb(self.GetForegroundColour())
         self.select_color = (1.0, 1.0, 1.0, self.sel_alpha)
 
         if size == (-1, -1):
@@ -636,10 +642,11 @@ class VisualRangeSlider(BaseSlider):
         self._percentage_to_val = lambda r0, r1, p: (r1 - r0) * p + r0
         self._val_to_percentage = lambda r0, r1, v: (float(v) - r0) / (r1 - r0)
 
-    def SetForegroundColour(self, col=None):  #pylint: disable=W0221
-        if col:
-            wx.PyControl.SetForegroundColour(self, col)
-        self.hist_color = wxcol_to_rgb(self.GetForegroundColour())
+    def SetForegroundColour(self, col):  #pylint: disable=W0221
+        ret = wx.PyControl.SetForegroundColour(self, col)
+        self.content_color = wxcol_to_rgb(self.GetForegroundColour())
+        # FIXME: this will fail if currently Disabled
+        return ret
 
     ### Setting and getting of values
 
@@ -675,7 +682,7 @@ class VisualRangeSlider(BaseSlider):
     def GetValue(self):
         return self.value
 
-    def SetRange(self, val_range):
+    def SetRange(self, val_range): # FIXME: should follow wx.Slider API: minValue, maxValue
         if self.value:
             if not all([val_range[0] <= i <= val_range[1] for i in self.value]):
                 msg = "Illegal range %s for value %s" % (val_range, self.value)
@@ -690,16 +697,18 @@ class VisualRangeSlider(BaseSlider):
         return self.val_range
 
     def Disable(self):  #pylint: disable=W0221
-        wx.PyControl.Disable(self)
-        self.hist_color = change_brightness(self.hist_color, -0.5)
-        self.select_color = change_brightness(self.select_color, -0.4)
-        #print self.hist_color
-        self.Refresh()
+        self.Enable(False)
 
     def Enable(self, enable=True):  #pylint: disable=W0221
         wx.PyControl.Enable(self, enable)
-        self.hist_color = wxcol_to_rgb(self.GetForegroundColour())
-        self.select_color = change_brightness(self.select_color, 0.4)
+        if enable:
+            self.content_color = wxcol_to_rgb(self.GetForegroundColour())
+            self.select_color = change_brightness(self.select_color, 0.4)
+        else:
+            # FIXME: this will fail if multiple Disable() in a row
+            self.content_color = change_brightness(self.content_color, -0.5)
+            self.select_color = change_brightness(self.select_color, -0.4)
+
         self.Refresh()
 
     def SetContent(self, content_list):
@@ -836,7 +845,7 @@ class VisualRangeSlider(BaseSlider):
         Send EVT_COMMAND_SLIDER_UPDATED, which is received as EVT_SLIDER.
         Means that the value has changed (even when the user is moving the slider)
         """
-        logging.error("Firing slider event for value %s", self.value)
+        logging.debug("Firing slider event for value %s", self.value)
 
         evt = wx.CommandEvent(wx.wxEVT_COMMAND_SLIDER_UPDATED)
         evt.SetEventObject(self)
@@ -873,13 +882,13 @@ class VisualRangeSlider(BaseSlider):
         self.drag_start_x = None
         self.mode = None
 
-    def _draw_histogram(self, ctx, width, height):
+    def _draw_content(self, ctx, width, height):
         line_width = float(width) / self.len_content
         ctx.set_line_width(line_width + 0.5)
-        ctx.set_source_rgb(*self.hist_color)
+        ctx.set_source_rgb(*self.content_color)
 
         for i, v in enumerate(self.content_list):
-            x = (i * line_width) + (line_width / 2.0)
+            x = (i + 0.5) * line_width
             self._draw_line(ctx, x, height, x, (1 - v) * float(height))
 
     def OnPaint(self, event=None):
@@ -889,7 +898,7 @@ class VisualRangeSlider(BaseSlider):
 
         if self.content_list:
             if self.dirty_content:
-                self._draw_histogram(ctx, width, height)
+                self._draw_content(ctx, width, height)
                 self.dirty_content = False
 
                 self.content_bmp = wx.EmptyBitmap(width, height)

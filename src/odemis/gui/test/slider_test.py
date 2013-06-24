@@ -185,21 +185,21 @@ class SliderTestCase(unittest.TestCase):
 
         loop()
 
-        vrs.set_range((0, 100))
+        vrs.SetRange((0, 100))
         vrs.SetValue((25, 75))
 
         for d in DATA:
-            vrs.set_content(d)
+            vrs.SetContent(d)
             loop()
             wx.MilliSleep(SLEEP_TIME)
 
-        vrs.set_content([])
+        vrs.SetContent([])
         vrs.SetValue(())
 
         self.assertEqual(vrs.pixel_value, ())
         self.assertEqual(vrs.GetValue(), ())
 
-        vrs.set_range((0.2, 0.8))
+        vrs.SetRange((0.2, 0.8))
         loop()
         wx.MilliSleep(SLEEP_TIME)
 
@@ -207,14 +207,14 @@ class SliderTestCase(unittest.TestCase):
         loop()
         wx.MilliSleep(SLEEP_TIME)
 
-        vrs.set_content(DATA[7])
+        vrs.SetContent(DATA[7])
         loop()
         wx.MilliSleep(SLEEP_TIME)
-        vrs.set_content(DATA[8])
+        vrs.SetContent(DATA[8])
         loop()
         wx.MilliSleep(SLEEP_TIME)
 
-        vrs.set_range((0, 1))
+        vrs.SetRange((0, 1))
         loop()
         wx.MilliSleep(SLEEP_TIME)
 
@@ -244,24 +244,24 @@ class SliderTestCase(unittest.TestCase):
 
         loop()
 
-        bws.set_range((0, 100))
+        bws.SetRange((0, 100))
         bws.SetValue((25, 75))
 
         for d in DATA:
-            bws.set_content(d)
+            bws.SetContent(d)
             loop()
             wx.MilliSleep(SLEEP_TIME)
 
-        bws.set_content([])
+        bws.SetContent([])
         bws.SetValue(())
 
-        bws.set_content([])
+        bws.SetContent([])
         bws.SetValue(())
 
         self.assertEqual(bws.pixel_value, ())
         self.assertEqual(bws.GetValue(), ())
 
-        bws.set_range((0.2, 0.8))
+        bws.SetRange((0.2, 0.8))
         loop()
         wx.MilliSleep(SLEEP_TIME)
 
@@ -269,14 +269,14 @@ class SliderTestCase(unittest.TestCase):
         loop()
         wx.MilliSleep(SLEEP_TIME)
 
-        bws.set_content(DATA[7])
+        bws.SetContent(DATA[7])
         loop()
         wx.MilliSleep(SLEEP_TIME)
-        bws.set_content(DATA[8])
+        bws.SetContent(DATA[8])
         loop()
         wx.MilliSleep(SLEEP_TIME)
 
-        bws.set_range((0, 1))
+        bws.SetRange((0, 1))
         loop()
         wx.MilliSleep(SLEEP_TIME)
 

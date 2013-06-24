@@ -856,19 +856,6 @@ class VisualRangeSliderHandler(xrc.XmlResourceHandler):
         capable = self.IsOfClass(node, "VisualRangeSlider")
         return capable
 
-    def GetFloat(self, param, defaultv=0):
-        # there is a bug in wxWidgets, which doesn't export GetFloat
-        # => recreate in Python
-        # self, String param, long defaultv=0
-
-        string = self.GetParamValue(param)
-
-        try:
-            value = float(string)
-        except ValueError:
-            logging.error("Float param incorrect %s", string)
-        return value
-
     def DoCreateResource(self):
         assert self.GetInstance() is None
         # Now create the object
@@ -878,7 +865,7 @@ class VisualRangeSliderHandler(xrc.XmlResourceHandler):
                                          size=self.GetSize(),
                                          style=self.GetStyle())
         self.SetupWindow(slider)
-        slider.SetForegroundColour()
+        slider.SetForegroundColour(slider.GetForegroundColour())
         return slider
 HANDLER_CLASS_LIST.append(VisualRangeSliderHandler)
 
@@ -893,19 +880,6 @@ class BandwidthSliderHandler(xrc.XmlResourceHandler):
         capable = self.IsOfClass(node, "BandwidthSlider")
         return capable
 
-    def GetFloat(self, param, defaultv=0):
-        # there is a bug in wxWidgets, which doesn't export GetFloat
-        # => recreate in Python
-        # self, String param, long defaultv=0
-
-        string = self.GetParamValue(param)
-
-        try:
-            value = float(string)
-        except ValueError:
-            logging.error("Float param incorrect %s", string)
-        return value
-
     def DoCreateResource(self):
         assert self.GetInstance() is None
         # Now create the object
@@ -915,7 +889,8 @@ class BandwidthSliderHandler(xrc.XmlResourceHandler):
                                        size=self.GetSize(),
                                        style=self.GetStyle())
         self.SetupWindow(slider)
-        slider.SetForegroundColour()
+        # FIXME: this shouldn't be needed, but without it, the content colour is not set
+        slider.SetForegroundColour(slider.GetForegroundColour())
         return slider
 HANDLER_CLASS_LIST.append(BandwidthSliderHandler)
 
