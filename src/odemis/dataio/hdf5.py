@@ -296,7 +296,7 @@ def _read_image_info(group, dataset):
         # TODO: add scale for each Z ??
     except Exception:
         pass
-    
+
     # Scale
     try:
         pxs = [None, None]
@@ -310,10 +310,22 @@ def _read_image_info(group, dataset):
     except Exception:
         pass
 
-    # TODO  Wavelength (for spectrograms)
-    
-    return md
+    # Wavelength is only if the data has a C dimension and it has one number 
+    # for the scale (linear polynomial) or it it has a list of wavelengths (one 
+    # per pixel).
+    try:
+        for i, dim in enumerate(dataset.dims):
+            if dim.label == "C":
+                if dim[0].shape == (dataset.shape[i],):
+                    md[model.MD_WL_LIST] = map(float, dim[0][...].tolist())
+                elif dim[0].shape == ():
+                    pn = [float(group["COffset"][()]),
+                          float(dim[0][()])]
+                    md[model.MD_WL_POLYNOMIAL] = pn
+    except Exception:
+        pass
 
+    return md
 
 
 ST_INVALID = 111
@@ -505,10 +517,13 @@ def _add_acquistion_svi(group, images, **kwargs):
     # dimension which is of size 1.
     # For now, if there are many possibilities, we pick the first one.
     # TODO: be more clever in choosing which dimension to pick using metadata
-    if not 1 in images5d[0].shape:
-        raise ValueError("No dimension found to concatenate images: %s" % images5d[0].shape)
-    concat_axis = images5d[0].shape.index(1)
-    gdata = numpy.concatenate(images5d, axis=concat_axis)
+    if len(images5d) > 1:
+        if not 1 in images5d[0].shape:
+            raise ValueError("No dimension found to concatenate images: %s" % images5d[0].shape)
+        concat_axis = images5d[0].shape.index(1)
+        gdata = numpy.concatenate(images5d, axis=concat_axis)
+    else:
+        gdata = images5d[0]
 
     # StateEnumeration
     # FIXME: should be done by _h5svi_set_state (and used)

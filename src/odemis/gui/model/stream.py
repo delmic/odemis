@@ -40,6 +40,7 @@ import odemis.gui.util.img as img
 import odemis.gui.util.units as units
 import odemis.model as model
 import threading
+from odemis.model._dataflow import MD_WL_LIST
 
 
 # to identify a ROI which must still be defined by the user
@@ -928,11 +929,15 @@ class StaticSpectrumStream(StaticStream):
     A Spectrum stream which displays only one static image/data.
     The main difference from the normal streams is that the data is 3D (a cube)
     The metadata should have a MD_WL_POLYNOMIAL
-    Note that the data received should be of the (numpy) shape CYX. (where YX
-    might be missing)
+    Note that the data received should be of the (numpy) shape CYX.
     When saving, the data will be converted to CTZYX (where TZ is 11)
     """
     def __init__(self, name, image):
+        """
+        name (string)
+        image (model.DataArray of shape (CYX)). The metadata MD_WL_POLYNOMIAL
+         should be included in order to associate the C to a wavelength.
+        """
         # Spectrum stream has in addition to normal stream:
         #  * projection type (1-point, line, avg. spectrum)
         #  * information about the current bandwidth displayed (avg. spectrum)
@@ -949,10 +954,10 @@ class StaticSpectrumStream(StaticStream):
 
         ### this is for "average spectrum" projection
         # VAs: center wavelength + bandwidth (=center + width)
-        pn = image.metadata[MD_WL_POLYNOMIAL]
-        if len(pn) >= 2:
-            minb = polynomial.polyval(0, pn)
-            maxb = polynomial.polyval(image.shape[0] - 1, pn)
+        try:
+            # cached list of wavelength for each pixel pos
+            self._wl_px_values = self._get_wavelength_per_pixel(image)
+            minb, maxb = self._wl_px_values[0], self._wl_px_values[-1]
             # they might represent wavelength out of the possible values, but they
             # will automatically be clipped to fine values
             self.centerWavelength = model.FloatContinuous((maxb + minb) / 2,
@@ -963,20 +968,22 @@ class StaticSpectrumStream(StaticStream):
             self.bandwidth = model.FloatContinuous(max_bw / 12,
                                                    range=(min_bw, max_bw),
                                                    unit="m")
-        else:
+        except (ValueError, KeyError):
             # useless polynomial => just show pixels values (ex: -50 -> +50 px)
             # TODO: try to make them always int?
+
             maxb = image.shape[0] // 2
             minb = (maxb - image.shape[0]) + 1
+            self._wl_px_values = range(minb, maxb + 1)
+            assert(len(self._wl_px_values) == image.shape[0])
             self.centerWavelength = model.FloatContinuous(0,
                                                           range=(minb, maxb),
                                                           unit="px")
             max_bw = image.shape[0]
-            self.bandwidth = model.FloatContinuous(max_bw // 12,
+            self.bandwidth = model.FloatContinuous(max(1, max_bw // 12),
                                                    range=(1, max_bw),
                                                    unit="px")
 
-        self._pn_px_values = None # cached list of wavelength for each pixel pos
 
         # Whether the (per bandwidth) display should be split intro 3 sub-bands
         # which are applied to RGB
@@ -1001,7 +1008,40 @@ class StaticSpectrumStream(StaticStream):
         self.centerWavelength.subscribe(self.onWavelengthChange)
         self.bandwidth.subscribe(self.onWavelengthChange)
 
-    def _get_bandwith_in_pixel(self):
+    def _get_wavelength_per_pixel(self, da):
+        """
+        Computes the wavelength for each pixel along the C dimension
+        da (model.DataArray of shape C...): the DataArray with metadata either
+          MD_WL_POLYNOMIAL or MD_WL_LIST
+        return (list of float of length C): the wavelength (in m) for each pixel
+         in C
+        raises:
+            KeyError: if no metadata is available
+            ValueError: if the metadata doesn't provide enough information
+        """
+        # MD_WL_LIST has priority
+        if MD_WL_LIST in da.metadata:
+            wl = da.metadata[MD_WL_LIST]
+            if len(wl) == len(da.shape[0]):
+                return wl
+            else:
+                logging.warning("MD_WL_LIST is not the same length as the data")
+
+        if MD_WL_POLYNOMIAL in da.metadata:
+            pn = da.metadata[MD_WL_POLYNOMIAL]
+            if len(pn) >= 2:
+                npn = polynomial.Polynomial(pn,
+                                            domain=[0, da.shape[0] - 1],
+                                            window=[0, da.shape[0] - 1])
+                return npn.linspace(da.shape[0])
+            else:
+                # a polynomial or 0 or 1 value is useless
+                raise ValueError("Wavelength polynomial has only %d degree"
+                                 % len(pn))
+
+        raise KeyError("No MD_WL_* metadata available")
+
+    def _get_bandwidth_in_pixel(self):
         """
         Return the current bandwidth in pixels index
         returns (2-tuple of int): low and high pixel coordinates (included)
@@ -1012,37 +1052,17 @@ class StaticSpectrumStream(StaticStream):
         high = center + width / 2
         # no need to clip, because searchsorted will do it anyway
 
-        # In theory it's a very complex question because you need to find the
-        # solution for the polynomial at the bandwidth borders. In reality, the
-        # world constraints help a lot: the polynomial is monotonic in the range
-        # observed. In addition, the degree of the polynomial is very small (<5).
-        # Finally, we know we are interested only by an integer solution.
-        # So an easy way is to just compute the polynomial for each pixel on the
-        # spectrum axis and take the closest ones (with the adapted rounding).
-        data = self.raw[0]
-        if self._pn_px_values is None:
-            # as the polynomial is rarely/never updated, we cache it
-            pn = data.metadata[MD_WL_POLYNOMIAL]
-            if len(pn) >= 2:
-                npn = polynomial.Polynomial(pn,
-                                            domain=[0, data.shape[0] - 1],
-                                            window=[0, data.shape[0] - 1])
-                n, self._pn_px_values = npn.linspace(data.shape[0])
-            else:
-                maxb = data.shape[0] // 2
-                minb = (maxb - data.shape[0]) + 1
-                self._pn_px_values = range(minb, maxb + 1)
-
-        low_px = numpy.searchsorted(self._pn_px_values, low, side="left")
-        low_px = min(low_px, data.shape[0] - 1) # make sure it fits inside
+        # Find the closest pixel position for the requested wavelength
+        low_px = numpy.searchsorted(self._wl_px_values, low, side="left")
+        low_px = min(low_px, len(self._wl_px_values) - 1) # make sure it fits inside
         # TODO: might need better handling to show just one pixel (in case it's
         # useful) as in almost all cases, it will end up displaying 2 pixels at
         # least
         if high == low:
             high_px = low_px
         else:
-            high_px = numpy.searchsorted(self._pn_px_values, high, side="right")
-            high_px = min(high_px, data.shape[0] - 1)
+            high_px = numpy.searchsorted(self._wl_px_values, high, side="right")
+            high_px = min(high_px, len(self._wl_px_values) - 1)
 
         logging.debug("Showing between %g -> %g nm = %d -> %d px",
                       low * 1e9, high * 1e9, low_px, high_px)
@@ -1073,7 +1093,7 @@ class StaticSpectrumStream(StaticStream):
                 # TODO: support fitToRGB
 
                 # pick only the data inside the bandwidth
-                spec_range = self._get_bandwith_in_pixel()
+                spec_range = self._get_bandwidth_in_pixel()
                 logging.debug("Spectrum range picked: %s px", spec_range)
                 # TODO: use better intermediary type if possible?, cf semcomedi
                 av_data = numpy.mean(data[spec_range[0]:spec_range[1] + 1], axis=0)

@@ -21,6 +21,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 
 from __future__ import division
+from numpy.polynomial import polynomial
 from odemis import model
 from odemis.dataio import hdf5
 from unittest.case import skip
@@ -344,13 +345,12 @@ class TestHDF5IO(unittest.TestCase):
                     },
                     ]
         # create 2 simple greyscale images
-        sizes = [(512, 256), (500, 400)] # different sizes to ensure different acquisitions
+        sizes = [(512, 256), (500, 400, 1, 1, 220)] # different sizes to ensure different acquisitions
         dtype = numpy.dtype("uint8")
         ldata = []
-        a = model.DataArray(numpy.zeros(sizes[0][-1:-3:-1], dtype), metadata[0])
-        ldata.append(a)
-        a = model.DataArray(numpy.zeros(sizes[1][-1:-3:-1], dtype), metadata[1])
-        ldata.append(a)
+        for i, s in enumerate(sizes):
+            a = model.DataArray(numpy.zeros(s[::-1], dtype), metadata[i])
+            ldata.append(a)
 
         # thumbnail : small RGB completely red
         tshape = (sizes[0][1] // 8, sizes[0][0] // 8, 3)
@@ -375,6 +375,19 @@ class TestHDF5IO(unittest.TestCase):
             self.assertEqual(im.metadata[model.MD_POS], md[model.MD_POS])
             self.assertEqual(im.metadata[model.MD_PIXEL_SIZE], md[model.MD_PIXEL_SIZE])
             self.assertEqual(im.metadata[model.MD_ACQ_DATE], md[model.MD_ACQ_DATE])
+
+            if model.MD_WL_POLYNOMIAL in md:
+                pn = md[model.MD_WL_POLYNOMIAL]
+                # 2 formats possible
+                if model.MD_WL_LIST in im.metadata:
+                    l = ldata[i].shape[2]
+                    npn = polynomial.Polynomial(pn,
+                                    domain=[0, l - 1],
+                                    window=[0, l - 1])
+                    wl = npn.linspace(l)
+                    self.assertEqual(im.metadata[model.MD_WL_LIST], wl)
+                else:
+                    self.assertEqual(im.metadata[model.MD_WL_POLYNOMIAL], pn)
 
         # check thumbnail
         rthumbs = hdf5.read_thumbnail(FILENAME)

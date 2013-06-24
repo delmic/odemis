@@ -226,6 +226,7 @@ class CompositedSpectrometer(model.Detector):
         Compose two polynomials : c1 o c2 = c1(c2(x))
         The arguments are sequences of coefficients, from lowest order term to highest, e.g., [1,2,3] represents the polynomial 1 + 2*x + 3*x**2.
         """
+        # TODO: Polynomial(Polynomial()) seems to do just that?
         # using Horner's method to compute the result of a polynomial
         cr = [c1[-1]]
         for a in reversed(c1[:-1]):
