@@ -951,6 +951,7 @@ class StaticSpectrumStream(StaticStream):
         image (model.DataArray of shape (CYX) or (C11YX)). The metadata MD_WL_POLYNOMIAL
          should be included in order to associate the C to a wavelength.
         """
+        Stream.__init__(self, name, None, None, None)
         # Spectrum stream has in addition to normal stream:
         #  * projection type (1-point, line, avg. spectrum)
         #  * information about the current bandwidth displayed (avg. spectrum)
@@ -1019,12 +1020,24 @@ class StaticSpectrumStream(StaticStream):
         self.projection = model.IntEnumerated(PROJ_AVERAGE_SPECTRUM,
           choices=set([PROJ_ONE_POINT, PROJ_ALONG_LINE, PROJ_AVERAGE_SPECTRUM]))
 
-        # this will call _updateImage(), which needs bandwidth
-        StaticStream.__init__(self, name, image)
+        # Find the depth
+        try:
+            self._depth = 2 ** image.metadata[model.MD_BPP]
+        except KeyError: # no MD_MPP
+            # guess out of the data
+            # cast to numpy.array to ensure it becomes a scalar (instead of a DataArray)
+            self._depth = numpy.array(image).max()
+            minv = numpy.array(image).min()
+            if minv < 0:  # signed?
+                self._depth += -minv
+                # FIXME: probably need to fix DataArray2wxImage() for such
+                # cases
 
         self.fitToRGB.subscribe(self.onFitToRGB)
         self.centerWavelength.subscribe(self.onWavelengthChange)
         self.bandwidth.subscribe(self.onWavelengthChange)
+
+        self.onNewImage(None, image) # generates the first rgb image
 
     def _get_wavelength_per_pixel(self, da):
         """
@@ -1389,13 +1402,11 @@ class SEMSpectrumMDStream(MultipleDetectorStream):
             e.shape = e.shape[-1::-1]
         # concatenate into one big array of (N, number of pixels)
         spec_data = numpy.concatenate(data_list, axis=1)
-        # reshape to (N, Y, X)
+        # reshape to (C, 1, 1, Y, X) (as C must be the 5th dimension)
         repetition = self._acq_repetition
         spec_res = data_list[0].shape[0]
-        spec_data.shape = (spec_res, repetition[1], repetition[0])
-
-        # TODO: insert 2 dimensions, to indicate spec_res is the channel
-        #   raw data: raw = raw[:,numpy.newaxis,numpy.newaxis,:,:]
+        spec_data.shape = (spec_res, 1, 1, repetition[1], repetition[0])
+#       raw = raw[:,numpy.newaxis,numpy.newaxis,:,:]
 
         # copy the metadata from the first point and add the ones from metadata
         md = data_list[0].metadata
