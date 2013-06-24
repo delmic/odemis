@@ -605,7 +605,7 @@ class VisualRangeSlider(BaseSlider):
 
         self.content_list = []
         self.len_content = 0
-        self.dirty_conent = False
+        self.dirty_content = False
         self.content_bmp = None
 
         # The minimum and maximum values
@@ -661,7 +661,7 @@ class VisualRangeSlider(BaseSlider):
                     self.pixel_value = tuple(self._val_to_pixel(i) for i in val)
                     self.Refresh()
                 else:
-                    msg = "Illegal value order %s, should be (low, high)" % val
+                    msg = "Illegal value order %s, should be (low, high)" % (val,)
                     raise ValueError(msg)
             else:
                 msg = "Illegal value %s for range %s" % (val, self.val_range)
@@ -675,7 +675,7 @@ class VisualRangeSlider(BaseSlider):
     def GetValue(self):
         return self.value
 
-    def set_range(self, val_range):
+    def SetRange(self, val_range):
         if self.value:
             if not all([val_range[0] <= i <= val_range[1] for i in self.value]):
                 msg = "Illegal range %s for value %s" % (val_range, self.value)
@@ -686,7 +686,7 @@ class VisualRangeSlider(BaseSlider):
         self.pixel_value = tuple(self._val_to_pixel(i) for i in self.value)
         self.Refresh()
 
-    def get_range(self):
+    def GetRange(self):
         return self.val_range
 
     def Disable(self):  #pylint: disable=W0221
@@ -702,10 +702,10 @@ class VisualRangeSlider(BaseSlider):
         self.select_color = change_brightness(self.select_color, 0.4)
         self.Refresh()
 
-    def set_content(self, content_list):
+    def SetContent(self, content_list):
         self.content_list = content_list
         self.len_content = len(content_list)
-        self.dirty_conent = True
+        self.dirty_content = True
         self.content_bmp = None
         self.Refresh()
 
@@ -828,6 +828,7 @@ class VisualRangeSlider(BaseSlider):
             self.drag_x = 0
         else:
             self._calc_drag(x)
+            self.send_slider_update_event() # FIXME: need to update the value, otherwise it's pointless
 
     @limit_invocation(0.07)  #pylint: disable=E1120
     def send_slider_update_event(self):
@@ -887,9 +888,9 @@ class VisualRangeSlider(BaseSlider):
         width, height = self.GetSize()
 
         if self.content_list:
-            if self.dirty_conent:
+            if self.dirty_content:
                 self._draw_histogram(ctx, width, height)
-                self.dirty_conent = False
+                self.dirty_content = False
 
                 self.content_bmp = wx.EmptyBitmap(width, height)
 
@@ -911,7 +912,7 @@ class VisualRangeSlider(BaseSlider):
         self._draw_selection(ctx)
 
     def OnSize(self, event=None):
-        self.dirty_conent = True
+        self.dirty_content = True
         super(VisualRangeSlider, self).OnSize(event)
 
 class BandwidthSlider(VisualRangeSlider):
@@ -941,8 +942,8 @@ class BandwidthSlider(VisualRangeSlider):
         logging.debug("Getting bandwidth %s", self.bandwidth)
         return self.bandwidth
 
-    # def set_range(self, val_range):
-    #     super(BandwidthSlider, self).set_range(val_range)
+    # def SetRange(self, val_range):
+    #     super(BandwidthSlider, self).SetRange(val_range)
     #     if self.value:
     #         if not all([val_range[0] <= i <= val_range[1] for i in self.value]):
     #             msg = "Illegal range %s for value %s" % (val_range, self.value)
@@ -958,6 +959,10 @@ class BandwidthSlider(VisualRangeSlider):
             self._drag_to_value()
             self._calc_bandwidth_center(self.value)
             self.send_scroll_event()
+
+    def _calc_drag(self, x):
+        VisualRangeSlider._calc_drag(self, x)
+        self._calc_bandwidth_center(self.value)
 
     def SetValue(self, value):
         if not value:
@@ -978,4 +983,4 @@ class BandwidthSlider(VisualRangeSlider):
         spread = self.bandwidth / 2.0
         val = (self.center_val - spread, self.center_val + spread)
         super(BandwidthSlider, self)._SetValue(val)
-        logging.debug( "Calculated value is [%s] ", self.value)
+        logging.debug("Calculated value is %s", (self.value,))

@@ -31,7 +31,7 @@ from odemis.gui.comp.slider import UnitIntegerSlider, UnitFloatSlider, \
     BandwidthSlider
 from odemis.gui.comp.text import SuggestTextCtrl, UnitIntegerCtrl, \
     IntegerTextCtrl
-from odemis.gui.util import call_after
+from odemis.gui.util import call_after, limit_invocation
 from odemis.gui.util.conversion import wave2rgb
 from odemis.gui.util.widgets import VigilantAttributeConnector
 from wx.lib.pubsub import pub
@@ -975,8 +975,8 @@ class BandwithStreamPanel(StreamPanel):
 
         self._sld_range.SetBackgroundColour(BG_COLOUR_PANEL)
 
-        self._sld_range.set_range(self.stream.centerWavelength.range)
-        # self._sld_range.set_range((5.0e-07, 7.0e-07))
+        self._sld_range.SetRange(self.stream.centerWavelength.range)
+        # self._sld_range.SetRange((5.0e-07, 7.0e-07))
         self._sld_range.set_center_value(self.stream.centerWavelength.value)
         # self._sld_range.set_center_value(6.0e-07)
 
@@ -985,7 +985,7 @@ class BandwithStreamPanel(StreamPanel):
                                 self._sld_range,
                                 va_2_ctrl=self._sld_range.set_center_value,
                                 ctrl_2_va=self._sld_range.get_center_value,
-                                events=wx.EVT_SCROLL_CHANGED)
+                                events=wx.EVT_SLIDER)
 
         self._sld_range.set_bandwidth_value(self.stream.bandwidth.value)
         # self._sld_range.set_bandwidth_value(1.0e-07)
@@ -996,6 +996,9 @@ class BandwithStreamPanel(StreamPanel):
         #                         va_2_ctrl=self._sld_range.set_bandwidth_value,
         #                         ctrl_2_va=self._sld_range.get_bandwidth_value,
         #                         events=wx.EVT_SCROLL_CHANGED)
+
+        # TODO: should the stream have a way to know when the raw data has changed?
+        self.stream.image.subscribe(self.on_new_data, init=True)
 
         # span is 2, because emission/excitation have 2 controls
         self._gbs.Add(self._sld_range, pos=(self.row_count, 0),
@@ -1014,6 +1017,31 @@ class BandwithStreamPanel(StreamPanel):
     def on_toggle_fit_rgb(self, evt):
         enabled = self._btn_fit_rgb.GetToggle()
         self.stream.fitToRGB.value = enabled
+
+    @limit_invocation(1)
+    def on_new_data(self, image):
+        # Display the global spectrum in the visual range slider
+        gspec = self.stream.getSpectrum()
+        if len(gspec) <= 1:
+            logging.warning("Strange spectrum of len %d", len(gspec))
+            return
+
+        # make it fit between 0 and 1
+        if len(gspec) >= 5:
+            # skip the 2 biggest peaks
+            s_values = sorted(gspec)
+            mins, maxs = s_values[2], s_values[-3]
+        else:
+            mins, maxs = min(gspec), max(gspec)
+
+        base = min(mins, 0) # to make sure big values look big
+        try:
+            coef = 1. / (maxs - base)
+        except ZeroDivisionError:
+            coef = 1
+
+        gspec = [(s + base) * coef for s in gspec]
+        wx.CallAfter(self._sld_range.SetContent, gspec)
 
 class DyeStreamPanel(StreamPanel):
     """ A stream panel which can be altered by the user """
