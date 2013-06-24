@@ -1160,6 +1160,25 @@ class StaticSpectrumStream(StaticStream):
             logging.exception(msg, self.__class__.__name__)
 
 
+    # TODO: have an "area=None" argument which allows to specify the 2D region
+    # within which the spectrum should be computed
+    # TODO: should it also return the wavelength values? Or maybe another method
+    # can do it?
+    def getSpectrum(self):
+        """
+        Compute the global spectrum of the data as an average over all the pixels
+        returns (list of float): average intensity for each wavelength
+         You need to use the metadata of the raw data to find out what is the
+         wavelength for each pixel. 
+        """
+        data = self.raw[0]
+        # flatten all but the C dimension, for the average
+        data = data.reshape((data.shape[0], numpy.prod(data.shape[1:])))
+        av_data = numpy.mean(data, axis=1)
+
+        # TODO: add an argument to request dividing by ._depth?
+        return av_data.tolist()
+        
     def onFitToRGB(self, value):
         """
         called when fitToRGB is changed
