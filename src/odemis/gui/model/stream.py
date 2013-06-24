@@ -1350,6 +1350,10 @@ class SEMSpectrumMDStream(MultipleDetectorStream):
                 if m in md_sem:
                     md[m] = md_sem[m]
 
+            # explicitly add names to make sure they are different
+            md_sem[model.MD_DESCRIPTION] = self._sem_stream.name.value
+            md[model.MD_DESCRIPTION] = self._spec_stream.name.value
+
             # create a spectrum cube from all the data
             self._assembleSpecData(self._acq_spect_buf, md)
 
@@ -1406,7 +1410,6 @@ class SEMSpectrumMDStream(MultipleDetectorStream):
         repetition = self._acq_repetition
         spec_res = data_list[0].shape[0]
         spec_data.shape = (spec_res, 1, 1, repetition[1], repetition[0])
-#       raw = raw[:,numpy.newaxis,numpy.newaxis,:,:]
 
         # copy the metadata from the first point and add the ones from metadata
         md = data_list[0].metadata

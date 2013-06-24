@@ -319,7 +319,8 @@ class OdemisGUIApp(wx.App):
         # It uses raw data, not images
         try:
             mtc = get_main_tab_controller()
-
+            # TODO: put all of it in an hdf5 file and use hdf5.read_data() +
+            # _display_new_data()
             sem_mat = pkg_resources.resource_stream("odemis.gui.img",
                                                     "example/s1-sem-bse.mat")
             mdsem = {model.MD_PIXEL_SIZE: (178e-9, 178e-9),
@@ -349,7 +350,7 @@ class OdemisGUIApp(wx.App):
             stream_controller.addStatic("Secondary electrons", semdatas,
                                         cls=StaticSEMStream,
                                         add_to_all_views=True)
-            stream_controller.addStatic("Spectrogram", specdatai,
+            stream_controller.addStatic("Spectrum", specdatai,
                                         cls=StaticSpectrumStream,
                                         add_to_all_views=True)
 

@@ -264,9 +264,10 @@ class AcquisitionTask(object):
 
             # add the raw images
             data = s.raw
-            # add the stream name to the image
+            # add the stream name to the image if nothing yet
             for d in data:
-                d.metadata[model.MD_DESCRIPTION] = s.name.value
+                if not model.MD_DESCRIPTION in d.metadata:
+                    d.metadata[model.MD_DESCRIPTION] = s.name.value
             raw_images.extend(data)
 
             # update the time left

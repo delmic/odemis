@@ -495,7 +495,7 @@ class InspectionTab(Tab):
             if (model.MD_WL_LIST in d.metadata or
                 model.MD_WL_POLYNOMIAL in d.metadata or
                 (len(d.shape) >= 5 and d.shape[-5] > 1)):
-                desc = d.metadata.get(model.MD_DESCRIPTION, "Spectrogram")
+                desc = d.metadata.get(model.MD_DESCRIPTION, "Spectrum")
                 self._stream_controller.addStatic(desc, d,
                                                   cls=StaticSpectrumStream,
                                                   add_to_all_views=True)
