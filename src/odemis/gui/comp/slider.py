@@ -596,9 +596,9 @@ class VisualRangeSlider(BaseSlider):
     sel_alpha_h = 0.7 # %
     min_sel_width = 5 # px
 
-    def __init__(self, parent, id=wx.ID_ANY, value=0.0, val_range=(0.0, 1.0),
-                 size=(-1, -1), pos=wx.DefaultPosition, style=wx.NO_BORDER,
-                 name="VisualRangeSlider"):
+    def __init__(self, parent, id=wx.ID_ANY, value=(0.5, 0.6), minValue=0.0,
+                 maxValue=1.0, size=(-1, -1), pos=wx.DefaultPosition,
+                 style=wx.NO_BORDER, name="VisualRangeSlider"):
 
         super(VisualRangeSlider, self).__init__(parent, id, pos, size, style)
 
@@ -613,11 +613,11 @@ class VisualRangeSlider(BaseSlider):
         self.content_bmp = None
 
         # The minimum and maximum values
-        self.val_range = ()
+        self.val_range = (minValue, maxValue)
         # The selected range (within self.range)
-        self.value = ()
+        self.value = value
         # Selected range in pixels
-        self.pixel_value = ()
+        self.pixel_value = (0, 0)
 
         # Layout Events
         self.Bind(wx.EVT_PAINT, self.OnPaint)
@@ -633,12 +633,14 @@ class VisualRangeSlider(BaseSlider):
 
         self.mode = None
 
-        self.drag_start_x = None
-        self.drag_x = 0
+        self.drag_start_x = None # px
+        self.drag_x = 0 # px
 
         # Same code as in other slider. Merge?
         self._percentage_to_val = lambda r0, r1, p: (r1 - r0) * p + r0
         self._val_to_percentage = lambda r0, r1, v: (float(v) - r0) / (r1 - r0)
+
+        self._SetValue(self.value) # will update .pixel_value and check range
 
     def SetForegroundColour(self, col):  #pylint: disable=W0221
         ret = wx.PyControl.SetForegroundColour(self, col)
@@ -654,12 +656,6 @@ class VisualRangeSlider(BaseSlider):
 
     def _SetValue(self, val):
         try:
-            if not val:
-                logging.debug("Clearing value")
-                self.value = ()
-                self.pixel_value = ()
-                return
-
             if all([self.val_range[0] <= i <= self.val_range[1] for i in val]):
                 if val[0] <= val[1]:
                     self.value = val
@@ -686,8 +682,9 @@ class VisualRangeSlider(BaseSlider):
     def SetRange(self, val_range): # FIXME: should follow wx.Slider API: minValue, maxValue
         if self.value:
             if not all([val_range[0] <= i <= val_range[1] for i in self.value]):
-                msg = "Illegal range %s for value %s" % (val_range, self.value)
-                raise ValueError(msg)
+                logging.warning("Illegal range %s for value %s, resetting it",
+                                val_range, self.value)
+                self.value = val_range
 
         logging.debug("Setting range to %s", val_range)
         self.val_range = val_range
@@ -864,6 +861,8 @@ class VisualRangeSlider(BaseSlider):
         if self.Enabled and self.HasCapture():
             self.ReleaseMouse()
             self._drag_to_value()
+            self.drag_start_x = None
+            self.mode = None
             self.send_scroll_event()
 
     def _drag_to_value(self):
@@ -880,8 +879,6 @@ class VisualRangeSlider(BaseSlider):
 
             self.value = tuple(self._pixel_to_val(i) for i in self.pixel_value)
             self.drag_x = 0
-        self.drag_start_x = None
-        self.mode = None
 
     def _draw_content(self, ctx, width, height):
         line_width = float(width) / len(self.content_list)
@@ -926,71 +923,24 @@ class VisualRangeSlider(BaseSlider):
         super(VisualRangeSlider, self).OnSize(event)
 
 class BandwidthSlider(VisualRangeSlider):
-    def __init__(self, *args, **kwargs):
-        super(BandwidthSlider, self).__init__(*args, **kwargs)
 
-        self.bandwidth = 0.0
-        self.center_val = None
-
-    def set_center_value(self, center_val):
-        if not self.HasCapture():
-            logging.debug("Setting center value to %s", center_val)
-            self.center_val = center_val
-            self._calc_value()
+    def set_center_value(self, center):
+        logging.debug("Setting center value to %s", center)
+        spread = self.get_bandwidth_value() / 2.0
+        center = self.get_center_value()
+        val = (center - spread, center + spread)
+        super(BandwidthSlider, self).SetValue(val) # will not do anything if dragging
 
     def get_center_value(self):
-        logging.debug("Getting center value %s", self.center_val)
-        return self.center_val
+        return (self.value[0] + self.value[1]) / 2.0
 
     def set_bandwidth_value(self, bandwidth):
-        if not self.HasCapture():
-            logging.debug("Setting bandwidth to %s", bandwidth)
-            self.bandwidth = bandwidth
-            self._calc_value()
+        logging.debug("Setting bandwidth to %s", bandwidth)
+        spread = bandwidth / 2.0
+        center = self.get_center_value()
+        val = (center - spread, center + spread)
+        super(BandwidthSlider, self).SetValue(val) # will not do anything if dragging
 
     def get_bandwidth_value(self):
-        logging.debug("Getting bandwidth %s", self.bandwidth)
-        return self.bandwidth
+        return self.value[1] - self.value[0]
 
-    # def SetRange(self, val_range):
-    #     super(BandwidthSlider, self).SetRange(val_range)
-    #     if self.value:
-    #         if not all([val_range[0] <= i <= val_range[1] for i in self.value]):
-    #             msg = "Illegal range %s for value %s" % (val_range, self.value)
-    #             raise ValueError(msg)
-
-    #     self.val_range = val_range
-    #     self.pixel_value = tuple(self._val_to_pixel(i) for i in self.value)
-    #     self.Refresh()
-
-    def OnLeftUp(self, event):
-        if self.Enabled and self.HasCapture():
-            self.ReleaseMouse()
-            self._drag_to_value()
-            self._calc_bandwidth_center(self.value)
-            self.send_scroll_event()
-
-    def _calc_drag(self, x):
-        VisualRangeSlider._calc_drag(self, x)
-        self._calc_bandwidth_center(self.value)
-
-    def SetValue(self, value):
-        if not value:
-            self.bandwidth = 0.0
-            self.center_val = None
-        else:
-            self._calc_bandwidth_center(value)
-        super(BandwidthSlider, self).SetValue(value)
-
-    def _calc_bandwidth_center(self, value):
-        self.bandwidth = value[1] - value[0]
-        self.center_val = value[0] + (self.bandwidth / 2.0)
-        logging.debug("Calculated bandwidth and center are [%s] %s",
-                     self.bandwidth,
-                     self.center_val)
-
-    def _calc_value(self):
-        spread = self.bandwidth / 2.0
-        val = (self.center_val - spread, self.center_val + spread)
-        super(BandwidthSlider, self)._SetValue(val)
-        logging.debug("Calculated value is %s", (self.value,))
