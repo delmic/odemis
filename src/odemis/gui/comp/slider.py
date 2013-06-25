@@ -96,7 +96,7 @@ class BaseSlider(wx.PyControl):
         Send EVT_COMMAND_SLIDER_UPDATED, which is received as EVT_SLIDER.
         Means that the value has changed (even when the user is moving the slider)
         """
-        logging.debug("Firing slider event for value %s", self.current_value)
+        logging.debug("Firing slider event")
 
         evt = wx.CommandEvent(wx.wxEVT_COMMAND_SLIDER_UPDATED)
         evt.SetEventObject(self)
