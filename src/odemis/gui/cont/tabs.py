@@ -3,9 +3,9 @@
 """
 @author: Rinze de Laat
 
-Copyright © 2012 Rinze de Laat, Delmic
+Copyright © 2012-2013 Rinze de Laat, Éric Piel, Delmic
 
-Custom (graphical) radio button control.
+Handles the switch of the content of the main GUI tabs.
 
 This file is part of Odemis.
 
@@ -23,7 +23,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
 from __future__ import division
-from collections import OrderedDict, namedtuple
+from collections import OrderedDict
 from odemis import dataio, model
 from odemis.gui import instrmodel
 from odemis.gui.cont import settings
