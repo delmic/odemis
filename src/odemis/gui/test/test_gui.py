@@ -343,6 +343,7 @@ def __init_resources():
             <size>-1, 60</size>
             <fg>#1E90FF</fg>
             <bg>#4D4D4D</bg>
+            <style>wxBORDER_NONE</style>
             <XRCED>
               <assign_var>1</assign_var>
             </XRCED>
@@ -354,6 +355,7 @@ def __init_resources():
             <size>-1, 60</size>
             <fg>#BA6DEA</fg>
             <bg>#4D4D4D</bg>
+            <style>wxBORDER_NONE</style>
             <XRCED>
               <assign_var>1</assign_var>
             </XRCED>

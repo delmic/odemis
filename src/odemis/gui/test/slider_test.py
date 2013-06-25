@@ -194,11 +194,14 @@ class SliderTestCase(unittest.TestCase):
             wx.MilliSleep(SLEEP_TIME)
 
         vrs.SetContent([])
-        vrs.SetValue(())
+        vrs.SetValue((0, 0)) # will be set to 1 px wide
 
-        self.assertEqual(vrs.pixel_value, ())
-        self.assertEqual(vrs.GetValue(), ())
+        vrs.SetContent([])
+        vrs.SetValue((1, 1))
 
+        self.assertEqual(vrs.GetValue(), (1, 1))
+
+        # it should be fine to put a range outside of the value
         vrs.SetRange((0.2, 0.8))
         loop()
         wx.MilliSleep(SLEEP_TIME)
@@ -254,18 +257,19 @@ class SliderTestCase(unittest.TestCase):
             wx.MilliSleep(SLEEP_TIME)
 
         bws.SetContent([])
-        bws.SetValue(())
+        bws.SetValue((0, 0)) # will be set to 1 px wide
 
         bws.SetContent([])
-        bws.SetValue(())
+        bws.SetValue((1, 1))
 
-        self.assertEqual(bws.pixel_value, ())
-        self.assertEqual(bws.GetValue(), ())
+        self.assertEqual(bws.GetValue(), (1, 1))
 
+        # it should be fine to put a range outside of the value
         bws.SetRange((0.2, 0.8))
         loop()
         wx.MilliSleep(SLEEP_TIME)
 
+        bws.SetValue((0.5, 0.5))
         bws.set_center_value(0.2)
         loop()
         wx.MilliSleep(SLEEP_TIME)
