@@ -19,6 +19,8 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 
+from __future__ import division
+
 import logging
 import math
 import time
@@ -125,7 +127,7 @@ class Slider(BaseSlider):
         # Closed range within which the current value must fall
         self.value_range = val_range
 
-        self.range_span = float(val_range[1] - val_range[0])
+        self.range_span = val_range[1] - val_range[0]
         # event.GetX() position or Horizontal position across Panel
         self.x = 0
         # position of the drag handle within the slider, ranging from 0 to
@@ -138,8 +140,8 @@ class Slider(BaseSlider):
 
         # Pointer dimensions
         self.handle_width, self.handle_height = self.bitmap.GetSize()
-        self.half_h_width = self.handle_width / 2
-        self.half_h_height = self.handle_height / 2
+        self.half_h_width = self.handle_width // 2
+        self.half_h_height = self.handle_height // 2
 
         if scale == "cubic":
             self._percentage_to_val = self._cubic_perc_to_val
@@ -149,7 +151,7 @@ class Slider(BaseSlider):
             self._val_to_percentage = self._log_val_to_perc
         else:
             self._percentage_to_val = lambda r0, r1, p: (r1 - r0) * p + r0
-            self._val_to_percentage = lambda r0, r1, v: (float(v) - r0) / (r1 - r0)
+            self._val_to_percentage = lambda r0, r1, v: (v - r0) / (r1 - r0)
 
         # Fire slide events at a maximum of once per '_fire_rate' seconds
         self._fire_rate = 0.05
@@ -215,8 +217,8 @@ class Slider(BaseSlider):
         using an inverse cube
         """
         assert(r0 < r1)
-        p = abs(float(v - r0) / (r1 - r0))
-        p = p ** (1 / 3.0)
+        p = abs((v - r0) / (r1 - r0))
+        p = p ** (1 / 3)
         return p
 
     @staticmethod
@@ -254,7 +256,7 @@ class Slider(BaseSlider):
 
 
         # ticks
-        steps = [v / 10.0 for v in range(1, 10)]
+        steps = [v / 10 for v in range(1, 10)]
         for s in steps:
             v = (self.range_span * s) + self.value_range[0]
             pix_x = self._val_to_pixel(v) + self.half_h_width
@@ -355,7 +357,7 @@ class Slider(BaseSlider):
 
     def _pixel_to_val(self):
         """ Convert the current handle position into a value """
-        prcnt = float(self.handlePos) / (self.GetWidth() - self.handle_width)
+        prcnt = self.handlePos / (self.GetWidth() - self.handle_width)
         return self._percentage_to_val(self.value_range[0],
                                        self.value_range[1],
                                        prcnt)
@@ -441,7 +443,7 @@ class Slider(BaseSlider):
 
     def SetRange(self, minv, maxv):
         self.value_range = (minv, maxv)
-        self.range_span = float(maxv - minv)
+        self.range_span = maxv - minv
 
         # To force an update of the display + check min/max
         val = self.current_value
@@ -555,7 +557,7 @@ class NumberSlider(Slider):
         return Slider.GetWidth(self) - self.linked_field.GetSize()[0]
 
     def OnPaint(self, event=None):
-        t_x = self.GetSize()[0] - self.linked_field.GetSize()[0]
+        t_x = self.GetWidth()
         t_y = -2
         self.linked_field.SetPosition((t_x, t_y))
 
@@ -638,7 +640,7 @@ class VisualRangeSlider(BaseSlider):
 
         # Same code as in other slider. Merge?
         self._percentage_to_val = lambda r0, r1, p: (r1 - r0) * p + r0
-        self._val_to_percentage = lambda r0, r1, v: (float(v) - r0) / (r1 - r0)
+        self._val_to_percentage = lambda r0, r1, v: (v - r0) / (r1 - r0)
 
         self._SetValue(self.value) # will update .pixel_value and check range
 
@@ -748,19 +750,23 @@ class VisualRangeSlider(BaseSlider):
     def _pixel_to_val(self, pixel):
         """ Convert the current handle position into a value """
         width, _ = self.GetSize()
-        prcnt = float(pixel) / width
+        prcnt = pixel / width
         return self._percentage_to_val(self.val_range[0],
                                        self.val_range[1],
                                        prcnt)
 
     def _hover(self, x):
+        """
+        x (int): pixel position
+        return (mode): GUI mode corresponding to the current position  
+        """
         if self.pixel_value:
             left, right = self.pixel_value
 
             # 3 zones: left, middle, right
             # It's important to ensure there are always a few pixels for middle.
-            middle_size_h = max(right - left - 2 * 10, 6) / 2. # at least 6 px
-            center = (right + left) / 2.
+            middle_size_h = max(right - left - 2 * 10, 6) / 2 # at least 6 px
+            center = (right + left) / 2
             inner_left = int(center - middle_size_h)
             inner_right = int(math.ceil(center + middle_size_h))
 
@@ -881,13 +887,13 @@ class VisualRangeSlider(BaseSlider):
             self.drag_x = 0
 
     def _draw_content(self, ctx, width, height):
-        line_width = float(width) / len(self.content_list)
+        line_width = width / len(self.content_list)
         ctx.set_line_width(line_width + 0.5)
         ctx.set_source_rgb(*self.content_color)
 
         for i, v in enumerate(self.content_list):
             x = (i + 0.5) * line_width
-            self._draw_line(ctx, x, height, x, (1 - v) * float(height))
+            self._draw_line(ctx, x, height, x, (1 - v) * height)
 
     def OnPaint(self, event=None):
         pdc = wx.PaintDC(self)
@@ -926,17 +932,17 @@ class BandwidthSlider(VisualRangeSlider):
 
     def set_center_value(self, center):
         logging.debug("Setting center value to %s", center)
-        spread = self.get_bandwidth_value() / 2.0
+        spread = self.get_bandwidth_value() / 2
         center = self.get_center_value()
         val = (center - spread, center + spread)
         super(BandwidthSlider, self).SetValue(val) # will not do anything if dragging
 
     def get_center_value(self):
-        return (self.value[0] + self.value[1]) / 2.0
+        return (self.value[0] + self.value[1]) / 2
 
     def set_bandwidth_value(self, bandwidth):
         logging.debug("Setting bandwidth to %s", bandwidth)
-        spread = bandwidth / 2.0
+        spread = bandwidth / 2
         center = self.get_center_value()
         val = (center - spread, center + spread)
         super(BandwidthSlider, self).SetValue(val) # will not do anything if dragging
