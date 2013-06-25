@@ -1,29 +1,32 @@
 #-*- coding: utf-8 -*-
 """
-@author: Rinze de Laat
+.. codeauthor:: Rinze de Laat <laat@delmic.com>
 
 Copyright © 2013 Rinze de Laat, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms 
-of the GNU General Public License version 2 as published by the Free Software 
-Foundation.
+.. license::
+    Odemis is free software: you can redistribute it and/or modify it under the
+    terms  of the GNU General Public License version 2 as published by the Free
+    Software  Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR 
-PURPOSE. See the GNU General Public License for more details.
+    Odemis is distributed in the hope that it will be useful, but WITHOUT ANY
+    WARRANTY;  without even the implied warranty of MERCHANTABILITY or FITNESS
+    FOR A PARTICULAR  PURPOSE. See the GNU General Public License for more
+    details.
 
-You should have received a copy of the GNU General Public License along with 
-Odemis. If not, see http://www.gnu.org/licenses/.
+    You should have received a copy of the GNU General Public License along with
+    Odemis. If not, see http://www.gnu.org/licenses/.
 
+Module purposes
+---------------
 
-### Purpose ###
-
-Provides the, partial dynamically generated, configuration for the settings
-panel
+Provides the, partially dynamically generated, configuration for the settings
+panel and various private support functions.
 
 """
+
 from odemis.model import NotApplicableError
 import logging
 import math

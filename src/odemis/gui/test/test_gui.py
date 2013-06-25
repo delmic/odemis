@@ -118,8 +118,8 @@ class xrcslider_frame(wx.Frame):
 
 
 
-class xrccairo_frame(wx.Frame):
-#!XRCED:begin-block:xrccairo_frame.PreCreate
+class xrcplot_frame(wx.Frame):
+#!XRCED:begin-block:xrcplot_frame.PreCreate
     def PreCreate(self, pre):
         """ This function is called during the class's initialization.
         
@@ -128,17 +128,16 @@ class xrccairo_frame(wx.Frame):
         """
         pass
         
-#!XRCED:end-block:xrccairo_frame.PreCreate
+#!XRCED:end-block:xrcplot_frame.PreCreate
 
     def __init__(self, parent):
         # Two stage creation (see http://wiki.wxpython.org/index.cgi/TwoStageCreation)
         pre = wx.PreFrame()
         self.PreCreate(pre)
-        get_resources().LoadOnFrame(pre, parent, "cairo_frame")
+        get_resources().LoadOnFrame(pre, parent, "plot_frame")
         self.PostCreate(pre)
 
         # Define variables for the controls, bind event handlers
-        self.cairo_panel = xrc.XRCCTRL(self, "cairo_panel")
 
 
 
@@ -153,7 +152,7 @@ def __init_resources():
     wx.FileSystem.AddHandler(wx.MemoryFSHandler())
 
     test_gui_xrc = '''\
-<?xml version="1.0" ?><resource class="VisualRangeSlider" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
+<?xml version="1.0" ?><resource class="test_cairo.CairoPanel(wxPanel)" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
   <object class="wxFrame" name="stream_frame">
     <object class="wxBoxSizer">
       <orient>wxVERTICAL</orient>
@@ -371,15 +370,12 @@ def __init_resources():
     </object>
     <size>400,400</size>
   </object>
-  <object class="wxFrame" name="cairo_frame">
-    <object class="wxPanel" name="cairo_panel" subclass="test_cairo.CairoPanel">
-      <size>400,400</size>
-      <XRCED>
-        <assign_var>1</assign_var>
-      </XRCED>
-    </object>
+  <object class="wxFrame" name="plot_frame">
     <size>400,400</size>
     <title>Cairo Test</title>
+    <object class="wxBoxSizer">
+      <orient>wxVERTICAL</orient>
+    </object>
   </object>
 </resource>'''
 
