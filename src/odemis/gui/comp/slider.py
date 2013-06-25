@@ -592,25 +592,23 @@ class VisualRangeSlider(BaseSlider):
     SetContent() to update the background image.
     """
 
-    sel_alpha = 0.5
-    sel_alpha_h = 0.7
+    sel_alpha = 0.5 # %
+    sel_alpha_h = 0.7 # %
+    min_sel_width = 5 # px
 
     def __init__(self, parent, id=wx.ID_ANY, value=0.0, val_range=(0.0, 1.0),
                  size=(-1, -1), pos=wx.DefaultPosition, style=wx.NO_BORDER,
                  name="VisualRangeSlider"):
-
-        style |= wx.NO_BORDER
 
         super(VisualRangeSlider, self).__init__(parent, id, pos, size, style)
 
         self.content_color = wxcol_to_rgb(self.GetForegroundColour())
         self.select_color = (1.0, 1.0, 1.0, self.sel_alpha)
 
-        if size == (-1, -1):
-            self.SetMinSize((-1, 40))
+        if size == (-1, -1): # wxPython follows this too much to always do it
+            self.SetMinSize(-1, 40)
 
         self.content_list = []
-        self.len_content = 0
         self.dirty_content = False
         self.content_bmp = None
 
@@ -666,6 +664,9 @@ class VisualRangeSlider(BaseSlider):
                 if val[0] <= val[1]:
                     self.value = val
                     self.pixel_value = tuple(self._val_to_pixel(i) for i in val)
+                    # There must be at least one pixel for the selection
+                    if self.pixel_value[1] - self.pixel_value[0] < 1:
+                        self.pixel_value = (self.pixel_value[0], self.pixel_value[0] + 1)
                     self.Refresh()
                 else:
                     msg = "Illegal value order %s, should be (low, high)" % (val,)
@@ -713,7 +714,6 @@ class VisualRangeSlider(BaseSlider):
 
     def SetContent(self, content_list):
         self.content_list = content_list
-        self.len_content = len(content_list)
         self.dirty_content = True
         self.content_bmp = None
         self.Refresh()
@@ -736,13 +736,7 @@ class VisualRangeSlider(BaseSlider):
             if self.mode in (gui.HOVER_SELECTION, gui.HOVER_RIGHT_EDGE):
                 right = self.pixel_value[1] + self.drag_x
 
-            rect = (left,
-                    0.0,
-                    right - left,
-                    height,
-            )
-
-            ctx.rectangle(*rect)
+            ctx.rectangle(left, 0.0, right - left, height)
             ctx.fill()
 
 
@@ -766,11 +760,18 @@ class VisualRangeSlider(BaseSlider):
         if self.pixel_value:
             left, right = self.pixel_value
 
-            if (left - 10) < x < (left + 10):
+            # 3 zones: left, middle, right
+            # It's important to ensure there are always a few pixels for middle.
+            middle_size_h = max(right - left - 2 * 10, 6) / 2. # at least 6 px
+            center = (right + left) / 2.
+            inner_left = int(center - middle_size_h)
+            inner_right = int(math.ceil(center + middle_size_h))
+
+            if (left - 10) < x < inner_left:
                 return gui.HOVER_LEFT_EDGE
-            elif (right - 10) < x < (right + 10):
+            elif inner_right < x < (right + 10):
                 return gui.HOVER_RIGHT_EDGE
-            elif left < x < right:
+            elif inner_left <= x <= inner_right:
                 return gui.HOVER_SELECTION
 
         return None
@@ -787,13 +788,13 @@ class VisualRangeSlider(BaseSlider):
                 elif right + drag_x > width:
                     drag_x = width - right
             elif self.mode == gui.HOVER_LEFT_EDGE:
-                if left + drag_x > right - 10:
-                    drag_x = right - left - 10
+                if left + drag_x > right - self.min_sel_width:
+                    drag_x = right - left - self.min_sel_width
                 elif left + drag_x < 0:
                     drag_x = -left
             elif self.mode == gui.HOVER_RIGHT_EDGE:
-                if right + drag_x < left + 10:
-                    drag_x = left + 10 - right
+                if right + drag_x < left + self.min_sel_width:
+                    drag_x = left + self.min_sel_width - right
                 elif right + drag_x > width:
                     drag_x = width - right
 
@@ -883,7 +884,7 @@ class VisualRangeSlider(BaseSlider):
         self.mode = None
 
     def _draw_content(self, ctx, width, height):
-        line_width = float(width) / self.len_content
+        line_width = float(width) / len(self.content_list)
         ctx.set_line_width(line_width + 0.5)
         ctx.set_source_rgb(*self.content_color)
 
