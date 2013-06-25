@@ -661,10 +661,7 @@ class VisualRangeSlider(BaseSlider):
             if all([self.val_range[0] <= i <= self.val_range[1] for i in val]):
                 if val[0] <= val[1]:
                     self.value = val
-                    self.pixel_value = tuple(self._val_to_pixel(i) for i in val)
-                    # There must be at least one pixel for the selection
-                    if self.pixel_value[1] - self.pixel_value[0] < 1:
-                        self.pixel_value = (self.pixel_value[0], self.pixel_value[0] + 1)
+                    self._update_pixel_value()
                     self.Refresh()
                 else:
                     msg = "Illegal value order %s, should be (low, high)" % (val,)
@@ -690,8 +687,17 @@ class VisualRangeSlider(BaseSlider):
 
         logging.debug("Setting range to %s", val_range)
         self.val_range = val_range
-        self.pixel_value = tuple(self._val_to_pixel(i) for i in self.value)
+        self._update_pixel_value()
         self.Refresh()
+
+    def _update_pixel_value(self):
+        """
+        Recompute .pixel_value according to .value
+        """
+        self.pixel_value = tuple(self._val_to_pixel(i) for i in self.value)
+        # There must be at least one pixel for the selection
+        if self.pixel_value[1] - self.pixel_value[0] < 1:
+            self.pixel_value = (self.pixel_value[0], self.pixel_value[0] + 1)
 
     def GetRange(self):
         return self.val_range
@@ -745,7 +751,7 @@ class VisualRangeSlider(BaseSlider):
         prcnt = self._val_to_percentage(self.val_range[0],
                                         self.val_range[1],
                                         val)
-        return int(width * prcnt)
+        return int(round(width * prcnt))
 
     def _pixel_to_val(self, pixel):
         """ Convert the current handle position into a value """
@@ -927,6 +933,9 @@ class VisualRangeSlider(BaseSlider):
     def OnSize(self, event=None):
         self.dirty_content = True
         super(VisualRangeSlider, self).OnSize(event)
+        # FIXME: problem with updating the drawing when resizing bigger
+        self._update_pixel_value()
+        self.Refresh()
 
 class BandwidthSlider(VisualRangeSlider):
 
