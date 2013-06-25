@@ -90,6 +90,18 @@ class BaseSlider(wx.PyControl):
         evt.SetEventObject(self)
         self.GetEventHandler().ProcessEvent(evt)
 
+    @limit_invocation(0.07)  #pylint: disable=E1120
+    def send_slider_update_event(self):
+        """
+        Send EVT_COMMAND_SLIDER_UPDATED, which is received as EVT_SLIDER.
+        Means that the value has changed (even when the user is moving the slider)
+        """
+        logging.debug("Firing slider event for value %s", self.current_value)
+
+        evt = wx.CommandEvent(wx.wxEVT_COMMAND_SLIDER_UPDATED)
+        evt.SetEventObject(self)
+        self.GetEventHandler().ProcessEvent(evt)
+
 
 class Slider(BaseSlider):
     """ This class describes a Slider control.
@@ -362,17 +374,7 @@ class Slider(BaseSlider):
                                        self.value_range[1],
                                        prcnt)
 
-    @limit_invocation(0.07)  #pylint: disable=E1120
-    def send_slider_update_event(self):
-        """
-        Send EVT_COMMAND_SLIDER_UPDATED, which is received as EVT_SLIDER.
-        Means that the value has changed (even when the user is moving the slider)
-        """
-        logging.debug("Firing slider event for value %s", self.current_value)
 
-        evt = wx.CommandEvent(wx.wxEVT_COMMAND_SLIDER_UPDATED)
-        evt.SetEventObject(self)
-        self.GetEventHandler().ProcessEvent(evt)
 
     def SetValue(self, value):
         """ Set the value of the slider
@@ -635,8 +637,8 @@ class VisualRangeSlider(BaseSlider):
 
         self.mode = None
 
-        self.drag_start_x = None # px
-        self.drag_x = 0 # px
+        self.drag_start_x = None # px : position at the beginning of the drag
+        self.drag_start_pv = None # pixel_value at the beginning of the drag
 
         # Same code as in other slider. Merge?
         self._percentage_to_val = lambda r0, r1, p: (r1 - r0) * p + r0
@@ -647,7 +649,7 @@ class VisualRangeSlider(BaseSlider):
     def SetForegroundColour(self, col):  #pylint: disable=W0221
         ret = wx.PyControl.SetForegroundColour(self, col)
         self.content_color = wxcol_to_rgb(self.GetForegroundColour())
-        # FIXME: this will fail if currently Disabled
+        # FIXME: content_color will have wrong value if currently Disabled
         return ret
 
     ### Setting and getting of values
@@ -729,20 +731,13 @@ class VisualRangeSlider(BaseSlider):
         ctx.stroke()
 
     def _draw_selection(self, ctx):
-        if self.value:
-            ctx.set_source_rgba(*self.select_color)
-            _, height = self.GetSize()
+        ctx.set_source_rgba(*self.select_color)
+        _, height = self.GetSize()
 
-            left, right = self.pixel_value
+        left, right = self.pixel_value
 
-            if self.mode in (gui.HOVER_SELECTION, gui.HOVER_LEFT_EDGE):
-                left = self.pixel_value[0] + self.drag_x
-
-            if self.mode in (gui.HOVER_SELECTION, gui.HOVER_RIGHT_EDGE):
-                right = self.pixel_value[1] + self.drag_x
-
-            ctx.rectangle(left, 0.0, right - left, height)
-            ctx.fill()
+        ctx.rectangle(left, 0.0, right - left, height)
+        ctx.fill()
 
 
     def _val_to_pixel(self, val=None):
@@ -766,49 +761,56 @@ class VisualRangeSlider(BaseSlider):
         x (int): pixel position
         return (mode): GUI mode corresponding to the current position  
         """
-        if self.pixel_value:
-            left, right = self.pixel_value
+        left, right = self.pixel_value
 
-            # 3 zones: left, middle, right
-            # It's important to ensure there are always a few pixels for middle.
-            middle_size_h = max(right - left - 2 * 10, 6) / 2 # at least 6 px
-            center = (right + left) / 2
-            inner_left = int(center - middle_size_h)
-            inner_right = int(math.ceil(center + middle_size_h))
+        # 3 zones: left, middle, right
+        # It's important to ensure there are always a few pixels for middle.
+        middle_size_h = max(right - left - 2 * 10, 6) / 2 # at least 6 px
+        center = (right + left) / 2
+        inner_left = int(center - middle_size_h)
+        inner_right = int(math.ceil(center + middle_size_h))
 
-            if (left - 10) < x < inner_left:
-                return gui.HOVER_LEFT_EDGE
-            elif inner_right < x < (right + 10):
-                return gui.HOVER_RIGHT_EDGE
-            elif inner_left <= x <= inner_right:
-                return gui.HOVER_SELECTION
+        if (left - 10) < x < inner_left:
+            return gui.HOVER_LEFT_EDGE
+        elif inner_right < x < (right + 10):
+            return gui.HOVER_RIGHT_EDGE
+        elif inner_left <= x <= inner_right:
+            return gui.HOVER_SELECTION
 
         return None
 
     def _calc_drag(self, x):
-        if self.pixel_value:
-            left, right = self.pixel_value
-            drag_x = x - self.drag_start_x
-            width, _ = self.GetSize()
+        """
+        Updates value (and pixel_value) for a given position on the X axis
+        x (int): position in pixel 
+        """
+        left, right = self.drag_start_pv
+        drag_x = x - self.drag_start_x
+        width, _ = self.GetSize()
 
-            if self.mode == gui.HOVER_SELECTION:
-                if left + drag_x < 0:
-                    drag_x = -left
-                elif right + drag_x > width:
-                    drag_x = width - right
-            elif self.mode == gui.HOVER_LEFT_EDGE:
-                if left + drag_x > right - self.min_sel_width:
-                    drag_x = right - left - self.min_sel_width
-                elif left + drag_x < 0:
-                    drag_x = -left
-            elif self.mode == gui.HOVER_RIGHT_EDGE:
-                if right + drag_x < left + self.min_sel_width:
-                    drag_x = left + self.min_sel_width - right
-                elif right + drag_x > width:
-                    drag_x = width - right
+        if self.mode == gui.HOVER_SELECTION:
+            if left + drag_x < 0:
+                drag_x = -left
+            elif right + drag_x > width:
+                drag_x = width - right
+            self.pixel_value = tuple(v + drag_x for v in self.drag_start_pv)
+        elif self.mode == gui.HOVER_LEFT_EDGE:
+            if left + drag_x > right - self.min_sel_width:
+                drag_x = right - left - self.min_sel_width
+            elif left + drag_x < 0:
+                drag_x = -left
+            self.pixel_value = (self.drag_start_pv[0] + drag_x,
+                                self.drag_start_pv[1])
+        elif self.mode == gui.HOVER_RIGHT_EDGE:
+            if right + drag_x < left + self.min_sel_width:
+                drag_x = left + self.min_sel_width - right
+            elif right + drag_x > width:
+                drag_x = width - right
+            self.pixel_value = (self.drag_start_pv[0],
+                                self.drag_start_pv[1] + drag_x)
 
-            self.drag_x = drag_x
-            self.Refresh()
+        self.value = tuple(self._pixel_to_val(i) for i in self.pixel_value)
+        self.Refresh()
 
     def OnLeave(self, event):
 
@@ -822,13 +824,12 @@ class VisualRangeSlider(BaseSlider):
             self.Refresh()
 
     def OnMotion(self, event):
-
         if not self.Enabled:
             return
 
         x = event.GetX()
 
-        if not self.HasCapture():
+        if self.mode is None:
             hover = self._hover(x)
             if hover in (gui.HOVER_LEFT_EDGE, gui.HOVER_RIGHT_EDGE):
                 self.SetCursor(wx.StockCursor(wx.CURSOR_SIZEWE))
@@ -843,28 +844,15 @@ class VisualRangeSlider(BaseSlider):
             elif not hover and self.select_color[-1] != self.sel_alpha:
                 self.select_color = self.select_color[:3] + (self.sel_alpha,)
                 self.Refresh()
-
-            self.drag_x = 0
         else:
             self._calc_drag(x)
             self.send_slider_update_event() # FIXME: need to update the value, otherwise it's pointless
-
-    @limit_invocation(0.07)  #pylint: disable=E1120
-    def send_slider_update_event(self):
-        """
-        Send EVT_COMMAND_SLIDER_UPDATED, which is received as EVT_SLIDER.
-        Means that the value has changed (even when the user is moving the slider)
-        """
-        logging.debug("Firing slider event for value %s", self.value)
-
-        evt = wx.CommandEvent(wx.wxEVT_COMMAND_SLIDER_UPDATED)
-        evt.SetEventObject(self)
-        self.GetEventHandler().ProcessEvent(evt)
 
     def OnLeftDown(self, event):
         if self.Enabled:
             self.CaptureMouse()
             self.drag_start_x = event.GetX()
+            self.drag_start_pv = self.pixel_value
             self.mode = self._hover(self.drag_start_x)
             self.SetFocus()
 
@@ -872,25 +860,11 @@ class VisualRangeSlider(BaseSlider):
     def OnLeftUp(self, event):
         if self.Enabled and self.HasCapture():
             self.ReleaseMouse()
-            self._drag_to_value()
             self.drag_start_x = None
+            self.drag_start_pv = None
             self.mode = None
             self.send_scroll_event()
 
-    def _drag_to_value(self):
-        if self.drag_x:
-            if self.mode == gui.HOVER_SELECTION:
-                pv = tuple(v + self.drag_x for v in self.pixel_value)
-                self.pixel_value = pv
-            elif self.mode == gui.HOVER_LEFT_EDGE:
-                self.pixel_value = (self.pixel_value[0] + self.drag_x,
-                                    self.pixel_value[1])
-            elif self.mode == gui.HOVER_RIGHT_EDGE:
-                self.pixel_value = (self.pixel_value[0],
-                                    self.pixel_value[1] + self.drag_x)
-
-            self.value = tuple(self._pixel_to_val(i) for i in self.pixel_value)
-            self.drag_x = 0
 
     def _draw_content(self, ctx, width, height):
         line_width = width / len(self.content_list)
