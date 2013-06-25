@@ -302,6 +302,9 @@ class ViewSelector(object):
         """
         micgui (MicroscopeModel): the representation of the microscope GUI
         main_frame: (wx.Frame): the frame which contains the 4 viewports
+        buttons (OrderedDict : btn -> (viewport, label)): 5 buttons and the
+          viewport (for the image) and label (for changing the name) associated.
+          The first button has no viewport, for the 2x2 view.
         """
         self._microscope_gui = micgui
         self._main_frame = main_frame
@@ -321,25 +324,25 @@ class ViewSelector(object):
         self._subscriptions = [] # list of functions
 
         # subscribe to change of name
-        for btn, view_label in self.buttons.items():
-            if view_label.vp is None: # 2x2 layout
-                view_label.lbl.SetLabel("Overview")
+        for btn, (vp, lbl) in self.buttons.items():
+            if vp is None: # 2x2 layout
+                lbl.SetLabel("Overview")
                 continue
 
             def onThumbnail(im, btn=btn): # save btn in scope
                 btn.set_overlay(im)
 
-            self.buttons[btn].vp.mic_view.thumbnail.subscribe(onThumbnail, init=True)
+            vp.mic_view.thumbnail.subscribe(onThumbnail, init=True)
             # keep ref of the functions so that they are not dropped
             self._subscriptions.append(onThumbnail)
 
             # also subscribe for updating the 2x2 button
-            self.buttons[btn].vp.mic_view.thumbnail.subscribe(self._update22Thumbnail)
+            vp.mic_view.thumbnail.subscribe(self._update22Thumbnail)
 
-            def onName(name, view_label=view_label): # save view_label
-                view_label.lbl.SetLabel(name)
+            def onName(name, lbl=lbl): # save lbl in scope
+                lbl.SetLabel(name)
 
-            view_label.vp.mic_view.name.subscribe(onName, init=True)
+            vp.mic_view.name.subscribe(onName, init=True)
             self._subscriptions.append(onName)
 
         # Select the overview by default
@@ -354,13 +357,13 @@ class ViewSelector(object):
                                            (2x2) is to be toggled
         Note: it does _not_ change the view
         """
-        for b, vl in self.buttons.items():
+        for b, (vp, lbl) in self.buttons.items():
             # 2x2 => vp is None / 1 => vp exists and vp.view is the view
-            if (vl.vp is None and mic_view is None) or (vl.vp and vl.vp.mic_view == mic_view):
+            if (vp is None and mic_view is None) or (vp and vp.mic_view == mic_view):
                 b.SetToggle(True)
             else:
-                if vl.vp:
-                    logging.debug("untoggling button of view %s", vl.vp.mic_view.name.value)
+                if vp:
+                    logging.debug("untoggling button of view %s", vp.mic_view.name.value)
                 else:
                     logging.debug("untoggling button of view All")
                 b.SetToggle(False)
@@ -375,7 +378,7 @@ class ViewSelector(object):
         # Create an image from the 4 thumbnails in a 2x2 layout with small
         # border. The button without a viewport attached is assumed to be the
         # one assigned to the 2x2 view
-        btn_all = [b for b, vl in self.buttons.items() if vl.vp is None][0]
+        btn_all = [b for b, (vp, lbl) in self.buttons.items() if vp is None][0]
         border_width = 2 # px
         size = max(1, btn_all.overlay_width), max(1, btn_all.overlay_height)
         size_sub = (max(1, (size[0] - border_width) // 2),
@@ -386,11 +389,11 @@ class ViewSelector(object):
 
         i = 0
 
-        for _, view_label in self.buttons.items():
-            if view_label.vp is None: # 2x2 layout
+        for vp, lbl in self.buttons.values():
+            if vp is None: # 2x2 layout
                 continue
 
-            im = view_label.vp.mic_view.thumbnail.value
+            im = vp.mic_view.thumbnail.value
             if im:
                 # im doesn't have the same aspect ratio as the actual thumbnail
                 # => rescale and crop on the center
@@ -459,7 +462,7 @@ class ViewSelector(object):
         # the button will be toggled when the event for value change is received.
 
         btn = evt.GetEventObject()
-        viewport = self.buttons[btn].vp
+        viewport = self.buttons[btn][0]
 
         if viewport is None:
             logging.debug("Overview button click")

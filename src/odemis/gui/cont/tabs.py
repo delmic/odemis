@@ -111,33 +111,22 @@ class SecomStreamsTab(Tab):
                                         self.interface_model,
                                         self.main_frame.pnl_secom_streams
                                   )
-        # btn -> (viewport, label)
-        ViewportLabel = namedtuple('ViewportLabel', ['vp', 'lbl'])
-
-        buttons = OrderedDict(
-            [
+        buttons = OrderedDict([
                 (self.main_frame.btn_secom_view_all,
-                    ViewportLabel(
-                        None,
-                        self.main_frame.lbl_secom_view_all)),
+                        (None, self.main_frame.lbl_secom_view_all)),
                 (self.main_frame.btn_secom_view_tl,
-                        ViewportLabel(
-                            self.main_frame.vp_secom_tl,
-                            self.main_frame.lbl_secom_view_tl)),
+                        (self.main_frame.vp_secom_tl,
+                         self.main_frame.lbl_secom_view_tl)),
                 (self.main_frame.btn_secom_view_tr,
-                        ViewportLabel(
-                            self.main_frame.vp_secom_tr,
-                            self.main_frame.lbl_secom_view_tr)),
+                        (self.main_frame.vp_secom_tr,
+                         self.main_frame.lbl_secom_view_tr)),
                 (self.main_frame.btn_secom_view_bl,
-                        ViewportLabel(
-                            self.main_frame.vp_secom_bl,
-                            self.main_frame.lbl_secom_view_bl)),
+                        (self.main_frame.vp_secom_bl,
+                         self.main_frame.lbl_secom_view_bl)),
                 (self.main_frame.btn_secom_view_br,
-                        ViewportLabel(
-                            self.main_frame.vp_secom_br,
-                            self.main_frame.lbl_secom_view_br))
-            ]
-        )
+                        (self.main_frame.vp_secom_br,
+                         self.main_frame.lbl_secom_view_br))
+                   ])
 
         self._view_selector = ViewSelector(
                                     self.interface_model,
@@ -377,28 +366,22 @@ class InspectionTab(Tab):
                                         self.interface_model
                                     )
 
-        # btn -> (viewport, label)
-        ViewportLabel = namedtuple('ViewportLabel', ['vp', 'lbl'])
-
-        buttons = {
-            self.main_frame.btn_sparc_view_all:
-                ViewportLabel(None, self.main_frame.lbl_sparc_view_all),
-            self.main_frame.btn_sparc_view_tl:
-                ViewportLabel(
-                    self.main_frame.vp_inspection_tl,
-                    self.main_frame.lbl_sparc_view_tl),
-            self.main_frame.btn_sparc_view_tr:
-                ViewportLabel(
-                    self.main_frame.vp_inspection_tr,
-                    self.main_frame.lbl_sparc_view_tr),
-            self.main_frame.btn_sparc_view_bl:
-                ViewportLabel(
-                    self.main_frame.vp_inspection_bl,
-                    self.main_frame.lbl_sparc_view_bl),
-            self.main_frame.btn_sparc_view_br:
-                ViewportLabel(
-                    self.main_frame.vp_inspection_br,
-                    self.main_frame.lbl_sparc_view_br)}
+        buttons = OrderedDict([
+            (self.main_frame.btn_sparc_view_all,
+                    (None, self.main_frame.lbl_sparc_view_all)),
+            (self.main_frame.btn_sparc_view_tl,
+                    (self.main_frame.vp_inspection_tl,
+                     self.main_frame.lbl_sparc_view_tl)),
+            (self.main_frame.btn_sparc_view_tr,
+                    (self.main_frame.vp_inspection_tr,
+                     self.main_frame.lbl_sparc_view_tr)),
+            (self.main_frame.btn_sparc_view_bl,
+                    (self.main_frame.vp_inspection_bl,
+                     self.main_frame.lbl_sparc_view_bl)),
+            (self.main_frame.btn_sparc_view_br,
+                    (self.main_frame.vp_inspection_br,
+                     self.main_frame.lbl_sparc_view_br))
+               ])
 
         self._view_selector = ViewSelector(
                                     self.interface_model,
@@ -490,7 +473,7 @@ class InspectionTab(Tab):
                 acq_date = min(acq_date or im_acq_date, im_acq_date)
             except KeyError: # no MD_ACQ_DATE
                 pass # => don't update the acq_date
-            
+
             # TODO: be more clever to detect the type of stream
             if (model.MD_WL_LIST in d.metadata or
                 model.MD_WL_POLYNOMIAL in d.metadata or
