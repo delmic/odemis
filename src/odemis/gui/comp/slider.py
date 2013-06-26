@@ -96,7 +96,7 @@ class BaseSlider(wx.PyControl):
         Send EVT_COMMAND_SLIDER_UPDATED, which is received as EVT_SLIDER.
         Means that the value has changed (even when the user is moving the slider)
         """
-        logging.debug("Firing slider event for value %s", self.current_value)
+        logging.debug("Firing slider event")
 
         evt = wx.CommandEvent(wx.wxEVT_COMMAND_SLIDER_UPDATED)
         evt.SetEventObject(self)
@@ -759,7 +759,7 @@ class VisualRangeSlider(BaseSlider):
     def _hover(self, x):
         """
         x (int): pixel position
-        return (mode): GUI mode corresponding to the current position  
+        return (mode): GUI mode corresponding to the current position
         """
         left, right = self.pixel_value
 
@@ -782,7 +782,7 @@ class VisualRangeSlider(BaseSlider):
     def _calc_drag(self, x):
         """
         Updates value (and pixel_value) for a given position on the X axis
-        x (int): position in pixel 
+        x (int): position in pixel
         """
         left, right = self.drag_start_pv
         drag_x = x - self.drag_start_x
