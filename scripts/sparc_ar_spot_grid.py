@@ -12,6 +12,7 @@ run as:
 ./script/sparc_ar_spot_grid -z 3 --prefix filename-prefix
 
 -z only defines a value to put in the filename.
+--prefix indicates the beginning of the filename.
 The files are saved in HDF5, with the z, y, x positions (in nm) in the name. 
 
 You first need to run the odemis backend with the SPARC config:
@@ -53,7 +54,8 @@ N_X, N_Y = 11, 13 # put an even number if you want (0, 0) to be scanned
 # file format
 FMT = "HDF5"
 # Filename format
-FN_FMT = "%(prefix)s-z%(zpos)+d-y%(ypos)+d-x%(xpos)+d.h5"
+#FN_FMT = "%(prefix)sz=%(zpos)+dy=%(ypos)+dx=%(xpos)+d.h5"
+FN_FMT = "%(prefix)sz=%(zpos)dy=%(ypos)dx=%(xpos)d.h5"
 
 def _discard_data(df, data):
     """
@@ -69,7 +71,7 @@ def start_spot(escan, edet, x, y):
     x, y (floats): X, Y position
     """
     # put a not too long, not too short dwell time
-    escan.DwellTime.value = 0.1 #s
+    escan.dwellTime.value = 0.1 # s
 
     # only one point
     escan.scale.value = (1, 1) # just to be sure
@@ -142,6 +144,8 @@ def acquire_ar(escan, sed, ccd, x, y, n):
     # configure CCD
     ccd.exposureTime.value = EXP_TIME
     ccd.binning.value = BINNING
+    ccd.resolution.value = (ccd.shape[0] // BINNING[0],
+                            ccd.shape[1] // BINNING[1])
 
     # acquire N images
     ldata = []
