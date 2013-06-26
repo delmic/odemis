@@ -418,7 +418,6 @@ class InspectionTab(Tab):
                                defaultFile="",
                                style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST,
                                wildcard=wildcards)
-#        dialog.SetFilterIndex(0)
 
         # Show the dialog and check whether is was accepted or cancelled
         if dialog.ShowModal() != wx.ID_OK:
