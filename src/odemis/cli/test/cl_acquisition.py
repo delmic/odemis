@@ -8,7 +8,7 @@ Created on 10 Apr 2013
 This is a simple example on how to acquire a "spectrum cube" on the SPARC in a 
 script.
 run as:
-cl_acquisition sed.hd5 spect.hd5
+cl_acquisition sed.h5 spect.h5
 
 You first need to run the odemis backend with the SPARC config:
 odemisd --log-level 2 install/linux/usr/share/odemis/sparc-amolf.odm.yaml
