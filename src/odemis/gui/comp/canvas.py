@@ -526,6 +526,9 @@ class DraggableCanvas(wx.Panel):
         ch = max(1, self.ClientSize[1]) # px
         self.scale = min(ch / h, cw / w) # pick the dimension which is shortest
 
+        # TODO: avoid aliasing when possible by picking a round number for the
+        # zoom level (for the "main" image) if it's ±10% of the target size
+
         if recenter:
             c = [(bbox[0] + bbox[2]) / 2., (bbox[1] + bbox[3]) / 2.]
             self.requested_world_pos = c # as ReCenterBuffer but without ShouldUpdateDrawing

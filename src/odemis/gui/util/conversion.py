@@ -42,28 +42,28 @@ def wave2rgb(wavelength):
     # colour
     if w >= 350 and w < 440:
         r = -(w - 440) / (440 - 350)
-        g = 0.0
-        b = 1.0
+        g = 0
+        b = 1
     elif w >= 440 and w < 490:
-        r = 0.0
+        r = 0
         g = (w - 440) / (490 - 440)
-        b = 1.0
+        b = 1
     elif w >= 490 and w < 510:
-        r = 0.0
-        g = 1.0
+        r = 0
+        g = 1
         b = -(w - 510) / (510 - 490)
     elif w >= 510 and w < 580:
         r = (w - 510) / (580 - 510)
-        g = 1.0
-        b = 0.0
+        g = 1
+        b = 0
     elif w >= 580 and w < 645:
-        r = 1.0
+        r = 1
         g = -(w - 645) / (645 - 580)
-        b = 0.0
+        b = 0
     elif w >= 645 and w <= 780:
-        r = 1.0
-        g = 0.0
-        b = 0.0
+        r = 1
+        g = 0
+        b = 0
     else:
         logging.warning("Unable to compute RGB for wavelength %d", w)
 
@@ -82,7 +82,7 @@ def hex_to_rgba(hex_str, af=1.0):
     return hex_to_rgb(hex_str) + (af,)
 
 def wxcol_to_rgb(wxcol):
-    return (wxcol.Red() / 255.0, wxcol.Green() / 255.0, wxcol.Blue() / 255.0)
+    return (wxcol.Red() / 255, wxcol.Green() / 255, wxcol.Blue() / 255)
 
 def change_brightness(col_tup, step):
     col_list = []
