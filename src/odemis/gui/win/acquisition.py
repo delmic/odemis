@@ -29,8 +29,7 @@ from odemis.gui.cont.settings import SecomSettingsController
 from odemis.gui.cont.streams import StreamController
 from odemis.gui.instrmodel import VIEW_LAYOUT_ONE
 from odemis.gui.main_xrc import xrcfr_acq
-from odemis.gui.util import units, call_after
-from odemis.gui.util.conversion import formats_to_wildcards
+from odemis.gui.util import units, call_after, formats_to_wildcards
 from wx.lib.pubsub import pub
 import copy
 import logging
@@ -420,7 +419,7 @@ def ShowAcquisitionFileDialog(parent, filename):
                            message="Choose a filename and destination",
                            defaultDir=path,
                            defaultFile="",
-                           style=wx.FD_SAVE|wx.FD_OVERWRITE_PROMPT,
+                           style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT,
                            wildcard=wildcards)
 
     # Select the last format used
