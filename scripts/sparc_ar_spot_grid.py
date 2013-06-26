@@ -28,15 +28,16 @@ odemis-cli --set-attr E-beam Magnification 4000
 
 from __future__ import division
 from odemis import model
+from odemis import dataio
 import argparse
 import logging
 import numpy
 import odemis
+import os.path
 import sys
 import time
-import os.path
 
-logging.getLogger().setLevel(logging.DEBUG)
+logging.getLogger().setLevel(logging.INFO) # put "DEBUG" level for more messages
 
 # Exposure time of the AR CCD
 EXP_TIME = 0.1 # s
@@ -79,7 +80,7 @@ def start_spot(escan, edet, x, y):
     # subscribe to the data forever, which will keep the spot forever
     edet.data.subscribe(_discard_data)
 
-def stop_spot(escan, sed):
+def stop_spot(escan, edet):
     """
     Stop spot mode
     escan (model.Emitter): the e-beam scanner
@@ -136,28 +137,34 @@ def acquire_ar(escan, sed, ccd, x, y, n):
     return (model.DataArray of shape (N,Y,X): the data, with first dimension the
      images acquired in time
     """
-    start_spot(x, y)
+    start_spot(escan, sed, x, y)
 
     # configure CCD
     ccd.exposureTime.value = EXP_TIME
     ccd.binning.value = BINNING
 
+    # acquire N images
     ldata = []
     try:
-        # TODO: we could save some time by subscribing to the dataflow until
-        # all the images have been received, as it would avoid reinitialisation.
-        pass
+        for i in range(n):
+            # TODO: we could save some time by subscribing to the dataflow until
+            # all the images have been received, as it would avoid reinitialisation.
+            d = ccd.data.get()
+            ldata.append(d)
     finally:
-        stop_spot(x, y)
+        stop_spot(escan, sed)
 
+    # TODO: it might actually be better to just give the whole list, and
+    # the exporter will take care of assembling the data, while keeping the
+    # acquisition date correct for each image.
 
-    # concatenate into one big array of (N, numberp)
-    data = numpy.concatenate(self.acq_spect_buf, axis=1)
-    # reshape to (N, Y, X)
-    data.shape = (spect_size[0], sem_size[1], sem_size[0])
-
+    # insert a new axis, for N
+    for d in ldata:
+        d.shape = (1,) + d.shape
+    # concatenate into one big array of (N, Y, X)
+    data = numpy.concatenate(ldata, axis=0)
     # Make a DataArray with the metadata from the first point
-    full_data = model.DataArray(data, metadata=ldata[0])
+    full_data = model.DataArray(data, metadata=ldata[0].metadata)
 
     return full_data
 
@@ -188,20 +195,18 @@ def acquire_grid(fn_prefix, zpos):
             logging.info("Acquiring at position (%+f, %+f)", xnm, ynm)
 
             startt = time.time()
-#            d = acquire_ar(x, y, N_IMAGES)
-
+            d = acquire_ar(escan, sed, ccd, x, y, N_IMAGES)
             endt = time.time()
             logging.debug("Took %g s (expected = %g s)",
                          endt - startt, EXP_TIME * N_IMAGES)
 
-
-#            save_data(d, prefix=fn_prefix, zpos=zpos, ypos=round(ynm), xpos=round(xnm))
+            save_data(d, prefix=fn_prefix, zpos=zpos, ypos=round(ynm), xpos=round(xnm))
 
 
 def save_data(data, **kwargs):
     """
     Saves the data into a file
-    data (model.DataArray): the data to save
+    data (model.DataArray or list of model.DataArray): the data to save
     kwargs (dict (str->value)): values to substitute in the file name
     """
     exporter = dataio.get_exporter(FMT)
@@ -210,6 +215,8 @@ def save_data(data, **kwargs):
     if os.path.exists(fn):
         # mostly to warn if multiple ypos/xpos are rounded to the same value
         logging.warning("Overwriting file '%s'.", fn)
+    else:
+        logging.info("Saving file '%s", fn)
 
     exporter.export(fn, data)
 
@@ -238,7 +245,7 @@ def main(args):
         logging.exception("Unexpected error while performing action.")
         return 127
 
-
+    logging.info("Successfully acquired %d positions", N_X * N_Y)
     return 0
 
 if __name__ == '__main__':
