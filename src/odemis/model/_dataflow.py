@@ -446,7 +446,10 @@ class DataFlowProxy(DataFlowBase, Pyro4.Proxy):
             self._commands.close()
             self._ctx.term()
 
-        Pyro4.Proxy.__del__(self)
+        try:
+            Pyro4.Proxy.__del__(self)
+        except Exception:
+            pass # don't be too rough if that fails, it's not big deal anymore
 
 
 class SubscribeProxyThread(threading.Thread):
