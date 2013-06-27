@@ -1,21 +1,23 @@
 #-*- coding: utf-8 -*-
 """
-@author: Rinze de Laat
+:author:    Rinze de Laat
+:copyright: © 2012 Rinze de Laat, Delmic
 
-Copyright © 2012 Rinze de Laat, Delmic
+.. license::
 
-This file is part of Odemis.
+    This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms
-of the GNU General Public License version 2 as published by the Free Software
-Foundation.
+    Odemis is free software: you can redistribute it and/or modify it under the
+    terms of the GNU General Public License version 2 as published by the Free
+    Software Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
-PURPOSE. See the GNU General Public License for more details.
+    Odemis is distributed in the hope that it will be useful, but WITHOUT ANY
+    WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+    FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
+    details.
 
-You should have received a copy of the GNU General Public License along with
-Odemis. If not, see http://www.gnu.org/licenses/.
+    You should have received a copy of the GNU General Public License along with
+    Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 
@@ -39,15 +41,18 @@ from ..util.conversion import wxcol_to_rgb, change_brightness
 
 
 class BaseSlider(wx.PyControl):
+    """ This abstract base class makes sure that all custom sliders implement
+    the right interface. This interface closely resembles the interface of
+    wx.Slider.
+    """
     __metaclass__ = ABCMeta
+
+    # The abstract methods must be implemented by any class inheriting from
+    # BaseSlider
 
     @abstractmethod
     def OnPaint(self, event=None):
-        """ This method handles the actual drawing of the control """
         pass
-
-    def OnSize(self, event=None):
-        self.Refresh()
 
     @abstractmethod
     def OnLeftDown(self, event):
@@ -67,10 +72,19 @@ class BaseSlider(wx.PyControl):
 
     @abstractmethod
     def SetValue(self, value):
+        """ This method should set the value if the slider doesn *not* have
+        the mouse captured. It should also not set the value itself, but by
+        calling _SetValue. (This scheme is mainly implemented to make sure
+        that external"""
         pass
 
     @abstractmethod
     def _SetValue(self, value):
+        """ This method should be used to actually set the value """
+        pass
+
+    @abstractmethod
+    def SetRange(self, min_val, max_val):
         pass
 
     @abstractmethod
@@ -92,12 +106,10 @@ class BaseSlider(wx.PyControl):
 
     @limit_invocation(0.07)  #pylint: disable=E1120
     def send_slider_update_event(self):
+        """ Send EVT_COMMAND_SLIDER_UPDATED, which is received as EVT_SLIDER.
+        Means that the value has changed (even when the user is moving the
+        slider)
         """
-        Send EVT_COMMAND_SLIDER_UPDATED, which is received as EVT_SLIDER.
-        Means that the value has changed (even when the user is moving the slider)
-        """
-        logging.debug("Firing slider event")
-
         evt = wx.CommandEvent(wx.wxEVT_COMMAND_SLIDER_UPDATED)
         evt.SetEventObject(self)
         self.GetEventHandler().ProcessEvent(evt)
@@ -294,8 +306,8 @@ class Slider(BaseSlider):
         If Panel is getting resize for any reason then calculate pointer's position
         based on it's new size
         """
-        super(Slider, self).OnSize(event)
         self.handlePos = self._val_to_pixel()
+        self.Refresh()
 
     def OnLeftDown(self, event):
         """ This event handler fires when the left mouse button is pressed down
@@ -589,11 +601,16 @@ class UnitFloatSlider(NumberSlider):
 
 
 class VisualRangeSlider(BaseSlider):
-    """
-    This is a very advanced slider which allows to select a range (i.e, low+high
-    value) and also display some monochrome image in the background. It follows
-    mostly the normal wx.Slider API, but value is a tuple of values, and it has
-    SetContent() to update the background image.
+    """ This is an advanced slider that allows the selection of a range of
+    values (i.e, a lower and upper value).
+
+    It can also display a background constructed from a list of arbitrary length
+    containing values ranging between 0.0 and 1.0.
+
+    This class largely implements the default wx.Slider interface, but the value
+    it contains is a 2-tuple and it also has  a SetContent() method to display
+    data in the background of the control.
+
     """
 
     sel_alpha = 0.5 # %
@@ -604,6 +621,7 @@ class VisualRangeSlider(BaseSlider):
                  maxValue=1.0, size=(-1, -1), pos=wx.DefaultPosition,
                  style=wx.NO_BORDER, name="VisualRangeSlider"):
 
+        style |= wx.NO_FULL_REPAINT_ON_RESIZE
         super(VisualRangeSlider, self).__init__(parent, id, pos, size, style)
 
         self.content_color = wxcol_to_rgb(self.GetForegroundColour())
@@ -613,8 +631,11 @@ class VisualRangeSlider(BaseSlider):
             self.SetMinSize(-1, 40)
 
         self.content_list = []
-        self.dirty_content = False
-        self.content_bmp = None
+
+        # Two separate buffers are used, one for the 'complex' content
+        # background rendering and one for the selection.
+        self._content_buffer = None
+        self._buffer = None
 
         # The minimum and maximum values
         self.val_range = (minValue, maxValue)
@@ -646,10 +667,17 @@ class VisualRangeSlider(BaseSlider):
 
         self._SetValue(self.value) # will update .pixel_value and check range
 
+        # OnSize called to make sure the buffer is initialized.
+        # This might result in OnSize getting called twice on some
+        # platforms at initialization, but little harm done.
+        self.OnSize(None)
+
     def SetForegroundColour(self, col):  #pylint: disable=W0221
-        ret = wx.PyControl.SetForegroundColour(self, col)
+        ret = super(VisualRangeSlider, self).SetForegroundColour(col)
         self.content_color = wxcol_to_rgb(self.GetForegroundColour())
         # FIXME: content_color will have wrong value if currently Disabled
+        # Probably has to do with the auto color calculatin for disabled
+        # controls
         return ret
 
     ### Setting and getting of values
@@ -721,24 +749,8 @@ class VisualRangeSlider(BaseSlider):
 
     def SetContent(self, content_list):
         self.content_list = content_list
-        self.dirty_content = True
-        self.content_bmp = None
+        self.UpdateContent()
         self.Refresh()
-
-    def _draw_line(self, ctx, a, b, c, d):
-        ctx.move_to(a, b)
-        ctx.line_to(c, d)
-        ctx.stroke()
-
-    def _draw_selection(self, ctx):
-        ctx.set_source_rgba(*self.select_color)
-        _, height = self.GetSize()
-
-        left, right = self.pixel_value
-
-        ctx.rectangle(left, 0.0, right - left, height)
-        ctx.fill()
-
 
     def _val_to_pixel(self, val=None):
         """ Convert a slider value into a pixel position """
@@ -867,49 +879,59 @@ class VisualRangeSlider(BaseSlider):
 
 
     def _draw_content(self, ctx, width, height):
+        logging.debug("Plotting content background")
         line_width = width / len(self.content_list)
-        ctx.set_line_width(line_width + 0.5)
+        ctx.set_line_width(line_width + 0.8)
         ctx.set_source_rgb(*self.content_color)
 
         for i, v in enumerate(self.content_list):
             x = (i + 0.5) * line_width
             self._draw_line(ctx, x, height, x, (1 - v) * height)
 
+    def _draw_line(self, ctx, a, b, c, d):
+        ctx.move_to(a, b)
+        ctx.line_to(c, d)
+        ctx.stroke()
+
+    def _draw_selection(self, ctx, height):
+        ctx.set_source_rgba(*self.select_color)
+        left, right = self.pixel_value
+        ctx.rectangle(left, 0.0, right - left, height)
+        ctx.fill()
+
     def OnPaint(self, event=None):
-        pdc = wx.PaintDC(self)
-        ctx = wxcairo.ContextFromDC(pdc)
-        width, height = self.GetSize()
-
-        if self.content_list:
-            if self.dirty_content:
-                self._draw_content(ctx, width, height)
-                self.dirty_content = False
-
-                self.content_bmp = wx.EmptyBitmap(width, height)
-
-                memDC = wx.MemoryDC()
-                memDC.SelectObject(self.content_bmp)
-
-                memDC.Blit(0, #Copy to this X coordinate
-                           0, #Copy to this Y coordinate
-                           width, #Copy this width
-                           height, #Copy this height
-                           pdc, #From where do we copy?
-                           0, #What's the X offset in the original DC?
-                           0  #What's the Y offset in the original DC?
-                )
-                memDC.SelectObject(wx.NullBitmap)
-            elif self.content_bmp:
-                pdc.DrawBitmap(self.content_bmp, 0, 0)
-
-        self._draw_selection(ctx)
+        self.UpdateSelection()
+        dc = wx.BufferedPaintDC(self, self._buffer)
 
     def OnSize(self, event=None):
-        self.dirty_content = True
-        super(VisualRangeSlider, self).OnSize(event)
-        # FIXME: problem with updating the drawing when resizing bigger
         self._update_pixel_value()
-        self.Refresh()
+
+        self._content_buffer = wx.EmptyBitmap(*self.ClientSize)
+        self._buffer = wx.EmptyBitmap(*self.ClientSize)
+        self.UpdateContent()
+        self.UpdateSelection()
+
+    def UpdateContent(self):
+        dc = wx.MemoryDC()
+        dc.SelectObject(self._content_buffer)
+        dc.SetBackground(wx.Brush(self.BackgroundColour, wx.SOLID))
+        dc.Clear() # make sure you clear the bitmap!
+
+        if self.content_list:
+            ctx = wxcairo.ContextFromDC(dc)
+            width, height = self.ClientSize
+            self._draw_content(ctx, width, height)
+        del dc # need to get rid of the MemoryDC before Update() is called.
+        self.Refresh(eraseBackground=False)
+        self.Update()
+
+    def UpdateSelection(self):
+        dc = wx.MemoryDC()
+        dc.SelectObject(self._buffer)
+        dc.DrawBitmap(self._content_buffer, 0, 0)
+        _, height = self.ClientSize
+        ctx = wxcairo.ContextFromDC(dc)
+        self._draw_selection(ctx, height)
 
 class BandwidthSlider(VisualRangeSlider):
 
