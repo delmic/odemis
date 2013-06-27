@@ -20,7 +20,7 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 # test the functions of the gui.util.__init__ module
-from odemis.gui.util import limit_invocation
+from odemis.gui.util import limit_invocation, formats_to_wildcards
 import logging
 import time
 import unittest
@@ -45,6 +45,15 @@ class TestLimitInvocation(unittest.TestCase):
     def count_max_1s(self):
         # never called more than once per second
         self.count += 1
+
+class TestFormat(unittest.TestCase):
+    def test_formats_to_wildcards(self):
+        inp = {"HDF5":[".h5", ".hdf5"]}
+        exp_out = ("HDF5 files (*.h5;*.hdf5)|*.h5;*.hdf5",
+                   ["HDF5"])
+        out = formats_to_wildcards(inp)
+        self.assertEqual(out, exp_out)
+
 
 
 if __name__ == "__main__":

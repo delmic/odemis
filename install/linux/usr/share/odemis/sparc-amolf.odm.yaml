@@ -31,7 +31,7 @@ SPARC-AMOLF: {
         hfw_nomag: 10.e-3, # m
     },
     properties: {
-        resolution: [512, 512], # px
+        scale: [8, 8], # (ratio) : start with a pretty fast scan
         dwellTime: 10.e-6, # s
         magnification: 1000, # (ratio)
     },

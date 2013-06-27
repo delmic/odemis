@@ -2014,17 +2014,11 @@ class Scanner(model.Emitter):
         # which is probably sufficient for most usages and almost always reachable
         # shapeX = (diff_limitsX / diff_bestrangeX) * maxdataX
         self._shape = (2048, 2048)
-        # .resolution is the number of pixels actually scanned. If it's less than
-        # the whole possible area, it's centered.
-        resolution = (256, 256) # small resolution to get a fast display
-        self.resolution = model.ResolutionVA(resolution, [(1, 1), self._shape],
-                                             setter=self._setResolution)
-        self._resolution = resolution
 
         # next two values are just to determine the pixel size
         # Distance between borders if magnification = 1. It should be found out
         # via calibration. We assume that image is square, i.e., VFW = HFW
-        if hfw_nomag <= 0 or hfw_nomag > 1:
+        if not 0 <= hfw_nomag < 1:
             raise ValueError("hfw_nomag is %g m, while it should be between 0 and 1 m."
                              % hfw_nomag)
         self._hfw_nomag = hfw_nomag # m
@@ -2046,12 +2040,21 @@ class Scanner(model.Emitter):
         # (float, float) in px => moves center of acquisition by this amount
         # independent of scale and rotation.
         tran_rng = [(-self._shape[0] / 2, -self._shape[1] / 2),
-                   (self._shape[0] / 2, self._shape[1] / 2)]
+                    (self._shape[0] / 2, self._shape[1] / 2)]
         self.translation = model.TupleContinuous((0, 0), tran_rng,
                                               cls=(int, long, float), unit="",
                                               setter=self._setTranslation)
+
+        # .resolution is the number of pixels actually scanned. If it's less than
+        # the whole possible area, it's centered.
+        resolution = (self._shape[0] // 8, self._shape[1] // 8)
+        self.resolution = model.ResolutionVA(resolution, [(1, 1), self._shape],
+                                             setter=self._setResolution)
+        self._resolution = resolution
+
         # (float, float) as a ratio => how big is a pixel, compared to pixelSize
         # it basically works the same as binning, but can be float
+        # (Default to scan the whole area)
         self._scale = (self._shape[0] / resolution[0], self._shape[1] / resolution[1])
         self.scale = model.TupleContinuous(self._scale, [(1, 1), self._shape],
                                            cls=(int, long, float),
@@ -2165,6 +2168,9 @@ class Scanner(model.Emitter):
           the whole ROI fits the screen.
         returns actual shift accepted
         """
+        # FIXME: slightly pessimistic if there is no fuzzing as it could go
+        # half a pixel further to reach the exact border.
+
         # compute the min/max of the shift. It's the same as the margin between
         # the centered ROI and the border, taking into account the scaling.
         max_tran = ((self._shape[0] - self._resolution[0] * self._scale[0]) / 2,

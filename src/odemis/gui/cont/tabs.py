@@ -36,8 +36,7 @@ from odemis.gui.instrmodel import STATE_ON, STATE_OFF, STATE_PAUSE
 from odemis.gui.model.img import InstrumentalImage
 from odemis.gui.model.stream import SpectrumStream, SEMStream, ARStream, \
     UNDEFINED_ROI, StaticStream, CameraStream, StaticSpectrumStream, StaticSEMStream
-from odemis.gui.util import widgets, get_picture_folder
-from odemis.gui.util.conversion import formats_to_wildcards
+from odemis.gui.util import widgets, get_picture_folder, formats_to_wildcards
 import logging
 import os.path
 import pkg_resources
@@ -418,7 +417,6 @@ class InspectionTab(Tab):
                                defaultFile="",
                                style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST,
                                wildcard=wildcards)
-#        dialog.SetFilterIndex(0)
 
         # Show the dialog and check whether is was accepted or cancelled
         if dialog.ShowModal() != wx.ID_OK:
