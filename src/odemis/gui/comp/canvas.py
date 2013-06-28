@@ -938,7 +938,7 @@ class DraggableCanvas(wx.Panel):
         :param center: (2-tuple float)
         :param opacity: (float) [0..1] => [transparent..opaque]
         :param scale: (float)
-        :param keepalpha: (boolean) if True, will use a slow method to apply 
+        :param keepalpha: (boolean) if True, will use a slow method to apply
                opacity that keeps the alpha channel information.
         """
 
@@ -1145,3 +1145,63 @@ def real_to_world_pos(real_pos, mpwu):
     """
     world_pos = tuple([v / mpwu for v in real_pos])
     return world_pos
+
+
+class PlotCanvas(wx.Panel):
+    """ A canvas for plotting data"""
+
+    def __init__(self, *args, **kwargs):
+
+        kwargs['style'] = wx.NO_FULL_REPAINT_ON_RESIZE | kwargs.get('style', 0)
+
+        wx.Panel.__init__(self, *args, **kwargs)
+
+        # Event binding
+        self.Bind(wx.EVT_PAINT, self.OnPaint)
+        self.Bind(wx.EVT_SIZE, self.OnSize)
+
+        # Indicator if the data need to be replotted
+        self.dirty = False
+
+    # Event handlers
+
+    def OnPaint(self, event):
+        """
+        """
+        pass
+
+    def OnSize(self, event):
+        """
+        """
+        event.Skip()
+
+
+    # def _draw_background(self, dc_buffer):
+    #     """ Draw checkered background """
+    #     # Only support wx.SOLID, and anything else is checkered
+    #     if self.backgroundBrush == wx.SOLID:
+    #         return
+
+    #     ctx = wxcairo.ContextFromDC(dc_buffer)
+    #     surface = wxcairo.ImageSurfaceFromBitmap(imgdata.getcanvasbgBitmap())
+
+    #     if not self.dragging:
+    #         # if self.Parent._has_focus:
+    #         #     print "drag offsetting {}".format(self.bg_offset)
+    #         surface.set_device_offset(-self.bg_offset[0], -self.bg_offset[1])
+    #     else:
+    #         if self.Parent._has_focus:
+    #             print "no dragoffsetting {}".format(self.bg_offset)
+
+    #     pattern = cairo.SurfacePattern(surface)
+    #     pattern.set_extend(cairo.EXTEND_REPEAT)
+    #     ctx.set_source(pattern)
+
+    #     ctx.rectangle(
+    #         0,
+    #         0,
+    #         self._bmp_buffer_size[0],
+    #         self._bmp_buffer_size[1]
+    #     )
+
+    #     ctx.fill()

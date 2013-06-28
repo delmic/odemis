@@ -235,6 +235,7 @@ class SliderTestCase(unittest.TestCase):
         self.assertAlmostEqual(vrs.pixel_value, (0, vrs.GetSize()[0] / 2.0))
         self.assertEqual(vrs.GetValue(), (0, 0.5))
 
+
     def test_bandwidthslider(self):
 
         global DATA
@@ -297,6 +298,8 @@ class SliderTestCase(unittest.TestCase):
 
         self.assertAlmostEqual(bws.pixel_value, (0, bws.GetSize()[0] / 2.0))
         self.assertEqual(bws.GetValue(), (0, 0.5))
+
+        self.app.test_frame.SetSize((500, 400))
 
 if __name__ == "__main__":
     unittest.main()

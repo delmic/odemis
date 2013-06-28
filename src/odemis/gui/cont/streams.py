@@ -184,6 +184,22 @@ class StreamController(object):
         stream = cls(name, image)
         return self.addStream(stream, add_to_all_views)
 
+    def addStream(self, stream, add_to_all_views=False):
+        """ Create a stream entry for the given existing stream
+        Will pick the right panel fitting the stream type.
+
+        :return StreamPanel: the panel created for the stream
+        """
+        # find the right panel type
+        if isinstance(stream, model.stream.FluoStream):
+            cls = comp.stream.DyeStreamPanel
+        elif isinstance(stream, SPECTRUM_STREAMS):
+            cls = comp.stream.BandwithStreamPanel
+        else:
+            cls = comp.stream.SecomStreamPanel
+
+        return self._addStream(stream, cls, add_to_all_views)
+
     def _addStream(self, stream, spanel_cls, add_to_all_views=False):
         """
         Adds a stream.
@@ -222,22 +238,6 @@ class StreamController(object):
                         streams_visible=self._has_visible_streams())
 
         return spanel
-
-    def addStream(self, stream, add_to_all_views=False):
-        """ Create a stream entry for the given existing stream
-        Will pick the right panel fitting the stream type.
-
-        :return StreamPanel: the panel created for the stream
-        """
-        # find the right panel type
-        if isinstance(stream, model.stream.FluoStream):
-            cls = comp.stream.DyeStreamPanel
-        elif isinstance(stream, SPECTRUM_STREAMS):
-            cls = comp.stream.BandwithStreamPanel
-        else:
-            cls = comp.stream.SecomStreamPanel
-
-        return self._addStream(stream, cls, add_to_all_views)
 
     def addStreamForAcquisition(self, stream):
         """ Create a stream entry for the given existing stream, adapted to ac
