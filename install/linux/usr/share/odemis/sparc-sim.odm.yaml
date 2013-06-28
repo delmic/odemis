@@ -59,7 +59,10 @@ ARSimCam: {
 FakeSpec10: {
     class: spectrometer.CompositedSpectrometer,
     role: spectrometer,
-    children: {detector: "SpecSimCam", spectrograph: "FakeSP2300i"}
+    children: {detector: "SpecSimCam", spectrograph: "FakeSP2300i"},
+    properties: {
+        binning: [4, 32],
+    },
 }
 
 SpecSimCam: {

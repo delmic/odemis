@@ -1,7 +1,7 @@
 SECOM: {
     class: Microscope,
     role: secom,
-    emitters: [Spectra, "Nikon Super Duper", "MultiBand Fixed Filter", "EBeam ExtXY"],
+    emitters: [Spectra, "Nikon Lens", "MultiBand Fixed Filter", "EBeam ExtXY"],
     detectors: [Clara, "SED ExtXY"],
     actuators: ["Redstone Stage", "SEM-Optical Alignment", "OpticalZ actuator"],
 }
@@ -62,7 +62,7 @@ Spectra: {
     },
 }
 
-"Nikon Super Duper": {
+"Nikon Lens": {
     class: static.OpticalLens,
     role: lens,
     init: {mag: 40.0}, # ratio
