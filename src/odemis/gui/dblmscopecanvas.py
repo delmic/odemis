@@ -92,6 +92,10 @@ class DblMicroscopeCanvas(DraggableCanvas):
         # meter per "world unit"
         self.mpwu = None
 
+        # for the FPS
+        self.fps_overlay = TextViewOverlay(self)
+        self.ViewOverlays.append(self.fps_overlay)
+
     def setView(self, microscope_view, microscope_model):
         """
         Set the microscope_view that this canvas is displaying/representing
@@ -391,6 +395,22 @@ class DblMicroscopeCanvas(DraggableCanvas):
         h = abs(start_w_pos[1] - end_w_pos[1]) * self.mpwu
         return w, h
 
+
+    # Hook to update the FPS value
+    def _DrawMergedImages(self, dc_buffer, images, mergeratio=0.5):
+        fps = super(DblMicroscopeCanvas, self)._DrawMergedImages(dc_buffer,
+                                                         images,
+                                                         mergeratio)
+        tlp = wx.GetTopLevelParent(self)
+
+        # TODO: have an complete GUI model, which contains one VA .debug
+        if hasattr(tlp, "menu_item_debug"):
+            debug_mode = tlp.menu_item_debug.IsChecked()
+            if debug_mode:
+                self.fps_overlay.set_label("%d fps" % fps)
+            else:
+                self.fps_overlay.set_label("")
+
 class SecomCanvas(DblMicroscopeCanvas):
 
     def __init__(self, *args, **kwargs):
@@ -398,9 +418,6 @@ class SecomCanvas(DblMicroscopeCanvas):
 
         self.zoom_overlay = ViewSelectOverlay(self, "Zoom")
         self.ViewOverlays.append(self.zoom_overlay)
-
-        self.fps_overlay = TextViewOverlay(self)
-        self.ViewOverlays.append(self.fps_overlay)
 
         self.update_overlay = WorldSelectOverlay(self, "Update")
         self.WorldOverlays.append(self.update_overlay)
@@ -575,16 +592,6 @@ class SecomCanvas(DblMicroscopeCanvas):
         if self.current_mode not in SECOM_MODES:
             super(SecomCanvas, self).OnRightUp(event)
 
-    def _DrawMergedImages(self, dc_buffer, images, mergeratio=0.5):
-        fps = super(SecomCanvas, self)._DrawMergedImages(dc_buffer,
-                                                         images,
-                                                         mergeratio)
-        tlp = wx.GetTopLevelParent(self)
-
-        if hasattr(tlp, "menu_item_debug"):
-            debug_mode = tlp.menu_item_debug.IsChecked()
-            if debug_mode:
-                self.fps_overlay.set_label("%d fps" % fps)
 
 class SparcAcquiCanvas(DblMicroscopeCanvas):
     def __init__(self, *args, **kwargs):
