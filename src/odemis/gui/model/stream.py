@@ -1171,6 +1171,9 @@ class StaticSpectrumStream(StaticStream):
          You need to use the metadata of the raw data to find out what is the
          wavelength for each pixel. 
         """
+        if len(self.raw) < 0:
+            return []
+
         data = self.raw[0]
         # flatten all but the C dimension, for the average
         data = data.reshape((data.shape[0], numpy.prod(data.shape[1:])))

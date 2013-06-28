@@ -22,7 +22,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 # Test module for Odemis' stream module in gui.comp
 #===============================================================================
 
-from odemis.gui import instrmodel, model, util
+from odemis.gui import instrmodel, util
 import odemis.gui.comp.stream as stream_comp
 from odemis.gui.instrmodel import Stream
 from odemis.gui.cont.streams import StreamController
@@ -92,6 +92,9 @@ class FakeSpectrumStream(stream_mod.StaticSpectrumStream):
     def onActive(self, active):
         pass
 
+    def getSpectrum(self):
+        return [5, 1, 4, 10, 8, 3] # fake spectrum
+
 
 class FakeFluoStream(stream_mod.FluoStream):
     """
@@ -137,7 +140,7 @@ class FakeMicroscopeModel(object):
 # Sleep timer in milliseconds
 SLEEP_TIME = 100
 # If manual is set to True, the window will be kept open at the end
-MANUAL = True
+MANUAL = False
 # Open an inspection window after running the tests if MANUAL is set
 INSPECT = False
 
@@ -206,7 +209,7 @@ class FoldPanelBarTestCase(unittest.TestCase):
         _ = StreamController(mic_mod, self.frm.stream_bar)
 
         fake_sem_stream = FakeSEMStream("First Fixed Stream")
-        stream_panel = stream_comp.SecomStreamPanel(
+        stream_panel = stream_comp.StreamPanel(
                                     self.frm.stream_bar,
                                     fake_sem_stream,
                                     mic_mod)
@@ -241,25 +244,25 @@ class FoldPanelBarTestCase(unittest.TestCase):
 
         # VISIBILITY BUTTON TEST
 
-        old_pbtn_pos = stream_panel._expander._btn_play.GetPosition()
+        old_pbtn_pos = stream_panel._expander._btn_updated.GetPosition()
 
         wx.MilliSleep(SLEEP_TIME)
-        stream_panel.show_visibility_btn(False)
+        stream_panel.show_visible_btn(False)
         loop()
 
         self.assertFalse(stream_panel._expander._btn_vis.IsShown())
 
-        new_pbtn_pos = stream_panel._expander._btn_play.GetPosition()
+        new_pbtn_pos = stream_panel._expander._btn_updated.GetPosition()
 
         self.assertEqual(old_pbtn_pos, new_pbtn_pos)
 
         wx.MilliSleep(SLEEP_TIME)
-        stream_panel.show_visibility_btn(True)
+        stream_panel.show_visible_btn(True)
         loop()
 
         self.assertTrue(stream_panel._expander._btn_vis.IsShown())
 
-        new_pbtn_pos = stream_panel._expander._btn_play.GetPosition()
+        new_pbtn_pos = stream_panel._expander._btn_updated.GetPosition()
 
         self.assertEqual(old_pbtn_pos, new_pbtn_pos)
 
@@ -270,20 +273,20 @@ class FoldPanelBarTestCase(unittest.TestCase):
         old_vbtn_pos = stream_panel._expander._btn_vis.GetPosition()
 
         wx.MilliSleep(SLEEP_TIME)
-        stream_panel.show_play_btn(False)
+        stream_panel.show_updated_btn(False)
         loop()
 
-        self.assertFalse(stream_panel._expander._btn_play.IsShown())
+        self.assertFalse(stream_panel._expander._btn_updated.IsShown())
 
         new_vbtn_pos = stream_panel._expander._btn_vis.GetPosition()
 
         self.assertEqual(old_vbtn_pos, new_vbtn_pos)
 
         wx.MilliSleep(SLEEP_TIME)
-        stream_panel.show_play_btn(True)
+        stream_panel.show_updated_btn(True)
         loop()
 
-        self.assertTrue(stream_panel._expander._btn_play.IsShown())
+        self.assertTrue(stream_panel._expander._btn_updated.IsShown())
 
         new_vbtn_pos = stream_panel._expander._btn_vis.GetPosition()
 
@@ -304,7 +307,7 @@ class FoldPanelBarTestCase(unittest.TestCase):
         _ = StreamController(mic_mod, self.frm.stream_bar)
 
         fake_sem_stream = FakeSEMStream("First Fixed Stream")
-        stream_panel = stream_comp.SecomStreamPanel(
+        stream_panel = stream_comp.StreamPanel(
                                     self.frm.stream_bar,
                                     fake_sem_stream,
                                     mic_mod)
@@ -313,39 +316,10 @@ class FoldPanelBarTestCase(unittest.TestCase):
 
         wx.MilliSleep(SLEEP_TIME)
         self.assertEqual("First Fixed Stream",
-                         stream_panel._expander.get_label())
+                         stream_panel._expander._label_ctrl.GetLabel())
         loop()
 
-        wx.MilliSleep(SLEEP_TIME)
-        stream_panel._expander.set_label("Banana")
-        self.assertEqual("Banana",
-                         stream_panel._expander.get_label())
-        loop()
-
-        # Hide label
-        old_vbtn_pos = stream_panel._expander._btn_vis.GetPosition()
-
-        wx.MilliSleep(SLEEP_TIME)
-        stream_panel.show_label(False)
-        loop()
-
-        self.assertFalse(stream_panel._expander._label_ctrl.IsShown())
-
-        new_vbtn_pos = stream_panel._expander._btn_vis.GetPosition()
-
-        self.assertEqual(old_vbtn_pos, new_vbtn_pos)
-
-        wx.MilliSleep(SLEEP_TIME)
-        stream_panel.show_label(True)
-        loop()
-
-        self.assertTrue(stream_panel._expander._label_ctrl.IsShown())
-
-        new_vbtn_pos = stream_panel._expander._btn_vis.GetPosition()
-
-        self.assertEqual(old_vbtn_pos, new_vbtn_pos)
-
-        # Clear remainging streams
+        # Clear remaining streams
         wx.MilliSleep(SLEEP_TIME)
         self.frm.stream_bar.clear()
         loop()
@@ -358,14 +332,14 @@ class FoldPanelBarTestCase(unittest.TestCase):
         _ = StreamController(mic_mod, self.frm.stream_bar)
 
         fake_fluo_stream = FakeFluoStream("Fluo Stream")
-        dye_panel = stream_comp.DyeStreamPanel(
+        dye_panel = stream_comp.StreamPanel(
                                     self.frm.stream_bar,
                                     fake_fluo_stream,
                                     mic_mod)
         self.frm.stream_bar.add_stream(dye_panel)
 
         # print stream_panel._expander.GetSize()
-        stream_panel = stream_comp.SecomStreamPanel(
+        stream_panel = stream_comp.StreamPanel(
                                     self.frm.stream_bar,
                                     fake_fluo_stream,
                                     mic_mod)
@@ -373,30 +347,7 @@ class FoldPanelBarTestCase(unittest.TestCase):
         # print stream_panel._expander.GetSize()
         loop()
 
-        # Hide label
-        old_cbtn_pos = dye_panel._expander._btn_tint.GetPosition()
-
-        wx.MilliSleep(SLEEP_TIME)
-        dye_panel.show_label(False)
-        loop()
-
-        self.assertFalse(dye_panel._expander._label_ctrl.IsShown())
-
-        new_cbtn_pos = dye_panel._expander._btn_tint.GetPosition()
-
-        self.assertEqual(old_cbtn_pos, new_cbtn_pos)
-
-        wx.MilliSleep(SLEEP_TIME)
-        dye_panel.show_label(True)
-        loop()
-
-        self.assertTrue(dye_panel._expander._label_ctrl.IsShown())
-
-        new_cbtn_pos = dye_panel._expander._btn_tint.GetPosition()
-
-        self.assertEqual(old_cbtn_pos, new_cbtn_pos)
-
-        # Clear remainging streams
+        # Clear remaining streams
         wx.MilliSleep(SLEEP_TIME)
         self.frm.stream_bar.clear()
         loop()
@@ -409,7 +360,7 @@ class FoldPanelBarTestCase(unittest.TestCase):
         _ = StreamController(mic_mod, self.frm.stream_bar)
 
         fake_spec_stream = FakeSpectrumStream("First Fixed Stream")
-        stream_panel = stream_comp.BandwithStreamPanel(
+        stream_panel = stream_comp.StreamPanel(
                                     self.frm.stream_bar,
                                     fake_spec_stream,
                                     mic_mod)
@@ -440,7 +391,7 @@ class FoldPanelBarTestCase(unittest.TestCase):
         # Add an editable entry
         wx.MilliSleep(SLEEP_TIME)
         fake_cstream = FakeFluoStream("First Custom Stream")
-        custom_entry = stream_comp.DyeStreamPanel(self.frm.stream_bar,
+        custom_entry = stream_comp.StreamPanel(self.frm.stream_bar,
                                       fake_cstream, mic_mod)
         self.frm.stream_bar.add_stream(custom_entry)
         loop()
@@ -453,7 +404,7 @@ class FoldPanelBarTestCase(unittest.TestCase):
         # Add a fixed stream
         wx.MilliSleep(SLEEP_TIME)
         fake_fstream1 = FakeSEMStream("First Fixed Stream")
-        fixed_entry = stream_comp.SecomStreamPanel(self.frm.stream_bar,
+        fixed_entry = stream_comp.StreamPanel(self.frm.stream_bar,
                                            fake_fstream1, mic_mod)
         self.frm.stream_bar.add_stream(fixed_entry)
         loop()
@@ -469,7 +420,7 @@ class FoldPanelBarTestCase(unittest.TestCase):
         # Add a fixed stream
         wx.MilliSleep(SLEEP_TIME)
         fake_fstream2 = FakeSEMStream("Second Fixed Stream")
-        fixed_entry2 = stream_comp.SecomStreamPanel(self.frm.stream_bar,
+        fixed_entry2 = stream_comp.StreamPanel(self.frm.stream_bar,
                                            fake_fstream2, mic_mod)
         self.frm.stream_bar.add_stream(fixed_entry2)
         loop()
@@ -523,7 +474,7 @@ class FoldPanelBarTestCase(unittest.TestCase):
         # Add a callback/name combo to the add button
         def brightfield_callback():
             fake_stream = FakeBrightfieldStream("Brightfield")
-            fixed_entry = stream_comp.SecomStreamPanel(self.frm.stream_bar,
+            fixed_entry = stream_comp.StreamPanel(self.frm.stream_bar,
                                                 fake_stream, mic_mod)
             self.frm.stream_bar.add_stream(fixed_entry)
 
@@ -538,7 +489,7 @@ class FoldPanelBarTestCase(unittest.TestCase):
         # Add another callback/name combo to the add button
         def sem_callback():
             fake_stream = FakeSEMStream("SEM:EDT")
-            fixed_entry = stream_comp.SecomStreamPanel(self.frm.stream_bar,
+            fixed_entry = stream_comp.StreamPanel(self.frm.stream_bar,
                                            fake_stream, mic_mod)
             self.frm.stream_bar.add_stream(fixed_entry)
 
@@ -560,7 +511,7 @@ class FoldPanelBarTestCase(unittest.TestCase):
         # Add another callback/name combo to the add button
         def custom_callback():
             fake_stream = FakeFluoStream("Custom")
-            custom_entry = stream_comp.DyeStreamPanel(self.frm.stream_bar,
+            custom_entry = stream_comp.StreamPanel(self.frm.stream_bar,
                                                  fake_stream, mic_mod)
             self.frm.stream_bar.add_stream(custom_entry)
 

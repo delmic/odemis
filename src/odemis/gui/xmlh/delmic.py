@@ -80,23 +80,14 @@ component.Manager.register(c)
 component.Manager.addXmlHandler(xh_delmic.StreamBarXmlHandler)
 component.Manager.setMenu(c, 'Delmic', 'Stream Bar', 'StreamBar', 3)
 
-c = component.Container('SecomStreamPanel',
+c = component.Container('StreamPanel',
     ['window', 'top_level', 'control'],
     ['pos', 'size', 'label', 'collapsed'])
 c.setParamClass('collapsed', params.ParamBool)
 c.addEvents('EVT_COMMAND_COLLPANE_CHANGED')
 component.Manager.register(c)
-component.Manager.addXmlHandler(xh_delmic.SecomStreamPanelXmlHandler)
-component.Manager.setMenu(c, 'Delmic', 'Standard Stream', 'SecomStreamPanel', 4)
-
-c = component.Container('DyeStreamPanel',
-    ['window', 'top_level', 'control'],
-    ['pos', 'size', 'label', 'collapsed'])
-c.setParamClass('collapsed', params.ParamBool)
-c.addEvents('EVT_COMMAND_COLLPANE_CHANGED')
-component.Manager.register(c)
-component.Manager.addXmlHandler(xh_delmic.DyeStreamPanelXmlHandler)
-component.Manager.setMenu(c, 'Delmic', 'Dye Stream', 'DyeStreamPanel', 5)
+component.Manager.addXmlHandler(xh_delmic.StreamPanelXmlHandler)
+component.Manager.setMenu(c, 'Delmic', 'Generic Stream Entry', 'StreamPanel', 4)
 
 
 ### gui.dblmscopepanel.MicroscopeViewport and subclasses

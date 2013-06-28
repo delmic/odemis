@@ -139,7 +139,7 @@ class StreamController(object):
         stream = model.stream.FluoStream(name,
                   self._interface_model.ccd, self._interface_model.ccd.data,
                   self._interface_model.light, self._interface_model.light_filter)
-        return self._addStream(stream, comp.stream.DyeStreamPanel, add_to_all_views)
+        return self._addStream(stream, add_to_all_views)
 
     def addBrightfield(self, add_to_all_views=False):
         """
@@ -149,7 +149,7 @@ class StreamController(object):
         stream = model.stream.BrightfieldStream("Bright-field",
                   self._interface_model.ccd, self._interface_model.ccd.data,
                   self._interface_model.light)
-        return self._addStream(stream, comp.stream.SecomStreamPanel, add_to_all_views)
+        return self._addStream(stream, add_to_all_views)
 
     def addSEMSED(self, add_to_all_views=False):
         """
@@ -159,7 +159,7 @@ class StreamController(object):
         stream = model.stream.SEMStream("Secondary electrons",
                   self._interface_model.sed, self._interface_model.sed.data,
                   self._interface_model.ebeam)
-        return self._addStream(stream, comp.stream.SecomStreamPanel, add_to_all_views)
+        return self._addStream(stream, add_to_all_views)
 
     def addSpectrumStream(self):
         """ Method not needed/used """
@@ -168,7 +168,7 @@ class StreamController(object):
                     self._interface_model.spccd,
                     self._interface_model.spccd.data,
                     self._interface_model.ebeam)
-        return self._addStream(stream, comp.stream.BandwidthStreamPanel)
+        return self._addStream(stream)
 
     def addStatic(self, name, image,
                   cls=model.stream.StaticStream, add_to_all_views=False):
@@ -186,29 +186,19 @@ class StreamController(object):
 
     def addStream(self, stream, add_to_all_views=False):
         """ Create a stream entry for the given existing stream
-        Will pick the right panel fitting the stream type.
 
         :return StreamPanel: the panel created for the stream
         """
-        # find the right panel type
-        if isinstance(stream, model.stream.FluoStream):
-            cls = comp.stream.DyeStreamPanel
-        elif isinstance(stream, SPECTRUM_STREAMS):
-            cls = comp.stream.BandwithStreamPanel
-        else:
-            cls = comp.stream.SecomStreamPanel
+        return self._addStream(stream, add_to_all_views)
 
-        return self._addStream(stream, cls, add_to_all_views)
-
-    def _addStream(self, stream, spanel_cls, add_to_all_views=False):
+    def _addStream(self, stream, add_to_all_views=False):
         """
         Adds a stream.
 
         stream (Stream): the new stream to add
-        spanel_cls (class): the type of stream panel to create
         add_to_all_views (boolean): if True, add the stream to all the compatible
           views, otherwise add only to the current view
-        returns the StreamPanel of subclass 'spanel_cls' that was created
+        returns the StreamPanel that was created
         """
         self._interface_model.streams.add(stream)
         if add_to_all_views:
@@ -225,7 +215,7 @@ class StreamController(object):
         # call it like self._scheduler.addStream(stream)
         self._scheduleStream(stream)
 
-        spanel = spanel_cls(self._stream_bar, stream, self._interface_model)
+        spanel = comp.stream.StreamPanel(self._stream_bar, stream, self._interface_model)
 
         show = isinstance(
                     spanel.stream,
@@ -245,14 +235,7 @@ class StreamController(object):
         :return StreamPanel:
 
         """
-        # TODO: generalise addStream() to support this case too
-        # find the right panel type
-        if isinstance(stream, model.stream.FluoStream):
-            cls = comp.stream.DyeStreamPanel
-        else:
-            cls = comp.stream.SecomStreamPanel
-
-        sp = cls(self._stream_bar, stream, self._interface_model)
+        sp = comp.stream.StreamPanel(self._stream_bar, stream, self._interface_model)
         self._stream_bar.add_stream(sp, True)
         sp.to_acquisition_mode()
 

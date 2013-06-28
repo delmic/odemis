@@ -181,10 +181,6 @@ class Expander(wx.PyControl):
                             BUTTON_BORDER)
             self._btn_tint.Bind(wx.EVT_BUTTON, self._on_tint_click)
             stream.tint.subscribe(self._on_tint_value)
-        else:
-            logging.warn("Expected 'tint' attribute not found!")
-
-
 
         # ===== Visibility button
 
@@ -364,10 +360,8 @@ class Expander(wx.PyControl):
         self._label_ctrl.SetChoices(choices)
 
 
-### STREAMPANELS
-
 class StreamPanel(wx.PyPanel):
-    """ The StreamPanel super class, a special case collapsible panel.
+    """ The StreamPanel class, a special case collapsible panel.
 
     The StreamPanel consists of the following widgets:
 
@@ -377,7 +371,7 @@ class StreamPanel(wx.PyPanel):
          └┬ BoxSizer
           └─ GridBagSizer
 
-    Additional controls can be added to the GridBagSizer in subclasses.
+    Additional controls can be added to the GridBagSizer in the finalize().
 
     Most of the component's construction is done in the finalize() method, so
     we can allow for a delay. This is necessary when construction the component
@@ -1114,36 +1108,6 @@ class StreamPanel(wx.PyPanel):
         wx.CallAfter(self._sld_range.SetContent, gspec)
 
 
-class SparcAcquiStreamPanel(StreamPanel):
-
-    def __init__(self, *args, **kwargs):
-        StreamPanel.__init__(self, *args, **kwargs)
-
-
-class SecomStreamPanel(StreamPanel):  # pylint: disable=R0901
-
-    def __init__(self, *args, **kwargs):
-        StreamPanel.__init__(self, *args, **kwargs)
-
-
-
-# TODO: don't make it special, just adapt if the VAs are available
-class BandwithStreamPanel(StreamPanel):
-    """ A base stream panel that can be used for the selection of bandwidths, or
-    more specifically a center value and a range around that."""
-
-    def __init__(self, *args, **kwargs):
-        StreamPanel.__init__(self, *args, **kwargs)
-
-
-class DyeStreamPanel(StreamPanel):
-    """ A stream panel which can be altered by the user """
-
-    def __init__(self, *args, **kwargs):
-        StreamPanel.__init__(self, *args, **kwargs)
-
-
-
 class StreamBar(wx.Panel):
     """
     The whole panel containing stream panels and a button to add more streams
@@ -1278,7 +1242,7 @@ class StreamBar(wx.Panel):
         return len(self.stream_panels) == 0
 
     def get_size(self):
-        """ Return the number of stream contained withing the StreamBar """
+        """ Return the number of streams contained within the StreamBar """
         return len(self.stream_panels)
 
     def add_stream(self, spanel, show=True):

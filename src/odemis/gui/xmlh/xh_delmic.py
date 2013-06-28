@@ -46,7 +46,7 @@ HANDLER_CLASS_LIST = []
 # Fold Panel Bar related Handlers
 ##################################
 
-class SecomStreamPanelXmlHandler(xrc.XmlResourceHandler):
+class StreamPanelXmlHandler(xrc.XmlResourceHandler):
     def __init__(self):
         xrc.XmlResourceHandler.__init__(self)
         # Specify the styles recognized by objects of this type
@@ -58,7 +58,7 @@ class SecomStreamPanelXmlHandler(xrc.XmlResourceHandler):
 
     # This method and the next one are required for XmlResourceHandlers
     def CanHandle(self, node):
-        capable = self.IsOfClass(node, "FixedStreamPanelEntry")
+        capable = self.IsOfClass(node, "StreamPanel")
 
         return capable
 
@@ -67,7 +67,7 @@ class SecomStreamPanelXmlHandler(xrc.XmlResourceHandler):
 
         parent_window = self.GetParentAsWindow()
         # Now create the object
-        panel = strm.SecomStreamPanel(parent_window,
+        panel = strm.StreamPanel(parent_window,
                                          self.GetID(),
                                          self.GetText('label'),
                                          self.GetPosition(),
@@ -89,48 +89,7 @@ class SecomStreamPanelXmlHandler(xrc.XmlResourceHandler):
         #self.CreateChildren(panel.get_panel())
 
         return panel
-HANDLER_CLASS_LIST.append(SecomStreamPanelXmlHandler)
-
-class DyeStreamPanelXmlHandler(xrc.XmlResourceHandler):
-    def __init__(self):
-        xrc.XmlResourceHandler.__init__(self)
-        # Specify the styles recognized by objects of this type
-        self.AddStyle("wxTAB_TRAVERSAL", wx.TAB_TRAVERSAL)
-        #self.AddStyle("CP_GTK_EXPANDER", CP_GTK_EXPANDER)
-        #self.AddStyle("CP_DEFAULT_STYLE", CP_DEFAULT_STYLE)
-        #self.AddStyle("CP_NO_TLW_RESIZE", CP_NO_TLW_RESIZE)
-        self.AddWindowStyles()
-
-    # This method and the next one are required for XmlResourceHandlers
-    def CanHandle(self, node):
-        return self.IsOfClass(node, "DyeStreamPanel")
-
-    def DoCreateResource(self):
-        assert self.GetInstance() is None
-
-        # Now create the object
-        panel = strm.DyeStreamPanel(self.GetParentAsWindow(),
-                                    self.GetID(),
-                                    self.GetText('label'),
-                                    self.GetPosition(),
-                                    self.GetSize(),
-                                    self.GetStyle("style", wx.TAB_TRAVERSAL),
-                                    #self.GetStyle('exstyle'),
-                                    name=self.GetName(),
-                                    collapsed=self.GetBool('collapsed')
-                                    )
-
-        # These two things should be done in either case:
-        # Set standard window attributes
-        self.SetupWindow(panel)
-        panel.finalize()
-
-        # Create any child windows of this node
-        # deprecated: all children are hard-coded
-        #self.CreateChildren(panel.get_panel())
-
-        return panel
-HANDLER_CLASS_LIST.append(DyeStreamPanelXmlHandler)
+HANDLER_CLASS_LIST.append(StreamPanelXmlHandler)
 
 
 class FoldPanelBarXmlHandler(xrc.XmlResourceHandler):
@@ -783,7 +742,7 @@ class UnitIntegerSliderHandler(xrc.XmlResourceHandler):
                                         unit=self.GetText('unit'),
                                         val_range=rng,
                                         scale=self.GetText('scale'),
-                                        t_size = text_size)
+                                        t_size=text_size)
         self.SetupWindow(slider)
         return slider
 HANDLER_CLASS_LIST.append(UnitIntegerSliderHandler)
