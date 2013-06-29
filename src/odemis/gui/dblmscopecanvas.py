@@ -226,12 +226,15 @@ class DblMicroscopeCanvas(DraggableCanvas):
         self._updateThumbnail()
 
     @limit_invocation(2) # max 1/2s
-    @call_after
+    @call_after  # needed as it accesses the DC
     def _updateThumbnail(self):
         # TODO: avoid doing 2 copies, by using directly the wxImage from the
         # result of the StreamTree
+#        logging.debug("Updating thumbnail with size = %s", self.ClientSize)
 
-        #logging.debug("Updating thumbnail")
+        csize = self.ClientSize
+        if (csize[0] * csize[1]) <= 0:
+            return # nothing to update
 
         # new bitmap to copy the DC
         bitmap = wx.EmptyBitmap(*self.ClientSize)
@@ -452,25 +455,25 @@ class SecomCanvas(DblMicroscopeCanvas):
                 logging.error("StreamTree has a None stream")
                 continue
 
-            if hasattr(s, "image"):
-                iim = s.image.value
+            if not hasattr(s, "image"):
+                continue
 
-                if iim is None or iim.image is None:
-                    continue
+            iim = s.image.value
+            if iim is None or iim.image is None:
+                continue
 
-                if isinstance(s, EM_STREAMS):
-                    # as first
-                    images.insert(0, iim)
-                    # FIXME: See the log warning
-                    if has_sem_image:
-                        logging.warning(("Multiple SEM images are not handled "
-                                         "correctly for now"))
-                    has_sem_image = True
-                else:
-                    images.append(iim)
-
-        if not has_sem_image: # make sure there is always a SEM image
-            images.insert(0, None)
+            if isinstance(s, EM_STREAMS):
+                # as last
+                images.append(iim)
+                logging.debug("inserting SEM image")
+                # FIXME: See the log warning
+                if has_sem_image:
+                    logging.warning(("Multiple SEM images are not handled "
+                                     "correctly for now"))
+                has_sem_image = True
+            else:
+                images.insert(0, iim) # as first
+                logging.debug("inserting normal image")
 
         return images
 
