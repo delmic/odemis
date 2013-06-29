@@ -32,6 +32,7 @@ from numpy.polynomial import polynomial
 from odemis.gui.model.img import InstrumentalImage
 from odemis.model import VigilantAttribute, MD_POS, MD_PIXEL_SIZE, \
     MD_SENSOR_PIXEL_SIZE, MD_WL_POLYNOMIAL
+from odemis.model._dataflow import MD_WL_LIST
 import logging
 import math
 import numpy
@@ -40,7 +41,6 @@ import odemis.gui.util.img as img
 import odemis.gui.util.units as units
 import odemis.model as model
 import threading
-from odemis.model._dataflow import MD_WL_LIST
 
 
 # to identify a ROI which must still be defined by the user
@@ -414,7 +414,7 @@ class FluoStream(CameraStream):
     It basically knows how to select the right emission/filtered wavelengths,
     and how to taint the image.
 
-    Note: Excitation is (filtered) light comming from a light source and
+    Note: Excitation is (filtered) light coming from a light source and
     emission is the light emitted by the sample.
     """
 
@@ -976,17 +976,6 @@ class StaticSpectrumStream(StaticStream):
         try:
             # cached list of wavelength for each pixel pos
             self._wl_px_values = self._get_wavelength_per_pixel(image)
-            minb, maxb = self._wl_px_values[0], self._wl_px_values[-1]
-            # they might represent wavelength out of the possible values, but they
-            # will automatically be clipped to fine values
-            self.centerWavelength = model.FloatContinuous((maxb + minb) / 2,
-                                                          range=(minb, maxb),
-                                                          unit="m")
-            max_bw = maxb - minb
-            min_bw = (maxb - minb) / image.shape[0] # one pixel width
-            self.bandwidth = model.FloatContinuous(max_bw / 12,
-                                                   range=(min_bw, max_bw),
-                                                   unit="m")
         except (ValueError, KeyError):
             # useless polynomial => just show pixels values (ex: -50 -> +50 px)
             # TODO: try to make them always int?
@@ -1002,7 +991,18 @@ class StaticSpectrumStream(StaticStream):
             self.bandwidth = model.FloatContinuous(max(1, max_bw // 12),
                                                    range=(1, max_bw),
                                                    unit="px")
-
+        else:
+            minb, maxb = self._wl_px_values[0], self._wl_px_values[-1]
+            # they might represent wavelength out of the possible values, but they
+            # will automatically be clipped to fine values
+            self.centerWavelength = model.FloatContinuous((maxb + minb) / 2,
+                                                          range=(minb, maxb),
+                                                          unit="m")
+            max_bw = maxb - minb
+            min_bw = (maxb - minb) / image.shape[0] # one pixel width
+            self.bandwidth = model.FloatContinuous(max_bw / 12,
+                                                   range=(min_bw, max_bw),
+                                                   unit="m")
 
         # Whether the (per bandwidth) display should be split intro 3 sub-bands
         # which are applied to RGB
@@ -1064,7 +1064,7 @@ class StaticSpectrumStream(StaticStream):
                 npn = polynomial.Polynomial(pn,
                                             domain=[0, da.shape[0] - 1],
                                             window=[0, da.shape[0] - 1])
-                return npn.linspace(da.shape[0])
+                return npn.linspace(da.shape[0])[1]
             else:
                 # a polynomial or 0 or 1 value is useless
                 raise ValueError("Wavelength polynomial has only %d degree"
@@ -1181,7 +1181,7 @@ class StaticSpectrumStream(StaticStream):
 
         # TODO: add an argument to request dividing by ._depth?
         return av_data.tolist()
-        
+
     def onFitToRGB(self, value):
         """
         called when fitToRGB is changed
