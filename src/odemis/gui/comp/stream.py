@@ -1126,8 +1126,13 @@ class StreamBar(wx.Panel):
     DEFAULT_STYLE = wx.BOTTOM | wx.EXPAND
     # the order in which the streams are displayed
     STREAM_ORDER = [model.stream.SEMStream,
+                    model.stream.StaticSEMStream,
                     model.stream.BrightfieldStream,
-                    model.stream.FluoStream]
+                    model.stream.StaticStream,
+                    model.stream.FluoStream,
+                    model.stream.SpectrumStream,
+                    model.stream.ARStream,
+                    ]
 
 
     def __init__(self, *args, **kwargs):
