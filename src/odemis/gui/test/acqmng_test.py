@@ -94,7 +94,7 @@ class TestWithBackend(unittest.TestCase):
 
         # create some streams connected to the backend
         cls.microscope = model.getMicroscope()
-        cls.imodel = instrmodel.MicroscopeModel(cls.microscope)
+        cls.imodel = instrmodel.MicroscopeGUIModel(cls.microscope)
         s1 = stream.FluoStream("fluo1",
                   cls.imodel.ccd, cls.imodel.ccd.data,
                   cls.imodel.light, cls.imodel.light_filter)
