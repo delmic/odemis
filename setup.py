@@ -8,7 +8,7 @@ import subprocess
 import sys
 
 # To be updated to the current version
-VERSION = "1.2~alpha1"
+VERSION = "1.2"
 # We cannot use the git version because it's not (always) available when building
 # the debian package
 
@@ -65,6 +65,7 @@ if sys.platform.startswith('linux'):
                   ('share/icons/hicolor/64x64/apps/', ['install/linux/usr/share/icons/hicolor/64x64/apps/odemis.png']),
                   ('share/icons/hicolor/128x128/apps/', ['install/linux/usr/share/icons/hicolor/128x128/apps/odemis.png']),
                   ('share/doc/odemis/', glob.glob('doc/*.txt')),
+                  ('share/doc/odemis/scripts/', glob.glob('scripts/*.py')),
                   ]
     # TODO: see if we could use entry_points instead
     scripts = ['install/linux/usr/local/bin/odemisd',
