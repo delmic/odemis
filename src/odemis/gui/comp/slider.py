@@ -939,7 +939,9 @@ class BandwidthSlider(VisualRangeSlider):
         logging.debug("Setting center value to %s", center)
         spread = self.get_bandwidth_value() / 2
         center = self.get_center_value()
-        val = (center - spread, center + spread)
+        # min/max needed as imprecision can bring the value slightly outside
+        val = (max(center - spread, self.val_range[0]),
+               min(center + spread, self.val_range[1]))
         super(BandwidthSlider, self).SetValue(val) # will not do anything if dragging
 
     def get_center_value(self):
@@ -949,7 +951,8 @@ class BandwidthSlider(VisualRangeSlider):
         logging.debug("Setting bandwidth to %s", bandwidth)
         spread = bandwidth / 2
         center = self.get_center_value()
-        val = (center - spread, center + spread)
+        val = (max(center - spread, self.val_range[0]),
+               min(center + spread, self.val_range[1]))
         super(BandwidthSlider, self).SetValue(val) # will not do anything if dragging
 
     def get_bandwidth_value(self):
