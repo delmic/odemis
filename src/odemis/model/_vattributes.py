@@ -108,7 +108,7 @@ class VigilantAttribute(VigilantAttributeBase):
         self._remote_listeners = set() # any unique string works
 
         self._global_name = None # to be filled when registered
-        self.ctx = None
+        self._ctx = None
         self.pipe = None
         self.max_discard = max_discard
 
@@ -169,8 +169,8 @@ class VigilantAttribute(VigilantAttributeBase):
         # Warning: notify() will most likely run in a separate thread, which is
         # not recommended by 0MQ. At least, we should never access it from this
         # thread anymore. To be safe, it might need a pub-sub forwarder proxy inproc
-        self.ctx = zmq.Context(1)
-        self.pipe = self.ctx.socket(zmq.PUB)
+        self._ctx = zmq.Context(1)
+        self.pipe = self._ctx.socket(zmq.PUB)
         self.pipe.linger = 1 # don't keep messages more than 1s after close
         # self.pipe.hwm has to be 0 (default), otherwise it drops _new_ values
 
@@ -187,10 +187,9 @@ class VigilantAttribute(VigilantAttributeBase):
         daemon = getattr(self, "_pyroDaemon", None)
         if daemon:
             daemon.unregister(self)
-        if self.ctx:
-            self.pipe.close()
-            self.ctx.term()
-            self.ctx = None
+        if hasattr(self, "_ctx") and self._ctx: # no ._ctx if exception during init
+                self.pipe.close()
+                self._ctx.term()
 
     @oneway
     def subscribe(self, listener, init=False):
@@ -243,8 +242,8 @@ class VigilantAttributeProxy(VigilantAttributeBase, Pyro4.Proxy):
         self.max_discard = 100
         self.readonly = False # will be updated in __setstate__
 
-        self.ctx = None
-        self.commands = None
+        self._ctx = None
+        self._commands = None
         self._thread = None
 
     @property
@@ -302,15 +301,16 @@ class VigilantAttributeProxy(VigilantAttributeBase, Pyro4.Proxy):
         #pylint: disable=E1101
         self._global_name = self._pyroUri.sockname + "@" + self._pyroUri.object
 
-        self.ctx = None
-        self.commands = None
+        self._ctx = None
+        self._commands = None
         self._thread = None
 
     def _create_thread(self):
-        self.ctx = zmq.Context(1) # apparently 0MQ reuse contexts
-        self.commands = self.ctx.socket(zmq.PAIR)
-        self.commands.bind("inproc://" + self._global_name)
-        self._thread = SubscribeProxyThread(self.notify, self._global_name, self.max_discard, self.ctx)
+        logging.debug("Creating thread")
+        self._ctx = zmq.Context(1) # apparently 0MQ reuse contexts
+        self._commands = self._ctx.socket(zmq.PAIR)
+        self._commands.bind("inproc://" + self._global_name)
+        self._thread = SubscribeProxyThread(self.notify, self._global_name, self.max_discard, self._ctx)
         self._thread.start()
 
     def subscribe(self, listener, init=False):
@@ -328,8 +328,8 @@ class VigilantAttributeProxy(VigilantAttributeBase, Pyro4.Proxy):
         """
         if not self._thread:
             self._create_thread()
-        self.commands.send("SUB")
-        self.commands.recv() # synchronise
+        self._commands.send("SUB")
+        self._commands.recv() # synchronise
 
         # send subscription to the actual VA
         # a bit tricky because the underlying method gets created on the fly
@@ -345,7 +345,7 @@ class VigilantAttributeProxy(VigilantAttributeBase, Pyro4.Proxy):
         stop the remote subscription
         """
         Pyro4.Proxy.__getattr__(self, "unsubscribe")(self._global_name)
-        self.commands.send("UNSUB")
+        self._commands.send("UNSUB")
 
     def __del__(self):
         # end the thread (but it will stop as soon as it notices we are gone anyway)
@@ -354,10 +354,15 @@ class VigilantAttributeProxy(VigilantAttributeBase, Pyro4.Proxy):
                 if len(self._listeners):
                     logging.warning("Stopping subscription while there are still subscribers because VA '%s' is going out of context", self._global_name)
                     Pyro4.Proxy.__getattr__(self, "unsubscribe")(self._global_name)
-                self.commands.send("STOP")
+                self._commands.send("STOP")
                 self._thread.join()
-            self.commands.close()
-            self.ctx.term()
+            self._commands.close()
+            self._ctx.term()
+
+        try:
+            Pyro4.Proxy.__del__(self)
+        except Exception:
+            pass # don't be too rough if that fails, it's not big deal anymore
 
 
 class SubscribeProxyThread(threading.Thread):
@@ -372,14 +377,14 @@ class SubscribeProxyThread(threading.Thread):
         self.daemon = True
         self.uri = uri
         self.max_discard = max_discard
-        self.ctx = zmq_ctx
+        self._ctx = zmq_ctx
         # don't keep strong reference to notifier so that it can be garbage
         # collected normally and it will let us know then that we can stop
         self.w_notifier = WeakMethod(notifier)
 
         # create a zmq synchronised channel to receive commands
-        self.commands = zmq_ctx.socket(zmq.PAIR)
-        self.commands.connect("inproc://" + uri)
+        self._commands = zmq_ctx.socket(zmq.PAIR)
+        self._commands.connect("inproc://" + uri)
 
         # create a zmq subscription to receive the data
         self.data = zmq_ctx.socket(zmq.SUB)
@@ -388,23 +393,23 @@ class SubscribeProxyThread(threading.Thread):
     def run(self):
         # Process messages for commands and data
         poller = zmq.Poller()
-        poller.register(self.commands, zmq.POLLIN)
+        poller.register(self._commands, zmq.POLLIN)
         poller.register(self.data, zmq.POLLIN)
         discarded = 0
         while True:
             socks = dict(poller.poll())
 
             # process commands
-            if socks.get(self.commands) == zmq.POLLIN:
-                message = self.commands.recv()
+            if socks.get(self._commands) == zmq.POLLIN:
+                message = self._commands.recv()
                 if message == "SUB":
                     self.data.setsockopt(zmq.SUBSCRIBE, '')
-                    self.commands.send("SUBD")
+                    self._commands.send("SUBD")
                 elif message == "UNSUB":
                     self.data.setsockopt(zmq.UNSUBSCRIBE, '')
                     # no confirmation (async)
                 elif message == "STOP":
-                    self.commands.close()
+                    self._commands.close()
                     self.data.close()
                     return
 
@@ -423,7 +428,7 @@ class SubscribeProxyThread(threading.Thread):
                 try:
                     self.w_notifier(value)
                 except WeakRefLostError:
-                    self.commands.close()
+                    self._commands.close()
                     self.data.close()
                     return
 
