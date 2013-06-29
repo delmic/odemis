@@ -76,11 +76,12 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
         # crosshair
         show_crosshair = self.view.show_crosshair
         show_crosshair.value = True
-        self.assertTrue(len(self.canvas.ViewOverlays) == 1)
+        self.assertGreaterEqual(len(self.canvas.ViewOverlays), 1)
+        lvo = len(self.canvas.ViewOverlays)
         show_crosshair.value = True
-        self.assertTrue(len(self.canvas.ViewOverlays) == 1)
+        self.assertEqual(len(self.canvas.ViewOverlays), lvo)
         show_crosshair.value = False
-        self.assertTrue(len(self.canvas.ViewOverlays) == 0)
+        self.assertEqual(len(self.canvas.ViewOverlays), lvo - 1)
 
     def test_BasicDisplay(self):
         """
@@ -217,8 +218,8 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
         resultIm = GetImageFromBuffer(self.canvas)
 
         px1 = GetRGB(resultIm,
-                     self.canvas.buffer_size[0]/2 + 10,
-                     self.canvas.buffer_size[1]/2 + 10)
+                     self.canvas._bmp_buffer_size[0] / 2 + 10,
+                     self.canvas._bmp_buffer_size[1] / 2 + 10)
         self.assertEqual(px1, (255, 0, 0))
 
         # zoom in
@@ -230,8 +231,8 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
         resultIm = GetImageFromBuffer(self.canvas)
 
         px1 = GetRGB(resultIm,
-             self.canvas.buffer_size[0]/2 + 40,
-             self.canvas.buffer_size[1]/2 + 40)
+             self.canvas._bmp_buffer_size[0] / 2 + 40,
+             self.canvas._bmp_buffer_size[1] / 2 + 40)
         self.assertEqual(px1, (255, 0, 0))
 
 
@@ -247,10 +248,10 @@ def GetImageFromBuffer(canvas):
     """
     Copy the current buffer into a wx.Image
     """
-    resultBmp = wx.EmptyBitmap(*canvas.buffer_size)
+    resultBmp = wx.EmptyBitmap(*canvas._bmp_buffer_size)
     resultDC = wx.MemoryDC()
     resultDC.SelectObject(resultBmp)
-    resultDC.BlitPointSize((0, 0), canvas.buffer_size, canvas._dcBuffer, (0, 0))
+    resultDC.BlitPointSize((0, 0), canvas._bmp_buffer_size, canvas._dc_buffer, (0, 0))
     resultDC.SelectObject(wx.NullBitmap)
     return wx.ImageFromBitmap(resultBmp)
 

@@ -155,7 +155,7 @@ class DraggableCanvas(wx.Panel):
         # buffer = the whole image to be displayed
         self._dc_buffer = wx.MemoryDC()
 
-        # wx.Bitmap that will allways contain the image to be displayed
+        # wx.Bitmap that will always contain the image to be displayed
         self._bmp_buffer = None
         # very small first, so that for sure it'll be resized with OnSize
         self._bmp_buffer_size = (1, 1)
