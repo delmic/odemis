@@ -138,13 +138,10 @@ class AcquisitionDialog(xrcfr_acq):
 
         # go through all the streams available in the interface model
         for s in self.interface_model.streams:
-            # add to the stream bar
-            sp = self.stream_controller.addStreamForAcquisition(s)
             if s in visible_streams:
-                view.addStream(s)
-                sp.show_stream()
-            else:
-                sp.hide_stream()
+                view.addStream(s) # must be done first, so that the "visible" button is correct
+            # add to the stream bar in any case
+            sp = self.stream_controller.addStreamForAcquisition(s)
 
     def find_current_preset(self):
         """
