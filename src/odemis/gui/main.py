@@ -223,8 +223,8 @@ class OdemisGUIApp(wx.App):
                     self.main_frame.pnl_tab_sparc_align
                 ),
                 (
-                    ("sparc", ),
-                    ("ACQUISITION", ),
+                    ("sparc",),
+                    ("ACQUISITION",),
                     "sparc_acqui",
                     tabs.SparcAcquisitionTab,
                     self.main_frame.btn_tab_sparc_acqui,
@@ -232,7 +232,7 @@ class OdemisGUIApp(wx.App):
                 ),
                 (
                     (None, "secom", "sparc"),
-                    (None, "GALLERY", "ANALYSIS"),
+                    ("GALLERY", "GALLERY", "ANALYSIS"),
                     "inspection",
                     tabs.InspectionTab,
                     self.main_frame.btn_tab_inspection,
