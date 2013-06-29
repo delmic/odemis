@@ -28,6 +28,7 @@ from odemis.gui.model import OPTICAL_STREAMS, EM_STREAMS, SPECTRUM_STREAMS, \
 from odemis.gui.model.stream import SEMStream, BrightfieldStream, FluoStream
 import logging
 import wx
+from odemis.gui.util import call_after
 
 # TODO: The next comments were copied from instrmodel. Read/implement/remove
 # viewport controller (to be merged with stream controller?)
@@ -329,6 +330,7 @@ class ViewSelector(object):
                 lbl.SetLabel("Overview")
                 continue
 
+            @call_after
             def onThumbnail(im, btn=btn): # save btn in scope
                 btn.set_overlay(im)
 
@@ -368,6 +370,7 @@ class ViewSelector(object):
                     logging.debug("untoggling button of view All")
                 b.SetToggle(False)
 
+    @call_after
     def _update22Thumbnail(self, im):
         """
         Called when any thumbnail is changed, to recompute the 2x2 thumbnail of
