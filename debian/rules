@@ -2,3 +2,7 @@
 
 %:
 	dh $@ --with python2
+	
+override_dh_compress:
+	# make sure it doesn't compress example scripts
+	dh_compress -X .py
