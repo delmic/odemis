@@ -1,3 +1,19 @@
+odemis (1.2-1ubuntu1) precise; urgency=low
+
+  * New version: 1.2
+  * Main new features:
+    - can open back acquisition previous files (only for HDF5 format)
+    - SPARC manual mirror alignment interface
+    - improved GUI control for the wavelength of spectra
+    - can be used without any microscope connected (for example for opening back a file)
+    - can be installed using the normal python way (setup.py)
+    - include some examples of Python scripts using odemis
+  * Main bug fixed
+    - fix scanning area of SEM twice too large
+    - fix SEM-CL acquisition sometime not receiving all the pixels
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Sat, 29 Jun 2013 20:16:32 +0200
+
 odemis (1.2~alpha3-1ubuntu1) precise; urgency=low
 
   * Package documentation too
