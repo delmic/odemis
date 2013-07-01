@@ -22,7 +22,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 # Test module for Odemis' custom FoldPanelBar in gui.comp
 #===============================================================================
 
-from odemis.gui import test
+from odemis.gui import test, comp
 from odemis.gui.xmlh import odemis_get_test_resources
 from wx.lib.inspection import InspectionTool
 import logging
@@ -30,7 +30,7 @@ import odemis.gui.test.test_gui
 import unittest
 import wx
 
-# logging.getLogger().setLevel(logging.DEBUG)
+logging.getLogger().setLevel(logging.DEBUG)
 
 # Open an inspection window after running the tests if MANUAL is set
 INSPECT = False
@@ -72,8 +72,7 @@ class FoldPanelBarTestCase(unittest.TestCase):
     def tearDownClass(cls):
         if not test.MANUAL:
             wx.CallAfter(cls.app.Exit)
-        else:
-            cls.app.MainLoop()
+        cls.app.MainLoop()
 
     @classmethod
     def dump_win_tree(cls, window, indent=0):
@@ -87,10 +86,8 @@ class FoldPanelBarTestCase(unittest.TestCase):
     @classmethod
     def build_caption_event(cls, foldpanelitem):
 
-        import odemis.gui.comp.foldpanelbar as ofpb
-
         cap_bar = foldpanelitem.GetCaptionBar()
-        event = ofpb.CaptionBarEvent(ofpb.wxEVT_CAPTIONBAR)
+        event = comp.foldpanelbar.CaptionBarEvent(comp.foldpanelbar.wxEVT_CAPTIONBAR)
         event.SetEventObject(cap_bar)
         event.SetBar(cap_bar)
 
@@ -106,18 +103,16 @@ class FoldPanelBarTestCase(unittest.TestCase):
         self.assertIsInstance(self.app.test_frame.scrwin, wx.ScrolledWindow)
         self.assertEqual(len(self.app.test_frame.scrwin.GetChildren()), 1)
 
-        fpb = self.app.test_frame.scrwin.GetChildren()[0]
-
-        import odemis.gui.comp.foldpanelbar as ofpb
-        self.assertIsInstance(fpb, ofpb.FoldPanelBar)
+        fpb = self.app.test_frame.fpb
+        self.assertIsInstance(fpb, comp.foldpanelbar.FoldPanelBar)
 
         #self.dump_win_tree(self.app.test_frame)
-        self.assertEqual(len(fpb.GetChildren()), 3)
+        self.assertTrue(len(fpb.GetChildren()) in [3, 4]) # 4 if other test have created panel 4
 
         for item in fpb.GetChildren():
-            self.assertIsInstance(item, ofpb.FoldPanelItem)
+            self.assertIsInstance(item, comp.foldpanelbar.FoldPanelItem)
             self.assertIsInstance(item.GetChildren()[0],
-                                  ofpb.CaptionBar)
+                                  comp.foldpanelbar.CaptionBar)
 
 
     def test_scrollbar_on_collapse(self):
@@ -128,6 +123,11 @@ class FoldPanelBarTestCase(unittest.TestCase):
 
         self.app.test_frame.SetTitle("Testing expand/collapse scroll bars")
         wx.MilliSleep(test.SLEEP_TIME)
+
+        # Put back into more or less original state
+        self.app.test_frame.panel_1.Expand()
+        self.app.test_frame.panel_2.Collapse()
+        self.app.test_frame.panel_3.Expand()
 
         # The first and third panel should be expanded, the second one collapsed
         self.assertEqual(self.app.test_frame.panel_1.IsExpanded(), True)
@@ -170,6 +170,11 @@ class FoldPanelBarTestCase(unittest.TestCase):
         """ Test the scroll bar """
         self.app.test_frame.SetTitle("Testing resizing scroll bars")
         wx.MilliSleep(test.SLEEP_TIME)
+
+        # Put back into more or less original state
+        self.app.test_frame.panel_1.Expand()
+        self.app.test_frame.panel_2.Collapse()
+        self.app.test_frame.panel_3.Expand()
 
         # The first and third panel should be expanded, the second one collapsed
         self.assertEqual(self.app.test_frame.panel_1.IsExpanded(), True)
@@ -313,9 +318,9 @@ class FoldPanelBarTestCase(unittest.TestCase):
                                              "ADDED LABEL"))
 
         test.gui_loop()
+        wx.MilliSleep(test.SLEEP_TIME)
         test.gui_loop()
 
-        wx.MilliSleep(test.SLEEP_TIME)
 
         # Vertical scroll bar should have appeared
         self.assertEqual(fpb.has_vert_scrollbar(), True)

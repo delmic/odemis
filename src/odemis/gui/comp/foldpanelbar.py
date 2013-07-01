@@ -23,7 +23,6 @@
 import wx
 from wx.lib.agw.aui.aui_utilities import StepColour
 
-from odemis.gui.log import log
 from odemis.gui.img.data import getarr_rightBitmap, getarr_downBitmap
 
 
@@ -74,13 +73,13 @@ class FoldPanelBar(wx.Panel):
         size = self.Parent.GetSize()
         vsize = self.Parent.GetVirtualSize()
 
-        return vsize[0] < size[0]
+        return vsize[1] > size[1]
 
     def has_horz_scrollbar(self):
         size = self.Parent.GetSize()
-        hsize = self.Parent.GetVirtualSize()
+        vsize = self.Parent.GetVirtualSize()
 
-        return hsize[1] < size[1]
+        return vsize[0] > size[0]
 
     def OnSize(self, evt):
         self.SetSize(self.Parent.GetVirtualSize())
@@ -126,7 +125,7 @@ class FoldPanelItem(wx.Panel):
 
     """
 
-    def __init__(self, parent, id=-1, pos=(0, 0), size=wx.DefaultSize,
+    def __init__(self, parent, id= -1, pos=(0, 0), size=wx.DefaultSize,
                  style=wx.TAB_TRAVERSAL | wx.NO_BORDER, label="",
                  collapsed=False, nocaption=False):
 
@@ -141,7 +140,7 @@ class FoldPanelItem(wx.Panel):
         if not nocaption:
             self.caption_bar = CaptionBar(self, label, collapsed)
             self._sizer.Add(self.caption_bar,
-                            flag=wx.EXPAND|wx.BOTTOM,
+                            flag=wx.EXPAND | wx.BOTTOM,
                             border=1)
 
         self.Bind(EVT_CAPTIONBAR, self.OnPressCaption)
@@ -193,14 +192,14 @@ class FoldPanelItem(wx.Panel):
     def add_item(self, item):
         """ Add a wx.Window or Sizer to the end of the panel """
         self._sizer.Add(item,
-                        flag=wx.EXPAND|wx.BOTTOM,
+                        flag=wx.EXPAND | wx.BOTTOM,
                         border=1)
         self._refresh()
 
     def insert_item(self, item, pos):
         """ Insert a wx.Window or Sizer into the panel at location `pos` """
         self._sizer.Insert(pos + 1, item,
-                           flag=wx.EXPAND|wx.BOTTOM,
+                           flag=wx.EXPAND | wx.BOTTOM,
                            border=1)
 
     def remove_item(self, item):
@@ -230,7 +229,7 @@ class FoldPanelItem(wx.Panel):
         for child in self.GetChildren():
             if not self._sizer.GetItem(child):
                 self._sizer.Add(child,
-                                flag=wx.EXPAND|wx.BOTTOM,
+                                flag=wx.EXPAND | wx.BOTTOM,
                                 border=1)
 
         if hasattr(self, 'caption_bar') and self.caption_bar.IsCollapsed():
@@ -361,8 +360,8 @@ class CaptionBar(wx.Window):
         else:
             x_pos = 10
 
-        if hasattr(self.Parent, "has_vert_scrollbar") and \
-           self.Parent.has_vert_scrollbar():
+        if (hasattr(self.Parent, "has_vert_scrollbar") and
+            self.Parent.has_vert_scrollbar()):
             x_pos -= SCROLLBAR_WIDTH
 
         if hasattr(self.Parent, "grandparent"):
