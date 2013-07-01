@@ -85,6 +85,7 @@ class BaseSlider(wx.PyControl):
 
     @abstractmethod
     def SetRange(self, min_val, max_val):
+        """ Set the range of valid values """
         pass
 
     @abstractmethod
@@ -95,19 +96,19 @@ class BaseSlider(wx.PyControl):
         self.ReleaseMouse()
         evt.Skip()
 
-    def send_scroll_event(self):
-        """ Fire EVT_SCROLL_CHANGED event
-        Means that the value has changed to a definite position (only sent when
-        the user is done moving the slider).
+    def _send_scroll_event(self):
+        """ This method fires the EVT_SCROLL_CHANGED event.
+        This means that the value has changed to a definite position, and it
+        should only be sent when the user is done moving the slider.
         """
         evt = wx.ScrollEvent(wx.wxEVT_SCROLL_CHANGED)
         evt.SetEventObject(self)
         self.GetEventHandler().ProcessEvent(evt)
 
     @limit_invocation(0.07)  #pylint: disable=E1120
-    def send_slider_update_event(self):
+    def _send_slider_update_event(self):
         """ Send EVT_COMMAND_SLIDER_UPDATED, which is received as EVT_SLIDER.
-        Means that the value has changed (even when the user is moving the
+        Means that the value has changed (even when the user is still moving the
         slider)
         """
         evt = wx.CommandEvent(wx.wxEVT_COMMAND_SLIDER_UPDATED)
@@ -330,7 +331,7 @@ class Slider(BaseSlider):
         """
         if self.HasCapture():
             self.ReleaseMouse()
-            self.send_scroll_event()
+            self._send_scroll_event()
 
         event.Skip()
 
@@ -368,7 +369,7 @@ class Slider(BaseSlider):
 
         #calculate value, based on pointer position
         self._SetValue(self._pixel_to_val())
-        self.send_slider_update_event()
+        self._send_slider_update_event()
 
     def _val_to_pixel(self, val=None):
         """ Convert a slider value into a pixel position """
@@ -394,7 +395,7 @@ class Slider(BaseSlider):
         If the slider is currently being dragged, the value will *NOT* be set.
 
         It doesn't send an event that the value was modified. To send an
-        event, you need to call send_slider_update_event()
+        event, you need to call _send_slider_update_event()
         """
         # If the user is *NOT* dragging...
         if not self.HasCapture():
@@ -477,7 +478,6 @@ class Slider(BaseSlider):
 
 class NumberSlider(Slider):
     """ A Slider with an extra linked text field showing the current value.
-
     """
 
     def __init__(self, parent, id=wx.ID_ANY, value=0, val_range=(0.0, 1.0),
@@ -485,9 +485,9 @@ class NumberSlider(Slider):
                  name="Slider", scale=None, t_class=UnitFloatCtrl,
                  t_size=(50, -1), unit="", accuracy=None):
         """
-        unit (None or string): if None then display numbers as-is, otherwise
+        :param unit: (None or string) if None then display numbers as-is, otherwise
           adds a SI prefix and unit.
-        accuracy (None or int): number of significant digits. If None, displays
+        :param accuracy: (None or int) number of significant digits. If None, displays
           almost all the value.
         """
         Slider.__init__(self, parent, id, value, val_range, size,
@@ -521,7 +521,6 @@ class NumberSlider(Slider):
     def _update_slider(self, evt):
         """ Private event handler called when the slider should be updated, for
             example when a linked text field receives a new value.
-
         """
 
         # If the slider is not being dragged
@@ -530,8 +529,8 @@ class NumberSlider(Slider):
             if self.GetValue() != text_val:
                 logging.debug("Updating slider value to %s", text_val)
                 Slider._SetValue(self, text_val) # avoid to update link field again
-                self.send_slider_update_event()
-                self.send_scroll_event()
+                self._send_slider_update_event()
+                self._send_scroll_event()
                 evt.Skip()
 
     def _update_linked_field(self, value):
@@ -721,9 +720,7 @@ class VisualRangeSlider(BaseSlider):
         self.Refresh()
 
     def _update_pixel_value(self):
-        """
-        Recompute .pixel_value according to .value
-        """
+        """ Recompute .pixel_value according to .value """
         self.pixel_value = tuple(self._val_to_pixel(i) for i in self.value)
         # There must be at least one pixel for the selection
         if self.pixel_value[1] - self.pixel_value[0] < 1:
@@ -770,8 +767,8 @@ class VisualRangeSlider(BaseSlider):
 
     def _hover(self, x):
         """
-        x (int): pixel position
-        return (mode): GUI mode corresponding to the current position
+        :param x: (int): pixel position
+        :return: (int) GUI mode corresponding to the current position
         """
         left, right = self.pixel_value
 
@@ -792,9 +789,9 @@ class VisualRangeSlider(BaseSlider):
         return None
 
     def _calc_drag(self, x):
-        """
-        Updates value (and pixel_value) for a given position on the X axis
-        x (int): position in pixel
+        """ Updates value (and pixel_value) for a given position on the X axis
+
+        :param x: (int) position in pixel
         """
         left, right = self.drag_start_pv
         drag_x = x - self.drag_start_x
@@ -858,7 +855,7 @@ class VisualRangeSlider(BaseSlider):
                 self.Refresh()
         else:
             self._calc_drag(x)
-            self.send_slider_update_event() # FIXME: need to update the value, otherwise it's pointless
+            self._send_slider_update_event() # FIXME: need to update the value, otherwise it's pointless
 
     def OnLeftDown(self, event):
         if self.Enabled:
@@ -875,7 +872,7 @@ class VisualRangeSlider(BaseSlider):
             self.drag_start_x = None
             self.drag_start_pv = None
             self.mode = None
-            self.send_scroll_event()
+            self._send_scroll_event()
 
 
     def _draw_content(self, ctx, width, height):

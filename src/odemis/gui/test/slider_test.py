@@ -301,6 +301,8 @@ class SliderTestCase(unittest.TestCase):
 
         self.app.test_frame.SetSize((500, 400))
 
+        bws.Disable()
+
 if __name__ == "__main__":
     unittest.main()
 
