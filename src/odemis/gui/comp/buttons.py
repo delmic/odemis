@@ -892,7 +892,7 @@ class ColourButton(ImageButton):
     """
 
     # The default colour for the colour button
-    DEFAULT_COLOR = "#88BA38"
+    DEFAULT_COLOR = (0, 0, 0)
 
     def __init__(self, *args, **kwargs):
         self.colour = kwargs.pop('colour', None) or self.DEFAULT_COLOR
@@ -900,10 +900,10 @@ class ColourButton(ImageButton):
         ImageButton.__init__(self, *args, **kwargs)
         self.set_colour(self.colour)
 
-    def set_colour(self, colour=None):
+    def set_colour(self, colour):
         """ Change the background colour of the button.
 
-            :param colour: (string) Hex colour value (optional)
+            :param colour: (3-tuple of 0<=int<=255) RGB values
         """
 
         if colour:
@@ -980,7 +980,8 @@ class PopupImageButton(ImageTextButton):
 
     def remove_choice(self, label):
         """ Remove the choice associated with the name `1abel` """
-        del self.choices[label]
+        menu_item, cb, ce = self.choices.pop(label)
+        self.menu.RemoveItem(menu_item)
 
     def show_menu(self, evt):
         """ Show the popup menu, when there are choices available. """
@@ -991,7 +992,7 @@ class PopupImageButton(ImageTextButton):
 
         logging.debug("Showing PopupImageButton menu")
 
-        for _, (menu_item, _, check_enabled) in self.choices.items():
+        for menu_item, _, check_enabled in self.choices.values():
             menu_item.Enable(check_enabled() if check_enabled else True)
 
         self.PopupMenu(self.menu, (0, self.GetSize().GetHeight()))
