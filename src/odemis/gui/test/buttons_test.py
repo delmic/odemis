@@ -24,43 +24,17 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 # Test module for Odemis' gui.comp.buttons module
 #===============================================================================
 
-import unittest
-import os
-
 from collections import OrderedDict
-
-if os.getcwd().endswith('test'):
-    os.chdir('../..')
-    print "Working directory changed to", os.getcwd()
-
-import wx
-from wx.lib.inspection import InspectionTool
-
-import odemis.gui.test.test_gui
-import odemis.gui.comp.buttons as buttons
-
-from odemis.gui.xmlh import odemis_get_test_resources
+from odemis.gui import test
 from odemis.gui.img import data
+from odemis.gui.xmlh import odemis_get_test_resources
+from wx.lib.inspection import InspectionTool
+import odemis.gui.comp.buttons as buttons
+import odemis.gui.test.test_gui
+import unittest
+import wx
 
-SLEEP_TIME = 100 # Sleep timer in milliseconds
-MANUAL = True # If manual is set to True, the window will be kept open at the end
 INSPECT = False
-
-TEST_LST = ["Aap", u"nöot", "noot", "mies", "kees", "vuur", "quantummechnica",
-            "Repelsteeltje", "", "XXX", "a", "aa", "aaa", "aaaa",
-            "aaaaa", "aaaaaa", "aaaaaaa"]
-
-
-def loop():
-    app = wx.GetApp()
-    if app is None:
-        return
-
-    while True:
-        wx.CallAfter(app.ExitMainLoop)
-        app.MainLoop()
-        if not app.Pending():
-            break
 
 class TestApp(wx.App):
     def __init__(self):
@@ -74,7 +48,7 @@ class TestApp(wx.App):
         self.test_frame.SetSize((400, 400))
         self.test_frame.Center()
 
-        panel =  self.test_frame.button_panel
+        panel = self.test_frame.button_panel
         sizer = panel.GetSizer()
 
         # Add button controls to test frame
@@ -124,20 +98,12 @@ class TestApp(wx.App):
                                                 r"\/",
                                                 style=wx.ALIGN_CENTER)
         self.buttons['PopupImageButton'].SetBitmaps(data.getbtn_128x24_hBitmap())
-        for i in range(5):
-            def bld_tmp():
-                option = i
-                def tmp():
-                    print "option %s chosen" % option
-                return tmp
-
-            self.buttons['PopupImageButton'].add_choice("option %s" % i, bld_tmp())
 
 
 
         # Add button controls to sizer
         for _, button in self.buttons.items():
-            sizer.Add(button, border=5, flag=wx.ALL|wx.ALIGN_CENTER)
+            sizer.Add(button, border=5, flag=wx.ALL | wx.ALIGN_CENTER)
 
         self.test_frame.Layout()
         self.test_frame.Show()
@@ -149,11 +115,11 @@ class ButtonsTestCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.app = TestApp()
-        loop()
+        test.gui_loop()
 
     @classmethod
     def tearDownClass(cls):
-        if not MANUAL:
+        if not test.MANUAL:
             wx.CallAfter(cls.app.Exit)
         else:
             if INSPECT:
@@ -161,7 +127,32 @@ class ButtonsTestCase(unittest.TestCase):
             cls.app.MainLoop()
 
     def test_neus(self):
-        pass
+        test.gui_loop() # if everything shows up, it's pretty good already
 
+        # colour button
+        cb = self.app.buttons['ColourButton']
+        red = (255, 0, 0)
+        cb.set_colour(red)
+        test.gui_loop()
+        self.assertEqual(red, cb.get_colour())
+        test.gui_loop()
+
+        # PopupImageButton
+        pib = self.app.buttons['PopupImageButton']
+        nb_options = 5
+        for i in range(nb_options):
+            def tmp(option=i):
+                print "option %s chosen" % option
+
+            pib.add_choice("option %s" % i, tmp)
+        test.gui_loop()
+        self.assertEqual(len(pib.choices), nb_options)
+        self.assertEqual(pib.menu.MenuItemCount, nb_options)
+        pib.remove_choice("option 0")
+        test.gui_loop()
+        self.assertEqual(len(pib.choices), nb_options - 1)
+        self.assertEqual(pib.menu.MenuItemCount, nb_options - 1)
+        test.gui_loop()
+        
 if __name__ == "__main__":
     unittest.main()

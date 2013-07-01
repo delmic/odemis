@@ -25,17 +25,9 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 #===============================================================================
 
 import unittest
-import os
-# import random
-
-if os.getcwd().endswith('test'):
-    os.chdir('../..')
-    print "Working directory changed to", os.getcwd()
-
-
 import odemis.gui.comp.canvas as canvas
 
-SCALES = [1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 256.0]
+SCALES = [0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 256.0]
 
 VIEW_SIZE = (400, 400)
 
@@ -75,16 +67,13 @@ class CanvasTestCase(unittest.TestCase):
                         wp = canvas.buffer_to_world_pos(bp, c, s, offset)
                         nbp = canvas.world_to_buffer_pos(wp, c, s, offset)
 
-                        delta = 2
                         err = ("{} -> {} -> {} "
-                               "scale: {}, delta: {},  center: {}, offset: {}")
-                        err = err.format(bp, wp, nbp, s, delta, c, offset)
+                               "scale: {}, center: {}, offset: {}")
+                        err = err.format(bp, wp, nbp, s, c, offset)
                         print err
 
-                        # The allowed deviation delta relies on the scale
-
-                        self.assertAlmostEqual(bp[0], nbp[0], delta=s, msg=err)
-                        self.assertAlmostEqual(bp[1], nbp[1], delta=s, msg=err)
+                        self.assertAlmostEqual(bp[0], nbp[0], msg=err)
+                        self.assertAlmostEqual(bp[1], nbp[1], msg=err)
 
 if __name__ == "__main__":
     unittest.main()

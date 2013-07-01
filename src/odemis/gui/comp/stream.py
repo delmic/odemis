@@ -1318,13 +1318,10 @@ class StreamBar(wx.Panel):
         return self.menu_actions
 
     # TODO need to have actions enabled/disabled depending on the context:
-    #  * if microscope if off/pause => disabled
+    #  * if microscope is off/pause => disabled
     #  * if focused view is not about this type of stream => disabled
     #  * if there can be only one stream of this type, and it's already present
     #    => disabled
-    # TODO: Add 'check_enabled' functions to the 'add_choice' method call that
-    # determine whether the choice should be enabled or disabled (by returning
-    # True or False)
     def add_action(self, title, callback, check_enabled=None):
         """
         Add an action to the menu. It's added at the end of the list. If an
