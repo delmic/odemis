@@ -226,13 +226,11 @@
       <orient>wxVERTICAL</orient>
     </object>
   </object>
-  <object class="wxFrame" name="fpb_frame">
-    <title>Fold Panel Bar Test Frame</title>
-    <bg>#666666</bg>
+  <object class="wxFrame " name="fpb_frame">
     <object class="wxBoxSizer">
       <object class="sizeritem">
         <object class="wxScrolledWindow" name="scrwin">
-          <object class="wxBoxSizer ">
+          <object class="wxBoxSizer">
             <object class="sizeritem">
               <object class="FoldPanelBar" name="fpb">
                 <object class="FoldPanelItem" name="panel_1">
@@ -362,5 +360,7 @@
       </object>
       <orient>wxVERTICAL</orient>
     </object>
+    <title>Fold Panel Bar Test Frame</title>
+    <bg>#666666</bg>
   </object>
 </resource>

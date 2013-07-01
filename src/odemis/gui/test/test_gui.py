@@ -141,7 +141,7 @@ class xrcplot_frame(wx.Frame):
 
 
 
-class xrcfpb_frame(wx.Frame):
+class xrcfpb_frame(wx.Frame ):
 #!XRCED:begin-block:xrcfpb_frame.PreCreate
     def PreCreate(self, pre):
         """ This function is called during the class's initialization.
@@ -155,9 +155,9 @@ class xrcfpb_frame(wx.Frame):
 
     def __init__(self, parent):
         # Two stage creation (see http://wiki.wxpython.org/index.cgi/TwoStageCreation)
-        pre = wx.PreFrame()
+        pre = wx.PreFrame ()
         self.PreCreate(pre)
-        get_resources().LoadOnFrame(pre, parent, "fpb_frame")
+        get_resources().LoadOnFrame (pre, parent, "fpb_frame")
         self.PostCreate(pre)
 
         # Define variables for the controls, bind event handlers
@@ -407,13 +407,11 @@ def __init_resources():
       <orient>wxVERTICAL</orient>
     </object>
   </object>
-  <object class="wxFrame" name="fpb_frame">
-    <title>Fold Panel Bar Test Frame</title>
-    <bg>#666666</bg>
+  <object class="wxFrame " name="fpb_frame">
     <object class="wxBoxSizer">
       <object class="sizeritem">
         <object class="wxScrolledWindow" name="scrwin">
-          <object class="wxBoxSizer ">
+          <object class="wxBoxSizer">
             <object class="sizeritem">
               <object class="FoldPanelBar" name="fpb">
                 <object class="FoldPanelItem" name="panel_1">
@@ -543,6 +541,8 @@ def __init_resources():
       </object>
       <orient>wxVERTICAL</orient>
     </object>
+    <title>Fold Panel Bar Test Frame</title>
+    <bg>#666666</bg>
   </object>
 </resource>'''
 
