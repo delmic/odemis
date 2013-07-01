@@ -226,7 +226,7 @@
       <orient>wxVERTICAL</orient>
     </object>
   </object>
-  <object class="wxFrame " name="fpb_frame">
+  <object class="wxFrame" name="fpb_frame">
     <object class="wxBoxSizer">
       <object class="sizeritem">
         <object class="wxScrolledWindow" name="scrwin">
