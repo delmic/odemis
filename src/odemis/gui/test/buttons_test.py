@@ -124,7 +124,7 @@ class ButtonsTestCase(unittest.TestCase):
         else:
             if INSPECT:
                 InspectionTool().Show()
-            cls.app.MainLoop()
+        cls.app.MainLoop()
 
     def test_neus(self):
         test.gui_loop() # if everything shows up, it's pretty good already

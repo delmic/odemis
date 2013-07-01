@@ -17,7 +17,7 @@ SimOptical: {
 
 Spectra: {
     class: lle.FakeLLE,
-    role: brightlight,
+    role: light,
     init: {
         port: "/dev/ttyLLE",
         # source name -> 99% low, 25% low, centre, 25% high, 99% high wavelength in m
