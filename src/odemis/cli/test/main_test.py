@@ -26,6 +26,7 @@ from unittest.case import skip
 import Image
 import StringIO
 import logging
+import odemis.model._components
 import os
 import re
 import subprocess
@@ -81,14 +82,14 @@ class TestWithoutBackend(unittest.TestCase):
             out = StringIO.StringIO()
             sys.stdout = out
             
-            cmdline = "cli  --log-level=2 --scan"
+            cmdline = "cli --log-level=2 --scan"
             ret = main.main(cmdline.split())
         except SystemExit, exc:
             ret = exc.code
         self.assertEqual(ret, 0, "trying to run '%s' returned %d" % (cmdline, ret))
         
         output = out.getvalue()
-        # SimCam should be there for sure
+        # AndorCam3 SimCam should be there for sure
         self.assertTrue("andorcam3.AndorCam3" in output)
     
     def test_getFittestExporter(self):
@@ -96,7 +97,7 @@ class TestWithoutBackend(unittest.TestCase):
         tc = [("a/b/d.tiff", "TIFF"),
               ("a/b/d.ome.tiff", "TIFF"),
               ("a/b/d.h5", "HDF5"),
-              ("a/b/d.b", "TIFF"),
+              ("a/b/d.b", "TIFF"), # fallback to tiff
               ("d.hdf5", "HDF5"),
               ]
         for input, exp_out in tc:
@@ -124,6 +125,7 @@ class TestWithBackend(unittest.TestCase):
         # end the backend
         cmdline = ODEMISD_CMD + " --kill"
         subprocess.call(cmdline.split())
+        odemis.model._components._microscope = None # force reset of the microscope for next connection
         time.sleep(1) # time to stop
 
     def test_list(self):
@@ -256,7 +258,7 @@ class TestWithBackend(unittest.TestCase):
     
     def test_acquire(self):
         picture_name = "test.tiff"
-        size = (2560, 2160)
+        size = (1024, 1024)
         
         # change resolution
         try:
