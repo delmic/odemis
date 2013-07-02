@@ -24,7 +24,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 import wx
 
 # If manual is set to True, the window of a test will be kept open at the end
-MANUAL = True
+MANUAL = False
 
 SLEEP_TIME = 100 # ms: time to sleep between actions (to slow down the tests)
 

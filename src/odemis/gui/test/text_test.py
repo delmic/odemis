@@ -24,37 +24,20 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 # Test module for Odemis' gui.comp.text module
 #===============================================================================
 
-import unittest
-import os
-import locale
-
-if os.getcwd().endswith('test'):
-    os.chdir('../..')
-    print "Working directory changed to", os.getcwd()
-
-import wx
-import odemis.gui.test.test_gui
+from odemis.gui import test
 from odemis.gui.xmlh import odemis_get_test_resources
+import locale
+import odemis.gui.test.test_gui
+import unittest
+import wx
 
-SLEEP_TIME = 100 # Sleep timer in milliseconds
-MANUAL = True # If manual is set to True, the window will be kept open at the end
+
 INSPECT = False
 
 TEST_LST = ["Aap", u"nöot", "noot", "mies", "kees", "vuur", "quantummechnica",
             "Repelsteeltje", "", "XXX", "a", "aa", "aaa", "aaaa",
             "aaaaa", "aaaaaa", "aaaaaaa"]
 
-
-def loop():
-    app = wx.GetApp()
-    if app is None:
-        return
-
-    while True:
-        wx.CallAfter(app.ExitMainLoop)
-        app.MainLoop()
-        if not app.Pending():
-            break
 
 class TestApp(wx.App):
     def __init__(self):
@@ -83,17 +66,17 @@ class OwnerDrawnComboBoxTestCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.app = TestApp()
-        loop()
+        test.gui_loop()
 
     @classmethod
     def tearDownClass(cls):
-        if not MANUAL:
+        if not test.MANUAL:
             wx.CallAfter(cls.app.Exit)
         else:
             if INSPECT:
                 from wx.lib import inspection
                 inspection.InspectionTool().Show()
-            cls.app.MainLoop()
+        cls.app.MainLoop()
 
     def test_setting_values(self):
         pass
@@ -103,8 +86,4 @@ class OwnerDrawnComboBoxTestCase(unittest.TestCase):
 if __name__ == "__main__":
     unittest.main()
 
-    #app = TestApp()
-
-    #app.MainLoop()
-    #app.Destroy()
 
