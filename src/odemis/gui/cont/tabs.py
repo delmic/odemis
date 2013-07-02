@@ -407,15 +407,14 @@ class InspectionTab(Tab):
         tb = self.main_frame.sparc_ana_tool_menu
         tb.AddTool(tools.TOOL_RO_ZOOM, self.interface_model.tool)
         tb.AddTool(tools.TOOL_POINT, self.interface_model.tool)
-        tb.AddTool(tools.TOOL_ZOOM_FIT, self.OnZoomFit)
+        tb.AddTool(tools.TOOL_ZOOM_FIT, self.onZoomFit)
 
     @property
     def stream_controller(self):
         return self._stream_controller
 
-    def OnZoomFit(self, event):
-        logging.debug("On zoom fit event: %s", event)
-        # TODO: do something useful
+    def onZoomFit(self, event):
+        self._view_controller.fitCurrentViewToContent()
 
     def on_file_open_button(self, evt):
         """ Open an image file using a file dialog box
