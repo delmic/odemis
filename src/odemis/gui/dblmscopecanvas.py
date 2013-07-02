@@ -4,7 +4,7 @@ Created on 6 Feb 2012
 
 @author: Éric Piel
 
-Copyright © 2012 Éric Piel, Delmic
+Copyright © 2012-2013 Éric Piel, Delmic
 
 This file is part of Odemis.
 
@@ -22,12 +22,11 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
 from __future__ import division
-from .comp.canvas import DraggableCanvas, world_to_real_pos
+from .comp.canvas import DraggableCanvas
 from .comp.overlay import CrossHairOverlay, ViewSelectOverlay, \
     WorldSelectOverlay, TextViewOverlay
 from decorator import decorator
 from odemis import util, model
-from odemis.gui.comp.canvas import real_to_world_pos
 from odemis.gui.model import EM_STREAMS, stream
 from odemis.gui.model.stream import UNDEFINED_ROI
 from odemis.gui.util import limit_invocation, call_after
@@ -387,10 +386,16 @@ class DblMicroscopeCanvas(DraggableCanvas):
         self.microscope_view.get_focus(1).moveRel({"z": shift})
 
     def world_to_real_pos(self, pos):
-        return world_to_real_pos(pos, self.mpwu)
+        phy_pos = tuple([v * self.mpwu for v in pos])
+        return phy_pos
 
-    def real_to_world_pos(self, pos):
-        return real_to_world_pos(pos, self.mpwu)
+    def real_to_world_pos(self, phy_pos):
+        """
+        phy_pos (tuple of float): "physical" coordinates in m
+        return (tuple of float)
+        """
+        world_pos = tuple([v / self.mpwu for v in phy_pos])
+        return world_pos
 
     def selection_to_real_size(self, start_w_pos, end_w_pos):
         w = abs(start_w_pos[0] - end_w_pos[0]) * self.mpwu

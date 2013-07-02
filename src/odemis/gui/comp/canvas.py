@@ -1059,20 +1059,6 @@ def world_to_view_pos(world_pos, world_buff_cent, margins, scale, offset=None):
     )
 
 
-def world_to_real_pos(world_pos, mpwu):
-    real_pos = tuple([v * mpwu for v in world_pos])
-    return real_pos
-
-
-def real_to_world_pos(real_pos, mpwu):
-    """
-    real_pos (tuple of float): "physical" coordinates in m
-    return (tuple of float)
-    """
-    world_pos = tuple([v / mpwu for v in real_pos])
-    return world_pos
-
-
 class PlotCanvas(wx.Panel):
     """ A canvas for plotting data"""
 
