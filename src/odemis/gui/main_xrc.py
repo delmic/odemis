@@ -396,7 +396,7 @@ def __init_resources():
                     <flag>wxEXPAND</flag>
                   </object>
                   <object class="sizeritem">
-                    <object class="wxPanel" name="secom_tool_menu" subclass="odemis.gui.cont.tools.SemToolMenu">
+                    <object class="wxPanel" name="secom_tool_menu" subclass="odemis.gui.cont.tools.ToolBar">
                       <object class="wxBoxSizer">
                         <object class="sizeritem">
                           <object class="wxStaticBitmap">
@@ -1435,7 +1435,7 @@ def __init_resources():
                     <flag>wxEXPAND</flag>
                   </object>
                   <object class="sizeritem">
-                    <object class="wxPanel" name="sparc_acq_tool_menu" subclass="odemis.gui.cont.tools.SparcAcquisitionToolMenu">
+                    <object class="wxPanel" name="sparc_acq_tool_menu" subclass="odemis.gui.cont.tools.ToolBar">
                       <object class="wxBoxSizer">
                         <object class="sizeritem">
                           <object class="wxStaticBitmap">
@@ -1446,45 +1446,7 @@ def __init_resources():
                           <object class="wxPanel">
                             <object class="wxBoxSizer">
                               <orient>wxVERTICAL</orient>
-                              <object class="sizeritem">
-                                <object class="ImageToggleButton" name="btn_sparc_acq_view_select">
-                                  <size>24,24</size>
-                                  <bitmap>img_btn_view_sel_png</bitmap>
-                                  <hover>img_btn_view_sel_h_png</hover>
-                                  <selected>img_btn_view_sel_a_png</selected>
-                                  <tooltip>Select region of interest</tooltip>
-                                  <XRCED>
-                                    <assign_var>1</assign_var>
-                                  </XRCED>
-                                </object>
-                                <flag>wxBOTTOM|wxLEFT</flag>
-                                <border>10</border>
-                              </object>
-                              <object class="sizeritem">
-                                <object class="ImageToggleButton" name="btn_sparc_acq_view_pick">
-                                  <size>24,24</size>
-                                  <bitmap>img_btn_view_pick_png</bitmap>
-                                  <hover>img_btn_view_pick_h_png</hover>
-                                  <selected>img_btn_view_pick_a_png</selected>
-                                  <enabled>0</enabled>
-                                  <XRCED>
-                                    <assign_var>1</assign_var>
-                                  </XRCED>
-                                </object>
-                                <flag>wxBOTTOM|wxLEFT</flag>
-                                <border>10</border>
-                              </object>
-                              <object class="sizeritem">
-                                <object class="ImageButton" name="btn_sparc_acq_view_resize">
-                                  <size>24,24</size>
-                                  <bitmap>img_btn_view_resize_png</bitmap>
-                                  <hover>img_btn_view_resize_h_png</hover>
-                                  <selected>img_btn_view_resize_a_png</selected>
-                                  <enabled>0</enabled>
-                                </object>
-                                <flag>wxLEFT</flag>
-                                <border>10</border>
-                              </object>
+                              
                             </object>
                             <bg>#000000</bg>
                           </object>
@@ -1919,7 +1881,7 @@ def __init_resources():
                     <flag>wxEXPAND</flag>
                   </object>
                   <object class="sizeritem">
-                    <object class="wxPanel" name="sparc_ana_tool_menu" subclass="odemis.gui.cont.tools.SparcAnalysisToolMenu">
+                    <object class="wxPanel" name="sparc_ana_tool_menu" subclass="odemis.gui.cont.tools.ToolBar">
                       <object class="wxBoxSizer">
                         <object class="sizeritem">
                           <object class="wxStaticBitmap">
@@ -1930,42 +1892,7 @@ def __init_resources():
                           <object class="wxPanel">
                             <object class="wxBoxSizer">
                               <orient>wxVERTICAL</orient>
-                              <object class="sizeritem">
-                                <object class="ImageToggleButton" name="btn_sparc_ana_view_zoom">
-                                  <size>24,24</size>
-                                  <bitmap>img_btn_view_sel_png</bitmap>
-                                  <hover>img_btn_view_sel_h_png</hover>
-                                  <selected>img_btn_view_sel_a_png</selected>
-                                  <XRCED>
-                                    <assign_var>1</assign_var>
-                                  </XRCED>
-                                </object>
-                                <flag>wxBOTTOM|wxLEFT</flag>
-                                <border>10</border>
-                              </object>
-                              <object class="sizeritem">
-                                <object class="ImageToggleButton" name="btn_sparc_ana_view_update">
-                                  <size>24,24</size>
-                                  <bitmap>img_btn_view_pick_png</bitmap>
-                                  <hover>img_btn_view_pick_h_png</hover>
-                                  <selected>img_btn_view_pick_a_png</selected>
-                                  <XRCED>
-                                    <assign_var>1</assign_var>
-                                  </XRCED>
-                                </object>
-                                <flag>wxBOTTOM|wxLEFT</flag>
-                                <border>10</border>
-                              </object>
-                              <object class="sizeritem">
-                                <object class="ImageButton" name="btn_sparc_ana_view_resize">
-                                  <size>24,24</size>
-                                  <bitmap>img_btn_view_resize_png</bitmap>
-                                  <hover>img_btn_view_resize_h_png</hover>
-                                  <selected>img_btn_view_resize_a_png</selected>
-                                </object>
-                                <flag>wxBOTTOM|wxLEFT</flag>
-                                <border>10</border>
-                              </object>
+                              
                             </object>
                             <bg>#000000</bg>
                           </object>

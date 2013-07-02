@@ -136,7 +136,7 @@ class ViewController(object):
                 viewport.setView(view, self._interface_model)
                 i += 1
             self._interface_model.focussedView.value = self._interface_model.views[0]
-            
+
         # If SEM only: all SEM
         # Works also for the Sparc, as there is no other emitter, and we don't
         # need to display anything else anyway
@@ -292,6 +292,17 @@ class ViewController(object):
         self._viewports[0].Parent.Layout()  # resize the viewports
         self._viewports[0].Parent.Thaw()
 
+    def fitCurrentViewToContent(self):
+        """
+        Adapts the scale (MPP) of the current view to the content
+        """
+        # find the viewport corresponding to the current view
+        for vp in self._viewports:
+            if vp.mic_view == self._interface_model.focussedView.value:
+                vp.canvas.fitViewToContent()
+                break
+        else:
+            logging.error("Faild to find the current viewport")
 
 class ViewSelector(object):
     """

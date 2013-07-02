@@ -27,6 +27,7 @@ from .comp.overlay import CrossHairOverlay, ViewSelectOverlay, \
     WorldSelectOverlay, TextViewOverlay
 from decorator import decorator
 from odemis import util, model
+from odemis.gui import instrmodel
 from odemis.gui.model import EM_STREAMS, stream
 from odemis.gui.model.stream import UNDEFINED_ROI
 from odemis.gui.util import limit_invocation, call_after
@@ -289,7 +290,9 @@ class DblMicroscopeCanvas(DraggableCanvas):
          will try to be clever, and only recenter if no stage is connected, as
          otherwise, it could cause an unexpected move.
         """
-        # TODO: be clever about recenter
+        if recenter is None:
+            # recenter only if there is no stage attached
+            recenter = not hasattr(self.microscope_view, "stage_pos")
         DraggableCanvas.fitViewToContent(self, recenter=recenter)
 
         # this will indirectly call _onMPP(), but not have any additional effect
@@ -431,6 +434,7 @@ class SecomCanvas(DblMicroscopeCanvas):
 
         self.active_overlay = None
 
+        # TODO: use .tool as for SparcCanvas
         pub.subscribe(self.toggle_zoom_mode, 'secom.tool.zoom.click')
         pub.subscribe(self.toggle_update_mode, 'secom.tool.update.click')
         pub.subscribe(self.on_zoom_start, 'secom.canvas.zoom.start')
@@ -610,34 +614,56 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
         self.active_overlay = None
         self.cursor = wx.STANDARD_CURSOR
 
-        pub.subscribe(self.toggle_select_mode, 'sparc.acq.tool.select.click')
+    def setView(self, microscope_view, microscope_model):
+        """
+        Set the microscope_view that this canvas is displaying/representing
+        Can be called only once, at initialisation.
 
-    def _toggle_mode(self, enabled, overlay, mode):
-        # If same mode, but disabled
-        if self.current_mode == mode and not enabled:
+        :param microscope_view:(instrmodel.MicroscopeView)
+        :param microscope_model: (instrmodel.MicroscopeModel)
+        """
+        super(SparcAcquiCanvas, self).setView(microscope_view, microscope_model)
+
+        # Associate the ROI of the SEM CL stream to the region of acquisition
+        for s in microscope_model.acquisitionView.getStreams():
+            if s.name.value == "SEM CL":
+                self._roa = s.roi
+                break
+        else:
+            raise KeyError("Failed to find SEM CL stream, required for the Sparc acquisition")
+
+        self._roa.subscribe(self._onROA, init=True)
+
+        sem = microscope_model.ebeam
+        if not sem:
+            raise AttributeError("No SEM on the microscope")
+
+        if isinstance(sem.magnification, VigilantAttributeBase):
+            sem.magnification.subscribe(self._onSEMMag)
+
+        microscope_model.tool.subscribe(self.onTool, init=True)
+
+    def onTool(self, tool):
+        """
+        Called when the tool (mode) of the view changes
+        """
+        if self.dragging:
+            logging.error("Changing to mode (%s) while dragging not implemented", tool)
+            # TODO: queue it until dragging is finished?
+
+        if tool == instrmodel.TOOL_ROA:
+            self.current_mode = MODE_SPARC_SELECT
+            self.active_overlay = self.roi_overlay
+            self.cursor = wx.StockCursor(wx.CURSOR_CROSS)
+        elif tool == instrmodel.TOOL_NONE:
             self.current_mode = None
             self.active_overlay = None
             self.cursor = wx.STANDARD_CURSOR
             self.ShouldUpdateDrawing()
-        # if not dragging and we need to enable
-        elif not self.dragging and enabled:
-            # TODO handle ZOOM selection as well
-            self.current_mode = mode
-            self.active_overlay = overlay
-            self.cursor = wx.StockCursor(wx.CURSOR_CROSS)
         else:
-            # dragging (=> pretty unlikely as it's not possible to click on the tool)
-            # or new mode and asking to disable (=> we should have received the request to enable the new mode first)
-            # or ...
-            logging.warning("Unhandled case tool toggle")
+            logging.warning("Unhandled tool type %s", tool)
 
         self.SetCursor(self.cursor)
-
-    def toggle_select_mode(self, enabled):
-        """ This method is called using pubsub, usually when a menu button is
-        toggled. """
-        logging.debug("Update mode %s", self)
-        self._toggle_mode(enabled, self.roi_overlay, MODE_SPARC_SELECT)
 
     def OnLeftDown(self, event):
 
@@ -652,7 +678,6 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
             if not hover or hover == gui.HOVER_SELECTION:
                 self.dragging = True
                 self.active_overlay.start_selection(vpos, self.scale)
-                pub.sendMessage('sparc.acq.select.start', canvas=self)
                 if not self.HasCapture():
                     self.CaptureMouse()
             # Clicked on edge
@@ -674,7 +699,6 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
                 self.active_overlay.stop_selection()
                 if self.HasCapture():
                     self.ReleaseMouse()
-                pub.sendMessage('sparc.acq.select.end')
                 logging.debug("ROA = %s", self.roi_overlay.get_physical_sel())
                 self._updateROA()
                 # force it to redraw the selection, even if the ROA hasn't changed
@@ -726,33 +750,6 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
     def OnRightUp(self, event):
         if self.current_mode not in SPARC_MODES:
             super(SparcAcquiCanvas, self).OnRightUp(event)
-
-    def setView(self, microscope_view, microscope_model):
-        """
-        Set the microscope_view that this canvas is displaying/representing
-        Can be called only once, at initialisation.
-
-        :param microscope_view:(instrmodel.MicroscopeView)
-        :param microscope_model: (instrmodel.MicroscopeModel)
-        """
-        super(SparcAcquiCanvas, self).setView(microscope_view, microscope_model)
-
-        # Associate the ROI of the SEM CL stream to the region of acquisition
-        for s in microscope_model.acquisitionView.getStreams():
-            if s.name.value == "SEM CL":
-                self._roa = s.roi
-                break
-        else:
-            raise KeyError("Failed to find SEM CL stream, required for the Sparc acquisition")
-
-        self._roa.subscribe(self._onROA, init=True)
-
-        sem = microscope_model.ebeam
-        if not sem:
-            raise AttributeError("No SEM on the microscope")
-
-        if isinstance(sem.magnification, VigilantAttributeBase):
-            sem.magnification.subscribe(self._onSEMMag)
 
     def _onSEMMag(self, mag):
         """
