@@ -330,6 +330,11 @@ class PVCam(model.DigitalCamera):
         self.exposureTime = model.FloatContinuous(self._exposure_time, range_exp,
                                                   unit="s", setter=self._setExposureTime)
 
+        # TODO: Add shutter IntEnumerated to select the shutter opening mode:
+        # -1 => Auto (as currently implemented)
+        # 0 => Off (shutter stays opens during the whole acquisition)
+        # 1 => On (shutter closes outside of exposure)
+        # ?? => more for setting always on/off?
         self.acquisition_lock = threading.Lock()
         self.acquire_must_stop = threading.Event()
         self.acquire_thread = None
@@ -361,13 +366,13 @@ class PVCam(model.DigitalCamera):
 
         # TODO change PARAM_COLOR_MODE to greyscale? => probably always default
 
-        # Shutter mode (could be an init parameter?)
-        try:
-            # TODO: if the the shutter is in Pre-Exposure mode, a short exposure
-            # time can burn it.
-            self.set_param(pv.PARAM_SHTR_OPEN_MODE, pv.OPEN_PRE_SEQUENCE)
-        except PVCamError:
-            logging.debug("Failed to change shutter mode")
+#        # Shutter mode (could be an init parameter?)
+#        try:
+#            # TODO: if the the shutter is in Pre-Exposure mode, a short exposure
+#            # time can burn it.
+#            self.set_param(pv.PARAM_SHTR_OPEN_MODE, pv.OPEN_PRE_SEQUENCE)
+#        except PVCamError:
+#            logging.debug("Failed to change shutter mode")
 
         # Set to simple acquisition mode
         self.set_param(pv.PARAM_PMODE, pv.PMODE_NORMAL)
@@ -958,6 +963,26 @@ class PVCam(model.DigitalCamera):
 
         # nothing special for the exposure time
         self._metadata[model.MD_EXP_TIME] = self._exposure_time
+
+        # Activate shutter closure whenever needed:
+        # Shutter closes between exposures iif:
+        # * period between exposures is long enough (>0.1s): to ensure we don't burn the mechanism
+        # * readout time > exposure time/2 (when risk of smearing is high)
+        readout_time = size[0] * size[1] / self._readout_rate # s
+        tot_time = readout_time + self._exposure_time # reality will be slightly longer
+        logging.debug("exposure = %f s, readout = %f s", readout_time, self._exposure_time)
+        if tot_time > 0.1 and readout_time > (self._exposure_time / 2):
+            try:
+                self.set_param(pv.PARAM_SHTR_OPEN_MODE, pv.OPEN_PRE_EXPOSURE)
+            except PVCamError:
+                logging.debug("Failed to change shutter mode")
+            else:
+                logging.info("Shutter activated")
+        else:
+            try:
+                self.set_param(pv.PARAM_SHTR_OPEN_MODE, pv.OPEN_PRE_SEQUENCE)
+            except PVCamError:
+                logging.debug("Failed to change shutter mode")
 
         self._prev_settings = [new_image_settings, self._exposure_time,
                                self._readout_rate, self._gain]
