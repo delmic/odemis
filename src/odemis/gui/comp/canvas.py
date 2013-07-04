@@ -98,6 +98,7 @@ import wx
 import wx.lib.wxcairo as wxcairo
 
 from ..util.conversion import wxcol_to_rgb, change_brightness
+# from odemis.gui.comp.overlay import ViewOverlay
 import odemis.gui.img.data as imgdata
 
 
@@ -1182,10 +1183,20 @@ class PlotCanvas(wx.Panel):
 
         self.closed = False
 
+        # View overlays can be added to this attribute
+        self.overlays = []
+
         # OnSize called to make sure the buffer is initialized.
         # This might result in OnSize getting called twice on some
         # platforms at initialization, but little harm done.
         self.OnSize(None)
+
+    def add_ovelay(self, ol):
+
+        # TODO: Add type check to make sure the ovelay is a ViewOverlay.
+        # (But importing View)
+        self.overlays.append(ol)
+        self.Refresh()
 
     def SetForegroundColour(self, *args, **kwargs):
         super(PlotCanvas, self).SetForegroundColour(*args, **kwargs)
@@ -1196,6 +1207,11 @@ class PlotCanvas(wx.Panel):
 
     def OnPaint(self, event=None):
         wx.BufferedPaintDC(self, self._buffer)
+
+        dc = wx.PaintDC(self)
+
+        for o in self.overlays:
+            o.Draw(dc)
 
     def OnSize(self, event=None):
         self._buffer = wx.EmptyBitmap(*self.ClientSize)
@@ -1218,7 +1234,6 @@ class PlotCanvas(wx.Panel):
 
     def set_1d_data(self, horz, vert):
         self._data = zip(horz, vert)
-        print self._data
         self.reset_dimensions()
         self.UpdateImage()
 
@@ -1276,7 +1291,7 @@ class PlotCanvas(wx.Panel):
 
         px = float(x - self.min_x) / self.width_x
         py = float(self.max_y - y) / self.width_y
-        logging.error("%s %s", px, py)
+        # logging.debug("%s %s", px, py)
 
         result = px * w, py * h
 
@@ -1312,28 +1327,4 @@ class PlotCanvas(wx.Panel):
             ctx.fill_preserve()
             ctx.set_source_rgb(*self.line_colour)
             ctx.stroke()
-
-
-            #ctx.set_source_rgb(1, 1, 0)
-            #ctx.fill()
-
-        # ctx.set_source_rgb(0, 0, 0)
-        # ctx.move_to(0, 0)
-        # ctx.line_to(390, 390)
-        # ctx.move_to(390, 0)
-        # ctx.line_to(0, 390)
-        # ctx.set_line_width(0.2)
-        # ctx.stroke()
-
-        # ctx.rectangle(0, 0, 195, 195)
-        # ctx.set_source_rgba(1, 0, 0, 0.80)
-        # ctx.fill()
-
-        # ctx.rectangle(0, 195, 195, 195)
-        # ctx.set_source_rgba(0, 1, 0, 0.60)
-        # ctx.fill()
-
-        # ctx.rectangle(195, 0, 195, 195)
-        # ctx.set_source_rgba(0, 0, 1, 0.40)
-        # ctx.fill()
 

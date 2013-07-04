@@ -9,20 +9,21 @@ Copyright © 2013 Rinze de Laat, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms 
-of the GNU General Public License version 2 as published by the Free Software 
+Odemis is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
 Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR 
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
 PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with 
+You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 
 import logging
+from abc import ABCMeta, abstractmethod
 
 import cairo
 import wx
@@ -33,6 +34,7 @@ from odemis.gui.util.units import readable_str
 from ..util.conversion import hex_to_rgba
 
 class Overlay(object):
+    __metaclass__ = ABCMeta
 
     def __init__(self, base, label=None):
         """
@@ -69,6 +71,9 @@ class Overlay(object):
 
         return pos
 
+    @abstractmethod
+    def Draw(self, dc, shift=(0, 0), scale=1.0):
+        pass
 
 class ViewOverlay(Overlay):
     """ This class displays an overlay on the view port """
@@ -79,7 +84,7 @@ class WorldOverlay(Overlay):
     pass
 
 class TextViewOverlay(ViewOverlay):
-
+    """ This overlay draws the label text at the provided view position """
     def __init__(self, base, vpos=((10, 16))):
         super(TextViewOverlay, self).__init__(base)
         self.label = ""
@@ -127,10 +132,7 @@ class CrossHairOverlay(ViewOverlay):
         dc.DrawLine(tl_s[0], center[1], br_s[0], center[1])
         dc.DrawLine(center[0], tl_s[1], center[0], br_s[1])
 
-
-
 class SelectionMixin(object):
-
     """ This Overlay class can be used to draw rectangular selection areas.
     These areas are always expressed in view port coordinates.
     Conversions to buffer and world coordinates should be done using subclasses.
@@ -270,8 +272,6 @@ class SelectionMixin(object):
             self.v_end_pos = wx.Point(
                                     *self.base.buffer_to_view_pos(b_end_pos))
             self._calc_edges()
-
-
 
     def _calc_edges(self):
         """ Calculate the inner and outer edges of the selection according to
@@ -552,43 +552,25 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
                 pos = (b_end_pos[0] + 5, b_end_pos[1] - 5)
                 self.write_label(ctx, pos, size_lbl)
 
-            # if self.dragging:
-            #     #ctx.translate(-view_size[0] / 2, -view_size[1] / 2)
-            #     msg = """{}
-            #              view: {} x {}
-            #              buffer: {} x {}
-            #              world: {} x {}
-            #              center: {}
-            #              offset: {}
-            #              scale: {}
-            #              shift: {},
-            #           """.format(
-            #                 self.label,
-            #                 self.v_start_pos, self.v_end_pos,
-            #                 start_pos, end_pos,
-            #                 self.w_start_pos, self.w_end_pos,
-            #                 self.base.buffer_center_world_pos,
-            #                 offset,
-            #                 scale,
-            #                 shift)
+class FocusLineOverlay(ViewOverlay):
 
-            #     ctx.select_font_face(
-            #         "Courier",
-            #         cairo.FONT_SLANT_NORMAL,
-            #         cairo.FONT_WEIGHT_NORMAL
-            #     )
-            #     ctx.set_font_size(12)
+    def __init__(self, base, label,
+                 sel_cur=None,
+                 color=gui.SELECTION_COLOR,
+                 center=(0, 0)):
 
-            #     #buf_pos = self.b_to_buffer_pos((9, 19))
+        super(FocusLineOverlay, self).__init__(base, label)
+        self.color = hex_to_rgba(color)
+        self.vposx = 100
 
-            #     x = 9
-            #     y = 19
-            #     for line in [l.strip() for l in msg.splitlines()]:
-            #         ctx.set_source_rgb(0.0, 0.0, 0.0)
-            #         buffer_pos = self.base.view_to_buffer_pos((x, y))
-            #         ctx.move_to(*buffer_pos)
-            #         ctx.show_text(line)
-            #         ctx.set_source_rgb(1.0, 1.0, 1.0)
-            #         ctx.move_to(buffer_pos[0] + 1, buffer_pos[1] + 1)
-            #         ctx.show_text(line)
-            #         y += 20
+    def Draw(self, dc_buffer, shift=(0, 0), scale=1.0):
+        ctx = wx.lib.wxcairo.ContextFromDC(dc_buffer)
+
+        # draws the dotted line
+        ctx.set_line_width(2)
+        ctx.set_dash([3,])
+        ctx.set_line_join(cairo.LINE_JOIN_MITER)
+        ctx.set_source_rgba(*self.color)
+        ctx.move_to(self.vposx, 0)
+        ctx.line_to(self.vposx, self.base.ClientSize[1])
+        ctx.stroke()

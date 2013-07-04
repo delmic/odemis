@@ -39,11 +39,12 @@ if os.getcwd().endswith('test'):
     print "Working directory changed to", os.getcwd()
 
 import odemis.gui.comp.canvas as canvas
+import odemis.gui.comp.overlay as overlay
 
 logging.getLogger().setLevel(logging.DEBUG)
 
 
-SLEEP_TIME = 1000 # Sleep timer in milliseconds
+SLEEP_TIME = 200 # Sleep timer in milliseconds
 MANUAL = True # If set to True, the window will be kept open after testing
 INSPECT = False
 
@@ -199,6 +200,9 @@ class CanvasTestCase(unittest.TestCase):
             loop()
             wx.MilliSleep(SLEEP_TIME)
 
+
+        ol = overlay.FocusLineOverlay(cnvs, "FocusLineOverlay")
+        cnvs.add_ovelay(ol)
 
         # wx.MilliSleep(SLEEP_TIME)
 
