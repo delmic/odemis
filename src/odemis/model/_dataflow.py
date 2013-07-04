@@ -435,17 +435,23 @@ class DataFlowProxy(DataFlowBase, Pyro4.Proxy):
         self._commands.send("UNSUB") # asynchronous (necessary to not deadlock)
 
     def __del__(self):
-        # end the thread (but it will stop as soon as it notices we are gone anyway)
-        if self._thread:
-            if self._thread.is_alive():
-                if len(self._listeners):
-                    logging.warning("Stopping subscription while there are still subscribers because dataflow '%s' is going out of context", self._global_name)
-                    Pyro4.Proxy.__getattr__(self, "unsubscribe")(self._global_name)
-                self._commands.send("STOP")
-                self._thread.join()
-            self._commands.close()
-            self._ctx.term()
-
+        try:
+            # end the thread (but it will stop as soon as it notices we are gone anyway)
+            if self._thread:
+                if self._thread.is_alive():
+                    if len(self._listeners):
+                        if logging:
+                            logging.debug("Stopping subscription while there "
+                                          "are still subscribers because dataflow '%s' is going out of context", self._global_name)
+                        Pyro4.Proxy.__getattr__(self, "unsubscribe")(self._global_name)
+                    self._commands.send("STOP")
+                    self._thread.join(1)
+                self._commands.close()
+                # Not needed: called when garbage-collected and it's dangerous
+                # as it blocks until all connections are closed.
+                # self._ctx.term()
+        except Exception:
+            pass
         try:
             Pyro4.Proxy.__del__(self)
         except Exception:
@@ -474,11 +480,11 @@ class SubscribeProxyThread(threading.Thread):
         self._commands.connect("inproc://" + uri)
 
         # create a zmq subscription to receive the data
-        self.data = zmq_ctx.socket(zmq.SUB)
-        self.data.connect("ipc://" + uri)
+        self._data = zmq_ctx.socket(zmq.SUB)
+        self._data.connect("ipc://" + uri)
         # TODO find out if it does something and if it does, depend on max_discard
 #        self.data.hwm = 1 # drop message silently if there is already one in the queue
-        self.data.hwm = 0 # FIXME currently set to 1 in order to avoid discarding when not wanted
+        self._data.hwm = 0 # FIXME currently set to 1 in order to avoid discarding when not wanted
 
         # TODO: we need a more advance support for max_discards to be able to
         # ensure all the data is received when the client needs it.
@@ -487,54 +493,73 @@ class SubscribeProxyThread(threading.Thread):
         #  * .subscribe(callback, no_discard=True) (per subscriber)
 
     def run(self):
-        # Process messages for commands and data
-        poller = zmq.Poller()
-        poller.register(self._commands, zmq.POLLIN)
-        poller.register(self.data, zmq.POLLIN)
-        discarded = 0
-        while True:
-            socks = dict(poller.poll())
+        """
+        Process messages for commands and data
+        """
+        # Warning: this might run even when ending (aka "in a __del__() state")
+        # Which means: logging might be None, and zmq might not be working
+        # normally (apparently zmq.POLLIN == None during this time).
+        try:
+            poller = zmq.Poller()
+            poller.register(self._commands, zmq.POLLIN)
+            poller.register(self._data, zmq.POLLIN)
+            discarded = 0
+            while True:
+                socks = dict(poller.poll())
 
-            # process commands
-            if socks.get(self._commands) == zmq.POLLIN:
-                message = self._commands.recv()
-                if message == "SUB":
-                    self.data.setsockopt(zmq.SUBSCRIBE, '')
-                    logging.debug("Subscribed to remote dataflow %s", self.uri)
-                    self._commands.send("SUBD")
-                elif message == "UNSUB":
-                    self.data.setsockopt(zmq.UNSUBSCRIBE, '')
-                    logging.debug("Unsubscribed to remote dataflow %s", self.uri)
-                    # no confirmation (async)
-                elif message == "STOP":
-                    self._commands.close()
-                    self.data.close()
-                    return
+                # process commands
+                if self._commands in socks:
+                    message = self._commands.recv()
+                    if message == "SUB":
+                        self._data.setsockopt(zmq.SUBSCRIBE, '')
+                        logging.debug("Subscribed to remote dataflow %s", self.uri)
+                        self._commands.send("SUBD")
+                    elif message == "UNSUB":
+                        self._data.setsockopt(zmq.UNSUBSCRIBE, '')
+                        if logging:
+                            logging.debug("Unsubscribed from remote dataflow %s", self.uri)
+                        # no confirmation (async)
+                    elif message == "STOP":
+                        return
+                    else:
+                        logging.warning("Received unknown message %s", message)
 
-            # receive data
-            if socks.get(self.data) == zmq.POLLIN:
-                array_format = self.data.recv_pyobj()
-                array_md = self.data.recv_pyobj()
-                array_buf = self.data.recv(copy=False)
-                # more fresh data already?
-                if (self.data.getsockopt(zmq.EVENTS) & zmq.POLLIN and
-                    discarded < self.max_discard):
-                    discarded += 1
-                    continue
-                if discarded:
-                    logging.debug("had discarded %d arrays", discarded)
-                discarded = 0
-                # TODO: any need to use zmq.utils.rebuffer.array_from_buffer()?
-                array = numpy.frombuffer(array_buf, dtype=array_format["dtype"])
-                array.shape = array_format["shape"]
-                darray = DataArray(array, metadata=array_md)
+                # receive data
+                if self._data in socks:
+                    # TODO: be more resilient if wrong data is received (can
+                    # block forever)
+                    array_format = self._data.recv_pyobj()
+                    array_md = self._data.recv_pyobj()
+                    array_buf = self._data.recv(copy=False)
+                    # more fresh data already?
+                    if (self._data.getsockopt(zmq.EVENTS) & zmq.POLLIN and
+                        discarded < self.max_discard):
+                        discarded += 1
+                        continue
+                    if discarded:
+                        logging.debug("had discarded %d arrays", discarded)
+                    discarded = 0
+                    # TODO: any need to use zmq.utils.rebuffer.array_from_buffer()?
+                    array = numpy.frombuffer(array_buf, dtype=array_format["dtype"])
+                    array.shape = array_format["shape"]
+                    darray = DataArray(array, metadata=array_md)
 
-                try:
-                    self.w_notifier(darray)
-                except WeakRefLostError:
-                    self._commands.close()
-                    self.data.close()
-                    return
+                    try:
+                        self.w_notifier(darray)
+                    except WeakRefLostError:
+                        return  # It's a sign there is nothing left to do
+        except:
+            if logging:
+                logging.exception("Ending ZMQ thread due to exception")
+        finally:
+            try:
+                self._commands.close()
+            except:
+                print "Exception closing ZMQ commands connection"
+            try:
+                self._data.close()
+            except:
+                print "Exception closing ZMQ data connection"
 
 def unregister_dataflows(self):
     # Only for the "DataFlow"s, the real objects, not the proxys
