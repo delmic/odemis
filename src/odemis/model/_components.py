@@ -40,6 +40,8 @@ _microscope = None
 def getMicroscope():
     """
     return the microscope component managed by the backend
+    Note: if a connection has already been set up, it will reuse it, unless
+    you reset _microscope to None
     """
     global _microscope # cached at the module level
     if _microscope is None:

@@ -17,7 +17,7 @@ SimOptical: {
 
 Spectra: {
     class: lle.FakeLLE,
-    role: brightlight,
+    role: light,
     init: {
         port: "/dev/ttyLLE",
         # source name -> 99% low, 25% low, centre, 25% high, 99% high wavelength in m
@@ -48,9 +48,9 @@ Spectra: {
 }
 
 "Andor SimCam": {
-    class: andorcam3.AndorCam3,
+    class: andorcam2.FakeAndorCam2,
     role: ccd,
-    init: {device: 1} # 1 is almost always SimCam
+    init: {device: 0}
 }
 
 "FakeRedStoneStage": {
@@ -93,7 +93,7 @@ Spectra: {
 
 FakePIGCS: {
     class: simulated.Stage2D,
-    role: AlignAndFocus,
+    role: none,
     init: {axes: ["l", "r", "z"]},
 }
 

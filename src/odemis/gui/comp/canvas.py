@@ -652,18 +652,18 @@ class DraggableCanvas(wx.Panel):
 
         if total_scale == 1.0:
             # TODO: should see how to avoid (it slows down quite a bit)
-            # Maybe just return a reference to im?
+            # Maybe just return a reference to im? (with a copy of Alpha?)
             ret = im.Copy()
             tl = buff_rect[0:2]
         elif total_scale < 1.0:
-            # Scaling to values smaller than 1.0 was throwing exceptions
             w, h = buff_rect[2:4]
             if w >= 1 and h >= 1:
                 logging.debug("Scaling to %s, %s", w, h)
                 ret = im.Scale(*buff_rect[2:4])
                 tl = buff_rect[0:2]
             else:
-                logging.warn("Illegal image scale %s for size %s, %s",
+                # less that one pixel big? Skip it!
+                logging.info("Image scale %s for size %s, %s, dropping it",
                              total_scale,
                              w,
                              h)
@@ -698,8 +698,15 @@ class DraggableCanvas(wx.Panel):
                 math.ceil(unsc_rect[1] + unsc_rect[3]) - int(unsc_rect[1])
                 )
 
-            assert(unsc_rnd_rect[0] + unsc_rnd_rect[2] <= orig_size[0])
-            assert(unsc_rnd_rect[1] + unsc_rnd_rect[3] <= orig_size[1])
+#            assert(unsc_rnd_rect[0] + unsc_rnd_rect[2] <= orig_size[0])
+#            assert(unsc_rnd_rect[1] + unsc_rnd_rect[3] <= orig_size[1])
+            if (unsc_rnd_rect[0] + unsc_rnd_rect[2] > orig_size[0]
+                or unsc_rnd_rect[1] + unsc_rnd_rect[3] > orig_size[1]):
+                logging.error("Resizing img of %s px by %f is gets rect = %s",
+                                orig_size, total_scale, unsc_rnd_rect)
+                # crop
+                unsc_rnd_rect[2] = orig_size[0] - unsc_rnd_rect[0]
+                unsc_rnd_rect[3] = orig_size[1] - unsc_rnd_rect[1]
 
             imcropped = im.GetSubImage(unsc_rnd_rect)
 
@@ -736,17 +743,10 @@ class DraggableCanvas(wx.Panel):
         # * the scale of the buffer (dependent on how much the user zoomed in)
 
         size = im.GetSize()
-
         actual_size = size[0] * scale, size[1] * scale
 
         tl_unscaled = (center[0] - (actual_size[0] / 2),
                        center[1] - (actual_size[1] / 2))
-
-        br_unscaled = (center[0] + (actual_size[0] / 2),
-                       center[1] + (actual_size[1] / 2))
-
-        self.world_image_area = (tl_unscaled, br_unscaled)
-
         tl = self.world_to_buffer_pos(tl_unscaled)
 
         # scale according to zoom
@@ -797,72 +797,9 @@ class DraggableCanvas(wx.Panel):
         if not images or images == [None]:
             return 0
 
-        # TODO: Check Secom still displays correctly
-
         t_start = time.time()
 
-
-        # The old idea:
-        # * display the first image (SEM) last, with the given mergeratio (or 1
-        #   if it's the only one)
-        # * display all the other images (fluo) as if they were average
-        #   N images -> mergeratio = 1-0/N, 1-1/N,... 1-(N-1)/N
-
-        # fluo = [im for im in images[1:] if im is not None]
-        # nb_fluo = len(fluo)
-
-        # for i, im in enumerate(fluo): # display the fluo images first
-        #     r = 1.0 - i / float(nb_fluo)
-        #     self._DrawImage(
-        #         dc_buffer,
-        #         im,
-        #         im._dc_center,
-        #         r,
-        #         scale=im._dc_scale
-        #     )
-
-        # for im in images[:1]: # the first image (or nothing)
-        #     if im is None:
-        #         continue
-        #     if nb_fluo == 0:
-        #         mergeratio = 1.0 # no transparency if it's alone
-        #     self._DrawImage(
-        #         dc_buffer,
-        #         im,
-        #         im._dc_center,
-        #         mergeratio,
-        #         scale=im._dc_scale
-        #     )
-
-
-#        # The new idea:
-#        # Images are sorted by size, where the biggest image is painted first
-#        # with no transparency. All other images are painted over that afterwards
-#        # where each get an opacity of 1/N
-#        #
-#        # It might be a good idea to devise a way in which we can define
-#        # different strategies for different scenarios.
-#
-#        for im in images[:1]: # the first image (or nothing)
-#            if im:
-#                self._DrawImage(
-#                    dc_buffer,
-#                    im,
-#                    im._dc_center,
-#                    1.0,
-#                    scale=im._dc_scale
-#                )
-#
-#        for _, im in enumerate([m for m in images[1:] if m is not None]):
-#            self._DrawImage(
-#               dc_buffer,
-#               im,
-#               im._dc_center,
-#               mergeratio,
-#               scale=im._dc_scale
-#            )
-
-        # Very new idea:
+        # The idea:
         # * display all the images but the last as average (fluo => expected all big)
         #   N images -> mergeratio = 1-(0/N), 1-(1/N),... 1-((N-1)/N)
         # * display the last image (SEM => expected smaller), with the given
@@ -910,12 +847,7 @@ class DraggableCanvas(wx.Panel):
         surface = wxcairo.ImageSurfaceFromBitmap(imgdata.getcanvasbgBitmap())
 
         if not self.dragging:
-            # if self.Parent._has_focus:
-            #     print "drag offsetting {}".format(self.bg_offset)
             surface.set_device_offset(-self.bg_offset[0], -self.bg_offset[1])
-        else:
-            if self.Parent._has_focus:
-                print "no dragoffsetting {}".format(self.bg_offset)
 
         pattern = cairo.SurfacePattern(surface)
         pattern.set_extend(cairo.EXTEND_REPEAT)
@@ -964,6 +896,7 @@ class DraggableCanvas(wx.Panel):
 
         # TODO: the conversion from Image to Bitmap should be done only once,
         # after all the images are merged
+        # tl = int(round(tl[0])), int(round(tl[1]))
         dc_buffer.DrawBitmapPoint(wx.BitmapFromImage(imscaled), tl)
 
 

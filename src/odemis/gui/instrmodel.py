@@ -50,6 +50,8 @@ TOOL_NONE = 0 # No tool (normal)
 TOOL_ZOOM = 1 # Select the region to zoom in
 TOOL_ROI = 2 # Select the region of interest (sub-area to be updated)
 TOOL_ROA = 3 # Select the region of acquisition (area to be acquired, SPARC-only)
+TOOL_POINT = 4 # Select a point (to acquire/display)
+TOOL_LINE = 5 # Select a line (to acquire/display)
 
 
 class MicroscopeGUIModel(object):
@@ -80,7 +82,7 @@ class MicroscopeGUIModel(object):
         """
         microscope (model.Microscope or None): the root of the HwComponent tree
          provided by the back-end. If None, it means the interface is not
-         connected to a microscope (and displays a recorded acqusition).
+         connected to a microscope (and displays a recorded acquisition).
         """
         self.microscope = microscope
 
@@ -152,8 +154,7 @@ class MicroscopeGUIModel(object):
         # bottom-left, bottom-right.
         self.views = []
 
-        # TODO: use it (cf cont.tools)
-        # Current tool selected (from the toolbar)
+        # Current tool selected (from the toolbar, cf cont.tools)
         self.tool = None # Needs to be overridden by a IntEnumerated
 
         # The MicroscopeView currently focused, it is one of the .views (or None)
@@ -318,7 +319,7 @@ class AcquisitionGUIModel(MicroscopeGUIModel):
 
 
         # more tools: for selecting the sub-region of acquisition
-        tools = set([TOOL_NONE, TOOL_ZOOM, TOOL_ROI, TOOL_ROA])
+        tools = set([TOOL_NONE, TOOL_ZOOM, TOOL_ROI, TOOL_ROA, TOOL_POINT, TOOL_LINE])
         self.tool = IntEnumerated(TOOL_NONE, choices=tools)
 
         # Very special view which is used only as a container to save which stream
@@ -337,8 +338,8 @@ class AnalysisGUIModel(MicroscopeGUIModel):
         fake_mic = model.Microscope("fake", role=role)
         MicroscopeGUIModel.__init__(self, fake_mic)
 
-        # only tool to zoom
-        tools = set([TOOL_NONE, TOOL_ZOOM])
+        # only tool to zoom and pick point/line
+        tools = set([TOOL_NONE, TOOL_ZOOM, TOOL_POINT, TOOL_LINE])
         self.tool = IntEnumerated(TOOL_NONE, choices=tools)
 
         # The current file it displays. If None, it means there is no file

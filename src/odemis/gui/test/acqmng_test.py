@@ -19,19 +19,20 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with 
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
-import odemis.gui.model.stream as stream
 from concurrent.futures._base import CancelledError
 from odemis import model
 from odemis.gui import instrmodel
-from odemis.gui.acqmng import ProgressiveFuture, startAcquisition
+from odemis.gui.acqmng import ProgressiveFuture, startAcquisition, \
+    computeThumbnail
 import logging
+import odemis.gui.model.stream as stream
 import subprocess
 import time
 import unittest
 
 logging.getLogger().setLevel(logging.DEBUG)
 
-ODEMISD_PATH = "../../odemisd/main.py"
+ODEMISD_CMD = "python2 -m odemis.odemisd.main"
 SIM_CONFIG = "../../odemisd/test/optical-sim.odm.yaml"
 
 class TestNoBackend(unittest.TestCase):
@@ -86,7 +87,7 @@ class TestWithBackend(unittest.TestCase):
     def setUpClass(cls):
         # run the backend as a daemon
         # we cannot run it normally as the child would also think it's in a unittest
-        cmdline = ODEMISD_PATH + " --log-level=2 --log-target=testdaemon.log --daemonize %s" % SIM_CONFIG
+        cmdline = ODEMISD_CMD + " --log-level=2 --log-target=testdaemon.log --daemonize %s" % SIM_CONFIG
         ret = subprocess.call(cmdline.split())
         if ret != 0:
             logging.warning("Failed to start backend, will try anyway")
@@ -110,22 +111,27 @@ class TestWithBackend(unittest.TestCase):
     def tearDownClass(cls):
 #        cls.microscope.terminate()
         # end the backend
-        cmdline = ODEMISD_PATH + " --kill"
+        cmdline = ODEMISD_CMD + " --kill"
         subprocess.call(cmdline.split())
         time.sleep(1) # time to stop
 
     def test_simple(self):
         # create a simple streamTree
         st = instrmodel.StreamTree(streams=[self.streams[0]])
-        f = startAcquisition(st)
-        data, thumb = f.result()
+        f = startAcquisition(st.getStreams())
+        data = f.result()
         self.assertIsInstance(data[0], model.DataArray)
-        # don't test thumb for now, because it's not working
+
+        thumb = computeThumbnail(st, f)
+        self.assertIsInstance(thumb, model.DataArray)
 
         # let's do it a second time, "just for fun"
-        f = startAcquisition(st)
-        data, thumb = f.result()
+        f = startAcquisition(st.getStreams())
+        data = f.result()
         self.assertIsInstance(data[0], model.DataArray)
+
+        thumb = computeThumbnail(st, f)
+        self.assertIsInstance(thumb, model.DataArray)
 
     def test_progress(self):
         """
@@ -140,10 +146,10 @@ class TestWithBackend(unittest.TestCase):
         self.left = None
         self.updates = 0
 
-        f = startAcquisition(st)
+        f = startAcquisition(st.getStreams())
         f.add_update_callback(self.on_progress_update)
 
-        data, thumb = f.result()
+        data = f.result()
         self.assertIsInstance(data[0], model.DataArray)
         self.assertGreaterEqual(self.updates, 3) # at least one update per stream
 
@@ -161,7 +167,7 @@ class TestWithBackend(unittest.TestCase):
         self.updates = 0
         self.done = False
 
-        f = startAcquisition(st)
+        f = startAcquisition(st.getStreams())
         f.add_update_callback(self.on_progress_update)
         f.add_done_callback(self.on_done)
 

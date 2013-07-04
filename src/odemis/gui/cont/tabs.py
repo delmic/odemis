@@ -26,7 +26,7 @@ from __future__ import division
 from collections import OrderedDict
 from odemis import dataio, model
 from odemis.gui import instrmodel
-from odemis.gui.cont import settings
+from odemis.gui.cont import settings, tools
 from odemis.gui.cont.acquisition import SecomAcquiController, \
     SparcAcquiController
 from odemis.gui.cont.microscope import MicroscopeController
@@ -263,9 +263,19 @@ class SparcAcquisitionTab(Tab):
         # TODO: maybe should be handled by a simple stream controller?
         self.interface_model.emState.subscribe(self.onEMState, init=True)
 
+        # Toolbar
+        tb = self.main_frame.sparc_acq_tool_menu
+        tb.AddTool(tools.TOOL_RO_ACQ, self.interface_model.tool)
+        tb.AddTool(tools.TOOL_POINT, self.interface_model.tool)
+        tb.AddTool(tools.TOOL_RO_ZOOM, self.interface_model.tool)
+        tb.AddTool(tools.TOOL_ZOOM_FIT, self.onZoomFit)
+
     @property
     def settings_controller(self):
         return self._settings_controller
+
+    def onZoomFit(self, event):
+        self._view_controller.fitCurrentViewToContent()
 
     def onEMState(self, state):
         if state in [STATE_OFF, STATE_PAUSE]:
@@ -393,9 +403,18 @@ class InspectionTab(Tab):
                             self.on_file_open_button
         )
 
+        # Toolbar
+        tb = self.main_frame.sparc_ana_tool_menu
+        tb.AddTool(tools.TOOL_RO_ZOOM, self.interface_model.tool)
+        tb.AddTool(tools.TOOL_POINT, self.interface_model.tool)
+        tb.AddTool(tools.TOOL_ZOOM_FIT, self.onZoomFit)
+
     @property
     def stream_controller(self):
         return self._stream_controller
+
+    def onZoomFit(self, event):
+        self._view_controller.fitCurrentViewToContent()
 
     def on_file_open_button(self, evt):
         """ Open an image file using a file dialog box

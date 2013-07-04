@@ -56,11 +56,11 @@ class InstrumentalImage(object):
     def get_pixel_size(self):
         return self.image.GetSize()
 
-    def get_real_size(self):
-        return tuple([d * self.mpp for d in self.image.GetSize()])
+    def get_phy_size(self):
+        return tuple([d * self.mpp for d in self.get_pixel_size()])
 
-    def get_real_surface_area(self):
-        x, y = self.get_real_size()
+    def get_phy_surface(self):
+        x, y = self.get_phy_size()
         return x * y
 
 

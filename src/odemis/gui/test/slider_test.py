@@ -24,24 +24,15 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 # Test module for Odemis' gui.comp.text module
 #===============================================================================
 
-import unittest
-import os
+from odemis.gui import test
+from odemis.gui.xmlh import odemis_get_test_resources
+import odemis.gui.comp.slider as slidecomp
+import logging
 import math
-
-if os.getcwd().endswith('test'):
-    os.chdir('../..')
-    print "Working directory changed to", os.getcwd()
-
+import odemis.gui.test.test_gui
+import unittest
 import wx
 
-import odemis.gui.test.test_gui
-import  odemis.gui.comp.slider as slidecomp
-from odemis.gui.xmlh import odemis_get_test_resources
-
-import logging
-
-SLEEP_TIME = 100 # Sleep timer in milliseconds
-MANUAL = True # If set to True, the window will be kept open after testing
 INSPECT = False
 
 DATA = [
@@ -74,17 +65,6 @@ DATA = [
 
 ]
 
-def loop():
-    app = wx.GetApp()
-    if app is None:
-        return
-
-    while True:
-        wx.CallAfter(app.ExitMainLoop)
-        app.MainLoop()
-        if not app.Pending():
-            break
-
 def gen_test_data():
     """ Help function to generate test data """
     functions = [lambda x: 0.0]
@@ -98,7 +78,7 @@ def gen_test_data():
             print "%s," % [abs(math.sin(i / (10 * math.pi))) for i in xrange(s)]
         print ""
         for s in sizes:
-            print "%s," % [i/float(s) for i in xrange(s)]
+            print "%s," % [i / float(s) for i in xrange(s)]
         print ""
 
     import sys
@@ -130,21 +110,21 @@ class SliderTestCase(unittest.TestCase):
         # NOTE!: Call Layout on the panel here, because otherwise the
         # controls layed out using XRC will not have the right sizes!
         cls.panel.Layout()
-        loop()
+        test.gui_loop()
 
     @classmethod
     def tearDownClass(cls):
-        if not MANUAL:
+        if not test.MANUAL:
             wx.CallAfter(cls.app.Exit)
         else:
             if INSPECT:
                 from wx.lib import inspection
                 inspection.InspectionTool().Show()
-            cls.app.MainLoop()
+        cls.app.MainLoop()
 
     @classmethod
     def add_control(cls, ctrl):
-        cls.sizer.Add(ctrl, flag=wx.ALL|wx.EXPAND, border=5)
+        cls.sizer.Add(ctrl, flag=wx.ALL | wx.EXPAND, border=5)
         cls.panel.Layout()
         return ctrl
 
@@ -183,15 +163,15 @@ class SliderTestCase(unittest.TestCase):
         vrs = self.app.test_frame.vrslider
         print "%s %s" % (vrs.__class__.__name__, vrs.GetSize())
 
-        loop()
+        test.gui_loop()
 
         vrs.SetRange((0, 100))
         vrs.SetValue((25, 75))
 
         for d in DATA:
             vrs.SetContent(d)
-            loop()
-            wx.MilliSleep(SLEEP_TIME)
+            test.gui_loop()
+            wx.MilliSleep(test.SLEEP_TIME)
 
         vrs.SetContent([])
         vrs.SetValue((0, 0)) # will be set to 1 px wide
@@ -203,34 +183,34 @@ class SliderTestCase(unittest.TestCase):
 
         # it should be fine to put a range outside of the value
         vrs.SetRange((0.2, 0.8))
-        loop()
-        wx.MilliSleep(SLEEP_TIME)
+        test.gui_loop()
+        wx.MilliSleep(test.SLEEP_TIME)
 
         vrs.SetValue((0.4, 0.45))
-        loop()
-        wx.MilliSleep(SLEEP_TIME)
+        test.gui_loop()
+        wx.MilliSleep(test.SLEEP_TIME)
 
         vrs.SetContent(DATA[7])
-        loop()
-        wx.MilliSleep(SLEEP_TIME)
+        test.gui_loop()
+        wx.MilliSleep(test.SLEEP_TIME)
         vrs.SetContent(DATA[8])
-        loop()
-        wx.MilliSleep(SLEEP_TIME)
+        test.gui_loop()
+        wx.MilliSleep(test.SLEEP_TIME)
 
         vrs.SetRange((0, 1))
-        loop()
-        wx.MilliSleep(SLEEP_TIME)
+        test.gui_loop()
+        wx.MilliSleep(test.SLEEP_TIME)
 
         vrs.SetValue((0, 1))
-        loop()
-        wx.MilliSleep(SLEEP_TIME)
+        test.gui_loop()
+        wx.MilliSleep(test.SLEEP_TIME)
 
         self.assertEqual(vrs.pixel_value, (0, vrs.GetSize()[0]))
         self.assertEqual(vrs.GetValue(), (0, 1))
 
         vrs.SetValue((0, 0.5))
-        loop()
-        wx.MilliSleep(SLEEP_TIME)
+        test.gui_loop()
+        wx.MilliSleep(test.SLEEP_TIME)
 
         self.assertAlmostEqual(vrs.pixel_value, (0, vrs.GetSize()[0] / 2.0))
         self.assertEqual(vrs.GetValue(), (0, 0.5))
@@ -243,15 +223,15 @@ class SliderTestCase(unittest.TestCase):
         bws = self.app.test_frame.bwslider
         print "%s %s" % (bws.__class__.__name__, bws.GetSize())
 
-        loop()
+        test.gui_loop()
 
         bws.SetRange((0, 100))
         bws.SetValue((25, 75))
 
         for d in DATA:
             bws.SetContent(d)
-            loop()
-            wx.MilliSleep(SLEEP_TIME)
+            test.gui_loop()
+            wx.MilliSleep(test.SLEEP_TIME)
 
         bws.SetContent([])
         bws.SetValue((0, 0)) # will be set to 1 px wide
@@ -263,35 +243,35 @@ class SliderTestCase(unittest.TestCase):
 
         # it should be fine to put a range outside of the value
         bws.SetRange((0.2, 0.8))
-        loop()
-        wx.MilliSleep(SLEEP_TIME)
+        test.gui_loop()
+        wx.MilliSleep(test.SLEEP_TIME)
 
         bws.SetValue((0.5, 0.5))
         bws.set_center_value(0.2)
-        loop()
-        wx.MilliSleep(SLEEP_TIME)
+        test.gui_loop()
+        wx.MilliSleep(test.SLEEP_TIME)
 
         bws.SetContent(DATA[7])
-        loop()
-        wx.MilliSleep(SLEEP_TIME)
+        test.gui_loop()
+        wx.MilliSleep(test.SLEEP_TIME)
         bws.SetContent(DATA[8])
-        loop()
-        wx.MilliSleep(SLEEP_TIME)
+        test.gui_loop()
+        wx.MilliSleep(test.SLEEP_TIME)
 
         bws.SetRange((0, 1))
-        loop()
-        wx.MilliSleep(SLEEP_TIME)
+        test.gui_loop()
+        wx.MilliSleep(test.SLEEP_TIME)
 
         bws.SetValue((0, 1))
-        loop()
-        wx.MilliSleep(SLEEP_TIME)
+        test.gui_loop()
+        wx.MilliSleep(test.SLEEP_TIME)
 
         self.assertEqual(bws.pixel_value, (0, bws.GetSize()[0]))
         self.assertEqual(bws.GetValue(), (0, 1))
 
         bws.SetValue((0, 0.5))
-        loop()
-        wx.MilliSleep(SLEEP_TIME)
+        test.gui_loop()
+        wx.MilliSleep(test.SLEEP_TIME)
 
         self.assertAlmostEqual(bws.pixel_value, (0, bws.GetSize()[0] / 2.0))
         self.assertEqual(bws.GetValue(), (0, 0.5))

@@ -675,7 +675,7 @@ class VisualRangeSlider(BaseSlider):
         ret = super(VisualRangeSlider, self).SetForegroundColour(col)
         self.content_color = wxcol_to_rgb(self.GetForegroundColour())
         # FIXME: content_color will have wrong value if currently Disabled
-        # Probably has to do with the auto color calculatin for disabled
+        # Probably has to do with the auto color calculation for disabled
         # controls
         return ret
 
@@ -843,7 +843,7 @@ class VisualRangeSlider(BaseSlider):
             if hover in (gui.HOVER_LEFT_EDGE, gui.HOVER_RIGHT_EDGE):
                 self.SetCursor(wx.StockCursor(wx.CURSOR_SIZEWE))
             elif hover == gui.HOVER_SELECTION:
-                self.SetCursor(wx.StockCursor(wx.CURSOR_CLOSED_HAND))
+                self.SetCursor(wx.StockCursor(wx.CURSOR_SIZENESW)) # A closed hand!
             else:
                 self.SetCursor(wx.STANDARD_CURSOR)
 

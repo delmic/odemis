@@ -22,28 +22,16 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 
-import time
-import unittest
-
-import wx
-
 from odemis import model
-from odemis.gui import instrmodel
+from odemis.gui import instrmodel, test
 from odemis.gui.dblmscopecanvas import DblMicroscopeCanvas
 from odemis.gui.model.img import InstrumentalImage
 from odemis.gui.model.stream import StaticStream
+import logging
+import unittest
+import wx
 
-
-def loop():
-    app = wx.GetApp()
-    if app is None:
-        return
-
-    while True:
-        wx.CallAfter(app.ExitMainLoop)
-        app.MainLoop()
-        if not app.Pending():
-            break
+logging.getLogger().setLevel(logging.DEBUG)
 
 class FakeMicroscopeGUI(object):
     """
@@ -61,12 +49,13 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
         self.mmodel = FakeMicroscopeGUI()
         self.view = self.mmodel.focussedView.value
         self.canvas = DblMicroscopeCanvas(self.frame)
+        self.canvas.backgroundBrush = wx.SOLID # no special background
         self.canvas.setView(self.view, self.mmodel)
 
         self.frame.SetSize((124, 124))
-        loop()
+        test.gui_loop()
         self.frame.Show(True)
-        loop()
+        test.gui_loop()
 
     def tearDown(self):
         self.frame.Destroy()
@@ -98,15 +87,16 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
         # Red pixel at center, (5,5)
         im1.SetRGB(px1_cent[0], px1_cent[1], 255, 0, 0)
         im2 = wx.EmptyImage(201, 201, clear=True)
-        px2_cent = (100, 100)
+        px2_cent = ((im2.Width - 1) // 2 , (im2.Height - 1) // 2)
         # Blue pixel at center (100,100)
         im2.SetRGB(px2_cent[0], px2_cent[1], 0, 0, 255)
         stream1 = StaticStream("s1", InstrumentalImage(im1, mpp * 10, (0, 0)))
         # 200, 200 => outside of the im1
+        # +(0.5, 0.5) to make it really in the center of the pixel
         stream2 = StaticStream("s2", InstrumentalImage(
                                         im2,
                                         mpp,
-                                        (200 * mpp, 200 * mpp)))
+                                        (200.5 * mpp, 200.5 * mpp)))
         self.view.addStream(stream1)
         self.view.addStream(stream2)
 
@@ -114,42 +104,41 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
         # image
         self.view.mpp.value = mpp
 
-        # for now it fails: depending on shift (sometimes everything is shifted
-        # by -1,-1)
-        shift = (0, 0) # 63,63 ; 100, 100 work
-        # self.canvas.ShiftView(shift)
+        shift = (63, 63)
+        self.canvas.ShiftView(shift)
 
         # merge the images
         ratio = 0.5
         self.view.merge_ratio.value = ratio
         self.assertEqual(ratio, self.view.merge_ratio.value)
 
-        loop()
-        # it's supposed to update in less than 1s
-        time.sleep(1)
-        loop()
+        test.gui_loop()
+        # it's supposed to update in less than 0.5s
+        wx.MilliSleep(500)
+        test.gui_loop()
 
         # copy the buffer into a nice image here
         resultIm = GetImageFromBuffer(self.canvas)
-        # for i in range(resultIm.GetWidth()):
-        #     for j in range(resultIm.GetHeight()):
-        #         px = GetRGB(resultIm, i, j)
-        #         if px != (0,0,0):
-        #             print px, i, j
+#        for i in range(resultIm.GetWidth()):
+#            for j in range(resultIm.GetHeight()):
+#                px = GetRGB(resultIm, i, j)
+#                if px != (0, 0, 0):
+#                    print px, i, j
 
-        px1 = GetRGB(resultIm, resultIm.Width/2 + shift[0], resultIm.Height/2 + shift[1])
+        px1 = GetRGB(resultIm, resultIm.Width / 2 + shift[0], resultIm.Height / 2 + shift[1])
         self.assertEqual(px1, (127, 0, 0))
-        px2 = GetRGB(resultIm, resultIm.Width/2 + 200 + shift[0], resultIm.Height/2 + 200 + shift[1])
+        px2 = GetRGB(resultIm, resultIm.Width / 2 + 200 + shift[0],
+                               resultIm.Height / 2 + 200 + shift[1])
         self.assertEqual(px2, (0, 0, 255))
 
         # remove first picture
         self.view.removeStream(stream1)
-        loop()
-        time.sleep(1)
-        loop()
+        test.gui_loop()
+        wx.MilliSleep(500)
+        test.gui_loop()
 
         resultIm = GetImageFromBuffer(self.canvas)
-        px2 = GetRGB(resultIm, resultIm.Width/2 + 200 + shift[0], resultIm.Height/2 + 200 + shift[1])
+        px2 = GetRGB(resultIm, resultIm.Width / 2 + 200 + shift[0], resultIm.Height / 2 + 200 + shift[1])
         self.assertEqual(px2, (0, 0, 255))
 
 #    @unittest.skip("simple")
@@ -166,7 +155,7 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
         px2_cent = (100, 100)
         im2.SetRGB(px2_cent[0], px2_cent[1], 0, 0, 255) # Blue pixel at center (100,100)
         stream1 = StaticStream("s1", InstrumentalImage(im1, mpp * 10, (0, 0)))
-        stream2 = StaticStream("s2", InstrumentalImage(im2, mpp, (200 * mpp, 200 * mpp)))
+        stream2 = StaticStream("s2", InstrumentalImage(im2, mpp, (200.5 * mpp, 200.5 * mpp)))
         self.view.addStream(stream1)
         self.view.addStream(stream2)
         # view might set its mpp to the mpp of first image => reset it
@@ -181,17 +170,17 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
         self.view.merge_ratio.value = ratio
         self.assertEqual(ratio, self.view.merge_ratio.value)
 
-        loop()
+        test.gui_loop()
         # it's supposed to update in less than 1s
-        time.sleep(1)
-        loop()
+        wx.MilliSleep(500)
+        test.gui_loop()
 
         # copy the buffer into a nice image here
         resultIm = GetImageFromBuffer(self.canvas)
 
-        px1 = GetRGB(resultIm, resultIm.Width/2 + shift[0], resultIm.Height/2 + shift[1])
+        px1 = GetRGB(resultIm, resultIm.Width / 2 + shift[0], resultIm.Height / 2 + shift[1])
         self.assertEqual(px1, (127, 0, 0))
-        px2 = GetRGB(resultIm, resultIm.Width/2 + 200 + shift[0], resultIm.Height/2 + 200 + shift[1])
+        px2 = GetRGB(resultIm, resultIm.Width / 2 + 200 + shift[0], resultIm.Height / 2 + 200 + shift[1])
         self.assertEqual(px2, (0, 0, 255))
 
 #    @unittest.skip("simple")
@@ -212,9 +201,9 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
         shift = (10, 10)
         self.canvas.ShiftView(shift)
 
-        loop()
-        time.sleep(1)
-        loop()
+        test.gui_loop()
+        wx.MilliSleep(500)
+        test.gui_loop()
         resultIm = GetImageFromBuffer(self.canvas)
 
         px1 = GetRGB(resultIm,
@@ -225,9 +214,9 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
         # zoom in
         self.canvas.Zoom(2)
         self.assertEqual(mpp / (2 ** 2), self.view.mpp.value)
-        loop()
-        time.sleep(1)
-        loop()
+        test.gui_loop()
+        wx.MilliSleep(500)
+        test.gui_loop()
         resultIm = GetImageFromBuffer(self.canvas)
 
         px1 = GetRGB(resultIm,

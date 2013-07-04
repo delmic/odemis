@@ -8,7 +8,7 @@ manipulate various data streams coming from the microscope.
 
 @author: Rinze de Laat
 
-Copyright © 2013 Rinze de Laat, Delmic
+Copyright © 2013 Rinze de Laat, Éric Piel, Delmic
 
 This file is part of Odemis.
 
@@ -25,216 +25,167 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 Purpose:
 
-This module contains classes that control the various tool menus.
+This module contains classes that allow to create ToolBars for the MicroscopeGUI.
 
 """
 
-import logging
-
-import wx
-import wx.xrc as xrc
-from wx.lib.pubsub import pub
-
-from odemis.gui.util.widgets import get_all_children
+from odemis.gui import instrmodel, img
 from odemis.gui.comp.buttons import ImageButton, ImageToggleButton
+import wx
 
-# from odemis.gui.cont.acquisition import SecomAcquiController
-# from odemis.gui.cont.microscope import MicroscopeController
-# from odemis.gui.cont import settings
-# from odemis.gui.cont.streams import StreamController
-# from odemis.gui.cont.views import ViewController, ViewSelector
+# List of tools available
+TOOL_RO_ZOOM = 1 # Select the region to zoom in
+TOOL_RO_UPDATE = 2 # Select the region of interest (sub-area to be updated)
+TOOL_RO_ACQ = 3 # Select the region of acquisition (area to be acquired, SPARC-only)
+TOOL_ZOOM_FIT = 4 # Select a zoom to fit the current image content
+TOOL_POINT = 5 # Select a point
+TOOL_LINE = 6 # Select a line
+
+# Two types of tools:
+# * mode: they are toggle buttons, changing the tool mode of the GUIModel
+# * action: they are just click button, and call a function when pressed
+
+class Tool(object):
+    def __init__(self, icon, tooltip=None):
+        """
+        icon (string): name of the bitmap without .png, _h.png, _a.png
+         (iow, as found in gui.img.data)  
+        tooltip (string): tool tip content
+        """
+        self.icon = icon
+        self.tooltip = tooltip
+
+class ModeTool(Tool):
+    def __init__(self, icon, value_on, value_off, tooltip=None):
+        """
+        value_on (anything): value to set to the VA when the tool is activated
+        value_on (anything): value to set when the tool is explicitly disabled
+        """
+        Tool.__init__(self, icon, tooltip=tooltip)
+        self.value_on = value_on
+        self.value_off = value_off
+
+class ActionTool(Tool):
+    pass
+
+TOOLS = {TOOL_RO_ZOOM: ModeTool("btn_view_zoom",
+                                instrmodel.TOOL_ZOOM, instrmodel.TOOL_NONE,
+                                "Select region of zoom"),
+         TOOL_RO_UPDATE: ModeTool("btn_view_update",
+                                  instrmodel.TOOL_ROI, instrmodel.TOOL_NONE,
+                                  "Select region of interest"),
+         TOOL_RO_ACQ: ModeTool("btn_view_sel",
+                               instrmodel.TOOL_ROA, instrmodel.TOOL_NONE,
+                               "Select region of acquisition"),
+         TOOL_POINT: ModeTool("btn_view_pick",
+                              instrmodel.TOOL_POINT, instrmodel.TOOL_NONE,
+                              "Select point"),
+         TOOL_LINE: ModeTool("btn_view_pick", # TODO icon
+                              instrmodel.TOOL_LINE, instrmodel.TOOL_NONE,
+                              "Select line"),
+         TOOL_ZOOM_FIT: ActionTool("btn_view_resize", "Zoom to fit content"),
+        }
 
 
-# TODO: need refactoring, to use MicroscopeGUI.tool VA to change the tool
-# TODO: need more generic version, which just takes a list of buttons and
-# create it
-
-class ToolMenu(wx.Panel):
+class ToolBar(wx.Panel):
     """ Tool Menu base class responsible for the general buttons states """
 
+#    def __init__(self, parent, id= -1, tools=None, **kwargs):
+#        """
+#        tools (list of TOOL_*): each button to be displayed, in order
+#        """
     def __init__(self):
+        # TODO: don't rely on XRC, and create ourself the bitmap and sub panel
         pre = wx.PrePanel()
         # the Create step is done later by XRC.
         self.PostCreate(pre)
         self.Bind(wx.EVT_WINDOW_CREATE, self.OnCreate)
-        self.Bind(wx.EVT_BUTTON, self._on_button)
 
-        self.toggle_buttons = []
-        self.action_buttons = []
-
-    def OnCreate(self, event):
-        raise NotImplementedError
-
-    def _on_button(self, evt):
-        """ Clear the toggle buttons on any button click within the menu """
-        evt_btn = evt.GetEventObject()
-
-        for b in self.toggle_buttons:
-            if b != evt_btn:
-                b.SetToggle(False)
-        evt.Skip()
-
-    def _sort_buttons(self):
-        self.toggle_buttons = get_all_children(self, ImageToggleButton)
-        self.action_buttons = get_all_children(self, ImageButton)
-
-class SemToolMenu(ToolMenu):
-    """ Tool menu for SEM view manipulation """
-
-    def __init__(self):
-        ToolMenu.__init__(self)
-
-        self.btn_zoom = None
-        self.btn_update = None
-        self.btn_resize = None
-
-        pub.subscribe(self.clear_zoom, 'secom.canvas.zoom.end')
+        self._panel = None # the (sub) panel that contains the sizer and buttons
+        self._tools = []
+        self._mode_callbacks = [] # to keep a reference, so they don't get unsubscribed
 
     def OnCreate(self, event):
         self.Unbind(wx.EVT_WINDOW_CREATE)
 
-        self.btn_zoom = xrc.XRCCTRL(self, "btn_secom_view_zoom")
-        self.btn_update = xrc.XRCCTRL(self, "btn_secom_view_update")
-        self.btn_resize = xrc.XRCCTRL(self, "btn_secom_view_resize")
+        for w in self.GetChildren():
+            if isinstance(w, wx.Panel):
+                self._panel = w
+                assert w.GetSizer() is not None
+                break
+        else:
+            raise KeyError("Failed to find the sub panel")
 
-        self._sort_buttons()
+        for t in self._tools:
+            self._add_tool(*t)
 
-        self.btn_zoom.Bind(wx.EVT_BUTTON, self.on_zoom)
-        self.btn_update.Bind(wx.EVT_BUTTON, self.on_update)
+    def AddTool(self, *args):
+        """
+        tool_id (TOOL_*): button to be displayed
+        handler (VA or callable): if mode: VA, if action: callable 
+        value (object): value for the VA
+        raises:
+            KeyError: if tool_id is incorrect
+        """
+        # Because it can be called before OnCreate, so we need to cache
+        # FIXME: as soon as OnCreate is gone, it can be simplified
+        if not self._panel:
+            self._tools.append(args)
+        else:
+            self._add_tool(*args)
 
-        logging.debug("Created SemToolMenu")
+    def _add_tool(self, tool_id, handler):
+        """
+        tool_id (TOOL_*): button to be displayed
+        handler (VA or callable): if mode: VA, if action: callable 
+        value (object): value for the VA
+        raises:
+            KeyError: if tool_id is incorrect
+        """
+        tooltype = TOOLS[tool_id]
+        if isinstance(tooltype, ActionTool):
+            self._add_action_tool(tooltype, handler)
+        elif isinstance(tooltype, ModeTool):
+            self._add_mode_tool(tooltype, handler)
 
-    def on_zoom(self, evt):
-        logging.debug("Zoom tool clicked")
-        pub.sendMessage(
-            'secom.tool.zoom.click',
-            enabled=self.btn_zoom.GetToggle()
-        )
-        evt.Skip()
+    def _add_action_tool(self, tooltype, callback):
+        btn = self._add_button(ImageButton, tooltype.icon, tooltype.tooltip)
+        btn.Bind(wx.EVT_BUTTON, callback)
 
-    def on_update(self, evt):
-        logging.debug("Update tool clicked")
-        pub.sendMessage(
-            'secom.tool.update.click',
-            enabled=self.btn_update.GetToggle()
-        )
-        evt.Skip()
+    def _add_mode_tool(self, tooltype, va):
+        btn = self._add_button(ImageToggleButton, tooltype.icon, tooltype.tooltip)
+        value_on = tooltype.value_on
+        value_off = tooltype.value_off
 
-    def on_resize(self, evt):
-        logging.debug("Resize tool clicked")
-        pub.sendMessage('secom.tool.resize.click')
-        evt.Skip()
+        # functions to handle synchronization VA <-> toggle button
+        def _on_click(evt, va=va, value_on=value_on, value_off=value_off):
+            if evt.isDown:
+                va.value = value_on
+            else:
+                va.value = value_off
 
-    # def toggle_tool(self, btn, pub_event):
-    #     new_state = not btn.GetToggle()
-    #     btn.SetToggle(new_state)
-    #     pub.sendMessage(
-    #         pub_event,
-    #         enabled=new_state
-    #     )
+        def _on_va_change(new_value, value_on=value_on, btn=btn):
+            btn.SetToggle(new_value == value_on)
 
-    def clear_zoom(self):
-        self.btn_zoom.SetToggle(False)
-        pub.sendMessage(
-            'secom.tool.zoom.click',
-            enabled=self.btn_zoom.GetToggle()
-        )
+        btn.Bind(wx.EVT_BUTTON, _on_click) # FIXME: It doesn't generate evt_togglebutton
+        va.subscribe(_on_va_change)
+        self._mode_callbacks.append(_on_va_change)
 
-    # def toggle_update(self):
-    #     self._toggle_tool(self.btn_update, 'secom.tool.update.click')
+    def _add_button(self, cls, img_prefix, tooltip=None):
+        bmp = img.data.catalog[img_prefix].GetBitmap()
+        bmpa = img.data.catalog[img_prefix + "_a"].GetBitmap()
+        bmph = img.data.catalog[img_prefix + "_h"].GetBitmap()
 
-class SparcAcquisitionToolMenu(ToolMenu):
-    """ Tool menu for Sparc acquisition view manipulation """
+        btn = cls(self._panel, bitmap=bmp, size=(24, 24))
+        btn.SetBitmapSelected(bmpa)
+        btn.SetBitmapHover(bmph)
 
-    def __init__(self):
-        ToolMenu.__init__(self)
+        if tooltip:
+            btn.SetToolTipString(tooltip)
 
-        self.btn_select = None
-        self.btn_pick = None
-        self.btn_resize = None
+        sizer = self._panel.GetSizer()
 
-        pub.subscribe(self.on_select_end, "sparc.acq.select.end")
+        sizer.Add(btn, border=10, flag=wx.BOTTOM | wx.LEFT)
+        self._panel.Layout()
+        return btn
 
-    def OnCreate(self, event):
-        self.Unbind(wx.EVT_WINDOW_CREATE)
-
-        self.btn_select = xrc.XRCCTRL(self, "btn_sparc_acq_view_select")
-        self.btn_pick = xrc.XRCCTRL(self, "btn_sparc_acq_view_pick")
-        self.btn_resize = xrc.XRCCTRL(self, "btn_sparc_acq_view_resize")
-
-        self._sort_buttons()
-
-        self.btn_select.Bind(wx.EVT_BUTTON, self.on_select)
-        self.btn_pick.Bind(wx.EVT_BUTTON, self.on_pick)
-
-        logging.debug("Created SparcToolMenu")
-
-    def on_select(self, evt):
-        logging.debug("Select tool clicked")
-        pub.sendMessage('sparc.acq.tool.select.click',
-                        enabled=self.btn_select.GetToggle()
-                        )
-        evt.Skip()
-
-    def on_select_end(self):
-        pass
-        # self.btn_select.SetToggle(False)
-        # pub.sendMessage(
-        #     'sparc.acq.tool.select.click',
-        #     enabled=self.btn_select.GetToggle()
-        # )
-
-    def on_pick(self, evt):
-        logging.debug("Pick tool clicked")
-        pub.sendMessage('sparc.acq.tool.pick.click',
-                        enabled=self.btn_pick.GetToggle()
-                        )
-        evt.Skip()
-
-    def on_resize(self, evt):
-        logging.debug("Resize tool clicked")
-        pub.sendMessage('sparc.acq.tool.resize.click')
-        evt.Skip()
-
-class SparcAnalysisToolMenu(ToolMenu):
-    """ Tool menu for Sparc analysis view manipulation """
-
-    def __init__(self):
-        ToolMenu.__init__(self)
-
-        self.btn_zoom = None
-        self.btn_update = None
-        self.btn_resize = None
-
-    def OnCreate(self, event):
-        self.Unbind(wx.EVT_WINDOW_CREATE)
-
-        self.btn_zoom = xrc.XRCCTRL(self, "btn_sparc_ana_view_zoom")
-        self.btn_update = xrc.XRCCTRL(self, "btn_sparc_ana_view_update")
-        self.btn_resize = xrc.XRCCTRL(self, "btn_sparc_ana_view_resize")
-
-        self._sort_buttons()
-
-        self.btn_zoom.Bind(wx.EVT_BUTTON, self.on_zoom)
-        self.btn_update.Bind(wx.EVT_BUTTON, self.on_update)
-
-        logging.debug("Created SparcToolMenu")
-
-    def on_zoom(self, evt):
-        logging.debug("Zoom tool clicked")
-        pub.sendMessage('sparc.ana.tool.zoom.click',
-                        enabled=self.btn_zoom.GetToggle()
-                        )
-        evt.Skip()
-
-    def on_update(self, evt):
-        logging.debug("Update tool clicked")
-        pub.sendMessage('sparc.ana.tool.update.click',
-                        enabled=self.btn_update.GetToggle()
-                        )
-        evt.Skip()
-
-    def on_resize(self, evt):
-        logging.debug("Resize tool clicked")
-        pub.sendMessage('sparc.ana.tool.resize.click')
-        evt.Skip()

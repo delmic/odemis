@@ -4,12 +4,12 @@
 # Every file which is in the pattern /test/*_test.py
 
 TESTLOG=./test.log
+ODEMISPATH="$(readlink -m "./src/odemis")"
+
+PYTHONPATH=./src/:../Pyro4/src/
 if [ -f /etc/odemis.conf ]; then
     # use the odemis config if it's available
     . /etc/odemis.conf
-else
-    ODEMISPATH="./src/odemis"
-    PYTHONPATH=./src/:../Pyro4/src/
 fi
 export PYTHONPATH
 

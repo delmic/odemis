@@ -118,29 +118,6 @@ class xrcslider_frame(wx.Frame):
 
 
 
-class xrcplot_frame(wx.Frame):
-#!XRCED:begin-block:xrcplot_frame.PreCreate
-    def PreCreate(self, pre):
-        """ This function is called during the class's initialization.
-        
-        Override it for custom setup before the window is created usually to
-        set additional window styles using SetWindowStyle() and SetExtraStyle().
-        """
-        pass
-        
-#!XRCED:end-block:xrcplot_frame.PreCreate
-
-    def __init__(self, parent):
-        # Two stage creation (see http://wiki.wxpython.org/index.cgi/TwoStageCreation)
-        pre = wx.PreFrame()
-        self.PreCreate(pre)
-        get_resources().LoadOnFrame(pre, parent, "plot_frame")
-        self.PostCreate(pre)
-
-        # Define variables for the controls, bind event handlers
-
-
-
 class xrccanvas_frame(wx.Frame):
 #!XRCED:begin-block:xrccanvas_frame.PreCreate
     def PreCreate(self, pre):
@@ -162,6 +139,34 @@ class xrccanvas_frame(wx.Frame):
 
         # Define variables for the controls, bind event handlers
         self.canvas_panel = xrc.XRCCTRL(self, "canvas_panel")
+
+
+
+class xrcfpb_frame(wx.Frame):
+#!XRCED:begin-block:xrcfpb_frame.PreCreate
+    def PreCreate(self, pre):
+        """ This function is called during the class's initialization.
+        
+        Override it for custom setup before the window is created usually to
+        set additional window styles using SetWindowStyle() and SetExtraStyle().
+        """
+        pass
+        
+#!XRCED:end-block:xrcfpb_frame.PreCreate
+
+    def __init__(self, parent):
+        # Two stage creation (see http://wiki.wxpython.org/index.cgi/TwoStageCreation)
+        pre = wx.PreFrame()
+        self.PreCreate(pre)
+        get_resources().LoadOnFrame(pre, parent, "fpb_frame")
+        self.PostCreate(pre)
+
+        # Define variables for the controls, bind event handlers
+        self.scrwin = xrc.XRCCTRL(self, "scrwin")
+        self.fpb = xrc.XRCCTRL(self, "fpb")
+        self.panel_1 = xrc.XRCCTRL(self, "panel_1")
+        self.panel_2 = xrc.XRCCTRL(self, "panel_2")
+        self.panel_3 = xrc.XRCCTRL(self, "panel_3")
 
 
 
@@ -396,13 +401,6 @@ def __init_resources():
     </object>
     <size>400,400</size>
   </object>
-  <object class="wxFrame" name="plot_frame">
-    <size>400,400</size>
-    <title>Cairo Test</title>
-    <object class="wxBoxSizer">
-      <orient>wxVERTICAL</orient>
-    </object>
-  </object>
   <object class="wxFrame" name="canvas_frame">
     <object class="wxPanel" name="canvas_panel">
       <object class="wxBoxSizer">
@@ -416,6 +414,143 @@ def __init_resources():
     <size>400,400</size>
     <title>Cairo Test</title>
     <bg>#4D4D4D</bg>
+  </object>
+  <object class="wxFrame" name="fpb_frame">
+    <object class="wxBoxSizer">
+      <object class="sizeritem">
+        <object class="wxScrolledWindow" name="scrwin">
+          <object class="wxBoxSizer">
+            <object class="sizeritem">
+              <object class="FoldPanelBar" name="fpb">
+                <object class="FoldPanelItem" name="panel_1">
+                  <object class="wxStaticText">
+                    <label>LABEL</label>
+                  </object>
+                  <object class="wxStaticText">
+                    <label>LABEL</label>
+                  </object>
+                  <label>Test Panel 1</label>
+                  <fg>#1A1A1A</fg>
+                  <bg>#666666</bg>
+                  <font>
+                    <size>13</size>
+                    <style>normal</style>
+                    <weight>normal</weight>
+                    <underlined>0</underlined>
+                    <family>default</family>
+                    <face>Ubuntu</face>
+                    <encoding>UTF-8</encoding>
+                  </font>
+                  <XRCED>
+                    <assign_var>1</assign_var>
+                  </XRCED>
+                </object>
+                <object class="FoldPanelItem" name="panel_2">
+                  <object class="wxStaticText">
+                    <label>LABEL</label>
+                  </object>
+                  <object class="wxStaticText">
+                    <label>LABEL</label>
+                  </object>
+                  <object class="wxStaticText">
+                    <label>LABEL</label>
+                  </object>
+                  <object class="wxStaticText">
+                    <label>LABEL</label>
+                  </object>
+                  <object class="wxStaticText">
+                    <label>LABEL</label>
+                  </object>
+                  <object class="wxStaticText">
+                    <label>LABEL</label>
+                  </object>
+                  <object class="wxStaticText">
+                    <label>LABEL</label>
+                  </object>
+                  <object class="wxStaticText">
+                    <label>LABEL</label>
+                  </object>
+                  <object class="wxStaticText">
+                    <label>LABEL</label>
+                  </object>
+                  <object class="wxStaticText">
+                    <label>LABEL</label>
+                  </object>
+                  <label>Test Panel 2</label>
+                  <collapsed>1</collapsed>
+                  <fg>#1A1A1A</fg>
+                  <bg>#666666</bg>
+                  <font>
+                    <size>13</size>
+                    <style>normal</style>
+                    <weight>normal</weight>
+                    <underlined>0</underlined>
+                    <family>default</family>
+                    <face>Ubuntu</face>
+                    <encoding>UTF-8</encoding>
+                  </font>
+                  <XRCED>
+                    <assign_var>1</assign_var>
+                  </XRCED>
+                </object>
+                <object class="FoldPanelItem" name="panel_3">
+                  <object class="wxStaticText">
+                    <label>LABEL</label>
+                  </object>
+                  <object class="wxStaticText">
+                    <label>LABEL</label>
+                  </object>
+                  <object class="wxStaticText">
+                    <label>LABEL</label>
+                  </object>
+                  <object class="wxStaticText">
+                    <label>LABEL</label>
+                  </object>
+                  <object class="wxStaticText">
+                    <label>LABEL</label>
+                  </object>
+                  <object class="wxStaticText">
+                    <label>LABEL</label>
+                  </object>
+                  <label>Test Panel 3</label>
+                  <fg>#1A1A1A</fg>
+                  <bg>#666666</bg>
+                  <font>
+                    <size>13</size>
+                    <style>normal</style>
+                    <weight>normal</weight>
+                    <underlined>0</underlined>
+                    <family>default</family>
+                    <face>Ubuntu</face>
+                    <encoding>UTF-8</encoding>
+                  </font>
+                  <XRCED>
+                    <assign_var>1</assign_var>
+                  </XRCED>
+                </object>
+                <spacing>0</spacing>
+                <bg>#1E90FF</bg>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxEXPAND</flag>
+            </object>
+            <orient>wxVERTICAL</orient>
+          </object>
+          <bg>#A52A2A</bg>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
+        <option>1</option>
+        <flag>wxEXPAND</flag>
+        <minsize>100,100</minsize>
+      </object>
+      <orient>wxVERTICAL</orient>
+    </object>
+    <title>Fold Panel Bar Test Frame</title>
+    <bg>#666666</bg>
   </object>
 </resource>'''
 
