@@ -86,7 +86,7 @@ def loop():
             break
 
 def gen_test_data():
-
+    """ Help function to generate test data """
     functions = [lambda x: 0.0]
     sizes = (128, 256, 512, 1024, 2048)
 
@@ -239,9 +239,6 @@ class SliderTestCase(unittest.TestCase):
     def test_bandwidthslider(self):
 
         global DATA
-
-        logging.getLogger().setLevel(logging.DEBUG)
-
 
         bws = self.app.test_frame.bwslider
         print "%s %s" % (bws.__class__.__name__, bws.GetSize())

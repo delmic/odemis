@@ -97,7 +97,9 @@ import cairo
 import wx
 import wx.lib.wxcairo as wxcairo
 
+from ..util.conversion import wxcol_to_rgb, change_brightness
 import odemis.gui.img.data as imgdata
+
 
 # A class for smooth, flicker-less display of anything on a window, with drag
 # and zoom capability a bit like: wx.canvas, wx.BufferedWindow, BufferedCanvas,
@@ -1147,6 +1149,9 @@ def real_to_world_pos(real_pos, mpwu):
     return world_pos
 
 
+CLOSE_STRAIGHT = 1
+CLOSE_BOTTOM = 2
+
 class PlotCanvas(wx.Panel):
     """ A canvas for plotting data"""
 
@@ -1154,54 +1159,181 @@ class PlotCanvas(wx.Panel):
 
         kwargs['style'] = wx.NO_FULL_REPAINT_ON_RESIZE | kwargs.get('style', 0)
 
-        wx.Panel.__init__(self, *args, **kwargs)
+        super(PlotCanvas, self).__init__(*args, **kwargs)
 
         # Event binding
         self.Bind(wx.EVT_PAINT, self.OnPaint)
         self.Bind(wx.EVT_SIZE, self.OnSize)
 
-        # Indicator if the data need to be replotted
-        self.dirty = False
+        self._buffer = None
+        self._data = []
+
+        self.min_x = None
+        self.max_x = None
+        self.width_x = None
+
+        self.min_y = None
+        self.max_y = None
+        self.width_y = None
+
+        self.line_width = 2 #px
+        self.line_colour = wxcol_to_rgb(self.ForegroundColour)
+        self.fill_colour = change_brightness(self.line_colour, -0.1)
+
+        self.closed = False
+
+        # OnSize called to make sure the buffer is initialized.
+        # This might result in OnSize getting called twice on some
+        # platforms at initialization, but little harm done.
+        self.OnSize(None)
+
+    def SetForegroundColour(self, *args, **kwargs):
+        super(PlotCanvas, self).SetForegroundColour(*args, **kwargs)
+        self.line_colour = wxcol_to_rgb(self.ForegroundColour)
+        self.fill_colour = change_brightness(self.line_colour, -0.4)
 
     # Event handlers
 
-    def OnPaint(self, event):
-        """
-        """
-        pass
+    def OnPaint(self, event=None):
+        wx.BufferedPaintDC(self, self._buffer)
 
-    def OnSize(self, event):
-        """
-        """
-        event.Skip()
+    def OnSize(self, event=None):
+        self._buffer = wx.EmptyBitmap(*self.ClientSize)
+        self.UpdateImage()
+
+    def UpdateImage(self):
+        dc = wx.MemoryDC()
+        dc.SelectObject(self._buffer)
+        dc.SetBackground(wx.Brush(self.BackgroundColour, wx.SOLID))
+
+        dc.Clear() # make sure you clear the bitmap!
+
+        ctx = wxcairo.ContextFromDC(dc)
+        width, height = self.ClientSize
+        self._plot_data(ctx, width, height)
+
+        del dc # need to get rid of the MemoryDC before Update() is called.
+        self.Refresh(eraseBackground=False)
+        self.Update()
+
+    def set_1d_data(self, horz, vert):
+        self._data = zip(horz, vert)
+        print self._data
+        self.reset_dimensions()
+        self.UpdateImage()
+
+    def set_2d_data(self, data):
+        self._data = data
+        self.reset_dimensions()
+        self.UpdateImage()
+
+    def reset_dimensions(self):
+        """ Determine the dimensions according to the present data """
+
+        horz, vert = zip(*self._data)
+        self.set_dimensions(
+            min(horz),
+            max(horz),
+            min(vert),
+            max(vert)
+        )
+        self.UpdateImage()
 
 
-    # def _draw_background(self, dc_buffer):
-    #     """ Draw checkered background """
-    #     # Only support wx.SOLID, and anything else is checkered
-    #     if self.backgroundBrush == wx.SOLID:
-    #         return
+    def set_dimensions(self, min_x, max_x, min_y, max_y):
 
-    #     ctx = wxcairo.ContextFromDC(dc_buffer)
-    #     surface = wxcairo.ImageSurfaceFromBitmap(imgdata.getcanvasbgBitmap())
+        self.min_x = min_x
+        self.max_x = max_x
+        self.min_y = min_y
+        self.max_y = max_y
 
-    #     if not self.dragging:
-    #         # if self.Parent._has_focus:
-    #         #     print "drag offsetting {}".format(self.bg_offset)
-    #         surface.set_device_offset(-self.bg_offset[0], -self.bg_offset[1])
-    #     else:
-    #         if self.Parent._has_focus:
-    #             print "no dragoffsetting {}".format(self.bg_offset)
+        logging.debug(
+            "Limits set to %s, %s and %s, %s",
+            self.min_x,
+            self.max_x,
+            self.min_y,
+            self.max_y,
+        )
 
-    #     pattern = cairo.SurfacePattern(surface)
-    #     pattern.set_extend(cairo.EXTEND_REPEAT)
-    #     ctx.set_source(pattern)
+        self.width_x = self.max_x - self.min_x
+        self.width_y = self.max_y - self.min_y
 
-    #     ctx.rectangle(
-    #         0,
-    #         0,
-    #         self._bmp_buffer_size[0],
-    #         self._bmp_buffer_size[1]
-    #     )
+        logging.debug("Widths set to %s and %s", self.width_x, self.width_y)
+        self.UpdateImage()
 
-    #     ctx.fill()
+    def set_closed(self, closed=CLOSE_STRAIGHT):
+        self.closed = closed
+
+    def v_to_p(self, point):
+        """ Translate a point tuple to pixel values """
+
+        if None in (self.width_x, self.width_y):
+            logging.warn("No plot data set")
+            return 0, 0
+
+        x, y = point
+        w, h = self.ClientSize
+
+        px = float(x - self.min_x) / self.width_x
+        py = float(self.max_y - y) / self.width_y
+        logging.error("%s %s", px, py)
+
+        result = px * w, py * h
+
+        # logging.debug("Point translaged from %s to %s", point, result)
+
+        return result
+
+
+    def _plot_data(self, ctx, width, height):
+        if self._data:
+            ctx.set_line_width(self.line_width)
+
+            # logging.debug("moving to %s", self.v_to_p(self._data[0]))
+            ctx.move_to(*self.v_to_p(self._data[0]))
+
+            for p in self._data[1:]:
+                x, y = self.v_to_p(p)
+                # logging.debug("drawing to %s", (x, y))
+                ctx.line_to(x, y)
+
+            if self.closed == CLOSE_BOTTOM:
+                x, y = self.v_to_p((self.max_x, 0))
+                ctx.line_to(x, y)
+                x, y = self.v_to_p((0, 0))
+                ctx.line_to(x, y)
+
+            if self.closed:
+                # ctx.line_to(self._data[0])
+                ctx.close_path()
+
+
+            ctx.set_source_rgb(*self.fill_colour)
+            ctx.fill_preserve()
+            ctx.set_source_rgb(*self.line_colour)
+            ctx.stroke()
+
+
+            #ctx.set_source_rgb(1, 1, 0)
+            #ctx.fill()
+
+        # ctx.set_source_rgb(0, 0, 0)
+        # ctx.move_to(0, 0)
+        # ctx.line_to(390, 390)
+        # ctx.move_to(390, 0)
+        # ctx.line_to(0, 390)
+        # ctx.set_line_width(0.2)
+        # ctx.stroke()
+
+        # ctx.rectangle(0, 0, 195, 195)
+        # ctx.set_source_rgba(1, 0, 0, 0.80)
+        # ctx.fill()
+
+        # ctx.rectangle(0, 195, 195, 195)
+        # ctx.set_source_rgba(0, 1, 0, 0.60)
+        # ctx.fill()
+
+        # ctx.rectangle(195, 0, 195, 195)
+        # ctx.set_source_rgba(0, 0, 1, 0.40)
+        # ctx.fill()
+
