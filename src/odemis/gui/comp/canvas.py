@@ -513,9 +513,9 @@ class DraggableCanvas(wx.Panel):
         # if no recenter, increase bbox so that its center is the current center
         if not recenter:
             c = self.buffer_center_world_pos
-            hw = max(abs(c[0] - bbox[0]), abs(c[2] - bbox[2]))
-            hh = max(abs(c[1] - bbox[1]), abs(c[3] - bbox[3]))
-            bbox = [c[0] - hw, c[1] - hh, c[2] + hw, c[3] + hh]
+            hw = max(abs(c[0] - bbox[0]), abs(c[0] - bbox[2]))
+            hh = max(abs(c[1] - bbox[1]), abs(c[1] - bbox[3]))
+            bbox = [c[0] - hw, c[1] - hh, c[0] + hw, c[1] + hh]
 
         # compute mpp so that the bbox fits exactly the visible part
         w, h = bbox[2] - bbox[0], bbox[3] - bbox[1] # wu
