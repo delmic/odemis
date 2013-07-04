@@ -527,14 +527,14 @@ def acquire(comp_name, dataflow_names, filename):
         
         try:
             if model.MD_PIXEL_SIZE in image.metadata:
-                pxs =  image.metadata[model.MD_PIXEL_SIZE]
+                pxs = image.metadata[model.MD_PIXEL_SIZE]
                 dim = (image.shape[0] * pxs[0], image.shape[1] * pxs[1])
                 logging.info("Physical dimension of image is %fx%f m.", dim[0], dim[1])
             else:
                 logging.warning("Physical dimension of image is unknown.")
                 
             if model.MD_SENSOR_PIXEL_SIZE in image.metadata:
-                spxs =  image.metadata[model.MD_PIXEL_SIZE]
+                spxs = image.metadata[model.MD_SENSOR_PIXEL_SIZE]
                 dim_sens = (image.shape[0] * spxs[0], image.shape[1] * spxs[1])
                 logging.info("Physical dimension of sensor is %fx%f m.", dim_sens[0], dim_sens[1])
         except:
