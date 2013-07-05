@@ -2343,11 +2343,14 @@ class Scanner(model.Emitter):
 
         # TODO see if meshgrid is faster (it needs to be in C order!)
 
+        # Force the conversion to full number (e.g., instead of uint16), which
+        # avoids linspace() to go crazy when limits are going down.
+        pylimits = limits.tolist()
         # fill the X dimension
         scanx = scan[:, :, 0].swapaxes(0, 1) # just a view to have X as last dim
-        scanx[:, :] = numpy.linspace(limits[0, 0], limits[0, 1], shape[0])
+        scanx[:, :] = numpy.linspace(pylimits[0][0], pylimits[0][1], shape[0])
         # fill the Y dimension
-        scan[:, margin:, 1] = numpy.linspace(limits[1, 0], limits[1, 1], shape[1])
+        scan[:, margin:, 1] = numpy.linspace(pylimits[1][0], pylimits[1][1], shape[1])
 
         # fill the margin with the first pixel (X dimension is already filled)
         if margin:

@@ -120,7 +120,26 @@ class TestSEMStatic(unittest.TestCase):
         self.assertEqual(len(sem_unpickled.children), 2)
         sem.terminate()
 
-    
+    def test_generate_scan(self):
+        """
+        Test the _generate_scan_array static method of the Scanner
+        """
+        # minY, maxY, minX, maxX
+        limits = numpy.array([[30320, 35215], [40943, 24592]], dtype="uint16")
+        shape = (256, 512)
+        margin = 1
+        scan_pos = semcomedi.Scanner._generate_scan_array(shape, limits, margin)
+
+        # should have 2 values for each pixel
+        self.assertEqual(scan_pos.shape, (shape[0], shape[1] + margin, 2))
+        # should be monotone in both dimensions
+        vecx = (scan_pos[0, :, 1]).astype("float64") # use float to allow negative values
+        diffx = vecx[0:-2] - vecx[1:-1]
+        if limits[1, 0] <= limits[1, 1]:
+            comp = diffx <= 0 # must be increasing
+        else:
+            comp = diffx >= 0 # must be decreasing
+        self.assertTrue(comp.all())
     
 #@unittest.skip("simple")
 class TestSEM(unittest.TestCase):
