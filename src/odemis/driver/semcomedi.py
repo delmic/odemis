@@ -1984,8 +1984,11 @@ class Scanner(model.Emitter):
                              % (settle_time, name))
         self._settle_time = settle_time
 
+        if len(channels) != len(set(channels)):
+            raise ValueError("Duplicated channels %r on device '%s'"
+                             % (channels, parent._device_name))
         # write channel as Y/X, for compatibility with numpy
-        self._channels = channels[-1::-1]
+        self._channels = channels[::-1]
         nchan = comedi.get_n_channels(parent._device, parent._ao_subdevice)
         if nchan < max(channels):
             raise ValueError("Requested channels %r on device '%s' which has only %d output channels"
@@ -1993,7 +1996,7 @@ class Scanner(model.Emitter):
 
         # write limits as Y/X, for compatibility with numpy
         # check the limits are reachable
-        self._limits = limits[-1::-1]
+        self._limits = limits[::-1]
         for i, channel in enumerate(channels):
             data_lim = self._limits[i]
             try:
@@ -2275,10 +2278,14 @@ class Scanner(model.Emitter):
             shift = translation[i] * pxv
             roi_lim = (center + shift - roi_hwidth,
                        center + shift + roi_hwidth)
-            assert roi_lim[0] <= roi_lim[1]
-            assert roi_lim[0] >= lim[0] and roi_lim[1] <= lim[1]
+            if lim[0] < lim[1]:
+                assert roi_lim[0] <= roi_lim[1]
+                assert roi_lim[0] >= lim[0] and roi_lim[1] <= lim[1]
+            else:
+                assert roi_lim[0] >= roi_lim[1]
+                assert roi_lim[0] <= lim[0] and roi_lim[1] >= lim[1]
             roi_limits.append(roi_lim)
-        logging.debug("ranges X = %sV, Y = %sV", roi_limits[0], roi_limits[1])
+        logging.debug("ranges X = %sV, Y = %sV", roi_limits[1], roi_limits[0])
 
         # if the conversion polynomial has degree <= 1, it's as precise and
         # much faster to generate directly the raw data.
