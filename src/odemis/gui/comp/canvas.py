@@ -1083,8 +1083,10 @@ def real_to_world_pos(real_pos, mpwu):
     return world_pos
 
 
-CLOSE_STRAIGHT = 1
-CLOSE_BOTTOM = 2
+PLOT_CLOSE_STRAIGHT = 1
+PLOT_CLOSE_BOTTOM = 2
+PLOT_MODE_LINE = 1
+PLOT_MODE_BAR = 2
 
 class PlotCanvas(wx.Panel):
     """ A canvas for plotting data"""
@@ -1101,6 +1103,8 @@ class PlotCanvas(wx.Panel):
 
         self._buffer = None
         self._data = []
+        # Move to subclass: index = pixel x, value = (value, pixel y)
+        self._values = []
 
         self.min_x = None
         self.max_x = None
@@ -1110,25 +1114,94 @@ class PlotCanvas(wx.Panel):
         self.max_y = None
         self.width_y = None
 
-        self.line_width = 2 #px
+        self.line_width = 1 #px
         self.line_colour = wxcol_to_rgb(self.ForegroundColour)
         self.fill_colour = change_brightness(self.line_colour, -0.1)
 
-        self.closed = False
+        # Tells the canvas to close the graph or not and if so, how
+        self.closed = None
+
+        self.plot_mode = PLOT_MODE_LINE
+
+        self.dragging = False
+
+        self.focusline_overlay = None
 
         # View overlays can be added to this attribute
         self.overlays = []
+
+        self.Bind(wx.EVT_LEFT_DOWN, self.OnLeftDown)
+        self.Bind(wx.EVT_LEFT_UP, self.OnLeftUp)
+        self.Bind(wx.EVT_MOTION, self.OnMouseMotion)
 
         # OnSize called to make sure the buffer is initialized.
         # This might result in OnSize getting called twice on some
         # platforms at initialization, but little harm done.
         self.OnSize(None)
 
-    def add_ovelay(self, ol):
+    def OnLeftDown(self, event):
+        self.dragging = True
+        self.drag_init_pos = event.GetPositionTuple()
 
+        logging.debug("Drag started at %s", self.drag_init_pos)
+
+        if not self.HasCapture():
+            self.CaptureMouse()
+
+        self.SetFocus()
+
+    def OnLeftUp(self, event):
+        self.dragging = False
+        self.SetCursor(wx.STANDARD_CURSOR)
+        if self.HasCapture():
+            self.ReleaseMouse()
+
+    def OnMouseMotion(self, event):
+        if self.dragging and self.focusline_overlay:
+            pos = event.GetPositionTuple()
+
+            drag_shift = (pos[0] - self.drag_init_pos[0],
+                          pos[1] - self.drag_init_pos[1])
+
+            self.focusline_overlay.set_position(pos)
+
+            self.Refresh()
+
+    def calc_values(self):
+        for i in xrange(self.ClientSize.x):
+            # print i
+            pass
+
+    def value_to_position(self, point):
+        """ Translate a point tuple to pixel value tuple """
+
+        if None in (self.width_x, self.width_y):
+            logging.warn("No plot data set")
+            return 0, 0
+
+        x, y = point
+        w, h = self.ClientSize
+
+        px = float(x - self.min_x) / self.width_x
+        py = float(self.max_y - y) / self.width_y
+        # logging.debug("%s %s", px, py)
+
+        result = px * w, py * h
+
+        # logging.debug("Point translaged from %s to %s", point, result)
+
+        return result
+
+    def _x_to_value(self, pos_x):
+        """ Map the give x pixel value to a y value """
+        pass
+
+
+    def set_focusline_ovelay(self, fol):
         # TODO: Add type check to make sure the ovelay is a ViewOverlay.
-        # (But importing View)
-        self.overlays.append(ol)
+        # (But importing Viewoverlay causes cyclic imports)
+        self.focusline_overlay = fol
+        self.overlays.append(fol)
         self.Refresh()
 
     def SetForegroundColour(self, *args, **kwargs):
@@ -1164,6 +1237,7 @@ class PlotCanvas(wx.Panel):
         del dc # need to get rid of the MemoryDC before Update() is called.
         self.Refresh(eraseBackground=False)
         self.Update()
+        self.calc_values()
 
     def set_1d_data(self, horz, vert):
         self._data = zip(horz, vert)
@@ -1209,55 +1283,79 @@ class PlotCanvas(wx.Panel):
         logging.debug("Widths set to %s and %s", self.width_x, self.width_y)
         self.UpdateImage()
 
-    def set_closed(self, closed=CLOSE_STRAIGHT):
+    def set_closed(self, closed=PLOT_CLOSE_STRAIGHT):
         self.closed = closed
 
-    def v_to_p(self, point):
-        """ Translate a point tuple to pixel values """
-
-        if None in (self.width_x, self.width_y):
-            logging.warn("No plot data set")
-            return 0, 0
-
-        x, y = point
-        w, h = self.ClientSize
-
-        px = float(x - self.min_x) / self.width_x
-        py = float(self.max_y - y) / self.width_y
-        # logging.debug("%s %s", px, py)
-
-        result = px * w, py * h
-
-        # logging.debug("Point translaged from %s to %s", point, result)
-
-        return result
-
+    def set_plot_mode(self, mode):
+        self.plot_mode = mode
+        self.UpdateImage()
 
     def _plot_data(self, ctx, width, height):
         if self._data:
-            ctx.set_line_width(self.line_width)
+            if self.plot_mode == PLOT_MODE_LINE:
+                self._line_plot(ctx)
+            elif self.plot_mode == PLOT_MODE_BAR:
+                self._bar_plot(ctx, width)
+            # logging.debug("moving to %s", self.value_to_position(self._data[0]))
 
-            # logging.debug("moving to %s", self.v_to_p(self._data[0]))
-            ctx.move_to(*self.v_to_p(self._data[0]))
+    def _bar_plot(self, ctx, width):
+        f_vtp = self.value_to_position
+        f_clt = ctx.line_to
 
-            for p in self._data[1:]:
-                x, y = self.v_to_p(p)
-                # logging.debug("drawing to %s", (x, y))
-                ctx.line_to(x, y)
+        x, y = f_vtp((self.min_x, self.min_y))
+        logging.error("moving to %s", (x, y))
 
-            if self.closed == CLOSE_BOTTOM:
-                x, y = self.v_to_p((self.max_x, 0))
-                ctx.line_to(x, y)
-                x, y = self.v_to_p((0, 0))
-                ctx.line_to(x, y)
+        ctx.move_to(x, y)
 
-            if self.closed:
-                # ctx.line_to(self._data[0])
-                ctx.close_path()
+        for i, p in enumerate(self._data[:-1]):
+            logging.error("p %s", p)
 
+            x, y = f_vtp(p)
+            logging.error("drawing to %s", (x, y))
+            f_clt(x, y)
+            x, _ = f_vtp(self._data[i + 1])
+            logging.error("np %s", self._data[i + 1])
 
-            ctx.set_source_rgb(*self.fill_colour)
-            ctx.fill_preserve()
-            ctx.set_source_rgb(*self.line_colour)
-            ctx.stroke()
+            logging.error("drawing next to %s", (x, y))
+            f_clt(x, y)
+
+        if self.closed == PLOT_CLOSE_BOTTOM:
+            x, y = self.value_to_position((self.max_x, 0))
+            ctx.line_to(x, y)
+            x, y = self.value_to_position((0, 0))
+            ctx.line_to(x, y)
+        else:
+            ctx.close_path()
+
+        ctx.set_line_width(1.5)
+        ctx.set_source_rgb(*self.fill_colour)
+        ctx.fill_preserve()
+        ctx.set_source_rgb(*self.line_colour)
+        ctx.stroke()
+
+    def _line_plot(self, ctx):
+
+        ctx.move_to(*self.value_to_position(self._data[0]))
+
+        f_vtp = self.value_to_position
+        f_clt = ctx.line_to
+
+        for p in self._data[1:]:
+            x, y = f_vtp(p)
+            # logging.debug("drawing to %s", (x, y))
+            f_clt(x, y)
+
+        if self.closed == PLOT_CLOSE_BOTTOM:
+            x, y = self.value_to_position((self.max_x, 0))
+            ctx.line_to(x, y)
+            x, y = self.value_to_position((0, 0))
+            ctx.line_to(x, y)
+        else:
+            ctx.close_path()
+
+        ctx.set_line_width(2.5)
+        ctx.set_source_rgb(*self.fill_colour)
+        ctx.fill_preserve()
+        ctx.set_source_rgb(*self.line_colour)
+        ctx.stroke()
 

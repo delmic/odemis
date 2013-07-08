@@ -23,6 +23,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
 import logging
+import math
 from abc import ABCMeta, abstractmethod
 
 import cairo
@@ -31,7 +32,7 @@ import wx
 import odemis.gui as gui
 import odemis.gui.comp.canvas as canvas
 from odemis.gui.util.units import readable_str
-from ..util.conversion import hex_to_rgba
+from ..util.conversion import hex_to_rgba, change_brightness
 
 class Overlay(object):
     __metaclass__ = ABCMeta
@@ -561,10 +562,20 @@ class FocusLineOverlay(ViewOverlay):
 
         super(FocusLineOverlay, self).__init__(base, label)
         self.color = hex_to_rgba(color)
-        self.vposx = 100
+        self.vposx = 0
+        self.vposy = None
+
+    def set_position(self, pos):
+        self.vposx = max(1, min(pos[0], self.base.ClientSize.x - 1))
+        self.vposy = max(1, min(pos[1], self.base.ClientSize.y - 1))
 
     def Draw(self, dc_buffer, shift=(0, 0), scale=1.0):
         ctx = wx.lib.wxcairo.ContextFromDC(dc_buffer)
+
+        if self.vposy:
+            ctx.set_source_rgba(*change_brightness(self.color, -0.1))
+            ctx.arc(self.vposx, self.vposy, 5.5, 0, 2*math.pi)
+            ctx.fill()
 
         # draws the dotted line
         ctx.set_line_width(2)
