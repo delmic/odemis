@@ -224,6 +224,14 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
              self.canvas._bmp_buffer_size[1] / 2 + 40)
         self.assertEqual(px1, (255, 0, 0))
 
+        # fit to content without recentering should always zoom less or as much
+        # as with recentering
+        self.canvas.fitViewToContent(recenter=False)
+        mpp_no_recenter = self.view.mpp.value
+        self.canvas.fitViewToContent(recenter=True)
+        mpp_recenter = self.view.mpp.value
+        self.assertGreaterEqual(mpp_no_recenter, mpp_recenter)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -143,6 +143,12 @@ class SecomStreamsTab(Tab):
                                             self.main_frame
                                       )
 
+        # Toolbar
+        tb = self.main_frame.secom_tool_menu
+        tb.AddTool(tools.TOOL_RO_UPDATE, self.interface_model.tool)
+        tb.AddTool(tools.TOOL_RO_ZOOM, self.interface_model.tool)
+        tb.AddTool(tools.TOOL_ZOOM_FIT, self.onZoomFit)
+
     @property
     def settings_controller(self):
         return self._settings_controller
@@ -150,6 +156,11 @@ class SecomStreamsTab(Tab):
     @property
     def stream_controller(self):
         return self._stream_controller
+
+    def onZoomFit(self, event):
+        self._view_controller.fitCurrentViewToContent()
+
+
 
 class SparcAcquisitionTab(Tab):
 

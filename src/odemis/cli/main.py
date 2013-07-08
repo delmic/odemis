@@ -55,7 +55,7 @@ def get_backend_status():
     except:
         logging.exception("Unresponsive back-end")
         return BACKEND_DEAD
-        
+
     return BACKEND_DEAD
 
 status_to_xtcode = {BACKEND_RUNNING: 0,
@@ -84,12 +84,12 @@ def scan():
     num = 0
     # we scan by using every HwComponent class which has a .scan() method
     for module_name in driver.__all__:
-        module = __import__("odemis.driver."+module_name, fromlist=[module_name])
+        module = __import__("odemis.driver." + module_name, fromlist=[module_name])
         for cls_name, cls in inspect.getmembers(module, inspect.isclass):
             if issubclass(cls, model.HwComponent) and hasattr(cls, "scan"):
                 # do it in a separate container so that we don't have to load
                 # all drivers in the same process (andor cams don't like it)
-                container_name = "scanner%d"%num
+                container_name = "scanner%d" % num
                 num += 1
                 scanner = model.createInNewContainer(container_name, Scanner, {"cls": cls})
                 devices = scanner.scan()
@@ -186,12 +186,12 @@ def print_data_flows(component):
 
 def print_event(name, evt):
     print "\t" + name + " (Event)"
-    
+
 def print_events(component):
     # find all Events
     for name, value in model.getEvents(component).items():
         print_event(name, value)
-        
+
 def print_vattribute(name, va):
     if va.unit:
         unit = " (unit: %s)" % va.unit
@@ -230,7 +230,7 @@ def print_vattributes(component):
 def print_attributes(component):
     print "Component '%s':" % component.name
     print "\trole: %s" % component.role
-    print "\taffects: " + ", ".join(["'"+c.name+"'" for c in component.affects])
+    print "\taffects: " + ", ".join(["'" + c.name + "'" for c in component.affects])
     print_roattributes(component)
     print_vattributes(component)
     print_data_flows(component)
@@ -466,7 +466,7 @@ def getFittestExporter(filename, default=dataio.tiff):
     default (dataio. Module): default exporter to pick if no really fitting
       exporter is found
     returns (dataio. Module): the right exporter
-    """ 
+    """
     # Find the extension of the file
     basename = os.path.basename(filename)
     if basename == "":
@@ -476,13 +476,13 @@ def getFittestExporter(filename, default=dataio.tiff):
     # It should compare the extension of the exporter to the end of the filename,
     # but that should be fine for now.
     extension = os.path.splitext(basename)[1].lower()
-    
+
     for module_name in dataio.__all__:
-        exporter = __import__("odemis.dataio."+module_name, fromlist=[module_name])
+        exporter = __import__("odemis.dataio." + module_name, fromlist=[module_name])
         if extension in exporter.EXTENSIONS:
             logging.debug("Determined that '%s' corresponds to %s format", basename, exporter.FORMAT)
             return exporter
-    
+
     return default
 
 def acquire(comp_name, dataflow_names, filename):
@@ -524,17 +524,17 @@ def acquire(comp_name, dataflow_names, filename):
         except:
             logging.exception("Failed to acquire image from component '%s'", comp_name)
             return 127
-        
+
         try:
             if model.MD_PIXEL_SIZE in image.metadata:
-                pxs =  image.metadata[model.MD_PIXEL_SIZE]
+                pxs = image.metadata[model.MD_PIXEL_SIZE]
                 dim = (image.shape[0] * pxs[0], image.shape[1] * pxs[1])
                 logging.info("Physical dimension of image is %fx%f m.", dim[0], dim[1])
             else:
                 logging.warning("Physical dimension of image is unknown.")
-                
+
             if model.MD_SENSOR_PIXEL_SIZE in image.metadata:
-                spxs =  image.metadata[model.MD_PIXEL_SIZE]
+                spxs = image.metadata[model.MD_SENSOR_PIXEL_SIZE]
                 dim_sens = (image.shape[0] * spxs[0], image.shape[1] * spxs[1])
                 logging.info("Physical dimension of sensor is %fx%f m.", dim_sens[0], dim_sens[1])
         except:
@@ -575,15 +575,15 @@ def live_display(comp_name, df_name):
     try:
         size = component.resolution.value
         # check it's a 2-tuple, mostly to detect if it's a RemoteMethod, which
-        # means it doesn't exists. 
+        # means it doesn't exists.
         if not isinstance(size, (tuple, list)) or len(size) != 2:
             raise ValueError
     except (AttributeError, ValueError):
         # pick something not too stupid
         size = (512, 512)
         # TODO: try to use resolution on the emitter that affects this detector
-        # (if it exists) 
-        
+        # (if it exists)
+
     # create a window
     window = VideoDisplayer("Live from %s.%s" % (comp_name, df_name), size)
 
@@ -679,7 +679,7 @@ def main(args):
         logging.error("name of the output file must be specified.")
         return 127
 
-    
+
     logging.debug("Trying to find the backend")
     status = get_backend_status()
     if options.check:
@@ -708,10 +708,10 @@ def main(args):
     try:
         if options.kill:
             return kill_backend()
-        
+
         logging.debug("Executing the actions")
         odemis.util.driver.speedUpPyroConnect(model.getMicroscope())
-        
+
         if options.list:
             return list_components()
 
@@ -733,7 +733,7 @@ def main(args):
                     return ret
             time.sleep(0.5)
             return 0
-        
+
         if options.move is not None:
             for c, a, d in options.move:
                 ret = move(c, a, d)

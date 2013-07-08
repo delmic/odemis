@@ -23,6 +23,7 @@ from odemis import model
 from odemis.driver import semcomedi
 import Pyro4
 import comedi
+import copy
 import logging
 import numpy
 import os
@@ -49,7 +50,7 @@ logging.getLogger().setLevel(logging.DEBUG)
 # arguments used for the creation of basic components
 CONFIG_SED = {"name": "sed", "role": "sed", "channel":5, "limits": [-3, 3]}
 CONFIG_BSD = {"name": "bsd", "role": "bsd", "channel":6, "limits": [-0.1, 0.2]}
-CONFIG_SCANNER = {"name": "scanner", "role": "ebeam", "limits": [[0, 5], [0, 5]],
+CONFIG_SCANNER = {"name": "scanner", "role": "ebeam", "limits": [[-5, 5], [3, -3]],
                   "channels": [0,1], "settle_time": 10e-6, "hfw_nomag": 10e-3} 
 CONFIG_SEM = {"name": "sem", "role": "sem", "device": "/dev/comedi0", 
               "children": {"detector0": CONFIG_SED, "scanner": CONFIG_SCANNER}
@@ -95,9 +96,14 @@ class TestSEMStatic(unittest.TestCase):
         sem.terminate()
     
     def test_error(self):
-        wrong_config = dict(CONFIG_SEM)
+        wrong_config = copy.deepcopy(CONFIG_SEM)
         wrong_config["device"] = "/dev/comdeeeee"
-        self.assertRaises(Exception, semcomedi.SEMComedi, None, wrong_config)
+        self.assertRaises(Exception, semcomedi.SEMComedi, **wrong_config)
+        
+        
+        wrong_config = copy.deepcopy(CONFIG_SEM)
+        wrong_config["children"]["scanner"]["channels"] = [1, 1]
+        self.assertRaises(Exception, semcomedi.SEMComedi, **wrong_config)
     
     def test_pickle(self):
         try:
@@ -114,7 +120,26 @@ class TestSEMStatic(unittest.TestCase):
         self.assertEqual(len(sem_unpickled.children), 2)
         sem.terminate()
 
-    
+    def test_generate_scan(self):
+        """
+        Test the _generate_scan_array static method of the Scanner
+        """
+        # minY, maxY, minX, maxX
+        limits = numpy.array([[30320, 35215], [40943, 24592]], dtype="uint16")
+        shape = (256, 512)
+        margin = 1
+        scan_pos = semcomedi.Scanner._generate_scan_array(shape, limits, margin)
+
+        # should have 2 values for each pixel
+        self.assertEqual(scan_pos.shape, (shape[0], shape[1] + margin, 2))
+        # should be monotone in both dimensions
+        vecx = (scan_pos[0, :, 1]).astype("float64") # use float to allow negative values
+        diffx = vecx[0:-2] - vecx[1:-1]
+        if limits[1, 0] <= limits[1, 1]:
+            comp = diffx <= 0 # must be increasing
+        else:
+            comp = diffx >= 0 # must be decreasing
+        self.assertTrue(comp.all())
     
 #@unittest.skip("simple")
 class TestSEM(unittest.TestCase):

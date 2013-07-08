@@ -191,8 +191,11 @@ make
 sudo cp rspiusb.ko /lib/modules/$(uname -r)/updates/
 sudo depmod
 
-Note that the driver seems to not work with USB3 ("SS"), so make sure the camera
-is connected to a USB2 slot.
+Note that the driver seems to not always work with USB3 ("SS"), so make sure
+the camera is connected to a USB2 slot. Also, it doesn't always work when
+plugged via a hub. So ensure that it is connected on USB plug directly linked
+to the motherboard. Use "lsusb -t" to check, and avoid the front panel USB
+plugs in general.
 
 Then install the libpvcam library from PI, as can be found on their site:
 wget ftp://ftp.piacton.com/Public/Software/Official/Linux/libpvcam.so.2.7.4.2
