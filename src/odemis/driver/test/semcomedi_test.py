@@ -159,6 +159,7 @@ class TestSEM(unittest.TestCase):
     @classmethod
     def tearUpClass(cls):
         cls.sem.terminate()
+        time.sleep(3)
 
     def setUp(self):
         # reset resolution and dwellTime
