@@ -2046,7 +2046,6 @@ class Writer(Accesser):
             # Wait until the buffer is fully emptied to state the output is over
             while (comedi.get_subdevice_flags(self._device, self._subdevice)
                    & comedi.SDF_RUNNING):
-                logging.debug("Device still running")
                 # sleep longer if the end is far away
                 left = min(self._expected_end - time.time(), 0.1)
                 if left > 0.01:
@@ -2068,23 +2067,20 @@ class Writer(Accesser):
         if timeout is None:
             timeout = max(time.time() - self._expected_end + 1, 0.1)
 
-        try:
-            self.thread.join(timeout)
-            logging.debug("Write finished after %g s, while expected  %g s",
-                          time.time() - self._begin, self.duration)
+        self.thread.join(timeout)
+        logging.debug("Write finished after %g s, while expected  %g s",
+                      time.time() - self._begin, self.duration)
 
-            if self.thread.isAlive():
-                # try to see why
-                flags = comedi.get_subdevice_flags(self._device, self._subdevice)
-                if flags & comedi.SDF_RUNNING:
-                    comedi.cancel(self._device, self._subdevice)
-                    raise IOError("Write timeout while device is still generating data")
-                else:
-                    raise IOError("Write timeout while device is idle")
-            elif self.cancelled:
-                raise CancelledError("Writer thread was cancelled")
-        finally:
-            comedi.cancel(self._device, self._subdevice)
+        if self.thread.isAlive():
+            # try to see why
+            flags = comedi.get_subdevice_flags(self._device, self._subdevice)
+            if flags & comedi.SDF_RUNNING:
+                comedi.cancel(self._device, self._subdevice)
+                raise IOError("Write timeout while device is still generating data")
+            else:
+                raise IOError("Write timeout while device is idle")
+        elif self.cancelled:
+            raise CancelledError("Writer thread was cancelled")
 
     def cancel(self):
         """
