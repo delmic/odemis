@@ -45,6 +45,9 @@ class Overlay(object):
         self.base = base
         self.label = label
 
+    def set_label(self, label):
+        self.label = unicode(label)
+
     @staticmethod
     def write_label(ctx, vpos, label):
         font = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT)
@@ -90,9 +93,6 @@ class TextViewOverlay(ViewOverlay):
         super(TextViewOverlay, self).__init__(base)
         self.label = ""
         self.vpos = vpos
-
-    def set_label(self, label):
-        self.label = label
 
     def Draw(self, dc, shift=(0, 0), scale=1.0):
         if self.label:
@@ -563,7 +563,7 @@ class FocusLineOverlay(ViewOverlay):
         super(FocusLineOverlay, self).__init__(base, label)
         self.color = hex_to_rgba(color)
         self.vposx = 0
-        self.vposy = None
+        self.vposy = 0
 
     def set_position(self, pos):
         self.vposx = max(1, min(pos[0], self.base.ClientSize.x - 1))
@@ -585,3 +585,15 @@ class FocusLineOverlay(ViewOverlay):
         ctx.move_to(self.vposx, 0)
         ctx.line_to(self.vposx, self.base.ClientSize[1])
         ctx.stroke()
+
+        if self.label:
+
+            if self.vposy <= 4:
+                y_mod = 10
+            elif self.vposy >= self.base.ClientSize.y - 4:
+                y_mod = -10
+            else:
+                y_mod = 0
+
+            vpos = (self.vposx + 5, self.vposy + y_mod)
+            self.write_label(ctx, vpos, self.label)

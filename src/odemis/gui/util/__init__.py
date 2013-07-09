@@ -79,6 +79,31 @@ def limit_invocation(delay_s):
     return decorator(limit)
 
 
+@decorator
+def memoize(f, self, *args, **kwargs):
+    if not hasattr(f, 'cache'):
+        f.cache = {}
+
+    cache = f.cache
+
+    if len(cache) > 1000:
+        logging.debug("Memoize cache reset")
+        cache = f.cache = {}
+
+    if kwargs: # frozenset is used to ensure hashability
+        key = args, frozenset(kwargs.iteritems())
+    else:
+        key = args
+
+    if key not in cache:
+        # print "cache save"
+        cache[key] = f(self, *args)
+        return cache[key]
+    # else:
+    #     print "cache hit"
+    return cache[key]
+
+
 #### Wrappers ########
 
 def call_after_wrapper(f, *args, **kwargs):
@@ -155,8 +180,8 @@ def formats_to_wildcards(formats2ext, include_all=False, include_any=False):
 
     formats2ext (dict (string -> list of strings)): format names and lists of
         their possible extensions.
-    include_all (boolean): If True, also include as first wildcards for all the formats 
-    include_any (boolean): If True, also include as last the *.* wildcards 
+    include_all (boolean): If True, also include as first wildcards for all the formats
+    include_any (boolean): If True, also include as last the *.* wildcards
 
     returns (tuple (string, list of strings)): wildcards, name of the format
         in the same order as in the wildcards (or None if all/any format)
@@ -184,7 +209,6 @@ def formats_to_wildcards(formats2ext, include_all=False, include_any=False):
 
     # the whole importance is that they are in the same order
     return "|".join(wildcards), formats
-
 
 # Data container
 

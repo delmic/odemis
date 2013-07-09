@@ -168,7 +168,8 @@ class CanvasTestCase(unittest.TestCase):
 
             event.Skip()
 
-        cnvs.Bind(wx.EVT_LEFT_UP, toggle)
+        # Enable this bind to enable render toggling by clicking
+        #cnvs.Bind(wx.EVT_LEFT_UP, toggle)
 
         gui_loop()
         wx.MilliSleep(SLEEP_TIME)
