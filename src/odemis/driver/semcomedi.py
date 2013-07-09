@@ -44,7 +44,7 @@ import weakref
 # detector. The DAQ card is handled via the (Linux) Comedi interface.
 #
 # Although it should in theory be quite generic, this driver is only tested on
-# Linux with Comedilib 0.8.1, with a NI PCI 6251 DAQ card, and a FEI Quanta SEM.
+# Linux with Comedilib 0.10.1, with a NI PCI 6251 DAQ card, and a FEI Quanta SEM.
 #
 # From the point of view of Odemis, this driver provides several HwComponents.
 # The e-beam position control is represented by an Scanner (Emitter) component,
@@ -82,9 +82,11 @@ import weakref
 # pycomedi is object-oriented. It tries to be less verbose but fails a bit
 # because each object is in a separate module. At least it handles call errors
 # as exceptions. It also has some non implemented parts, for example to_phys,
-# from_phys are not available and to_physical, from_physical only work if the
-# device is hardware calibrated, it's not (yet?) implemented for software
-# calibrated devices. For now there is no documentation but some examples.
+# from_phys are not available. For now there is no documentation but some
+# examples.
+# We ended up with using our own wrapper "comedi_simple". It's actually just a
+# wrapper of python-comedilib to remove the "comedi_" part of each function, and
+# generate the right exception in case of errors.
 
 NI_TRIG_AI_START1 = 18 # Trigger number for AI Start1 (= beginning of a command)
 
