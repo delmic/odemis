@@ -68,7 +68,7 @@ sudo python setup.py install
 Used to access the DAQ board to connect to the SEM. The version of comedi
 provided in Ubuntu 12.04 is version 0.8. It should work, but if not you can also
 try to upgrade to 0.10. See below for the instructions. The driver is only
-tested on the NI PCI 6251, and will only work on a NI board or the simulator
+tested on the NI PCI 6251, and will only work on a NI board or the comedi_test simulator
 (adaptation for other boards should be light, as long as Comedi support
 synchronous input/output).
 
@@ -79,6 +79,11 @@ sudo comedi_soft_calibrate -f /dev/comedi0
 
 For some other boards, which are calibrated in hardware, you need to do:
 sudo comedi_calibrate -f /dev/comedi0
+
+Warning: you probably want to ensure your kernel is >= 3.11 or has the following two
+patches, otherwise it might crash:
+http://article.gmane.org/gmane.linux.kernel.stable/57779/raw
+http://article.gmane.org/gmane.linux.kernel.stable/57796/raw
 
 == Installing comedilib 0.10.1 ==
 Ubuntu 12.04 has a too old version of comedi (v 0.8). Version 0.10 or higher is required.

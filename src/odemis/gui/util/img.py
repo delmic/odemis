@@ -29,10 +29,9 @@ import wx
 # various functions to convert and modify images (DataArray and wxImage)
 
 # TODO: compute histogram. There are 3 ways in numpy:
-# * x=numpy.bincount(a, minlength=depth);x.min();x.max() => fast (~0.03s for
-#   a 2048x2048 array) but only works only on flat array
-#   with uint8 and uint16 and creates 2**16 bins if uint16 (so need to do a
-#   bytescale + a second bincount)
+# * x=numpy.bincount(a.flat, minlength=depth);x.min();x.max() => fast (~0.03s for
+#   a 2048x2048 array) but only works on flat array with uint8 and uint16 and
+#   creates 2**16 bins if uint16 (so need to do a reshape and sum on top of it)
 # * numpy.histogram(a, bins=256, range=(0,depth)) => slow (~0.09s for a
 #   2048x2048 array) but works exactly as needed directly in every case.
 # * see weave? (~ 0.01s for 2048x2048 array) eg:
