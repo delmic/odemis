@@ -118,8 +118,8 @@ class xrcslider_frame(wx.Frame):
 
 
 
-class xrcplot_frame(wx.Frame):
-#!XRCED:begin-block:xrcplot_frame.PreCreate
+class xrccanvas_frame(wx.Frame):
+#!XRCED:begin-block:xrccanvas_frame.PreCreate
     def PreCreate(self, pre):
         """ This function is called during the class's initialization.
         
@@ -128,16 +128,17 @@ class xrcplot_frame(wx.Frame):
         """
         pass
         
-#!XRCED:end-block:xrcplot_frame.PreCreate
+#!XRCED:end-block:xrccanvas_frame.PreCreate
 
     def __init__(self, parent):
         # Two stage creation (see http://wiki.wxpython.org/index.cgi/TwoStageCreation)
         pre = wx.PreFrame()
         self.PreCreate(pre)
-        get_resources().LoadOnFrame(pre, parent, "plot_frame")
+        get_resources().LoadOnFrame(pre, parent, "canvas_frame")
         self.PostCreate(pre)
 
         # Define variables for the controls, bind event handlers
+        self.canvas_panel = xrc.XRCCTRL(self, "canvas_panel")
 
 
 
@@ -180,7 +181,7 @@ def __init_resources():
     wx.FileSystem.AddHandler(wx.MemoryFSHandler())
 
     test_gui_xrc = '''\
-<?xml version="1.0" ?><resource class="test_cairo.CairoPanel(wxPanel)" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
+<?xml version="1.0" ?><resource class="wxFrame" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
   <object class="wxFrame" name="stream_frame">
     <object class="wxBoxSizer">
       <orient>wxVERTICAL</orient>
@@ -400,12 +401,19 @@ def __init_resources():
     </object>
     <size>400,400</size>
   </object>
-  <object class="wxFrame" name="plot_frame">
+  <object class="wxFrame" name="canvas_frame">
+    <object class="wxPanel" name="canvas_panel">
+      <object class="wxBoxSizer">
+        <orient>wxVERTICAL</orient>
+      </object>
+      <bg>#4D4D4D</bg>
+      <XRCED>
+        <assign_var>1</assign_var>
+      </XRCED>
+    </object>
     <size>400,400</size>
     <title>Cairo Test</title>
-    <object class="wxBoxSizer">
-      <orient>wxVERTICAL</orient>
-    </object>
+    <bg>#4D4D4D</bg>
   </object>
   <object class="wxFrame" name="fpb_frame">
     <object class="wxBoxSizer">

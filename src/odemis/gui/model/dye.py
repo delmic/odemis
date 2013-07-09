@@ -8,15 +8,15 @@ Copyright © 2013 Rinze de Laat, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms 
-of the GNU General Public License version 2 as published by the Free Software 
+Odemis is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
 Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR 
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
 PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with 
+You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 
 
@@ -99,7 +99,10 @@ def LoadDyeDatabase():
         # append the name of the solvent in parenthesis.
         for n in names:
             if n in DyeDatabase:
-                logging.debug("Dye database already had an entry for dye %s", n)
+                # Disabled logging statement because it was firing too many
+                # messages that weren't interesting
+                #logging.debug("Dye database already had an entry for dye %s", n)
+                pass
             DyeDatabase[n] = (xwl, ewl)
 
     # TODO: also de-duplicate names in a case insensitive way
