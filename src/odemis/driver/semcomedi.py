@@ -2026,9 +2026,9 @@ class Writer(Accesser):
         """
         Ends once the output is fully over 
         """
+        if self.cancelled:
+            return
         try:
-            if self.cancelled:
-                return
             self.buf[self._preload_size:].tofile(self.file)
             if self.cancelled:
                 return
@@ -2043,46 +2043,50 @@ class Writer(Accesser):
                 left = self._expected_end - time.time()
                 if left > 0:
                     time.sleep(left)
+                comedi.cancel(self._device, self._subdevice)
                 return
-
-            # Wait until the buffer is fully emptied to state the output is over
-            while (comedi.get_subdevice_flags(self._device, self._subdevice)
-                   & comedi.SDF_RUNNING):
-                # sleep longer if the end is far away
-                left = min(self._expected_end - time.time(), 0.1)
-                if left > 0.01:
-                    time.sleep(left / 2)
-                else:
-                    time.sleep(0) # just yield
         except (IOError, comedi.ComediError):
             # might be due to a cancel
             logging.debug("Write ended before the end")
         except:
             logging.exception("Unhandled error in writing thread")
-        finally:
-            # According to https://groups.google.com/forum/?fromgroups=#!topic/comedi_list/yr2U179x8VI
-            # To finish a write fully, we need to do a cancel().
-            # Wait until SDF_RUNNING is gone, then cancel() to reset SDF_BUSY
-            comedi.cancel(self._device, self._subdevice)
 
     def wait(self, timeout=None):
+        now = time.time()
         if timeout is None:
-            timeout = max(time.time() - self._expected_end + 1, 0.1)
+            timeout = max(now - self._expected_end + 1, 0.1)
+        max_time = now + timeout
 
         self.thread.join(timeout)
-        logging.debug("Write finished after %g s, while expected  %g s",
-                      time.time() - self._begin, self.duration)
 
-        if self.thread.isAlive():
-            # try to see why
-            flags = comedi.get_subdevice_flags(self._device, self._subdevice)
-            if flags & comedi.SDF_RUNNING:
+        # Wait until the buffer is fully emptied to state the output is over
+        while (comedi.get_subdevice_flags(self._device, self._subdevice)
+               & comedi.SDF_RUNNING):
+            # sleep longer if the end is far away
+            left = min(self._expected_end - time.time(), 0.1)
+            if left > 0.01:
+                time.sleep(left / 2)
+            else:
+                time.sleep(0) # just yield
+
+            if time.time() > max_time:
                 comedi.cancel(self._device, self._subdevice)
                 raise IOError("Write timeout while device is still generating data")
-            else:
-                raise IOError("Write timeout while device is idle")
-        elif self.cancelled:
+
+        if self.thread.isAlive():
+            comedi.cancel(self._device, self._subdevice)
+            raise IOError("Write timeout while device is idle")
+
+        if self.cancelled:
             raise CancelledError("Writer thread was cancelled")
+
+        # According to https://groups.google.com/forum/?fromgroups=#!topic/comedi_list/yr2U179x8VI
+        # To finish a write fully, we need to do a cancel().
+        # Wait until SDF_RUNNING is gone, then cancel() to reset SDF_BUSY
+        comedi.cancel(self._device, self._subdevice)
+
+        logging.debug("Write finished after %g s, while expected  %g s",
+                      time.time() - self._begin, self.duration)
 
     def cancel(self):
         """
