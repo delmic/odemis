@@ -70,8 +70,9 @@ def start_spot(escan, edet, x, y):
     edet (model.Detector): any detector of the SEM
     x, y (floats): X, Y position
     """
-    # put a not too long, not too short dwell time
-    escan.dwellTime.value = 0.1 # s
+    # put a not too short dwell time to avoid acquisition to keep repeating,
+    # and not too long to avoid using too much memory for acquiring one point.
+    escan.dwellTime.value = 1 # s
 
     # only one point
     escan.scale.value = (1, 1) # just to be sure

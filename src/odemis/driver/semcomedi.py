@@ -27,6 +27,7 @@ import gc
 import glob
 import logging
 import math
+import mmap
 import numpy
 import odemis
 import odemis.driver.comedi_simple as comedi
@@ -637,6 +638,7 @@ class SEMComedi(model.HwComponent):
         # need lock to avoid setting up the command at the same time as the
         # (next) acquisition is starting.
         with self._acquisition_init_lock:
+            logging.debug("Setting rest position")
             # There was a bug in the NI driver, it's fixed in the latest kernels.
             # Set min_period to "500" to work around it.
             min_period = int(self._min_ao_periods[2] * 1e9)
@@ -651,6 +653,7 @@ class SEMComedi(model.HwComponent):
             # we use a timer because of the problem with the NI driver with 1 scan only
             # (although it seems to work when period is min_period)
             time.sleep(0.001) # that should be more than enough
+            logging.debug("Canceling resting command")
             comedi.cancel(self._device, self._ao_subdevice)
 
     def _get_data(self, channels, period, size):
@@ -1328,7 +1331,7 @@ class SEMComedi(model.HwComponent):
         timeout = expected_time * 1.10 + 0.1 # s   == expected time + 10% + 0.1s
         logging.debug("Waiting %g s for the acquisition to finish", timeout)
         rbuf = self._reader.wait(timeout)
-        self._writer.wait(0.1) # writer is faster, so there should be no wait
+        self._writer.wait() # writer is faster, so there should be no wait
         # reshape to 2D
         rbuf.shape = (nrscans, nrchans)
         return rbuf
@@ -1722,6 +1725,13 @@ class Accesser(object):
         pass
 
 class Reader(Accesser):
+    """
+    Classical version of the reader, using a... read() (aka fromfile()). It's
+    supposed to avoid latency as the read will return as soon as all the data 
+    is received. But in the current behaviour of comedi, the cancel() is really
+    complicated and unstable, as a new empty command must be sent (reported 
+    upstream and a fix was published on 2013-07-08).
+    """
     def __init__(self, parent):
         Accesser.__init__(self, parent)
         self._subdevice = parent._ai_subdevice
@@ -1729,32 +1739,34 @@ class Reader(Accesser):
         self.dtype = parent._get_dtype(self._subdevice)
         self.buf = None
         self.count = None
+        self._lock = threading.Lock()
 
     def prepare(self, count, duration):
         """
         count: number of values to read
         duration: expected total duration it will take (in s)
         """
-        self.count = count
-        self.duration = duration
-        self.cancelled = False
-        if self.thread and self.thread.isAlive():
-            logging.warning("Preparing a new acquisition while previous one is not over")
-        self.thread = threading.Thread(name="SEMComedi reader", target=self._thread)
-        self.file.seek(0)
+        with self._lock:
+            self.count = count
+            self.duration = duration
+            self.cancelled = False
+            if self.thread and self.thread.isAlive():
+                logging.warning("Preparing a new acquisition while previous one is not over")
+            self.thread = threading.Thread(name="SEMComedi reader", target=self._thread)
+            self.file.seek(0)
 
     def run(self):
         if self.cancelled:
-            raise CancelledError("Writting thread was cancelled")
+            raise CancelledError("Reader thread was cancelled")
         # start reader thread
-        self.begin = time.time()
+        self._begin = time.time()
         self.thread.start()
 
     def _thread(self):
         """To be called in a separate thread"""
         try:
             self.buf = numpy.fromfile(self.file, dtype=self.dtype, count=self.count)
-            logging.debug("read took %g s", time.time() - self.begin)
+            logging.debug("read took %g s", time.time() - self._begin)
         except IOError:
             # might be due to a cancel
             logging.debug("Read ended before the end")
@@ -1765,18 +1777,19 @@ class Reader(Accesser):
         """
         timeout (float): maximum number of seconds to wait for the read to finish
         """
-        timeout = timeout or self.period
+        timeout = timeout or self.duration
 
-        begin = time.time()
         # Note: join is pretty costly when timeout is not None, because it'll
         # do long sleeps between each checks.
         self.thread.join(timeout)
-        logging.debug("waiting for the read thread for %g s", time.time() - begin)
-        if self.thread.isAlive():
+        logging.debug("Waited for the read thread for actually %g s", time.time() - self._begin)
+        if self.cancelled:
+            if self.thread.isAlive():
+                self.thread.join(1) # waiting for the cancel to finish
+            raise CancelledError("Reading thread was cancelled")
+        elif self.thread.isAlive():
             logging.warning("Reading thread is still running after %g s", timeout)
             self.cancel()
-        elif self.cancelled:
-            raise CancelledError("Reading thread was cancelled")
 
         # the result should be in self.buf
         if self.buf is None:
@@ -1787,45 +1800,198 @@ class Reader(Accesser):
         return self.buf
 
     def cancel(self):
+        with self._lock:
+            logging.debug("Cancelling read")
+            if not self.thread or self.cancelled:
+                return
+
+            try:
+                comedi.cancel(self._device, self._subdevice)
+                self.cancelled = True
+            except comedi.ComediError:
+                logging.debug("Failed to cancel read")
+
+            # if the thread is stopped/not started, it's all fine
+            if not self.thread.isAlive():
+                return
+            self.thread.join(0.5) # wait maximum 0.5 s
+            if not self.thread.isAlive():
+                return
+
+            # Currently, after cancelling a comedi command, the read doesn't
+            # unblock. A trick to manage to stop a current read, is to give a
+            # new command of few reads (e.g., 1 read), on any channel
+            logging.debug("Seems the read didn't end, will force it")
+            try:
+                cmd = comedi.cmd_struct()
+                comedi.get_cmd_generic_timed(self._device, self._subdevice, cmd, 1, 0)
+                clist = comedi.chanlist(1)
+                clist[0] = comedi.cr_pack(0, 0, comedi.AREF_GROUND)
+                cmd.chanlist = clist
+                cmd.stop_src = comedi.TRIG_COUNT
+                cmd.stop_arg = 1
+                comedi.command(self._device, cmd)
+            except comedi.ComediError:
+                logging.error("Failed to give read command of 1 element")
+
+            self.thread.join(0.5) # wait maximum 0.5 s
+            try:
+                comedi.cancel(self._device, self._subdevice)
+            except comedi.ComediError:
+                logging.debug("Failed to cancel read")
+
+            if self.thread.isAlive():
+                logging.warning("failed to cancel fully the reading thread")
+
+class MMapReader(Reader):
+    """
+    MMap based reader. It might introduce a very little bit of latency to detect
+    the end of a complete acquisition read, but has the advantage of being much
+    simpler to cancel. However, there seems to be a bug with detecting the end
+    of a read, and it tends to read too much data.
+    """
+    def __init__(self, parent):
+        Reader.__init__(self, parent)
+        self.mmap_size = comedi.get_buffer_size(self._device, self._subdevice)
+        self.mmap = mmap.mmap(self.parent._fileno, self.mmap_size, access=mmap.ACCESS_READ)
+
+    def close(self):
+        Reader.close(self)
+
+    def prepare(self, count, duration):
+        with self._lock:
+            self.count = count
+            self.duration = duration
+            self.buf = numpy.empty(count, dtype=self.dtype)
+            self.remaining = self.buf.nbytes
+            self.buf_offset = 0
+            self.mmap.seek(0)
+            self.cancelled = False
+            if self.thread and self.thread.isAlive():
+                logging.warning("Preparing a new acquisition while previous one is not over")
+            self.thread = threading.Thread(name="SEMComedi reader", target=self._thread)
+
+    # run() is identical
+
+    # Code inspired by pycomedi
+    def _thread(self):
+        # time it takes to read 10% of the buffer at maximum speed
+        sleep_time = ((self.mmap_size / 10) / self.buf.itemsize) * self.parent._min_ai_periods[1]
+        # at least 1 ms, for scheduler, and 100 ms for cancel latency
+        sleep_time = min(0.1, max(sleep_time, 0.001))
         try:
-            comedi.cancel(self._device, self._subdevice)
-            self.cancelled = True
-        except comedi.ComediError:
-            logging.debug("Failed to cancel read")
+            while self.remaining > 0 and not self.cancelled:
+                avail_bytes = comedi.get_buffer_contents(self._device, self._subdevice)
+                if avail_bytes > 0:
+#                    logging.debug("Need to read %d bytes from mmap", avail_bytes)
+                    read_bytes = self._act(avail_bytes)
+                    self.buf_offset += read_bytes
+                    self.remaining -= read_bytes
+                else:
+                    # a bit of time to fill the buffer
+                    if self.remaining < (self.mmap_size / 10):
+                        # almost the end, finish quickly
+                        sleep_time = self.remaining / self.buf.itemsize * self.parent._min_ai_periods[1]
+                    time.sleep(sleep_time)
+
+            # TODO: it seems that cancel prevent from reading the buffer, but
+            # next command everything left will still be there. So we end up
+            # with more to read on the next read.
+            offset = comedi.get_buffer_offset(self._device, self._subdevice)
+            logging.debug("Offset after reading = %d", offset)
+            time.sleep(0.01)
+            avail_bytes = comedi.get_buffer_contents(self._device, self._subdevice)
+            total = self.buf.nbytes
+            while avail_bytes > 0:
+                if self.cancelled:
+                    logging.debug("Flushing %d bytes", avail_bytes)
+                else:
+                    logging.warning("Still able to read %d bytes", avail_bytes)
+                comedi.mark_buffer_read(self._device, self._subdevice, avail_bytes)
+                total += avail_bytes
+                comedi.poll(self._device, self._subdevice)
+                time.sleep(0.01)
+                avail_bytes = comedi.get_buffer_contents(self._device, self._subdevice)
+            logging.debug("Got %d bytes, while expected %d", total, self.buf.nbytes)
+            offset = comedi.get_buffer_offset(self._device, self._subdevice)
+            logging.debug("Offset at end = %d", offset)
+
+
+            logging.debug("read took %g s", time.time() - self._begin)
+        except:
+            logging.exception("Unhandled error in reading thread")
+        finally:
+            if not self.cancelled:
+                #comedi.cancel(self._device, self._subdevice)
+                pass
+
+    def _act(self, avail_bytes):
+        read_size = min(avail_bytes, self.remaining)
+        if self.mmap.tell() + read_size >= self.mmap_size - 1:
+            read_size = self.mmap_size - self.mmap.tell()
+            wrap = True
+        else:
+            wrap = False
+
+        # mmap_action = copy to numpy array
+        offset = self.buf_offset / self.buf.itemsize
+        s = read_size / self.buf.itemsize
+        self.buf[offset:offset + s] = numpy.fromstring(self.mmap.read(read_size),
+                                                       dtype=self.dtype)
+        comedi.mark_buffer_read(self._device, self._subdevice, read_size)
+        if wrap:
+            self.mmap.seek(0)
+
+        return read_size
+
+    def wait(self, timeout=None):
+        timeout = timeout or (self.duration + 1)
+
+        # Note: join is pretty costly when timeout is not None, because it'll
+        # do long sleeps between each checks.
+        self.thread.join(timeout)
+        logging.debug("Waited for the read thread for actually %g s", time.time() - self._begin)
+        if self.cancelled:
+            if self.thread.isAlive():
+                self.thread.join(1) # waiting for the cancel to finish
+            raise CancelledError("Reading thread was cancelled")
+        elif self.thread.isAlive():
+            logging.warning("Reading thread is still running after %g s", timeout)
+            self.cancel()
+
+        # the result should be in self.buf
+        if self.buf is None:
+            raise IOError("Failed to read all the %d expected values" % self.count)
+        elif self.remaining != 0:
+            raise IOError("Read only %d values from the %d expected" %
+                          (self.count - self.remaining / self.buf.itemsize), self.count)
+
+        return self.buf
+
+    def cancel(self):
+        with self._lock:
+            if not self.thread or self.cancelled or not self.thread.isAlive():
+                return
+
+            logging.debug("Cancelling read")
+            try:
+                comedi.cancel(self._device, self._subdevice)
+                self.cancelled = True
+            except comedi.ComediError:
+                logging.warning("Failed to cancel read")
+
+            self.thread.join(0.5)
 
         # if the thread is stopped, it's all fine
-        if not self.thread or not self.thread.isAlive():
-            return
-
-        # apparently, to manage to stop a current read, you need to give a new
-        # command of few reads (e.g., 1 read), on any channel
-        try:
-            cmd = comedi.cmd_struct()
-            comedi.get_cmd_generic_timed(self._device, self._subdevice, cmd, 1, 0)
-            clist = comedi.chanlist(1)
-            clist[0] = comedi.cr_pack(0, 0, comedi.AREF_GROUND)
-            cmd.chanlist = clist
-            cmd.stop_src = comedi.TRIG_COUNT
-            cmd.stop_arg = 1
-            comedi.command(self._device, cmd)
-        except comedi.ComediError:
-            logging.debug("Failed to give read command of 1 element")
-
-        self.thread.join(1) # wait maximum 1 s
-        try:
-            comedi.cancel(self._device, self._subdevice)
-        except comedi.ComediError:
-            logging.debug("Failed to cancel read")
-
         if self.thread.isAlive():
-            logging.warning("failed to cancel fully the reading thread")
+            logging.warning("Failed to stop the reading thread")
 
 class Writer(Accesser):
     def __init__(self, parent):
         Accesser.__init__(self, parent)
         self._subdevice = parent._ao_subdevice
 
-        self._expected_end = None
+        self._expected_end = 0
         self._preload_size = None
         self._lock = threading.Lock()
 
@@ -1850,6 +2016,7 @@ class Writer(Accesser):
             self.thread = threading.Thread(name="SEMComedi writer", target=self._thread)
 
     def run(self):
+        self._begin = time.time()
         self._expected_end = time.time() + self.duration
         self.thread.start()
 
@@ -1858,55 +2025,62 @@ class Writer(Accesser):
         Ends once the output is fully over 
         """
         try:
+            if self.cancelled:
+                return
             self.buf[self._preload_size:].tofile(self.file)
+            if self.cancelled:
+                return
             self.file.flush()
-        except IOError:
+
+            # TODO: investigate further this issue and report upstream.
+            # Need a C sample code (also seems to work ok if period is min_period)
+            # There seems to be is a bug in the NI comedi driver that cause writes
+            # of only one scan to never finish. So we force the stop by cancelling
+            # after enough time.
+            if self.buf.size <= 2:
+                left = self._expected_end - time.time()
+                if left > 0:
+                    time.sleep(left)
+                return
+
+            # Wait until the buffer is fully emptied to state the output is over
+            while (comedi.get_subdevice_flags(self._device, self._subdevice)
+                   & comedi.SDF_RUNNING):
+                # sleep longer if the end is far away
+                left = min(self._expected_end - time.time(), 0.1)
+                if left > 0.01:
+                    time.sleep(left / 2)
+                else:
+                    time.sleep(0) # just yield
+        except (IOError, comedi.ComediError):
             # might be due to a cancel
             logging.debug("Write ended before the end")
         except:
-            logging.exception("Unhandled error in reading thread")
-
-        # TODO: investigate further this issue and report upstream.
-        # Need a C sample code (also seems to work ok if period is min_period)
-        # There seems to be is a bug in the NI comedi driver that cause writes
-        # of only one scan to never finish. So we force the stop by cancelling
-        # after enough time.
-        if self.buf.size <= 2:
-            left = self._expected_end - time.time()
-            if left > 0:
-                time.sleep(left)
-            comedi.cancel(self._device, self._subdevice)
-            return
-
-        # Wait until the buffer is fully emptied to state the output is over
-        while (comedi.get_subdevice_flags(self._device, self._subdevice)
-               & comedi.SDF_RUNNING):
-            # sleep longer if the end is far away
-            left = self._expected_end - time.time()
-            if left > 0.01:
-                time.sleep(left / 2)
-            else:
-                time.sleep(0) # just yield
-
-    def wait(self, timeout=None):
-        timeout = timeout or self.duration
-        try:
-            self.thread.join(timeout)
-            if self.thread.isAlive():
-                # try to see why
-                flags = comedi.get_subdevice_flags(self._device, self._subdevice)
-                if flags & comedi.SDF_RUNNING:
-                    raise IOError("Write timeout while device is still generating data")
-                else:
-                    raise IOError("Write timeout while device is idle")
-            elif self.cancelled:
-                raise CancelledError("Writer thread was cancelled")
-
+            logging.exception("Unhandled error in writing thread")
         finally:
             # According to https://groups.google.com/forum/?fromgroups=#!topic/comedi_list/yr2U179x8VI
             # To finish a write fully, we need to do a cancel().
             # Wait until SDF_RUNNING is gone, then cancel() to reset SDF_BUSY
             comedi.cancel(self._device, self._subdevice)
+
+    def wait(self, timeout=None):
+        if timeout is None:
+            timeout = max(time.time() - self._expected_end + 1, 0.1)
+
+        self.thread.join(timeout)
+        logging.debug("Write finished after %g s, while expected  %g s",
+                      time.time() - self._begin, self.duration)
+
+        if self.thread.isAlive():
+            # try to see why
+            flags = comedi.get_subdevice_flags(self._device, self._subdevice)
+            if flags & comedi.SDF_RUNNING:
+                comedi.cancel(self._device, self._subdevice)
+                raise IOError("Write timeout while device is still generating data")
+            else:
+                raise IOError("Write timeout while device is idle")
+        elif self.cancelled:
+            raise CancelledError("Writer thread was cancelled")
 
     def cancel(self):
         """
@@ -1914,9 +2088,19 @@ class Writer(Accesser):
          prepared.
         """
         try:
+            if not self.thread or self.cancelled:
+                return
+
+            logging.debug("Cancelling write")
             with self._lock:
                 comedi.cancel(self._device, self._subdevice)
                 self.cancelled = True
+                logging.debug("Write cmd cancel sent")
+
+            if not self.thread.isAlive():
+                return
+
+            self.thread.join(0.5)
         except comedi.ComediError:
             logging.debug("Failed to cancel write")
 
