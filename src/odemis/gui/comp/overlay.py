@@ -48,8 +48,7 @@ class Overlay(object):
     def set_label(self, label):
         self.label = unicode(label)
 
-    @staticmethod
-    def write_label(ctx, vpos, label):
+    def write_label(self, ctx, vpos, label, flip=True):
         font = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT)
         ctx.select_font_face(
                 font.GetFaceName(),
@@ -58,13 +57,27 @@ class Overlay(object):
         )
         ctx.set_font_size(font.GetPointSize())
 
+        margin = 5
+
+        _, _, width, height, _, _ = ctx.text_extents(label)
+        x, y = vpos
+
+        if flip:
+            if x + width > self.base.ClientSize[0]:
+                x = self.base.ClientSize[0] - width - margin
+
+            if y + height > self.base.ClientSize[1]:
+                y = self.base.ClientSize[1] - height - margin
+            elif y - height < 0:
+                y = height + margin
+
         #t = font.GetPixelSize()
         ctx.set_source_rgb(0.0, 0.0, 0.0)
-        ctx.move_to(vpos[0], vpos[1])
+        ctx.move_to(x, y)
         ctx.show_text(label)
 
         ctx.set_source_rgb(1.0, 1.0, 1.0)
-        ctx.move_to(vpos[0] + 1, vpos[1] + 1)
+        ctx.move_to(x + 1, y + 1)
         ctx.show_text(label)
 
     def _clip_viewport_pos(self, pos):
@@ -555,7 +568,8 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
 
 class FocusLineOverlay(ViewOverlay):
 
-    def __init__(self, base, label,
+    def __init__(self, base,
+                 label="",
                  sel_cur=None,
                  color=gui.SELECTION_COLOR,
                  center=(0, 0)):

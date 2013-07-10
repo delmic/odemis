@@ -1,5 +1,6 @@
 #-*- coding: utf-8 -*-
 
+import functools
 import logging
 import time
 import inspect
@@ -79,29 +80,42 @@ def limit_invocation(delay_s):
     return decorator(limit)
 
 
-@decorator
-def memoize(f, self, *args, **kwargs):
-    if not hasattr(f, 'cache'):
-        f.cache = {}
+class memoize(object):
+    """Decorator that caches a function's return value each time it is called.
+    If called later with the same arguments, the cached value is returned, and
+    not re-evaluated.
+    """
 
-    cache = f.cache
+    def __init__(self, func):
+        self.func = func
+        self.cache = {}
 
-    if len(cache) > 1000:
-        logging.debug("Memoize cache reset")
-        cache = f.cache = {}
+    def __call__(self, *args):
+        try:
+            if len(self.cache) > 1000:
+                self._reset()
+            return self.cache[args]
+        except KeyError:
+            value = self.func(*args)
+            self.cache[args] = value
+            return value
+        except TypeError:
+            # uncachable -- for instance, passing a list as an argument.
+            # Better to not cache than to blow up entirely.
+            return self.func(*args)
 
-    if kwargs: # frozenset is used to ensure hashability
-        key = args, frozenset(kwargs.iteritems())
-    else:
-        key = args
+    def __repr__(self):
+        """Return the function's docstring."""
+        return self.func.__doc__
 
-    if key not in cache:
-        # print "cache save"
-        cache[key] = f(self, *args)
-        return cache[key]
-    # else:
-    #     print "cache hit"
-    return cache[key]
+    def __get__(self, obj, objtype):
+        """Support instance methods."""
+        fn = functools.partial(self.__call__, obj)
+        fn.reset = self._reset
+        return fn
+
+    def _reset(self):
+        self.cache = {}
 
 
 #### Wrappers ########

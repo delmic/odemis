@@ -88,6 +88,7 @@ DrawTimer is set by ShouldUpdateDrawing
 
 """
 import ctypes
+import inspect
 import logging
 import math
 import os
@@ -1159,24 +1160,33 @@ class PlotCanvas(wx.Panel):
         logging.debug("Drag started at %s", self.drag_init_pos)
 
         if not self.HasCapture():
+            self._position_focus_line(event)
             self.CaptureMouse()
 
         self.SetFocus()
+        event.Skip()
+
 
     def OnLeftUp(self, event):
         self.dragging = False
         self.SetCursor(wx.STANDARD_CURSOR)
         if self.HasCapture():
             self.ReleaseMouse()
+        event.Skip()
 
     def OnMouseMotion(self, event):
         if self.dragging and self.focusline_overlay:
-            x, _ = event.GetPositionTuple()
-            val_y = self._pos_x_to_val_y(x)
-            pos = (x, self._val_y_to_pos_y(val_y))
-            self.focusline_overlay.set_label(val_y)
-            self.focusline_overlay.set_position(pos, )
-            self.Refresh()
+            self._position_focus_line(event)
+        event.Skip()
+
+
+    def _position_focus_line(self, event):
+        x, _ = event.GetPositionTuple()
+        val_y = self._pos_x_to_val_y(x)
+        pos = (x, self._val_y_to_pos_y(val_y))
+        self.focusline_overlay.set_label(val_y)
+        self.focusline_overlay.set_position(pos, )
+        self.Refresh()
 
     def OnSize(self, event=None):
         self._bmp_buffer = wx.EmptyBitmap(*self.ClientSize)
@@ -1190,7 +1200,7 @@ class PlotCanvas(wx.Panel):
         for o in self.overlays:
             o.Draw(dc)
 
-    # Value methods
+    # Value calculation methods
 
     def value_to_position(self, value_point):
         """ Translate a value tuple to a pixel position tuple """
@@ -1211,6 +1221,9 @@ class PlotCanvas(wx.Panel):
 
         return result
 
+    # Cached calculation methods. These should be reset when the relevant
+    # data changes (e.g. when the canvas changes size).
+
     @memoize
     def _val_y_to_pos_y(self, val_y):
         perc_y = float(self.max_y - val_y) / self.width_y
@@ -1229,7 +1242,30 @@ class PlotCanvas(wx.Panel):
         val_x = (perc_x * self.width_x) + self.min_x
         return max(min(val_x, self.max_x), self.min_x)
 
+    # Getters and Setters
+
+    def set_1d_data(self, horz, vert):
+        """ Construct the data by zipping the wo provided 1D iterables """
+        if not all(horz[i] <= horz[i+1] for i in xrange(len(horz)-1)):
+            raise ValueError("The horizontal data should be sorted!")
+        self._data = zip(horz, vert)
+        self.reset_dimensions()
+
+    def set_data(self, data):
+        """ Set the data to be plotted
+
+        The data should be an iterable of numerical 2-tuples.
+        """
+        if not all(data[i][0] <= data[i+1][0] for i in xrange(len(data)-1)):
+            raise ValueError("The horizontal data should be sorted!")
+        if len(data[0]) != 2:
+            raise ValueError("The data should be 2D!")
+
+        self._data = data
+        self.reset_dimensions()
+
     def set_focusline_ovelay(self, fol):
+        """ Assign a focusline overlay to the canvas """
         # TODO: Add type check to make sure the ovelay is a ViewOverlay.
         # (But importing Viewoverlay causes cyclic imports)
         self.focusline_overlay = fol
@@ -1241,50 +1277,15 @@ class PlotCanvas(wx.Panel):
         self.line_colour = wxcol_to_rgb(self.ForegroundColour)
         self.fill_colour = change_brightness(self.line_colour, -0.4)
 
-
-    def UpdateImage(self):
-        dc = wx.MemoryDC()
-        dc.SelectObject(self._bmp_buffer)
-        dc.SetBackground(wx.Brush(self.BackgroundColour, wx.SOLID))
-
-        dc.Clear() # make sure you clear the bitmap!
-
-        ctx = wxcairo.ContextFromDC(dc)
-        width, height = self.ClientSize
-        self._plot_data(ctx, width, height)
-
-        del dc # need to get rid of the MemoryDC before Update() is called.
-        self.Refresh(eraseBackground=False)
-        self.Update()
-
-    def set_1d_data(self, horz, vert):
-        if not all(horz[i] <= horz[i+1] for i in xrange(len(horz)-1)):
-            raise ValueError("The horizontal data should be sorted!")
-        self._data = zip(horz, vert)
-        self.reset_dimensions()
-        self.UpdateImage()
-
-    def set_2d_data(self, data):
-        if not all(data[i][0] <= data[i+1][0] for i in xrange(len(data)-1)):
-            raise ValueError("The horizontal data should be sorted!")
-        self._data = data
-        self.reset_dimensions()
-        self.UpdateImage()
-
-    def reset_dimensions(self):
-        """ Determine the dimensions according to the present data """
-
-        horz, vert = zip(*self._data)
-        self.set_dimensions(
-            min(horz),
-            max(horz),
-            min(vert),
-            max(vert)
-        )
-        self.UpdateImage()
-
+    # Attribute calculators
 
     def set_dimensions(self, min_x, max_x, min_y, max_y):
+        """ Set the outer dimensions of the plotting area.
+
+        This method can be used to override the values derived from the data
+        set, so that the extreme values will not make the graph touch the edge
+        of the canvas.
+        """
 
         self.min_x = min_x
         self.max_x = max_x
@@ -1304,6 +1305,43 @@ class PlotCanvas(wx.Panel):
 
         logging.debug("Widths set to %s and %s", self.width_x, self.width_y)
         self.UpdateImage()
+
+    def reset_dimensions(self):
+        """ Determine the dimensions according to the present data """
+
+        horz, vert = zip(*self._data)
+        self.set_dimensions(
+            min(horz),
+            max(horz),
+            min(vert),
+            max(vert)
+        )
+        self.UpdateImage()
+
+    # Image generation
+
+    def UpdateImage(self):
+        """ This method updates the graph image """
+
+        # Reset all cached values
+        for _, f in inspect.getmembers(self, lambda m: hasattr(m, "reset")):
+            f.reset()
+
+        dc = wx.MemoryDC()
+        dc.SelectObject(self._bmp_buffer)
+        dc.SetBackground(wx.Brush(self.BackgroundColour, wx.SOLID))
+
+        dc.Clear() # make sure you clear the bitmap!
+
+        ctx = wxcairo.ContextFromDC(dc)
+        width, height = self.ClientSize
+        self._plot_data(ctx, width, height)
+
+        del dc # need to get rid of the MemoryDC before Update() is called.
+        self.Refresh(eraseBackground=False)
+        self.Update()
+
+
 
     def set_closed(self, closed=PLOT_CLOSE_STRAIGHT):
         self.closed = closed

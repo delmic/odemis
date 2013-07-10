@@ -182,7 +182,7 @@ class CanvasTestCase(unittest.TestCase):
         ]
 
         gui_loop()
-        cnvs.set_2d_data(data)
+        cnvs.set_data(data)
 
         gui_loop()
         wx.MilliSleep(SLEEP_TIME)
@@ -207,7 +207,7 @@ class CanvasTestCase(unittest.TestCase):
             gui_loop()
             wx.MilliSleep(SLEEP_TIME)
 
-        ol = overlay.FocusLineOverlay(cnvs, "FocusLineOverlay")
+        ol = overlay.FocusLineOverlay(cnvs)
         cnvs.set_focusline_ovelay(ol)
 
         # wx.MilliSleep(SLEEP_TIME)
