@@ -1,5 +1,6 @@
 #-*- coding: utf-8 -*-
 
+import functools
 import logging
 import time
 import inspect
@@ -79,6 +80,44 @@ def limit_invocation(delay_s):
     return decorator(limit)
 
 
+class memoize(object):
+    """Decorator that caches a function's return value each time it is called.
+    If called later with the same arguments, the cached value is returned, and
+    not re-evaluated.
+    """
+
+    def __init__(self, func):
+        self.func = func
+        self.cache = {}
+
+    def __call__(self, *args):
+        try:
+            if len(self.cache) > 1000:
+                self._reset()
+            return self.cache[args]
+        except KeyError:
+            value = self.func(*args)
+            self.cache[args] = value
+            return value
+        except TypeError:
+            # uncachable -- for instance, passing a list as an argument.
+            # Better to not cache than to blow up entirely.
+            return self.func(*args)
+
+    def __repr__(self):
+        """Return the function's docstring."""
+        return self.func.__doc__
+
+    def __get__(self, obj, objtype):
+        """Support instance methods."""
+        fn = functools.partial(self.__call__, obj)
+        fn.reset = self._reset
+        return fn
+
+    def _reset(self):
+        self.cache = {}
+
+
 #### Wrappers ########
 
 def call_after_wrapper(f, *args, **kwargs):
@@ -155,8 +194,8 @@ def formats_to_wildcards(formats2ext, include_all=False, include_any=False):
 
     formats2ext (dict (string -> list of strings)): format names and lists of
         their possible extensions.
-    include_all (boolean): If True, also include as first wildcards for all the formats 
-    include_any (boolean): If True, also include as last the *.* wildcards 
+    include_all (boolean): If True, also include as first wildcards for all the formats
+    include_any (boolean): If True, also include as last the *.* wildcards
 
     returns (tuple (string, list of strings)): wildcards, name of the format
         in the same order as in the wildcards (or None if all/any format)
@@ -184,7 +223,6 @@ def formats_to_wildcards(formats2ext, include_all=False, include_any=False):
 
     # the whole importance is that they are in the same order
     return "|".join(wildcards), formats
-
 
 # Data container
 

@@ -88,6 +88,7 @@ DrawTimer is set by ShouldUpdateDrawing
 
 """
 import ctypes
+import inspect
 import logging
 import math
 import os
@@ -97,6 +98,7 @@ import cairo
 import wx
 import wx.lib.wxcairo as wxcairo
 
+from ..util import memoize, limit_invocation
 from ..util.conversion import wxcol_to_rgb, change_brightness
 # from odemis.gui.comp.overlay import ViewOverlay
 import odemis.gui.img.data as imgdata
@@ -1082,12 +1084,20 @@ def real_to_world_pos(real_pos, mpwu):
     world_pos = tuple([v / mpwu for v in real_pos])
     return world_pos
 
-
-CLOSE_STRAIGHT = 1
-CLOSE_BOTTOM = 2
+# PlotCanvas configuration flags
+PLOT_CLOSE_NOT = 0
+PLOT_CLOSE_STRAIGHT = 1
+PLOT_CLOSE_BOTTOM = 2
+PLOT_MODE_LINE = 1
+PLOT_MODE_BAR = 2
 
 class PlotCanvas(wx.Panel):
-    """ A canvas for plotting data"""
+    """ This canvas can plot numerical data in various ways and allows
+    the querying of values by visual means.
+
+    All values used by this class will be mapped to pixel values as needed.
+
+    """
 
     def __init__(self, *args, **kwargs):
 
@@ -1095,13 +1105,12 @@ class PlotCanvas(wx.Panel):
 
         super(PlotCanvas, self).__init__(*args, **kwargs)
 
-        # Event binding
-        self.Bind(wx.EVT_PAINT, self.OnPaint)
-        self.Bind(wx.EVT_SIZE, self.OnSize)
-
-        self._buffer = None
+        # Bitmap used as a buffer for the plot
+        self._bmp_buffer = None
+        # The data to be plotted, a list of numerical value pairs
         self._data = []
 
+        # Interesting values taken from the data
         self.min_x = None
         self.max_x = None
         self.width_x = None
@@ -1110,25 +1119,157 @@ class PlotCanvas(wx.Panel):
         self.max_y = None
         self.width_y = None
 
-        self.line_width = 2 #px
+        ## Rendering settings
+
+        self.line_width = 1.5 #px
         self.line_colour = wxcol_to_rgb(self.ForegroundColour)
         self.fill_colour = change_brightness(self.line_colour, -0.1)
 
-        self.closed = False
+        # Determines if the graph should be closed, and if so, how.
+        self.closed = PLOT_CLOSE_NOT
+        self.plot_mode = PLOT_MODE_LINE
 
-        # View overlays can be added to this attribute
+        self.dragging = False
+
+        ## Overlays
+
+        self.focusline_overlay = None
+        # List of all overlays used by this canvas
         self.overlays = []
+
+        ## Event binding
+
+        self.Bind(wx.EVT_PAINT, self.OnPaint)
+        self.Bind(wx.EVT_SIZE, self.OnSize)
+
+        self.Bind(wx.EVT_LEFT_DOWN, self.OnLeftDown)
+        self.Bind(wx.EVT_LEFT_UP, self.OnLeftUp)
+        self.Bind(wx.EVT_MOTION, self.OnMouseMotion)
 
         # OnSize called to make sure the buffer is initialized.
         # This might result in OnSize getting called twice on some
         # platforms at initialization, but little harm done.
         self.OnSize(None)
 
-    def add_ovelay(self, ol):
+    # Event handlers
 
+    def OnLeftDown(self, event):
+        self.dragging = True
+        self.drag_init_pos = event.GetPositionTuple()
+
+        logging.debug("Drag started at %s", self.drag_init_pos)
+
+        if not self.HasCapture():
+            self._position_focus_line(event)
+            self.CaptureMouse()
+
+        self.SetFocus()
+        event.Skip()
+
+
+    def OnLeftUp(self, event):
+        self.dragging = False
+        self.SetCursor(wx.STANDARD_CURSOR)
+        if self.HasCapture():
+            self.ReleaseMouse()
+        event.Skip()
+
+    def OnMouseMotion(self, event):
+        if self.dragging and self.focusline_overlay:
+            self._position_focus_line(event)
+        event.Skip()
+
+
+    def _position_focus_line(self, event):
+        x, _ = event.GetPositionTuple()
+        val_y = self._pos_x_to_val_y(x)
+        pos = (x, self._val_y_to_pos_y(val_y))
+        self.focusline_overlay.set_label(val_y)
+        self.focusline_overlay.set_position(pos, )
+        self.Refresh()
+
+    def OnSize(self, event=None):
+        self._bmp_buffer = wx.EmptyBitmap(*self.ClientSize)
+        self.UpdateImage()
+
+    def OnPaint(self, event=None):
+        wx.BufferedPaintDC(self, self._bmp_buffer)
+
+        dc = wx.PaintDC(self)
+
+        for o in self.overlays:
+            o.Draw(dc)
+
+    # Value calculation methods
+
+    def value_to_position(self, value_point):
+        """ Translate a value tuple to a pixel position tuple """
+
+        if None in (self.width_x, self.width_y):
+            logging.warn("No plot data set")
+            return (0, 0)
+
+        x, y = value_point
+        w, h = self.ClientSize
+
+        perc_x = float(x - self.min_x) / self.width_x
+        perc_y = float(self.max_y - y) / self.width_y
+        # logging.debug("%s %s", px, py)
+
+        result = (perc_x * w, perc_y * h)
+        # logging.debug("Point translated from %s to %s", value_point, result)
+
+        return result
+
+    # Cached calculation methods. These should be reset when the relevant
+    # data changes (e.g. when the canvas changes size).
+
+    @memoize
+    def _val_y_to_pos_y(self, val_y):
+        perc_y = float(self.max_y - val_y) / self.width_y
+        return perc_y * self.ClientSize[1]
+
+    @memoize
+    def _pos_x_to_val_y(self, pos_x):
+        """ Map the give x pixel value to a y value """
+        val_x = self._pos_x_to_val_x(pos_x)
+        return [y for x, y in self._data if x <= val_x][-1]
+
+    @memoize
+    def  _pos_x_to_val_x(self, pos_x):
+        w, _ = self.ClientSize
+        perc_x = pos_x / float(w)
+        val_x = (perc_x * self.width_x) + self.min_x
+        return max(min(val_x, self.max_x), self.min_x)
+
+    # Getters and Setters
+
+    def set_1d_data(self, horz, vert):
+        """ Construct the data by zipping the wo provided 1D iterables """
+        if not all(horz[i] <= horz[i+1] for i in xrange(len(horz)-1)):
+            raise ValueError("The horizontal data should be sorted!")
+        self._data = zip(horz, vert)
+        self.reset_dimensions()
+
+    def set_data(self, data):
+        """ Set the data to be plotted
+
+        The data should be an iterable of numerical 2-tuples.
+        """
+        if not all(data[i][0] <= data[i+1][0] for i in xrange(len(data)-1)):
+            raise ValueError("The horizontal data should be sorted!")
+        if len(data[0]) != 2:
+            raise ValueError("The data should be 2D!")
+
+        self._data = data
+        self.reset_dimensions()
+
+    def set_focusline_ovelay(self, fol):
+        """ Assign a focusline overlay to the canvas """
         # TODO: Add type check to make sure the ovelay is a ViewOverlay.
-        # (But importing View)
-        self.overlays.append(ol)
+        # (But importing Viewoverlay causes cyclic imports)
+        self.focusline_overlay = fol
+        self.overlays.append(fol)
         self.Refresh()
 
     def SetForegroundColour(self, *args, **kwargs):
@@ -1136,59 +1277,15 @@ class PlotCanvas(wx.Panel):
         self.line_colour = wxcol_to_rgb(self.ForegroundColour)
         self.fill_colour = change_brightness(self.line_colour, -0.4)
 
-    # Event handlers
-
-    def OnPaint(self, event=None):
-        wx.BufferedPaintDC(self, self._buffer)
-
-        dc = wx.PaintDC(self)
-
-        for o in self.overlays:
-            o.Draw(dc)
-
-    def OnSize(self, event=None):
-        self._buffer = wx.EmptyBitmap(*self.ClientSize)
-        self.UpdateImage()
-
-    def UpdateImage(self):
-        dc = wx.MemoryDC()
-        dc.SelectObject(self._buffer)
-        dc.SetBackground(wx.Brush(self.BackgroundColour, wx.SOLID))
-
-        dc.Clear() # make sure you clear the bitmap!
-
-        ctx = wxcairo.ContextFromDC(dc)
-        width, height = self.ClientSize
-        self._plot_data(ctx, width, height)
-
-        del dc # need to get rid of the MemoryDC before Update() is called.
-        self.Refresh(eraseBackground=False)
-        self.Update()
-
-    def set_1d_data(self, horz, vert):
-        self._data = zip(horz, vert)
-        self.reset_dimensions()
-        self.UpdateImage()
-
-    def set_2d_data(self, data):
-        self._data = data
-        self.reset_dimensions()
-        self.UpdateImage()
-
-    def reset_dimensions(self):
-        """ Determine the dimensions according to the present data """
-
-        horz, vert = zip(*self._data)
-        self.set_dimensions(
-            min(horz),
-            max(horz),
-            min(vert),
-            max(vert)
-        )
-        self.UpdateImage()
-
+    # Attribute calculators
 
     def set_dimensions(self, min_x, max_x, min_y, max_y):
+        """ Set the outer dimensions of the plotting area.
+
+        This method can be used to override the values derived from the data
+        set, so that the extreme values will not make the graph touch the edge
+        of the canvas.
+        """
 
         self.min_x = min_x
         self.max_x = max_x
@@ -1209,55 +1306,109 @@ class PlotCanvas(wx.Panel):
         logging.debug("Widths set to %s and %s", self.width_x, self.width_y)
         self.UpdateImage()
 
-    def set_closed(self, closed=CLOSE_STRAIGHT):
+    def reset_dimensions(self):
+        """ Determine the dimensions according to the present data """
+
+        horz, vert = zip(*self._data)
+        self.set_dimensions(
+            min(horz),
+            max(horz),
+            min(vert),
+            max(vert)
+        )
+        self.UpdateImage()
+
+    # Image generation
+
+    def UpdateImage(self):
+        """ This method updates the graph image """
+
+        # Reset all cached values
+        for _, f in inspect.getmembers(self, lambda m: hasattr(m, "reset")):
+            f.reset()
+
+        dc = wx.MemoryDC()
+        dc.SelectObject(self._bmp_buffer)
+        dc.SetBackground(wx.Brush(self.BackgroundColour, wx.SOLID))
+
+        dc.Clear() # make sure you clear the bitmap!
+
+        ctx = wxcairo.ContextFromDC(dc)
+        width, height = self.ClientSize
+        self._plot_data(ctx, width, height)
+
+        del dc # need to get rid of the MemoryDC before Update() is called.
+        self.Refresh(eraseBackground=False)
+        self.Update()
+
+
+
+    def set_closed(self, closed=PLOT_CLOSE_STRAIGHT):
         self.closed = closed
 
-    def v_to_p(self, point):
-        """ Translate a point tuple to pixel values """
-
-        if None in (self.width_x, self.width_y):
-            logging.warn("No plot data set")
-            return 0, 0
-
-        x, y = point
-        w, h = self.ClientSize
-
-        px = float(x - self.min_x) / self.width_x
-        py = float(self.max_y - y) / self.width_y
-        # logging.debug("%s %s", px, py)
-
-        result = px * w, py * h
-
-        # logging.debug("Point translaged from %s to %s", point, result)
-
-        return result
-
+    def set_plot_mode(self, mode):
+        self.plot_mode = mode
+        self.UpdateImage()
 
     def _plot_data(self, ctx, width, height):
         if self._data:
-            ctx.set_line_width(self.line_width)
+            if self.plot_mode == PLOT_MODE_LINE:
+                self._line_plot(ctx)
+            elif self.plot_mode == PLOT_MODE_BAR:
+                self._bar_plot(ctx, width)
+            # logging.debug("moving to %s", self.value_to_position(self._data[0]))
 
-            # logging.debug("moving to %s", self.v_to_p(self._data[0]))
-            ctx.move_to(*self.v_to_p(self._data[0]))
+    def _bar_plot(self, ctx, width):
+        f_vtp = self.value_to_position
+        f_clt = ctx.line_to
 
-            for p in self._data[1:]:
-                x, y = self.v_to_p(p)
-                # logging.debug("drawing to %s", (x, y))
-                ctx.line_to(x, y)
+        x, y = f_vtp((self.min_x, self.min_y))
 
-            if self.closed == CLOSE_BOTTOM:
-                x, y = self.v_to_p((self.max_x, 0))
-                ctx.line_to(x, y)
-                x, y = self.v_to_p((0, 0))
-                ctx.line_to(x, y)
+        ctx.move_to(x, y)
 
-            if self.closed:
-                # ctx.line_to(self._data[0])
-                ctx.close_path()
+        for i, p in enumerate(self._data[:-1]):
+            x, y = f_vtp(p)
+            f_clt(x, y)
+            x, _ = f_vtp(self._data[i + 1])
+            f_clt(x, y)
 
+        if self.closed == PLOT_CLOSE_BOTTOM:
+            x, y = self.value_to_position((self.max_x, 0))
+            ctx.line_to(x, y)
+            x, y = self.value_to_position((0, 0))
+            ctx.line_to(x, y)
+        else:
+            ctx.close_path()
 
-            ctx.set_source_rgb(*self.fill_colour)
-            ctx.fill_preserve()
-            ctx.set_source_rgb(*self.line_colour)
-            ctx.stroke()
+        ctx.set_line_width(self.line_width)
+        ctx.set_source_rgb(*self.fill_colour)
+        ctx.fill_preserve()
+        ctx.set_source_rgb(*self.line_colour)
+        ctx.stroke()
+
+    def _line_plot(self, ctx):
+
+        ctx.move_to(*self.value_to_position(self._data[0]))
+
+        f_vtp = self.value_to_position
+        f_clt = ctx.line_to
+
+        for p in self._data[1:]:
+            x, y = f_vtp(p)
+            # logging.debug("drawing to %s", (x, y))
+            f_clt(x, y)
+
+        if self.closed == PLOT_CLOSE_BOTTOM:
+            x, y = self.value_to_position((self.max_x, 0))
+            ctx.line_to(x, y)
+            x, y = self.value_to_position((0, 0))
+            ctx.line_to(x, y)
+        else:
+            ctx.close_path()
+
+        ctx.set_line_width(self.line_width)
+        ctx.set_source_rgb(*self.fill_colour)
+        ctx.fill_preserve()
+        ctx.set_source_rgb(*self.line_colour)
+        ctx.stroke()
 

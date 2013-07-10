@@ -23,6 +23,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
 import logging
+import math
 from abc import ABCMeta, abstractmethod
 
 import cairo
@@ -31,7 +32,7 @@ import wx
 import odemis.gui as gui
 import odemis.gui.comp.canvas as canvas
 from odemis.gui.util.units import readable_str
-from ..util.conversion import hex_to_rgba
+from ..util.conversion import hex_to_rgba, change_brightness
 
 class Overlay(object):
     __metaclass__ = ABCMeta
@@ -44,8 +45,10 @@ class Overlay(object):
         self.base = base
         self.label = label
 
-    @staticmethod
-    def write_label(ctx, vpos, label):
+    def set_label(self, label):
+        self.label = unicode(label)
+
+    def write_label(self, ctx, vpos, label, flip=True):
         font = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT)
         ctx.select_font_face(
                 font.GetFaceName(),
@@ -54,13 +57,27 @@ class Overlay(object):
         )
         ctx.set_font_size(font.GetPointSize())
 
+        margin = 5
+
+        _, _, width, height, _, _ = ctx.text_extents(label)
+        x, y = vpos
+
+        if flip:
+            if x + width > self.base.ClientSize[0]:
+                x = self.base.ClientSize[0] - width - margin
+
+            if y + height > self.base.ClientSize[1]:
+                y = self.base.ClientSize[1] - height - margin
+            elif y - height < 0:
+                y = height + margin
+
         #t = font.GetPixelSize()
         ctx.set_source_rgb(0.0, 0.0, 0.0)
-        ctx.move_to(vpos[0], vpos[1])
+        ctx.move_to(x, y)
         ctx.show_text(label)
 
         ctx.set_source_rgb(1.0, 1.0, 1.0)
-        ctx.move_to(vpos[0] + 1, vpos[1] + 1)
+        ctx.move_to(x + 1, y + 1)
         ctx.show_text(label)
 
     def _clip_viewport_pos(self, pos):
@@ -89,9 +106,6 @@ class TextViewOverlay(ViewOverlay):
         super(TextViewOverlay, self).__init__(base)
         self.label = ""
         self.vpos = vpos
-
-    def set_label(self, label):
-        self.label = label
 
     def Draw(self, dc, shift=(0, 0), scale=1.0):
         if self.label:
@@ -554,17 +568,28 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
 
 class FocusLineOverlay(ViewOverlay):
 
-    def __init__(self, base, label,
+    def __init__(self, base,
+                 label="",
                  sel_cur=None,
                  color=gui.SELECTION_COLOR,
                  center=(0, 0)):
 
         super(FocusLineOverlay, self).__init__(base, label)
         self.color = hex_to_rgba(color)
-        self.vposx = 100
+        self.vposx = 0
+        self.vposy = 0
+
+    def set_position(self, pos):
+        self.vposx = max(1, min(pos[0], self.base.ClientSize.x - 1))
+        self.vposy = max(1, min(pos[1], self.base.ClientSize.y - 1))
 
     def Draw(self, dc_buffer, shift=(0, 0), scale=1.0):
         ctx = wx.lib.wxcairo.ContextFromDC(dc_buffer)
+
+        if self.vposy:
+            ctx.set_source_rgba(*change_brightness(self.color, -0.1))
+            ctx.arc(self.vposx, self.vposy, 5.5, 0, 2*math.pi)
+            ctx.fill()
 
         # draws the dotted line
         ctx.set_line_width(2)
@@ -574,3 +599,15 @@ class FocusLineOverlay(ViewOverlay):
         ctx.move_to(self.vposx, 0)
         ctx.line_to(self.vposx, self.base.ClientSize[1])
         ctx.stroke()
+
+        if self.label:
+
+            if self.vposy <= 4:
+                y_mod = 10
+            elif self.vposy >= self.base.ClientSize.y - 4:
+                y_mod = -10
+            else:
+                y_mod = 0
+
+            vpos = (self.vposx + 5, self.vposy + y_mod)
+            self.write_label(ctx, vpos, self.label)

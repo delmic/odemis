@@ -28,8 +28,6 @@ MANUAL = False
 
 SLEEP_TIME = 100 # ms: time to sleep between actions (to slow down the tests)
 
-
-
 def gui_loop():
     """
     Execute the main loop for the GUI until all the current events are processed
