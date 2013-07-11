@@ -535,7 +535,7 @@ class DraggableCanvas(wx.Panel):
         # zoom level (for the "main" image) if it's ±10% of the target size
 
         if recenter:
-            c = [(bbox[0] + bbox[2]) / 2., (bbox[1] + bbox[3]) / 2.]
+            c = (bbox[0] + bbox[2]) / 2., (bbox[1] + bbox[3]) / 2.
             self.requested_world_pos = c # as ReCenterBuffer but without ShouldUpdateDrawing
 
         wx.CallAfter(self.ShouldUpdateDrawing)
