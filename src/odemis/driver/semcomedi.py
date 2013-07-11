@@ -1883,49 +1883,23 @@ class MMapReader(Reader):
         sleep_time = min(0.1, max(sleep_time, 0.001))
         try:
             while self.remaining > 0 and not self.cancelled:
+                # a bit of time to fill the buffer
+                if self.remaining < (self.mmap_size / 10):
+                    # almost the end, finish quickly
+                    sleep_time = self.remaining / self.buf.itemsize * self.parent._min_ai_periods[1]
+                time.sleep(sleep_time)
+                comedi.poll(self._device, self._subdevice) # the NI driver _requires_ this to ensure the buffer content is correct after a mark_read
+
                 avail_bytes = comedi.get_buffer_contents(self._device, self._subdevice)
                 if avail_bytes > 0:
 #                    logging.debug("Need to read %d bytes from mmap", avail_bytes)
                     read_bytes = self._act(avail_bytes)
                     self.buf_offset += read_bytes
                     self.remaining -= read_bytes
-                else:
-                    # a bit of time to fill the buffer
-                    if self.remaining < (self.mmap_size / 10):
-                        # almost the end, finish quickly
-                        sleep_time = self.remaining / self.buf.itemsize * self.parent._min_ai_periods[1]
-                    time.sleep(sleep_time)
-
-            # TODO: it seems that cancel prevent from reading the buffer, but
-            # next command everything left will still be there. So we end up
-            # with more to read on the next read.
-            offset = comedi.get_buffer_offset(self._device, self._subdevice)
-            logging.debug("Offset after reading = %d", offset)
-            time.sleep(0.01)
-            avail_bytes = comedi.get_buffer_contents(self._device, self._subdevice)
-            total = self.buf.nbytes
-            while avail_bytes > 0:
-                if self.cancelled:
-                    logging.debug("Flushing %d bytes", avail_bytes)
-                else:
-                    logging.warning("Still able to read %d bytes", avail_bytes)
-                comedi.mark_buffer_read(self._device, self._subdevice, avail_bytes)
-                total += avail_bytes
-                comedi.poll(self._device, self._subdevice)
-                time.sleep(0.01)
-                avail_bytes = comedi.get_buffer_contents(self._device, self._subdevice)
-            logging.debug("Got %d bytes, while expected %d", total, self.buf.nbytes)
-            offset = comedi.get_buffer_offset(self._device, self._subdevice)
-            logging.debug("Offset at end = %d", offset)
-
-
             logging.debug("read took %g s", time.time() - self._begin)
         except:
             logging.exception("Unhandled error in reading thread")
-        finally:
-            if not self.cancelled:
-                #comedi.cancel(self._device, self._subdevice)
-                pass
+            comedi.cancel(self._device, self._subdevice)
 
     def _act(self, avail_bytes):
         read_size = min(avail_bytes, self.remaining)
