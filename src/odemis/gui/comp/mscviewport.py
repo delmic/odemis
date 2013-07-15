@@ -20,8 +20,10 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
+
 from __future__ import division
 from odemis import gui
+from odemis.gui.comp.legend import InfoLegend
 from odemis.gui.comp.scalewindow import ScaleWindow
 from odemis.gui.comp.slider import Slider
 from odemis.gui.img.data import getico_blending_optBitmap, \
@@ -71,25 +73,7 @@ class MicroscopeViewport(wx.Panel):
         # It's made of multiple controls positioned via sizers
         # TODO: allow the user to pick which information is displayed in the
         # legend
-        self.legend_panel = wx.Panel(self)
-        self.legend_panel.SetBackgroundColour(self.GetBackgroundColour())
-        self.legend_panel.SetForegroundColour(self.GetForegroundColour())
-
-        # Merge slider
-        # TODO: should be possible to use VAConnector
-        self.mergeSlider = Slider(self.legend_panel,
-                    wx.ID_ANY,
-                    50,
-                    (0, 100),
-                    size=(100, 12),
-                    style=(wx.SL_HORIZONTAL |
-                           wx.SL_AUTOTICKS |
-                           wx.SL_TICKS |
-                           wx.NO_BORDER))
-
-        self.mergeSlider.SetBackgroundColour(self.legend_panel.GetBackgroundColour())
-        self.mergeSlider.SetForegroundColour("#4d4d4d")
-        self.mergeSlider.SetToolTipString("Merge ratio")
+        self.legend_panel = InfoLegend(self) #wx.Panel(self)
 
         self.bmpSliderLeft = wx.StaticBitmap(
                                     self.legend_panel,
@@ -108,13 +92,13 @@ class MicroscopeViewport(wx.Panel):
         self.bmpSliderLeft.Bind(wx.EVT_LEFT_UP, self.OnSliderIconClick)
         self.bmpSliderRight.Bind(wx.EVT_LEFT_UP, self.OnSliderIconClick)
 
-        self.mergeSlider.Bind(wx.EVT_LEFT_UP, self.OnSlider)
+        self.legend_panel.mergeSlider.Bind(wx.EVT_LEFT_UP, self.OnSlider)
 
         # Bind on EVT_SLIDER to update even while the user is moving
-        self.mergeSlider.Bind(wx.EVT_SLIDER, self.OnSlider)
+        self.legend_panel.mergeSlider.Bind(wx.EVT_SLIDER, self.OnSlider)
 
         # Dragging the slider should set the focus to the right view
-        self.mergeSlider.Bind(wx.EVT_LEFT_DOWN, self.OnChildFocus)
+        self.legend_panel.mergeSlider.Bind(wx.EVT_LEFT_DOWN, self.OnChildFocus)
 
         # scale
         self.scaleDisplay = ScaleWindow(self.legend_panel)
@@ -157,7 +141,7 @@ class MicroscopeViewport(wx.Panel):
         # TODO: need to have the icons updated according to the streams
         sliderSizer.Add(self.bmpSliderLeft, border=3,
                         flag=wx.ALIGN_CENTER | wx.RIGHT | wx.RESERVE_SPACE_EVEN_IF_HIDDEN)
-        sliderSizer.Add(self.mergeSlider,
+        sliderSizer.Add(self.legend_panel.mergeSlider,
                         flag=wx.ALIGN_CENTER | wx.EXPAND | wx.RESERVE_SPACE_EVEN_IF_HIDDEN)
         sliderSizer.Add(self.bmpSliderRight, border=3,
                         flag=wx.ALIGN_CENTER | wx.LEFT | wx.RESERVE_SPACE_EVEN_IF_HIDDEN)
@@ -246,7 +230,7 @@ class MicroscopeViewport(wx.Panel):
     def ShowMergeSlider(self, show):
         """ Show or hide the merge slider """
         self.bmpSliderLeft.Show(show)
-        self.mergeSlider.Show(show)
+        self.legend_panel.mergeSlider.Show(show)
         self.bmpSliderRight.Show(show)
 
     def HasFocus(self, *args, **kwargs):
@@ -325,7 +309,7 @@ class MicroscopeViewport(wx.Panel):
     def _onMergeRatio(self, val):
         # round is important because int can cause unstable value
         # int(0.58*100) = 57
-        self.mergeSlider.SetValue(round(val * 100))
+        self.legend_panel.mergeSlider.SetValue(round(val * 100))
 
 
     # TODO need to subscribe to view_center, or done by canvas and delete this?
@@ -423,7 +407,8 @@ class MicroscopeViewport(wx.Panel):
         if self._microscope_view is None:
             return
 
-        self._microscope_view.merge_ratio.value = self.mergeSlider.GetValue() / 100
+        val = self.legend_panel.mergeSlider.GetValue() / 100
+        self._microscope_view.merge_ratio.value = val
         evt.Skip()
 
     def OnSize(self, evt):
@@ -437,11 +422,12 @@ class MicroscopeViewport(wx.Panel):
             return
 
         if(evt.GetEventObject() == self.bmpSliderLeft):
-            self.mergeSlider.set_to_min_val()
+            self.legend_panel.mergeSlider.set_to_min_val()
         else:
-            self.mergeSlider.set_to_max_val()
+            self.legend_panel.mergeSlider.set_to_max_val()
 
-        self._microscope_view.merge_ratio.value = self.mergeSlider.GetValue() / 100
+        val = self.legend_panel.mergeSlider.GetValue() / 100
+        self._microscope_view.merge_ratio.value = val
         evt.Skip()
 
     ## END Event handling
