@@ -24,7 +24,10 @@
 
 import wx
 
+from odemis.gui.comp.scalewindow import ScaleWindow
 from odemis.gui.comp.slider import Slider
+from odemis.gui.img.data import getico_blending_optBitmap, \
+    getico_blending_semBitmap
 
 class InfoLegend(wx.Panel):
 
@@ -36,6 +39,8 @@ class InfoLegend(wx.Panel):
 
         self.SetBackgroundColour(parent.GetBackgroundColour())
         self.SetForegroundColour(parent.GetForegroundColour())
+
+        ### Create child windows
 
         # Merge slider
         # TODO: should be possible to use VAConnector
@@ -53,6 +58,124 @@ class InfoLegend(wx.Panel):
         self.mergeSlider.SetBackgroundColour(parent.GetBackgroundColour())
         self.mergeSlider.SetForegroundColour("#4d4d4d")
         self.mergeSlider.SetToolTipString("Merge ratio")
+
+        self.bmpSliderLeft = wx.StaticBitmap(
+                                    self,
+                                    wx.ID_ANY,
+                                    getico_blending_optBitmap())
+        self.bmpSliderRight = wx.StaticBitmap(
+                                    self,
+                                    wx.ID_ANY,
+                                    getico_blending_semBitmap())
+
+        # scale
+        self.scaleDisplay = ScaleWindow(self)
+
+        # Horizontal Full Width text
+        # TODO: allow the user to select/copy the text
+        self.hfwDisplay = wx.StaticText(self)
+        self.hfwDisplay.SetToolTipString("Horizontal Field Width")
+
+        # magnification
+        self.LegendMag = wx.StaticText(self)
+        self.LegendMag.SetToolTipString("Magnification")
+
+
+        # TODO more...
+        # self.LegendWl = wx.StaticText(self.legend_panel)
+        # self.LegendWl.SetToolTipString("Wavelength")
+        # self.LegendET = wx.StaticText(self.legend_panel)
+        # self.LegendET.SetToolTipString("Exposure Time")
+
+        # self.LegendDwell = wx.StaticText(self.legend_panel)
+        # self.LegendSpot = wx.StaticText(self.legend_panel)
+        # self.LegendHV = wx.StaticText(self.legend_panel)
+
+
+        ## Child window layout
+
+
+        # Sizer composition:
+        #
+        # +-------------------------------------------------------+
+        # | +----+-----+ |    |         |    | +----+------+----+ |
+        # | |Mag | HFW | | <> | <Scale> | <> | |Icon|Slider|Icon| |
+        # | +----+-----+ |    |         |    | +----+------+----+ |
+        # +-------------------------------------------------------+
+
+        leftColSizer = wx.BoxSizer(wx.HORIZONTAL)
+        leftColSizer.Add(self.LegendMag,
+                         border=10,
+                         flag=wx.ALIGN_CENTER | wx.RIGHT)
+        leftColSizer.Add(self.hfwDisplay, border=10, flag=wx.ALIGN_CENTER)
+
+
+        sliderSizer = wx.BoxSizer(wx.HORIZONTAL)
+        # TODO: need to have the icons updated according to the streams
+        sliderSizer.Add(
+            self.bmpSliderLeft,
+            border=3,
+            flag=wx.ALIGN_CENTER | wx.RIGHT | wx.RESERVE_SPACE_EVEN_IF_HIDDEN)
+        sliderSizer.Add(
+            self.mergeSlider,
+            flag=wx.ALIGN_CENTER | wx.EXPAND | wx.RESERVE_SPACE_EVEN_IF_HIDDEN)
+        sliderSizer.Add(
+            self.bmpSliderRight,
+            border=3,
+            flag=wx.ALIGN_CENTER | wx.LEFT | wx.RESERVE_SPACE_EVEN_IF_HIDDEN)
+
+
+        legendSizer = wx.BoxSizer(wx.HORIZONTAL)
+        legendSizer.Add(leftColSizer, 0, flag=wx.EXPAND | wx.ALIGN_CENTER)
+        legendSizer.AddStretchSpacer(1)
+        legendSizer.Add(self.scaleDisplay,
+                      2,
+                      border=2,
+                      flag=wx.EXPAND | wx.ALIGN_CENTER | wx.RIGHT | wx.LEFT)
+        legendSizer.AddStretchSpacer(1)
+        legendSizer.Add(sliderSizer, 0, flag=wx.EXPAND | wx.ALIGN_CENTER)
+
+        # legend_panel_sizer is needed to add a border around the legend
+        legend_panel_sizer = wx.BoxSizer(wx.VERTICAL)
+        legend_panel_sizer.Add(legendSizer, border=10, flag=wx.ALL | wx.EXPAND)
+        self.SetSizerAndFit(legend_panel_sizer)
+
+
+        ## Event binding
+
+
+        # Dragging the slider should set the focus to the right view
+        self.mergeSlider.Bind(wx.EVT_LEFT_DOWN, self.OnLeftDown)
+        self.mergeSlider.Bind(wx.EVT_LEFT_UP, self.OnLeftUp)
+
+        # Make sure that mouse clicks on the icons set the correct focus
+        self.bmpSliderLeft.Bind(wx.EVT_LEFT_DOWN, self.OnLeftDown)
+        self.bmpSliderRight.Bind(wx.EVT_LEFT_DOWN, self.OnLeftDown)
+
+        # Set slider to min/max
+        self.bmpSliderLeft.Bind(wx.EVT_LEFT_UP, parent.OnSliderIconClick)
+        self.bmpSliderRight.Bind(wx.EVT_LEFT_UP, parent.OnSliderIconClick)
+
+        self.hfwDisplay.Bind(wx.EVT_LEFT_DOWN, self.OnLeftDown)
+        self.LegendMag.Bind(wx.EVT_LEFT_DOWN, self.OnLeftDown)
+
+
+    # Make mouse events propagate to the parent
+    def OnLeftDown(self, evt):
+        evt.ResumePropagation(1)
+        evt.Skip()
+
+    def OnLeftUp(self, evt):
+        evt.ResumePropagation(1)
+        evt.Skip()
+
+    def set_hfw_label(self, label):
+        self.hfwDisplay.SetLabel(label)
+        self.Layout()
+
+    def set_mag_label(self, label):
+        self.LegendMag.SetLabel(label)
+        self.Layout()
 
 class AxisLegend(wx.Panel):
 
