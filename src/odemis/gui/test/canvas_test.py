@@ -33,8 +33,10 @@ import odemis.gui.comp.canvas as canvas
 import odemis.gui.comp.overlay as overlay
 import odemis.gui.test.test_gui
 
+
 from odemis.gui.xmlh import odemis_get_test_resources
 from odemis.gui.test import MANUAL, SLEEP_TIME, gui_loop
+from odemis.gui.dblmscopecanvas import ZeroDimensionalPlotCanvas
 
 INSPECT = False
 MANUAL = True
@@ -152,7 +154,9 @@ class CanvasTestCase(unittest.TestCase):
 
 
         # Create and add a test plot canvas
-        cnvs = canvas.PlotCanvas(self.panel)
+        # cnvs = canvas.PlotCanvas(self.panel)
+        cnvs = ZeroDimensionalPlotCanvas(self.panel)
+
         cnvs.SetBackgroundColour(wx.BLACK)
         cnvs.SetForegroundColour("#DDDDDD")
         cnvs.set_closed(canvas.PLOT_CLOSE_STRAIGHT)

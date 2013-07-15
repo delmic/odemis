@@ -30,6 +30,9 @@ from odemis.gui.img.data import getico_blending_optBitmap, \
     getico_blending_semBitmap
 
 class InfoLegend(wx.Panel):
+    """ This class describes a legend containing the default controls that
+    provide information about life data streams.
+    """
 
     def __init__(self, parent, wid=-1, pos=(0, 0), size=wx.DefaultSize,
                  style=wx.NO_BORDER):

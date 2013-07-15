@@ -393,3 +393,46 @@ class SparcAlignViewport(MicroscopeViewport):
         # change SEM icon to Goal
         # FIXME: create goal icon
         self.legend_panel.bmpSliderRight.SetBitmap(getico_blending_goalBitmap())
+
+class PlotViewport(wx.Panel):
+
+    # Default class
+    canvas_class = canvas.PlotCanvas
+
+    def __init__(self, *args, **kwargs):
+        """Note: The MicroscopeViewport is not fully initialised until setView()
+        has been called.
+        """
+        wx.Panel.__init__(self, *args, **kwargs)
+
+        # Keep track of this panel's pseudo focus
+        self._has_focus = False
+
+        font = wx.Font(8, wx.FONTFAMILY_DEFAULT,
+                          wx.FONTSTYLE_NORMAL,
+                          wx.FONTWEIGHT_NORMAL)
+        self.SetFont(font)
+        self.SetBackgroundColour("#1A1A1A")
+        self.SetForegroundColour("#BBBBBB")
+
+        # main widget
+        self.canvas = self.canvas_class(self)
+
+        # Put all together (canvas + legend)
+        mainSizer = wx.BoxSizer(wx.VERTICAL)
+        mainSizer.Add(self.canvas, 1,
+                border=2, flag=wx.EXPAND | wx.TOP | wx.LEFT | wx.RIGHT)
+        mainSizer.Add(self.legend_panel, 0,
+                border=2, flag=wx.EXPAND | wx.BOTTOM | wx.LEFT | wx.RIGHT)
+
+        self.SetSizerAndFit(mainSizer)
+        self.SetAutoLayout(True)
+
+        self.Bind(wx.EVT_CHILD_FOCUS, self.OnChildFocus)
+        self.Bind(wx.EVT_SIZE, self.OnSize)
+
+    def OnSize(self, evt):
+        evt.Skip() # processed also by the parent
+
+    def OnChildFocus(self, evt):
+        evt.Skip()

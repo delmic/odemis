@@ -98,7 +98,7 @@ import cairo
 import wx
 import wx.lib.wxcairo as wxcairo
 
-from ..util import memoize, limit_invocation, units
+from ..util import memoize, limit_invocation
 from ..util.conversion import wxcol_to_rgb, change_brightness
 # from odemis.gui.comp.overlay import ViewOverlay
 import odemis.gui.img.data as imgdata
@@ -1110,9 +1110,6 @@ class PlotCanvas(wx.Panel):
         # The data to be plotted, a list of numerical value pairs
         self._data = []
 
-        self.current_y_value = None
-        self.current_x_value = None
-
         # Interesting values taken from the data
         self.min_x = None
         self.max_x = None
@@ -1124,9 +1121,6 @@ class PlotCanvas(wx.Panel):
 
         ## Rendering settings
 
-        self.unit_x = None
-        self.unit_y = None
-
         self.line_width = 1.5 #px
         self.line_colour = wxcol_to_rgb(self.ForegroundColour)
         self.fill_colour = change_brightness(self.line_colour, -0.1)
@@ -1135,22 +1129,10 @@ class PlotCanvas(wx.Panel):
         self.closed = PLOT_CLOSE_NOT
         self.plot_mode = PLOT_MODE_LINE
 
-        self.dragging = False
-
-        ## Overlays
-
-        self.focusline_overlay = None
-        # List of all overlays used by this canvas
-        self.overlays = []
-
         ## Event binding
 
         self.Bind(wx.EVT_PAINT, self.OnPaint)
         self.Bind(wx.EVT_SIZE, self.OnSize)
-
-        self.Bind(wx.EVT_LEFT_DOWN, self.OnLeftDown)
-        self.Bind(wx.EVT_LEFT_UP, self.OnLeftUp)
-        self.Bind(wx.EVT_MOTION, self.OnMouseMotion)
 
         # OnSize called to make sure the buffer is initialized.
         # This might result in OnSize getting called twice on some
@@ -1159,59 +1141,12 @@ class PlotCanvas(wx.Panel):
 
     # Event handlers
 
-    def OnLeftDown(self, event):
-        self.dragging = True
-        self.drag_init_pos = event.GetPositionTuple()
-
-        logging.debug("Drag started at %s", self.drag_init_pos)
-
-        if not self.HasCapture():
-            self._position_focus_line(event)
-            self.CaptureMouse()
-
-        self.SetFocus()
-        event.Skip()
-
-    def OnLeftUp(self, event):
-        self.dragging = False
-        self.SetCursor(wx.STANDARD_CURSOR)
-        if self.HasCapture():
-            self.ReleaseMouse()
-        event.Skip()
-
-    def OnMouseMotion(self, event):
-        if self.dragging and self.focusline_overlay:
-            self._position_focus_line(event)
-        event.Skip()
-
-    def _position_focus_line(self, event):
-        x, _ = event.GetPositionTuple()
-        self.current_y_value = self._pos_x_to_val_y(x)
-        pos = (x, self._val_y_to_pos_y(self.current_y_value))
-        label = "%s, %s" % (units.readable_str(
-                                self.current_x_value,
-                                self.unit_x,
-                                3),
-                            units.readable_str(
-                                self.current_y_value,
-                                self.unit_y,
-                                3)
-                            )
-        self.focusline_overlay.set_label(label)
-        self.focusline_overlay.set_position(pos, )
-        self.Refresh()
-
     def OnSize(self, event=None):
         self._bmp_buffer = wx.EmptyBitmap(*self.ClientSize)
         self.UpdateImage()
 
     def OnPaint(self, event=None):
-        wx.BufferedPaintDC(self, self._bmp_buffer)
-
-        dc = wx.PaintDC(self)
-
-        for o in self.overlays:
-            o.Draw(dc)
+        raise NotImplementedError()
 
     # Value calculation methods
 
@@ -1278,14 +1213,6 @@ class PlotCanvas(wx.Panel):
         self._data = data
         self.reset_dimensions()
 
-    def set_focusline_ovelay(self, fol):
-        """ Assign a focusline overlay to the canvas """
-        # TODO: Add type check to make sure the ovelay is a ViewOverlay.
-        # (But importing Viewoverlay causes cyclic imports)
-        self.focusline_overlay = fol
-        self.overlays.append(fol)
-        self.Refresh()
-
     def SetForegroundColour(self, *args, **kwargs):
         super(PlotCanvas, self).SetForegroundColour(*args, **kwargs)
         self.line_colour = wxcol_to_rgb(self.ForegroundColour)
@@ -1297,16 +1224,6 @@ class PlotCanvas(wx.Panel):
     def set_plot_mode(self, mode):
         self.plot_mode = mode
         self.UpdateImage()
-
-    def get_y_value(self):
-        """ Return the current y value """
-        return self.current_y_value
-
-    def set_x_unit(self, unit):
-        self.unit_x = unit
-
-    def set_y_unit(self, unit):
-        self.unit_y = unit
 
     # Attribute calculators
 
