@@ -567,6 +567,8 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
                 self.write_label(ctx, pos, size_lbl)
 
 class FocusLineOverlay(ViewOverlay):
+    """ This class describes an overlay that draws a vertical line over a
+    canvas, showing a marker at the vertical value and a possible label """
 
     def __init__(self, base,
                  label="",
@@ -576,8 +578,8 @@ class FocusLineOverlay(ViewOverlay):
 
         super(FocusLineOverlay, self).__init__(base, label)
         self.color = hex_to_rgba(color)
-        self.vposx = 0
-        self.vposy = 0
+        self.vposx = None
+        self.vposy = None
 
     def set_position(self, pos):
         self.vposx = max(1, min(pos[0], self.base.ClientSize.x - 1))
@@ -591,23 +593,24 @@ class FocusLineOverlay(ViewOverlay):
             ctx.arc(self.vposx, self.vposy, 5.5, 0, 2*math.pi)
             ctx.fill()
 
-        # draws the dotted line
-        ctx.set_line_width(2)
-        ctx.set_dash([3,])
-        ctx.set_line_join(cairo.LINE_JOIN_MITER)
-        ctx.set_source_rgba(*self.color)
-        ctx.move_to(self.vposx, 0)
-        ctx.line_to(self.vposx, self.base.ClientSize[1])
-        ctx.stroke()
+        if self.vposx:
+            # draws the dotted line
+            ctx.set_line_width(2)
+            ctx.set_dash([3,])
+            ctx.set_line_join(cairo.LINE_JOIN_MITER)
+            ctx.set_source_rgba(*self.color)
+            ctx.move_to(self.vposx, 0)
+            ctx.line_to(self.vposx, self.base.ClientSize[1])
+            ctx.stroke()
 
-        if self.label:
+            if self.label:
 
-            if self.vposy <= 4:
-                y_mod = 10
-            elif self.vposy >= self.base.ClientSize.y - 4:
-                y_mod = -10
-            else:
-                y_mod = 0
+                if self.vposy <= 4:
+                    y_mod = 10
+                elif self.vposy >= self.base.ClientSize.y - 4:
+                    y_mod = -10
+                else:
+                    y_mod = 0
 
-            vpos = (self.vposx + 5, self.vposy + y_mod)
-            self.write_label(ctx, vpos, self.label)
+                vpos = (self.vposx + 5, self.vposy + y_mod)
+                self.write_label(ctx, vpos, self.label)

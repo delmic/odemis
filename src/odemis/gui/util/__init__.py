@@ -93,7 +93,7 @@ class memoize(object):
     def __call__(self, *args):
         try:
             if len(self.cache) > 1000:
-                self._reset()
+                self._flush()
             return self.cache[args]
         except KeyError:
             value = self.func(*args)
@@ -111,10 +111,10 @@ class memoize(object):
     def __get__(self, obj, objtype):
         """Support instance methods."""
         fn = functools.partial(self.__call__, obj)
-        fn.reset = self._reset
+        fn.flush = self._flush
         return fn
 
-    def _reset(self):
+    def _flush(self):
         self.cache = {}
 
 

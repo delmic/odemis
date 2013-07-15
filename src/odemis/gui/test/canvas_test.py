@@ -158,15 +158,17 @@ class CanvasTestCase(unittest.TestCase):
         cnvs.set_closed(canvas.PLOT_CLOSE_STRAIGHT)
         self.add_control(cnvs, wx.EXPAND)
 
-        def toggle(event):
-            canv = event.GetEventObject()
+        cnvs.set_x_unit('m')
 
-            if canv.plot_mode == canvas.PLOT_MODE_BAR:
-                canv.set_plot_mode(canvas.PLOT_MODE_LINE)
-            else:
-                canv.set_plot_mode(canvas.PLOT_MODE_BAR)
+        # def toggle(event):
+        #     canv = event.GetEventObject()
 
-            event.Skip()
+        #     if canv.plot_mode == canvas.PLOT_MODE_BAR:
+        #         canv.set_plot_mode(canvas.PLOT_MODE_LINE)
+        #     else:
+        #         canv.set_plot_mode(canvas.PLOT_MODE_BAR)
+
+        #     event.Skip()
 
         # Enable this bind to enable render toggling by clicking
         #cnvs.Bind(wx.EVT_LEFT_UP, toggle)

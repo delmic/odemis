@@ -98,7 +98,7 @@ import cairo
 import wx
 import wx.lib.wxcairo as wxcairo
 
-from ..util import memoize, limit_invocation
+from ..util import memoize, limit_invocation, units
 from ..util.conversion import wxcol_to_rgb, change_brightness
 # from odemis.gui.comp.overlay import ViewOverlay
 import odemis.gui.img.data as imgdata
@@ -700,8 +700,8 @@ class DraggableCanvas(wx.Panel):
                 math.ceil(unsc_rect[1] + unsc_rect[3]) - int(unsc_rect[1])
                 )
 
-#            assert(unsc_rnd_rect[0] + unsc_rnd_rect[2] <= orig_size[0])
-#            assert(unsc_rnd_rect[1] + unsc_rnd_rect[3] <= orig_size[1])
+            # assert(unsc_rnd_rect[0] + unsc_rnd_rect[2] <= orig_size[0])
+            # assert(unsc_rnd_rect[1] + unsc_rnd_rect[3] <= orig_size[1])
             if (unsc_rnd_rect[0] + unsc_rnd_rect[2] > orig_size[0]
                 or unsc_rnd_rect[1] + unsc_rnd_rect[3] > orig_size[1]):
                 logging.error("Resizing img of %s px by %f is gets rect = %s",
@@ -1110,6 +1110,9 @@ class PlotCanvas(wx.Panel):
         # The data to be plotted, a list of numerical value pairs
         self._data = []
 
+        self.current_y_value = None
+        self.current_x_value = None
+
         # Interesting values taken from the data
         self.min_x = None
         self.max_x = None
@@ -1120,6 +1123,9 @@ class PlotCanvas(wx.Panel):
         self.width_y = None
 
         ## Rendering settings
+
+        self.unit_x = None
+        self.unit_y = None
 
         self.line_width = 1.5 #px
         self.line_colour = wxcol_to_rgb(self.ForegroundColour)
@@ -1166,7 +1172,6 @@ class PlotCanvas(wx.Panel):
         self.SetFocus()
         event.Skip()
 
-
     def OnLeftUp(self, event):
         self.dragging = False
         self.SetCursor(wx.STANDARD_CURSOR)
@@ -1179,12 +1184,20 @@ class PlotCanvas(wx.Panel):
             self._position_focus_line(event)
         event.Skip()
 
-
     def _position_focus_line(self, event):
         x, _ = event.GetPositionTuple()
-        val_y = self._pos_x_to_val_y(x)
-        pos = (x, self._val_y_to_pos_y(val_y))
-        self.focusline_overlay.set_label(val_y)
+        self.current_y_value = self._pos_x_to_val_y(x)
+        pos = (x, self._val_y_to_pos_y(self.current_y_value))
+        label = "%s, %s" % (units.readable_str(
+                                self.current_x_value,
+                                self.unit_x,
+                                3),
+                            units.readable_str(
+                                self.current_y_value,
+                                self.unit_y,
+                                3)
+                            )
+        self.focusline_overlay.set_label(label)
         self.focusline_overlay.set_position(pos, )
         self.Refresh()
 
@@ -1221,7 +1234,7 @@ class PlotCanvas(wx.Panel):
 
         return result
 
-    # Cached calculation methods. These should be reset when the relevant
+    # Cached calculation methods. These should be flushed when the relevant
     # data changes (e.g. when the canvas changes size).
 
     @memoize
@@ -1232,15 +1245,16 @@ class PlotCanvas(wx.Panel):
     @memoize
     def _pos_x_to_val_y(self, pos_x):
         """ Map the give x pixel value to a y value """
-        val_x = self._pos_x_to_val_x(pos_x)
-        return [y for x, y in self._data if x <= val_x][-1]
+        self.current_x_value = self._pos_x_to_val_x(pos_x)
+        return [y for x, y in self._data if x <= self.current_x_value][-1]
 
     @memoize
-    def  _pos_x_to_val_x(self, pos_x):
+    def _pos_x_to_val_x(self, pos_x):
         w, _ = self.ClientSize
         perc_x = pos_x / float(w)
         val_x = (perc_x * self.width_x) + self.min_x
-        return max(min(val_x, self.max_x), self.min_x)
+        val_x = max(min(val_x, self.max_x), self.min_x)
+        return[x for x, _ in self._data if x <= val_x][-1]
 
     # Getters and Setters
 
@@ -1277,6 +1291,23 @@ class PlotCanvas(wx.Panel):
         self.line_colour = wxcol_to_rgb(self.ForegroundColour)
         self.fill_colour = change_brightness(self.line_colour, -0.4)
 
+    def set_closed(self, closed=PLOT_CLOSE_STRAIGHT):
+        self.closed = closed
+
+    def set_plot_mode(self, mode):
+        self.plot_mode = mode
+        self.UpdateImage()
+
+    def get_y_value(self):
+        """ Return the current y value """
+        return self.current_y_value
+
+    def set_x_unit(self, unit):
+        self.unit_x = unit
+
+    def set_y_unit(self, unit):
+        self.unit_y = unit
+
     # Attribute calculators
 
     def set_dimensions(self, min_x, max_x, min_y, max_y):
@@ -1308,7 +1339,6 @@ class PlotCanvas(wx.Panel):
 
     def reset_dimensions(self):
         """ Determine the dimensions according to the present data """
-
         horz, vert = zip(*self._data)
         self.set_dimensions(
             min(horz),
@@ -1324,8 +1354,8 @@ class PlotCanvas(wx.Panel):
         """ This method updates the graph image """
 
         # Reset all cached values
-        for _, f in inspect.getmembers(self, lambda m: hasattr(m, "reset")):
-            f.reset()
+        for _, f in inspect.getmembers(self, lambda m: hasattr(m, "flush")):
+            f.flush()
 
         dc = wx.MemoryDC()
         dc.SelectObject(self._bmp_buffer)
@@ -1340,15 +1370,6 @@ class PlotCanvas(wx.Panel):
         del dc # need to get rid of the MemoryDC before Update() is called.
         self.Refresh(eraseBackground=False)
         self.Update()
-
-
-
-    def set_closed(self, closed=PLOT_CLOSE_STRAIGHT):
-        self.closed = closed
-
-    def set_plot_mode(self, mode):
-        self.plot_mode = mode
-        self.UpdateImage()
 
     def _plot_data(self, ctx, width, height):
         if self._data:
