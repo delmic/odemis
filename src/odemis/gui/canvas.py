@@ -38,8 +38,6 @@ import odemis.gui as gui
 import threading
 import wx
 
-
-
 # Various modes canvas elements can go into.
 
 MODE_SECOM_ZOOM = 1
@@ -970,6 +968,9 @@ class SparcAlignCanvas(DblMicroscopeCanvas):
 # TODO: change name
 
 class ZeroDimensionalPlotCanvas(PlotCanvas):
+    """ A plotable canvas with a vertical 'focus line', that shows the x and y
+    values of the selected position.
+    """
 
     def __init__(self, *args, **kwargs):
         super(ZeroDimensionalPlotCanvas, self).__init__(*args, **kwargs)

@@ -30,7 +30,7 @@ from odemis.gui.img.data import getico_blending_goalBitmap
 from odemis.gui.model import OPTICAL_STREAMS, EM_STREAMS
 from odemis.gui.util import call_after, units
 import logging
-import odemis.gui.dblmscopecanvas as canvas
+import odemis.gui.canvas as canvas
 import wx
 
 
@@ -394,15 +394,13 @@ class SparcAlignViewport(MicroscopeViewport):
         # FIXME: create goal icon
         self.legend_panel.bmpSliderRight.SetBitmap(getico_blending_goalBitmap())
 
+
 class PlotViewport(wx.Panel):
 
     # Default class
-    canvas_class = canvas.PlotCanvas
+    canvas_class = canvas.ZeroDimensionalPlotCanvas
 
     def __init__(self, *args, **kwargs):
-        """Note: The MicroscopeViewport is not fully initialised until setView()
-        has been called.
-        """
         wx.Panel.__init__(self, *args, **kwargs)
 
         # Keep track of this panel's pseudo focus
@@ -422,8 +420,8 @@ class PlotViewport(wx.Panel):
         mainSizer = wx.BoxSizer(wx.VERTICAL)
         mainSizer.Add(self.canvas, 1,
                 border=2, flag=wx.EXPAND | wx.TOP | wx.LEFT | wx.RIGHT)
-        mainSizer.Add(self.legend_panel, 0,
-                border=2, flag=wx.EXPAND | wx.BOTTOM | wx.LEFT | wx.RIGHT)
+        # mainSizer.Add(self.legend_panel, 0,
+        #         border=2, flag=wx.EXPAND | wx.BOTTOM | wx.LEFT | wx.RIGHT)
 
         self.SetSizerAndFit(mainSizer)
         self.SetAutoLayout(True)
