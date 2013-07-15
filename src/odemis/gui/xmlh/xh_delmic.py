@@ -29,7 +29,7 @@ import ast
 import logging
 import odemis.gui.comp.buttons as btns
 import odemis.gui.comp.foldpanelbar as fpb
-import odemis.gui.comp.mscviewport as mscp
+import odemis.gui.comp.viewport as vport
 import odemis.gui.comp.slider as slide
 import odemis.gui.comp.stream as strm
 import odemis.gui.comp.text as txt
@@ -637,7 +637,7 @@ HANDLER_CLASS_LIST.append(UnitFloatCtrlHandler)
 
 class MicroscopeViewportXmlHandler(xrc.XmlResourceHandler):
 
-    klass = mscp.MicroscopeViewport
+    klass = vport.MicroscopeViewport
 
     def __init__(self):
         xrc.XmlResourceHandler.__init__(self)
@@ -665,7 +665,7 @@ HANDLER_CLASS_LIST.append(MicroscopeViewportXmlHandler)
 
 class SecomViewportXmlHandler(MicroscopeViewportXmlHandler):
 
-    klass = mscp.SecomViewport
+    klass = vport.SecomViewport
 
     # This method and the next one are required for XmlResourceHandlers
     def CanHandle(self, node):
@@ -675,7 +675,7 @@ HANDLER_CLASS_LIST.append(SecomViewportXmlHandler)
 
 class SparcAcquisitionViewportXmlHandler(MicroscopeViewportXmlHandler):
 
-    klass = mscp.SparcAcquisitionViewport
+    klass = vport.SparcAcquisitionViewport
 
     # This method and the next one are required for XmlResourceHandlers
     def CanHandle(self, node):
@@ -685,7 +685,7 @@ HANDLER_CLASS_LIST.append(SparcAcquisitionViewportXmlHandler)
 
 class SparcAnalysisViewportXmlHandler(MicroscopeViewportXmlHandler):
 
-    klass = mscp.SparcAnalysisViewport
+    klass = vport.SparcAnalysisViewport
 
     # This method and the next one are required for XmlResourceHandlers
     def CanHandle(self, node):
@@ -694,7 +694,7 @@ HANDLER_CLASS_LIST.append(SparcAnalysisViewportXmlHandler)
 
 class SparcAlignViewportXmlHandler(MicroscopeViewportXmlHandler):
 
-    klass = mscp.SparcAlignViewport
+    klass = vport.SparcAlignViewport
 
     # This method and the next one are required for XmlResourceHandlers
     def CanHandle(self, node):

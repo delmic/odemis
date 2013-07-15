@@ -2,22 +2,24 @@
 """
 Created on 8 Feb 2012
 
-@author: Éric Piel
+:author: Éric Piel
+:copyright: © 2012 Éric Piel, Delmic
 
-Copyright © 2012 Éric Piel, Delmic
+.. license::
 
-This file is part of Odemis.
+    This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms
-of the GNU General Public License version 2 as published by the Free Software
-Foundation.
+    Odemis is free software: you can redistribute it and/or modify it under the
+    terms of the GNU General Public License version 2 as published by the Free
+    Software Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
-PURPOSE. See the GNU General Public License for more details.
+    Odemis is distributed in the hope that it will be useful, but WITHOUT ANY
+    WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+    FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
+    details.
 
-You should have received a copy of the GNU General Public License along with
-Odemis. If not, see http://www.gnu.org/licenses/.
+    You should have received a copy of the GNU General Public License along with
+    Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 
@@ -54,7 +56,7 @@ class MicroscopeViewport(wx.Panel):
         # Keep track of this panel's pseudo focus
         self._has_focus = False
 
-        font = wx.Font(6, wx.FONTFAMILY_DEFAULT,
+        font = wx.Font(8, wx.FONTFAMILY_DEFAULT,
                           wx.FONTSTYLE_NORMAL,
                           wx.FONTWEIGHT_NORMAL)
         self.SetFont(font)
