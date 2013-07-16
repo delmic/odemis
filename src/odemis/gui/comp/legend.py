@@ -165,6 +165,9 @@ class InfoLegend(wx.Panel):
         self.hfwDisplay.Bind(wx.EVT_LEFT_DOWN, self.OnLeftDown)
         self.LegendMag.Bind(wx.EVT_LEFT_DOWN, self.OnLeftDown)
 
+        # Explicitly set the
+        self.SetMinSize((-1, 40))
+
 
     # Make mouse events propagate to the parent
     def OnLeftDown(self, evt):
