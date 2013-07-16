@@ -1312,6 +1312,10 @@ class PlotCanvas(wx.Panel):
             x, _ = f_vtp(self._data[i + 1])
             f_clt(x, y)
 
+        # Store the line path for later use
+        line_path = ctx.copy_path()
+
+        # Close the path in the desired way, so we can fill it
         if self.closed == PLOT_CLOSE_BOTTOM:
             x, y = self.value_to_position((self.max_x, 0))
             ctx.line_to(x, y)
@@ -1322,8 +1326,13 @@ class PlotCanvas(wx.Panel):
 
         ctx.set_line_width(self.line_width)
         ctx.set_source_rgb(*self.fill_colour)
-        ctx.fill_preserve()
+        # Fill the current path. (Filling also clears the path when done)
+        ctx.fill()
+
+        # Reload the stored line path
+        ctx.append_path(line_path)
         ctx.set_source_rgb(*self.line_colour)
+        # Draw the line
         ctx.stroke()
 
     def _line_plot(self, ctx):

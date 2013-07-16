@@ -193,3 +193,18 @@ class AxisLegend(wx.Panel):
 
         style = style | wx.NO_BORDER
         super(AxisLegend, self).__init__(parent, wid, pos, size, style)
+
+        # self.SetBackgroundColour(parent.GetBackgroundColour())
+        # self.SetForegroundColour(parent.GetForegroundColour())
+
+        self.tick_panel = wx.Panel(self, style=wx.NO_BORDER)
+        self.tick_panel.SetBackgroundColour(parent.GetBackgroundColour())
+
+        mainSizer = wx.BoxSizer(wx.VERTICAL)
+        mainSizer.Add(self.tick_panel, 1, flag=wx.EXPAND)
+
+        # Explicitly set the
+        self.SetMinSize((-1, 40))
+
+        self.SetSizer(mainSizer)
+        self.SetAutoLayout(True)

@@ -25,7 +25,7 @@ Created on 8 Feb 2012
 
 from __future__ import division
 from odemis import gui
-from odemis.gui.comp.legend import InfoLegend
+from odemis.gui.comp.legend import InfoLegend, AxisLegend
 from odemis.gui.img.data import getico_blending_goalBitmap
 from odemis.gui.model import OPTICAL_STREAMS, EM_STREAMS
 from odemis.gui.util import call_after, units
@@ -416,12 +416,15 @@ class PlotViewport(wx.Panel):
         # main widget
         self.canvas = self.canvas_class(self)
 
+        # legend
+        self.legend = AxisLegend(self)
+
         # Put all together (canvas + legend)
         mainSizer = wx.BoxSizer(wx.VERTICAL)
         mainSizer.Add(self.canvas, 1,
                 border=2, flag=wx.EXPAND | wx.TOP | wx.LEFT | wx.RIGHT)
-        # mainSizer.Add(self.legend_panel, 0,
-        #         border=2, flag=wx.EXPAND | wx.BOTTOM | wx.LEFT | wx.RIGHT)
+        mainSizer.Add(self.legend, 0,
+                border=2, flag=wx.EXPAND | wx.BOTTOM | wx.LEFT | wx.RIGHT)
 
         self.SetSizerAndFit(mainSizer)
         self.SetAutoLayout(True)
