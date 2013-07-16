@@ -160,7 +160,8 @@ CONFIG = {
                 },
                 "readoutRate":
                 {
-                    "control_type": odemis.gui.CONTROL_INT,
+                    # TODO: should be RADIO
+                    "control_type": odemis.gui.CONTROL_FLT,
                 },
 
                 # what we don't want to display:
@@ -237,7 +238,7 @@ CONFIG = {
                 },
                 "readoutRate":
                 {
-                    "control_type": odemis.gui.CONTROL_INT,
+                    "control_type": odemis.gui.CONTROL_FLT,
                 },
                 "binning":
                 {
