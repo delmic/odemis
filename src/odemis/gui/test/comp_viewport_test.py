@@ -30,7 +30,7 @@ import math
 import wx
 
 import odemis.gui.comp.canvas as canvas
-import odemis.gui.comp.overlay as overlay
+import odemis.gui.comp.viewport as viewport
 import odemis.gui.test.test_gui
 
 
@@ -74,43 +74,11 @@ BUFF_COORDS = [
 # The center of the buffer, in world coordinates
 BUFFER_CENTER = [(0.0, 0.0)]
 
-def gen_test_data():
-    """ Help function to generate test data """
-    from random import randrange
-
-    sizes = (128,)
-
-    for _ in range(1):
-
-        for s in sizes:
-
-            x_axis = []
-            y_axis = []
-            start = 0
-
-            for j in xrange(s):
-                start += randrange(20)
-                x_axis.append(j)
-                y_axis.append(start)
-            print "(%s, %s)," % (x_axis, y_axis)
-
-            x = 0
-            x_axis = []
-            for j in xrange(s):
-                x += randrange(20)
-                x_axis.append(x)
-            y_axis = [abs(math.sin(i / (10 * math.pi))) * 20 for i in xrange(s)]
-            print "\n(%s, %s)," % (x_axis, y_axis)
-        print "\n"
-
-    import sys
-    sys.exit()
 
 class TestApp(wx.App):
     def __init__(self):
         odemis.gui.test.test_gui.get_resources = odemis_get_test_resources
         self.test_frame = None
-        # gen_test_data()
         wx.App.__init__(self, redirect=False)
 
     def OnInit(self):
@@ -146,110 +114,20 @@ class CanvasTestCase(unittest.TestCase):
 
     @classmethod
     def add_control(cls, ctrl, flags):
-        cls.sizer.Add(ctrl, flag=flags|wx.ALL, border=5, proportion=1)
+        cls.sizer.Add(ctrl, flag=flags|wx.ALL, border=0, proportion=1)
         cls.sizer.Layout()
         return ctrl
 
-    def test_plot_canvas(self):
+    def test_plot_viewport(self):
+        vwp = viewport.PlotViewport(self.panel)
 
+        vwp.SetBackgroundColour(wx.BLACK)
+        vwp.SetForegroundColour("#DDDDDD")
+        # vwp.set_closed(canvas.PLOT_CLOSE_STRAIGHT)
+        self.add_control(vwp, wx.EXPAND)
 
-        # Create and add a test plot canvas
-        # cnvs = canvas.PlotCanvas(self.panel)
-        cnvs = ZeroDimensionalPlotCanvas(self.panel)
+        vwp.canvas.set_1d_data(PLOTS[-1][0], PLOTS[-1][1])
 
-        cnvs.SetBackgroundColour(wx.BLACK)
-        cnvs.SetForegroundColour("#DDDDDD")
-        cnvs.set_closed(canvas.PLOT_CLOSE_STRAIGHT)
-        self.add_control(cnvs, wx.EXPAND)
-
-        cnvs.set_x_unit('m')
-
-        # def toggle(event):
-        #     canv = event.GetEventObject()
-
-        #     if canv.plot_mode == canvas.PLOT_MODE_BAR:
-        #         canv.set_plot_mode(canvas.PLOT_MODE_LINE)
-        #     else:
-        #         canv.set_plot_mode(canvas.PLOT_MODE_BAR)
-
-        #     event.Skip()
-
-        # Enable this bind to enable render toggling by clicking
-        #cnvs.Bind(wx.EVT_LEFT_UP, toggle)
-
-        gui_loop()
-        wx.MilliSleep(SLEEP_TIME)
-
-        data = [
-            (0.5, 0.5),
-            (0.5, 4.5),
-            (4.5, 4.5),
-            (4.5, 0.5),
-        ]
-
-        gui_loop()
-        cnvs.set_data(data)
-
-        gui_loop()
-        wx.MilliSleep(SLEEP_TIME)
-
-        cnvs.set_dimensions(0, 5, 0, 5)
-
-        gui_loop()
-        wx.MilliSleep(SLEEP_TIME)
-
-        cnvs.set_closed(canvas.PLOT_CLOSE_BOTTOM)
-        cnvs.reset_dimensions()
-
-        gui_loop()
-        wx.MilliSleep(SLEEP_TIME)
-
-
-        cnvs.set_plot_mode(canvas.PLOT_MODE_BAR)
-
-        for plot in PLOTS:
-            cnvs.set_1d_data(plot[0], plot[1])
-
-            gui_loop()
-            wx.MilliSleep(SLEEP_TIME)
-
-        ol = overlay.FocusLineOverlay(cnvs)
-        cnvs.set_focusline_ovelay(ol)
-
-        # wx.MilliSleep(SLEEP_TIME)
-
-        # data = [
-        #     (0.1, 0.1),
-        #     (0.1, 3.9),
-        #     (3.9, 3.9),
-        #     (3.9, 0.1),
-        # ]
-
-        # cnvs.set_2d_data(data)
-
-        # gui_loop()
-        # cnvs.Update()
-
-        # wx.MilliSleep(SLEEP_TIME)
-
-
-    def xtest_buffer_to_world(self):
-
-        for m in MARGINS:
-            offset = tuple((x / 2) + y for x, y in zip(VIEW_SIZE, m))
-            for bp in BUFF_COORDS:
-                for s in SCALES:
-                    for c in BUFFER_CENTER:
-                        wp = canvas.buffer_to_world_pos(bp, c, s, offset)
-                        nbp = canvas.world_to_buffer_pos(wp, c, s, offset)
-
-                        err = ("{} -> {} -> {} "
-                               "scale: {}, center: {}, offset: {}")
-                        err = err.format(bp, wp, nbp, s, c, offset)
-                        print err
-
-                        self.assertAlmostEqual(bp[0], nbp[0], msg=err)
-                        self.assertAlmostEqual(bp[1], nbp[1], msg=err)
 
 if __name__ == "__main__":
     unittest.main()

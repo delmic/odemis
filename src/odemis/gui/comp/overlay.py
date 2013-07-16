@@ -57,19 +57,19 @@ class Overlay(object):
         )
         ctx.set_font_size(font.GetPointSize())
 
-        margin = 5
+        margin_x = 10
 
         _, _, width, height, _, _ = ctx.text_extents(label)
         x, y = vpos
 
         if flip:
-            if x + width > self.base.ClientSize[0]:
-                x = self.base.ClientSize[0] - width - margin
+            if x + width + margin_x > self.base.ClientSize.x:
+                x = self.base.ClientSize[0] - width - margin_x
 
-            if y + height > self.base.ClientSize[1]:
-                y = self.base.ClientSize[1] - height - margin
-            elif y - height < 0:
-                y = height + margin
+            if y + height + margin_x > self.base.ClientSize.y:
+                y = self.base.ClientSize[1] - height
+            elif y < height:
+                y = height
 
         #t = font.GetPixelSize()
         ctx.set_source_rgb(0.0, 0.0, 0.0)
@@ -604,13 +604,5 @@ class FocusLineOverlay(ViewOverlay):
             ctx.stroke()
 
             if self.label:
-
-                if self.vposy <= 4:
-                    y_mod = 10
-                elif self.vposy >= self.base.ClientSize.y - 4:
-                    y_mod = -10
-                else:
-                    y_mod = 0
-
-                vpos = (self.vposx + 5, self.vposy + y_mod)
+                vpos = (self.vposx + 5, self.vposy + 3)
                 self.write_label(ctx, vpos, self.label)

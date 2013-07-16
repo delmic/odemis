@@ -98,7 +98,7 @@ import cairo
 import wx
 import wx.lib.wxcairo as wxcairo
 
-from ..util import memoize, limit_invocation
+from ..util import memoize
 from ..util.conversion import wxcol_to_rgb, change_brightness
 # from odemis.gui.comp.overlay import ViewOverlay
 import odemis.gui.img.data as imgdata

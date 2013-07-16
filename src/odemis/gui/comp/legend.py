@@ -22,7 +22,10 @@
 
 """
 
+
+import cairo
 import wx
+import wx.lib.wxcairo as wxcairo
 
 from odemis.gui.comp.scalewindow import ScaleWindow
 from odemis.gui.comp.slider import Slider

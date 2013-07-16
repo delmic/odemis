@@ -22,7 +22,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
 from __future__ import division
-from .comp.canvas import DraggableCanvas, PlotCanvas
 from .comp.overlay import CrossHairOverlay, ViewSelectOverlay, \
     WorldSelectOverlay, TextViewOverlay
 from decorator import decorator
@@ -32,9 +31,11 @@ from odemis.gui.model import EM_STREAMS, stream
 from odemis.gui.model.stream import UNDEFINED_ROI
 from odemis.gui.util import limit_invocation, call_after, units
 from odemis.model._vattributes import VigilantAttributeBase
+import odemis.gui.comp.overlay as overlay
 from wx.lib.pubsub import pub
 import logging
 import odemis.gui as gui
+import odemis.gui.comp.canvas as canvas
 import threading
 import wx
 
@@ -59,7 +60,7 @@ def microscope_view_check(f, self, *args, **kwargs):
     if self.microscope_view:
         return f(self, *args, **kwargs)
 
-class DblMicroscopeCanvas(DraggableCanvas):
+class DblMicroscopeCanvas(canvas.DraggableCanvas):
     """ A draggable, flicker-free window class adapted to show pictures of two
     microscope simultaneously.
 
@@ -69,7 +70,7 @@ class DblMicroscopeCanvas(DraggableCanvas):
     It also provides various typical overlays (ie, drawings) for microscope views.
     """
     def __init__(self, *args, **kwargs):
-        DraggableCanvas.__init__(self, *args, **kwargs)
+        canvas.DraggableCanvas.__init__(self, *args, **kwargs)
         self.microscope_view = None
         self._microscope_model = None
 
@@ -227,7 +228,7 @@ class DblMicroscopeCanvas(DraggableCanvas):
     def _updateThumbnail(self):
         # TODO: avoid doing 2 copies, by using directly the wxImage from the
         # result of the StreamTree
-#        logging.debug("Updating thumbnail with size = %s", self.ClientSize)
+        # logging.debug("Updating thumbnail with size = %s", self.ClientSize)
 
         csize = self.ClientSize
         if (csize[0] * csize[1]) <= 0:
@@ -291,7 +292,7 @@ class DblMicroscopeCanvas(DraggableCanvas):
         if recenter is None:
             # recenter only if there is no stage attached
             recenter = not hasattr(self.microscope_view, "stage_pos")
-        DraggableCanvas.fitViewToContent(self, recenter=recenter)
+        canvas.DraggableCanvas.fitViewToContent(self, recenter=recenter)
 
         # this will indirectly call _onMPP(), but not have any additional effect
         if self.microscope_view and self.mpwu:
@@ -543,7 +544,7 @@ class SecomCanvas(DblMicroscopeCanvas):
             self.ShouldUpdateDrawing()
 
         else:
-            DraggableCanvas.OnLeftDown(self, event)
+            canvas.DraggableCanvas.OnLeftDown(self, event)
 
     def OnLeftUp(self, event):
         if self.current_mode in SECOM_MODES:
@@ -560,7 +561,7 @@ class SecomCanvas(DblMicroscopeCanvas):
 
             self.ShouldUpdateDrawing()
         else:
-            DraggableCanvas.OnLeftUp(self, event)
+            canvas.DraggableCanvas.OnLeftUp(self, event)
 
     def OnMouseMotion(self, event):
         if self.current_mode in SECOM_MODES and self.active_overlay:
@@ -585,7 +586,7 @@ class SecomCanvas(DblMicroscopeCanvas):
                     self.SetCursor(self.cursor)
 
         else:
-            DraggableCanvas.OnMouseMotion(self, event)
+            canvas.DraggableCanvas.OnMouseMotion(self, event)
 
     # Capture unwanted events when a tool is active.
 
@@ -687,7 +688,7 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
             self.ShouldUpdateDrawing()
 
         else:
-            DraggableCanvas.OnLeftDown(self, event)
+            canvas.DraggableCanvas.OnLeftDown(self, event)
 
     def OnLeftUp(self, event):
         if self.current_mode in SPARC_MODES:
@@ -707,7 +708,7 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
                     self._roa.value = UNDEFINED_ROI
 
         else:
-            DraggableCanvas.OnLeftUp(self, event)
+            canvas.DraggableCanvas.OnLeftUp(self, event)
 
     def OnMouseMotion(self, event):
         if self.current_mode in SPARC_MODES and self.active_overlay:
@@ -733,7 +734,7 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
                     self.SetCursor(self.cursor)
 
         else:
-            DraggableCanvas.OnMouseMotion(self, event)
+            canvas.DraggableCanvas.OnMouseMotion(self, event)
 
     # Capture unwanted events when a tool is active.
 
@@ -965,9 +966,9 @@ class SparcAlignCanvas(DblMicroscopeCanvas):
     def OnChar(self, event):
         event.Skip()
 
-# TODO: change name
+# TODO: change name?
 
-class ZeroDimensionalPlotCanvas(PlotCanvas):
+class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
     """ A plotable canvas with a vertical 'focus line', that shows the x and y
     values of the selected position.
     """
@@ -988,6 +989,15 @@ class ZeroDimensionalPlotCanvas(PlotCanvas):
         self.focusline_overlay = None
         # List of all overlays used by this canvas
         self.overlays = []
+
+        self.SetBackgroundColour(self.Parent.BackgroundColour)
+        self.SetForegroundColour(self.Parent.ForegroundColour)
+
+        self.closed = canvas.PLOT_CLOSE_BOTTOM
+        self.plot_mode = canvas.PLOT_MODE_BAR
+
+
+        self.set_focusline_ovelay(overlay.FocusLineOverlay(self.Parent))
 
         ## Event binding
 
@@ -1053,7 +1063,6 @@ class ZeroDimensionalPlotCanvas(PlotCanvas):
         self.focusline_overlay = fol
         self.overlays.append(fol)
         self.Refresh()
-
 
     def get_y_value(self):
         """ Return the current y value """
