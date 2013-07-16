@@ -556,7 +556,7 @@ class MirrorAlignTab(Tab):
 
             # TODO: need to know the mirror center according to the goal image (metadata using pypng?)
             goal_im = pkg_resources.resource_stream("odemis.gui.img",
-                                        "calibration/ma_goal_image_5_13.png")
+                                        "calibration/ma_goal_image_5_13_no_lens.png")
             mpp = 13e-6 # m (not used if everything goes fine)
             goal_iim = InstrumentalImage(wx.ImageFromStream(goal_im), mpp, (0, 0))
             goal_stream = StaticStream("Goal", goal_iim)
