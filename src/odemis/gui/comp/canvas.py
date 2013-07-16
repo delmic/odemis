@@ -693,20 +693,22 @@ class DraggableCanvas(wx.Panel):
 
             # Note that width and length must be "double rounded" to account
             # for the round down of the origin and round up of the bottom left
-            unsc_rnd_rect = (
+            unsc_rnd_rect = [
                 int(unsc_rect[0]), # rounding down
                 int(unsc_rect[1]),
                 math.ceil(unsc_rect[0] + unsc_rect[2]) - int(unsc_rect[0]),
                 math.ceil(unsc_rect[1] + unsc_rect[3]) - int(unsc_rect[1])
-                )
+                ]
 
             # assert(unsc_rnd_rect[0] + unsc_rnd_rect[2] <= orig_size[0])
             # assert(unsc_rnd_rect[1] + unsc_rnd_rect[3] <= orig_size[1])
+
             if (unsc_rnd_rect[0] + unsc_rnd_rect[2] > orig_size[0]
                 or unsc_rnd_rect[1] + unsc_rnd_rect[3] > orig_size[1]):
-                logging.error("Resizing img of %s px by %f is gets rect = %s",
-                                orig_size, total_scale, unsc_rnd_rect)
-                # crop
+                # sometimes floating errors + rounding leads to one pixel too
+                # much => just crop
+                assert(unsc_rnd_rect[0] + unsc_rnd_rect[2] <= orig_size[0] + 1)
+                assert(unsc_rnd_rect[1] + unsc_rnd_rect[3] <= orig_size[1] + 1)
                 unsc_rnd_rect[2] = orig_size[0] - unsc_rnd_rect[0]
                 unsc_rnd_rect[3] = orig_size[1] - unsc_rnd_rect[1]
 
@@ -719,7 +721,7 @@ class DraggableCanvas(wx.Panel):
                           int(unsc_rnd_rect[3] * total_scale))
 
             if (final_rect[2] > 2 * goal_rect[2] or
-               final_rect[3] > 2 * goal_rect[3]):
+                final_rect[3] > 2 * goal_rect[3]):
                 # a sign we went too far (too much zoomed) => not as perfect but
                 # don't use too much memory
                 final_rect = goal_rect
@@ -1195,7 +1197,7 @@ class PlotCanvas(wx.Panel):
 
     def set_1d_data(self, horz, vert):
         """ Construct the data by zipping the wo provided 1D iterables """
-        if not all(horz[i] <= horz[i+1] for i in xrange(len(horz)-1)):
+        if not all(horz[i] <= horz[i + 1] for i in xrange(len(horz) - 1)):
             raise ValueError("The horizontal data should be sorted!")
         self._data = zip(horz, vert)
         self.reset_dimensions()
@@ -1205,7 +1207,7 @@ class PlotCanvas(wx.Panel):
 
         The data should be an iterable of numerical 2-tuples.
         """
-        if not all(data[i][0] <= data[i+1][0] for i in xrange(len(data)-1)):
+        if not all(data[i][0] <= data[i + 1][0] for i in xrange(len(data) - 1)):
             raise ValueError("The horizontal data should be sorted!")
         if len(data[0]) != 2:
             raise ValueError("The data should be 2D!")

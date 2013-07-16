@@ -614,7 +614,7 @@ class VisualRangeSlider(BaseSlider):
 
     sel_alpha = 0.5 # %
     sel_alpha_h = 0.7 # %
-    min_sel_width = 5 # px
+    min_sel_width = 2 # px
 
     def __init__(self, parent, id=wx.ID_ANY, value=(0.5, 0.6), minValue=0.0,
                  maxValue=1.0, size=(-1, -1), pos=wx.DefaultPosition,
@@ -722,6 +722,10 @@ class VisualRangeSlider(BaseSlider):
     def _update_pixel_value(self):
         """ Recompute .pixel_value according to .value """
         self.pixel_value = tuple(self._val_to_pixel(i) for i in self.value)
+        # Note: we could force it at least min_sel_width, but then it would
+        # change back a lot as soon as the user moves the selection (or we'd
+        # need to remember we're in a special display mode until left or right
+        # are moved alone).
         # There must be at least one pixel for the selection
         if self.pixel_value[1] - self.pixel_value[0] < 1:
             self.pixel_value = (self.pixel_value[0], self.pixel_value[0] + 1)
