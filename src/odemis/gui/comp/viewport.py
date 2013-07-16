@@ -2,39 +2,36 @@
 """
 Created on 8 Feb 2012
 
-@author: Éric Piel
+:author: Éric Piel
+:copyright: © 2012 Éric Piel, Delmic
 
-Copyright © 2012 Éric Piel, Delmic
+.. license::
 
-This file is part of Odemis.
+    This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms
-of the GNU General Public License version 2 as published by the Free Software
-Foundation.
+    Odemis is free software: you can redistribute it and/or modify it under the
+    terms of the GNU General Public License version 2 as published by the Free
+    Software Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
-PURPOSE. See the GNU General Public License for more details.
+    Odemis is distributed in the hope that it will be useful, but WITHOUT ANY
+    WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+    FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
+    details.
 
-You should have received a copy of the GNU General Public License along with
-Odemis. If not, see http://www.gnu.org/licenses/.
+    You should have received a copy of the GNU General Public License along with
+    Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 
 from __future__ import division
 from odemis import gui
 from odemis.gui.comp.legend import InfoLegend
-from odemis.gui.comp.scalewindow import ScaleWindow
-from odemis.gui.comp.slider import Slider
-from odemis.gui.img.data import getico_blending_optBitmap, \
-    getico_blending_semBitmap, getico_blending_goalBitmap
+from odemis.gui.img.data import getico_blending_goalBitmap
 from odemis.gui.model import OPTICAL_STREAMS, EM_STREAMS
 from odemis.gui.util import call_after, units
 import logging
-import odemis.gui.dblmscopecanvas as canvas
+import odemis.gui.canvas as canvas
 import wx
-
-
 
 
 
@@ -75,89 +72,12 @@ class MicroscopeViewport(wx.Panel):
         # legend
         self.legend_panel = InfoLegend(self) #wx.Panel(self)
 
-        self.bmpSliderLeft = wx.StaticBitmap(
-                                    self.legend_panel,
-                                    wx.ID_ANY,
-                                    getico_blending_optBitmap())
-        self.bmpSliderRight = wx.StaticBitmap(
-                                    self.legend_panel,
-                                    wx.ID_ANY,
-                                    getico_blending_semBitmap())
-
-        # Make sure that mouse clicks on the icons set the correct focus
-        self.bmpSliderLeft.Bind(wx.EVT_LEFT_DOWN, self.OnChildFocus)
-        self.bmpSliderRight.Bind(wx.EVT_LEFT_DOWN, self.OnChildFocus)
-
-        # Set slider to min/max
-        self.bmpSliderLeft.Bind(wx.EVT_LEFT_UP, self.OnSliderIconClick)
-        self.bmpSliderRight.Bind(wx.EVT_LEFT_UP, self.OnSliderIconClick)
-
-        self.legend_panel.mergeSlider.Bind(wx.EVT_LEFT_UP, self.OnSlider)
+        # Focus the view when a child element is clicked
+        self.legend_panel.Bind(wx.EVT_LEFT_DOWN, self.OnChildFocus)
 
         # Bind on EVT_SLIDER to update even while the user is moving
-        self.legend_panel.mergeSlider.Bind(wx.EVT_SLIDER, self.OnSlider)
-
-        # Dragging the slider should set the focus to the right view
-        self.legend_panel.mergeSlider.Bind(wx.EVT_LEFT_DOWN, self.OnChildFocus)
-
-        # scale
-        self.scaleDisplay = ScaleWindow(self.legend_panel)
-        self.scaleDisplay.SetFont(font)
-
-        # Horizontal Full Width text
-        # TODO: allow the user to select/copy the text
-        self.hfwDisplay = wx.StaticText(self.legend_panel)
-        self.hfwDisplay.SetToolTipString("Horizontal Field Width")
-        self.hfwDisplay.Bind(wx.EVT_LEFT_DOWN, self.OnChildFocus)
-
-        # magnification
-        self.LegendMag = wx.StaticText(self.legend_panel)
-        self.LegendMag.SetToolTipString("Magnification")
-        self.LegendMag.Bind(wx.EVT_LEFT_DOWN, self.OnChildFocus)
-
-        # TODO more...
-#        self.LegendWl = wx.StaticText(self.legend_panel)
-#        self.LegendWl.SetToolTipString("Wavelength")
-#        self.LegendET = wx.StaticText(self.legend_panel)
-#        self.LegendET.SetToolTipString("Exposure Time")
-#
-#        self.LegendDwell = wx.StaticText(self.legend_panel)
-#        self.LegendSpot = wx.StaticText(self.legend_panel)
-#        self.LegendHV = wx.StaticText(self.legend_panel)
-
-        # Sizer composition:
-        #
-        # +-------------------------------------------------------+
-        # | +----+-----+ |    |         |    | +----+------+----+ |
-        # | |Mag | HFW | | <> | <Scale> | <> | |Icon|Slider|Icon| |
-        # | +----+-----+ |    |         |    | +----+------+----+ |
-        # +-------------------------------------------------------+
-
-        leftColSizer = wx.BoxSizer(wx.HORIZONTAL)
-        leftColSizer.Add(self.LegendMag, border=10, flag=wx.ALIGN_CENTER | wx.RIGHT)
-        leftColSizer.Add(self.hfwDisplay, border=10, flag=wx.ALIGN_CENTER)
-
-        sliderSizer = wx.BoxSizer(wx.HORIZONTAL)
-        # TODO: need to have the icons updated according to the streams
-        sliderSizer.Add(self.bmpSliderLeft, border=3,
-                        flag=wx.ALIGN_CENTER | wx.RIGHT | wx.RESERVE_SPACE_EVEN_IF_HIDDEN)
-        sliderSizer.Add(self.legend_panel.mergeSlider,
-                        flag=wx.ALIGN_CENTER | wx.EXPAND | wx.RESERVE_SPACE_EVEN_IF_HIDDEN)
-        sliderSizer.Add(self.bmpSliderRight, border=3,
-                        flag=wx.ALIGN_CENTER | wx.LEFT | wx.RESERVE_SPACE_EVEN_IF_HIDDEN)
-
-        legendSizer = wx.BoxSizer(wx.HORIZONTAL)
-        legendSizer.Add(leftColSizer, 0, flag=wx.EXPAND | wx.ALIGN_CENTER)
-        legendSizer.AddStretchSpacer(1)
-        legendSizer.Add(self.scaleDisplay, 2, border=2,
-                        flag=wx.EXPAND | wx.ALIGN_CENTER | wx.RIGHT | wx.LEFT)
-        legendSizer.AddStretchSpacer(1)
-        legendSizer.Add(sliderSizer, 0, flag=wx.EXPAND | wx.ALIGN_CENTER)
-
-        # legend_panel_sizer is needed to add a border around the legend
-        legend_panel_sizer = wx.BoxSizer(wx.VERTICAL)
-        legend_panel_sizer.Add(legendSizer, border=10, flag=wx.ALL | wx.EXPAND)
-        self.legend_panel.SetSizerAndFit(legend_panel_sizer)
+        self.legend_panel.Bind(wx.EVT_LEFT_UP, self.OnSlider)
+        self.legend_panel.Bind(wx.EVT_SLIDER, self.OnSlider)
 
         # Put all together (canvas + legend)
         mainSizer = wx.BoxSizer(wx.VERTICAL)
@@ -229,9 +149,9 @@ class MicroscopeViewport(wx.Panel):
 
     def ShowMergeSlider(self, show):
         """ Show or hide the merge slider """
-        self.bmpSliderLeft.Show(show)
+        self.legend_panel.bmpSliderLeft.Show(show)
         self.legend_panel.mergeSlider.Show(show)
-        self.bmpSliderRight.Show(show)
+        self.legend_panel.bmpSliderRight.Show(show)
 
     def HasFocus(self, *args, **kwargs):
         return self._has_focus == True
@@ -255,8 +175,7 @@ class MicroscopeViewport(wx.Panel):
         hfw = self._microscope_view.mpp.value * self.GetClientSize()[0]
         hfw = units.round_significant(hfw, 4)
         label = u"HFW: %s" % units.readable_str(hfw, "m", sig=3)
-        self.hfwDisplay.SetLabel(label)
-        self.legend_panel.Layout()
+        self.legend_panel.set_hfw_label(label)
 
     def UpdateMagnification(self):
         # TODO: shall we use the real density of the screen?
@@ -298,8 +217,7 @@ class MicroscopeViewport(wx.Panel):
             else:
                 label += u"÷" + units.readable_str(units.round_significant(1.0 / mag, 3))
 
-        self.LegendMag.SetLabel(label)
-        self.legend_panel.Layout()
+        self.legend_panel.set_mag_label(label)
 
     ################################################
     ## VA handling
@@ -326,7 +244,7 @@ class MicroscopeViewport(wx.Panel):
 
     @call_after
     def _onMPP(self, mpp):
-        self.scaleDisplay.SetMPP(mpp)
+        self.legend_panel.scaleDisplay.SetMPP(mpp)
         self.UpdateHFWLabel()
         self.UpdateMagnification()
         # the MicroscopeView will send an event that the view has to be redrawn
@@ -391,7 +309,6 @@ class MicroscopeViewport(wx.Panel):
         """ When one of it's child widgets is clicked, this viewport should be
         considered as having the focus.
         """
-
         if self._microscope_view and self._microscope_model:
             # This will take care of doing everything necessary
             # Remember, the notify method of the vigilant attribute will
@@ -421,7 +338,7 @@ class MicroscopeViewport(wx.Panel):
         if self._microscope_view is None:
             return
 
-        if(evt.GetEventObject() == self.bmpSliderLeft):
+        if(evt.GetEventObject() == self.legend_panel.bmpSliderLeft):
             self.legend_panel.mergeSlider.set_to_min_val()
         else:
             self.legend_panel.mergeSlider.set_to_max_val()
@@ -474,4 +391,46 @@ class SparcAlignViewport(MicroscopeViewport):
         super(SparcAlignViewport, self).__init__(*args, **kwargs)
         # TODO: should be done on the fly by _checkMergeSliderDisplay()
         # change SEM icon to Goal
-        self.bmpSliderRight.SetBitmap(getico_blending_goalBitmap()) # FIXME: create goal icon
+        # FIXME: create goal icon
+        self.legend_panel.bmpSliderRight.SetBitmap(getico_blending_goalBitmap())
+
+
+class PlotViewport(wx.Panel):
+
+    # Default class
+    canvas_class = canvas.ZeroDimensionalPlotCanvas
+
+    def __init__(self, *args, **kwargs):
+        wx.Panel.__init__(self, *args, **kwargs)
+
+        # Keep track of this panel's pseudo focus
+        self._has_focus = False
+
+        font = wx.Font(8, wx.FONTFAMILY_DEFAULT,
+                          wx.FONTSTYLE_NORMAL,
+                          wx.FONTWEIGHT_NORMAL)
+        self.SetFont(font)
+        self.SetBackgroundColour("#1A1A1A")
+        self.SetForegroundColour("#BBBBBB")
+
+        # main widget
+        self.canvas = self.canvas_class(self)
+
+        # Put all together (canvas + legend)
+        mainSizer = wx.BoxSizer(wx.VERTICAL)
+        mainSizer.Add(self.canvas, 1,
+                border=2, flag=wx.EXPAND | wx.TOP | wx.LEFT | wx.RIGHT)
+        # mainSizer.Add(self.legend_panel, 0,
+        #         border=2, flag=wx.EXPAND | wx.BOTTOM | wx.LEFT | wx.RIGHT)
+
+        self.SetSizerAndFit(mainSizer)
+        self.SetAutoLayout(True)
+
+        self.Bind(wx.EVT_CHILD_FOCUS, self.OnChildFocus)
+        self.Bind(wx.EVT_SIZE, self.OnSize)
+
+    def OnSize(self, evt):
+        evt.Skip() # processed also by the parent
+
+    def OnChildFocus(self, evt):
+        evt.Skip()

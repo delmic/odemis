@@ -98,7 +98,7 @@ import cairo
 import wx
 import wx.lib.wxcairo as wxcairo
 
-from ..util import memoize, limit_invocation
+from ..util import memoize
 from ..util.conversion import wxcol_to_rgb, change_brightness
 # from odemis.gui.comp.overlay import ViewOverlay
 import odemis.gui.img.data as imgdata
@@ -700,6 +700,9 @@ class DraggableCanvas(wx.Panel):
                 math.ceil(unsc_rect[1] + unsc_rect[3]) - int(unsc_rect[1])
                 ]
 
+            # assert(unsc_rnd_rect[0] + unsc_rnd_rect[2] <= orig_size[0])
+            # assert(unsc_rnd_rect[1] + unsc_rnd_rect[3] <= orig_size[1])
+
             if (unsc_rnd_rect[0] + unsc_rnd_rect[2] > orig_size[0]
                 or unsc_rnd_rect[1] + unsc_rnd_rect[3] > orig_size[1]):
                 # sometimes floating errors + rounding leads to one pixel too
@@ -1128,22 +1131,10 @@ class PlotCanvas(wx.Panel):
         self.closed = PLOT_CLOSE_NOT
         self.plot_mode = PLOT_MODE_LINE
 
-        self.dragging = False
-
-        ## Overlays
-
-        self.focusline_overlay = None
-        # List of all overlays used by this canvas
-        self.overlays = []
-
         ## Event binding
 
         self.Bind(wx.EVT_PAINT, self.OnPaint)
         self.Bind(wx.EVT_SIZE, self.OnSize)
-
-        self.Bind(wx.EVT_LEFT_DOWN, self.OnLeftDown)
-        self.Bind(wx.EVT_LEFT_UP, self.OnLeftUp)
-        self.Bind(wx.EVT_MOTION, self.OnMouseMotion)
 
         # OnSize called to make sure the buffer is initialized.
         # This might result in OnSize getting called twice on some
@@ -1152,52 +1143,12 @@ class PlotCanvas(wx.Panel):
 
     # Event handlers
 
-    def OnLeftDown(self, event):
-        self.dragging = True
-        self.drag_init_pos = event.GetPositionTuple()
-
-        logging.debug("Drag started at %s", self.drag_init_pos)
-
-        if not self.HasCapture():
-            self._position_focus_line(event)
-            self.CaptureMouse()
-
-        self.SetFocus()
-        event.Skip()
-
-
-    def OnLeftUp(self, event):
-        self.dragging = False
-        self.SetCursor(wx.STANDARD_CURSOR)
-        if self.HasCapture():
-            self.ReleaseMouse()
-        event.Skip()
-
-    def OnMouseMotion(self, event):
-        if self.dragging and self.focusline_overlay:
-            self._position_focus_line(event)
-        event.Skip()
-
-
-    def _position_focus_line(self, event):
-        x, _ = event.GetPositionTuple()
-        val_y = self._pos_x_to_val_y(x)
-        pos = (x, self._val_y_to_pos_y(val_y))
-        self.focusline_overlay.set_label(val_y)
-        self.focusline_overlay.set_position(pos,)
-        self.Refresh()
-
     def OnSize(self, event=None):
         self._bmp_buffer = wx.EmptyBitmap(*self.ClientSize)
         self.UpdateImage()
 
     def OnPaint(self, event=None):
-        wx.BufferedPaintDC(self, self._bmp_buffer)
-
-        dc = wx.PaintDC(self)
-
-        for o in self.overlays:
-            o.Draw(dc)
+        raise NotImplementedError()
 
     # Value calculation methods
 
@@ -1220,7 +1171,7 @@ class PlotCanvas(wx.Panel):
 
         return result
 
-    # Cached calculation methods. These should be reset when the relevant
+    # Cached calculation methods. These should be flushed when the relevant
     # data changes (e.g. when the canvas changes size).
 
     @memoize
@@ -1231,15 +1182,16 @@ class PlotCanvas(wx.Panel):
     @memoize
     def _pos_x_to_val_y(self, pos_x):
         """ Map the give x pixel value to a y value """
-        val_x = self._pos_x_to_val_x(pos_x)
-        return [y for x, y in self._data if x <= val_x][-1]
+        self.current_x_value = self._pos_x_to_val_x(pos_x)
+        return [y for x, y in self._data if x <= self.current_x_value][-1]
 
     @memoize
-    def  _pos_x_to_val_x(self, pos_x):
+    def _pos_x_to_val_x(self, pos_x):
         w, _ = self.ClientSize
         perc_x = pos_x / float(w)
         val_x = (perc_x * self.width_x) + self.min_x
-        return max(min(val_x, self.max_x), self.min_x)
+        val_x = max(min(val_x, self.max_x), self.min_x)
+        return[x for x, _ in self._data if x <= val_x][-1]
 
     # Getters and Setters
 
@@ -1263,18 +1215,17 @@ class PlotCanvas(wx.Panel):
         self._data = data
         self.reset_dimensions()
 
-    def set_focusline_ovelay(self, fol):
-        """ Assign a focusline overlay to the canvas """
-        # TODO: Add type check to make sure the ovelay is a ViewOverlay.
-        # (But importing Viewoverlay causes cyclic imports)
-        self.focusline_overlay = fol
-        self.overlays.append(fol)
-        self.Refresh()
-
     def SetForegroundColour(self, *args, **kwargs):
         super(PlotCanvas, self).SetForegroundColour(*args, **kwargs)
         self.line_colour = wxcol_to_rgb(self.ForegroundColour)
         self.fill_colour = change_brightness(self.line_colour, -0.4)
+
+    def set_closed(self, closed=PLOT_CLOSE_STRAIGHT):
+        self.closed = closed
+
+    def set_plot_mode(self, mode):
+        self.plot_mode = mode
+        self.UpdateImage()
 
     # Attribute calculators
 
@@ -1307,7 +1258,6 @@ class PlotCanvas(wx.Panel):
 
     def reset_dimensions(self):
         """ Determine the dimensions according to the present data """
-
         horz, vert = zip(*self._data)
         self.set_dimensions(
             min(horz),
@@ -1323,8 +1273,8 @@ class PlotCanvas(wx.Panel):
         """ This method updates the graph image """
 
         # Reset all cached values
-        for _, f in inspect.getmembers(self, lambda m: hasattr(m, "reset")):
-            f.reset()
+        for _, f in inspect.getmembers(self, lambda m: hasattr(m, "flush")):
+            f.flush()
 
         dc = wx.MemoryDC()
         dc.SelectObject(self._bmp_buffer)
@@ -1339,15 +1289,6 @@ class PlotCanvas(wx.Panel):
         del dc # need to get rid of the MemoryDC before Update() is called.
         self.Refresh(eraseBackground=False)
         self.Update()
-
-
-
-    def set_closed(self, closed=PLOT_CLOSE_STRAIGHT):
-        self.closed = closed
-
-    def set_plot_mode(self, mode):
-        self.plot_mode = mode
-        self.UpdateImage()
 
     def _plot_data(self, ctx, width, height):
         if self._data:

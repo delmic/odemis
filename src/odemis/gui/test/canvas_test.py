@@ -1,9 +1,11 @@
-#-*- coding: utf-8 -*-
-
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
 """
-@author: Rinze de Laat
+Created on 10 Feb 2012
 
-Copyright © 2013 Rinze de Laat, Delmic
+@author: Éric Piel
+
+Copyright © 2012 Éric Piel, Delmic
 
 This file is part of Odemis.
 
@@ -20,230 +22,232 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 
-#===============================================================================
-# Test module for Odemis' gui.comp.buttons module
-#===============================================================================
-
+from odemis import model
+from odemis.gui import instrmodel, test
+from odemis.gui.canvas import DblMicroscopeCanvas
+from odemis.gui.model.img import InstrumentalImage
+from odemis.gui.model.stream import StaticStream
+import logging
 import unittest
-import math
-
 import wx
 
-import odemis.gui.comp.canvas as canvas
-import odemis.gui.comp.overlay as overlay
-import odemis.gui.test.test_gui
+logging.getLogger().setLevel(logging.DEBUG)
 
-from odemis.gui.xmlh import odemis_get_test_resources
-from odemis.gui.test import MANUAL, SLEEP_TIME, gui_loop
-
-INSPECT = False
-MANUAL = True
-
-PLOTS = [
-    ([0, 1, 2, 3, 4, 5], [1, 3, 5, 2, 4, 0]),
-    ([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127], [15, 29, 29, 34, 42, 48, 62, 64, 71, 88, 94, 95, 104, 117, 124, 126, 140, 144, 155, 158, 158, 172, 186, 205, 214, 226, 234, 244, 248, 265, 280, 299, 312, 314, 317, 321, 333, 335, 337, 343, 346, 346, 352, 370, 379, 384, 392, 411, 413, 431, 438, 453, 470, 477, 487, 495, 509, 512, 519, 527, 535, 544, 550, 555, 561, 574, 579, 582, 601, 605, 616, 619, 620, 633, 642, 658, 668, 687, 702, 716, 732, 745, 763, 779, 780, 780, 793, 803, 815, 815, 832, 851, 851, 866, 873, 890, 896, 906, 918, 919, 921, 922, 933, 934, 949, 949, 952, 963, 974, 974, 989, 989, 1002, 1012, 1031, 1046, 1053, 1062, 1066, 1074, 1085, 1092, 1097, 1097, 1098, 1103, 1105, 1116]),
-    ([17, 36, 40, 43, 44, 62, 79, 83, 99, 104, 116, 133, 147, 152, 171, 185, 193, 195, 201, 210, 225, 225, 241, 246, 254, 254, 269, 270, 272, 280, 286, 304, 323, 336, 344, 345, 351, 355, 374, 381, 400, 408, 425, 444, 449, 456, 466, 482, 489, 506, 507, 516, 526, 542, 561, 576, 581, 593, 595, 602, 604, 618, 633, 639, 647, 656, 667, 670, 689, 691, 705, 721, 725, 738, 750, 767, 768, 776, 786, 797, 809, 809, 815, 832, 840, 857, 867, 869, 878, 889, 892, 905, 907, 915, 934, 952, 957, 971, 985, 1003, 1019, 1032, 1042, 1046, 1058, 1077, 1089, 1100, 1104, 1109, 1121, 1124, 1127, 1132, 1145, 1148, 1155, 1170, 1171, 1183, 1184, 1196, 1208, 1214, 1229, 1235, 1236, 1239], [0.0, 0.6365122726989454, 1.2723796780808552, 1.906958002160726, 2.53960433695571, 3.1696777318320972, 3.7965398428692474, 4.419555579582602, 5.0380937483505495, 5.651527691893277, 6.259235924155733, 6.860602759951489, 7.455018938729595, 8.041882241832447, 8.620598102619352, 9.19058020883762, 9.75125109663092, 10.30204273558309, 10.842397104204696, 11.371766755279262, 11.889615370496443, 12.395418303810198, 12.888663112971502, 13.368850078697054, 13.835492710948023, 14.28811824180589, 14.72626810444606, 15.149498397723974, 15.557380335903012, 15.949500683068614, 16.325462171788427, 16.68488390559441, 17.027401744879036, 17.352668675814723, 17.660355161922638, 17.9501494779348, 18.22175802561112, 18.474905631191508, 18.70933582418163, 18.924811097189927, 19.12111314655259, 19.29804309350273, 19.4554216856597, 19.593089478634386, 19.710906997566514, 19.8087548784303, 19.886533988965265, 19.94416552910976, 19.98159111083536, 19.998772817301322, 19.995693241269127, 19.972355502738214, 19.928783245785024, 19.86502061460857, 19.78113220880678, 19.677203017928953, 19.55333833537061, 19.40966365169799, 19.246324527510243, 19.063486445968188, 18.861334645138946, 18.640073930326405, 18.39992846657756, 18.141141551575032, 17.863975369145777, 17.568710723635768, 17.255646755419708, 16.925100637834095, 16.577407255840527, 16.212918866744978, 15.832004743316626, 15.435050799667964, 15.022459200275, 14.594647952533888, 14.152050483266645, 13.695115199605024, 13.2243050346975, 12.740096978699476, 12.242981595522055, 11.733462525828823, 11.212055976784281, 10.679290199070756, 10.135704951703774, 9.581850955187997, 9.018289333567836, 8.445591045937874, 7.86433630798924, 7.275114004177816, 6.678521091109944, 6.075161992749953, 5.465647988062376, 4.850596591709154, 4.230630928429297, 3.6063791017348503, 2.9784735575626757, 2.3475504435268717, 1.7142489644208867, 1.0792107346223752, 0.44307912805674976, 0.19350137362182113, 0.829885833971738, 1.4654295151659982, 2.0994885311930926, 2.731420500194814, 3.3605851952802257, 3.986345193156318, 4.608066519918359, 5.225119293345488, 5.836878361050961, 6.44272393384048, 7.042042213636877, 7.63422601533515, 8.218675381957603, 8.794798192486061, 9.3620107617552, 9.919738431799397, 10.467416154053764, 11.004489061819742, 11.530413032415103, 12.044655238438986, 12.546694687593318, 13.03602275051382, 13.512143676075766, 13.974575093652511, 14.422848501817834, 14.856509742997059, 15.275119463586035, 15.678253559071791]),
-]
-
-SCALES = [0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 256.0]
-
-VIEW_SIZE = (400, 400)
-
-# View coordinates, with a top-left 0,0 origin
-VIEW_COORDS = [
-                (0, 0),
-                (0, 349),
-                (123, 0),
-                (321, 322),
-              ]
-
-# Margin around the view
-MARGINS = [(0, 0), (512, 512)]
-
-# Buffer coordinates, with a top-left 0,0 origin
-BUFF_COORDS = [
-                (0, 0),
-                (0, 349),
-                (512 + 200, 512 + 200),
-                (133, 0),
-                (399, 399),
-              ]
-
-# The center of the buffer, in world coordinates
-BUFFER_CENTER = [(0.0, 0.0)]
-
-def gen_test_data():
-    """ Help function to generate test data """
-    from random import randrange
-
-    sizes = (128,)
-
-    for _ in range(1):
-
-        for s in sizes:
-
-            x_axis = []
-            y_axis = []
-            start = 0
-
-            for j in xrange(s):
-                start += randrange(20)
-                x_axis.append(j)
-                y_axis.append(start)
-            print "(%s, %s)," % (x_axis, y_axis)
-
-            x = 0
-            x_axis = []
-            for j in xrange(s):
-                x += randrange(20)
-                x_axis.append(x)
-            y_axis = [abs(math.sin(i / (10 * math.pi))) * 20 for i in xrange(s)]
-            print "\n(%s, %s)," % (x_axis, y_axis)
-        print "\n"
-
-    import sys
-    sys.exit()
-
-class TestApp(wx.App):
+class FakeMicroscopeGUI(object):
+    """
+    Imitates a MicroscopeModel wrt stream entry: it just needs a focussedView
+    """
     def __init__(self):
-        odemis.gui.test.test_gui.get_resources = odemis_get_test_resources
-        self.test_frame = None
-        # gen_test_data()
-        wx.App.__init__(self, redirect=False)
+        fview = instrmodel.MicroscopeView("fakeview")
+        self.focussedView = model.VigilantAttribute(fview)
 
-    def OnInit(self):
-        self.test_frame = odemis.gui.test.test_gui.xrccanvas_frame(None)
-        self.test_frame.SetSize((400, 400))
-        self.test_frame.Center()
-        self.test_frame.Layout()
-        self.test_frame.Show()
+class TestDblMicroscopeCanvas(unittest.TestCase):
 
-        return True
+    def setUp(self):
+        self.app = wx.PySimpleApp()
+        self.frame = wx.Frame(None)
+        self.mmodel = FakeMicroscopeGUI()
+        self.view = self.mmodel.focussedView.value
+        self.canvas = DblMicroscopeCanvas(self.frame)
+        self.canvas.backgroundBrush = wx.SOLID # no special background
+        self.canvas.setView(self.view, self.mmodel)
 
-class CanvasTestCase(unittest.TestCase):
+        self.frame.SetSize((124, 124))
+        test.gui_loop()
+        self.frame.Show(True)
+        test.gui_loop()
 
-    @classmethod
-    def setUpClass(cls):
-        cls.app = TestApp()
-        cls.panel = cls.app.test_frame.canvas_panel
-        cls.sizer = cls.panel.GetSizer()
+    def tearDown(self):
+        self.frame.Destroy()
+        self.app.MainLoop()
 
-        # NOTE!: Call Layout on the panel here, because otherwise the
-        # controls layed out using XRC will not have the right sizes!
-        gui_loop()
+    def test_CrosHair(self):
+        # crosshair
+        show_crosshair = self.view.show_crosshair
+        show_crosshair.value = True
+        self.assertGreaterEqual(len(self.canvas.ViewOverlays), 1)
+        lvo = len(self.canvas.ViewOverlays)
+        show_crosshair.value = True
+        self.assertEqual(len(self.canvas.ViewOverlays), lvo)
+        show_crosshair.value = False
+        self.assertEqual(len(self.canvas.ViewOverlays), lvo - 1)
 
-    @classmethod
-    def tearDownClass(cls):
-        if not MANUAL:
-            wx.CallAfter(cls.app.Exit)
-        else:
-            if INSPECT:
-                from wx.lib import inspection
-                inspection.InspectionTool().Show()
-            cls.app.MainLoop()
+    def test_BasicDisplay(self):
+        """
+        Draws a view with two streams, one with a red pixel with a low density
+         and one with a blue pixel at a high density.
+        """
+        mpp = 0.0001
+        self.view.mpp.value = mpp
+        self.assertEqual(mpp, self.view.mpp.value)
 
-    @classmethod
-    def add_control(cls, ctrl, flags):
-        cls.sizer.Add(ctrl, flag=flags|wx.ALL, border=5, proportion=1)
-        cls.sizer.Layout()
-        return ctrl
+        # add images
+        im1 = wx.EmptyImage(11, 11, clear=True)
+        px1_cent = (5, 5)
+        # Red pixel at center, (5,5)
+        im1.SetRGB(px1_cent[0], px1_cent[1], 255, 0, 0)
+        im2 = wx.EmptyImage(201, 201, clear=True)
+        px2_cent = ((im2.Width - 1) // 2 , (im2.Height - 1) // 2)
+        # Blue pixel at center (100,100)
+        im2.SetRGB(px2_cent[0], px2_cent[1], 0, 0, 255)
+        stream1 = StaticStream("s1", InstrumentalImage(im1, mpp * 10, (0, 0)))
+        # 200, 200 => outside of the im1
+        # +(0.5, 0.5) to make it really in the center of the pixel
+        stream2 = StaticStream("s2", InstrumentalImage(
+                                        im2,
+                                        mpp,
+                                        (200.5 * mpp, 200.5 * mpp)))
+        self.view.addStream(stream1)
+        self.view.addStream(stream2)
 
-    def test_plot_canvas(self):
+        # reset the mpp of the view, as it's automatically set to the first
+        # image
+        self.view.mpp.value = mpp
 
+        shift = (63, 63)
+        self.canvas.ShiftView(shift)
 
-        # Create and add a test plot canvas
-        cnvs = canvas.PlotCanvas(self.panel)
-        cnvs.SetBackgroundColour(wx.BLACK)
-        cnvs.SetForegroundColour("#DDDDDD")
-        cnvs.set_closed(canvas.PLOT_CLOSE_STRAIGHT)
-        self.add_control(cnvs, wx.EXPAND)
+        # merge the images
+        ratio = 0.5
+        self.view.merge_ratio.value = ratio
+        self.assertEqual(ratio, self.view.merge_ratio.value)
 
-        def toggle(event):
-            canv = event.GetEventObject()
+        test.gui_loop()
+        # it's supposed to update in less than 0.5s
+        wx.MilliSleep(500)
+        test.gui_loop()
 
-            if canv.plot_mode == canvas.PLOT_MODE_BAR:
-                canv.set_plot_mode(canvas.PLOT_MODE_LINE)
-            else:
-                canv.set_plot_mode(canvas.PLOT_MODE_BAR)
+        # copy the buffer into a nice image here
+        resultIm = GetImageFromBuffer(self.canvas)
+        # for i in range(resultIm.GetWidth()):
+        #     for j in range(resultIm.GetHeight()):
+        #         px = GetRGB(resultIm, i, j)
+        #         if px != (0, 0, 0):
+        #             print px, i, j
 
-            event.Skip()
+        px1 = GetRGB(resultIm, resultIm.Width / 2 + shift[0], resultIm.Height / 2 + shift[1])
+        self.assertEqual(px1, (127, 0, 0))
+        px2 = GetRGB(resultIm, resultIm.Width / 2 + 200 + shift[0],
+                               resultIm.Height / 2 + 200 + shift[1])
+        self.assertEqual(px2, (0, 0, 255))
 
-        # Enable this bind to enable render toggling by clicking
-        #cnvs.Bind(wx.EVT_LEFT_UP, toggle)
+        # remove first picture
+        self.view.removeStream(stream1)
+        test.gui_loop()
+        wx.MilliSleep(500)
+        test.gui_loop()
 
-        gui_loop()
-        wx.MilliSleep(SLEEP_TIME)
+        resultIm = GetImageFromBuffer(self.canvas)
+        px2 = GetRGB(resultIm, resultIm.Width / 2 + 200 + shift[0], resultIm.Height / 2 + 200 + shift[1])
+        self.assertEqual(px2, (0, 0, 255))
 
-        data = [
-            (0.5, 0.5),
-            (0.5, 4.5),
-            (4.5, 4.5),
-            (4.5, 0.5),
-        ]
+#    @unittest.skip("simple")
+    def test_BasicMove(self):
+        mpp = 0.0001
+        self.view.mpp.value = mpp
+        self.assertEqual(mpp, self.view.mpp.value)
 
-        gui_loop()
-        cnvs.set_data(data)
+        # add images
+        im1 = wx.EmptyImage(11, 11, clear=True)
+        px1_cent = (5, 5)
+        im1.SetRGB(px1_cent[0], px1_cent[1], 255, 0, 0) # Red pixel at center, (5,5)
+        im2 = wx.EmptyImage(201, 201, clear=True)
+        px2_cent = (100, 100)
+        im2.SetRGB(px2_cent[0], px2_cent[1], 0, 0, 255) # Blue pixel at center (100,100)
+        stream1 = StaticStream("s1", InstrumentalImage(im1, mpp * 10, (0, 0)))
+        stream2 = StaticStream("s2", InstrumentalImage(im2, mpp, (200.5 * mpp, 200.5 * mpp)))
+        self.view.addStream(stream1)
+        self.view.addStream(stream2)
+        # view might set its mpp to the mpp of first image => reset it
+        self.view.mpp.value = mpp
+        self.assertEqual(mpp, self.view.mpp.value)
 
-        gui_loop()
-        wx.MilliSleep(SLEEP_TIME)
+        shift = (100, 100)
+        self.canvas.ShiftView(shift)
 
-        cnvs.set_dimensions(0, 5, 0, 5)
+        # merge the images
+        ratio = 0.5
+        self.view.merge_ratio.value = ratio
+        self.assertEqual(ratio, self.view.merge_ratio.value)
 
-        gui_loop()
-        wx.MilliSleep(SLEEP_TIME)
+        test.gui_loop()
+        # it's supposed to update in less than 1s
+        wx.MilliSleep(500)
+        test.gui_loop()
 
-        cnvs.set_closed(canvas.PLOT_CLOSE_BOTTOM)
-        cnvs.reset_dimensions()
+        # copy the buffer into a nice image here
+        resultIm = GetImageFromBuffer(self.canvas)
 
-        gui_loop()
-        wx.MilliSleep(SLEEP_TIME)
+        px1 = GetRGB(resultIm, resultIm.Width / 2 + shift[0], resultIm.Height / 2 + shift[1])
+        self.assertEqual(px1, (127, 0, 0))
+        px2 = GetRGB(resultIm, resultIm.Width / 2 + 200 + shift[0], resultIm.Height / 2 + 200 + shift[1])
+        self.assertEqual(px2, (0, 0, 255))
 
+#    @unittest.skip("simple")
+    def test_ZoomMove(self):
+        mpp = 0.0001
+        self.view.mpp.value = mpp
+        self.assertEqual(mpp, self.view.mpp.value)
 
-        cnvs.set_plot_mode(canvas.PLOT_MODE_BAR)
+        # add images
+        im1 = wx.EmptyImage(11, 11, clear=True)
+        px1_cent = (5, 5)
+        im1.SetRGB(px1_cent[0], px1_cent[1], 255, 0, 0) # Red pixel at center, (5,5)
+        stream1 = StaticStream("s1", InstrumentalImage(im1, mpp * 10, (0, 0)))
+        self.view.addStream(stream1)
+        # view might set its mpp to the mpp of first image => reset it
+        self.view.mpp.value = mpp
 
-        for plot in PLOTS:
-            cnvs.set_1d_data(plot[0], plot[1])
+        shift = (10, 10)
+        self.canvas.ShiftView(shift)
 
-            gui_loop()
-            wx.MilliSleep(SLEEP_TIME)
+        test.gui_loop()
+        wx.MilliSleep(500)
+        test.gui_loop()
+        resultIm = GetImageFromBuffer(self.canvas)
 
-        ol = overlay.FocusLineOverlay(cnvs)
-        cnvs.set_focusline_ovelay(ol)
+        px1 = GetRGB(resultIm,
+                     self.canvas._bmp_buffer_size[0] / 2 + 10,
+                     self.canvas._bmp_buffer_size[1] / 2 + 10)
+        self.assertEqual(px1, (255, 0, 0))
 
-        # wx.MilliSleep(SLEEP_TIME)
+        # zoom in
+        self.canvas.Zoom(2)
+        self.assertEqual(mpp / (2 ** 2), self.view.mpp.value)
+        test.gui_loop()
+        wx.MilliSleep(500)
+        test.gui_loop()
+        resultIm = GetImageFromBuffer(self.canvas)
 
-        # data = [
-        #     (0.1, 0.1),
-        #     (0.1, 3.9),
-        #     (3.9, 3.9),
-        #     (3.9, 0.1),
-        # ]
+        px1 = GetRGB(resultIm,
+             self.canvas._bmp_buffer_size[0] / 2 + 40,
+             self.canvas._bmp_buffer_size[1] / 2 + 40)
+        self.assertEqual(px1, (255, 0, 0))
 
-        # cnvs.set_2d_data(data)
+        # fit to content without recentering should always zoom less or as much
+        # as with recentering
+        self.canvas.fitViewToContent(recenter=False)
+        mpp_no_recenter = self.view.mpp.value
+        self.canvas.fitViewToContent(recenter=True)
+        mpp_recenter = self.view.mpp.value
+        self.assertGreaterEqual(mpp_no_recenter, mpp_recenter)
 
-        # gui_loop()
-        # cnvs.Update()
+def GetRGB(im, x, y):
+    # TODO use DC.GetPixel()
+    return (im.GetRed(x, y), im.GetGreen(x, y), im.GetBlue(x, y))
 
-        # wx.MilliSleep(SLEEP_TIME)
-
-
-    def xtest_buffer_to_world(self):
-
-        for m in MARGINS:
-            offset = tuple((x / 2) + y for x, y in zip(VIEW_SIZE, m))
-            for bp in BUFF_COORDS:
-                for s in SCALES:
-                    for c in BUFFER_CENTER:
-                        wp = canvas.buffer_to_world_pos(bp, c, s, offset)
-                        nbp = canvas.world_to_buffer_pos(wp, c, s, offset)
-
-                        err = ("{} -> {} -> {} "
-                               "scale: {}, center: {}, offset: {}")
-                        err = err.format(bp, wp, nbp, s, c, offset)
-                        print err
-
-                        self.assertAlmostEqual(bp[0], nbp[0], msg=err)
-                        self.assertAlmostEqual(bp[1], nbp[1], msg=err)
+def GetImageFromBuffer(canvas):
+    """
+    Copy the current buffer into a wx.Image
+    """
+    resultBmp = wx.EmptyBitmap(*canvas._bmp_buffer_size)
+    resultDC = wx.MemoryDC()
+    resultDC.SelectObject(resultBmp)
+    resultDC.BlitPointSize((0, 0), canvas._bmp_buffer_size, canvas._dc_buffer, (0, 0))
+    resultDC.SelectObject(wx.NullBitmap)
+    return wx.ImageFromBitmap(resultBmp)
 
 if __name__ == "__main__":
     unittest.main()
+
+# vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:

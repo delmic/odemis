@@ -409,8 +409,8 @@ class OdemisGUIApp(wx.App):
             info.Developers += ["", "Dye database from http://fluorophores.org"]
             info.Licence += ("""
 The dye database is provided as-is, from the Fluorobase consortium.
-The Fluorobase consortium provides this data and software in good faith, but makes
-no warranty, expressed or implied, nor assumes any legal liability or
+The Fluorobase consortium provides this data and software in good faith, but
+akes no warranty, expressed or implied, nor assumes any legal liability or
 responsibility for any purpose for which they are used. For further information
 see http://www.fluorophores.org/disclaimer/.
 """)
