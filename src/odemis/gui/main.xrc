@@ -697,13 +697,13 @@
                   </object>
                   <object class="sizeritem">
                     <object class="wxStaticText">
-                      <label>Step size</label>
+                      <label>Step size X</label>
                     </object>
                     <flag>wxBOTTOM</flag>
                     <border>5</border>
                   </object>
                   <object class="sizeritem">
-                    <object class="UnitFloatSlider" name="slider_mirror_t">
+                    <object class="UnitFloatSlider" name="slider_mirror_x">
                       <size>-1,20</size>
                       <value>0.000001</value>
                       <min>0.0000001</min>
@@ -845,7 +845,7 @@
                         <cellpos>3,2</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="btn_align_mx">
+                        <object class="ImageTextButton" name="btn_align_px">
                           <label>◃</label>
                           <delta>1</delta>
                           <bitmap>img/btn_64x48.png</bitmap>
@@ -868,7 +868,7 @@
                         <cellpos>2,1</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="btn_align_px">
+                        <object class="ImageTextButton" name="btn_align_mx">
                           <label>▹</label>
                           <delta>1</delta>
                           <bitmap>img/btn_64x48.png</bitmap>

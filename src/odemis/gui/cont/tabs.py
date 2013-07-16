@@ -649,8 +649,8 @@ class MirrorAlignTab(Tab):
                     wx.WXK_NUMPAD8: ("l", 1),
                     }
     key_bindings_sparc = {
-                    wx.WXK_LEFT: ("x", -1),
-                    wx.WXK_RIGHT: ("x", 1),
+                    wx.WXK_LEFT: ("x", 1), # so that image goes in same direction
+                    wx.WXK_RIGHT: ("x", -1),
                     wx.WXK_DOWN: ("y", -1),
                     wx.WXK_UP: ("y", 1),
 #                    wx.WXK_PAGEDOWN: ("z", -1),
