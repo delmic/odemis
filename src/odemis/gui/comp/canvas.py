@@ -1092,6 +1092,8 @@ PLOT_CLOSE_STRAIGHT = 1
 PLOT_CLOSE_BOTTOM = 2
 PLOT_MODE_LINE = 1
 PLOT_MODE_BAR = 2
+PLOT_TICKS_HORZ = 1
+PLOT_TICKS_VERT = 2
 
 class PlotCanvas(wx.Panel):
     """ This canvas can plot numerical data in various ways and allows
@@ -1125,11 +1127,13 @@ class PlotCanvas(wx.Panel):
 
         self.line_width = 1.5 #px
         self.line_colour = wxcol_to_rgb(self.ForegroundColour)
-        self.fill_colour = change_brightness(self.line_colour, -0.1)
+        self.fill_colour = change_brightness(self.line_colour, -0.2)
 
         # Determines if the graph should be closed, and if so, how.
         self.closed = PLOT_CLOSE_NOT
         self.plot_mode = PLOT_MODE_LINE
+        self.ticks = None
+        self.tick_gap = 40
 
         ## Event binding
 
@@ -1218,7 +1222,7 @@ class PlotCanvas(wx.Panel):
     def SetForegroundColour(self, *args, **kwargs):
         super(PlotCanvas, self).SetForegroundColour(*args, **kwargs)
         self.line_colour = wxcol_to_rgb(self.ForegroundColour)
-        self.fill_colour = change_brightness(self.line_colour, -0.4)
+        self.fill_colour = change_brightness(self.line_colour, -0.2)
 
     def set_closed(self, closed=PLOT_CLOSE_STRAIGHT):
         self.closed = closed
@@ -1290,27 +1294,34 @@ class PlotCanvas(wx.Panel):
         self.Refresh(eraseBackground=False)
         self.Update()
 
+    def get_ticks(self):
+        ticks = []
+        for i in range(self.ClientSize.x / self.tick_gap):
+            xpos = (i + 1) * self.tick_gap
+            ticks.append((xpos, self._pos_x_to_val_x(xpos)))
+        return ticks
+
     def _plot_data(self, ctx, width, height):
         if self._data:
             if self.plot_mode == PLOT_MODE_LINE:
                 self._line_plot(ctx)
             elif self.plot_mode == PLOT_MODE_BAR:
-                self._bar_plot(ctx, width)
+                self._bar_plot(ctx)
             # logging.debug("moving to %s", self.value_to_position(self._data[0]))
 
-    def _bar_plot(self, ctx, width):
-        f_vtp = self.value_to_position
-        f_clt = ctx.line_to
+    def _bar_plot(self, ctx):
+        value_to_position = self.value_to_position
+        line_to = ctx.line_to
 
-        x, y = f_vtp((self.min_x, self.min_y))
+        x, y = value_to_position((self.min_x, self.min_y))
 
         ctx.move_to(x, y)
 
         for i, p in enumerate(self._data[:-1]):
-            x, y = f_vtp(p)
-            f_clt(x, y)
-            x, _ = f_vtp(self._data[i + 1])
-            f_clt(x, y)
+            x, y = value_to_position(p)
+            line_to(x, y)
+            x, _ = value_to_position(self._data[i + 1])
+            line_to(x, y)
 
         # Store the line path for later use
         line_path = ctx.copy_path()
@@ -1335,17 +1346,20 @@ class PlotCanvas(wx.Panel):
         # Draw the line
         ctx.stroke()
 
+        if self.ticks:
+            self._tick_plot(ctx)
+
     def _line_plot(self, ctx):
 
         ctx.move_to(*self.value_to_position(self._data[0]))
 
-        f_vtp = self.value_to_position
-        f_clt = ctx.line_to
+        value_to_position = self.value_to_position
+        line_to = ctx.line_to
 
         for p in self._data[1:]:
-            x, y = f_vtp(p)
+            x, y = value_to_position(p)
             # logging.debug("drawing to %s", (x, y))
-            f_clt(x, y)
+            line_to(x, y)
 
         if self.closed == PLOT_CLOSE_BOTTOM:
             x, y = self.value_to_position((self.max_x, 0))
@@ -1361,3 +1375,16 @@ class PlotCanvas(wx.Panel):
         ctx.set_source_rgb(*self.line_colour)
         ctx.stroke()
 
+        if self.ticks:
+            self._tick_plot(ctx)
+
+    def _tick_plot(self, ctx):
+        ctx.set_line_width(2)
+        ctx.set_line_join(cairo.LINE_JOIN_MITER)
+        ctx.set_source_rgba(0.0, 0, 0, 0.5)
+
+        for xpos, _ in self.get_ticks():
+            ctx.move_to(xpos, self.ClientSize.y - 5)
+            ctx.line_to(xpos, self.ClientSize.y)
+
+        ctx.stroke()
