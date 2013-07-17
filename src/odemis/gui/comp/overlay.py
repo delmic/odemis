@@ -72,7 +72,7 @@ class Overlay(object):
                 y = height
 
         #t = font.GetPixelSize()
-        ctx.set_source_rgb(0.0, 0.0, 0.0)
+        ctx.set_source_rgba(0.0, 0.0, 0.0, 0.7)
         ctx.move_to(x, y)
         ctx.show_text(label)
 
@@ -589,7 +589,9 @@ class FocusLineOverlay(ViewOverlay):
         ctx = wx.lib.wxcairo.ContextFromDC(dc_buffer)
 
         if self.vposy:
-            ctx.set_source_rgba(*change_brightness(self.color, -0.1))
+            r, g, b, a = change_brightness(self.color, -0.1)
+            a = 0.5
+            ctx.set_source_rgba(r, g, b, a)
             ctx.arc(self.vposx, self.vposy, 5.5, 0, 2*math.pi)
             ctx.fill()
 
