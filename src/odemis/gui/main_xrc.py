@@ -76,11 +76,12 @@ class xrcfr_main(wx.Frame):
         self.fp_annotations = xrc.XRCCTRL(self, "fp_annotations")
         self.btn_secom_acquire = xrc.XRCCTRL(self, "btn_secom_acquire")
         self.pnl_tab_sparc_align = xrc.XRCCTRL(self, "pnl_tab_sparc_align")
-        self.slider_mirror_t = xrc.XRCCTRL(self, "slider_mirror_t")
+        self.slider_mirror_x = xrc.XRCCTRL(self, "slider_mirror_x")
+        self.slider_mirror_y = xrc.XRCCTRL(self, "slider_mirror_y")
         self.btn_align_py = xrc.XRCCTRL(self, "btn_align_py")
         self.btn_align_my = xrc.XRCCTRL(self, "btn_align_my")
-        self.btn_align_mx = xrc.XRCCTRL(self, "btn_align_mx")
         self.btn_align_px = xrc.XRCCTRL(self, "btn_align_px")
+        self.btn_align_mx = xrc.XRCCTRL(self, "btn_align_mx")
         self.slider_mirror_r = xrc.XRCCTRL(self, "slider_mirror_r")
         self.btn_align_pry = xrc.XRCCTRL(self, "btn_align_pry")
         self.btn_align_mry = xrc.XRCCTRL(self, "btn_align_mry")
@@ -878,13 +879,37 @@ def __init_resources():
                   </object>
                   <object class="sizeritem">
                     <object class="wxStaticText">
-                      <label>Step size</label>
+                      <label>Step size X</label>
                     </object>
                     <flag>wxBOTTOM</flag>
                     <border>5</border>
                   </object>
                   <object class="sizeritem">
-                    <object class="UnitFloatSlider" name="slider_mirror_t">
+                    <object class="UnitFloatSlider" name="slider_mirror_x">
+                      <size>-1,20</size>
+                      <value>0.000001</value>
+                      <min>0.0000001</min>
+                      <max>0.001</max>
+                      <unit>m</unit>
+                      <scale>log</scale>
+                      <accuracy>2</accuracy>
+                      <fg>#E5E5E5</fg>
+                      <style>wxBORDER_NONE</style>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <flag>wxEXPAND</flag>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxStaticText">
+                      <label>Step size Y</label>
+                    </object>
+                    <flag>wxBOTTOM</flag>
+                    <border>5</border>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="UnitFloatSlider" name="slider_mirror_y">
                       <size>-1,20</size>
                       <value>0.000001</value>
                       <min>0.0000001</min>
@@ -1026,7 +1051,7 @@ def __init_resources():
                         <cellpos>3,2</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="btn_align_mx">
+                        <object class="ImageTextButton" name="btn_align_px">
                           <label>◃</label>
                           <delta>1</delta>
                           <bitmap>img_btn_64x48_png</bitmap>
@@ -1049,7 +1074,7 @@ def __init_resources():
                         <cellpos>2,1</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="btn_align_px">
+                        <object class="ImageTextButton" name="btn_align_mx">
                           <label>▹</label>
                           <delta>1</delta>
                           <bitmap>img_btn_64x48_png</bitmap>
