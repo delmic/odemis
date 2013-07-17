@@ -3,7 +3,7 @@ SECOM: {
     role: secom,
     emitters: [Spectra, "Nikon Lens", "MultiBand Fixed Filter", "EBeam ExtXY"],
     detectors: [Clara, "SED ExtXY"],
-    actuators: ["Redstone Stage", "SEM-Optical Alignment", "OpticalZ actuator"],
+    actuators: ["OLStage", "SEM-Optical Alignment", "OpticalZ actuator"],
 }
 
 Spectra: {
@@ -65,7 +65,7 @@ Spectra: {
 "Nikon Lens": {
     class: static.OpticalLens,
     role: lens,
-    init: {mag: 40.0}, # ratio
+    init: {mag: 60.0}, # ratio (actually of the complete light path)
     affects: [Clara]
 }
 
@@ -87,27 +87,23 @@ Clara: {
     }
 }
 
-# PI RedStone jumpers (.=off):
-# X,Y = 1234...8
-# X => Ch1
-# Y => Ch2
+# Use 3 CombinedActuators to separate the axes of the PIGCS over different roles
+
 # Axes should be synchronized with the camera
-"Redstone Stage": {
-    class: pi.StageRedStone,
+"OLStage": {
+    class: CombinedActuator,
     role: stage,
     affects: [Clara, "EBeam ExtXY"],
+    children: {"x": PIGCS, "y": PIGCS},
     init: {
-        port: /dev/ttyS0, # serial port on the board
-        # port: /dev/ttyPIRS, # USB serial port
-        axes: {x: [0, 1], y: [0, 0]}, # axis -> controller, channel
-        inverted: ["y"],
-    }, 
+        axes_map: {"x": "x", "y": "y"},
+#        inverted: ["x"]
+    },
     properties: {
         speed: {'x': 0.001, 'y': 0.001} #m/s
     }
 }
 
-# Use 2 CombinedActuators to separate the axes of the PIGCS over different roles
 "SEM-Optical Alignment": {
     class: CombinedActuator,
     role: align,
@@ -136,17 +132,22 @@ Clara: {
     }
 }
 
-# PI E-861 jumpers (. = off):
+# USB should be connected to a E-861 or C-867
+# PI E-861/C-867 jumpers (. = off):
 # L = 1234.6..
 # R = 123..6..
 # Z = 12.4.6..
+# X = 12...6.. (C-867)
+# Y = 1.34.6.. (C-867)
 
 PIGCS: {
     class: pigcs.Bus,
     role: none,
     init: {
         port: "/dev/ttyPIGCS",
-        axes: {"l": [1, 1, False], "r": [2, 1, False], "z": [3, 1, False]} # axis -> controller, channel, closed-loop?
+        # axis -> controller, channel, closed-loop?
+        axes: {"l": [1, 1, False], "r": [2, 1, False], "z": [3, 1, False],
+               "x": [4, 1, False], "y": [5, 1, False]}
     },
 }
 
