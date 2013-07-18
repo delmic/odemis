@@ -237,7 +237,7 @@ class DraggableCanvas(wx.Panel):
         self._rdragging = True
         self._rdrag_init_pos = event.GetPositionTuple()
         self._rdrag_prev_value = [0, 0]
-        self.SetCursor(wx.StockCursor(wx.CURSOR_BULLSEYE))
+
         if not self.HasCapture():
             self.CaptureMouse()
 
@@ -299,6 +299,23 @@ class DraggableCanvas(wx.Panel):
         )
         self.ReCenterBuffer(new_pos)
 
+    def OnDblClick(self, event):
+        pos = event.GetPositionTuple()
+        center = (self.ClientSize[0] // 2, self.ClientSize[1] // 2)
+        shift = (center[0] - pos[0],
+                 center[1] - pos[1])
+
+        # shift the view instantly
+        self.drag_shift = (self.drag_shift[0] + shift[0],
+                           self.drag_shift[1] + shift[1])
+        self.Refresh()
+
+        # recompute the view
+        new_pos = (self.buffer_center_world_pos[0] - shift[0] / self.scale,
+                   self.buffer_center_world_pos[1] - shift[1] / self.scale)
+        logging.debug("double click at %s", new_pos)
+        self.ReCenterBuffer(new_pos)
+
     def OnMouseMotion(self, event):
         if self.dragging:
             pos = event.GetPositionTuple()
@@ -333,44 +350,40 @@ class DraggableCanvas(wx.Panel):
             # always be at the same position for the cursor at the same place
             linear_zone = 32.0
             pos = event.GetPositionTuple()
-            for i in range(2):
+            for i in [0, 1]: # x, y
                 shift = pos[i] - self._rdrag_init_pos[i]
+
+                if i:
+                    # Flip the sign for vertical movement, as indicated in the
+                    # onExtraAxisMove docstring: up/right is positive
+                    shift = -shift
+                    # logging.debug("pos %s, shift %s", pos[i], shift)
+
                 if abs(shift) <= linear_zone:
                     value = shift
                 else:
                     ssquare = cmp(shift, 0) * (shift - linear_zone) ** 2
                     value = shift + ssquare / linear_zone
+
                 change = value - self._rdrag_prev_value[i]
+
+                # if i:
+                #     logging.debug("shift %s, value %s, change %s",
+                #         shift, value, change)
+
                 if change:
                     self.onExtraAxisMove(i, change)
                     self._rdrag_prev_value[i] = value
-
-
-    def OnDblClick(self, event):
-        pos = event.GetPositionTuple()
-        center = (self.ClientSize[0] // 2, self.ClientSize[1] // 2)
-        shift = (center[0] - pos[0],
-                 center[1] - pos[1])
-
-        # shift the view instantly
-        self.drag_shift = (self.drag_shift[0] + shift[0],
-                           self.drag_shift[1] + shift[1])
-        self.Refresh()
-
-        # recompute the view
-        new_pos = (self.buffer_center_world_pos[0] - shift[0] / self.scale,
-                   self.buffer_center_world_pos[1] - shift[1] / self.scale)
-        logging.debug("double click at %s", new_pos)
-        self.ReCenterBuffer(new_pos)
 
     # END Event handlers
 
     def onExtraAxisMove(self, axis, shift):
         """
         called when the extra dimensions are modified (right drag)
-        axis (0<int): the axis modified
-            0 => right vertical
-            1 => right horizontal
+
+        axis (int>0): the axis modified
+            0 => X (horizontal)
+            1 => Y (vertical)
         shift (int): relative amount of pixel moved
             >0: toward up/right
         """

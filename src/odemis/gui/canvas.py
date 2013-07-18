@@ -333,11 +333,11 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         else:
             self.Zoom(change)
 
-    @microscope_view_check
+    # @microscope_view_check
     def onExtraAxisMove(self, axis, shift):
         """
         called when the extra dimensions are modified (right drag)
-        axis (0<int): the axis modified
+        axis (int>0): the axis modified
             0 => X
             1 => Y
         shift (int): relative amount of pixel moved
@@ -353,20 +353,27 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             # negative == go up == closer from the sample
             val = 0.1e-6 * shift # m
             assert(abs(val) < 0.01) # a move of 1 cm is a clear sign of bug
-
+            # logging.error("%s, %s", axis, shift)
             self.queueMoveFocus(axis, val)
 
     def queueMoveFocus(self, axis, shift, period=0.1):
-        """
-        Move the focus, but at most every period, to avoid accumulating
+        """ Move the focus, but at most every period, to avoid accumulating
         many slow small moves.
-        axis (0,1): axis/focus number
+
+        axis (0|1): axis/focus number
+            0 => X
+            1 => Y
         shift (float): distance of the focus move
         period (second): maximum time to wait before it will be moved
         """
         # update the complete move to do
         with self._moveFocusLock:
             self._moveFocusDistance[axis] += shift
+            # logging.debug(
+            #         "Increasing focus mod with %s for axis %s set to %s",
+            #         shift,
+            #         axis,
+            #         self._moveFocusDistance[axis])
 
         # start the timer if not yet started
         timer = [self._moveFocus0Timer, self._moveFocus1Timer][axis]
@@ -595,8 +602,22 @@ class SecomCanvas(DblMicroscopeCanvas):
             super(SecomCanvas, self).OnWheel(event)
 
     def OnRightDown(self, event):
+        # If we're currently not performing an action...
         if self.current_mode not in SECOM_MODES:
+            # Note: Set the cursor before the super method is called.
+            # There probably is a Ubuntu/wxPython related bug that
+            # SetCursor does not work one CaptureMouse is called (which)
+            # happens in the super method.
+            num_focus = self.microscope_view.get_focus_count()
+            if num_focus == 1:
+                logging.debug("One focus actuator found")
+                self.SetCursor(wx.StockCursor(wx.CURSOR_SIZENS))
+            elif num_focus == 2:
+                logging.debug("Two focus actuators found")
+                self.SetCursor(wx.StockCursor(wx.CURSOR_CROSS))
+
             super(SecomCanvas, self).OnRightDown(event)
+
 
     def OnRightUp(self, event):
         if self.current_mode not in SECOM_MODES:

@@ -572,6 +572,10 @@ class MicroscopeView(object):
     def get_focus(self, i):
         return self._focus[i]
 
+    def get_focus_count(self):
+        """ Get the number of available focus actuators """
+        return len([a for a in self._focus if a])
+
     def moveStageToView(self):
         """ Move the stage to the current view_pos
 

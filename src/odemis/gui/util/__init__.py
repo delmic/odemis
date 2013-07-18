@@ -81,7 +81,7 @@ def limit_invocation(delay_s):
 
 
 class memoize(object):
-    """Decorator that caches a function's return value each time it is called.
+    """ Decorator that caches a function's return value each time it is called.
     If called later with the same arguments, the cached value is returned, and
     not re-evaluated.
     """

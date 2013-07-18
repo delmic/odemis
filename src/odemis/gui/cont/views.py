@@ -192,7 +192,7 @@ class ViewController(object):
             view = instrmodel.MicroscopeView(
                         "Optical",
                         self._interface_model.stage,
-                        focus0=self._interface_model.focus,
+                        focus1=self._interface_model.focus,
                         stream_classes=OPTICAL_STREAMS
                      )
             self._interface_model.views.append(view)
@@ -201,8 +201,8 @@ class ViewController(object):
             view = instrmodel.MicroscopeView(
                         "Combined 1",
                         self._interface_model.stage,
-                        focus0=self._interface_model.focus,
-                        focus1=None, # TODO: SEM focus
+                        focus0=None, # TODO: SEM focus
+                        focus1=self._interface_model.focus,
                      )
             self._interface_model.views.append(view)
             self._viewports[2].setView(view, self._interface_model)
@@ -210,8 +210,8 @@ class ViewController(object):
             view = instrmodel.MicroscopeView(
                         "Combined 2",
                         self._interface_model.stage,
-                        focus0=self._interface_model.focus,
-                        focus1=None, # TODO: SEM focus
+                        focus0=None, # TODO: SEM focus
+                        focus1=self._interface_model.focus,
                      )
             self._interface_model.views.append(view)
             self._viewports[3].setView(view, self._interface_model)
