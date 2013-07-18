@@ -995,7 +995,7 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
 
         self.closed = canvas.PLOT_CLOSE_BOTTOM
         self.plot_mode = canvas.PLOT_MODE_BAR
-
+        self.ticks = canvas.PLOT_TICKS_HORZ
 
         self.set_focusline_ovelay(overlay.FocusLineOverlay(self.Parent))
 

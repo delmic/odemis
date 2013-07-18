@@ -411,7 +411,7 @@ def __init_resources():
         <assign_var>1</assign_var>
       </XRCED>
     </object>
-    <size>400,400</size>
+    <size>404,400</size>
     <title>Cairo Test</title>
     <bg>#4D4D4D</bg>
   </object>

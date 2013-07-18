@@ -31,6 +31,8 @@ from odemis.gui.comp.scalewindow import ScaleWindow
 from odemis.gui.comp.slider import Slider
 from odemis.gui.img.data import getico_blending_optBitmap, \
     getico_blending_semBitmap
+from odemis.gui.util.conversion import wxcol_to_rgb
+
 
 class InfoLegend(wx.Panel):
     """ This class describes a legend containing the default controls that
@@ -165,6 +167,9 @@ class InfoLegend(wx.Panel):
         self.hfwDisplay.Bind(wx.EVT_LEFT_DOWN, self.OnLeftDown)
         self.LegendMag.Bind(wx.EVT_LEFT_DOWN, self.OnLeftDown)
 
+        # Explicitly set the
+        self.SetMinSize((-1, 40))
+
 
     # Make mouse events propagate to the parent
     def OnLeftDown(self, evt):
@@ -190,3 +195,37 @@ class AxisLegend(wx.Panel):
 
         style = style | wx.NO_BORDER
         super(AxisLegend, self).__init__(parent, wid, pos, size, style)
+
+        self.SetBackgroundColour(parent.GetBackgroundColour())
+        self.SetForegroundColour(parent.GetForegroundColour())
+
+        # Explicitly set the
+        self.SetMinSize((-1, 40))
+
+        self.Bind(wx.EVT_PAINT, self.OnPaint)
+        self.Bind(wx.EVT_SIZE, self.OnSize)
+
+        self.tick_colour = wxcol_to_rgb(self.ForegroundColour)
+
+    def OnPaint(self, event=None):
+        ticks = self.Parent.canvas.get_ticks()
+        ctx = wx.lib.wxcairo.ContextFromDC(wx.PaintDC(self))
+
+        font = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT)
+        ctx.select_font_face(
+                font.GetFaceName(),
+                cairo.FONT_SLANT_NORMAL,
+                cairo.FONT_WEIGHT_NORMAL
+        )
+        ctx.set_font_size(font.GetPointSize())
+
+        ctx.set_source_rgb(*self.tick_colour)
+
+        for xpos, xval in ticks:
+            label = str(xval)
+            _, _, width, height, _, _ = ctx.text_extents(label)
+            ctx.move_to(xpos - (width / 2), height + 5)
+            ctx.show_text(label)
+
+    def OnSize(self, event):
+        self.Refresh(eraseBackground=False)
