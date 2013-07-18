@@ -85,7 +85,8 @@ class MetadataUpdater(model.Component):
             x = pos.get("x", 0)
             y = pos.get("y", 0)
             md = {model.MD_POS: (x, y)}
-            logging.debug("Updating position for component %s", comp.name)
+            logging.debug("Updating position for component %s, to %f, %f",
+                          comp.name, x , y)
             comp.updateMetadata(md)
         
         stage.position.subscribe(updateStagePos)

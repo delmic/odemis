@@ -116,25 +116,24 @@ class Controller(object):
             return
         if axes is None:
             raise LookupError("Need to have at least one axis configured")
-        
+
         # reinitialise: make sure it's back to normal and ensure it's responding
         try:
-            # FIXME: there seems to be problems to recover sometimes from a 
+            # FIXME: there seems to be problems to recover sometimes from a
             # disturbed controller. Not sure what is required to do. Seems to
             # be just the right commands with the right timing....
             # In this state, the error led directly turns on when the usb cable
             # is connected in.
-            # maybe self.GetErrorNum() first? 
+            # maybe self.GetErrorNum() first?
             self.Reboot()
             self.GetErrorNum()
         except IOError:
             raise IOError("No answer from controller %d" % address)
-        
+
         self._model = self.getModel()
         if self._model == MODEL_UNKNOWN:
             logging.warning("Controller %d is an unsupported version (%s)", self.address, self.GetIdentification())
-        #TODO support C867
-        
+
         self._channels = self.GetAxes() # available channels (=axes)
         # dict axis -> boolean
         self._hasLimit = dict([(a, self.hasLimitSwitches(a)) for a in self._channels])
@@ -144,10 +143,19 @@ class Controller(object):
         self._hasServo = dict(axes)
         self._position = {} # m (dict axis-> position), only used in open-loop
         
+        # If the controller is misconfigured for the actuator, things can go quite
+        # wrong, so make it clear
+        logging.info("Controller %d is configured for actuator %s", address, self.GetStageName())
+        for c in self._channels:
+            logging.info("Axis %s has %slimit switch and has %s reference switch",
+                         c,
+                         "" if self._hasLimit[c] else "no ",
+                         "" if self._hasSensor[c] else "no ")
+
         for a, cl in axes.items():
             if not a in self._channels:
                 raise LookupError("Axis %d is not supported by controller %d" % (a, address))
-            
+
             if cl: # want closed-loop?
                 if not self._hasSensor[a]:
                     raise LookupError("Axis %d of controller %d does not support closed-loop mode" % (a, address))
@@ -163,18 +171,18 @@ class Controller(object):
                 else:
                     self.SetStepAmplitude(a, 55) # maximum is best
                 self._position[a] = 0
-        
-        self._try_recover = True # full feature only after init 
-        
+
+        self._try_recover = True # full feature only after init
+
         # For open-loop. For now, keep it simple: linear, using info from manual
         # TODO: allow to pass it in parameters
-        self.move_calibration = 1e5 # step/m 
+        self.move_calibration = 1e5 # step/m
         self.min_stepsize = 0.01 # step, under this, no move at all
-        
+
         # actually set just before a move
         # The max using closed-loop info seem purely arbitrary
-        
-#        # FIXME: how to use the closed-loop version? 
+
+#        # FIXME: how to use the closed-loop version?
 #        max_vel = float(self.GetParameter(1, 0xA)) # in unit/s
 #        num_unit = float(self.GetParameter(1, 0xE))
 #        den_unit = float(self.GetParameter(1, 0xF))
@@ -183,7 +191,7 @@ class Controller(object):
 #        # and it should be initialised using PIStages.dat
 #        self.speed_max = max_vel * 1e3 * (num_unit/den_unit)
 #        self.accel_max = max_accel * 1e3 * (num_unit/den_unit)
-        
+
         # FIXME 0x7000204 seems specific to E-861. need different initialisation per controller
         # Even the old firmware don't seem to support it
         try:
@@ -199,35 +207,35 @@ class Controller(object):
             logging.debug("Using default speed and acceleration value after error '%s'", err)
             self.speed_max = 0.5 # m/s
             self.accel_max = 0.01 # m/s²
-        
+
         self._speed = dict([(a, self.speed_max) for a in axes]) # m/s
         self._accel = dict([(a, self.accel_max) for a in axes]) # m/s² (both acceleration and deceleration)
-        self._prev_speed_accel = (dict(), dict()) 
-    
-    
+        self._prev_speed_accel = (dict(), dict())
+
+
     def _initOLViaPID(self):
         """
         Initialise the controller to move using the SMO command. 
         """
         # Get maximum motor output parameter (0x9) allowed
-        # Because some type of stages cannot bear as much as the full maximum 
+        # Because some type of stages cannot bear as much as the full maximum
         # The maximum output voltage is calculated following this formula:
         # 200 Vpp*Maximum motor output/32767
         self._max_motor_out = int(self.GetParameter(1, 0x9))
         # official approx. min is 3V, but from test, it can go down to 1.5V
-        self._min_motor_out = int((2. / 10.) * 32767) 
+        self._min_motor_out = int((2. / 10.) * 32767)
         assert(self._max_motor_out > self._min_motor_out)
-        
+
         # From measurement, at 1.8V (slowest), it goes at ~0.023 m/s
         # at 6V (fastest), it goes at ~0.3 m/s
-        
+
         # We simplify to a linear conversion, making sure that the min voltage
         # is approximately the min speed. It will tend to overshoot if the speed
         # is higher than the min speed and there is no load on the actuator.
-        # So it's recommended to use it always at the min speed (0.023 m/s), 
-        # which also gives the best precision. 
+        # So it's recommended to use it always at the min speed (0.023 m/s),
+        # which also gives the best precision.
         self._vpms = self._min_motor_out / 0.023 # uV/(m/s)
-        
+
         # Set up a macro that will do the job
         # To be called like "MAC START OLSTEP 16000 500"
         # First param is voltage between -32766 and 32766
@@ -252,7 +260,7 @@ class Controller(object):
         # change the moveRel and isMoving methods to PID-aware versions
         self._moveRelOL = self._moveRelOLViaPID
         self.isMoving = self._isMovingViaPID
-    
+
     def _sendOrderCommand(self, com):
         """
         Send a command which does not expect any report back
@@ -262,7 +270,7 @@ class Controller(object):
         full_com = "%d %s" % (self.address, com)
         logging.debug("Sending: %s", full_com.encode('string_escape'))
         self.serial.write(full_com)
-        
+
     def _sendQueryCommandRaw(self, com):
         """
         Send a command and return its report (raw)
@@ -272,13 +280,13 @@ class Controller(object):
         full_com = "%d %s" % (self.address, com)
         logging.debug("Sending: %s", full_com.encode('string_escape'))
         self.serial.write(full_com)
-        
+
         char = self.serial.read() # empty if timeout
         line = ""
         lines = []
         while char:
             if char == "\n":
-                if (len(line) > 0 and line[-1] == " " and  # multiline: "... \n" 
+                if (len(line) > 0 and line[-1] == " " and  # multiline: "... \n"
                     not re.match(r"0 \d+ ", line)):   # excepted empty line "0 1 \n"
                     lines.append(line[:-1]) # don't include the space
                     line = ""
@@ -290,13 +298,13 @@ class Controller(object):
                 # normal char
                 line += char
             char = self.serial.read()
-            
+
         if not char:
             raise IOError("Controller %d timeout." % self.address)
-        
+
         return lines
-    
-    
+
+
     def _sendQueryCommand(self, com):
         """
         Send a command and return its report
@@ -310,7 +318,7 @@ class Controller(object):
         except IOError as ex:
             if not self._try_recover:
                 raise
-            
+
             success = self.recoverTimeout()
             if success:
                 logging.warning("Controller %d timeout after '%s', but recovered.",
@@ -320,7 +328,7 @@ class Controller(object):
             else:
                 raise IOError("Controller %d timeout after '%s', not recovered." %
                               (self.address, com.encode('string_escape')))
-    
+
         assert len(lines) > 0
 
         logging.debug("Received: %s", "\n".join(lines).encode('string_escape'))
@@ -333,7 +341,7 @@ class Controller(object):
             return lines[0]
         else:
             return lines
-    
+
     def recoverTimeout(self):
         """
         Try to recover from error in the controller state
@@ -341,7 +349,7 @@ class Controller(object):
         """
         # Give it some time to recover from whatever
         time.sleep(0.5)
-        
+
         # It appears to make the controller more comfortable...
         self._sendOrderCommand("ERR?\n")
         char = self.serial.read()
@@ -362,10 +370,10 @@ class Controller(object):
                 return True
             char = self.serial.read()
 
-        # that's getting pretty hopeless 
+        # that's getting pretty hopeless
         return False
-    
-    
+
+
     # The following are function directly mapping to the controller commands.
     # In general it should not be need to use them directly from outside this class
     def GetIdentification(self):
@@ -373,12 +381,12 @@ class Controller(object):
         #ex: 0 2 (c)2010 Physik Instrumente(PI) Karlsruhe,E-861 Version 7.2.0
         version = self._sendQueryCommand("*IDN?\n")
         return version
-    
+
     def GetSyntaxVersion(self):
         #CSV? (Get Current Syntax Version)
         #GCS version, can be 1.0 (for GCS 1.0) or 2.0 (for GCS 2.0)
         return self._sendQueryCommand("CSV?\n")
-    
+
     def GetStageName(self):
         """
         return (str) the name of the stage for which the controller is configured.
@@ -386,7 +394,7 @@ class Controller(object):
         """
         #parameter 0x3c
         return self.GetParameter(1, 0x3C)
-        
+
     def GetAxes(self):
         """
         returns (set of int): all the available axes
@@ -398,13 +406,13 @@ class Controller(object):
         # FIXME: the name of the axis can be a string of up to 8 char (see TVI)
         axes = set([int(a) for a in answer.split(" ")])
         return axes
-    
+
     def GetAvailableCommands(self):
         #HLP? (Get List Of Available Commands)
         # first line starts with \x00
         lines = self._sendQueryCommand("HLP?\n")
         lines[0].lstrip("\x00")
-        return lines 
+        return lines
 
     def GetAvailableParameters(self):
         #HPA? (Get List Of Available Parameters)
@@ -412,7 +420,7 @@ class Controller(object):
         lines = self._sendQueryCommand("HPA?\n")
         lines[0].lstrip("\x00")
         return lines
-     
+
     def GetParameter(self, axis, param):
         """
         axis (1<int<16): axis number
@@ -422,7 +430,7 @@ class Controller(object):
         # SPA? (Get Volatile Memory Parameters)
         assert((1 <= axis) and (axis <= 16))
         assert(0 <= param)
-        
+
         answer = self._sendQueryCommand("SPA? %d %d\n" % (axis, param))
         try:
             value = answer.split("=")[1]
@@ -437,22 +445,22 @@ class Controller(object):
         """
         #DRC? (get Data Recorder Configuration)
         return self._sendQueryCommand("DRC?\n")
-    
+
     def hasLimitSwitches(self, axis):
         """
         Report whether the given axis has limit switches (is able to detect 
          the ends of the axis).
-        Note: apparently it's just read from a configuration value in flash 
-        memory. Can be configured easily with PIMikroMove
+        Note: It's just read from a configuration value in flash 
+        memory. Can be configured easily with PIMikroMove (paremeter 
         axis (1<int<16): axis number
         """
         #LIM? (Indicate Limit Switches)
         assert((1 <= axis) and (axis <= 16))
-        
+
         answer = self._sendQueryCommand("LIM? %d\n" % axis)
         # 1 => True, 0 => False
         return answer == "1"
- 
+
     def hasSensor(self, axis):
         """
         Report whether the given axis has a sensor (is able to measure the 
@@ -463,11 +471,11 @@ class Controller(object):
         """
         # TRS? (Indicate Reference Switch)
         assert((1 <= axis) and (axis <= 16))
-        
+
         answer = self._sendQueryCommand("TRS? %d\n" % axis)
         # 1 => True, 0 => False
         return answer == "1"
- 
+
 
     def GetMotionStatus(self):
         """
@@ -486,9 +494,9 @@ class Controller(object):
             if bitmap & 1:
                 mv_axes.add(i)
             i += 1
-            bitmap = bitmap >> 1
+            bitmap >>= 1
         return mv_axes
-    
+
     def isAxisMovingOLViaPID(self, axis):
         """
         axis (1<int<16): axis number
@@ -503,7 +511,7 @@ class Controller(object):
             return False
         else:
             return True
-    
+
     def GetStatus(self):
         #SRG? = "\x04" (Query Status Register Value)
         #SRG? 1 1
@@ -515,7 +523,7 @@ class Controller(object):
         value = int(bitmap[2:], 16)
         # TODO change to constants
         return value
-    
+
     def IsReady(self):
         """
         return (boolean): True if ready for new command
@@ -527,9 +535,9 @@ class Controller(object):
             return True
         elif ans == "\xb2":
             return False
-        
+
         logging.warning("Controller %d replied unknown ready status '%s'", self.address, ans)
-    
+
     def GetErrorNum(self):
         """
         return (int): the error number (can be negative) of last error
@@ -539,7 +547,7 @@ class Controller(object):
         answer = self._sendQueryCommand("ERR?\n")
         error = int(answer, 10)
         return error
-    
+
     def Reboot(self):
         self._sendOrderCommand("RBT\n")
         time.sleep(1) # give it some time to reboot before it's accessible again
@@ -573,7 +581,7 @@ class Controller(object):
         # need to recover from the "error", otherwise nothing works
         error = self.GetErrorNum()
         if error != 10: #PI_CNTR_STOP
-            logging.warning("Stopped controller %d, but error code is %d instead of 10", self.address, error) 
+            logging.warning("Stopped controller %d, but error code is %d instead of 10", self.address, error)
 
     def Stop(self):
         """
@@ -586,7 +594,7 @@ class Controller(object):
         # need to recover from the "error", otherwise nothing works
         error = self.GetErrorNum()
         if error != 10: #PI_CNTR_STOP
-            logging.warning("Stopped controller %d, but error code is %d instead of 10", self.address, error) 
+            logging.warning("Stopped controller %d, but error code is %d instead of 10", self.address, error)
 
     def SetServo(self, axis, activated):
         """
@@ -597,7 +605,7 @@ class Controller(object):
         """
         #SVO (Set Servo State)
         assert(axis in self._channels)
-        
+
         if activated:
             assert(self._hasSensor[axis])
             state = 1
@@ -619,7 +627,7 @@ class Controller(object):
         if steps == 0:
             return
         self._sendOrderCommand("OSM %d %.5g\n" % (axis, steps))
-    
+
     def SetStepAmplitude(self, axis, amplitude):
         """
         Set the amplitude of one step (in nanostep mode). It affects the velocity
@@ -628,7 +636,7 @@ class Controller(object):
         axis (1<int<16): axis number
         amplitude (0<=float<=55): voltage applied (the more the further)
         """
-        #SSA (Set Step Amplitude) : for nanostepping 
+        #SSA (Set Step Amplitude) : for nanostepping
         assert(axis in self._channels)
         assert((0 <= amplitude) and (amplitude <= 55))
         self._sendOrderCommand("SSA %d %.5g\n" % (axis, amplitude))
@@ -657,7 +665,7 @@ class Controller(object):
         #OAD (Open-Loop Analog Driving): move using analog
         assert(axis in self._channels)
         assert((-55 <= amplitude) and (amplitude <= 55))
-        self._sendOrderCommand("OAD %d %.5g\n" % (axis, amplitude))        
+        self._sendOrderCommand("OAD %d %.5g\n" % (axis, amplitude))
 
     def SetOLVelocity(self, axis, velocity):
         """
@@ -669,7 +677,7 @@ class Controller(object):
         assert(axis in self._channels)
         assert(velocity > 0)
         self._sendOrderCommand("OVL %d %.5g\n" % (axis, velocity))
-    
+
     def SetOLAcceleration(self, axis, value):
         """
         Moves an axis for a number of steps. Can be done only with servo off.
@@ -680,7 +688,7 @@ class Controller(object):
         assert(axis in self._channels)
         assert(value > 0)
         self._sendOrderCommand("OAC %d %.5g\n" % (axis, value))
-        
+
     def SetOLDeceleration(self, axis, value):
         """
         Moves an axis for a number of steps. Can be done only with servo off.
@@ -706,9 +714,9 @@ class Controller(object):
         assert(-32766 <= voltage and voltage <= 32766)
         assert(time > 0)
         # a delay of 0 means actually 2**16
-        self._sendOrderCommand("MAC START OLSTEP %d %d\n" % (voltage, time))        
-        
-        
+        self._sendOrderCommand("MAC START OLSTEP %d %d\n" % (voltage, time))
+
+
 #Abs (with sensor = closed-loop):
 #MOV (Set Target Position)
 #MVR (Set Target Relative To Current Position)
@@ -747,7 +755,7 @@ class Controller(object):
             if re.search(m, idn):
                 return c
         return MODEL_UNKNOWN
-           
+
     def getPosition(self, axis):
         """
         Note: in open-loop mode it's very approximate.
@@ -760,7 +768,7 @@ class Controller(object):
             # call POS?
         else:
             return self._position[axis]
-    
+
     def setSpeed(self, axis, speed):
         """
         Changes the move speed of the motor (for the next move).
@@ -774,7 +782,7 @@ class Controller(object):
 
     def getSpeed(self, axis):
         return self._speed[axis]
-    
+
     def setAccel(self, axis, accel):
         """
         Changes the move acceleration (and deceleration) of the motor (for the next move).
@@ -798,13 +806,13 @@ class Controller(object):
         if prev_speed != new_speed:
             raise NotImplementedError("No closed-loop support")
             self._prev_speed_accel[0][axis] = new_speed
-        
+
         prev_accel = self._prev_speed_accel[1].get(axis, None)
         new_accel = self._accel[axis]
         if prev_accel != new_accel:
             raise NotImplementedError("No closed-loop support")
             self._prev_speed_accel[1][axis] = new_accel
-    
+
     def _updateOLSpeedAccel(self, axis):
         """
         Update the speed and acceleration values for the given axis. 
@@ -818,15 +826,15 @@ class Controller(object):
             steps_ps = self.convertSpeedToDevice(new_speed)
             self.SetOLVelocity(axis, steps_ps)
             self._prev_speed_accel[0][axis] = new_speed
-        
+
         prev_accel = self._prev_speed_accel[1].get(axis, None)
         new_accel = self._accel[axis]
         if prev_accel != new_accel:
             steps_pss = self.convertAccelToDevice(new_accel)
             self.SetOLAcceleration(axis, steps_pss)
             self.SetOLDeceleration(axis, steps_pss)
-            self._prev_speed_accel[1][axis] = new_accel       
-    
+            self._prev_speed_accel[1][axis] = new_accel
+
     def _moveRelCL(self, axis, distance):
         """
         See moveRel
@@ -835,7 +843,7 @@ class Controller(object):
         # closed-loop
         raise NotImplementedError("No closed-loop support")
         # call MVR
-            
+
         return distance
 
     def _moveRelOLStep(self, axis, distance):
@@ -846,7 +854,7 @@ class Controller(object):
         steps = self.convertDistanceToDevice(distance)
         if steps == 0: # if distance is too small, report it
             return 0
-        
+
         self.OLMoveStep(axis, steps)
         # TODO use OLAnalogDriving for very small moves (< 5um)?
         return distance
@@ -859,12 +867,12 @@ class Controller(object):
         v, t = self.convertDistanceSpeedToPIDControl(distance, speed)
         if v == 0: # if distance is too small, report it
             return 0
-        
+
         self.OLMovePID(axis, v, t)
         return distance
 
     _moveRelOL = _moveRelOLStep
-     
+
     def moveRel(self, axis, distance):
         """
         Move on a given axis for a given distance.
@@ -874,15 +882,15 @@ class Controller(object):
         returns (float): approximate distance actually moved
         """
         assert(axis in self._channels)
-        
+
         if self._hasServo[axis]:
             distance = self._moveRelCL(axis, distance)
         else:
-            distance = self._moveRelOL(axis, distance) 
-            
+            distance = self._moveRelOL(axis, distance)
+
         self._position[axis] += distance
         return distance
-    
+
     def convertDistanceSpeedToPIDControl(self, distance, speed):
         """
         converts meters and speed to the units for this device (~V, ms) in
@@ -892,7 +900,7 @@ class Controller(object):
         return (2 tuple: int, 0<int): PID control (in device unit, duration
         """
         min_speed = self._min_motor_out / self._vpms # m/s
-        
+
         voltage_u = round(int(speed * self._vpms)) # uV
         # clamp it to the possible values
         voltage_u = min(max(self._min_motor_out, voltage_u), self._max_motor_out)
@@ -907,15 +915,15 @@ class Controller(object):
             # no hope
             # TODO: see if a special macro without delay would move a very little bit
             return 0, 0
-        
+
         # TODO: we could report the "actual distance", but as everything is so
         # approximate, the original distance is as likely actual as the value of
         # time_ms * voltage / vpms
-        
+
         if distance < 0:
             voltage_u = -voltage_u
         return voltage_u, time_ms
-    
+
     def convertDistanceToDevice(self, distance):
         """
         converts meters to the unit for this device (steps) in open-loop.
@@ -926,9 +934,9 @@ class Controller(object):
         steps = distance * self.move_calibration
         if abs(steps) < self.min_stepsize:
             return 0
-        
+
         return steps
-    
+
     def convertSpeedToDevice(self, speed):
         """
         converts meters/s to the unit for this device (steps/s) in open-loop.
@@ -937,10 +945,10 @@ class Controller(object):
         """
         steps_ps = speed * self.move_calibration
         return max(1, steps_ps) # don't go at 0 m/s!
-    
+
     # in linear approximation, it's the same
     convertAccelToDevice = convertSpeedToDevice
-    
+
     def isMoving(self, axes=None):
         """
         Indicate whether the motors are moving. 
@@ -951,9 +959,9 @@ class Controller(object):
             axes = self._channels
         else:
             assert axes.issubset(self._channels)
-        
+
         return not axes.isdisjoint(self.GetMotionStatus())
-    
+
     def _isMovingViaPID(self, axes=None):
         """
         Replacement method for isMoving() when the OL moves are done using OLViaPID
@@ -962,7 +970,7 @@ class Controller(object):
             axes = self._channels
         else:
             assert axes.issubset(self._channels)
-        
+
         # TOOD: support multiple channels
         assert(len(self._channels) == 1)
         axis = list(self._channels)[0]
@@ -970,13 +978,13 @@ class Controller(object):
             return not axes.isdisjoint(self.GetMotionStatus())
         else:
             return self.isAxisMovingOLViaPID(axis)
-            
+
     def stopMotion(self):
         """
         Stop the motion on all axes immediately
         """
         self.Stop()
-    
+
     def waitEndMotion(self, axes=None):
         """
         Wait until the motion of all the given axis is finished.
@@ -991,7 +999,7 @@ class Controller(object):
             if time.time() >= end:
                 raise IOError("Timeout while waiting for end of motion")
             time.sleep(0.005)
-    
+
     def selfTest(self):
         """
         check as much as possible that it works without actually moving the motor
@@ -1001,20 +1009,20 @@ class Controller(object):
             error = self.GetErrorNum()
             if error:
                 logging.warning("Controller %d had error status %d", self.address, error)
-            
+
             version = self.GetSyntaxVersion()
             logging.info("GCS version: '%s'", version)
             ver_num = float(version)
             if ver_num < 1 or ver_num > 2:
                 logging.error("Controller %d has unexpected GCS version %s", self.address, version)
                 return False
-            
+
             axes = self.GetAxes()
             if len(axes) == 0 or len(axes) > 16:
                 logging.error("Controller %d report axes %s", self.address, str(axes))
                 return False
-        
-            if self._model not in (MODEL_E861, ): # support open-loop mode
+
+            if self._model not in (MODEL_E861,): # support open-loop mode
                 for a in self._channels:
                     self.SetStepAmplitude(a, 10)
                     amp = self.GetStepAmplitude(a)
@@ -1022,18 +1030,18 @@ class Controller(object):
                         logging.error("Failed to modify amplitude of controller %d (%f instead of 10)", self.address, amp)
                         return False
 
-            if self._model in (MODEL_C867, ): # support temperature reading
+            if self._model in (MODEL_C867,): # support temperature reading
                 # TODO put the temperature as a RO VA?
                 current_temp = float(self.GetParameter(1, 0x57))
                 max_temp = float(self.GetParameter(1, 0x58))
                 if current_temp >= max_temp:
                     logging.error("Motor of controller %d too hot (%f C)", self.address, current_temp)
-                    return False                        
+                    return False
         except:
             return False
-        
+
         return True
-    
+
     @staticmethod
     def scan(port, max_add=16, baudrate=38400):
         """
@@ -1047,9 +1055,9 @@ class Controller(object):
         """
         ser = Controller.openSerialPort(port, baudrate)
         ctrl = Controller(ser)
-        
+
         present = {}
-        for i in range(1, max_add+1):
+        for i in range(1, max_add + 1):
             # ask for controller #i
             logging.debug("Querying address %d", i)
 
@@ -1063,14 +1071,14 @@ class Controller(object):
                     logging.info("Found controller %d with no axis", i)
                 else:
                     version = ctrl.GetIdentification()
-                    logging.info("Found controller %d with ID '%s'.", i, version) 
+                    logging.info("Found controller %d with ID '%s'.", i, version)
                     present[i] = axes
             except IOError:
                 pass
-        
+
         ctrl.address = None
         return present
-    
+
     @staticmethod
     def openSerialPort(port, baudrate=38400):
         """
@@ -1080,14 +1088,14 @@ class Controller(object):
         return (serial): the opened serial port
         """
         ser = serial.Serial(
-            port = port,
-            baudrate = baudrate,
-            bytesize = serial.EIGHTBITS,
-            parity = serial.PARITY_NONE,
-            stopbits = serial.STOPBITS_ONE,
-            timeout = 0.3 #s
+            port=port,
+            baudrate=baudrate,
+            bytesize=serial.EIGHTBITS,
+            parity=serial.PARITY_NONE,
+            stopbits=serial.STOPBITS_ONE,
+            timeout=0.3 #s
         )
-        
+
         return ser
 
 
@@ -1108,7 +1116,7 @@ class Bus(model.Actuator):
         """
         # this set ._axes and ._ranges
         model.Actuator.__init__(self, name, role, axes=axes.keys(), **kwargs)
-        
+
         ser = Controller.openSerialPort(port, baudrate)
 
         # Prepare initialisation by grouping axes from the same controller
@@ -1119,13 +1127,13 @@ class Bus(model.Actuator):
                 controllers[add] = {}
             elif channel in controllers[add]:
                 raise ValueError("Cannot associate multiple axes to controller %d:%d" % (add, channel))
-            ac_to_axis[(add, channel)] = axis 
+            ac_to_axis[(add, channel)] = axis
             controllers[add].update({channel: isCL})
 
-        # Init each controller            
+        # Init each controller
         self._axis_to_cc = {} # axis name => (Controller, channel)
         # TODO also a rangesRel : min and max of a step
-        position = {} 
+        position = {}
         speed = {}
         max_speed = 1 # m/s
         for address, channels in controllers.items():
@@ -1140,7 +1148,7 @@ class Bus(model.Actuator):
             for c in channels:
                 axis = ac_to_axis[(address, c)]
                 self._axis_to_cc[axis] = (controller, c)
-                
+
                 position[axis] = controller.getPosition(c)
                 # TODO if closed-loop, the ranges should be updated after homing
                 # For now we put very large one
@@ -1148,26 +1156,26 @@ class Bus(model.Actuator):
                 # Just to make sure it doesn't go too fast
                 speed[axis] = 0.001 # m/s
                 max_speed = max(max_speed, controller.speed_max)
-        
-        
+
+
         # RO, as to modify it the client must use .moveRel() or .moveAbs()
         self.position = model.VigilantAttribute(position, unit="m", readonly=True)
-        
+
         # min speed = don't be crazy slow. max speed from hardware spec
         self.speed = model.MultiSpeedVA(speed, range=[10e-6, max_speed], unit="m/s",
                                         setter=self._setSpeed)
         self._setSpeed(speed)
-        
+
         # set HW and SW version
         self._swVersion = "%s (serial driver: %s)" % (odemis.__version__, self.getSerialDriver(port))
         hwversions = []
         for axis, (ctrl, channel) in self._axis_to_cc.items():
             hwversions.append("'%s': %s (GCS %s) for %s" % (axis, ctrl.GetIdentification(), ctrl.GetSyntaxVersion(), ctrl.GetStageName()))
         self._hwVersion = ", ".join(hwversions)
-    
+
         # to acquire before sending anything on the serial port
         self.ser_access = threading.Lock()
-        
+
         self._action_mgr = ActionManager(self)
         self._action_mgr.start()
 
@@ -1180,20 +1188,21 @@ class Bus(model.Actuator):
             # send stop to all controllers (including the ones not in action)
             for axis, (controller, channel) in self._axis_to_cc.items():
                 position[axis] = controller.getPosition(channel)
-        
+
         return self._applyInversionAbs(position)
-    
+
     def _updatePosition(self):
         """
         update the position VA
         Note: it should not be called while holding the lock to the serial port
         """
         pos = self._getPosition() # TODO: improve efficiency
-        
+        logging.debug("Reporting new position at %s", pos)
+
         # it's read-only, so we change it via _value
         self.position._value = pos
         self.position.notify(self.position.value)
-    
+
     @staticmethod
     def getSerialDriver(name):
         """
@@ -1208,7 +1217,7 @@ class Bus(model.Actuator):
                 return "Unknown"
         else:
             return "Unknown"
-    
+
     def _setSpeed(self, value):
         """
         value (dict string-> float): speed for each axis
@@ -1218,7 +1227,7 @@ class Bus(model.Actuator):
             controller, channel = self._axis_to_cc[axis]
             controller.setSpeed(channel, v)
         return value
-    
+
     @isasync
     def moveRel(self, shift):
         """
@@ -1227,23 +1236,23 @@ class Bus(model.Actuator):
         returns (Future): future that control the asynchronous move
         """
         shift = self._applyInversionRel(shift)
-        # converts the request into one action (= a dict controller -> channels + distance) 
+        # converts the request into one action (= a dict controller -> channels + distance)
         action_axes = {}
         for axis, distance in shift.items():
             if axis not in self.axes:
                 raise Exception("Axis unknown: " + str(axis))
             if abs(distance) > self.ranges[axis][1]:
-                raise Exception("Trying to move axis %s by %f m> %f m." % 
+                raise Exception("Trying to move axis %s by %f m> %f m." %
                                 (axis, distance, self.ranges[axis][1]))
             controller, channel = self._axis_to_cc[axis]
             if not controller in action_axes:
                 action_axes[controller] = []
             action_axes[controller].append((channel, distance))
-        
+
         action = ActionFuture(MOVE_REL, action_axes, self.ser_access)
         self._action_mgr.append_action(action)
         return action
-    
+
     # TODO implement moveAbs
 
     def stop(self):
@@ -1253,10 +1262,10 @@ class Bus(model.Actuator):
         all the axes of all controller managed).
         """
         if self._action_mgr:
-            self._action_mgr.cancel_all() 
+            self._action_mgr.cancel_all()
 
         # Stop every axes (even if there is no action going, or action on just
-        # some axes        
+        # some axes
         with self.ser_access:
             # send stop to all controllers (including the ones not in action)
             controllers = set()
@@ -1264,22 +1273,22 @@ class Bus(model.Actuator):
                 if controller not in controllers:
                     controller.stopMotion()
                     controllers.add(controller)
-            
+
             # wait all controllers are done moving
             for controller in controllers:
                 controller.waitEndMotion()
-    
+
     def terminate(self):
         if not hasattr(self, "_action_mgr"):
-            # not even fully initialised 
+            # not even fully initialised
             return
-        
+
         self.stop()
-        
+
         if self._action_mgr:
             self._action_mgr.terminate()
             self._action_mgr = None
-        
+
     def selfTest(self):
         """
         No move should be going one while doing a self-test
@@ -1290,24 +1299,24 @@ class Bus(model.Actuator):
             for controller in controllers:
                 logging.info("Testing controller %d", controller.address)
                 passed &= controller.selfTest()
-        
+
         return passed
-    
+
     @staticmethod
     def scan(port=None):
         """
         port (string): name of the serial port. If None, all the serial ports are tried
         returns (list of 2-tuple): name, args (port, axes(channel -> CL?)
         Note: it's obviously not advised to call this function if moves on the motors are ongoing
-        """ 
+        """
         if port:
             ports = [port]
         else:
             if os.name == "nt":
-                ports = ["COM" + str(n) for n in range (0,8)]
+                ports = ["COM" + str(n) for n in range (0, 8)]
             else:
                 ports = glob.glob('/dev/ttyS?*') + glob.glob('/dev/ttyUSB?*')
-        
+
         logging.info("Serial network scanning for PI-GCS controllers in progress...")
         axes_names = "xyzabcdefghijklmnopqrstuvw"
         found = []  # (list of 2-tuple): name, args (port, axes(channel -> CL?)
@@ -1351,7 +1360,7 @@ class ActionManager(threading.Thread):
         self.action_queue = collections.deque()
         self.current_action = None
         self._bus = bus
-    
+
     def run(self):
         while True:
             # Pick the next action
@@ -1359,7 +1368,7 @@ class ActionManager(threading.Thread):
                 while not self.action_queue:
                     self.action_queue_cv.wait()
                 self.current_action = self.action_queue.popleft()
-            
+
             # Special action "None" == stop
             if self.current_action is None:
                 return
@@ -1370,17 +1379,17 @@ class ActionManager(threading.Thread):
             except futures.CancelledError:
                 # cancelled in the mean time: skip the action
                 pass
-            
+
             # update position after the action is done
             self._bus._updatePosition()
-    
+
     def cancel_all(self):
         must_terminate = False
         with self.action_queue_cv:
             # cancel current action
             if self.current_action:
                 self.current_action.cancel()
-                
+
             # cancel every action in the queue
             while self.action_queue:
                 action = self.action_queue.popleft()
@@ -1388,10 +1397,10 @@ class ActionManager(threading.Thread):
                     must_terminate = True
                     continue
                 action.cancel()
-         
+
         if must_terminate:
             self.append_action(None)
-    
+
     def append_action(self, action):
         """
         appends an action in the doer's queue
@@ -1400,7 +1409,7 @@ class ActionManager(threading.Thread):
         with self.action_queue_cv:
             self.action_queue.append(action)
             self.action_queue_cv.notify()
-    
+
     def terminate(self):
         """
         Ask the action manager to terminate (once all the queued actions are done)
@@ -1434,18 +1443,18 @@ class ActionFuture(object):
         ser_access (Lock): lock to access the serial port
         """
         assert(action_type in self.possible_types)
-        
+
         self._type = action_type
         self._args = args
         self._ser_access = ser_access
         self._expected_end = None # when it expects to finish (only during RUNNING)
         self._timeout = None # really too late to be running normally
-        
+
         # acquire to modify the state, wait to wait for it to be done
         self._condition = threading.Condition()
         self._state = PENDING
         self._callbacks = []
-    
+
     def _invoke_callbacks(self):
         # do not call with _condition! And ensure it's called only once
         for callback in self._callbacks:
@@ -1463,13 +1472,13 @@ class ActionFuture(object):
             elif self._state == RUNNING:
                 self._stop_action()
                 # go through, like for state == PENDING
-            
+
             self._state = CANCELLED
             self._condition.notify_all()
 
         self._invoke_callbacks()
         return True
-            
+
     def cancelled(self):
         with self._condition:
             return self._state == CANCELLED
@@ -1488,7 +1497,7 @@ class ActionFuture(object):
                 raise futures.CancelledError()
             elif self._state == FINISHED:
                 return None
-            
+
             self._condition.wait(timeout)
 
             if self._state == CANCELLED:
@@ -1518,14 +1527,14 @@ class ActionFuture(object):
 
     def _start_action(self):
         """
-        Start the physical action, and immediatly return. It also set the 
+        Start the physical action, and immediately return. It also set the 
         state to RUNNING.
         Note: to be called without the lock (._condition) acquired.
         """
         with self._condition:
             if self._state == CANCELLED:
                 raise futures.CancelledError()
-            
+
             # Do the action
             if self._type == MOVE_REL:
                 duration = self._moveRel(self._args)
@@ -1533,11 +1542,11 @@ class ActionFuture(object):
                 duration = self._moveAbs(self._args)
             else:
                 raise Exception("Unknown action %s" % self._type)
-        
+
             self._state = RUNNING
             duration = min(duration, 60) # => wait maximum 2 min
             self._expected_end = time.time() + duration
-            self._timeout = self._expected_end + duration + 1, # 2 *duration + 1s 
+            self._timeout = self._expected_end + duration + 1, # 2 *duration + 1s
 
     def _wait_action(self):
         """
@@ -1550,46 +1559,46 @@ class ActionFuture(object):
         for controller, moves in self._args.items():
             channels = [c for c, d in moves]
             controllers[controller] = channels
-            
+
         with self._condition:
             assert(self._expected_end is not None)
             # if it has been cancelled in the mean time
             if self._state != RUNNING:
                 return
-                        
+
             duration = self._expected_end - time.time()
-            duration = max(0, duration) 
+            duration = max(0, duration)
             logging.debug("Waiting %f s for the move to finish", duration)
             self._condition.wait(duration)
-            
+
             # it's over when either all axes are finished moving, it's too late,
             # or the action was cancelled
             while (self._state == RUNNING and time.time() <= self._timeout
                    and self._isMoving(controllers)):
                 self._condition.wait(0.01)
-            
+
             # if cancelled, we don't update state
             if self._state != RUNNING:
                 return
-            
+
             self._state = FINISHED
             self._condition.notify_all()
 
         self._invoke_callbacks()
-        
+
     def _stop_action(self):
         """
         Stop the action. Do not call directly, call cancel()
         Note: to be called with the lock (._condition) acquired.
         """
         # The only two possible actions are stopped the same way
-        
+
         # create a dict of controllers => channels
         controllers = {}
         for controller, moves in self._args.items():
             channels = [c for c, d in moves]
             controllers[controller] = channels
-            
+
         self._stopMotion(controllers)
 
     def _isMoving(self, axes):
@@ -1604,7 +1613,7 @@ class ActionFuture(object):
                 if len(channels) == 1:
                     moving |= controller.isMoving(set(channels))
             return moving
-    
+
     def _stopMotion(self, axes):
         """
         axes (dict: Controller -> list (int)): controller to channel which must be stopped
@@ -1613,7 +1622,7 @@ class ActionFuture(object):
             for controller in axes:
                 # it can only stop all axes (that's the point anyway)
                 controller.stopMotion()
-    
+
     def _moveRel(self, axes):
         """
         axes (dict: Controller -> list (tuple(int, double)): 
@@ -1625,11 +1634,11 @@ class ActionFuture(object):
             for controller, channels in axes.items():
                 for channel, distance in channels:
                     actual_dist = controller.moveRel(channel, distance)
-                    duration = abs(actual_dist) / controller.getSpeed(channel) 
+                    duration = abs(actual_dist) / controller.getSpeed(channel)
                     max_duration = max(max_duration, duration)
-                
+
         return max_duration
-    
+
     def _moveAbs(self, axes):
         """
         axes (dict: Controller -> list (tuple(int, double)): 
@@ -1641,8 +1650,152 @@ class ActionFuture(object):
             for controller, channels in axes.items():
                 for channel, distance in channels:
                     actual_dist = controller.moveAbs(channel, distance)
-                    duration = abs(actual_dist) / controller.getSpeed(channel) 
+                    duration = abs(actual_dist) / controller.getSpeed(channel)
                     max_duration = max(max_duration, duration)
-                
-        return max_duration 
+
+        return max_duration
+
+
+
+class CtrlSimulator(object):
+    """
+    Simulates a GCS controller (+ serial port). Only used for testing.
+    1 axis, open-loop only, very limited behaviour
+    Same interface as the serial port
+    """
+    _idn = "(c)2013 Delmic Fake Physik Instrumente(PI) Karlsruhe, E-861 Version 7.2.0"
+    _csv = "2.0"
+    def __init__(self, timeout=0, *args, **kwargs):
+        # we don't care about the actual parameters but timeout
+        self.timeout = timeout
+
+        self._init_mem()
+
+        self._end_move = 0 # time the last requested move is over
+
+        self._output_buf = "" # what the commands sends back to the "host computer"
+        self._input_buf = "" # what we receive from the "host computer"
+
+    def _init_mem(self):
+        # internal values to simulate the device
+        # Parameter table: address -> value
+        self._parameters = {0x14: 0, # 0 = no ref switch, 1 = ref switch
+                            0x32: 1, # 0 = limit switches, 1 = no limit switches
+                            0x3c: "DEFAULT-FAKE", # stage name
+                            0x7000204: 15.3, # max step/s
+                            0x7000205: 1.2, # max step/s²
+
+                            }
+        self._ssa = 10 # step amplitude
+        self._ready = True # is ready?
+        self._errno = 0 # last error set
+
+    def write(self, data):
+        self._input_buf += data
+        # process each commands separated by "\n"
+        commands = self._input_buf.split("\n")
+        self._input_buf = commands.pop() # last one is not complete yet
+        for c in commands:
+            self._processCommand(c)
+
+    def read(self, size=1):
+        ret = self._output_buf[:size]
+        self._output_buf = self._output_buf[len(ret):]
+
+        if len(ret) < size:
+            # simulate timeout
+            time.sleep(self.timeout)
+        return ret
+
+    def close(self):
+        # using read or write will fail after that
+        del self._output_buf
+        del self._input_buf
+
+    def _processCommand(self, com):
+        """
+        process the command, and put the result in the output buffer
+        com (str): command
+        """
+        out = None # None means error decoding command
+        # TODO: remove prefix looking like "0 5 " if it starts like this, and
+        # then insert the opposite one as answer
+
+        # FIXME: if errno is not null, most commands don't work any more
+        if self._errno:
+            logging.debug("received command %s while errno = %d", com, self._errno)
+
+        if com == "*IDN?": # identification
+            out = self._idn
+        elif com == "CSV?": # command set version
+            out = self._csv
+        elif com == "ERR?": # last error number
+            out = self._errno
+            self._errno = 0 # reset error number
+        elif com == "RBT": # reboot
+            self._init_mem()
+            out = "" # FIXME: any output at all?
+        elif com == "\x04": # Query Status Register Value
+            # return hexadecimal bitmap of moving axes
+            if time.time() > self._end_move:
+                val = 0
+            else:
+                val = 1 #  first axis moving
+            out = "0x%x" % val
+        elif com == "\x05": # Request Motion Status
+            # return hexadecimal bitmap of moving axes
+            if time.time() > self._end_move:
+                val = 0
+            else:
+                val = 1 # first axis moving
+            out = "%x" % val
+        elif com == "\x07": # Request Controller Ready Status
+            if self._ready: # TODO: when is it not ready??
+                out = "\xb1"
+            else:
+                out = "\xb2"
+        elif com == "\x18": # Stop immediately
+            self._end_move = 0
+            self._errno = 10 # PI_CNTR_STOP
+        elif com.startswith("HLT"): # halt motion with deceleration: axis (optional)
+            self._end_move = 0
+        elif com.startswith("LIM? "): # Has limit switch: axis
+            m = re.match("LIM? (\d+)", com)
+            if m and int(m.group(1)) == 1:
+                out = "%d" % (1 - self._parameters[0x32]) # inverted parameter
+        elif com.startswith("TRS? "): # Indicate Reference Switch: axis
+            m = re.match("TRS? (\d+)", com)
+            if m and int(m.group(1)) == 1:
+                out = "%d" % self._parameters[0x14]
+        elif com.startswith("SAI?"): # List Of Current Axis Identifiers
+            # Can be followed by "ALL", but for us, it's the same
+            out = "1"
+        elif com.startswith("SPA? "): # GetParameter: axis, address
+            m = re.match("SPA? (\d+ \d+)", com)
+            if m:
+                axis, addr = int(m.group(1)), int(m.group(2))
+                if axis == 1:
+                    try:
+                        out = "%d = %s" % (addr, self._parameters[addr])
+                    except KeyError:
+                        logging.debug("Unknown parameter %d", addr)
+                        out = "" # TODO: what's the typical output?
+        elif com == "HLP?":
+            # TODO: more realistic output?
+            out = ("\x00The following commands are available:\n" +
+                   " HLP:\tlist the available commands\n" +
+                   " ERR?:\tshow last error number\n")
+        elif com == "HPA?":
+            # TODO: more realistic output?
+            out = ("\x00The following parameters are available:\n" +
+                   " 0x14:\thas reference switch\n" +
+                   " 0x32:\thas no limit switch\n")
+
+        # add the response header
+        if out is None:
+            self._errno = 1 # FIXME: what's the right errno?
+            out = " %s? \r\n" % com
+        else:
+            out = " " + out + "  ok\r\n"
+        self._output_buf += out
 
