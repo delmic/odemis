@@ -1214,7 +1214,7 @@ class ActionFuture(object):
 
     def _start_action(self):
         """
-        Start the physical action, and immediatly return. It also set the 
+        Start the physical action, and immediately return. It also set the 
         state to RUNNING.
         Note: to be called without the lock (._condition) acquired.
         """

@@ -32,8 +32,7 @@ import unittest
 
 logging.getLogger().setLevel(logging.DEBUG)
 
-#@unittest.skip("simple")
-CLASS = andorcam2.FakeAndorCam2 # use FakeAndorCam2 if you don't have the hardware
+CLASS = andorcam2.AndorCam2 # use FakeAndorCam2 if you don't have the hardware
 KWARGS = {"name": "camera", "role": "ccd", "device": 0} 
 
 # arguments used for the creation of the SEM simulator
