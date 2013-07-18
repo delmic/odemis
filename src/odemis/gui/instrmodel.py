@@ -600,12 +600,13 @@ class MicroscopeView(object):
         }
 
         # Check it makes sense (=> not too big)
-        distance = math.sqrt(sum([v * v for v in move.values()]))
+        distance = math.sqrt(sum([v ** 2 for v in move.values()]))
         if distance > MAX_SAFE_MOVE_DISTANCE:
             logging.error("Cancelling request to move by %f m (because > %f m)",
                           distance, MAX_SAFE_MOVE_DISTANCE)
             return
 
+        logging.debug("Sending move request of %s", move)
         return self._stage.moveRel(move)
 
 # def onStagePos(self, pos):
