@@ -1235,6 +1235,7 @@ class Bus(model.Actuator):
         shift dict(string-> float): name of the axis and shift in m
         returns (Future): future that control the asynchronous move
         """
+	logging.debug("received request to move by %s", shift)
         shift = self._applyInversionRel(shift)
         # converts the request into one action (= a dict controller -> channels + distance)
         action_axes = {}
@@ -1444,6 +1445,7 @@ class ActionFuture(object):
         """
         assert(action_type in self.possible_types)
 
+	logging.debug("New action of type %s with arguments %s", action_type, args)
         self._type = action_type
         self._args = args
         self._ser_access = ser_access
