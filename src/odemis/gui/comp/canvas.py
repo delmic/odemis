@@ -1178,18 +1178,24 @@ class PlotCanvas(wx.Panel):
     # Cached calculation methods. These should be flushed when the relevant
     # data changes (e.g. when the canvas changes size).
 
-    @memoize
+    # @memoize
     def _val_y_to_pos_y(self, val_y):
         perc_y = float(self.max_y - val_y) / self.width_y
         return perc_y * self.ClientSize[1]
 
-    @memoize
+    # FIXME: When the memoize on the method is activated,
+    # _pos_x_to_val_x starts returning weird value.
+    # Reproduce: draw the smallest graph in the test case and drage back and
+    # forth between 0 and 1
+
+    #@memoize
     def _pos_x_to_val_y(self, pos_x):
         """ Map the give x pixel value to a y value """
         self.current_x_value = self._pos_x_to_val_x(pos_x)
-        return [y for x, y in self._data if x <= self.current_x_value][-1]
+        res = [y for x, y in self._data if x <= self.current_x_value][-1]
+        return res
 
-    @memoize
+    #@memoize
     def _pos_x_to_val_x(self, pos_x):
         w, _ = self.ClientSize
         perc_x = pos_x / float(w)
