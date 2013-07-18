@@ -500,12 +500,14 @@ class AndorCam2(model.DigitalCamera):
     # they do not ensure the actual camera is selected, you have to call select()
     # TODO: not _everything_ is implemented, just what we need
     def Initialize(self):
+        # TODO: move to the lib class
         # It can take a loooong time (Clara: ~10s)
         logging.info("Initialising Andor camera, can be long...")
         if os.name == "nt":
             self.atcore.Initialize("")
         else:
-            self.atcore.Initialize("/usr/local/etc/andor")
+            # TODO: read the argument as the first line of the /etc/andor/andor.install file
+            self.atcore.Initialize("/usr/etc/andor")
         logging.info("Initialisation completed.")
     
     def Reinitialize(self):
