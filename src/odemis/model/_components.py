@@ -251,7 +251,7 @@ class ComponentProxy(ComponentBase, Pyro4.Proxy):
 # Converter from Component to ComponentProxy
 def ComponentSerializer(self):
     """reduce function that automatically replaces Component objects by a Proxy"""
-    daemon=getattr(self,"_pyroDaemon",None)
+    daemon = getattr(self, "_pyroDaemon", None)
     if daemon: # TODO might not be even necessary: They should be registering themselves in the init
         # only return a proxy if the object is a registered pyro object
         return (ComponentProxy, (daemon.uriFor(self),), self._getproxystate())
@@ -298,7 +298,7 @@ class HwComponent(Component):
 
     # no setter, to force to use the hidden _set_affects() with parsimony
     affects = property(_get_affects,
-                doc = """set of HwComponents which are affected by this component
+                doc="""set of HwComponents which are affected by this component
                          (i.e. if this component changes of state, it will be
                          detected by the affected components).""")
 
@@ -570,6 +570,7 @@ class CombinedActuator(Actuator):
             self._position[axis] = child.position.value[axes_map[axis]]
             self._speed[axis] = child.speed.value[axes_map[axis]]
 
+
         # check if can do absolute positioning: all the axes have moveAbs()
         canAbs = True
         for child, axis in self._axis_to_child.values():
@@ -577,8 +578,13 @@ class CombinedActuator(Actuator):
         if canAbs:
             self.moveAbs = self._moveAbs
 
+        # keep a reference to the subscribers so that they are not
+        # automatically garbage collected
+        self._subfun = []
+
         children_axes = {} # dict actuator -> set of string (our axes)
         for axis, (child, axis_mapped) in self._axis_to_child.items():
+            logging.debug("adding axis %s to child %s", axis, child.name)
             if child in children_axes:
                 children_axes[child].add(axis)
             else:
@@ -587,21 +593,31 @@ class CombinedActuator(Actuator):
         # position & speed: special VAs combining multiple VAs
         self.position = _vattributes.VigilantAttribute(self._position, unit="m", readonly=True)
         for c, axes in children_axes.items():
-            def update_position_per_child(value):
+            def update_position_per_child(value, axes=axes, c=c):
+                logging.debug("updating position of child %s", c.name)
                 for a in axes:
-                    self._position[a] = value[axes_map[axis]]
+                    try:
+                        self._position[a] = value[axes_map[a]]
+                    except KeyError:
+                        logging.error("Child %s is not reporting position of axis %s", c.name, a)
                 self._updatePosition()
+            logging.debug("Subscribing to position of child %s", c.name)
             c.position.subscribe(update_position_per_child)
+            self._subfun.append(update_position_per_child)
 
         # TODO should have a range per axis
         self.speed = _vattributes.MultiSpeedVA(self._speed, [0., 10.], "m/s",
                                                setter=self._setSpeed)
         for c, axes in children_axes.items():
-            def update_speed_per_child(value):
+            def update_speed_per_child(value, axes=axes):
                 for a in axes:
-                    self._speed[a] = value[axes_map[axis]]
+                    try:
+                        self._speed[a] = value[axes_map[a]]
+                    except KeyError:
+                        logging.error("Child %s is not reporting position of axis %s", c.name, a)
                 self._updateSpeed()
             c.speed.subscribe(update_speed_per_child)
+            self._subfun.append(update_speed_per_child)
 
         #TODO hwVersion swVersion
 
@@ -610,6 +626,7 @@ class CombinedActuator(Actuator):
         update the position VA
         """
         # it's read-only, so we change it via _value
+        logging.debug("reporting position %s", self._position)
         self.position._value = self._position
         self.position.notify(self._position)
 
