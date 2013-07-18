@@ -6,15 +6,15 @@ Copyright © 2012-2013 Rinze de Laat, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms 
-of the GNU General Public License version 2 as published by the Free Software 
+Odemis is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
 Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR 
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
 PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with 
+You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 
 
@@ -294,7 +294,7 @@ class SettingsPanel(object):
         value (None or stringable): value to display after the label
         selectable (boolean): whether the value can be selected by the user
           (iow, copy/pasted)
-        returns (SettingEntry): the new SettingEntry created 
+        returns (SettingEntry): the new SettingEntry created
         """
         self._clear()
         # Create label
@@ -476,7 +476,7 @@ class SettingsPanel(object):
                                              events=wx.EVT_COMMAND_ENTER)
 
             new_ctrl.Bind(wx.EVT_COMMAND_ENTER, self.on_setting_changed)
-#            new_ctrl.Bind(wx.EVT_TEXT, self.on_setting_changed)
+            # new_ctrl.Bind(wx.EVT_TEXT, self.on_setting_changed)
 
 
         elif control_type == odemis.gui.CONTROL_FLT:
@@ -497,7 +497,7 @@ class SettingsPanel(object):
                                              events=wx.EVT_COMMAND_ENTER)
 
             new_ctrl.Bind(wx.EVT_COMMAND_ENTER, self.on_setting_changed)
-#            new_ctrl.Bind(wx.EVT_TEXT, self.on_setting_changed)
+            # new_ctrl.Bind(wx.EVT_TEXT, self.on_setting_changed)
 
         elif control_type == odemis.gui.CONTROL_RADIO:
             new_ctrl = GraphicalRadioButtonControl(self.panel,
@@ -707,7 +707,7 @@ class SettingsPanel(object):
 
     def add_metadata(self, key, value):
         """
-        Adds an entry representing a specific metadata. According to the 
+        Adds an entry representing a specific metadata. According to the
          metadata key, the right representation is used for the value.
         key (model.MD_*): the metadata key
         value (depends on the metadata): the value to display

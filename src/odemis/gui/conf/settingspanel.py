@@ -132,8 +132,6 @@ def _binning_firstd_only(va, conf):
     except NotApplicableError:
         return [cur_val]
 
-
-
 # TODO: special settings for the acquisition window? (higher ranges)
 
 CONFIG = {
@@ -160,8 +158,8 @@ CONFIG = {
                 },
                 "readoutRate":
                 {
-                    # TODO: should be RADIO
-                    "control_type": odemis.gui.CONTROL_FLT,
+                    "control_type": odemis.gui.CONTROL_RADIO,
+                    "format": True,
                 },
 
                 # what we don't want to display:
