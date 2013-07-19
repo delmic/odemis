@@ -70,7 +70,7 @@ In open-loop, the controller has 2 ways to move the actuators:
 As an exception, the C-867 only supports officially closed-loop. However, there
 is a "testing" command, SMO, that allows to move in open-loop by simulating the input
 to the PID controller. PI assured us that as long as the stage used can reach 
-the limit without getting damaged, it is safe. It's pretty straightforwards to
+the limit without getting damaged, it is safe. It's pretty straightforward to
 use the command. The voltage defines the speed (and direction) of the move. The
 voltage should be set to 0 again when the position desired is reached. 3V is 
 approximately the minimum to move, and 10V is the maximum. Voltage is more or 
@@ -100,14 +100,29 @@ MODEL_E861 = 861
 MODEL_UNKNOWN = 0
 
 class Controller(object):
-    def __init__(self, ser, address=None, axes=None):
+    def __init__(self, ser, address=None, axes=None,
+                 dist_to_steps=None, min_dist=None, vpms=None):
         """
         ser: a serial port (opened)
         address 1<int<16: address as configured on the controller
         If not address is given, it just allows to do some raw commands
         axes (dict int -> boolean): determine which axis will be used and whether
-          it will be used closed-loop (True) or open-loop (False). 
+          it will be used closed-loop (True) or open-loop (False).
+        Next 2 parameters are calibration values for E-861
+        dist_to_steps (0 < float): allows to calibrate how many steps correspond
+          to a given distance (in step/m). Default is 1e5, a value that could 
+          make sense.
+        min_dist (0 <= float < 1): minimum distance required for the axis to 
+          even move (in m). Below this distance, a command will be sent, but it
+          is expected that the actuator doesn't move at all. Default is 0.01 
+          step (= 0.01 / dist_to_steps).
+        Next parameter is calibration value for C-867
+        vpms (0 < float): calibration value voltage -> speed, in V/(m/s), 
+          default is a not too bad value of 87 V/(m/s). Note: it's not linear
+          at all actually, but we tend to try to always go at lowest speed (near 2V)
         """
+        # TODO: calibration values should be per axis (but for now we only have controllers with 1 axis)
+
         self.serial = ser
         self.address = address
         self._try_recover = False # for now, fully raw access
@@ -116,6 +131,13 @@ class Controller(object):
             return
         if axes is None:
             raise LookupError("Need to have at least one axis configured")
+
+        if dist_to_steps and not (0 < dist_to_steps):
+            raise ValueError("dist_to_steps (%s) must be > 0", dist_to_steps)
+        if min_dist and not (0 <= min_dist < 1):
+            raise ValueError("min_dist (%s) must be between 0 and 1 m", min_dist)
+        if vpms and not (0 < vpms):
+            raise ValueError("vpms (%s) must be > 0", vpms)
 
         # reinitialise: make sure it's back to normal and ensure it's responding
         try:
@@ -142,7 +164,7 @@ class Controller(object):
         # dict axis (string) -> servo activated (boolean): updated by SetServo
         self._hasServo = dict(axes)
         self._position = {} # m (dict axis-> position), only used in open-loop
-        
+
         # If the controller is misconfigured for the actuator, things can go quite
         # wrong, so make it clear
         logging.info("Controller %d is configured for actuator %s", address, self.GetStageName())
@@ -167,17 +189,20 @@ class Controller(object):
                 self.SetServo(a, False)
                 if self._model == MODEL_C867: # only has testing command SMO
                     logging.warning("This controller model only supports imprecise open-loop mode.")
-                    self._initOLViaPID()
+                    self._initOLViaPID(vpms=vpms)
                 else:
                     self.SetStepAmplitude(a, 55) # maximum is best
                 self._position[a] = 0
 
         self._try_recover = True # full feature only after init
 
-        # For open-loop. For now, keep it simple: linear, using info from manual
-        # TODO: allow to pass it in parameters
-        self.move_calibration = 1e5 # step/m
-        self.min_stepsize = 0.01 # step, under this, no move at all
+        # For open-loop
+        # TODO: allow to pass a polynomial
+        self._dist_to_steps = dist_to_steps or 1e5 # step/m
+        if min_dist is None:
+            self.min_stepsize = 0.01 # step, under this, no move at all
+        else:
+            self.min_stepsize = min_dist * self._dist_to_steps
 
         # actually set just before a move
         # The max using closed-loop info seem purely arbitrary
@@ -195,11 +220,11 @@ class Controller(object):
         # FIXME 0x7000204 seems specific to E-861. need different initialisation per controller
         # Even the old firmware don't seem to support it
         try:
-            # (max m/s) = (max step/s) / (step/m)
-            self.speed_max = float(self.GetParameter(1, 0x7000204)) / self.move_calibration # m/s
+            # (max m/s) = (max step/s) * (step/m)
+            self.speed_max = float(self.GetParameter(1, 0x7000204)) / self._dist_to_steps # m/s
             # Note: the E-861 claims max 0.015 m/s but actually never goes above 0.004 m/s
-            # (max m/s²) = (max step/s²) / (step/m)
-            self.accel_max = float(self.GetParameter(1, 0x7000205)) / self.move_calibration # m/s²
+            # (max m/s²) = (max step/s²) * (step/m)
+            self.accel_max = float(self.GetParameter(1, 0x7000205)) / self._dist_to_steps # m/s²
         except (IOError, ValueError) as err:
             # TODO detect better that it's just a problem of sending unsupported command/value
             # Put default (large values)
@@ -213,28 +238,34 @@ class Controller(object):
         self._prev_speed_accel = (dict(), dict())
 
 
-    def _initOLViaPID(self):
+    def _initOLViaPID(self, vpms=None):
         """
-        Initialise the controller to move using the SMO command. 
+        Initialise the controller to move using the SMO command.
+        vpms (0< float): calibration value voltage -> speed, in V/(m/s), 
+          default is a not too bad value of 87 V/(m/s). Note: it's not linear
+          at all actually, but we tend to try to always go at lowest speed (near 2V)
         """
         # Get maximum motor output parameter (0x9) allowed
         # Because some type of stages cannot bear as much as the full maximum
         # The maximum output voltage is calculated following this formula:
         # 200 Vpp*Maximum motor output/32767
         self._max_motor_out = int(self.GetParameter(1, 0x9))
-        # official approx. min is 3V, but from test, it can go down to 1.5V
-        self._min_motor_out = int((2. / 10.) * 32767)
+        # official approx. min is 3V, but from test, it can go down to 1.5V,
+        # so use 3V
+        self._min_motor_out = int((3. / 10.) * 32767) # encoded as a ratio of 10 V * 32767
         assert(self._max_motor_out > self._min_motor_out)
-
-        # From measurement, at 1.8V (slowest), it goes at ~0.023 m/s
-        # at 6V (fastest), it goes at ~0.3 m/s
 
         # We simplify to a linear conversion, making sure that the min voltage
         # is approximately the min speed. It will tend to overshoot if the speed
         # is higher than the min speed and there is no load on the actuator.
         # So it's recommended to use it always at the min speed (0.023 m/s),
         # which also gives the best precision.
-        self._vpms = self._min_motor_out / 0.023 # uV/(m/s)
+        if vpms is None:
+            # From measurement, at 1.8V (slowest), it goes at ~0.023 m/s
+            # at 6V (fastest), it goes at ~0.3 m/s
+            self._vpms = self._min_motor_out / 0.023 # V/(m/s)
+        else:
+            self._vpms = vpms * (32767 / 10.)
 
         # Set up a macro that will do the job
         # To be called like "MAC START OLSTEP 16000 500"
@@ -854,9 +885,10 @@ class Controller(object):
         steps = self.convertDistanceToDevice(distance)
         if steps == 0: # if distance is too small, report it
             return 0
+            # TODO: try to move anyway, just in case it works
 
         self.OLMoveStep(axis, steps)
-        # TODO use OLAnalogDriving for very small moves (< 5um)?
+        # TODO use OLAnalogDriving for very small moves (< 5µm)?
         return distance
 
     def _moveRelOLViaPID(self, axis, distance):
@@ -865,6 +897,7 @@ class Controller(object):
         """
         speed = self._speed[axis]
         v, t = self.convertDistanceSpeedToPIDControl(distance, speed)
+        logging.debug("Moving axis at V = %f, for %f ms", v/32687., t)
         if v == 0: # if distance is too small, report it
             return 0
 
@@ -906,12 +939,12 @@ class Controller(object):
         voltage_u = min(max(self._min_motor_out, voltage_u), self._max_motor_out)
         act_speed = voltage_u / self._vpms # m/s
 
-        time = abs(distance) / act_speed #s
-        time_ms = int(round(time * 1000)) # ms
-        if time_ms < 10 and act_speed > min_speed:
+        mv_time = abs(distance) / act_speed # s
+        mv_time_ms = int(round(mv_time * 1000)) # ms
+        if mv_time_ms < 10 and act_speed > min_speed:
             # small distance => try with the minimum speed to have a better precision
             return self.convertDistanceSpeedToPIDControl(distance, min_speed)
-        elif time_ms < 1:
+        elif mv_time_ms < 1:
             # no hope
             # TODO: see if a special macro without delay would move a very little bit
             return 0, 0
@@ -922,7 +955,7 @@ class Controller(object):
 
         if distance < 0:
             voltage_u = -voltage_u
-        return voltage_u, time_ms
+        return voltage_u, mv_time_ms
 
     def convertDistanceToDevice(self, distance):
         """
@@ -931,7 +964,7 @@ class Controller(object):
         return (float): number of steps, <0 if going opposite direction
             0 if too small to move.
         """
-        steps = distance * self.move_calibration
+        steps = distance * self._dist_to_steps
         if abs(steps) < self.min_stepsize:
             return 0
 
@@ -943,7 +976,7 @@ class Controller(object):
         distance (float): meters/s (can be negative)
         return (float): number of steps/s, <0 if going opposite direction
         """
-        steps_ps = speed * self.move_calibration
+        steps_ps = speed * self._dist_to_steps
         return max(1, steps_ps) # don't go at 0 m/s!
 
     # in linear approximation, it's the same
@@ -1103,7 +1136,8 @@ class Bus(model.Actuator):
     """
     Represent a chain of PIGCS controllers over a serial port
     """
-    def __init__(self, name, role, port, axes, baudrate=38400, **kwargs):
+    def __init__(self, name, role, port, axes, baudrate=38400,
+                 dist_to_steps=None, min_dist=None, vpms=None, **kwargs):
         """
         port (string): name of the serial port to connect to the controllers
         axes (dict string -> 3-tuple(1<=int<=16, 1<=int, boolean): the configuration
@@ -1113,22 +1147,35 @@ class Bus(model.Actuator):
          _not_ seen as a child from the odemis model point of view.
         baudrate (int): baudrate of the serial port (default is the recommended 
           38400). Use .scan() to detect it.
+        Next 3 parameters are for calibration, see Controller for definition
+        dist_to_steps (dict string -> (0 < float)): axis name -> value
+        min_dist (dict string -> (0 <= float < 1)): axis name -> value
+        vpms (dict string -> (0 < float)): axis name -> value
         """
         # this set ._axes and ._ranges
         model.Actuator.__init__(self, name, role, axes=axes.keys(), **kwargs)
 
         ser = Controller.openSerialPort(port, baudrate)
 
+        dist_to_steps = dist_to_steps or {}
+        min_dist = min_dist or {}
+        vpms = vpms or {}
+
         # Prepare initialisation by grouping axes from the same controller
         ac_to_axis = {} # address, channel -> axis name
-        controllers = {} # address -> dict (axis -> boolean)
+        controllers = {} # address -> args (dict (axis -> boolean), dist_to_steps, min_dist, vpms)
         for axis, (add, channel, isCL) in axes.items():
             if not add in controllers:
-                controllers[add] = {}
+                controllers[add] = [{}, None, None, None]
             elif channel in controllers[add]:
                 raise ValueError("Cannot associate multiple axes to controller %d:%d" % (add, channel))
             ac_to_axis[(add, channel)] = axis
-            controllers[add].update({channel: isCL})
+            args = controllers[add]
+            args[0].update({channel: isCL})
+            # FIXME: for now we rely on the fact 1 axis = 1 controller for the calibration values
+            args[1] = dist_to_steps.get(axis)
+            args[2] = min_dist.get(axis)
+            args[3] = vpms.get(axis)
 
         # Init each controller
         self._axis_to_cc = {} # axis name => (Controller, channel)
@@ -1136,15 +1183,16 @@ class Bus(model.Actuator):
         position = {}
         speed = {}
         max_speed = 1 # m/s
-        for address, channels in controllers.items():
+        for address, args in controllers.items():
             try:
-                controller = Controller(ser, address, channels)
+                controller = Controller(ser, address, *args)
             except IOError:
                 logging.exception("Failed to find a controller with address %d on %s", address, port)
                 raise
             except LookupError:
                 logging.exception("Failed to initialise controller %d on %s", address, port)
                 raise
+            channels = args[0]
             for c in channels:
                 axis = ac_to_axis[(address, c)]
                 self._axis_to_cc[axis] = (controller, c)
@@ -1235,7 +1283,7 @@ class Bus(model.Actuator):
         shift dict(string-> float): name of the axis and shift in m
         returns (Future): future that control the asynchronous move
         """
-	logging.debug("received request to move by %s", shift)
+        logging.debug("received request to move by %s", shift)
         shift = self._applyInversionRel(shift)
         # converts the request into one action (= a dict controller -> channels + distance)
         action_axes = {}
