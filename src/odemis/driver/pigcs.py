@@ -242,9 +242,13 @@ class Controller(object):
         """
         Initialise the controller to move using the SMO command.
         vpms (0< float): calibration value voltage -> speed, in V/(m/s), 
-          default is a not too bad value of 87 V/(m/s). Note: it's not linear
-          at all actually, but we tend to try to always go at lowest speed (near 2V)
+          default is a not too bad value of 78 V/(m/s) (measured from observing
+          a speed of 0.023 m/s at 1.8V). Note: it's not linear at all actually,
+          but we tend to try to always go at lowest speed (3V). At 6 V (fastest),
+          it goes at ~0.3 m/s.
         """
+        vpms = vpms or 78 # V/(m/s)
+
         # Get maximum motor output parameter (0x9) allowed
         # Because some type of stages cannot bear as much as the full maximum
         # The maximum output voltage is calculated following this formula:
@@ -258,14 +262,9 @@ class Controller(object):
         # We simplify to a linear conversion, making sure that the min voltage
         # is approximately the min speed. It will tend to overshoot if the speed
         # is higher than the min speed and there is no load on the actuator.
-        # So it's recommended to use it always at the min speed (0.023 m/s),
+        # So it's recommended to use it always at the min speed (~0.03 m/s),
         # which also gives the best precision.
-        if vpms is None:
-            # From measurement, at 1.8V (slowest), it goes at ~0.023 m/s
-            # at 6V (fastest), it goes at ~0.3 m/s
-            self._vpms = self._min_motor_out / 0.023 # V/(m/s)
-        else:
-            self._vpms = vpms * (32767 / 10.)
+        self._vpms = vpms * (32767 / 10.)
 
         # Set up a macro that will do the job
         # To be called like "MAC START OLSTEP 16000 500"
