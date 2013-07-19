@@ -216,9 +216,9 @@ class DraggableCanvas(wx.Panel):
     def OnChar(self, event):
         key = event.GetKeyCode()
 
-        change = 16
+        change = 100 # about a 10th of the screen
         if event.ShiftDown():
-            change = 2 # softer
+            change //= 8 # softer
 
         if key == wx.WXK_LEFT:
             self.ShiftView((change, 0))
