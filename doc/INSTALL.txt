@@ -246,5 +246,14 @@ configure the X/Y axes of the SEM to orient the image identically to the vendor
 software, and then adjust the orientation of the other detectors.
   
 
- 
+= Auto start =
+To avoid entering the password when starting and stopping the backend, add the
+following lines to the sudo config file (sudo visudo):
+
+# Allow to start/stop odemis without password
+ALL    ALL = (root) NOPASSWD: /usr/bin/odemisd
+# these 3 are also needed
+ALL    ALL = (root) NOPASSWD: /usr/bin/cgcreate
+ALL    ALL = (root) NOPASSWD: /usr/bin/pkill -f odemis.odemisd.main
+ALL    ALL = (root) NOPASSWD: /bin/rm -rf /var/run/odemisd/*
 
