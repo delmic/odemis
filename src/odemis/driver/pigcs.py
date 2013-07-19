@@ -169,7 +169,7 @@ class Controller(object):
         # wrong, so make it clear
         logging.info("Controller %d is configured for actuator %s", address, self.GetStageName())
         for c in self._channels:
-            logging.info("Axis %s has %slimit switch and has %s reference switch",
+            logging.info("Axis %s has %slimit switch and has %sreference switch",
                          c,
                          "" if self._hasLimit[c] else "no ",
                          "" if self._hasSensor[c] else "no ")
