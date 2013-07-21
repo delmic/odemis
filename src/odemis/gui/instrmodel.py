@@ -23,6 +23,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from abc import ABCMeta
 from odemis import model
 from odemis.gui.model.stream import Stream, StreamTree
+from odemis.gui.util import ignore_dead
 from odemis.model import FloatContinuous, VigilantAttribute
 from odemis.model._vattributes import IntEnumerated, NotSettableError
 import collections

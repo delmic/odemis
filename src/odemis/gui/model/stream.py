@@ -137,7 +137,7 @@ class Stream(object):
 
         # list of warnings to display to the user
         # TODO should be a set
-        self.warnings = model.ListVA([]) # should only contains WARNING_*
+        self.warnings = model.ListVA([]) # should only contain WARNING_*
 
     @property
     def emitter(self):
@@ -879,7 +879,7 @@ class StaticStream(Stream):
     def __init__(self, name, image):
         """
         Note: parameters are different from the base class.
-        image (InstrumentalImage or DataArray of shape (111)YX): image to 
+        image (InstrumentalImage or DataArray of shape (111)YX): image to
           display or raw data.
           If it is a DataArray, the metadata should contain at least MD_POS and
           MD_PIXEL_SIZE.
@@ -1169,7 +1169,7 @@ class StaticSpectrumStream(StaticStream):
         Compute the global spectrum of the data as an average over all the pixels
         returns (list of float): average intensity for each wavelength
          You need to use the metadata of the raw data to find out what is the
-         wavelength for each pixel. 
+         wavelength for each pixel.
         """
         if len(self.raw) < 0:
             return []

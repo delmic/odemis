@@ -8,15 +8,15 @@ Copyright © 2012 Éric Piel, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms 
-of the GNU General Public License version 2 as published by the Free Software 
+Odemis is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
 Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR 
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
 PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with 
+You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from Pyro4.core import oneway
@@ -29,9 +29,9 @@ import threading
 import urllib
 import weakref
 #Pyro4.config.COMMTIMEOUT = 30.0 # a bit of timeout
-# There is a problem with threadpool: threads have a timeout on waiting for a 
+# There is a problem with threadpool: threads have a timeout on waiting for a
 # request. That obviously doesn't make much sense, but also means it's not
-# possible to put a global timeout with the current version and threadpool. 
+# possible to put a global timeout with the current version and threadpool.
 # One possibility is to change ._pyroTimeout on each proxy.
 
 
@@ -39,7 +39,7 @@ import weakref
 # MAXTHREADS concurrent connections (which is MINTHREADS because there is a bug).
 # After that it simply blocks. As there is one connection per object, it goes fast.
 # Multiplex can handle a much larger number of connections, but will always
-# execute the requests one at a time. It seems to handle badly callbacks 
+# execute the requests one at a time. It seems to handle badly callbacks
 #Pyro4.config.SERVERTYPE = "multiplex"
 Pyro4.config.THREADPOOL_MINTHREADS = 24
 # TODO make sure Pyro can grow the pool: for now it allocates a huge static number of threads
@@ -47,7 +47,7 @@ Pyro4.config.THREADPOOL_MINTHREADS = 24
 # TODO needs a different value on Windows
 # TODO try a user temp directory if /var/run/odemisd doesn't exist (and cannot be created)
 BASE_DIRECTORY="/var/run/odemisd"
-BASE_GROUP="odemis" # user group that is allowed to access the backend 
+BASE_GROUP="odemis" # user group that is allowed to access the backend
 
 #TODO special attributes, which are just properties that are explicitly duplicated
 # on the proxy. Getting/setting them always access the actual object remotely.
@@ -56,7 +56,7 @@ BASE_GROUP="odemis" # user group that is allowed to access the backend
 # * create special methods on the object, to handle these attributes (when the parent object is registered or shared)
 
 
-# The special read-only attribute which are duplicated on proxy objects 
+# The special read-only attribute which are duplicated on proxy objects
 class roattribute(property):
     """
     A member of an object which will be cached in the proxy when remotely shared.
@@ -83,7 +83,7 @@ def get_roattributes(self):
                 roattributes.append(key)
         except AttributeError:
             continue
-       
+
     return roattributes
 
 def dump_roattributes(self):
@@ -93,7 +93,7 @@ def dump_roattributes(self):
     # if it is a proxy, use _odemis_roattributes
     roattr = getattr(self, "_odemis_roattributes", [])
     roattr += get_roattributes(self)
-        
+
     return dict([[name, getattr(self, name)] for name in roattr])
 
 def load_roattributes(self, roattributes):
@@ -103,7 +103,7 @@ def load_roattributes(self, roattributes):
     """
     for a, value in roattributes.items():
         setattr(self, a, value)
-        
+
     # save the list in case we need to pickle the object again
     self._odemis_roattributes = roattributes.keys()
 
@@ -112,7 +112,7 @@ def load_roattributes(self, roattributes):
 
 class ContainerObject(Pyro4.core.DaemonObject):
     """Object which represent the daemon for remote access"""
-     
+
     # it'll never be able to answer back if everything goes fine
     @oneway
     def terminate(self):
@@ -120,7 +120,7 @@ class ContainerObject(Pyro4.core.DaemonObject):
         stops the server
         """
         self.daemon.terminate()
-    
+
     def instantiate(self, klass, kwargs):
         """
         instantiate a component and publish it
@@ -129,14 +129,14 @@ class ContainerObject(Pyro4.core.DaemonObject):
         returns the new component instantiated
         """
         return self.daemon.instantiate(klass, kwargs)
-    
+
     def getRoot(self):
         """
         returns the root object, if it has been defined in the container
         """
         return self.getObject(self.daemon.rootId)
-    
-# Basically a wrapper around the Pyro Daemon 
+
+# Basically a wrapper around the Pyro Daemon
 class Container(Pyro4.core.Daemon):
     def __init__(self, name):
         """
@@ -145,7 +145,7 @@ class Container(Pyro4.core.Daemon):
         assert not "/" in name
         # all the sockets are in the same directory so it's independent from the PWD
         self.ipc_name = BASE_DIRECTORY + "/" + urllib.quote(name) + ".ipc"
-        
+
         if os.path.exists(self.ipc_name):
             try:
                 os.remove(self.ipc_name)
@@ -154,10 +154,10 @@ class Container(Pyro4.core.Daemon):
                 logging.error("Impossible to delete file '%s', needed to create container '%s'.", self.ipc_name, name)
 
         Pyro4.Daemon.__init__(self, unixsocket=self.ipc_name, interface=ContainerObject)
-        
-        # To be set by the user of the container 
+
+        # To be set by the user of the container
         self.rootId = None # objectId of a "Root" component
-        
+
     def run(self):
         """
         runs and serve the objects registered in the container.
@@ -174,7 +174,7 @@ class Container(Pyro4.core.Daemon):
         # wrapper to shutdown(), in order to be more consistent with the vocabulary
         self.shutdown()
         # All the cleaning is done in the original thread, after the run()
-    
+
     def close(self):
         """
         Cleans up everything behind, once the container is already done with running
@@ -191,7 +191,7 @@ class Container(Pyro4.core.Daemon):
                     logging.exception("Failed to unregister object %s when terminating container", str(obj))
             else:
                 self.unregister(obj)
-        
+
         Pyro4.Daemon.close(self)
 
     def instantiate(self, klass, kwargs):
@@ -213,13 +213,13 @@ def getContainer(name, validate=True):
     raises an exception if no such container exist
     """
     # detect when the base directory doesn't even exists and is readable
-    if not os.path.isdir(BASE_DIRECTORY + "/."): # + "/." to check it's readable 
+    if not os.path.isdir(BASE_DIRECTORY + "/."): # + "/." to check it's readable
         raise IOError("Directory " + BASE_DIRECTORY + " is not accessible.")
-    
+
     # the container is the default pyro daemon at the address named by the container
     container = Pyro4.Proxy("PYRO:Pyro.Daemon@./u:"+BASE_DIRECTORY+"/"+urllib.quote(name)+".ipc")
     container._pyroOneway.add("terminate")
-    
+
     # A proxy doesn't connect until the first remote call, check the connection
     if validate:
         container.ping() # raise an exception if connection fails
@@ -252,7 +252,7 @@ def createNewContainer(name, validate=True):
 
     # connect to the new container
     return getContainer(name, validate)
- 
+
 def createInNewContainer(container_name, klass, kwargs):
     """
     creates a new component in a new container
@@ -263,7 +263,7 @@ def createInNewContainer(container_name, klass, kwargs):
     """
     container = createNewContainer(container_name, validate=False)
     return container.instantiate(klass, kwargs)
- 
+
 def _manageContainer(name, isready=None):
     """
     manages the whole life of a container, from birth till death
@@ -275,9 +275,9 @@ def _manageContainer(name, isready=None):
         isready.set()
     container.run()
     container.close()
-    
+
 # Special functions and class to manage method/function with weakref
-# wxpython.pubsub has something similar 
+# wxpython.pubsub has something similar
 
 class WeakRefLostError(Exception):
     pass
@@ -288,47 +288,47 @@ class WeakMethodBound(object):
         self.c = weakref.ref(f.im_self)
         # cache the hash so that it's the same after deref'd
         self.hash = hash(f.im_func) + hash(f.im_self)
-        
+
     def __call__(self, *arg, **kwargs):
-        ins = self.c() 
+        ins = self.c()
         if ins == None:
             raise WeakRefLostError, 'Method called on dead object'
         return self.f(ins, *arg, **kwargs)
-        
+
     def __hash__(self):
         return self.hash
-    
+
     def __eq__(self, other):
         try:
             return (type(self) is type(other) and self.f == other.f
                     and self.c() == other.c())
         except:
             return False
-        
-#    def __ne__(self, other):
-#        return not self == other
+
+    # def __ne__(self, other):
+    #     return not self == other
 
 class WeakMethodFree(object):
     def __init__(self, f):
         self.f = weakref.ref(f)
         # cache the hash so that it's the same after deref'd
         self.hash = hash(f)
-        
+
     def __call__(self, *arg, **kwargs):
         fun = self.f()
         if fun == None:
             raise WeakRefLostError, 'Function no longer exist'
         return fun(*arg, **kwargs)
-        
+
     def __hash__(self):
         return self.hash
-    
+
     def __eq__(self, other):
         try:
             return type(self) is type(other) and self.f() == other.f()
         except:
             return False
-        
+
 #    def __ne__(self, other):
 #        return not self == other
 
