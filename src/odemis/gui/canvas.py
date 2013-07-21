@@ -29,7 +29,7 @@ from odemis import util, model
 from odemis.gui import instrmodel
 from odemis.gui.model import EM_STREAMS, stream
 from odemis.gui.model.stream import UNDEFINED_ROI
-from odemis.gui.util import limit_invocation, call_after, units
+from odemis.gui.util import limit_invocation, call_after, units, ignore_dead
 from odemis.model._vattributes import VigilantAttributeBase
 import odemis.gui.comp.overlay as overlay
 from wx.lib.pubsub import pub
@@ -225,6 +225,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
     @limit_invocation(2) # max 1/2s
     @call_after  # needed as it accesses the DC
+    @ignore_dead  # This method might get called after the canvas is destroyed
     def _updateThumbnail(self):
         # TODO: avoid doing 2 copies, by using directly the wxImage from the
         # result of the StreamTree

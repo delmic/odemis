@@ -24,6 +24,13 @@ def call_after(f, self, *args, **kwargs):
     """
     return wx.CallAfter(f, self, *args, **kwargs)
 
+    # The dead_object_wrapper was added to prevent PyDeadObjectError when
+    # delayed calls were made on a deleted dialog (i.e. the acquisition dialog)
+    # return wx.CallAfter(dead_object_wrapper(f, self, *args, **kwargs),
+    #                     self,
+    #                     *args,
+    #                     **kwargs)
+
 def limit_invocation(delay_s):
     """ This decorator limits how often a method will be executed.
 
@@ -38,7 +45,6 @@ def limit_invocation(delay_s):
     thread.
     """
     def limit(f, self, *args, **kwargs):
-
         if inspect.isclass(self):
             raise ValueError("limit_invocation decorators should only be "
                              "assigned to instance methods!")
@@ -79,6 +85,12 @@ def limit_invocation(delay_s):
 
     return decorator(limit)
 
+@decorator
+def ignore_dead(f, self, *args, **kwargs):
+    try:
+        return f(self, *args, **kwargs)
+    except wx.PyDeadObjectError:
+        logging.warn("Dead object ignored in %s", f.__name__)
 
 class memoize(object):
     """ Decorator that caches a function's return value each time it is called.
@@ -137,7 +149,7 @@ def dead_object_wrapper(f, *args, **kwargs):
             if app:
                 return f(*args, **kwargs)
         except wx.PyDeadObjectError:
-            logging.debug("PyDeadObjectError avoided")
+            logging.warn("Dead object ignored in %s", f.__name__)
     return wrapzor
 
 
