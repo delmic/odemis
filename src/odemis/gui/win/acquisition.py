@@ -82,6 +82,9 @@ class AcquisitionDialog(xrcfr_acq):
 
         self.stream_controller = StreamController(self.interface_model,
                                                   self.pnl_secom_streams)
+        # Keep track of the added streams, so we can easily remove them when
+        # the dialog is destroyed
+        self.added_streams = []
         # The streams currently displayed are the one
         self.add_all_streams(orig_view.getStreams())
 
@@ -139,9 +142,17 @@ class AcquisitionDialog(xrcfr_acq):
         # go through all the streams available in the interface model
         for s in self.interface_model.streams:
             if s in visible_streams:
+                self.added_streams.append(s)
                 view.addStream(s) # must be done first, so that the "visible" button is correct
             # add to the stream bar in any case
             sp = self.stream_controller.addStreamForAcquisition(s)
+
+    def remove_all_streams(self):
+        """ Remove the streams we added to the view on creation """
+        view = self.interface_model.focussedView.value
+
+        for s in self.added_streams:
+            view.removeStream(s)
 
     def find_current_preset(self):
         """
@@ -279,6 +290,7 @@ class AcquisitionDialog(xrcfr_acq):
             logging.info(msg)
             self.acq_future.cancel()
 
+        self.remove_all_streams()
         # stop listening to events
         pub.unsubscribe(self.on_setting_change, 'setting.changed')
 
