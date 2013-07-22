@@ -19,6 +19,7 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with 
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
+from __future__ import division
 from odemis.model import isasync
 from odemis import model
 import logging
@@ -100,7 +101,7 @@ class EBeam(model.Emitter):
         logging.info("E-beam spot size is now %d m", value)
         return value
 
-class Stage2D(model.Actuator):
+class Stage(model.Actuator):
     """
     Simulated stage component. Just pretends to be able to move all around.
     """
@@ -120,7 +121,7 @@ class Stage2D(model.Actuator):
         # start at the centre
         self._position = {}
         for a in axes:
-            self._position[a] = (self.ranges[a][0] + self.ranges[a][1]) / 2.0
+            self._position[a] = (self.ranges[a][0] + self.ranges[a][1]) / 2
         # RO, as to modify it the client must use .moveRel() or .moveAbs()
         self.position = model.VigilantAttribute(self._position, unit="m", readonly=True)
         

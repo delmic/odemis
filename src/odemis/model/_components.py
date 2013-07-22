@@ -668,7 +668,7 @@ class CombinedActuator(Actuator):
         futures = []
         for axis, distance in shift.items():
             if axis not in self._axis_to_child:
-                raise Exception("Axis unknown: " + str(axis))
+                raise Exception("Axis unknown: %s" % axis)
             child, child_axis = self._axis_to_child[axis]
             logging.debug("Moving axis %s -> %s by %g", axis, child_axis, distance)
             f = child.moveRel({child_axis: distance})
@@ -691,22 +691,34 @@ class CombinedActuator(Actuator):
         """
         # TODO what's the origin? => need a different conversion?
         # TODO check values are within range
+        futures = []
         for axis, distance in pos.items():
             if axis not in self._axis_to_child:
                 raise Exception("Axis unknown: " + str(axis))
             child, child_axis = self._axis_to_child[axis]
             f = child.moveAbs({child_axis: distance})
+            futures.append(f)
 
+        if len(futures) == 1:
+            return futures[0]
+        else:
+            #TODO return future composed of multiple futures
+            return futures[0]
 
-    def stop(self):
+    def stop(self, axes=None):
         """
-        stops the motion on every axes
+        stops the motion
+        axes (iterable or None): list of axes to stop, or None if all should be stopped
         """
-        # TODO: only stop the children axes that we control (need a "axes" argument)
+        axes = axes or self.axes
         threads = []
-        for child in self._children:
+        for axis in axes:
+            if axis not in self._axis_to_child:
+                logging.error("Axis unknown: %s", axis)
+                continue
+            child, child_axis = self._axis_to_child[axis]
             # it's synchronous, but we want to stop them as soon as possible
-            thread = threading.Thread(name="stopping fork", target=child.stop)
+            thread = threading.Thread(name="stopping axis", target=child.stop, args=(child_axis,))
             thread.start()
             threads.append(thread)
 
