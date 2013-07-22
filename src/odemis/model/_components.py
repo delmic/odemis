@@ -106,9 +106,6 @@ def getEvents(component):
     evts = inspect.getmembers(component, lambda x: isinstance(x, _dataflow.EventBase))
     return dict(evts)
 
-class ArgumentError(Exception):
-    pass
-
 class ComponentBase(object):
     """Abstract class for a component"""
     __metaclass__ = ABCMeta
@@ -368,10 +365,10 @@ class Microscope(HwComponent):
     def __init__(self, name, role, children=None, daemon=None, **kwargs):
         HwComponent.__init__(self, name, role, daemon=daemon)
         if children:
-            raise ArgumentError("Microscope component cannot have children.")
+            raise ValueError("Microscope component cannot have children.")
 
         if kwargs:
-            raise ArgumentError("Microscope component cannot have initialisation arguments.")
+            raise ValueError("Microscope component cannot have initialisation arguments.")
 
         # TODO: validate that each set contains only components from the specific type
         self._detectors = set()
@@ -452,7 +449,7 @@ class Actuator(HwComponent):
         self._inverted = frozenset(inverted)
         if not self._inverted <= self._axes:
             non_existing = self._inverted - self._axes
-            raise ArgumentError("Actuator %s has non-existing inverted axes: %s.",
+            raise ValueError("Actuator %s has non-existing inverted axes: %s.",
                                 ", ".join(non_existing))
 
         if ranges is None:
@@ -542,10 +539,10 @@ class CombinedActuator(Actuator):
         axes_map (dict str -> str): axis name in this actuator -> axis name in the child actuator
         """
         if not children:
-            raise ArgumentError("CombinedActuator needs children")
+            raise ValueError("CombinedActuator needs children")
 
         if set(children.keys()) != set(axes_map.keys()):
-            raise ArgumentError("CombinedActuator needs the same keys in children and axes_map")
+            raise ValueError("CombinedActuator needs the same keys in children and axes_map")
 
         # this set ._axes and ._ranges (_children is an empty set)
         Actuator.__init__(self, name, role, axes=children.keys(), **kwargs)
@@ -558,14 +555,13 @@ class CombinedActuator(Actuator):
             child.parent = self
             self._axis_to_child[axis] = (child, axes_map[axis])
 
-            # FIXME: how do we check if it's an actuator?
+            # Ducktyping (useful to support also testing with MockComponent)
             # At least, it has .ranges and .axes (and they are set and dict)
-            # if not isinstance(child, Actuator):
             if not isinstance(child, ComponentBase):
-                raise ArgumentError("Child %s is not a component." % str(child))
+                raise ValueError("Child %s is not a component." % str(child))
             if (not hasattr(child, "ranges") or not isinstance(child.ranges, dict) or
                 not hasattr(child, "axes") or not isinstance(child.axes, collections.Set)):
-                raise ArgumentError("Child %s is not an actuator." % str(child))
+                raise ValueError("Child %s is not an actuator." % str(child))
             self._ranges[axis] = child.ranges[axes_map[axis]]
             self._position[axis] = child.position.value[axes_map[axis]]
             self._speed[axis] = child.speed.value[axes_map[axis]]
@@ -664,14 +660,21 @@ class CombinedActuator(Actuator):
         """
         shift = self._applyInversionRel(shift)
         # TODO check values are within range
-        # TODO merge multiple axes for the same children
-        futures = []
+
+        # merge multiple axes for the same children
+        child_to_move = {} # child -> moveRel argument
         for axis, distance in shift.items():
             if axis not in self._axis_to_child:
                 raise Exception("Axis unknown: %s" % axis)
             child, child_axis = self._axis_to_child[axis]
-            logging.debug("Moving axis %s -> %s by %g", axis, child_axis, distance)
-            f = child.moveRel({child_axis: distance})
+            if not child in child_to_move:
+                child_to_move[child] = {}
+            child_to_move[child].update({child_axis: distance})
+            logging.debug("Moving axis %s (-> %s) by %g", axis, child_axis, distance)
+
+        futures = []
+        for child, move in child_to_move.items():
+            f = child.moveRel(move)
             futures.append(f)
 
         if len(futures) == 1:
@@ -689,14 +692,21 @@ class CombinedActuator(Actuator):
         sync (boolean): whether the moves should be done asynchronously or the
         method should return only when all the moves are over (sync=True)
         """
-        # TODO what's the origin? => need a different conversion?
+        pos = self._applyInversionAbs(pos)
         # TODO check values are within range
-        futures = []
+        child_to_move = {} # child -> moveAbs argument
         for axis, distance in pos.items():
             if axis not in self._axis_to_child:
-                raise Exception("Axis unknown: " + str(axis))
+                raise Exception("Axis unknown: %s" % axis)
             child, child_axis = self._axis_to_child[axis]
-            f = child.moveAbs({child_axis: distance})
+            if not child in child_to_move:
+                child_to_move[child] = {}
+            child_to_move[child].update({child_axis: distance})
+            logging.debug("Moving axis %s (-> %s) to %g", axis, child_axis, distance)
+
+        futures = []
+        for child, move in child_to_move.items():
+            f = child.moveAbs(move)
             futures.append(f)
 
         if len(futures) == 1:

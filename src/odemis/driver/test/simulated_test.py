@@ -143,7 +143,7 @@ class StageTest(unittest.TestCase, ActuatorTest):
 
     actuator_type = simulated.Stage
     # name, role, children (must be None)
-    _kwargs = {"name": "stage", "role": "test", "axes": {"x", "y"}}
+    _kwargs = dict(name="stage", role="test", axes={"x", "y"}, inverted=["y"])
 
 class CombinedTest(unittest.TestCase, ActuatorTest):
 

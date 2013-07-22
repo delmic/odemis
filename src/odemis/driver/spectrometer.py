@@ -22,7 +22,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from __future__ import division
 from numpy.polynomial import polynomial
 from odemis import model
-from odemis.model._components import ComponentBase, ArgumentError
+from odemis.model._components import ComponentBase
 from odemis.model._dataflow import DataFlowBase
 import logging
 import math
@@ -63,7 +63,7 @@ class CompositedSpectrometer(model.Detector):
             There must be exactly two children "spectrograph" and "detector". The 
             first dimension of the CCD is supposed to be along the wavelength,
             with the first pixels representing the lowest wavelengths. 
-        Raise an ArgumentError exception if the children are not compatible
+        Raise an ValueError exception if the children are not compatible
         '''
         # we will fill the set of children with Components later in ._children 
         model.Detector.__init__(self, name, role, **kwargs)
@@ -71,29 +71,29 @@ class CompositedSpectrometer(model.Detector):
         # Check the children
         dt = children["detector"]
         if not isinstance(dt, ComponentBase):
-            raise ArgumentError("Child detector is not a component.")
+            raise ValueError("Child detector is not a component.")
         if not hasattr(dt, "shape") or not isinstance(dt.shape, tuple):
-            raise ArgumentError("Child detector is not a Detector component.")
+            raise ValueError("Child detector is not a Detector component.")
         if not hasattr(dt, "data") or not isinstance(dt.data, DataFlowBase):
-            raise ArgumentError("Child detector is not a Detector component.")
+            raise ValueError("Child detector is not a Detector component.")
         self._detector = dt
         self.children.add(dt)
         
         sp = children["spectrograph"]
         if not isinstance(sp, ComponentBase):
-            raise ArgumentError("Child spectrograph is not a component.")
+            raise ValueError("Child spectrograph is not a component.")
         try:
             if not "wavelength" in sp.axes:
-                raise ArgumentError("Child spectrograph has no 'wavelength' axis.")
+                raise ValueError("Child spectrograph has no 'wavelength' axis.")
         except Exception:
-            raise ArgumentError("Child spectrograph is not an Actuator.")
+            raise ValueError("Child spectrograph is not an Actuator.")
         self._spectrograph = sp
         self.children.add(sp)
 
         # set up the detector part
         # check that the shape is "horizontal"
         if dt.shape[0] <= 1:
-            raise ArgumentError("Child detector must have at least 2 pixels horizontally")
+            raise ValueError("Child detector must have at least 2 pixels horizontally")
         if dt.shape[0] < dt.shape[1]:
             logging.warning("Child detector is shaped vertically (%dx%d), "
                             "this is probably incorrect, as wavelengths are " 
@@ -157,7 +157,7 @@ class CompositedSpectrometer(model.Detector):
         try:
             self._pn_phys = sp.getPolyToWavelength()
         except AttributeError:
-            raise ArgumentError("Child spectrograph has no getPolyToWavelength() method")
+            raise ValueError("Child spectrograph has no getPolyToWavelength() method")
         if hasattr(sp, "grating") and isinstance(sp.grating, model.VigilantAttributeBase):
             sp.grating.subscribe(self._onGratingUpdate)
         sp.position.subscribe(self._onWavelengthUpdate)
