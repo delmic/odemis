@@ -447,7 +447,7 @@ class AndorCam2(model.DigitalCamera):
                                           setter=self.setGain)
 
         current_temp = self.GetTemperature()
-        self.temperature = model.FloatVA(current_temp, unit="°C", readonly=True)
+        self.temperature = model.FloatVA(current_temp, unit="C", readonly=True)
         self._metadata[model.MD_SENSOR_TEMP] = current_temp
         self.temp_timer = util.RepeatingTimer(10, self.updateTemperatureVA,
                                          "AndorCam2 temperature update")
