@@ -165,6 +165,8 @@ class Controller(object):
         self._hasServo = dict(axes)
         self._position = {} # m (dict axis-> position), only used in open-loop
 
+        self.min_speed = 10e-6 # m/s (default low value)
+
         # If the controller is misconfigured for the actuator, things can go quite
         # wrong, so make it clear
         logging.info("Controller %d is configured for actuator %s", address, self.GetStageName())
@@ -214,27 +216,27 @@ class Controller(object):
 #        max_accel = float(self.GetParameter(1, 0x4A)) # in unit/s²
 #        # seems like unit = num_unit/den_unit mm
 #        # and it should be initialised using PIStages.dat
-#        self.speed_max = max_vel * 1e3 * (num_unit/den_unit)
-#        self.accel_max = max_accel * 1e3 * (num_unit/den_unit)
+#        self.max_speed = max_vel * 1e3 * (num_unit/den_unit)
+#        self.max_accel = max_accel * 1e3 * (num_unit/den_unit)
 
         # FIXME 0x7000204 seems specific to E-861. need different initialisation per controller
         # Even the old firmware don't seem to support it
         try:
             # (max m/s) = (max step/s) * (step/m)
-            self.speed_max = float(self.GetParameter(1, 0x7000204)) / self._dist_to_steps # m/s
+            self.max_speed = float(self.GetParameter(1, 0x7000204)) / self._dist_to_steps # m/s
             # Note: the E-861 claims max 0.015 m/s but actually never goes above 0.004 m/s
             # (max m/s²) = (max step/s²) * (step/m)
-            self.accel_max = float(self.GetParameter(1, 0x7000205)) / self._dist_to_steps # m/s²
+            self.max_accel = float(self.GetParameter(1, 0x7000205)) / self._dist_to_steps # m/s²
         except (IOError, ValueError) as err:
             # TODO detect better that it's just a problem of sending unsupported command/value
             # Put default (large values)
             self.GetErrorNum() # reset error
             logging.debug("Using default speed and acceleration value after error '%s'", err)
-            self.speed_max = 0.5 # m/s
-            self.accel_max = 0.01 # m/s²
+            self.max_speed = 0.5 # m/s
+            self.max_accel = 0.01 # m/s²
 
-        self._speed = dict([(a, self.speed_max) for a in axes]) # m/s
-        self._accel = dict([(a, self.accel_max) for a in axes]) # m/s² (both acceleration and deceleration)
+        self._speed = dict([(a, self.max_speed) for a in axes]) # m/s
+        self._accel = dict([(a, self.max_accel) for a in axes]) # m/s² (both acceleration and deceleration)
         self._prev_speed_accel = (dict(), dict())
 
 
@@ -266,10 +268,13 @@ class Controller(object):
         # which also gives the best precision.
         self._vpms = vpms * (32767 / 10.)
 
+        self.min_speed = self._min_motor_out / self._vpms # m/s
+
         # Set up a macro that will do the job
         # To be called like "MAC START OLSTEP 16000 500"
         # First param is voltage between -32766 and 32766
-        # Second param is delay in ms
+        # Second param is delay in ms between 1 and ...
+        # TODO between??
         # Note: it seems it doesn't work to have a third param is the axis
         mac = "MAC BEG OLSTEP\n" \
               "%(n)d SMO 1 $1\n" \
@@ -290,6 +295,7 @@ class Controller(object):
         # change the moveRel and isMoving methods to PID-aware versions
         self._moveRelOL = self._moveRelOLViaPID
         self.isMoving = self._isMovingViaPID
+        self.stopMotion = self._stopMotionViaPID
 
     def _sendOrderCommand(self, com):
         """
@@ -372,6 +378,7 @@ class Controller(object):
         else:
             return lines
 
+    err_ans_re = ".* \d+\n" # ex: "0 1 54\n"
     def recoverTimeout(self):
         """
         Try to recover from error in the controller state
@@ -383,18 +390,22 @@ class Controller(object):
         # It appears to make the controller more comfortable...
         self._sendOrderCommand("ERR?\n")
         char = self.serial.read()
+        resp = ""
         while char:
-            if char == "\n":
-                # TOOD Check if error == 307 or 308?
+            resp += char
+            if re.match(self.err_ans_re, resp): # looks like an answer to err?
+                # TODO Check if error == 307 or 308?
                 return True
             char = self.serial.read()
 
         # We timed out again, try harder: reboot
         self.Reboot()
         self._sendOrderCommand("ERR?\n")
-        char = " "
+        char = self.serial.read()
+        resp = ""
         while char:
-            if char == "\n":
+            resp += char
+            if re.match(self.err_ans_re, resp): # looks like an answer to err?
                 #TODO reset all the values (SetServo...)
                 self._prev_speed_accel = (dict(), dict())
                 return True
@@ -542,6 +553,12 @@ class Controller(object):
         else:
             return True
 
+    def StopOLViaPID(self, axis):
+        """
+        Stop the fake PID driving when doing open-loop
+        """
+        self._sendOrderCommand("SMO %d 0\n" % axis)
+
     def GetStatus(self):
         #SRG? = "\x04" (Query Status Register Value)
         #SRG? 1 1
@@ -580,7 +597,13 @@ class Controller(object):
 
     def Reboot(self):
         self._sendOrderCommand("RBT\n")
-        time.sleep(1) # give it some time to reboot before it's accessible again
+        end_time = time.time() + 1 # give it some time to reboot before it's accessible again
+
+        # empty the serial buffer
+        while self.serial.read():
+            pass
+
+        time.sleep(max(0, end_time - time.time()))
 
     def RelaxPiezos(self, axis):
         """
@@ -650,7 +673,7 @@ class Controller(object):
         Moves an axis for a number of steps. Can be done only with servo off.
         axis (1<int<16): axis number
         steps (float): number of steps to do (can be a float). If negative, goes
-          the opposite direction. 1 step is about 10um.
+          the opposite direction. 1 step is about 10µm.
         """
         #OSM (Open-Loop Step Moving): move using nanostepping
         assert(axis in self._channels)
@@ -737,13 +760,14 @@ class Controller(object):
         axis (1<int<16): axis number
         voltage (-32766<=int<=32766): voltage for the PID control. <0 to go towards
           the negative direction. 32766 is 10V
-        time (0<int): time in ms.
+        time (0<int <= 9999): time in ms.
         """
         # Uses MAC OLSTEP, based on SMO
         assert(axis == 1) # seems not possible to have 3 parameters?!
         assert(-32766 <= voltage and voltage <= 32766)
-        assert(time > 0)
-        # a delay of 0 means actually 2**16
+        assert(0 < time <= 9999)
+
+        # From experiment: a delay of 0 means actually 2**16, and >= 10000 it's 0
         self._sendOrderCommand("MAC START OLSTEP %d %d\n" % (voltage, time))
 
 
@@ -806,7 +830,7 @@ class Controller(object):
         speed (0<float<10): speed in m/s.
         axis (1<=int<=16): the axis
         """
-        assert((0 < speed) and (speed <= self.speed_max))
+        assert((0 < speed) and (speed <= self.max_speed))
         assert(axis in self._channels)
         self._speed[axis] = speed
 
@@ -820,7 +844,7 @@ class Controller(object):
         accel (0<float<100): acceleration in m/s².
         axis (1<=int<=16): the axis
         """
-        assert((0 < accel) and (accel <= self.accel_max))
+        assert((0 < accel) and (accel <= self.max_accel))
         assert(axis in self._channels)
         self._accel[axis] = accel
 
@@ -895,13 +919,13 @@ class Controller(object):
         See moveRel
         """
         speed = self._speed[axis]
-        v, t = self.convertDistanceSpeedToPIDControl(distance, speed)
-        logging.debug("Moving axis at V = %f, for %f ms", v/32687., t)
+        v, t, ad = self.convertDistanceSpeedToPIDControl(distance, speed)
+        logging.debug("Moving axis at %f V, for %f ms", v * (10 / 32687.), t)
         if v == 0: # if distance is too small, report it
             return 0
 
         self.OLMovePID(axis, v, t)
-        return distance
+        return ad
 
     _moveRelOL = _moveRelOLStep
 
@@ -913,6 +937,7 @@ class Controller(object):
         distance (float): the distance of move in m (can be negative)
         returns (float): approximate distance actually moved
         """
+        # TODO: also report expected time for the move?
         assert(axis in self._channels)
 
         if self._hasServo[axis]:
@@ -929,10 +954,8 @@ class Controller(object):
         open-loop via PID control.
         distance (float): meters (can be negative)
         speed (0<float): meters/s (can be negative)
-        return (2 tuple: int, 0<int): PID control (in device unit, duration
+        return (tuple: int, 0<int, float): PID control (in device unit, duration, distance)
         """
-        min_speed = self._min_motor_out / self._vpms # m/s
-
         voltage_u = round(int(speed * self._vpms)) # uV
         # clamp it to the possible values
         voltage_u = min(max(self._min_motor_out, voltage_u), self._max_motor_out)
@@ -940,21 +963,22 @@ class Controller(object):
 
         mv_time = abs(distance) / act_speed # s
         mv_time_ms = int(round(mv_time * 1000)) # ms
-        if mv_time_ms < 10 and act_speed > min_speed:
+        if mv_time_ms < 10 and act_speed > self.min_speed:
             # small distance => try with the minimum speed to have a better precision
-            return self.convertDistanceSpeedToPIDControl(distance, min_speed)
+            return self.convertDistanceSpeedToPIDControl(distance, self.min_speed)
         elif mv_time_ms < 1:
             # no hope
             # TODO: see if a special macro without delay would move a very little bit
-            return 0, 0
-
-        # TODO: we could report the "actual distance", but as everything is so
-        # approximate, the original distance is as likely actual as the value of
-        # time_ms * voltage / vpms
+            return 0, 0, 0
+        elif mv_time_ms >= 10000:
+            logging.debug("Too big distance of %f m, shortening it", distance)
+            mv_time_ms = 9999
 
         if distance < 0:
             voltage_u = -voltage_u
-        return voltage_u, mv_time_ms
+
+        act_dist = mv_time_ms * 1e-3 * voltage_u / self._vpms # m (very approximate)
+        return voltage_u, mv_time_ms, act_dist
 
     def convertDistanceToDevice(self, distance):
         """
@@ -1011,6 +1035,16 @@ class Controller(object):
         else:
             return self.isAxisMovingOLViaPID(axis)
 
+    def _stopMotionViaPID(self):
+        """
+        Stop the motion on all axes immediately
+        Implementation for open-loop PID control 
+        """
+        self.Stop()
+        for axis, hs in self._hasServo.items():
+            if not hs:
+                self.StopOLViaPID(axis)
+
     def stopMotion(self):
         """
         Stop the motion on all axes immediately
@@ -1054,7 +1088,7 @@ class Controller(object):
                 logging.error("Controller %d report axes %s", self.address, str(axes))
                 return False
 
-            if self._model not in (MODEL_E861,): # support open-loop mode
+            if self._model in (MODEL_E861,): # support open-loop mode
                 for a in self._channels:
                     self.SetStepAmplitude(a, 10)
                     amp = self.GetStepAmplitude(a)
@@ -1063,6 +1097,7 @@ class Controller(object):
                         return False
 
             if self._model in (MODEL_C867,): # support temperature reading
+                # No support for direct open-loop mode
                 # TODO put the temperature as a RO VA?
                 current_temp = float(self.GetParameter(1, 0x57))
                 max_temp = float(self.GetParameter(1, 0x58))
@@ -1181,7 +1216,8 @@ class Bus(model.Actuator):
         # TODO also a rangesRel : min and max of a step
         position = {}
         speed = {}
-        max_speed = 1 # m/s
+        max_speed = 0 # m/s
+        min_speed = 1e6 # m/s
         for address, args in controllers.items():
             try:
                 controller = Controller(ser, address, *args)
@@ -1202,14 +1238,15 @@ class Bus(model.Actuator):
                 self._ranges[axis] = [-1, 1] # m
                 # Just to make sure it doesn't go too fast
                 speed[axis] = 0.001 # m/s
-                max_speed = max(max_speed, controller.speed_max)
+                max_speed = max(max_speed, controller.max_speed)
+                min_speed = min(min_speed, controller.min_speed)
 
 
         # RO, as to modify it the client must use .moveRel() or .moveAbs()
         self.position = model.VigilantAttribute(position, unit="m", readonly=True)
 
         # min speed = don't be crazy slow. max speed from hardware spec
-        self.speed = model.MultiSpeedVA(speed, range=[10e-6, max_speed], unit="m/s",
+        self.speed = model.MultiSpeedVA(speed, range=[min_speed, max_speed], unit="m/s",
                                         setter=self._setSpeed)
         self._setSpeed(speed)
 
@@ -1257,7 +1294,8 @@ class Bus(model.Actuator):
         """
         # In linux, can be found as link of /sys/class/tty/tty*/device/driver
         if sys.platform.startswith('linux'):
-            path = "/sys/class/tty/" + os.path.basename(name) + "/device/driver"
+            path = ("/sys/class/tty/" + os.path.basename(os.path.realpath(name))
+                    + "/device/driver")
             try:
                 return os.path.basename(os.readlink(path))
             except OSError:
@@ -1288,9 +1326,9 @@ class Bus(model.Actuator):
         action_axes = {}
         for axis, distance in shift.items():
             if axis not in self.axes:
-                raise Exception("Axis unknown: " + str(axis))
+                raise ValueError("Axis unknown: " + str(axis))
             if abs(distance) > self.ranges[axis][1]:
-                raise Exception("Trying to move axis %s by %f m> %f m." %
+                raise ValueError("Trying to move axis %s by %f m> %f m." %
                                 (axis, distance, self.ranges[axis][1]))
             controller, channel = self._axis_to_cc[axis]
             if not controller in action_axes:
@@ -1429,7 +1467,7 @@ class ActionManager(threading.Thread):
                 pass
 
             # update position after the action is done
-            self._bus._updatePosition()
+            self._bus._updatePosition() # FIXME: should update position before calling the callbacks
 
     def cancel_all(self):
         must_terminate = False
@@ -1492,7 +1530,7 @@ class ActionFuture(object):
         """
         assert(action_type in self.possible_types)
 
-	logging.debug("New action of type %s with arguments %s", action_type, args)
+        logging.debug("New action of type %s with arguments %s", action_type, args)
         self._type = action_type
         self._args = args
         self._ser_access = ser_access
@@ -1615,16 +1653,15 @@ class ActionFuture(object):
             if self._state != RUNNING:
                 return
 
-            duration = self._expected_end - time.time()
-            duration = max(0, duration)
-            logging.debug("Waiting %f s for the move to finish", duration)
-            self._condition.wait(duration)
-
             # it's over when either all axes are finished moving, it's too late,
             # or the action was cancelled
-            while (self._state == RUNNING and time.time() <= self._timeout
-                   and self._isMoving(controllers)):
-                self._condition.wait(0.01)
+            logging.debug("Waiting %f s for the move to finish", self._expected_end - time.time())
+            while self._state == RUNNING and time.time() <= self._timeout:
+                duration = (self._expected_end - time.time()) / 2
+                duration = max(0.01, duration)
+                self._condition.wait(duration)
+                if not self._isMoving(controllers):
+                    break
 
             # if cancelled, we don't update state
             if self._state != RUNNING:
@@ -1659,7 +1696,7 @@ class ActionFuture(object):
             for controller, channels in axes.items():
                 if len(channels) == 0:
                     logging.warning("Asked to check move on a controller without any axis")
-                if len(channels) == 1:
+                else:
                     moving |= controller.isMoving(set(channels))
             return moving
 
