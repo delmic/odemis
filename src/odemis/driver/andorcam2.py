@@ -171,8 +171,7 @@ class AndorV2DLL(CDLL):
         error.
         Follows the ctypes.errcheck callback convention
         """
-        # everything returns DRV_SUCCESS on correct usage, _excepted_ GetTemperature()
-        # Clever :-/
+        # everything returns DRV_SUCCESS on correct usage, _except_ GetTemperature()
         if not result in AndorV2DLL.ok_code:
             if result in AndorV2DLL.err_code:
                 raise AndorV2Error(result, "Call to %s failed with error code %d: %s" %
@@ -448,7 +447,7 @@ class AndorCam2(model.DigitalCamera):
                                           setter=self.setGain)
         
         current_temp = self.GetTemperature()
-        self.temperature = model.FloatVA(current_temp, unit="C", readonly=True)
+        self.temperature = model.FloatVA(current_temp, unit="°C", readonly=True)
         self._metadata[model.MD_SENSOR_TEMP] = current_temp
         self.temp_timer = util.RepeatingTimer(10, self.updateTemperatureVA,
                                          "AndorCam2 temperature update")
@@ -477,8 +476,9 @@ class AndorCam2(model.DigitalCamera):
 #        self.atcore.SetFilterMode(2) # 2 = on
 #        metadata['Filter'] = "Cosmic Ray filter"
 
+
+        # TODO: handle shutter
         # TODO: according to doc: if AC_FEATURES_SHUTTEREX you MUST use SetShutterEx()
-        # TODO: 20, 20 ms for open/closing times matter in auto? Should be 0, more?
         # Clara : 20, 20 gives horrible results. Default for Andor Solis: 10, 0
         # Apparently, if there is no shutter, it should be 0, 0
         self.atcore.SetShutter(1, 0, 0, 0) # mode 0 = auto
@@ -498,16 +498,40 @@ class AndorCam2(model.DigitalCamera):
     
     # low level methods, wrapper to the actual SDK functions
     # they do not ensure the actual camera is selected, you have to call select()
-    # TODO: not _everything_ is implemented, just what we need
+    # NOTE: not _everything_ is implemented, just what we need
     def Initialize(self):
-        # TODO: move to the lib class
+        """
+        Initialise the currently selected device
+        """
         # It can take a loooong time (Clara: ~10s)
         logging.info("Initialising Andor camera, can be long...")
         if os.name == "nt":
             self.atcore.Initialize("")
         else:
-            # TODO: read the argument as the first line of the /etc/andor/andor.install file
-            self.atcore.Initialize("/usr/etc/andor")
+            # In Linux the library needs to know the installation path (which
+            # contains the cameras firmware.
+            possibilities = ["/usr/etc/andor", "/usr/local/etc/andor"]
+            try:
+                f = open("/etc/andor/andor.install")
+                # only read the first non empty line
+                for l in f.readlines():
+                    if not l:
+                        continue
+                    possibilities.insert(0, l.strip() + "/etc/andor")
+                    break
+            except IOError:
+                pass
+
+            for p in possibilities:
+                if os.path.isdir(p):
+                    install_path = p
+                    break
+            else:
+                logging.error("Failed to find the .../etc/andor firmware "
+                              "directory, check the andor2 installation.")
+                install_path = possibilities[0] # try just in case
+
+            self.atcore.Initialize(install_path)
         logging.info("Initialisation completed.")
     
     def Reinitialize(self):
@@ -1706,7 +1730,7 @@ class FakeAndorV2DLL(object):
     
     # init
     def Initialize(self, path):
-        pass
+        assert(os.path.isdir(path))
     
     def ShutDown(self):
         pass
