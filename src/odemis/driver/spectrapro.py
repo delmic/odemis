@@ -793,9 +793,10 @@ class FakeSpectraPro(SpectraPro):
     Same as SpectraPro but connects to the simulator. Only used for testing.
     """
     
-    # FIXME: global scan ends up scanning twice, once for  SpectraPro and once for FakeSpectraPro
+    # FIXME: global scan ends up scanning twice, once for SpectraPro and once for FakeSpectraPro
     # maybe link it to a special "/fake/*" port in openSerialPort() and don't
-    # duplicate class?
+    # duplicate class? Or have the class be also of a FakeComponent class?
+    # Or just return the fake port only
     @staticmethod
     def scan(port=None):
         return SpectraPro.scan(port) + [("fakesp", {"port":"fake"})]

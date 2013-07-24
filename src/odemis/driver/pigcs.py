@@ -302,7 +302,7 @@ class Controller(object):
         """
         assert(len(com) <= 100) # commands can be quite long (with floats)
         full_com = "%d %s" % (self.address, com)
-        logging.debug("Sending: %s", full_com.encode('string_escape'))
+        logging.debug("Sending: '%s'", full_com.encode('string_escape'))
         self.serial.write(full_com)
 
     def _sendQueryCommandRaw(self, com):
@@ -312,7 +312,7 @@ class Controller(object):
         return (list of strings): the complete report with each line separated and without \n 
         """
         full_com = "%d %s" % (self.address, com)
-        logging.debug("Sending: %s", full_com.encode('string_escape'))
+        logging.debug("Sending: '%s'", full_com.encode('string_escape'))
         self.serial.write(full_com)
 
         char = self.serial.read() # empty if timeout
@@ -1132,17 +1132,16 @@ class Controller(object):
         return True
 
     @staticmethod
-    def scan(port, max_add=16, baudrate=38400):
+    def scan(ser, max_add=16):
         """
         Scan the serial network for all the PI GCS compatible devices available.
         Note this is the low-level part, you probably want to use Controller.scan()
          for scanning devices on a computer.
-        port (string): name of the serial port
+        ser: the (open) serial port
         max_add (1<=int<=16): maximum address to scan
         return (dict int -> tuple): addresses of available controllers associated
             to number of axes, and presence of limit switches/sensor
         """
-        ser = Controller.openSerialPort(port, baudrate)
         ctrl = Controller(ser)
 
         present = {}
@@ -1168,26 +1167,6 @@ class Controller(object):
         ctrl.address = None
         return present
 
-    @staticmethod
-    def openSerialPort(port, baudrate=38400):
-        """
-        Opens the given serial port the right way for the PI-E861.
-        port (string): the name of the serial port (e.g., /dev/ttyUSB0)
-        baudrate (int): baudrate to use, default is the recommended 38400
-        return (serial): the opened serial port
-        """
-        ser = serial.Serial(
-            port=port,
-            baudrate=baudrate,
-            bytesize=serial.EIGHTBITS,
-            parity=serial.PARITY_NONE,
-            stopbits=serial.STOPBITS_ONE,
-            timeout=0.3 #s
-        )
-
-        return ser
-
-
 class Bus(model.Actuator):
     """
     Represent a chain of PIGCS controllers over a serial port
@@ -1211,7 +1190,7 @@ class Bus(model.Actuator):
         # this set ._axes and ._ranges
         model.Actuator.__init__(self, name, role, axes=axes.keys(), **kwargs)
 
-        ser = Controller.openSerialPort(port, baudrate)
+        ser = self.openSerialPort(port, baudrate)
 
         dist_to_steps = dist_to_steps or {}
         min_dist = min_dist or {}
@@ -1433,7 +1412,8 @@ class Bus(model.Actuator):
                 # check all possible baud rates, in the most likely order
                 for br in [38400, 9600, 19200, 115200]:
                     logging.debug("Trying port %s at baud rate %d", p, br)
-                    controllers = Controller.scan(p, baudrate=br)
+                    ser = Bus.openSerialPort(port, br)
+                    controllers = Controller.scan(ser)
                     if controllers:
                         axis_num = 0
                         arg = {}
@@ -1451,6 +1431,25 @@ class Bus(model.Actuator):
                 pass
 
         return found
+
+    @staticmethod
+    def openSerialPort(port, baudrate=38400):
+        """
+        Opens the given serial port the right way for the PI controllers.
+        port (string): the name of the serial port (e.g., /dev/ttyUSB0)
+        baudrate (int): baudrate to use, default is the recommended 38400
+        return (serial): the opened serial port
+        """
+        ser = serial.Serial(
+            port=port,
+            baudrate=baudrate,
+            bytesize=serial.EIGHTBITS,
+            parity=serial.PARITY_NONE,
+            stopbits=serial.STOPBITS_ONE,
+            timeout=0.3 #s
+        )
+
+        return ser
 
 
 class ActionManager(threading.Thread):
@@ -1764,8 +1763,91 @@ class ActionFuture(object):
         return max_duration
 
 
+class FakeBus(Bus):
+    """
+    Same as the normal Bus, but connects to simulated controllers
+    """
+    @staticmethod
+    def openSerialPort(port, baudrate=38400):
+        """
+        Opens a fake serial port
+        port (string): the name of the serial port (e.g., /dev/ttyUSB0)
+        return (serial): the opened serial port
+        """
+        # TODO: daisychain + address
+        ser = E861Simulator(
+                port=port,
+                baudrate=baudrate,
+                bytesize=serial.EIGHTBITS,
+                parity=serial.PARITY_NONE,
+                stopbits=serial.STOPBITS_ONE,
+                timeout=0.3 #s
+            )
 
-class CtrlSimulator(object):
+        return ser
+
+class DaisyChainSimulator(object):
+    """
+    Simulated serial port that can simulate daisy chain on the controllers
+    Same interface as the serial port + list of (fake) serial ports to connect 
+    """
+    def __init__(self, timeout=0, *args, **kwargs):
+        """
+        subports (list of open ports): the ports to receive the data
+        """
+        self.timeout = timeout
+        self._subports = kwargs["subports"]
+        self._output_buf = "" # TODO: probably cleaner to user lock to access it
+
+        # TODO: for each port, put a thread listening on the read and push to output
+        self._is_terminated = False
+        for p in self._subports:
+            t = threading.Thread(target=self._thread_read_serial, args=(p,))
+            t.start()
+
+    def write(self, data):
+        # just duplicate
+        for p in self._subports:
+            p.write(data)
+
+    def read(self, size=1):
+        # simulate timeout
+        end_time = time.time() + self.timeout
+
+        ret = self._output_buf[:size]
+        self._output_buf = self._output_buf[len(ret):]
+
+        while len(ret) < size:
+            time.sleep(0.01)
+            left = size - len(ret)
+            ret += self._output_buf[:left]
+            self._output_buf = self._output_buf[len(ret):]
+            if self.timeout and time.time() > end_time:
+                break
+
+        return ret
+
+    def _thread_read_serial(self, ser):
+        """
+        Push the output of the given serial port into our output
+        """
+        try:
+            while not self._is_terminated:
+                c = ser.read(1)
+                if len(c) == 0:
+                    time.sleep(0.001)
+                else:
+                    self._output_buf += c
+        except Exception:
+            logging.exception("Fake daisy chain thread received an exception")
+
+    def close(self):
+        self._is_terminated = True
+        # using read or write will fail after that
+        del self._output_buf
+        del self._subports
+
+class E861Simulator(object):
     """
     Simulates a GCS controller (+ serial port). Only used for testing.
     1 axis, open-loop only, very limited behaviour
@@ -1773,7 +1855,12 @@ class CtrlSimulator(object):
     """
     _idn = "(c)2013 Delmic Fake Physik Instrumente(PI) Karlsruhe, E-861 Version 7.2.0"
     _csv = "2.0"
-    def __init__(self, timeout=0, *args, **kwargs):
+    def __init__(self, timeout=0, address=1, *args, **kwargs):
+        """
+        parameters are the same as a serial port
+        address (1<=int<=16): the address of the controller  
+        """
+        self._address = address
         # we don't care about the actual parameters but timeout
         self.timeout = timeout
 
@@ -1790,21 +1877,29 @@ class CtrlSimulator(object):
         self._parameters = {0x14: 0, # 0 = no ref switch, 1 = ref switch
                             0x32: 1, # 0 = limit switches, 1 = no limit switches
                             0x3c: "DEFAULT-FAKE", # stage name
+                            0x7000201: 3.2, # OVL
+                            0x7000202: 0.9, # OAC
                             0x7000204: 15.3, # max step/s
                             0x7000205: 1.2, # max step/s²
+                            0x7000206: 0.9, # ODC
 
                             }
         self._ssa = 10 # step amplitude
+        self._servo = 0 # servo state
         self._ready = True # is ready?
         self._errno = 0 # last error set
 
+    _re_command = ".*?[\n\x04\x05\x07\x08\x24]"
     def write(self, data):
         self._input_buf += data
-        # process each commands separated by "\n"
-        commands = self._input_buf.split("\n")
-        self._input_buf = commands.pop() # last one is not complete yet
-        for c in commands:
+        # process each commands separated by a "\n" or is short command
+        while len(self._input_buf) > 0:
+            m = re.match(self._re_command, self._input_buf)
+            if not m:
+                return # no more full command available
+            c = m.group(0)
             self._processCommand(c)
+            self._input_buf = self._input_buf[m.end(0):] # all the left over
 
     def read(self, size=1):
         ret = self._output_buf[:size]
@@ -1820,14 +1915,35 @@ class CtrlSimulator(object):
         del self._output_buf
         del self._input_buf
 
+    # Command name -> parameter number
+    _com_to_param = {"OVL": 0x7000201,
+                     "OAC": 0x7000202,
+                     "ODC": 0x7000206,
+                     }
+    _re_addr_com = r"((?P<addr>\d+) (0 )?)?(?P<com>.*)"
     def _processCommand(self, com):
         """
         process the command, and put the result in the output buffer
         com (str): command
         """
+        logging.debug("Fake controller %d processing command '%s'",
+                       self._address, com.encode('string_escape'))
         out = None # None means error decoding command
-        # TODO: remove prefix looking like "0 5 " if it starts like this, and
-        # then insert the opposite one as answer
+
+        # command can start with a prefix like "5 0 " or "5 "
+        m = re.match(self._re_addr_com, com)
+        assert m # anything left over should be in com
+        if m.group("addr"):
+            addr = int(m.group("addr"))
+            if addr != self._address:
+                return # skip message
+
+            prefix = "0 %d " % addr
+        else:
+            prefix = ""
+
+        com = m.group("com") # also removes the \n at the end if it's there
+        logging.debug("Command understood: '%s'", com)
 
         # FIXME: if errno is not null, most commands don't work any more
         if self._errno:
@@ -1838,11 +1954,11 @@ class CtrlSimulator(object):
         elif com == "CSV?": # command set version
             out = self._csv
         elif com == "ERR?": # last error number
-            out = self._errno
+            out = "%d" % self._errno
             self._errno = 0 # reset error number
         elif com == "RBT": # reboot
             self._init_mem()
-            out = "" # FIXME: any output at all?
+            time.sleep(0.1)
         elif com == "\x04": # Query Status Register Value
             # return hexadecimal bitmap of moving axes
             if time.time() > self._end_move:
@@ -1867,19 +1983,52 @@ class CtrlSimulator(object):
             self._errno = 10 # PI_CNTR_STOP
         elif com.startswith("HLT"): # halt motion with deceleration: axis (optional)
             self._end_move = 0
+        elif com[:3] in self._com_to_param:
+            param = self._com_to_param[com[:3]]
+            if com[3:4] == "?": # query
+                m = re.match(com[:3] + r"? (\d+)", com)
+                if m:
+                    out = "%s = %s" % (m.group(1), self._parameters[param])
+            else:
+                m = re.match(com[:3] + r" (\d+) +(\d+)", com)
+                if m:
+                    axis, val = int(m.group(1)), int(m.group(2))
+                    if axis == 1:
+                        self._parameters[param] = val
+                    else:
+                        self._errno = 15
+        elif com.startswith("SSA "): # Set Step Amplitude
+            m = re.match(r"SSA (\d+) +(\d+)", com)
+            if m:
+                axis, amp = int(m.group(1)), int(m.group(2))
+                if axis == 1:
+                    self._ssa = amp
+                else:
+                    self._errno = 15
+        elif com.startswith("SVO "): # Set Servo State
+            m = re.match(r"SVO (\d+) +(\d+)", com)
+            if m:
+                axis, state = int(m.group(1)), int(m.group(2))
+                if axis == 1:
+                    self._servo = state
+                else:
+                    self._errno = 15
+        elif com.startswith("OSM "): #Open-Loop Step Moving
+            # TODO: check values + compute move duration
+            pass
         elif com.startswith("LIM? "): # Has limit switch: axis
-            m = re.match("LIM? (\d+)", com)
+            m = re.match(r"LIM\? (\d+)", com)
             if m and int(m.group(1)) == 1:
                 out = "%d" % (1 - self._parameters[0x32]) # inverted parameter
         elif com.startswith("TRS? "): # Indicate Reference Switch: axis
-            m = re.match("TRS? (\d+)", com)
+            m = re.match(r"TRS\? (\d+)", com)
             if m and int(m.group(1)) == 1:
                 out = "%d" % self._parameters[0x14]
         elif com.startswith("SAI?"): # List Of Current Axis Identifiers
             # Can be followed by "ALL", but for us, it's the same
             out = "1"
         elif com.startswith("SPA? "): # GetParameter: axis, address
-            m = re.match("SPA? (\d+ \d+)", com)
+            m = re.match(r"SPA\? (\d+) +(\d+)", com)
             if m:
                 axis, addr = int(m.group(1)), int(m.group(2))
                 if axis == 1:
@@ -1887,23 +2036,29 @@ class CtrlSimulator(object):
                         out = "%d = %s" % (addr, self._parameters[addr])
                     except KeyError:
                         logging.debug("Unknown parameter %d", addr)
-                        out = "" # TODO: what's the typical output?
+                        self._errno = 56
+                else:
+                    self._errno = 15
         elif com == "HLP?":
             # TODO: more realistic output?
-            out = ("\x00The following commands are available:\n" +
-                   " HLP:\tlist the available commands\n" +
+            out = ("\x00The following commands are available: \n" +
+                   " HLP:\tlist the available commands \n" +
                    " ERR?:\tshow last error number\n")
         elif com == "HPA?":
             # TODO: more realistic output?
-            out = ("\x00The following parameters are available:\n" +
-                   " 0x14:\thas reference switch\n" +
+            out = ("\x00The following parameters are available: \n" +
+                   " 0x14:\thas reference switch \n" +
                    " 0x32:\thas no limit switch\n")
+        else:
+            logging.debug("Unknown command %s", com)
+            self._errno = 1
 
         # add the response header
         if out is None:
-            self._errno = 1 # FIXME: what's the right errno?
-            out = " %s? \r\n" % com
+            logging.debug("Fake controller %d doesn't respond", self._address)
         else:
-            out = " " + out + "  ok\r\n"
-        self._output_buf += out
+            out = "%s%s\n" % (prefix, out)
+            logging.debug("Fake controller %d responding '%s'", self._address,
+                          out.encode('string_escape'))
+            self._output_buf += out
 
