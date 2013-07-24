@@ -355,6 +355,7 @@ class SettingsPanel(object):
         format = conf.get("format", False)
 
         if choices:
+            choices = sorted(list(choices))
             # choice_fmt is an iterable of tuples choice -> formatted choice
             # (like a dict, but keeps order)
             if format and len(choices) > 1 \
@@ -402,6 +403,7 @@ class SettingsPanel(object):
         # Create the needed wxPython controls
         if control_type == odemis.gui.CONTROL_LABEL:
             new_ctrl, vac = self._create_label(self.panel, vigil_attr, unit)
+
         elif control_type == odemis.gui.CONTROL_TEXT:
             # TODO: should be a free entry text, like combobox
             new_ctrl = wx.TextCtrl(self.panel, style=wx.BORDER_NONE | wx.TE_READONLY)
