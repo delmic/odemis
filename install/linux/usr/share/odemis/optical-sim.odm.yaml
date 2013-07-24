@@ -54,7 +54,7 @@ Spectra: {
 }
 
 "FakeRedStoneStage": {
-    class: simulated.Stage2D,
+    class: simulated.Stage,
     role: stage,
     init: {axes: [x, y]},
     affects: ["Andor SimCam"],
@@ -92,7 +92,7 @@ Spectra: {
 }
 
 FakePIGCS: {
-    class: simulated.Stage2D,
+    class: simulated.Stage,
     role: AlignAndFocus,
     init: {axes: ["l", "r", "z"]},
 }

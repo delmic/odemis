@@ -82,7 +82,7 @@ FakeSP2300i: {
 }
 
 MirrorMover: {
-    class: simulated.Stage2D,
+    class: simulated.Stage,
     role: mirror,
     affects: [SpecSimCam, ARSimCam],
     init: {axes: ["x", "y", "rz", "ry"]}, # rz = yaw, ry = pitch

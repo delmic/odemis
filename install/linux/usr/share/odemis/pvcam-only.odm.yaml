@@ -35,7 +35,7 @@ Pixis: {
 
 
 "FakeRedStoneStage": {
-    class: simulated.Stage2D,
+    class: simulated.Stage,
     role: stage,
     init: {axes: ["x", "y"]},
     affects: [Pixis],
@@ -73,7 +73,7 @@ Pixis: {
 }
 
 FakePIGCS: {
-    class: simulated.Stage2D,
+    class: simulated.Stage,
     role: AlignAndFocus,
     init: {axes: ["l", "r", "z"]},
 }
