@@ -119,7 +119,7 @@ class Controller(object):
         Next parameter is calibration value for C-867
         vpms (0 < float): calibration value voltage -> speed, in V/(m/s), 
           default is a not too bad value of 87 V/(m/s). Note: it's not linear
-          at all actually, but we tend to try to always go at lowest speed (near 2V)
+          at all actually, but we tend to try to always go at lowest speed (near 3V)
         """
         # TODO: calibration values should be per axis (but for now we only have controllers with 1 axis)
 
@@ -273,8 +273,7 @@ class Controller(object):
         # Set up a macro that will do the job
         # To be called like "MAC START OLSTEP 16000 500"
         # First param is voltage between -32766 and 32766
-        # Second param is delay in ms between 1 and ...
-        # TODO between??
+        # Second param is delay in ms between 1 and 9999
         # Note: it seems it doesn't work to have a third param is the axis
         mac = "MAC BEG OLSTEP\n" \
               "%(n)d SMO 1 $1\n" \
@@ -286,11 +285,10 @@ class Controller(object):
         # TODO: try a macro like this for short moves:
         mac = "MAC BEG OLSTEP0\n" \
               "%(n)d SMO 1 $1\n" \
-              "%(n)d HLP?\n"   \
+              "%(n)d SAI? ALL\n" \
               "%(n)d SMO 1 0\n"  \
               "%(n)d MAC END\n" % {"n": self.address}
-        #self._sendOrderCommand(mac)
-
+        self._sendOrderCommand(mac)
 
         # change the moveRel and isMoving methods to PID-aware versions
         self._moveRelOL = self._moveRelOLViaPID
@@ -323,7 +321,7 @@ class Controller(object):
         while char:
             if char == "\n":
                 if (len(line) > 0 and line[-1] == " " and  # multiline: "... \n"
-                    not re.match(r"0 \d+ ", line)):   # excepted empty line "0 1 \n"
+                    not re.match(r"0 \d+ $", line)):   # excepted empty line "0 1 \n"
                     lines.append(line[:-1]) # don't include the space
                     line = ""
                 else:
@@ -378,7 +376,7 @@ class Controller(object):
         else:
             return lines
 
-    err_ans_re = ".* \d+\n" # ex: "0 1 54\n"
+    err_ans_re = ".* \\d+\n$" # ex: "0 1 54\n"
     def recoverTimeout(self):
         """
         Try to recover from error in the controller state
@@ -605,6 +603,7 @@ class Controller(object):
 
         time.sleep(max(0, end_time - time.time()))
 
+    # TODO: use it when terminating?
     def RelaxPiezos(self, axis):
         """
         Call relaxing procedure. Reduce voltage, to increase lifetime and needed
@@ -614,7 +613,7 @@ class Controller(object):
         #RNP (Relax PiezoWalk Piezos): reduce voltage when stopped to increase lifetime
         #Also needed to change between nanostepping and analog
         assert(axis in self._channels)
-        self._sendOrderCommand("RNP %d\n" % axis)
+        self._sendOrderCommand("RNP %d 0\n" % axis)
 
     def Halt(self, axis=None):
         """
@@ -722,7 +721,7 @@ class Controller(object):
 
     def SetOLVelocity(self, axis, velocity):
         """
-        Moves an axis for a number of steps. Can be done only with servo off.
+        Set velocity for open-loop nanostepping motion.
         axis (1<int<16): axis number
         velocity (0<float): velocity in step-cycles/s. Default is 200 (~ 0.002 m/s)
         """
@@ -733,7 +732,7 @@ class Controller(object):
 
     def SetOLAcceleration(self, axis, value):
         """
-        Moves an axis for a number of steps. Can be done only with servo off.
+        Set open-loop acceleration of given axes.
         axis (1<int<16): axis number
         value (0<float): acceleration in step-cycles/s. Default is 2000 
         """
@@ -744,7 +743,7 @@ class Controller(object):
 
     def SetOLDeceleration(self, axis, value):
         """
-        Moves an axis for a number of steps. Can be done only with servo off.
+        Set the open-loop deceleration.
         axis (1<int<16): axis number
         value (0<float): deceleration in step-cycles/s. Default is 2000 
         """
@@ -769,6 +768,21 @@ class Controller(object):
 
         # From experiment: a delay of 0 means actually 2**16, and >= 10000 it's 0
         self._sendOrderCommand("MAC START OLSTEP %d %d\n" % (voltage, time))
+
+
+    def OLMovePID0(self, axis, voltage):
+        """
+        Moves an axis a very little bit. Can be done only with servo off.
+        Warning: it's completely hacky, there is no idea if it even moves
+        axis (1<int<16): axis number
+        voltage (-32766<=int<=32766): voltage for the PID control. <0 to go towards
+          the negative direction. 32766 is 10V
+        """
+        # Uses MAC OLSTEP0, based on SMO
+        assert(axis == 1)
+        assert(-32766 <= voltage and voltage <= 32766)
+
+        self._sendOrderCommand("MAC START OLSTEP0 %d\n" % (voltage,))
 
 
 #Abs (with sensor = closed-loop):
@@ -921,10 +935,13 @@ class Controller(object):
         speed = self._speed[axis]
         v, t, ad = self.convertDistanceSpeedToPIDControl(distance, speed)
         logging.debug("Moving axis at %f V, for %f ms", v * (10 / 32687.), t)
-        if v == 0: # if distance is too small, report it
+        if t == 0: # if distance is too small, report it
             return 0
+        elif t < 1: # special small move command
+            self.OLMovePID0(axis, v)
+        else:
+            self.OLMovePID(axis, v, t)
 
-        self.OLMovePID(axis, v, t)
         return ad
 
     _moveRelOL = _moveRelOLStep
@@ -954,7 +971,7 @@ class Controller(object):
         open-loop via PID control.
         distance (float): meters (can be negative)
         speed (0<float): meters/s (can be negative)
-        return (tuple: int, 0<int, float): PID control (in device unit, duration, distance)
+        return (tuple: int, 0<number, float): PID control (in device unit, duration, distance)
         """
         voltage_u = round(int(speed * self._vpms)) # uV
         # clamp it to the possible values
@@ -966,9 +983,14 @@ class Controller(object):
         if mv_time_ms < 10 and act_speed > self.min_speed:
             # small distance => try with the minimum speed to have a better precision
             return self.convertDistanceSpeedToPIDControl(distance, self.min_speed)
+        elif mv_time_ms < 1 and mv_time > 0.1e-3:
+            # try our special super small step trick if at least 0.1 ms
+            # TODO: check it actually does something, and get better idea of how
+            # much it's moving
+            mv_time_ms = 0.1 # ms
+            voltage_u = self._max_motor_out # TODO: change according to requested distance?
         elif mv_time_ms < 1:
-            # no hope
-            # TODO: see if a special macro without delay would move a very little bit
+            # really no hope
             return 0, 0, 0
         elif mv_time_ms >= 10000:
             logging.debug("Too big distance of %f m, shortening it", distance)
