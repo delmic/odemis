@@ -584,7 +584,6 @@ class FocusLineOverlay(ViewOverlay):
         self.line_width = 2
 
     def set_position(self, pos):
-        print type(self.base), self.base.ClientSize.x
         self.vposx = max(1, min(pos[0], self.base.ClientSize.x - self.line_width))
         self.vposy = max(1, min(pos[1], self.base.ClientSize.y - 1))
 

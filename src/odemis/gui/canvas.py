@@ -1075,8 +1075,10 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
 
         label = "%s" % units.readable_str(self.current_y_value, self.unit_y, 3)
 
-        self.Parent.legend.set_label(label, x)
-        self.Parent.legend.Refresh()
+        # TODO: find a more elegant way to link the legend.
+        if hasattr(self.Parent, 'legend'):
+            self.Parent.legend.set_label(label, x)
+            self.Parent.legend.Refresh()
 
         #self.focusline_overlay.set_label(label)
         self.focusline_overlay.set_position(pos)
