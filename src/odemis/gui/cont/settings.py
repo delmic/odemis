@@ -357,7 +357,8 @@ class SettingsPanel(object):
         if choices:
             # choice_fmt is an iterable of tuples choice -> formatted choice
             # (like a dict, but keeps order)
-            if format and all([isinstance(c, (int, float)) for c in choices]):
+            if format and len(choices) > 1 \
+               and all([isinstance(c, (int, float)) for c in choices]):
                 fmt, prefix = utun.si_scale_list(choices)
                 choices_fmt = zip(choices, [u"%g" % c for c in fmt])
                 unit = prefix + unit
@@ -400,24 +401,7 @@ class SettingsPanel(object):
         logging.debug("Adding VA %s", label)
         # Create the needed wxPython controls
         if control_type == odemis.gui.CONTROL_LABEL:
-            # Read only value
-            new_ctrl = wx.TextCtrl(self.panel, style=wx.BORDER_NONE | wx.TE_READONLY)
-            new_ctrl.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_DIS)
-            new_ctrl.SetBackgroundColour(odemis.gui.BACKGROUND_COLOUR)
-
-            val = vigil_attr.value # only format if it's a number
-            if (isinstance(val, (int, float)) or
-                (isinstance(val, collections.Iterable) and len(val) > 0
-                  and isinstance(val[0], (int, float)))
-                ):
-                def format_value(value, unit=unit):
-                    new_ctrl.SetValue(readable_str(value, unit, sig=3))
-            else:
-                format_value = None
-            vac = VigilantAttributeConnector(vigil_attr,
-                                             new_ctrl,
-                                             format_value)
-
+            new_ctrl, vac = self._create_label(self.panel, vigil_attr, unit)
         elif control_type == odemis.gui.CONTROL_TEXT:
             # TODO: should be a free entry text, like combobox
             new_ctrl = wx.TextCtrl(self.panel, style=wx.BORDER_NONE | wx.TE_READONLY)
@@ -500,55 +484,59 @@ class SettingsPanel(object):
             # new_ctrl.Bind(wx.EVT_TEXT, self.on_setting_changed)
 
         elif control_type == odemis.gui.CONTROL_RADIO:
-            new_ctrl = GraphicalRadioButtonControl(self.panel,
-                                                   - 1,
-                                                   size=(-1, 16),
-                                                   choices=[c for c, _ in choices_fmt],
-                                                   style=wx.NO_BORDER,
-                                                   labels=[f for _, f in choices_fmt],
-                                                   units=unit)
+            if len(choices_fmt) > 1:
+                new_ctrl = GraphicalRadioButtonControl(
+                                        self.panel,
+                                        -1,
+                                        size=(-1, 16),
+                                        choices=[c for c, _ in choices_fmt],
+                                        style=wx.NO_BORDER,
+                                        labels=[f for _, f in choices_fmt],
+                                        units=unit)
 
-            if conf.get('type', None) == "1d_binning":
-                # need to convert back and forth between 1D and 2D
-                # from 2D to 1D (just pick X)
-                def radio_set(value, ctrl=new_ctrl):
-                    v = value[0]
-                    logging.debug("Setting Radio value to %d", v)
-                    # it's fine to set a value not in the choices, it will
-                    # just not set any of the buttons.
-                    return ctrl.SetValue(v)
+                if conf.get('type', None) == "1d_binning":
+                    # need to convert back and forth between 1D and 2D
+                    # from 2D to 1D (just pick X)
+                    def radio_set(value, ctrl=new_ctrl):
+                        v = value[0]
+                        logging.debug("Setting Radio value to %d", v)
+                        # it's fine to set a value not in the choices, it will
+                        # just not set any of the buttons.
+                        return ctrl.SetValue(v)
 
-                # from 1D to 2D (both identical)
-                def radio_get(ctrl=new_ctrl):
-                    value = ctrl.GetValue()
-                    return (value, value)
-            elif conf.get('type', None) == "1std_binning":
-                # need to convert back and forth between 1D and 2D
-                # from 2D to 1D (just pick X)
-                def radio_set(value, ctrl=new_ctrl):
-                    v = value[0]
-                    logging.debug("Setting Radio value to %d", v)
-                    # it's fine to set a value not in the choices, it will
-                    # just not set any of the buttons.
-                    return ctrl.SetValue(v)
+                    # from 1D to 2D (both identical)
+                    def radio_get(ctrl=new_ctrl):
+                        value = ctrl.GetValue()
+                        return (value, value)
+                elif conf.get('type', None) == "1std_binning":
+                    # need to convert back and forth between 1D and 2D
+                    # from 2D to 1D (just pick X)
+                    def radio_set(value, ctrl=new_ctrl):
+                        v = value[0]
+                        logging.debug("Setting Radio value to %d", v)
+                        # it's fine to set a value not in the choices, it will
+                        # just not set any of the buttons.
+                        return ctrl.SetValue(v)
 
-                # from 1D to 2D (don't change dimensions >1)
-                def radio_get(ctrl=new_ctrl, va=vigil_attr):
-                    value = ctrl.GetValue()
-                    new_val = list(va.value)
-                    new_val[0] = value
-                    return new_val
+                    # from 1D to 2D (don't change dimensions >1)
+                    def radio_get(ctrl=new_ctrl, va=vigil_attr):
+                        value = ctrl.GetValue()
+                        new_val = list(va.value)
+                        new_val[0] = value
+                        return new_val
+                else:
+                    radio_get = None
+                    radio_set = None
+
+                vac = VigilantAttributeConnector(vigil_attr,
+                                                 new_ctrl,
+                                                 va_2_ctrl=radio_set,
+                                                 ctrl_2_va=radio_get,
+                                                 events=wx.EVT_BUTTON)
+
+                new_ctrl.Bind(wx.EVT_BUTTON, self.on_setting_changed)
             else:
-                radio_get = None
-                radio_set = None
-
-            vac = VigilantAttributeConnector(vigil_attr,
-                                             new_ctrl,
-                                             va_2_ctrl=radio_set,
-                                             ctrl_2_va=radio_get,
-                                             events=wx.EVT_BUTTON)
-
-            new_ctrl.Bind(wx.EVT_BUTTON, self.on_setting_changed)
+                new_ctrl, vac = self._create_label(self.panel, vigil_attr, unit)
 
         elif control_type == odemis.gui.CONTROL_COMBO:
 
@@ -645,6 +633,26 @@ class SettingsPanel(object):
             # print new_ctrl.GetBackgroundColour()
             # new_ctrl.SetBackgroundColour(wx.RED)
 
+    def _create_label(self, panel, vigil_attr, unit):
+        # Read only value
+        new_ctrl = wx.TextCtrl(panel, style=wx.BORDER_NONE | wx.TE_READONLY)
+        new_ctrl.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_DIS)
+        new_ctrl.SetBackgroundColour(odemis.gui.BACKGROUND_COLOUR)
+
+        val = vigil_attr.value # only format if it's a number
+        if (isinstance(val, (int, float)) or
+            (isinstance(val, collections.Iterable) and len(val) > 0
+              and isinstance(val[0], (int, float)))
+            ):
+            def format_value(value, unit=unit):
+                new_ctrl.SetValue(readable_str(value, unit, sig=3))
+        else:
+            format_value = None
+        vac = VigilantAttributeConnector(vigil_attr,
+                                         new_ctrl,
+                                         format_value)
+
+        return new_ctrl, vac
 
     def add_axis(self, name, comp, conf=None):
         """
