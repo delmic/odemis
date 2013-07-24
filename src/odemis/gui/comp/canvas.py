@@ -1196,16 +1196,29 @@ class PlotCanvas(wx.Panel):
         perc_y = float(self.max_y - val_y) / self.width_y
         return perc_y * self.ClientSize[1]
 
+    # @memoize
+    def _val_x_to_pos_x(self, val_x):
+        val = [(x, y) for x, y in self._data if x >= val_x]
+        if val:
+            x1, _ = self.value_to_position(val[0])
+
+            if len(val) > 1:
+                x2, _ = self.value_to_position(val[1])
+                return x1 + (x2 - x1) / 2
+            else:
+                return x1
+
+        return 0
+
     # FIXME: When the memoize on the method is activated,
     # _pos_x_to_val_x starts returning weird value.
     # Reproduce: draw the smallest graph in the test case and drage back and
     # forth between 0 and 1
 
     #@memoize
-    def _pos_x_to_val_y(self, pos_x):
+    def _val_x_to_val_y(self, val_x):
         """ Map the give x pixel value to a y value """
-        self.current_x_value = self._pos_x_to_val_x(pos_x)
-        res = [y for x, y in self._data if x <= self.current_x_value][-1]
+        res = [y for x, y in self._data if x <= val_x][-1]
         return res
 
     #@memoize
@@ -1214,7 +1227,7 @@ class PlotCanvas(wx.Panel):
         perc_x = pos_x / float(w)
         val_x = (perc_x * self.width_x) + self.min_x
         val_x = max(min(val_x, self.max_x), self.min_x)
-        return[x for x, _ in self._data if x <= val_x][-1]
+        return [x for x, _ in self._data if x <= val_x][-1]
 
     # Getters and Setters
 
