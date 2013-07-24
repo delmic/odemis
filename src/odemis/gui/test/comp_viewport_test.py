@@ -122,6 +122,7 @@ class CanvasTestCase(unittest.TestCase):
 
         vwp.SetBackgroundColour(wx.BLACK)
         vwp.SetForegroundColour("#DDDDDD")
+        vwp.canvas.set_y_unit("m")
         # vwp.set_closed(canvas.PLOT_CLOSE_STRAIGHT)
         self.add_control(vwp, wx.EXPAND)
 

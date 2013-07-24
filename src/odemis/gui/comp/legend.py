@@ -27,11 +27,12 @@ import cairo
 import wx
 import wx.lib.wxcairo as wxcairo
 
+import odemis.gui as gui
 from odemis.gui.comp.scalewindow import ScaleWindow
 from odemis.gui.comp.slider import Slider
 from odemis.gui.img.data import getico_blending_optBitmap, \
     getico_blending_semBitmap
-from odemis.gui.util.conversion import wxcol_to_rgb
+from odemis.gui.util.conversion import wxcol_to_rgb, hex_to_rgba
 
 
 class InfoLegend(wx.Panel):
@@ -207,6 +208,9 @@ class AxisLegend(wx.Panel):
 
         self.tick_colour = wxcol_to_rgb(self.ForegroundColour)
 
+        self.label = None
+        self.label_pos = None
+
     def OnPaint(self, event=None):
         ticks = self.Parent.canvas.get_ticks()
         ctx = wx.lib.wxcairo.ContextFromDC(wx.PaintDC(self))
@@ -226,6 +230,39 @@ class AxisLegend(wx.Panel):
             _, _, width, height, _, _ = ctx.text_extents(label)
             ctx.move_to(xpos - (width / 2), height + 5)
             ctx.show_text(label)
+
+        if self.label and self.label_pos:
+            self.write_label(ctx, self.label, self.label_pos)
+
+    def set_label(self, label, pos_x):
+        self.label = unicode(label)
+        self.label_pos = pos_x
+
+    def write_label(self, ctx, label, pos_x):
+        font = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT)
+        ctx.select_font_face(
+                font.GetFaceName(),
+                cairo.FONT_SLANT_NORMAL,
+                cairo.FONT_WEIGHT_NORMAL
+        )
+        ctx.set_font_size(font.GetPointSize())
+
+        margin_x = 5
+
+        _, _, width, _, _, _ = ctx.text_extents(label)
+        x, y = pos_x, 30
+        x = x - width / 2
+
+        if x + width + margin_x > self.ClientSize.x:
+            x = self.ClientSize[0] - width - margin_x
+
+        if x < margin_x:
+            x = margin_x
+
+        #t = font.GetPixelSize()
+        ctx.set_source_rgba(*hex_to_rgba(gui.FOREGROUND_COLOUR_EDIT))
+        ctx.move_to(x, y)
+        ctx.show_text(label)
 
     def OnSize(self, event):
         self.Refresh(eraseBackground=False)

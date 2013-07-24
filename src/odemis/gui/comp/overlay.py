@@ -581,8 +581,11 @@ class FocusLineOverlay(ViewOverlay):
         self.vposx = None
         self.vposy = None
 
+        self.line_width = 2
+
     def set_position(self, pos):
-        self.vposx = max(1, min(pos[0], self.base.ClientSize.x - 1))
+        print type(self.base), self.base.ClientSize.x
+        self.vposx = max(1, min(pos[0], self.base.ClientSize.x - self.line_width))
         self.vposy = max(1, min(pos[1], self.base.ClientSize.y - 1))
 
     def Draw(self, dc_buffer, shift=(0, 0), scale=1.0):
@@ -597,7 +600,7 @@ class FocusLineOverlay(ViewOverlay):
 
         if self.vposx:
             # draws the dotted line
-            ctx.set_line_width(2)
+            ctx.set_line_width(self.line_width)
             ctx.set_dash([3,])
             ctx.set_line_join(cairo.LINE_JOIN_MITER)
             ctx.set_source_rgba(*self.color)

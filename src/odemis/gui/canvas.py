@@ -1022,7 +1022,7 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
         self.plot_mode = canvas.PLOT_MODE_BAR
         self.ticks = canvas.PLOT_TICKS_HORZ
 
-        self.set_focusline_ovelay(overlay.FocusLineOverlay(self.Parent))
+        self.set_focusline_ovelay(overlay.FocusLineOverlay(self))
 
         ## Event binding
 
@@ -1058,7 +1058,8 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
             self._position_focus_line(event)
         event.Skip()
 
-    def OnSize(self, event):
+    def OnSize(self, event):  #pylint: disable=W0222
+        """ Update the position of the focus line """
         super(ZeroDimensionalPlotCanvas, self).OnSize(event)
         if None not in (self.current_x_value, self.current_y_value):
             pos = (self._val_x_to_pos_x(self.current_x_value),
@@ -1066,20 +1067,18 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
             self.focusline_overlay.set_position(pos)
 
     def _position_focus_line(self, event):
+        """ Position the focus line at the position of the given mouse event """
         x, _ = event.GetPositionTuple()
         self.current_x_value = self._pos_x_to_val_x(x)
         self.current_y_value = self._val_x_to_val_y(self.current_x_value)
         pos = (x, self._val_y_to_pos_y(self.current_y_value))
-        label = "%s, %s" % (units.readable_str(
-                                self.current_x_value,
-                                self.unit_x,
-                                3),
-                            units.readable_str(
-                                self.current_y_value,
-                                self.unit_y,
-                                3)
-                            )
-        self.focusline_overlay.set_label(label)
+
+        label = "%s" % units.readable_str(self.current_y_value, self.unit_y, 3)
+
+        self.Parent.legend.set_label(label, x)
+        self.Parent.legend.Refresh()
+
+        #self.focusline_overlay.set_label(label)
         self.focusline_overlay.set_position(pos)
         self.Refresh()
 
