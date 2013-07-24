@@ -996,10 +996,13 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
     """
 
     def __init__(self, *args, **kwargs):
-        super(ZeroDimensionalPlotCanvas, self).__init__(*args, **kwargs)
 
+        # These attributes need to be assigned before the super constructor
+        # is called, because they are used in the OnSize event handler.
         self.current_y_value = None
         self.current_x_value = None
+
+        super(ZeroDimensionalPlotCanvas, self).__init__(*args, **kwargs)
 
         self.unit_x = None
         self.unit_y = None
@@ -1019,13 +1022,14 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
         self.plot_mode = canvas.PLOT_MODE_BAR
         self.ticks = canvas.PLOT_TICKS_HORZ
 
-        self.set_focusline_ovelay(overlay.FocusLineOverlay(self.Parent))
+        self.set_focusline_ovelay(overlay.FocusLineOverlay(self))
 
         ## Event binding
 
         self.Bind(wx.EVT_LEFT_DOWN, self.OnLeftDown)
         self.Bind(wx.EVT_LEFT_UP, self.OnLeftUp)
         self.Bind(wx.EVT_MOTION, self.OnMouseMotion)
+        # self.Bind(wx.EVT_SIZE, self.OnSize)
 
     # Event handlers
 
@@ -1054,21 +1058,30 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
             self._position_focus_line(event)
         event.Skip()
 
+    def OnSize(self, event):  #pylint: disable=W0222
+        """ Update the position of the focus line """
+        super(ZeroDimensionalPlotCanvas, self).OnSize(event)
+        if None not in (self.current_x_value, self.current_y_value):
+            pos = (self._val_x_to_pos_x(self.current_x_value),
+                   self._val_y_to_pos_y(self.current_y_value))
+            self.focusline_overlay.set_position(pos)
+
     def _position_focus_line(self, event):
+        """ Position the focus line at the position of the given mouse event """
         x, _ = event.GetPositionTuple()
-        self.current_y_value = self._pos_x_to_val_y(x)
+        self.current_x_value = self._pos_x_to_val_x(x)
+        self.current_y_value = self._val_x_to_val_y(self.current_x_value)
         pos = (x, self._val_y_to_pos_y(self.current_y_value))
-        label = "%s, %s" % (units.readable_str(
-                                self.current_x_value,
-                                self.unit_x,
-                                3),
-                            units.readable_str(
-                                self.current_y_value,
-                                self.unit_y,
-                                3)
-                            )
-        self.focusline_overlay.set_label(label)
-        self.focusline_overlay.set_position(pos, )
+
+        label = "%s" % units.readable_str(self.current_y_value, self.unit_y, 3)
+
+        # TODO: find a more elegant way to link the legend.
+        if hasattr(self.Parent, 'legend'):
+            self.Parent.legend.set_label(label, x)
+            self.Parent.legend.Refresh()
+
+        #self.focusline_overlay.set_label(label)
+        self.focusline_overlay.set_position(pos)
         self.Refresh()
 
     def OnPaint(self, event=None):

@@ -7,15 +7,15 @@ Copyright © 2012 Rinze de Laat, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms 
-of the GNU General Public License version 2 as published by the Free Software 
+Odemis is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
 Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR 
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
 PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with 
+You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
@@ -35,6 +35,7 @@ import unittest
 import wx
 
 INSPECT = False
+# test.MANUAL = True
 
 class TestApp(wx.App):
     def __init__(self):
@@ -153,6 +154,6 @@ class ButtonsTestCase(unittest.TestCase):
         self.assertEqual(len(pib.choices), nb_options - 1)
         self.assertEqual(pib.menu.MenuItemCount, nb_options - 1)
         test.gui_loop()
-        
+
 if __name__ == "__main__":
     unittest.main()
