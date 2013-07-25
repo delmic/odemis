@@ -492,7 +492,8 @@ class SecomCanvas(DblMicroscopeCanvas):
 
         return images
 
-
+    def add_world_overlay(self, wol):
+        self.WorldOverlays.append(wol)
 
     def _toggle_mode(self, enabled, overlay, mode):
         if self.current_mode == mode and not enabled:
@@ -1068,6 +1069,10 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
 
     def _position_focus_line(self, event):
         """ Position the focus line at the position of the given mouse event """
+
+        if not self._data:
+            return
+
         x, _ = event.GetPositionTuple()
         self.current_x_value = self._pos_x_to_val_x(x)
         self.current_y_value = self._val_x_to_val_y(self.current_x_value)
@@ -1096,8 +1101,11 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
         # TODO: Add type check to make sure the ovelay is a ViewOverlay.
         # (But importing Viewoverlay causes cyclic imports)
         self.focusline_overlay = fol
-        self.overlays.append(fol)
+        self.add_overlay(fol)
         self.Refresh()
+
+    def add_overlay(self, ol):
+        self.overlays.append(ol)
 
     def get_y_value(self):
         """ Return the current y value """

@@ -32,7 +32,7 @@ import wx
 import odemis.gui as gui
 import odemis.gui.comp.canvas as canvas
 from odemis.gui.util.units import readable_str
-from ..util.conversion import hex_to_rgba, change_brightness
+from odemis.gui.util.conversion import hex_to_rgba, change_brightness
 
 class Overlay(object):
     __metaclass__ = ABCMeta
@@ -156,8 +156,6 @@ class SelectionMixin(object):
 
 
     def __init__(self, sel_cur=None, color=gui.SELECTION_COLOR, center=(0, 0)):
-        #super(SelectionOverlay, self).__init__(base)
-
         # The start and end points of the selection rectangle in view port
         # coordinates
         self.v_start_pos = None
