@@ -230,6 +230,8 @@ class SelectionMixin(object):
             self._calc_edges()
             self.dragging = False
             self.edit = False
+            self.edit_edge = None
+
 
     def clear_selection(self):
         """ Clear the selection """
@@ -280,6 +282,41 @@ class SelectionMixin(object):
 
     ##### END edit methods  #####
 
+    ##### drag methods  #####
+
+    def start_drag(self, start_pos):
+        self.edit_start_pos = start_pos
+        self.edit = True
+
+    def update_drag(self, current_pos):
+        # TODO: The drag range is currently limited by the location of the
+        # mouse pointer, meaning that you cannot drag the cursor beyong the
+        # edge of the canvas.
+        # It might be better to limit the movement in such a way that no part
+        # of the selection can be dragged off canvas. The commented part was a
+        # first attempt at that, but it didn't work.
+        current_pos = self._clip_viewport_pos(current_pos)
+        diff = current_pos - self.edit_start_pos
+        self.v_start_pos += diff
+        self.v_end_pos += diff
+        self.edit_start_pos = current_pos
+
+        # diff = current_pos - self.edit_start_pos
+        # new_start = self.v_start_pos + diff
+
+        # if new_start == self._clip_viewport_pos(new_start):
+        #     new_end = self.v_start_pos + diff
+        #     if new_end == self._clip_viewport_pos(new_end):
+        #         self.v_start_pos = new_start
+        #         self.v_end_pos = new_end
+
+        # self.edit_start_pos = current_pos
+
+
+    def stop_drag(self):
+        self.stop_selection()
+
+    ##### END drag methods  #####
 
     def update_from_buffer(self, b_start_pos, b_end_pos, shiftscale):
         """ Update the view positions of the selection if the base view has
@@ -456,6 +493,21 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
     def stop_edit(self):
         SelectionMixin.stop_edit(self)
         self._calc_world_pos()
+
+    # Selection dragging
+
+    def start_drag(self, start_pos):
+        SelectionMixin.start_drag(self, start_pos)
+        self._calc_world_pos()
+
+    def update_drag(self, current_pos):
+        SelectionMixin.update_drag(self, current_pos)
+        self._calc_world_pos()
+
+    def stop_drag(self):
+        SelectionMixin.stop_drag(self)
+        self._calc_world_pos()
+
 
     # Selection clearing
 

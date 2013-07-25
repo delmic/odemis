@@ -34,7 +34,7 @@ import odemis.gui.comp.overlay as overlay
 import odemis.gui.test as test
 
 test.goto_manual()
-# logging.getLogger().setLevel(logging.DEBUG)
+# logging.getLogger().setLevel(logging.DEBUG)b
 
 class PlotCanvasTestCase(test.GuiTestCase):
 
@@ -49,6 +49,7 @@ class PlotCanvasTestCase(test.GuiTestCase):
 
         cnvs.add_world_overlay(overlay.ViewSelectOverlay(cnvs, "test selection"))
         cnvs.toggle_update_mode(True)
+        cnvs.current_mode = 1
 
 
 if __name__ == "__main__":
