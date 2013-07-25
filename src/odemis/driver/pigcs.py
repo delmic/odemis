@@ -19,6 +19,7 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with 
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
+from __future__ import division
 from concurrent import futures
 from odemis import model
 from odemis.model import isasync
@@ -50,15 +51,15 @@ actuator):
 * Do not send the open-loop commands OMA and OMR, since they
    use a sensor, too
 
-The controller accepts several baud rate. We choose 38400 (DIP=01) as it's fast
+The controller accepts several baud rates. We choose 38400 (DIP=01) as it's fast
 and it seems accepted by every version. Other settings are 8 data, 1 stop, 
 no parity.
 
 The controller can save in memory the configuration for a specific stage.
 The configuration database is available in a file called pistages2.dat. The
 PIMikroMove Windows program allows to load it, but by default doesn't copy it to
-the non-volatile memory, so it will be reset after a reboot of the controller, 
-unless WPA has been called for the parameters (password is "100").
+the non-volatile memory, so you need to also force the record. (Can also be done
+with the WPA command and password "100".)
 
 In open-loop, the controller has 2 ways to move the actuators:
  * Nanostepping: high-speed, and long distance
@@ -74,7 +75,8 @@ the limit without getting damaged, it is safe. It's pretty straightforward to
 use the command. The voltage defines the speed (and direction) of the move. The
 voltage should be set to 0 again when the position desired is reached. 3V is 
 approximately the minimum to move, and 10V is the maximum. Voltage is more or 
-less linear between -32766 and 32766 -> -10 and 10V. 
+less linear between -32766 and 32766 -> -10 and 10V. So the distance moved 
+depends on the time the SMO is set, which is obviously very unprecise.
 
 In closed-loop, it's all automagical.
 
@@ -238,7 +240,7 @@ class Controller(object):
             self.GetErrorNum() # reset error
             logging.debug("Using default speed and acceleration value after error '%s'", err)
 
-        self._speed = dict([(a, self.max_speed) for a in axes]) # m/s
+        self._speed = dict([(a, (self.min_speed + self.max_speed) / 2) for a in axes]) # m/s
         self._accel = dict([(a, self.max_accel) for a in axes]) # m/s² (both acceleration and deceleration)
         self._prev_speed_accel = (dict(), dict())
 
@@ -261,7 +263,7 @@ class Controller(object):
         self._max_motor_out = int(self.GetParameter(1, 0x9))
         # official approx. min is 3V, but from test, it can go down to 1.5V,
         # so use 3V
-        self._min_motor_out = int((3. / 10.) * 32767) # encoded as a ratio of 10 V * 32767
+        self._min_motor_out = int((3 / 10) * 32767) # encoded as a ratio of 10 V * 32767
         assert(self._max_motor_out > self._min_motor_out)
 
         # We simplify to a linear conversion, making sure that the min voltage
@@ -269,7 +271,7 @@ class Controller(object):
         # is higher than the min speed and there is no load on the actuator.
         # So it's recommended to use it always at the min speed (~0.03 m/s),
         # which also gives the best precision.
-        self._vpms = vpms * (32767 / 10.)
+        self._vpms = vpms * (32767 / 10)
 
         self.min_speed = self._min_motor_out / self._vpms # m/s
 
@@ -324,7 +326,7 @@ class Controller(object):
         while char:
             if char == "\n":
                 if (len(line) > 0 and line[-1] == " " and  # multiline: "... \n"
-                    not re.match(r"0 \d+ $", line)):   # excepted empty line "0 1 \n"
+                    not re.match(r"0 \d+ $", line)):  # excepted empty line "0 1 \n"
                     lines.append(line[:-1]) # don't include the space
                     line = ""
                 else:
@@ -368,7 +370,7 @@ class Controller(object):
 
         assert len(lines) > 0
 
-        logging.debug("Received: %s", "\n".join(lines).encode('string_escape'))
+        logging.debug("Received: '%s'", "\n".join(lines).encode('string_escape'))
         prefix = "0 %d " % self.address
         if not lines[0].startswith(prefix):
             raise IOError("Report prefix unexpected after '%s': '%s'." % (com, lines[0]))
@@ -385,8 +387,9 @@ class Controller(object):
         Try to recover from error in the controller state
         return (boolean): True if it recovered
         """
-        # Give it some time to recover from whatever
-        time.sleep(0.5)
+        # Flush buffer + give it some time to recover from whatever
+        while self.serial.read():
+            pass
 
         # It appears to make the controller more comfortable...
         self._sendOrderCommand("ERR?\n")
@@ -445,7 +448,7 @@ class Controller(object):
         #SAI? ALL: list all axes (included disabled ones)
         answer = self._sendQueryCommand("SAI? ALL\n")
         # TODO check it works with multiple axes
-        # FIXME: the name of the axis can be a string of up to 8 char (see TVI)
+        # FIXME: on the C867 the name of the axis can be a string of up to 8 char (see TVI)
         axes = set([int(a) for a in answer.split(" ")])
         return axes
 
@@ -952,7 +955,7 @@ class Controller(object):
         """
         speed = self._speed[axis]
         v, t, ad = self.convertDistanceSpeedToPIDControl(distance, speed)
-        logging.debug("Moving axis at %f V, for %f ms", v * (10 / 32687.), t)
+        logging.debug("Moving axis at %f V, for %f ms", v * (10 / 32687), t)
         if t == 0: # if distance is too small, report it
             return 0
         elif t < 1: # special small move command
@@ -1407,13 +1410,14 @@ class Bus(model.Actuator):
 
         return passed
 
-    @staticmethod
-    def scan(port=None):
+    @classmethod
+    def scan(cls, port=None, _cls=None):
         """
         port (string): name of the serial port. If None, all the serial ports are tried
         returns (list of 2-tuple): name, args (port, axes(channel -> CL?)
         Note: it's obviously not advised to call this function if moves on the motors are ongoing
         """
+        _cls = _cls or cls # use _cls if forced
         if port:
             ports = [port]
         else:
@@ -1430,7 +1434,7 @@ class Bus(model.Actuator):
                 # check all possible baud rates, in the most likely order
                 for br in [38400, 9600, 19200, 115200]:
                     logging.debug("Trying port %s at baud rate %d", p, br)
-                    ser = Bus.openSerialPort(port, br)
+                    ser = _cls.openSerialPort(port, br)
                     controllers = Controller.scan(ser)
                     if controllers:
                         axis_num = 0
@@ -1464,7 +1468,7 @@ class Bus(model.Actuator):
             bytesize=serial.EIGHTBITS,
             parity=serial.PARITY_NONE,
             stopbits=serial.STOPBITS_ONE,
-            timeout=0.3 #s
+            timeout=0.5 #s
         )
 
         return ser
@@ -1781,28 +1785,7 @@ class ActionFuture(object):
         return max_duration
 
 
-class FakeBus(Bus):
-    """
-    Same as the normal Bus, but connects to simulated controllers
-    """
-    @staticmethod
-    def openSerialPort(port, baudrate=38400):
-        """
-        Opens a fake serial port
-        port (string): the name of the serial port (e.g., /dev/ttyUSB0)
-        return (serial): the opened serial port
-        """
-        # TODO: daisychain + address
-        ser = E861Simulator(
-                port=port,
-                baudrate=baudrate,
-                bytesize=serial.EIGHTBITS,
-                parity=serial.PARITY_NONE,
-                stopbits=serial.STOPBITS_ONE,
-                timeout=0.5 #s
-            )
 
-        return ser
 
 class DaisyChainSimulator(object):
     """
@@ -1867,13 +1850,13 @@ class DaisyChainSimulator(object):
 
 class E861Simulator(object):
     """
-    Simulates a GCS controller (+ serial port). Only used for testing.
+    Simulates a GCS controller (+ serial port at 38400). Only used for testing.
     1 axis, open-loop only, very limited behaviour
     Same interface as the serial port
     """
     _idn = "(c)2013 Delmic Fake Physik Instrumente(PI) Karlsruhe, E-861 Version 7.2.0"
     _csv = "2.0"
-    def __init__(self, timeout=0, address=1, *args, **kwargs):
+    def __init__(self, port, baudrate=9600, timeout=0, address=1, *args, **kwargs):
         """
         parameters are the same as a serial port
         address (1<=int<=16): the address of the controller  
@@ -1889,6 +1872,11 @@ class E861Simulator(object):
         self._output_buf = "" # what the commands sends back to the "host computer"
         self._input_buf = "" # what we receive from the "host computer"
 
+        # special trick to only answer if baudrate is correct
+        if baudrate != 38400:
+            logging.debug("Baudrate incompatible: %d", baudrate)
+            self.write = (lambda s=1: "")
+
     def _init_mem(self):
         # internal values to simulate the device
         # Parameter table: address -> value
@@ -1901,9 +1889,7 @@ class E861Simulator(object):
                             0x7000204: 15.3, # max step/s
                             0x7000205: 1.2, # max step/s²
                             0x7000206: 0.9, # ODC
-
                             }
-        self._ssa = 10 # step amplitude
         self._servo = 0 # servo state
         self._ready = True # is ready?
         self._errno = 0 # last error set
@@ -1989,7 +1975,7 @@ class E861Simulator(object):
                 time.sleep(0.1)
             elif com == "\x04": # Query Status Register Value
                 # return hexadecimal bitmap of moving axes
-                # TODO: to check, much more
+                # TODO: to check, much more info returned
                 val = 0
                 if time.time() < self._end_move:
                     val |= 0x400  #  first axis moving
@@ -2057,25 +2043,27 @@ class E861Simulator(object):
                 axis, addr = int(args[1]), int(args[2])
                 if axis == 1:
                     try:
-                        out = "%d = %s" % (addr, self._parameters[addr])
+                        out = "%d=%s" % (addr, self._parameters[addr])
                     except KeyError:
                         logging.debug("Unknown parameter %d", addr)
                         self._errno = 56
                 else:
                     self._errno = 15
             elif com == "HLP?":
-                # TODO: more realistic output?
                 out = ("The following commands are available: \n" +
-                       " HLP:\tlist the available commands \n" +
-                       " ERR?:\tshow last error number\n")
+                       "#4 request status register \n" +
+                       "HLP list the available commands \n" +
+                       "ERR? get error number \n" +
+                       "VEL {<AxisId> <Velocity>} set closed-loop velocity \n" +
+                       "end of help"
+                       )
             elif com == "HPA?":
-                # TODO: more realistic output?
                 out = ("The following parameters are valid: \n" +
                        "0x1=\t0\t1\tINT\tmotorcontroller\tP term 1 \n" +
                        "0x32=\t0\t1\tINT\tmotorcontroller\thas limit\t(0=limitswitchs 1=no limitswitchs) \n" +
                        "0x3C=\t0\t1\tCHAR\tmotorcontroller\tStagename \n" +
                        "0x7000000=\t0\t1\tFLOAT\tmotorcontroller\ttravel range minimum \n" +
-                       "end of help\n"
+                       "end of help"
                        )
             else:
                 logging.debug("Unknown command '%s'", com)
@@ -2093,3 +2081,30 @@ class E861Simulator(object):
                           out.encode('string_escape'))
             self._output_buf += out
 
+class FakeBus(Bus):
+    """
+    Same as the normal Bus, but connects to simulated controllers
+    """
+    @classmethod
+    def scan(cls, port=None):
+        # force only one port
+        return Bus.scan(port="/fake/ttyPIGCS", _cls=cls)
+
+    @staticmethod
+    def openSerialPort(port, baudrate=38400):
+        """
+        Opens a fake serial port
+        port (string): the name of the serial port (e.g., /dev/ttyUSB0)
+        return (serial): the opened serial port
+        """
+        # TODO: daisychain + address
+        ser = E861Simulator(
+                port=port,
+                baudrate=baudrate,
+                bytesize=serial.EIGHTBITS,
+                parity=serial.PARITY_NONE,
+                stopbits=serial.STOPBITS_ONE,
+                timeout=0.5 #s
+            )
+
+        return ser
