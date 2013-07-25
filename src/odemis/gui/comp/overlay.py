@@ -216,6 +216,17 @@ class SelectionMixin(object):
             logging.debug("Selection too small")
             self.clear_selection()
         else:
+
+            # Make sure that the start and end positions are the top left and
+            # bottom right respectively.
+            start_x = min(self.v_start_pos.x, self.v_end_pos.x)
+            start_y = min(self.v_start_pos.y, self.v_end_pos.y)
+            end_x = max(self.v_start_pos.x, self.v_end_pos.x)
+            end_y = max(self.v_start_pos.y, self.v_end_pos.y)
+
+            self.v_start_pos = wx.Point(start_x, start_y)
+            self.v_end_pos = wx.Point(end_x, end_y)
+
             self._calc_edges()
             self.dragging = False
             self.edit = False
