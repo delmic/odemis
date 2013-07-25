@@ -175,6 +175,7 @@ class Controller(object):
                          c,
                          "" if self._hasLimit[c] else "no ",
                          "" if self._hasSensor[c] else "no ")
+        self._avail_params = self.GetAvailableParameters()
 
         for a, cl in axes.items():
             if not a in self._channels:
@@ -221,19 +222,21 @@ class Controller(object):
 
         # FIXME 0x7000204 seems specific to E-861. need different initialisation per controller
         # Even the old firmware don't seem to support it
+        self.max_speed = 0.5 # m/s
+        self.max_accel = 0.01 # m/s²
         try:
-            # (max m/s) = (max step/s) * (step/m)
-            self.max_speed = float(self.GetParameter(1, 0x7000204)) / self._dist_to_steps # m/s
-            # Note: the E-861 claims max 0.015 m/s but actually never goes above 0.004 m/s
-            # (max m/s²) = (max step/s²) * (step/m)
-            self.max_accel = float(self.GetParameter(1, 0x7000205)) / self._dist_to_steps # m/s²
+            if 0x7000204 in self._avail_params:
+                # (max m/s) = (max step/s) * (step/m)
+                self.max_speed = float(self.GetParameter(1, 0x7000204)) / self._dist_to_steps # m/s
+                # Note: the E-861 claims max 0.015 m/s but actually never goes above 0.004 m/s
+            if 0x7000205 in self._avail_params:
+                # (max m/s²) = (max step/s²) * (step/m)
+                self.max_accel = float(self.GetParameter(1, 0x7000205)) / self._dist_to_steps # m/s²
         except (IOError, ValueError) as err:
             # TODO detect better that it's just a problem of sending unsupported command/value
             # Put default (large values)
             self.GetErrorNum() # reset error
             logging.debug("Using default speed and acceleration value after error '%s'", err)
-            self.max_speed = 0.5 # m/s
-            self.max_accel = 0.01 # m/s²
 
         self._speed = dict([(a, self.max_speed) for a in axes]) # m/s
         self._accel = dict([(a, self.max_accel) for a in axes]) # m/s² (both acceleration and deceleration)
@@ -454,11 +457,26 @@ class Controller(object):
         return lines
 
     def GetAvailableParameters(self):
+        """
+        Returns the available parameters
+        return (dict param -> list of strings): parameter number and strings 
+         used to describe it (typically: 0, 1, FLOAT, description)
+        """
         #HPA? (Get List Of Available Parameters)
-        # first line starts with \x00
         lines = self._sendQueryCommand("HPA?\n")
-        lines[0].lstrip("\x00")
-        return lines
+        # first line doesn't seem to starts with \x00
+#        lines[0].lstrip("\x00")
+        params = {}
+        # first and last lines are typically just user-friendly text
+        # look for something like '0x412=\t0\t1\tINT\tmotorcontroller\tI term 1'
+        for l in lines:
+            m = re.match("0x(?P<param>[0-9A-Fa-f]+)=(?P<desc>(\t\S+)+)", l)
+            if not m:
+                logging.debug("Line doesn't seem to be a parameter: '%s'", l)
+                continue
+            param, desc = int(m.group("param"), 16), m.group("desc")
+            params[param] = tuple(filter(bool, desc.split("\t")))
+        return params
 
     def GetParameter(self, axis, param):
         """
@@ -1781,7 +1799,7 @@ class FakeBus(Bus):
                 bytesize=serial.EIGHTBITS,
                 parity=serial.PARITY_NONE,
                 stopbits=serial.STOPBITS_ONE,
-                timeout=0.3 #s
+                timeout=0.5 #s
             )
 
         return ser
@@ -1877,6 +1895,7 @@ class E861Simulator(object):
         self._parameters = {0x14: 0, # 0 = no ref switch, 1 = ref switch
                             0x32: 1, # 0 = limit switches, 1 = no limit switches
                             0x3c: "DEFAULT-FAKE", # stage name
+                            0x7000003: 10.0, # SSA
                             0x7000201: 3.2, # OVL
                             0x7000202: 0.9, # OAC
                             0x7000204: 15.3, # max step/s
@@ -1889,7 +1908,7 @@ class E861Simulator(object):
         self._ready = True # is ready?
         self._errno = 0 # last error set
 
-    _re_command = ".*?[\n\x04\x05\x07\x08\x24]"
+    _re_command = ".*?[\n\x04\x05\x07\x08\x18]"
     def write(self, data):
         self._input_buf += data
         # process each commands separated by a "\n" or is short command
@@ -1919,6 +1938,7 @@ class E861Simulator(object):
     _com_to_param = {"OVL": 0x7000201,
                      "OAC": 0x7000202,
                      "ODC": 0x7000206,
+                     "SSA": 0x7000003,
                      }
     _re_addr_com = r"((?P<addr>\d+) (0 )?)?(?P<com>.*)"
     def _processCommand(self, com):
@@ -1940,97 +1960,101 @@ class E861Simulator(object):
 
             prefix = "0 %d " % addr
         else:
+            if 1 != self._address: # default is address == 1
+                return # skip message
+
             prefix = ""
 
         com = m.group("com") # also removes the \n at the end if it's there
-        logging.debug("Command understood: '%s'", com)
+        # split into arguments separated by spaces (not including empty strings)
+        args = filter(bool, com.split(" "))
+        logging.debug("Command decoded: %s", args)
 
         # FIXME: if errno is not null, most commands don't work any more
         if self._errno:
             logging.debug("received command %s while errno = %d", com, self._errno)
 
-        if com == "*IDN?": # identification
-            out = self._idn
-        elif com == "CSV?": # command set version
-            out = self._csv
-        elif com == "ERR?": # last error number
-            out = "%d" % self._errno
-            self._errno = 0 # reset error number
-        elif com == "RBT": # reboot
-            self._init_mem()
-            time.sleep(0.1)
-        elif com == "\x04": # Query Status Register Value
-            # return hexadecimal bitmap of moving axes
-            if time.time() > self._end_move:
+        # TODO: to support more commands, we should have a table, with name of
+        # the command + type of arguments (+ number of optional args)
+        try:
+            if com == "*IDN?": # identification
+                out = self._idn
+            elif com == "CSV?": # command set version
+                out = self._csv
+            elif com == "ERR?": # last error number
+                out = "%d" % self._errno
+                self._errno = 0 # reset error number
+            elif com == "RBT": # reboot
+                self._init_mem()
+                time.sleep(0.1)
+            elif com == "\x04": # Query Status Register Value
+                # return hexadecimal bitmap of moving axes
+                # TODO: to check, much more
                 val = 0
-            else:
-                val = 1 #  first axis moving
-            out = "0x%x" % val
-        elif com == "\x05": # Request Motion Status
-            # return hexadecimal bitmap of moving axes
-            if time.time() > self._end_move:
-                val = 0
-            else:
-                val = 1 # first axis moving
-            out = "%x" % val
-        elif com == "\x07": # Request Controller Ready Status
-            if self._ready: # TODO: when is it not ready??
-                out = "\xb1"
-            else:
-                out = "\xb2"
-        elif com == "\x18": # Stop immediately
-            self._end_move = 0
-            self._errno = 10 # PI_CNTR_STOP
-        elif com.startswith("HLT"): # halt motion with deceleration: axis (optional)
-            self._end_move = 0
-        elif com[:3] in self._com_to_param:
-            param = self._com_to_param[com[:3]]
-            if com[3:4] == "?": # query
-                m = re.match(com[:3] + r"? (\d+)", com)
-                if m:
-                    out = "%s = %s" % (m.group(1), self._parameters[param])
-            else:
-                m = re.match(com[:3] + r" (\d+) +(\d+)", com)
-                if m:
-                    axis, val = int(m.group(1)), int(m.group(2))
-                    if axis == 1:
-                        self._parameters[param] = val
-                    else:
-                        self._errno = 15
-        elif com.startswith("SSA "): # Set Step Amplitude
-            m = re.match(r"SSA (\d+) +(\d+)", com)
-            if m:
-                axis, amp = int(m.group(1)), int(m.group(2))
-                if axis == 1:
-                    self._ssa = amp
+                if time.time() < self._end_move:
+                    val |= 0x400  #  first axis moving
+                out = "0x%x" % val
+            elif com == "\x05": # Request Motion Status
+                # return hexadecimal bitmap of moving axes
+                if time.time() > self._end_move:
+                    val = 0
                 else:
-                    self._errno = 15
-        elif com.startswith("SVO "): # Set Servo State
-            m = re.match(r"SVO (\d+) +(\d+)", com)
-            if m:
-                axis, state = int(m.group(1)), int(m.group(2))
+                    val = 1 # first axis moving
+                out = "%x" % val
+            elif com == "\x07": # Request Controller Ready Status
+                if self._ready: # TODO: when is it not ready??
+                    out = "\xb1"
+                else:
+                    out = "\xb2"
+            elif com == "\x18" or com == "STP": # Stop immediately
+                self._end_move = 0
+                self._errno = 10 # PI_CNTR_STOP
+            elif args[0].startswith("HLT"): # halt motion with deceleration: axis (optional)
+                self._end_move = 0
+            elif args[0][:3] in self._com_to_param:
+                param = self._com_to_param[args[0][:3]]
+                if args[0][3:4] == "?": # query
+                    if len(args) == 2:
+                        out = "%s=%s" % (args[1], self._parameters[param])
+                else:
+                    if len(args) == 3:
+                        # TODO: convert according to the type of the parameter
+                        axis, val = int(args[1]), float(args[2])
+                        if axis == 1:
+                            self._parameters[param] = val
+                        else:
+                            self._errno = 15
+            elif args[0] == "SVO" and len(args) == 3: # Set Servo State
+                axis, state = int(args[1]), int(args[2])
                 if axis == 1:
                     self._servo = state
                 else:
                     self._errno = 15
-        elif com.startswith("OSM "): #Open-Loop Step Moving
-            # TODO: check values + compute move duration
-            pass
-        elif com.startswith("LIM? "): # Has limit switch: axis
-            m = re.match(r"LIM\? (\d+)", com)
-            if m and int(m.group(1)) == 1:
-                out = "%d" % (1 - self._parameters[0x32]) # inverted parameter
-        elif com.startswith("TRS? "): # Indicate Reference Switch: axis
-            m = re.match(r"TRS\? (\d+)", com)
-            if m and int(m.group(1)) == 1:
-                out = "%d" % self._parameters[0x14]
-        elif com.startswith("SAI?"): # List Of Current Axis Identifiers
-            # Can be followed by "ALL", but for us, it's the same
-            out = "1"
-        elif com.startswith("SPA? "): # GetParameter: axis, address
-            m = re.match(r"SPA\? (\d+) +(\d+)", com)
-            if m:
-                axis, addr = int(m.group(1)), int(m.group(2))
+            elif args[0] == "OSM" and len(args) == 3: #Open-Loop Step Moving
+                axis, steps = int(args[1]), float(args[2])
+                speed = self._parameters[self._com_to_param["OVL"]]
+                if axis == 1:
+                    duration = steps / speed
+                    self._end_move = time.time() + duration # current move stopped
+                else:
+                    self._errno = 15
+            elif args[0] == "LIM?" and len(args) == 2: # Has limit switch: axis
+                axis = int(args[1])
+                if axis == 1:
+                    out = "%d" % (1 - self._parameters[0x32]) # inverted parameter
+                else:
+                    self._errno = 15
+            elif args[0] == "TRS?" and len(args) == 2: # Indicate Reference Switch: axis
+                axis = int(args[1])
+                if axis == 1:
+                    out = "%d" % self._parameters[0x14]
+                else:
+                    self._errno = 15
+            elif args[0] == "SAI?" and len(args) <= 2: # List Of Current Axis Identifiers
+                # Can be followed by "ALL", but for us, it's the same
+                out = "1"
+            elif args[0] == "SPA?" and len(args) == 3: # GetParameter: axis, address
+                axis, addr = int(args[1]), int(args[2])
                 if axis == 1:
                     try:
                         out = "%d = %s" % (addr, self._parameters[addr])
@@ -2039,18 +2063,25 @@ class E861Simulator(object):
                         self._errno = 56
                 else:
                     self._errno = 15
-        elif com == "HLP?":
-            # TODO: more realistic output?
-            out = ("\x00The following commands are available: \n" +
-                   " HLP:\tlist the available commands \n" +
-                   " ERR?:\tshow last error number\n")
-        elif com == "HPA?":
-            # TODO: more realistic output?
-            out = ("\x00The following parameters are available: \n" +
-                   " 0x14:\thas reference switch \n" +
-                   " 0x32:\thas no limit switch\n")
-        else:
-            logging.debug("Unknown command %s", com)
+            elif com == "HLP?":
+                # TODO: more realistic output?
+                out = ("The following commands are available: \n" +
+                       " HLP:\tlist the available commands \n" +
+                       " ERR?:\tshow last error number\n")
+            elif com == "HPA?":
+                # TODO: more realistic output?
+                out = ("The following parameters are valid: \n" +
+                       "0x1=\t0\t1\tINT\tmotorcontroller\tP term 1 \n" +
+                       "0x32=\t0\t1\tINT\tmotorcontroller\thas limit\t(0=limitswitchs 1=no limitswitchs) \n" +
+                       "0x3C=\t0\t1\tCHAR\tmotorcontroller\tStagename \n" +
+                       "0x7000000=\t0\t1\tFLOAT\tmotorcontroller\ttravel range minimum \n" +
+                       "end of help\n"
+                       )
+            else:
+                logging.debug("Unknown command '%s'", com)
+                self._errno = 1
+        except Exception:
+            logging.debug("Failed to process command '%s'", com)
             self._errno = 1
 
         # add the response header

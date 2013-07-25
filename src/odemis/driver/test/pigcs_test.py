@@ -361,24 +361,24 @@ if __name__ == "__main__":
 #    print stage.hwVersion
 #    print stage.selfTest()
 
-#from odemis.driver import pigcs
-#import logging
-#logging.getLogger().setLevel(logging.DEBUG)
-#CONFIG_CTRL_BASIC = (1, {1: False})
-#PORT = "/dev/ttyPIGCS"
-#ser = pigcs.Bus.openSerialPort(PORT)
+from odemis.driver import pigcs
+import logging
+logging.getLogger().setLevel(logging.DEBUG)
+CONFIG_CTRL_BASIC = (1, {1: False})
+PORT = "/dev/ttyPIGCS"
+ser = pigcs.Bus.openSerialPort(PORT)
 #ctrl = pigcs.Controller(ser, *CONFIG_CTRL_BASIC)
 #ctrl.GetAvailableCommands()
 #ctrl.OLMovePID(1, 10000, 10); ctrl.isMoving()
 #ctrl.moveRel(1, 10e-6); ctrl.isMoving()
 
-#from odemis.driver import pigcs
-#import logging
-#logging.getLogger().setLevel(logging.DEBUG)
-#CONFIG_CTRL_BASIC = (1, {1: False})
-#PORT = "/dev/ttyPIGCS"
-#ser = pigcs.FakeBus.openSerialPort(PORT)
-#ctrl = pigcs.Controller(ser, *CONFIG_CTRL_BASIC)
-#ctrl.GetAvailableCommands()
-#ctrl.OLMovePID(1, 10000, 10); ctrl.isMoving()
-#ctrl.moveRel(1, 10e-6); ctrl.isMoving()
+from odemis.driver import pigcs
+import logging
+logging.getLogger().setLevel(logging.DEBUG)
+CONFIG_CTRL_BASIC = (1, {1: False})
+PORT = "/dev/ttyPIGCS"
+ser = pigcs.FakeBus.openSerialPort(PORT)
+ctrl = pigcs.Controller(ser, *CONFIG_CTRL_BASIC)
+ctrl.GetAvailableCommands()
+ctrl.OLMovePID(1, 10000, 10); ctrl.isMoving()
+ctrl.moveRel(1, 10e-6); ctrl.isMoving()
