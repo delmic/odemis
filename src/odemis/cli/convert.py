@@ -21,7 +21,7 @@ You should have received a copy of the GNU General Public License along with Ode
 # convert --input file-as.hdf5 --output file-as.ome.tiff
 
 from __future__ import division
-from odemis import dataio
+from odemis import dataio, model
 import argparse
 import logging
 import odemis
@@ -79,6 +79,31 @@ def save_acq(fn, data, thumbs):
     exporter.export(fn, data, thumb)
 
 
+def minus(data_a, data_b):
+    """
+    computes data_a - data_b.
+    data_a (list of DataArrays of length N)
+    data_b (list of DataArrays of length 1 or N): if length is 1, all the arrays
+     in data_a are subtracted from this array, otherwise, each array is subtracted
+     1 to 1. 
+    returns (list of DataArrays of length N)
+    """
+    ret = []
+    if len(data_b) == 1:
+        # subtract the same data from all the data_a
+        b = data_b[0]
+        for a in data_a:
+            r = a - b # metadata is copied from a
+            ret.append(r)
+    elif len(data_b) == len(data_a):
+        for a, b in zip(data_a, data_b):
+            r = a - b # metadata is copied from a
+            ret.append(r)
+    else:
+        raise ValueError("Cannot subtract %d images from %d images",
+                         len(data_b), len(data_a))
+    return ret
+
 def main(args):
     """
     Handles the command line arguments
@@ -90,11 +115,19 @@ def main(args):
 
     parser.add_argument('--version', dest="version", action='store_true',
                         help="show program's version number and exit")
-    parser.add_argument("--input", "-i", dest="input", required=True,
+    parser.add_argument("--input", "-i", dest="input",
                         help="name of the input file")
     # TODO: list supported file formats for input and output
-    parser.add_argument("--output", "-o", dest="output", required=True,
-                        help="name of the output file. The file format is derived from the extension (TIFF and HDF5 are supported).")
+    parser.add_argument("--output", "-o", dest="output",
+            help="name of the output file. The file format is derived from the extension (TIFF and HDF5 are supported).")
+
+    parser.add_argument("--minus", "-m", dest="minus", action='append',
+            help="name of an acquisition file whose data is subtracted from the input file.")
+
+
+    # TODO: --range parameter to select which image to select from the input
+    #      (like: 1-4,5,6-10,12)
+
 
     options = parser.parse_args(args[1:])
 
@@ -108,11 +141,28 @@ def main(args):
     infn = options.input
     outfn = options.output
 
+    if not infn or not outfn:
+        logging.error("--input and --output arguments must be provided.")
+        return 128
+
     try:
         data, thumbs = open_acq(infn)
     except:
         logging.exception("Error while opening file %s.", infn)
         return 127
+    logging.info("File contains %d images (and %d thumbnails)", len(data), len(thumbs))
+
+    if options.minus:
+        if thumbs:
+            logging.info("Dropping thumbnail due to subtraction")
+            thumbs = []
+        for fn in options.minus:
+            try:
+                sdata, sthumbs = open_acq(fn)
+            except:
+                logging.exception("Error while opening file %s.", infn)
+                return 127
+            data = minus(data, sdata)
 
     try:
         save_acq(outfn, data, thumbs)
