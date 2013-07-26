@@ -22,6 +22,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
 # for listing all the types of file format supported
+from odemis.dataio import tiff
 import logging
 import os
 
@@ -50,8 +51,8 @@ def get_available_formats(mode=os.O_RDWR):
     # Look dynamically which format is available
     for module_name in __all__:
         try:
-            exporter = __import__("odemis.dataio."+module_name, fromlist=[module_name])
-        except:  #pylint: disable=W0702
+            exporter = __import__("odemis.dataio." + module_name, fromlist=[module_name])
+        except Exception:  #pylint: disable=W0702
             continue # module cannot be loaded
         if ((mode == os.O_RDONLY and not hasattr(exporter, "read_data")) or
             (mode == os.O_WRONLY and not hasattr(exporter, "export"))):
@@ -77,7 +78,7 @@ def get_exporter(fmt):
     # Look dynamically which format is available
     for module_name in __all__:
         try:
-            exporter = __import__("odemis.dataio."+module_name, fromlist=[module_name])
+            exporter = __import__("odemis.dataio." + module_name, fromlist=[module_name])
         except:  #pylint: disable=W0702
             continue # module cannot be loaded
         if fmt == exporter.FORMAT:
@@ -85,3 +86,34 @@ def get_exporter(fmt):
 
     raise ValueError("No exporter for format %s found" % fmt)
 
+
+def find_fittest_exporter(filename, default=tiff):
+    """
+    Find the most fitting exporter according to a filename (actually, its extension)
+    filename (string): (path +) filename with extension
+    default (dataio. Module): default exporter to pick if no really fitting
+      exporter is found
+    returns (dataio. Module): the right exporter
+    """
+    # Find the extension of the file
+    basename = os.path.basename(filename).lower()
+    if basename == "":
+        raise ValueError("Filename should have at least one letter: '%s'" % filename)
+
+    # make sure we pick the format with the longest fitting extention
+    best_len = 0
+    best_fmt = default
+    for module_name in __all__:
+        try:
+            exporter = __import__("odemis.dataio." + module_name, fromlist=[module_name])
+        except Exception:  #pylint: disable=W0702
+            continue # module cannot be loaded
+        for e in exporter.EXTENSIONS:
+            if filename.endswith(e) and len(e) > best_len:
+                best_len = len(e)
+                best_fmt = exporter
+
+    if best_len > 0:
+        logging.debug("Determined that '%s' corresponds to %s format",
+                      basename, best_fmt.FORMAT)
+    return best_fmt

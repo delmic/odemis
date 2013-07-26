@@ -25,7 +25,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from Pyro4.errors import CommunicationError
 from odemis import model, dataio, util
 from odemis.cli.video_displayer import VideoDisplayer
-from odemis.dataio import tiff #pylint: disable=W0611
 from odemis.util.driver import reproduceTypedValue
 import argparse
 import collections
@@ -459,32 +458,6 @@ def stop_move():
 
     return ret
 
-def getFittestExporter(filename, default=dataio.tiff):
-    """
-    Find the most fitting exporter according to a filename (actually, its extension)
-    filename (string): (path +) filename with extension
-    default (dataio. Module): default exporter to pick if no really fitting
-      exporter is found
-    returns (dataio. Module): the right exporter
-    """
-    # Find the extension of the file
-    basename = os.path.basename(filename)
-    if basename == "":
-        raise ValueError("Filename should have at least one letter: '%s'" % filename)
-    # TODO: This only finds the last extension:
-    # aaa.ome.tiff => .tiff
-    # It should compare the extension of the exporter to the end of the filename,
-    # but that should be fine for now.
-    extension = os.path.splitext(basename)[1].lower()
-
-    for module_name in dataio.__all__:
-        exporter = __import__("odemis.dataio." + module_name, fromlist=[module_name])
-        if extension in exporter.EXTENSIONS:
-            logging.debug("Determined that '%s' corresponds to %s format", basename, exporter.FORMAT)
-            return exporter
-
-    return default
-
 def acquire(comp_name, dataflow_names, filename):
     """
     Acquire an image from one (or more) dataflow
@@ -540,7 +513,7 @@ def acquire(comp_name, dataflow_names, filename):
         except:
             logging.exception("Failed to read image information")
 
-    exporter = getFittestExporter(filename)
+    exporter = dataio.find_fittest_exporter(filename)
     exporter.export(filename, images)
     return 0
 
@@ -612,22 +585,22 @@ def main(args):
                         help="show program's version number and exit")
     opt_grp = parser.add_argument_group('Options')
     opt_grp.add_argument("--log-level", dest="loglev", metavar="<level>", type=int,
-                        default=0, help="Set verbosity level (0-2, default = 0)")
+                        default=0, help="set verbosity level (0-2, default = 0)")
     dm_grp = parser.add_argument_group('Microscope management')
     dm_grpe = dm_grp.add_mutually_exclusive_group()
     dm_grpe.add_argument("--kill", "-k", dest="kill", action="store_true", default=False,
-                         help="Kill the running back-end")
+                         help="kill the running back-end")
     dm_grpe.add_argument("--check", dest="check", action="store_true", default=False,
-                         help="Check for a running back-end (only returns exit code)")
+                         help="check for a running back-end (only returns exit code)")
     dm_grpe.add_argument("--scan", dest="scan", action="store_true", default=False,
-                         help="Scan for possible devices to connect (the back-end must be stopped)")
+                         help="scan for possible devices to connect (the back-end must be stopped)")
     dm_grpe.add_argument("--list", "-l", dest="list", action="store_true", default=False,
-                         help="List the components of the microscope")
+                         help="list the components of the microscope")
     dm_grpe.add_argument("--list-prop", "-L", dest="listprop", metavar="<component>",
-                         help="List the properties of a component")
+                         help="list the properties of a component")
     dm_grpe.add_argument("--set-attr", "-s", dest="setattr", nargs=3, action='append',
                          metavar=("<component>", "<attribute>", "<value>"),
-                         help="Set the attribute of a component (lists are delimited by commas,"
+                         help="set the attribute of a component (lists are delimited by commas,"
                          " dictionary keys are delimited by colon)")
     dm_grpe.add_argument("--move", "-m", dest="move", nargs=3, action='append',
                          metavar=("<component>", "<axis>", "<distance>"),
@@ -636,15 +609,15 @@ def main(args):
                          metavar=("<component>", "<axis>", "<position>"),
                          help=u"move the axis to the given position in µm.")
     dm_grpe.add_argument("--stop", "-S", dest="stop", action="store_true", default=False,
-                         help="Immediately stop all the actuators in all directions.")
+                         help="immediately stop all the actuators in all directions.")
     dm_grpe.add_argument("--acquire", "-a", dest="acquire", nargs="+",
                          metavar=("<component>", "data-flow"),
-                         help="Acquire an image (default data-flow is \"data\")")
+                         help="acquire an image (default data-flow is \"data\")")
     dm_grp.add_argument("--output", "-o", dest="output",
                         help="name of the file where the image should be saved after acquisition. The file format is derived from the extension (TIFF and HDF5 are supported).")
     dm_grpe.add_argument("--live", dest="live", nargs="+",
                          metavar=("<component>", "data-flow"),
-                         help="Display and update an image on the screen (default data-flow is \"data\")")
+                         help="display and update an image on the screen (default data-flow is \"data\")")
 
     options = parser.parse_args(args[1:])
 
@@ -714,47 +687,37 @@ def main(args):
 
         if options.list:
             return list_components()
-
-        if options.listprop is not None:
+        elif options.listprop is not None:
             return list_properties(options.listprop)
-
-        if options.setattr is not None:
+        elif options.setattr is not None:
             for c, a, v in options.setattr:
                 ret = set_attr(c, a, v)
                 if ret != 0:
                     return ret
-            return 0
-
-        if options.position is not None:
+        elif options.position is not None:
             for c, a, d in options.position:
                 ret = move_abs(c, a, d)
                 # TODO warn if same axis multiple times
                 if ret != 0:
                     return ret
             time.sleep(0.5)
-            return 0
-
-        if options.move is not None:
+        elif options.move is not None:
             for c, a, d in options.move:
                 ret = move(c, a, d)
                 # TODO move commands to the same actuator should be agglomerated
                 if ret != 0:
                     return ret
             time.sleep(0.5) # wait a bit for the futures to close nicely
-            return 0
-
-        if options.stop:
+        elif options.stop:
             return stop_move()
-
-        if options.acquire is not None:
+        elif options.acquire is not None:
             component = options.acquire[0]
             if len(options.acquire) == 1:
                 dataflows = ["data"]
             else:
                 dataflows = options.acquire[1:]
-            acquire(component, dataflows, options.output)
-
-        if options.live is not None:
+            return acquire(component, dataflows, options.output)
+        elif options.live is not None:
             component = options.live[0]
             if len(options.live) == 1:
                 dataflow = "data"
@@ -763,7 +726,7 @@ def main(args):
             else:
                 logging.error("live command accepts only one data-flow")
                 return 127
-            live_display(component, dataflow)
+            return live_display(component, dataflow)
     except:
         logging.exception("Unexpected error while performing action.")
         return 127

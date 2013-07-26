@@ -233,7 +233,8 @@ def main(args):
     """
 
     # arguments handling
-    parser = argparse.ArgumentParser(description=odemis.__fullname__)
+    parser = argparse.ArgumentParser(description=
+                     "Automated AR acquisition at multiple spot locations")
 
     parser.add_argument("--zpos", "-z", dest="zpos", type=int, required=True,
                         help="position on the Z axis, for the filename only")
