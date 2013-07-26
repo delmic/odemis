@@ -41,19 +41,24 @@ CONFIG_BUS_BASIC = {"x":(1, 1, False)}
 CONFIG_BUS_TWO = {"x":(1, 1, False), "y":(2, 1, False)}
 CONFIG_CTRL_BASIC = (1, {1: False})
 
+CLASS = pigcs.FakeBus # use FakeBus if no hardware present
+KWARGS = {"name": "test", "role": "stage", "port": PORT, "axes": CONFIG_BUS_BASIC}
+KWARGS_TWO = {"name": "test", "role": "stage2d", "port": PORT, "axes": CONFIG_BUS_TWO}
+
 #@unittest.skip("faster")
 class TestController(unittest.TestCase):
     """
     directly test the low level class
     """
+    def setUp(self):
+        self.ser = CLASS.openSerialPort(PORT)
 
     def test_scan(self):
-        addresses = pigcs.Controller.scan(PORT)
+        addresses = pigcs.Controller.scan(self.ser)
         self.assertGreater(len(addresses), 0, "No controller found")
 
     def test_move(self):
-        ser = pigcs.Controller.openSerialPort(PORT)
-        ctrl = pigcs.Controller(ser, *CONFIG_CTRL_BASIC)
+        ctrl = pigcs.Controller(self.ser, *CONFIG_CTRL_BASIC)
         speed = ctrl.max_speed / 10
         self.assertGreater(ctrl.max_speed, 100e-6, "Maximum speed is expected to be more than 100μm/s")
         ctrl.setSpeed(1, speed)
@@ -74,8 +79,7 @@ class TestController(unittest.TestCase):
         self.assertFalse(ctrl.isMoving(set([1])))
 
     def test_timeout(self):
-        ser = pigcs.Controller.openSerialPort(PORT)
-        ctrl = pigcs.Controller(ser, *CONFIG_CTRL_BASIC)
+        ctrl = pigcs.Controller(self.ser, *CONFIG_CTRL_BASIC)
 
         self.assertIn("Physik Instrumente", ctrl.GetIdentification())
         self.assertTrue(ctrl.IsReady())
@@ -83,6 +87,13 @@ class TestController(unittest.TestCase):
         # the next command is going to have to use recovery from timeout
         self.assertTrue(ctrl.IsReady())
         self.assertEqual(0, ctrl.GetErrorNum())
+
+class TestFake(TestController):
+    """
+    very basic test of the simulator, to ensure we always test it.
+    """
+    def setUp(self):
+        self.ser = pigcs.FakeBus.openSerialPort(PORT)
 
 #@unittest.skip("faster")
 class TestActuator(unittest.TestCase):
@@ -95,16 +106,16 @@ class TestActuator(unittest.TestCase):
         Check that we can do a scan network. It can pass only if we are
         connected to at least one controller.
         """
-        devices = pigcs.Bus.scan()
+        devices = CLASS.scan()
         self.assertGreater(len(devices), 0)
 
         for name, kwargs in devices:
             print "opening ", name
-            stage = pigcs.Bus("test", "stage", **kwargs)
+            stage = CLASS("test", "stage", **kwargs)
             self.assertTrue(stage.selfTest(), "Controller self test failed.")
 
     def test_simple(self):
-        stage = pigcs.Bus("test", "stage", PORT, CONFIG_BUS_BASIC)
+        stage = CLASS(**KWARGS)
         move = {'x':0.01e-6}
         stage.moveRel(move)
         time.sleep(0.1) # wait for the move to finish
@@ -113,7 +124,7 @@ class TestActuator(unittest.TestCase):
         # For moves big enough, sync should always take more time than async
         delta = 0.0001 # s
 
-        stage = pigcs.Bus("test", "stage", PORT, CONFIG_BUS_BASIC)
+        stage = CLASS(**KWARGS)
         speed = max(stage.speed.range[0], 1e-3) # try as slow as reasonable
         stage.speed.value = {"x": speed}
         move = {'x':100e-6}
@@ -141,7 +152,7 @@ class TestActuator(unittest.TestCase):
     def test_speed(self):
         # For moves big enough, a 0.1m/s move should take approximately 100 times less time
         # than a 0.001m/s move
-        stage = pigcs.Bus("test", "stage", PORT, CONFIG_BUS_BASIC)
+        stage = CLASS(**KWARGS)
         # FIXME: 2.5 instead of 10.0 because C-867 doesn't report correct range
         expected_ratio = min(stage.speed.range[1] / stage.speed.range[0], 2.5) # 10.0
         delta_ratio = 2.0 # no unit
@@ -188,7 +199,7 @@ class TestActuator(unittest.TestCase):
                          " instead of " + str(expected_ratio) + ".")
 
     def test_stop(self):
-        stage = pigcs.Bus("test", "stage", PORT, CONFIG_BUS_BASIC)
+        stage = CLASS(**KWARGS)
         stage.stop()
 
         move = {'x':100e-6}
@@ -200,7 +211,7 @@ class TestActuator(unittest.TestCase):
         """
         Ask for several long moves in a row, and checks that nothing breaks
         """
-        stage = pigcs.Bus("test", "stage", PORT, CONFIG_BUS_BASIC)
+        stage = CLASS(**KWARGS)
         speed = max(stage.speed.range[0], 1e-3) # try as slow as reasonable
         stage.speed.value = {"x": speed}
         move_forth = {'x': speed} # => 1s per move
@@ -222,7 +233,7 @@ class TestActuator(unittest.TestCase):
         self.assertGreaterEqual(dur, expected_time)
 
     def test_cancel(self):
-        stage = pigcs.Bus("test", "stage", PORT, CONFIG_BUS_BASIC)
+        stage = CLASS(**KWARGS)
         speed = max(stage.speed.range[0], 1e-3) # try as slow as reasonable
         stage.speed.value = {"x": speed}
         move_forth = {'x': speed} # => 1s per move
@@ -251,7 +262,7 @@ class TestActuator(unittest.TestCase):
         f1.result() # wait for the move to be finished
 
     def test_not_cancel(self):
-        stage = pigcs.Bus("test", "stage", PORT, CONFIG_BUS_BASIC)
+        stage = CLASS(**KWARGS)
         speed = max(stage.speed.range[0], 1e-3) # try as slow as reasonable
         stage.speed.value = {"x": speed}
         small_move_forth = {'x': speed / 10}  # => 0.1s per move
@@ -278,11 +289,11 @@ class TestActuator(unittest.TestCase):
 
     def test_move_circle(self):
         # check if we can run it
-        devices = pigcs.Bus.scan(PORT)
+        devices = CLASS.scan(PORT)
         if len(devices) < 2:
             self.skipTest("Couldn't find two controllers")
 
-        stage = pigcs.Bus("test", "stage", PORT, CONFIG_BUS_TWO)
+        stage = CLASS(**KWARGS_TWO)
         speed = max(stage.speed.range[0], 1e-3) # try as slow as reasonable
         stage.speed.value = {"x": speed, "y": speed}
         radius = 100e-6 # m
@@ -301,7 +312,7 @@ class TestActuator(unittest.TestCase):
             cur_pos = next_pos
 
     def test_future_callback(self):
-        stage = pigcs.Bus("test", "stage", PORT, CONFIG_BUS_BASIC)
+        stage = CLASS(**KWARGS)
         speed = max(stage.speed.range[0], 1e-3) # try as slow as reasonable
         stage.speed.value = {"x": speed}
         move_forth = {'x': speed / 10}  # => 0.1s per move
@@ -351,34 +362,16 @@ class TestActuator(unittest.TestCase):
         self.called += 1
 
 if __name__ == "__main__":
-    #import sys;sys.argv = ['', 'Test.testName']
     unittest.main()
 
-#    addresses = pigcs.Controller.scan(PORT)
-#    print addresses
-#
-#    stage = pigcs.Bus("test", "stage", PORT, CONFIG_BUS_BASIC)
-#    print stage.hwVersion
-#    print stage.selfTest()
-
-from odemis.driver import pigcs
-import logging
-logging.getLogger().setLevel(logging.DEBUG)
-CONFIG_CTRL_BASIC = (1, {1: False})
-PORT = "/dev/ttyPIGCS"
-ser = pigcs.Bus.openSerialPort(PORT)
+#from odemis.driver import pigcs
+#import logging
+#logging.getLogger().setLevel(logging.DEBUG)
+#CONFIG_CTRL_BASIC = (1, {1: False})
+#PORT = "/dev/ttyPIGCS"
+#ser = pigcs.Bus.openSerialPort(PORT)
 #ctrl = pigcs.Controller(ser, *CONFIG_CTRL_BASIC)
 #ctrl.GetAvailableCommands()
 #ctrl.OLMovePID(1, 10000, 10); ctrl.isMoving()
 #ctrl.moveRel(1, 10e-6); ctrl.isMoving()
 
-from odemis.driver import pigcs
-import logging
-logging.getLogger().setLevel(logging.DEBUG)
-CONFIG_CTRL_BASIC = (1, {1: False})
-PORT = "/dev/ttyPIGCS"
-ser = pigcs.FakeBus.openSerialPort(PORT)
-ctrl = pigcs.Controller(ser, *CONFIG_CTRL_BASIC)
-ctrl.GetAvailableCommands()
-ctrl.OLMovePID(1, 10000, 10); ctrl.isMoving()
-ctrl.moveRel(1, 10e-6); ctrl.isMoving()

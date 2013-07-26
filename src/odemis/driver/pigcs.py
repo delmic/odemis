@@ -1193,7 +1193,8 @@ class Bus(model.Actuator):
     Represent a chain of PIGCS controllers over a serial port
     """
     def __init__(self, name, role, port, axes, baudrate=38400,
-                 dist_to_steps=None, min_dist=None, vpms=None, **kwargs):
+                 dist_to_steps=None, min_dist=None, vpms=None,
+                 _addresses=None, **kwargs):
         """
         port (string): name of the serial port to connect to the controllers
         axes (dict string -> 3-tuple(1<=int<=16, 1<=int, boolean): the configuration
@@ -1211,7 +1212,7 @@ class Bus(model.Actuator):
         # this set ._axes and ._ranges
         model.Actuator.__init__(self, name, role, axes=axes.keys(), **kwargs)
 
-        ser = self.openSerialPort(port, baudrate)
+        ser = self.openSerialPort(port, baudrate, _addresses)
 
         dist_to_steps = dist_to_steps or {}
         min_dist = min_dist or {}
@@ -1434,7 +1435,7 @@ class Bus(model.Actuator):
                 # check all possible baud rates, in the most likely order
                 for br in [38400, 9600, 19200, 115200]:
                     logging.debug("Trying port %s at baud rate %d", p, br)
-                    ser = _cls.openSerialPort(port, br)
+                    ser = _cls.openSerialPort(p, br)
                     controllers = Controller.scan(ser)
                     if controllers:
                         axis_num = 0
@@ -1455,11 +1456,12 @@ class Bus(model.Actuator):
         return found
 
     @staticmethod
-    def openSerialPort(port, baudrate=38400):
+    def openSerialPort(port, baudrate=38400, _addresses=None):
         """
         Opens the given serial port the right way for the PI controllers.
         port (string): the name of the serial port (e.g., /dev/ttyUSB0)
         baudrate (int): baudrate to use, default is the recommended 38400
+        _addresses (unused): only for testing (cf FakeBus)
         return (serial): the opened serial port
         """
         ser = serial.Serial(
@@ -1785,68 +1787,7 @@ class ActionFuture(object):
         return max_duration
 
 
-
-
-class DaisyChainSimulator(object):
-    """
-    Simulated serial port that can simulate daisy chain on the controllers
-    Same interface as the serial port + list of (fake) serial ports to connect 
-    """
-    def __init__(self, timeout=0, *args, **kwargs):
-        """
-        subports (list of open ports): the ports to receive the data
-        """
-        self.timeout = timeout
-        self._subports = kwargs["subports"]
-        self._output_buf = "" # TODO: probably cleaner to user lock to access it
-
-        # TODO: for each port, put a thread listening on the read and push to output
-        self._is_terminated = False
-        for p in self._subports:
-            t = threading.Thread(target=self._thread_read_serial, args=(p,))
-            t.start()
-
-    def write(self, data):
-        # just duplicate
-        for p in self._subports:
-            p.write(data)
-
-    def read(self, size=1):
-        # simulate timeout
-        end_time = time.time() + self.timeout
-
-        ret = self._output_buf[:size]
-        self._output_buf = self._output_buf[len(ret):]
-
-        while len(ret) < size:
-            time.sleep(0.01)
-            left = size - len(ret)
-            ret += self._output_buf[:left]
-            self._output_buf = self._output_buf[len(ret):]
-            if self.timeout and time.time() > end_time:
-                break
-
-        return ret
-
-    def _thread_read_serial(self, ser):
-        """
-        Push the output of the given serial port into our output
-        """
-        try:
-            while not self._is_terminated:
-                c = ser.read(1)
-                if len(c) == 0:
-                    time.sleep(0.001)
-                else:
-                    self._output_buf += c
-        except Exception:
-            logging.exception("Fake daisy chain thread received an exception")
-
-    def close(self):
-        self._is_terminated = True
-        # using read or write will fail after that
-        del self._output_buf
-        del self._subports
+# All the classes below are for the simulation of the hardware
 
 class E861Simulator(object):
     """
@@ -1907,12 +1848,20 @@ class E861Simulator(object):
             self._input_buf = self._input_buf[m.end(0):] # all the left over
 
     def read(self, size=1):
+        # simulate timeout
+        end_time = time.time() + self.timeout
+
         ret = self._output_buf[:size]
         self._output_buf = self._output_buf[len(ret):]
 
-        if len(ret) < size:
-            # simulate timeout
-            time.sleep(self.timeout)
+        while len(ret) < size:
+            time.sleep(0.01)
+            left = size - len(ret)
+            ret += self._output_buf[:left]
+            self._output_buf = self._output_buf[len(ret):]
+            if self.timeout and time.time() > end_time:
+                break
+
         return ret
 
     def close(self):
@@ -1932,8 +1881,8 @@ class E861Simulator(object):
         process the command, and put the result in the output buffer
         com (str): command
         """
-        logging.debug("Fake controller %d processing command '%s'",
-                       self._address, com.encode('string_escape'))
+#        logging.debug("Fake controller %d processing command '%s'",
+#                       self._address, com.encode('string_escape'))
         out = None # None means error decoding command
 
         # command can start with a prefix like "5 0 " or "5 "
@@ -1941,15 +1890,15 @@ class E861Simulator(object):
         assert m # anything left over should be in com
         if m.group("addr"):
             addr = int(m.group("addr"))
-            if addr != self._address:
-                return # skip message
-
             prefix = "0 %d " % addr
         else:
-            if 1 != self._address: # default is address == 1
-                return # skip message
-
+            addr = 1 # default is address == 1
             prefix = ""
+
+        if addr != self._address: # message is for us?
+            logging.debug("Controller %d skipping message for %d",
+                          self._address, addr)
+            return
 
         com = m.group("com") # also removes the \n at the end if it's there
         # split into arguments separated by spaces (not including empty strings)
@@ -2020,7 +1969,8 @@ class E861Simulator(object):
                 axis, steps = int(args[1]), float(args[2])
                 speed = self._parameters[self._com_to_param["OVL"]]
                 if axis == 1:
-                    duration = steps / speed
+                    duration = abs(steps) / speed
+                    logging.debug("Simulating a move of %f s", duration)
                     self._end_move = time.time() + duration # current move stopped
                 else:
                     self._errno = 15
@@ -2074,37 +2024,125 @@ class E861Simulator(object):
 
         # add the response header
         if out is None:
-            logging.debug("Fake controller %d doesn't respond", self._address)
+            #logging.debug("Fake controller %d doesn't respond", self._address)
+            pass
         else:
             out = "%s%s\n" % (prefix, out)
             logging.debug("Fake controller %d responding '%s'", self._address,
                           out.encode('string_escape'))
             self._output_buf += out
 
+class DaisyChainSimulator(object):
+    """
+    Simulated serial port that can simulate daisy chain on the controllers
+    Same interface as the serial port + list of (fake) serial ports to connect 
+    """
+    def __init__(self, timeout=0, *args, **kwargs):
+        """
+        subports (list of open ports): the ports to receive the data
+        """
+        self.timeout = timeout
+        self._subports = kwargs["subports"]
+        self._output_buf = "" # TODO: probably cleaner to user lock to access it
+
+        # TODO: for each port, put a thread listening on the read and push to output
+        self._is_terminated = False
+        for p in self._subports:
+            t = threading.Thread(target=self._thread_read_serial, args=(p,))
+            t.daemon = True
+            t.start()
+
+    def write(self, data):
+        # just duplicate
+        for p in self._subports:
+            p.write(data)
+
+    def read(self, size=1):
+        # simulate timeout
+        end_time = time.time() + self.timeout
+
+        ret = self._output_buf[:size]
+        self._output_buf = self._output_buf[len(ret):]
+
+        while len(ret) < size:
+            time.sleep(0.01)
+            left = size - len(ret)
+            ret += self._output_buf[:left]
+            self._output_buf = self._output_buf[len(ret):]
+            if self.timeout and time.time() > end_time:
+                break
+
+        return ret
+
+    def _thread_read_serial(self, ser):
+        """
+        Push the output of the given serial port into our output
+        """
+        try:
+            while not self._is_terminated:
+                c = ser.read(1)
+                if len(c) == 0:
+                    time.sleep(0.01)
+                else:
+                    self._output_buf += c
+        except Exception:
+            logging.exception("Fake daisy chain thread received an exception")
+
+    def close(self):
+        self._is_terminated = True
+        # using read or write will fail after that
+        del self._output_buf
+        del self._subports
+
 class FakeBus(Bus):
     """
     Same as the normal Bus, but connects to simulated controllers
     """
+    def __init__(self, name, role, port, axes, baudrate=38400, 
+        dist_to_steps=None, min_dist=None, vpms=None, **kwargs):
+        # compute the addresses from the axes declared
+        addresses = [d[0] for d in axes.values()]
+        Bus.__init__(self, name, role, port, axes, baudrate=baudrate,
+                     dist_to_steps=dist_to_steps, min_dist=min_dist, vpms=vpms,
+                     _addresses=addresses, **kwargs)
+    
     @classmethod
     def scan(cls, port=None):
         # force only one port
         return Bus.scan(port="/fake/ttyPIGCS", _cls=cls)
 
     @staticmethod
-    def openSerialPort(port, baudrate=38400):
+    def openSerialPort(port, baudrate=38400, _addresses=None):
         """
         Opens a fake serial port
         port (string): the name of the serial port (e.g., /dev/ttyUSB0)
+        _addresses (list of int or None): list of each address that should have 
+         a simulated controller created. Default to [1, 2] (used for scan).
         return (serial): the opened serial port
         """
-        # TODO: daisychain + address
-        ser = E861Simulator(
+        _addresses = _addresses or [1, 2]
+        simulators = []
+        for addr in _addresses:
+            sim = E861Simulator(
+                    port=port,
+                    baudrate=baudrate,
+                    bytesize=serial.EIGHTBITS,
+                    parity=serial.PARITY_NONE,
+                    stopbits=serial.STOPBITS_ONE,
+                    timeout=0.5, #s
+                    address=addr,
+                   )
+            simulators.append(sim)
+
+        # link all of them in daisy chain
+        ser = DaisyChainSimulator(
                 port=port,
                 baudrate=baudrate,
                 bytesize=serial.EIGHTBITS,
                 parity=serial.PARITY_NONE,
                 stopbits=serial.STOPBITS_ONE,
-                timeout=0.5 #s
-            )
+                timeout=0.5, #s
+                subports=simulators,
+              )
 
         return ser
