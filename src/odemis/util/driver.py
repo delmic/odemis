@@ -33,7 +33,8 @@ def getSerialDriver(name):
     """
     # In linux, can be found as link of /sys/class/tty/tty*/device/driver
     if sys.platform.startswith('linux'):
-        path = "/sys/class/tty/" + os.path.basename(name) + "/device/driver"
+        path = ("/sys/class/tty/" + os.path.basename(os.path.realpath(name))
+                + "/device/driver")
         try:
             return os.path.basename(os.readlink(path))
         except OSError:
@@ -120,7 +121,7 @@ def _speedUpPyroVAConnect(comp):
     # Force the creation of the connection
     # If the connection already exists it's very fast, otherwise, we wait
     # for the connection to be created in a separate thread
-    
+
     for va in model.getVAs(comp).values():
         t = threading.Thread(target=va._pyroBind)
         t.start()
@@ -133,18 +134,18 @@ def speedUpPyroConnect(comp):
     """
     # each connection is pretty fast (~10ms) but when listing all the VAs of
     # all the components, it can easily add up to 1s if done sequentially.
-    
+
     def bind_obj(obj):
 #        logging.debug("binding comp %s", obj.name)
         obj._pyroBind()
         speedUpPyroConnect(obj)
-    
+
     for child in getattr(comp, "children", []):
         t = threading.Thread(target=bind_obj, args=(child,))
         t.start()
 
     _speedUpPyroVAConnect(comp)
-    
+
     # cannot check for Microscope because it's a proxy
     if isinstance(comp.detectors, collections.Set):
         for child in (comp.detectors | comp.emitters | comp.actuators):

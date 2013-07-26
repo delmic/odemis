@@ -22,6 +22,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from concurrent import futures
 from odemis import model
 from odemis.model import isasync
+from odemis.util import driver
 import collections
 import glob
 import logging
@@ -133,7 +134,7 @@ class PIRedStone(object):
         # allow to not initialise the controller (mostly for .scan())
         if address is None:
             return
-        
+
         # Small check to verify it's responding
         self.select()
         try:
@@ -144,21 +145,21 @@ class PIRedStone(object):
             raise IOError("No answer from PI controller %d" % address)
 
         self._try_recover = True
-        
+
         self._position = [0, 0] # m (float, float: position)
-        
+
         # TODO use values passed in parameter
         # found by second degree regression with measurement of 50, 100, 150, 200, 250 steps
-        # actual distance can vary by 300% depending on the motor! 
+        # actual distance can vary by 300% depending on the motor!
         self.move_calibration = (8.6E-11, 5.7E-9, 6.2E-7)
         self.min_stepsize = 40 # µs, under this, no move at all
-        
+
         #print self.convertMToDevice(10e-6)
 
-        self.speed = [0.1, 0.1] # m/s for each axis 
+        self.speed = [0.1, 0.1] # m/s for each axis
         self.speed_max = 0.5 # m/s, from the documentation (= no waittime)
-        
-        
+
+
     def _sendSetCommand(self, com):
         """
         Send a command which does not expect any report back
@@ -166,11 +167,11 @@ class PIRedStone(object):
         """
         for sc in com.split(","):
             assert(len(sc) < 10)
-            
+
         logging.debug("Sending: %s", com.encode('string_escape'))
         self.serial.write(com)
         # TODO allow to check for error via TellStatus afterwards
-    
+
     def _sendGetCommand(self, com, prefix="", suffix="\r\n\x03"):
         """
         Send a command and return its report
@@ -185,30 +186,30 @@ class PIRedStone(object):
         assert(len(prefix) <= 2)
         logging.debug("Sending: %s", com.encode('string_escape'))
         self.serial.write(com)
-        
+
         char = self.serial.read() # empty if timeout
         report = char
         while char and not report.endswith(suffix):
             char = self.serial.read()
             report += char
-            
+
         if not char:
             if not self._try_recover:
                 raise IOError("PI controller %d timeout." % self.address)
-                
+
             success = self.recoverTimeout()
             if success:
                 logging.warning("PI controller %d timeout, but recovered.", self.address)
                 # TODO try to send again the command
             else:
                 raise IOError("PI controller %d timeout, not recovered." % self.address)
-            
+
         logging.debug("Receive: %s", report.encode('string_escape'))
         if not report.startswith(prefix):
             raise IOError("Report prefix unexpected after '%s': '%s'." % (com, report))
 
         return report.lstrip(prefix).rstrip(suffix)
-    
+
     def recoverTimeout(self):
         """
         Try to recover from error in the controller state
@@ -216,7 +217,7 @@ class PIRedStone(object):
         """
         # It appears to make the controller comfortable...
         self._sendSetCommand("SR?\r%")
-        
+
         char = self.serial.read()
         while char:
             if char == "\x03":
@@ -224,7 +225,7 @@ class PIRedStone(object):
             char = self.serial.read()
         # we still timed out
         return False
-    
+
     # Low-level functions
     def addressSelection(self, address):
         """
@@ -233,7 +234,7 @@ class PIRedStone(object):
         """
         assert((0 <= address) and (address <= 15))
         self._sendSetCommand("\x01%X" % address)
-        
+
     def selectController(self, address):
         """
         Tell the currently selected controller that the given controller is selected
@@ -241,14 +242,14 @@ class PIRedStone(object):
         """
         assert((0 <= address) and (address <= 15))
         self._sendSetCommand("SC%d\r" % address)
-        
+
     def tellStatus(self):
         """
         Call the Tell Status command and return the answer.
         return (2-tuple (status: int, error: int): 
             * status is a flag based value (cf STATUS_*)
             * error is a number corresponding to the last error (cf ERROR_*)
-        """ 
+        """
         #bytes_str = self._sendGetCommand("TS\r", "S:")
         #The documentation claims the report prefix is "%", but it's just "S:"
         bytes_str = self._sendGetCommand("%", "S:") # short version
@@ -273,7 +274,7 @@ class PIRedStone(object):
     def versionReport(self):
         version = self._sendGetCommand("VE\r")
         # expects something like:
-        #(C)2004 PI GmbH Karlsruhe, Ver. 2.20, 7 Oct, 2004 CR LF ETX 
+        #(C)2004 PI GmbH Karlsruhe, Ver. 2.20, 7 Oct, 2004 CR LF ETX
         return version
 
     def help(self):
@@ -282,7 +283,7 @@ class PIRedStone(object):
         """
         # apparently returns a string starting with \0\0... so get rid of it
         return self._sendGetCommand("HE\r", "\x00\x00", "\n")
-    
+
     def abortMotion(self):
         """
         Stops the running output pulse sequences started by GP or GN.
@@ -313,7 +314,7 @@ class PIRedStone(object):
         assert((0 <= axis) and (axis <= 1))
         assert((0 <= direction) and (direction <= 1))
         self._sendSetCommand("%dCD%d\r" % (axis + 1, direction))
-        
+
     def stringGoPositive(self, axis):
         """
         Used to execute a move in the positive direction as defined by
@@ -322,7 +323,7 @@ class PIRedStone(object):
         """
         assert((0 <= axis) and (axis <= 1))
         return "%dGP" % (axis + 1)
-                
+
     def goPositive(self, axis):
         """
         Used to execute a move in the positive direction as defined by
@@ -394,7 +395,7 @@ class PIRedStone(object):
         """
         assert((0 <= axis) and (axis <= 1))
         assert((0 <= duration) and (duration <= 65535))
-        # doc says it's number of ms, but from experiments, it's number of ms - 1 
+        # doc says it's number of ms, but from experiments, it's number of ms - 1
         # waittime == 1 => speed >> waittime == 2
         # 0 is 65536
         return"%dSW%d" % (axis + 1, duration + 1)
@@ -419,7 +420,7 @@ class PIRedStone(object):
             self.addressSelection(self.address)
         self.serial._pi_select = self.address
 
-    
+
     def moveRelSmall(self, axis, duration):
         """
         Move on a given axis for a given pulse length
@@ -432,16 +433,16 @@ class PIRedStone(object):
         assert((-255 <= duration) and (duration <= 255))
         if duration == 0:
             return
-        
+
         self.select()
         if duration > 0:
             self.setDirection(axis, 0)
         else:
             self.setDirection(axis, 1)
-        
+
         self.pulseOutput(axis, round(abs(duration)))
-    
-    
+
+
     def moveRel(self, axis, distance):
         """
         Move on a given axis for a given pulse length, will repeat the steps if
@@ -456,7 +457,7 @@ class PIRedStone(object):
         steps, stepsize = self.convertMToDevice(distance)
         if abs(stepsize) < 1 or steps < 1: # ==0 ?
             return 0.0
-        
+
         self.select()
         sign = cmp(stepsize, 0)
 
@@ -464,7 +465,7 @@ class PIRedStone(object):
         # eg: 1SW1,1SS255,1SR3,1GN,1WS2,1SS35,1SR1,1GN\r
         # A problem is that while it's waiting (WS) any new command (ex, TS)
         # will stop the wait and the rest of the compound.
-        
+
         if steps == 1:
             # waittime is not used
             com = self.stringSetWaitTime(axis, 1)
@@ -477,14 +478,14 @@ class PIRedStone(object):
             com += "," + self.stringGoPositive(axis)
         else:
             com += "," + self.stringGoNegative(axis)
-    
+
 #        print distance, com
         self._sendSetCommand(com + "\r")
-        
+
         act_dist = self.convertDeviceToM((steps, stepsize))
         self._position[axis] += act_dist
         return act_dist
-    
+
     def isMoving(self, axis=None):
         """
         Indicate whether the motors are moving. 
@@ -500,9 +501,9 @@ class PIRedStone(object):
         else:
             mask = (STATUS_MOVING_X | STATUS_PULSE_X | STATUS_DELAY_X |
                     STATUS_MOVING_Y | STATUS_PULSE_Y | STATUS_DELAY_Y)
-        
+
         return bool(st & mask)
-    
+
     def stopMotion(self):
         """
         Stop the motion of all the given axis.
@@ -510,7 +511,7 @@ class PIRedStone(object):
         """
         self.select()
         self.abortMotion()
-          
+
     def waitEndMotion(self, axis=None):
         """
         Wait until the motion of all the given axis is finished.
@@ -524,7 +525,7 @@ class PIRedStone(object):
             if time.time() >= end:
                 raise IOError("Timeout while waiting for end of motion")
             time.sleep(0.005)
-    
+
     def selfTest(self):
         """
         check as much as possible that it works without actually moving the motor
@@ -543,12 +544,12 @@ class PIRedStone(object):
         if not (st & STATUS_BOARD_ADDRESSED):
             logging.error("Failed to select controller " + str(self.address) + ", status is " + str(st))
             return False
-        
+
         logging.info("Selected controller %d.", self.address)
-        
+
         version = self.versionReport()
         logging.info("Version: '%s'", version)
-        
+
         commands = self.help()
         logging.info("Accepted commands: '%s'", commands)
 
@@ -568,9 +569,9 @@ class PIRedStone(object):
         if err:
             logging.error("SetRepeatCounter returned error %x", err)
             return False
-        
+
         return True
-        
+
     def convertSmallMToDevice(self, m):
         """
         converts meters to the unit for this device (pulse duration).
@@ -578,19 +579,19 @@ class PIRedStone(object):
         return (float): device units (us), 0 if it's so small that it cannot be done
         """
         # Actual distance approximately dependent on the pulse duration (x):
-        # dis = a*x² + b*x + c 
+        # dis = a*x² + b*x + c
         # so x: impossible if dis < c => return 0
-        #       normal solution (with x >0) : x = (-b + sqrt(b**2 - 4*a*(c-y)))/(2 * a) 
+        #       normal solution (with x >0) : x = (-b + sqrt(b**2 - 4*a*(c-y)))/(2 * a)
         sign = cmp(m, 0)
         distance = abs(m)
         a, b, c = self.move_calibration
-        if (distance < (c*1.01) or # 1% margin
-            distance < self.convertDeviceToM((1, self.min_stepsize))): 
+        if (distance < (c * 1.01) or # 1% margin
+            distance < self.convertDeviceToM((1, self.min_stepsize))):
             return 0
-        duration = round((-b + math.sqrt(b**2 - 4*a*(c-distance)))/(2 * a))
-        
+        duration = round((-b + math.sqrt(b ** 2 - 4 * a * (c - distance))) / (2 * a))
+
         return sign * duration
-                
+
     def convertMToDevice(self, m):
         """
         converts meters to the unit for this device (pulse duration).
@@ -602,18 +603,18 @@ class PIRedStone(object):
         """
         # if less than 255 for pulse => one step => use convertSmallMToDevice
         a, b, c = self.move_calibration
-        distance_step = a*255**2 + b*255 + c
+        distance_step = a * 255 ** 2 + b * 255 + c
         sign = cmp(m, 0)
         distance = abs(m)
         if distance < distance_step:
             return (1, self.convertSmallMToDevice(m))
-        
+
         # linear => several times steps of at much 255 (can be smaller to accommodate)
         steps = math.ceil(distance / distance_step)
         stepsize = self.convertSmallMToDevice(distance / steps)
         assert(stepsize > 0) # could happen if c is very bad (but normally it's never so bad)
         return (steps, sign * stepsize)
-           
+
     def convertDeviceToM(self, units):
         """
         Converts from device units (step, stepsize) to meters
@@ -625,8 +626,8 @@ class PIRedStone(object):
         if abs(stepsize) < self.min_stepsize:
             return 0
         a, b, c = self.move_calibration
-        return sign * steps * (a*abs(stepsize)**2 + b*abs(stepsize) + c)
-               
+        return sign * steps * (a * abs(stepsize) ** 2 + b * abs(stepsize) + c)
+
     def getPosition(self, axis):
         """
         axis (int 0 or 1): axis to pic  
@@ -635,7 +636,7 @@ class PIRedStone(object):
         """
         assert((0 <= axis) and (axis <= 1))
         return self._position[axis]
-            
+
     def setSpeed(self, axis, speed):
         """
         Changes the move speed of the motor (for the next move). It's very 
@@ -645,12 +646,12 @@ class PIRedStone(object):
         """
         assert((0 < speed) and (speed < self.speed_max))
         assert((0 <= axis) and (axis <= 1))
-        
+
         self.speed[axis] = speed
-    
+
     def getSpeed(self, axis):
         return self.speed[axis]
-    
+
     def speedToWaittime(self, speed, move):
         """
         Converts the speed to a waittime for a given move.
@@ -669,12 +670,12 @@ class PIRedStone(object):
             return 1
         actual_distance = abs(self.convertDeviceToM(move))
         assert (actual_distance > 0)
-        
-        waittime = ((1/speed - 1/self.speed_max) * actual_distance) / (steps - 1)
+
+        waittime = ((1 / speed - 1 / self.speed_max) * actual_distance) / (steps - 1)
         waittime_ms = round(waittime * 1e3)
-        # warning: waittime == 0 => faster but unabordable during move 
+        # warning: waittime == 0 => faster but unabordable during move
         return min(max(1, waittime_ms), 65535)
-                
+
     @staticmethod
     def scan(port, max_add=15):
         """
@@ -688,7 +689,7 @@ class PIRedStone(object):
         # to all the range and then listen.
         ser = PIRedStone.openSerialPort(port)
         ctrl = PIRedStone(ser)
-        
+
         logging.info("Serial network scanning for PI Redstones in progress...")
         ctrl._try_recover = False # timeouts are expected!
         present = set([])
@@ -707,10 +708,10 @@ class PIRedStone(object):
                     logging.warning("asked for controller %d and was answered by controller %d.", i, add)
             except IOError:
                 pass
-        
+
         ctrl.address = None
         return present
-        
+
     @staticmethod
     def openSerialPort(port):
         """
@@ -719,14 +720,14 @@ class PIRedStone(object):
         return (serial): the opened serial port
         """
         ser = serial.Serial(
-            port = port,
-            baudrate = 9600, # XXX: might be 19200 if switches are changed
-            bytesize = serial.EIGHTBITS,
-            parity = serial.PARITY_NONE,
-            stopbits = serial.STOPBITS_ONE,
-            timeout = 0.3 #s
+            port=port,
+            baudrate=9600, # XXX: might be 19200 if switches are changed
+            bytesize=serial.EIGHTBITS,
+            parity=serial.PARITY_NONE,
+            stopbits=serial.STOPBITS_ONE,
+            timeout=0.3 #s
         )
-        
+
         # Currently selected one is unknown
         ser._pi_select = -1
         return ser
@@ -736,13 +737,13 @@ class PIRedStone(object):
 class FakeSerial(object):
     def __init__(self, name):
         self.file = open(name, "w+")
-    
+
     def read(self):
         return self.file.read()
-    
+
     def write(self, arg):
         return self.file.write(arg)
-     
+
 class FakePIRedStone(PIRedStone):
     """
     Fake version of the PIRedstone which pretend do be a motor, while just
@@ -751,40 +752,40 @@ class FakePIRedStone(PIRedStone):
     def __init__(self, *args):
         PIRedStone.__init__(self, *args)
         self.last_move_end = [0, 0] #s since epoch
-    
+
     def _sendGetCommand(self, com, prefix="", suffix="\r\n\x03"):
         # Should normally never be called
         assert(len(com) <= 10)
         assert(len(prefix) <= 2)
         logging.debug("Sending: %s", com.encode('string_escape'))
         self.serial.write(com)
-        
+
         return ""
-    
+
     def tellStatus(self):
         status = STATUS_BOARD_ADDRESSED
         err = 0
         return (status, err)
-    
+
     def tellBoardAddress(self):
         return self.address
-    
+
     def versionReport(self):
         return "Fake Redstone Ver. 1.0"
 
     def help(self):
         return "HE"
-    
+
     def selfTest(self):
         return True
-    
+
     def moveRel(self, axis, distance):
         ret = PIRedStone.moveRel(self, axis, distance)
         # fake the time it takes to move
         duration = abs(distance) / self.speed[axis]
         self.last_move_end[axis] = time.time() + duration
         return ret
-    
+
     def isMoving(self, axis=None):
         now = time.time()
         if axis:
@@ -796,19 +797,19 @@ class FakePIRedStone(PIRedStone):
 #                print "Still %g s to wait" % (max(self.last_move_end) - now)
                 return True
         return False
-        
-    
+
+
     @staticmethod
     def scan(port, max_add=15):
         present = set([1])
         return present
-    
+
     @staticmethod
     def openSerialPort(port):
         ser = FakeSerial("piredstone-commands.txt")
         ser._pi_select = -1
         return ser
-        
+
 class StageRedStone(model.Actuator):
     """
     An actuator made entirely of redstone controllers connected on the same serial port
@@ -821,15 +822,15 @@ class StageRedStone(model.Actuator):
          for each axis name the controller address and channel
          Note that even if it's made of several controllers, each controller is 
          _not_ seen as a child from the odemis model point of view.
-        """ 
+        """
         model.Actuator.__init__(self, name, role, axes=axes.keys(), **kwargs)
-        
+
         ser = PIRedStone.openSerialPort(port)
 #        ser = FakePIRedStone.openSerialPort(port) # use FakePIRedStone for testing
-        
+
         # Not to be mistaken with axes which is a simple public view
         self._axis_to_child = {} # axis name => (PIRedStone, channel)
-        # TODO also a rangesRel : min and max of a step 
+        # TODO also a rangesRel : min and max of a step
         position = {}
         speed = {}
         controllers = {} # address => PIRedStone
@@ -839,35 +840,36 @@ class StageRedStone(model.Actuator):
 #                controllers[add] = FakePIRedStone(ser, add) # use FakePIRedStone for testing
             controller = controllers[add]
             self._axis_to_child[axis] = (controller, channel)
-            
+
             position[axis] = controller.getPosition(channel)
             # TODO request also the ranges from the arguments?
             # For now we put very large one
             self._ranges[axis] = [-1, 1] # m
             # Just to make sure it doesn't go too fast
             speed[axis] = 0.1 # m/s
-        
+
         # RO, as to modify it the client must use .moveRel() or .moveAbs()
         self.position = model.VigilantAttribute(position, unit="m", readonly=True)
-        
+
         # min speed = don't be crazy slow. max speed from hardware spec
         self.speed = model.MultiSpeedVA(speed, range=[10e-6, 0.5], unit="m/s",
                                         setter=self._setSpeed)
         self._setSpeed(speed)
-        
+
         # set HW and SW version
-        self._swVersion = "%s (serial driver: %s)" % (odemis.__version__, self.getSerialDriver(port))
+        self._swVersion = "%s (serial driver: %s)" % (odemis.__version__,
+                                                      driver.getSerialDriver(port))
         hwversions = []
         for axis, (ctrl, channel) in self._axis_to_child.items():
             hwversions.append("'%s': %s" % (axis, ctrl.versionReport()))
         self._hwVersion = ", ".join(hwversions)
-        
+
         # to acquire before sending anything on the serial port
         self.ser_access = threading.Lock()
-        
+
         self._action_mgr = ActionManager(self)
         self._action_mgr.start()
-    
+
     def _getPosition(self):
         """
         return (dict string -> float): axis name to (absolute) position
@@ -878,10 +880,10 @@ class StageRedStone(model.Actuator):
             # send stop to all controllers (including the ones not in action)
             for axis, (controller, channel) in self._axis_to_child.items():
                 position[axis] = controller.getPosition(channel)
-        
+
         return self._applyInversionAbs(position)
 
-    # TODO needs to be triggered by end of action, or directly controller? 
+    # TODO needs to be triggered by end of action, or directly controller?
     # maybe whenever a controller updates it's position?
     # How to avoid updating each axis one-by-one?
     # Maybe we should just do it regularly as long as there are actions in the queue
@@ -891,25 +893,10 @@ class StageRedStone(model.Actuator):
         Note: it should not be called while holding the lock to the serial port
         """
         pos = self._getPosition() # TODO: improve efficiency
-        
+
         # it's read-only, so we change it via _value
         self.position._value = pos
         self.position.notify(self.position.value)
-
-    @staticmethod
-    def getSerialDriver(name):
-        """
-        return (string): the name of the serial driver used for the given port
-        """
-        # In linux, can be found as link of /sys/class/tty/tty*/device/driver
-        if sys.platform.startswith('linux'):
-            path = "/sys/class/tty/" + os.path.basename(name) + "/device/driver"
-            try:
-                return os.path.basename(os.readlink(path))
-            except OSError:
-                return "Unknown"
-        else:
-            return "Unknown"
 
     def _setSpeed(self, value):
         """
@@ -929,19 +916,19 @@ class StageRedStone(model.Actuator):
         returns (Future): future that control the asynchronous move
         """
         shift = self._applyInversionRel(shift)
-        # converts the request into one action (= a dict controller -> channels + distance) 
+        # converts the request into one action (= a dict controller -> channels + distance)
         action_axes = {}
         for axis, distance in shift.items():
             if axis not in self.axes:
                 raise Exception("Axis unknown: " + str(axis))
             if abs(distance) > self.ranges[axis][1]:
-                raise Exception("Trying to move axis %s by %f m> %f m." % 
+                raise Exception("Trying to move axis %s by %f m> %f m." %
                                 (axis, distance, self.ranges[axis][1]))
             controller, channel = self._axis_to_child[axis]
             if not controller in action_axes:
                 action_axes[controller] = []
             action_axes[controller].append((channel, distance))
-        
+
         action = ActionFuture(MOVE_REL, action_axes, self.ser_access)
         self._action_mgr.append_action(action)
         return action
@@ -953,10 +940,10 @@ class StageRedStone(model.Actuator):
         all the axes of all controller managed).
         """
         if self._action_mgr:
-            self._action_mgr.cancel_all() 
+            self._action_mgr.cancel_all()
 
         # Stop every axes (even if there is no action going, or action on just
-        # some axes        
+        # some axes
         with self.ser_access:
             # send stop to all controllers (including the ones not in action)
             controllers = set()
@@ -964,22 +951,22 @@ class StageRedStone(model.Actuator):
                 if controller not in controllers:
                     controller.stopMotion()
                     controllers.add(controller)
-            
+
             # wait all controllers are done moving
             for controller in controllers:
                 controller.waitEndMotion()
-    
+
     def terminate(self):
         if not hasattr(self, "_action_mgr"):
-            # not even fully initialised 
+            # not even fully initialised
             return
-        
+
         self.stop()
-        
+
         if self._action_mgr:
             self._action_mgr.terminate()
             self._action_mgr = None
-        
+
     def selfTest(self):
         """
         No move should be going one while doing a self-test
@@ -990,9 +977,9 @@ class StageRedStone(model.Actuator):
             for controller in controllers:
                 logging.info("Testing controller %d", controller.address)
                 passed &= controller.selfTest()
-        
+
         return passed
-    
+
     @staticmethod
     def scan(port=None, max_add=15):
         """
@@ -1006,10 +993,10 @@ class StageRedStone(model.Actuator):
             ports = [port]
         else:
             if os.name == "nt":
-                ports = ["COM" + str(n) for n in range (0,8)]
+                ports = ["COM" + str(n) for n in range (0, 8)]
             else:
-                ports = glob.glob('/dev/ttyS?*') +  glob.glob('/dev/ttyUSB?*')
-        
+                ports = glob.glob('/dev/ttyS?*') + glob.glob('/dev/ttyUSB?*')
+
         axes_names = "xyzabcdefghijklmnopqrstuvw"
         found = []  # tuple of (name, args (dict with: port=>port, axes=>add, channel)
         for p in ports:
@@ -1018,7 +1005,7 @@ class StageRedStone(model.Actuator):
             except serial.SerialException:
                 # not possible to use this port? next one!
                 continue
-            
+
             if addresses:
                 axis_num = 0
                 arg = {}
@@ -1029,9 +1016,9 @@ class StageRedStone(model.Actuator):
                     axis_num += 1
                 found.append(("Actuator " + os.path.basename(p),
                              {"port": p, "axes": arg}))
-        
+
         return found
-    
+
 # TODO share with PIGCS?
 class ActionManager(threading.Thread):
     """
@@ -1048,7 +1035,7 @@ class ActionManager(threading.Thread):
         self.action_queue = collections.deque()
         self.current_action = None
         self._bus = bus
-    
+
     def run(self):
         while True:
             # Pick the next action
@@ -1056,7 +1043,7 @@ class ActionManager(threading.Thread):
                 while not self.action_queue:
                     self.action_queue_cv.wait()
                 self.current_action = self.action_queue.popleft()
-            
+
             # Special action "None" == stop
             if self.current_action is None:
                 return
@@ -1067,17 +1054,17 @@ class ActionManager(threading.Thread):
             except futures.CancelledError:
                 # cancelled in the mean time: skip the action
                 pass
-            
+
             # update position after the action is done
             self._bus._updatePosition()
-            
+
     def cancel_all(self):
         must_terminate = False
         with self.action_queue_cv:
             # cancel current action
             if self.current_action:
                 self.current_action.cancel()
-                
+
             # cancel every action in the queue
             while self.action_queue:
                 action = self.action_queue.popleft()
@@ -1085,10 +1072,10 @@ class ActionManager(threading.Thread):
                     must_terminate = True
                     continue
                 action.cancel()
-         
+
         if must_terminate:
             self.append_action(None)
-    
+
     def append_action(self, action):
         """
         appends an action in the doer's queue
@@ -1097,7 +1084,7 @@ class ActionManager(threading.Thread):
         with self.action_queue_cv:
             self.action_queue.append(action)
             self.action_queue_cv.notify()
-    
+
     def terminate(self):
         """
         Ask the action manager to terminate (once all the queued actions are done)
@@ -1130,18 +1117,18 @@ class ActionFuture(object):
         ser_access (Lock): lock to access the serial port
         """
         assert(action_type in self.possible_types)
-        
+
         self._type = action_type
         self._args = args
         self._ser_access = ser_access
         self._expected_end = None # when it expects to finish (only during RUNNING)
         self._timeout = None # really too late to be running normally
-        
+
         # acquire to modify the state, wait to wait for it to be done
         self._condition = threading.Condition()
         self._state = PENDING
         self._callbacks = []
-    
+
     def _invoke_callbacks(self):
         # do not call with _condition! And ensure it's called only once
         for callback in self._callbacks:
@@ -1159,13 +1146,13 @@ class ActionFuture(object):
             elif self._state == RUNNING:
                 self._stop_action()
                 # go through, like for state == PENDING
-            
+
             self._state = CANCELLED
             self._condition.notify_all()
 
         self._invoke_callbacks()
         return True
-            
+
     def cancelled(self):
         with self._condition:
             return self._state == CANCELLED
@@ -1184,7 +1171,7 @@ class ActionFuture(object):
                 raise futures.CancelledError()
             elif self._state == FINISHED:
                 return None
-            
+
             self._condition.wait(timeout)
 
             if self._state == CANCELLED:
@@ -1221,17 +1208,17 @@ class ActionFuture(object):
         with self._condition:
             if self._state == CANCELLED:
                 raise futures.CancelledError()
-            
+
             # Do the action
             if self._type == MOVE_REL:
                 duration = self._moveRel(self._args)
             else:
                 raise Exception("Unknown action %s" % self._type)
-        
+
             self._state = RUNNING
             duration = min(duration, 60) # => wait maximum 2 min
             self._expected_end = time.time() + duration
-            self._timeout = self._expected_end + duration + 1, # 2 *duration + 1s 
+            self._timeout = self._expected_end + duration + 1, # 2 *duration + 1s
 
     def _wait_action(self):
         """
@@ -1244,46 +1231,46 @@ class ActionFuture(object):
         for controller, moves in self._args.items():
             channels = [c for c, d in moves]
             controllers[controller] = channels
-            
+
         with self._condition:
             assert(self._expected_end is not None)
             # if it has been cancelled in the mean time
             if self._state != RUNNING:
                 return
-                        
+
             duration = self._expected_end - time.time()
-            duration = max(0, duration) 
+            duration = max(0, duration)
             logging.debug("Waiting %f s for the move to finish", duration)
             self._condition.wait(duration)
-            
+
             # it's over when either all axes are finished moving, it's too late,
             # or the action was cancelled
             while (self._state == RUNNING and time.time() <= self._timeout
                    and self._isMoving(controllers)):
                 self._condition.wait(0.01)
-            
+
             # if cancelled, we don't update state
             if self._state != RUNNING:
                 return
-            
+
             self._state = FINISHED
             self._condition.notify_all()
 
         self._invoke_callbacks()
-        
+
     def _stop_action(self):
         """
         Stop the action. Do not call directly, call cancel()
         Note: to be called with the lock (._condition) acquired.
         """
         # The only two possible actions are stopped the same way
-        
+
         # create a dict of controllers => channels
         controllers = {}
         for controller, moves in self._args.items():
             channels = [c for c, d in moves]
             controllers[controller] = channels
-            
+
         self._stopMotion(controllers)
 
     def _isMoving(self, axes):
@@ -1301,7 +1288,7 @@ class ActionFuture(object):
                     # There are maximum 2 channels on the RedStone
                     moving |= controller.isMoving() # all
             return moving
-    
+
     def _stopMotion(self, axes):
         """
         axes (dict: PIRedStone -> list (int)): controller to channel which must be stopped
@@ -1310,7 +1297,7 @@ class ActionFuture(object):
             for controller in axes:
                 # it can only stop all axes (that's the point anyway)
                 controller.stopMotion()
-    
+
     def _moveRel(self, axes):
         """
         axes (dict: PIRedStone -> list (tuple(int, double)): 
@@ -1322,9 +1309,9 @@ class ActionFuture(object):
             for controller, channels in axes.items():
                 for channel, distance in channels:
                     actual_dist = controller.moveRel(channel, distance)
-                    duration = abs(actual_dist) / controller.getSpeed(channel) 
+                    duration = abs(actual_dist) / controller.getSpeed(channel)
                     max_duration = max(max_duration, duration)
-                
+
         return max_duration
-                          
+
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:

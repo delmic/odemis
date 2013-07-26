@@ -23,6 +23,7 @@ from __future__ import division
 from concurrent import futures
 from odemis import model
 from odemis.model import isasync
+from odemis.util import driver
 import collections
 import glob
 import logging
@@ -101,6 +102,9 @@ MODEL_C867 = 867
 MODEL_E861 = 861
 MODEL_UNKNOWN = 0
 
+# TODO: Have a separate Controller class for each type of move mode. For now, we
+# are overriding the method dynamically depending on what the controller can do,
+# but that's too hard to read.
 class Controller(object):
     def __init__(self, ser, address=None, axes=None,
                  dist_to_steps=None, min_dist=None, vpms=None):
@@ -1274,10 +1278,14 @@ class Bus(model.Actuator):
         self._setSpeed(speed)
 
         # set HW and SW version
-        self._swVersion = "%s (serial driver: %s)" % (odemis.__version__, self.getSerialDriver(port))
+        self._swVersion = "%s (serial driver: %s)" % (odemis.__version__,
+                                                      driver.getSerialDriver(port))
         hwversions = []
         for axis, (ctrl, channel) in self._axis_to_cc.items():
-            hwversions.append("'%s': %s (GCS %s) for %s" % (axis, ctrl.GetIdentification(), ctrl.GetSyntaxVersion(), ctrl.GetStageName()))
+            hwversions.append("'%s': %s (GCS %s) for %s" %
+                              (axis, ctrl.GetIdentification(),
+                               ctrl.GetSyntaxVersion(), ctrl.GetStageName())
+                             )
         self._hwVersion = ", ".join(hwversions)
 
         # to acquire before sending anything on the serial port
@@ -1309,22 +1317,6 @@ class Bus(model.Actuator):
         # it's read-only, so we change it via _value
         self.position._value = pos
         self.position.notify(self.position.value)
-
-    @staticmethod
-    def getSerialDriver(name):
-        """
-        return (string): the name of the serial driver used for the given port
-        """
-        # In linux, can be found as link of /sys/class/tty/tty*/device/driver
-        if sys.platform.startswith('linux'):
-            path = ("/sys/class/tty/" + os.path.basename(os.path.realpath(name))
-                    + "/device/driver")
-            try:
-                return os.path.basename(os.readlink(path))
-            except OSError:
-                return "Unknown"
-        else:
-            return "Unknown"
 
     def _setSpeed(self, value):
         """
@@ -2098,14 +2090,14 @@ class FakeBus(Bus):
     """
     Same as the normal Bus, but connects to simulated controllers
     """
-    def __init__(self, name, role, port, axes, baudrate=38400, 
+    def __init__(self, name, role, port, axes, baudrate=38400,
         dist_to_steps=None, min_dist=None, vpms=None, **kwargs):
         # compute the addresses from the axes declared
         addresses = [d[0] for d in axes.values()]
         Bus.__init__(self, name, role, port, axes, baudrate=baudrate,
                      dist_to_steps=dist_to_steps, min_dist=min_dist, vpms=vpms,
                      _addresses=addresses, **kwargs)
-    
+
     @classmethod
     def scan(cls, port=None):
         # force only one port
