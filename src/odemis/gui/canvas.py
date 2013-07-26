@@ -492,7 +492,8 @@ class SecomCanvas(DblMicroscopeCanvas):
 
         return images
 
-
+    def add_world_overlay(self, wol):
+        self.WorldOverlays.append(wol)
 
     def _toggle_mode(self, enabled, overlay, mode):
         if self.current_mode == mode and not enabled:
@@ -545,9 +546,10 @@ class SecomCanvas(DblMicroscopeCanvas):
                     self.CaptureMouse()
             # Clicked inside selection
             elif self.current_mode == MODE_SECOM_ZOOM:
-                self.dragging = False
-                if self.HasCapture():
-                    self.ReleaseMouse()
+                self.dragging = True
+                self.active_overlay.start_drag(vpos)
+                if not self.HasCapture():
+                    self.CaptureMouse()
 
             self.ShouldUpdateDrawing()
 
@@ -558,7 +560,7 @@ class SecomCanvas(DblMicroscopeCanvas):
         if self.current_mode in SECOM_MODES:
             if self.dragging:
                 self.dragging = False
-                # Stop both selection and edit
+                # Stop selection, edit, or drag
                 self.active_overlay.stop_selection()
                 if self.HasCapture():
                     self.ReleaseMouse()
@@ -575,17 +577,22 @@ class SecomCanvas(DblMicroscopeCanvas):
         if self.current_mode in SECOM_MODES and self.active_overlay:
             vpos = event.GetPosition()
 
+            # TODO: Make a better, more natural between the different kinds
+            # of dragging (edge vs whole selection)
             if self.dragging:
                 if self.active_overlay.dragging:
                     self.active_overlay.update_selection(vpos)
                 else:
-                    self.active_overlay.update_edit(vpos)
+                    if self.active_overlay.edit_edge:
+                        self.active_overlay.update_edit(vpos)
+                    else:
+                        self.active_overlay.update_drag(vpos)
                 self.ShouldUpdateDrawing()
                 #self.Draw(wx.PaintDC(self))
             else:
                 hover = self.active_overlay.is_hovering(vpos)
                 if hover == gui.HOVER_SELECTION:
-                    self.SetCursor(wx.StockCursor(wx.CURSOR_MAGNIFIER))
+                    self.SetCursor(wx.StockCursor(wx.CURSOR_HAND))
                 elif hover in (gui.HOVER_LEFT_EDGE, gui.HOVER_RIGHT_EDGE):
                     self.SetCursor(wx.StockCursor(wx.CURSOR_SIZEWE))
                 elif hover in (gui.HOVER_TOP_EDGE, gui.HOVER_BOTTOM_EDGE):
@@ -671,6 +678,7 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
         if self.dragging:
             logging.error("Changing to mode (%s) while dragging not implemented", tool)
             # TODO: queue it until dragging is finished?
+            # Really? Why? I can't think of a scenario.
 
         if tool == instrmodel.TOOL_ROA:
             self.current_mode = MODE_SPARC_SELECT
@@ -1068,6 +1076,10 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
 
     def _position_focus_line(self, event):
         """ Position the focus line at the position of the given mouse event """
+
+        if not self._data:
+            return
+
         x, _ = event.GetPositionTuple()
         self.current_x_value = self._pos_x_to_val_x(x)
         self.current_y_value = self._val_x_to_val_y(self.current_x_value)
@@ -1096,8 +1108,11 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
         # TODO: Add type check to make sure the ovelay is a ViewOverlay.
         # (But importing Viewoverlay causes cyclic imports)
         self.focusline_overlay = fol
-        self.overlays.append(fol)
+        self.add_overlay(fol)
         self.Refresh()
+
+    def add_overlay(self, ol):
+        self.overlays.append(ol)
 
     def get_y_value(self):
         """ Return the current y value """

@@ -1165,7 +1165,7 @@ class PlotCanvas(wx.Panel):
         self.UpdateImage()
 
     def OnPaint(self, event=None):
-        raise NotImplementedError()
+        pass
 
     # Value calculation methods
 
