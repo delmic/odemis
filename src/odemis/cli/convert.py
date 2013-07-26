@@ -27,7 +27,7 @@ import logging
 import odemis
 import sys
 
-logging.getLogger().setLevel(logging.DEBUG)
+logging.getLogger().setLevel(logging.INFO) # use DEBUG for more messages
 
 def open_acq(fn):
     """

@@ -70,6 +70,7 @@ if sys.platform.startswith('linux'):
     # TODO: see if we could use entry_points instead
     scripts = ['install/linux/usr/local/bin/odemisd',
                'install/linux/usr/local/bin/odemis-cli',
+               'install/linux/usr/local/bin/odemis-convert',
                'install/linux/usr/local/bin/odemis-gui',
                'install/linux/usr/local/bin/odemis-start',
                'install/linux/usr/local/bin/odemis-stop'
