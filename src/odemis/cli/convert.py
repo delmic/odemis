@@ -21,11 +21,10 @@ You should have received a copy of the GNU General Public License along with Ode
 # convert --input file-as.hdf5 --output file-as.ome.tiff
 
 from __future__ import division
-from odemis import dataio, model
+from odemis import dataio
 import argparse
 import logging
 import odemis
-import os
 import sys
 
 logging.getLogger().setLevel(logging.DEBUG)
@@ -124,10 +123,8 @@ def main(args):
     parser.add_argument("--minus", "-m", dest="minus", action='append',
             help="name of an acquisition file whose data is subtracted from the input file.")
 
-
     # TODO: --range parameter to select which image to select from the input
     #      (like: 1-4,5,6-10,12)
-
 
     options = parser.parse_args(args[1:])
 
