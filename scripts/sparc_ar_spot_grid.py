@@ -28,8 +28,7 @@ odemis-cli --set-attr E-beam Magnification 4000
 '''
 
 from __future__ import division
-from odemis import model
-from odemis import dataio
+from odemis import dataio, model
 import argparse
 import logging
 import numpy
@@ -37,6 +36,7 @@ import odemis
 import os.path
 import sys
 import time
+import itertools
 
 logging.getLogger().setLevel(logging.INFO) # put "DEBUG" level for more messages
 
@@ -46,7 +46,7 @@ EXP_TIME = 0.1 # s
 BINNING = (1, 1) # px, px
 
 # Number of identical images to acquire from the CCD for each spot position
-N_IMAGES = 5
+N_IMAGES = 4
 # Number of points on the grid
 N_X, N_Y = 11, 13 # put an even number if you want (0, 0) to be scanned
 
@@ -116,7 +116,38 @@ def calc_xy_pos(escan):
         y = n - ((N_Y - 1) / 2) # distance from the iteration center
         yps.append(widths[1] * y / (N_Y - 1))
 
-    return xps, yps
+    return list(itertools.product(xps, yps))
+
+def predefined_xy_pos_0(escan):
+    """
+    Used with z = 0
+    """
+    # expressed as a ratio over the half-width
+    xps_r = [-0.9, -0.85, -0.8, -0.75, -0.7, -0.65, -0.6, -0.55, -0.5, -0.45, -0.4, -0.35, -0.3, -0.25, -0.2, -0.15, -0.1, -0.05, 0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.5, -0.5, -0.5, -0.5, -0.25, -0.25, -0.25, -0.25, 0.25, 0.25, 0.25, 0.25, 0.5, 0.5, 0.5, 0.5]
+    yps_r = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.9, -0.85, -0.8, -0.75, -0.7, -0.65, -0.6, -0.55, -0.5, -0.45, -0.4, -0.35, -0.3, -0.25, -0.2, -0.15, -0.1, -0.05, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.5, 0.25, -0.25, -0.5, 0.5, 0.25, -0.25, -0.5, 0.5, 0.25, -0.25, -0.5, 0.5, 0.25, -0.25, -0.5]
+
+    # position is expressed in pixels, within the .translation ranges
+    rngs = escan.translation.range
+    hwidths = [rngs[1][0] - rngs[0][0] - 1, rngs[1][1] - rngs[0][1] - 1]
+
+    xps = [x * hwidths[0] / 2 for x in xps_r]
+    yps = [y * hwidths[1] / 2 for y in yps_r]
+    return zip(xps, yps)
+
+def predefined_xy_pos_not0(escan):
+    """
+    Used when z variates
+    """
+    xps_r = [-0.5, -0.5, -0.5, -0.5, -0.5, -0.25, -0.25, -0.25, -0.25, -0.25, 0, 0, 0, 0, 0, 0.25, 0.25, 0.25, 0.25, 0.25, 0.5, 0.5, 0.5, 0.5, 0.5]
+    yps_r = [0.5, 0.25, 0, -0.25, -0.5, 0.5, 0.25, 0, -0.25, -0.5, 0.5, 0.25, 0, -0.25, -0.5, 0.5, 0.25, 0, -0.25, -0.5, 0.5, 0.25, 0, -0.25, -0.5]
+
+    # position is expressed in pixels, within the .translation ranges
+    rngs = escan.translation.range
+    hwidths = [rngs[1][0] - rngs[0][0] - 1, rngs[1][1] - rngs[0][1] - 1]
+
+    xps = [x * hwidths[0] / 2 for x in xps_r]
+    yps = [y * hwidths[1] / 2 for y in yps_r]
+    return zip(xps, yps)
 
 def convert_xy_pos_to_nm(escan, x, y):
     """
@@ -174,6 +205,9 @@ def acquire_ar(escan, sed, ccd, x, y, n):
     return full_data
 
 def acquire_grid(fn_prefix, zpos):
+    """
+    returns (int): number of positions acquired
+    """
 
     escan = None
     sed = None
@@ -190,22 +224,26 @@ def acquire_grid(fn_prefix, zpos):
         logging.error("Failed to find all the components")
         raise KeyError("Not all components found")
 
-    xps, yps = calc_xy_pos(escan)
-    logging.debug("Will scan on X positions %s", xps)
-    logging.debug("Will scan on Y positions %s", yps)
+#    xyps = calc_xy_pos(escan)
+#    xyps = predefined_xy_pos_0(escan)
+    xyps = predefined_xy_pos_not0(escan)
+    logging.debug("Will scan on X/Y positions %s", xyps)
 
-    for y in yps:
-        for x in xps:
-            xnm, ynm = convert_xy_pos_to_nm(escan, x, y)
-            logging.info("Acquiring at position (%+f, %+f)", xnm, ynm)
+    n_pos = 0
+    for x, y in xyps:
+        xnm, ynm = convert_xy_pos_to_nm(escan, x, y)
+        logging.info("Acquiring at position (%+f, %+f)", xnm, ynm)
 
-            startt = time.time()
-            d = acquire_ar(escan, sed, ccd, x, y, N_IMAGES)
-            endt = time.time()
-            logging.debug("Took %g s (expected = %g s)",
-                         endt - startt, EXP_TIME * N_IMAGES)
+        startt = time.time()
+        d = acquire_ar(escan, sed, ccd, x, y, N_IMAGES)
+        endt = time.time()
+        logging.debug("Took %g s (expected = %g s)",
+                     endt - startt, EXP_TIME * N_IMAGES)
 
-            save_data(d, prefix=fn_prefix, zpos=zpos, ypos=round(ynm), xpos=round(xnm))
+        save_data(d, prefix=fn_prefix, zpos=zpos, ypos=round(ynm), xpos=round(xnm))
+        n_pos += 1
+
+    return n_pos
 
 
 def save_data(data, **kwargs):
@@ -246,12 +284,12 @@ def main(args):
     zpos = options.zpos
 
     try:
-        acquire_grid(fn_prefix, zpos)
+        n = acquire_grid(fn_prefix, zpos)
     except:
         logging.exception("Unexpected error while performing action.")
         return 127
 
-    logging.info("Successfully acquired %d positions", N_X * N_Y)
+    logging.info("Successfully acquired %d positions", n)
     return 0
 
 if __name__ == '__main__':
