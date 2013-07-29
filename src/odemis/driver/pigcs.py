@@ -158,6 +158,10 @@ class Controller(object):
         except IOError:
             raise IOError("No answer from controller %d" % address)
 
+        version = self.GetSyntaxVersion()
+        if version != "2.0":
+            logging.warning("Controller %d announces untested GCS %s", address, version)
+
         self._model = self.getModel()
         if self._model == MODEL_UNKNOWN:
             logging.warning("Controller %d is an unsupported version (%s)", self.address, self.GetIdentification())
