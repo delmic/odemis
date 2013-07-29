@@ -157,9 +157,14 @@ def main(args):
             try:
                 sdata, sthumbs = open_acq(fn)
             except:
-                logging.exception("Error while opening file %s.", infn)
+                logging.exception("Error while opening file %s.", fn)
                 return 127
-            data = minus(data, sdata)
+
+            try:
+                data = minus(data, sdata)
+            except:
+                logging.exception("Error while subtracting file %s.", fn)
+                return 127
 
     try:
         save_acq(outfn, data, thumbs)
