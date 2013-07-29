@@ -56,8 +56,8 @@ class InfoLegend(wx.Panel):
         self.mergeSlider = Slider(
                     self,
                     wx.ID_ANY,
-                    50,
-                    (0, 100),
+                    50, # val
+                    0, 100,
                     size=(100, 12),
                     style=(wx.SL_HORIZONTAL |
                            wx.SL_AUTOTICKS |
