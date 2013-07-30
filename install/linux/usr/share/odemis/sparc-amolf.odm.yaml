@@ -26,7 +26,7 @@ SPARC-AMOLF: {
     role: e-beam,
     init: {
         channels: [0, 1],
-        limits: [[-4, 4], [-4, 4]], # V
+        limits: [[3, -3], [-4, 4]], # V
         settle_time: 10.e-6, # s
         hfw_nomag: 0.2, # m
     },
