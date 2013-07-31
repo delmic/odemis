@@ -334,7 +334,7 @@ class SpectraPro(model.Actuator):
     
     # regex to read the gratings
     RE_NOTINSTALLED = re.compile("\D*(\d+)\s+Not Installed")
-    RE_INSTALLED = re.compile("\D*(\d+)\s+(\d+)\s*g/mm BLZ=\s*(\d+)\s*(nm|NM)")
+    RE_INSTALLED = re.compile("\D*(\d+)\s+(\d+)\s*g/mm BLZ=\s*([0-9][.0-9]*)\s*(nm|NM|um|UM)")
     RE_GRATING = re.compile("\D*(\d+)\s+(.+\S)\s*\r")
     def GetGratingChoices(self):
         """
@@ -344,6 +344,8 @@ class SpectraPro(model.Actuator):
         #  present grating is specified with an arrow.
         # Example output:
         #  \r\n 1  300 g/mm BLZ=  500NM \r\n\x1a2  300 g/mm BLZ=  750NM \r\n 3  Not Installed     \r\n 4  Not Installed     \r\n 5  Not Installed     \r\n 6  Not Installed     \r\n 7  Not Installed     \r\n 8  Not Installed     \r\n ok\r\n
+        #  \r\n\x1a1  600 g/mm BLZ=  1.6UM \r\n 2  150 g/mm BLZ=    2UM \r\n 3  Not Installed     \r\n 4  Not Installed     \r\n 5  Not Installed     \r\n 6  Not Installed     \r\n 7  Not Installed     \r\n 8  Not Installed     \r\n 9  Not Installed     \r\n ok\r\n
+
         # From the spectrapro_300i_ll.c of fsc2, it seems the format is:
         # non-digit*,digits=grating number,spaces,"Not Installed"\r\n
         # non-digit*,digits=grating number,space+,digit+:g/mm,space*,"g/mm BLZ=", space*,digit+:blaze wl in nm,space*,"nm"\r\n
