@@ -24,8 +24,10 @@ from __future__ import division
 from odemis import dataio
 import argparse
 import logging
+import numpy
 import odemis
 import sys
+from gettext import ngettext
 
 logging.getLogger().setLevel(logging.INFO) # use DEBUG for more messages
 
@@ -77,6 +79,32 @@ def save_acq(fn, data, thumbs):
         thumb = None
     exporter.export(fn, data, thumb)
 
+def da_sub(daa, dab):
+    """
+    subtract 2 DataArrays as cleverly as possible:
+      * keep the metadata of the first DA in the result
+      * ensures the result has the right type so that no underflows happen
+    returns (DataArray): the result of daa - dab
+    """
+    rt = numpy.result_type(daa, dab) # dtype of result of daa-dab
+
+    dt = None # default is to let numpy decide
+    if rt.kind == "f":
+        # float should always be fine
+        pass
+    elif rt.kind in "iub":
+        # underflow can happen (especially if unsigned)
+
+        # find the worse case value (could be improved, but would be longer)
+        worse_val = int(daa.min()) - int(dab.max())
+        dt = numpy.result_type(rt, numpy.min_scalar_type(worse_val))
+    else:
+        # subtracting such a data is suspicious, but try anyway
+        logging.warning("Subtraction on data of type %s unsupported", rt.name)
+
+    res = numpy.subtract(daa, dab, dtype=dt) # metadata is copied from daa
+    logging.error("type = %s , %s", res.dtype.name, daa.dtype.name)
+    return res
 
 def minus(data_a, data_b):
     """
@@ -92,11 +120,11 @@ def minus(data_a, data_b):
         # subtract the same data from all the data_a
         b = data_b[0]
         for a in data_a:
-            r = a - b # metadata is copied from a
+            r = da_sub(a, b)
             ret.append(r)
     elif len(data_b) == len(data_a):
         for a, b in zip(data_a, data_b):
-            r = a - b # metadata is copied from a
+            r = da_sub(a, b)
             ret.append(r)
     else:
         raise ValueError("Cannot subtract %d images from %d images",
@@ -147,7 +175,9 @@ def main(args):
     except:
         logging.exception("Error while opening file %s.", infn)
         return 127
-    logging.info("File contains %d images (and %d thumbnails)", len(data), len(thumbs))
+    logging.info("File contains %d %s (and %d %s)",
+                 len(data), ngettext("image", "images", len(data)),
+                 len(thumbs), ngettext("thumbnail", "thumbnails", len(thumbs)))
 
     if options.minus:
         if thumbs:
