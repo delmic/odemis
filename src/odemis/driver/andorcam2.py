@@ -1708,7 +1708,7 @@ class FakeAndorV2DLL(object):
 
         self.exposure = 0.1 # s
         self.kinetic = 0. # s, kinetic cycle time
-        self.pixelReadout = 0.1e-6 # s, time to readout one pixel
+        self.pixelReadout = [0.01e-6, 0.1e-6] # s, time to readout one pixel
 
         self.pixelSize = (20.0, 20.0) # um
         self.shape = (1024, 1024) # px
@@ -1885,12 +1885,12 @@ class FakeAndorV2DLL(object):
     def GetNumberHSSpeeds(self, channel, output_amp, p_nb):
         # only one channel and OA
         nb = _deref(p_nb, c_int)
-        nb.value = 1
+        nb.value = len(self.pixelReadout)
 
     def GetHSSpeed(self, channel, output_amp, i, p_speed):
         # only one channel and OA
         speed = _deref(p_speed, c_float)
-        speed.value = 1e-6 / self.pixelReadout # MHz
+        speed.value = 1e-6 / self.pixelReadout[i] # MHz
 
     def SetHSSpeed(self, output_amp, i):
         if _val(i) != 0:
