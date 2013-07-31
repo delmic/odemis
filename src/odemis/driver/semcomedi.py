@@ -2235,7 +2235,7 @@ class Scanner(model.Emitter):
                                               readonly=True)
 
         # max dwell time is purely arbitrary
-        range_dwell = (parent.find_closest_dwell_time(0), 1) # s
+        range_dwell = (parent.find_closest_dwell_time(0), 100) # s
         self._osr = 1
         self.dwellTime = model.FloatContinuous(range_dwell[0], range_dwell,
                                                unit="s", setter=self._setDwellTime)
