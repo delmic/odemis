@@ -158,6 +158,10 @@ class Controller(object):
         except IOError:
             raise IOError("No answer from controller %d" % address)
 
+        version = self.GetSyntaxVersion()
+        if version != "2.0":
+            logging.warning("Controller %d announces untested GCS %s", address, version)
+
         self._model = self.getModel()
         if self._model == MODEL_UNKNOWN:
             logging.warning("Controller %d is an unsupported version (%s)", self.address, self.GetIdentification())
@@ -476,8 +480,9 @@ class Controller(object):
         params = {}
         # first and last lines are typically just user-friendly text
         # look for something like '0x412=\t0\t1\tINT\tmotorcontroller\tI term 1'
+        # (and old firmwares report like: '0x412 XXX')
         for l in lines:
-            m = re.match("0x(?P<param>[0-9A-Fa-f]+)=(?P<desc>(\t\S+)+)", l)
+            m = re.match("0x(?P<param>[0-9A-Fa-f]+)[= ](?P<desc>(\t\S+)+)", l)
             if not m:
                 logging.debug("Line doesn't seem to be a parameter: '%s'", l)
                 continue

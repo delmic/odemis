@@ -1,4 +1,4 @@
-# Configuration for the SPARC system at AMOLF. 
+# Configuration for the SPARC system at AMOLF, with only the angle resolved camera
 # The main difference with the typical SPARC is that camera are Princeton-Instruments.
 SPARC-AMOLF: {
     class: Microscope,
@@ -26,7 +26,7 @@ SPARC-AMOLF: {
     role: e-beam,
     init: {
         channels: [0, 1],
-        limits: [[3, -3], [-4, 4]], # V
+        limits: [[3, -3], [-4, 4]],  # V
         settle_time: 10.e-6, # s
         hfw_nomag: 0.2, # m
     },
@@ -58,18 +58,21 @@ ARCam: {
 Spec10: {
     class: spectrometer.CompositedSpectrometer,
     role: spectrometer,
-    children: {detector: "SpecCam", spectrograph: "SP2300i"}
+    children: {detector: "SpecCam", spectrograph: "FakeSP2300i"},
+    properties: {
+        binning: [4, 32],
+    },
 }
 
 SpecCam: {
-    class: pvcam.PVCam,
+    class: andorcam2.FakeAndorCam2,
     role: sp-ccd,
-    init: {device: "rspist133"}
+    init: {device: 0} # same device number but it will actually be different device
 }
 
-# SP-2300i, the spectrograph part of the Spec-10
-SP2300i: {
-    class: spectrapro.SpectraPro,
+# Simulated SP-2300i, the spectrograph part of the Spec-10
+FakeSP2300i: {
+    class: spectrapro.FakeSpectraPro,
     role: spectrograph,
     affects: [SpecCam],
     init: {
@@ -77,29 +80,13 @@ SP2300i: {
     },
 }
 
-# PI E-861 jumpers (. = off):
-# X          = 1234.6..
-# Y          = 123..6..
-# RZ (yaw)   = 12.4.6..
-# RY (pitch) = 12...6..
 MirrorMover: {
-    class: pigcs.Bus,
+    class: simulated.Stage2D,
     role: mirror,
-    init: {
-        port: "/dev/ttyPIGCS",
-        baudrate: 9600,
-        # X/Y are same axes as SEM
-        # yaw/pitch are axes according to Mirror's orientation
-        # rz = yaw, ry = pitch (from Mirror's point of view)
-        # axis -> controller, channel, closed-loop?
-        axes: {"y":  [1, 1, False],
-               "x":  [2, 1, False],
-               "ry": [3, 1, False],
-               "rz": [4, 1, False]},
-        inverted: ["y", "ry"],
-    },
+    affects: [SpecCam, ARCam],
+    init: {axes: ["x", "y", "rz", "ry"]}, # rz = yaw, ry = pitch
     properties: {
-        speed: {"x": 0.1, "y": 0.1, "rz": 0.1, "ry": 0.1} # m/s
+        speed: {"x": 0.1, "y": 0.1, "rz": 0.1, "ry": 0.1} #m/s
     }
 }
 
