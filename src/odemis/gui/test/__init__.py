@@ -55,6 +55,9 @@ def gui_loop():
         if not app.Pending():
             break
 
+def sleep(ms=None):
+    wx.MilliSleep(ms or SLEEP_TIME)
+
 # Default wxPython App that can be used as a basis for testing
 
 class GuiTestApp(wx.App):

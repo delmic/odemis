@@ -640,8 +640,7 @@ class NumberTextCtrl(wx.TextCtrl):
         self.Bind(wx.EVT_TEXT_ENTER, self.on_text_enter)
 
     def _display_raw(self):
-        """
-        set the current text to raw style (no truncation/no unit)
+        """ Set the current text to raw style (no truncation/no unit)
         """
         if self.number is None:
             str_val = u""
@@ -701,8 +700,7 @@ class NumberTextCtrl(wx.TextCtrl):
         self.GetValidator().SetRange(minv, maxv)
 
     def _processNewText(self, str_val):
-        """
-        Called internally when a new text is entered by the user
+        """ Called internally when a new text is entered by the user
         It processes the new text and set the number
         """
         prev_num = self.number

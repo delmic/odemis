@@ -660,7 +660,7 @@ class VisualRangeSlider(BaseSlider):
         self.select_color = (1.0, 1.0, 1.0, self.sel_alpha)
 
         if size == (-1, -1): # wxPython follows this too much to always do it
-            self.SetMinSize(-1, 40)
+            self.SetMinSize((-1, 40))
 
         self.content_list = []
 
@@ -995,10 +995,10 @@ class BandwidthSlider(VisualRangeSlider):
     def set_center_value(self, center):
         logging.debug("Setting center value to %s", center)
         spread = self.get_bandwidth_value() / 2
-        center = self.get_center_value()
         # min/max needed as imprecision can bring the value slightly outside
         val = (max(center - spread, self.min_value),
                min(center + spread, self.max_value))
+
         super(BandwidthSlider, self).SetValue(val)
 
     def get_center_value(self):
