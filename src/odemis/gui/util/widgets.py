@@ -155,7 +155,7 @@ class AxisConnector(object):
         """
         try:
             value = self.ctrl_2_pos()
-            logging.debug("Requesting axis %s to move to %f", self.axis, value)
+            logging.debug("Requesting axis %s to move to %g", self.axis, value)
 
             # expect absolute move works
             move = {self.axis: value}
@@ -188,7 +188,7 @@ class AxisConnector(object):
         Called when position changes
         """
         position = positions[self.axis]
-        logging.debug("Axis has moved to position %f", position)
+        logging.debug("Axis has moved to position %g", position)
         self.pos_2_ctrl(position)
 
     def pause(self):

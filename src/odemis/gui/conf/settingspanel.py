@@ -134,6 +134,8 @@ def _binning_firstd_only(va, conf):
 
 # TODO: special settings for the acquisition window? (higher ranges)
 
+# This _only_ defines the configuration for the VA which are not automatically
+# correctly displayed
 CONFIG = {
             "ccd":
             {
@@ -156,12 +158,6 @@ CONFIG = {
                     "control_type": odemis.gui.CONTROL_COMBO,
                     "choices": _resolution_from_range,
                 },
-                "readoutRate":
-                {
-                    "control_type": odemis.gui.CONTROL_RADIO,
-                    "format": True,
-                },
-
                 # what we don't want to display:
                 "targetTemperature":
                 {
@@ -178,14 +174,6 @@ CONFIG = {
             },
             "e-beam":
             {
-                "energy":
-                {
-                    "format": True
-                },
-                "spotSize":
-                {
-                    "format": True
-                },
                 "dwellTime":
                 {
                     "control_type": odemis.gui.CONTROL_SLIDER,
@@ -202,10 +190,6 @@ CONFIG = {
                 "magnification": # force using just a text field => it's for copy-paste
                 {
                     "control_type": odemis.gui.CONTROL_FLT,
-                },
-                "pixelSize":
-                {
-                    "control_type": odemis.gui.CONTROL_TEXT,
                 },
                 "scale":
                 {
@@ -233,10 +217,6 @@ CONFIG = {
                     "range": (0.01, 10.0),
                     "type": "float",
                     "accuracy": 2,
-                },
-                "readoutRate":
-                {
-                    "control_type": odemis.gui.CONTROL_FLT,
                 },
                 "binning":
                 {
