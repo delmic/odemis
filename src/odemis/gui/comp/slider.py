@@ -51,6 +51,13 @@ class BaseSlider(wx.PyControl):
     # The abstract methods must be implemented by any class inheriting from
     # BaseSlider
 
+    def Disable(self):
+        return self.Enable(False)
+
+    @abstractmethod
+    def Enable(self, *args, **kwargs):
+        return wx.PyControl.Enable(self, *args, **kwargs)
+
     @abstractmethod
     def OnPaint(self, event=None):
         pass
@@ -61,10 +68,6 @@ class BaseSlider(wx.PyControl):
 
     @abstractmethod
     def OnLeftUp(self, event):
-        pass
-
-    @abstractmethod
-    def Disable(self, *args, **kwargs):
         pass
 
     @abstractmethod
@@ -347,11 +350,12 @@ class Slider(BaseSlider):
 
         event.Skip()
 
-    def Disable(self, *args, **kwargs):
-        # ensure we don't keep the capture (as LeftUp will never be received)
-        if self.HasCapture():
-            self.ReleaseMouse()
-        return super(Slider, self).Disable(*args, **kwargs)
+    def Enable(self, enable=True):
+        if not enable:
+            # ensure we don't keep the capture (as LeftUp will never be received)
+            if self.HasCapture():
+                self.ReleaseMouse()
+        return super(Slider, self).Enable(enable)
 
     def OnMotion(self, event=None):
         """ Mouse motion event handler """
@@ -786,9 +790,6 @@ class VisualRangeSlider(BaseSlider):
 
     def GetRange(self):
         return (self.min_value, self.max_value)
-
-    def Disable(self):  #pylint: disable=W0221
-        self.Enable(False)
 
     def Enable(self, enable=True):  #pylint: disable=W0221
         dim = 0.1
