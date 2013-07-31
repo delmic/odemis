@@ -82,7 +82,7 @@ class Expander(wx.PyControl):
 
         + Expander
         |-- ImageButton: Removes the stream
-        |-- Label: Name of the stream 
+        |-- Label: Name of the stream
         |-- ColourButton: Select tint of stream (optional)
         |-- ImageToggleButton: show/hide button
         |-- ImageToggleButton: update/pause button
@@ -767,7 +767,8 @@ class StreamPanel(wx.PyPanel):
         self._sld_brightness = UnitIntegerSlider(
                                     self._panel,
                                     value=self.stream.brightness.value,
-                                    val_range=self.stream.brightness.range,
+                                    min_val=self.stream.brightness.range[0],
+                                    max_val=self.stream.brightness.range[1],
                                     t_size=(40, -1),
                                     unit=None,
                                     name="brightness_slider")
@@ -789,7 +790,8 @@ class StreamPanel(wx.PyPanel):
         self._sld_contrast = UnitIntegerSlider(
                              self._panel,
                              value=self.stream.contrast.value,
-                             val_range=self.stream.contrast.range,
+                             min_val=self.stream.contrast.range[0],
+                             max_val=self.stream.contrast.range[1],
                              t_size=(40, -1),
                              unit=None,
                              name="contrast_slider")

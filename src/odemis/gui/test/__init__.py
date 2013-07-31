@@ -55,17 +55,23 @@ def gui_loop():
         if not app.Pending():
             break
 
+def sleep(ms=None):
+    wx.MilliSleep(ms or SLEEP_TIME)
+
 # Default wxPython App that can be used as a basis for testing
 
 class GuiTestApp(wx.App):
-    def __init__(self):
+
+    test_frame = None
+
+    def __init__(self, frame):
         odemis.gui.test.test_gui.get_resources = odemis_get_test_resources
-        self.test_frame = None
+        self.test_frame = frame
         # gen_test_data()
         wx.App.__init__(self, redirect=False)
 
     def OnInit(self):
-        self.test_frame = odemis.gui.test.test_gui.xrccanvas_frame(None)
+        self.test_frame = self.test_frame(None) # odemis.gui.test.test_gui.xrccanvas_frame(None)
         self.test_frame.SetSize((400, 400))
         self.test_frame.Center()
         self.test_frame.Layout()
@@ -73,14 +79,28 @@ class GuiTestApp(wx.App):
 
         return True
 
+    def panel_finder(self, win):
+
+        for c in win.GetChildren():
+            if isinstance(c, wx.Panel):
+                return c
+            else:
+                return self.panel_finder(c)
+
+        return None
+
 # TestCase base class, with GuiTestApp support
 
 class GuiTestCase(unittest.TestCase):
 
+    frame_class = None
+
     @classmethod
     def setUpClass(cls):
-        cls.app = GuiTestApp()
-        cls.panel = cls.app.test_frame.canvas_panel
+        if not cls.frame_class:
+            raise ValueError("No frame_class set!")
+        cls.app = GuiTestApp(cls.frame_class)
+        cls.panel = cls.app.panel_finder(cls.app.test_frame)
         cls.sizer = cls.panel.GetSizer()
 
         # NOTE!: Call Layout on the panel here, because otherwise the
@@ -98,7 +118,7 @@ class GuiTestCase(unittest.TestCase):
             cls.app.MainLoop()
 
     @classmethod
-    def add_control(cls, ctrl, flags):
+    def add_control(cls, ctrl, flags=0):
         cls.sizer.Add(ctrl, flag=flags|wx.ALL, border=0, proportion=1)
         cls.sizer.Layout()
         return ctrl

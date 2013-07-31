@@ -256,17 +256,17 @@ class SettingsPanel(object):
             # Return default control
             return odemis.gui.CONTROL_TEXT
 
-    def _get_rng_choice_unit(self, va, conf):
+    def _get_va_meta(self, va, conf):
         """ Retrieve the range and choices values from the vigilant attribute
         or override them with the values provided in the configuration.
         """
 
-        rng = conf.get("range", (None, None))
+        minv, maxv = conf.get("range", (None, None))
         try:
-            if rng == (None, None):
-                rng = va.range
+            if (minv, maxv) == (None, None):
+                minv, maxv = va.range
             else: # merge
-                rng = [max(rng[0], va.range[0]), min(rng[1], va.range[1])]
+                minv, maxv = [max(minv, va.range[0]), min(maxv, va.range[1])]
         except (AttributeError, NotApplicableError):
             pass
 
@@ -286,7 +286,7 @@ class SettingsPanel(object):
         # Get unit from config, vattribute or use an empty one
         unit = conf.get('unit', va.unit or "")
 
-        return rng, choices, unit
+        return minv, maxv, choices, unit
 
     def add_label(self, label, value=None, selectable=True):
         """ Adds a label to the settings panel, accompanied by an immutable
@@ -350,7 +350,7 @@ class SettingsPanel(object):
         conf = conf or {}
 
         # Get the range and choices
-        rng, choices, unit = self._get_rng_choice_unit(vigil_attr, conf)
+        min_val, max_val, choices, unit = self._get_va_meta(vigil_attr, conf)
 
         format = conf.get("format", False)
 
@@ -433,7 +433,8 @@ class SettingsPanel(object):
 
             new_ctrl = klass(self.panel,
                              value=vigil_attr.value,
-                             val_range=rng,
+                             min_val=min_val,
+                             max_val=max_val,
                              scale=conf.get('scale', None),
                              unit=unit,
                              t_size=(50, -1),
@@ -451,8 +452,8 @@ class SettingsPanel(object):
             new_ctrl = text.UnitIntegerCtrl(self.panel,
                                             style=wx.NO_BORDER,
                                             unit=unit,
-                                            min_val=rng[0],
-                                            max_val=rng[1],
+                                            min_val=min_val,
+                                            max_val=max_val,
                                             choices=choices)
             new_ctrl.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_EDIT)
             new_ctrl.SetBackgroundColour(self.panel.GetBackgroundColour())
@@ -471,8 +472,8 @@ class SettingsPanel(object):
             new_ctrl = text.UnitFloatCtrl(self.panel,
                                           style=wx.NO_BORDER,
                                           unit=unit,
-                                          min_val=rng[0],
-                                          max_val=rng[1],
+                                          min_val=min_val,
+                                          max_val=max_val,
                                           choices=choices,
                                           accuracy=conf.get('accuracy', 5))
             new_ctrl.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_EDIT)
@@ -684,11 +685,12 @@ class SettingsPanel(object):
 
         pos = comp.position.value[name]
         unit = comp.position.unit
-        rng = comp.ranges[name]
+        minv, maxv = comp.ranges[name]
 
         new_ctrl = UnitFloatSlider(self.panel,
                          value=pos,
-                         val_range=rng,
+                         min_val=minv,
+                         max_val=maxv,
                          unit=unit,
                          t_size=(50, -1),
                          accuracy=conf.get('accuracy', 3))

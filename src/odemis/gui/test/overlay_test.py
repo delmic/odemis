@@ -26,17 +26,19 @@
 # Test module for Odemis' gui.comp.overlay module
 #===============================================================================
 
-import logging
 import unittest
 import wx
 import odemis.gui.canvas as canvas
 import odemis.gui.comp.overlay as overlay
 import odemis.gui.test as test
+import odemis.gui.test.test_gui
 
-test.goto_manual()
-# logging.getLogger().setLevel(logging.DEBUG)b
+# test.goto_manual() # Keep the test frame open after the tests are run
+# logging.getLogger().setLevel(logging.DEBUG)
 
 class PlotCanvasTestCase(test.GuiTestCase):
+
+    frame_class = odemis.gui.test.test_gui.xrccanvas_frame
 
     def test_view_select_overlay(self):
         # Create and add a test plot canvas

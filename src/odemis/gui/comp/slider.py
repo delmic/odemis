@@ -23,6 +23,7 @@
 
 from __future__ import division
 
+import collections
 import logging
 import math
 import time
@@ -89,6 +90,16 @@ class BaseSlider(wx.PyControl):
         pass
 
     @abstractmethod
+    def SetMax(self, max_val):
+        """ Set the maximum value """
+        pass
+
+    @abstractmethod
+    def SetMin(self, min_val):
+        """ Set the minimum value """
+        pass
+
+    @abstractmethod
     def GetValue(self):
         pass
 
@@ -124,9 +135,9 @@ class Slider(BaseSlider):
 
     """
 
-    def __init__(self, parent, id=wx.ID_ANY, value=0.0, val_range=(0.0, 1.0),
-                 size=(-1, -1), pos=wx.DefaultPosition, style=wx.NO_BORDER,
-                 name="Slider", scale=None):
+    def __init__(self, parent, wid=wx.ID_ANY, value=0.0, min_val=0.0,
+                 max_val=1.0, size=(-1, -1), pos=wx.DefaultPosition,
+                 style=wx.NO_BORDER, name="Slider", scale=None):
         """
         :param parent: Parent window. Must not be None.
         :param id:     Slider identifier.
@@ -141,7 +152,7 @@ class Slider(BaseSlider):
             xmlh.delmic !
         """
 
-        super(Slider, self).__init__(parent, id, pos, size, style)
+        super(Slider, self).__init__(parent, wid, pos, size, style)
 
         # Set minimum height
         if size == (-1, -1):
@@ -150,9 +161,10 @@ class Slider(BaseSlider):
         self.current_value = value
 
         # Closed range within which the current value must fall
-        self.value_range = val_range
+        self.min_value = min_val
+        self.max_value = max_val
 
-        self.range_span = val_range[1] - val_range[0]
+        self.range_span = max_val - min_val
         # event.GetX() position or Horizontal position across Panel
         self.x = 0
         # position of the drag handle within the slider, ranging from 0 to
@@ -283,7 +295,7 @@ class Slider(BaseSlider):
         # ticks
         steps = [v / 10 for v in range(1, 10)]
         for s in steps:
-            v = (self.range_span * s) + self.value_range[0]
+            v = (self.range_span * s) + self.min_value
             pix_x = self._val_to_pixel(v) + self.half_h_width
             dc.DrawLine(pix_x, half_height - 1,
                         pix_x, half_height + 2)
@@ -375,16 +387,16 @@ class Slider(BaseSlider):
         """ Convert a slider value into a pixel position """
         val = self.current_value if val is None else val
         slider_width = self.GetWidth() - self.handle_width
-        prcnt = self._val_to_percentage(self.value_range[0],
-                                        self.value_range[1],
+        prcnt = self._val_to_percentage(self.min_value,
+                                        self.max_value,
                                         val)
         return int(abs(slider_width * prcnt))
 
     def _pixel_to_val(self):
         """ Convert the current handle position into a value """
         prcnt = self.handlePos / (self.GetWidth() - self.handle_width)
-        return self._percentage_to_val(self.value_range[0],
-                                       self.value_range[1],
+        return self._percentage_to_val(self.min_value,
+                                       self.max_value,
                                        prcnt)
 
 
@@ -416,16 +428,16 @@ class Slider(BaseSlider):
 
         logging.debug("Setting slider value to %s", value)
 
-        if value < self.value_range[0]:
+        if value < self.min_value:
             logging.warn("Value %s lower than minimum %s!",
                          value,
-                         self.value_range[0])
-            self.current_value = self.value_range[0]
-        elif value > self.value_range[1]:
+                         self.min_value)
+            self.current_value = self.min_value
+        elif value > self.max_value:
             logging.warn("Value %s higher than maximum %s!",
                          value,
-                         self.value_range[1])
-            self.current_value = self.value_range[1]
+                         self.max_value)
+            self.current_value = self.max_value
         else:
             self.current_value = value
 
@@ -434,12 +446,12 @@ class Slider(BaseSlider):
         self.Refresh()
 
     def set_to_min_val(self):
-        self.current_value = self.value_range[0]
+        self.current_value = self.min_value
         self.handlePos = self._val_to_pixel()
         self.Refresh()
 
     def set_to_max_val(self):
-        self.current_value = self.value_range[1]
+        self.current_value = self.max_value
         self.handlePos = self._val_to_pixel()
         self.Refresh()
 
@@ -456,49 +468,70 @@ class Slider(BaseSlider):
     def GetHeight(self):
         return self.GetSize()[1]
 
-    def SetRange(self, minv, maxv):
-        self.value_range = (minv, maxv)
-        self.range_span = maxv - minv
+    def SetRange(self, min_value, max_value):
+        self.range_span = max_value - min_value
+        self.SetMin(min_value)
+        self.SetMax(max_value)
 
-        # To force an update of the display + check min/max
-        val = self.current_value
-        self.current_value = None
-        self._SetValue(val)
+    def SetMin(self, min_value):
+        if min_value <= self.max_value:
+            if self.current_value and self.current_value < min_value:
+                logging.warning("Minimum %s is larger than current value %s!",
+                                min_value, self.current_value)
+            else:
+                self.min_value = min_value
+                self.Refresh()
+        else:
+            logging.warning("Minimum %s is larger than maximum %s!",
+                            min_value, self.max_value)
+
+    def SetMax(self, max_value):
+        if max_value >= self.min_value:
+            if self.current_value and self.current_value < max_value:
+                logging.warning("Maximum %s is smaller than current value %s!",
+                                max_value, self.current_value)
+            else:
+                self.max_value = max_value
+                self.Refresh()
+        else:
+            logging.warning("Maximum %s is smaller than minimum %s!",
+                            max_value, self.min_value)
 
     def GetRange(self):
-        return self.value_range
+        return (self.min_value, self.max_value)
 
     def GetMin(self):
         """ Return the minimum value of the range """
-        return self.value_range[0]
+        return self.min_value
 
     def GetMax(self):
         """ Return the maximum value of the range """
-        return self.value_range[1]
+        return self.max_value
 
 class NumberSlider(Slider):
     """ A Slider with an extra linked text field showing the current value.
     """
 
-    def __init__(self, parent, id=wx.ID_ANY, value=0, val_range=(0.0, 1.0),
-                 size=(-1, -1), pos=wx.DefaultPosition, style=wx.NO_BORDER,
-                 name="Slider", scale=None, t_class=UnitFloatCtrl,
-                 t_size=(50, -1), unit="", accuracy=None):
+    def __init__(self, parent, wid=wx.ID_ANY, value=0, min_val=0.0,
+                 max_val=1.0, size=(-1, -1), pos=wx.DefaultPosition,
+                 style=wx.NO_BORDER, name="Slider", scale=None,
+                 t_class=UnitFloatCtrl, t_size=(50, -1), unit="",
+                 accuracy=None):
         """
         :param unit: (None or string) if None then display numbers as-is, otherwise
           adds a SI prefix and unit.
         :param accuracy: (None or int) number of significant digits. If None, displays
           almost all the value.
         """
-        Slider.__init__(self, parent, id, value, val_range, size,
+        Slider.__init__(self, parent, wid, value, min_val, max_val, size,
                         pos, style, name, scale)
 
         self.linked_field = t_class(self, -1,
                                     value,
                                     style=wx.NO_BORDER | wx.ALIGN_RIGHT,
                                     size=t_size,
-                                    min_val=val_range[0],
-                                    max_val=val_range[1],
+                                    min_val=min_val,
+                                    max_val=max_val,
                                     unit=unit,
                                     accuracy=accuracy)
 
@@ -576,9 +609,9 @@ class NumberSlider(Slider):
 
         Slider.OnPaint(self, event)
 
-    def SetRange(self, minv, maxv):
-        self.linked_field.SetValueRange(minv, maxv)
-        super(NumberSlider, self).SetRange(minv, maxv)
+    def SetRange(self, min_value, max_value):
+        self.linked_field.SetValueRange(min_value, max_value)
+        super(NumberSlider, self).SetRange(min_value, max_value)
 
 class UnitIntegerSlider(NumberSlider):
 
@@ -616,18 +649,18 @@ class VisualRangeSlider(BaseSlider):
     sel_alpha_h = 0.7 # %
     min_sel_width = 2 # px
 
-    def __init__(self, parent, id=wx.ID_ANY, value=(0.5, 0.6), minValue=0.0,
-                 maxValue=1.0, size=(-1, -1), pos=wx.DefaultPosition,
+    def __init__(self, parent, wid=wx.ID_ANY, value=(0.0, 1.0), min_val=0.0,
+                 max_val=1.0, size=(-1, -1), pos=wx.DefaultPosition,
                  style=wx.NO_BORDER, name="VisualRangeSlider"):
 
         style |= wx.NO_FULL_REPAINT_ON_RESIZE
-        super(VisualRangeSlider, self).__init__(parent, id, pos, size, style)
+        super(VisualRangeSlider, self).__init__(parent, wid, pos, size, style)
 
         self.content_color = wxcol_to_rgb(self.GetForegroundColour())
         self.select_color = (1.0, 1.0, 1.0, self.sel_alpha)
 
         if size == (-1, -1): # wxPython follows this too much to always do it
-            self.SetMinSize(-1, 40)
+            self.SetMinSize((-1, 40))
 
         self.content_list = []
 
@@ -637,7 +670,9 @@ class VisualRangeSlider(BaseSlider):
         self._buffer = None
 
         # The minimum and maximum values
-        self.val_range = (minValue, maxValue)
+        self.min_value = min_val
+        self.max_value = max_val
+
         # The selected range (within self.range)
         self.value = value
         # Selected range in pixels
@@ -682,42 +717,61 @@ class VisualRangeSlider(BaseSlider):
     ### Setting and getting of values
 
     def SetValue(self, val):
+        """ Set the value, if the user is not dragging the range """
         if not self.HasCapture():
             self._SetValue(val)
 
     def _SetValue(self, val):
-        try:
-            if all([self.val_range[0] <= i <= self.val_range[1] for i in val]):
-                if val[0] <= val[1]:
-                    self.value = val
-                    self._update_pixel_value()
-                    self.Refresh()
-                else:
-                    msg = "Illegal value order %s, should be (low, high)" % (val,)
-                    raise ValueError(msg)
+        """ Set the value if it falls within the given range """
+        if all([self.min_value <= i <= self.max_value for i in val]):
+            if val[0] <= val[1]:
+                self.value = val
+                self._update_pixel_value()
+                self.Refresh()
             else:
-                msg = "Illegal value %s for range %s" % (val, self.val_range)
-                raise ValueError(msg)
-        except IndexError:
-            if not self.val_range:
-                raise IndexError("Value range not set!")
-            else:
-                raise
+                msg = "Illegal value order %s, should be (low, high)"
+                raise ValueError(msg % val)
+        else:
+            msg = "Illegal value %s for range %s, %s"
+            raise ValueError(msg % (val, self.min_value, self.max_value))
 
     def GetValue(self):
+        """ Return the 2-tuple value """
         return self.value
 
-    def SetRange(self, val_range): # FIXME: should follow wx.Slider API: minValue, maxValue
-        if self.value:
-            if not all([val_range[0] <= i <= val_range[1] for i in self.value]):
-                logging.warning("Illegal range %s for value %s, resetting it",
-                                val_range, self.value)
-                self.value = val_range
+    def SetRange(self, min_value, max_value=None):
+        if isinstance(min_value, collections.Iterable) and len(min_value) == 2:
+            min_value, max_value = min_value
 
-        logging.debug("Setting range to %s", val_range)
-        self.val_range = val_range
-        self._update_pixel_value()
-        self.Refresh()
+        logging.debug("Setting range to %s, %s", min_value, max_value)
+        self.SetMin(min_value)
+        self.SetMax(max_value)
+
+    def SetMin(self, min_value):
+        if min_value <= self.max_value:
+            if self.value and self.value < min_value:
+                logging.warning("Minimum %s is larger than current value %s!",
+                                min_value, self.value)
+            else:
+                self.min_value = min_value
+                self._update_pixel_value()
+                self.Refresh()
+        else:
+            logging.warning("Minimum %s is larger than maximum %s!",
+                            min_value, self.max_value)
+
+    def SetMax(self, max_value):
+        if max_value >= self.min_value:
+            if self.value and self.value < max_value:
+                logging.warning("Maximum %s is smaller than current value %s!",
+                                max_value, self.value)
+            else:
+                self.max_value = max_value
+                self._update_pixel_value()
+                self.Refresh()
+        else:
+            logging.warning("Maximum %s is smaller than minimum %s!",
+                            max_value, self.min_value)
 
     def _update_pixel_value(self):
         """ Recompute .pixel_value according to .value """
@@ -731,22 +785,24 @@ class VisualRangeSlider(BaseSlider):
             self.pixel_value = (self.pixel_value[0], self.pixel_value[0] + 1)
 
     def GetRange(self):
-        return self.val_range
+        return (self.min_value, self.max_value)
 
     def Disable(self):  #pylint: disable=W0221
         self.Enable(False)
 
     def Enable(self, enable=True):  #pylint: disable=W0221
-        wx.PyControl.Enable(self, enable)
-        if enable:
-            self.content_color = wxcol_to_rgb(self.GetForegroundColour())
-            self.select_color = change_brightness(self.select_color, 0.4)
-        else:
-            # FIXME: this will fail if multiple Disable() in a row
-            self.content_color = change_brightness(self.content_color, -0.5)
-            self.select_color = change_brightness(self.select_color, -0.4)
+        dim = 0.1
 
-        self.Refresh()
+        if enable != self.Enabled:
+            wx.PyControl.Enable(self, enable)
+            if enable:
+                self.content_color = wxcol_to_rgb(self.GetForegroundColour())
+                self.select_color = change_brightness(self.select_color, dim)
+            else:
+                self.content_color = change_brightness(self.content_color, -dim)
+                self.select_color = change_brightness(self.select_color, -dim)
+
+            self.Refresh()
 
     def SetContent(self, content_list):
         self.content_list = content_list
@@ -756,8 +812,8 @@ class VisualRangeSlider(BaseSlider):
     def _val_to_pixel(self, val=None):
         """ Convert a slider value into a pixel position """
         width, _ = self.GetSize()
-        prcnt = self._val_to_percentage(self.val_range[0],
-                                        self.val_range[1],
+        prcnt = self._val_to_percentage(self.min_value,
+                                        self.max_value,
                                         val)
         return int(round(width * prcnt))
 
@@ -765,8 +821,8 @@ class VisualRangeSlider(BaseSlider):
         """ Convert the current handle position into a value """
         width, _ = self.GetSize()
         prcnt = pixel / width
-        return self._percentage_to_val(self.val_range[0],
-                                       self.val_range[1],
+        return self._percentage_to_val(self.min_value,
+                                       self.max_value,
                                        prcnt)
 
     def _hover(self, x):
@@ -939,11 +995,11 @@ class BandwidthSlider(VisualRangeSlider):
     def set_center_value(self, center):
         logging.debug("Setting center value to %s", center)
         spread = self.get_bandwidth_value() / 2
-        center = self.get_center_value()
         # min/max needed as imprecision can bring the value slightly outside
-        val = (max(center - spread, self.val_range[0]),
-               min(center + spread, self.val_range[1]))
-        super(BandwidthSlider, self).SetValue(val) # will not do anything if dragging
+        val = (max(center - spread, self.min_value),
+               min(center + spread, self.max_value))
+
+        super(BandwidthSlider, self).SetValue(val)
 
     def get_center_value(self):
         return (self.value[0] + self.value[1]) / 2
@@ -952,9 +1008,10 @@ class BandwidthSlider(VisualRangeSlider):
         logging.debug("Setting bandwidth to %s", bandwidth)
         spread = bandwidth / 2
         center = self.get_center_value()
-        val = (max(center - spread, self.val_range[0]),
-               min(center + spread, self.val_range[1]))
-        super(BandwidthSlider, self).SetValue(val) # will not do anything if dragging
+        val = (max(center - spread, self.min_value),
+               min(center + spread, self.max_value))
+        # will not do anything if dragging
+        super(BandwidthSlider, self).SetValue(val)
 
     def get_bandwidth_value(self):
         return self.value[1] - self.value[0]

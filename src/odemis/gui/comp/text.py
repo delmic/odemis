@@ -8,15 +8,15 @@ Copyright © 2012 Rinze de Laat, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms 
-of the GNU General Public License version 2 as published by the Free Software 
+Odemis is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
 Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR 
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
 PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with 
+You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 
 Content:
@@ -640,8 +640,7 @@ class NumberTextCtrl(wx.TextCtrl):
         self.Bind(wx.EVT_TEXT_ENTER, self.on_text_enter)
 
     def _display_raw(self):
-        """
-        set the current text to raw style (no truncation/no unit)
+        """ Set the current text to raw style (no truncation/no unit)
         """
         if self.number is None:
             str_val = u""
@@ -701,8 +700,7 @@ class NumberTextCtrl(wx.TextCtrl):
         self.GetValidator().SetRange(minv, maxv)
 
     def _processNewText(self, str_val):
-        """
-        Called internally when a new text is entered by the user
+        """ Called internally when a new text is entered by the user
         It processes the new text and set the number
         """
         prev_num = self.number

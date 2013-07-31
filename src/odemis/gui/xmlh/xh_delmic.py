@@ -720,17 +720,12 @@ class UnitIntegerSliderHandler(xrc.XmlResourceHandler):
     def DoCreateResource(self):
         assert self.GetInstance() is None
 
-        # parent, id=wx.ID_ANY, value=0.0, val_range=(0.0, 1.0),
-        #          size=(-1, -1), pos=wx.DefaultPosition, style=wx.NO_BORDER,
-        #          name="Slider", scale=None, t_class=NumberTextCtrl,
-        #          t_size=(50, -1), unit="", accuracy=0):
-
         val = int(self.GetText('value') or 0)
-        rng = (self.GetLong('min'), self.GetLong('max'))
+        minv, maxv = self.GetLong('min'), self.GetLong('max')
         text_size = ast.literal_eval(self.GetText('text_size') or "50, -1")
 
-        if rng[0] == rng[1]:
-            rng = (rng[0], rng[1] + 1)
+        if minv == maxv:
+            maxv = minv + 1
 
         # Now create the object
         slider = slide.UnitIntegerSlider(self.GetParentAsWindow(),
@@ -740,7 +735,8 @@ class UnitIntegerSliderHandler(xrc.XmlResourceHandler):
                                         style=self.GetStyle(),
                                         value=val,
                                         unit=self.GetText('unit'),
-                                        val_range=rng,
+                                        min_val=minv,
+                                        max_val=maxv,
                                         scale=self.GetText('scale'),
                                         t_size=text_size)
         self.SetupWindow(slider)
@@ -776,12 +772,14 @@ class UnitFloatSliderHandler(xrc.XmlResourceHandler):
         assert self.GetInstance() is None
 
         val = self.GetFloat('value')
-        rng = (self.GetFloat('min'), self.GetFloat('max'))
+        min_val = self.GetFloat('min')
+        max_val = self.GetFloat('max')
+
         text_size = ast.literal_eval(self.GetText('text_size') or "50, -1")
 
-        if rng[0] == rng[1]:
-            logging.warning("Incorrect range between %r and %r", rng[0], rng[1])
-            rng = (rng[0], rng[1] + 1.0)
+        if min_val == max_val:
+            logging.warning("Incorrect range between %r and %r", min_val, max_val)
+            max_val = min_val + 1.0
 
         accuracy = self.GetLong('accuracy', -1)
         if accuracy == -1:
@@ -789,13 +787,14 @@ class UnitFloatSliderHandler(xrc.XmlResourceHandler):
 
         # Now create the object
         slider = slide.UnitFloatSlider(self.GetParentAsWindow(),
-                                       id=self.GetID(),
+                                       wid=self.GetID(),
                                        pos=self.GetPosition(),
                                        size=self.GetSize(),
                                        style=self.GetStyle(),
                                        value=val,
                                        unit=self.GetText('unit'),
-                                       val_range=rng,
+                                       min_val=min_val,
+                                       max_val=max_val,
                                        scale=self.GetText('scale'),
                                        accuracy=accuracy,
                                        t_size=text_size)
@@ -819,7 +818,7 @@ class VisualRangeSliderHandler(xrc.XmlResourceHandler):
         assert self.GetInstance() is None
         # Now create the object
         slider = slide.VisualRangeSlider(self.GetParentAsWindow(),
-                                         id=self.GetID(),
+                                         wid=self.GetID(),
                                          pos=self.GetPosition(),
                                          size=self.GetSize(),
                                          style=self.GetStyle())
@@ -843,7 +842,7 @@ class BandwidthSliderHandler(xrc.XmlResourceHandler):
         assert self.GetInstance() is None
         # Now create the object
         slider = slide.BandwidthSlider(self.GetParentAsWindow(),
-                                       id=self.GetID(),
+                                       wid=self.GetID(),
                                        pos=self.GetPosition(),
                                        size=self.GetSize(),
                                        style=self.GetStyle())
