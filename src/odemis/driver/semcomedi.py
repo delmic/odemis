@@ -99,6 +99,7 @@ def get_best_dtype_for_acc(idtype, count):
     returns (dtype): the best fitting dtype
     """
     maxval = numpy.iinfo(idtype).max * count
+    # TODO: this could probably be simplified with numpy.min_scalar_type()
     if maxval <= numpy.iinfo(numpy.uint32).max:
         adtype = numpy.uint32
     elif maxval <= numpy.iinfo(numpy.uint64).max:
