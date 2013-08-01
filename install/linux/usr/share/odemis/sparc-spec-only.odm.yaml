@@ -1,4 +1,4 @@
-# Configuration for the SPARC system at AMOLF, with only the angle resolved camera
+# Configuration for the SPARC system at AMOLF, with only the spectrometer
 # The main difference with the typical SPARC is that camera are Princeton-Instruments.
 SPARC-AMOLF: {
     class: Microscope,
@@ -28,7 +28,7 @@ SPARC-AMOLF: {
         channels: [0, 1],
         limits: [[3, -3], [-4, 4]],  # V
         settle_time: 10.e-6, # s
-        hfw_nomag: 0.2, # m
+        hfw_nomag: 0.136, # m
     },
     properties: {
         scale: [8, 8], # (ratio) : start with a pretty fast scan
@@ -50,29 +50,26 @@ SPARC-AMOLF: {
 
 # PIXIS via USB
 ARCam: {
-    class: pvcam.PVCam,
+    class: andorcam2.FakeAndorCam2,
     role: ccd,
-    init: {device: "rspipixis"} # use 0 if this symlink is no created
+    init: {device: 0}
 }
 
 Spec10: {
     class: spectrometer.CompositedSpectrometer,
     role: spectrometer,
-    children: {detector: "SpecCam", spectrograph: "FakeSP2300i"},
-    properties: {
-        binning: [4, 32],
-    },
+    children: {detector: "SpecCam", spectrograph: "SP2300i"}
 }
 
 SpecCam: {
-    class: andorcam2.FakeAndorCam2,
+    class: pvcam.PVCam,
     role: sp-ccd,
-    init: {device: 0} # same device number but it will actually be different device
+    init: {device: "rspist133"}
 }
 
-# Simulated SP-2300i, the spectrograph part of the Spec-10
-FakeSP2300i: {
-    class: spectrapro.FakeSpectraPro,
+# SP-2300i, the spectrograph part of the Spec-10
+SP2300i: {
+    class: spectrapro.SpectraPro,
     role: spectrograph,
     affects: [SpecCam],
     init: {
