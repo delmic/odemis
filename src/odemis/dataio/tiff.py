@@ -30,6 +30,64 @@ import time
 import xml.etree.ElementTree as ET
 #pylint: disable=E1101
 
+# Note about libtiff: it's a pretty ugly library, with 2 different wrappers.
+# We use only the C wrapper (not the Python implementation).
+
+
+
+# monkey patching of TIFF.read_image() because the original version cannot read RGB
+np = numpy
+def _TIFF_read_image(self, verbose=False):
+    """ Read image from TIFF and return it as an array.
+    """
+    width = self.GetField('ImageWidth')
+    height = self.GetField('ImageLength')
+    samples_pp = self.GetField('SamplesPerPixel') # this number includes extra samples
+    if samples_pp is None:
+        samples_pp = 1
+    bits = self.GetField('BitsPerSample') # samples_pp values
+    # The version of libtiff we have doesn't support count =, so assume they are all the same
+    # anyway, even libtiff doesn't support different values per sample
+#    bits = [bits] * samples_pp
+    planar_config = self.GetField('PlanarConfig') # default is contig
+    if planar_config is None:
+        planar_config = T.PLANARCONFIG_CONTIG
+    sample_format = self.GetField('SampleFormat')
+    compression = self.GetField('Compression')
+
+    typ = self.get_numpy_type(bits, sample_format)
+    if typ is None:
+        raise NotImplementedError("%d bits" % bits)
+    # TODO: might need special support if bits < 8
+
+    if samples_pp == 1:
+        # only 2 dimensions array
+        arr = np.empty((height, width), typ)
+    else:
+        if planar_config == T.PLANARCONFIG_CONTIG:
+            arr = np.empty((height, width, samples_pp), typ)
+        elif planar_config == T.PLANARCONFIG_SEPARATE:
+            # Each sample must be of the same type, as numpy doesn't support
+            # dimensions of different types (alternatively, we could just return
+            # a list of arrays, with one array per plane).
+            arr = np.empty((samples_pp, height, width), typ)
+        else:
+            raise NotImplementedError("Planarconfig = %d" % planar_config)
+    size = arr.nbytes
+
+    if compression == T.COMPRESSION_NONE:
+        ReadStrip = self.ReadRawStrip
+    else:
+        ReadStrip = self.ReadEncodedStrip
+
+    pos = 0
+    for strip in range(self.NumberOfStrips()):
+        elem = ReadStrip(strip, arr.ctypes.data + pos, max(size - pos, 0))
+        pos += elem
+    return arr
+
+TIFF.read_image = _TIFF_read_image
+
 # Note concerning the image format: it follows the numpy convention. The first
 # dimension is the height, and second one is the width. (This is so because
 # in memory the height is the slowest changing dimension, so it is first in C
@@ -101,6 +159,7 @@ def _convertToTiffTag(metadata):
             # or actually rotate the data?
             logging.info("Metadata tag '%s' skipped when saving TIFF file", key)
         # TODO MD_BPP : the actual bit size of the detector
+        # Use SMINSAMPLEVALUE and SMAXSAMPLEVALUE ?
         elif key == model.MD_DESCRIPTION:
             # We don't use description as it's used for OME-TIFF
             tiffmd[T.TIFFTAG_PAGENAME] = val
@@ -112,6 +171,92 @@ def _convertToTiffTag(metadata):
             logging.debug("Metadata tag '%s' skipped when saving TIFF file", key)
 
     return tiffmd
+
+def _rational2float(rational):
+    """
+    Converts a rational number (from libtiff) to a float
+    rational (numpy array of shape 1 with numer and denom fields): numerator, denominator
+    returns (float): numer/ denom
+    """
+    return rational["numer"][0] / rational["denom"][0]
+
+def _GetFieldDefault(tfile, tag, default=None):
+    """
+    Same as TIFF.GetField(), but if the tag is not defined, return default
+    Note: the C libtiff has GetFieldDefaulted() which returns the dafault value
+    of the specification, this function is different.
+    tag (int or string): tag id or name
+    default (value): value to return if the tag is not defined
+    """
+    ret = tfile.GetField(tag)
+    if ret is None:
+        return default
+    else:
+        return ret
+
+# factor for value -> me
+resunit_to_m = {T.RESUNIT_INCH: 0.0254, T.RESUNIT_CENTIMETER: 0.01}
+def _readTiffTag(tfile):
+    """
+    Reads the tiff tags of the current page and convert them into metadata
+    It tries to do the reverse of _convertToTiffTag(). Support for other
+    metadata and other ways to encode metadata is best-effort only.
+    tfile (TIFF): the opened tiff file
+    return (dict of tag -> value): the metadata of a DataArray
+    """
+    md = {}
+
+    # scale + position
+    resunit = _GetFieldDefault(tfile, T.TIFFTAG_RESOLUTIONUNIT, T.RESUNIT_INCH)
+    factor = resunit_to_m.get(resunit, 1) # default to 1
+
+    xres = tfile.GetField(T.TIFFTAG_XRESOLUTION)
+    yres = tfile.GetField(T.TIFFTAG_YRESOLUTION)
+    if xres is not None and yres is not None:
+        md[model.MD_PIXEL_SIZE] = (factor / _rational2float(xres),
+                                   factor / _rational2float(yres))
+
+    xpos = tfile.GetField(T.TIFFTAG_XPOSITION)
+    ypos = tfile.GetField(T.TIFFTAG_YPOSITION)
+    if xpos is not None and ypos is not None:
+        # -1 m for the shift
+        md[model.MD_POS] = (factor / _rational2float(xpos) - 1,
+                            factor / _rational2float(yres) - 1)
+
+    # informative metadata
+    val = tfile.GetField(T.TIFFTAG_PAGENAME)
+    if val is not None:
+        md[model.MD_DESCRIPTION] = val
+    val = tfile.GetField(T.TIFFTAG_SOFTWARE)
+    if val is not None:
+        md[model.MD_SW_VERSION] = val
+    val = tfile.GetField(T.TIFFTAG_MAKE)
+    if val is not None:
+        md[model.MD_HW_NAME] = val
+    val = tfile.GetField(T.TIFFTAG_MODEL)
+    if val is not None:
+        md[model.MD_HW_VERSION] = val
+    val = tfile.GetField(T.TIFFTAG_MODEL)
+    if val is not None:
+        try:
+            t = time.mktime(time.strptime(val, "%Y:%m:%d %H:%M:%S"))
+            md[model.MD_ACQ_DATE] = t
+        except (OverflowError, ValueError):
+            logging.info("Failed to parse date '%s'", val)
+
+    return md
+
+def _isThumbnail(tfile):
+    """
+    Detects wheter the current image if a file is a thumbnail or not
+    returns (boolean): True if the image is a thumbnail, False otherwise
+    """
+    # Best method is to check for the official TIFF flag
+    subft = _GetFieldDefault(tfile, T.TIFFTAG_SUBFILETYPE, 0)
+    if subft & T.FILETYPE_REDUCEDIMAGE:
+        return True
+
+    return False
 
 def _convertToOMEMD(images):
     """
@@ -471,12 +616,20 @@ def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True):
 
     if thumbnail is not None:
         # save the thumbnail just as the first image
+        # FIXME: Note that this is contrary to the specification which states:
+        # "If multiple subfiles are written, the first one must be the
+        # full-resolution image." The main problem is that most thumbnailers
+        # use the first image as thumbnail. Maybe we should provide our own
+        # clever thumbnailer?
+
         f.SetField(T.TIFFTAG_IMAGEDESCRIPTION, ometxt)
         ometxt = None
         f.SetField(T.TIFFTAG_PAGENAME, "Composited image")
+        # Flag for saying it's a thumbnail
+        f.SetField(T.TIFFTAG_SUBFILETYPE, T.FILETYPE_REDUCEDIMAGE)
 
         # FIXME:
-        # libtiff has a bug: it thinks that RGB image are organised as
+        # Pylibtiff has a bug: it thinks that RGB image are organised as
         # 3xHxW, while normally in numpy, it's HxWx3. (cf scipy.imread)
         # So we need to swap the axes
         if len(thumbnail.shape) == 3:
@@ -484,6 +637,7 @@ def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True):
 
         # write_rgb makes it clever to detect RGB vs. Greyscale
         f.write_image(thumbnail, compression=compression, write_rgb=True)
+        
 
         # TODO also save it as thumbnail of the image (in limited size)
         # see  http://www.libtiff.org/man/thumbnail.1.html
@@ -535,6 +689,8 @@ def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True):
         for key, val in tags.items():
             f.SetField(key, val)
 
+        # TODO: see if we need to set FILETYPE_PAGE + Page number for each image? data?
+
         if ometxt: # save OME tags if not yet done
             f.SetField(T.TIFFTAG_IMAGEDESCRIPTION, ometxt)
             ometxt = None
@@ -542,6 +698,53 @@ def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True):
         # for data > 2D: write as a sequence of 2D images
         for i in numpy.ndindex(data.shape[:-2]):
             f.write_image(data[i], compression=compression)
+
+def _thumbsFromTIFF(filename):
+    """
+    Read thumbnails from an TIFF file.
+    return (list of model.DataArray)
+    """
+    f = TIFF.open(filename, mode='r')
+    # open each image/page as a separate data
+    data = []
+    for image in f.iter_images():
+        if _isThumbnail(f):
+            md = _readTiffTag(f) # reads tag of the current image
+            da = model.DataArray(image, metadata=md)
+            data.append(da)
+
+    return data
+
+def _dataFromTIFF(filename):
+    """
+    Read microscopy data from a TIFF file.
+    filename (string): path of the file to read
+    return (list of model.DataArray)
+    """
+    f = TIFF.open(filename, mode='r')
+    
+    # open each image/page as a separate image
+    data = []
+    for image in f.iter_images():
+        # If it's a thumbnail, skip it, but leave the space free to not mess with the IFD number
+        if _isThumbnail(f):
+            data.append(None)
+            continue
+        md = _readTiffTag(f) # reads tag of the current image
+        da = model.DataArray(image, metadata=md)
+        data.append(da)
+        
+    # If looks like OME TIFF, reconstruct >2D data and add metadata
+    # It's OME TIFF, if it has a valid ome-tiff XML in the first T.TIFFTAG_IMAGEDESCRIPTION
+    # Warning: we support what we write, not the whole OME-TIFF specification.
+    if False:
+        return _reconstructFromOMETIFF(xml, data)
+    
+
+    # Remove all the None (=thumnails) from the list
+    data = [i for i in data if i is not None]
+    return data
+
 
 def export(filename, data, thumbnail=None):
     '''
@@ -563,3 +766,35 @@ def export(filename, data, thumbnail=None):
         assert(isinstance(data, model.DataArray))
         _saveAsTiffLT(filename, data, thumbnail)
 
+def read_data(filename):
+    """
+    Read an TIFF file and return its content (skipping the thumbnail).
+    filename (string): filename of the file to read
+    return (list of model.DataArray): the data to import (with the metadata 
+     as .metadata). It might be empty.
+     Warning: reading back a file just exported might give a smaller number of
+     DataArrays! This is because export() tries to aggregate data which seems
+     to be from the same acquisition but on different dimensions C, T, Z.
+     read_data() cannot separate them back explicitly.
+    raises:
+        IOError in case the file format is not as expected.
+    """
+    # TODO: support filename to be a File or Stream (but it seems very difficult
+    # to do it without looking at the .filename attribute)
+    # see http://pytables.github.io/cookbook/inmemory_hdf5_files.html
+
+    return _dataFromTIFF(filename)
+
+def read_thumbnail(filename):
+    """
+    Read the thumbnail data of a given TIFF file.
+    filename (string): filename of the file to read
+    return (list of model.DataArray): the thumbnails attached to the file. If 
+     the file contains multiple thumbnails, all of them are returned. If it 
+     contains none, an empty list is returned.
+    raises:
+        IOError in case the file format is not as expected.
+    """
+    # TODO: support filename to be a File or Stream
+
+    return _thumbsFromTIFF(filename)

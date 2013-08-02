@@ -37,6 +37,13 @@ import xml.etree.ElementTree as ET
 FILENAME = "test" + tiff.EXTENSIONS[0] 
 class TestTiffIO(unittest.TestCase):
     
+    def tearDown(self):
+        # clean up
+        try:
+            os.remove(FILENAME)
+        except Exception:
+            pass
+
     # Be careful: numpy's notation means that the pixel coordinates are Y,X,C
     def testExportOnePage(self):
         # create a simple greyscale image
@@ -58,8 +65,6 @@ class TestTiffIO(unittest.TestCase):
         self.assertEqual(im.size, size)
         self.assertEqual(im.getpixel(white), 124)
         
-        os.remove(FILENAME)
-
 #    @skip("Doesn't work")
     def testExportMultiPage(self):
         # create a simple greyscale image
@@ -127,8 +132,6 @@ class TestTiffIO(unittest.TestCase):
             im.seek(i+1)
             self.assertEqual(im.size, size)
             
-        os.remove(FILENAME)
-        
     def testExportCube(self):
         """
         Check it's possible to export a 3D data (typically: 2D area with full
@@ -195,8 +198,6 @@ class TestTiffIO(unittest.TestCase):
         self.assertEqual(im.size, size)
         self.assertEqual(im.getpixel((1,1)), 0)
             
-        os.remove(FILENAME)
-
 
     def testMetadata(self):
         """
@@ -278,8 +279,59 @@ class TestTiffIO(unittest.TestCase):
         exp_bin = "%dx%d" % metadata[model.MD_BINNING]
         self.assertEqual(bin_str, exp_bin)
         
-        os.remove(FILENAME)
-        
+    def testExportRead(self):
+        """
+        Checks that we can read back an image and a thumbnail
+        """
+        # create 2 simple greyscale images
+        sizes = [(512, 256), (500, 400)] # different sizes to ensure different acquisitions
+        dtype = numpy.dtype("uint16")
+        white = (12, 52) # non symmetric position
+        ldata = []
+        num = 2
+        # TODO: check support for combining channels when same data shape
+        for i in range(num):
+            a = model.DataArray(numpy.zeros(sizes[i][-1:-3:-1], dtype))
+            a[white[-1:-3:-1]] = 1027
+            ldata.append(a)
+
+        # thumbnail : small RGB completely red
+        tshape = (sizes[0][1] // 8, sizes[0][0] // 8, 3)
+        tdtype = numpy.uint8
+        thumbnail = model.DataArray(numpy.zeros(tshape, tdtype))
+        thumbnail[:, :, 0] += 255 # red
+        blue = (12, 22) # non symmetric position
+        thumbnail[blue[-1:-3:-1]] = [0, 0, 255]
+
+        # export
+        tiff.export(FILENAME, ldata, thumbnail)
+
+        # check it's here
+        st = os.stat(FILENAME) # this test also that the file is created
+        self.assertGreater(st.st_size, 0)
+
+        # check data
+        rdata = tiff.read_data(FILENAME)
+        self.assertEqual(len(rdata), num)
+
+        for i, im in enumerate(rdata):
+            if len(im.shape) > 2:
+                subim = im[0, 0, 0] # remove C,T,Z dimensions
+            else:
+                subim = im      # TODO: should it always be 5 dim?
+            self.assertEqual(subim.shape, sizes[i][-1::-1])
+            self.assertEqual(subim[white[-1:-3:-1]], ldata[i][white[-1:-3:-1]])
+
+        # check thumbnail
+        rthumbs = tiff.read_thumbnail(FILENAME)
+        self.assertEqual(len(rthumbs), 1)
+        im = rthumbs[0]
+        self.assertEqual(im.shape, tshape)
+        self.assertEqual(im[0, 0].tolist(), [255, 0, 0])
+        self.assertEqual(im[blue[-1:-3:-1]].tolist(), [0, 0, 255])
+
+
+
 def rational2float(rational):
     """
     Converts a rational number (from libtiff) to a float
