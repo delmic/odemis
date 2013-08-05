@@ -33,61 +33,6 @@ import xml.etree.ElementTree as ET
 # Note about libtiff: it's a pretty ugly library, with 2 different wrappers.
 # We use only the C wrapper (not the Python implementation).
 
-
-
-# monkey patching of TIFF.read_image() because the original version cannot read RGB
-np = numpy
-def _TIFF_read_image(self, verbose=False):
-    """ Read image from TIFF and return it as an array.
-    """
-    width = self.GetField('ImageWidth')
-    height = self.GetField('ImageLength')
-    samples_pp = self.GetField('SamplesPerPixel') # this number includes extra samples
-    if samples_pp is None:
-        samples_pp = 1
-    bits = self.GetField('BitsPerSample') # samples_pp values
-    # The version of libtiff we have doesn't support count =, so assume they are all the same
-    # anyway, even libtiff doesn't support different values per sample
-#    bits = [bits] * samples_pp
-    planar_config = self.GetField('PlanarConfig') # default is contig
-    if planar_config is None:
-        planar_config = T.PLANARCONFIG_CONTIG
-    sample_format = self.GetField('SampleFormat')
-    compression = self.GetField('Compression')
-
-    typ = self.get_numpy_type(bits, sample_format)
-    if typ is None:
-        raise NotImplementedError("%d bits" % bits)
-    # TODO: might need special support if bits < 8
-
-    if samples_pp == 1:
-        # only 2 dimensions array
-        arr = np.empty((height, width), typ)
-    else:
-        if planar_config == T.PLANARCONFIG_CONTIG:
-            arr = np.empty((height, width, samples_pp), typ)
-        elif planar_config == T.PLANARCONFIG_SEPARATE:
-            # Each sample must be of the same type, as numpy doesn't support
-            # dimensions of different types (alternatively, we could just return
-            # a list of arrays, with one array per plane).
-            arr = np.empty((samples_pp, height, width), typ)
-        else:
-            raise NotImplementedError("Planarconfig = %d" % planar_config)
-    size = arr.nbytes
-
-    if compression == T.COMPRESSION_NONE:
-        ReadStrip = self.ReadRawStrip
-    else:
-        ReadStrip = self.ReadEncodedStrip
-
-    pos = 0
-    for strip in range(self.NumberOfStrips()):
-        elem = ReadStrip(strip, arr.ctypes.data + pos, max(size - pos, 0))
-        pos += elem
-    return arr
-
-TIFF.read_image = _TIFF_read_image
-
 # Note concerning the image format: it follows the numpy convention. The first
 # dimension is the height, and second one is the width. (This is so because
 # in memory the height is the slowest changing dimension, so it is first in C
@@ -103,22 +48,15 @@ FORMAT = "TIFF"
 # list of file-name extensions possible, the first one is the default when saving a file
 EXTENSIONS = [".ome.tiff", ".ome.tif", ".tiff", ".tif"]
 
+# We try to make it as much as possible looking like a normal (multi-page) TIFF,
+# with as much metadata as possible saved in the known TIFF tags. In addition,
+# we ensure it's compatible with OME-TIFF, which support much more metadata, and
+# more than 3 dimensions for the data.
+# Note that it could be possible to use more TIFF tags, from DNG and LSM for
+# example.
 
-# For tags, see convert.py of libtiff.py which has some specific for microscopy
-# Or use the LSM format (from Carl Zeiss)?
-
-#TIFFTAG_DOCUMENTNAME
-#TIFFTAG_ARTIST
-#TIFFTAG_COPYRIGHT
-# MODEL
-# MAKE
-# XPOSITION
-# YPOSITION
-#TIFFTAG_XRESOLUTION
-#TIFFTAG_YRESOLUTION
-#TIFFTAG_RESOLUTIONUNIT
-#TIFFTAG_IMAGEDESCRIPTION
-# TODO how to put our own tags? => use ome xml in ImageDescription?
+# TODO: make sure that _all_ the metadata is saved, either in TIFF tags, OME-TIFF,
+# or in a separate mechanism.
 
 def _convertToTiffTag(metadata):
     """
@@ -628,12 +566,9 @@ def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True):
         # Flag for saying it's a thumbnail
         f.SetField(T.TIFFTAG_SUBFILETYPE, T.FILETYPE_REDUCEDIMAGE)
 
-        # FIXME:
-        # Pylibtiff has a bug: it thinks that RGB image are organised as
-        # 3xHxW, while normally in numpy, it's HxWx3. (cf scipy.imread)
-        # So we need to swap the axes
-        if len(thumbnail.shape) == 3:
-            thumbnail = numpy.rollaxis(thumbnail, 2) # a new view
+        # Warning, upstream Pylibtiff has a bug: it can only write RGB images are
+        # organised as 3xHxW, while normally in numpy, it's HxWx3.
+        # Our version is fixed
 
         # write_rgb makes it clever to detect RGB vs. Greyscale
         f.write_image(thumbnail, compression=compression, write_rgb=True)
