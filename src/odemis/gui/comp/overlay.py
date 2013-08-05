@@ -80,11 +80,11 @@ class Overlay(object):
 
         #t = font.GetPixelSize()
         ctx.set_source_rgba(0.0, 0.0, 0.0, 0.7)
-        ctx.move_to(x, y)
+        ctx.move_to(x + 1, y + 1)
         ctx.show_text(label)
 
         ctx.set_source_rgb(1.0, 1.0, 1.0)
-        ctx.move_to(x + 1, y + 1)
+        ctx.move_to(x, y)
         ctx.show_text(label)
 
     def _clip_viewport_pos(self, pos):
@@ -200,6 +200,7 @@ class FocusOverlay(ViewOverlay):
 
     def add_shift(self, shift, num):
         self.shifts[num] += shift * 1e6
+        self.base.Refresh()
 
     def clear_shift(self):
         self.shifts = [0, 0]
