@@ -405,6 +405,11 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
     def OnRightUp(self, event):
         if self._rdragging:
+            # Stop the timers, so there won't be any more focussing once the
+            # button is released.
+            for timer in [self._moveFocus0Timer, self._moveFocus1Timer]:
+                if timer.IsRunning():
+                    timer.Stop()
             self.focus_overlay.clear_shift()
         canvas.DraggableCanvas.OnRightUp(self, event)
 
@@ -636,6 +641,7 @@ class SecomCanvas(DblMicroscopeCanvas):
             elif num_focus == 2:
                 logging.debug("Two focus actuators found")
                 self.SetCursor(wx.StockCursor(wx.CURSOR_CROSS))
+            self.focus_overlay.clear_shift()
 
             super(SecomCanvas, self).OnRightDown(event)
 

@@ -198,12 +198,15 @@ class FocusOverlay(ViewOverlay):
                 align=wx.ALIGN_RIGHT
             )
 
-    def add_shift(self, shift, num):
-        self.shifts[num] += shift * 1e6
+    def add_shift(self, shift, axis):
+        """ TODO: doc """
+        self.shifts[axis] += shift * 1e6
         self.base.Refresh()
 
     def clear_shift(self):
+        logging.debug("Clearing focus shift")
         self.shifts = [0, 0]
+        self.base.Refresh()
 
 class SelectionMixin(object):
     """ This Overlay class can be used to draw rectangular selection areas.
