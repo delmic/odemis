@@ -31,8 +31,10 @@ import wx
 
 import odemis.gui as gui
 import odemis.gui.comp.canvas as canvas
+import odemis.gui.util.units as units
 from odemis.gui.util.units import readable_str
 from odemis.gui.util.conversion import hex_to_rgba, change_brightness
+
 
 class Overlay(object):
     __metaclass__ = ABCMeta
@@ -48,7 +50,7 @@ class Overlay(object):
     def set_label(self, label):
         self.label = unicode(label)
 
-    def write_label(self, ctx, vpos, label, flip=True):
+    def write_label(self, ctx, vpos, label, flip=True, align=wx.ALIGN_LEFT):
         font = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT)
         ctx.select_font_face(
                 font.GetFaceName(),
@@ -62,9 +64,14 @@ class Overlay(object):
         _, _, width, height, _, _ = ctx.text_extents(label)
         x, y = vpos
 
+        if align == wx.ALIGN_RIGHT:
+            x = x - width
+
         if flip:
             if x + width + margin_x > self.base.ClientSize.x:
                 x = self.base.ClientSize[0] - width - margin_x
+            elif x < margin_x:
+                x = margin_x
 
             if y + height + margin_x > self.base.ClientSize.y:
                 y = self.base.ClientSize[1] - height
@@ -145,6 +152,57 @@ class CrossHairOverlay(ViewOverlay):
         dc.SetPen(self.pen)
         dc.DrawLine(tl_s[0], center[1], br_s[0], center[1])
         dc.DrawLine(center[0], tl_s[1], center[0], br_s[1])
+
+class FocusOverlay(ViewOverlay):
+    """ This overlay can be used to display the change in focus """
+    def __init__(self, base):
+        super(FocusOverlay, self).__init__(base)
+
+        self.margin = 10
+        self.line_width = 16
+        self.shifts = [0, 0]
+
+    def Draw(self, dc, shift=(0, 0), scale=1.0):
+        """
+        Draws the crosshair
+        dc (wx.DC)
+        shift (2-tuple float): shift for the coordinate conversion
+        scale (float): scale for the coordinate conversion
+        """
+        if self.shifts[1]:
+            ctx = wx.lib.wxcairo.ContextFromDC(dc)
+
+            ctx.set_line_width(10)
+            ctx.set_line_join(cairo.LINE_JOIN_MITER)
+            ctx.set_source_rgba(1.0, 1.0, 1.0, 0.8)
+
+            x, y = self.base.ClientSize
+            x = x - self.margin - (self.line_width / 2)
+            middle = y / 2
+            end_y = min(
+                        max(self.margin,
+                            middle - middle * (self.shifts[1] / (y / 2))
+                        ),
+                        y - self.margin
+                    )
+
+            ctx.move_to(x, middle)
+            ctx.line_to(x, end_y)
+            ctx.stroke()
+
+            self.write_label(
+                ctx,
+                (x - 10, end_y),
+                "focus %s" % units.readable_str(self.shifts[1] / 1e6, 'm', 2),
+                flip=False,
+                align=wx.ALIGN_RIGHT
+            )
+
+    def add_shift(self, shift, num):
+        self.shifts[num] += shift * 1e6
+
+    def clear_shift(self):
+        self.shifts = [0, 0]
 
 class SelectionMixin(object):
     """ This Overlay class can be used to draw rectangular selection areas.

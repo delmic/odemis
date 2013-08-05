@@ -348,6 +348,11 @@ class DraggableCanvas(wx.Panel):
             #  * else: dis + 1/32 * sign* (dis-32)**2 => (square zone)
             # send diff between value and previous value sent => it should
             # always be at the same position for the cursor at the same place
+            #
+            # NOTE: The focus overlay is loosely dependant on the values
+            # generated here, because it uses them to guesstimate the maximum
+            # value produced while focussing.
+
             linear_zone = 32.0
             pos = event.GetPositionTuple()
             for i in [0, 1]: # x, y

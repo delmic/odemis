@@ -123,6 +123,10 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         if hasattr(self.microscope_view, "stage_pos"):
             self.microscope_view.stage_pos.subscribe(self._onStagePos, init=True)
 
+        if self.microscope_view.get_focus_count():
+            self.focus_overlay = overlay.FocusOverlay(self)
+            self.ViewOverlays.append(self.focus_overlay)
+
         # any image changes
         self.microscope_view.lastUpdate.subscribe(self._onViewImageUpdate, init=True)
 
@@ -385,6 +389,8 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         with self._moveFocusLock:
             shift = self._moveFocusDistance[0]
             self._moveFocusDistance[0] = 0
+
+        self.focus_overlay.add_shift(shift, 0)
         logging.debug("Moving focus0 by %f μm", shift * 1e6)
         self.microscope_view.get_focus(0).moveRel({"z": shift})
 
@@ -392,8 +398,15 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         with self._moveFocusLock:
             shift = self._moveFocusDistance[1]
             self._moveFocusDistance[1] = 0
+
+        self.focus_overlay.add_shift(shift, 1)
         logging.debug("Moving focus1 by %f μm", shift * 1e6)
         self.microscope_view.get_focus(1).moveRel({"z": shift})
+
+    def OnRightUp(self, event):
+        if self._rdragging:
+            self.focus_overlay.clear_shift()
+        canvas.DraggableCanvas.OnRightUp(self, event)
 
     def world_to_real_pos(self, pos):
         phy_pos = tuple([v * self.mpwu for v in pos])
