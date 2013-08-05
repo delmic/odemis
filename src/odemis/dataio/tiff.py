@@ -110,14 +110,6 @@ def _convertToTiffTag(metadata):
 
     return tiffmd
 
-def _rational2float(rational):
-    """
-    Converts a rational number (from libtiff) to a float
-    rational (numpy array of shape 1 with numer and denom fields): numerator, denominator
-    returns (float): numer/ denom
-    """
-    return rational["numer"][0] / rational["denom"][0]
-
 def _GetFieldDefault(tfile, tag, default=None):
     """
     Same as TIFF.GetField(), but if the tag is not defined, return default
@@ -151,15 +143,13 @@ def _readTiffTag(tfile):
     xres = tfile.GetField(T.TIFFTAG_XRESOLUTION)
     yres = tfile.GetField(T.TIFFTAG_YRESOLUTION)
     if xres is not None and yres is not None:
-        md[model.MD_PIXEL_SIZE] = (factor / _rational2float(xres),
-                                   factor / _rational2float(yres))
+        md[model.MD_PIXEL_SIZE] = (factor / xres, factor / yres)
 
     xpos = tfile.GetField(T.TIFFTAG_XPOSITION)
     ypos = tfile.GetField(T.TIFFTAG_YPOSITION)
     if xpos is not None and ypos is not None:
         # -1 m for the shift
-        md[model.MD_POS] = (factor / _rational2float(xpos) - 1,
-                            factor / _rational2float(yres) - 1)
+        md[model.MD_POS] = (factor / xpos - 1, factor / yres - 1)
 
     # informative metadata
     val = tfile.GetField(T.TIFFTAG_PAGENAME)
