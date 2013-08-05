@@ -149,7 +149,7 @@ def _readTiffTag(tfile):
     ypos = tfile.GetField(T.TIFFTAG_YPOSITION)
     if xpos is not None and ypos is not None:
         # -1 m for the shift
-        md[model.MD_POS] = (factor / xpos - 1, factor / yres - 1)
+        md[model.MD_POS] = (factor / xpos - 1, factor / ypos - 1)
 
     # informative metadata
     val = tfile.GetField(T.TIFFTAG_PAGENAME)
