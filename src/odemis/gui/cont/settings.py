@@ -236,7 +236,10 @@ class SettingsPanel(object):
                 # in string representation, use a dropdown box
 
                 choices_str = "".join([str(c) for c in va.choices])
-                if len(va.choices) < max_items and \
+                if len(va.choices) <= 1:
+                    # not much choices really
+                    return odemis.gui.CONTROL_LABEL
+                elif len(va.choices) < max_items and \
                    len(choices_str) < max_items * max_len:
                     return odemis.gui.CONTROL_RADIO
                 else:
@@ -352,22 +355,24 @@ class SettingsPanel(object):
         # Get the range and choices
         min_val, max_val, choices, unit = self._get_va_meta(vigil_attr, conf)
 
-        format = conf.get("format", False)
+        format = conf.get("format", True)
 
         if choices:
-            choices = sorted(list(choices))
-            # choice_fmt is an iterable of tuples choice -> formatted choice
+            # choice_fmt is an iterable of tuples: choice -> formatted choice
             # (like a dict, but keeps order)
-            if format and len(choices) > 1 \
+            if isinstance(choices, dict):
+                # it's then already value -> string (user-friendly display)
+                choices_fmt = choices.items()
+            elif format and len(choices) > 1 \
                and all([isinstance(c, (int, float)) for c in choices]):
+#                choices = sorted(choices)
                 fmt, prefix = utun.si_scale_list(choices)
                 choices_fmt = zip(choices, [u"%g" % c for c in fmt])
                 unit = prefix + unit
-            elif isinstance(choices, dict):
-                # it's then already value -> string (user-friendly display)
-                choices_fmt = choices.items()
             else:
                 choices_fmt = [(c, choice_to_str(c)) for c in choices]
+
+            choices_fmt = sorted(choices_fmt) # sort 2-tuples = according to first value in tuple
 
         # Get the defined type of control or assign a default one
         try:
@@ -383,8 +388,6 @@ class SettingsPanel(object):
             self.entries.append(ne)
             # don't increase num_entries, as it doesn't add any graphical element
             return
-        # TODO: if choices has len == 1 => don't provide choice at all
-        #  => either display the value as a text, or don't display at all.
 
         # Remove any 'empty panel' warning
         self._clear()

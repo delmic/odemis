@@ -99,6 +99,7 @@ def get_best_dtype_for_acc(idtype, count):
     returns (dtype): the best fitting dtype
     """
     maxval = numpy.iinfo(idtype).max * count
+    # TODO: this could probably be simplified with numpy.min_scalar_type()
     if maxval <= numpy.iinfo(numpy.uint32).max:
         adtype = numpy.uint32
     elif maxval <= numpy.iinfo(numpy.uint64).max:
@@ -2234,7 +2235,7 @@ class Scanner(model.Emitter):
                                               readonly=True)
 
         # max dwell time is purely arbitrary
-        range_dwell = (parent.find_closest_dwell_time(0), 1) # s
+        range_dwell = (parent.find_closest_dwell_time(0), 100) # s
         self._osr = 1
         self.dwellTime = model.FloatContinuous(range_dwell[0], range_dwell,
                                                unit="s", setter=self._setDwellTime)

@@ -76,6 +76,7 @@ class PVCamDLL(CDLL):
             try:
                 self.raw1394 = CDLL("libraw1394.so.11", RTLD_GLOBAL)
                 #self.pthread = CDLL("libpthread.so.0", RTLD_GLOBAL) # python already loads libpthread
+                # TODO: shall we use  ctypes.util.find_library("pvcam")?
                 CDLL.__init__(self, "libpvcam.so", RTLD_GLOBAL)
             except OSError:
                 logging.exception("Failed to find the PVCam driver. You need to "
