@@ -347,6 +347,7 @@ class SelectionMixin(object):
     ##### drag methods  #####
 
     def start_drag(self, start_pos):
+        logging.debug("Starting selection drag")
         self.edit_start_pos = start_pos
         self.edit = True
 

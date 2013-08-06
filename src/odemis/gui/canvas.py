@@ -714,7 +714,6 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
         self.SetCursor(self.cursor)
 
     def OnLeftDown(self, event):
-
         # If one of the Sparc tools is activated...
         # current_mode is set through 'toggle_select_mode', which in
         # turn if activated by a pubsub event
@@ -723,7 +722,7 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
             hover = self.active_overlay.is_hovering(vpos)
 
             # Clicked outside selection
-            if not hover or hover == gui.HOVER_SELECTION:
+            if not hover:
                 self.dragging = True
                 self.active_overlay.start_selection(vpos, self.scale)
                 if not self.HasCapture():
@@ -732,6 +731,12 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
             elif hover != gui.HOVER_SELECTION:
                 self.dragging = True
                 self.active_overlay.start_edit(vpos, hover)
+                if not self.HasCapture():
+                    self.CaptureMouse()
+            # Clicked inside selection
+            elif self.current_mode == MODE_SPARC_SELECT:
+                self.dragging = True
+                self.active_overlay.start_drag(vpos)
                 if not self.HasCapture():
                     self.CaptureMouse()
             self.ShouldUpdateDrawing()
@@ -767,9 +772,13 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
                 if self.active_overlay.dragging:
                     self.active_overlay.update_selection(vpos)
                 else:
-                    self.active_overlay.update_edit(vpos)
+                    if self.active_overlay.edit_edge:
+                        self.active_overlay.update_edit(vpos)
+                    else:
+                        self.active_overlay.update_drag(vpos)
                 self.ShouldUpdateDrawing()
                 #self.Draw(wx.PaintDC(self))
+
             else:
                 hover = self.active_overlay.is_hovering(vpos)
                 if hover == gui.HOVER_SELECTION:
