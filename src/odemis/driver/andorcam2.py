@@ -1708,7 +1708,8 @@ class FakeAndorV2DLL(object):
 
         self.exposure = 0.1 # s
         self.kinetic = 0. # s, kinetic cycle time
-        self.pixelReadout = [0.01e-6, 0.1e-6] # s, time to readout one pixel
+        self.hsspeed = 0 # index in pixelReadout
+        self.pixelReadouts = [0.01e-6, 0.1e-6] # s, time to readout one pixel
 
         self.pixelSize = (20.0, 20.0) # um
         self.shape = (1024, 1024) # px
@@ -1885,17 +1886,17 @@ class FakeAndorV2DLL(object):
     def GetNumberHSSpeeds(self, channel, output_amp, p_nb):
         # only one channel and OA
         nb = _deref(p_nb, c_int)
-        nb.value = len(self.pixelReadout)
+        nb.value = len(self.pixelReadouts)
 
     def GetHSSpeed(self, channel, output_amp, i, p_speed):
         # only one channel and OA
         speed = _deref(p_speed, c_float)
-        speed.value = 1e-6 / self.pixelReadout[i] # MHz
+        speed.value = 1e-6 / self.pixelReadouts[i] # MHz
 
     def SetHSSpeed(self, output_amp, i):
-        if _val(i) != 0:
+        if _val(i) >= len(self.pixelReadouts):
             raise AndorV2Error()
-        # whatever
+        self.hsspeed = i
 
     def GetFastestRecommendedVSSpeed(self, p_i, p_speed):
         i = _deref(p_i, c_int)
@@ -1943,7 +1944,7 @@ class FakeAndorV2DLL(object):
         res = ((self.roi[1] - self.roi[0] + 1) // self.binning[0],
                (self.roi[3] - self.roi[2] + 1) // self.binning[1])
         nb_pixels = res[0] * res[1]
-        return self.pixelReadout * nb_pixels #s
+        return self.pixelReadouts[self.hsspeed] * nb_pixels #s
 
     def GetAcquisitionTimings(self, p_exposure, p_accumulate, p_kinetic):
         exposure = _deref(p_exposure, c_float)
