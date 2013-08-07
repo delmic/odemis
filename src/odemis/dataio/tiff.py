@@ -192,6 +192,8 @@ def _convertToOMEMD(images):
     """
     Converts DataArray tags to OME-TIFF tags.
     images (list of DataArrays): the images that will be in the TIFF file, in order
+      They should have 5 dimensions in this order: CTZYX, with the exception that
+      all the first dimensions of size 1 can be skipped.
     returns (string): the XML data as compatible with OME
     Note: the images will be considered from the same detectors only if they are
       consecutive (and the metadata confirms the detector is the same)
@@ -299,6 +301,8 @@ def _updateMDFromOME(root, das):
 def _foldArraysFromOME(root, das):
     """
     Reorganize DataArrays with more than 2 dimensions according to OME XML
+    Note: it expects _updateMDFromOME has been run before and so each array
+     has 
     root (ET.Element): the root (i.e., OME) element of the XML description
     data (list of DataArrays): DataArrays at the same place as the TIFF IFDs
     return (list of DataArrays): new shorter list of DAs 
@@ -311,17 +315,25 @@ def _foldArraysFromOME(root, das):
         # Use the first DA's metadata as metadata
         # Note: default IFD is 0 (but in which case the PlaneCount is all the file
         for tft in ime.findall("Pixels/TiffData"):
-            ifd = tft.get("IFD", "0")
+            ifd = int(tft.get("IFD", "0"))
+            try:
+                im = das[ifd]
+            except KeyError:
+                logging.warning("Failed to find IFD %d in image referenced in OME XML", ifd)
+                continue
+            if im is None:
+                continue
+            omedas.append(im)
 
-
-        # Note: Position might actually be different! In which case it could make
-        # sense to leave them separate.
+        # Note: Position or Wavelength might actually be different! In which
+        # case it could make sense to leave them separate.
+        # => Have a list of metadata which _can be_ different, and everything
+        # else must be identical to be merged
 
         # TODO: If has UUID tag, it means it's actually in a separate document
         # (cf tiff series)
 
-    return das
-#    return omedas
+    return omedas
 
 def _findImageGroups(das):
     """
@@ -356,7 +368,11 @@ def _findImageGroups(das):
             groups[-1].append(da)
         
         # increase ifd by the number of planes (= everything above 2D)
-        ifd += numpy.prod(da.shape[:-2])
+        # (and if RGB, don't count C dimension)
+        rep_hdim = list(da.shape[:-2])
+        if da.shape[0] == 3: # RGB
+            rep_hdim = 1
+        ifd += numpy.prod(rep_hdim)
             
     return groups, first_ifd
 
@@ -414,6 +430,12 @@ def _addImageElement(root, das, ifd):
     gshape[concat_axis] = len(das)
     gshape = tuple(gshape)
     
+    # Note: it seems officially OME-TIFF doesn't support RGB TIFF (instead,
+    # each colour should go in a separate channel). However, that'd defeat
+    # the purpose of the thumbnail, and it seems at OMERO handles this
+    # not too badly (all the other images get 3 components).
+    is_rgb = (dshape[0] == 3)
+
     # TODO: check that all the DataArrays have the same shape
     pixels = ET.SubElement(ime, "Pixels", attrib={
                               "ID": "Pixels:%d" % idnum,
@@ -437,13 +459,6 @@ def _addImageElement(root, das, ifd):
     # Channel Element
     subid = 0
     for da in das:
-        # RGB?
-        # Note: it seems officially OME-TIFF doesn't support RGB TIFF (instead,
-        # each colour should go in a separate channel). However, that'd defeat
-        # the purpose of the thumbnail, and it seems at OMERO handles this
-        # not too badly (all the other images get 3 components).
-        is_rgb = (len(da.shape) == 5 and da.shape[0] == 3)
-        
         if is_rgb or len(da.shape) < 5:
             num_chan = 1
         else:
@@ -498,9 +513,12 @@ def _addImageElement(root, das, ifd):
             subid += 1
 
     # TiffData Element: describe every single IFD image
-    # TODO: could be simplified for DAs of dim > 2, with PlaneCount > 2?
+    # TODO: could be more compact for DAs of dim > 2, with PlaneCount = first dim > 1?
     subid = 0
-    for index in numpy.ndindex(gshape[:-2]):
+    rep_hdim = list(gshape[:-2])
+    if is_rgb:
+        rep_hdim[0] = 1
+    for index in numpy.ndindex(*rep_hdim):
         tde = ET.SubElement(pixels, "TiffData", attrib={
                                 "IFD": "%d" % (ifd + subid),
                                 "FirstZ": "%d" % index[2],
@@ -512,7 +530,7 @@ def _addImageElement(root, das, ifd):
 
     # Plane Element
     subid = 0
-    for index in numpy.ndindex(gshape[:-2]):
+    for index in numpy.ndindex(*rep_hdim):
         da = das[index[concat_axis]]
         plane = ET.SubElement(pixels, "Plane", attrib={
                                "TheZ": "%d" % index[2],
@@ -661,8 +679,15 @@ def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True):
             ometxt = None
 
         # for data > 2D: write as a sequence of 2D images
-        for i in numpy.ndindex(data.shape[:-2]):
-            f.write_image(data[i], compression=compression)
+        # FIXME: for RGB images (data.ndim ==5 and data.shape[0] == 3), write them
+        # as RGB in only one IFD
+        if data.ndim == 5 and data.shape[0] == 3: # RGB
+            # Write an RGB image, instead of 3 images along C
+            for i in numpy.ndindex(*data.shape[1:3]):
+                f.write_image(data[:, i[0], i[1]], write_rgb=True, compression=compression)
+        else:
+            for i in numpy.ndindex(*data.shape[:-2]):
+                f.write_image(data[i], compression=compression)
 
 def _thumbsFromTIFF(filename):
     """
@@ -745,10 +770,12 @@ def export(filename, data, thumbnail=None):
     '''
     Write a TIFF file with the given image and metadata
     filename (string): filename of the file to create (including path)
-    data (list of model.DataArray, or model.DataArray): the data to export,
-        must be 2D or more of int or float. Metadata is taken directly from the data
-        object. If it's a list, a multiple page file is created. The order of the
-        dimensions is Channel, Time, Z, Y, X.
+    data (list of model.DataArray, or model.DataArray): the data to export.
+       Metadata is taken directly from the DA object. If it's a list, a multiple
+       page file is created. It must have 5 dimensions in this order: Channel, 
+       Time, Z, Y, X. However, all the first dimensions of size 1 can be omitted
+       (ex: an array of 111YX can be given just as YX, but RGB images are 311YX,
+       so must always be 5 dimensions).
     thumbnail (None or numpy.array): Image used as thumbnail for the file. Can be of any
       (reasonable) size. Must be either 2D array (greyscale) or 3D with last
       dimension of length 3 (RGB). If the exporter doesn't support it, it will
