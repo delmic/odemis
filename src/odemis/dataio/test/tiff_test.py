@@ -131,7 +131,25 @@ class TestTiffIO(unittest.TestCase):
         for i in range(num):
             im.seek(i+1)
             self.assertEqual(im.size, size)
+
+        # check OME-TIFF metadata
+        imo = libtiff.tiff.TIFFfile(FILENAME)
+        omemd = imo.IFD[0].get_value("ImageDescription")
+        self.assertTrue(omemd.startswith('<?xml') or omemd[:4].lower() == '<ome')
+
+        # remove "xmlns" which is the default namespace and is appended everywhere
+        omemd = re.sub('xmlns="http://www.openmicroscopy.org/Schemas/OME/....-.."',
+                       "", omemd, count=1)
+        root = ET.fromstring(omemd)
             
+        # check the IFD of each TIFFData is different
+        ifds = set()
+        for tdt in root.findall("Image/Pixels/TiffData"):
+            ifd = int(tdt.get("IFD", "0"))
+            self.assertNotIn(ifd, ifds, "Multiple times the same IFD %d" % ifd)
+            self.assertTrue(imo.IFD[ifd], "IFD %d doesn't exists" % ifd)
+
+
     def testExportCube(self):
         """
         Check it's possible to export a 3D data (typically: 2D area with full
@@ -252,7 +270,7 @@ class TestTiffIO(unittest.TestCase):
         omemd = re.sub('xmlns="http://www.openmicroscopy.org/Schemas/OME/....-.."',
                        "", omemd, count=1)
         root = ET.fromstring(omemd)
-        ns = {"ome": root.tag.rsplit("}")[0][1:]} # read the default namespace
+#        ns = {"ome": root.tag.rsplit("}")[0][1:]} # read the default namespace
         roottag = root.tag.split("}")[-1]
         self.assertEqual(roottag.lower(), "ome")
         
