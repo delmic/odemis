@@ -26,10 +26,13 @@ from odemis import model
 from odemis.dataio import hdf5
 from unittest.case import skip
 import h5py
+import logging
 import numpy
 import os
 import time
 import unittest
+
+logging.getLogger().setLevel(logging.DEBUG)
 
 FILENAME = "test" + hdf5.EXTENSIONS[0]
 class TestHDF5IO(unittest.TestCase):

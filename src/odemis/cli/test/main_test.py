@@ -26,7 +26,6 @@ from unittest.case import skip
 import Image
 import StringIO
 import logging
-import odemis.model._components
 import os
 import re
 import subprocess

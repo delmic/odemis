@@ -65,16 +65,22 @@ def _convertToTiffTag(metadata):
     metadata (dict of tag -> value): the metadata of a DataArray
     returns (dict of tag -> value): the metadata as compatible for libtiff
     """
+    # Note on strings: We accept unicode and utf-8 encoded strings, but TIFF
+    # only supports ASCII (7-bits) officially. It seems however that utf-8
+    # strings are often accepted, so for now we use that. If it turns out to
+    # bring too much problem we might need .encode("ascii", "ignore") or
+    # unidecode (but they are lossy).
+
     tiffmd = {}
     # we've got choice between inches and cm... so it's easy
     tiffmd[T.TIFFTAG_RESOLUTIONUNIT] = T.RESUNIT_CENTIMETER
     for key, val in metadata.items():
         if key == model.MD_SW_VERSION:
-            tiffmd[T.TIFFTAG_SOFTWARE] = odemis.__shortname__ + " " + val
+            tiffmd[T.TIFFTAG_SOFTWARE] = odemis.__shortname__ + " " + val.encode("utf-8")
         elif key == model.MD_HW_NAME:
-            tiffmd[T.TIFFTAG_MAKE] = val
+            tiffmd[T.TIFFTAG_MAKE] = val.encode("utf-8")
         elif key == model.MD_HW_VERSION:
-            tiffmd[T.TIFFTAG_MODEL] = val
+            tiffmd[T.TIFFTAG_MODEL] = val.encode("utf-8")
         elif key == model.MD_ACQ_DATE:
             tiffmd[T.TIFFTAG_DATETIME] = time.strftime("%Y:%m:%d %H:%M:%S", time.gmtime(val))
         elif key == model.MD_PIXEL_SIZE:
@@ -102,7 +108,7 @@ def _convertToTiffTag(metadata):
         # N = SPP in the specification, but libtiff duplicates the values
         elif key == model.MD_DESCRIPTION:
             # We don't use description as it's used for OME-TIFF
-            tiffmd[T.TIFFTAG_PAGENAME] = val
+            tiffmd[T.TIFFTAG_PAGENAME] = val.encode("utf-8")
         # TODO save the brightness and contrast applied by the user?
         # Could use GrayResponseCurve, DotRange, or TransferFunction?
         # TODO save the tint applied by the user? maybe WhitePoint can help
@@ -370,7 +376,7 @@ def _findImageGroups(das):
         # increase ifd by the number of planes (= everything above 2D)
         # (and if RGB, don't count C dimension)
         rep_hdim = list(da.shape[:-2])
-        if da.shape[0] == 3: # RGB
+        if da.ndim == 5 and da.shape[0] == 3: # RGB
             rep_hdim = 1
         ifd += numpy.prod(rep_hdim)
             
@@ -670,6 +676,8 @@ def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True):
         # Save metadata (before the image)
         tags = _convertToTiffTag(data.metadata)
         for key, val in tags.items():
+            if val == "":
+                logging.debug("writing key %d = '%s'", key, val)
             f.SetField(key, val)
 
         # TODO: see if we need to set FILETYPE_PAGE + Page number for each image? data?
@@ -678,9 +686,8 @@ def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True):
             f.SetField(T.TIFFTAG_IMAGEDESCRIPTION, ometxt)
             ometxt = None
 
+        # TODO: If compression=="lzw" => TIFFTAG_PREDICTOR = PREDICTOR_HORIZONTAL to improve compression?
         # for data > 2D: write as a sequence of 2D images
-        # FIXME: for RGB images (data.ndim ==5 and data.shape[0] == 3), write them
-        # as RGB in only one IFD
         if data.ndim == 5 and data.shape[0] == 3: # RGB
             # Write an RGB image, instead of 3 images along C
             for i in numpy.ndindex(*data.shape[1:3]):

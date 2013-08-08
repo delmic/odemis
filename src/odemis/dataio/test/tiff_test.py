@@ -27,12 +27,15 @@ from unittest.case import skip
 import Image
 import libtiff
 import libtiff.libtiff_ctypes as T # for the constant names
+import logging
 import numpy
 import os
 import re
 import time
 import unittest
 import xml.etree.ElementTree as ET
+
+logging.getLogger().setLevel(logging.DEBUG)
 
 FILENAME = "test" + tiff.EXTENSIONS[0] 
 class TestTiffIO(unittest.TestCase):
@@ -141,7 +144,7 @@ class TestTiffIO(unittest.TestCase):
         omemd = re.sub('xmlns="http://www.openmicroscopy.org/Schemas/OME/....-.."',
                        "", omemd, count=1)
         root = ET.fromstring(omemd)
-            
+
         # check the IFD of each TIFFData is different
         ifds = set()
         for tdt in root.findall("Image/Pixels/TiffData"):
@@ -171,8 +174,8 @@ class TestTiffIO(unittest.TestCase):
                     model.MD_IN_WL: (500e-9, 520e-9), #m
                     }
         metadata = {model.MD_SW_VERSION: "1.0-test",
-                    model.MD_HW_NAME: "fake hw",
-                    model.MD_DESCRIPTION: "test",
+                    model.MD_HW_NAME: u"", # check empty unicode strings
+                    model.MD_DESCRIPTION: "tÉst", # tiff doesn't support É
                     model.MD_ACQ_DATE: time.time(),
                     model.MD_BPP: 12,
                     model.MD_BINNING: (1, 2), # px, px
