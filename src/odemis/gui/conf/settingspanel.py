@@ -246,7 +246,7 @@ CONFIG = {
                     "control_type": odemis.gui.CONTROL_COMBO,
                     "choices": _resolution_from_range,
                 },
-               "pixelSize":
+                "pixelSize":
                 {
                     "control_type": odemis.gui.CONTROL_FLT,
                 },

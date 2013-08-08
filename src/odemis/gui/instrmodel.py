@@ -320,11 +320,17 @@ class AcquisitionGUIModel(MicroscopeGUIModel):
 
 
         # more tools: for selecting the sub-region of acquisition
-        tools = set([TOOL_NONE, TOOL_ZOOM, TOOL_ROI, TOOL_ROA, TOOL_POINT, TOOL_LINE])
+        tools = set([TOOL_NONE,
+                     TOOL_ZOOM,
+                     TOOL_ROI,
+                     TOOL_ROA,
+                     TOOL_POINT,
+                     TOOL_LINE])
+
         self.tool = IntEnumerated(TOOL_NONE, choices=tools)
 
-        # Very special view which is used only as a container to save which stream
-        # will be acquired (for the Sparc acquisition interface only).
+        # Very special view which is used only as a container to save which
+        # stream will be acquired (for the Sparc acquisition interface only).
         # The tab controller will take care of filling it
         self.acquisitionView = MicroscopeView("Acquisition")
 

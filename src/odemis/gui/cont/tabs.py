@@ -274,12 +274,44 @@ class SparcAcquisitionTab(Tab):
         # TODO: maybe should be handled by a simple stream controller?
         self.interface_model.emState.subscribe(self.onEMState, init=True)
 
+        # Grab the repetition entry, so we can use it to hook extra event
+        # handlers to it.
+        self.spec_rep_entry = self.settings_controller.get_entry("repetition")
+        self.spec_rep_entry.ctrl.Bind(wx.EVT_SET_FOCUS, self.on_spec_rep_focus)
+        self.spec_rep_entry.ctrl.Bind(wx.EVT_KILL_FOCUS, self.on_spec_rep_focus)
+        self.spec_rep_entry.ctrl.Bind(wx.EVT_ENTER_WINDOW, self.on_spec_rep_enter)
+        self.spec_rep_entry.ctrl.Bind(wx.EVT_LEAVE_WINDOW, self.on_spec_rep_leave)
+
         # Toolbar
         tb = self.main_frame.sparc_acq_tool_menu
         tb.AddTool(tools.TOOL_RO_ACQ, self.interface_model.tool)
         tb.AddTool(tools.TOOL_POINT, self.interface_model.tool)
         tb.AddTool(tools.TOOL_RO_ZOOM, self.interface_model.tool)
         tb.AddTool(tools.TOOL_ZOOM_FIT, self.onZoomFit)
+
+    def on_spec_rep_focus(self, event):
+        eo = event.GetEventObject()
+        overlay = self.main_frame.vp_sparc_acq_view.canvas.roi_overlay
+
+        if eo.HasFocus():
+            overlay.grid_fill()
+        else:
+            overlay.clear_fill()
+
+        event.Skip()
+
+    def on_spec_rep_enter(self, event):
+        overlay = self.main_frame.vp_sparc_acq_view.canvas.roi_overlay
+        overlay.grid_fill()
+        event.Skip()
+
+    def on_spec_rep_leave(self, event):
+        eo = event.GetEventObject()
+        if not eo.HasFocus():
+            overlay = self.main_frame.vp_sparc_acq_view.canvas.roi_overlay
+            overlay.clear_fill()
+        event.Skip()
+
 
     @property
     def settings_controller(self):
@@ -328,6 +360,9 @@ class SparcAcquisitionTab(Tab):
             self._sem_cl_stream.roi.unsubscribe(self.onROI)
             self._sem_cl_stream.roi.value = roi
             self._sem_cl_stream.roi.subscribe(self.onROI)
+
+            overlay = self.main_frame.vp_sparc_acq_view.canvas.roi_overlay
+            overlay.set_repetition(self.spec_rep_entry.va.value)
 
     def onARROI(self, roi):
         """
@@ -484,8 +519,8 @@ class InspectionTab(Tab):
     def _display_new_data(self, filename, data):
         """
         Display a new data set (removing all references to the current one)
-        filename (string): Name of the file containing the data.  
-        data (list of model.DataArray): the data to display. Should have at 
+        filename (string): Name of the file containing the data.
+        data (list of model.DataArray): the data to display. Should have at
          least one DataArray.
         """
         fi = instrmodel.FileInfo(filename)

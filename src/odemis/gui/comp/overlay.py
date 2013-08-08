@@ -690,6 +690,78 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
                 pos = (b_end_pos[0] + 5, b_end_pos[1] - 5)
                 self.write_label(ctx, pos, size_lbl)
 
+FILL_GRID = 0
+FILL_POINT = 1
+
+class RepitionSelectOverlay(WorldSelectOverlay):
+
+    def __init__(self, base, label,
+                 sel_cur=None,
+                 color=gui.SELECTION_COLOR,
+                 center=(0, 0)):
+
+        super(RepitionSelectOverlay, self).__init__(base, label)
+
+        self.fill = None
+        self.repitition = (0, 0)
+
+    def clear_fill(self):
+        self.fill = None
+
+    def point_fill(self):
+        self.fill = FILL_POINT
+
+    def grid_fill(self):
+        self.fill = FILL_GRID
+
+    def set_repetition(self, repitition):
+        self.repitition = repitition
+
+    def Draw(self, dc_buffer, shift=(0, 0), scale=1.0):
+
+        super(RepitionSelectOverlay, self).Draw(dc_buffer, shift, scale)
+
+        if self.w_start_pos and self.w_end_pos and self.fill is not None:
+            ctx = wx.lib.wxcairo.ContextFromDC(dc_buffer)
+            offset = tuple(v / 2 for v in self.base._bmp_buffer_size)
+            b_start_pos = self.base.world_to_buffer_pos(
+                                        self.w_start_pos,
+                                        offset)
+
+            b_end_pos = self.base.world_to_buffer_pos(
+                                        self.w_end_pos,
+                                        offset)
+            rep_x, rep_y = self.repitition
+            start_x = b_start_pos[0]
+            end_x =  b_end_pos[0]
+            start_y = b_start_pos[1]
+            end_y =  b_end_pos[1]
+            step_x = float(end_x - start_x) / rep_x
+            step_y = float(end_y - start_y) / rep_y
+
+            r, g, b, _ = self.color
+            ctx.set_source_rgba(r, g, b, 0.5)
+            ctx.set_line_width(1)
+
+            if self.fill == FILL_POINT:
+                for i in range(1, rep_x):
+                    x = start_x + i * step_x
+                    for j in range(1, rep_y):
+                        y = start_y + j * step_y
+                        ctx.rectangle(x, y, 2, 2)
+            elif self.fill == FILL_GRID:
+                for i in range(1, rep_x):
+                    ctx.move_to(start_x + i * step_x, start_y)
+                    ctx.line_to(start_x + i * step_x, end_y)
+
+                for i in range(1, rep_y):
+                    ctx.move_to(start_x, start_y + i * step_y)
+                    ctx.line_to(end_x,  start_y + i * step_y)
+
+            ctx.stroke()
+
+
+
 class FocusLineOverlay(ViewOverlay):
     """ This class describes an overlay that draws a vertical line over a
     canvas, showing a marker at the vertical value and a possible label """
