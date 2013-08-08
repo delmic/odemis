@@ -23,7 +23,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 from .comp.overlay import CrossHairOverlay, ViewSelectOverlay, \
-    WorldSelectOverlay, TextViewOverlay
+    WorldSelectOverlay, TextViewOverlay, RepitionSelectOverlay
 from decorator import decorator
 from odemis import util, model
 from odemis.gui import instrmodel
@@ -656,7 +656,7 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
         super(SparcAcquiCanvas, self).__init__(*args, **kwargs)
 
         self._roa = None # The ROI VA of SEM CL stream, initialized on setView()
-        self.roi_overlay = WorldSelectOverlay(self, "Region of acquisition")
+        self.roi_overlay = RepitionSelectOverlay(self, "Region of acquisition")
         self.WorldOverlays.append(self.roi_overlay)
         self.active_overlay = None
         self.cursor = wx.STANDARD_CURSOR

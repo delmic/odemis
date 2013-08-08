@@ -110,6 +110,10 @@ class SettingEntry(object):
         vac (VigilantAttributeController): the object that ensures the connection
           between the VA and the widget
         """
+
+
+        print name, label
+
         self.name = name
         self.va = va
         self.comp = comp
@@ -805,6 +809,13 @@ class SettingsBarController(object):
         for panel in self.settings_panels:
             entries.extend(panel.entries)
         return entries
+
+    def get_entry(self, name):
+        for panel in self.settings_panels:
+            for entry in panel.entries:
+                if entry.name == name:
+                    return entry
+        return None
 
     def add_component(self, label, comp, panel):
 
