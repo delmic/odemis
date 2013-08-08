@@ -162,7 +162,7 @@ class TestHDF5IO(unittest.TestCase):
                     model.MD_BINNING: (1, 2), # px, px
                     model.MD_PIXEL_SIZE: (1e-6, 2e-5), # m/px
                     model.MD_POS: (1e-3, -30e-3), # m
-                    model.MD_EXP_TIME: 1.2, #s
+                    model.MD_DWELL_TIME: 1.2, #s
                     model.MD_IN_WL: (500e-9, 520e-9), #m
                     }
         ldata = []
@@ -260,11 +260,12 @@ class TestHDF5IO(unittest.TestCase):
         desc = f["Acquisition0/PhysicalData/Title"][()]
         self.assertAlmostEqual(metadata[model.MD_DESCRIPTION], desc)
 
-
         iwl = f["Acquisition0/PhysicalData/ExcitationWavelength"][()] # m
         self.assertTrue((metadata[model.MD_IN_WL][0] <= iwl and
                          iwl <= metadata[model.MD_IN_WL][1]))
 
+        expt = f["Acquisition0/PhysicalData/IntegrationTime"][()] # s
+        self.assertAlmostEqual(metadata[model.MD_EXP_TIME], expt)
 
 
     def testExportRead(self):

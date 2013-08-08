@@ -481,6 +481,21 @@ def _add_image_metadata(group, images):
     gp["ExcitationPhotonCount"] = [1] * len(images) # photons
     _h5svi_set_state(gp["ExcitationPhotonCount"], ST_DEFAULT)
 
+
+    # Below are addiontal metadata from us (Delmic)
+    # IntegrationTime: time spent by each pixel to receive energy (in s)
+    its = []
+    for i in images:
+        if model.MD_DWELL_TIME in i.metadata:
+            its.append(i.metadata[model.MD_DWELL_TIME])
+        elif model.MD_EXP_TIME in i.metadata:
+            its.append(i.metadata[model.MD_EXP_TIME])
+    if its:
+        gp["IntegrationTime"] = its
+        _h5svi_set_state(gp["IntegrationTime"], ST_REPORTED)
+
+    # TODO: model.MD_EBEAM_ENERGY, model.MD_EBEAM_SPOT_DIAM
+
 def _add_svi_info(group):
     """
     Adds the information to indicate this file follows the SVI format

@@ -26,6 +26,7 @@ import libtiff.libtiff_ctypes as T # for the constant names
 import logging
 import numpy
 import odemis
+import re
 import time
 import xml.etree.ElementTree as ET
 #pylint: disable=E1101
@@ -98,6 +99,7 @@ def _convertToTiffTag(metadata):
             logging.info("Metadata tag '%s' skipped when saving TIFF file", key)
         # TODO MD_BPP : the actual bit size of the detector
         # Use SMINSAMPLEVALUE and SMAXSAMPLEVALUE ?
+        # N = SPP in the specification, but libtiff duplicates the values
         elif key == model.MD_DESCRIPTION:
             # We don't use description as it's used for OME-TIFF
             tiffmd[T.TIFFTAG_PAGENAME] = val
@@ -228,8 +230,8 @@ def _convertToOMEMD(images):
 
     # To create and manipulate the XML, we use the Python ElementTree API.
 
-    # TODO: it seems pylibtiff has a small OME support, need to investigate
-    # how much could be used.
+    # Note: pylibtiff has a small OME support, but it's so terrible that we are
+    # much better ignoring it completely
     root = ET.Element('OME', attrib={
             "xmlns": "http://www.openmicroscopy.org/Schemas/OME/2012-06",
             "xmlns:xsi": "http://www.w3.org/2001/XMLSchema-instance",
@@ -283,6 +285,43 @@ def _convertToOMEMD(images):
     ometxt = ('<?xml version="1.0" encoding="UTF-8"?>' +
               ET.tostring(root, encoding="utf-8"))
     return ometxt
+
+def _updateMDFromOME(root, das):
+    """
+    Updates the metadata of DAs according to OME XML
+    root (ET.Element): the root (i.e., OME) element of the XML description
+    data (list of DataArrays): DataArrays at the same place as the TIFF IFDs
+    return None: only the metadata of DA's inside is updated 
+    """
+    #
+    pass
+
+def _foldArraysFromOME(root, das):
+    """
+    Reorganize DataArrays with more than 2 dimensions according to OME XML
+    root (ET.Element): the root (i.e., OME) element of the XML description
+    data (list of DataArrays): DataArrays at the same place as the TIFF IFDs
+    return (list of DataArrays): new shorter list of DAs 
+    """
+    omedas = []
+
+    # Go through each Image
+    for ime in root.findall("Image"):
+        # Aggregate each TiffData's DataArray according to the dimensions
+        # Use the first DA's metadata as metadata
+        # Note: default IFD is 0 (but in which case the PlaneCount is all the file
+        for tft in ime.findall("Pixels/TiffData"):
+            ifd = tft.get("IFD", "0")
+
+
+        # Note: Position might actually be different! In which case it could make
+        # sense to leave them separate.
+
+        # TODO: If has UUID tag, it means it's actually in a separate document
+        # (cf tiff series)
+
+    return das
+#    return omedas
 
 def _findImageGroups(das):
     """
@@ -459,6 +498,7 @@ def _addImageElement(root, das, ifd):
             subid += 1
 
     # TiffData Element: describe every single IFD image
+    # TODO: could be simplified for DAs of dim > 2, with PlaneCount > 2?
     subid = 0
     for index in numpy.ndindex(gshape[:-2]):
         tde = ET.SubElement(pixels, "TiffData", attrib={
@@ -632,13 +672,38 @@ def _thumbsFromTIFF(filename):
     f = TIFF.open(filename, mode='r')
     # open each image/page as a separate data
     data = []
-    for image in f.iter_images():
+    f.SetDirectory(0)
+    while True:
         if _isThumbnail(f):
             md = _readTiffTag(f) # reads tag of the current image
+            image = f.read_image()
             da = model.DataArray(image, metadata=md)
             data.append(da)
+        
+        # TODO: also check SubIFD for sub directories that might contain 
+        # thumbnails
+        if f.ReadDirectory() == 0: # reads _next_ directory
+            break
 
     return data
+
+def _reconstructFromOMETIFF(xml, data):
+    """
+    Update DAs to reflect shape and metadata contained in OME XML
+    xml (string): String containing the OME XML declaration
+    data (list of model.DataArray): each
+    return (list of model.DataArray): new list with the DAs following the OME 
+      XML description. Note that DAs are either updated or completely recreated.  
+    """
+    # Remove "xmlns" which is the default namespace and is appended everywhere
+    # It's not beautiful, but the simplest with ET to handle expected namespaces.
+    xml = re.sub('xmlns="http://www.openmicroscopy.org/Schemas/OME/....-.."',
+                 "", xml, count=1)
+    root = ET.fromstring(xml)
+    _updateMDFromOME(root, data)
+    omedata = _foldArraysFromOME(root, data)
+
+    return omedata
 
 def _dataFromTIFF(filename):
     """
@@ -662,14 +727,19 @@ def _dataFromTIFF(filename):
     # If looks like OME TIFF, reconstruct >2D data and add metadata
     # It's OME TIFF, if it has a valid ome-tiff XML in the first T.TIFFTAG_IMAGEDESCRIPTION
     # Warning: we support what we write, not the whole OME-TIFF specification.
-    if False:
-        return _reconstructFromOMETIFF(xml, data)
-    
+    f.SetDirectory(0)
+    desc = f.GetField(T.TIFFTAG_IMAGEDESCRIPTION)
+    if ((desc.startswith("<?xml") and "<ome " in desc.lower()) 
+         or desc[:4].lower()=='<ome'):
+        try:
+            data = _reconstructFromOMETIFF(desc, data)
+        except Exception:
+            # fallback to pretend there was no OME XML
+            logging.exception("Failed to decode OME XML string: '%s'", desc)
 
-    # Remove all the None (=thumnails) from the list
+    # Remove all the None (=thumbnails) from the list
     data = [i for i in data if i is not None]
     return data
-
 
 def export(filename, data, thumbnail=None):
     '''
