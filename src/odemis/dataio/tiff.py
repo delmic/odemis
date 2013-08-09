@@ -289,7 +289,7 @@ def _convertToOMEMD(images):
 
     # TODO add tag to each image with "Odemis", so that we can find them back
     # easily in a database?
-
+    # TODO: pretty print?
     ometxt = ('<?xml version="1.0" encoding="UTF-8"?>' +
               ET.tostring(root, encoding="utf-8"))
     return ometxt
@@ -382,6 +382,36 @@ def _findImageGroups(das):
             
     return groups, first_ifd
 
+def _dtype2OMEtype(dtype):
+    """
+    Converts a numpy dtype to a OME type
+    dtype (numpy.dtype)
+    returns (string): OME type
+    """
+    # OME type is one of : int8, int16, int32, uint8, uint16, uint32, float,
+    # bit, double, complex, double-complex
+    # Meaning is not explicit, but probably the same as TIFF/C:
+    # Float is 4 bytes, while double is 8 bytes
+    # So complex is 8 bytes, and double complex == 16 bytes
+    if dtype.kind in "ui":
+        # int and uint seems to be compatible in general
+        return "%s" % dtype
+    elif dtype.kind == "f":
+        if dtype.itemsize <= 4:
+            return "float"
+        else:
+            return "double"
+    elif dtype.kind == "c":
+        if dtype.itemsize <= 4:
+            return "complex"
+        else:
+            return "double-complex"
+    elif dtype.kind == "b":
+        return "bit"
+    else:
+        raise NotImplementedError("data type %s is not support by OME", dtype)    
+    
+
 def _addImageElement(root, das, ifd):
     """
     Add the metadata of a list of DataArray to a OME-XML root element
@@ -446,7 +476,7 @@ def _addImageElement(root, das, ifd):
     pixels = ET.SubElement(ime, "Pixels", attrib={
                               "ID": "Pixels:%d" % idnum,
                               "DimensionOrder": "XYZTC", # we don't have ZT so it doesn't matter
-                              "Type": "%s" % da0.dtype, # seems to be compatible in general
+                              "Type": "%s" % _dtype2OMEtype(da0.dtype),
                               "SizeX": "%d" % gshape[4], # numpy shape is reversed
                               "SizeY": "%d" % gshape[3],
                               "SizeZ": "%d" % gshape[2],
@@ -458,11 +488,20 @@ def _addImageElement(root, das, ifd):
         pxs = globalMD[model.MD_PIXEL_SIZE]
         pixels.attrib["PhysicalSizeX"] = "%f" % (pxs[0] * 1e6) # in µm
         pixels.attrib["PhysicalSizeY"] = "%f" % (pxs[1] * 1e6) # in µm
+    
+    if model.MD_BPP in globalMD:
+        bpp = globalMD[model.MD_BPP]
+        pixels.attrib["SignificantBits"] = "%d" % bpp # in bits
 
     # For each DataArray, add a Channel, TiffData, and Plane, but be careful
     # because they all have to be grouped and in this order.
 
-    # Channel Element
+    # TODO: for spectrum images, adding 1 channel per wavelength seem extremely
+    # inefficient, there must be a better way to describe them in OME-XML
+    # Channel Element.
+    # => "  Each Logical Channel is composed of one or more
+    # ChannelComponents.  For example, an entire spectrum in an FTIR experiment may be stored in a single Logical Channel with each discrete wavenumber of the spectrum
+    # constituting a ChannelComponent of the FTIR Logical Channel."
     subid = 0
     for da in das:
         if is_rgb or len(da.shape) < 5:
@@ -676,8 +715,6 @@ def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True):
         # Save metadata (before the image)
         tags = _convertToTiffTag(data.metadata)
         for key, val in tags.items():
-            if val == "":
-                logging.debug("writing key %d = '%s'", key, val)
             f.SetField(key, val)
 
         # TODO: see if we need to set FILETYPE_PAGE + Page number for each image? data?
