@@ -111,9 +111,6 @@ class SettingEntry(object):
           between the VA and the widget
         """
 
-
-        print name, label
-
         self.name = name
         self.va = va
         self.comp = comp

@@ -422,7 +422,6 @@ class Slider(BaseSlider):
 
         The value will be clipped if it is out of range.
         """
-
         if not isinstance(value, (int, long, float)):
             raise TypeError("Illegal data type %s" % type(value))
 
@@ -753,7 +752,7 @@ class VisualRangeSlider(BaseSlider):
 
     def SetMin(self, min_value):
         if min_value <= self.max_value:
-            if self.value and self.value < min_value:
+            if self.value and min(self.value) > min_value:
                 logging.warning("Minimum %s is larger than current value %s!",
                                 min_value, self.value)
             else:
@@ -766,7 +765,7 @@ class VisualRangeSlider(BaseSlider):
 
     def SetMax(self, max_value):
         if max_value >= self.min_value:
-            if self.value and self.value < max_value:
+            if self.value and max(self.value) < max_value:
                 logging.warning("Maximum %s is smaller than current value %s!",
                                 max_value, self.value)
             else:
