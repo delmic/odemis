@@ -400,6 +400,8 @@ class TestHDF5IO(unittest.TestCase):
         self.assertEqual(im.shape, tshape)
         self.assertEqual(im[0, 0].tolist(), [0, 255, 0])
 
+# TODO: test compatibility with Hyperspy for loading spectra (exported by Odemis)
+
 if __name__ == "__main__":
     #import sys;sys.argv = ['', 'Test.testName']
     unittest.main()

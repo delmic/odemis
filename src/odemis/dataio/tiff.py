@@ -55,6 +55,8 @@ EXTENSIONS = [".ome.tiff", ".ome.tif", ".tiff", ".tif"]
 # more than 3 dimensions for the data.
 # Note that it could be possible to use more TIFF tags, from DNG and LSM for
 # example.
+# See also MicroManager OME-TIFF format with additional tricks for ImageJ:
+# http://valelab.ucsf.edu/~MM/MMwiki/index.php/Micro-Manager_File_Formats
 
 # TODO: make sure that _all_ the metadata is saved, either in TIFF tags, OME-TIFF,
 # or in a separate mechanism.
@@ -284,6 +286,8 @@ def _convertToOMEMD(images):
             if model.MD_LENS_NAME in da0.metadata:
                 obj.attrib["Model"] = da0.metadata[model.MD_LENS_NAME]
 
+    # TODO: filters (with TransmittanceRange)
+
     for i, g in enumerate(groups):
         _addImageElement(root, g, first_ifd[i])
 
@@ -320,24 +324,90 @@ def _foldArraysFromOME(root, das):
         # Aggregate each TiffData's DataArray according to the dimensions
         # Use the first DA's metadata as metadata
         # Note: default IFD is 0 (but in which case the PlaneCount is all the file
-        for tft in ime.findall("Pixels/TiffData"):
-            ifd = int(tft.get("IFD", "0"))
-            try:
-                im = das[ifd]
-            except KeyError:
-                logging.warning("Failed to find IFD %d in image referenced in OME XML", ifd)
-                continue
-            if im is None:
-                continue
-            omedas.append(im)
+        
+        pxe = ime.find("Pixels")
+        # Read the shape of the dataset
+        dshape = []
+        for d in "CTZYX": # that's our fixed order
+            ds = int(pxe.get("Size%s" % d, "1"))
+            dshape.append(ds)
 
+        spp = int(pxe.get("Channel/SamplesPerPixel", "1"))
+        # The spec says: The SamplesPerPixel attribute is the number of channel components in the logical channel.
+        # An RGB image where the Red, Green and Blue components do not reflect discrete probes but are
+        # instead the output of a color camera would be treated similarly - one Logical channel with three ChannelComponents in this case.
+        # TODO: what to do if > 1? See if the data is 3D or not? See the plane count number?
+        # See the channels number? 
+        # For now we expect RGB as SPP=3, SizeC=3, PlaneCount=1, and 1 3D IFD,
+        # but they probably can be encoded as SPP=3, SizeC=3, PlaneCount=3 and 3
+        # 2D IFDs.
+
+        # Create an array with the IFD of each 2D image part of the entire data
+        imsetn = numpy.empty(dshape[:3], dtype="int")
+        imsetn[:] = -1
+        for tfe in pxe.findall("TiffData"):
+            ifd = int(tfe.get("IFD", "0"))
+            pos = []
+            for d in "CTZ": # that's our fixed order
+                ds = int(tfe.get("First%s" % d, "0"))
+                pos.append(ds)
+            # TODO: if no IFD specified, PC should default to all the IFDs
+            pc = int(tfe.get("PlaneCount", "1"))
+            
+            # TODO: If has UUID tag, it means it's actually in a separate document
+            # (cf tiff series)
+
+            # If PlaneCount is > 1: it's in the same order as DimensionOrder
+            # TODO: for now fixed to ZTC, but that should not be
+            for i in range(pc):
+                imsetn[pos] = ifd + i
+                pos[-1] += 1
+                # compute modulo
+                for d in range(len(pos) - 1, -1, -1):
+                    if pos[d] > dshape[d]:
+                        pos[d] = 0
+                        pos[d - 1] += 1 # will fail if d = 0, on purpose
+
+        # Check if the IFDs are 2D or 3D, based on the first one
+        fifd = imsetn[0, 0, 0]
+        if fifd == -1:
+            logging.warning("Failed to locate all IFDs to fill the Image of %s", dshape)
+            raise ValueError("Not enough IFDs available")
+        fim = das[fifd]
+        if fim == None:
+            continue # thumbnail
+        is_3d = (len(fim.shape) >= 3 and fim.shape[-3] > 1)
+
+        # Remove C dim if 3D
+        if is_3d:
+            if imsetn.shape != fim.shape[-3]:
+                raise NotImplementedError("Loading of %d channel from images "
+                       "with %d channels not supported" % (imsetn.shape, fim.shape[-3]))
+            imsetn = imsetn[0]
+
+        # Short-circuit for dataset with only one IFD
+        if all(d == 1 for d in imsetn.shape):
+            omedas.append(fim)
+            continue
+
+        if -1 in imsetn:
+            logging.warning("Failed to locate all IFDs to fill the Image of %s", dshape)
+            raise ValueError("Not enough IFDs available")
+
+        # TODO
         # Note: Position or Wavelength might actually be different! In which
-        # case it could make sense to leave them separate.
+        # case Odemis needs to see them as separate data.
         # => Have a list of metadata which _can be_ different, and everything
         # else must be identical to be merged
 
-        # TODO: If has UUID tag, it means it's actually in a separate document
-        # (cf tiff series)
+        # Combine all the IFDs into a 5D array
+        imset = numpy.empty(dshape, fim.dtype)
+        for i, ifd in numpy.ndenumerate(imsetn):
+            if is_3d:
+                imset[:, i[0], i[1]] = das[ifd]
+            else:
+                imset[i] = das[ifd]
+        omedas.append(imset)
 
     return omedas
 
@@ -499,7 +569,7 @@ def _addImageElement(root, das, ifd):
     # TODO: for spectrum images, adding 1 channel per wavelength seem extremely
     # inefficient, there must be a better way to describe them in OME-XML
     # Channel Element.
-    # => "  Each Logical Channel is composed of one or more
+    # => "Each Logical Channel is composed of one or more
     # ChannelComponents.  For example, an entire spectrum in an FTIR experiment may be stored in a single Logical Channel with each discrete wavenumber of the spectrum
     # constituting a ChannelComponent of the FTIR Logical Channel."
     subid = 0
@@ -512,7 +582,7 @@ def _addImageElement(root, das, ifd):
             chan = ET.SubElement(pixels, "Channel", attrib={
                                    "ID": "Channel:%d:%d" % (idnum, subid)})
             if is_rgb:
-                chan.attrib["SamplesPerPixel"] = "3"
+                chan.attrib["SamplesPerPixel"] = "%d" % dshape[0]
                 
             # TODO Name attrib for Filtered color streams?
             if model.MD_DESCRIPTION in da.metadata:
@@ -566,9 +636,9 @@ def _addImageElement(root, das, ifd):
     for index in numpy.ndindex(*rep_hdim):
         tde = ET.SubElement(pixels, "TiffData", attrib={
                                 "IFD": "%d" % (ifd + subid),
-                                "FirstZ": "%d" % index[2],
-                                "FirstT": "%d" % index[1],
                                 "FirstC": "%d" % index[0],
+                                "FirstT": "%d" % index[1],
+                                "FirstZ": "%d" % index[2],
                                 "PlaneCount": "1"
                                 })
         subid += 1
@@ -578,9 +648,9 @@ def _addImageElement(root, das, ifd):
     for index in numpy.ndindex(*rep_hdim):
         da = das[index[concat_axis]]
         plane = ET.SubElement(pixels, "Plane", attrib={
-                               "TheZ": "%d" % index[2],
-                               "TheT": "%d" % index[1],
                                "TheC": "%d" % index[0],
+                               "TheT": "%d" % index[1],
+                               "TheZ": "%d" % index[2],
                                })
         if model.MD_ACQ_DATE in da.metadata:
             diff = da.metadata[model.MD_ACQ_DATE] - globalAD
@@ -594,7 +664,7 @@ def _addImageElement(root, das, ifd):
             exp = da.metadata[model.MD_DWELL_TIME] * numpy.prod(da.shape)
             plane.attrib["ExposureTime"] = "%.12f" % exp
 
-        # Note that Position has no official unit, which prevent Tiling to be
+        # Note that Position has no official unit, which prevents Tiling to be
         # usable. In one OME-TIFF official example of tiles, they use pixels
         # (and ModuloAlongT "tile")
         if model.MD_POS in da.metadata:
