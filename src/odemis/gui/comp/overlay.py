@@ -50,7 +50,7 @@ class Overlay(object):
     def set_label(self, label):
         self.label = unicode(label)
 
-    def write_label(self, ctx, vpos, label, flip=True, align=wx.ALIGN_LEFT):
+    def write_label(self, ctx, size, vpos, label, flip=True, align=wx.ALIGN_LEFT):
         font = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT)
         ctx.select_font_face(
                 font.GetFaceName(),
@@ -68,17 +68,18 @@ class Overlay(object):
             x = x - width
 
         if flip:
-            if x + width + margin_x > self.base.ClientSize.x:
+            if x + width + margin_x > size.x:
                 x = self.base.ClientSize[0] - width - margin_x
             elif x < margin_x:
                 x = margin_x
 
-            if y + height + margin_x > self.base.ClientSize.y:
+            if y + height + margin_x > size.y:
                 y = self.base.ClientSize[1] - height
             elif y < height:
                 y = height
 
         #t = font.GetPixelSize()
+
         ctx.set_source_rgba(0.0, 0.0, 0.0, 0.7)
         ctx.move_to(x + 1, y + 1)
         ctx.show_text(label)
@@ -117,7 +118,7 @@ class TextViewOverlay(ViewOverlay):
     def Draw(self, dc, shift=(0, 0), scale=1.0):
         if self.label:
             ctx = wx.lib.wxcairo.ContextFromDC(dc)
-            self.write_label(ctx, self.vpos, self.label)
+            self.write_label(ctx, dc.GetSize(), self.vpos, self.label)
 
 class CrossHairOverlay(ViewOverlay):
     def __init__(self, base,
@@ -192,6 +193,7 @@ class FocusOverlay(ViewOverlay):
 
             self.write_label(
                 ctx,
+                dc.GetSize(),
                 (x - 10, end_y),
                 "focus %s" % units.readable_str(self.shifts[1] / 1e6, 'm', 2),
                 flip=False,
@@ -506,14 +508,14 @@ class ViewSelectOverlay(ViewOverlay, SelectionMixin):
             ctx.rectangle(*rect)
             ctx.stroke()
 
-            if self.dragging or True:
+            if self.dragging:
                 msg = "{}: {} to {}, {} to {} unscaled".format(
                                             self.label,
                                             self.v_start_pos,
                                             self.v_end_pos,
                                             start_pos,
                                             end_pos)
-                self.write_label(ctx, (10, 10), msg)
+                self.write_label(ctx, dc.GetSize(), (10, 10), msg)
 
 class WorldSelectOverlay(WorldOverlay, SelectionMixin):
 
@@ -673,11 +675,7 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
             ctx.stroke()
 
             # Label
-            if self.dragging or self.edit:
-                # No need for size label
-                if not self.base.microscope_view:
-                    return
-
+            if (self.dragging or self.edit) and self.base.microscope_view:
                 w, h = self.base.selection_to_real_size(
                                             self.w_start_pos,
                                             self.w_end_pos
@@ -688,7 +686,7 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
                 size_lbl = u"{} x {}".format(w, h)
 
                 pos = (b_end_pos[0] + 5, b_end_pos[1] - 5)
-                self.write_label(ctx, pos, size_lbl)
+                self.write_label(ctx, dc_buffer.GetSize(), pos, size_lbl)
 
 FILL_GRID = 0
 FILL_POINT = 1
@@ -731,6 +729,7 @@ class RepitionSelectOverlay(WorldSelectOverlay):
             b_end_pos = self.base.world_to_buffer_pos(
                                         self.w_end_pos,
                                         offset)
+
             rep_x, rep_y = self.repitition
             start_x = b_start_pos[0]
             end_x =  b_end_pos[0]
@@ -805,4 +804,4 @@ class FocusLineOverlay(ViewOverlay):
 
             if self.label:
                 vpos = (self.vposx + 5, self.vposy + 3)
-                self.write_label(ctx, vpos, self.label)
+                self.write_label(ctx, dc.GetSize(), vpos, self.label)
