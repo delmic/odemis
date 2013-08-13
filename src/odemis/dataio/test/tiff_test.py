@@ -40,7 +40,14 @@ logging.getLogger().setLevel(logging.DEBUG)
 
 FILENAME = "test" + tiff.EXTENSIONS[0] 
 class TestTiffIO(unittest.TestCase):
-    
+
+    def assertTupleAlmostEqual(self, first, second, places=None, msg=None, delta=None):
+        """
+        check two tuples are almost equal (value by value)
+        """
+        for f, s in zip(first, second):
+            self.assertAlmostEqual(f, s, places=places, msg=msg, delta=delta)
+
     def tearDown(self):
         # clean up
         try:
@@ -412,7 +419,8 @@ class TestTiffIO(unittest.TestCase):
             self.assertAlmostEqual(im.metadata[model.MD_POS][1], md[model.MD_POS][1])
             self.assertAlmostEqual(im.metadata[model.MD_PIXEL_SIZE][0], md[model.MD_PIXEL_SIZE][0])
             self.assertAlmostEqual(im.metadata[model.MD_PIXEL_SIZE][1], md[model.MD_PIXEL_SIZE][1])
-            self.assertEqual(im.metadata[model.MD_ACQ_DATE], md[model.MD_ACQ_DATE])
+            self.assertAlmostEqual(im.metadata[model.MD_ACQ_DATE], md[model.MD_ACQ_DATE], delta=1)
+            self.assertEqual(im.metadata[model.MD_BPP], md[model.MD_BPP])
 
             if model.MD_WL_POLYNOMIAL in md:
                 pn = md[model.MD_WL_POLYNOMIAL]
@@ -423,9 +431,9 @@ class TestTiffIO(unittest.TestCase):
                                     domain=[0, l - 1],
                                     window=[0, l - 1])
                     wl = npn.linspace(l)
-                    self.assertEqual(im.metadata[model.MD_WL_LIST], wl)
+                    self.assertTupleAlmostEqual(im.metadata[model.MD_WL_LIST], wl)
                 else:
-                    self.assertEqual(im.metadata[model.MD_WL_POLYNOMIAL], pn)
+                    self.assertTupleAlmostEqual(im.metadata[model.MD_WL_POLYNOMIAL], pn)
 
         # check thumbnail
         rthumbs = tiff.read_thumbnail(FILENAME)

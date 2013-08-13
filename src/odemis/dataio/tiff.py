@@ -22,6 +22,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from __future__ import division
 from libtiff import TIFF
 from odemis import model
+import calendar
 import libtiff.libtiff_ctypes as T # for the constant names
 import logging
 import numpy
@@ -174,10 +175,10 @@ def _readTiffTag(tfile):
     val = tfile.GetField(T.TIFFTAG_MODEL)
     if val is not None:
         md[model.MD_HW_VERSION] = val
-    val = tfile.GetField(T.TIFFTAG_MODEL)
+    val = tfile.GetField(T.TIFFTAG_DATETIME)
     if val is not None:
         try:
-            t = time.mktime(time.strptime(val, "%Y:%m:%d %H:%M:%S"))
+            t = calendar.timegm(time.strptime(val, "%Y:%m:%d %H:%M:%S"))
             md[model.MD_ACQ_DATE] = t
         except (OverflowError, ValueError):
             logging.info("Failed to parse date '%s'", val)
@@ -327,7 +328,60 @@ def _updateMDFromOME(root, das):
     data (list of DataArrays): DataArrays at the same place as the TIFF IFDs
     return None: only the metadata of DA's inside is updated 
     """
-    #
+    # For each Image in the XML, gorge ourself from all the metadata we can
+    # find, and then use it to update the metadata of each IFD referenced.
+    for ime in root.findall("Image"):
+        md = {}
+        try:
+            md[model.MD_DESCRIPTION] = ime.attrib["Name"]
+        except KeyError: 
+            pass
+
+        try:
+            md[model.MD_USER_NOTE] = ime.attrib["Description"]
+        except KeyError:
+            pass
+
+        acq_date = ime.find("AcquisitionDate")
+        if acq_date is not None:
+            try:
+                # the earliest time of all the acquisitions in this image (see DeltaT)
+                val = acq_date.text
+                md[model.MD_ACQ_DATE] = calendar.timegm(time.strptime(val, "%Y-%m-%dT%H:%M:%S"))
+            except (OverflowError, ValueError):
+                pass
+
+        pxe = ime.find("Pixels") # there must be only one per Image
+        try:
+            psx = float(pxe.attrib["PhysicalSizeX"]) * 1e-6 # µm -> m
+            psy = float(pxe.attrib["PhysicalSizeY"]) * 1e-6
+            md[model.MD_PIXEL_SIZE] = (psx, psy)
+        except (KeyError, ValueError):
+            pass
+
+        try:
+            md[model.MD_BPP] = int(pxe.attrib["SignificantBits"])
+        except (KeyError, ValueError):
+            pass
+
+        try:
+            a = int(pxe.attrib["WaveStart"]) * 1e-9
+            b = int(pxe.attrib["WaveIncrement"]) * 1e-9
+            md[model.MD_WL_POLYNOMIAL] = [a, b]
+        except (KeyError, ValueError):
+            pass
+
+        for tfe in pxe.findall("TiffData"):
+            ifd = int(tfe.get("IFD", "0"))
+            pc = int(tfe.get("PlaneCount", "1"))
+
+            # Update each IFD referenced
+            for i in range(ifd, ifd + pc):
+                im = das[i]
+                if im is None:
+                    continue
+                im.metadata.update(md)
+
     pass
 
 def _getIFDsFromOME(pixele):
@@ -599,7 +653,7 @@ def _addImageElement(root, das, ifd):
     if model.MD_PIXEL_SIZE in globalMD:
         pxs = globalMD[model.MD_PIXEL_SIZE]
         pixels.attrib["PhysicalSizeX"] = "%f" % (pxs[0] * 1e6) # in µm
-        pixels.attrib["PhysicalSizeY"] = "%f" % (pxs[1] * 1e6) # in µm
+        pixels.attrib["PhysicalSizeY"] = "%f" % (pxs[1] * 1e6)
     
     if model.MD_BPP in globalMD:
         bpp = globalMD[model.MD_BPP]
@@ -614,6 +668,24 @@ def _addImageElement(root, das, ifd):
     # => "Each Logical Channel is composed of one or more
     # ChannelComponents.  For example, an entire spectrum in an FTIR experiment may be stored in a single Logical Channel with each discrete wavenumber of the spectrum
     # constituting a ChannelComponent of the FTIR Logical Channel."
+    # http://trac.openmicroscopy.org.uk/ome/ticket/7355 mentions spectrum can
+    # be stored as a fake Filter with the CutIn/CutOut wavelengths, but that's
+    # not so pretty.
+    # Some very old versions of the standard had WaveStart/WaveIncrement on Image
+
+    if model.MD_WL_POLYNOMIAL in globalMD:
+        # we store a subset of the metadata in a non-standard attribute :-(
+        pn = globalMD[model.MD_WL_POLYNOMIAL]
+        if len(pn) >= 1:
+            pixels.attrib["WaveStart"] = "%d" % round(pn[0] * 1e9) # in nm
+        if len(pn) >= 2:
+            pixels.attrib["WaveIncrement"] = "%d" % round(pn[1] * 1e9) # in nm/px
+    elif model.MD_WL_LIST in globalMD:
+        lwl = globalMD[model.MD_WL_LIST]
+        inc = (lwl[-1] - lwl[0]) / (len(lwl) - 1)
+        pixels.attrib["WaveStart"] = "%d" % round(lwl[0] * 1e9) # in nm
+        pixels.attrib["WaveIncrement"] = "%d" % round(inc * 1e9) # in nm/px
+
     subid = 0
     for da in das:
         if is_rgb or len(da.shape) < 5:
@@ -659,7 +731,7 @@ def _addImageElement(root, das, ifd):
             if model.MD_GAIN in da.metadata:
                 attrib["Gain"] = "%f" % da.metadata[model.MD_GAIN]
             if model.MD_READOUT_TIME in da.metadata:
-                ror = (1 / da.metadata[model.MD_READOUT_TIME]) / 1e6 #MHz
+                ror = (1 / da.metadata[model.MD_READOUT_TIME]) / 1e6 # MHz
                 attrib["ReadOutRate"] = "%f" % ror
     
             if attrib:
@@ -783,8 +855,7 @@ def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True):
         # TODO also save it as thumbnail of the image (in limited size)
         # see  http://www.libtiff.org/man/thumbnail.1.html
 
-        # It seems that libtiff.py doesn't support yet SubIFD's so it's not
-        # going to fly
+        # libtiff.py doesn't support yet SubIFD's so it's not going to fly
 
 
         # from http://stackoverflow.com/questions/11959617/in-a-tiff-create-a-sub-ifd-with-thumbnail-libtiff
