@@ -134,7 +134,7 @@ def _GetFieldDefault(tfile, tag, default=None):
     else:
         return ret
 
-# factor for value -> me
+# factor for value -> m
 resunit_to_m = {T.RESUNIT_INCH: 0.0254, T.RESUNIT_CENTIMETER: 0.01}
 def _readTiffTag(tfile):
     """
@@ -159,7 +159,7 @@ def _readTiffTag(tfile):
     ypos = tfile.GetField(T.TIFFTAG_YPOSITION)
     if xpos is not None and ypos is not None:
         # -1 m for the shift
-        md[model.MD_POS] = (factor / xpos - 1, factor / ypos - 1)
+        md[model.MD_POS] = (factor * xpos - 1, factor * ypos - 1)
 
     # informative metadata
     val = tfile.GetField(T.TIFFTAG_PAGENAME)
@@ -195,6 +195,26 @@ def _isThumbnail(tfile):
         return True
 
     return False
+
+def _indent(elem, level=0):
+    """
+    In-place pretty-print formatter
+    From http://effbot.org/zone/element-lib.htm#prettyprint
+    elem (ElementTree)
+    """
+    i = "\n" + level * "    "
+    if len(elem):
+        if not elem.text or not elem.text.strip():
+            elem.text = i + "    "
+        if not elem.tail or not elem.tail.strip():
+            elem.tail = i
+        for elem in elem:
+            _indent(elem, level + 1)
+        if not elem.tail or not elem.tail.strip():
+            elem.tail = i
+    else:
+        if level and (not elem.tail or not elem.tail.strip()):
+            elem.tail = i
 
 def _convertToOMEMD(images):
     """
@@ -293,7 +313,9 @@ def _convertToOMEMD(images):
 
     # TODO add tag to each image with "Odemis", so that we can find them back
     # easily in a database?
-    # TODO: pretty print?
+
+    # make it more readable
+    _indent(root)
     ometxt = ('<?xml version="1.0" encoding="UTF-8"?>' +
               ET.tostring(root, encoding="utf-8"))
     return ometxt
@@ -337,6 +359,7 @@ def _foldArraysFromOME(root, das):
         # An RGB image where the Red, Green and Blue components do not reflect discrete probes but are
         # instead the output of a color camera would be treated similarly - one Logical channel with three ChannelComponents in this case.
         # TODO: what to do if > 1? See if the data is 3D or not? See the plane count number?
+        # Probably the spec expects to _only_ have 2D images.
         # See the channels number? 
         # For now we expect RGB as SPP=3, SizeC=3, PlaneCount=1, and 1 3D IFD,
         # but they probably can be encoded as SPP=3, SizeC=3, PlaneCount=3 and 3
@@ -360,11 +383,13 @@ def _foldArraysFromOME(root, das):
             # If PlaneCount is > 1: it's in the same order as DimensionOrder
             # TODO: for now fixed to ZTC, but that should not be
             for i in range(pc):
-                imsetn[pos] = ifd + i
+                imsetn[tuple(pos)] = ifd + i
+                if i == (pc - 1): # don't compute next position if it's over
+                    break
+                # compute next position (with modulo)
                 pos[-1] += 1
-                # compute modulo
                 for d in range(len(pos) - 1, -1, -1):
-                    if pos[d] > dshape[d]:
+                    if pos[d] >= dshape[d]:
                         pos[d] = 0
                         pos[d - 1] += 1 # will fail if d = 0, on purpose
 
@@ -381,6 +406,7 @@ def _foldArraysFromOME(root, das):
         # Remove C dim if 3D
         if is_3d:
             if imsetn.shape != fim.shape[-3]:
+                # 3D data arrays are not officially supported in OME-TIFF anyway
                 raise NotImplementedError("Loading of %d channel from images "
                        "with %d channels not supported" % (imsetn.shape, fim.shape[-3]))
             imsetn = imsetn[0]
@@ -402,12 +428,15 @@ def _foldArraysFromOME(root, das):
 
         # Combine all the IFDs into a 5D array
         imset = numpy.empty(dshape, fim.dtype)
+        if is_3d:
+            # move the C axis next to YX, so they fit the data shape
+            vimset = numpy.rollaxis(imset, 0, -2)
+        else:
+            vimset = imset
+
         for i, ifd in numpy.ndenumerate(imsetn):
-            if is_3d:
-                imset[:, i[0], i[1]] = das[ifd]
-            else:
-                imset[i] = das[ifd]
-        omedas.append(imset)
+            vimset[i] = das[ifd]
+        omedas.append(model.DataArray(imset, metadata=fim.metadata))
 
     return omedas
 
@@ -713,6 +742,7 @@ def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True):
     else:
         alldata = ldata
     # TODO: reorder the data so that data from the same sensor are together
+
     ometxt = _convertToOMEMD(alldata)
 
     if thumbnail is not None:
@@ -782,26 +812,27 @@ def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True):
 #        TIFFWriteDirectory(created_TIFF);
 
     for data in ldata:
-        # Save metadata (before the image)
-        tags = _convertToTiffTag(data.metadata)
-        for key, val in tags.items():
-            f.SetField(key, val)
-
         # TODO: see if we need to set FILETYPE_PAGE + Page number for each image? data?
-
+        tags = _convertToTiffTag(data.metadata)
         if ometxt: # save OME tags if not yet done
             f.SetField(T.TIFFTAG_IMAGEDESCRIPTION, ometxt)
             ometxt = None
 
-        # TODO: If compression=="lzw" => TIFFTAG_PREDICTOR = PREDICTOR_HORIZONTAL to improve compression?
-        # for data > 2D: write as a sequence of 2D images
+        # for data > 2D: write as a sequence of 2D images or RGB images
         if data.ndim == 5 and data.shape[0] == 3: # RGB
             # Write an RGB image, instead of 3 images along C
-            for i in numpy.ndindex(*data.shape[1:3]):
-                f.write_image(data[:, i[0], i[1]], write_rgb=True, compression=compression)
+            write_rgb = True
+            hdim = data.shape[1:3]
+            data = numpy.rollaxis(data, 0, -2) # move C axis near YX
         else:
-            for i in numpy.ndindex(*data.shape[:-2]):
-                f.write_image(data[i], compression=compression)
+            write_rgb = False
+            hdim = data.shape[:-2]
+            
+        for i in numpy.ndindex(*hdim):
+            # Save metadata (before the image)
+            for key, val in tags.items():
+                f.SetField(key, val)
+            f.write_image(data[i], write_rgb=write_rgb, compression=compression)
 
 def _thumbsFromTIFF(filename):
     """

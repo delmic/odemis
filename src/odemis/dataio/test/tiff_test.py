@@ -363,7 +363,7 @@ class TestTiffIO(unittest.TestCase):
                      model.MD_BPP: 12,
                      model.MD_BINNING: (1, 2), # px, px
                      model.MD_PIXEL_SIZE: (1e-6, 2e-5), # m/px
-                     model.MD_POS: (1e-3, -30e-3), # m
+                     model.MD_POS: (13.7e-3, -30e-3), # m
                      model.MD_EXP_TIME: 1.2, # s
                      model.MD_IN_WL: (500e-9, 520e-9), # m
                      model.MD_OUT_WL: (600e-9, 630e-9), # m
@@ -376,7 +376,7 @@ class TestTiffIO(unittest.TestCase):
                      model.MD_BINNING: (1, 1), # px, px
                      model.MD_PIXEL_SIZE: (1e-6, 2e-5), # m/px
                      model.MD_WL_POLYNOMIAL: [500e-9, 1e-9], # m, m/px: wl polynomial
-                     model.MD_POS: (1e-3, -30e-3), # m
+                     model.MD_POS: (13.7e-3, -30e-3), # m
                      model.MD_EXP_TIME: 1.2, # s
                     },
                     ]
@@ -408,8 +408,10 @@ class TestTiffIO(unittest.TestCase):
         for i, im in enumerate(rdata):
             md = metadata[i]
             self.assertEqual(im.metadata[model.MD_DESCRIPTION], md[model.MD_DESCRIPTION])
-            self.assertEqual(im.metadata[model.MD_POS], md[model.MD_POS])
-            self.assertEqual(im.metadata[model.MD_PIXEL_SIZE], md[model.MD_PIXEL_SIZE])
+            self.assertAlmostEqual(im.metadata[model.MD_POS][0], md[model.MD_POS][0])
+            self.assertAlmostEqual(im.metadata[model.MD_POS][1], md[model.MD_POS][1])
+            self.assertAlmostEqual(im.metadata[model.MD_PIXEL_SIZE][0], md[model.MD_PIXEL_SIZE][0])
+            self.assertAlmostEqual(im.metadata[model.MD_PIXEL_SIZE][1], md[model.MD_PIXEL_SIZE][1])
             self.assertEqual(im.metadata[model.MD_ACQ_DATE], md[model.MD_ACQ_DATE])
 
             if model.MD_WL_POLYNOMIAL in md:
