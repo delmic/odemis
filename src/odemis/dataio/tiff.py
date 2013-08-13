@@ -330,85 +330,99 @@ def _updateMDFromOME(root, das):
     #
     pass
 
+def _getIFDsFromOME(pixele):
+    """
+    Return the IFD containing the 2D data for each high dimension of an array.
+    Note: this doesn't take into account if the data is 3D.
+    pixele (ElementTree): the element to Pixels of an image
+    return (numpy.array of int): shape is the shape of the 3 high dimensions CTZ,
+     the value is the IFD number of -1 if not specified.
+    """
+    hdshape = []
+    for d in "CTZ": # that's our fixed order
+        ds = int(pixele.get("Size%s" % d, "1"))
+        hdshape.append(ds)
+
+    imsetn = numpy.empty(hdshape, dtype="int")
+    imsetn[:] = -1
+    for tfe in pixele.findall("TiffData"):
+        ifd = int(tfe.get("IFD", "0"))
+        pos = []
+        for d in "CTZ": # that's our fixed order
+            ds = int(tfe.get("First%s" % d, "0"))
+            pos.append(ds)
+        # TODO: if no IFD specified, PC should default to all the IFDs
+        pc = int(tfe.get("PlaneCount", "1"))
+
+        # TODO: If has UUID tag, it means it's actually in a separate document
+        # (cf tiff series) => load it and add it to the data as a new IFD?
+
+        # If PlaneCount is > 1: it's in the same order as DimensionOrder
+        # TODO: for now fixed to ZTC, but that should as DimensionOrder
+        for i in range(pc):
+            imsetn[tuple(pos)] = ifd + i
+            if i == (pc - 1): # don't compute next position if it's over
+                break
+            # compute next position (with modulo)
+            pos[-1] += 1
+            for d in range(len(pos) - 1, -1, -1):
+                if pos[d] >= hdshape[d]:
+                    pos[d] = 0
+                    pos[d - 1] += 1 # will fail if d = 0, on purpose
+
+    return imsetn
+
 def _foldArraysFromOME(root, das):
     """
     Reorganize DataArrays with more than 2 dimensions according to OME XML
     Note: it expects _updateMDFromOME has been run before and so each array
-     has 
+     has its metadata filled up.
+    Note: Officially OME supports only base arrays of 2D. But we also support
+     base arrays of 3D if the data is RGB (3rd dimension has length 3).
     root (ET.Element): the root (i.e., OME) element of the XML description
     data (list of DataArrays): DataArrays at the same place as the TIFF IFDs
     return (list of DataArrays): new shorter list of DAs 
     """
     omedas = []
 
-    # Go through each Image
     for ime in root.findall("Image"):
-        # Aggregate each TiffData's DataArray according to the dimensions
-        # Use the first DA's metadata as metadata
-        # Note: default IFD is 0 (but in which case the PlaneCount is all the file
-        
-        pxe = ime.find("Pixels")
-        # Read the shape of the dataset
-        dshape = []
-        for d in "CTZYX": # that's our fixed order
+        pxe = ime.find("Pixels") # there must be only one per Image
+
+        # The relation between channel and planes is not very clear. Each channel
+        # can have multiple SamplesPerPixel, apparently to indicate they have
+        # multiple planes. However, the Interleaved attribute is global for
+        # Pixels, and seems to imply that RGB data could be saved as a whole,
+        # although OME-TIFF normally only has 2D arrays.
+        # So far the understanding is Channel refers to the "Logical channels",
+        # and Plane refers to the C dimension.
+#        spp = int(pxe.get("Channel/SamplesPerPixel", "1"))
+
+        imsetn = _getIFDsFromOME(pxe)
+        # For now we expect RGB as (SPP=3,) SizeC=3, PlaneCount=1, and 1 3D IFD,
+        # or as (SPP=3,) SizeC=3, PlaneCount=3 and 3 2D IFDs.
+
+        # Read the complete shape of the dataset
+        dshape = list(imsetn.shape)
+        for d in "YX":
             ds = int(pxe.get("Size%s" % d, "1"))
             dshape.append(ds)
-
-        spp = int(pxe.get("Channel/SamplesPerPixel", "1"))
-        # The spec says: The SamplesPerPixel attribute is the number of channel components in the logical channel.
-        # An RGB image where the Red, Green and Blue components do not reflect discrete probes but are
-        # instead the output of a color camera would be treated similarly - one Logical channel with three ChannelComponents in this case.
-        # TODO: what to do if > 1? See if the data is 3D or not? See the plane count number?
-        # Probably the spec expects to _only_ have 2D images.
-        # See the channels number? 
-        # For now we expect RGB as SPP=3, SizeC=3, PlaneCount=1, and 1 3D IFD,
-        # but they probably can be encoded as SPP=3, SizeC=3, PlaneCount=3 and 3
-        # 2D IFDs.
-
-        # Create an array with the IFD of each 2D image part of the entire data
-        imsetn = numpy.empty(dshape[:3], dtype="int")
-        imsetn[:] = -1
-        for tfe in pxe.findall("TiffData"):
-            ifd = int(tfe.get("IFD", "0"))
-            pos = []
-            for d in "CTZ": # that's our fixed order
-                ds = int(tfe.get("First%s" % d, "0"))
-                pos.append(ds)
-            # TODO: if no IFD specified, PC should default to all the IFDs
-            pc = int(tfe.get("PlaneCount", "1"))
-            
-            # TODO: If has UUID tag, it means it's actually in a separate document
-            # (cf tiff series)
-
-            # If PlaneCount is > 1: it's in the same order as DimensionOrder
-            # TODO: for now fixed to ZTC, but that should not be
-            for i in range(pc):
-                imsetn[tuple(pos)] = ifd + i
-                if i == (pc - 1): # don't compute next position if it's over
-                    break
-                # compute next position (with modulo)
-                pos[-1] += 1
-                for d in range(len(pos) - 1, -1, -1):
-                    if pos[d] >= dshape[d]:
-                        pos[d] = 0
-                        pos[d - 1] += 1 # will fail if d = 0, on purpose
 
         # Check if the IFDs are 2D or 3D, based on the first one
         fifd = imsetn[0, 0, 0]
         if fifd == -1:
-            logging.warning("Failed to locate all IFDs to fill the Image of %s", dshape)
-            raise ValueError("Not enough IFDs available")
+            raise ValueError("Not all IFDs defined for image %d", len(omedas) + 1)
+
         fim = das[fifd]
         if fim == None:
             continue # thumbnail
-        is_3d = (len(fim.shape) >= 3 and fim.shape[-3] > 1)
+        is_3d = (len(fim.shape) == 3 and fim.shape[0] > 1)
 
         # Remove C dim if 3D
         if is_3d:
-            if imsetn.shape != fim.shape[-3]:
+            if imsetn.shape != fim.shape[0]:
                 # 3D data arrays are not officially supported in OME-TIFF anyway
                 raise NotImplementedError("Loading of %d channel from images "
-                       "with %d channels not supported" % (imsetn.shape, fim.shape[-3]))
+                       "with %d channels not supported" % (imsetn.shape, fim.shape[0]))
             imsetn = imsetn[0]
 
         # Short-circuit for dataset with only one IFD
@@ -417,8 +431,7 @@ def _foldArraysFromOME(root, das):
             continue
 
         if -1 in imsetn:
-            logging.warning("Failed to locate all IFDs to fill the Image of %s", dshape)
-            raise ValueError("Not enough IFDs available")
+            raise ValueError("Not all IFDs defined for image %d", len(omedas) + 1)
 
         # TODO
         # Note: Position or Wavelength might actually be different! In which
