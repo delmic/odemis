@@ -154,7 +154,10 @@ def _readTiffTag(tfile):
     xres = tfile.GetField(T.TIFFTAG_XRESOLUTION)
     yres = tfile.GetField(T.TIFFTAG_YRESOLUTION)
     if xres is not None and yres is not None:
-        md[model.MD_PIXEL_SIZE] = (factor / xres, factor / yres)
+        try:
+            md[model.MD_PIXEL_SIZE] = (factor / xres, factor / yres)
+        except ZeroDivisionError:
+            pass
 
     xpos = tfile.GetField(T.TIFFTAG_XPOSITION)
     ypos = tfile.GetField(T.TIFFTAG_YPOSITION)
@@ -371,6 +374,49 @@ def _updateMDFromOME(root, das):
         except (KeyError, ValueError):
             pass
 
+
+        # Channels are tricky, because it _seems_ they are associated to each
+        # C dimension only by the order they are specified
+        md_chan = [] # list of metadata dict
+        for che in pxe.findall("Channel"):
+            mdc = {}
+            try:
+                mdc[model.MD_DESCRIPTION] = che.attrib["Name"]
+            except KeyError:
+                pass
+
+            try:
+                iwl = float(che.attrib["ExcitationWavelength"]) * 1e-9 # nm -> m
+                mdc[model.MD_IN_WL] = (iwl, iwl)
+            except (KeyError, ValueError):
+                pass
+
+            try:
+                owl = float(che.attrib["EmissionWavelength"]) * 1e-9 # nm -> m
+                mdc[model.MD_OUT_WL] = (owl, owl)
+            except (KeyError, ValueError):
+                pass
+
+            d_settings = ime.find("DetectorSettings")
+            if d_settings is not None:
+                try:
+                    mdc[model.MD_BINNING] = d_settings.attrib["Binning"]
+                except KeyError:
+                    pass
+                try:
+                    mdc[model.MD_GAIN] = float(d_settings.attrib["Gain"])
+                except (KeyError, ValueError):
+                    pass
+                try:
+                    ror = float(d_settings.attrib["ReadOutRate"]) # MHz
+                    mdc[model.MD_READOUT_TIME] = 1e-6 / ror # s
+                except (KeyError, ValueError):
+                    pass                
+
+        # TODO: Plane (=indirect per IFD)
+        for ple in pxe.findall("Plane"):
+            mdp = []
+            
         for tfe in pxe.findall("TiffData"):
             ifd = int(tfe.get("IFD", "0"))
             pc = int(tfe.get("PlaneCount", "1"))
@@ -381,6 +427,7 @@ def _updateMDFromOME(root, das):
                 if im is None:
                     continue
                 im.metadata.update(md)
+
 
     pass
 
@@ -704,10 +751,11 @@ def _addImageElement(root, das, ifd):
     
             # TODO Color attrib for tint?
             # TODO Fluor attrib for the dye?
+            # TODO create a Filter with the cut range?
             if model.MD_IN_WL in da.metadata:
                 iwl = da.metadata[model.MD_IN_WL]
                 xwl = numpy.mean(iwl) * 1e9 # in nm
-                chan.attrib["ExcitationWavelength"] = "%f" % xwl
+                chan.attrib["ExcitationWavelength"] = "%d" % round(xwl)
     
                 # if input wavelength range is small, it means we are in epifluoresence
                 if abs(iwl[1] - iwl[0]) < 100e-9:
@@ -722,7 +770,7 @@ def _addImageElement(root, das, ifd):
             if model.MD_OUT_WL in da.metadata:
                 owl = da.metadata[model.MD_OUT_WL]
                 ewl = numpy.mean(owl) * 1e9 # in nm
-                chan.attrib["EmissionWavelength"] = "%f" % ewl
+                chan.attrib["EmissionWavelength"] = "%d" % round(ewl)
     
             # Add info on detector
             attrib = {}
