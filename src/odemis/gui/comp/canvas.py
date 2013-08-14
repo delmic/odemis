@@ -367,7 +367,7 @@ class DraggableCanvas(wx.Panel):
                 if abs(shift) <= linear_zone:
                     value = shift
                 else:
-                    ssquare = cmp(shift, 0) * (shift - linear_zone) ** 2
+                    ssquare = cmp(shift, 0) * (abs(shift) - linear_zone) ** 2
                     value = shift + ssquare / linear_zone
 
                 change = value - self._rdrag_prev_value[i]
