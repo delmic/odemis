@@ -233,7 +233,8 @@ class SparcAcquisitionTab(Tab):
         semcl_stream.roi.subscribe(self.onROI, init=True)
 
         # create a view on the microscope model
-        # Needs SEM CL stream (could be avoided if we had a .roa on the microscope model)
+        # Needs SEM CL stream (could be avoided if we had a .roa on the
+        # microscope model)
         self._view_controller = ViewController(
                                     self.interface_model,
                                     self.main_frame,
@@ -250,8 +251,8 @@ class SparcAcquisitionTab(Tab):
 
         # FIXME: for now we disable the AR from the acquisition view, because we
         # don't want to always acquire it, so we never acquire it. The good way
-        # is to add/remove the stream according to the "instrument" state, in the
-        # microscope controller.
+        # is to add/remove the stream according to the "instrument" state, in
+        # the microscope controller.
         # We always create ar_stream because the setting controller needs to
         # initialise the widgets with it.
         if self._ar_stream:
@@ -265,7 +266,8 @@ class SparcAcquisitionTab(Tab):
                                             self.settings_controller
                                        )
 
-        # TODO: maybe don't use this: just is_active + direct link of the buttons
+        # TODO: maybe don't use this: just is_active + direct link of the
+        # buttons
         # to hide/show the instrument settings
         # Turn on the live SEM stream
         self.interface_model.emState.value = STATE_ON
@@ -274,40 +276,91 @@ class SparcAcquisitionTab(Tab):
         # TODO: maybe should be handled by a simple stream controller?
         self.interface_model.emState.subscribe(self.onEMState, init=True)
 
-        # Grab the repetition entry, so we can use it to hook extra event
+        # Repetition visualisation
+
+        # Grab the repetition entries, so we can use it to hook extra event
         # handlers to it.
-        self.spec_rep_entry = self.settings_controller.get_entry("repetition")
-        self.spec_rep_entry.ctrl.Bind(wx.EVT_SET_FOCUS, self.on_spec_rep_focus)
-        self.spec_rep_entry.ctrl.Bind(wx.EVT_KILL_FOCUS, self.on_spec_rep_focus)
-        self.spec_rep_entry.ctrl.Bind(wx.EVT_ENTER_WINDOW, self.on_spec_rep_enter)
-        self.spec_rep_entry.ctrl.Bind(wx.EVT_LEAVE_WINDOW, self.on_spec_rep_leave)
+        self.spec_rep = self.settings_controller.get_spectro_rep_entry()
+        if self.spec_rep:
+            self.spec_rep.ctrl.Bind(wx.EVT_SET_FOCUS, self.on_spec_rep_focus)
+            self.spec_rep.ctrl.Bind(wx.EVT_KILL_FOCUS, self.on_spec_rep_focus)
+            self.spec_rep.ctrl.Bind(wx.EVT_ENTER_WINDOW, self.on_spec_rep_enter)
+            self.spec_rep.ctrl.Bind(wx.EVT_LEAVE_WINDOW, self.on_spec_rep_leave)
+            self.spec_rep.va.subscribe(self.on_spec_rep_change)
+
+        self.angu_rep = self.settings_controller.get_angular_rep_entry()
+        if self.angu_rep:
+            self.angu_rep.ctrl.Bind(wx.EVT_SET_FOCUS, self.on_angu_rep_focus)
+            self.angu_rep.ctrl.Bind(wx.EVT_KILL_FOCUS, self.on_angu_rep_focus)
+            self.angu_rep.ctrl.Bind(wx.EVT_ENTER_WINDOW, self.on_angu_rep_enter)
+            self.angu_rep.ctrl.Bind(wx.EVT_LEAVE_WINDOW, self.on_angu_rep_leave)
+            self.angu_rep.va.subscribe(self.on_angu_rep_change)
+
 
         # Toolbar
+
         tb = self.main_frame.sparc_acq_tool_menu
         tb.AddTool(tools.TOOL_RO_ACQ, self.interface_model.tool)
         tb.AddTool(tools.TOOL_POINT, self.interface_model.tool)
         tb.AddTool(tools.TOOL_RO_ZOOM, self.interface_model.tool)
         tb.AddTool(tools.TOOL_ZOOM_FIT, self.onZoomFit)
 
+    # Special event handlers for repition indication in the ROI selection
+    # TODO: refactor, a lot of code repitition is going on here
+
+    def on_spec_rep_change(self, rep):
+        overlay = self.main_frame.vp_sparc_acq_view.canvas.roi_overlay
+        overlay.set_repetition(rep)
+
     def on_spec_rep_focus(self, event):
-        eo = event.GetEventObject()
         overlay = self.main_frame.vp_sparc_acq_view.canvas.roi_overlay
 
-        if eo.HasFocus():
+        if self.spec_rep.ctrl.HasFocus():
+            overlay.set_repetition(self.spec_rep.va.value)
             overlay.grid_fill()
         else:
             overlay.clear_fill()
 
         event.Skip()
 
-    def on_spec_rep_enter(self, event):
+    def on_spec_rep_enter(self, event=None):
         overlay = self.main_frame.vp_sparc_acq_view.canvas.roi_overlay
+        overlay.set_repetition(self.spec_rep.va.value)
+
         overlay.grid_fill()
         event.Skip()
 
     def on_spec_rep_leave(self, event):
-        eo = event.GetEventObject()
-        if not eo.HasFocus():
+        if not self.spec_rep.ctrl.HasFocus():
+            overlay = self.main_frame.vp_sparc_acq_view.canvas.roi_overlay
+            overlay.clear_fill()
+        event.Skip()
+
+
+    def on_angu_rep_change(self, rep):
+        overlay = self.main_frame.vp_sparc_acq_view.canvas.roi_overlay
+        overlay.set_repetition(rep)
+
+    def on_angu_rep_focus(self, event):
+        overlay = self.main_frame.vp_sparc_acq_view.canvas.roi_overlay
+
+        if self.angu_rep.ctrl.HasFocus():
+            overlay.set_repetition(self.angu_rep.va.value)
+            overlay.point_fill()
+        else:
+            overlay.clear_fill()
+
+        event.Skip()
+
+    def on_angu_rep_enter(self, event=None):
+        overlay = self.main_frame.vp_sparc_acq_view.canvas.roi_overlay
+        overlay.set_repetition(self.angu_rep.va.value)
+
+        overlay.point_fill()
+        event.Skip()
+
+    def on_angu_rep_leave(self, event):
+        if not self.angu_rep.ctrl.HasFocus():
             overlay = self.main_frame.vp_sparc_acq_view.canvas.roi_overlay
             overlay.clear_fill()
         event.Skip()
@@ -362,7 +415,7 @@ class SparcAcquisitionTab(Tab):
             self._sem_cl_stream.roi.subscribe(self.onROI)
 
             overlay = self.main_frame.vp_sparc_acq_view.canvas.roi_overlay
-            overlay.set_repetition(self.spec_rep_entry.va.value)
+            overlay.set_repetition(self.spec_rep.va.value)
 
     def onARROI(self, roi):
         """
@@ -374,6 +427,9 @@ class SparcAcquisitionTab(Tab):
             self._sem_cl_stream.roi.unsubscribe(self.onROI)
             self._sem_cl_stream.roi.value = roi
             self._sem_cl_stream.roi.subscribe(self.onROI)
+
+            overlay = self.main_frame.vp_sparc_acq_view.canvas.roi_overlay
+            overlay.set_repetition(self.angu_rep.va.value)
 
 class InspectionTab(Tab):
 
@@ -589,11 +645,16 @@ class MirrorAlignTab(Tab):
             self._ccd_stream = ccd_stream
 
 
-            # TODO: need to know the mirror center according to the goal image (metadata using pypng?)
-            goal_im = pkg_resources.resource_stream("odemis.gui.img",
-                                        "calibration/ma_goal_image_5_13_no_lens.png")
+            # TODO: need to know the mirror center according to the goal image
+            # (metadata using pypng?)
+            goal_im = pkg_resources.resource_stream(
+                            "odemis.gui.img",
+                            "calibration/ma_goal_image_5_13_no_lens.png")
             mpp = 13e-6 # m (not used if everything goes fine)
-            goal_iim = InstrumentalImage(wx.ImageFromStream(goal_im), mpp, (0, 0))
+            goal_iim = InstrumentalImage(
+                            wx.ImageFromStream(goal_im),
+                            mpp,
+                            (0, 0))
             goal_stream = StaticStream("Goal", goal_iim)
             # create a view on the microscope model
             self._view_controller = ViewController(
@@ -602,8 +663,8 @@ class MirrorAlignTab(Tab):
                                         [self.main_frame.vp_sparc_align]
                                     )
             mic_view = self.interface_model.focussedView.value
-            mic_view.show_crosshair.value = False
-            mic_view.merge_ratio.value = 1
+            mic_view.show_crosshair.value = False    #pylint: disable=E1103
+            mic_view.merge_ratio.value = 1           #pylint: disable=E1103
             ccd_stream.should_update.value = True
 
             # TODO: Do not put goal stream in the stream panel, we don't need
@@ -746,7 +807,8 @@ class TabBarController(object):
         # create all the tabs that fit the microscope role
         self.tab_list = self._filter_tabs(tab_rules, main_frame, microscope)
         if not self.tab_list:
-            raise LookupError("No interface known for microscope %s" % microscope.role)
+            msg = "No interface known for microscope %s" % microscope.role
+            raise LookupError(msg)
         self.switch(0)
 
         for tab in self.tab_list:

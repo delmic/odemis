@@ -50,7 +50,7 @@ class Overlay(object):
     def set_label(self, label):
         self.label = unicode(label)
 
-    def write_label(self, ctx, vpos, label, flip=True, align=wx.ALIGN_LEFT):
+    def write_label(self, ctx, size, vpos, label, flip=True, align=wx.ALIGN_LEFT):
         font = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT)
         ctx.select_font_face(
                 font.GetFaceName(),
@@ -68,17 +68,18 @@ class Overlay(object):
             x = x - width
 
         if flip:
-            if x + width + margin_x > self.base.ClientSize.x:
+            if x + width + margin_x > size.x:
                 x = self.base.ClientSize[0] - width - margin_x
             elif x < margin_x:
                 x = margin_x
 
-            if y + height + margin_x > self.base.ClientSize.y:
+            if y + height + margin_x > size.y:
                 y = self.base.ClientSize[1] - height
             elif y < height:
                 y = height
 
         #t = font.GetPixelSize()
+
         ctx.set_source_rgba(0.0, 0.0, 0.0, 0.7)
         ctx.move_to(x + 1, y + 1)
         ctx.show_text(label)
@@ -117,7 +118,7 @@ class TextViewOverlay(ViewOverlay):
     def Draw(self, dc, shift=(0, 0), scale=1.0):
         if self.label:
             ctx = wx.lib.wxcairo.ContextFromDC(dc)
-            self.write_label(ctx, self.vpos, self.label)
+            self.write_label(ctx, dc.GetSize(), self.vpos, self.label)
 
 class CrossHairOverlay(ViewOverlay):
     def __init__(self, base,
@@ -179,9 +180,12 @@ class FocusOverlay(ViewOverlay):
             x, y = self.base.ClientSize
             x = x - self.margin - (self.line_width / 2)
             middle = y / 2
+
+            # print self.shifts
+
             end_y = min(
                         max(self.margin,
-                            middle - middle * (self.shifts[1] / (y / 2))
+                            middle - (middle * (self.shifts[1] / (y / 2)))
                         ),
                         y - self.margin
                     )
@@ -192,6 +196,7 @@ class FocusOverlay(ViewOverlay):
 
             self.write_label(
                 ctx,
+                dc.GetSize(),
                 (x - 10, end_y),
                 "focus %s" % units.readable_str(self.shifts[1] / 1e6, 'm', 2),
                 flip=False,
@@ -506,14 +511,14 @@ class ViewSelectOverlay(ViewOverlay, SelectionMixin):
             ctx.rectangle(*rect)
             ctx.stroke()
 
-            if self.dragging or True:
+            if self.dragging:
                 msg = "{}: {} to {}, {} to {} unscaled".format(
                                             self.label,
                                             self.v_start_pos,
                                             self.v_end_pos,
                                             start_pos,
                                             end_pos)
-                self.write_label(ctx, (10, 10), msg)
+                self.write_label(ctx, dc.GetSize(), (10, 10), msg)
 
 class WorldSelectOverlay(WorldOverlay, SelectionMixin):
 
@@ -673,11 +678,7 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
             ctx.stroke()
 
             # Label
-            if self.dragging or self.edit:
-                # No need for size label
-                if not self.base.microscope_view:
-                    return
-
+            if (self.dragging or self.edit) and self.base.microscope_view:
                 w, h = self.base.selection_to_real_size(
                                             self.w_start_pos,
                                             self.w_end_pos
@@ -688,19 +689,19 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
                 size_lbl = u"{} x {}".format(w, h)
 
                 pos = (b_end_pos[0] + 5, b_end_pos[1] - 5)
-                self.write_label(ctx, pos, size_lbl)
+                self.write_label(ctx, dc_buffer.GetSize(), pos, size_lbl)
 
 FILL_GRID = 0
 FILL_POINT = 1
 
-class RepitionSelectOverlay(WorldSelectOverlay):
+class RepetitionSelectOverlay(WorldSelectOverlay):
 
     def __init__(self, base, label,
                  sel_cur=None,
                  color=gui.SELECTION_COLOR,
                  center=(0, 0)):
 
-        super(RepitionSelectOverlay, self).__init__(base, label)
+        super(RepetitionSelectOverlay, self).__init__(base, label)
 
         self.fill = None
         self.repitition = (0, 0)
@@ -718,8 +719,9 @@ class RepitionSelectOverlay(WorldSelectOverlay):
         self.repitition = repitition
 
     def Draw(self, dc_buffer, shift=(0, 0), scale=1.0):
+        """ TODO: Cache grid/point """
 
-        super(RepitionSelectOverlay, self).Draw(dc_buffer, shift, scale)
+        super(RepetitionSelectOverlay, self).Draw(dc_buffer, shift, scale)
 
         if self.w_start_pos and self.w_end_pos and self.fill is not None:
             ctx = wx.lib.wxcairo.ContextFromDC(dc_buffer)
@@ -731,6 +733,7 @@ class RepitionSelectOverlay(WorldSelectOverlay):
             b_end_pos = self.base.world_to_buffer_pos(
                                         self.w_end_pos,
                                         offset)
+
             rep_x, rep_y = self.repitition
             start_x = b_start_pos[0]
             end_x =  b_end_pos[0]
@@ -740,31 +743,49 @@ class RepitionSelectOverlay(WorldSelectOverlay):
             step_y = float(end_y - start_y) / rep_y
 
             r, g, b, _ = self.color
-            ctx.set_source_rgba(r, g, b, 0.5)
-            ctx.set_line_width(1)
+            if end_x - start_x < rep_x or end_y - start_y < rep_y:
+                ctx.set_source_rgba(r, g, b, 0.5)
+            else:
+                ctx.set_source_rgba(r, g, b, 0.9)
+
 
             if self.fill == FILL_POINT:
-                for i in range(1, rep_x):
-                    x = start_x + i * step_x
-                    for j in range(1, rep_y):
-                        y = start_y + j * step_y
-                        ctx.rectangle(x, y, 2, 2)
+                ctx.set_line_width(2)
+
+                # cairo_move_to (cr, x, y);
+                # cairo_line_to (cr, x, y);
+                move_to = ctx.move_to
+                line_to = ctx.line_to
+
+                half_step_x = step_x / 2
+                half_step_y = step_y / 2
+
+                for i in range(rep_x):
+                    x = start_x + i * step_x + half_step_x
+                    for j in range(rep_y):
+                        y = start_y + j * step_y + half_step_y
+                        move_to(x, y)
+                        line_to(x + 2, y + 2)
+
             elif self.fill == FILL_GRID:
+                ctx.set_line_width(1)
+
+                move_to = ctx.move_to
+                line_to = ctx.line_to
+
                 for i in range(1, rep_x):
-                    ctx.move_to(start_x + i * step_x, start_y)
-                    ctx.line_to(start_x + i * step_x, end_y)
+                    move_to(start_x + i * step_x, start_y)
+                    line_to(start_x + i * step_x, end_y)
 
                 for i in range(1, rep_y):
-                    ctx.move_to(start_x, start_y + i * step_y)
-                    ctx.line_to(end_x,  start_y + i * step_y)
+                    move_to(start_x, start_y + i * step_y)
+                    line_to(end_x,  start_y + i * step_y)
 
             ctx.stroke()
 
 
 
-class FocusLineOverlay(ViewOverlay):
-    """ This class describes an overlay that draws a vertical line over a
-    canvas, showing a marker at the vertical value and a possible label """
+class MarkingLineOverlay(ViewOverlay):
 
     def __init__(self, base,
                  label="",
@@ -772,7 +793,7 @@ class FocusLineOverlay(ViewOverlay):
                  color=gui.SELECTION_COLOR,
                  center=(0, 0)):
 
-        super(FocusLineOverlay, self).__init__(base, label)
+        super(MarkingLineOverlay, self).__init__(base, label)
         self.color = hex_to_rgba(color)
         self.vposx = None
         self.vposy = None
@@ -805,4 +826,4 @@ class FocusLineOverlay(ViewOverlay):
 
             if self.label:
                 vpos = (self.vposx + 5, self.vposy + 3)
-                self.write_label(ctx, vpos, self.label)
+                self.write_label(ctx, dc_buffer.GetSize(), vpos, self.label)
