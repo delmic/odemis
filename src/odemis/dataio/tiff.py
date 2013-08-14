@@ -287,7 +287,7 @@ def _convertToOMEMD(images):
                                 })
 
     # for each set of images from the same instrument, add them
-    groups, first_ifd = _findImageGroups(images)
+    groups, first_ifd = _findImageGroups(images) # TODO: check it works well
 
     # Detectors
     for i, g in enumerate(groups):
@@ -374,10 +374,11 @@ def _updateMDFromOME(root, das):
         except (KeyError, ValueError):
             pass
 
+        ctz_2_ifd = _getIFDsFromOME(pxe)
 
-        # Channels are tricky, because it _seems_ they are associated to each
-        # C dimension only by the order they are specified
-        md_chan = [] # list of metadata dict
+        # Channels are a bit tricky, because apparently they are associated to
+        # each C only by the order they are specified.
+        chan = 0
         for che in pxe.findall("Channel"):
             mdc = {}
             try:
@@ -397,10 +398,14 @@ def _updateMDFromOME(root, das):
             except (KeyError, ValueError):
                 pass
 
-            d_settings = ime.find("DetectorSettings")
+            # TODO: parse detector
+
+            d_settings = che.find("DetectorSettings")
             if d_settings is not None:
                 try:
-                    mdc[model.MD_BINNING] = d_settings.attrib["Binning"]
+                    bin_str = d_settings.attrib["Binning"]
+                    m = re.match("(?P<b1>\d+)\s*x\s*(?P<b2>\d+)", bin_str)
+                    mdc[model.MD_BINNING] = (int(m.group("b1")), int(m.group("b2")))
                 except KeyError:
                     pass
                 try:
@@ -413,23 +418,58 @@ def _updateMDFromOME(root, das):
                 except (KeyError, ValueError):
                     pass                
 
-        # TODO: Plane (=indirect per IFD)
-        for ple in pxe.findall("Plane"):
-            mdp = []
+            # update all the IFDs related to this channel
+            for ifd in ctz_2_ifd[chan].flat:
+                if ifd == -1:
+                    continue # no IFD known, it's alright, might be just 3D array
+                da = das[ifd]
+                if da is None:
+                    continue # might be a thumbnail, it's alright
+                # First apply the global MD, then per-channel
+                da.metadata.update(md)
+                da.metadata.update(mdc)
+
+            chan += 1
             
-        for tfe in pxe.findall("TiffData"):
-            ifd = int(tfe.get("IFD", "0"))
-            pc = int(tfe.get("PlaneCount", "1"))
+        # Plane (= one per CTZ -> IFD)
+        for ple in pxe.findall("Plane"):
+            mdp = {}
+            pos = []
+            try:
+                for d in "CTZ": # that's our fixed order
+                    ds = int(ple.attrib["The%s" % d]) # required tag
+                    pos.append(ds)
+            except KeyError:
+                logging.warning("Failed to parse Plane element, skipping metadata")
+                continue
+            
+            try:
+                deltat = float(ple.attrib["DeltaT"]) # s
+                mdp[model.MD_ACQ_DATE] = md[model.MD_ACQ_DATE] + deltat
+            except (KeyError, ValueError):
+                pass
+            
+            try:
+                # FIXME: could actually be the dwell time (if scanned)
+                mdp[model.MD_EXP_TIME] = float(ple.attrib["ExposureTime"]) # s
+            except (KeyError, ValueError):
+                pass
 
-            # Update each IFD referenced
-            for i in range(ifd, ifd + pc):
-                im = das[i]
-                if im is None:
-                    continue
-                im.metadata.update(md)
+            try:
+                # We assume it's in meters, as we write it (but there is no official unit)
+                psx = float(pxe.attrib["PositionX"])
+                psy = float(pxe.attrib["PositionY"])
+                mdp[model.MD_POS] = (psx, psy)
+            except (KeyError, ValueError):
+                pass
 
-
-    pass
+            ifd = ctz_2_ifd[tuple(pos)]
+            if ifd == -1:
+                continue # no IFD known, it's alright, might be just 3D array
+            da = das[ifd]
+            if da is None:
+                continue # might be a thumbnail, it's alright
+            da.metadata.update(mdp)
 
 def _getIFDsFromOME(pixele):
     """
