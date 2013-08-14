@@ -62,6 +62,8 @@ MD_LIGHT_POWER = "Light power" # W, power of the emitting light
 MD_LENS_NAME = "Lens name" # str, product name of the lens
 MD_LENS_MAG = "Lens magnification" # float (ratio), magnification factor
 MD_FILTER_NAME = "Filter name" # str, product name of the light filter
+# TODO: might need to merge DWELL_TIME and EXP_TIME into INTEGRATION_TIME: the time each pixel receive energy
+# + SCANNED_DIMENSIONS: list of dimensions which were scanned instead of being acquired simultaneously
 MD_DWELL_TIME = "Pixel dwell time" # s (float), time the electron beam spends per pixel
 MD_EBEAM_ENERGY = "Electron beam energy" # eV (float), energy of the electron beam TODO: in SI, ie, Joules?
 MD_EBEAM_SPOT_DIAM = "Electron beam spot diameter" # m (float), approximate diameter of the electron beam spot (typically function of the current)

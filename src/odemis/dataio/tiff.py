@@ -22,6 +22,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from __future__ import division
 from libtiff import TIFF
 from odemis import model
+import calendar
 import libtiff.libtiff_ctypes as T # for the constant names
 import logging
 import numpy
@@ -55,6 +56,8 @@ EXTENSIONS = [".ome.tiff", ".ome.tif", ".tiff", ".tif"]
 # more than 3 dimensions for the data.
 # Note that it could be possible to use more TIFF tags, from DNG and LSM for
 # example.
+# See also MicroManager OME-TIFF format with additional tricks for ImageJ:
+# http://valelab.ucsf.edu/~MM/MMwiki/index.php/Micro-Manager_File_Formats
 
 # TODO: make sure that _all_ the metadata is saved, either in TIFF tags, OME-TIFF,
 # or in a separate mechanism.
@@ -132,7 +135,7 @@ def _GetFieldDefault(tfile, tag, default=None):
     else:
         return ret
 
-# factor for value -> me
+# factor for value -> m
 resunit_to_m = {T.RESUNIT_INCH: 0.0254, T.RESUNIT_CENTIMETER: 0.01}
 def _readTiffTag(tfile):
     """
@@ -151,13 +154,16 @@ def _readTiffTag(tfile):
     xres = tfile.GetField(T.TIFFTAG_XRESOLUTION)
     yres = tfile.GetField(T.TIFFTAG_YRESOLUTION)
     if xres is not None and yres is not None:
-        md[model.MD_PIXEL_SIZE] = (factor / xres, factor / yres)
+        try:
+            md[model.MD_PIXEL_SIZE] = (factor / xres, factor / yres)
+        except ZeroDivisionError:
+            pass
 
     xpos = tfile.GetField(T.TIFFTAG_XPOSITION)
     ypos = tfile.GetField(T.TIFFTAG_YPOSITION)
     if xpos is not None and ypos is not None:
         # -1 m for the shift
-        md[model.MD_POS] = (factor / xpos - 1, factor / ypos - 1)
+        md[model.MD_POS] = (factor * xpos - 1, factor * ypos - 1)
 
     # informative metadata
     val = tfile.GetField(T.TIFFTAG_PAGENAME)
@@ -172,10 +178,10 @@ def _readTiffTag(tfile):
     val = tfile.GetField(T.TIFFTAG_MODEL)
     if val is not None:
         md[model.MD_HW_VERSION] = val
-    val = tfile.GetField(T.TIFFTAG_MODEL)
+    val = tfile.GetField(T.TIFFTAG_DATETIME)
     if val is not None:
         try:
-            t = time.mktime(time.strptime(val, "%Y:%m:%d %H:%M:%S"))
+            t = calendar.timegm(time.strptime(val, "%Y:%m:%d %H:%M:%S"))
             md[model.MD_ACQ_DATE] = t
         except (OverflowError, ValueError):
             logging.info("Failed to parse date '%s'", val)
@@ -193,6 +199,26 @@ def _isThumbnail(tfile):
         return True
 
     return False
+
+def _indent(elem, level=0):
+    """
+    In-place pretty-print formatter
+    From http://effbot.org/zone/element-lib.htm#prettyprint
+    elem (ElementTree)
+    """
+    i = "\n" + level * "    "
+    if len(elem):
+        if not elem.text or not elem.text.strip():
+            elem.text = i + "    "
+        if not elem.tail or not elem.tail.strip():
+            elem.tail = i
+        for elem in elem:
+            _indent(elem, level + 1)
+        if not elem.tail or not elem.tail.strip():
+            elem.tail = i
+    else:
+        if level and (not elem.tail or not elem.tail.strip()):
+            elem.tail = i
 
 def _convertToOMEMD(images):
     """
@@ -284,12 +310,16 @@ def _convertToOMEMD(images):
             if model.MD_LENS_NAME in da0.metadata:
                 obj.attrib["Model"] = da0.metadata[model.MD_LENS_NAME]
 
+    # TODO: filters (with TransmittanceRange)
+
     for i, g in enumerate(groups):
         _addImageElement(root, g, first_ifd[i])
 
     # TODO add tag to each image with "Odemis", so that we can find them back
     # easily in a database?
-    # TODO: pretty print?
+
+    # make it more readable
+    _indent(root)
     ometxt = ('<?xml version="1.0" encoding="UTF-8"?>' +
               ET.tostring(root, encoding="utf-8"))
     return ometxt
@@ -301,43 +331,226 @@ def _updateMDFromOME(root, das):
     data (list of DataArrays): DataArrays at the same place as the TIFF IFDs
     return None: only the metadata of DA's inside is updated 
     """
-    #
+    # For each Image in the XML, gorge ourself from all the metadata we can
+    # find, and then use it to update the metadata of each IFD referenced.
+    for ime in root.findall("Image"):
+        md = {}
+        try:
+            md[model.MD_DESCRIPTION] = ime.attrib["Name"]
+        except KeyError: 
+            pass
+
+        try:
+            md[model.MD_USER_NOTE] = ime.attrib["Description"]
+        except KeyError:
+            pass
+
+        acq_date = ime.find("AcquisitionDate")
+        if acq_date is not None:
+            try:
+                # the earliest time of all the acquisitions in this image (see DeltaT)
+                val = acq_date.text
+                md[model.MD_ACQ_DATE] = calendar.timegm(time.strptime(val, "%Y-%m-%dT%H:%M:%S"))
+            except (OverflowError, ValueError):
+                pass
+
+        pxe = ime.find("Pixels") # there must be only one per Image
+        try:
+            psx = float(pxe.attrib["PhysicalSizeX"]) * 1e-6 # µm -> m
+            psy = float(pxe.attrib["PhysicalSizeY"]) * 1e-6
+            md[model.MD_PIXEL_SIZE] = (psx, psy)
+        except (KeyError, ValueError):
+            pass
+
+        try:
+            md[model.MD_BPP] = int(pxe.attrib["SignificantBits"])
+        except (KeyError, ValueError):
+            pass
+
+        try:
+            a = int(pxe.attrib["WaveStart"]) * 1e-9
+            b = int(pxe.attrib["WaveIncrement"]) * 1e-9
+            md[model.MD_WL_POLYNOMIAL] = [a, b]
+        except (KeyError, ValueError):
+            pass
+
+
+        # Channels are tricky, because it _seems_ they are associated to each
+        # C dimension only by the order they are specified
+        md_chan = [] # list of metadata dict
+        for che in pxe.findall("Channel"):
+            mdc = {}
+            try:
+                mdc[model.MD_DESCRIPTION] = che.attrib["Name"]
+            except KeyError:
+                pass
+
+            try:
+                iwl = float(che.attrib["ExcitationWavelength"]) * 1e-9 # nm -> m
+                mdc[model.MD_IN_WL] = (iwl, iwl)
+            except (KeyError, ValueError):
+                pass
+
+            try:
+                owl = float(che.attrib["EmissionWavelength"]) * 1e-9 # nm -> m
+                mdc[model.MD_OUT_WL] = (owl, owl)
+            except (KeyError, ValueError):
+                pass
+
+            d_settings = ime.find("DetectorSettings")
+            if d_settings is not None:
+                try:
+                    mdc[model.MD_BINNING] = d_settings.attrib["Binning"]
+                except KeyError:
+                    pass
+                try:
+                    mdc[model.MD_GAIN] = float(d_settings.attrib["Gain"])
+                except (KeyError, ValueError):
+                    pass
+                try:
+                    ror = float(d_settings.attrib["ReadOutRate"]) # MHz
+                    mdc[model.MD_READOUT_TIME] = 1e-6 / ror # s
+                except (KeyError, ValueError):
+                    pass                
+
+        # TODO: Plane (=indirect per IFD)
+        for ple in pxe.findall("Plane"):
+            mdp = []
+            
+        for tfe in pxe.findall("TiffData"):
+            ifd = int(tfe.get("IFD", "0"))
+            pc = int(tfe.get("PlaneCount", "1"))
+
+            # Update each IFD referenced
+            for i in range(ifd, ifd + pc):
+                im = das[i]
+                if im is None:
+                    continue
+                im.metadata.update(md)
+
+
     pass
+
+def _getIFDsFromOME(pixele):
+    """
+    Return the IFD containing the 2D data for each high dimension of an array.
+    Note: this doesn't take into account if the data is 3D.
+    pixele (ElementTree): the element to Pixels of an image
+    return (numpy.array of int): shape is the shape of the 3 high dimensions CTZ,
+     the value is the IFD number of -1 if not specified.
+    """
+    hdshape = []
+    for d in "CTZ": # that's our fixed order
+        ds = int(pixele.get("Size%s" % d, "1"))
+        hdshape.append(ds)
+
+    imsetn = numpy.empty(hdshape, dtype="int")
+    imsetn[:] = -1
+    for tfe in pixele.findall("TiffData"):
+        ifd = int(tfe.get("IFD", "0"))
+        pos = []
+        for d in "CTZ": # that's our fixed order
+            ds = int(tfe.get("First%s" % d, "0"))
+            pos.append(ds)
+        # TODO: if no IFD specified, PC should default to all the IFDs
+        pc = int(tfe.get("PlaneCount", "1"))
+
+        # TODO: If has UUID tag, it means it's actually in a separate document
+        # (cf tiff series) => load it and add it to the data as a new IFD?
+
+        # If PlaneCount is > 1: it's in the same order as DimensionOrder
+        # TODO: for now fixed to ZTC, but that should as DimensionOrder
+        for i in range(pc):
+            imsetn[tuple(pos)] = ifd + i
+            if i == (pc - 1): # don't compute next position if it's over
+                break
+            # compute next position (with modulo)
+            pos[-1] += 1
+            for d in range(len(pos) - 1, -1, -1):
+                if pos[d] >= hdshape[d]:
+                    pos[d] = 0
+                    pos[d - 1] += 1 # will fail if d = 0, on purpose
+
+    return imsetn
 
 def _foldArraysFromOME(root, das):
     """
     Reorganize DataArrays with more than 2 dimensions according to OME XML
     Note: it expects _updateMDFromOME has been run before and so each array
-     has 
+     has its metadata filled up.
+    Note: Officially OME supports only base arrays of 2D. But we also support
+     base arrays of 3D if the data is RGB (3rd dimension has length 3).
     root (ET.Element): the root (i.e., OME) element of the XML description
     data (list of DataArrays): DataArrays at the same place as the TIFF IFDs
     return (list of DataArrays): new shorter list of DAs 
     """
     omedas = []
 
-    # Go through each Image
     for ime in root.findall("Image"):
-        # Aggregate each TiffData's DataArray according to the dimensions
-        # Use the first DA's metadata as metadata
-        # Note: default IFD is 0 (but in which case the PlaneCount is all the file
-        for tft in ime.findall("Pixels/TiffData"):
-            ifd = int(tft.get("IFD", "0"))
-            try:
-                im = das[ifd]
-            except KeyError:
-                logging.warning("Failed to find IFD %d in image referenced in OME XML", ifd)
-                continue
-            if im is None:
-                continue
-            omedas.append(im)
+        pxe = ime.find("Pixels") # there must be only one per Image
 
+        # The relation between channel and planes is not very clear. Each channel
+        # can have multiple SamplesPerPixel, apparently to indicate they have
+        # multiple planes. However, the Interleaved attribute is global for
+        # Pixels, and seems to imply that RGB data could be saved as a whole,
+        # although OME-TIFF normally only has 2D arrays.
+        # So far the understanding is Channel refers to the "Logical channels",
+        # and Plane refers to the C dimension.
+#        spp = int(pxe.get("Channel/SamplesPerPixel", "1"))
+
+        imsetn = _getIFDsFromOME(pxe)
+        # For now we expect RGB as (SPP=3,) SizeC=3, PlaneCount=1, and 1 3D IFD,
+        # or as (SPP=3,) SizeC=3, PlaneCount=3 and 3 2D IFDs.
+
+        # Read the complete shape of the dataset
+        dshape = list(imsetn.shape)
+        for d in "YX":
+            ds = int(pxe.get("Size%s" % d, "1"))
+            dshape.append(ds)
+
+        # Check if the IFDs are 2D or 3D, based on the first one
+        fifd = imsetn[0, 0, 0]
+        if fifd == -1:
+            raise ValueError("Not all IFDs defined for image %d", len(omedas) + 1)
+
+        fim = das[fifd]
+        if fim == None:
+            continue # thumbnail
+        is_3d = (len(fim.shape) == 3 and fim.shape[0] > 1)
+
+        # Remove C dim if 3D
+        if is_3d:
+            if imsetn.shape != fim.shape[0]:
+                # 3D data arrays are not officially supported in OME-TIFF anyway
+                raise NotImplementedError("Loading of %d channel from images "
+                       "with %d channels not supported" % (imsetn.shape, fim.shape[0]))
+            imsetn = imsetn[0]
+
+        # Short-circuit for dataset with only one IFD
+        if all(d == 1 for d in imsetn.shape):
+            omedas.append(fim)
+            continue
+
+        if -1 in imsetn:
+            raise ValueError("Not all IFDs defined for image %d", len(omedas) + 1)
+
+        # TODO
         # Note: Position or Wavelength might actually be different! In which
-        # case it could make sense to leave them separate.
+        # case Odemis needs to see them as separate data.
         # => Have a list of metadata which _can be_ different, and everything
         # else must be identical to be merged
 
-        # TODO: If has UUID tag, it means it's actually in a separate document
-        # (cf tiff series)
+        # Combine all the IFDs into a 5D array
+        imset = numpy.empty(dshape, fim.dtype)
+        if is_3d:
+            # move the C axis next to YX, so they fit the data shape
+            vimset = numpy.rollaxis(imset, 0, -2)
+        else:
+            vimset = imset
+
+        for i, ifd in numpy.ndenumerate(imsetn):
+            vimset[i] = das[ifd]
+        omedas.append(model.DataArray(imset, metadata=fim.metadata))
 
     return omedas
 
@@ -487,7 +700,7 @@ def _addImageElement(root, das, ifd):
     if model.MD_PIXEL_SIZE in globalMD:
         pxs = globalMD[model.MD_PIXEL_SIZE]
         pixels.attrib["PhysicalSizeX"] = "%f" % (pxs[0] * 1e6) # in µm
-        pixels.attrib["PhysicalSizeY"] = "%f" % (pxs[1] * 1e6) # in µm
+        pixels.attrib["PhysicalSizeY"] = "%f" % (pxs[1] * 1e6)
     
     if model.MD_BPP in globalMD:
         bpp = globalMD[model.MD_BPP]
@@ -499,9 +712,27 @@ def _addImageElement(root, das, ifd):
     # TODO: for spectrum images, adding 1 channel per wavelength seem extremely
     # inefficient, there must be a better way to describe them in OME-XML
     # Channel Element.
-    # => "  Each Logical Channel is composed of one or more
+    # => "Each Logical Channel is composed of one or more
     # ChannelComponents.  For example, an entire spectrum in an FTIR experiment may be stored in a single Logical Channel with each discrete wavenumber of the spectrum
     # constituting a ChannelComponent of the FTIR Logical Channel."
+    # http://trac.openmicroscopy.org.uk/ome/ticket/7355 mentions spectrum can
+    # be stored as a fake Filter with the CutIn/CutOut wavelengths, but that's
+    # not so pretty.
+    # Some very old versions of the standard had WaveStart/WaveIncrement on Image
+
+    if model.MD_WL_POLYNOMIAL in globalMD:
+        # we store a subset of the metadata in a non-standard attribute :-(
+        pn = globalMD[model.MD_WL_POLYNOMIAL]
+        if len(pn) >= 1:
+            pixels.attrib["WaveStart"] = "%d" % round(pn[0] * 1e9) # in nm
+        if len(pn) >= 2:
+            pixels.attrib["WaveIncrement"] = "%d" % round(pn[1] * 1e9) # in nm/px
+    elif model.MD_WL_LIST in globalMD:
+        lwl = globalMD[model.MD_WL_LIST]
+        inc = (lwl[-1] - lwl[0]) / (len(lwl) - 1)
+        pixels.attrib["WaveStart"] = "%d" % round(lwl[0] * 1e9) # in nm
+        pixels.attrib["WaveIncrement"] = "%d" % round(inc * 1e9) # in nm/px
+
     subid = 0
     for da in das:
         if is_rgb or len(da.shape) < 5:
@@ -512,7 +743,7 @@ def _addImageElement(root, das, ifd):
             chan = ET.SubElement(pixels, "Channel", attrib={
                                    "ID": "Channel:%d:%d" % (idnum, subid)})
             if is_rgb:
-                chan.attrib["SamplesPerPixel"] = "3"
+                chan.attrib["SamplesPerPixel"] = "%d" % dshape[0]
                 
             # TODO Name attrib for Filtered color streams?
             if model.MD_DESCRIPTION in da.metadata:
@@ -520,10 +751,11 @@ def _addImageElement(root, das, ifd):
     
             # TODO Color attrib for tint?
             # TODO Fluor attrib for the dye?
+            # TODO create a Filter with the cut range?
             if model.MD_IN_WL in da.metadata:
                 iwl = da.metadata[model.MD_IN_WL]
                 xwl = numpy.mean(iwl) * 1e9 # in nm
-                chan.attrib["ExcitationWavelength"] = "%f" % xwl
+                chan.attrib["ExcitationWavelength"] = "%d" % round(xwl)
     
                 # if input wavelength range is small, it means we are in epifluoresence
                 if abs(iwl[1] - iwl[0]) < 100e-9:
@@ -538,7 +770,7 @@ def _addImageElement(root, das, ifd):
             if model.MD_OUT_WL in da.metadata:
                 owl = da.metadata[model.MD_OUT_WL]
                 ewl = numpy.mean(owl) * 1e9 # in nm
-                chan.attrib["EmissionWavelength"] = "%f" % ewl
+                chan.attrib["EmissionWavelength"] = "%d" % round(ewl)
     
             # Add info on detector
             attrib = {}
@@ -547,7 +779,7 @@ def _addImageElement(root, das, ifd):
             if model.MD_GAIN in da.metadata:
                 attrib["Gain"] = "%f" % da.metadata[model.MD_GAIN]
             if model.MD_READOUT_TIME in da.metadata:
-                ror = (1 / da.metadata[model.MD_READOUT_TIME]) / 1e6 #MHz
+                ror = (1 / da.metadata[model.MD_READOUT_TIME]) / 1e6 # MHz
                 attrib["ReadOutRate"] = "%f" % ror
     
             if attrib:
@@ -566,9 +798,9 @@ def _addImageElement(root, das, ifd):
     for index in numpy.ndindex(*rep_hdim):
         tde = ET.SubElement(pixels, "TiffData", attrib={
                                 "IFD": "%d" % (ifd + subid),
-                                "FirstZ": "%d" % index[2],
-                                "FirstT": "%d" % index[1],
                                 "FirstC": "%d" % index[0],
+                                "FirstT": "%d" % index[1],
+                                "FirstZ": "%d" % index[2],
                                 "PlaneCount": "1"
                                 })
         subid += 1
@@ -578,9 +810,9 @@ def _addImageElement(root, das, ifd):
     for index in numpy.ndindex(*rep_hdim):
         da = das[index[concat_axis]]
         plane = ET.SubElement(pixels, "Plane", attrib={
-                               "TheZ": "%d" % index[2],
-                               "TheT": "%d" % index[1],
                                "TheC": "%d" % index[0],
+                               "TheT": "%d" % index[1],
+                               "TheZ": "%d" % index[2],
                                })
         if model.MD_ACQ_DATE in da.metadata:
             diff = da.metadata[model.MD_ACQ_DATE] - globalAD
@@ -594,7 +826,7 @@ def _addImageElement(root, das, ifd):
             exp = da.metadata[model.MD_DWELL_TIME] * numpy.prod(da.shape)
             plane.attrib["ExposureTime"] = "%.12f" % exp
 
-        # Note that Position has no official unit, which prevent Tiling to be
+        # Note that Position has no official unit, which prevents Tiling to be
         # usable. In one OME-TIFF official example of tiles, they use pixels
         # (and ModuloAlongT "tile")
         if model.MD_POS in da.metadata:
@@ -643,6 +875,7 @@ def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True):
     else:
         alldata = ldata
     # TODO: reorder the data so that data from the same sensor are together
+
     ometxt = _convertToOMEMD(alldata)
 
     if thumbnail is not None:
@@ -670,8 +903,7 @@ def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True):
         # TODO also save it as thumbnail of the image (in limited size)
         # see  http://www.libtiff.org/man/thumbnail.1.html
 
-        # It seems that libtiff.py doesn't support yet SubIFD's so it's not
-        # going to fly
+        # libtiff.py doesn't support yet SubIFD's so it's not going to fly
 
 
         # from http://stackoverflow.com/questions/11959617/in-a-tiff-create-a-sub-ifd-with-thumbnail-libtiff
@@ -712,26 +944,27 @@ def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True):
 #        TIFFWriteDirectory(created_TIFF);
 
     for data in ldata:
-        # Save metadata (before the image)
-        tags = _convertToTiffTag(data.metadata)
-        for key, val in tags.items():
-            f.SetField(key, val)
-
         # TODO: see if we need to set FILETYPE_PAGE + Page number for each image? data?
-
+        tags = _convertToTiffTag(data.metadata)
         if ometxt: # save OME tags if not yet done
             f.SetField(T.TIFFTAG_IMAGEDESCRIPTION, ometxt)
             ometxt = None
 
-        # TODO: If compression=="lzw" => TIFFTAG_PREDICTOR = PREDICTOR_HORIZONTAL to improve compression?
-        # for data > 2D: write as a sequence of 2D images
+        # for data > 2D: write as a sequence of 2D images or RGB images
         if data.ndim == 5 and data.shape[0] == 3: # RGB
             # Write an RGB image, instead of 3 images along C
-            for i in numpy.ndindex(*data.shape[1:3]):
-                f.write_image(data[:, i[0], i[1]], write_rgb=True, compression=compression)
+            write_rgb = True
+            hdim = data.shape[1:3]
+            data = numpy.rollaxis(data, 0, -2) # move C axis near YX
         else:
-            for i in numpy.ndindex(*data.shape[:-2]):
-                f.write_image(data[i], compression=compression)
+            write_rgb = False
+            hdim = data.shape[:-2]
+            
+        for i in numpy.ndindex(*hdim):
+            # Save metadata (before the image)
+            for key, val in tags.items():
+                f.SetField(key, val)
+            f.write_image(data[i], write_rgb=write_rgb, compression=compression)
 
 def _thumbsFromTIFF(filename):
     """

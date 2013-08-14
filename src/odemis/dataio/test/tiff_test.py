@@ -21,6 +21,7 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
+from numpy.polynomial import polynomial
 from odemis import model
 from odemis.dataio import tiff
 from unittest.case import skip
@@ -39,7 +40,14 @@ logging.getLogger().setLevel(logging.DEBUG)
 
 FILENAME = "test" + tiff.EXTENSIONS[0] 
 class TestTiffIO(unittest.TestCase):
-    
+
+    def assertTupleAlmostEqual(self, first, second, places=None, msg=None, delta=None):
+        """
+        check two tuples are almost equal (value by value)
+        """
+        for f, s in zip(first, second):
+            self.assertAlmostEqual(f, s, places=places, msg=msg, delta=delta)
+
     def tearDown(self):
         # clean up
         try:
@@ -351,6 +359,88 @@ class TestTiffIO(unittest.TestCase):
         self.assertEqual(im[0, 0].tolist(), [255, 0, 0])
         self.assertEqual(im[blue[-1:-3:-1]].tolist(), [0, 0, 255])
 
+    def testReadMetadata(self):
+        """
+        Checks that we can read back the metadata of an image
+        """
+        metadata = [{model.MD_SW_VERSION: "1.0-test",
+                     model.MD_HW_NAME: "fake hw",
+                     model.MD_DESCRIPTION: "test",
+                     model.MD_ACQ_DATE: time.time(),
+                     model.MD_BPP: 12,
+                     model.MD_BINNING: (1, 2), # px, px
+                     model.MD_PIXEL_SIZE: (1e-6, 2e-5), # m/px
+                     model.MD_POS: (13.7e-3, -30e-3), # m
+                     model.MD_EXP_TIME: 1.2, # s
+                     model.MD_IN_WL: (500e-9, 520e-9), # m
+                     model.MD_OUT_WL: (600e-9, 630e-9), # m
+                    },
+                    {model.MD_SW_VERSION: "1.0-test",
+                     model.MD_HW_NAME: "fake spec",
+                     model.MD_DESCRIPTION: "test3d",
+                     model.MD_ACQ_DATE: time.time(),
+                     model.MD_BPP: 12,
+                     model.MD_BINNING: (1, 1), # px, px
+                     model.MD_PIXEL_SIZE: (1e-6, 2e-5), # m/px
+                     model.MD_WL_POLYNOMIAL: [500e-9, 1e-9], # m, m/px: wl polynomial
+                     model.MD_POS: (13.7e-3, -30e-3), # m
+                     model.MD_EXP_TIME: 1.2, # s
+                    },
+                    ]
+        # create 2 simple greyscale images
+        sizes = [(512, 256), (500, 400, 1, 1, 220)] # different sizes to ensure different acquisitions
+        dtype = numpy.dtype("uint8")
+        ldata = []
+        for i, s in enumerate(sizes):
+            a = model.DataArray(numpy.zeros(s[::-1], dtype), metadata[i])
+            ldata.append(a)
+
+        # thumbnail : small RGB completely red
+        tshape = (sizes[0][1] // 8, sizes[0][0] // 8, 3)
+        tdtype = numpy.uint8
+        thumbnail = model.DataArray(numpy.zeros(tshape, tdtype))
+        thumbnail[:, :, 1] += 255 # green
+
+        # export
+        tiff.export(FILENAME, ldata, thumbnail)
+
+        # check it's here
+        st = os.stat(FILENAME) # this test also that the file is created
+        self.assertGreater(st.st_size, 0)
+
+        # check data
+        rdata = tiff.read_data(FILENAME)
+        self.assertEqual(len(rdata), len(ldata))
+
+        for i, im in enumerate(rdata):
+            md = metadata[i]
+            self.assertEqual(im.metadata[model.MD_DESCRIPTION], md[model.MD_DESCRIPTION])
+            self.assertAlmostEqual(im.metadata[model.MD_POS][0], md[model.MD_POS][0])
+            self.assertAlmostEqual(im.metadata[model.MD_POS][1], md[model.MD_POS][1])
+            self.assertAlmostEqual(im.metadata[model.MD_PIXEL_SIZE][0], md[model.MD_PIXEL_SIZE][0])
+            self.assertAlmostEqual(im.metadata[model.MD_PIXEL_SIZE][1], md[model.MD_PIXEL_SIZE][1])
+            self.assertAlmostEqual(im.metadata[model.MD_ACQ_DATE], md[model.MD_ACQ_DATE], delta=1)
+            self.assertEqual(im.metadata[model.MD_BPP], md[model.MD_BPP])
+
+            if model.MD_WL_POLYNOMIAL in md:
+                pn = md[model.MD_WL_POLYNOMIAL]
+                # 2 formats possible
+                if model.MD_WL_LIST in im.metadata:
+                    l = ldata[i].shape[2]
+                    npn = polynomial.Polynomial(pn,
+                                    domain=[0, l - 1],
+                                    window=[0, l - 1])
+                    wl = npn.linspace(l)
+                    self.assertTupleAlmostEqual(im.metadata[model.MD_WL_LIST], wl)
+                else:
+                    self.assertTupleAlmostEqual(im.metadata[model.MD_WL_POLYNOMIAL], pn)
+
+        # check thumbnail
+        rthumbs = tiff.read_thumbnail(FILENAME)
+        self.assertEqual(len(rthumbs), 1)
+        im = rthumbs[0]
+        self.assertEqual(im.shape, tshape)
+        self.assertEqual(im[0, 0].tolist(), [0, 255, 0])
 
 
 def rational2float(rational):
