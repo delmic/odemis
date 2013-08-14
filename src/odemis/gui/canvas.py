@@ -1058,7 +1058,7 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
         self.plot_mode = canvas.PLOT_MODE_BAR
         self.ticks = canvas.PLOT_TICKS_HORZ
 
-        self.set_focusline_ovelay(overlay.FocusLineOverlay(self))
+        self.set_focusline_ovelay(overlay.MarkingLineOverlay(self))
 
         ## Event binding
 

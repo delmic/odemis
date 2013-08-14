@@ -716,6 +716,7 @@ class RepitionSelectOverlay(WorldSelectOverlay):
         self.repitition = repitition
 
     def Draw(self, dc_buffer, shift=(0, 0), scale=1.0):
+        """ TODO: Cache grid/point """
 
         super(RepitionSelectOverlay, self).Draw(dc_buffer, shift, scale)
 
@@ -761,9 +762,7 @@ class RepitionSelectOverlay(WorldSelectOverlay):
 
 
 
-class FocusLineOverlay(ViewOverlay):
-    """ This class describes an overlay that draws a vertical line over a
-    canvas, showing a marker at the vertical value and a possible label """
+class MarkingLineOverlay(ViewOverlay):
 
     def __init__(self, base,
                  label="",
@@ -771,7 +770,7 @@ class FocusLineOverlay(ViewOverlay):
                  color=gui.SELECTION_COLOR,
                  center=(0, 0)):
 
-        super(FocusLineOverlay, self).__init__(base, label)
+        super(MarkingLineOverlay, self).__init__(base, label)
         self.color = hex_to_rgba(color)
         self.vposx = None
         self.vposy = None
@@ -804,4 +803,4 @@ class FocusLineOverlay(ViewOverlay):
 
             if self.label:
                 vpos = (self.vposx + 5, self.vposy + 3)
-                self.write_label(ctx, dc.GetSize(), vpos, self.label)
+                self.write_label(ctx, dc_buffer.GetSize(), vpos, self.label)
