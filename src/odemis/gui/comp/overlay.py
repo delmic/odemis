@@ -180,9 +180,12 @@ class FocusOverlay(ViewOverlay):
             x, y = self.base.ClientSize
             x = x - self.margin - (self.line_width / 2)
             middle = y / 2
+
+            # print self.shifts
+
             end_y = min(
                         max(self.margin,
-                            middle - middle * (self.shifts[1] / (y / 2))
+                            middle - (middle * (self.shifts[1] / (y / 2)))
                         ),
                         y - self.margin
                     )
@@ -691,14 +694,14 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
 FILL_GRID = 0
 FILL_POINT = 1
 
-class RepitionSelectOverlay(WorldSelectOverlay):
+class RepetitionSelectOverlay(WorldSelectOverlay):
 
     def __init__(self, base, label,
                  sel_cur=None,
                  color=gui.SELECTION_COLOR,
                  center=(0, 0)):
 
-        super(RepitionSelectOverlay, self).__init__(base, label)
+        super(RepetitionSelectOverlay, self).__init__(base, label)
 
         self.fill = None
         self.repitition = (0, 0)
@@ -718,7 +721,7 @@ class RepitionSelectOverlay(WorldSelectOverlay):
     def Draw(self, dc_buffer, shift=(0, 0), scale=1.0):
         """ TODO: Cache grid/point """
 
-        super(RepitionSelectOverlay, self).Draw(dc_buffer, shift, scale)
+        super(RepetitionSelectOverlay, self).Draw(dc_buffer, shift, scale)
 
         if self.w_start_pos and self.w_end_pos and self.fill is not None:
             ctx = wx.lib.wxcairo.ContextFromDC(dc_buffer)
@@ -740,23 +743,43 @@ class RepitionSelectOverlay(WorldSelectOverlay):
             step_y = float(end_y - start_y) / rep_y
 
             r, g, b, _ = self.color
-            ctx.set_source_rgba(r, g, b, 0.5)
-            ctx.set_line_width(1)
+            if end_x - start_x < rep_x or end_y - start_y < rep_y:
+                ctx.set_source_rgba(r, g, b, 0.5)
+            else:
+                ctx.set_source_rgba(r, g, b, 0.9)
+
 
             if self.fill == FILL_POINT:
-                for i in range(1, rep_x):
-                    x = start_x + i * step_x
-                    for j in range(1, rep_y):
-                        y = start_y + j * step_y
-                        ctx.rectangle(x, y, 2, 2)
+                ctx.set_line_width(2)
+
+                # cairo_move_to (cr, x, y);
+                # cairo_line_to (cr, x, y);
+                move_to = ctx.move_to
+                line_to = ctx.line_to
+
+                half_step_x = step_x / 2
+                half_step_y = step_y / 2
+
+                for i in range(rep_x):
+                    x = start_x + i * step_x + half_step_x
+                    for j in range(rep_y):
+                        y = start_y + j * step_y + half_step_y
+                        move_to(x, y)
+                        line_to(x + 2, y + 2)
+
             elif self.fill == FILL_GRID:
+                ctx.set_line_width(1)
+
+                move_to = ctx.move_to
+                line_to = ctx.line_to
+
                 for i in range(1, rep_x):
-                    ctx.move_to(start_x + i * step_x, start_y)
-                    ctx.line_to(start_x + i * step_x, end_y)
+                    move_to(start_x + i * step_x, start_y)
+                    line_to(start_x + i * step_x, end_y)
 
                 for i in range(1, rep_y):
-                    ctx.move_to(start_x, start_y + i * step_y)
-                    ctx.line_to(end_x,  start_y + i * step_y)
+                    move_to(start_x, start_y + i * step_y)
+                    line_to(end_x,  start_y + i * step_y)
 
             ctx.stroke()
 

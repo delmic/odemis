@@ -118,6 +118,12 @@ class SettingEntry(object):
         self.ctrl = ctrl
         self.vac = vac
 
+    def __repr__(self):
+        msg = "Name: %s, label: %s, comp: %s"
+        return msg % (self.name,
+                      self.label.GetLabel() if self.label else None,
+                      self.comp.name if self.comp else None)
+
     def highlight(self, active=True):
         """
         Highlight the setting entry (ie, the name label becomes bright coloured)
@@ -366,7 +372,7 @@ class SettingsPanel(object):
                 choices_fmt = choices.items()
             elif format and len(choices) > 1 \
                and all([isinstance(c, (int, float)) for c in choices]):
-#                choices = sorted(choices)
+                # choices = sorted(choices)
                 fmt, prefix = utun.si_scale_list(choices)
                 choices_fmt = zip(choices, [u"%g" % c for c in fmt])
                 unit = prefix + unit
@@ -631,6 +637,8 @@ class SettingsPanel(object):
 
         self.fold_panel.Parent.Layout()
 
+        return ne
+
         # if hasattr(new_ctrl, 'GetTextCtrl'):
         #     txt_ctrl = new_ctrl.GetTextCtrl()
         #     txt_ctrl.SetSizeWH(274, 18)
@@ -808,6 +816,7 @@ class SettingsBarController(object):
         return entries
 
     def get_entry(self, name):
+        """ TODO: not very useful, because name are not unique """
         for panel in self.settings_panels:
             for entry in panel.entries:
                 if entry.name == name:
@@ -883,6 +892,11 @@ class SparcSettingsController(SettingsBarController):
                                     "No spectrometer found",
                                     highlight_change)
 
+        # Somewhat of a hack to get direct references to a couple of controls
+        self.angular_rep_ent = None
+        self.spectro_rep_ent = None
+
+
         if microscope_model.ebeam:
             self.add_component(
                     "SEM",
@@ -903,11 +917,11 @@ class SparcSettingsController(SettingsBarController):
             spectrum_streams = [s for s in acq_streams if isinstance(s, SpectrumStream)]
             assert len(spectrum_streams) <= 1 # there should be one or none
             for s in spectrum_streams:
-                self._spectrum_panel.add_value(
-                        "repetition",
-                        s.repetition,
-                        None,  #component
-                        CONFIG["streamspec"]["repetition"])
+                self.spectro_rep_ent = self._spectrum_panel.add_value(
+                                            "repetition",
+                                            s.repetition,
+                                            None,  #component
+                                            CONFIG["streamspec"]["repetition"])
 
                 # Added for debug only
                 self._spectrum_panel.add_value(
@@ -956,16 +970,21 @@ class SparcSettingsController(SettingsBarController):
             ar_streams = [s for s in acq_streams if isinstance(s, ARStream)]
             assert len(ar_streams) <= 1 # there should be one or none
             for s in ar_streams:
-                self._angular_panel.add_value(
-                        "repetition",
-                        s.repetition,
-                        None,  #component
-                        CONFIG["streamspec"]["repetition"])
+                self.angular_rep_ent = self._angular_panel.add_value(
+                                        "repetition",
+                                        s.repetition,
+                                        None,  #component
+                                        CONFIG["streamspec"]["repetition"])
 
         else:
             parent_frame.fp_settings_sparc_angular.Hide()
 
 
+    def get_angular_rep_entry(self):
+        return self.angular_rep_ent
+
+    def get_spectro_rep_entry(self):
+        return self.spectro_rep_ent
 
 class AnalysisSettingsController(SettingsBarController):
 
