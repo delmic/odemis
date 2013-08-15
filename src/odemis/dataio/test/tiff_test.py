@@ -510,7 +510,6 @@ class TestTiffIO(unittest.TestCase):
 
         # check data
         rdata = tiff.read_data(FILENAME)
-        # FIXME: For now it should fail, as it's not supposed to separate back the data
         self.assertEqual(len(rdata), len(ldata))
 
         for i, im in enumerate(rdata):

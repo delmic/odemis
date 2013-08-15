@@ -190,7 +190,7 @@ def _readTiffTag(tfile):
 
 def _isThumbnail(tfile):
     """
-    Detects wheter the current image if a file is a thumbnail or not
+    Detects whether the current image if a file is a thumbnail or not
     returns (boolean): True if the image is a thumbnail, False otherwise
     """
     # Best method is to check for the official TIFF flag
@@ -287,11 +287,11 @@ def _convertToOMEMD(images):
                                 })
 
     # for each set of images from the same instrument, add them
-    groups, first_ifd = _findImageGroups(images) # TODO: check it works well
+    groups = _findImageGroups(images)
 
     # Detectors
-    for i, g in enumerate(groups):
-        did = first_ifd[i] # our convention: ID is the first IFD
+    for ifd, g in groups.items():
+        did = ifd # our convention: ID is the first IFD
         da0 = g[0]
         if model.MD_HW_NAME in da0.metadata:
             detect = ET.SubElement(instr, "Detector", attrib={
@@ -299,8 +299,8 @@ def _convertToOMEMD(images):
                                       "Model": da0.metadata[model.MD_HW_NAME]})
 
     # Objectives
-    for i, g in enumerate(groups):
-        oid = first_ifd[i] # our convention: ID is the first IFD
+    for ifd, g in groups.items():
+        oid = ifd # our convention: ID is the first IFD
         da0 = g[0]
         if model.MD_LENS_MAG in da0.metadata:
             obj = ET.SubElement(instr, "Objective", attrib={
@@ -312,8 +312,8 @@ def _convertToOMEMD(images):
 
     # TODO: filters (with TransmittanceRange)
 
-    for i, g in enumerate(groups):
-        _addImageElement(root, g, first_ifd[i])
+    for ifd, g in groups.items():
+        _addImageElement(root, g, ifd)
 
     # TODO add tag to each image with "Odemis", so that we can find them back
     # easily in a database?
@@ -594,23 +594,33 @@ def _foldArraysFromOME(root, das):
 
     return omedas
 
+def _countNeededIFDs(da):
+    """
+    return the number of IFD (aka TIFF pages, aka planes) needed for storing the given array
+    da (DataArray): can have any dimensions, should be ordered ...CTZYX
+    return (int > 1)
+    """
+    # Storred as a sequence of 2D arrays... excepted if it contains RGB images,
+    # then we store RGB images (i.e., 3D arrays).
+    rep_hdim = list(da.shape[:-2])
+    if da.ndim >= 5 and da.shape[-5] == 3: # RGB
+        rep_hdim[-3] = 1
+    return numpy.prod(rep_hdim)
+
+
 def _findImageGroups(das):
     """
     Find groups of images which should be considered part of the same acquisition
     (aka "Image" in OME-XML).
     das (list of DataArray): all the images of the final TIFF file
-    returns :
-        groups (list of list of DataArray): a set of "groups", each group is 
-         a list which contains the DataArrays 
-        first_ifd (list of int): the IFD (index) of the first image of the group 
+    returns (dict int -> list of DataArrays):
+        IFD (index) of the first DataArray of a group -> "group" of DataArrays
     """
     # We consider images to be part of the same group if they have:
     # * same shape
     # * metadata that show they were acquired by the same instrument
-    groups = []
-    first_ifd = []
-
-    ifd = 0
+    groups = dict()
+    current_ifd = 0
     prev_da = None
     for da in das:
         # check if it can be part of the current group (compare just to the previous DA)
@@ -620,20 +630,14 @@ def _findImageGroups(das):
             prev_da.metadata.get(model.MD_HW_VERSION, None) != da.metadata.get(model.MD_HW_VERSION, None)
             ):
             # new group
-            groups.append([da])
-            first_ifd.append(ifd)
-        else:
-            # same group
-            groups[-1].append(da)
+            group_ifd = current_ifd
+        groups.setdefault(group_ifd, []).append(da)
         
-        # increase ifd by the number of planes (= everything above 2D)
-        # (and if RGB, don't count C dimension)
-        rep_hdim = list(da.shape[:-2])
-        if da.ndim == 5 and da.shape[0] == 3: # RGB
-            rep_hdim = 1
-        ifd += numpy.prod(rep_hdim)
+        # increase ifd by the number of planes
+        current_ifd += _countNeededIFDs(da)
+        prev_da = da
             
-    return groups, first_ifd
+    return groups
 
 def _dtype2OMEtype(dtype):
     """

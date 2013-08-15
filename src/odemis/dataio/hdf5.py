@@ -566,12 +566,10 @@ def _findImageGroups(das):
     # * metadata that show they were acquired by the same instrument
     # * same position
     # * same density (MPP)
-
     groups = []
 
     for i, da in enumerate(das):
         # try to find a matching group (compare just to the first picture)
-        found = False
         for g in groups:
             da0 = das[g[0]]
             if da0.shape != da.shape:
@@ -582,12 +580,11 @@ def _findImageGroups(das):
             if (da0.metadata.get(model.MD_PIXEL_SIZE, None) != da.metadata.get(model.MD_PIXEL_SIZE, None) or
                 da0.metadata.get(model.MD_POS, None) != da.metadata.get(model.MD_POS, None)):
                 continue
+            # Found!
             g.append(i)
-            found = True
             break
-
-        if not found:
-            # if not, create a new group
+        else:
+            # Not found => create a new group
             groups.append([i])
 
     return groups
