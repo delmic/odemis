@@ -31,6 +31,7 @@ import wx
 
 import odemis.gui as gui
 import odemis.gui.comp.canvas as canvas
+import odemis.gui.img.data as img
 import odemis.gui.util.units as units
 from odemis.gui.util.units import readable_str
 from odemis.gui.util.conversion import hex_to_rgba, change_brightness
@@ -705,6 +706,7 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
 
         self.fill = None
         self.repitition = (0, 0)
+        self.bmp = None
 
     def clear_fill(self):
         self.fill = None
@@ -721,11 +723,15 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
     def Draw(self, dc_buffer, shift=(0, 0), scale=1.0):
         """ TODO: Cache grid/point """
 
-        super(RepetitionSelectOverlay, self).Draw(dc_buffer, shift, scale)
+
 
         if self.w_start_pos and self.w_end_pos and self.fill is not None:
             ctx = wx.lib.wxcairo.ContextFromDC(dc_buffer)
             offset = tuple(v / 2 for v in self.base._bmp_buffer_size)
+
+            # TODO: CLIP BUFFER COORDINATES SO THEY NEVER EXTEND BEYOND THE
+            # BUFFER (We don't want to draw too many points)
+
             b_start_pos = self.base.world_to_buffer_pos(
                                         self.w_start_pos,
                                         offset)
@@ -750,25 +756,61 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
 
 
             if self.fill == FILL_POINT:
-                ctx.set_line_width(2)
+                print (b_start_pos, b_end_pos)
 
-                # cairo_move_to (cr, x, y);
-                # cairo_line_to (cr, x, y);
-                move_to = ctx.move_to
-                line_to = ctx.line_to
+                if not self.bmp:
+                    if (end_x - start_x) / 3 < rep_x or (end_y - start_y) / 3 < rep_y:
+                        ctx.rectangle(
+                            start_x, start_y,
+                            int(end_x - start_x), int(end_y - start_y))
+                        ctx.fill()
+                        ctx.stroke()
+                    else:
+                        half_step_x = step_x / 2
+                        half_step_y = step_y / 2
 
-                half_step_x = step_x / 2
-                half_step_y = step_y / 2
+                        point = img.getdotBitmap()
+                        point_dc = wx.MemoryDC()
+                        point_dc.SelectObject(point)
+                        point.SetMaskColour(wx.BLACK)
 
-                for i in range(rep_x):
-                    x = start_x + i * step_x + half_step_x
-                    for j in range(rep_y):
-                        y = start_y + j * step_y + half_step_y
-                        move_to(x, y)
-                        line_to(x + 2, y + 2)
+                        horz_dc = wx.MemoryDC()
+                        horz_bmp = wx.EmptyBitmap(
+                                        int(end_x - start_x), 3)
+                        horz_dc.SelectObject(horz_bmp)
+                        horz_dc.SetBackground(wx.BLACK_BRUSH)
+                        horz_dc.Clear()
+
+                        blit = horz_dc.Blit
+                        for i in range(rep_x):
+                            x = i * step_x + half_step_x
+                            blit(x, 0, 3, 3, point_dc, 0, 0)
+
+                        total_dc = wx.MemoryDC()
+                        self.bmp = wx.EmptyBitmap(
+                                        int(end_x - start_x),
+                                        int(end_y - start_y))
+                        total_dc.SelectObject(self.bmp)
+                        total_dc.SetBackground(wx.BLACK_BRUSH)
+                        total_dc.Clear()
+
+                        blit = total_dc.Blit
+                        for j in range(rep_y):
+                            y = j * step_y + half_step_y
+                            blit(0, y, int(end_x - start_x), 3, horz_dc, 0, 0)
+
+                        self.bmp.SetMaskColour(wx.BLACK)
+
+                else:
+                    dc_buffer.DrawBitmapPoint(self.bmp,
+                            wx.Point(int(start_x), int(start_y)),
+                            useMask=True)
 
             elif self.fill == FILL_GRID:
+                self.bmp = None
+
                 ctx.set_line_width(1)
+                # ctx.set_antialias(cairo.ANTIALIAS_DEFAULT)
 
                 move_to = ctx.move_to
                 line_to = ctx.line_to
@@ -781,9 +823,9 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
                     move_to(start_x, start_y + i * step_y)
                     line_to(end_x,  start_y + i * step_y)
 
-            ctx.stroke()
+                ctx.stroke()
 
-
+        super(RepetitionSelectOverlay, self).Draw(dc_buffer, shift, scale)
 
 class MarkingLineOverlay(ViewOverlay):
 

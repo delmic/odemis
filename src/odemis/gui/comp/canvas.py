@@ -976,16 +976,18 @@ class DraggableCanvas(wx.Panel):
 
     def world_to_buffer_pos(self, pos, offset=None):
         """ Converts a position from world coordinates to buffer coordinates
-        using the current values
+        using the current values.
 
         pos (2-tuple floats): the coordinates in the world
         """
-        return world_to_buffer_pos(
+        bp = world_to_buffer_pos(
                     pos,
                     self.buffer_center_world_pos,
                     self.scale,
                     offset
         )
+
+        return bp
 
     def buffer_to_world_pos(self, pos, offset=None):
         return buffer_to_world_pos(

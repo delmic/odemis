@@ -1873,6 +1873,16 @@ getcontrast_labelImage = contrast_label.GetImage
 getcontrast_labelBitmap = contrast_label.GetBitmap
 
 #----------------------------------------------------------------------
+dot = PyEmbeddedImage(
+    "iVBORw0KGgoAAAANSUhEUgAAAAMAAAADCAYAAABWKLW/AAAAGUlEQVQIHWNgYGD4r7/8yn8Q"
+    "zQBjQGmEDAAkIA+giR5mSQAAAABJRU5ErkJggg==")
+index.append('dot')
+catalog['dot'] = dot
+getdotData = dot.GetData
+getdotImage = dot.GetImage
+getdotBitmap = dot.GetBitmap
+
+#----------------------------------------------------------------------
 empty_h = PyEmbeddedImage(
     "iVBORw0KGgoAAAANSUhEUgAAABIAAAASCAYAAABWzo5XAAAAR0lEQVQ4jWPw9fX97+Tk9N/I"
     "yOi/np4eSRikB6QXZAYDiEGqAegYZAYDOS7B5jIGSg2B4VGDRg0aNQi/QVTLtFQrRqhVsAEA"
