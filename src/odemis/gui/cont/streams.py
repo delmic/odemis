@@ -27,7 +27,6 @@ from wx.lib.pubsub import pub
 
 from odemis.gui import comp, instrmodel, model
 from odemis.gui.instrmodel import STATE_OFF, STATE_PAUSE, STATE_ON
-from odemis.gui.model import SPECTRUM_STREAMS
 
 # stream controller:
 # create the default streams when a part of the microscope is turned on, and

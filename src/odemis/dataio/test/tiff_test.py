@@ -512,6 +512,7 @@ class TestTiffIO(unittest.TestCase):
         rdata = tiff.read_data(FILENAME)
         self.assertEqual(len(rdata), len(ldata))
 
+        # TODO: rdata and ldata don't have to be in the same order
         for i, im in enumerate(rdata):
             md = metadata[i]
             self.assertEqual(im.metadata[model.MD_DESCRIPTION], md[model.MD_DESCRIPTION])
@@ -526,6 +527,11 @@ class TestTiffIO(unittest.TestCase):
             iwl = im.metadata[model.MD_IN_WL] # nm
             self.assertTrue((md[model.MD_IN_WL][0] <= iwl[0] and
                              iwl[1] <= md[model.MD_IN_WL][1]))
+
+            owl = im.metadata[model.MD_OUT_WL] # nm
+            self.assertTrue((md[model.MD_OUT_WL][0] <= owl[0] and
+                             owl[1] <= md[model.MD_OUT_WL][1]))
+
 
 
         # check thumbnail

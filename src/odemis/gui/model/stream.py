@@ -32,7 +32,6 @@ from numpy.polynomial import polynomial
 from odemis.gui.model.img import InstrumentalImage
 from odemis.model import VigilantAttribute, MD_POS, MD_PIXEL_SIZE, \
     MD_SENSOR_PIXEL_SIZE, MD_WL_POLYNOMIAL
-from odemis.model._dataflow import MD_WL_LIST
 import logging
 import math
 import numpy
@@ -547,6 +546,16 @@ class FluoStream(CameraStream):
             self._addWarning(Stream.WARNING_EXCITATION_NOT_OPT)
 
 
+    def onNewImage(self, dataflow, data):
+        # Add some metadata on the fluorescence
+
+        # TODO: handle better if there is already MD_OUT_WL
+        data.metadata[model.MD_OUT_WL] = (self.emission.value,
+                                          self.emission.value)
+
+        data.metadata[model.MD_USER_TINT] = self.tint.value
+        super(FluoStream, self).onNewImage(dataflow, data)
+
 class SpectrumStream(Stream):
     """
     A Spectrum stream. Be aware that acquisition can be very long so should
@@ -925,6 +934,60 @@ class StaticSEMStream(StaticStream):
     """
     pass
 
+
+class StaticFluoStream(StaticStream):
+    """Static Stream containing images obtained via epifluorescence.
+
+    It basically knows how to show the emission/filtered wavelengths,
+    and how to taint the image.
+    """
+
+    def __init__(self, name, image):
+        """
+        Note: parameters are different from the base class.
+        image (DataArray of shape (111)YX): raw data. The metadata should
+          contain at least MD_POS and MD_PIXEL_SIZE. It should also contain
+          MD_IN_WL and MD_OUT_WL.
+        """
+        # Wavelengths
+        try:
+            exc_range = image.metadata[model.MD_IN_WL]
+            val = numpy.mean(exc_range) 
+            self.excitation = model.FloatContinuous(val,
+                                                    range=exc_range,
+                                                    unit="m",
+                                                    readonly=True)
+        except KeyError:
+            logging.warning("No excitation wavelength for fluorescence stream")
+
+        try:
+            em_range = image.metadata[model.MD_OUT_WL]
+            val = numpy.mean(em_range)
+            self.emission = model.FloatContinuous(val,
+                                                  range=em_range,
+                                                  unit="m",
+                                                  readonly=True)
+
+            default_tint = conversion.wave2rgb(self.emission.value)
+        except KeyError:
+            logging.warning("No emission wavelength for fluorescence stream")
+            default_tint = (0, 255, 0) # green is most typical
+            
+        # colouration of the image (even if 
+        # TODO: have and use metadata
+        self.tint = model.ListVA(default_tint, unit="RGB") # 3-tuple R,G,B
+        self.tint.subscribe(self.onTint)
+
+        # Do it at the end, as it forces it the update of the image
+        StaticStream.__init__(self, name, image)
+
+    def _updateImage(self): #pylint: disable=W0221
+        Stream._updateImage(self, self.tint.value)
+
+    def onTint(self, value):
+        self._updateImage()
+
+
 class StaticARStream(StaticStream):
     """
     Same as a StaticStream, but considered a AR stream
@@ -1051,8 +1114,8 @@ class StaticSpectrumStream(StaticStream):
             ValueError: if the metadata doesn't provide enough information
         """
         # MD_WL_LIST has priority
-        if MD_WL_LIST in da.metadata:
-            wl = da.metadata[MD_WL_LIST]
+        if model.MD_WL_LIST in da.metadata:
+            wl = da.metadata[model.MD_WL_LIST]
             if len(wl) == len(da.shape[0]):
                 return wl
             else:

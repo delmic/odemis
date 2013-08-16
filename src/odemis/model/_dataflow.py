@@ -73,6 +73,7 @@ MD_WL_LIST = "Wavelength list" # m... (list of float), wavelength for each pixel
 # The following tags are not to be filled at acquisition, but by the user interface
 MD_DESCRIPTION = "Description" # (string) User-friendly name that describes what this acquisition is
 MD_USER_NOTE = "User note" # (string) Whatever comment the user has added to the image
+MD_USER_TINT = "Display tint" # RGB (3-tuple of 0<int<255): colour to display the (greyscale) image
 
 class DataArray(numpy.ndarray):
     """

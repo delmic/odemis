@@ -26,7 +26,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
 from odemis.gui import FOREGROUND_COLOUR_EDIT, FOREGROUND_COLOUR, \
-    BACKGROUND_COLOUR, BACKGROUND_COLOUR_TITLE
+    BACKGROUND_COLOUR, BACKGROUND_COLOUR_TITLE, FOREGROUND_COLOUR_DIS
 from odemis.gui.comp.foldpanelbar import FoldPanelItem
 from odemis.gui.comp.slider import UnitIntegerSlider, BandwidthSlider
 from odemis.gui.comp.text import SuggestTextCtrl, UnitIntegerCtrl, \
@@ -853,15 +853,32 @@ class StreamPanel(wx.PyPanel):
         self._gbs.Add(lbl_excitation, (self.row_count, 0),
                       flag=wx.ALL, border=5)
 
-        self._txt_excitation = UnitIntegerCtrl(self._panel, -1,
-                int(round(self.stream.excitation.value * 1e9)),
-                style=wx.NO_BORDER,
-                size=(-1, 14),
-                min_val=int(math.ceil(self.stream.excitation.range[0] * 1e9)),
-                max_val=int(self.stream.excitation.range[1] * 1e9),
-                unit='nm')
+        if self.stream.excitation.readonly:
+            self._txt_excitation = wx.TextCtrl(self._panel,
+                       value="%d nm" % round(self.stream.excitation.value * 1e9),
+                       style=wx.BORDER_NONE | wx.TE_READONLY)
+            self._txt_excitation.SetForegroundColour(FOREGROUND_COLOUR_DIS)
+        else:
+            min_val = int(math.ceil(self.stream.excitation.range[0] * 1e9))
+            max_val = int(self.stream.excitation.range[1] * 1e9)
+            # if the range is very small, they might not be min < max
+            min_val, max_val = (min(min_val, max_val), max(min_val, max_val))
 
-        self._txt_excitation.SetForegroundColour(FOREGROUND_COLOUR_EDIT)
+            self._txt_excitation = UnitIntegerCtrl(self._panel, -1,
+                    int(round(self.stream.excitation.value * 1e9)),
+                    style=wx.NO_BORDER,
+                    size=(-1, 14),
+                    min_val=min_val,
+                    max_val=max_val,
+                    unit='nm')
+
+            self._txt_excitation.SetForegroundColour(FOREGROUND_COLOUR_EDIT)
+            self._vac_excitation = VigilantAttributeConnector(
+                  self.stream.excitation, self._txt_excitation,
+                  va_2_ctrl=self._excitation_2_ctrl, # to convert to nm + update btn
+                  ctrl_2_va=self._excitation_2_va, # to convert from nm
+                  events=wx.EVT_COMMAND_ENTER)
+
         self._txt_excitation.SetBackgroundColour(BACKGROUND_COLOUR)
 
         self._gbs.Add(self._txt_excitation, (self.row_count, 1),
@@ -880,11 +897,6 @@ class StreamPanel(wx.PyPanel):
                       border=5)
         self.row_count += 1
 
-        self._vac_excitation = VigilantAttributeConnector(
-              self.stream.excitation, self._txt_excitation,
-              va_2_ctrl=self._excitation_2_ctrl, # to convert to nm + update btn
-              ctrl_2_va=self._excitation_2_va, # to convert from nm
-              events=wx.EVT_COMMAND_ENTER)
 
         # TODO also a label for warnings
 
@@ -893,15 +905,32 @@ class StreamPanel(wx.PyPanel):
         self._gbs.Add(lbl_emission, (self.row_count, 0),
                       flag=wx.ALL, border=5)
 
-        self._txt_emission = UnitIntegerCtrl(self._panel, -1,
-                int(round(self.stream.emission.value * 1e9)),
-                style=wx.NO_BORDER,
-                size=(-1, 14),
-                min_val=int(math.ceil(self.stream.emission.range[0] * 1e9)),
-                max_val=int(self.stream.emission.range[1] * 1e9),
-                unit='nm')
+        if self.stream.emission.readonly:
+            self._txt_emission = wx.TextCtrl(self._panel,
+                       value="%d nm" % round(self.stream.emission.value * 1e9),
+                       style=wx.BORDER_NONE | wx.TE_READONLY)
+            self._txt_emission.SetForegroundColour(FOREGROUND_COLOUR_DIS)
+        else:
+            min_val = int(math.ceil(self.stream.emission.range[0] * 1e9))
+            max_val = int(self.stream.emission.range[1] * 1e9)
+            # if the range is very small, they might not be min < max
+            min_val, max_val = (min(min_val, max_val), max(min_val, max_val))
 
-        self._txt_emission.SetForegroundColour(FOREGROUND_COLOUR_EDIT)
+            self._txt_emission = UnitIntegerCtrl(self._panel, -1,
+                    int(round(self.stream.emission.value * 1e9)),
+                    style=wx.NO_BORDER,
+                    size=(-1, 14),
+                    min_val=min_val,
+                    max_val=max_val,
+                    unit='nm')
+
+            self._txt_emission.SetForegroundColour(FOREGROUND_COLOUR_EDIT)
+            self._vac_emission = VigilantAttributeConnector(
+                  self.stream.emission, self._txt_emission,
+                  va_2_ctrl=self._emission_2_ctrl, # to convert to nm + update btn
+                  ctrl_2_va=self._emission_2_va, # to convert from nm
+                  events=wx.EVT_COMMAND_ENTER)
+
         self._txt_emission.SetBackgroundColour(BACKGROUND_COLOUR)
 
         self._gbs.Add(self._txt_emission, (self.row_count, 1),
@@ -918,12 +947,6 @@ class StreamPanel(wx.PyPanel):
                       flag=wx.RIGHT | wx.ALIGN_RIGHT,
                       border=5)
         self.row_count += 1
-
-        self._vac_emission = VigilantAttributeConnector(
-              self.stream.emission, self._txt_emission,
-              va_2_ctrl=self._emission_2_ctrl, # to convert to nm + update btn
-              ctrl_2_va=self._emission_2_va, # to convert from nm
-              events=wx.EVT_COMMAND_ENTER)
 
     def _getCompatibleDyes(self):
         """

@@ -35,7 +35,8 @@ from odemis.gui.cont.views import ViewController, ViewSelector
 from odemis.gui.instrmodel import STATE_ON, STATE_OFF, STATE_PAUSE
 from odemis.gui.model.img import InstrumentalImage
 from odemis.gui.model.stream import SpectrumStream, SEMStream, ARStream, \
-    UNDEFINED_ROI, StaticStream, CameraStream, StaticSpectrumStream, StaticSEMStream
+    UNDEFINED_ROI, StaticStream, CameraStream, StaticSpectrumStream, StaticSEMStream, \
+    StaticFluoStream
 from odemis.gui.util import widgets, get_picture_folder, formats_to_wildcards
 import logging
 import os.path
@@ -600,6 +601,13 @@ class InspectionTab(Tab):
                 desc = d.metadata.get(model.MD_DESCRIPTION, "Spectrum")
                 self._stream_controller.addStatic(desc, d,
                                                   cls=StaticSpectrumStream,
+                                                  add_to_all_views=True)
+            elif (model.MD_IN_WL in d.metadata and
+                  model.MD_OUT_WL in d.metadata):
+                # TODO: handle bright-field (which also has in/out wl)
+                desc = d.metadata.get(model.MD_DESCRIPTION, "Filtered colour")
+                self._stream_controller.addStatic(desc, d,
+                                                  cls=StaticFluoStream,
                                                   add_to_all_views=True)
             else:
                 desc = d.metadata.get(model.MD_DESCRIPTION, "Secondary electrons")
