@@ -513,6 +513,58 @@ def _getIFDsFromOME(pixele):
 
     return imsetn
 
+# List of metadata which is allowed to merge (and possibly loose it partially)
+WHITELIST_MD_MERGE = frozenset([model.MD_DESCRIPTION, model.MD_FILTER_NAME,
+                                model.MD_HW_NAME, model.MD_HW_VERSION,
+                                model.MD_SW_VERSION, model.MD_LENS_NAME,
+                                model.MD_SENSOR_TEMP, model.MD_ACQ_DATE])
+def _canBeMerged(das):
+    """
+    Check whether multiple DataArrays can be merged into a larger DA without 
+      metadata loss.
+    Note: this is about merging DataArrays for use in Odemis. For use in 
+      OME-TIFF, the conditions are different.
+    das (list of DataArrays): all the DataArrays
+    return (boolean): True if they can be merged, False otherwise.
+    """
+    if len(das) <= 1:
+        return True
+
+    shape = das[0].shape
+    md = das[0].metadata.copy()
+    for da in das[1:]:
+        # shape must be the same
+        if shape != da.shape:
+            return False
+        # all the important metadata must be the same, or not defined
+        for mdk in (set(md.keys()) | set(da.metadata.keys())):
+            if (mdk not in WHITELIST_MD_MERGE and
+                md.get(mdk) != da.metadata.get(mdk)):
+                return False
+        
+    return True
+
+def _mergeDA(das, hdim_index):
+    """
+    Merge multiple DataArrays into a higher dimension DataArray.
+    das (list of DataArrays): ordered list of DataArrays (can contain more 
+      arrays than what is used in the high dimension arrays
+    hdim_index (ndarray of int >= 0): an array representing the higher 
+      dimensions of the final merged arrays. Each value is the index of the 
+      small array in das.
+    return (DataArray): the merge of all the DAs. The shape is hdim_index.shape
+     + shape of original DataArray. The metadata is the metadata of the first
+     DataArray inserted
+    """
+    fim = das[hdim_index.flat[0]]
+    tshape = hdim_index.shape + fim.shape
+    imset = numpy.empty(tshape, fim.dtype)
+    for hi, i in numpy.ndenumerate(hdim_index):
+        imset[hi] = das[i]
+    
+    return model.DataArray(imset, metadata=fim.metadata)
+    
+
 def _foldArraysFromOME(root, das):
     """
     Reorganize DataArrays with more than 2 dimensions according to OME XML
@@ -574,23 +626,28 @@ def _foldArraysFromOME(root, das):
         if -1 in imsetn:
             raise ValueError("Not all IFDs defined for image %d", len(omedas) + 1)
 
-        # TODO
-        # Note: Position or Wavelength might actually be different! In which
-        # case Odemis needs to see them as separate data.
-        # => Have a list of metadata which _can be_ different, and everything
-        # else must be identical to be merged
-
-        # Combine all the IFDs into a 5D array
-        imset = numpy.empty(dshape, fim.dtype)
-        if is_3d:
-            # move the C axis next to YX, so they fit the data shape
-            vimset = numpy.rollaxis(imset, 0, -2)
+        # TODO: Position might also be different. Probably should be grouped
+        # by position too, as Odemis doesn't support such case.
+        
+        # In Odemis, arrays can be merged along C _only_ if they are continuous
+        # (like for a spectrum acquisition). If it's like fluorescence, with
+        # complex channel metadata, they need to be kept separated.
+        # Check for all the C with T=0, Z=0 (should be the same at other indices)
+        das_tz0n = list(imsetn[..., 0, 0])
+        das_tz0 = [das[i] for i in das_tz0n]
+        if not _canBeMerged(das_tz0):
+            for sub_imsetn in imsetn:
+                # Combine all the IFDs into a (1+)4D array    
+                sub_imsetn.shape = (1,) + sub_imsetn.shape
+                imset = _mergeDA(das, sub_imsetn)
+                omedas.append(imset)
         else:
-            vimset = imset
-
-        for i, ifd in numpy.ndenumerate(imsetn):
-            vimset[i] = das[ifd]
-        omedas.append(model.DataArray(imset, metadata=fim.metadata))
+            # Combine all the IFDs into a 5D array
+            imset = _mergeDA(das, imsetn)
+            if is_3d:
+                # move the C axis back to first position (it's currently TZCYX)
+                imset = numpy.rollaxis(imset, -3)
+            omedas.append(imset)
 
     return omedas
 
