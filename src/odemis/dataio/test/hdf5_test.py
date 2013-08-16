@@ -158,8 +158,8 @@ class TestHDF5IO(unittest.TestCase):
                     model.MD_IN_WL: (500e-9, 520e-9), #m
                     }
         metadata = {model.MD_SW_VERSION: "1.0-test",
-                    model.MD_HW_NAME: "fake hw",
-                    model.MD_DESCRIPTION: "test",
+                    model.MD_HW_NAME: u"", # check empty unicode strings
+                    model.MD_DESCRIPTION: "tÉst",
                     model.MD_ACQ_DATE: time.time(),
                     model.MD_BPP: 12,
                     model.MD_BINNING: (1, 2), # px, px
@@ -320,7 +320,7 @@ class TestHDF5IO(unittest.TestCase):
         self.assertEqual(im[blue[-1:-3:-1]].tolist(), [0, 0, 255])
 
 
-    def testReadMetada(self):
+    def testReadMDSpec(self):
         """
         Checks that we can read back the metadata of an image
         """
@@ -401,6 +401,109 @@ class TestHDF5IO(unittest.TestCase):
         self.assertEqual(im[0, 0].tolist(), [0, 255, 0])
 
 # TODO: test compatibility with Hyperspy for loading spectra (exported by Odemis)
+
+
+
+
+
+    def testReadMDFluo(self):
+        """
+        Checks that we can read back the metadata of a fluoresence image
+        The OME-TIFF file will contain just one big array, but three arrays 
+        should be read back with the right data.
+        """
+        metadata = [{model.MD_SW_VERSION: "1.0-test",
+                     model.MD_HW_NAME: "fake hw",
+                     model.MD_DESCRIPTION: "brightfield",
+                     model.MD_ACQ_DATE: time.time(),
+                     model.MD_BPP: 12,
+                     model.MD_BINNING: (1, 1), # px, px
+                     model.MD_PIXEL_SIZE: (1e-6, 1e-6), # m/px
+                     model.MD_POS: (13.7e-3, -30e-3), # m
+                     model.MD_EXP_TIME: 1.2, # s
+                     model.MD_IN_WL: (400e-9, 630e-9), # m
+                     model.MD_OUT_WL: (400e-9, 630e-9), # m
+                    },
+                    {model.MD_SW_VERSION: "1.0-test",
+                     model.MD_HW_NAME: "fake hw",
+                     model.MD_DESCRIPTION: "blue die",
+                     model.MD_ACQ_DATE: time.time() + 1,
+                     model.MD_BPP: 12,
+                     model.MD_BINNING: (1, 1), # px, px
+                     model.MD_PIXEL_SIZE: (1e-6, 1e-6), # m/px
+                     model.MD_POS: (13.7e-3, -30e-3), # m
+                     model.MD_EXP_TIME: 1.2, # s
+                     model.MD_IN_WL: (500e-9, 520e-9), # m
+                     model.MD_OUT_WL: (600e-9, 630e-9), # m
+                    },
+                    {model.MD_SW_VERSION: "1.0-test",
+                     model.MD_HW_NAME: "fake hw",
+                     model.MD_DESCRIPTION: "green die",
+                     model.MD_ACQ_DATE: time.time() + 2,
+                     model.MD_BPP: 12,
+                     model.MD_BINNING: (1, 1), # px, px
+                     model.MD_PIXEL_SIZE: (1e-6, 1e-6), # m/px
+                     model.MD_POS: (13.7e-3, -30e-3), # m
+                     model.MD_EXP_TIME: 1, # s
+                     model.MD_IN_WL: (600e-9, 620e-9), # m
+                     model.MD_OUT_WL: (620e-9, 650e-9), # m
+                    },
+                    ]
+        # create 3 greyscale images of same size
+        size = (512, 256)
+        dtype = numpy.dtype("uint16")
+        ldata = []
+        for i, md in enumerate(metadata):
+            a = model.DataArray(numpy.zeros(size[::-1], dtype), md)
+            a[i, i] = i # "watermark" it
+            ldata.append(a)
+
+        # thumbnail : small RGB completely red
+        tshape = (size[1] // 8, size[0] // 8, 3)
+        tdtype = numpy.uint8
+        thumbnail = model.DataArray(numpy.zeros(tshape, tdtype))
+        thumbnail[:, :, 1] += 255 # green
+
+        # export
+        hdf5.export(FILENAME, ldata, thumbnail)
+
+        # check it's here
+        st = os.stat(FILENAME) # this test also that the file is created
+        self.assertGreater(st.st_size, 0)
+
+        # check data
+        rdata = hdf5.read_data(FILENAME)
+        self.assertEqual(len(rdata), len(ldata))
+
+        # TODO: rdata and ldata don't have to be in the same order
+        for i, im in enumerate(rdata):
+            md = metadata[i]
+            self.assertEqual(im.metadata[model.MD_DESCRIPTION], md[model.MD_DESCRIPTION])
+            self.assertAlmostEqual(im.metadata[model.MD_POS][0], md[model.MD_POS][0])
+            self.assertAlmostEqual(im.metadata[model.MD_POS][1], md[model.MD_POS][1])
+            self.assertAlmostEqual(im.metadata[model.MD_PIXEL_SIZE][0], md[model.MD_PIXEL_SIZE][0])
+            self.assertAlmostEqual(im.metadata[model.MD_PIXEL_SIZE][1], md[model.MD_PIXEL_SIZE][1])
+            self.assertAlmostEqual(im.metadata[model.MD_ACQ_DATE], md[model.MD_ACQ_DATE], delta=1)
+            self.assertEqual(im.metadata[model.MD_BPP], md[model.MD_BPP])
+            self.assertEqual(im.metadata[model.MD_BINNING], md[model.MD_BINNING])
+
+            iwl = im.metadata[model.MD_IN_WL] # nm
+            self.assertTrue((md[model.MD_IN_WL][0] <= iwl[0] and
+                             iwl[1] <= md[model.MD_IN_WL][1]))
+
+            owl = im.metadata[model.MD_OUT_WL] # nm
+            self.assertTrue((md[model.MD_OUT_WL][0] <= owl[0] and
+                             owl[1] <= md[model.MD_OUT_WL][1]))
+
+
+
+        # check thumbnail
+        rthumbs = hdf5.read_thumbnail(FILENAME)
+        self.assertEqual(len(rthumbs), 1)
+        im = rthumbs[0]
+        self.assertEqual(im.shape, tshape)
+        self.assertEqual(im[0, 0].tolist(), [0, 255, 0])
+
 
 if __name__ == "__main__":
     #import sys;sys.argv = ['', 'Test.testName']
