@@ -721,6 +721,7 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
 
     def clear_fill(self):
         self.fill = None
+        self.bmp = None
 
     def point_fill(self):
         self.fill = FILL_POINT
@@ -730,6 +731,7 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
 
     def set_repetition(self, repitition):
         self.repitition = repitition
+        self.clear_fill()
 
     def Draw(self, dc_buffer, shift=(0, 0), scale=1.0):
 
@@ -754,10 +756,6 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
             # be wider and higher than the actual buffer.
             width = b_end_pos[0] - b_start_pos[0]
             height = b_end_pos[1] - b_start_pos[1]
-
-            # No need to render
-            if 0 in (width, height):
-                return
 
             logging.warn("width and height: %s %s", width, height)
 
