@@ -182,7 +182,8 @@ class SparcAcquisitionTab(Tab):
         self._spec_stream = None
         self._ar_stream = None
 
-        acq_view = self.interface_model.acquisitionView # list of streams for acquisition
+        # list of streams for acquisition
+        acq_view = self.interface_model.acquisitionView
 
         # create the streams
         sem_stream = SEMStream(
@@ -196,10 +197,11 @@ class SparcAcquisitionTab(Tab):
 
         # the SEM acquisition simultaneous to the CCDs
         semcl_stream = SEMStream(
-                        "SEM CL", # name matters, used to find the stream for the ROI
-                        self.interface_model.sed,
-                        self.interface_model.sed.data,
-                        self.interface_model.ebeam)
+                "SEM CL", # name matters, used to find the stream for the ROI
+                self.interface_model.sed,
+                self.interface_model.sed.data,
+                self.interface_model.ebeam
+        )
         acq_view.addStream(semcl_stream)
         self._sem_cl_stream = semcl_stream
 
@@ -283,20 +285,20 @@ class SparcAcquisitionTab(Tab):
         # handlers to it.
         self.spec_rep = self.settings_controller.get_spectro_rep_entry()
         if self.spec_rep:
+            self.spec_rep.va.subscribe(self.on_spec_rep_change)
             self.spec_rep.ctrl.Bind(wx.EVT_SET_FOCUS, self.on_spec_rep_focus)
-            self.spec_rep.ctrl.Bind(wx.EVT_KILL_FOCUS, self.on_spec_rep_focus)
+            self.spec_rep.ctrl.Bind(wx.EVT_KILL_FOCUS, self.on_spec_rep_unfocus)
             self.spec_rep.ctrl.Bind(wx.EVT_ENTER_WINDOW, self.on_spec_rep_enter)
             self.spec_rep.ctrl.Bind(wx.EVT_LEAVE_WINDOW, self.on_spec_rep_leave)
-            self.spec_rep.va.subscribe(self.on_spec_rep_change)
 
         self.angu_rep = self.settings_controller.get_angular_rep_entry()
         if self.angu_rep:
+            self.angu_rep.va.subscribe(self.on_angu_rep_change)
+            mic_view.mpp.subscribe(self.on_angu_rep_change)
             self.angu_rep.ctrl.Bind(wx.EVT_SET_FOCUS, self.on_angu_rep_focus)
             self.angu_rep.ctrl.Bind(wx.EVT_KILL_FOCUS, self.on_angu_rep_focus)
             self.angu_rep.ctrl.Bind(wx.EVT_ENTER_WINDOW, self.on_angu_rep_enter)
             self.angu_rep.ctrl.Bind(wx.EVT_LEAVE_WINDOW, self.on_angu_rep_leave)
-            self.angu_rep.va.subscribe(self.on_angu_rep_change)
-
 
         # Toolbar
 
@@ -307,64 +309,64 @@ class SparcAcquisitionTab(Tab):
         tb.AddTool(tools.TOOL_ZOOM_FIT, self.onZoomFit)
 
     # Special event handlers for repition indication in the ROI selection
-    # TODO: refactor, a lot of code repitition is going on here
+
+    # Spectrograph
 
     def on_spec_rep_change(self, rep):
-        overlay = self.main_frame.vp_sparc_acq_view.canvas.roi_overlay
-        overlay.set_repetition(rep)
+        self.update_spec_rep()
 
-    def on_spec_rep_focus(self, event):
+    def update_spec_rep(self, show=False):
         overlay = self.main_frame.vp_sparc_acq_view.canvas.roi_overlay
 
-        if self.spec_rep.ctrl.HasFocus():
+        if self.spec_rep.ctrl.HasFocus() or show:
             overlay.set_repetition(self.spec_rep.va.value)
             overlay.grid_fill()
         else:
             overlay.clear_fill()
 
-        event.Skip()
+    def on_spec_rep_focus(self, evt):
+        self.update_spec_rep()
+        evt.Skip()
 
-    def on_spec_rep_enter(self, event=None):
-        overlay = self.main_frame.vp_sparc_acq_view.canvas.roi_overlay
-        overlay.set_repetition(self.spec_rep.va.value)
+    on_spec_rep_unfocus = on_spec_rep_focus
 
-        overlay.grid_fill()
-        event.Skip()
+    def on_spec_rep_enter(self, evt):
+        self.update_spec_rep(True)
+        evt.Skip()
 
-    def on_spec_rep_leave(self, event):
+    def on_spec_rep_leave(self, evt):
         if not self.spec_rep.ctrl.HasFocus():
-            overlay = self.main_frame.vp_sparc_acq_view.canvas.roi_overlay
-            overlay.clear_fill()
-        event.Skip()
+            self.update_spec_rep(False)
+        evt.Skip()
 
+    # Angular
 
     def on_angu_rep_change(self, rep):
-        overlay = self.main_frame.vp_sparc_acq_view.canvas.roi_overlay
-        overlay.set_repetition(rep)
+        self.update_angu_rep()
 
-    def on_angu_rep_focus(self, event):
+    def update_angu_rep(self, show=False):
         overlay = self.main_frame.vp_sparc_acq_view.canvas.roi_overlay
 
-        if self.angu_rep.ctrl.HasFocus():
+        if self.angu_rep.ctrl.HasFocus() or show:
             overlay.set_repetition(self.angu_rep.va.value)
             overlay.point_fill()
         else:
             overlay.clear_fill()
 
-        event.Skip()
+    def on_angu_rep_focus(self, evt):
+        self.update_angu_rep()
+        evt.Skip()
 
-    def on_angu_rep_enter(self, event=None):
-        overlay = self.main_frame.vp_sparc_acq_view.canvas.roi_overlay
-        overlay.set_repetition(self.angu_rep.va.value)
+    on_angu_rep_unfocus = on_angu_rep_focus
 
-        overlay.point_fill()
-        event.Skip()
+    def on_angu_rep_enter(self, evt):
+        self.update_angu_rep(True)
+        evt.Skip()
 
-    def on_angu_rep_leave(self, event):
+    def on_angu_rep_leave(self, evt):
         if not self.angu_rep.ctrl.HasFocus():
-            overlay = self.main_frame.vp_sparc_acq_view.canvas.roi_overlay
-            overlay.clear_fill()
-        event.Skip()
+            self.update_angu_rep(False)
+        evt.Skip()
 
 
     @property
