@@ -21,11 +21,11 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
+from __future__ import division
 
 import logging
 import math
 from abc import ABCMeta, abstractmethod
-
 import cairo
 import wx
 
@@ -90,12 +90,23 @@ class Overlay(object):
         ctx.show_text(label)
 
     def _clip_viewport_pos(self, pos):
-        """ Return the given pos, clipped by the base's viewport """
+        """ Return the given pos, clipped by the base's viewport
+            TODO: Change into viewport method?
+        """
 
         pos.x = max(1, min(pos.x, self.base.ClientSize.x - 1))
         pos.y = max(1, min(pos.y, self.base.ClientSize.y - 1))
 
         return pos
+
+    def _clip_buffer_pos(self, pos):
+        """ Return the given pos, clipped by the base's buffer
+            TODO: Change into viewport method?
+        """
+        x = max(1, min(pos[0], self.base._bmp_buffer_size[0] - 1))
+        y = max(1, min(pos[1], self.base._bmp_buffer_size[1] - 1))
+
+        return x, y
 
     @abstractmethod
     def Draw(self, dc, shift=(0, 0), scale=1.0):
@@ -179,8 +190,8 @@ class FocusOverlay(ViewOverlay):
             ctx.set_source_rgba(1.0, 1.0, 1.0, 0.8)
 
             x, y = self.base.ClientSize
-            x = x - self.margin - (self.line_width / 2)
-            middle = y / 2
+            x = x - self.margin - (self.line_width // 2)
+            middle = y // 2
 
             # print self.shifts
 
@@ -199,7 +210,7 @@ class FocusOverlay(ViewOverlay):
                 ctx,
                 dc.GetSize(),
                 (x - 10, end_y),
-                "focus %s" % units.readable_str(self.shifts[1] / 1e6, 'm', 2),
+                "focus %s" % units.readable_str(self.shifts[1] // 1e6, 'm', 2),
                 flip=False,
                 align=wx.ALIGN_RIGHT
             )
@@ -588,14 +599,14 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
     def _center_view_origin(self, vpos):
         #view_size = self.base._bmp_buffer_size
         view_size = self.base.GetSize()
-        return (vpos[0] - (view_size[0] / 2),
-                vpos[1] - (view_size[1] / 2))
+        return (vpos[0] - (view_size[0] // 2),
+                vpos[1] - (view_size[1] // 2))
 
     def _calc_world_pos(self):
         """ Update the world position to reflect the view position
         """
         if self.v_start_pos and self.v_end_pos:
-            offset = tuple(v / 2 for v in self.base._bmp_buffer_size)
+            offset = tuple(v // 2 for v in self.base._bmp_buffer_size)
             self.w_start_pos = self.base.view_to_world_pos(
                                             self.v_start_pos,
                                             offset)
@@ -608,7 +619,7 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
         if not self.w_start_pos or not self.w_end_pos:
             logging.warning("Asking to convert non-existing world positions")
             return
-        offset = tuple(v / 2 for v in self.base._bmp_buffer_size)
+        offset = tuple(v // 2 for v in self.base._bmp_buffer_size)
         v_start = self.base.world_to_view_pos(self.w_start_pos, offset)
         self.v_start_pos = wx.Point(*v_start)
         v_end = self.base.world_to_view_pos(self.w_end_pos, offset)
@@ -639,7 +650,7 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
     def Draw(self, dc_buffer, shift=(0, 0), scale=1.0):
 
         if self.w_start_pos and self.w_end_pos:
-            offset = tuple(v / 2 for v in self.base._bmp_buffer_size)
+            offset = tuple(v // 2 for v in self.base._bmp_buffer_size)
             b_start_pos = self.base.world_to_buffer_pos(
                                         self.w_start_pos,
                                         offset)
@@ -721,53 +732,88 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
         self.repitition = repitition
 
     def Draw(self, dc_buffer, shift=(0, 0), scale=1.0):
-        """ TODO: Cache grid/point """
-
-
 
         if self.w_start_pos and self.w_end_pos and self.fill is not None:
             ctx = wx.lib.wxcairo.ContextFromDC(dc_buffer)
-            offset = tuple(v / 2 for v in self.base._bmp_buffer_size)
+            # Calculate the offset of the center of the buffer relative to the
+            # top left op the buffer
+            offset = tuple(v // 2 for v in self.base._bmp_buffer_size)
 
-            # TODO: CLIP BUFFER COORDINATES SO THEY NEVER EXTEND BEYOND THE
-            # BUFFER (We don't want to draw too many points)
-
+            # The start and end position, in buffer coordinates. The resoluting
+            # values may extend beyond the actual buffer when zoomed in.
             b_start_pos = self.base.world_to_buffer_pos(
                                         self.w_start_pos,
                                         offset)
-
             b_end_pos = self.base.world_to_buffer_pos(
                                         self.w_end_pos,
                                         offset)
 
-            rep_x, rep_y = self.repitition
-            start_x = b_start_pos[0]
-            end_x =  b_end_pos[0]
-            start_y = b_start_pos[1]
-            end_y =  b_end_pos[1]
-            step_x = float(end_x - start_x) / rep_x
-            step_y = float(end_y - start_y) / rep_y
+            logging.warn("start and end buffer pos: %s %s", b_start_pos, b_end_pos)
 
+            # Calculate the width and height in buffer pixels. Again, this may
+            # be wider and higher than the actual buffer.
+            width = b_end_pos[0] - b_start_pos[0]
+            height = b_end_pos[1] - b_start_pos[1]
+
+            # No need to render
+            if 0 in (width, height):
+                return
+
+            logging.warn("width and height: %s %s", width, height)
+
+            # Clip the start and end positions using the actual buffer size
+            clipped_start_pos = self._clip_buffer_pos(b_start_pos)
+            clipped_end_pos = self._clip_buffer_pos(b_end_pos)
+
+            logging.warn("clipped start and end: %s %s", clipped_start_pos, clipped_end_pos)
+
+            # No need to render
+            if 0 in self.repitition:
+                return
+
+            rep_x, rep_y = self.repitition
+
+            # The start and end values we are drawing from and to.
+            start_x, start_y = clipped_start_pos
+            end_x, end_y = clipped_end_pos
+
+            # The step size in pixels
+            step_x = width // rep_x
+            step_y = height // rep_y
+
+            # Make the color more transparent, when there are more steps than
+            # pixels
             r, g, b, _ = self.color
-            if end_x - start_x < rep_x or end_y - start_y < rep_y:
+            if width < rep_x or height < rep_y:
                 ctx.set_source_rgba(r, g, b, 0.5)
             else:
                 ctx.set_source_rgba(r, g, b, 0.9)
 
-
             if self.fill == FILL_POINT:
-                print (b_start_pos, b_end_pos)
-
                 if not self.bmp:
-                    if (end_x - start_x) / 3 < rep_x or (end_y - start_y) / 3 < rep_y:
+                    # If we cannot fit enough 3x3 bitmaps into either direction,
+                    # then we just fill a rectangle
+                    if width // 3 < rep_x or height // 3 < rep_y:
+                        logging.warn("simple fill")
                         ctx.rectangle(
                             start_x, start_y,
                             int(end_x - start_x), int(end_y - start_y))
                         ctx.fill()
                         ctx.stroke()
                     else:
-                        half_step_x = step_x / 2
-                        half_step_y = step_y / 2
+                        half_step_x = step_x // 2
+                        half_step_y = step_y // 2
+
+                        # The number of repetitions that fits into the buffer
+                        # clipped selection
+                        buf_rep_x = (end_x - start_x) // step_x
+                        buf_rep_y = (end_y - start_y) // step_y
+
+                        logging.warn(
+                                "Rendering %sx%s points",
+                                buf_rep_x,
+                                buf_rep_y
+                        )
 
                         point = img.getdotBitmap()
                         point_dc = wx.MemoryDC()
@@ -782,7 +828,7 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
                         horz_dc.Clear()
 
                         blit = horz_dc.Blit
-                        for i in range(rep_x):
+                        for i in range(buf_rep_x):
                             x = i * step_x + half_step_x
                             blit(x, 0, 3, 3, point_dc, 0, 0)
 
@@ -795,7 +841,7 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
                         total_dc.Clear()
 
                         blit = total_dc.Blit
-                        for j in range(rep_y):
+                        for j in range(buf_rep_y):
                             y = j * step_y + half_step_y
                             blit(0, y, int(end_x - start_x), 3, horz_dc, 0, 0)
 
@@ -807,21 +853,35 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
                             useMask=True)
 
             elif self.fill == FILL_GRID:
+                # The grid is easy to draw, no need for a cached bmp
                 self.bmp = None
 
-                ctx.set_line_width(1)
-                # ctx.set_antialias(cairo.ANTIALIAS_DEFAULT)
+                # If there are more repititions in either direction than there
+                # are pixels, just fill a semi transparent rectangle
+                if 0 in (step_x, step_y):
+                    ctx.rectangle(
+                        start_x, start_y,
+                        int(end_x - start_x), int(end_y - start_y))
+                    ctx.fill()
+                else:
+                    ctx.set_line_width(1)
+                    # ctx.set_antialias(cairo.ANTIALIAS_DEFAULT)
 
-                move_to = ctx.move_to
-                line_to = ctx.line_to
+                    move_to = ctx.move_to
+                    line_to = ctx.line_to
 
-                for i in range(1, rep_x):
-                    move_to(start_x + i * step_x, start_y)
-                    line_to(start_x + i * step_x, end_y)
+                    # The number of repetitions that fits into the buffer clipped
+                    # selection
+                    buf_rep_x = (end_x - start_x) // step_x
+                    buf_rep_y = (end_y - start_y) // step_y
 
-                for i in range(1, rep_y):
-                    move_to(start_x, start_y + i * step_y)
-                    line_to(end_x,  start_y + i * step_y)
+                    for i in range(1, buf_rep_x):
+                        move_to(start_x + i * step_x, start_y)
+                        line_to(start_x + i * step_x, end_y)
+
+                    for i in range(1, buf_rep_y):
+                        move_to(start_x, start_y + i * step_y)
+                        line_to(end_x,  start_y + i * step_y)
 
                 ctx.stroke()
 
