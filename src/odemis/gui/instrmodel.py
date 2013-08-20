@@ -659,7 +659,7 @@ class MicroscopeView(object):
         # For now we just add it to the list of streams, with the only merge
         # operation possible
         with self._streams_lock:
-            self.stream_tree.streams.append(stream)
+            self.stream_tree.add_stream(stream)
 
         # subscribe to the stream's image
         if hasattr(stream, "image"):
@@ -688,7 +688,7 @@ class MicroscopeView(object):
 
             # remove stream from the StreamTree()
             # TODO handle more complex trees
-            self.stream_tree.streams.remove(stream)
+            self.stream_tree.remove_stream(stream)
 
         # let everyone know that the view has changed
         self.lastUpdate.value = time.time()

@@ -952,7 +952,7 @@ class StaticFluoStream(StaticStream):
         # Wavelengths
         try:
             exc_range = image.metadata[model.MD_IN_WL]
-            val = numpy.mean(exc_range) 
+            val = numpy.mean(exc_range)
             self.excitation = model.FloatContinuous(val,
                                                     range=exc_range,
                                                     unit="m",
@@ -972,8 +972,8 @@ class StaticFluoStream(StaticStream):
         except KeyError:
             logging.warning("No emission wavelength for fluorescence stream")
             default_tint = (0, 255, 0) # green is most typical
-            
-        # colouration of the image (even if 
+
+        # colouration of the image (even if
         # TODO: have and use metadata
         self.tint = model.ListVA(default_tint, unit="RGB") # 3-tuple R,G,B
         self.tint.subscribe(self.onTint)
@@ -1537,12 +1537,47 @@ class StreamTree(object):
 
         streams = streams or []
         assert(isinstance(streams, list))
+
         for s in streams:
-            assert(isinstance(s, (Stream, StreamTree)))
+            if isinstance(s, (Stream, StreamTree)):
+                s.should_update.subscribe(
+                    self.stream_update_changed,
+                    init=False)
+            else:
+                msg = "Illegal type %s found in stream tree!" % type(s)
+                raise ValueError(msg)
+
+        self.should_update = model.BooleanVA(False)
+
         self.streams = streams
 
         self.kwargs = kwargs
 
+    def add_stream(self, stream):
+        if isinstance(stream, (Stream, StreamTree)):
+            self.streams.append(stream)
+            stream.should_update.subscribe(
+                    self.stream_update_changed,
+                    init=False)
+        else:
+            msg = "Illegal type %s found in add_stream!" % type(stream)
+            raise ValueError(msg)
+
+    def remove_stream(self, stream):
+        self.streams.remove(stream)
+
+    def stream_update_changed(self, should_update):
+        """ This method is called when one of the streams' should_update
+        vigilant attribute changes.
+        """
+
+        logging.debug("Stream update changed")
+
+        # At least one stream is live, so we 'should update'
+        if should_update or all([s.should_update.value for s in self.streams]):
+            self.should_update.value = True
+        else:
+            self.should_update.value = False
 
     def getStreams(self):
         """

@@ -356,9 +356,18 @@ class SecomViewport(MicroscopeViewport):
     def __init__(self, *args, **kwargs):
         super(SecomViewport, self).__init__(*args, **kwargs)
 
+    def setView(self, microscope_view, microscope_model):
+        super(SecomViewport, self).setView(microscope_view, microscope_model)
+        self._microscope_view.stream_tree.should_update.subscribe(
+                                                        self.hide_pause
+        )
+
+    def hide_pause(self, hide_pause):
+        self.canvas.icon_overlay.hide_pause(hide_pause)
+        self.canvas.Refresh()
+
     def _checkMergeSliderDisplay(self):
         # Overridden to avoid displaying merge slide if only SEM or only Optical
-
         # display iif both EM and OPT streams
         streams = self._microscope_view.getStreams()
         has_opt = any(isinstance(s, OPTICAL_STREAMS) for s in streams)

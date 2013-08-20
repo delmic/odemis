@@ -22,8 +22,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
 from __future__ import division
-from .comp.overlay import CrossHairOverlay, ViewSelectOverlay, \
-    WorldSelectOverlay, TextViewOverlay, RepetitionSelectOverlay
 from decorator import decorator
 from odemis import util, model
 from odemis.gui import instrmodel
@@ -91,7 +89,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         self.mpwu = None
 
         # for the FPS
-        self.fps_overlay = TextViewOverlay(self)
+        self.fps_overlay = overlay.TextViewOverlay(self)
         self.ViewOverlays.append(self.fps_overlay)
 
     def setView(self, microscope_view, microscope_model):
@@ -141,13 +139,13 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         # static overlays
         ch = None
         for o in self.ViewOverlays:
-            if isinstance(o, CrossHairOverlay):
+            if isinstance(o, overlay.CrossHairOverlay):
                 ch = o
                 break
 
         if activated:
             if not ch:
-                ch = CrossHairOverlay(self)
+                ch = overlay.CrossHairOverlay(self)
                 self.ViewOverlays.append(ch)
                 self.Refresh(eraseBackground=False)
         else:
@@ -451,10 +449,12 @@ class SecomCanvas(DblMicroscopeCanvas):
     def __init__(self, *args, **kwargs):
         super(SecomCanvas, self).__init__(*args, **kwargs)
 
-        self.zoom_overlay = ViewSelectOverlay(self, "Zoom")
-        self.ViewOverlays.append(self.zoom_overlay)
+        self.zoom_overlay = overlay.ViewSelectOverlay(self, "Zoom")
+        self.icon_overlay = overlay.StreamIconOverlay(self)
+        self.ViewOverlays.extend([self.zoom_overlay,
+                                  self.icon_overlay])
 
-        self.update_overlay = WorldSelectOverlay(self, "Update")
+        self.update_overlay = overlay.WorldSelectOverlay(self, "Update")
         self.WorldOverlays.append(self.update_overlay)
 
         self.active_overlay = None
@@ -656,7 +656,7 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
         super(SparcAcquiCanvas, self).__init__(*args, **kwargs)
 
         self._roa = None # The ROI VA of SEM CL stream, initialized on setView()
-        self.roi_overlay = RepetitionSelectOverlay(self, "Region of acquisition")
+        self.roi_overlay = overlay.RepetitionSelectOverlay(self, "Region of acquisition")
         self.WorldOverlays.append(self.roi_overlay)
         self.active_overlay = None
         self.cursor = wx.STANDARD_CURSOR

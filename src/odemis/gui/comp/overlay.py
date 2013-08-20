@@ -927,3 +927,50 @@ class MarkingLineOverlay(ViewOverlay):
             if self.label:
                 vpos = (self.vposx + 5, self.vposy + 3)
                 self.write_label(ctx, dc_buffer.GetSize(), vpos, self.label)
+
+class StreamIconOverlay(ViewOverlay):
+    """ This class can display various icon on the view to indicate the state of
+    the Streams belonging to that view.
+    """
+
+    def __init__(self, base):
+
+        super(StreamIconOverlay, self).__init__(base, None)
+
+        self.pause = False
+        self.colour = (1, 1, 1, 0.8)
+
+    def hide_pause(self, hide_pause):
+        self.pause = not hide_pause
+
+    def Draw(self, dc_buffer, shift=(0, 0), scale=1.0):
+        ctx = wx.lib.wxcairo.ContextFromDC(dc_buffer)
+
+        if self.pause:
+            self._draw_pause(ctx)
+
+    def _draw_pause(self, ctx):
+
+        margin = self.base.ClientSize.x / 25
+
+        base_size = self.base.ClientSize.x / 8
+        bar_width = max((base_size / 5) * 2, 1)
+        gap_width = max(base_size - (2 * bar_width), 1)
+
+        x = self.base.ClientSize.x - margin - bar_width
+        y = margin
+        height = base_size * 0.8
+
+        ctx.set_line_width(1)
+
+        ctx.set_source_rgba(*self.colour)
+        ctx.rectangle(x, y, bar_width, height)
+
+        x -= bar_width + gap_width
+        ctx.rectangle(x, y, bar_width, height)
+
+        ctx.set_source_rgba(*self.colour)
+        ctx.fill_preserve()
+
+        ctx.set_source_rgb(0, 0, 0)
+        ctx.stroke()
