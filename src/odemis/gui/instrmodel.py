@@ -23,7 +23,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from abc import ABCMeta
 from odemis import model
 from odemis.gui.model.stream import Stream, StreamTree
-from odemis.gui.util import ignore_dead
 from odemis.model import FloatContinuous, VigilantAttribute
 from odemis.model._vattributes import IntEnumerated, NotSettableError
 import collections
@@ -377,12 +376,12 @@ class ActuatorGUIModel(MicroscopeGUIModel):
             if getattr(self, an) is None:
                 del self.stepsizes[an]
 
-        # Mirror is a bit more complicated as it has 4 axes and X usualy needs
-        # to be 10x bigger than Y
+        # Mirror is a bit more complicated as it has 4 axes and Y usually needs
+        # to be 10x bigger than X
         if self.mirror is not None:
-            mss = {"mirror_x": model.FloatContinuous(10e-6, [1e-8, 1e-3]),
-                   "mirror_y": model.FloatContinuous(1e-6, [1e-8, 1e-3]),
-                   "mirror_r": model.FloatContinuous(1e-6, [1e-8, 1e-3])
+            mss = {"mirror_x": model.FloatContinuous(1e-6, [1e-8, 1e-3]),
+                   "mirror_y": model.FloatContinuous(10e-6, [1e-8, 1e-3]),
+                   "mirror_r": model.FloatContinuous(10e-6, [1e-8, 1e-3])
                    }
             self.stepsizes.update(mss)
 

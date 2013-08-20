@@ -38,12 +38,12 @@ from odemis.model import getVAs, NotApplicableError, VigilantAttributeBase
 from odemis.util.driver import reproduceTypedValue
 from wx.lib.pubsub import pub
 import collections
-import datetime
 import logging
 import odemis.gui
 import odemis.gui.comp.text as text
 import odemis.gui.util.units as utun
 import re
+import time
 import wx
 
 ####### Utility functions #######
@@ -743,8 +743,7 @@ class SettingsPanel(object):
         try:
             if key == model.MD_ACQ_DATE:
                 # convert to a date using the user's preferences
-                ad = datetime.datetime.utcfromtimestamp(value)
-                nice_str = ad.strftime("%c")
+                nice_str = time.strftime("%c", time.localtime(value))
             else:
                 # Still try to beautify a bit if it's a number
                 if (isinstance(value, (int, float)) or
