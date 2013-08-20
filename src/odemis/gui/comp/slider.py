@@ -753,12 +753,12 @@ class VisualRangeSlider(BaseSlider):
     def SetMin(self, min_value):
         if min_value <= self.max_value:
             if self.value and min(self.value) > min_value:
-                logging.warning("Minimum %s is larger than current value %s!",
-                                min_value, self.value)
-            else:
                 self.min_value = min_value
                 self._update_pixel_value()
                 self.Refresh()
+            else:
+                logging.warning("Minimum %s is larger than current value %s!",
+                                min_value, self.value)
         else:
             logging.warning("Minimum %s is larger than maximum %s!",
                             min_value, self.max_value)
@@ -766,12 +766,12 @@ class VisualRangeSlider(BaseSlider):
     def SetMax(self, max_value):
         if max_value >= self.min_value:
             if self.value and max(self.value) < max_value:
-                logging.warning("Maximum %s is smaller than current value %s!",
-                                max_value, self.value)
-            else:
                 self.max_value = max_value
                 self._update_pixel_value()
                 self.Refresh()
+            else:
+                logging.warning("Maximum %s is bigger than current value %s!",
+                                max_value, self.value)
         else:
             logging.warning("Maximum %s is smaller than minimum %s!",
                             max_value, self.min_value)
