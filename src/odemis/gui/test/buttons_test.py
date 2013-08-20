@@ -35,7 +35,7 @@ import unittest
 import wx
 
 INSPECT = False
-# test.MANUAL = True
+MANUAL = False
 
 class TestApp(wx.App):
     def __init__(self):
@@ -70,16 +70,19 @@ class TestApp(wx.App):
         self.buttons['ImageToggleButton'] = buttons.ImageToggleButton(panel, -1,
                                                 data.getbtn_128x24Bitmap(),
                                                 label_delta=10)
-        self.buttons['ImageToggleButton'].SetBitmaps(data.getbtn_128x24_hBitmap(),
-                                                     data.getbtn_128x24_aBitmap())
+        self.buttons['ImageToggleButton'].SetBitmaps(
+                                                data.getbtn_128x24_hBitmap(),
+                                                data.getbtn_128x24_aBitmap())
 
-        self.buttons['ImageTextToggleButton'] = buttons.ImageTextToggleButton(panel, -1,
+        self.buttons['ImageTextToggleButton'] = buttons.ImageTextToggleButton(
+                                                panel, -1,
                                                 data.getbtn_256x24_hBitmap(),
                                                 "ImageTextToggleButton",
                                                 label_delta=1,
                                                 style=wx.ALIGN_CENTER)
-        self.buttons['ImageTextToggleButton'].SetBitmaps(data.getbtn_256x24_hBitmap(),
-                                                         data.getbtn_256x24_aBitmap())
+        self.buttons['ImageTextToggleButton'].SetBitmaps(
+                                                data.getbtn_256x24_hBitmap(),
+                                                data.getbtn_256x24_aBitmap())
 
 
         self.buttons['ViewButton'] = buttons.ViewButton(panel, -1,
@@ -120,14 +123,14 @@ class ButtonsTestCase(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        if not test.MANUAL:
+        if not MANUAL:
             wx.CallAfter(cls.app.Exit)
         else:
             if INSPECT:
                 InspectionTool().Show()
         cls.app.MainLoop()
 
-    def test_neus(self):
+    def test_buttons(self):
         test.gui_loop() # if everything shows up, it's pretty good already
 
         # colour button

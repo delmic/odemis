@@ -8,15 +8,15 @@ Copyright © 2013 Éric Piel, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms 
-of the GNU General Public License version 2 as published by the Free Software 
+Odemis is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
 Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR 
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
 PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with 
+You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from concurrent.futures._base import CancelledError
@@ -26,11 +26,15 @@ from odemis.gui.acqmng import ProgressiveFuture, startAcquisition, \
     computeThumbnail
 import logging
 import odemis.gui.model.stream as stream
+import os
 import subprocess
 import time
 import unittest
 
 logging.getLogger().setLevel(logging.DEBUG)
+
+path = os.path.dirname(os.path.realpath(__file__))
+os.chdir(path)
 
 ODEMISD_CMD = "python2 -m odemis.odemisd.main"
 SIM_CONFIG = "../../odemisd/test/optical-sim.odm.yaml"
@@ -70,7 +74,7 @@ class TestNoBackend(unittest.TestCase):
         # try to cancel while running
         future.cancel()
         self.assertTrue(future.cancelled(), True)
-        self.assertRaises(CancelledError, future.result, 1) # future.result(1) should fail
+        self.assertRaises(CancelledError, future.result, 1)
         self.assertEqual(self.left, 0)
 
     def cancel_task(self):
@@ -109,7 +113,7 @@ class TestWithBackend(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-#        cls.microscope.terminate()
+        # cls.microscope.terminate()
         # end the backend
         cmdline = ODEMISD_CMD + " --kill"
         subprocess.call(cmdline.split())
@@ -188,3 +192,6 @@ class TestWithBackend(unittest.TestCase):
         self.past = past
         self.left = left
         self.updates += 1
+
+if __name__ == "__main__":
+    unittest.main()

@@ -31,7 +31,7 @@ import logging
 import unittest
 import wx
 
-logging.getLogger().setLevel(logging.DEBUG)
+# logging.getLogger().setLevel(logging.DEBUG)
 
 class FakeMicroscopeGUI(object):
     """
