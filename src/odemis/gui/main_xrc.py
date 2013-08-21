@@ -181,7 +181,7 @@ def __init_resources():
     wx.FileSystem.AddHandler(wx.MemoryFSHandler())
 
     main_xrc = '''\
-<?xml version="1.0" ?><resource class="FoldPanelItem" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
+<?xml version="1.0" ?><resource class="wxPanel" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
   <object class="wxFrame" name="fr_main">
     <object class="wxMenuBar">
       <object class="wxMenu">
@@ -2376,6 +2376,7 @@ def __init_resources():
                       </object>
                       <object class="FoldPanelItem">
                         <object class="StreamBar" name="pnl_secom_streams">
+                          <size>300,-1</size>
                           <fg>#7F7F7F</fg>
                           <bg>#333333</bg>
                           <XRCED>
@@ -2404,15 +2405,6 @@ def __init_resources():
               <option>1</option>
               <flag>wxEXPAND</flag>
               <minsize>400,400</minsize>
-            </object>
-            <object class="sizeritem">
-              <object class="wxPanel">
-                <object class="wxBoxSizer">
-                  <orient>wxVERTICAL</orient>
-                </object>
-                <bg>#4D4D4D</bg>
-              </object>
-              <flag>wxEXPAND</flag>
             </object>
             <orient>wxVERTICAL</orient>
           </object>

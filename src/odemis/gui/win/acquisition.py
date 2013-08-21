@@ -8,13 +8,13 @@ Copyright © 2013 Éric Piel, Rinze de Laat, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms
-of the GNU General Public License version 2 as published by the Free Software
-Foundation.
+Odemis is free software: you can redistribute it and/or modify it under the
+terms of the GNU General Public License version 2 as published by the Free
+Software Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
-PURPOSE. See the GNU General Public License for more details.
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
@@ -66,9 +66,9 @@ class AcquisitionDialog(xrcfr_acq):
         # FIXME: pass the fold_panels
 
         # Compute the preset values for each preset
-        self._preset_values = {} # dict string ->  dict (SettingEntries -> value)
+        self._preset_values = {} # dict string -> dict (SettingEntries -> value)
         orig_entries = self.settings_controller.entries
-        self._orig_settings = preset_as_is(orig_entries) # used to detect changes
+        self._orig_settings = preset_as_is(orig_entries) # to detect changes
         for n, preset in presets.items():
             self._preset_values[n] = preset(orig_entries)
         # Presets which have been confirmed on the hardware
@@ -143,7 +143,8 @@ class AcquisitionDialog(xrcfr_acq):
         for s in self.interface_model.streams:
             if s in visible_streams:
                 self.added_streams.append(s)
-                view.addStream(s) # must be done first, so that the "visible" button is correct
+                # Do addstream first, so that the "visible" button is correct
+                view.addStream(s)
             # add to the stream bar in any case
             sp = self.stream_controller.addStreamForAcquisition(s)
 
@@ -362,8 +363,9 @@ class AcquisitionDialog(xrcfr_acq):
 
         # save result to file
         try:
-            thumb = acqmng.computeThumbnail(self.interface_model.focussedView.value.stream_tree,
-                                            future)
+            thumb = acqmng.computeThumbnail(
+                            self.interface_model.focussedView.value.stream_tree,
+                            future)
             filename = self.filename.value
             exporter = dataio.get_exporter(self.conf.last_format)
             exporter.export(filename, data, thumb)
