@@ -127,7 +127,7 @@ class xrcfr_main(wx.Frame):
         self.vp_inspection_br = xrc.XRCCTRL(self, "vp_inspection_br")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
         self.fp_sparc_file_info = xrc.XRCCTRL(self, "fp_sparc_file_info")
-        self.pnl_sparc_streams = xrc.XRCCTRL(self, "pnl_sparc_streams")
+        self.pnl_inspection_streams = xrc.XRCCTRL(self, "pnl_inspection_streams")
         self.fp_annotations = xrc.XRCCTRL(self, "fp_annotations")
         self.pnl_log = xrc.XRCCTRL(self, "pnl_log")
         self.txt_log = xrc.XRCCTRL(self, "txt_log")
@@ -2126,7 +2126,7 @@ def __init_resources():
                               </XRCED>
                             </object>
                             <object class="FoldPanelItem">
-                              <object class="StreamBar" name="pnl_sparc_streams">
+                              <object class="StreamBar" name="pnl_inspection_streams">
                                 <size>300,-1</size>
                                 <fg>#7F7F7F</fg>
                                 <bg>#333333</bg>

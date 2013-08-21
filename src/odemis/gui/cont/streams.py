@@ -52,10 +52,11 @@ class StreamController(object):
     streams when the microscope is turned on/off.
     """
 
-    def __init__(self, microscope_model, stream_bar):
+    def __init__(self, microscope_model, stream_bar, static=False):
         """
         microscope_model (MicroscopeModel): the representation of the microscope Model
         stream_bar (StreamBar): an empty stream panel
+        static (Boolean): Treat streams as static
         """
         self._interface_model = microscope_model
         self._stream_bar = stream_bar
@@ -83,6 +84,13 @@ class StreamController(object):
 
         self._interface_model.focussedView.subscribe(self._onView, init=True)
         pub.subscribe(self.removeStream, 'stream.remove')
+
+        # This attribute indicates wether live data is processed by the sreams
+        # in the controller, or that they just display static data.
+        self.static_mode = static
+
+    def to_static_mode(self):
+        self.static_mod = True
 
     def optical_was_turned_on(self):
         return self._opticalWasTurnedOn
@@ -214,12 +222,18 @@ class StreamController(object):
         # call it like self._scheduler.addStream(stream)
         self._scheduleStream(stream)
 
-        spanel = comp.stream.StreamPanel(self._stream_bar, stream, self._interface_model)
-
+        spanel = comp.stream.StreamPanel(
+                                self._stream_bar,
+                                stream,
+                                self._interface_model)
         show = isinstance(
                     spanel.stream,
                     self._interface_model.focussedView.value.stream_classes)
         self._stream_bar.add_stream(spanel, show)
+
+        if self.static_mode:
+            spanel.to_static_mode()
+
 
         logging.debug("Sending stream.ctrl.added message")
         pub.sendMessage('stream.ctrl.added',
@@ -236,7 +250,7 @@ class StreamController(object):
         """
         sp = comp.stream.StreamPanel(self._stream_bar, stream, self._interface_model)
         self._stream_bar.add_stream(sp, True)
-        sp.to_acquisition_mode()
+        sp.to_static_mode()
 
         return sp
 

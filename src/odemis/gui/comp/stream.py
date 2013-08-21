@@ -301,7 +301,7 @@ class Expander(wx.PyControl):
         if hasattr(self, "_btn_tint"):
             self._show_item(self._btn_tint, show)
 
-    def to_acquisition_mode(self):
+    def to_static_mode(self):
         """ This method hides or makes read-only any button or data that should
         not be changed during acquisition.
         """
@@ -662,11 +662,11 @@ class StreamPanel(wx.PyPanel):
 
         self._expander.OnDrawExpander(dc)
 
-    def to_acquisition_mode(self):
+    def to_static_mode(self):
         """ This method hides or makes read-only any button or data that should
         not be changed during acquisition.
         """
-        self._expander.to_acquisition_mode()
+        self._expander.to_static_mode()
 
         # ====== Fourth row, accumulation label, text field and value
 

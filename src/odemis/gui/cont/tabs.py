@@ -471,7 +471,8 @@ class InspectionTab(Tab):
 
         self._stream_controller = StreamController(
                                         self.interface_model,
-                                        self.main_frame.pnl_sparc_streams
+                                        self.main_frame.pnl_inspection_streams,
+                                        static=True
                                   )
 
 
