@@ -366,6 +366,7 @@ class SecomViewport(MicroscopeViewport):
 
     def hide_pause(self, hide_pause):
         self.canvas.icon_overlay.hide_pause(hide_pause)  #pylint: disable=E1101
+        self.canvas.lock_stage_drag(not hide_pause)
         self.canvas.Refresh()
 
     def _checkMergeSliderDisplay(self):

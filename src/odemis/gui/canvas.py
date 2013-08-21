@@ -470,6 +470,9 @@ class SecomCanvas(DblMicroscopeCanvas):
         # pattern
         self.backgroundBrush = wx.SOLID
 
+        # The method can be used to make sure the stage won't be moved
+        self.stage_drag_lock = False
+
     # Special version which put the SEM images first, as with the current
     # display mechanism in the canvas, the fluorescent images must be displayed
     # together last
@@ -571,8 +574,11 @@ class SecomCanvas(DblMicroscopeCanvas):
 
             self.ShouldUpdateDrawing()
 
-        else:
+        elif not self.stage_drag_lock:
             canvas.DraggableCanvas.OnLeftDown(self, event)
+
+    def lock_stage_drag(self, lock):
+        self.stage_drag_lock = lock
 
     def OnLeftUp(self, event):
         if self.current_mode in SECOM_MODES:
@@ -618,7 +624,7 @@ class SecomCanvas(DblMicroscopeCanvas):
                 else:
                     self.SetCursor(self.cursor)
 
-        else:
+        elif not self.stage_drag_lock:
             canvas.DraggableCanvas.OnMouseMotion(self, event)
 
     # Capture unwanted events when a tool is active.
@@ -629,7 +635,7 @@ class SecomCanvas(DblMicroscopeCanvas):
 
     def OnRightDown(self, event):
         # If we're currently not performing an action...
-        if self.current_mode not in SECOM_MODES:
+        if self.current_mode not in SECOM_MODES and not self.stage_drag_lock:
             # Note: Set the cursor before the super method is called.
             # There probably is a Ubuntu/wxPython related bug that
             # SetCursor does not work one CaptureMouse is called (which)
