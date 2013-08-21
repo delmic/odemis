@@ -471,6 +471,9 @@ class SecomCanvas(DblMicroscopeCanvas):
         self.backgroundBrush = wx.SOLID
 
         # The method can be used to make sure the stage won't be moved
+        # This attribute should nog have any effect when no stage is present
+        # so that the user can still drag the acquisition view and saved images
+        # for example.
         self.stage_drag_lock = False
 
     # Special version which put the SEM images first, as with the current
@@ -574,11 +577,11 @@ class SecomCanvas(DblMicroscopeCanvas):
 
             self.ShouldUpdateDrawing()
 
-        elif not self.stage_drag_lock:
+        elif not self.stage_drag_lock or not self.microscope_view.has_stage():
             canvas.DraggableCanvas.OnLeftDown(self, event)
+        else:
+            event.Skip()
 
-    def lock_stage_drag(self, lock):
-        self.stage_drag_lock = lock
 
     def OnLeftUp(self, event):
         if self.current_mode in SECOM_MODES:
@@ -624,8 +627,10 @@ class SecomCanvas(DblMicroscopeCanvas):
                 else:
                     self.SetCursor(self.cursor)
 
-        elif not self.stage_drag_lock:
+        elif not self.stage_drag_lock or not self.microscope_view.has_stage():
             canvas.DraggableCanvas.OnMouseMotion(self, event)
+        else:
+            event.Skip()
 
     # Capture unwanted events when a tool is active.
 
@@ -656,6 +661,8 @@ class SecomCanvas(DblMicroscopeCanvas):
         if self.current_mode not in SECOM_MODES:
             super(SecomCanvas, self).OnRightUp(event)
 
+    def lock_stage_drag(self, lock):
+        self.stage_drag_lock = lock
 
 class SparcAcquiCanvas(DblMicroscopeCanvas):
     def __init__(self, *args, **kwargs):
