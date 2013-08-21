@@ -308,10 +308,14 @@ class Expander(wx.PyControl):
         self.show_remove_btn(False)
         self.show_updated_btn(False)
 
-        # TODO: label readonly (if editable)?
+        # TODO: label readonly (if editable)? Or in to_locked_mode?
         if hasattr(self, "_btn_tint"):
             self._btn_tint.SetBitmapHover(None)
             self._btn_tint.Unbind(wx.EVT_BUTTON)
+
+    def to_locked_mode(self):
+        self.to_static_mode()
+        self.show_visible_btn(False)
 
     # TODO: use VAConnector
     def _on_updated_btn(self, evt):
@@ -721,6 +725,10 @@ class StreamPanel(wx.PyPanel):
                                          span=(1, 2))
 
         self.row_count += 1
+
+    def to_locked_mode(self):
+        self.to_static_mode()
+        self._expander.to_locked_mode()
 
     # ===== For brightness/contrast
 

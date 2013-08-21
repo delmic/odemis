@@ -52,7 +52,7 @@ class StreamController(object):
     streams when the microscope is turned on/off.
     """
 
-    def __init__(self, microscope_model, stream_bar, static=False):
+    def __init__(self, microscope_model, stream_bar, static=False, locked=False):
         """
         microscope_model (MicroscopeModel): the representation of the microscope Model
         stream_bar (StreamBar): an empty stream panel
@@ -88,9 +88,14 @@ class StreamController(object):
         # This attribute indicates wether live data is processed by the sreams
         # in the controller, or that they just display static data.
         self.static_mode = static
+        # Disable all controls
+        self.locked_mode = locked
 
     def to_static_mode(self):
-        self.static_mod = True
+        self.static_mode = True
+
+    def to_locked_mode(self):
+        self.locked_mode = True
 
     def optical_was_turned_on(self):
         return self._opticalWasTurnedOn
@@ -231,9 +236,10 @@ class StreamController(object):
                     self._interface_model.focussedView.value.stream_classes)
         self._stream_bar.add_stream(spanel, show)
 
-        if self.static_mode:
+        if self.locked_mode:
+            spanel.to_locked_mode()
+        elif self.static_mode:
             spanel.to_static_mode()
-
 
         logging.debug("Sending stream.ctrl.added message")
         pub.sendMessage('stream.ctrl.added',

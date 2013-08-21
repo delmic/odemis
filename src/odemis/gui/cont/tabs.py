@@ -643,7 +643,8 @@ class MirrorAlignTab(Tab):
         self._acquisition_controller = None
         self._stream_controller = StreamController(
                                         self.interface_model,
-                                        self.main_frame.pnl_sparc_align_streams
+                                        self.main_frame.pnl_sparc_align_streams,
+                                        locked=True
                                   )
         self._ccd_stream = None
 
