@@ -1935,7 +1935,7 @@
                         <orient>wxVERTICAL</orient>
                         <object class="sizeritem">
                           <object class="FoldPanelBar">
-                            <object class="FoldPanelItem" name="fp_sparc_file_info">
+                            <object class="FoldPanelItem" name="fp_inspect_file_info">
                               <label>FILE INFO</label>
                               <fg>#1A1A1A</fg>
                               <bg>#555555</bg>

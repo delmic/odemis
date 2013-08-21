@@ -766,6 +766,17 @@ class SettingsPanel(object):
         wx.CallAfter(pub.sendMessage, 'setting.changed', setting_ctrl=evt_obj)
         evt.Skip()
 
+    def Refresh(self):
+        self.panel.Layout()
+
+        p = self.panel.Parent
+        while p:
+            if isinstance(p, wx.ScrolledWindow):
+                p.FitInside()
+                p = None
+            else:
+                p = p.Parent
+
 class SemSettingsPanel(SettingsPanel):
     pass
 
@@ -991,7 +1002,7 @@ class AnalysisSettingsController(SettingsBarController):
         super(AnalysisSettingsController, self).__init__(microscope_model)
 
         self._file_panel = FileInfoSettingsPanel(
-                                    parent_frame.fp_sparc_file_info,
+                                    parent_frame.fp_inspect_file_info,
                                     "No file loaded")
 
         microscope_model.fileinfo.subscribe(self.on_fileinfo_change, init=True)
@@ -1009,6 +1020,7 @@ class AnalysisSettingsController(SettingsBarController):
             for key, value in fi.metadata.items():
                 self._file_panel.add_metadata(key, value)
 
+            self._file_panel.Refresh()
 
 
 class SparcAlignSettingsController(SettingsBarController):

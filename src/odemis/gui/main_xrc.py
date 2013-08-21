@@ -126,7 +126,7 @@ class xrcfr_main(wx.Frame):
         self.vp_inspection_bl = xrc.XRCCTRL(self, "vp_inspection_bl")
         self.vp_inspection_br = xrc.XRCCTRL(self, "vp_inspection_br")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
-        self.fp_sparc_file_info = xrc.XRCCTRL(self, "fp_sparc_file_info")
+        self.fp_inspect_file_info = xrc.XRCCTRL(self, "fp_inspect_file_info")
         self.pnl_inspection_streams = xrc.XRCCTRL(self, "pnl_inspection_streams")
         self.fp_annotations = xrc.XRCCTRL(self, "fp_annotations")
         self.pnl_log = xrc.XRCCTRL(self, "pnl_log")
@@ -2117,7 +2117,7 @@ def __init_resources():
                         <orient>wxVERTICAL</orient>
                         <object class="sizeritem">
                           <object class="FoldPanelBar">
-                            <object class="FoldPanelItem" name="fp_sparc_file_info">
+                            <object class="FoldPanelItem" name="fp_inspect_file_info">
                               <label>FILE INFO</label>
                               <fg>#1A1A1A</fg>
                               <bg>#555555</bg>

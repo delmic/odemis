@@ -621,6 +621,8 @@ class InspectionTab(Tab):
             fi.metadata[model.MD_ACQ_DATE] = acq_date
         self.interface_model.fileinfo.value = fi
 
+
+
 class MirrorAlignTab(Tab):
     """
     Tab for the mirror alignment calibration on the Sparc
