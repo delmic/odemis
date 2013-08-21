@@ -210,7 +210,7 @@ class FocusOverlay(ViewOverlay):
                 ctx,
                 dc.GetSize(),
                 (x - 10, end_y),
-                "focus %s" % units.readable_str(self.shifts[1] // 1e6, 'm', 2),
+                "focus %s" % units.readable_str(self.shifts[1] / 1e6, 'm', 2),
                 flip=False,
                 align=wx.ALIGN_RIGHT
             )
