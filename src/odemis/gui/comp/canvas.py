@@ -678,7 +678,7 @@ class DraggableCanvas(wx.Panel):
         elif total_scale < 1.0:
             w, h = buff_rect[2:4]
             if w >= 1 and h >= 1:
-                logging.debug("Scaling to %s, %s", w, h)
+                # logging.debug("Scaling to %s, %s", w, h)
                 ret = im.Scale(*buff_rect[2:4])
                 tl = buff_rect[0:2]
             else:

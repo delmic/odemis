@@ -359,11 +359,13 @@ class SecomViewport(MicroscopeViewport):
     def setView(self, microscope_view, microscope_model):
         super(SecomViewport, self).setView(microscope_view, microscope_model)
         self._microscope_view.stream_tree.should_update.subscribe(
-                                                        self.hide_pause
+                                                        self.hide_pause,
+                                                        init=True
+
         )
 
     def hide_pause(self, hide_pause):
-        self.canvas.icon_overlay.hide_pause(hide_pause)
+        self.canvas.icon_overlay.hide_pause(hide_pause)  #pylint: disable=E1101
         self.canvas.Refresh()
 
     def _checkMergeSliderDisplay(self):

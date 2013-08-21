@@ -498,7 +498,7 @@ class SecomCanvas(DblMicroscopeCanvas):
             if isinstance(s, EM_STREAMS):
                 # as last
                 images.append(iim)
-                logging.debug("inserting SEM image")
+                # logging.debug("inserting SEM image")
                 # FIXME: See the log warning
                 if has_sem_image:
                     logging.warning(("Multiple SEM images are not handled "
@@ -506,7 +506,7 @@ class SecomCanvas(DblMicroscopeCanvas):
                 has_sem_image = True
             else:
                 images.insert(0, iim) # as first
-                logging.debug("inserting normal image")
+                # logging.debug("inserting normal image")
 
         return images
 
