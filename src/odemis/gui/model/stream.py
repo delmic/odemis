@@ -1540,9 +1540,10 @@ class StreamTree(object):
 
         for s in streams:
             if isinstance(s, (Stream, StreamTree)):
-                s.should_update.subscribe(
-                    self.stream_update_changed,
-                    init=False)
+                if hasattr(s, 'should_update'):
+                    s.should_update.subscribe(
+                        self.stream_update_changed,
+                        init=False)
             else:
                 msg = "Illegal type %s found in stream tree!" % type(s)
                 raise ValueError(msg)
@@ -1556,9 +1557,10 @@ class StreamTree(object):
     def add_stream(self, stream):
         if isinstance(stream, (Stream, StreamTree)):
             self.streams.append(stream)
-            stream.should_update.subscribe(
-                    self.stream_update_changed,
-                    init=False)
+            if hasattr(stream, 'should_update'):
+                stream.should_update.subscribe(
+                        self.stream_update_changed,
+                        init=False)
             # print "stream added %s" % stream.should_update.value
             # self.stream_update_changed()
         else:
