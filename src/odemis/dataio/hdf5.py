@@ -276,13 +276,13 @@ def _add_image_info(group, dataset, image):
 #   RotationAngle (scalar): angle in radian
 #   RotationAxis (3-scalar): X,Y,Z of the rotation vector
 
-def _read_image_info(group, dataset):
+def _read_image_info(group):
     """
     Read the basic metadata information about an image (scale and offset)
-    group (HDF Group): the group that contains the dataset
-    dataset (HDF Dataset): the image dataset
+    group (HDF Group): the group "ImageData" that contains the image (named "Image")
     return (dict (MD_* -> Value)): the metadata that could be read
     """
+    dataset = group["Image"]
     md = {}
     # Offset
     try:
@@ -313,6 +313,9 @@ def _read_image_info(group, dataset):
     # Wavelength is only if the data has a C dimension and it has one number 
     # for the scale (linear polynomial) or it it has a list of wavelengths (one 
     # per pixel).
+    # Note that not all data has information, for example RGB images, or
+    # fluorescence images have no scale (but the SVI flavour has several
+    # metadata related in the PhysicalData group).
     try:
         for i, dim in enumerate(dataset.dims):
             if dim.label == "C":
@@ -327,6 +330,78 @@ def _read_image_info(group, dataset):
 
     return md
 
+
+def _parse_physical_data(pdgroup, da):
+    """
+    Parse the metadata found in PhysicalData, and cut the DataArray if necessary.
+    pdgroup (HDF Group): the group "PhysicalData" associated to an image
+    da (DataArray): the DataArray that was obtained by reading the ImageData
+    returns (list of DataArrays): The same data, but broken into smaller 
+      DataArrays if necessary, and with additional metadata.
+    """
+    # The information in PhysicalData might be different for each channel (e.g.
+    # fluorescence image). In this case, the DA must be separated into smaller
+    # ones, per channel.
+    # For now, we detect this by only checking the shape of the metadata (>1),
+    # and just ChannelDescription
+
+    try:
+        cd = pdgroup["ChannelDescription"]
+        n = numpy.prod(cd.shape) # typically like (N,)
+    except KeyError:
+        n = 0 # that means all are together
+
+    if n > 1:
+        # need to separate it
+        if n != da.shape[0]:
+            logging.warning("Image has %d channels and %d metadata, failed to map",
+                            da.shape[0], n)
+            das = [da]
+        else:
+            # list(da) does almost what we need, but metadata is shared
+            das = [model.DataArray(c, da.metadata.copy()) for c in da]
+    else:
+        das = [da]
+
+    for i, d in enumerate(das):
+        md = d.metadata
+        try:
+            cd = pdgroup["ChannelDescription"][i]
+            md[model.MD_DESCRIPTION] = unicode(cd)
+        except (KeyError, IndexError):
+            # maybe Title is more informative... but it's not per channel
+            try:
+                title = pdgroup["Title"][()]
+                md[model.MD_DESCRIPTION] = unicode(title)
+            except (KeyError, IndexError):
+                pass
+
+        try:
+            xwl = float(pdgroup["ExcitationWavelength"][i]) # in m
+            md[model.MD_IN_WL] = (xwl, xwl)
+        except (KeyError, IndexError, ValueError):
+            pass
+
+        try:
+            ewl = float(pdgroup["EmissionWavelength"][i]) # in m
+            md[model.MD_OUT_WL] = (ewl, ewl)
+        except (KeyError, IndexError, ValueError):
+            pass
+
+        try:
+            mag = float(pdgroup["Magnification"][i])
+            md[model.MD_LENS_MAG] = mag
+        except (KeyError, IndexError, ValueError):
+            pass
+
+        # Our extended metadata
+        try:
+            it = float(pdgroup["IntegrationTime"][i]) # s
+            md[model.MD_EXP_TIME] = it
+        except (KeyError, IndexError, ValueError):
+            pass
+
+    return das
 
 ST_INVALID = 111
 ST_DEFAULT = 112
@@ -482,7 +557,7 @@ def _add_image_metadata(group, images):
     _h5svi_set_state(gp["ExcitationPhotonCount"], ST_DEFAULT)
 
 
-    # Below are addiontal metadata from us (Delmic)
+    # Below are additional metadata from us (Delmic)
     # IntegrationTime: time spent by each pixel to receive energy (in s)
     its = []
     for i in images:
@@ -635,7 +710,6 @@ def _dataFromSVIHDF5(f):
             imagedata = obj["ImageData"]
             image = imagedata["Image"]
             physicaldata = obj["PhysicalData"]
-            title = physicaldata["Title"]
         except KeyError:
             continue # not conforming => try next object
 
@@ -646,15 +720,13 @@ def _dataFromSVIHDF5(f):
             logging.exception("Failed to read data of acquisition '%s'", obj.name)
 
         # TODO: read more metadata
-        md = {}
         try:
-            md[model.MD_DESCRIPTION] = unicode(title[()])
-            md.update(_read_image_info(imagedata, image))
+            da = model.DataArray(nd, metadata=_read_image_info(imagedata))
         except Exception:
             logging.exception("Failed to parse metadata of acquisition '%s'", obj.name)
-
-        data.append(model.DataArray(nd, metadata=md))
-
+        
+        das = _parse_physical_data(physicaldata, da)
+        data.extend(das)
     return data
 
 def _dataFromHDF5(filename):

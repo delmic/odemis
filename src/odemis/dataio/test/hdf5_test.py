@@ -426,8 +426,8 @@ class TestHDF5IO(unittest.TestCase):
                     },
                     {model.MD_SW_VERSION: "1.0-test",
                      model.MD_HW_NAME: "fake hw",
-                     model.MD_DESCRIPTION: "blue die",
-                     model.MD_ACQ_DATE: time.time() + 1,
+                     model.MD_DESCRIPTION: "blue dye",
+                     model.MD_ACQ_DATE: time.time() + 10,
                      model.MD_BPP: 12,
                      model.MD_BINNING: (1, 1), # px, px
                      model.MD_PIXEL_SIZE: (1e-6, 1e-6), # m/px
@@ -438,8 +438,8 @@ class TestHDF5IO(unittest.TestCase):
                     },
                     {model.MD_SW_VERSION: "1.0-test",
                      model.MD_HW_NAME: "fake hw",
-                     model.MD_DESCRIPTION: "green die",
-                     model.MD_ACQ_DATE: time.time() + 2,
+                     model.MD_DESCRIPTION: "green dye",
+                     model.MD_ACQ_DATE: time.time() + 20,
                      model.MD_BPP: 12,
                      model.MD_BINNING: (1, 1), # px, px
                      model.MD_PIXEL_SIZE: (1e-6, 1e-6), # m/px
@@ -483,9 +483,6 @@ class TestHDF5IO(unittest.TestCase):
             self.assertAlmostEqual(im.metadata[model.MD_POS][1], md[model.MD_POS][1])
             self.assertAlmostEqual(im.metadata[model.MD_PIXEL_SIZE][0], md[model.MD_PIXEL_SIZE][0])
             self.assertAlmostEqual(im.metadata[model.MD_PIXEL_SIZE][1], md[model.MD_PIXEL_SIZE][1])
-            self.assertAlmostEqual(im.metadata[model.MD_ACQ_DATE], md[model.MD_ACQ_DATE], delta=1)
-            self.assertEqual(im.metadata[model.MD_BPP], md[model.MD_BPP])
-            self.assertEqual(im.metadata[model.MD_BINNING], md[model.MD_BINNING])
 
             iwl = im.metadata[model.MD_IN_WL] # nm
             self.assertTrue((md[model.MD_IN_WL][0] <= iwl[0] and
@@ -495,6 +492,15 @@ class TestHDF5IO(unittest.TestCase):
             self.assertTrue((md[model.MD_OUT_WL][0] <= owl[0] and
                              owl[1] <= md[model.MD_OUT_WL][1]))
 
+            # SVI HDF5 only records one acq time per T dimension
+            # so only check for the first channel
+            if i == 0:
+                self.assertAlmostEqual(im.metadata[model.MD_ACQ_DATE], md[model.MD_ACQ_DATE], delta=1)
+
+            # SVI HDF5 doesn't this metadata:
+#            self.assertEqual(im.metadata[model.MD_BPP], md[model.MD_BPP])
+#            self.assertEqual(im.metadata[model.MD_BINNING], md[model.MD_BINNING])
+            self.assertEqual(im.metadata[model.MD_EXP_TIME], md[model.MD_EXP_TIME])
 
 
         # check thumbnail
