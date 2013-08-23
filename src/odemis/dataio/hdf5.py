@@ -52,6 +52,17 @@ EXTENSIONS = [".h5", ".hdf5"]
 # Image is an official extension to HDF5:
 # http://www.hdfgroup.org/HDF5/doc/ADGuide/ImageSpec.html
 
+# TODO: define format for Angular Resolved images acquired by the SPARC.
+# They can be up to 4D: SEMY, SEMX, CCDY, CCDX (SEM* are the positions on the sample)
+# CCDY, CCDX are not directly mappable to an angle, so their unit can only be px.
+# SEMY, SEMX are not necessarily on a grid/line. So it seems the less bad way to
+# save them would be a C11YX format, with C = SEMX * SEMY. It would have an
+# additional metadata PhysicalData/CenterPosition of Cx2 (or Cx3) floats to
+# contain the actual SEMY SEMX positions for each C.
+# An advantage of this format is that it works with complex acquisition shapes
+# like cross or circle. In addition, it's relatively simple for the user to
+# check each CCD image with a simple HDF5 viewer.
+
 
 # h5py doesn't implement explicitly HDF5 image, and is not willing to cf:
 # http://code.google.com/p/h5py/issues/detail?id=157
