@@ -94,7 +94,9 @@ Spectra: {
 "Andor SimCam": {
     class: andorcam2.FakeAndorCam2,
     role: ccd,
-    init: {device: 0}
+    init: {device: 0,
+           transpose: [-2, 1], # rotated 90° clockwise
+          }
 }
 
 "FakeRedStoneStage": {

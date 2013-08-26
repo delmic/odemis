@@ -32,8 +32,8 @@ import unittest
 
 logging.getLogger().setLevel(logging.DEBUG)
 
-CLASS = andorcam2.AndorCam2 # use FakeAndorCam2 if you don't have the hardware
-KWARGS = {"name": "camera", "role": "ccd", "device": 0} 
+CLASS = andorcam2.FakeAndorCam2 # use FakeAndorCam2 if you don't have the hardware
+KWARGS = dict(name="camera", role="ccd", device=0, transpose=[2, -1])
 
 # arguments used for the creation of the SEM simulator
 # Note that you need to run this line after a boot, for the simulator to work:
@@ -46,7 +46,7 @@ CONFIG_SEM = {"name": "sem", "role": "sem", "device": "/dev/comedi0",
               "children": {"detector0": CONFIG_SED, "scanner": CONFIG_SCANNER}
               }
 
-#@skip("simple")
+@skip("simple")
 class StaticTestFake(VirtualStaticTestCam, unittest.TestCase):
     """
     Ensure we always test the fake version at least a bit
@@ -54,13 +54,13 @@ class StaticTestFake(VirtualStaticTestCam, unittest.TestCase):
     camera_type = andorcam2.FakeAndorCam2
     camera_kwargs = KWARGS
 
-#@skip("simple")
+@skip("simple")
 class StaticTestAndorCam2(VirtualStaticTestCam, unittest.TestCase):
     camera_type = CLASS
     camera_kwargs = KWARGS
 
 # Inheritance order is important for setUp, tearDown
-# @skip("simple")
+@skip("simple")
 class TestAndorCam2(VirtualTestCam, unittest.TestCase):
     """
     Test directly the AndorCam2 class.
