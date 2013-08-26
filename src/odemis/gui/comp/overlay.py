@@ -953,13 +953,13 @@ class StreamIconOverlay(ViewOverlay):
 
         margin = self.base.ClientSize.x / 25
 
-        base_size = self.base.ClientSize.x / 10
-        bar_width = max((base_size / 5) * 2, 1)
+        base_size = self.base.ClientSize.x / 12
+        bar_width = max(base_size / 3, 1)
         gap_width = max(base_size - (2 * bar_width), 1) - 0.5
 
         x = self.base.ClientSize.x - margin - bar_width + 0.5
         y = margin + 0.5
-        height = int(base_size * 0.8 )
+        height = max(int(base_size * 1.2), 1)
 
         ctx.set_line_width(1)
 
