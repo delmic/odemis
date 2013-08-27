@@ -947,7 +947,7 @@ class AndorCam2(model.DigitalCamera):
         # adapt resolution so that the AOI stays the same
         change = (prev_binning[0] / value[0],
                   prev_binning[1] / value[1])
-        old_resolution = self.resolution.value
+        old_resolution = self._transposeSizeFromUser(self.resolution.value)
         new_resolution = (int(round(old_resolution[0] * change[0])),
                           int(round(old_resolution[1] * change[1])))
 
@@ -1127,7 +1127,7 @@ class AndorCam2(model.DigitalCamera):
             logging.debug("Updating image settings")
             self.atcore.SetImage(*new_image_settings)
             # there is no metadata for the resolution
-            self._metadata[model.MD_BINNING] = self._binning
+            self._metadata[model.MD_BINNING] = self._transposeSizeToUser(self._binning)
 
         if prev_exp_time != self._exposure_time:
             self.atcore.SetExposureTime(c_float(self._exposure_time))
@@ -1718,11 +1718,11 @@ class FakeAndorV2DLL(object):
         self.pixelReadouts = [0.01e-6, 0.1e-6] # s, time to readout one pixel
 
         self.pixelSize = (20.0, 20.0) # um
-        self.shape = (1024, 1024) # px
+        self.shape = (1280, 1024) # px
         self.bpp = 12
         self.maxBinning = (64, 64) # px
 
-        self.roi = (1, 1024, 1, 1024) # h0, hlast, v0, vlast, starting from 1
+        self.roi = (1, 1280, 1, 1024) # h0, hlast, v0, vlast, starting from 1
         self.binning = (1, 1) # px
 
         self.acq_end = None

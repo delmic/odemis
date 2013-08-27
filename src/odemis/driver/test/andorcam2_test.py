@@ -46,7 +46,7 @@ CONFIG_SEM = {"name": "sem", "role": "sem", "device": "/dev/comedi0",
               "children": {"detector0": CONFIG_SED, "scanner": CONFIG_SCANNER}
               }
 
-@skip("simple")
+#@skip("simple")
 class StaticTestFake(VirtualStaticTestCam, unittest.TestCase):
     """
     Ensure we always test the fake version at least a bit
@@ -54,13 +54,13 @@ class StaticTestFake(VirtualStaticTestCam, unittest.TestCase):
     camera_type = andorcam2.FakeAndorCam2
     camera_kwargs = KWARGS
 
-@skip("simple")
+#@skip("simple")
 class StaticTestAndorCam2(VirtualStaticTestCam, unittest.TestCase):
     camera_type = CLASS
     camera_kwargs = KWARGS
 
 # Inheritance order is important for setUp, tearDown
-@skip("simple")
+#@skip("simple")
 class TestAndorCam2(VirtualTestCam, unittest.TestCase):
     """
     Test directly the AndorCam2 class.
@@ -76,7 +76,7 @@ class TestAndorCam2(VirtualTestCam, unittest.TestCase):
     def tearDownClass(cls):
         cls.camera.terminate()
 
-# @skip("simple")
+#@skip("simple")
 class TestSynchronized(unittest.TestCase):
     """
     Test the synchronizedOn(Event) interface, using the fake SEM
