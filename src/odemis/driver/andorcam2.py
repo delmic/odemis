@@ -421,7 +421,7 @@ class AndorCam2(model.DigitalCamera):
                         [self._transposeSizeToUser((1, 1)), 
                          self._transposeSizeToUser(resolution)],
                          setter=self._setResolution)
-        self._setResolution(resolution)
+        self._setResolution(self._transposeSizeToUser(resolution))
 
         maxbin = self.GetMaximumBinnings(AndorV2DLL.RM_IMAGE)
         self.binning = model.ResolutionVA(self._transposeSizeToUser(self._binning),
