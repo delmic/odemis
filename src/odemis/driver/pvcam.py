@@ -6,7 +6,7 @@ Created on 22 Feb 2013
 
 Copyright © 2012-2013 Éric Piel, Delmic
 
-This file is part of Open Odemis.
+This file is part of Odemis.
 
 Odemis is free software: you can redistribute it and/or modify it under the terms 
 of the GNU General Public License version 2 as published by the Free Software 
@@ -242,7 +242,7 @@ class PVCam(model.DigitalCamera):
         self._metadata[model.MD_HW_VERSION] = self._hwVersion
 
         resolution = self.GetSensorSize()
-        self._metadata[model.MD_SENSOR_SIZE] = resolution
+        self._metadata[model.MD_SENSOR_SIZE] = self._transposeSizeToUser(resolution)
 
         # setup everything best (fixed)
         self._prev_settings = [None, None, None, None] # image, exposure, readout, gain
@@ -250,7 +250,7 @@ class PVCam(model.DigitalCamera):
         self._shape = resolution + (2 ** self.get_param(pv.PARAM_BIT_DEPTH),)
 
         # put the detector pixelSize
-        psize = self.GetPixelSize()
+        psize = self._transposeSizeToUser(self.GetPixelSize())
         self.pixelSize = model.VigilantAttribute(psize, unit="m", readonly=True)
         self._metadata[model.MD_SENSOR_PIXEL_SIZE] = psize
 
@@ -309,12 +309,16 @@ class PVCam(model.DigitalCamera):
         minr = (int(math.ceil(self._min_res[0] / max_bin[0])),
                 int(math.ceil(self._min_res[1] / max_bin[1])))
         # need to be before binning, as it is modified when changing binning
-        self.resolution = model.ResolutionVA(resolution, [minr, resolution],
+        self.resolution = model.ResolutionVA(self._transposeSizeToUser(resolution),
+                          [self._transposeSizeToUser(minr),
+                           self._transposeSizeToUser(resolution)],
                                              setter=self._setResolution)
-        self._setResolution(resolution)
+        self._setResolution(self._transposeSizeToUser(resolution))
 
         # 2D binning is like a "small resolution"
-        self.binning = model.ResolutionVA(self._binning, [(1, 1), max_bin],
+        self.binning = model.ResolutionVA(self._transposeSizeToUser(self._binning),
+                           [self._transposeSizeToUser((1, 1)),
+                            self._transposeSizeToUser(max_bin)],
                                           setter=self._setBinning)
 
         # default values try to get live microscopy imaging more likely to show something
@@ -834,19 +838,19 @@ class PVCam(model.DigitalCamera):
         value (int): how many pixels horizontally and vertically
          are combined to create "super pixels"
         """
-
+        value = self._transposeSizeFromUser(value)
         prev_binning = self._binning
         self._binning = value
 
         # adapt resolution so that the AOI stays the same
         change = (prev_binning[0] / self._binning[0],
                   prev_binning[1] / self._binning[1])
-        old_resolution = self.resolution.value
+        old_resolution = self._transposeSizeFromUser(self.resolution.value)
         new_resolution = (int(round(old_resolution[0] * change[0])),
                           int(round(old_resolution[1] * change[1])))
 
-        self.resolution.value = new_resolution # will automatically call _storeSize
-        return value
+        self.resolution.value = self._transposeSizeToUser(new_resolution) # will automatically call _storeSize
+        return self._transposeSizeToUser(value)
 
     def _storeSize(self, size):
         """
@@ -872,9 +876,10 @@ class PVCam(model.DigitalCamera):
                             lt[1] * self._binning[1], (lt[1] + size[1]) * self._binning[1] - 1)
 
     def _setResolution(self, value):
+        value = self._transposeSizeFromUser(value)
         new_res = self.resolutionFitter(value)
         self._storeSize(new_res)
-        return new_res
+        return self._transposeSizeToUser(new_res)
 
     def resolutionFitter(self, size_req):
         """
@@ -957,7 +962,7 @@ class PVCam(model.DigitalCamera):
         # region is 0 indexed
         region.s1, region.s2, region.p1, region.p2 = self._image_rect
         region.sbin, region.pbin = self._binning
-        self._metadata[model.MD_BINNING] = self._binning
+        self._metadata[model.MD_BINNING] = self._transposeSizeToUser(self._binning)
         new_image_settings = self._binning + self._image_rect
         size = ((self._image_rect[1] - self._image_rect[0] + 1) // self._binning[0],
                 (self._image_rect[3] - self._image_rect[2] + 1) // self._binning[1])
@@ -1129,7 +1134,7 @@ class PVCam(model.DigitalCamera):
 
                 retries = 0
                 logging.debug("image acquired successfully after %g s", time.time() - start)
-                callback(array)
+                callback(self._transposeDAToUser(array))
 
                 # force the GC to non-used buffers, for some reason, without this
                 # the GC runs only after we've managed to fill up the memory
@@ -1304,7 +1309,7 @@ class PVCam(model.DigitalCamera):
             logging.exception("Camera reports a problem: " + str(err))
             return False
 
-        # TODO: try to acquire an image too?
+        # TODO: try to acquire image too?
 
         return True
 

@@ -34,7 +34,7 @@ logging.getLogger().setLevel(logging.DEBUG)
 
 CLASS = pvcam.PVCam
 # device can also be "rspiusb", but 0 is more generic
-CONFIG_PVCAM = {"name": "camera", "role": "ccd", "device": 0} 
+CONFIG_PVCAM = dict(name="camera", role="ccd", device=0, transpose=[2, -1])
 
 # arguments used for the creation of the SEM simulator
 # Note that you need to run this line after a boot, for the simulator to work:
