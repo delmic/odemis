@@ -29,7 +29,7 @@ import unittest
 logging.getLogger().setLevel(logging.DEBUG)
 
 CLASS = andorcam3.AndorCam3
-KWARGS = {"name": "camera", "role": "ccd", "device": 0} 
+KWARGS = dict(name="camera", role="ccd", device=0, transpose=[2, -1])
 
 class StaticTestAndorCam3(VirtualStaticTestCam, unittest.TestCase):
     camera_type = CLASS
