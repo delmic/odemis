@@ -20,8 +20,9 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with 
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
+from Pyro4.core import isasync
 from odemis import model
-from odemis.model._components import DigitalCamera
+from odemis.model._components import DigitalCamera, Actuator
 import logging
 import numpy
 import unittest
@@ -109,14 +110,43 @@ class TestCamera(unittest.TestCase):
 
 
 class TestActuator(unittest.TestCase):
-
+    # more complex tests go into driver.test.simulated_test
 
     def testInvertedArg(self):
         """
         Check all the invert related functions 
         """
-        pass
+        act = FakeActuator("test", "actuator", axes=["x", "y", "z"],
+                       inverted=["x", "y"],
+                       ranges={"x": (-5, 4), "y": (-0.01, 0), "z": (-2, 2)})
 
+        # relative
+        rel_mov = {"x":-1, "y": 0.001, "z": 1.1}
+        rel_mov_in = act._applyInversionRel(rel_mov)
+        logging.info("From user=%s, internal=%s", rel_mov, rel_mov_in)
+        self.assertEqual(set(rel_mov.keys()), set(rel_mov_in.keys()))
+        rel_mov_back = act._applyInversionRel(rel_mov_in)
+        self.assertEqual(set(rel_mov.keys()), set(rel_mov_back.keys()))
+        self.assertEqual(rel_mov, rel_mov_back)
+
+        # absolute
+        abs_mov = {"x":-4.5, "y":-0.001}
+        abs_mov_in = act._applyInversionAbs(abs_mov)
+        logging.info("From user=%s, internal=%s", abs_mov, abs_mov_in)
+        self.assertEqual(set(abs_mov.keys()), set(abs_mov_in.keys()))
+        for axis, val in abs_mov_in.items():
+            rng = act.ranges[axis]
+            self.assertTrue(rng[0] <= val <= rng[1])
+        abs_mov_back = act._applyInversionAbs(abs_mov_in)
+        self.assertEqual(set(abs_mov.keys()), set(abs_mov_back.keys()))
+        for axis, val in abs_mov.items():
+            self.assertAlmostEqual(val, abs_mov_back[axis])
+
+
+class FakeActuator(Actuator):
+    @isasync
+    def moveRel(self, shift):
+        pass
 
 
 

@@ -123,7 +123,9 @@ class Stage(model.Actuator):
         for a in axes:
             self._position[a] = (self.ranges[a][0] + self.ranges[a][1]) / 2
         # RO, as to modify it the client must use .moveRel() or .moveAbs()
-        self.position = model.VigilantAttribute(self._position, unit="m", readonly=True)
+        self.position = model.VigilantAttribute(
+                                    self._applyInversionAbs(self._position),
+                                    unit="m", readonly=True)
         
         init_speed = {}
         for a in axes:
@@ -135,7 +137,7 @@ class Stage(model.Actuator):
         update the position VA
         """
         # it's read-only, so we change it via _value
-        self.position._value = self._position
+        self.position._value = self._applyInversionAbs(self._position)
         self.position.notify(self.position.value)
         
     @isasync

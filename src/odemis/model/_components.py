@@ -559,20 +559,16 @@ class Actuator(HwComponent):
         ranges (dict string -> 2-tuple of float): name of the axis to min, max position
         """
         HwComponent.__init__(self, name, role, **kwargs)
-        if axes is None:
-            axes = []
+        axes = axes or []
         self._axes = frozenset(axes)
-        if inverted is None:
-            inverted = []
+        inverted = inverted or []
         self._inverted = frozenset(inverted)
         if not self._inverted <= self._axes:
             non_existing = self._inverted - self._axes
             raise ValueError("Actuator %s has non-existing inverted axes: %s.",
                                 ", ".join(non_existing))
 
-        if ranges is None:
-            ranges = {}
-        self._ranges = dict(ranges)
+        self._ranges = ranges or {}
 
         # it should also have a .position VA
 
@@ -619,6 +615,8 @@ class Actuator(HwComponent):
     def _applyInversionAbs(self, pos):
         """
         pos (dict string -> float): the new position for a moveAbs()
+        Note: it's an involutary function, it can be used also to convert
+          internal position to the user.
         return (dict string -> float): the position with inversion of axes applied
         """
         ret = dict(pos)

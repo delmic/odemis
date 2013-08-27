@@ -1275,7 +1275,8 @@ class Bus(model.Actuator):
 
 
         # RO, as to modify it the client must use .moveRel() or .moveAbs()
-        self.position = model.VigilantAttribute(position, unit="m", readonly=True)
+        self.position = model.VigilantAttribute(self._applyInversionAbs(position),
+                                                unit="m", readonly=True)
 
         # min speed = don't be crazy slow. max speed from hardware spec
         self.speed = model.MultiSpeedVA(speed, range=[min_speed, max_speed], unit="m/s",
