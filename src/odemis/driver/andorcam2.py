@@ -385,7 +385,7 @@ class AndorCam2(model.DigitalCamera):
         self._hwVersion = "%s (%s)" % (hw_name, hwv)
 
         resolution = self.GetDetector()
-        self._metadata[model.MD_SENSOR_SIZE] = resolution
+        self._metadata[model.MD_SENSOR_SIZE] = self._transposeSizeToUser(resolution)
 
         # setup everything best (fixed)
         self._prev_settings = [None, None, None, None] # image, exposure, readout, gain
@@ -394,9 +394,9 @@ class AndorCam2(model.DigitalCamera):
 
         # put the detector pixelSize
         psize = self.GetPixelSize()
-        psize = (psize[0] * 1e-6, psize[1] * 1e-6) # m
+        psize = self._transposeSizeToUser((psize[0] * 1e-6, psize[1] * 1e-6)) # m
         self.pixelSize = model.VigilantAttribute(psize, unit="m", readonly=True)
-        self._metadata[model.MD_SENSOR_PIXEL_SIZE] = self.pixelSize.value
+        self._metadata[model.MD_SENSOR_PIXEL_SIZE] = psize
 
         # Strong cooling for low (image) noise
         if self.hasSetFunction(AndorCapabilities.SETFUNCTION_TEMPERATURE):
@@ -417,12 +417,16 @@ class AndorCam2(model.DigitalCamera):
         self._binning = (1, 1) # px, horizontal, vertical
         self._image_rect = (1, resolution[0], 1, resolution[1])
         # need to be before binning, as it is modified when changing binning
-        self.resolution = model.ResolutionVA(resolution, [(1, 1), resolution],
-                                             setter=self._setResolution)
+        self.resolution = model.ResolutionVA(self._transposeSizeToUser(resolution),
+                        [self._transposeSizeToUser((1, 1)), 
+                         self._transposeSizeToUser(resolution)],
+                         setter=self._setResolution)
         self._setResolution(resolution)
 
         maxbin = self.GetMaximumBinnings(AndorV2DLL.RM_IMAGE)
-        self.binning = model.ResolutionVA(self._binning, [(1, 1), maxbin],
+        self.binning = model.ResolutionVA(self._transposeSizeToUser(self._binning),
+                             [self._transposeSizeToUser((1, 1)), 
+                              self._transposeSizeToUser(maxbin)],
                                           setter=self._setBinning)
 
         # default values try to get live microscopy imaging more likely to show something
@@ -935,6 +939,7 @@ class AndorCam2(model.DigitalCamera):
         value (2-tuple of int)
         Called when "binning" VA is modified. It actually modifies the camera binning.
         """
+        value = self._transposeSizeFromUser(value)
         # TODO support "Full Vertical Binning" if binning[1] == size[1]
         prev_binning = self._binning
         self._binning = value
@@ -947,8 +952,8 @@ class AndorCam2(model.DigitalCamera):
                           int(round(old_resolution[1] * change[1])))
 
         # to update the VA, need to ensure it's at least within the range
-        self.resolution.value = self.resolutionFitter(new_resolution)
-        return self._binning
+        self.resolution.value = self._transposeSizeToUser(self.resolutionFitter(new_resolution))
+        return self._transposeSizeToUser(self._binning)
 
     def _storeSize(self, size):
         """
@@ -981,9 +986,10 @@ class AndorCam2(model.DigitalCamera):
                             lt[1] * self._binning[1] + 1, (lt[1] + size[1]) * self._binning[1])
 
     def _setResolution(self, value):
+        value = self._transposeSizeFromUser(value)
         new_res = self.resolutionFitter(value)
         self._storeSize(new_res)
-        return new_res
+        return self._transposeSizeToUser(new_res)
 
     def resolutionFitter(self, size_req):
         """
@@ -1185,7 +1191,7 @@ class AndorCam2(model.DigitalCamera):
             array = self._buffer_as_array(cbuffer, size, metadata)
 
             self.atcore.FreeInternalMemory() # TODO not sure it's needed
-            return array
+            return self._transposeDAToUser(array)
 
     def start_flow(self, callback):
         """
@@ -1243,7 +1249,7 @@ class AndorCam2(model.DigitalCamera):
                     self.atcore.SetKineticCycleTime(0) # don't wait between acquisitions
                     self.atcore.StartAcquisition()
 
-                    size = self.resolution.value
+                    size = self._transposeSizeFromUser(self.resolution.value)
                     exposure, accumulate, kinetic = self.GetAcquisitionTimings()
                     logging.debug("Accumulate time = %f, kinetic = %f", accumulate, kinetic)
                     readout = size[0] * size[1] * self._metadata[model.MD_READOUT_TIME] # s
@@ -1289,7 +1295,7 @@ class AndorCam2(model.DigitalCamera):
                     else:
                         raise
 
-                callback(array)
+                callback(self._transposeDAToUser(array))
 
                 # force the GC to non-used buffers, for some reason, without this
                 # the GC runs only after we've managed to fill up the memory
@@ -1342,7 +1348,7 @@ class AndorCam2(model.DigitalCamera):
                     self._update_settings()
 
                     # TODO: can be before starting?
-                    size = self.resolution.value
+                    size = self._transposeSizeFromUser(self.resolution.value)
                     exposure, accumulate, kinetic = self.GetAcquisitionTimings()
                     logging.debug("Accumulate time = %f, kinetic = %f", accumulate, kinetic)
                     readout = size[0] * size[1] * self._metadata[model.MD_READOUT_TIME] # s
@@ -1393,7 +1399,7 @@ class AndorCam2(model.DigitalCamera):
                         raise
 
                 logging.debug("image acquired successfully after %g s", time.time() - start)
-                callback(array)
+                callback(self._transposeDAToUser(array))
 
                 # force the GC to non-used buffers, for some reason, without this
                 # the GC runs only after we've managed to fill up the memory
@@ -1547,7 +1553,7 @@ class AndorCam2(model.DigitalCamera):
         prev_res = self.resolution.value
         prev_exp = self.exposureTime.value
         try:
-            self.resolution.value = resolution
+            self.resolution.value = self._transposeSizeToUser(resolution)
             self.exposureTime.value = 0.01
             im = self.acquireOne()
         except Exception as err:

@@ -947,7 +947,7 @@ class StreamIconOverlay(ViewOverlay):
     def hide_pause(self, hide_pause):
         self.pause = not hide_pause
         if not self.pause:
-            self.play = 0.8
+            self.play = 0.7
 
     def Draw(self, dc_buffer, shift=(0, 0), scale=1.0):
         ctx = wx.lib.wxcairo.ContextFromDC(dc_buffer)

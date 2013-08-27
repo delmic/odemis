@@ -463,7 +463,7 @@ class TestTiffIO(unittest.TestCase):
                     },
                     {model.MD_SW_VERSION: "1.0-test",
                      model.MD_HW_NAME: "fake hw",
-                     model.MD_DESCRIPTION: "blue die",
+                     model.MD_DESCRIPTION: "blue dye",
                      model.MD_ACQ_DATE: time.time() + 1,
                      model.MD_BPP: 12,
                      model.MD_BINNING: (1, 1), # px, px
@@ -475,7 +475,7 @@ class TestTiffIO(unittest.TestCase):
                     },
                     {model.MD_SW_VERSION: "1.0-test",
                      model.MD_HW_NAME: "fake hw",
-                     model.MD_DESCRIPTION: "green die",
+                     model.MD_DESCRIPTION: "green dye",
                      model.MD_ACQ_DATE: time.time() + 2,
                      model.MD_BPP: 12,
                      model.MD_BINNING: (1, 1), # px, px

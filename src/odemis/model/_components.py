@@ -416,15 +416,133 @@ class DigitalCamera(Detector):
     """
     __metaclass__ = ABCMeta
 
-    def __init__(self, name, role, **kwargs):
+    def __init__(self, name, role, transpose=None, **kwargs):
+        """
+        transpose (None or list of int): 
+        """ 
         Detector.__init__(self, name, role, **kwargs)
-
+        if transpose is not None:
+            # check a bit it's valid
+            transpose = tuple(transpose)
+            if len(set(abs(v) for v in transpose)) != len(transpose):
+                raise ValueError("Transpose argument contains multiple times "
+                                 "the same axis: %s" % (transpose,))
+            # Shape not yet defined, so can't check precisely all the axes are there
+            if (not 1 <= len(transpose) <= 5 or 0 in transpose 
+                or any(abs(v) > 5 for v in transpose)):
+                raise ValueError("Transpose argument does not define each axis "
+                                 "of the camera once: %s" % (transpose,))
+        self._transpose = transpose
+        
         # To be overridden by a VA
         self.pixelSize = None # (len(dim)-1 * float) size of a pixel (in meters). More precisely it should be the average distance between the centres of two pixels.
         self.binning = None # how many CCD pixels are merged (in each dimension) to form one pixel on the image.
         self.resolution = None # (len(dim)-1 * int): number of pixels in the image generated for each dimension. If it's smaller than the full resolution of the captor, it's centred.
         self.exposureTime = None # (float): time in second for the exposure for one image.
 
+    @roattribute
+    def transpose(self):
+        if self._transpose is None:
+            return tuple(range(len(self.shape) - 1))
+        else:
+            return self._transpose
+
+    @roattribute
+    def shape(self):
+        return self._transposeShapeToUser(self._shape)
+
+    # helper functions for handling transpose
+    def _transposePosToUser(self, v, origin=None):
+        """
+        For position, etc.
+        v (tuple of Numbers): logical position of a point
+        origin (tuple of Numbers of same length as v): position of the logical
+          origin on the CCD. Default is 0 * length (=top-left pixel). Note that
+          floats are possible. 
+        """
+        if self._transpose is None:
+            return v
+        # TODO: what to do with origin?
+        vt = []
+        for idx in self._transpose:
+            if idx > 0:
+                vt.append(v[idx - 1])
+            else:
+                idx = -1 - idx
+                vt.append(self._shape[idx] - v[idx] - 1)
+
+        typev = type(v)
+        return typev(vt)
+
+    def _transposeSizeToUser(self, v):
+        """
+        For resolution, binning... where mirroring has no effect.
+        """
+        if self._transpose is None:
+            return v
+
+        typev = type(v)
+        vt = typev(v[abs(idx) - 1] for idx in self._transpose)
+        return vt
+
+    def _transposeShapeToUser(self, v):
+        """
+        For shape, where the last element is the depth (so unaffected)
+        """
+        if self._transpose is None:
+            return v
+
+        return self._transposeSizeToUser(v[:-1]) + v[-1:]
+
+    def _transposePosFromUser(self, v):
+        """
+        For pixel positions, and everything starting at 0,0 = top-left
+        """
+        if self._transpose is None:
+            return v
+
+        vt = [None] * len(self._transpose)
+        for idx, ov in zip(self._transpose, v):
+            if idx < 0:
+                ov = self._shape[abs(idx) - 1] - ov - 1
+            vt[abs(idx) - 1] = ov
+
+        typev = type(v)
+        return typev(vt)
+
+    def _transposeSizeFromUser(self, v):
+        """
+        For resolution, binning... where mirroring has no effect.
+        """
+        if self._transpose is None:
+            return v
+
+        vt = [None] * len(self._transpose)
+        for idx, ov in zip(self._transpose, v):
+            vt[abs(idx) - 1] = ov
+
+        typev = type(v)
+        return typev(vt)
+
+    # _transposeShapeFromUser and _transposeDAFromUser do not seem to have usage
+
+    def _transposeDAToUser(self, v):
+        if self._transpose is None:
+            return v
+
+        # No copy is made, it's just a different view of the same data
+        dat = v.transpose([abs(idx) - 1 for idx in self._transpose])
+
+        # Build slices on the fly, to reorder the whole array in one go
+        slc = []
+        for idx in self._transpose:
+            if idx > 0:
+                slc.append(slice(None)) # [:] (=no change)
+            else:
+                slc.append(slice(None, None, -1)) # [::-1] (=fully inverted)
+        
+        dat = dat[tuple(slc)]
+        return dat
 
 class Actuator(HwComponent):
     """

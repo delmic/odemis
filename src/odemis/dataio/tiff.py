@@ -757,11 +757,12 @@ def _addImageElement(root, das, ifd):
         desc = ET.SubElement(ime, "Description")
         desc.text = globalMD[model.MD_USER_NOTE]
 
-    # TODO: should be the earliest time?
     globalAD = None
     if model.MD_ACQ_DATE in globalMD:
+        # Need to find the earliest time
+        globalAD = min(d.metadata[model.MD_ACQ_DATE]
+                        for d in das if model.MD_ACQ_DATE in d.metadata)
         ad = ET.SubElement(ime, "AcquisitionDate")
-        globalAD = globalMD[model.MD_ACQ_DATE]
         ad.text = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(globalAD))
 
     # Find a dimension along which the DA can be concatenated. That's a
