@@ -54,13 +54,13 @@ class AcquisitionController(object):
     is currently focused, and block any change of settings during acquisition.
     It relies on the acquisition manager to actually do the acquisition.
     """
-    def __init__(self, micgui, main_frame):
+    def __init__(self, microscope_model, main_frame):
         """
-        micgui (MicroscopeModel): the representation of the microscope GUI
+        microscope_model (MicroscopeModel): the representation of the microscope GUI
         main_frame: (wx.Frame): the frame which contains the 4 viewports
         """
         # TODO: get tab_controller from arguments or setting and stream controller
-        self._interface_model = micgui
+        self._microscope_model = microscope_model
         self._main_frame = main_frame
         self._anim_thread = None # for snapshot animation
 
@@ -149,7 +149,7 @@ class AcquisitionController(object):
             return
 
         # get currently focused view
-        view = self._interface_model.focussedView.value
+        view = self._microscope_model.focussedView.value
         if not view:
             logging.warning("Failed to take snapshot, no view is selected")
             return
@@ -290,12 +290,12 @@ class SecomAcquiController(AcquisitionController):
     is currently focused, and block any change of settings during acquisition.
     """
 
-    def __init__(self, micgui, main_frame):
+    def __init__(self, microscope_model, main_frame):
         """
-        micgui (MicroscopeModel): the representation of the microscope GUI
+        microscope_model (MicroscopeModel): the representation of the microscope GUI
         main_frame: (wx.Frame): the frame which contains the 4 viewports
         """
-        AcquisitionController.__init__(self, micgui, main_frame)
+        AcquisitionController.__init__(self, microscope_model, main_frame)
 
         # Event binding
 
@@ -331,7 +331,7 @@ class SecomAcquiController(AcquisitionController):
         paused_streams = main_stream_controller.pauseStreams()
 
         # create the dialog
-        acq_dialog = AcquisitionDialog(self._main_frame, self._interface_model)
+        acq_dialog = AcquisitionDialog(self._main_frame, self._microscope_model)
         parent_size = [v * 0.66 for v in self._main_frame.GetSize()]
 
         try:
@@ -353,13 +353,13 @@ class SparcAcquiController(AcquisitionController):
     """ Acquisition controller for the Sparc platform
     """
 
-    def __init__(self, main_frame, micgui, settings_controller):
+    def __init__(self, main_frame, microscope_model, settings_controller):
         """
         main_frame: (wx.Frame): the frame which contains the 4 viewports
-        micgui (MicroscopeModel): the representation of the microscope GUI
+        microscope_model (MicroscopeModel): the representation of the microscope GUI
         settings_controller (SettingsController)
         """
-        AcquisitionController.__init__(self, micgui, main_frame)
+        AcquisitionController.__init__(self, microscope_model, main_frame)
 
         # For file selection
         self.conf = conf.get_acqui_conf()
@@ -408,7 +408,7 @@ class SparcAcquiController(AcquisitionController):
 
         # look for the SEM CL stream
         self._sem_cl = None # SEM CL stream
-        for s in self._interface_model.acquisitionView.getStreams():
+        for s in self._microscope_model.acquisitionView.getStreams():
             if s.name.value == "SEM CL":
                 self._sem_cl = s
                 break
@@ -466,7 +466,7 @@ class SparcAcquiController(AcquisitionController):
             # TODO: update the default text to be the same
             txt = "Region of acquisition needs to be selected"
         else:
-            streams = self._interface_model.acquisitionView.getStreams()
+            streams = self._microscope_model.acquisitionView.getStreams()
             acq_time = acqmng.estimateTime(streams)
             self.gauge_acq.Range = 100 * acq_time
             acq_time = math.ceil(acq_time) # round a bit pessimistically
@@ -488,7 +488,7 @@ class SparcAcquiController(AcquisitionController):
 
         # TODO: also freeze the MicroscopeView (for now we just pause the streams)
         # pause all the live acquisitions
-        live_streams = self._interface_model.focussedView.value.getStreams()
+        live_streams = self._microscope_model.focussedView.value.getStreams()
         for s in live_streams:
             s.is_active.value = False
             s.should_update.value = False
@@ -498,7 +498,7 @@ class SparcAcquiController(AcquisitionController):
         Resume (unfreeze) the settings in the GUI and make sure the value are
         back to the previous value
         """
-        live_streams = self._interface_model.focussedView.value.getStreams()
+        live_streams = self._microscope_model.focussedView.value.getStreams()
         for s in live_streams:
             s.should_update.value = True
             s.is_active.value = True
@@ -528,7 +528,7 @@ class SparcAcquiController(AcquisitionController):
         stream_controller.clear()
 
         # add streams
-        for s in self._interface_model.acquisitionView.getStreams():
+        for s in self._microscope_model.acquisitionView.getStreams():
             # Get a static version of the stream
             statics = s.getStatic()
             # TODO: how to associate the data we got back to the streams?
@@ -573,7 +573,7 @@ class SparcAcquiController(AcquisitionController):
         self._main_frame.Layout() # to put the gauge at the right place
 
         # start acquisition + connect events to callback
-        streams = self._interface_model.acquisitionView.getStreams()
+        streams = self._microscope_model.acquisitionView.getStreams()
 
         self.acq_future = acqmng.startAcquisition(streams)
         self.acq_future.add_update_callback(self.on_acquisition_upd)
@@ -622,7 +622,7 @@ class SparcAcquiController(AcquisitionController):
 
             # save result to file
             try:
-                thumb = acqmng.computeThumbnail(self._interface_model.acquisitionView.stream_tree,
+                thumb = acqmng.computeThumbnail(self._microscope_model.acquisitionView.stream_tree,
                                                 future)
                 filename = self.filename.value
                 exporter = dataio.get_exporter(self.conf.last_format)

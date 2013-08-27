@@ -1539,20 +1539,24 @@ class StreamTree(object):
         assert(isinstance(streams, list))
 
         for s in streams:
-            if isinstance(s, (Stream, StreamTree)):
-                if hasattr(s, 'should_update'):
-                    s.should_update.subscribe(
-                        self.stream_update_changed,
-                        init=False)
-            else:
-                msg = "Illegal type %s found in stream tree!" % type(s)
-                raise ValueError(msg)
+            self.add_stream(s)
 
         self.should_update = model.BooleanVA(False)
 
         self.streams = streams
 
         self.kwargs = kwargs
+
+    def __len__(self):
+        acc = 0
+
+        for s in self.streams:
+            if isinstance(s, Stream):
+                acc += 1
+            elif isinstance(s, StreamTree):
+                acc += len(s)
+
+        return acc
 
     def add_stream(self, stream):
         if isinstance(stream, (Stream, StreamTree)):
