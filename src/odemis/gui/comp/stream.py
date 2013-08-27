@@ -375,7 +375,8 @@ class StreamPanel(wx.PyPanel):
          └┬ BoxSizer
           └─ GridBagSizer
 
-    Additional controls can be added to the GridBagSizer in the finalize().
+    Additional controls can be added to the GridBagSizer in the 'finalize'
+    method.
 
     Most of the component's construction is done in the finalize() method, so
     we can allow for a delay. This is necessary when construction the component
@@ -495,7 +496,8 @@ class StreamPanel(wx.PyPanel):
             self._expander.Bind(wx.EVT_LEFT_DCLICK, self.on_button)
 
         # ==== Bind events
-        self.setVisible(self.stream in self._interface_model.focussedView.value.getStreams())
+        vis = self.stream in self._interface_model.focussedView.value.getStreams()
+        self.setVisible(vis)
 
     def set_expander_button(self, button):
         """ Assign a new expander button to the stream panel.
@@ -1236,7 +1238,8 @@ class StreamBar(wx.Panel):
             if isinstance(stream, c):
                 return i
 
-        logging.warning("Stream of unknown order type %s", stream.__class__.__name__)
+        msg = "Stream of unknown order type %s"
+        logging.warning(msg, stream.__class__.__name__)
         return len(self.STREAM_ORDER)
 
     # === VA handlers

@@ -800,8 +800,8 @@ class SettingsBarController(object):
     of the setting panel.
     """
 
-    def __init__(self, interface_model, highlight_change=False):
-        self._interface_model = interface_model
+    def __init__(self, microscope_model, highlight_change=False):
+        self._microscope_model = microscope_model
         self.settings_panels = []
 
 

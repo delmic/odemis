@@ -937,29 +937,81 @@ class StreamIconOverlay(ViewOverlay):
 
         super(StreamIconOverlay, self).__init__(base, None)
 
+        opacity = 0.8
+
         self.pause = False
-        self.colour = hex_to_rgba(gui.FOREGROUND_COLOUR_HIGHLIGHT, 0.8)
+        self.play = 0
+
+        self.colour = hex_to_rgba(gui.FOREGROUND_COLOUR_HIGHLIGHT, opacity)
 
     def hide_pause(self, hide_pause):
         self.pause = not hide_pause
+        if not self.pause:
+            self.play = 0.7
 
     def Draw(self, dc_buffer, shift=(0, 0), scale=1.0):
         ctx = wx.lib.wxcairo.ContextFromDC(dc_buffer)
 
         if self.pause:
             self._draw_pause(ctx)
+        elif self.play:
+            self._draw_play(ctx)
+            if self.play > 0:
+                self.play -= 0.07
+                wx.CallAfter(self.base.UpdateDrawing)
+            else:
+                self.play = 0
+
+    def _get_dimensions(self):
+
+        width = self.base.ClientSize.x / 10
+        height = int(width * 0.8 )
+        right = self.base.ClientSize.x
+        bottom = self.base.ClientSize.y
+        margin = self.base.ClientSize.x / 25
+
+        return width, height, right, bottom, margin
+
+    def _draw_play(self, ctx):
+
+        width, height, right, _, margin = self._get_dimensions()
+
+        half_height = height / 2
+
+        x = right - margin - width + 10.5
+        y = margin + 0.5
+
+        ctx.set_line_width(1)
+        ctx.set_source_rgba(
+            *hex_to_rgba(gui.FOREGROUND_COLOUR_HIGHLIGHT, self.play))
+
+        ctx.move_to(x, y)
+
+        x = right - margin - 9.5
+        y = y + half_height
+
+        ctx.line_to(x, y)
+
+        x = right - margin - width + 10.5
+        y = y + half_height
+
+        ctx.line_to(x, y)
+        ctx.close_path()
+
+        ctx.fill_preserve()
+
+        ctx.set_source_rgba(0, 0, 0, self.play)
+        ctx.stroke()
 
     def _draw_pause(self, ctx):
 
-        margin = self.base.ClientSize.x / 25
+        width, height, right, _, margin = self._get_dimensions()
 
-        base_size = self.base.ClientSize.x / 12
-        bar_width = max(base_size / 3, 1)
-        gap_width = max(base_size - (2 * bar_width), 1) - 0.5
+        bar_width = max((width / 5) * 2, 1)
+        gap_width = max(width - (2 * bar_width), 1) - 0.5
 
-        x = self.base.ClientSize.x - margin - bar_width + 0.5
+        x = right - margin - bar_width + 0.5
         y = margin + 0.5
-        height = max(int(base_size * 1.2), 1)
 
         ctx.set_line_width(1)
 

@@ -642,9 +642,10 @@ class MicroscopeView(object):
         """
         Add a stream to the view. It takes care of updating the StreamTree
         according to the type of stream.
-        stream (Stream): stream to add
+        stream (model.Stream): stream to add
         If the stream is already present, nothing happens
         """
+
         # check if the stream is already present
         if stream in self.stream_tree.getStreams():
             return
