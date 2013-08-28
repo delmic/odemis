@@ -200,6 +200,23 @@ def _isThumbnail(tfile):
 
     return False
 
+def _guessModelName(das):
+    """
+    Detect the model of the Delmic microscope from the type of images acquired
+    das (list of DataArrays)
+    return (String or None): None if unknown, or the name of the model
+    """
+    # If any image has MD_IN_WL => fluorescence => SECOM
+    # If any image has MD_WL_* => spectra => SPARC
+    for da in das:
+        md = da.metadata
+        if model.MD_WL_LIST in md or model.MD_WL_POLYNOMIAL in md:
+            return "SPARC"
+        elif model.MD_IN_WL in md:
+            return "SECOM"
+
+    return None
+
 def _indent(elem, level=0):
     """
     In-place pretty-print formatter
@@ -283,8 +300,10 @@ def _convertToOMEMD(images):
                                       "ID": "Instrument:0"})
     micro = ET.SubElement(instr, "Microscope", attrib={
                                "Manufacturer": "Delmic",
-                               "Model": "SECOM", # FIXME: should depend on the metadata
                                 })
+    model_name = _guessModelName(images)
+    if model_name:
+        micro.attrib["Model"] = model_name
 
     # for each set of images from the same instrument, add them
     groups = _findImageGroups(images)
