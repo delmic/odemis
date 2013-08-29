@@ -38,6 +38,50 @@ import wx
 #  timeit.timeit("counts=numpy.zeros((2**16), dtype=numpy.uint32); weave.inline( code, ['counts', 'idxa'])", "import numpy;from scipy import weave; code=r\"for (int i=0; i<Nidxa[0]; i++) { COUNTS1( IDXA1(i)>>8)++; }\"; idxa=numpy.ones((2048*2048), dtype=numpy.uint16)+15", number=100)
 # for comparison, a.min() + a.max() are 0.01s for 2048x2048 array
 
+def histogram(data, depth=None):
+    """
+    Compute the histogram of the given image.
+    data (numpy.ndarray of unsigned int): 2D image greyscale
+     Note: might work with other data types but not supported yet.
+    depth (1<int or None): maximum value possibly encoded (12 bits => 4096)
+    return (ndarray 1D of 0<=int): number of pixels with the given value
+     Note that the length of the returned histogram is not fixed. It is
+     always depth, or less. For small depths, it will be the same as depth, but
+     if the dtype is float or the depth is too big (> 256), it might be 
+     compressed. 
+    """
+    if depth is None:
+        if data.dtype.kind in "biu":
+            idt = numpy.iinfo(data.dtype)
+            depth = idt.max - idt.min + 1
+        else:
+            depth = 256
+
+    # short-cuts (for the most usual types)
+    if data.dtype == "uint8":
+        hist = numpy.bincount(data.flat, minlength=depth)
+    elif data.dtype == "uint16":
+        hist = numpy.bincount(data.flat, minlength=depth)
+        # if too big, make it compact
+        if len(hist) > 1024 and len(hist) % 256 == 0:
+            # length (= depth) is normally a multiple of 256
+            # all the counts which must be accumulated are on the second axis
+            hist.shape = (256, hist.shape[0] // 256)
+            hist = numpy.sum(hist, 1)
+    else:
+        bins = max(2, min(depth, 256))
+        if data.dtype.kind == "i":
+            idt = numpy.iinfo(data.dtype)
+            rng = (idt.min, idt.max)
+        elif data.dtype.kind in "bu":
+            rng = (0, depth - 1)
+        else:
+            # For floats, it will automatically find the minimum and maximum
+            rng = None
+        hist, _ = numpy.histogram(data, bins=bins, range=rng)
+
+    return hist
+
 def FindOptimalBC(data, depth):
     """
     Computes the (mathematically) optimal brightness and contrast. It returns the
@@ -66,7 +110,66 @@ def FindOptimalBC(data, depth):
 
     return brightness, contrast
 
-# TODO: rename to raw_to_rgba?
+
+def DataArray2RGB(data, irange=None, tint=(255, 255, 255)):
+    """
+    data (numpy.ndarray of unsigned int): 2D image greyscale (unsigned float might work as well)
+    irange (None or tuple of 2 unsigned int): min/max intensities mapped to black/white
+        None => auto (min, max are from the data); 0, max val of data => whole range is mapped.
+        min must be < max, and must be of the same type as data.dtype.
+    tint (3-tuple of 0 < int <256): RGB colour of the final image (each pixel is
+        multiplied by the value. Default is white.
+    returns (numpy.ndarray of 3*shape of uint8): converted image in RGB with the same dimension
+    """
+    # TODO: add a depth value to override idt.max? (allows to avoid clip when not userful
+    # TODO: handle signed values
+    assert(len(data.shape) == 2) # => 2D with greyscale
+
+    # fit it to 8 bits and update brightness and contrast at the same time
+    if irange is None:
+        # automatic scaling (not so fast as min and max must be found)
+        drescaled = scipy.misc.bytescale(data)
+    elif data.dtype == "uint8" and irange == (0, 255):
+        # short-cut when data is already the same type
+        logging.debug("Applying direct range mapping to RGB")
+        drescaled = data
+        # TODO: also write short-cut for 16 bits by reading only the high byte?
+    else:
+        # If data might go outside of the range, clip first
+        if data.dtype.kind in "iu":
+            # no need to clip if irange is the whole possible range
+            idt = numpy.iinfo(data.dtype)
+            if irange[0] > idt.min or irange[1] < idt.max:
+                data = data.clip(*irange)
+        else: # floats et al. => always clip
+            data = data.clip(*irange)
+        drescaled = scipy.misc.bytescale(data, cmin=irange[0], cmax=irange[1])
+
+
+    # Now duplicate it 3 times to make it rgb (as a simple approximation of greyscale)
+    # dstack doesn't work because it doesn't generate in C order (uses strides)
+    # apparently this is as fast (or even a bit better):
+    rgb = numpy.empty(data.shape + (3,), dtype="uint8", order='C') # 0 copy (1 malloc)
+
+    # Tint (colouration)
+    if tint == (255, 255, 255):
+        # fast path when no tint
+        # Note: it seems numpy.repeat is 10x slower ?!
+        # a = numpy.repeat(drescaled, 3)
+        # a.shape = data.shape + (3,)
+        rgb[:, :, 0] = drescaled # 1 copy
+        rgb[:, :, 1] = drescaled # 1 copy
+        rgb[:, :, 2] = drescaled # 1 copy
+    else:
+        rtint, gtint, btint = tint
+        # multiply by a float, cast back to type of out, and put into out array
+        numpy.multiply(drescaled, rtint / 255, out=rgb[:, :, 0])
+        numpy.multiply(drescaled, gtint / 255, out=rgb[:, :, 1])
+        numpy.multiply(drescaled, btint / 255, out=rgb[:, :, 2])
+
+    return rgb
+
+# Deprecated
 def DataArray2wxImage(data, depth=None, brightness=None, contrast=None, tint=(255, 255, 255)):
     """
     data (numpy.ndarray of unsigned int): 2D image greyscale (unsigned float might work as well)

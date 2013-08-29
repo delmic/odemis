@@ -3,8 +3,10 @@ Created on 19 Sep 2012
 
 @author: piel
 '''
+from odemis.gui.util import img
 from odemis.gui.util.img import DataArray2wxImage, wxImage2NDImage, \
-    FindOptimalBC
+    FindOptimalBC, DataArray2RGB
+from unittest.case import skip
 import numpy
 import unittest
 import wx
@@ -99,7 +101,182 @@ class TestFindOptimalBC(unittest.TestCase):
         img_manu = wxImage2NDImage(out_manu)
         
         self.assertTrue(numpy.all(img_auto==img_manu))
-        
+
+class TestHistogram(unittest.TestCase):
+    # 8 and 16 bit short-cuts test
+    def test_uint8(self):
+        # 8 bits
+        depth = 256
+        size = (1024, 512)
+        grey_img = numpy.zeros(size, dtype="uint8") + depth // 2
+        grey_img[0, 0] = 10
+        grey_img[0, 1] = depth - 10
+        hist = img.histogram(grey_img, depth)
+        self.assertLessEqual(len(hist), depth)
+        self.assertEqual(hist[grey_img[0, 0]], 1)
+        self.assertEqual(hist[grey_img[0, 1]], 1)
+        self.assertEqual(hist[depth // 2], grey_img.size - 2)
+        hist_auto = img.histogram(grey_img)
+        numpy.testing.assert_array_equal(hist, hist_auto)
+
+    def test_uint16(self):
+        # 16 bits
+        depth = 4096 # limited depth
+        size = (1024, 965)
+        grey_img = numpy.zeros(size, dtype="uint16") + 1500
+        grey_img[0, 0] = 0
+        grey_img[0, 1] = depth - 1
+        hist = img.histogram(grey_img, depth)
+        # hist might be more compressed
+        self.assertLessEqual(len(hist), depth)
+        self.assertEqual(hist[0], 1)
+        self.assertEqual(hist[-1], 1)
+        u = numpy.unique(hist[1:-1])
+        self.assertEqual(sorted(u.tolist()), [0, grey_img.size - 2])
+
+
+    def test_float(self):
+        size = (102, 965)
+        grey_img = numpy.zeros(size, dtype="float") + 15.05
+        grey_img[0, 0] = -15.6
+        grey_img[0, 1] = 500.6
+        hist = img.histogram(grey_img)
+        # hist might be more compressed
+        self.assertGreaterEqual(len(hist), 256)
+        self.assertEqual(hist[0], 1)
+        self.assertEqual(hist[-1], 1)
+        u = numpy.unique(hist[1:-1])
+        self.assertEqual(sorted(u.tolist()), [0, grey_img.size - 2])
+
+
+class TestDataArray2RGB(unittest.TestCase):
+    @staticmethod
+    def CountValues(array):
+        return len(numpy.unique(array))
+
+    def test_simple(self):
+        # test with everything auto
+        size = (1024, 512)
+        grey_img = numpy.zeros(size, dtype="uint16") + 1500
+
+        # one colour
+        out = DataArray2RGB(grey_img)
+        self.assertEqual(out.shape, size + (3,))
+        self.assertEqual(self.CountValues(out), 1)
+
+        # add black
+        grey_img[0, 0] = 0
+        out = DataArray2RGB(grey_img)
+        self.assertEqual(out.shape, size + (3,))
+        self.assertEqual(self.CountValues(out), 2)
+
+        # add white
+        grey_img[0, 1] = 4095
+        out = DataArray2RGB(grey_img)
+        self.assertEqual(out.shape, size + (3,))
+        self.assertEqual(self.CountValues(out), 3)
+        pixel0 = out[0, 0]
+        pixel1 = out[0, 1]
+        pixelg = out[0, 2]
+        numpy.testing.assert_array_less(pixel0, pixel1)
+        numpy.testing.assert_array_less(pixel0, pixelg)
+        numpy.testing.assert_array_less(pixelg, pixel1)
+
+    def test_direct_mapping(self):
+        """test with irange fitting the whole depth"""
+        # first 8 bit => no change (and test the short-cut)
+        size = (1024, 1024)
+        depth = 256
+        grey_img = numpy.zeros(size, dtype="uint8") + depth // 2
+        grey_img[0, 0] = 10
+        grey_img[0, 1] = depth - 10
+
+        # should keep the grey
+        out = DataArray2RGB(grey_img, irange=(0, depth))
+        self.assertEqual(out.shape, size + (3,))
+        self.assertEqual(self.CountValues(out), 3)
+        pixel = out[2, 2]
+        numpy.testing.assert_equal(pixel, [128, 128, 128])
+
+        # 16 bits
+        depth = 4096
+        grey_img = numpy.zeros(size, dtype="uint16") + depth // 2
+        grey_img[0, 0] = 100
+        grey_img[0, 1] = depth - 100
+
+        # should keep the grey
+        out = DataArray2RGB(grey_img, irange=(0, depth - 1))
+        self.assertEqual(out.shape, size + (3,))
+        self.assertEqual(self.CountValues(out), 3)
+        pixel = out[2, 2]
+        numpy.testing.assert_equal(pixel, [128, 128, 128])
+
+    def test_irange(self):
+        """test with specific corner values of irange"""
+        size = (1024, 1024)
+        depth = 4096
+        grey_img = numpy.zeros(size, dtype="uint16") + depth // 2
+        grey_img[0, 0] = 100
+        grey_img[0, 1] = depth - 100
+
+        # slightly smaller range than everything => still 3 colours
+        out = DataArray2RGB(grey_img, irange=(50, depth - 51))
+        self.assertEqual(out.shape, size + (3,))
+        self.assertEqual(self.CountValues(out), 3)
+        pixel0 = out[0, 0]
+        pixel1 = out[0, 1]
+        pixelg = out[0, 2]
+        numpy.testing.assert_array_less(pixel0, pixel1)
+        numpy.testing.assert_array_less(pixel0, pixelg)
+        numpy.testing.assert_array_less(pixelg, pixel1)
+
+        # irange at the lowest value => all white (but the blacks)
+        out = DataArray2RGB(grey_img, irange=(0, 1))
+        self.assertEqual(out.shape, size + (3,))
+        self.assertEqual(self.CountValues(out), 1)
+        pixel = out[2, 2]
+        numpy.testing.assert_equal(pixel, [255, 255, 255])
+
+        # irange at the highest value => all blacks (but the whites)
+        out = DataArray2RGB(grey_img, irange=(depth - 2 , depth - 1))
+        self.assertEqual(out.shape, size + (3,))
+        self.assertEqual(self.CountValues(out), 1)
+        pixel = out[2, 2]
+        numpy.testing.assert_equal(pixel, [0, 0, 0])
+
+        # irange at the middle value => black/white/grey (max)
+        out = DataArray2RGB(grey_img, irange=(depth // 2 - 1 , depth // 2 + 1))
+        self.assertEqual(out.shape, size + (3,))
+        self.assertEqual(self.CountValues(out), 3)
+        hist = img.histogram(out[:, :, 0]) # just use one RGB channel
+        self.assertGreater(hist[0], 0)
+        self.assertEqual(hist[1], 0)
+        self.assertGreater(hist[-1], 0)
+        self.assertEqual(hist[-2], 0)
+
+    def test_tint(self):
+        """test with tint"""
+        size = (1024, 1024)
+        depth = 4096
+        grey_img = numpy.zeros(size, dtype="uint16") + depth // 2
+        grey_img[0, 0] = 0
+        grey_img[0, 1] = depth - 1
+
+        # white should become same as the tint
+        tint = (0, 73, 255)
+        out = DataArray2RGB(grey_img, tint=tint)
+        self.assertEqual(out.shape, size + (3,))
+        self.assertEqual(self.CountValues(out[:, :, 0]), 1) # R
+        self.assertEqual(self.CountValues(out[:, :, 1]), 3) # G
+        self.assertEqual(self.CountValues(out[:, :, 2]), 3) # B
+
+        pixel0 = out[0, 0]
+        pixel1 = out[0, 1]
+        pixelg = out[0, 2]
+        numpy.testing.assert_array_equal(pixel1, list(tint))
+        self.assertTrue(numpy.all(pixel0 <= pixel1))
+        self.assertTrue(numpy.all(pixel0 <= pixelg))
+        self.assertTrue(numpy.all(pixelg <= pixel1))
 
 class TestDataArray2wxImage(unittest.TestCase):
     def test_simple(self):
