@@ -964,8 +964,8 @@ class StreamIconOverlay(ViewOverlay):
 
     def _get_dimensions(self):
 
-        width = self.base.ClientSize.x / 10
-        height = int(width * 0.8 )
+        width = max(16, self.base.ClientSize.x / 10)
+        height = width
         right = self.base.ClientSize.x
         bottom = self.base.ClientSize.y
         margin = self.base.ClientSize.x / 25
@@ -978,7 +978,7 @@ class StreamIconOverlay(ViewOverlay):
 
         half_height = height / 2
 
-        x = right - margin - width + 10.5
+        x = right - margin - width + 0.5
         y = margin + 0.5
 
         ctx.set_line_width(1)
@@ -987,13 +987,13 @@ class StreamIconOverlay(ViewOverlay):
 
         ctx.move_to(x, y)
 
-        x = right - margin - 9.5
-        y = y + half_height
+        x = right - margin - 0.5
+        y += half_height
 
         ctx.line_to(x, y)
 
-        x = right - margin - width + 10.5
-        y = y + half_height
+        x = right - margin - width + 0.5
+        y += half_height
 
         ctx.line_to(x, y)
         ctx.close_path()
@@ -1007,7 +1007,7 @@ class StreamIconOverlay(ViewOverlay):
 
         width, height, right, _, margin = self._get_dimensions()
 
-        bar_width = max((width / 5) * 2, 1)
+        bar_width = max(width / 3, 1)
         gap_width = max(width - (2 * bar_width), 1) - 0.5
 
         x = right - margin - bar_width + 0.5
