@@ -554,8 +554,6 @@ def live_display(comp_name, df_name):
     except (AttributeError, ValueError):
         # pick something not too stupid
         size = (512, 512)
-        # TODO: try to use resolution on the emitter that affects this detector
-        # (if it exists)
 
     # create a window
     window = VideoDisplayer("Live from %s.%s" % (comp_name, df_name), size)

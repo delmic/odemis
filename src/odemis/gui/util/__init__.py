@@ -55,7 +55,8 @@ def limit_invocation(delay_s):
 
     The first call will always immediately be executed. The last call will be
     delayed 'delay_s' seconds at the most. In between the first and last calls,
-    the method will be executed at 'delay_s' intervals.
+    the method will be executed at 'delay_s' intervals. In other words, it's
+    a rate limitor.
 
     :param delay_s: (float) The minimum interval between executions in seconds.
 
