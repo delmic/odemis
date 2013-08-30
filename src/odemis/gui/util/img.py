@@ -28,6 +28,77 @@ import wx
 
 # various functions to convert and modify images (DataArray and wxImage)
 
+
+def findOptimalRange(hist, edges, outliers=0):
+    """
+    Find the intensity range fitting best an image based on the histogram.
+    hist (ndarray 1D of 0<=int): histogram
+    edges (tuple of 2 numbers): the values corresponding to the first and last
+      bin of the histogram. To get an index, use edges = (0, len(hist)).
+    outliers (0<float<0.5): ratio of outliers to discard (on both side). 0 
+      discards no value, 0.5 discards every value (and so returns the median).
+    """
+    if outliers == 0:
+        # short-cut if no outliers: find first and last non null value
+        lowi = 0
+        for v in hist:
+            if v:
+                break
+            lowi += 1
+
+        highi = hist.size - 1
+        for v in hist[::-1]:
+            if v:
+                break
+            highi -= 1
+        idxrng = (lowi, highi)
+    else:
+        # accumulate each bin into the next bin
+        cum_hist = hist.cumsum()
+
+        # find out how much is the value corresponding to outliers
+        nval = cum_hist[-1]
+        oval = int(round(outliers * nval))
+        lowv, highv = oval, nval - oval
+
+        # search for first bin equal or above lowv
+        lowi = numpy.searchsorted(cum_hist, lowv, side="right")
+        # if exactly lowv -> remove this bin too, otherwise include the bin
+        if hist[lowi] == lowv:
+            lowi += 1
+        # same with highv (note: it's always found, so highi is always within hist)
+        highi = numpy.searchsorted(cum_hist, highv, side="left")
+
+        idxrng = (lowi, highi)
+    
+    # convert index into intensity values
+    a = edges[0]
+    b = (edges[1] - edges[0]) / (hist.size - 1)
+    rng = (a + b * idxrng[0], a + b * idxrng[1])
+    return rng
+
+def compactHistogram(hist, length):
+    """
+    Make a histogram smaller by summing bins together
+    hist (ndarray 1D of 0<=int): histogram
+    length (0<int<=hist.size): final length required. It must be a multiple of
+     the length of hist 
+    return (ndarray 1D of 0<=int): histogram representing the same bins, but 
+      accumulated together as necessary to only have "length" bins.
+    """
+    if hist.size < length:
+        raise ValueError("Cannot compact histogram of length %d to length %d",
+                         hist.size, length)
+    elif hist.size == length:
+        return hist
+    elif hist.size % length != 0:
+        raise ValueError("Fail to compact histogram of length %d not multiple of %d",
+                         hist.size, length)
+    # Reshape to have on first axis the length, and second axis the bins which
+    # must be accumulated.
+    chist = hist.reshape(length, hist.size // length)
+    return numpy.sum(chist, 1)
+
 # TODO: compute histogram. There are 3 ways in numpy:
 # * x=numpy.bincount(a.flat, minlength=depth);x.min();x.max() => fast (~0.03s for
 #   a 2048x2048 array) but only works on flat array with uint8 and uint16 and
@@ -38,49 +109,46 @@ import wx
 #  timeit.timeit("counts=numpy.zeros((2**16), dtype=numpy.uint32); weave.inline( code, ['counts', 'idxa'])", "import numpy;from scipy import weave; code=r\"for (int i=0; i<Nidxa[0]; i++) { COUNTS1( IDXA1(i)>>8)++; }\"; idxa=numpy.ones((2048*2048), dtype=numpy.uint16)+15", number=100)
 # for comparison, a.min() + a.max() are 0.01s for 2048x2048 array
 
-def histogram(data, depth=None):
+def histogram(data, irange=None):
     """
     Compute the histogram of the given image.
-    data (numpy.ndarray of unsigned int): 2D image greyscale
-     Note: might work with other data types but not supported yet.
-    depth (1<int or None): maximum value possibly encoded (12 bits => 4096)
-    return (ndarray 1D of 0<=int): number of pixels with the given value
-     Note that the length of the returned histogram is not fixed. It is
-     always depth, or less. For small depths, it will be the same as depth, but
-     if the dtype is float or the depth is too big (> 256), it might be 
-     compressed. 
+    data (numpy.ndarray of numbers): 2D image greyscale
+    irange (None or tuple of 2 unsigned int): min/max values to be found
+      in the data. None => auto (min, max will be detected from the data)
+    return hist, edges:
+     hist (ndarray 1D of 0<=int): number of pixels with the given value
+      Note that the length of the returned histogram is not fixed. If irange
+      is defined and data is integer, the length is always equal to 
+      irange[1] - irange[0] + 1. 
+     edges (tuple of numbers): lowest and highest bound of the histogram. 
+       edges[1] is included in the bin. If irange is defined, it's the same values. 
     """
-    if depth is None:
+    if irange is None:
         if data.dtype.kind in "biu":
             idt = numpy.iinfo(data.dtype)
-            depth = idt.max - idt.min + 1
+            irange = (idt.min, idt.max)
         else:
-            depth = 256
+            irange = (data.min(), data.max())
 
     # short-cuts (for the most usual types)
-    if data.dtype == "uint8":
-        hist = numpy.bincount(data.flat, minlength=depth)
-    elif data.dtype == "uint16":
-        hist = numpy.bincount(data.flat, minlength=depth)
-        # if too big, make it compact
-        if len(hist) > 1024 and len(hist) % 256 == 0:
-            # length (= depth) is normally a multiple of 256
-            # all the counts which must be accumulated are on the second axis
-            hist.shape = (256, hist.shape[0] // 256)
-            hist = numpy.sum(hist, 1)
+    if data.dtype.kind in "biu" and irange[0] >= 0:
+        # TODO: for int (irange[0] < 0), treat as unsigned, and swap the first
+        # and second halves of the histogram.
+        length = irange[1] - irange[0] + 1
+        hist = numpy.bincount(data.flat, minlength=length)
+        edges = (0, hist.size - 1)
+        if edges[1] > irange[1]:
+            logging.warning("Unexpected value %d outside of range", edges[1])
     else:
-        bins = max(2, min(depth, 256))
-        if data.dtype.kind == "i":
-            idt = numpy.iinfo(data.dtype)
-            rng = (idt.min, idt.max)
-        elif data.dtype.kind in "bu":
-            rng = (0, depth - 1)
+        if data.dtype.kind in "biu":
+            length = irange[1] - irange[0] + 1
         else:
             # For floats, it will automatically find the minimum and maximum
-            rng = None
-        hist, _ = numpy.histogram(data, bins=bins, range=rng)
+            length = 256
+        hist, all_edges = numpy.histogram(data, bins=length, range=irange)
+        edges = (all_edges[0], all_edges[-1])
 
-    return hist
+    return hist, edges
 
 def FindOptimalBC(data, depth):
     """
@@ -154,7 +222,7 @@ def DataArray2RGB(data, irange=None, tint=(255, 255, 255)):
     # Tint (colouration)
     if tint == (255, 255, 255):
         # fast path when no tint
-        # Note: it seems numpy.repeat is 10x slower ?!
+        # Note: it seems numpy.repeat() is 10x slower ?!
         # a = numpy.repeat(drescaled, 3)
         # a.shape = data.shape + (3,)
         rgb[:, :, 0] = drescaled # 1 copy
@@ -163,6 +231,7 @@ def DataArray2RGB(data, irange=None, tint=(255, 255, 255)):
     else:
         rtint, gtint, btint = tint
         # multiply by a float, cast back to type of out, and put into out array
+        # TODO: multiplying by float(x/255) is the same as multiplying by int(x) and >> 8
         numpy.multiply(drescaled, rtint / 255, out=rgb[:, :, 0])
         numpy.multiply(drescaled, gtint / 255, out=rgb[:, :, 1])
         numpy.multiply(drescaled, btint / 255, out=rgb[:, :, 2])

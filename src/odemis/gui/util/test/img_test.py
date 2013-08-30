@@ -102,6 +102,67 @@ class TestFindOptimalBC(unittest.TestCase):
         
         self.assertTrue(numpy.all(img_auto==img_manu))
 
+class TestFindOptimalRange(unittest.TestCase):
+    """
+    Test findOptimalRange
+    """
+
+    def test_no_outliers(self):
+        # just one value (middle)
+        hist = numpy.zeros(256, dtype="int32")
+        hist[128] = 4564
+        irange = img.findOptimalRange(hist, (0, 255))
+        self.assertEqual(irange, (128, 128))
+
+        # first
+        hist = numpy.zeros(256, dtype="int32")
+        hist[0] = 4564
+        irange = img.findOptimalRange(hist, (0, 255))
+        self.assertEqual(irange, (0, 0))
+
+        # last
+        hist = numpy.zeros(256, dtype="int32")
+        hist[255] = 4564
+        irange = img.findOptimalRange(hist, (0, 255))
+        self.assertEqual(irange, (255, 255))
+
+        # first + last
+        hist = numpy.zeros(256, dtype="int32")
+        hist[0] = 456
+        hist[255] = 4564
+        irange = img.findOptimalRange(hist, (0, 255))
+        self.assertEqual(irange, (0, 255))
+
+        # average
+        hist = numpy.zeros(256, dtype="int32") + 125
+        irange = img.findOptimalRange(hist, (0, 255))
+        self.assertEqual(irange, (0, 255))
+
+    def test_with_outliers(self):
+        # almost nothing, but more than 0
+        hist = numpy.zeros(256, dtype="int32")
+        hist[128] = 4564
+        irange = img.findOptimalRange(hist, (0, 255), 1e-6)
+        self.assertEqual(irange, (128, 128))
+
+        # 1%
+        hist = numpy.zeros(256, dtype="int32")
+        hist[2] = 1
+        hist[5] = 99
+        hist[135] = 99
+        hist[199] = 1
+
+        irange = img.findOptimalRange(hist, (0, 255), 0.01)
+        self.assertEqual(irange, (5, 135))
+
+        # 5% -> same
+        irange = img.findOptimalRange(hist, (0, 255), 0.05)
+        self.assertEqual(irange, (5, 135))
+
+        # 0.1 % -> include everything
+        irange = img.findOptimalRange(hist, (0, 255), 0.001)
+        self.assertEqual(irange, (2, 199))
+
 class TestHistogram(unittest.TestCase):
     # 8 and 16 bit short-cuts test
     def test_uint8(self):
@@ -111,13 +172,15 @@ class TestHistogram(unittest.TestCase):
         grey_img = numpy.zeros(size, dtype="uint8") + depth // 2
         grey_img[0, 0] = 10
         grey_img[0, 1] = depth - 10
-        hist = img.histogram(grey_img, depth)
-        self.assertLessEqual(len(hist), depth)
+        hist, edges = img.histogram(grey_img, (0, depth - 1))
+        self.assertEqual(len(hist), depth)
+        self.assertEqual(edges, (0, depth - 1))
         self.assertEqual(hist[grey_img[0, 0]], 1)
         self.assertEqual(hist[grey_img[0, 1]], 1)
         self.assertEqual(hist[depth // 2], grey_img.size - 2)
-        hist_auto = img.histogram(grey_img)
+        hist_auto, edges = img.histogram(grey_img)
         numpy.testing.assert_array_equal(hist, hist_auto)
+        self.assertEqual(edges, (0, depth - 1))
 
     def test_uint16(self):
         # 16 bits
@@ -126,28 +189,55 @@ class TestHistogram(unittest.TestCase):
         grey_img = numpy.zeros(size, dtype="uint16") + 1500
         grey_img[0, 0] = 0
         grey_img[0, 1] = depth - 1
-        hist = img.histogram(grey_img, depth)
-        # hist might be more compressed
-        self.assertLessEqual(len(hist), depth)
+        hist, edges = img.histogram(grey_img, (0, depth - 1))
+        self.assertEqual(len(hist), depth)
+        self.assertEqual(edges, (0, depth - 1))
         self.assertEqual(hist[0], 1)
         self.assertEqual(hist[-1], 1)
         u = numpy.unique(hist[1:-1])
         self.assertEqual(sorted(u.tolist()), [0, grey_img.size - 2])
 
+        hist_auto, edges = img.histogram(grey_img)
+        self.assertGreaterEqual(edges[1], depth - 1)
+        numpy.testing.assert_array_equal(hist, hist_auto[:depth])
 
     def test_float(self):
         size = (102, 965)
         grey_img = numpy.zeros(size, dtype="float") + 15.05
         grey_img[0, 0] = -15.6
         grey_img[0, 1] = 500.6
-        hist = img.histogram(grey_img)
-        # hist might be more compressed
+        hist, edges = img.histogram(grey_img)
         self.assertGreaterEqual(len(hist), 256)
+        self.assertEqual(numpy.sum(hist), numpy.prod(size))
         self.assertEqual(hist[0], 1)
         self.assertEqual(hist[-1], 1)
         u = numpy.unique(hist[1:-1])
         self.assertEqual(sorted(u.tolist()), [0, grey_img.size - 2])
+        hist_forced, edges = img.histogram(grey_img, edges)
+        numpy.testing.assert_array_equal(hist, hist_forced)
 
+    def test_compact(self):
+        """
+        test the compactHistogram()
+        """
+        depth = 4096 # limited depth
+        size = (1024, 965)
+        grey_img = numpy.zeros(size, dtype="uint16") + 1500
+        grey_img[0, 0] = 0
+        grey_img[0, 1] = depth - 1
+        hist, edges = img.histogram(grey_img, (0, depth - 1))
+        # make it compact
+        chist = img.compactHistogram(hist, 256)
+        self.assertEqual(len(chist), 256)
+        self.assertEqual(numpy.sum(chist), numpy.prod(size))
+
+        # make it really compact
+        vchist = img.compactHistogram(hist, 1)
+        self.assertEqual(vchist[0], numpy.prod(size))
+
+        # keep it the same length
+        nchist = img.compactHistogram(hist, depth)
+        numpy.testing.assert_array_equal(hist, nchist)
 
 class TestDataArray2RGB(unittest.TestCase):
     @staticmethod
@@ -248,7 +338,7 @@ class TestDataArray2RGB(unittest.TestCase):
         out = DataArray2RGB(grey_img, irange=(depth // 2 - 1 , depth // 2 + 1))
         self.assertEqual(out.shape, size + (3,))
         self.assertEqual(self.CountValues(out), 3)
-        hist = img.histogram(out[:, :, 0]) # just use one RGB channel
+        hist, edges = img.histogram(out[:, :, 0]) # just use one RGB channel
         self.assertGreater(hist[0], 0)
         self.assertEqual(hist[1], 0)
         self.assertGreater(hist[-1], 0)
