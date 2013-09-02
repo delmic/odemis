@@ -103,7 +103,7 @@ def compactHistogram(hist, length):
 def histogram(data, irange=None):
     """
     Compute the histogram of the given image.
-    data (numpy.ndarray of numbers): 2D image greyscale
+    data (numpy.ndarray of numbers): greyscale image
     irange (None or tuple of 2 unsigned int): min/max values to be found
       in the data. None => auto (min, max will be detected from the data)
     return hist, edges:
@@ -119,7 +119,8 @@ def histogram(data, irange=None):
             idt = numpy.iinfo(data.dtype)
             irange = (idt.min, idt.max)
         else:
-            irange = (data.min(), data.max())
+            # cast to ndarray to ensure a scalar (instead of a DataArray)
+            irange = (numpy.array(data).min(), numpy.array(data).max())
 
     # short-cuts (for the most usual types)
     if data.dtype.kind in "biu" and irange[0] >= 0:

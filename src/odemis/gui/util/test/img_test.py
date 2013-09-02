@@ -167,26 +167,28 @@ class TestFindOptimalRange(unittest.TestCase):
         self.assertEqual(irange, (2, 199))
 
     def test_speed(self):
-        # Check the shortcut when outliers = 0 is indeed faster
-        hist = numpy.zeros(4096, dtype="int32")
-        hist[125] = 99
-        hist[135] = 99
+        for depth in [16, 256, 4096]:
+            # Check the shortcut when outliers = 0 is indeed faster
+            hist = numpy.zeros(depth, dtype="int32")
+            p1, p2 = depth // 2 - 4, depth // 2 + 3
+            hist[p1] = 99
+            hist[p2] = 99
 
-        tstart = time.time()
-        for i in range(10000):
-            irange = img.findOptimalRange(hist, (0, 4095))
-        dur_sc = time.time() - tstart
-        self.assertEqual(irange, (125, 135))
-        
-        # outliers is some small, it's same behaviour as with 0
-        tstart = time.time()
-        for i in range(10000):
-            irange = img.findOptimalRange(hist, (0, 4095), 1e-6)
-        dur_full = time.time() - tstart
-        self.assertEqual(irange, (125, 135))
+            tstart = time.time()
+            for i in range(10000):
+                irange = img.findOptimalRange(hist, (0, depth - 1))
+            dur_sc = time.time() - tstart
+            self.assertEqual(irange, (p1, p2))
 
-        logging.info("shortcut took %g s, while full took %g s", dur_sc, dur_full)
-        self.assertLessEqual(dur_sc, dur_full)
+            # outliers is some small, it's same behaviour as with 0
+            tstart = time.time()
+            for i in range(10000):
+                irange = img.findOptimalRange(hist, (0, depth - 1), 1e-6)
+            dur_full = time.time() - tstart
+            self.assertEqual(irange, (p1, p2))
+
+            logging.info("shortcut took %g s, while full took %g s", dur_sc, dur_full)
+            self.assertLessEqual(dur_sc, dur_full)
         
 
     def test_auto_vs_manual(self):
