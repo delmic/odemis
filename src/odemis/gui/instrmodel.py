@@ -721,3 +721,8 @@ class MicroscopeView(object):
 
         # just let everyone that the composited image has changed
         self.lastUpdate.value = time.time()
+
+    def is_compatible(self, stream):
+        """ Check if the given stream is compatible with this view.
+        """
+        return stream in self.stream_classes
