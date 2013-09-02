@@ -274,7 +274,7 @@ class OdemisGUIApp(wx.App):
         mtc = get_main_tab_controller()
         secom_tab = mtc['secom_live']
 
-        pos = secom_tab.interface_model.focussedView.value.view_pos.value
+        pos = secom_tab.microscope_model.focussedView.value.view_pos.value
         opt_im = pkg_resources.resource_stream("odemis.gui.img",
                                                "example/1-optical-rot7.png")
         opt_iim = InstrumentalImage(wx.ImageFromStream(opt_im), 7.14286e-7, pos)
@@ -297,7 +297,7 @@ class OdemisGUIApp(wx.App):
 
         sem_im = pkg_resources.resource_stream("odemis.gui.img",
                                                "example/3-sem.png")
-        pos = secom_tab.interface_model.focussedView.value.view_pos.value
+        pos = secom_tab.microscope_model.focussedView.value.view_pos.value
         sem_iim = InstrumentalImage(wx.ImageFromStream(sem_im), 2.5e-07, pos)
 
         pos = (pos[0] + 5.5e-06, pos[1] + 1e-6)
@@ -354,7 +354,7 @@ class OdemisGUIApp(wx.App):
                                         cls=StaticSpectrumStream,
                                         add_to_all_views=True)
 
-            analysis_interface = mtc['inspection'].interface_model
+            analysis_interface = mtc['inspection'].microscope_model
             # This is just to fill the metadata
             # TODO: avoid this by getting the metadata from the stream =>
             # better metadata + avoid copy if packaged in an egg.
@@ -453,19 +453,19 @@ see http://www.fluorophores.org/disclaimer/.
             # Stop live view
             mtc = get_main_tab_controller()
             try:
-                interface_model = mtc['secom_live'].interface_model
+                microscope_model = mtc['secom_live'].microscope_model
             except LookupError:
                 try:
-                    interface_model = mtc['sparc_acqui'].interface_model
+                    microscope_model = mtc['sparc_acqui'].microscope_model
                 except LookupError:
-                    interface_model = None
-            if interface_model:
+                    microscope_model = None
+            if microscope_model:
                 try:
-                    interface_model.opticalState.value = instrmodel.STATE_OFF
+                    microscope_model.opticalState.value = instrmodel.STATE_OFF
                 except AttributeError:
                     pass # just no such microscope present
                 try:
-                    interface_model.emState.value = instrmodel.STATE_OFF
+                    microscope_model.emState.value = instrmodel.STATE_OFF
                 except AttributeError:
                     pass
 
