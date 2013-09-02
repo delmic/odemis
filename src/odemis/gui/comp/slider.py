@@ -974,7 +974,7 @@ class VisualRangeSlider(BaseSlider):
         dc.SetBackground(wx.Brush(self.BackgroundColour, wx.SOLID))
         dc.Clear() # make sure you clear the bitmap!
 
-        if self.content_list:
+        if len(self.content_list): # using len to be compatible with numpy arrays
             ctx = wxcairo.ContextFromDC(dc)
             width, height = self.ClientSize
             self._draw_content(ctx, width, height)
