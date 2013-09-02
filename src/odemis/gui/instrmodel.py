@@ -725,4 +725,7 @@ class MicroscopeView(object):
     def is_compatible(self, stream):
         """ Check if the given stream is compatible with this view.
         """
-        return stream in self.stream_classes
+        for klass in self.stream_classes:
+            if issubclass(stream, klass):
+                return True
+        return False

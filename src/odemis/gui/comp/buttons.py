@@ -952,12 +952,18 @@ class PopupImageButton(ImageTextButton):
         self.choices = {}
         self.menu = wx.Menu()
         self.Bind(wx.EVT_BUTTON, self.show_menu)
+        self.Disable()
 
     def set_choices(self, choices):
         """ Set the choices available to the user
 
         :param choices: [(string, function reference),..]
         """
+        if choices:
+            self.Enable()
+        else:
+            self.Disable()
+
         for label, callback in choices.items():
             self.add_choice(label, callback)
 
@@ -976,18 +982,18 @@ class PopupImageButton(ImageTextButton):
         self.menu.Bind(wx.EVT_MENU, self.on_action_select, id=menu_id)
         self.choices[label] = (menu_item, callback, check_enabled)
         self.menu.AppendItem(menu_item)
+        self.Enable()
 
     def remove_choice(self, label):
         """ Remove the choice associated with the name `1abel` """
         menu_item, cb, ce = self.choices.pop(label)
         self.menu.RemoveItem(menu_item)
 
+        if not self.choices:
+            self.Disable()
+
     def show_menu(self, evt):
         """ Show the popup menu, when there are choices available. """
-
-        if not self.choices:
-            logging.debug("*NOT* Showing PopupImageButton menu, no choices")
-            return
 
         logging.debug("Showing PopupImageButton menu")
 
