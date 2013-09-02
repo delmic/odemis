@@ -30,6 +30,7 @@ Detector, Emitter and Dataflow associations.
 from __future__ import division
 from numpy.polynomial import polynomial
 from odemis.gui.model.img import InstrumentalImage
+from odemis.gui.util import limit_invocation
 from odemis.model import VigilantAttribute, MD_POS, MD_PIXEL_SIZE, \
     MD_SENSOR_PIXEL_SIZE, MD_WL_POLYNOMIAL
 import logging
@@ -40,6 +41,7 @@ import odemis.gui.util.img as img
 import odemis.gui.util.units as units
 import odemis.model as model
 import threading
+import time
 
 
 # to identify a ROI which must still be defined by the user
@@ -91,6 +93,7 @@ class Stream(object):
         # has a separate attribute.
         self._dataflow = dataflow
 
+        self._running_upd_img = False # to avoid simultaneous updates in different threads
         # list of DataArray received and used to generate the image
         # every time it's modified, image is also modified
         self.raw = []
@@ -114,25 +117,53 @@ class Stream(object):
                                          range=[(0, 0, 0, 0), (1, 1, 1, 1)],
                                          cls=(int, long, float))
 
-        self._depth = 0
 
         if self._detector:
             # The last element of the shape indicates the bit depth, which
             # is used for brightness/contrast adjustment.
-            self._depth = self._detector.shape[-1]
+            self._irange = (0, self._detector.shape[-1] - 1) # FIXME: true iif unsigned int
+        else:
+            self._irange = None # min/max possible data values
 
         # whether to use auto brightness & contrast
         self.auto_bc = model.BooleanVA(True)
+        # % of values considered outliers discarded in auto BC detection
+        # Note: 1/256th is a nice value because on RGB, it means in degenerated
+        # cases (like flat histogram), you still loose only one value on each
+        # side.
+        self.auto_bc_outliers = model.FloatContinuous(1 / 256, range=[0, 40])
 
-        # these 2 are only used if auto_bc is False
-        # ratio, contrast if no auto
+        # Used if auto_bc is False
+        # min/max ratio of the whole intensity level which are mapped to
+        # black/white. The .histogram always has
+        # the first value mapped to 0 and last value mapped to 1.
+        self.intensityRange = model.TupleContinuous((0, 1),
+                                                    range=[(0, 0), (1, 1)],
+                                                    cls=(int, long, float))
+#        # ratio, contrast if no auto
         self.contrast = model.FloatContinuous(0, range=[-100, 100])
-        # ratio, balance if no auto
+#        # ratio, balance if no auto
         self.brightness = model.FloatContinuous(0, range=[-100, 100])
 
-        self.auto_bc.subscribe(self.onAutoBC)
-        self.contrast.subscribe(self.onBrightnessContrast)
-        self.brightness.subscribe(self.onBrightnessContrast)
+        # list of values representing the histogram of the current image _or_
+        # slightly older image. Note it's an ndarray. Use .tolist() to get a
+        # python list.
+        self.histogram = model.VigilantAttribute(numpy.ndarray(0), readonly=True)
+        self.histogram._full_hist = numpy.ndarray(0) # for finding the outliers
+        self.histogram._edges = self._irange # TODO: needed?
+
+        self.auto_bc.subscribe(self._onAutoBC)
+        self.auto_bc_outliers.subscribe(self._onOutliers) # FIXME
+        self.intensityRange.subscribe(self._onIntensityRange)
+#        self.contrast.subscribe(self.onBrightnessContrast)
+#        self.brightness.subscribe(self.onBrightnessContrast)
+        self._ht_needs_recompute = threading.Event()
+        self._htread = threading.Thread(target=self._histogram_thread,
+                                        name="Histogram computation")
+        self._htread.daemon = True
+        self._htread.start()
+
+#        self.histogram.subscribe(self._onHistogram) # FIXME -> update outliers and then image
 
         # list of warnings to display to the user
         # TODO should be a set
@@ -189,34 +220,25 @@ class Stream(object):
     # No __del__: subscription should be automatically stopped when the object
     # disappears, and the user should stop the update first anyway.
 
-    def _updateImage(self, tint=(255, 255, 255)):
-        """ Recomputes the image with all the raw data available
-
-        tint ((int, int, int)): colouration of the image, in RGB. Only used by
-            FluoStream to avoid code duplication
+    def _findPos(self, data):
         """
-        data = self.raw[0]
-
-        if self.auto_bc.value:
-            brightness = None
-            contrast = None
-        else:
-            brightness = self.brightness.value / 100
-            contrast = self.contrast.value / 100
-
-        im = img.DataArray2wxImage(data,
-                                        self._depth,
-                                        brightness,
-                                        contrast,
-                                        tint)
-        im.InitAlpha() # it's a different buffer so useless to do it in numpy
-
+        Find the (center) position of the given image. Guess if necessary.
+        data (DataArray): image
+        return (tuple of float): position
+        """
         try:
             pos = data.metadata[MD_POS]
         except KeyError:
             logging.warning("Position of image unknown")
             pos = (0, 0)
+        return pos
 
+    def _findMPP(self, data):
+        """
+        Find the density of the given image. Guess if necessary.
+        data (DataArray): image
+        return (tuple of float): MPP per dimension
+        """
         try:
             mpp = data.metadata[MD_PIXEL_SIZE][0]
         except KeyError:
@@ -229,34 +251,142 @@ class Stream(object):
                 logging.error("Image has no pixel density known")
                 mpp = 20e-6 # m/px (typical sensor size)
 
-        self.image.value = InstrumentalImage(im, mpp, pos)
+        return mpp
 
-    def onAutoBC(self, enabled):
-        if self.raw:
-            # if changing to manual: need to set the current (automatic) B/C
-            if enabled == False:
-                b, c = img.FindOptimalBC(self.raw[0], self._depth)
-                self.brightness.value = b * 100
-                self.contrast.value = c * 100
+    @limit_invocation(0.1) # Max 10 Hz
+    def _updateImage(self, tint=(255, 255, 255)):
+        """ Recomputes the image with all the raw data available
+
+        tint ((int, int, int)): colouration of the image, in RGB. Only used by
+            FluoStream to avoid code duplication
+        """
+        # check to avoid running it if there is already one running
+        if self._running_upd_img or not self.raw:
+            return
+
+        try:
+            self._running_upd_img = True
+            data = self.raw[0]
+
+            if self.auto_bc.value:
+                # TODO: move to whenever histogram changes?
+                # The histogram might be slightly old, but not too much
+                irange = img.findOptimalRange(self.histogram._full_hist,
+                                              self.histogram._edges,
+                                              self.auto_bc_outliers.value / 100)
+
+                # Also update the intensityRanges if auto BC
+                edges = self.histogram._edges
+                rrange = [(v - edges[0]) / (edges[1] - edges[0]) for v in irange]
+                self.intensityRange.value = tuple(rrange)
             else:
-                # B/C might be different from the manual values => redisplay
-                self._updateImage()
+                # just convert from the user-defined (as ratio) to actual values
+                rrange = sorted(self.intensityRange.value)
+                edges = self.histogram._edges
+                irange = [edges[0] + (edges[1] - edges[0]) * v for v in rrange]
 
-    def onBrightnessContrast(self, unused):
-        # called whenever brightness/contrast changes
-        # => needs to recompute the image (but not too often, so we do it in a
-        # timer)
+            rgbim = img.DataArray2RGB(data, irange, tint)
+            im = img.NDImage2wxImage(rgbim)
+            im.InitAlpha() # it's a different buffer so useless to do it in numpy
 
-        if self.raw:
+            self.image.value = InstrumentalImage(im,
+                                                 self._findMPP(data),
+                                                 self._findPos(data))
+        except Exception:
+            logging.exception("Updating %s image", self.__class__.__name__)
+        finally:
+            self._running_upd_img = False
+
+    def _onAutoBC(self, enabled):
+        # if changing to auto: B/C might be different from the manual values
+        if enabled == True:
             self._updateImage()
+
+    def _onOutliers(self, outliers):
+        if self.auto_bc.value == True:
+            self._updateImage()
+
+    def _onIntensityRange(self, irange):
+        # If auto_bc is active, it updates intensities (from _updateImage()),
+        # so no need to refresh image again.
+        # TODO: => just unsubscribe from intensityRange ?
+        if self.auto_bc.value == False:
+            self._updateImage()
+
+#    # TODO: have an "area=None" argument which allows to specify the 2D region
+#    # within which the spectrum should be computed
+#    def getHistogram(self):
+#        """
+#        Compute the global histogram of the data as an average over all the pixels
+#        Note: avoid calling this method, and prefer .histogram
+#        returns (list of 0<=int): number of pixels with the intensity corresponding
+#          to the index. Length is arbitrary (but tries to be long enough and not
+#          too long => ~ 256).
+#        """
+#        if not self.raw:
+#            return []
+#
+#        data = self.raw[0]
+#        hist = img.histogram(data, self._depth)
+#
+#        return hist.tolist()
+
+    def _shouldUpdateHistogram(self):
+        """
+        Ensures that the histogram VA will be updated in the "near future".
+        """
+        # If the previous request is still being processed, the event
+        # synchronization allows to delay it (without accumulation).
+        self._ht_needs_recompute.set()
+
+    def _updateHistogram(self):
+        # Compute histogram and compact version
+        if not self.raw:
+            return
+
+        data = self.raw[0]
+        # Initially, _edges might be None, in which case they will be guessed
+        hist, edges = img.histogram(data, irange=self.histogram._edges)
+        if hist.size > 256:
+            chist = img.compactHistogram(hist, 256)
+        else:
+            chist = hist
+        self.histogram._full_hist = hist
+        self.histogram._edges = edges
+        # Read-only VA, so we need to go around...
+        self.histogram._value = chist
+        self.histogram.notify(chist)
+
+    def _histogram_thread(self):
+        """
+        Called as a separate thread, and recomputes the histogram whenever
+        it receives an event asking for it.
+        """
+        while True:
+            self._ht_needs_recompute.wait() # wait until a new image is available
+            tstart = time.time()
+            self._ht_needs_recompute.clear()
+
+            self._updateHistogram()
+            tend = time.time()
+            logging.debug("Computed histogram in %g s", tend - tstart)
+            # sleep at as much, to ensure we are not using too much CPU
+            tsleep = max(0.2, tend - tstart) # max 5 Hz
+            time.sleep(tsleep)
 
     def onNewImage(self, dataflow, data):
         # For now, raw images are pretty simple: we only have one
         # (in the future, we could keep the old ones which are not fully
-        # overlapped
-        if self.raw:
-            self.raw.pop()
-        self.raw.insert(0, data)
+        # overlapped)
+
+        if not self.raw:
+            self.raw.append(data)
+            # This ensures there's always a valid histogram
+            self._updateHistogram()
+        else:
+            self.raw[0] = data
+            self._shouldUpdateHistogram()
+
         self._updateImage()
 
 
@@ -466,8 +596,7 @@ class FluoStream(CameraStream):
             self._set_emission_filter()
 
     def onTint(self, value):
-        if self.raw:
-            self._updateImage()
+        self._updateImage()
 
     def _set_emission_filter(self):
         """ Check if the emission value matches the emission filter band
@@ -896,6 +1025,7 @@ class StaticStream(Stream):
         Stream.__init__(self, name, None, None, None)
         if isinstance(image, InstrumentalImage):
             # TODO: use original image as raw, to allow changing the B/C/tint
+            # Need to distinguish between greyscale (possible) and colour (impossible)
             self.image = VigilantAttribute(image)
         else: # raw data
             # Check it's 2D
@@ -911,16 +1041,18 @@ class StaticStream(Stream):
 
             # Find the depth
             try:
-                self._depth = 2 ** image.metadata[model.MD_BPP]
-            except KeyError: # no MD_MPP
-                # guess out of the data
-                # cast to numpy.array to ensure it becomes a scalar (instead of a DataArray)
-                self._depth = numpy.array(image).max()
-                minv = numpy.array(image).min()
-                if minv < 0:  # signed?
-                    self._depth += -minv
-                    # FIXME: probably need to fix DataArray2wxImage() for such
-                    # cases
+                self._irange = (0, 2 ** image.metadata[model.MD_BPP] - 1)
+                self.histogram._edges = self._irange
+            except KeyError:
+                # no MD_MPP => no problem, will be guessed by histogram computation
+                pass
+
+            # Avoid negative values
+            # FIXME: probably need to fix DataArray2wxImage() for such cases
+            # cast to numpy.array to ensure it becomes a scalar (instead of a DataArray)
+            minv = numpy.array(image).min()
+            if minv < 0:  # signed?
+                self._depth += -minv
 
             self.onNewImage(None, image)
 
@@ -1085,16 +1217,18 @@ class StaticSpectrumStream(StaticStream):
 
         # Find the depth
         try:
-            self._depth = 2 ** image.metadata[model.MD_BPP]
-        except KeyError: # no MD_MPP
-            # guess out of the data
-            # cast to numpy.array to ensure it becomes a scalar (instead of a DataArray)
-            self._depth = numpy.array(image).max()
-            minv = numpy.array(image).min()
-            if minv < 0:  # signed?
-                self._depth += -minv
-                # FIXME: probably need to fix DataArray2wxImage() for such
-                # cases
+            self._irange = (0, 2 ** image.metadata[model.MD_BPP] - 1)
+            self.histogram._edges = self._irange
+        except KeyError:
+            # no MD_MPP => no problem, will be guessed by histogram computation
+            pass
+
+        # Avoid negative values
+        # FIXME: probably need to fix DataArray2wxImage() for such cases
+        # cast to numpy.array to ensure it becomes a scalar (instead of a DataArray)
+        minv = numpy.array(image).min()
+        if minv < 0:  # signed?
+            self._depth += -minv
 
         self.fitToRGB.subscribe(self.onFitToRGB)
         self.centerWavelength.subscribe(self.onWavelengthChange)
@@ -1163,65 +1297,64 @@ class StaticSpectrumStream(StaticStream):
         assert low_px <= high_px
         return low_px, high_px
 
+    def _updateImageAverage(self, data):
+        if self.auto_bc.value:
+            # TODO: move to whenever histogram changes?
+            # The histogram might be slightly old, but not too much
+            irange = img.findOptimalRange(self.histogram._full_hist,
+                                          self.histogram._edges,
+                                          self.auto_bc_outliers.value / 100)
+
+            # Also update the intensityRanges if auto BC
+            edges = self.histogram._edges
+            rrange = [(v - edges[0]) / (edges[1] - edges[0]) for v in irange]
+            self.intensityRange.value = tuple(rrange)
+        else:
+            # just convert from the user-defined (as ratio) to actual values
+            rrange = sorted(self.intensityRange.value)
+            edges = self.histogram._edges
+            irange = [edges[0] + (edges[1] - edges[0]) * v for v in rrange]
+
+
+        # TODO: support fitToRGB => 3 greyscales mapped to RGB
+
+        # pick only the data inside the bandwidth
+        spec_range = self._get_bandwidth_in_pixel()
+        logging.debug("Spectrum range picked: %s px", spec_range)
+        # TODO: use better intermediary type if possible?, cf semcomedi
+        av_data = numpy.mean(data[spec_range[0]:spec_range[1] + 1], axis=0)
+
+        rgbim = img.DataArray2RGB(av_data, irange)
+        im = img.NDImage2wxImage(rgbim)
+        im.InitAlpha() # it's a different buffer so useless to do it in numpy
+
+        self.image.value = InstrumentalImage(im,
+                                             self._findMPP(data),
+                                             self._findPos(data))
+
+    @limit_invocation(0.1) # Max 10 Hz
     def _updateImage(self):
         """ Recomputes the image with all the raw data available
           Note: for spectrum-based data, it mostly computes a projection of the
           3D data to a 2D array. The type of projection used depends on
           self.projection.
         """
-        # FIXME: check that this API makes sense (projection...)
+        # check to avoid running it if there is already one running
+        if self._running_upd_img or not self.raw:
+            return
 
         try:
+            self._running_upd_img = True
             data = self.raw[0][:, 0, 0, :, :]
+            # FIXME: check that this API makes sense (projection...)
             if self.projection.value == PROJ_AVERAGE_SPECTRUM:
-                if self.auto_bc.value:
-                    # FIXME: need to fix the brightness/contrast to the min/max
-                    # of the _entire_ image (not just the current slice)
-                    # b, c = img.FindOptimalBC(self.raw[0], self._depth)
-                    # or allow user to switch between whole data and current slice?
-                    brightness = None
-                    contrast = None
-                else:
-                    brightness = self.brightness.value / 100
-                    contrast = self.contrast.value / 100
-
-                # TODO: support fitToRGB
-
-                # pick only the data inside the bandwidth
-                spec_range = self._get_bandwidth_in_pixel()
-                logging.debug("Spectrum range picked: %s px", spec_range)
-                # TODO: use better intermediary type if possible?, cf semcomedi
-                av_data = numpy.mean(data[spec_range[0]:spec_range[1] + 1], axis=0)
-
-                im = img.DataArray2wxImage(av_data,
-                                                self._depth,
-                                                brightness,
-                                                contrast)
-
-                # it's a different buffer so useless to do it in numpy
-                im.InitAlpha()
-
-                try:
-                    pos = data.metadata[MD_POS]
-                except KeyError:
-                    logging.warning("Position of image unknown")
-                    pos = (0, 0)
-
-                try:
-                    mpp = data.metadata[MD_PIXEL_SIZE][0]
-                except KeyError:
-                    logging.warning("pixel density of image unknown")
-                    # Hopefully it'll be within the same magnitude
-                    mpp = data.metadata[MD_SENSOR_PIXEL_SIZE][0] / 10
-
-                self.image.value = InstrumentalImage(im, mpp, pos)
+                self._updateImageAverage(data)
             else:
-                msg = "Need to handle other projection types"
-                raise NotImplementedError(msg)
+                raise NotImplementedError("Need to handle other projection types")
         except Exception:
-            msg = "Error while updating %s image"
-            logging.exception(msg, self.__class__.__name__)
-
+            logging.exception("Updating %s image", self.__class__.__name__)
+        finally:
+            self._running_upd_img = False
 
     # TODO: have an "area=None" argument which allows to specify the 2D region
     # within which the spectrum should be computed
@@ -1234,7 +1367,7 @@ class StaticSpectrumStream(StaticStream):
          You need to use the metadata of the raw data to find out what is the
          wavelength for each pixel.
         """
-        if len(self.raw) < 0:
+        if not self.raw:
             return []
 
         data = self.raw[0]
@@ -1251,15 +1384,13 @@ class StaticSpectrumStream(StaticStream):
         """
         if value:
             logging.warning("FitToRGB projection not supported")
-        if self.raw:
-            self._updateImage()
+        self._updateImage()
 
     def onWavelengthChange(self, value):
         """
         called when centerWavelength or bandwidth are changed
         """
-        if self.raw:
-            self._updateImage()
+        self._updateImage()
 
 class MultipleDetectorStream(Stream):
     """

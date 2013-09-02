@@ -28,7 +28,8 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from odemis.gui import FOREGROUND_COLOUR_EDIT, FOREGROUND_COLOUR, \
     BACKGROUND_COLOUR, BACKGROUND_COLOUR_TITLE, FOREGROUND_COLOUR_DIS
 from odemis.gui.comp.foldpanelbar import FoldPanelItem
-from odemis.gui.comp.slider import UnitIntegerSlider, BandwidthSlider
+from odemis.gui.comp.slider import UnitIntegerSlider, BandwidthSlider, \
+    UnitFloatSlider, VisualRangeSlider
 from odemis.gui.comp.text import SuggestTextCtrl, UnitIntegerCtrl, \
     IntegerTextCtrl
 from odemis.gui.util import call_after, limit_invocation
@@ -735,102 +736,153 @@ class StreamPanel(wx.PyPanel):
     # ===== For brightness/contrast
 
     def _has_bc(self, stream):
-        return (hasattr(stream, "auto_bc") and hasattr(stream, "brightness")
-                and hasattr(stream, "contrast"))
+        return (hasattr(stream, "auto_bc") and hasattr(stream, "intensityRange"))
 
     def _add_bc_controls(self):
         """ Add the widgets related to brightness/contrast
-          ├ StaticText (contrast)
-          ├ Slider
-          ├ IntegerTextCtrl
-          ├ StaticText (brightness)
-          ├ Slider
-          ├ IntegerTextCtrl
+          ├ Toggle button (AutoBC)
+          ├ StaticText (Outliers)
+          ├ UnitFloatSlider (AutoBC Outliers)
+          ├ BandwidthSlider (Histogram -> Low/High intensity)
+          ├ FloatTextCtrl (Low intensity)
+          ├ FloatTextCtrl (High intensity)
         """
         # ====== Top row, auto contrast toggle button
 
-        self._btn_auto_contrast = buttons.ImageTextToggleButton(self._panel, -1,
+        self._btn_autobc = buttons.ImageTextToggleButton(self._panel, -1,
                                                 img.getbtn_contrastBitmap(),
                                                 label="Auto",
                                                 size=(68, 26),
-                                                style=wx.ALIGN_RIGHT,)
+                                                style=wx.ALIGN_RIGHT)
 
         tooltip = "Toggle auto brightness and contrast"
-
-        self._btn_auto_contrast.SetToolTipString(tooltip)
-        self._btn_auto_contrast.SetBitmaps(
+        self._btn_autobc.SetToolTipString(tooltip)
+        self._btn_autobc.SetBitmaps(
                                         bmp_h=img.getbtn_contrast_hBitmap(),
                                         bmp_sel=img.getbtn_contrast_aBitmap())
-        self._btn_auto_contrast.SetForegroundColour("#000000")
-        self._gbs.Add(self._btn_auto_contrast, (self.row_count, 0),
-                      flag=wx.LEFT | wx.TOP, border=5)
+        self._btn_autobc.SetForegroundColour("#000000")
+        self._vac_autobc = VigilantAttributeConnector(self.stream.auto_bc,
+                                  self._btn_autobc,
+                                  self._btn_autobc.SetToggle,
+                                  self._btn_autobc.GetToggle,
+                                  events=wx.EVT_BUTTON)
 
-        self.row_count += 1
-
-        # ====== Second row, brightness label, slider and value
-
-        lbl_brightness = wx.StaticText(self._panel, -1, "Brightness")
-        self._gbs.Add(lbl_brightness, (self.row_count, 0),
-                      flag=wx.ALL,
-                      border=5)
-
-        self._sld_brightness = UnitIntegerSlider(
+        # TODO: add outliers text and slider
+        # FIXME: what's the right name? ImageJ uses "Saturated Pixels"
+#        lbl_bc_outliers = wx.StaticText(self._panel, -1, "Outliers")
+        self._sld_bc_outliers = UnitFloatSlider(
                                     self._panel,
-                                    value=self.stream.brightness.value,
-                                    min_val=self.stream.brightness.range[0],
-                                    max_val=self.stream.brightness.range[1],
+                                    value=self.stream.auto_bc_outliers.value,
+                                    min_val=self.stream.auto_bc_outliers.range[0],
+                                    max_val=self.stream.auto_bc_outliers.range[1],
                                     t_size=(40, -1),
-                                    unit=None,
-                                    name="brightness_slider")
+                                    unit=None, # TODO: "%" ?
+                                    scale="cubic",
+                                    name="bc_outliers_slider")
 
-        self._vac_brightness = VigilantAttributeConnector(self.stream.brightness,
-                                             self._sld_brightness,
+        self._vac_bc_outliers = VigilantAttributeConnector(
+                                             self.stream.auto_bc_outliers,
+                                             self._sld_bc_outliers,
                                              events=wx.EVT_SLIDER)
+
+        # TODO: put all this in a horizontal ruler
+        self._gbs.Add(self._btn_autobc, (self.row_count, 0),
+                      flag=wx.LEFT | wx.TOP, border=5)
+        self._gbs.Add(self._sld_bc_outliers, pos=(self.row_count, 1),
+                      flag=wx.EXPAND | wx.ALL, border=5)
+        self.row_count += 1
+
+        # ====== Second row, histogram
+        self._sld_hist = VisualRangeSlider(
+                                self._panel,
+                                size=(380, 40), # FIXME: remove fixed width
+        )
+
+        self._sld_hist.SetBackgroundColour(BACKGROUND_COLOUR)
+        rngs = self.stream.intensityRange.range
+        self._sld_hist.SetRange(rngs[0][0], rngs[1][1])
+        self._vac_hist = VigilantAttributeConnector(
+                                self.stream.intensityRange,
+                                self._sld_hist,
+                                events=wx.EVT_SLIDER)
+        self.stream.histogram.subscribe(self._onHistogram, init=True)
+
         # span is 2, because emission/excitation have 2 controls
-        self._gbs.Add(self._sld_brightness, pos=(self.row_count, 1),
+        self._gbs.Add(self._sld_hist, pos=(self.row_count, 0),
                       span=(1, 2), flag=wx.EXPAND | wx.ALL, border=5)
         self.row_count += 1
 
-        # ====== Third row, contrast label, slider and value
+        # ====== Third row, text fields for intensity (ratios)
+        # TODO
 
-        lbl_contrast = wx.StaticText(self._panel, -1, "Contrast")
-        self._gbs.Add(lbl_contrast, (self.row_count, 0),
-                      flag=wx.ALL, border=5)
 
-        self._sld_contrast = UnitIntegerSlider(
-                             self._panel,
-                             value=self.stream.contrast.value,
-                             min_val=self.stream.contrast.range[0],
-                             max_val=self.stream.contrast.range[1],
-                             t_size=(40, -1),
-                             unit=None,
-                             name="contrast_slider")
-
-        self._vac_contrast = VigilantAttributeConnector(self.stream.contrast,
-                                             self._sld_contrast,
-                                             events=wx.EVT_SLIDER)
-
-        self._gbs.Add(self._sld_contrast, pos=(self.row_count, 1),
-                      span=(1, 2), flag=wx.EXPAND | wx.ALL, border=5)
-        self.row_count += 1
+#        lbl_brightness = wx.StaticText(self._panel, -1, "Brightness")
+#        self._gbs.Add(lbl_brightness, (self.row_count, 0),
+#                      flag=wx.ALL,
+#                      border=5)
+#
+#        self._sld_brightness = UnitIntegerSlider(
+#                                    self._panel,
+#                                    value=self.stream.brightness.value,
+#                                    min_val=self.stream.brightness.range[0],
+#                                    max_val=self.stream.brightness.range[1],
+#                                    t_size=(40, -1),
+#                                    unit=None,
+#                                    name="brightness_slider")
+#
+#        self._vac_brightness = VigilantAttributeConnector(self.stream.brightness,
+#                                             self._sld_brightness,
+#                                             events=wx.EVT_SLIDER)
+#        # span is 2, because emission/excitation have 2 controls
+#        self._gbs.Add(self._sld_brightness, pos=(self.row_count, 1),
+#                      span=(1, 2), flag=wx.EXPAND | wx.ALL, border=5)
+#        self.row_count += 1
+#
+#
+#        lbl_contrast = wx.StaticText(self._panel, -1, "Contrast")
+#        self._gbs.Add(lbl_contrast, (self.row_count, 0),
+#                      flag=wx.ALL, border=5)
+#
+#        self._sld_contrast = UnitIntegerSlider(
+#                             self._panel,
+#                             value=self.stream.contrast.value,
+#                             min_val=self.stream.contrast.range[0],
+#                             max_val=self.stream.contrast.range[1],
+#                             t_size=(40, -1),
+#                             unit=None,
+#                             name="contrast_slider")
+#
+#        self._vac_contrast = VigilantAttributeConnector(self.stream.contrast,
+#                                             self._sld_contrast,
+#                                             events=wx.EVT_SLIDER)
+#
+#        self._gbs.Add(self._sld_contrast, pos=(self.row_count, 1),
+#                      span=(1, 2), flag=wx.EXPAND | wx.ALL, border=5)
+#        self.row_count += 1
 
 
         # Can only do that once all the controls are here
-        # TODO reuse VigilantAttributeConnector, or at least refactor
-        self._btn_auto_contrast.Bind(wx.EVT_BUTTON, self.on_toggle_autocontrast)
-        self._btn_auto_contrast.SetToggle(self.stream.auto_bc.value)
-        self.on_toggle_autocontrast(None)  # to ensure the controls are disabled if necessary
+        self.stream.auto_bc.subscribe(self._onAutoBC, init=True)
 
-
-    def on_toggle_autocontrast(self, evt):
-        enabled = self._btn_auto_contrast.GetToggle()
+    @call_after
+    def _onAutoBC(self, enabled):
         # disable the manual controls if it's on
-        ctrl_enabled = not enabled
-        self._sld_brightness.Enable(ctrl_enabled)
-        self._sld_contrast.Enable(ctrl_enabled)
+        self._sld_bc_outliers.Enable(enabled)
 
-        self.stream.auto_bc.value = enabled
+        # TODO: check the colour doesn't change, just read-only
+        self._sld_hist.Enable(not enabled)
+#        self._txt_lowi.Enable(not enabled)
+#        self._txt_highi.Enable(not enabled)
 
+    @call_after
+    def _onHistogram(self, hist):
+        # hist is a ndarray of ints, content is a list of values between 0 and 1
+        if len(hist):
+            norm_hist = hist / float(hist.max())
+        else:
+            norm_hist = []
+
+        self._sld_hist.SetContent(norm_hist) # Seems that ndarrays work too :-)
 
     # ====== For the dyes
     def _has_dye(self, stream):
@@ -1085,7 +1137,7 @@ class StreamPanel(wx.PyPanel):
 
         self._sld_range.SetBackgroundColour(BACKGROUND_COLOUR)
         self._sld_range.SetRange(self.stream.centerWavelength.range)
-        self._sld_range.set_center_value(self.stream.centerWavelength.value)
+#        self._sld_range.set_center_value(self.stream.centerWavelength.value)
 
         self._vac_center = VigilantAttributeConnector(
                                 self.stream.centerWavelength,
@@ -1094,7 +1146,7 @@ class StreamPanel(wx.PyPanel):
                                 ctrl_2_va=self._sld_range.get_center_value,
                                 events=wx.EVT_SLIDER)
 
-        self._sld_range.set_bandwidth_value(self.stream.bandwidth.value)
+#        self._sld_range.set_bandwidth_value(self.stream.bandwidth.value)
 
         self._vac_bandwidth = VigilantAttributeConnector(
                                 self.stream.bandwidth,
