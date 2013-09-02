@@ -220,7 +220,8 @@ class StreamController(object):
         else:
             v = self._microscope_model.focussedView.value
             if isinstance(stream, v.stream_classes):
-                logging.warning("Adding stream incompatible with the current view")
+                warn ="Adding stream incompatible with the current view"
+                logging.warning(warn)
             v.addStream(stream)
 
         # TODO create a StreamScheduler
@@ -370,7 +371,8 @@ class StreamController(object):
         elif state == STATE_ON:
             if not self._opticalWasTurnedOn:
                 self._opticalWasTurnedOn = True
-                self.addBrightfield(add_to_all_views=True)
+                sp = self.addBrightfield(add_to_all_views=True)
+                sp.show_remove_btn(False)
 
             self.resumeStreams(self._streams_to_restart_opt)
 
@@ -381,7 +383,8 @@ class StreamController(object):
             if not self._semWasTurnedOn:
                 self._semWasTurnedOn = True
                 if self._microscope_model.sed:
-                    self.addSEMSED(add_to_all_views=True)
+                    sp = self.addSEMSED(add_to_all_views=True)
+                    sp.show_remove_btn(False)
 
             self.resumeStreams(self._streams_to_restart_em)
 
@@ -389,8 +392,10 @@ class StreamController(object):
     def pauseStreams(self, classes=instrmodel.Stream):
         """
         Pause (deactivate and stop updating) all the streams of the given class
-        classes (class or list of class): classes of streams that should be disabled
-        returns (set of Stream): streams which were actually paused
+        classes (class or list of class): classes of streams that should be
+        disabled.
+
+        Returns (set of Stream): streams which were actually paused
         """
         streams = set() # stream paused
         for s in self._microscope_model.streams:
