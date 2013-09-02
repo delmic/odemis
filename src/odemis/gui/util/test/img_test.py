@@ -7,9 +7,12 @@ from odemis.gui.util import img
 from odemis.gui.util.img import DataArray2wxImage, wxImage2NDImage, \
     FindOptimalBC, DataArray2RGB
 from unittest.case import skip
+import logging
 import numpy
+import time
 import unittest
 import wx
+logging.getLogger().setLevel(logging.DEBUG)
 
 def GetRGB(im, x, y):
     """
@@ -162,6 +165,65 @@ class TestFindOptimalRange(unittest.TestCase):
         # 0.1 % -> include everything
         irange = img.findOptimalRange(hist, (0, 255), 0.001)
         self.assertEqual(irange, (2, 199))
+
+    def test_speed(self):
+        # Check the shortcut when outliers = 0 is indeed faster
+        hist = numpy.zeros(4096, dtype="int32")
+        hist[125] = 99
+        hist[135] = 99
+
+        tstart = time.time()
+        for i in range(10000):
+            irange = img.findOptimalRange(hist, (0, 4095))
+        dur_sc = time.time() - tstart
+        self.assertEqual(irange, (125, 135))
+        
+        # outliers is some small, it's same behaviour as with 0
+        tstart = time.time()
+        for i in range(10000):
+            irange = img.findOptimalRange(hist, (0, 4095), 1e-6)
+        dur_full = time.time() - tstart
+        self.assertEqual(irange, (125, 135))
+
+        logging.info("shortcut took %g s, while full took %g s", dur_sc, dur_full)
+        self.assertLessEqual(dur_sc, dur_full)
+        
+
+    def test_auto_vs_manual(self):
+        """
+        Checks that conversion with auto BC is the same as optimal BC + manual
+        conversion.
+        """
+        size = (1024, 512)
+        depth = 2 ** 12
+        img12 = numpy.zeros(size, dtype="uint16") + depth // 2
+        img12[0, 0] = depth - 1 - 240
+
+        # automatic
+        img_auto = DataArray2RGB(img12)
+
+        # manual
+        hist, edges = img.histogram(img12, (0, depth - 1))
+        self.assertEqual(edges, (0, depth - 1))
+        irange = img.findOptimalRange(hist, edges)
+        img_manu = DataArray2RGB(img12, irange)
+
+        numpy.testing.assert_equal(img_auto, img_manu)
+
+        # second try
+        img12 = numpy.zeros(size, dtype="uint16") + 4000
+        img12[0, 0] = depth - 1 - 40
+        img12[12, 12] = 50
+
+        # automatic
+        img_auto = DataArray2RGB(img12)
+
+        # manual
+        hist, edges = img.histogram(img12, (0, depth - 1))
+        irange = img.findOptimalRange(hist, edges)
+        img_manu = DataArray2RGB(img12, irange)
+
+        numpy.testing.assert_equal(img_auto, img_manu)
 
 class TestHistogram(unittest.TestCase):
     # 8 and 16 bit short-cuts test

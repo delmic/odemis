@@ -40,18 +40,8 @@ def findOptimalRange(hist, edges, outliers=0):
     """
     if outliers == 0:
         # short-cut if no outliers: find first and last non null value
-        lowi = 0
-        for v in hist:
-            if v:
-                break
-            lowi += 1
-
-        highi = hist.size - 1
-        for v in hist[::-1]:
-            if v:
-                break
-            highi -= 1
-        idxrng = (lowi, highi)
+        inz = numpy.flatnonzero(hist)
+        idxrng = inz[0], inz[-1]
     else:
         # accumulate each bin into the next bin
         cum_hist = hist.cumsum()
@@ -69,7 +59,7 @@ def findOptimalRange(hist, edges, outliers=0):
         # same with highv (note: it's always found, so highi is always within hist)
         highi = numpy.searchsorted(cum_hist, highv, side="left")
 
-        idxrng = (lowi, highi)
+        idxrng = lowi, highi
     
     # convert index into intensity values
     a = edges[0]
@@ -99,14 +89,15 @@ def compactHistogram(hist, length):
     chist = hist.reshape(length, hist.size // length)
     return numpy.sum(chist, 1)
 
-# TODO: compute histogram. There are 3 ways in numpy:
-# * x=numpy.bincount(a.flat, minlength=depth);x.min();x.max() => fast (~0.03s for
+# TODO: compute histogram faster. There are several ways:
+# * x=numpy.bincount(a.flat, minlength=depth) => fast (~0.03s for
 #   a 2048x2048 array) but only works on flat array with uint8 and uint16 and
 #   creates 2**16 bins if uint16 (so need to do a reshape and sum on top of it)
 # * numpy.histogram(a, bins=256, range=(0,depth)) => slow (~0.09s for a
 #   2048x2048 array) but works exactly as needed directly in every case.
-# * see weave? (~ 0.01s for 2048x2048 array) eg:
+# * see weave? (~ 0.01s for 2048x2048 array of uint16) eg:
 #  timeit.timeit("counts=numpy.zeros((2**16), dtype=numpy.uint32); weave.inline( code, ['counts', 'idxa'])", "import numpy;from scipy import weave; code=r\"for (int i=0; i<Nidxa[0]; i++) { COUNTS1( IDXA1(i)>>8)++; }\"; idxa=numpy.ones((2048*2048), dtype=numpy.uint16)+15", number=100)
+# * see cython?
 # for comparison, a.min() + a.max() are 0.01s for 2048x2048 array
 
 def histogram(data, irange=None):
