@@ -56,7 +56,7 @@ def limit_invocation(delay_s):
     The first call will always immediately be executed. The last call will be
     delayed 'delay_s' seconds at the most. In between the first and last calls,
     the method will be executed at 'delay_s' intervals. In other words, it's
-    a rate limitor.
+    a rate limiter.
 
     :param delay_s: (float) The minimum interval between executions in seconds.
 
@@ -64,14 +64,15 @@ def limit_invocation(delay_s):
     might need to decorate it by @call_after to ensure it is called in the GUI
     thread.
     """
+    if delay_s > 5:
+        logging.warn("Warning! Long delay interval. Please consider using "
+                     "an interval of 5 or less seconds")
+
     def limit(f, self, *args, **kwargs):
         if inspect.isclass(self):
             raise ValueError("limit_invocation decorators should only be "
                              "assigned to instance methods!")
 
-        if delay_s > 5:
-            logging.warn("Warning! Long delay interval. Please consider using "
-                         "and interval of 5 or less seconds")
         now = time.time()
 
         # The next statement was not useful in the sense that we cannot
