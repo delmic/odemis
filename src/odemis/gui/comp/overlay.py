@@ -908,7 +908,7 @@ class MarkingLineOverlay(ViewOverlay):
         ctx = wx.lib.wxcairo.ContextFromDC(dc_buffer)
 
         if self.vposy:
-            r, g, b, a = change_brightness(self.color, -0.1)
+            r, g, b, a = change_brightness(self.color, -0.2)
             a = 0.5
             ctx.set_source_rgba(r, g, b, a)
             ctx.arc(self.vposx, self.vposy, 5.5, 0, 2*math.pi)

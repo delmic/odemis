@@ -22,23 +22,18 @@
 """
 
 from __future__ import division
-
+from ..util.conversion import wxcol_to_rgb, change_brightness, hex_to_rgba
+from .text import UnitFloatCtrl, UnitIntegerCtrl
+from abc import ABCMeta, abstractmethod
+from odemis.gui.img.data import getsliderBitmap, getslider_disBitmap
+from odemis.gui.util import limit_invocation
 import collections
 import logging
 import math
+import odemis.gui as gui
 import time
-
 import wx
 import wx.lib.wxcairo as wxcairo
-from wx.lib.agw.aui.aui_utilities import StepColour
-
-import odemis.gui as gui
-from abc import ABCMeta, abstractmethod
-from .text import UnitFloatCtrl, UnitIntegerCtrl
-from odemis.gui.img.data import getsliderBitmap, getslider_disBitmap
-from odemis.gui.util import limit_invocation
-from ..util.conversion import wxcol_to_rgb, change_brightness
-
 
 
 class BaseSlider(wx.PyControl):
@@ -285,8 +280,7 @@ class Slider(BaseSlider):
         fgc = self.Parent.GetForegroundColour()
 
         if not self.Enabled:
-            fgc = StepColour(fgc, 50)
-
+            fgc = change_brightness(fgc, -0.5)
 
         dc.SetPen(wx.Pen(fgc, 1))
 
@@ -743,38 +737,29 @@ class VisualRangeSlider(BaseSlider):
         return self.value
 
     def SetRange(self, min_value, max_value=None):
-        if isinstance(min_value, collections.Iterable) and len(min_value) == 2:
-            min_value, max_value = min_value
-
+        # Make it compatible with passing a tuple as argument
+        if max_value is None:
+            if isinstance(min_value, collections.Iterable) and len(min_value) == 2:
+                min_value, max_value = min_value
+            else:
+                raise ValueError("Needs min and max values")
         logging.debug("Setting range to %s, %s", min_value, max_value)
-        self.SetMin(min_value)
-        self.SetMax(max_value)
+        
+        if min_value >= max_value:
+            raise ValueError("Minimum %s is bigger than maximum %s.",
+                             min_value, max_value)
+        
+        self.min_value = min_value
+        self.max_value = max_value
+        if self.value and self.value[0] >= min_value and self.value[1] <= max_value:
+            self._update_pixel_value()
+            self.Refresh()
 
     def SetMin(self, min_value):
-        if min_value <= self.max_value:
-            if self.value and min(self.value) > min_value:
-                self.min_value = min_value
-                self._update_pixel_value()
-                self.Refresh()
-            else:
-                logging.warning("Minimum %s is larger than current value %s!",
-                                min_value, self.value)
-        else:
-            logging.warning("Minimum %s is larger than maximum %s!",
-                            min_value, self.max_value)
+        self.SetRange(min_value, self.max_value)
 
     def SetMax(self, max_value):
-        if max_value >= self.min_value:
-            if self.value and max(self.value) < max_value:
-                self.max_value = max_value
-                self._update_pixel_value()
-                self.Refresh()
-            else:
-                logging.warning("Maximum %s is bigger than current value %s!",
-                                max_value, self.value)
-        else:
-            logging.warning("Maximum %s is smaller than minimum %s!",
-                            max_value, self.min_value)
+        self.SetRange(self.min_value, max_value)
 
     def _update_pixel_value(self):
         """ Recompute .pixel_value according to .value """
@@ -791,16 +776,17 @@ class VisualRangeSlider(BaseSlider):
         return (self.min_value, self.max_value)
 
     def Enable(self, enable=True):  #pylint: disable=W0221
-        dim = 0.1
 
         if enable != self.Enabled:
             wx.PyControl.Enable(self, enable)
-            if enable:
-                self.content_color = wxcol_to_rgb(self.GetForegroundColour())
-                self.select_color = change_brightness(self.select_color, dim)
-            else:
-                self.content_color = change_brightness(self.content_color, -dim)
-                self.select_color = change_brightness(self.select_color, -dim)
+            # Uncomment if you need different colour when disabled
+#            dim = 0.2
+#            if enable:
+#                self.content_color = wxcol_to_rgb(self.GetForegroundColour())
+#                self.select_color = change_brightness(self.select_color, dim)
+#            else:
+#                self.content_color = change_brightness(self.content_color, -dim)
+#                self.select_color = change_brightness(self.select_color, -dim)
 
             self.Refresh()
 
@@ -955,6 +941,11 @@ class VisualRangeSlider(BaseSlider):
         left, right = self.pixel_value
         ctx.rectangle(left, 0.0, right - left, height)
         ctx.fill()
+        if self.Enabled:
+            # draw the "edit" bars on each side
+            ctx.set_source_rgba(*hex_to_rgba(gui.FOREGROUND_COLOUR_EDIT, 0.8))
+            self._draw_line(ctx, left, height, left, 0)
+            self._draw_line(ctx, right, height, right, 0)
 
     def OnPaint(self, event=None):
         self.UpdateSelection()

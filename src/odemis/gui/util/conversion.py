@@ -80,12 +80,23 @@ def hex_to_rgba(hex_str, af=1.0):
 def wxcol_to_rgb(wxcol):
     return (wxcol.Red() / 255, wxcol.Green() / 255, wxcol.Blue() / 255)
 
-def change_brightness(col_tup, step):
-    col_list = []
-    f, lim = (min, 1.0) if step > 0 else (max, 0.0)
+def change_brightness(colf, weight):
+    """
+    Brighten (or darken) a given colour
+    See also wx.lib.agw.aui.aui_utilities.StepColour()
+    colf (tuple of 3+ 0<float<1): RGB colour (and alpha)
+    weight (-1<float<1): how much to brighten (>0) or darken (<0) 
+    return (tuple of 3+ 0<float<1): new RGB colour
+    """
+    if weight > 0:
+        # blend towards white
+        f, lim = min, 1.0
+    else:
+        # blend towards black
+        f, lim = max, 0.0
+        weight = -weight
 
-    for c in col_tup[:3]:
-        col_list.append(f(c + step, lim))
+    new_col = tuple(f(c * (1 - weight) + lim * weight, lim) for c in colf[:3])
 
-    return tuple(col_list + list(col_tup[3:]))
+    return new_col + colf[3:]
 

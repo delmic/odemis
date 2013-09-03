@@ -20,10 +20,9 @@
     Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
-import wx
-from wx.lib.agw.aui.aui_utilities import StepColour
-
 from odemis.gui.img.data import getarr_rightBitmap, getarr_downBitmap
+from odemis.gui.util.conversion import change_brightness, wxcol_to_rgb
+import wx
 
 
 CAPTION_BAR_SIZE = (-1, 40)
@@ -382,29 +381,23 @@ class CaptionBar(wx.Window):
 
         # calculate gradient coefficients
 
+        bck_col = wxcol_to_rgb(self.parent.GetBackgroundColour())
         if self._mouse_is_over:
-            col1 = StepColour(self.parent.GetBackgroundColour(), 115)
-            col2 = StepColour(self.parent.GetBackgroundColour(), 110)
+            col1 = change_brightness(bck_col, 0.15)
+            col2 = change_brightness(bck_col, 0.10)
         else:
-            col1 = StepColour(self.parent.GetBackgroundColour(), 110)
-            col2 = StepColour(self.parent.GetBackgroundColour(), 100)
+            col1 = change_brightness(bck_col, 0.10)
+            col2 = bck_col
 
+        r1, g1, b1 = col1
+        r2, g2, b2 = col2
+        rstep = (r2 - r1) / rect.height
+        gstep = (g2 - g1) / rect.height
+        bstep = (b2 - b1) / rect.height
 
-
-        r1, g1, b1 = int(col1.Red()), int(col1.Green()), int(col1.Blue())
-        r2, g2, b2 = int(col2.Red()), int(col2.Green()), int(col2.Blue())
-
-        flrect = float(rect.height)
-
-        rstep = float((r2 - r1)) / flrect
-        gstep = float((g2 - g1)) / flrect
-        bstep = float((b2 - b1)) / flrect
-
-        rf, gf, bf = 0, 0, 0
-
+        rf, gf, bf = col1
         for y in range(rect.y, rect.y + rect.height):
-            currCol = (r1 + rf, g1 + gf, b1 + bf)
-
+            currCol = (rf * 255, gf * 255, bf * 255)
             dc.SetBrush(wx.Brush(currCol, wx.SOLID))
             dc.DrawRectangle(rect.x,
                              rect.y + (y - rect.y),

@@ -1147,7 +1147,7 @@ class PlotCanvas(wx.Panel):
 
         self.line_width = 1.5 #px
         self.line_colour = wxcol_to_rgb(self.ForegroundColour)
-        self.fill_colour = change_brightness(self.line_colour, -0.2)
+        self.fill_colour = change_brightness(self.line_colour, -0.3)
 
         # Determines if the graph should be closed, and if so, how.
         self.closed = PLOT_CLOSE_NOT
