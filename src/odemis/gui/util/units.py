@@ -132,8 +132,9 @@ def readable_str(value, unit=None, sig=None):
 
     return (string)
     """
+    # TODO: convert % to ‰ when small value?
     # check against our black list of units which don't support SI prefix
-    if unit in (None, "", "px", "C", "rad"):
+    if unit in (None, "", "px", "C", u"°C", "rad", "%"):
         # don't put SI scaling prefix
         if unit in (None, ""):
             sunit = u""
