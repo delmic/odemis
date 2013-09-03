@@ -515,6 +515,7 @@
                               <object class="wxStaticText">
                                 <label>Presets</label>
                                 <fg>#FFFFFF</fg>
+                                <hidden>1</hidden>
                               </object>
                               <flag>wxTOP|wxBOTTOM|wxEXPAND</flag>
                               <border>6</border>
@@ -524,6 +525,7 @@
                                 <size>-1,16</size>
                                 <fg>#2FA7D4</fg>
                                 <bg>#424242</bg>
+                                <hidden>1</hidden>
                                 <style>wxBORDER_NONE|wxCB_DROPDOWN|wxCB_READONLY|wxTE_PROCESS_ENTER</style>
                                 <XRCED>
                                   <assign_var>1</assign_var>
@@ -584,6 +586,38 @@
                     <minsize>400,400</minsize>
                   </object>
                   <orient>wxVERTICAL</orient>
+                  <object class="sizeritem">
+                    <object class="wxPanel" name="secom_align_menu" subclass="odemis.gui.cont.tools.ToolBar">
+                      <object class="wxBoxSizer">
+                        <object class="sizeritem">
+                          <object class="wxStaticBitmap">
+                            <bitmap>img/side_menu_left.png</bitmap>
+                          </object>
+                          <flag>wxLEFT</flag>
+                          <border>60</border>
+                        </object>
+                        <object class="sizeritem">
+                          <object class="wxPanel">
+                            <object class="wxBoxSizer">
+                              <orient>wxHORIZONTAL</orient>
+                            </object>
+                            <bg>#000000</bg>
+                          </object>
+                          <minsize>-1,36</minsize>
+                        </object>
+                        <object class="sizeritem">
+                          <object class="wxStaticBitmap">
+                            <bitmap>img/side_menu_right.png</bitmap>
+                          </object>
+                        </object>
+                        <orient>wxHORIZONTAL</orient>
+                      </object>
+                      <bg>#333333</bg>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                  </object>
                   <object class="sizeritem">
                     <object class="SecomViewport" name="vp_align_sem">
                       <XRCED>

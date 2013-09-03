@@ -12,15 +12,15 @@ Copyright © 2013 Rinze de Laat, Éric Piel, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms 
-of the GNU General Public License version 2 as published by the Free Software 
+Odemis is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
 Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR 
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
 PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with 
+You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 
 Purpose:
@@ -49,7 +49,7 @@ class Tool(object):
     def __init__(self, icon, tooltip=None):
         """
         icon (string): name of the bitmap without .png, _h.png, _a.png
-         (iow, as found in gui.img.data)  
+         (iow, as found in gui.img.data)
         tooltip (string): tool tip content
         """
         self.icon = icon
@@ -122,7 +122,7 @@ class ToolBar(wx.Panel):
     def AddTool(self, *args):
         """
         tool_id (TOOL_*): button to be displayed
-        handler (VA or callable): if mode: VA, if action: callable 
+        handler (VA or callable): if mode: VA, if action: callable
         value (object): value for the VA
         raises:
             KeyError: if tool_id is incorrect
@@ -137,7 +137,7 @@ class ToolBar(wx.Panel):
     def _add_tool(self, tool_id, handler):
         """
         tool_id (TOOL_*): button to be displayed
-        handler (VA or callable): if mode: VA, if action: callable 
+        handler (VA or callable): if mode: VA, if action: callable
         value (object): value for the VA
         raises:
             KeyError: if tool_id is incorrect
@@ -183,9 +183,16 @@ class ToolBar(wx.Panel):
         if tooltip:
             btn.SetToolTipString(tooltip)
 
+        if self._panel.Parent.GetSizer().GetOrientation() == wx.HORIZONTAL:
+            f = wx.LEFT | wx.RIGHT | wx.TOP
+            b = 5
+        else:
+            f = wx.BOTTOM | wx.LEFT
+            b = 10
+
         sizer = self._panel.GetSizer()
 
-        sizer.Add(btn, border=10, flag=wx.BOTTOM | wx.LEFT)
+        sizer.Add(btn, border=b, flag=f)
         self._panel.Layout()
         return btn
 

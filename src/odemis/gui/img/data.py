@@ -2319,6 +2319,32 @@ getside_menu_bottomImage = side_menu_bottom.GetImage
 getside_menu_bottomBitmap = side_menu_bottom.GetBitmap
 
 #----------------------------------------------------------------------
+side_menu_left = PyEmbeddedImage(
+    "iVBORw0KGgoAAAANSUhEUgAAABQAAAAoCAYAAAD+MdrbAAAAs0lEQVRIx63WsQkCYRAF4TkV"
+    "zIwMrwEjIxu5BizCKqzAzBquAEsQjM1FsIpnAx7+q7Ow6ZcMCwv1WQIH4A7kw5ZmBTwnoJ/A"
+    "6xesBG4bsBJ4McFFI9YMrm1wZ4N7Gzzb4MMEuwKW1nNTwY0NDjZ4tMGbCVYLxy4cu3DswrEL"
+    "xy4cu3DswrELxy4cu3DswrELxy4cu3DswrELxy6cqZc3JjiY4Bx4WWAHnP7EAjADemAUsLwB"
+    "S7Xqk3kaLbgAAAAASUVORK5CYII=")
+index.append('side_menu_left')
+catalog['side_menu_left'] = side_menu_left
+getside_menu_leftData = side_menu_left.GetData
+getside_menu_leftImage = side_menu_left.GetImage
+getside_menu_leftBitmap = side_menu_left.GetBitmap
+
+#----------------------------------------------------------------------
+side_menu_right = PyEmbeddedImage(
+    "iVBORw0KGgoAAAANSUhEUgAAABQAAAAoCAYAAAD+MdrbAAAApUlEQVRIx63SvQ0BABgG4fOT"
+    "6FRKC6hUFrGAIUxhAp0ZDGAEiVovElOcXkSE+5K3fZr7AHyzK7AFJvxwftgdmJagwLkGBZY1"
+    "eKpBgXENzmpwVYObGjzU4K0GBQY1OK3BRQ2ua3BXg5ca/Kq0dWnr0talrUtbl7YubV3aurR1"
+    "aevS1qWtS1uXti5tXdq6tHVp/9ikBtc1+ABGJSiwf31ygx2BOTB8AqxC6pPoPivOAAAAAElF"
+    "TkSuQmCC")
+index.append('side_menu_right')
+catalog['side_menu_right'] = side_menu_right
+getside_menu_rightData = side_menu_right.GetData
+getside_menu_rightImage = side_menu_right.GetImage
+getside_menu_rightBitmap = side_menu_right.GetBitmap
+
+#----------------------------------------------------------------------
 side_menu_top = PyEmbeddedImage(
     "iVBORw0KGgoAAAANSUhEUgAAACgAAAAUCAYAAAD/Rn+7AAAAkklEQVRIx+3OsQnCUBRA0RMV"
     "0qWyzAJWVi7iAg7hFE5g5wwZwBEEa3sRnOLbBLESA/n+V+TC7Q+xmwX3aSPjKnRRcXMckaLB"

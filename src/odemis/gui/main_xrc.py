@@ -63,6 +63,7 @@ class xrcfr_main(wx.Frame):
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
         self.fp_lens_sem_settings = xrc.XRCCTRL(self, "fp_lens_sem_settings")
         self.fp_lens_opt_settings = xrc.XRCCTRL(self, "fp_lens_opt_settings")
+        self.secom_align_menu = xrc.XRCCTRL(self, "secom_align_menu")
         self.vp_align_sem = xrc.XRCCTRL(self, "vp_align_sem")
         self.pnl_tab_secom_streams = xrc.XRCCTRL(self, "pnl_tab_secom_streams")
         self.secom_tool_menu = xrc.XRCCTRL(self, "secom_tool_menu")
@@ -712,6 +713,7 @@ def __init_resources():
                               <object class="wxStaticText">
                                 <label>Presets</label>
                                 <fg>#FFFFFF</fg>
+                                <hidden>1</hidden>
                               </object>
                               <flag>wxTOP|wxBOTTOM|wxEXPAND</flag>
                               <border>6</border>
@@ -721,6 +723,7 @@ def __init_resources():
                                 <size>-1,16</size>
                                 <fg>#2FA7D4</fg>
                                 <bg>#424242</bg>
+                                <hidden>1</hidden>
                                 <style>wxBORDER_NONE|wxCB_DROPDOWN|wxCB_READONLY|wxTE_PROCESS_ENTER</style>
                                 <XRCED>
                                   <assign_var>1</assign_var>
@@ -781,6 +784,38 @@ def __init_resources():
                     <minsize>400,400</minsize>
                   </object>
                   <orient>wxVERTICAL</orient>
+                  <object class="sizeritem">
+                    <object class="wxPanel" name="secom_align_menu" subclass="odemis.gui.cont.tools.ToolBar">
+                      <object class="wxBoxSizer">
+                        <object class="sizeritem">
+                          <object class="wxStaticBitmap">
+                            <bitmap>img_side_menu_left_png</bitmap>
+                          </object>
+                          <flag>wxLEFT</flag>
+                          <border>60</border>
+                        </object>
+                        <object class="sizeritem">
+                          <object class="wxPanel">
+                            <object class="wxBoxSizer">
+                              <orient>wxHORIZONTAL</orient>
+                            </object>
+                            <bg>#000000</bg>
+                          </object>
+                          <minsize>-1,36</minsize>
+                        </object>
+                        <object class="sizeritem">
+                          <object class="wxStaticBitmap">
+                            <bitmap>img_side_menu_right_png</bitmap>
+                          </object>
+                        </object>
+                        <orient>wxHORIZONTAL</orient>
+                      </object>
+                      <bg>#333333</bg>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                  </object>
                   <object class="sizeritem">
                     <object class="SecomViewport" name="vp_align_sem">
                       <XRCED>
@@ -3401,6 +3436,45 @@ X\x8b\xcc\xe1\x9b5\xf3\x02l\xa7\xf0U\x81\x17T\xbe\xf0\x91\xb9\xf0\xdd\xd2\
 \x9f\xceY\xbfOC\xd6\x89$I~\x95R\xfe\x81\xe7\x17\x0e\xc9\xb3\xb5\x0bb\x8c\
 \xac\xf9\x0f\x93\xdft\x9c\xbb%Z\xf2\x00\x00\x00\x00IEND\xaeB`\x82'''
 
+    img_side_menu_left_png = '''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00\x0e\x00\x00\x00$\x08\x06\x00\x00\x00\xb9\
+\x0b\x81\x00\x00\x00\x06bKGD\x00\xff\x00\xff\x00\xff\xa0\xbd\xa7\x93\x00\
+\x00\x00\x09pHYs\x00\x00\x0b\x13\x00\x00\x0b\x13\x01\x00\x9a\x9c\x18\x00\
+\x00\x00\x07tIME\x07\xdd\x09\x03\x0e
+!\xc1\xc9\xbd\x10\x00\x00\x00\xd4IDATH\xc7\x9d\xd41
+\xc20\x18\xc5\xf1
+\xe2\xa0t\x10\x9c\x14\x14D\xa7"8\x08n\x0e\xbax\x0dG/\xe1}<\x87x\x0d7\x1d\
+\xdc;\x88Z\x97\x0e\x12L\xfa\xe5\xbd\xb1\xf0k\x93\x97/u\xa4\x27\x07\x0e\xa9\
+h
+\x94@\x95\x82\xda\xc0\xadFIp\xff\x83\xcc\xd0y_3\xc3\xae\x87\xaa\xcc\x08\
+G\xfe\x03+,T\xb8A\xcc\xdd\xdf\xa33\xa0\x0cx+K\xed\x85\xde\xd6\x94\x89
+\x97*\xdc\xa9\x8d\x96~\xa3\x96\x91\xeb\x04P\xe3\xc8\x0dcg\x14\xcb\\\x85\
+k\xb5\x98kh\x8f\xb1\x91k\x01Oe\xa9\xfd\xa6\x01\x0ee\xa6\xc2\x95Z\xcc9TL\
+\xac\x1cW\xdfA\x97\xba\xd4<\x86bpl\xf9-\xfc\xcbB\x85[\xb5\xd1G\xac\xd1\xd0\
+},\x0c\xe8/\xbc(\xf0\x08|\xac0\x03\x06\xc0\x09x\x19Q\xf5\x05.qh,D\xe2\xfa\
+\xb6\x00\x00\x00\x00IEND\xaeB`\x82'''
+
+    img_side_menu_right_png = '''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00\x0e\x00\x00\x00$\x08\x06\x00\x00\x00\xb9\
+\x0b\x81\x00\x00\x00\x06bKGD\x00\xff\x00\xff\x00\xff\xa0\xbd\xa7\x93\x00\
+\x00\x00\x09pHYs\x00\x00\x0b\x13\x00\x00\x0b\x13\x01\x00\x9a\x9c\x18\x00\
+\x00\x00\x07tIME\x07\xdd\x09\x03\x0e
+\x0c\x84\x16\xe1e\x00\x00\x00\xc2IDATH\xc7\x9d\xd41JCQ\x10\x05\xd0\x93\
+\x1fB
+\xc3/\x04+\x03\x11\x82V!`!\xd8Yh\xe36\xb2\x8at\xee\xc7u\x84l\xc3.)\xec\
+\xad\xe4O\x1a\x05\x91\x04~\xee\x94\x8fw\x1es\x07\xe6\xc1\x1a\xad\xa0
+_\xb8M`a\x87q\x02\x0b\xab\x14\xee0H`a\xd2\x075G\xcef)\\\xa4\xf09\xcd\xb8\
+\xef\x83\x06?\x97\xff\xd7\x10\xdd\xb9\xad\xc2e\x92\x11\xe6)|H\xe1k2\xd5\
+\xdfm\x89`\xe1"i\x15\xa6)\\\xa6\xf0)\xcd\xf8\x91\xc2\xc2(i\x15\xaeRx\x97\
+\xc2\xc74\xe3\xe6\xdc}\xfc\xfb\xe8\xf0\xd8\x9d\xa6\xc7\xa2\xb7IF\xb8I\xe1\
+}
+_\x92\xa9\x16>SX\xa7>\xe9>p\x9b\xc2\x0eo\x09,|\xe3\x1d\xd7h\x0e\xefxq9\
+\xb4Gu\x95\x00\x00\x00\x00IEND\xaeB`\x82'''
+
     img_side_menu_top_png = '''\
 \x89PNG\x0d
 \x1a
@@ -4927,6 +5001,8 @@ Z\xb9A\x04\xc6\x89\x00\x00\x00\x00IEND\xaeB`\x82'''
     wx.MemoryFSHandler.AddFile('XRC/main/img_btn_opt_png', img_btn_opt_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_btn_opt_h_png', img_btn_opt_h_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_btn_opt_on_a_png', img_btn_opt_on_a_png)
+    wx.MemoryFSHandler.AddFile('XRC/main/img_side_menu_left_png', img_side_menu_left_png)
+    wx.MemoryFSHandler.AddFile('XRC/main/img_side_menu_right_png', img_side_menu_right_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_side_menu_top_png', img_side_menu_top_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_side_menu_bottom_png', img_side_menu_bottom_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_preview_block_png', img_preview_block_png)
