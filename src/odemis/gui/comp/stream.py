@@ -45,6 +45,7 @@ import odemis.gui.img.data as img
 import odemis.gui.model as model
 import odemis.gui.model.dye as dye
 import wx
+import wx.lib.newevent
 
 
 
@@ -776,8 +777,9 @@ class StreamPanel(wx.PyPanel):
                                     min_val=self.stream.auto_bc_outliers.range[0],
                                     max_val=self.stream.auto_bc_outliers.range[1],
                                     t_size=(40, -1),
-                                    unit=None, # TODO: "%" ?
+                                    unit="%",
                                     scale="cubic",
+                                    accuracy=2,
                                     name="bc_outliers_slider")
 
         self._vac_bc_outliers = VigilantAttributeConnector(
@@ -798,7 +800,7 @@ class StreamPanel(wx.PyPanel):
                                 size=(380, 40), # FIXME: remove fixed width
         )
 
-        self._sld_hist.SetBackgroundColour(BACKGROUND_COLOUR)
+        self._sld_hist.SetBackgroundColour("#000000")
         rngs = self.stream.intensityRange.range
         self._sld_hist.SetRange(rngs[0][0], rngs[1][1])
         self._vac_hist = VigilantAttributeConnector(
@@ -1135,18 +1137,14 @@ class StreamPanel(wx.PyPanel):
                                 size=(380, 40), # FIXME: remove fixed width
         )
 
-        self._sld_range.SetBackgroundColour(BACKGROUND_COLOUR)
+        self._sld_range.SetBackgroundColour("#000000")
         self._sld_range.SetRange(self.stream.centerWavelength.range)
-#        self._sld_range.set_center_value(self.stream.centerWavelength.value)
-
         self._vac_center = VigilantAttributeConnector(
                                 self.stream.centerWavelength,
                                 self._sld_range,
                                 va_2_ctrl=self._sld_range.set_center_value,
                                 ctrl_2_va=self._sld_range.get_center_value,
                                 events=wx.EVT_SLIDER)
-
-#        self._sld_range.set_bandwidth_value(self.stream.bandwidth.value)
 
         self._vac_bandwidth = VigilantAttributeConnector(
                                 self.stream.bandwidth,

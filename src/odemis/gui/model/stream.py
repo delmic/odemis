@@ -131,7 +131,7 @@ class Stream(object):
         # Note: 1/256th is a nice value because on RGB, it means in degenerated
         # cases (like flat histogram), you still loose only one value on each
         # side.
-        self.auto_bc_outliers = model.FloatContinuous(1 / 256, range=[0, 40])
+        self.auto_bc_outliers = model.FloatContinuous(100 / 256, range=[0, 40])
 
         # Used if auto_bc is False
         # min/max ratio of the whole intensity level which are mapped to
