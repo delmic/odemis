@@ -2559,9 +2559,9 @@ class Detector(model.Detector):
         self._range = best_range
 
         # The closest to the actual precision of the device
-        self._maxdata = comedi.get_maxdata(parent._device, parent._ai_subdevice,
+        maxdata = comedi.get_maxdata(parent._device, parent._ai_subdevice,
                                            channel)
-        self._shape = (self._maxdata,) # only one point
+        self._shape = (maxdata + 1,) # only one point
         self.data = SEMDataFlow(self, parent)
 
     @roattribute
