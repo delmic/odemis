@@ -1731,8 +1731,8 @@ class FakeAndorV2DLL(object):
         # will be copied when asked for an image
         self._data = numpy.empty((self.shape[1], self.shape[0]), dtype=numpy.uint16)
         end = 2 ** self.bpp
-        step = end // self.shape[0]
-        self._data[:] = numpy.arange(0, end, step, dtype=numpy.uint16)[0:self.shape[0]]
+        step = end / self.shape[0]
+        self._data[:] = numpy.arange(0, end, step)[0:self.shape[0]].astype(numpy.uint16)
 #        self._data.shape = self.shape[0] * self.shape[1]
 
     # init
