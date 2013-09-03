@@ -361,7 +361,6 @@ class SecomViewport(MicroscopeViewport):
         self._microscope_view.stream_tree.should_update.subscribe(
                                                         self.hide_pause,
                                                         init=True
-
         )
 
     def hide_pause(self, hide_pause):

@@ -88,6 +88,8 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         # meter per "world unit"
         self.mpwu = None
 
+        self.previous_size = None
+
         # for the FPS
         self.fps_overlay = overlay.TextViewOverlay(self)
         self.ViewOverlays.append(self.fps_overlay)
@@ -288,11 +290,11 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         # stage_pos will be updated once the move is completed
 
     def fitViewToContent(self, recenter=None):
-        """
-        Adapts the MPP and center to fit to the current content
+        """ Adapts the MPP and center to fit to the current content
+
         recenter (None or boolean): If True, also recenter the view. If None, it
-         will try to be clever, and only recenter if no stage is connected, as
-         otherwise, it could cause an unexpected move.
+            will try to be clever, and only recenter if no stage is connected,
+            as otherwise, it could cause an unexpected move.
         """
         if recenter is None:
             # recenter only if there is no stage attached
@@ -304,8 +306,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             self.microscope_view.mpp.value = self.mpwu / self.scale
 
     def _onMPP(self, mpp):
-        """
-        Called when the view.mpp is updated
+        """ Called when the view.mpp is updated
         """
         self.scale = self.mpwu / mpp
         wx.CallAfter(self.ShouldUpdateDrawing)
@@ -667,6 +668,14 @@ class SecomCanvas(DblMicroscopeCanvas):
         if self.current_mode not in SECOM_MODES:
             super(SecomCanvas, self).OnRightUp(event)
 
+    def OnSize(self, event):
+        # if self.previous_size:
+        # print "from %s to %s" % (self.previous_size, self.ClientSize)
+
+        DblMicroscopeCanvas.OnSize(self, event)
+
+        self.previous_size = self.ClientSize
+
     def lock_stage_drag(self, lock):
         self.stage_drag_lock = lock
 
@@ -1017,6 +1026,7 @@ class SparcAlignCanvas(DblMicroscopeCanvas):
 
     def OnSize(self, event):
         DblMicroscopeCanvas.OnSize(self, event)
+
         # TODO: refit image
         self.fitViewToContent(recenter=True)
 

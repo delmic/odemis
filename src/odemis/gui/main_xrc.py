@@ -425,7 +425,6 @@ def __init_resources():
               <object class="wxPanel">
                 <object class="wxBoxSizer">
                   <orient>wxVERTICAL</orient>
-                  
                   <object class="sizeritem">
                     <object class="wxStaticText">
                       <label>Step size</label>
@@ -450,8 +449,6 @@ def __init_resources():
                     </object>
                     <flag>wxEXPAND</flag>
                   </object>
-                  
-                  
                   <object class="sizeritem">
                     <object class="wxGridBagSizer">
                       <object class="sizeritem">
@@ -625,10 +622,6 @@ def __init_resources():
                     <flag>wxTOP|wxALIGN_CENTRE</flag>
                     <border>20</border>
                   </object>
-                
-                  
-                  
-                  
                 </object>
                 <size>300,-1</size>
                 <fg>#E5E5E5</fg>
@@ -654,6 +647,7 @@ def __init_resources():
                   <object class="sizeritem">
                     <object class="wxPanel" name="main_buttons">
                       <object class="wxBoxSizer">
+                        <orient>wxHORIZONTAL</orient>
                         <object class="sizeritem">
                           <object class="ImageTextToggleButton" name="btn_lens_toggle_sem">
                             <size>92,48</size>
@@ -1136,7 +1130,6 @@ def __init_resources():
                           <flag>wxTOP|wxBOTTOM|wxLEFT</flag>
                           <border>10</border>
                         </object>
-                        
                         <object class="spacer">
                           <option>1</option>
                         </object>

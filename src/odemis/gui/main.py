@@ -197,6 +197,14 @@ class OdemisGUIApp(wx.App):
 
             tab_defs = [
                 (
+                    ("secom",),
+                    ("LENS ALIGNMENT", ),
+                    "secom_align",
+                    tabs.LensAlignTab,
+                    self.main_frame.btn_tab_secom_align,
+                    self.main_frame.pnl_tab_secom_align
+                ),
+                (
                     ("secom", "sem", "optical"),
                     ("STREAMS", "STREAMS", "STREAMS"),
                     "secom_live",

@@ -229,7 +229,6 @@
               <object class="wxPanel">
                 <object class="wxBoxSizer">
                   <orient>wxVERTICAL</orient>
-                  
                   <object class="sizeritem">
                     <object class="wxStaticText">
                       <label>Step size</label>
@@ -254,8 +253,6 @@
                     </object>
                     <flag>wxEXPAND</flag>
                   </object>
-                  
-                  
                   <object class="sizeritem">
                     <object class="wxGridBagSizer">
                       <object class="sizeritem">
@@ -423,16 +420,12 @@
                         <border>7</border>
                         <cellpos>2,2</cellpos>
                       </object>
-                      <growablecols></growablecols>
-                      <growablerows></growablerows>
+                      <growablecols/>
+                      <growablerows/>
                     </object>
                     <flag>wxTOP|wxALIGN_CENTRE</flag>
                     <border>20</border>
                   </object>
-                
-                  
-                  
-                  
                 </object>
                 <size>300,-1</size>
                 <fg>#E5E5E5</fg>
@@ -458,6 +451,7 @@
                   <object class="sizeritem">
                     <object class="wxPanel" name="main_buttons">
                       <object class="wxBoxSizer">
+                        <orient>wxHORIZONTAL</orient>
                         <object class="sizeritem">
                           <object class="ImageTextToggleButton" name="btn_lens_toggle_sem">
                             <size>92,48</size>
@@ -940,7 +934,6 @@
                           <flag>wxTOP|wxBOTTOM|wxLEFT</flag>
                           <border>10</border>
                         </object>
-                        
                         <object class="spacer">
                           <option>1</option>
                         </object>
