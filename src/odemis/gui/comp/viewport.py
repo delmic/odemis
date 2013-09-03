@@ -147,6 +147,10 @@ class MicroscopeViewport(wx.Panel):
     ## Panel control
     ################################################
 
+    def ShowLegend(self, show):
+        """ Show or hide the merge slider """
+        self.legend_panel.Show(show)
+
     def ShowMergeSlider(self, show):
         """ Show or hide the merge slider """
         self.legend_panel.bmpSliderLeft.Show(show)

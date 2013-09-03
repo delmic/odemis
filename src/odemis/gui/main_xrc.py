@@ -61,8 +61,9 @@ class xrcfr_main(wx.Frame):
         self.btn_lens_toggle_opt = xrc.XRCCTRL(self, "btn_lens_toggle_opt")
         self.cmb_lens_align_presets = xrc.XRCCTRL(self, "cmb_lens_align_presets")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
-        self.fp_sparc_settings = xrc.XRCCTRL(self, "fp_sparc_settings")
-        self.pnl_sparc_align_streams = xrc.XRCCTRL(self, "pnl_sparc_align_streams")
+        self.fp_lens_sem_settings = xrc.XRCCTRL(self, "fp_lens_sem_settings")
+        self.fp_lens_opt_settings = xrc.XRCCTRL(self, "fp_lens_opt_settings")
+        self.vp_align_sem = xrc.XRCCTRL(self, "vp_align_sem")
         self.pnl_tab_secom_streams = xrc.XRCCTRL(self, "pnl_tab_secom_streams")
         self.secom_tool_menu = xrc.XRCCTRL(self, "secom_tool_menu")
         self.lbl_secom_view_all = xrc.XRCCTRL(self, "lbl_secom_view_all")
@@ -701,6 +702,10 @@ def __init_resources():
                           <border>10</border>
                         </object>
                         <orient>wxHORIZONTAL</orient>
+                        <object class="spacer">
+                          <option>1</option>
+                          <flag>wxEXPAND</flag>
+                        </object>
                         <object class="sizeritem">
                           <object class="wxBoxSizer">
                             <object class="sizeritem">
@@ -708,8 +713,8 @@ def __init_resources():
                                 <label>Presets</label>
                                 <fg>#FFFFFF</fg>
                               </object>
-                              <flag>wxBOTTOM|wxEXPAND</flag>
-                              <border>8</border>
+                              <flag>wxTOP|wxBOTTOM|wxEXPAND</flag>
+                              <border>6</border>
                             </object>
                             <object class="sizeritem">
                               <object class="OwnerDrawnComboBox" name="cmb_lens_align_presets">
@@ -725,11 +730,11 @@ def __init_resources():
                             </object>
                             <orient>wxVERTICAL</orient>
                           </object>
-                          <flag>wxTOP|wxLEFT|wxEXPAND</flag>
-                          <border>14</border>
+                          <flag>wxTOP|wxRIGHT|wxEXPAND</flag>
+                          <border>10</border>
                         </object>
                       </object>
-                      <size>400,-1</size>
+                      <size>512,-1</size>
                       <bg>#4D4D4D</bg>
                     </object>
                     <flag>wxEXPAND</flag>
@@ -740,8 +745,16 @@ def __init_resources():
                         <orient>wxVERTICAL</orient>
                         <object class="sizeritem">
                           <object class="FoldPanelBar">
-                            <object class="FoldPanelItem" name="fp_sparc_settings">
-                              <label>INSTRUMENT SETTINGS</label>
+                            <object class="FoldPanelItem" name="fp_lens_sem_settings">
+                              <label>SEM SETTINGS</label>
+                              <fg>#1A1A1A</fg>
+                              <bg>#555555</bg>
+                              <XRCED>
+                                <assign_var>1</assign_var>
+                              </XRCED>
+                            </object>
+                            <object class="FoldPanelItem" name="fp_lens_opt_settings">
+                              <label>OPTICAL SETTINGS</label>
                               <fg>#1A1A1A</fg>
                               <bg>#555555</bg>
                               <XRCED>
@@ -752,19 +765,6 @@ def __init_resources():
                             <leftspacing>0</leftspacing>
                             <rightspacing>0</rightspacing>
                             <bg>#333333</bg>
-                            <object class="FoldPanelItem">
-                              <object class="StreamBar" name="pnl_sparc_align_streams">
-                                <size>300,-1</size>
-                                <fg>#7F7F7F</fg>
-                                <bg>#333333</bg>
-                                <XRCED>
-                                  <assign_var>1</assign_var>
-                                </XRCED>
-                              </object>
-                              <nocaption>1</nocaption>
-                              <fg>#1A1A1A</fg>
-                              <bg>#555555</bg>
-                            </object>
                           </object>
                           <flag>wxEXPAND</flag>
                         </object>
@@ -781,8 +781,16 @@ def __init_resources():
                     <minsize>400,400</minsize>
                   </object>
                   <orient>wxVERTICAL</orient>
+                  <object class="sizeritem">
+                    <object class="SecomViewport" name="vp_align_sem">
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <minsize>512,512</minsize>
+                  </object>
                 </object>
-                <size>400,-1</size>
+                <size>512,-1</size>
                 <bg>#333333</bg>
                 <style>wxBORDER_NONE</style>
               </object>
