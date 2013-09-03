@@ -25,14 +25,13 @@
 
 import cairo
 import wx
-import wx.lib.wxcairo as wxcairo
 
 import odemis.gui as gui
 from odemis.gui.comp.scalewindow import ScaleWindow
 from odemis.gui.comp.slider import Slider
 from odemis.gui.img.data import getico_blending_optBitmap, \
     getico_blending_semBitmap
-from odemis.gui.util.conversion import wxcol_to_rgb, hex_to_rgba
+from odemis.gui.util.conversion import wxcol_to_frgb, hex_to_frgba
 
 
 class InfoLegend(wx.Panel):
@@ -206,7 +205,7 @@ class AxisLegend(wx.Panel):
         self.Bind(wx.EVT_PAINT, self.OnPaint)
         self.Bind(wx.EVT_SIZE, self.OnSize)
 
-        self.tick_colour = wxcol_to_rgb(self.ForegroundColour)
+        self.tick_colour = wxcol_to_frgb(self.ForegroundColour)
 
         self.label = None
         self.label_pos = None
@@ -260,7 +259,7 @@ class AxisLegend(wx.Panel):
             x = margin_x
 
         #t = font.GetPixelSize()
-        ctx.set_source_rgba(*hex_to_rgba(gui.FOREGROUND_COLOUR_EDIT))
+        ctx.set_source_rgba(*hex_to_frgba(gui.FOREGROUND_COLOUR_EDIT))
         ctx.move_to(x, y)
         ctx.show_text(label)
 

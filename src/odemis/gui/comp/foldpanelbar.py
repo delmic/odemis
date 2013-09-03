@@ -21,7 +21,7 @@
 """
 
 from odemis.gui.img.data import getarr_rightBitmap, getarr_downBitmap
-from odemis.gui.util.conversion import change_brightness, wxcol_to_rgb
+from odemis.gui.util.conversion import change_brightness, wxcol_to_frgb
 import wx
 
 
@@ -381,7 +381,7 @@ class CaptionBar(wx.Window):
 
         # calculate gradient coefficients
 
-        bck_col = wxcol_to_rgb(self.parent.GetBackgroundColour())
+        bck_col = wxcol_to_frgb(self.parent.GetBackgroundColour())
         if self._mouse_is_over:
             col1 = change_brightness(bck_col, 0.15)
             col2 = change_brightness(bck_col, 0.10)

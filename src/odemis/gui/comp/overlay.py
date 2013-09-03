@@ -34,7 +34,7 @@ import odemis.gui.comp.canvas as canvas
 import odemis.gui.img.data as img
 import odemis.gui.util.units as units
 from odemis.gui.util.units import readable_str
-from odemis.gui.util.conversion import hex_to_rgba, change_brightness
+from odemis.gui.util.conversion import hex_to_frgba, change_brightness
 
 
 class Overlay(object):
@@ -253,7 +253,7 @@ class SelectionMixin(object):
 
         self.edges = {}
 
-        self.color = hex_to_rgba(color)
+        self.color = hex_to_frgba(color)
         self.center = center
 
         self.scale = 1.0
@@ -894,7 +894,7 @@ class MarkingLineOverlay(ViewOverlay):
                  center=(0, 0)):
 
         super(MarkingLineOverlay, self).__init__(base, label)
-        self.color = hex_to_rgba(color)
+        self.color = hex_to_frgba(color)
         self.vposx = None
         self.vposy = None
 
@@ -942,7 +942,7 @@ class StreamIconOverlay(ViewOverlay):
         self.pause = False
         self.play = 0
 
-        self.colour = hex_to_rgba(gui.FOREGROUND_COLOUR_HIGHLIGHT, opacity)
+        self.colour = hex_to_frgba(gui.FOREGROUND_COLOUR_HIGHLIGHT, opacity)
 
     def hide_pause(self, hide_pause):
         self.pause = not hide_pause
@@ -983,7 +983,7 @@ class StreamIconOverlay(ViewOverlay):
 
         ctx.set_line_width(1)
         ctx.set_source_rgba(
-            *hex_to_rgba(gui.FOREGROUND_COLOUR_HIGHLIGHT, self.play))
+            *hex_to_frgba(gui.FOREGROUND_COLOUR_HIGHLIGHT, self.play))
 
         ctx.move_to(x, y)
 

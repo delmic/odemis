@@ -67,23 +67,39 @@ def wave2rgb(wavelength):
 
 def hex_to_rgb(hex_str):
     """
+    Convert a Hexadecimal color representation into an 3-tuple of ints
+    return (tuple of 3 (0<int<255): R, G, and B
+    """
+    hex_str = hex_str[-6:]
+    return tuple(int(hex_str[i:i + 2], 16) for i in [0, 2, 4])
+
+def hex_to_rgba(hex_str, af=255):
+    """ Convert a Hexadecimal color representation into an 4-tuple of ints """
+    return hex_to_rgb(hex_str) + (af,)
+
+def wxcol_to_rgb(wxcol):
+    return (wxcol.Red(), wxcol.Green(), wxcol.Blue())
+
+# To handle RGB as floats (for Cairo, etc.)
+def hex_to_frgb(hex_str):
+    """
     Convert a Hexadecimal color representation into an 3-tuple of floats
     return (tuple of 3 (0<float<1): R, G, and B
     """
     hex_str = hex_str[-6:]
     return tuple(int(hex_str[i:i + 2], 16) / 255 for i in [0, 2, 4])
 
-def hex_to_rgba(hex_str, af=1.0):
+def hex_to_frgba(hex_str, af=1.0):
     """ Convert a Hexadecimal color representation into an 4-tuple of floats """
-    return hex_to_rgb(hex_str) + (af,)
+    return hex_to_frgb(hex_str) + (af,)
 
-def wxcol_to_rgb(wxcol):
+def wxcol_to_frgb(wxcol):
     return (wxcol.Red() / 255, wxcol.Green() / 255, wxcol.Blue() / 255)
 
 def change_brightness(colf, weight):
     """
     Brighten (or darken) a given colour
-    See also wx.lib.agw.aui.aui_utilities.StepColour()
+    See also wx.lib.agw.aui.aui_utilities.StepColour() and Colour.ChangeLightness() from 3.0 
     colf (tuple of 3+ 0<float<1): RGB colour (and alpha)
     weight (-1<float<1): how much to brighten (>0) or darken (<0) 
     return (tuple of 3+ 0<float<1): new RGB colour

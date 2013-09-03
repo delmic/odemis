@@ -22,7 +22,7 @@
 """
 
 from __future__ import division
-from ..util.conversion import wxcol_to_rgb, change_brightness, hex_to_rgba
+from ..util.conversion import wxcol_to_frgb, change_brightness, hex_to_frgba
 from .text import UnitFloatCtrl, UnitIntegerCtrl
 from abc import ABCMeta, abstractmethod
 from odemis.gui.img.data import getsliderBitmap, getslider_disBitmap
@@ -653,7 +653,7 @@ class VisualRangeSlider(BaseSlider):
         style |= wx.NO_FULL_REPAINT_ON_RESIZE
         super(VisualRangeSlider, self).__init__(parent, wid, pos, size, style)
 
-        self.content_color = wxcol_to_rgb(self.GetForegroundColour())
+        self.content_color = wxcol_to_frgb(self.GetForegroundColour())
         self.select_color = (1.0, 1.0, 1.0, self.sel_alpha)
 
         if size == (-1, -1): # wxPython follows this too much to always do it
@@ -705,7 +705,7 @@ class VisualRangeSlider(BaseSlider):
 
     def SetForegroundColour(self, col):  #pylint: disable=W0221
         ret = super(VisualRangeSlider, self).SetForegroundColour(col)
-        self.content_color = wxcol_to_rgb(self.GetForegroundColour())
+        self.content_color = wxcol_to_frgb(self.GetForegroundColour())
         # FIXME: content_color will have wrong value if currently Disabled
         # Probably has to do with the auto color calculation for disabled
         # controls
@@ -782,7 +782,7 @@ class VisualRangeSlider(BaseSlider):
             # Uncomment if you need different colour when disabled
 #            dim = 0.2
 #            if enable:
-#                self.content_color = wxcol_to_rgb(self.GetForegroundColour())
+#                self.content_color = wxcol_to_frgb(self.GetForegroundColour())
 #                self.select_color = change_brightness(self.select_color, dim)
 #            else:
 #                self.content_color = change_brightness(self.content_color, -dim)
@@ -943,7 +943,7 @@ class VisualRangeSlider(BaseSlider):
         ctx.fill()
         if self.Enabled:
             # draw the "edit" bars on each side
-            ctx.set_source_rgba(*hex_to_rgba(gui.FOREGROUND_COLOUR_EDIT, 0.8))
+            ctx.set_source_rgba(*hex_to_frgba(gui.FOREGROUND_COLOUR_EDIT, 0.8))
             self._draw_line(ctx, left, height, left, 0)
             self._draw_line(ctx, right, height, right, 0)
 

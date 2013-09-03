@@ -98,8 +98,7 @@ import cairo
 import wx
 import wx.lib.wxcairo as wxcairo
 
-from ..util import memoize
-from ..util.conversion import wxcol_to_rgb, change_brightness
+from ..util.conversion import wxcol_to_frgb, change_brightness
 # from odemis.gui.comp.overlay import ViewOverlay
 import odemis.gui.img.data as imgdata
 
@@ -1146,7 +1145,7 @@ class PlotCanvas(wx.Panel):
         ## Rendering settings
 
         self.line_width = 1.5 #px
-        self.line_colour = wxcol_to_rgb(self.ForegroundColour)
+        self.line_colour = wxcol_to_frgb(self.ForegroundColour)
         self.fill_colour = change_brightness(self.line_colour, -0.3)
 
         # Determines if the graph should be closed, and if so, how.
@@ -1260,7 +1259,7 @@ class PlotCanvas(wx.Panel):
 
     def SetForegroundColour(self, *args, **kwargs):
         super(PlotCanvas, self).SetForegroundColour(*args, **kwargs)
-        self.line_colour = wxcol_to_rgb(self.ForegroundColour)
+        self.line_colour = wxcol_to_frgb(self.ForegroundColour)
         self.fill_colour = change_brightness(self.line_colour, -0.2)
 
     def set_closed(self, closed=PLOT_CLOSE_STRAIGHT):
