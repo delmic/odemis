@@ -25,6 +25,7 @@ import logging
 
 from wx.lib.pubsub import pub
 
+import odemis.gui.model.stream as stream
 from odemis.gui import comp, instrmodel, model
 from odemis.gui.instrmodel import STATE_OFF, STATE_PAUSE, STATE_ON
 
@@ -97,12 +98,6 @@ class StreamController(object):
     def to_locked_mode(self):
         self.locked_mode = True
 
-    def optical_was_turned_on(self):
-        return self._opticalWasTurnedOn
-
-    def sem_was_turned_on(self):
-        return self._semWasTurnedOn
-
     def _createAddStreamActions(self):
         """
         Create the possible "add stream" actions according to the current
@@ -114,23 +109,44 @@ class StreamController(object):
         # First: Fluorescent stream (for dyes)
         if (self._microscope_model.light and self._microscope_model.light_filter
             and self._microscope_model.ccd):
+
+            def fluor_capable():
+                on = self._microscope_model.opticalState.value == STATE_ON
+                view = self._microscope_model.focussedView.value
+                compatible = view.is_compatible(stream.FluoStream)
+                return on and compatible
+
             # TODO: how to know it's _fluorescent_ microscope?
             #  => multiple source? filter?
             self._stream_bar.add_action("Filtered colour",
                                     self.addFluo,
-                                    self.optical_was_turned_on)
+                                    fluor_capable)
 
         # Bright-field
         if self._microscope_model.light and self._microscope_model.ccd:
+
+            def brightfield_capable():
+                on = self._microscope_model.opticalState.value == STATE_ON
+                view = self._microscope_model.focussedView.value
+                compatible = view.is_compatible(stream.BrightfieldStream)
+                return on and compatible
+
             self._stream_bar.add_action("Bright-field",
                                     self.addBrightfield,
-                                    self.optical_was_turned_on)
+                                    brightfield_capable)
 
         # SED
         if self._microscope_model.ebeam and self._microscope_model.sed:
+
+            def sem_capable():
+                on = self._microscope_model.emState.value == STATE_ON
+                view = self._microscope_model.focussedView.value
+                compatible = view.is_compatible(stream.SEMStream)
+                return on and compatible
+
             self._stream_bar.add_action("Secondary electrons",
                                     self.addSEMSED,
-                                    self.sem_was_turned_on)
+                                    sem_capable)
 
 
     def addFluo(self, add_to_all_views=False):
@@ -220,7 +236,8 @@ class StreamController(object):
         else:
             v = self._microscope_model.focussedView.value
             if isinstance(stream, v.stream_classes):
-                logging.warning("Adding stream incompatible with the current view")
+                warn ="Adding stream incompatible with the current view"
+                logging.warning(warn)
             v.addStream(stream)
 
         # TODO create a StreamScheduler
@@ -370,7 +387,8 @@ class StreamController(object):
         elif state == STATE_ON:
             if not self._opticalWasTurnedOn:
                 self._opticalWasTurnedOn = True
-                self.addBrightfield(add_to_all_views=True)
+                sp = self.addBrightfield(add_to_all_views=True)
+                sp.show_remove_btn(False)
 
             self.resumeStreams(self._streams_to_restart_opt)
 
@@ -381,7 +399,8 @@ class StreamController(object):
             if not self._semWasTurnedOn:
                 self._semWasTurnedOn = True
                 if self._microscope_model.sed:
-                    self.addSEMSED(add_to_all_views=True)
+                    sp = self.addSEMSED(add_to_all_views=True)
+                    sp.show_remove_btn(False)
 
             self.resumeStreams(self._streams_to_restart_em)
 
@@ -389,8 +408,10 @@ class StreamController(object):
     def pauseStreams(self, classes=instrmodel.Stream):
         """
         Pause (deactivate and stop updating) all the streams of the given class
-        classes (class or list of class): classes of streams that should be disabled
-        returns (set of Stream): streams which were actually paused
+        classes (class or list of class): classes of streams that should be
+        disabled.
+
+        Returns (set of Stream): streams which were actually paused
         """
         streams = set() # stream paused
         for s in self._microscope_model.streams:

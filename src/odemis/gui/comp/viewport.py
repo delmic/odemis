@@ -147,6 +147,10 @@ class MicroscopeViewport(wx.Panel):
     ## Panel control
     ################################################
 
+    def ShowLegend(self, show):
+        """ Show or hide the merge slider """
+        self.legend_panel.Show(show)
+
     def ShowMergeSlider(self, show):
         """ Show or hide the merge slider """
         self.legend_panel.bmpSliderLeft.Show(show)
@@ -361,7 +365,6 @@ class SecomViewport(MicroscopeViewport):
         self._microscope_view.stream_tree.should_update.subscribe(
                                                         self.hide_pause,
                                                         init=True
-
         )
 
     def hide_pause(self, hide_pause):

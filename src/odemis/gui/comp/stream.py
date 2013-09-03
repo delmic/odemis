@@ -414,7 +414,7 @@ class StreamPanel(wx.PyPanel):
 
         # Data models
         self.stream = stream
-        self._interface_model = microscope_model
+        self._microscope_model = microscope_model
 
         # Appearance
         self._agwStyle = agwStyle | wx.CP_NO_TLW_RESIZE  # |wx.CP_GTK_EXPANDER
@@ -498,7 +498,7 @@ class StreamPanel(wx.PyPanel):
             self._expander.Bind(wx.EVT_LEFT_DCLICK, self.on_button)
 
         # ==== Bind events
-        vis = self.stream in self._interface_model.focussedView.value.getStreams()
+        vis = self.stream in self._microscope_model.focussedView.value.getStreams()
         self.setVisible(vis)
 
     def set_expander_button(self, button):
@@ -611,7 +611,7 @@ class StreamPanel(wx.PyPanel):
     def on_visibility_btn(self, evt):
         # TODO: Move to controller. Screen widget should not need to know about
         # microscopes and focussed views.
-        view = self._interface_model.focussedView.value
+        view = self._microscope_model.focussedView.value
         if not view:
             return
         if self._expander._btn_vis.GetToggle():
@@ -1226,7 +1226,7 @@ class StreamBar(wx.Panel):
 
         wx.Panel.__init__(self, *args, **kwargs)
 
-        self._interface_model = None # MicroscopeModel
+        self._microscope_model = None # MicroscopeModel
 
         self.stream_panels = []
         self.menu_actions = collections.OrderedDict()  # title => callback

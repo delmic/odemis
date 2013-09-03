@@ -6,13 +6,13 @@ Copyright © 2012-2013 Rinze de Laat, Éric Piel, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms
-of the GNU General Public License version 2 as published by the Free Software
-Foundation.
+Odemis is free software: you can redistribute it and/or modify it under the
+terms of the GNU General Public License version 2 as published by the Free
+Software Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
-PURPOSE. See the GNU General Public License for more details.
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
@@ -24,7 +24,8 @@ import wx
 
 class MicroscopeController(object):
     """ This controller class controls the main microscope buttons and updates
-    the model. To query/change the status of a special microscope, use the model.
+    the model. To query/change the status of a special microscope, use the
+    model.
     """
     def __init__(self, microscope_model, main_frame):
         """
@@ -41,12 +42,14 @@ class MicroscopeController(object):
         # microscope should always be ON.
 
         # GUI toggle button -> VA name
-        # cannot be directly the VA, because it might not exists
+        # We cannot directly associate the buttons with a VA, because they might
+        # not exist!
         btn_to_va = {main_frame.btn_toggle_sem: "emState",
                      main_frame.btn_toggle_opt: "opticalState",
                      main_frame.btn_toggle_spectrometer: "specState",
                      main_frame.btn_toggle_angular: "arState",
                      }
+
         for btn, vaname in btn_to_va.items():
             try:
                 va = getattr(microscope_model, vaname)

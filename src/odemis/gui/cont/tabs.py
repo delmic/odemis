@@ -625,6 +625,17 @@ class InspectionTab(Tab):
         self.microscope_model.fileinfo.value = fi
 
 
+class LensAlignTab(Tab):
+    """ Tab for the lens alignment on the Secom platform
+    """
+
+    def __init__(self, name, button, panel, main_frame, microscope=None):
+        super(LensAlignTab, self).__init__(name, button, panel)
+
+        main_frame.vp_align_ccd.ShowMergeSlider(False)
+        main_frame.vp_align_sem.ShowMergeSlider(False)
+        main_frame.vp_align_sem.ShowLegend(False)
+
 
 class MirrorAlignTab(Tab):
     """
