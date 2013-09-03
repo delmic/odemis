@@ -31,7 +31,7 @@ from odemis.gui.comp.foldpanelbar import FoldPanelItem
 from odemis.gui.comp.slider import UnitIntegerSlider, BandwidthSlider, \
     UnitFloatSlider, VisualRangeSlider
 from odemis.gui.comp.text import SuggestTextCtrl, UnitIntegerCtrl, \
-    IntegerTextCtrl
+    IntegerTextCtrl, UnitFloatCtrl
 from odemis.gui.util import call_after, limit_invocation
 from odemis.gui.util.conversion import wave2rgb
 from odemis.gui.util.widgets import VigilantAttributeConnector
@@ -434,29 +434,22 @@ class StreamPanel(wx.PyPanel):
 
         # Add a simple sizer so we can create padding for the panel
         border_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        #border_sizer.AddSpacer((5, -1))
         border_sizer.Add(self._gbs,
                          border=5,
                          flag=wx.ALL | wx.EXPAND,
                          proportion=1)
-        #border_sizer.AddSpacer((5, -1))
-
         self._panel.SetSizer(border_sizer)
 
         # Counter that keeps track of the number of rows containing controls
         # inside this panel
         self.row_count = 0
-
         self._expander = None
-
         self._sz = wx.BoxSizer(wx.HORIZONTAL)
-
         self.Bind(wx.EVT_SIZE, self.OnSize)
 
         # Process our custom 'collapsed' parameter.
         if not collapsed:
             self.collapse(collapsed)
-
 
     def finalize(self):
         """ Controls should be added to the panel using this method. This
@@ -768,9 +761,8 @@ class StreamPanel(wx.PyPanel):
                                   self._btn_autobc.GetToggle,
                                   events=wx.EVT_BUTTON)
 
-        # TODO: add outliers text and slider
         # FIXME: what's the right name? ImageJ uses "Saturated Pixels"
-#        lbl_bc_outliers = wx.StaticText(self._panel, -1, "Outliers")
+        lbl_bc_outliers = wx.StaticText(self._panel, -1, "Outliers")
         self._sld_bc_outliers = UnitFloatSlider(
                                     self._panel,
                                     value=self.stream.auto_bc_outliers.value,
@@ -779,19 +771,29 @@ class StreamPanel(wx.PyPanel):
                                     t_size=(40, -1),
                                     unit="%",
                                     scale="cubic",
-                                    accuracy=2,
-                                    name="bc_outliers_slider")
+                                    accuracy=2)
 
+        self._sld_bc_outliers.SetToolTipString("Percentage of values to ignore "
+                                               "in auto brightness and contrast")
         self._vac_bc_outliers = VigilantAttributeConnector(
                                              self.stream.auto_bc_outliers,
                                              self._sld_bc_outliers,
                                              events=wx.EVT_SLIDER)
 
         # TODO: put all this in a horizontal ruler
-        self._gbs.Add(self._btn_autobc, (self.row_count, 0),
-                      flag=wx.LEFT | wx.TOP, border=5)
-        self._gbs.Add(self._sld_bc_outliers, pos=(self.row_count, 1),
-                      flag=wx.EXPAND | wx.ALL, border=5)
+        autobc_sz = wx.BoxSizer(wx.HORIZONTAL)
+        autobc_sz.Add(self._btn_autobc, 0,
+                  flag=wx.ALIGN_CENTRE_VERTICAL | wx.RIGHT,
+                  border=5)
+        autobc_sz.Add(lbl_bc_outliers, 0,
+                  flag=wx.ALIGN_CENTRE_VERTICAL | wx.LEFT,
+                  border=5)
+        autobc_sz.Add(self._sld_bc_outliers, 1,
+                  flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND,
+                  border=5)
+        self._gbs.Add(autobc_sz, (self.row_count, 0), span=(1, 3),
+                      flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.ALL,
+                      border=5)
         self.row_count += 1
 
         # ====== Second row, histogram
@@ -811,57 +813,81 @@ class StreamPanel(wx.PyPanel):
 
         # span is 2, because emission/excitation have 2 controls
         self._gbs.Add(self._sld_hist, pos=(self.row_count, 0),
-                      span=(1, 2), flag=wx.EXPAND | wx.ALL, border=5)
+                      span=(1, 3),
+                      flag=wx.EXPAND | wx.TOP | wx.RIGHT | wx.LEFT,
+                      border=5)
         self.row_count += 1
 
         # ====== Third row, text fields for intensity (ratios)
-        # TODO
+        
+        lbl_lowi = wx.StaticText(self._panel, -1, "Low")
+        self._txt_lowi = UnitFloatCtrl(self._panel, -1,
+                    self.stream.intensityRange.value[0] * 100,
+                    style=wx.NO_BORDER,
+                    size=(-1, 14),
+                    min_val=0,
+                    max_val=100,
+                    unit='%')
+        self._txt_lowi.SetBackgroundColour(BACKGROUND_COLOUR)
+        self._txt_lowi.SetForegroundColour(FOREGROUND_COLOUR_EDIT)
+        self._txt_lowi.SetToolTipString("Value mapped to black")
+        def get_lowi(va=self.stream.intensityRange, ctrl=self._txt_lowi):
+            lv = ctrl.GetValue() / 100
+            hv = va.value[1]
+            # clamp low range to max high range
+            if hv < lv:
+                lv = hv
+                ctrl.SetValue(lv * 100)
+            return lv, hv
+        self._vac_lowi = VigilantAttributeConnector(self.stream.intensityRange,
+                          self._txt_lowi,
+                          lambda r: self._txt_lowi.SetValue(r[0] * 100),
+                          get_lowi,
+                          events=wx.EVT_COMMAND_ENTER)
 
+        lbl_highi = wx.StaticText(self._panel, -1, "High")
+        self._txt_highi = UnitFloatCtrl(self._panel, -1,
+                    self.stream.intensityRange.value[1] * 100,
+                    style=wx.NO_BORDER,
+                    size=(-1, 14),
+                    min_val=0,
+                    max_val=100,
+                    unit='%')
+        self._txt_highi.SetBackgroundColour(BACKGROUND_COLOUR)
+        self._txt_highi.SetForegroundColour(FOREGROUND_COLOUR_EDIT)
+        self._txt_highi.SetToolTipString("Value mapped to white")
+        def get_highi(va=self.stream.intensityRange, ctrl=self._txt_highi):
+            lv = va.value[0]
+            hv = ctrl.GetValue() / 100
+            # clamp high range to at least low range
+            if hv < lv:
+                hv = lv
+                ctrl.SetValue(hv * 100)
+            return lv, hv
+        
+        self._vac_highi = VigilantAttributeConnector(self.stream.intensityRange,
+                          self._txt_highi,
+                          lambda r: self._txt_highi.SetValue(r[1] * 100),
+                          get_highi,
+                          events=wx.EVT_COMMAND_ENTER)
 
-#        lbl_brightness = wx.StaticText(self._panel, -1, "Brightness")
-#        self._gbs.Add(lbl_brightness, (self.row_count, 0),
-#                      flag=wx.ALL,
-#                      border=5)
-#
-#        self._sld_brightness = UnitIntegerSlider(
-#                                    self._panel,
-#                                    value=self.stream.brightness.value,
-#                                    min_val=self.stream.brightness.range[0],
-#                                    max_val=self.stream.brightness.range[1],
-#                                    t_size=(40, -1),
-#                                    unit=None,
-#                                    name="brightness_slider")
-#
-#        self._vac_brightness = VigilantAttributeConnector(self.stream.brightness,
-#                                             self._sld_brightness,
-#                                             events=wx.EVT_SLIDER)
-#        # span is 2, because emission/excitation have 2 controls
-#        self._gbs.Add(self._sld_brightness, pos=(self.row_count, 1),
-#                      span=(1, 2), flag=wx.EXPAND | wx.ALL, border=5)
-#        self.row_count += 1
-#
-#
-#        lbl_contrast = wx.StaticText(self._panel, -1, "Contrast")
-#        self._gbs.Add(lbl_contrast, (self.row_count, 0),
-#                      flag=wx.ALL, border=5)
-#
-#        self._sld_contrast = UnitIntegerSlider(
-#                             self._panel,
-#                             value=self.stream.contrast.value,
-#                             min_val=self.stream.contrast.range[0],
-#                             max_val=self.stream.contrast.range[1],
-#                             t_size=(40, -1),
-#                             unit=None,
-#                             name="contrast_slider")
-#
-#        self._vac_contrast = VigilantAttributeConnector(self.stream.contrast,
-#                                             self._sld_contrast,
-#                                             events=wx.EVT_SLIDER)
-#
-#        self._gbs.Add(self._sld_contrast, pos=(self.row_count, 1),
-#                      span=(1, 2), flag=wx.EXPAND | wx.ALL, border=5)
-#        self.row_count += 1
-
+        lh_sz = wx.BoxSizer(wx.HORIZONTAL)
+        lh_sz.Add(lbl_lowi, 0,
+                  flag=wx.ALIGN_CENTRE_VERTICAL | wx.LEFT,
+                  border=5)
+        lh_sz.Add(self._txt_lowi, 1,
+                  flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.RIGHT | wx.LEFT,
+                  border=5)
+        lh_sz.Add(lbl_highi, 0,
+                  flag=wx.ALIGN_CENTRE_VERTICAL | wx.LEFT,
+                  border=5)
+        lh_sz.Add(self._txt_highi, 1,
+                  flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.RIGHT | wx.LEFT,
+                  border=5)
+        self._gbs.Add(lh_sz, (self.row_count, 0), span=(1, 3),
+                      flag=wx.BOTTOM | wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND,
+                      border=5)
+        self.row_count += 1
 
         # Can only do that once all the controls are here
         self.stream.auto_bc.subscribe(self._onAutoBC, init=True)
@@ -870,11 +896,9 @@ class StreamPanel(wx.PyPanel):
     def _onAutoBC(self, enabled):
         # disable the manual controls if it's on
         self._sld_bc_outliers.Enable(enabled)
-
-        # TODO: check the colour doesn't change, just read-only
         self._sld_hist.Enable(not enabled)
-#        self._txt_lowi.Enable(not enabled)
-#        self._txt_highi.Enable(not enabled)
+        self._txt_lowi.Enable(not enabled)
+        self._txt_highi.Enable(not enabled)
 
     @call_after
     def _onHistogram(self, hist):
