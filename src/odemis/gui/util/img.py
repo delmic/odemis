@@ -82,8 +82,11 @@ def compactHistogram(hist, length):
     elif hist.size == length:
         return hist
     elif hist.size % length != 0:
-        raise ValueError("Fail to compact histogram of length %d not multiple of %d",
+        # Very costly (in CPU time) and probably a sign something went wrong
+        logging.warning("Length of histogram = %d, not multiple of %d",
                          hist.size, length)
+        # add enough zeros at the end to make it a multiple
+        hist = numpy.concatenate(hist, numpy.zeros(length - hist.size % length))
     # Reshape to have on first axis the length, and second axis the bins which
     # must be accumulated.
     chist = hist.reshape(length, hist.size // length)
