@@ -899,7 +899,6 @@ class StreamPanel(wx.PyPanel):
         self._txt_lowi.Enable(not enabled)
         self._txt_highi.Enable(not enabled)
 
-    @call_after
     def _onHistogram(self, hist):
         # TODO: don't update when folded: it's useless => unsubscribe
         # hist is a ndarray of ints, content is a list of values between 0 and 1
@@ -911,7 +910,7 @@ class StreamPanel(wx.PyPanel):
         else:
             norm_hist = []
 
-        self._sld_hist.SetContent(norm_hist)
+        wx.CallAfter(self._sld_hist.SetContent, norm_hist)
 
     # ====== For the dyes
     def _has_dye(self, stream):
@@ -1135,59 +1134,128 @@ class StreamPanel(wx.PyPanel):
     def _add_wl_controls(self):
         # ====== Top row, fit RGB toggle button
 
-        self._btn_fit_rgb = buttons.ImageTextToggleButton(
-                                                self._panel,
-                                                - 1,
-                                                img.getbtn_spectrumBitmap(),
-                                                label="RGB",
-                                                size=(68, 26),
-                                                style=wx.ALIGN_RIGHT)
-        tooltip = "Toggle sub-bandwidths to Red/Green/Blue display"
-        self._btn_fit_rgb.SetToolTipString(tooltip)
-        self._btn_fit_rgb.SetBitmaps(bmp_h=img.getbtn_spectrum_hBitmap(),
-                                     bmp_sel=img.getbtn_spectrum_aBitmap())
-        self._btn_fit_rgb.SetForegroundColour("#000000")
-        self._gbs.Add(self._btn_fit_rgb,
-                      (self.row_count, 0),
-                      flag=wx.LEFT | wx.TOP,
-                      border=5)
-        self.row_count += 1
-
-        # TODO: need to use VA connector for this toggle button
-        self._btn_fit_rgb.Bind(wx.EVT_BUTTON, self.on_toggle_fit_rgb)
-        self._btn_fit_rgb.SetToggle(self.stream.fitToRGB.value)
+        # TODO: only when the functionality is there!
+#        self._btn_fit_rgb = buttons.ImageTextToggleButton(
+#                                                self._panel,
+#                                                - 1,
+#                                                img.getbtn_spectrumBitmap(),
+#                                                label="RGB",
+#                                                size=(68, 26),
+#                                                style=wx.ALIGN_RIGHT)
+#        tooltip = "Toggle sub-bandwidths to Red/Green/Blue display"
+#        self._btn_fit_rgb.SetToolTipString(tooltip)
+#        self._btn_fit_rgb.SetBitmaps(bmp_h=img.getbtn_spectrum_hBitmap(),
+#                                     bmp_sel=img.getbtn_spectrum_aBitmap())
+#        self._btn_fit_rgb.SetForegroundColour("#000000")
+#        self._gbs.Add(self._btn_fit_rgb,
+#                      (self.row_count, 0),
+#                      flag=wx.LEFT | wx.TOP,
+#                      border=5)
+#        self.row_count += 1
+#
+#        # TODO: need to use VA connector for this toggle button
+#        self._btn_fit_rgb.Bind(wx.EVT_BUTTON, self.on_toggle_fit_rgb)
+#        self._btn_fit_rgb.SetToggle(self.stream.fitToRGB.value)
 
         # ====== Second row, center label, slider and value
 
-        self._sld_range = BandwidthSlider(
+        self._sld_spec = BandwidthSlider(
                                 self._panel,
                                 size=(380, 40), # FIXME: remove fixed width
         )
 
-        self._sld_range.SetBackgroundColour("#000000")
-        self._sld_range.SetRange(self.stream.centerWavelength.range)
+        self._sld_spec.SetBackgroundColour("#000000")
+        self._sld_spec.SetRange(self.stream.centerWavelength.range)
         self._vac_center = VigilantAttributeConnector(
                                 self.stream.centerWavelength,
-                                self._sld_range,
-                                va_2_ctrl=self._sld_range.set_center_value,
-                                ctrl_2_va=self._sld_range.get_center_value,
+                                self._sld_spec,
+                                va_2_ctrl=self._sld_spec.set_center_value,
+                                ctrl_2_va=self._sld_spec.get_center_value,
                                 events=wx.EVT_SLIDER)
 
         self._vac_bandwidth = VigilantAttributeConnector(
                                 self.stream.bandwidth,
-                                self._sld_range,
-                                va_2_ctrl=self._sld_range.set_bandwidth_value,
-                                ctrl_2_va=self._sld_range.get_bandwidth_value,
+                                self._sld_spec,
+                                va_2_ctrl=self._sld_spec.set_bandwidth_value,
+                                ctrl_2_va=self._sld_spec.get_bandwidth_value,
                                 events=wx.EVT_SLIDER)
 
-        # span is 2, because emission/excitation have 2 controls
-        self._gbs.Add(self._sld_range, pos=(self.row_count, 0),
-                      span=(1, 2), flag=wx.EXPAND | wx.ALL, border=5)
+        # span is 3, because emission/excitation have 2 controls
+        self._gbs.Add(self._sld_spec, pos=(self.row_count, 0),
+                      span=(1, 3),
+                      flag=wx.EXPAND | wx.TOP | wx.LEFT | wx.RIGHT,
+                      border=5)
         self.row_count += 1
 
-#        self._gbs.AddGrowableCol(1) # This makes the 2nd column's width variable
+        # ====== Third row, text fields for intensity (ratios)
 
-        # TODO: should the stream have a way to know when the raw data has changed?
+        tooltip_txt = "Center wavelength of the spectrum"
+        lbl_scenter = wx.StaticText(self._panel, -1, "Center")
+        lbl_scenter.SetToolTipString(tooltip_txt)
+        self._txt_scenter = UnitFloatCtrl(self._panel, -1,
+                    self.stream.centerWavelength.value * 1e9,
+                    style=wx.NO_BORDER,
+                    size=(-1, 14),
+                    min_val=self.stream.centerWavelength.range[0] * 1e9,
+                    max_val=self.stream.centerWavelength.range[1] * 1e9,
+                    unit='nm')
+        self._txt_scenter.SetBackgroundColour(BACKGROUND_COLOUR)
+        self._txt_scenter.SetForegroundColour(FOREGROUND_COLOUR_EDIT)
+        self._txt_scenter.SetToolTipString(tooltip_txt)
+        # TODO: either put more connection between the 2 VAs to reflect actual
+        # value, or put cleverness here.
+#        def get_lowi(va=self.stream.intensityRange, ctrl=self._txt_lowi):
+#            lv = ctrl.GetValue() / 100
+#            hv = va.value[1]
+#            # clamp low range to max high range
+#            if hv < lv:
+#                lv = hv
+#                ctrl.SetValue(lv * 100)
+#            return lv, hv
+        self._vac_scenter = VigilantAttributeConnector(self.stream.centerWavelength,
+                          self._txt_scenter,
+                          lambda v: self._txt_scenter.SetValue(v * 1e9),
+                          lambda: self._txt_scenter.GetValue() / 1e9,
+                          events=wx.EVT_COMMAND_ENTER)
+
+        tooltip_txt = "Bandwidth of the spectrum"
+        lbl_sbw = wx.StaticText(self._panel, -1, "Bandwidth")
+        lbl_sbw.SetToolTipString(tooltip_txt)
+        self._txt_sbw = UnitFloatCtrl(self._panel, -1,
+                    self.stream.bandwidth.value * 1e9,
+                    style=wx.NO_BORDER,
+                    size=(-1, 14),
+                    min_val=self.stream.bandwidth.range[0] * 1e9,
+                    max_val=self.stream.bandwidth.range[1] * 1e9,
+                    unit='nm')
+        self._txt_sbw.SetBackgroundColour(BACKGROUND_COLOUR)
+        self._txt_sbw.SetForegroundColour(FOREGROUND_COLOUR_EDIT)
+        self._txt_sbw.SetToolTipString(tooltip_txt)
+        self._vac_scenter = VigilantAttributeConnector(self.stream.bandwidth,
+                          self._txt_sbw,
+                          lambda v: self._txt_sbw.SetValue(v * 1e9),
+                          lambda: self._txt_sbw.GetValue() / 1e9,
+                          events=wx.EVT_COMMAND_ENTER)
+
+        cb_wl_sz = wx.BoxSizer(wx.HORIZONTAL)
+        cb_wl_sz.Add(lbl_scenter, 0,
+                  flag=wx.ALIGN_CENTRE_VERTICAL | wx.LEFT,
+                  border=5)
+        cb_wl_sz.Add(self._txt_scenter, 1,
+                  flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.RIGHT | wx.LEFT,
+                  border=5)
+        cb_wl_sz.Add(lbl_sbw, 0,
+                  flag=wx.ALIGN_CENTRE_VERTICAL | wx.LEFT,
+                  border=5)
+        cb_wl_sz.Add(self._txt_sbw, 1,
+                  flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.RIGHT | wx.LEFT,
+                  border=5)
+        self._gbs.Add(cb_wl_sz, (self.row_count, 0), span=(1, 3),
+                      flag=wx.BOTTOM | wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND,
+                      border=5)
+        self.row_count += 1
+
+        # TODO: should the stream have a way to know when the raw data has changed? => just a spectrum VA, like histogram VA
         self.stream.image.subscribe(self.on_new_spec_data, init=True)
 
     def on_toggle_fit_rgb(self, evt):
@@ -1217,7 +1285,7 @@ class StreamPanel(wx.PyPanel):
             coef = 1
 
         gspec = [(s + base) * coef for s in gspec]
-        wx.CallAfter(self._sld_range.SetContent, gspec)
+        wx.CallAfter(self._sld_spec.SetContent, gspec)
 
 
 class StreamBar(wx.Panel):
