@@ -762,7 +762,6 @@ class StreamPanel(wx.PyPanel):
                                   self._btn_autobc.GetToggle,
                                   events=wx.EVT_BUTTON)
 
-        # FIXME: what's the right name? ImageJ uses "Saturated Pixels"
         lbl_bc_outliers = wx.StaticText(self._panel, -1, "Outliers")
         self._sld_bc_outliers = UnitFloatSlider(
                                     self._panel,
@@ -781,7 +780,6 @@ class StreamPanel(wx.PyPanel):
                                              self._sld_bc_outliers,
                                              events=wx.EVT_SLIDER)
 
-        # TODO: put all this in a horizontal ruler
         autobc_sz = wx.BoxSizer(wx.HORIZONTAL)
         autobc_sz.Add(self._btn_autobc, 0,
                   flag=wx.ALIGN_CENTRE_VERTICAL | wx.RIGHT,
@@ -903,6 +901,7 @@ class StreamPanel(wx.PyPanel):
 
     @call_after
     def _onHistogram(self, hist):
+        # TODO: don't update when folded: it's useless => unsubscribe
         # hist is a ndarray of ints, content is a list of values between 0 and 1
         if len(hist):
             lhist = numpy.log1p(hist) # log histogram is easier to read

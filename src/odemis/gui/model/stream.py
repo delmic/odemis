@@ -117,13 +117,13 @@ class Stream(object):
                                          range=[(0, 0, 0, 0), (1, 1, 1, 1)],
                                          cls=(int, long, float))
 
-
-        if self._detector:
-            # The last element of the shape indicates the bit depth, which
-            # is used for brightness/contrast adjustment.
-            self._irange = (0, self._detector.shape[-1] - 1) # FIXME: true iif unsigned int
-        else:
-            self._irange = None # min/max possible data values
+        self._updateIRange()
+#        if self._detector:
+#            # The last element of the shape indicates the bit depth, which
+#            # is used for brightness/contrast adjustment.
+#            self._irange = (0, self._detector.shape[-1] - 1) # FIXME: true iif unsigned int
+#        else:
+#            self._irange = None # min/max possible data values
 
         # whether to use auto brightness & contrast
         self.auto_bc = model.BooleanVA(True)
@@ -140,26 +140,16 @@ class Stream(object):
         self.intensityRange = model.TupleContinuous((0, 1),
                                                     range=[(0, 0), (1, 1)],
                                                     cls=(int, long, float))
-#        # ratio, contrast if no auto
-        self.contrast = model.FloatContinuous(0, range=[-100, 100])
-#        # ratio, balance if no auto
-        self.brightness = model.FloatContinuous(0, range=[-100, 100])
 
-        # list of values representing the histogram of the current image _or_
-        # slightly older image. Note it's an ndarray. Use .tolist() to get a
-        # python list.
+        # Histogram of the current image _or_ slightly older image.
+        # Note it's an ndarray. Use .tolist() to get a python list.
         self.histogram = model.VigilantAttribute(numpy.ndarray(0), readonly=True)
         self.histogram._full_hist = numpy.ndarray(0) # for finding the outliers
         self.histogram._edges = self._irange # TODO: needed?
-        # TODO: 2 types of irange management:
-        # * dtype is int -> follow MD_BPP/shape/dtype.max
-        # * dtype is float -> always increase, starting from 0-depth
 
         self.auto_bc.subscribe(self._onAutoBC)
         self.auto_bc_outliers.subscribe(self._onOutliers) # FIXME
         self.intensityRange.subscribe(self._onIntensityRange)
-#        self.contrast.subscribe(self.onBrightnessContrast)
-#        self.brightness.subscribe(self.onBrightnessContrast)
         self._ht_needs_recompute = threading.Event()
         self._htread = threading.Thread(target=self._histogram_thread,
                                         name="Histogram computation")
@@ -223,6 +213,48 @@ class Stream(object):
     # No __del__: subscription should be automatically stopped when the object
     # disappears, and the user should stop the update first anyway.
 
+    def _updateIRange(self):
+        """
+        Update the ._irange, with whatever data is known so far.
+        """
+        # 2 types of irange management:
+        # * dtype is int -> follow MD_BPP/shape/dtype.max
+        # * dtype is float -> always increase, starting from 0-depth
+        if self.raw:
+            data = self.raw[0]
+            if data.dtype.kind in "biu":
+                if model.MD_BPP in data.metadata:
+                    depth = 2**data.metadata[model.MD_BPP]
+                    if data.dtype.kind == "i":
+                        irange = -depth // 2, depth //2 -1
+                    else:
+                        irange = 0, depth -1
+                elif self._detector:
+                    depth = self._detector.shape[-1]
+                    if data.dtype.kind == "i":
+                        irange = -depth // 2, depth // 2 - 1
+                    else:
+                        irange = 0, depth - 1
+                else:
+                    idt = numpy.iinfo(data.dtype)
+                    irange = (idt.min, idt.max)
+            else: # float
+                # cast to ndarray to ensure a scalar (instead of a DataArray)
+                irange = (numpy.array(data).min(), numpy.array(data).max())
+                if self._irange is not None:
+                    irange = (min(irange[0], self._irange[0]),
+                              max(irange[1], self._irange[1]))
+        else:
+            # no data, assume it's uint
+            if self._detector:
+                # The last element of the shape indicates the bit depth, which
+                # is used for brightness/contrast adjustment.
+                irange = (0, self._detector.shape[-1] - 1)
+            else:
+                irange = None
+
+        self._irange = irange
+
     def _findPos(self, data):
         """
         Find the (center) position of the given image. Guess if necessary.
@@ -272,7 +304,6 @@ class Stream(object):
             data = self.raw[0]
 
             if self.auto_bc.value:
-                # TODO: move to whenever histogram changes?
                 # The histogram might be slightly old, but not too much
                 irange = img.findOptimalRange(self.histogram._full_hist,
                                               self.histogram._edges,
@@ -312,7 +343,6 @@ class Stream(object):
     def _onIntensityRange(self, irange):
         # If auto_bc is active, it updates intensities (from _updateImage()),
         # so no need to refresh image again.
-        # TODO: => just unsubscribe from intensityRange ?
         if self.auto_bc.value == False:
             self._updateImage()
 
@@ -330,10 +360,8 @@ class Stream(object):
             return
 
         data = self.raw[0]
-        # TODO: handle the fact that the MD_BPP can change between pictures
-
-        # Initially, _edges might be None, in which case they will be guessed
-        hist, edges = img.histogram(data, irange=self.histogram._edges)
+        # Initially, _irange might be None, in which case it will be guessed
+        hist, edges = img.histogram(data, irange=self._irange)
         if hist.size > 256:
             chist = img.compactHistogram(hist, 256)
         else:
@@ -353,13 +381,10 @@ class Stream(object):
             self._ht_needs_recompute.wait() # wait until a new image is available
             tstart = time.time()
             self._ht_needs_recompute.clear()
-
             self._updateHistogram()
             tend = time.time()
 
-            # logging.debug("Computed histogram in %g s", tend - tstart)
             # sleep at as much, to ensure we are not using too much CPU
-
             tsleep = max(0.2, tend - tstart) # max 5 Hz
             time.sleep(tsleep)
 
@@ -368,12 +393,20 @@ class Stream(object):
         # (in the future, we could keep the old ones which are not fully
         # overlapped)
 
+        old_irange = self._irange
         if not self.raw:
             self.raw.append(data)
+            old_irange = None # will force histogram creation
+        else:
+            self.raw[0] = data
+
+        # Depth can change at each image (depends on hardware settings)
+        self._updateIRange()
+        if old_irange != self._irange:
+            logging.debug("Updating irange to %s", self._irange)
             # This ensures there's always a valid histogram
             self._updateHistogram()
         else:
-            self.raw[0] = data
             self._shouldUpdateHistogram()
 
         self._updateImage()
