@@ -53,9 +53,14 @@ TOOL_ROA = 3 # Select the region of acquisition (area to be acquired, SPARC-only
 TOOL_POINT = 4 # Select a point (to acquire/display)
 TOOL_LINE = 5 # Select a line (to acquire/display)
 
+
+# This global attribute is used so the exact same live gui microscope model
+# object can be shared by multiple objects.
 live_gui_model = None
 
 def get_live_gui_model(microscope):
+    """ Create a LiveGuiModel object, or return the previously created one if
+    it's already present """
     global live_gui_model
 
     if not live_gui_model:

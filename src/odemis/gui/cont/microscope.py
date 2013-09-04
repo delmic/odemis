@@ -31,19 +31,14 @@ class MicroscopeController(object):
     bound = False
     callbacks = []
 
-    def __init__(self, microscope_model, main_frame):
-        """
-        interface_model: MicroscopeModel
-        main_frame: (wx.Frame): the frame which contains the 4 viewports
-        """
-        self.microscope_model = microscope_model
-
-        # Microscope buttons
-        self.btn_pause = main_frame.btn_toggle_pause
-        self.btn_pressure = main_frame.btn_toggle_press
-
     @classmethod
     def bind_buttons(cls, microscope_model, main_frame):
+        """ This class method binds the 'hardware' buttons to their appropriate
+        Vigilant Attributes in the instrmodel.MicroscopeGUIModel
+
+        MicroscopeGUIModel: MicroscopeGUIModel
+        main_frame: (wx.Frame): the main frame of the GUI
+        """
         if not cls.bound:
             # TODO: for the Sparc, if only one microscope: hide everything, as this
             # microscope should always be ON.
