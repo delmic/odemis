@@ -1152,8 +1152,8 @@ def _dataFromTIFF(filename):
     # Warning: we support what we write, not the whole OME-TIFF specification.
     f.SetDirectory(0)
     desc = f.GetField(T.TIFFTAG_IMAGEDESCRIPTION)
-    if ((desc.startswith("<?xml") and "<ome " in desc.lower()) 
-         or desc[:4].lower()=='<ome'):
+    if (desc and ((desc.startswith("<?xml") and "<ome " in desc.lower())
+                  or desc[:4].lower() == '<ome')):
         try:
             data = _reconstructFromOMETIFF(desc, data)
         except Exception:

@@ -787,7 +787,8 @@ class VisualRangeSlider(BaseSlider):
 #            else:
 #                self.content_color = change_brightness(self.content_color, -dim)
 #                self.select_color = change_brightness(self.select_color, -dim)
-
+            if not enable: # in case the cursor was changed during hover
+                self.SetCursor(wx.STANDARD_CURSOR)
             self.Refresh()
 
     def SetContent(self, content_list):

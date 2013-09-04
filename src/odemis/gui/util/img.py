@@ -173,7 +173,8 @@ def FindOptimalBC(data, depth):
 
     return brightness, contrast
 
-
+# TODO: try to do cumulative histogram value mapping (=histogram equalization)?
+# => might improve the greys
 def DataArray2RGB(data, irange=None, tint=(255, 255, 255)):
     """
     data (numpy.ndarray of unsigned int): 2D image greyscale (unsigned float might work as well)
