@@ -369,7 +369,7 @@ class Stream(object):
 
             self._updateHistogram()
             tend = time.time()
-            logging.debug("Computed histogram in %g s", tend - tstart)
+            # logging.debug("Computed histogram in %g s", tend - tstart)
             # sleep at as much, to ensure we are not using too much CPU
             tsleep = max(0.2, tend - tstart) # max 5 Hz
             time.sleep(tsleep)

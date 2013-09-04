@@ -744,11 +744,11 @@ class VisualRangeSlider(BaseSlider):
             else:
                 raise ValueError("Needs min and max values")
         logging.debug("Setting range to %s, %s", min_value, max_value)
-        
+
         if min_value >= max_value:
             raise ValueError("Minimum %s is bigger than maximum %s.",
                              min_value, max_value)
-        
+
         self.min_value = min_value
         self.max_value = max_value
         if self.value and self.value[0] >= min_value and self.value[1] <= max_value:
@@ -922,7 +922,7 @@ class VisualRangeSlider(BaseSlider):
 
 
     def _draw_content(self, ctx, width, height):
-        logging.debug("Plotting content background")
+        # logging.debug("Plotting content background")
         line_width = width / len(self.content_list)
         ctx.set_line_width(line_width + 0.8)
         ctx.set_source_rgb(*self.content_color)

@@ -877,11 +877,37 @@ class SecomSettingsController(SettingsBarController):
             self.add_component("Camera",
                                 microscope_model.ccd,
                                 self._optical_panel)
-        # TODO allow to change light.power
+        # TODO: allow to change light.power
 
         if microscope_model.ebeam:
             self.add_component("SEM", microscope_model.ebeam, self._sem_panel)
 
+class LensAlignSettingsController(SettingsBarController):
+
+    def __init__(self, parent_frame, microscope_model, highlight_change=False):
+        super(LensAlignSettingsController, self).__init__(microscope_model,
+                                                          highlight_change)
+
+        self._sem_panel = SemSettingsPanel(
+                                    parent_frame.fp_lens_sem_settings,
+                                    "No SEM found",
+                                    highlight_change)
+
+        self._optical_panel = OpticalSettingsPanel(
+                                    parent_frame.fp_lens_opt_settings,
+                                    "No optical microscope found",
+                                    highlight_change)
+
+        # Query Odemis daemon (Should move this to separate thread)
+        if microscope_model.ccd:
+            self.add_component("Camera",
+                                microscope_model.ccd,
+                                self._optical_panel)
+
+        # TODO: allow to change light.power
+
+        if microscope_model.ebeam:
+            self.add_component("SEM", microscope_model.ebeam, self._sem_panel)
 
 class SparcSettingsController(SettingsBarController):
 

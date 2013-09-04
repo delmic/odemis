@@ -78,7 +78,7 @@ class SecomStreamsTab(Tab):
     def __init__(self, name, button, panel, main_frame, microscope):
         super(SecomStreamsTab, self).__init__(name, button, panel)
 
-        self.microscope_model = instrmodel.LiveGUIModel(microscope)
+        self.microscope_model = instrmodel.get_live_gui_model(microscope)
         self.main_frame = main_frame
 
         # Various controllers used for the live view and acquisition of images
@@ -137,7 +137,7 @@ class SecomStreamsTab(Tab):
                                             self.main_frame
                                        )
 
-        self._microscope_controller = MicroscopeController(
+        self._microscope_controller = MicroscopeController.bind_buttons(
                                             self.microscope_model,
                                             self.main_frame
                                       )
@@ -632,9 +632,22 @@ class LensAlignTab(Tab):
     def __init__(self, name, button, panel, main_frame, microscope=None):
         super(LensAlignTab, self).__init__(name, button, panel)
 
+        self.microscope_model = instrmodel.get_live_gui_model(microscope)
+        self.main_frame = main_frame
+
         main_frame.vp_align_ccd.ShowMergeSlider(False)
         main_frame.vp_align_sem.ShowMergeSlider(False)
         main_frame.vp_align_sem.ShowLegend(False)
+
+        self._settings_controller = settings.LensAlignSettingsController(
+                                        self.main_frame,
+                                        self.microscope_model
+                                    )
+
+        self._microscope_controller = MicroscopeController.bind_buttons(
+                                            self.microscope_model,
+                                            self.main_frame
+                                      )
 
 
 class MirrorAlignTab(Tab):

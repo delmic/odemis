@@ -53,28 +53,45 @@ TOOL_ROA = 3 # Select the region of acquisition (area to be acquired, SPARC-only
 TOOL_POINT = 4 # Select a point (to acquire/display)
 TOOL_LINE = 5 # Select a line (to acquire/display)
 
+live_gui_model = None
+
+def get_live_gui_model(microscope):
+    global live_gui_model
+
+    if not live_gui_model:
+        live_gui_model = LiveGUIModel(microscope)
+    return live_gui_model
+
 
 class MicroscopeGUIModel(object):
-    """
-    Represents the graphical user interface for a microscope. In Odemis GUI,
-    there's basically one per tab (and for each window without tab).
-    This is a meta-class. You actually want to use one of the sub-classes to
-    represent a specific type of interface. Not all interfaces have all the
-    same attributes. However, there is always:
-    .microscope: The HwComponent root of all the other components (can be None
-    if there is no microscope available, like an interface to display recorded
-    acquisition). There are also many .ccd, .stage, etc, which can be used to
-    directly access the sub-components. .microscope.role (string) should be used
-    to find out the generic type of microscope connected. Normally, all the
-    interfaces of the same execution will have the same .microscope or None (
-    there are never multiple microscopes manipulated simultaneously).
-    .view and .focusedView: represent the available/currently selected views
-    (graphical image/data display).
-    .viewLayout: the current way on how the views are organized (the choices
-     give all the possibilities of this GUI)
-    .streams: all the stream/data available to the user to manipulate.
-    .tool: the current "mode" in which the user is (the choices give all the
-     available tools for this GUI).
+    """ Represents the graphical user interface for a microscope.
+
+    In the Odemis GUI, there's basically one MicroscopeGUIModel per tab (and for
+    each window without tab). This is a meta-class. You actually want to use one
+    of the sub-classes to represent a specific type of interface. Not all
+    interfaces have the same attributes.
+
+    However, there are always:
+    .microscope:
+        The HwComponent root of all the other components (can be None
+        if there is no microscope available, like an interface to display
+        recorded acquisition). There are also many .ccd, .stage, etc, which can
+        be used to directly access the sub-components.
+        .microscope.role (string) should be used to find out the generic type of
+        microscope connected. Normally, all the interfaces of the same execution
+        will have the same .microscope or None (there are never multiple
+        microscopes manipulated simultaneously).
+    .view and .focussedView:
+        Represent the available/currently selected views (graphical image/data
+        display).
+    .viewLayout:
+        The current way on how the views are organized (the choices
+        give all the possibilities of this GUI)
+    .streams:
+        All the stream/data available to the user to manipulate.
+    .tool:
+        the current "mode" in which the user is (the choices give all the
+        available tools for this GUI).
     """
     __metaclass__ = ABCMeta
 
@@ -259,8 +276,7 @@ class MicroscopeGUIModel(object):
 
 
 class LiveGUIModel(MicroscopeGUIModel):
-    """
-    Represent an interface used to only show the current data from the
+    """ Represent an interface used to only show the current data from the
     microscope. It should be able to handle SEM-only, optical-only, and SECOM
     systems.
     """
@@ -291,9 +307,8 @@ class LiveGUIModel(MicroscopeGUIModel):
 
 
 class AcquisitionGUIModel(MicroscopeGUIModel):
-    """
-    Represent an interface used to show the current data from the microscope and
-    select different settings for a (high quality) acquisition. It should be
+    """ Represent an interface used to show the current data from the microscope
+    and select different settings for a (high quality) acquisition. It should be
     able to handle SPARC systems (at least).
     """
     # TODO: use it for the SECOM acquisition dialogue as well
