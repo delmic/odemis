@@ -644,6 +644,12 @@ class LensAlignTab(Tab):
                                         self.microscope_model
                                     )
 
+        # self._view_controller = viewcont.ViewController(
+        #                             self.microscope_model,
+        #                             self.main_frame,
+        #                             [self.main_frame.vp_align_sem,
+        #                              self.main_frame.vp_align_ccd])
+
         self._microscope_controller = MicroscopeController.bind_buttons(
                                             self.microscope_model,
                                             self.main_frame
