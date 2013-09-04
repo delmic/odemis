@@ -39,6 +39,7 @@ from wx.lib.pubsub import pub
 import collections
 import logging
 import math
+import numpy
 import odemis.gui
 import odemis.gui.comp.buttons as buttons
 import odemis.gui.img.data as img
@@ -904,11 +905,14 @@ class StreamPanel(wx.PyPanel):
     def _onHistogram(self, hist):
         # hist is a ndarray of ints, content is a list of values between 0 and 1
         if len(hist):
-            norm_hist = hist / float(hist.max())
+            lhist = numpy.log1p(hist) # log histogram is easier to read
+            norm_hist = lhist / float(lhist.max())
+            # ndarrays work too, but slower to display
+            norm_hist = norm_hist.tolist()
         else:
             norm_hist = []
 
-        self._sld_hist.SetContent(norm_hist) # Seems that ndarrays work too :-)
+        self._sld_hist.SetContent(norm_hist)
 
     # ====== For the dyes
     def _has_dye(self, stream):
