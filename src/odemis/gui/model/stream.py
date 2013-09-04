@@ -151,6 +151,9 @@ class Stream(object):
         self.histogram = model.VigilantAttribute(numpy.ndarray(0), readonly=True)
         self.histogram._full_hist = numpy.ndarray(0) # for finding the outliers
         self.histogram._edges = self._irange # TODO: needed?
+        # TODO: 2 types of irange management:
+        # * dtype is int -> follow MD_BPP/shape/dtype.max
+        # * dtype is float -> always increase, starting from 0-depth
 
         self.auto_bc.subscribe(self._onAutoBC)
         self.auto_bc_outliers.subscribe(self._onOutliers) # FIXME
@@ -313,24 +316,6 @@ class Stream(object):
         if self.auto_bc.value == False:
             self._updateImage()
 
-#    # TODO: have an "area=None" argument which allows to specify the 2D region
-#    # within which the spectrum should be computed
-#    def getHistogram(self):
-#        """
-#        Compute the global histogram of the data as an average over all the pixels
-#        Note: avoid calling this method, and prefer .histogram
-#        returns (list of 0<=int): number of pixels with the intensity corresponding
-#          to the index. Length is arbitrary (but tries to be long enough and not
-#          too long => ~ 256).
-#        """
-#        if not self.raw:
-#            return []
-#
-#        data = self.raw[0]
-#        hist = img.histogram(data, self._depth)
-#
-#        return hist.tolist()
-
     def _shouldUpdateHistogram(self):
         """
         Ensures that the histogram VA will be updated in the "near future".
@@ -345,6 +330,8 @@ class Stream(object):
             return
 
         data = self.raw[0]
+        # TODO: handle the fact that the MD_BPP can change between pictures
+
         # Initially, _edges might be None, in which case they will be guessed
         hist, edges = img.histogram(data, irange=self.histogram._edges)
         if hist.size > 256:
@@ -370,7 +357,7 @@ class Stream(object):
             self._updateHistogram()
             tend = time.time()
             logging.debug("Computed histogram in %g s", tend - tstart)
-            # sleep at as much, to ensure we are not using too much CPU
+            # sleep at least as much, to ensure we are not using too much CPU
             tsleep = max(0.2, tend - tstart) # max 5 Hz
             time.sleep(tsleep)
 
