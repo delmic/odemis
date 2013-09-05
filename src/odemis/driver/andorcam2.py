@@ -1720,19 +1720,20 @@ class FakeAndorV2DLL(object):
 
         self.pixelSize = (20.0, 20.0) # um
 
-        # will be copied when asked for an image
-        self._data = tiff.read_data(os.path.dirname(__file__) + "/andorcam2-fake-clara.tiff")[0]
-        self.shape = self._data.shape[::-1]
-        self.bpp = 16
-        self.maxBinning = (16, 16) # px
-        # uncomment the following to just get a greyscale gradient
-#        self._data = numpy.empty((self.shape[1], self.shape[0]), dtype=numpy.uint16)
-#        end = 2 ** self.bpp
-#        step = end / self.shape[0]
-#        self._data[:] = numpy.arange(0, end, step)[0:self.shape[0]].astype(numpy.uint16)
-#        self.shape = (1280, 1024) # px
-#        self.bpp = 12
-#        self.maxBinning = (64, 64) # px
+        if True: # Change to True to get an actual image
+            # will be copied when asked for an image
+            self._data = tiff.read_data(os.path.dirname(__file__) + "/andorcam2-fake-clara.tiff")[0]
+            self.shape = self._data.shape[::-1]
+            self.bpp = 16
+            self.maxBinning = (16, 16) # px
+        else:
+            self.shape = (1280, 1024) # px
+            self.bpp = 12
+            self._data = numpy.empty((self.shape[1], self.shape[0]), dtype=numpy.uint16)
+            end = 2 ** self.bpp
+            step = end / self.shape[0]
+            self._data[:] = numpy.arange(0, end, step)[0:self.shape[0]].astype(numpy.uint16)
+            self.maxBinning = (64, 64) # px
 
         self.roi = (1, self.shape[0], 1, self.shape[1]) # h0, hlast, v0, vlast, starting from 1
         self.binning = (1, 1) # px

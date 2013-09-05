@@ -1719,12 +1719,13 @@ class StreamTree(object):
         """ This method is called when one of the streams' should_update
         vigilant attribute changes.
         """
-
         logging.debug("Stream update changed: should update %s", should_update)
 
         # At least one stream is live, so we 'should update'
-        if any([s.should_update.value for s in self.streams]):
-            self.should_update.value = True
+        for s in self.streams:
+            if hasattr(s, "should_update") and s.should_update.value:
+                self.should_update.value = True
+                break
         else:
             self.should_update.value = False
 

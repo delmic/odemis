@@ -521,7 +521,7 @@ class SparcAcquiController(AcquisitionController):
         # get the analysis tab
         mtc = get_main_tab_controller()
 
-        analysis_interface = mtc['inspection'].interface_model
+        analysis_interface = mtc['inspection'].microscope_model
         stream_controller = mtc['inspection'].stream_controller
 
         # clear the analysis tab
