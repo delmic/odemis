@@ -1213,9 +1213,6 @@ class StaticSpectrumStream(StaticStream):
         # which are applied to RGB
         self.fitToRGB = model.BooleanVA(False)
 
-        # TODO: how to export the average spectrum of the whole image (for the
-        # bandwidth selector)? a separate method?
-
         # TODO: min/max: tl and br points of the image in physical coordinates
         # TODO: also need the size of a point (and density?)
 #        self.point1 = model.ResolutionVA(unit="m") # FIXME: float
@@ -1364,20 +1361,20 @@ class StaticSpectrumStream(StaticStream):
     def getSpectrum(self):
         """
         Compute the global spectrum of the data as an average over all the pixels
-        returns (list of float): average intensity for each wavelength
+        returns (numpy.ndarray of float): average intensity for each wavelength
          You need to use the metadata of the raw data to find out what is the
-         wavelength for each pixel.
+         wavelength for each pixel, but the range of wavelengthBandwidth is
+         the same as the range of this spectrum.
         """
         if not self.raw:
             return []
 
-        data = self.raw[0]
+        data = numpy.array(self.raw[0])
         # flatten all but the C dimension, for the average
         data = data.reshape((data.shape[0], numpy.prod(data.shape[1:])))
         av_data = numpy.mean(data, axis=1)
 
-        # TODO: add an argument to request dividing by ._depth?
-        return av_data.tolist()
+        return av_data
 
     def onFitToRGB(self, value):
         """

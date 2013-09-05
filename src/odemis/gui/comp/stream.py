@@ -1294,7 +1294,7 @@ class StreamPanel(wx.PyPanel):
         enabled = self._btn_fit_rgb.GetToggle()
         self.stream.fitToRGB.value = enabled
 
-    @limit_invocation(1)
+    @limit_invocation(0.2)
     def on_new_spec_data(self, image):
         # Display the global spectrum in the visual range slider
         gspec = self.stream.getSpectrum()
@@ -1305,10 +1305,10 @@ class StreamPanel(wx.PyPanel):
         # make it fit between 0 and 1
         if len(gspec) >= 5:
             # skip the 2 biggest peaks
-            s_values = sorted(gspec)
+            s_values = numpy.sort(gspec)
             mins, maxs = s_values[2], s_values[-3]
         else:
-            mins, maxs = min(gspec), max(gspec)
+            mins, maxs = gspec.min(), gspec.max()
 
         base = min(mins, 0) # to make sure big values look big
         try:
@@ -1316,8 +1316,9 @@ class StreamPanel(wx.PyPanel):
         except ZeroDivisionError:
             coef = 1
 
-        gspec = [(s + base) * coef for s in gspec]
-        wx.CallAfter(self._sld_spec.SetContent, gspec)
+        gspec = gspec + base
+        gspec *= coef
+        wx.CallAfter(self._sld_spec.SetContent, gspec.tolist())
 
 
 class StreamBar(wx.Panel):
