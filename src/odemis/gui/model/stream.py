@@ -117,13 +117,8 @@ class Stream(object):
                                          range=[(0, 0, 0, 0), (1, 1, 1, 1)],
                                          cls=(int, long, float))
 
+        self._irange = None
         self._updateIRange()
-#        if self._detector:
-#            # The last element of the shape indicates the bit depth, which
-#            # is used for brightness/contrast adjustment.
-#            self._irange = (0, self._detector.shape[-1] - 1) # FIXME: true iif unsigned int
-#        else:
-#            self._irange = None # min/max possible data values
 
         # whether to use auto brightness & contrast
         self.auto_bc = model.BooleanVA(True)
@@ -226,15 +221,15 @@ class Stream(object):
                 if model.MD_BPP in data.metadata:
                     depth = 2**data.metadata[model.MD_BPP]
                     if data.dtype.kind == "i":
-                        irange = -depth // 2, depth //2 -1
+                        irange = (-depth // 2, depth // 2 - 1)
                     else:
-                        irange = 0, depth -1
+                        irange = (0, depth - 1)
                 elif self._detector:
                     depth = self._detector.shape[-1]
                     if data.dtype.kind == "i":
-                        irange = -depth // 2, depth // 2 - 1
+                        irange = (-depth // 2, depth // 2 - 1)
                     else:
-                        irange = 0, depth - 1
+                        irange = (0, depth - 1)
                 else:
                     idt = numpy.iinfo(data.dtype)
                     irange = (idt.min, idt.max)
@@ -1149,7 +1144,6 @@ class StaticARStream(StaticStream):
     pass
 
 # Different projection types
-# TODO: maybe ONE_POINT can be dropped (= LINE with twice the same point)
 PROJ_ONE_POINT = 1
 PROJ_ALONG_LINE = 2
 PROJ_AVERAGE_SPECTRUM = 3
@@ -1189,7 +1183,6 @@ class StaticSpectrumStream(StaticStream):
             raise NotImplementedError("SpectrumStream needs a cube data")
 
         ### this is for "average spectrum" projection
-        # VAs: center wavelength + bandwidth (=center + width)
         try:
             # cached list of wavelength for each pixel pos
             self._wl_px_values = self._get_wavelength_per_pixel(image)
@@ -1197,29 +1190,24 @@ class StaticSpectrumStream(StaticStream):
             # useless polynomial => just show pixels values (ex: -50 -> +50 px)
             # TODO: try to make them always int?
 
-            maxb = image.shape[0] // 2
-            minb = (maxb - image.shape[0]) + 1
-            self._wl_px_values = range(minb, maxb + 1)
+            max_bw = image.shape[0] // 2
+            min_bw = (max_bw - image.shape[0]) + 1
+            self._wl_px_values = range(min_bw, max_bw + 1)
             assert(len(self._wl_px_values) == image.shape[0])
-            self.centerWavelength = model.FloatContinuous(0,
-                                                          range=(minb, maxb),
-                                                          unit="px")
-            max_bw = image.shape[0]
-            self.bandwidth = model.FloatContinuous(max(1, max_bw // 12),
-                                                   range=(1, max_bw),
-                                                   unit="px")
+            unit_bw = "px"
+            cwl = (max_bw + min_bw) // 2
+            width = image.shape[0] // 12
         else:
-            minb, maxb = self._wl_px_values[0], self._wl_px_values[-1]
-            # they might represent wavelength out of the possible values, but they
-            # will automatically be clipped to fine values
-            self.centerWavelength = model.FloatContinuous((maxb + minb) / 2,
-                                                          range=(minb, maxb),
-                                                          unit="m")
-            max_bw = maxb - minb
-            min_bw = (maxb - minb) / image.shape[0] # one pixel width
-            self.bandwidth = model.FloatContinuous(max_bw / 12,
-                                                   range=(min_bw, max_bw),
-                                                   unit="m")
+            min_bw, max_bw = self._wl_px_values[0], self._wl_px_values[-1]
+            unit_bw = "m"
+            cwl = (max_bw + min_bw) / 2
+            width = (max_bw - min_bw) / 12
+
+        # low/high values of the spectrum displayed
+        self.spectrumBandwidth = model.TupleContinuous((cwl - width, cwl + width),
+                                       range=((min_bw, min_bw), (max_bw, max_bw)),
+                                       unit=unit_bw,
+                                       cls=(int, long, float))
 
         # Whether the (per bandwidth) display should be split intro 3 sub-bands
         # which are applied to RGB
@@ -1237,24 +1225,18 @@ class StaticSpectrumStream(StaticStream):
         self.projection = model.IntEnumerated(PROJ_AVERAGE_SPECTRUM,
           choices=set([PROJ_ONE_POINT, PROJ_ALONG_LINE, PROJ_AVERAGE_SPECTRUM]))
 
-        # Find the depth
-        try:
-            self._irange = (0, 2 ** image.metadata[model.MD_BPP] - 1)
-            self.histogram._edges = self._irange
-        except KeyError:
-            # no MD_MPP => no problem, will be guessed by histogram computation
-            pass
-
-        # Avoid negative values
-        # FIXME: probably need to fix DataArray2wxImage() for such cases
-        # cast to numpy.array to ensure it becomes a scalar (instead of a DataArray)
-        minv = numpy.array(image).min()
-        if minv < 0:  # signed?
-            self._depth += -minv
+#        # Avoid negative values
+#        # FIXME: probably need to fix DataArray2RGB() for such cases
+#        # cast to numpy.array to ensure it becomes a scalar (instead of a DataArray)
+#        minv = numpy.array(image).min()
+#        if minv < 0:  # signed?
+#            self._depth += -minv
+#
+        self._irange = None
+        self._updateIRange()
 
         self.fitToRGB.subscribe(self.onFitToRGB)
-        self.centerWavelength.subscribe(self.onWavelengthChange)
-        self.bandwidth.subscribe(self.onWavelengthChange)
+        self.spectrumBandwidth.subscribe(self.onSpectrumBandwidth)
 
         self.onNewImage(None, image) # generates the first rgb image
 
@@ -1296,11 +1278,7 @@ class StaticSpectrumStream(StaticStream):
         Return the current bandwidth in pixels index
         returns (2-tuple of int): low and high pixel coordinates (included)
         """
-        center = self.centerWavelength.value
-        width = self.bandwidth.value
-        low = center - width / 2
-        high = center + width / 2
-        # no need to clip, because searchsorted will do it anyway
+        low, high = self.spectrumBandwidth.value
 
         # Find the closest pixel position for the requested wavelength
         low_px = numpy.searchsorted(self._wl_px_values, low, side="left")
@@ -1321,7 +1299,7 @@ class StaticSpectrumStream(StaticStream):
 
     def _updateImageAverage(self, data):
         if self.auto_bc.value:
-            # TODO: move to whenever histogram changes?
+            # FIXME: it doesn't seem to really work (never full black or full white)
             # The histogram might be slightly old, but not too much
             irange = img.findOptimalRange(self.histogram._full_hist,
                                           self.histogram._edges,
@@ -1368,9 +1346,10 @@ class StaticSpectrumStream(StaticStream):
         try:
             self._running_upd_img = True
             data = self.raw[0][:, 0, 0, :, :]
-            # FIXME: check that this API makes sense (projection...)
             if self.projection.value == PROJ_AVERAGE_SPECTRUM:
                 self._updateImageAverage(data)
+            # TODO PROJ_ONE_POINT
+            # TODO PROJ_ALONG_LINE
             else:
                 raise NotImplementedError("Need to handle other projection types")
         except Exception:
@@ -1408,9 +1387,9 @@ class StaticSpectrumStream(StaticStream):
             logging.warning("FitToRGB projection not supported")
         self._updateImage()
 
-    def onWavelengthChange(self, value):
+    def onSpectrumBandwidth(self, value):
         """
-        called when centerWavelength or bandwidth are changed
+        called when spectrumBandwidth is changed
         """
         self._updateImage()
 

@@ -796,14 +796,16 @@ class StreamPanel(wx.PyPanel):
         self.row_count += 1
 
         # ====== Second row, histogram
+        ir_rng = (self.stream.intensityRange.range[0][0],
+                  self.stream.intensityRange.range[1][1])
         self._sld_hist = VisualRangeSlider(
                                 self._panel,
                                 size=(380, 40), # FIXME: remove fixed width
+                                value=self.stream.intensityRange.value,
+                                min_val=ir_rng[0],
+                                max_val=ir_rng[1],
         )
-
         self._sld_hist.SetBackgroundColour("#000000")
-        rngs = self.stream.intensityRange.range
-        self._sld_hist.SetRange(rngs[0][0], rngs[1][1])
         self._vac_hist = VigilantAttributeConnector(
                                 self.stream.intensityRange,
                                 self._sld_hist,
@@ -820,6 +822,8 @@ class StreamPanel(wx.PyPanel):
         # ====== Third row, text fields for intensity (ratios)
         
         lbl_lowi = wx.StaticText(self._panel, -1, "Low")
+        tooltip_txt = "Value mapped to black"
+        lbl_lowi.SetToolTipString(tooltip_txt)
         self._txt_lowi = UnitFloatCtrl(self._panel, -1,
                     self.stream.intensityRange.value[0] * 100,
                     style=wx.NO_BORDER,
@@ -829,7 +833,7 @@ class StreamPanel(wx.PyPanel):
                     unit='%')
         self._txt_lowi.SetBackgroundColour(BACKGROUND_COLOUR)
         self._txt_lowi.SetForegroundColour(FOREGROUND_COLOUR_EDIT)
-        self._txt_lowi.SetToolTipString("Value mapped to black")
+        self._txt_lowi.SetToolTipString(tooltip_txt)
         def get_lowi(va=self.stream.intensityRange, ctrl=self._txt_lowi):
             lv = ctrl.GetValue() / 100
             hv = va.value[1]
@@ -845,6 +849,8 @@ class StreamPanel(wx.PyPanel):
                           events=wx.EVT_COMMAND_ENTER)
 
         lbl_highi = wx.StaticText(self._panel, -1, "High")
+        tooltip_txt = "Value mapped to white"
+        lbl_highi.SetToolTipString(tooltip_txt)
         self._txt_highi = UnitFloatCtrl(self._panel, -1,
                     self.stream.intensityRange.value[1] * 100,
                     style=wx.NO_BORDER,
@@ -854,7 +860,7 @@ class StreamPanel(wx.PyPanel):
                     unit='%')
         self._txt_highi.SetBackgroundColour(BACKGROUND_COLOUR)
         self._txt_highi.SetForegroundColour(FOREGROUND_COLOUR_EDIT)
-        self._txt_highi.SetToolTipString("Value mapped to white")
+        self._txt_highi.SetToolTipString(tooltip_txt)
         def get_highi(va=self.stream.intensityRange, ctrl=self._txt_highi):
             lv = va.value[0]
             hv = ctrl.GetValue() / 100
@@ -1128,8 +1134,8 @@ class StreamPanel(wx.PyPanel):
         """
         return True if the stream looks like a stream with wavelength
         """
-        return (hasattr(stream, "fitToRGB") and hasattr(stream, "bandwidth")
-                and hasattr(stream, "centerWavelength"))
+        return (hasattr(stream, "spectrumBandwidth"))
+                #and hasattr(stream, "fitToRGB")
 
     def _add_wl_controls(self):
         # ====== Top row, fit RGB toggle button
@@ -1159,25 +1165,20 @@ class StreamPanel(wx.PyPanel):
 
         # ====== Second row, center label, slider and value
 
-        self._sld_spec = BandwidthSlider(
+        wl = self.stream.spectrumBandwidth.value
+        wl_rng = (self.stream.spectrumBandwidth.range[0][0],
+                  self.stream.spectrumBandwidth.range[1][1])
+        self._sld_spec = VisualRangeSlider(
                                 self._panel,
                                 size=(380, 40), # FIXME: remove fixed width
+                                value=wl,
+                                min_val=wl_rng[0],
+                                max_val=wl_rng[1],
         )
-
         self._sld_spec.SetBackgroundColour("#000000")
-        self._sld_spec.SetRange(self.stream.centerWavelength.range)
         self._vac_center = VigilantAttributeConnector(
-                                self.stream.centerWavelength,
+                                self.stream.spectrumBandwidth,
                                 self._sld_spec,
-                                va_2_ctrl=self._sld_spec.set_center_value,
-                                ctrl_2_va=self._sld_spec.get_center_value,
-                                events=wx.EVT_SLIDER)
-
-        self._vac_bandwidth = VigilantAttributeConnector(
-                                self.stream.bandwidth,
-                                self._sld_spec,
-                                va_2_ctrl=self._sld_spec.set_bandwidth_value,
-                                ctrl_2_va=self._sld_spec.get_bandwidth_value,
                                 events=wx.EVT_SLIDER)
 
         # span is 3, because emission/excitation have 2 controls
@@ -1188,53 +1189,84 @@ class StreamPanel(wx.PyPanel):
         self.row_count += 1
 
         # ====== Third row, text fields for intensity (ratios)
-
         tooltip_txt = "Center wavelength of the spectrum"
         lbl_scenter = wx.StaticText(self._panel, -1, "Center")
         lbl_scenter.SetToolTipString(tooltip_txt)
         self._txt_scenter = UnitFloatCtrl(self._panel, -1,
-                    self.stream.centerWavelength.value * 1e9,
+                    (wl[0] + wl[1]) / 2,
                     style=wx.NO_BORDER,
                     size=(-1, 14),
-                    min_val=self.stream.centerWavelength.range[0] * 1e9,
-                    max_val=self.stream.centerWavelength.range[1] * 1e9,
-                    unit='nm')
+                    min_val=wl_rng[0],
+                    max_val=wl_rng[1],
+                    unit=self.stream.spectrumBandwidth.unit) # m or px
         self._txt_scenter.SetBackgroundColour(BACKGROUND_COLOUR)
         self._txt_scenter.SetForegroundColour(FOREGROUND_COLOUR_EDIT)
         self._txt_scenter.SetToolTipString(tooltip_txt)
-        # TODO: either put more connection between the 2 VAs to reflect actual
-        # value, or put cleverness here.
-#        def get_lowi(va=self.stream.intensityRange, ctrl=self._txt_lowi):
-#            lv = ctrl.GetValue() / 100
-#            hv = va.value[1]
-#            # clamp low range to max high range
-#            if hv < lv:
-#                lv = hv
-#                ctrl.SetValue(lv * 100)
-#            return lv, hv
-        self._vac_scenter = VigilantAttributeConnector(self.stream.centerWavelength,
+
+        def get_center(va=self.stream.spectrumBandwidth, ctrl=self._txt_scenter):
+            """
+            Return the low/high values for the bandwidth, from the requested center
+            """
+            # ensure the low/high values are always within the allowed range
+            wl = va.value
+            wl_rng = (va.range[0][0], va.range[1][1])
+            
+            width = wl[1] - wl[0]
+            ctr_rng = wl_rng[0] + width / 2, wl_rng[1] - width / 2
+            req_center = ctrl.GetValue()
+            new_center = min(max(ctr_rng[0], req_center), ctr_rng[1])
+            
+            if req_center != new_center:
+                # VA might not change => update value ourselves
+                ctrl.SetValue(new_center)
+
+            wl = (new_center - width / 2, new_center + width / 2)
+            return wl
+
+        self._vac_scenter = VigilantAttributeConnector(self.stream.spectrumBandwidth,
                           self._txt_scenter,
-                          lambda v: self._txt_scenter.SetValue(v * 1e9),
-                          lambda: self._txt_scenter.GetValue() / 1e9,
+                          lambda r: self._txt_scenter.SetValue((r[0] + r[1]) / 2),
+                          get_center,
                           events=wx.EVT_COMMAND_ENTER)
 
         tooltip_txt = "Bandwidth of the spectrum"
         lbl_sbw = wx.StaticText(self._panel, -1, "Bandwidth")
         lbl_sbw.SetToolTipString(tooltip_txt)
         self._txt_sbw = UnitFloatCtrl(self._panel, -1,
-                    self.stream.bandwidth.value * 1e9,
+                    (wl[1] - wl[0]),
                     style=wx.NO_BORDER,
                     size=(-1, 14),
-                    min_val=self.stream.bandwidth.range[0] * 1e9,
-                    max_val=self.stream.bandwidth.range[1] * 1e9,
-                    unit='nm')
+                    min_val=0,
+                    max_val=(wl_rng[1] - wl_rng[0]),
+                    unit=self.stream.spectrumBandwidth.unit)
         self._txt_sbw.SetBackgroundColour(BACKGROUND_COLOUR)
         self._txt_sbw.SetForegroundColour(FOREGROUND_COLOUR_EDIT)
         self._txt_sbw.SetToolTipString(tooltip_txt)
-        self._vac_scenter = VigilantAttributeConnector(self.stream.bandwidth,
+
+        def get_bandwidth(va=self.stream.spectrumBandwidth, ctrl=self._txt_sbw):
+            """
+            Return the low/high values for the bandwidth, from the requested bandwidth
+            """
+            # ensure the low/high values are always within the allowed range
+            wl = va.value
+            wl_rng = (va.range[0][0], va.range[1][1])
+
+            center = (wl[0] + wl[1]) / 2
+            max_width = max(center - wl_rng[0], wl_rng[1] - center) * 2
+            req_width = ctrl.GetValue()
+            new_width = max(min(max_width, req_width), max_width / 1024)
+
+            if req_width != new_width:
+                # VA might not change => update value ourselves
+                ctrl.SetValue(new_width)
+
+            wl = (center - new_width / 2, center + new_width / 2)
+            return wl
+
+        self._vac_sbw = VigilantAttributeConnector(self.stream.spectrumBandwidth,
                           self._txt_sbw,
-                          lambda v: self._txt_sbw.SetValue(v * 1e9),
-                          lambda: self._txt_sbw.GetValue() / 1e9,
+                          lambda r: self._txt_sbw.SetValue(r[1] - r[0]),
+                          get_bandwidth,
                           events=wx.EVT_COMMAND_ENTER)
 
         cb_wl_sz = wx.BoxSizer(wx.HORIZONTAL)
