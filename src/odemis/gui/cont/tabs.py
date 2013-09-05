@@ -78,7 +78,7 @@ class SecomStreamsTab(Tab):
     def __init__(self, name, button, panel, main_frame, microscope):
         super(SecomStreamsTab, self).__init__(name, button, panel)
 
-        self.microscope_model = instrmodel.get_live_gui_model(microscope)
+        self.tab_data_model = instrmodel.get_live_gui_model(microscope)
         self.main_frame = main_frame
 
         # Various controllers used for the live view and acquisition of images
@@ -92,7 +92,7 @@ class SecomStreamsTab(Tab):
         # Order matters!
         # First we create the views, then the streams
         self._view_controller = viewcont.ViewController(
-                                    self.microscope_model,
+                                    self.tab_data_model,
                                     self.main_frame,
                                     [self.main_frame.vp_secom_tl,
                                      self.main_frame.vp_secom_tr,
@@ -102,11 +102,11 @@ class SecomStreamsTab(Tab):
 
         self._settings_controller = settings.SecomSettingsController(
                                         self.main_frame,
-                                        self.microscope_model
+                                        self.tab_data_model
                                     )
 
         self._stream_controller = streamcont.StreamController(
-                                        self.microscope_model,
+                                        self.tab_data_model,
                                         self.main_frame.pnl_secom_streams
                                   )
         buttons = OrderedDict([
@@ -127,25 +127,25 @@ class SecomStreamsTab(Tab):
                    ])
 
         self._view_selector = viewcont.ViewSelector(
-                                    self.microscope_model,
+                                    self.tab_data_model,
                                     self.main_frame,
                                     buttons
                               )
 
         self._acquisition_controller = SecomAcquiController(
-                                            self.microscope_model,
+                                            self.tab_data_model,
                                             self.main_frame
                                        )
 
         self._microscope_controller = MicroscopeController.bind_buttons(
-                                            self.microscope_model,
+                                            self.tab_data_model,
                                             self.main_frame
                                       )
 
         # Toolbar
         tb = self.main_frame.secom_tool_menu
-        tb.AddTool(tools.TOOL_RO_UPDATE, self.microscope_model.tool)
-        tb.AddTool(tools.TOOL_RO_ZOOM, self.microscope_model.tool)
+        tb.AddTool(tools.TOOL_RO_UPDATE, self.tab_data_model.tool)
+        tb.AddTool(tools.TOOL_RO_ZOOM, self.tab_data_model.tool)
         tb.AddTool(tools.TOOL_ZOOM_FIT, self.onZoomFit)
 
     @property
@@ -166,7 +166,7 @@ class SparcAcquisitionTab(Tab):
     def __init__(self, name, button, panel, main_frame, microscope):
         super(SparcAcquisitionTab, self).__init__(name, button, panel)
 
-        self.microscope_model = instrmodel.AcquisitionGUIModel(microscope)
+        self.tab_data_model = instrmodel.ScannedAcquisitionGUIData(microscope)
         self.main_frame = main_frame
 
         # Various controllers used for the live view and acquisition of images
@@ -181,14 +181,14 @@ class SparcAcquisitionTab(Tab):
         self._ar_stream = None
 
         # list of streams for acquisition
-        acq_view = self.microscope_model.acquisitionView
+        acq_view = self.tab_data_model.acquisitionView
 
         # create the streams
         sem_stream = streammod.SEMStream(
                         "SEM live",
-                        self.microscope_model.sed,
-                        self.microscope_model.sed.data,
-                        self.microscope_model.ebeam)
+                        self.tab_data_model.sed,
+                        self.tab_data_model.sed.data,
+                        self.tab_data_model.ebeam)
         self._sem_live_stream = sem_stream
         sem_stream.should_update.value = True
         acq_view.addStream(sem_stream) # it should also be saved
@@ -196,9 +196,9 @@ class SparcAcquisitionTab(Tab):
         # the SEM acquisition simultaneous to the CCDs
         semcl_stream = streammod.SEMStream(
                 "SEM CL", # name matters, used to find the stream for the ROI
-                self.microscope_model.sed,
-                self.microscope_model.sed.data,
-                self.microscope_model.ebeam
+                self.tab_data_model.sed,
+                self.tab_data_model.sed.data,
+                self.tab_data_model.ebeam
         )
         acq_view.addStream(semcl_stream)
         self._sem_cl_stream = semcl_stream
@@ -207,23 +207,23 @@ class SparcAcquisitionTab(Tab):
         # streams. Both from the setting panels, the acquisition view and
         # from ._roi_streams .
 
-        if self.microscope_model.spectrometer:
+        if self.tab_data_model.spectrometer:
             spec_stream = streammod.SpectrumStream(
                                         "Spectrum",
-                                        self.microscope_model.spectrometer,
-                                        self.microscope_model.spectrometer.data,
-                                        self.microscope_model.ebeam)
+                                        self.tab_data_model.spectrometer,
+                                        self.tab_data_model.spectrometer.data,
+                                        self.tab_data_model.ebeam)
             acq_view.addStream(spec_stream)
             self._roi_streams.append(spec_stream)
             spec_stream.roi.subscribe(self.onSpecROI)
             self._spec_stream = spec_stream
 
-        if self.microscope_model.ccd:
+        if self.tab_data_model.ccd:
             ar_stream = streammod.ARStream(
                                 "Angular",
-                                self.microscope_model.ccd,
-                                self.microscope_model.ccd.data,
-                                self.microscope_model.ebeam)
+                                self.tab_data_model.ccd,
+                                self.tab_data_model.ccd.data,
+                                self.tab_data_model.ebeam)
             acq_view.addStream(ar_stream)
             self._roi_streams.append(ar_stream)
             ar_stream.roi.subscribe(self.onARROI)
@@ -237,17 +237,17 @@ class SparcAcquisitionTab(Tab):
         # Needs SEM CL stream (could be avoided if we had a .roa on the
         # microscope model)
         self._view_controller = viewcont.ViewController(
-                                    self.microscope_model,
+                                    self.tab_data_model,
                                     self.main_frame,
                                     [self.main_frame.vp_sparc_acq_view]
                                 )
-        mic_view = self.microscope_model.focussedView.value
+        mic_view = self.tab_data_model.focussedView.value
         mic_view.addStream(sem_stream)  #pylint: disable=E1103
 
         # needs to have the AR and Spectrum streams on the acquisition view
         self._settings_controller = settings.SparcSettingsController(
                                         self.main_frame,
-                                        self.microscope_model,
+                                        self.tab_data_model,
                                     )
 
         # FIXME: for now we disable the AR from the acquisition view, because we
@@ -263,7 +263,7 @@ class SparcAcquisitionTab(Tab):
         # needs settings_controller
         self._acquisition_controller = SparcAcquiController(
                                             self.main_frame,
-                                            self.microscope_model,
+                                            self.tab_data_model,
                                             self.settings_controller
                                        )
 
@@ -271,11 +271,11 @@ class SparcAcquisitionTab(Tab):
         # buttons
         # to hide/show the instrument settings
         # Turn on the live SEM stream
-        self.microscope_model.emState.value = STATE_ON
+        self.tab_data_model.emState.value = STATE_ON
         # and subscribe to activate the live stream accordingly
         # (also needed to ensure at exit, all the streams are unsubscribed)
         # TODO: maybe should be handled by a simple stream controller?
-        self.microscope_model.emState.subscribe(self.onEMState, init=True)
+        self.tab_data_model.emState.subscribe(self.onEMState, init=True)
 
         # Repetition visualisation
 
@@ -301,15 +301,14 @@ class SparcAcquisitionTab(Tab):
         # Toolbar
 
         tb = self.main_frame.sparc_acq_tool_menu
-        tb.AddTool(tools.TOOL_RO_ACQ, self.microscope_model.tool)
-        tb.AddTool(tools.TOOL_POINT, self.microscope_model.tool)
-        tb.AddTool(tools.TOOL_RO_ZOOM, self.microscope_model.tool)
+        tb.AddTool(tools.TOOL_RO_ACQ, self.tab_data_model.tool)
+        tb.AddTool(tools.TOOL_POINT, self.tab_data_model.tool)
+        tb.AddTool(tools.TOOL_RO_ZOOM, self.tab_data_model.tool)
         tb.AddTool(tools.TOOL_ZOOM_FIT, self.onZoomFit)
 
-    # Special event handlers for repition indication in the ROI selection
+    # Special event handlers for repetition indication in the ROI selection
 
-    # Spectrograph
-
+    # Spectrometer
     def on_spec_rep_change(self, rep):
         self.update_spec_rep()
 
@@ -337,8 +336,7 @@ class SparcAcquisitionTab(Tab):
             self.update_spec_rep(False)
         evt.Skip()
 
-    # Angular
-
+    # Angular Resolved
     def on_angu_rep_change(self, rep):
         self.update_angu_rep()
 
@@ -385,7 +383,7 @@ class SparcAcquisitionTab(Tab):
 
         # Turn on the SEM stream only when displaying this tab
         if show:
-            self.onEMState(self.microscope_model.emState.value)
+            self.onEMState(self.tab_data_model.emState.value)
         else:
             self._sem_live_stream.is_active.value = False
 
@@ -432,20 +430,21 @@ class SparcAcquisitionTab(Tab):
             overlay = self.main_frame.vp_sparc_acq_view.canvas.roi_overlay
             overlay.set_repetition(self.angu_rep.va.value)
 
-class InspectionTab(Tab):
+class AnalysisTab(Tab):
 
     def __init__(self, name, button, panel, main_frame, microscope=None):
         """
         microscope will be used only to select the type of views
         """
-        super(InspectionTab, self).__init__(name, button, panel)
+        super(AnalysisTab, self).__init__(name, button, panel)
 
-        # Doesn't need a microscope
+        # TODO: automatically change the display type based on the acquisition displayed
+        # Doesn't need a microscope, but helps to pick a "flavour"
         if microscope:
             role = microscope.role
         else:
             role = None
-        self.microscope_model = instrmodel.AnalysisGUIModel(role=role)
+        self.tab_data_model = instrmodel.AnalysisGUIData(role=role)
         self.main_frame = main_frame
 
         # Various controllers used for the live view and acquisition of images
@@ -454,12 +453,8 @@ class InspectionTab(Tab):
         self._acquisition_controller = None
         self._stream_controller = None
 
-        # The file currently being viewed (if any, data shown might also be
-        # be a fresh acquisition)
-        self.current_file = None
-
         self._view_controller = viewcont.ViewController(
-                                    self.microscope_model,
+                                    self.tab_data_model,
                                     self.main_frame,
                                     [self.main_frame.vp_inspection_tl,
                                      self.main_frame.vp_inspection_tr,
@@ -468,7 +463,7 @@ class InspectionTab(Tab):
                                 )
 
         self._stream_controller = streamcont.StreamController(
-                                        self.microscope_model,
+                                        self.tab_data_model,
                                         self.main_frame.pnl_inspection_streams,
                                         static=True
                                   )
@@ -476,7 +471,7 @@ class InspectionTab(Tab):
 
         self._settings_controller = settings.AnalysisSettingsController(
                                         self.main_frame,
-                                        self.microscope_model
+                                        self.tab_data_model
                                     )
 
         buttons = OrderedDict([
@@ -497,7 +492,7 @@ class InspectionTab(Tab):
                ])
 
         self._view_selector = viewcont.ViewSelector(
-                                    self.microscope_model,
+                                    self.tab_data_model,
                                     self.main_frame,
                                     buttons
                               )
@@ -509,8 +504,8 @@ class InspectionTab(Tab):
 
         # Toolbar
         tb = self.main_frame.sparc_ana_tool_menu
-        tb.AddTool(tools.TOOL_RO_ZOOM, self.microscope_model.tool)
-        tb.AddTool(tools.TOOL_POINT, self.microscope_model.tool)
+        tb.AddTool(tools.TOOL_RO_ZOOM, self.tab_data_model.tool)
+        tb.AddTool(tools.TOOL_POINT, self.tab_data_model.tool)
         tb.AddTool(tools.TOOL_ZOOM_FIT, self.onZoomFit)
 
     @property
@@ -523,13 +518,13 @@ class InspectionTab(Tab):
     def on_file_open_button(self, evt):
         """ Open an image file using a file dialog box
 
-        :return: True if a file was successfully selected, False otherwise.
         """
         # Find the available formats (and corresponding extensions)
         formats_to_ext = dataio.get_available_formats(os.O_RDONLY)
 
-        if self.current_file:
-            path, _ = os.path.split(self.current_file)
+        fi = self.tab_data_model.fileinfo.value
+        if fi and fi.file_name:
+            path, _ = os.path.split(fi.file_name)
         else:
             path = get_picture_folder()
 
@@ -543,12 +538,11 @@ class InspectionTab(Tab):
 
         # Show the dialog and check whether is was accepted or cancelled
         if dialog.ShowModal() != wx.ID_OK:
-            return False
+            return
 
         # Detect the format to use
         fn = dialog.GetPath()
-        self.current_file = fn
-        logging.debug("Current file set to %s", self.current_file)
+        logging.debug("Current file set to %s", fn)
 
         fmt = formats[dialog.GetFilterIndex()]
         if fmt is None:
@@ -570,8 +564,6 @@ class InspectionTab(Tab):
             logging.exception("Failed to open file '%s' with format %s", fn, fmt)
 
         self._display_new_data(fn, data)
-
-        return True
 
 
     def _display_new_data(self, filename, data):
@@ -622,7 +614,7 @@ class InspectionTab(Tab):
                                             add_to_all_views=True)
         if acq_date:
             fi.metadata[model.MD_ACQ_DATE] = acq_date
-        self.microscope_model.fileinfo.value = fi
+        self.tab_data_model.fileinfo.value = fi
 
 
 class LensAlignTab(Tab):
@@ -632,7 +624,7 @@ class LensAlignTab(Tab):
     def __init__(self, name, button, panel, main_frame, microscope=None):
         super(LensAlignTab, self).__init__(name, button, panel)
 
-        self.microscope_model = instrmodel.get_live_gui_model(microscope)
+        self.tab_data_model = instrmodel.get_live_gui_model(microscope)
         self.main_frame = main_frame
 
         main_frame.vp_align_ccd.ShowMergeSlider(False)
@@ -641,17 +633,17 @@ class LensAlignTab(Tab):
 
         self._settings_controller = settings.LensAlignSettingsController(
                                         self.main_frame,
-                                        self.microscope_model
+                                        self.tab_data_model
                                     )
 
         # self._view_controller = viewcont.ViewController(
-        #                             self.microscope_model,
+        #                             self.tab_data_model,
         #                             self.main_frame,
         #                             [self.main_frame.vp_align_sem,
         #                              self.main_frame.vp_align_ccd])
 
         self._microscope_controller = MicroscopeController.bind_buttons(
-                                            self.microscope_model,
+                                            self.tab_data_model,
                                             self.main_frame
                                       )
 
@@ -667,7 +659,7 @@ class MirrorAlignTab(Tab):
     def __init__(self, name, button, panel, main_frame, microscope=None):
         super(MirrorAlignTab, self).__init__(name, button, panel)
 
-        self.microscope_model = instrmodel.ActuatorGUIModel(microscope)
+        self.tab_data_model = instrmodel.ActuatorGUIData(microscope)
         self.main_frame = main_frame
 
         # Various controllers used for the live view and acquisition of images
@@ -675,21 +667,21 @@ class MirrorAlignTab(Tab):
         self._view_controller = None
         self._acquisition_controller = None
         self._stream_controller = streamcont.StreamController(
-                                        self.microscope_model,
+                                        self.tab_data_model,
                                         self.main_frame.pnl_sparc_align_streams,
                                         locked=True
                                   )
         self._ccd_stream = None
 
         # create the stream to the AR image + goal image
-        if self.microscope_model.ccd:
+        if self.tab_data_model.ccd:
             # Not ARStream as this is for multiple repetitions, and we just care
             # about what's on the CCD
             ccd_stream = streammod.CameraStream(
                                     "Angular resolved sensor",
-                                     self.microscope_model.ccd,
-                                     self.microscope_model.ccd.data,
-                                     self.microscope_model.ebeam)
+                                     self.tab_data_model.ccd,
+                                     self.tab_data_model.ccd.data,
+                                     self.tab_data_model.ebeam)
             self._ccd_stream = ccd_stream
 
 
@@ -706,11 +698,11 @@ class MirrorAlignTab(Tab):
             goal_stream = streammod.StaticStream("Goal", goal_iim)
             # create a view on the microscope model
             self._view_controller = viewcont.ViewController(
-                                        self.microscope_model,
+                                        self.tab_data_model,
                                         self.main_frame,
                                         [self.main_frame.vp_sparc_align]
                                     )
-            mic_view = self.microscope_model.focussedView.value
+            mic_view = self.tab_data_model.focussedView.value
             mic_view.show_crosshair.value = False    #pylint: disable=E1103
             mic_view.merge_ratio.value = 1           #pylint: disable=E1103
             ccd_stream.should_update.value = True
@@ -726,7 +718,7 @@ class MirrorAlignTab(Tab):
 
         self._settings_controller = settings.SparcAlignSettingsController(
                                         self.main_frame,
-                                        self.microscope_model,
+                                        self.tab_data_model,
                                     )
 
         # TODO: need contrast/brightness for the AR stream
@@ -734,7 +726,7 @@ class MirrorAlignTab(Tab):
         # TODO: Should go to a new controller "actuator controller"?
         # Bind sizesteps
         self.va_connectors = []
-        for an, ss in self.microscope_model.stepsizes.items():
+        for an, ss in self.tab_data_model.stepsizes.items():
             slider_name = "slider_" + an
             try:
                 slider = getattr(self.main_frame, slider_name)
@@ -749,7 +741,7 @@ class MirrorAlignTab(Tab):
             self.va_connectors.append(vac)
 
         # Bind buttons
-        for axis in self.microscope_model.axes:
+        for axis in self.tab_data_model.axes:
             for suffix, factor in [("m", -1), ("p", 1)]:
                 # something like "btn_align_pry"
                 btn_name = "btn_align_" + suffix + axis
@@ -760,7 +752,7 @@ class MirrorAlignTab(Tab):
                     continue
 
                 def btn_action(evt, axis=axis, factor=factor):
-                    self.microscope_model.step(axis, factor)
+                    self.tab_data_model.step(axis, factor)
 
                 btn.Bind(wx.EVT_BUTTON, btn_action)
 
@@ -817,7 +809,7 @@ class MirrorAlignTab(Tab):
             focusedWin = wx.Window.FindFocus()
             # TODO: need to check for more types?
             if not isinstance(focusedWin, wx.TextCtrl):
-                self.microscope_model.step(*self.key_bindings_sparc[key])
+                self.tab_data_model.step(*self.key_bindings_sparc[key])
                 return # keep it for ourselves
 
         # everything else we don't process

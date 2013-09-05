@@ -64,19 +64,19 @@ def get_live_gui_model(microscope):
     global live_gui_model
 
     if not live_gui_model:
-        live_gui_model = LiveGUIModel(microscope)
+        live_gui_model = LiveViewGUIData(microscope)
     return live_gui_model
 
 
-class MicroscopeGUIModel(object):
-    """ Represents the graphical user interface for a microscope.
+class MicroscopyGUIData(object):
+    """Contains all the data corresponding to a GUI tab.
 
-    In the Odemis GUI, there's basically one MicroscopeGUIModel per tab (and for
-    each window without tab). This is a meta-class. You actually want to use one
+    In the Odemis GUI, there's basically one MicroscopyGUIData per tab (or just
+    one for each window without tab). In the MVC terminology, it's a model.
+    
+    This is a meta-class. You actually want to use one
     of the sub-classes to represent a specific type of interface. Not all
-    interfaces have the same attributes.
-
-    However, there are always:
+    interfaces have the same attributes. However, there are always:
     .microscope:
         The HwComponent root of all the other components (can be None
         if there is no microscope available, like an interface to display
@@ -106,7 +106,10 @@ class MicroscopeGUIModel(object):
          provided by the back-end. If None, it means the interface is not
          connected to a microscope (and displays a recorded acquisition).
         """
+        # TODO: put all these HW attributes to a shared MainGUIData
+
         self.microscope = microscope
+
 
         # These are either HwComponents or None (if not available)
         self.ccd = None
@@ -280,15 +283,14 @@ class MicroscopeGUIModel(object):
         logging.info("Stopped motion on every axes")
 
 
-class LiveGUIModel(MicroscopeGUIModel):
+class LiveViewGUIData(MicroscopyGUIData):
     """ Represent an interface used to only show the current data from the
     microscope. It should be able to handle SEM-only, optical-only, and SECOM
     systems.
     """
-    # TODO check it can also handle SPARC?
     def __init__(self, microscope):
         assert microscope is not None
-        MicroscopeGUIModel.__init__(self, microscope)
+        MicroscopyGUIData.__init__(self, microscope)
 
         # Do some typical checks on expectations from an actual microscope
         if not any((self.ccd, self.sed, self.bsd, self.spectrometer)):
@@ -296,30 +298,20 @@ class LiveGUIModel(MicroscopeGUIModel):
 
         if not self.light and not self.ebeam:
             raise KeyError("No emitter found in the microscope")
-
-        if microscope.role == "secom":
-            if not self.stage:
-                raise KeyError("No stage found in the SECOM microscope")
-            # it's not an error to not have focus but it's weird
-            if not self.focus:
-                logging.warning("No focus actuator found for the microscope")
-        elif microscope.role == "sparc" and not self.mirror:
-            raise KeyError("No mirror found in the SPARC microscope")
 
         # Current tool selected (from the toolbar)
         tools = set([TOOL_NONE, TOOL_ZOOM, TOOL_ROI])
         self.tool = IntEnumerated(TOOL_NONE, choices=tools)
 
 
-class AcquisitionGUIModel(MicroscopeGUIModel):
-    """ Represent an interface used to show the current data from the microscope
-    and select different settings for a (high quality) acquisition. It should be
-    able to handle SPARC systems (at least).
+class ScannedAcquisitionGUIData(MicroscopyGUIData):
+    """ Represent an interface used to select a precise area to scan and
+    acquire signal. It allows fine control of the shape and density of the scan.
+    It is specifically made for the SPARC system.
     """
-    # TODO: use it for the SECOM acquisition dialogue as well
     def __init__(self, microscope):
         assert microscope is not None
-        MicroscopeGUIModel.__init__(self, microscope)
+        MicroscopyGUIData.__init__(self, microscope)
 
         # Do some typical checks on expectations from an actual microscope
         if not any((self.ccd, self.sed, self.bsd, self.spectrometer)):
@@ -327,16 +319,6 @@ class AcquisitionGUIModel(MicroscopeGUIModel):
 
         if not self.light and not self.ebeam:
             raise KeyError("No emitter found in the microscope")
-
-        if microscope.role == "secom":
-            if not self.stage:
-                raise KeyError("No stage found in the SECOM microscope")
-                # it's not an error to not have focus but it's weird
-            if not self.focus:
-                logging.warning("No focus actuator found for the microscope")
-        elif microscope.role == "sparc" and not self.mirror:
-            raise KeyError("No mirror found in the SPARC microscope")
-
 
         # more tools: for selecting the sub-region of acquisition
         tools = set([TOOL_NONE,
@@ -353,7 +335,7 @@ class AcquisitionGUIModel(MicroscopeGUIModel):
         # The tab controller will take care of filling it
         self.acquisitionView = MicroscopeView("Acquisition")
 
-class AnalysisGUIModel(MicroscopeGUIModel):
+class AnalysisGUIData(MicroscopyGUIData):
     """
     Represent an interface used to show the recorded microscope data. Typically
     it represents all the data present in a specific file.
@@ -362,7 +344,7 @@ class AnalysisGUIModel(MicroscopeGUIModel):
     def __init__(self, role=None):
         # create a fake empty microscope, with just a role
         fake_mic = model.Microscope("fake", role=role)
-        MicroscopeGUIModel.__init__(self, fake_mic)
+        MicroscopyGUIData.__init__(self, fake_mic)
 
         # only tool to zoom and pick point/line
         tools = set([TOOL_NONE, TOOL_ZOOM, TOOL_POINT, TOOL_LINE])
@@ -373,14 +355,14 @@ class AnalysisGUIModel(MicroscopeGUIModel):
         self.fileinfo = VigilantAttribute(None) # a FileInfo
 
 # TODO: use it for FirstStep too
-class ActuatorGUIModel(MicroscopeGUIModel):
+class ActuatorGUIData(MicroscopyGUIData):
     """
     Represent an interface used to move the actuators of a microscope. It might
     also display one or more views, but it's not required.
     """
     def __init__(self, microscope):
         assert microscope is not None
-        MicroscopeGUIModel.__init__(self, microscope)
+        MicroscopyGUIData.__init__(self, microscope)
 
         # check there is something to move
         if not microscope.actuators:

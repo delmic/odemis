@@ -34,9 +34,9 @@ class MicroscopeController(object):
     @classmethod
     def bind_buttons(cls, microscope_model, main_frame):
         """ This class method binds the 'hardware' buttons to their appropriate
-        Vigilant Attributes in the instrmodel.MicroscopeGUIModel
+        Vigilant Attributes in the instrmodel.MicroscopyGUIData
 
-        MicroscopeGUIModel: MicroscopeGUIModel
+        microscope_model (MicroscopyGUIData): the data model of the tab
         main_frame: (wx.Frame): the main frame of the GUI
         """
         if not cls.bound:

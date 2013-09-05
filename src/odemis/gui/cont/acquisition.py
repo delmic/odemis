@@ -56,7 +56,7 @@ class AcquisitionController(object):
     """
     def __init__(self, microscope_model, main_frame):
         """
-        microscope_model (MicroscopeModel): the representation of the microscope GUI
+        tab_data_model (MicroscopeModel): the representation of the microscope GUI
         main_frame: (wx.Frame): the frame which contains the 4 viewports
         """
         # TODO: get tab_controller from arguments or setting and stream controller
@@ -292,7 +292,7 @@ class SecomAcquiController(AcquisitionController):
 
     def __init__(self, microscope_model, main_frame):
         """
-        microscope_model (MicroscopeModel): the representation of the microscope GUI
+        tab_data_model (MicroscopeModel): the representation of the microscope GUI
         main_frame: (wx.Frame): the frame which contains the 4 viewports
         """
         AcquisitionController.__init__(self, microscope_model, main_frame)
@@ -356,7 +356,7 @@ class SparcAcquiController(AcquisitionController):
     def __init__(self, main_frame, microscope_model, settings_controller):
         """
         main_frame: (wx.Frame): the frame which contains the 4 viewports
-        microscope_model (MicroscopeModel): the representation of the microscope GUI
+        tab_data_model (MicroscopeModel): the representation of the microscope GUI
         settings_controller (SettingsController)
         """
         AcquisitionController.__init__(self, microscope_model, main_frame)
@@ -521,7 +521,7 @@ class SparcAcquiController(AcquisitionController):
         # get the analysis tab
         mtc = get_main_tab_controller()
 
-        analysis_interface = mtc['inspection'].microscope_model
+        analysis_interface = mtc['inspection'].tab_data_model
         stream_controller = mtc['inspection'].stream_controller
 
         # clear the analysis tab

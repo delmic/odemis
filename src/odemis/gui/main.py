@@ -212,16 +212,6 @@ class OdemisGUIApp(wx.App):
                     self.main_frame.btn_tab_secom_streams,
                     self.main_frame.pnl_tab_secom_streams
                 ),
-                # TODO: merge secom_gallery and sparc_analysis, once
-                # the tab can adapt the views depending on the acquisition
-                # content
-                # (
-                #     "booooo",
-                #     "secom_gallery",
-                #     tabs.InspectionTab,
-                #     self.main_frame.btn_tab_secom_gallery,
-                #     self.main_frame.pnl_tab_secom_gallery
-                # ),
                 (
                     ("sparc",),
                     ("MIRROR ALIGNMENT",),
@@ -241,8 +231,8 @@ class OdemisGUIApp(wx.App):
                 (
                     (None, "secom", "sparc"),
                     ("GALLERY", "GALLERY", "ANALYSIS"),
-                    "inspection",
-                    tabs.InspectionTab,
+                    "analysis",
+                    tabs.AnalysisTab,
                     self.main_frame.btn_tab_inspection,
                     self.main_frame.pnl_tab_inspection),
             ]
@@ -282,7 +272,7 @@ class OdemisGUIApp(wx.App):
         mtc = get_main_tab_controller()
         secom_tab = mtc['secom_live']
 
-        pos = secom_tab.microscope_model.focussedView.value.view_pos.value
+        pos = secom_tab.tab_data_model.focussedView.value.view_pos.value
         opt_im = pkg_resources.resource_stream("odemis.gui.img",
                                                "example/1-optical-rot7.png")
         opt_iim = InstrumentalImage(wx.ImageFromStream(opt_im), 7.14286e-7, pos)
@@ -305,7 +295,7 @@ class OdemisGUIApp(wx.App):
 
         sem_im = pkg_resources.resource_stream("odemis.gui.img",
                                                "example/3-sem.png")
-        pos = secom_tab.microscope_model.focussedView.value.view_pos.value
+        pos = secom_tab.tab_data_model.focussedView.value.view_pos.value
         sem_iim = InstrumentalImage(wx.ImageFromStream(sem_im), 2.5e-07, pos)
 
         pos = (pos[0] + 5.5e-06, pos[1] + 1e-6)
@@ -352,7 +342,7 @@ class OdemisGUIApp(wx.App):
                                         mdspec)
 
             # put only these streams and switch to the analysis tab
-            stream_controller = mtc['inspection'].stream_controller
+            stream_controller = mtc['analysis'].stream_controller
             stream_controller.clear()
 
             stream_controller.addStatic("Secondary electrons", semdatas,
@@ -362,14 +352,14 @@ class OdemisGUIApp(wx.App):
                                         cls=StaticSpectrumStream,
                                         add_to_all_views=True)
 
-            analysis_interface = mtc['inspection'].microscope_model
+            interface_model = mtc['analysis'].tab_data_model
             # This is just to fill the metadata
             # TODO: avoid this by getting the metadata from the stream =>
             # better metadata + avoid copy if packaged in an egg.
             spec_fn = pkg_resources.resource_filename("odemis.gui.img",
                                                       "example/s1-spectrum.mat")
-            analysis_interface.fileinfo.value = instrmodel.FileInfo(spec_fn)
-            mtc.switch("inspection")
+            interface_model.fileinfo.value = instrmodel.FileInfo(spec_fn)
+            mtc.switch("analysis")
         except KeyError:
             self.goto_debug_mode()
             logging.exception("Failed to load example")
@@ -461,19 +451,19 @@ see http://www.fluorophores.org/disclaimer/.
             # Stop live view
             mtc = get_main_tab_controller()
             try:
-                microscope_model = mtc['secom_live'].microscope_model
+                data_model = mtc['secom_live'].tab_data_model
             except LookupError:
                 try:
-                    microscope_model = mtc['sparc_acqui'].microscope_model
+                    data_model = mtc['sparc_acqui'].tab_data_model
                 except LookupError:
-                    microscope_model = None
-            if microscope_model:
+                    data_model = None
+            if data_model:
                 try:
-                    microscope_model.opticalState.value = instrmodel.STATE_OFF
+                    data_model.opticalState.value = instrmodel.STATE_OFF
                 except AttributeError:
                     pass # just no such microscope present
                 try:
-                    microscope_model.emState.value = instrmodel.STATE_OFF
+                    data_model.emState.value = instrmodel.STATE_OFF
                 except AttributeError:
                     pass
 

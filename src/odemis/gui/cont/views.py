@@ -50,13 +50,12 @@ class ViewController(object):
 
     def __init__(self, micgui, main_frame, viewports):
         """
-        micgui (MicroscopeModel) -- the representation of the microscope GUI
+        micgui (MicroscopyGUIData) -- the representation of the microscope GUI
         main_frame: (wx.Frame) -- the frame which contains the 4 viewports
         viewports (list of MicroscopeViewport): the viewports to update
         """
 
         self._microscope_model = micgui
-        self._main_frame = main_frame
 
         # list of all the viewports (widgets that show the views)
         self._viewports = viewports
@@ -76,8 +75,8 @@ class ViewController(object):
         To be executed only once, at initialisation.
         """
 
-        # If InspectionTab for Sparc: SEM/Spec/AR/SEM
-        if (isinstance(self._microscope_model, instrmodel.AnalysisGUIModel) and
+        # If AnalysisTab for Sparc: SEM/Spec/AR/SEM
+        if (isinstance(self._microscope_model, instrmodel.AnalysisGUIData) and
             self._microscope_model.microscope.role == "sparc"):
             # TODO: should be dependent on the type of acquisition, and so
             # updated every time the .file changes
@@ -125,7 +124,7 @@ class ViewController(object):
             self._microscope_model.focussedView.value = self._viewports[1].mic_view
 
         # calibration tab => allow to display anything (the tab wants)
-        elif isinstance(self._microscope_model, instrmodel.ActuatorGUIModel):
+        elif isinstance(self._microscope_model, instrmodel.ActuatorGUIData):
             i = 1
             for viewport in self._viewports:
                 view = instrmodel.MicroscopeView(
@@ -175,7 +174,7 @@ class ViewController(object):
 
         # If both SEM and Optical (=SECOM): SEM/Optical/2x combined
         elif ((self._microscope_model.ebeam and self._microscope_model.light) or
-              (isinstance(self._microscope_model, instrmodel.AnalysisGUIModel) and
+              (isinstance(self._microscope_model, instrmodel.AnalysisGUIData) and
               self._microscope_model.microscope.role == "secom")):
             assert len(self._viewports) == 4
             assert not self._microscope_model.views # should still be empty
@@ -313,7 +312,7 @@ class ViewSelector(object):
 
     def __init__(self, microscope_model, main_frame, buttons):
         """
-        microscope_model (MicroscopeModel): the representation of the microscope
+        microscope_model (MicroscopyGUIData): the representation of the microscope
             GUI
         main_frame: (wx.Frame): the frame which contains the 4 viewports
         buttons (OrderedDict : btn -> (viewport, label)): 5 buttons and the
@@ -322,7 +321,6 @@ class ViewSelector(object):
             The first button has no viewport, for the 2x2 view.
         """
         self.microscope_model = microscope_model
-        self._main_frame = main_frame
 
         self.buttons = buttons
 
@@ -362,7 +360,7 @@ class ViewSelector(object):
             self._subscriptions.append(onName)
 
         # Select the overview by default
-        # Fixme: should be related to the layout in MicroscopeModel and/or the
+        # Fixme: should be related to the layout in MicroscopyGUIData and/or the
         # focussed viewport. ('None' selects the overview button)
         self.toggleButtonForView(None)
 
