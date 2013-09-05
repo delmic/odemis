@@ -28,8 +28,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from odemis.gui import FOREGROUND_COLOUR_EDIT, FOREGROUND_COLOUR, \
     BACKGROUND_COLOUR, BACKGROUND_COLOUR_TITLE, FOREGROUND_COLOUR_DIS
 from odemis.gui.comp.foldpanelbar import FoldPanelItem
-from odemis.gui.comp.slider import UnitIntegerSlider, BandwidthSlider, \
-    UnitFloatSlider, VisualRangeSlider
+from odemis.gui.comp.slider import UnitFloatSlider, VisualRangeSlider
 from odemis.gui.comp.text import SuggestTextCtrl, UnitIntegerCtrl, \
     IntegerTextCtrl, UnitFloatCtrl
 from odemis.gui.util import call_after, limit_invocation
@@ -1140,28 +1139,27 @@ class StreamPanel(wx.PyPanel):
     def _add_wl_controls(self):
         # ====== Top row, fit RGB toggle button
 
-        # TODO: only when the functionality is there!
-#        self._btn_fit_rgb = buttons.ImageTextToggleButton(
-#                                                self._panel,
-#                                                - 1,
-#                                                img.getbtn_spectrumBitmap(),
-#                                                label="RGB",
-#                                                size=(68, 26),
-#                                                style=wx.ALIGN_RIGHT)
-#        tooltip = "Toggle sub-bandwidths to Red/Green/Blue display"
-#        self._btn_fit_rgb.SetToolTipString(tooltip)
-#        self._btn_fit_rgb.SetBitmaps(bmp_h=img.getbtn_spectrum_hBitmap(),
-#                                     bmp_sel=img.getbtn_spectrum_aBitmap())
-#        self._btn_fit_rgb.SetForegroundColour("#000000")
-#        self._gbs.Add(self._btn_fit_rgb,
-#                      (self.row_count, 0),
-#                      flag=wx.LEFT | wx.TOP,
-#                      border=5)
-#        self.row_count += 1
-#
-#        # TODO: need to use VA connector for this toggle button
-#        self._btn_fit_rgb.Bind(wx.EVT_BUTTON, self.on_toggle_fit_rgb)
-#        self._btn_fit_rgb.SetToggle(self.stream.fitToRGB.value)
+        self._btn_fit_rgb = buttons.ImageTextToggleButton(
+                                                self._panel,
+                                                - 1,
+                                                img.getbtn_spectrumBitmap(),
+                                                label="RGB",
+                                                size=(68, 26),
+                                                style=wx.ALIGN_RIGHT)
+        tooltip = "Toggle sub-bandwidths to Red/Green/Blue display"
+        self._btn_fit_rgb.SetToolTipString(tooltip)
+        self._btn_fit_rgb.SetBitmaps(bmp_h=img.getbtn_spectrum_hBitmap(),
+                                     bmp_sel=img.getbtn_spectrum_aBitmap())
+        self._btn_fit_rgb.SetForegroundColour("#000000")
+        self._gbs.Add(self._btn_fit_rgb,
+                      (self.row_count, 0),
+                      flag=wx.LEFT | wx.TOP,
+                      border=5)
+        self.row_count += 1
+
+        # TODO: need to use VA connector for this toggle button
+        self._btn_fit_rgb.Bind(wx.EVT_BUTTON, self.on_toggle_fit_rgb)
+        self._btn_fit_rgb.SetToggle(self.stream.fitToRGB.value)
 
         # ====== Second row, center label, slider and value
 

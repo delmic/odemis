@@ -1169,9 +1169,6 @@ class StaticSpectrumStream(StaticStream):
         #  * coordinates of 1st point (1-point, line)
         #  * coordinates of 2nd point (line)
 
-        # TODO: support either 3D or 5D (CTZYX with TZ = 11)
-
-        # default to showing all the data
         if isinstance(image, InstrumentalImage):
             raise NotImplementedError("SpectrumStream needs a raw cube data")
 
@@ -1189,7 +1186,6 @@ class StaticSpectrumStream(StaticStream):
         except (ValueError, KeyError):
             # useless polynomial => just show pixels values (ex: -50 -> +50 px)
             # TODO: try to make them always int?
-
             max_bw = image.shape[0] // 2
             min_bw = (max_bw - image.shape[0]) + 1
             self._wl_px_values = range(min_bw, max_bw + 1)
@@ -1296,7 +1292,6 @@ class StaticSpectrumStream(StaticStream):
 
     def _updateImageAverage(self, data):
         if self.auto_bc.value:
-            # FIXME: it doesn't seem to really work (never full black or full white)
             # The histogram might be slightly old, but not too much
             irange = img.findOptimalRange(self.histogram._full_hist,
                                           self.histogram._edges,
@@ -1312,16 +1307,35 @@ class StaticSpectrumStream(StaticStream):
             edges = self.histogram._edges
             irange = [edges[0] + (edges[1] - edges[0]) * v for v in rrange]
 
-
-        # TODO: support fitToRGB => 3 greyscales mapped to RGB
-
         # pick only the data inside the bandwidth
         spec_range = self._get_bandwidth_in_pixel()
         logging.debug("Spectrum range picked: %s px", spec_range)
-        # TODO: use better intermediary type if possible?, cf semcomedi
-        av_data = numpy.mean(data[spec_range[0]:spec_range[1] + 1], axis=0)
 
-        rgbim = img.DataArray2RGB(av_data, irange)
+        if not self.fitToRGB.value:
+            # TODO: use better intermediary type if possible?, cf semcomedi
+            av_data = numpy.mean(data[spec_range[0]:spec_range[1] + 1], axis=0)
+            rgbim = img.DataArray2RGB(av_data, irange)
+        else:
+            # divide the range into 3 sub-ranges of almost the same length
+            len_rng = spec_range[1] - spec_range[0] + 1
+            rrange = [spec_range[0], int(round(spec_range[0] + len_rng / 3)) - 1]
+            grange = [rrange[1] + 1, int(round(spec_range[0] + 2 * len_rng / 3)) - 1]
+            brange = [grange[1] + 1, spec_range[1]]
+            # ensure each range contains at least one pixel
+            rrange[1] = max(rrange)
+            grange[1] = max(grange)
+            brange[1] = max(brange)
+
+            # FIXME: unoptimized, as each channel is duplicated 3 times, and discarded
+            av_data = numpy.mean(data[rrange[0]:rrange[1] + 1], axis=0)
+            rgbim = img.DataArray2RGB(av_data, irange)
+            av_data = numpy.mean(data[grange[0]:grange[1] + 1], axis=0)
+            gim = img.DataArray2RGB(av_data, irange)
+            rgbim[:, :, 1] = gim[:, :, 0]
+            av_data = numpy.mean(data[brange[0]:brange[1] + 1], axis=0)
+            bim = img.DataArray2RGB(av_data, irange)
+            rgbim[:, :, 2] = bim[:, :, 0]
+
         im = img.NDImage2wxImage(rgbim)
         im.InitAlpha() # it's a different buffer so useless to do it in numpy
 
@@ -1380,8 +1394,6 @@ class StaticSpectrumStream(StaticStream):
         """
         called when fitToRGB is changed
         """
-        if value:
-            logging.warning("FitToRGB projection not supported")
         self._updateImage()
 
     def onSpectrumBandwidth(self, value):
