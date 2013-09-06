@@ -25,17 +25,17 @@ SimActuators: {
 "SEM-Optical Alignment": {
     class: CombinedActuator,
     role: align,
-    children: {"l": FakePIGCS, "r": FakePIGCS},
+    children: {"a": FakePIGCS, "b": FakePIGCS},
     init: {
-        axes_map: {"l": "l", "r": "r"},
-#        inverted: ["l"]
+        axes_map: {"a": "a", "b": "b"},
+#        inverted: ["a"]
     },
     properties: {
-        speed: {'l': 0.001, 'r': 0.001} #m/s
+        speed: {'a': 0.001, 'b': 0.001} #m/s
     }
 }
 
-# Z axis of focus: decreasing means "closer to the sample"
+# Z axis of focus: increasing means "closer to the sample"
 "OpticalZ actuator": {
     class: CombinedActuator,
     role: focus,
@@ -51,6 +51,6 @@ SimActuators: {
 FakePIGCS: {
     class: simulated.Stage,
     role: none,
-    init: {axes: ["l", "r", "z", "x", "y"]},
+    init: {axes: ["a", "b", "z", "x", "y"]},
 }
 

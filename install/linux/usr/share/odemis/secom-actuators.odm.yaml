@@ -25,17 +25,17 @@ SECOM-Actuators: {
 "SEM-Optical Alignment": {
     class: CombinedActuator,
     role: align,
-    children: {"l": PIGCS, "r": PIGCS},
+    children: {"a": PIGCS, "b": PIGCS},
     init: {
-        axes_map: {"l": "l", "r": "r"},
-#        inverted: ["l"]
+        axes_map: {"a": "a", "b": "b"},
+#        inverted: ["a"]
     },
     properties: {
-        speed: {'l': 0.001, 'r': 0.001} #m/s
+        speed: {'a': 0.001, 'b': 0.001} #m/s
     }
 }
 
-# Z axis of focus: decreasing means "closer to the sample"
+# Z axis of focus: increasing means "closer to the sample"
 "OpticalZ actuator": {
     class: CombinedActuator,
     role: focus,
@@ -48,13 +48,13 @@ SECOM-Actuators: {
     }
 }
 
-# USB should be connected to a E-861 (or pi-fixed.rules updated to rename to "ttyPIGCS")
+# USB should be connected to a E-861 or C-867
 # PI E-861/C-867 jumpers (. = off):
-# L = 1234.6..
-# R = 123..6..
+# A = 1234.6..
+# B = 123..6..
 # Z = 12.4.6..
-# X = 12...6..
-# Y = 1.34.6..
+# X = 12...6.. (C-867)
+# Y = 1.34.6.. (C-867)
 
 PIGCS: {
     class: pigcs.Bus,
@@ -62,8 +62,10 @@ PIGCS: {
     init: {
         port: "/dev/ttyPIGCS",
         # axis -> controller, channel, closed-loop?
-        axes: {"l": [1, 1, False], "r": [2, 1, False], "z": [3, 1, False],
-               "x": [4, 1, False], "y": [5, 1, False]}
+        axes: {"a": [1, 1, False], "b": [2, 1, False], "z": [3, 1, False],
+               "x": [4, 1, False], "y": [5, 1, False]},
+        vpms: {"x": 200, "y": 200} # V/(m/s) : increase to increase the actual distance moved (for a given value in m)
     },
 }
+
 

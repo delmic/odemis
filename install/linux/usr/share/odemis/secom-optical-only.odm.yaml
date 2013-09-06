@@ -1,9 +1,9 @@
 SECOM: {
     class: Microscope,
     role: brightfield,
-    emitters: [Spectra, "Nikon Super Duper", "MultiBand Fixed Filter", EBeam],
+    emitters: [Spectra, "Nikon Super Duper", "MultiBand Fixed Filter"],
     detectors: [Clara],
-    actuators: ["Redstone Stage", "SEM-Optical Alignment", "OpticalZ actuator"],
+    actuators: ["OLStage", "SEM-Optical Alignment", "OpticalZ actuator"],
 }
 
 Spectra: {
@@ -20,11 +20,6 @@ Spectra: {
                  }
         },
     affects: [Clara],
-}
-
-EBeam: {
-    class: simulated.EBeam,
-    role: e-beam,
 }
 
 "Nikon Super Duper": {
@@ -52,42 +47,35 @@ Clara: {
     }
 }
 
-# PI RedStone jumpers (.=off):
-# X,Y = 1234...8
-# X => Ch1
-# Y => Ch2
 # Axes should be synchronized with the camera
-"Redstone Stage": {
-    class: pi.StageRedStone,
+"OLStage": {
+    class: CombinedActuator,
     role: stage,
     affects: [Clara],
+    children: {"x": PIGCS, "y": PIGCS},
     init: {
-        port: /dev/ttyS0, # serial port on the board
-        # port: /dev/ttyPIRS, # USB serial port
-        axes: {x: [0, 1], y: [0, 0]}, # axis -> controller, channel
-        inverted: ["y"],
-    }, 
+        axes_map: {"x": "x", "y": "y"},
+    },
     properties: {
-        speed: {'x': 0.001, 'y': 0.001} #m/s
+        speed: {'x': 0.0001, 'y': 0.0001} #m/s (low enough to ensure we always use the minimum voltage)
     }
 }
 
-# Use 2 CombinedActuators to separate the axes of the PIGCS over different roles
 "SEM-Optical Alignment": {
     class: CombinedActuator,
     role: align,
     affects: [Clara],
-    children: {"l": PIGCS, "r": PIGCS},
+    children: {"a": PIGCS, "b": PIGCS},
     init: {
-        axes_map: {"l": "l", "r": "r"},
-#        inverted: ["l"]
+        axes_map: {"a": "a", "b": "b"},
+#        inverted: ["a"]
     },
     properties: {
-        speed: {'l': 0.001, 'r': 0.001} #m/s
+        speed: {'a': 0.001, 'b': 0.001} #m/s
     }
 }
 
-# Z axis of focus: decreasing means "closer to the sample"
+# Z axis of focus: increasing means "closer to the sample"
 "OpticalZ actuator": {
     class: CombinedActuator,
     role: focus,
@@ -101,17 +89,23 @@ Clara: {
     }
 }
 
-# PI E-861 jumpers (. = off):
-# L = 1234.6..
-# R = 123..6..
+# USB should be connected to a E-861 or C-867
+# PI E-861/C-867 jumpers (. = off):
+# A = 1234.6..
+# B = 123..6..
 # Z = 12.4.6..
+# X = 12...6.. (C-867)
+# Y = 1.34.6.. (C-867)
 
 PIGCS: {
     class: pigcs.Bus,
-    role: AlignAndFocus,
+    role: none,
     init: {
         port: "/dev/ttyPIGCS",
-        axes: {"l": [1, 1, False], "r": [2, 1, False], "z": [3, 1, False]} # axis -> controller, channel, closed-loop?
+        # axis -> controller, channel, closed-loop?
+        axes: {"a": [1, 1, False], "b": [2, 1, False], "z": [3, 1, False],
+               "x": [4, 1, False], "y": [5, 1, False]},
+        vpms: {"x": 200, "y": 200} # V/(m/s) : increase to increase the actual distance moved (for a given value in m)
     },
 }
 

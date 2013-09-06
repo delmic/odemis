@@ -114,13 +114,13 @@ Spectra: {
     class: CombinedActuator,
     role: align,
     affects: ["Andor SimCam"],
-    children: {"l": FakePIGCS, "r": FakePIGCS},
+    children: {"a": FakePIGCS, "b": FakePIGCS},
     init: {
-        axes_map: {"l": "l", "r": "r"},
-        inverted: ["r"]
+        axes_map: {"a": "a", "b": "b"},
+#        inverted: ["a"]
     },
     properties: {
-        speed: {'l': 0.1, 'r': 0.1} #m/s
+        speed: {'a': 0.001, 'b': 0.001} #m/s
     }
 }
 
@@ -140,6 +140,6 @@ Spectra: {
 FakePIGCS: {
     class: simulated.Stage,
     role: none,
-    init: {axes: ["l", "r", "z"]},
+    init: {axes: ["a", "b", "z"]},
 }
 
