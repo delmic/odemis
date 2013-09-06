@@ -355,13 +355,13 @@ class OdemisGUIApp(wx.App):
                                         cls=StaticSpectrumStream,
                                         add_to_all_views=True)
 
-            interface_model = mtc['analysis'].tab_data_model
+            tab_data_model = mtc['analysis'].tab_data_model
             # This is just to fill the metadata
             # TODO: avoid this by getting the metadata from the stream =>
             # better metadata + avoid copy if packaged in an egg.
             spec_fn = pkg_resources.resource_filename("odemis.gui.img",
                                                       "example/s1-spectrum.mat")
-            interface_model.fileinfo.value = guimodel.FileInfo(spec_fn)
+            tab_data_model.fileinfo.value = guimodel.FileInfo(spec_fn)
             mtc.switch("analysis")
         except KeyError:
             self.goto_debug_mode()
@@ -379,8 +379,8 @@ class OdemisGUIApp(wx.App):
         pass
 
     def on_stop_axes(self, evt):
-        if self.microscope:
-            for actuator in self.microscope.actuators:
+        if self.main_data and self.main_data.microscope:
+            for actuator in self.main_data.microscope.actuators:
                 # TODO: run each of them in a separate thread, to call the stop
                 # ASAP? (or all but the last one?)
                 try:

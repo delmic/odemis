@@ -562,6 +562,12 @@ class StreamPanel(wx.PyPanel):
         """
         Delete the widget from the GUI
         """
+        # Avoid receiving data after the object is deleted
+        if hasattr(self, "_sld_hist"):
+            self.stream.histogram.unsubscribe(self._onHistogram)
+        if hasattr(self, "_sld_spec"):
+            self.stream.image.unsubscribe(self.on_new_spec_data)
+
         fpb_item = self.Parent
         wx.PyPanel.Destroy(self, *args, **kwargs)
         fpb_item._fitStreams()
@@ -799,7 +805,7 @@ class StreamPanel(wx.PyPanel):
                   self.stream.intensityRange.range[1][1])
         self._sld_hist = VisualRangeSlider(
                                 self._panel,
-                                size=(380, 40), # FIXME: remove fixed width
+                                size=(-1, 40),
                                 value=self.stream.intensityRange.value,
                                 min_val=ir_rng[0],
                                 max_val=ir_rng[1],
@@ -1168,7 +1174,7 @@ class StreamPanel(wx.PyPanel):
                   self.stream.spectrumBandwidth.range[1][1])
         self._sld_spec = VisualRangeSlider(
                                 self._panel,
-                                size=(380, 40), # FIXME: remove fixed width
+                                size=(-1, 40),
                                 value=wl,
                                 min_val=wl_rng[0],
                                 max_val=wl_rng[1],

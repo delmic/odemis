@@ -1720,24 +1720,22 @@ class StreamTree(object):
         if isinstance(stream, (Stream, StreamTree)):
             self.streams.append(stream)
             if hasattr(stream, 'should_update'):
-                stream.should_update.subscribe(
-                        self.stream_update_changed,
-                        init=False)
+                stream.should_update.subscribe(self.stream_update_changed, init=True)
             # print "stream added %s" % stream.should_update.value
-            # self.stream_update_changed()
         else:
             msg = "Illegal type %s found in add_stream!" % type(stream)
             raise ValueError(msg)
 
     def remove_stream(self, stream):
+        if hasattr(stream, 'should_update'):
+            stream.should_update.unsubscribe(self.stream_update_changed)
         self.streams.remove(stream)
+        self.stream_update_changed()
 
     def stream_update_changed(self, should_update=None):
         """ This method is called when one of the streams' should_update
         vigilant attribute changes.
         """
-        logging.debug("Stream update changed: should update %s", should_update)
-
         # At least one stream is live, so we 'should update'
         for s in self.streams:
             if hasattr(s, "should_update") and s.should_update.value:
