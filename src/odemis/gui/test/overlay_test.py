@@ -28,7 +28,7 @@
 
 import unittest
 import wx
-import odemis.gui.canvas as canvas
+import odemis.gui.comp.miccanvas as miccanvas
 import odemis.gui.comp.overlay as overlay
 import odemis.gui.test as test
 import odemis.gui.test.test_gui
@@ -43,7 +43,7 @@ class PlotCanvasTestCase(test.GuiTestCase):
     def test_view_select_overlay(self):
         # Create and add a test plot canvas
         # cnvs = canvas.PlotCanvas(self.panel)
-        cnvs = canvas.SecomCanvas(self.panel)
+        cnvs = miccanvas.SecomCanvas(self.panel)
 
         cnvs.SetBackgroundColour(wx.BLACK)
         cnvs.SetForegroundColour("#DDDDDD")

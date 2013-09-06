@@ -19,7 +19,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 import logging
-import odemis.gui.instrmodel as instrmodel
+from odemis.gui import model
 import wx
 
 # GUI toggle button (suffix) name -> VA name
@@ -39,7 +39,7 @@ class MicroscopeStateController(object):
 
     def __init__(self, tab_data, main_frame, btn_prefix):
         """ Binds the 'hardware' buttons to their appropriate
-        Vigilant Attributes in the instrmodel.MainGUIData
+        Vigilant Attributes in the model.MainGUIData
 
         tab_data (MicroscopyGUIData): the data model of the tab
         main_frame: (wx.Frame): the main frame of the GUI
@@ -67,7 +67,7 @@ class MicroscopeStateController(object):
 
             # TODO: use VAConnector
             def on_va(state, btn=btn):
-                btn.SetToggle(state != instrmodel.STATE_OFF)
+                btn.SetToggle(state != model.STATE_OFF)
 
             self._callbacks.append(on_va)
             va.subscribe(on_va, init=True)
@@ -76,9 +76,9 @@ class MicroscopeStateController(object):
             def on_toggle(event, va=va, vaname=vaname):
                 logging.debug("%s toggle button pressed" % vaname)
                 if event.isDown:
-                    va.value = instrmodel.STATE_ON
+                    va.value = model.STATE_ON
                 else:
-                    va.value = instrmodel.STATE_OFF
+                    va.value = model.STATE_OFF
 
             # FIXME: special _bitmap_ toggle button doesn't seem to generate
             # EVT_TOGGLEBUTTON

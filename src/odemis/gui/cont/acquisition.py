@@ -28,7 +28,8 @@ of microscope images.
 
 from concurrent.futures._base import CancelledError
 from odemis import model, dataio
-from odemis.gui import acqmng, conf, instrmodel
+from odemis.gui import acqmng, conf
+import odemis.gui.model as guimodel
 from odemis.gui.acqmng import preset_as_is
 from odemis.gui.cont import get_main_tab_controller
 from odemis.gui.model.stream import UNDEFINED_ROI
@@ -537,7 +538,7 @@ class SparcAcquiController(AcquisitionController):
             stream_controller.addStream(statics, add_to_all_views=True)
 
         # add the file info
-        finfo = instrmodel.FileInfo(acqfile)
+        finfo = guimodel.FileInfo(acqfile)
         # find the precise acquisition time as the earliest of all
         acq_time = finfo.metadata.get(model.MD_ACQ_DATE, time.time()) # ctime
         for r in data:

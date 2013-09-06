@@ -21,7 +21,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from concurrent.futures._base import CancelledError
 from odemis import model
-from odemis.gui import instrmodel
+import odemis.gui.model as guimodel
 from odemis.gui.acqmng import ProgressiveFuture, startAcquisition, \
     computeThumbnail
 import logging
@@ -99,7 +99,7 @@ class TestWithBackend(unittest.TestCase):
 
         # create some streams connected to the backend
         cls.microscope = model.getMicroscope()
-        cls.imodel = instrmodel.MicroscopyGUIData(cls.microscope)
+        cls.imodel = guimodel.MicroscopyGUIData(cls.microscope)
         s1 = stream.FluoStream("fluo1",
                   cls.imodel.ccd, cls.imodel.ccd.data,
                   cls.imodel.light, cls.imodel.light_filter)
@@ -121,7 +121,7 @@ class TestWithBackend(unittest.TestCase):
 
     def test_simple(self):
         # create a simple streamTree
-        st = instrmodel.StreamTree(streams=[self.streams[0]])
+        st = stream.StreamTree(streams=[self.streams[0]])
         f = startAcquisition(st.getStreams())
         data = f.result()
         self.assertIsInstance(data[0], model.DataArray)
@@ -142,9 +142,9 @@ class TestWithBackend(unittest.TestCase):
         Check we get some progress updates
         """
         # create a little complex streamTree
-        st = instrmodel.StreamTree(streams=[
+        st = stream.StreamTree(streams=[
                 self.streams[0],
-                instrmodel.StreamTree(streams=self.streams[1:3])
+                stream.StreamTree(streams=self.streams[1:3])
                 ])
         self.past = None
         self.left = None
@@ -162,9 +162,9 @@ class TestWithBackend(unittest.TestCase):
         try a bit the cancelling possibility
         """
         # create a little complex streamTree
-        st = instrmodel.StreamTree(streams=[
+        st = stream.StreamTree(streams=[
                 self.streams[2],
-                instrmodel.StreamTree(streams=self.streams[0:2])
+                stream.StreamTree(streams=self.streams[0:2])
                 ])
         self.past = None
         self.left = None

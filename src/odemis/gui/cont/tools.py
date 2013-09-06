@@ -29,7 +29,7 @@ This module contains classes that allow to create ToolBars for the MicroscopeGUI
 
 """
 
-from odemis.gui import instrmodel, img
+from odemis.gui import model, img
 from odemis.gui.comp.buttons import ImageButton, ImageToggleButton
 import wx
 
@@ -69,19 +69,19 @@ class ActionTool(Tool):
     pass
 
 TOOLS = {TOOL_RO_ZOOM: ModeTool("btn_view_zoom",
-                                instrmodel.TOOL_ZOOM, instrmodel.TOOL_NONE,
+                                model.TOOL_ZOOM, model.TOOL_NONE,
                                 "Select region of zoom"),
          TOOL_RO_UPDATE: ModeTool("btn_view_update",
-                                  instrmodel.TOOL_ROI, instrmodel.TOOL_NONE,
+                                  model.TOOL_ROI, model.TOOL_NONE,
                                   "Select region of interest"),
          TOOL_RO_ACQ: ModeTool("btn_view_sel",
-                               instrmodel.TOOL_ROA, instrmodel.TOOL_NONE,
+                               model.TOOL_ROA, model.TOOL_NONE,
                                "Select region of acquisition"),
          TOOL_POINT: ModeTool("btn_view_pick",
-                              instrmodel.TOOL_POINT, instrmodel.TOOL_NONE,
+                              model.TOOL_POINT, model.TOOL_NONE,
                               "Select point"),
          TOOL_LINE: ModeTool("btn_view_pick", # TODO icon
-                              instrmodel.TOOL_LINE, instrmodel.TOOL_NONE,
+                              model.TOOL_LINE, model.TOOL_NONE,
                               "Select line"),
          TOOL_ZOOM_FIT: ActionTool("btn_view_resize", "Zoom to fit content"),
         }

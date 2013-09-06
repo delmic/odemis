@@ -21,7 +21,8 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
 from odemis import model
-from odemis.gui import main_xrc, instrmodel, log
+from odemis.gui import main_xrc, log
+import odemis.gui.model as guimodel
 from odemis.gui.cont import set_main_tab_controller, get_main_tab_controller
 from odemis.gui.model.dye import DyeDatabase
 from odemis.gui.model.img import InstrumentalImage
@@ -101,7 +102,7 @@ class OdemisGUIApp(wx.App):
                 sys.exit(1)
             microscope = None
 
-        self.main_data = instrmodel.MainGUIData(microscope)
+        self.main_data = guimodel.MainGUIData(microscope)
         # Load the main frame
         self.main_frame = main_xrc.xrcfr_main(None)
 
@@ -360,7 +361,7 @@ class OdemisGUIApp(wx.App):
             # better metadata + avoid copy if packaged in an egg.
             spec_fn = pkg_resources.resource_filename("odemis.gui.img",
                                                       "example/s1-spectrum.mat")
-            interface_model.fileinfo.value = instrmodel.FileInfo(spec_fn)
+            interface_model.fileinfo.value = guimodel.FileInfo(spec_fn)
             mtc.switch("analysis")
         except KeyError:
             self.goto_debug_mode()
@@ -441,7 +442,6 @@ see http://www.fluorophores.org/disclaimer/.
 
     def on_close_window(self, evt=None): #pylint: disable=W0613
         """ This method cleans up and closes the Odemis GUI. """
-
         logging.info("Exiting Odemis")
 
         try:
@@ -449,38 +449,30 @@ see http://www.fluorophores.org/disclaimer/.
 
             pub.unsubAll()
 
-            # TODO: move to tab controller?
             # Stop live view
-            mtc = get_main_tab_controller()
             try:
-                data_model = mtc['secom_live'].tab_data_model
-            except LookupError:
-                try:
-                    data_model = mtc['sparc_acqui'].tab_data_model
-                except LookupError:
-                    data_model = None
-            if data_model:
-                try:
-                    data_model.opticalState.value = instrmodel.STATE_OFF
-                except AttributeError:
-                    pass # just no such microscope present
-                try:
-                    data_model.emState.value = instrmodel.STATE_OFF
-                except AttributeError:
-                    pass
+                self.main_data.opticalState.value = guimodel.STATE_OFF
+            except AttributeError:
+                pass # just no such microscope present
+            try:
+                self.main_data.emState.value = guimodel.STATE_OFF
+            except AttributeError:
+                pass
 
             # let all the tabs know we are stopping
+            mtc = get_main_tab_controller()
             mtc.terminate()
 
             if self.http_proc:
                 self.http_proc.terminate()  #pylint: disable=E1101
-
-            self.main_frame.Destroy()
-
         except Exception:
             logging.exception("Error during GUI shutdown")
 
-        log.stop_gui_logger()
+        try:
+            log.stop_gui_logger()
+        except Exception:
+            logging.exception("Error stopping GUI logging")
+
         self.main_frame.Destroy()
 
     def excepthook(self, etype, value, trace): #pylint: disable=W0622

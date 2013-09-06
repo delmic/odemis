@@ -22,9 +22,10 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 # Test module for Odemis' stream module in gui.comp
 #===============================================================================
 
-from odemis.gui import instrmodel, util
+from odemis.gui import util
+import odemis.gui.model as guimodel
 import odemis.gui.comp.stream as stream_comp
-from odemis.gui.instrmodel import Stream
+from odemis.gui.model.stream import Stream
 from odemis.gui.cont.streams import StreamController
 from odemis.gui.xmlh import odemis_get_test_resources
 from wx.lib.inspection import InspectionTool
@@ -128,7 +129,7 @@ class FakeMicroscopeModel(object):
     Imitates a MicroscopeModel wrt stream entry: it just needs a focussedView
     """
     def __init__(self):
-        fview = instrmodel.MicroscopeView("fakeview")
+        fview = guimodel.MicroscopeView("fakeview")
         self.focussedView = model.VigilantAttribute(fview)
 
         self.light = None
@@ -435,7 +436,7 @@ class FoldPanelBarTestCase(unittest.TestCase):
 
         # Hide first stream by changing to a view that only show SEM streams
         wx.MilliSleep(SLEEP_TIME)
-        semview = instrmodel.MicroscopeView("SEM view", stream_classes=(stream_mod.SEMStream,))
+        semview = guimodel.MicroscopeView("SEM view", stream_classes=(stream_mod.SEMStream,))
         # self.frm.stream_bar.hide_stream(0)
         mic_mod.focussedView.value = semview
         loop()

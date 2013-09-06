@@ -22,14 +22,14 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
 from __future__ import division
-from odemis.gui import instrmodel
+from odemis.gui import model
 from odemis.gui.model.stream import SEMStream, BrightfieldStream, FluoStream, \
     OPTICAL_STREAMS, EM_STREAMS, SPECTRUM_STREAMS, AR_STREAMS
 from odemis.gui.util import call_after
 import logging
 import wx
 
-# TODO: The next comments were copied from instrmodel. Read/implement/remove
+# TODO: The next comments were copied from model. Read/implement/remove
 # viewport controller (to be merged with stream controller?)
 # Creates the 4 microscope views at init, with the right names, depending on
 #   the available microscope hardware.
@@ -76,7 +76,7 @@ class ViewController(object):
         """
 
         # If AnalysisTab for Sparc: SEM/Spec/AR/SEM
-        if (isinstance(self._tab_data_model, instrmodel.AnalysisGUIData) and
+        if (isinstance(self._tab_data_model, model.AnalysisGUIData) and
             self._main_data_model.role == "sparc"):
             # TODO: should be dependent on the type of acquisition, and so
             # updated every time the .file changes
@@ -84,7 +84,7 @@ class ViewController(object):
             assert not self._tab_data_model.views # should still be empty
             logging.info("Creating (static) SPARC viewport layout")
 
-            view = instrmodel.MicroscopeView(
+            view = model.MicroscopeView(
                         "SEM",
                         self._main_data_model.stage,
                         stream_classes=EM_STREAMS
@@ -92,7 +92,7 @@ class ViewController(object):
             self._tab_data_model.views.append(view)
             self._viewports[0].setView(view, self._tab_data_model)
 
-            view = instrmodel.MicroscopeView(
+            view = model.MicroscopeView(
                         "Spectrum",
                         self._main_data_model.stage,
                         # TODO: change center wavelength?
@@ -104,14 +104,14 @@ class ViewController(object):
             self._viewports[1].setView(view, self._tab_data_model)
 
             # TODO: need a special View?
-            view = instrmodel.MicroscopeView(
+            view = model.MicroscopeView(
                         "Angle Resolved",
                         stream_classes=AR_STREAMS
                      )
             self._tab_data_model.views.append(view)
             self._viewports[2].setView(view, self._tab_data_model)
 
-            view = instrmodel.MicroscopeView(
+            view = model.MicroscopeView(
                         "SEM CL",
                         self._main_data_model.stage,
                         stream_classes=(EM_STREAMS + SPECTRUM_STREAMS)
@@ -124,10 +124,10 @@ class ViewController(object):
             self._tab_data_model.focussedView.value = self._viewports[1].mic_view
 
         # calibration tab => allow to display anything (the tab wants)
-        elif isinstance(self._tab_data_model, instrmodel.ActuatorGUIData):
+        elif isinstance(self._tab_data_model, model.ActuatorGUIData):
             i = 1
             for viewport in self._viewports:
-                view = instrmodel.MicroscopeView(
+                view = model.MicroscopeView(
                             "View %d" % i,
                             self._main_data_model.stage,
                             focus0=self._main_data_model.focus
@@ -144,7 +144,7 @@ class ViewController(object):
             logging.info("Creating SEM only viewport layout")
             i = 1
             for viewport in self._viewports:
-                view = instrmodel.MicroscopeView(
+                view = model.MicroscopeView(
                             "SEM %d" % i,
                             self._main_data_model.stage,
                             focus0=None, # TODO: SEM focus or focus1?
@@ -161,7 +161,7 @@ class ViewController(object):
             logging.info("Creating Optical only viewport layout")
             i = 1
             for viewport in self._viewports:
-                view = instrmodel.MicroscopeView(
+                view = model.MicroscopeView(
                             "Optical %d" % i,
                             self._main_data_model.stage,
                             focus0=self._main_data_model.focus,
@@ -174,13 +174,13 @@ class ViewController(object):
 
         # If both SEM and Optical (=SECOM): SEM/Optical/2x combined
         elif ((self._main_data_model.ebeam and self._main_data_model.light) or
-              (isinstance(self._tab_data_model, instrmodel.AnalysisGUIData) and
+              (isinstance(self._tab_data_model, model.AnalysisGUIData) and
               self._main_data_model.role == "secom")):
             assert len(self._viewports) == 4
             assert not self._tab_data_model.views # should still be empty
             logging.info("Creating combined SEM/Optical viewport layout")
 
-            view = instrmodel.MicroscopeView(
+            view = model.MicroscopeView(
                         "SEM",
                         self._main_data_model.stage,
                         focus0=None, # TODO: SEM focus
@@ -189,7 +189,7 @@ class ViewController(object):
             self._tab_data_model.views.append(view)
             self._viewports[0].setView(view, self._tab_data_model)
 
-            view = instrmodel.MicroscopeView(
+            view = model.MicroscopeView(
                         "Optical",
                         self._main_data_model.stage,
                         focus1=self._main_data_model.focus,
@@ -198,7 +198,7 @@ class ViewController(object):
             self._tab_data_model.views.append(view)
             self._viewports[1].setView(view, self._tab_data_model)
 
-            view = instrmodel.MicroscopeView(
+            view = model.MicroscopeView(
                         "Combined 1",
                         self._main_data_model.stage,
                         focus0=None, # TODO: SEM focus
@@ -207,7 +207,7 @@ class ViewController(object):
             self._tab_data_model.views.append(view)
             self._viewports[2].setView(view, self._tab_data_model)
 
-            view = instrmodel.MicroscopeView(
+            view = model.MicroscopeView(
                         "Combined 2",
                         self._main_data_model.stage,
                         focus0=None, # TODO: SEM focus
@@ -224,7 +224,7 @@ class ViewController(object):
                             "generic views", len(self._viewports))
             i = 1
             for viewport in self._viewports:
-                view = instrmodel.MicroscopeView(
+                view = model.MicroscopeView(
                             "View %d" % i,
                             self._main_data_model.stage,
                             focus0=self._main_data_model.focus
@@ -249,15 +249,15 @@ class ViewController(object):
         for viewport in self._viewports:
             if viewport.mic_view == view:
                 viewport.SetFocus(True)
-                if layout == instrmodel.VIEW_LAYOUT_ONE:
+                if layout == model.VIEW_LAYOUT_ONE:
                     # TODO: maybe in that case, it's not necessary to display the focus frame around?
                     viewport.Show()
             else:
                 viewport.SetFocus(False)
-                if layout == instrmodel.VIEW_LAYOUT_ONE:
+                if layout == model.VIEW_LAYOUT_ONE:
                     viewport.Hide()
 
-        if layout == instrmodel.VIEW_LAYOUT_ONE:
+        if layout == model.VIEW_LAYOUT_ONE:
             self._viewports[0].Parent.Layout() # resize viewport
 
         self._viewports[0].Parent.Thaw()
@@ -269,7 +269,7 @@ class ViewController(object):
         # only called when changed
         self._viewports[0].Parent.Freeze()
 
-        if layout == instrmodel.VIEW_LAYOUT_ONE:
+        if layout == model.VIEW_LAYOUT_ONE:
             logging.debug("Showing only one view")
             # TODO resize all the viewports now, so that there is no flickering
             # when just changing view
@@ -279,12 +279,12 @@ class ViewController(object):
                 else:
                     viewport.Hide()
 
-        elif layout == instrmodel.VIEW_LAYOUT_22:
+        elif layout == model.VIEW_LAYOUT_22:
             logging.debug("Showing all views")
             for viewport in self._viewports:
                 viewport.Show()
 
-        elif layout == instrmodel.VIEW_LAYOUT_FULLSCREEN:
+        elif layout == model.VIEW_LAYOUT_FULLSCREEN:
             raise NotImplementedError()
         else:
             raise NotImplementedError()
@@ -449,7 +449,7 @@ class ViewSelector(object):
 
         try:
             if view is not None:
-                assert isinstance(view, instrmodel.MicroscopeView)
+                assert isinstance(view, model.MicroscopeView)
         except AssertionError:
             logging.exception("Wrong type of view parameter! %s", view)
             raise
@@ -460,7 +460,7 @@ class ViewSelector(object):
         self.toggleButtonForView(view)
 
         # if layout is 2x2 => do nothing (first button is selected by _onViewLayout)
-        # if self._tab_data_model.viewLayout.value == instrmodel.VIEW_LAYOUT_22:
+        # if self._tab_data_model.viewLayout.value == model.VIEW_LAYOUT_22:
         #     # otherwise (layout is 2x2) => select the first button
         #     self.toggleButtonForView(None)
         # else:
@@ -486,7 +486,7 @@ class ViewSelector(object):
             self.toggleButtonForView(None)
             # 2x2 button
             # When selecting the overview, the focussed viewport should not change
-            self._tab_data_model.viewLayout.value = instrmodel.VIEW_LAYOUT_22
+            self._tab_data_model.viewLayout.value = model.VIEW_LAYOUT_22
         else:
             logging.debug("View button click")
             self.toggleButtonForView(viewport.mic_view)
@@ -494,4 +494,4 @@ class ViewSelector(object):
             # if the layout was 2x2 with another view focused, it doesn't first
             # display one big view, and immediately after changes to another view.
             self._tab_data_model.focussedView.value = viewport.mic_view
-            self._tab_data_model.viewLayout.value = instrmodel.VIEW_LAYOUT_ONE
+            self._tab_data_model.viewLayout.value = model.VIEW_LAYOUT_ONE

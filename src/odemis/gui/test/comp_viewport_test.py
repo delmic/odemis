@@ -21,24 +21,21 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
 #===============================================================================
-# Test module for Odemis' gui.comp.buttons module
+# Test module for Odemis' gui.comp.viewport module
 #===============================================================================
 
 import unittest
 
 import wx
 
-import odemis.gui.comp.canvas as canvas
 import odemis.gui.comp.viewport as viewport
 import odemis.gui.test.test_gui
 
 
 from odemis.gui.xmlh import odemis_get_test_resources
 from odemis.gui.test import MANUAL, SLEEP_TIME, gui_loop
-from odemis.gui.canvas import ZeroDimensionalPlotCanvas
 
 INSPECT = False
-MANUAL = False
 
 PLOTS = [
     ([0, 1, 2, 3, 4, 5], [1, 3, 5, 2, 4, 0]),

@@ -24,7 +24,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from __future__ import division
 from decorator import decorator
 from odemis import util, model
-from odemis.gui import instrmodel
+import odemis.gui.model as guimodel
 from odemis.gui.model import stream
 from odemis.gui.model.stream import UNDEFINED_ROI, EM_STREAMS
 from odemis.gui.util import limit_invocation, call_after, units, ignore_dead
@@ -99,8 +99,8 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         Set the microscope_view that this canvas is displaying/representing
         Can be called only once, at initialisation.
 
-        :param microscope_view:(instrmodel.MicroscopeView)
-        :param tab_data: (instrmodel.MicroscopyGUIData)
+        :param microscope_view:(model.MicroscopeView)
+        :param tab_data: (model.MicroscopyGUIData)
         """
         # This is a kind of kludge, see mscviewport.MicroscopeViewport for
         # details
@@ -694,8 +694,8 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
         Set the microscope_view that this canvas is displaying/representing
         Can be called only once, at initialisation.
 
-        :param microscope_view:(instrmodel.MicroscopeView)
-        :param tab_data: (instrmodel.MicroscopyGUIData)
+        :param microscope_view:(model.MicroscopeView)
+        :param tab_data: (model.MicroscopyGUIData)
         """
         super(SparcAcquiCanvas, self).setView(microscope_view, tab_data)
 
@@ -727,11 +727,11 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
             # TODO: queue it until dragging is finished?
             # Really? Why? I can't think of a scenario.
 
-        if tool == instrmodel.TOOL_ROA:
+        if tool == guimodel.TOOL_ROA:
             self.current_mode = MODE_SPARC_SELECT
             self.active_overlay = self.roi_overlay
             self.cursor = wx.StockCursor(wx.CURSOR_CROSS)
-        elif tool == instrmodel.TOOL_NONE:
+        elif tool == guimodel.TOOL_NONE:
             self.current_mode = None
             self.active_overlay = None
             self.cursor = wx.STANDARD_CURSOR

@@ -23,8 +23,9 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
 from odemis import model
-from odemis.gui import instrmodel, test
-from odemis.gui.canvas import DblMicroscopeCanvas
+from odemis.gui import test
+from odemis.gui.comp.miccanvas import DblMicroscopeCanvas
+from odemis.gui.model import MicroscopeView
 from odemis.gui.model.img import InstrumentalImage
 from odemis.gui.model.stream import StaticStream
 import logging
@@ -38,7 +39,7 @@ class FakeMicroscopeGUI(object):
     Imitates a MicroscopeModel wrt stream entry: it just needs a focussedView
     """
     def __init__(self):
-        fview = instrmodel.MicroscopeView("fakeview")
+        fview = MicroscopeView("fakeview")
         self.focussedView = model.VigilantAttribute(fview)
 
 class TestDblMicroscopeCanvas(unittest.TestCase):

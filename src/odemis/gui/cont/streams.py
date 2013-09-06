@@ -21,13 +21,14 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 
+from odemis.gui import comp
+from odemis.gui.model import STATE_OFF, STATE_PAUSE, STATE_ON
+from odemis.gui.model.stream import FluoStream, BrightfieldStream, SEMStream, \
+    StaticStream, Stream
+from wx.lib.pubsub import pub
 import logging
 
-from wx.lib.pubsub import pub
 
-import odemis.gui.model.stream as stream
-from odemis.gui import comp, instrmodel
-from odemis.gui.instrmodel import STATE_OFF, STATE_PAUSE, STATE_ON
 
 class StreamController(object):
     """
@@ -91,7 +92,7 @@ class StreamController(object):
             def fluor_capable():
                 on = self._main_data_model.opticalState.value == STATE_ON
                 view = self._tab_data_model.focussedView.value
-                compatible = view.is_compatible(stream.FluoStream)
+                compatible = view.is_compatible(FluoStream)
                 return on and compatible
 
             # TODO: how to know it's _fluorescent_ microscope?
@@ -106,7 +107,7 @@ class StreamController(object):
             def brightfield_capable():
                 on = self._main_data_model.opticalState.value == STATE_ON
                 view = self._tab_data_model.focussedView.value
-                compatible = view.is_compatible(stream.BrightfieldStream)
+                compatible = view.is_compatible(BrightfieldStream)
                 return on and compatible
 
             self._stream_bar.add_action("Bright-field",
@@ -119,7 +120,7 @@ class StreamController(object):
             def sem_capable():
                 on = self._main_data_model.emState.value == STATE_ON
                 view = self._tab_data_model.focussedView.value
-                compatible = view.is_compatible(stream.SEMStream)
+                compatible = view.is_compatible(SEMStream)
                 return on and compatible
 
             self._stream_bar.add_action("Secondary electrons",
@@ -142,33 +143,33 @@ class StreamController(object):
             logging.error("Failed to find a new unique name for stream")
             name = "Filtered colour"
 
-        stream = stream.FluoStream(name,
+        s = FluoStream(name,
                   self._main_data_model.ccd, self._main_data_model.ccd.data,
                   self._main_data_model.light, self._main_data_model.light_filter)
-        return self._addStream(stream, add_to_all_views)
+        return self._addStream(s, add_to_all_views)
 
     def addBrightfield(self, add_to_all_views=False):
         """
         Creates a new brightfield stream and panel in the stream bar
         returns (StreamPanel): the stream panel created
         """
-        stream = stream.BrightfieldStream("Bright-field",
+        s = BrightfieldStream("Bright-field",
                   self._main_data_model.ccd, self._main_data_model.ccd.data,
                   self._main_data_model.light)
-        return self._addStream(stream, add_to_all_views)
+        return self._addStream(s, add_to_all_views)
 
     def addSEMSED(self, add_to_all_views=False):
         """
         Creates a new SED stream and panel in the stream bar
         returns (StreamPanel): the panel created
         """
-        stream = stream.SEMStream("Secondary electrons",
+        s = SEMStream("Secondary electrons",
                   self._main_data_model.sed, self._main_data_model.sed.data,
                   self._main_data_model.ebeam)
-        return self._addStream(stream, add_to_all_views)
+        return self._addStream(s, add_to_all_views)
 
     def addStatic(self, name, image,
-                  cls=stream.StaticStream, add_to_all_views=False):
+                  cls=StaticStream, add_to_all_views=False):
         """
         Creates a new static stream and panel in the stream bar
         Note: only for debugging/testing
@@ -178,8 +179,8 @@ class StreamController(object):
         :param cls: (class of Stream)
         :param returns: (StreamPanel): the panel created
         """
-        stream = cls(name, image)
-        return self.addStream(stream, add_to_all_views)
+        s = cls(name, image)
+        return self.addStream(s, add_to_all_views)
 
     def addStream(self, stream, add_to_all_views=False):
         """ Create a stream entry for the given existing stream
@@ -192,7 +193,7 @@ class StreamController(object):
         """
         Adds a stream.
 
-        stream (Stream): the new stream to add
+        stream (stream.Stream): the new stream to add
         add_to_all_views (boolean): if True, add the stream to all the compatible
           views, otherwise add only to the current view
         returns the StreamPanel that was created
@@ -362,7 +363,7 @@ class StreamController(object):
         elif state == STATE_ON:
             pass
 
-    def pauseStreams(self, classes=instrmodel.Stream):
+    def pauseStreams(self, classes=Stream):
         """
         Pause (deactivate and stop updating) all the streams of the given class
         classes (class or list of class): classes of streams that should be
@@ -405,8 +406,6 @@ class StreamController(object):
         for v in self._tab_data_model.views:
             v.removeStream(stream)
 
-        self._streams_to_restart_opt.discard(stream)
-        self._streams_to_restart_em.discard(stream)
         self._tab_data_model.streams.discard(stream)
 
         logging.debug("Sending stream.ctrl.removed message")

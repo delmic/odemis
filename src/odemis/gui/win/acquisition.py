@@ -22,12 +22,12 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from concurrent.futures._base import CancelledError
 from odemis import model, dataio
-from odemis.gui import acqmng, instrmodel
+from odemis.gui import acqmng
+import odemis.gui.model as guimodel
 from odemis.gui.acqmng import presets, preset_as_is
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.cont.settings import SecomSettingsController
 from odemis.gui.cont.streams import StreamController
-from odemis.gui.instrmodel import VIEW_LAYOUT_ONE
 from odemis.gui.main_xrc import xrcfr_acq
 from odemis.gui.util import units, call_after, formats_to_wildcards
 from wx.lib.pubsub import pub
@@ -120,13 +120,13 @@ class AcquisitionDialog(xrcfr_acq):
         new = copy.copy(orig) # shallow copy
 
         # create view (which cannot move or focus)
-        view = instrmodel.MicroscopeView(orig.focussedView.value.name.value)
+        view = guimodel.MicroscopeView(orig.focussedView.value.name.value)
 
         # differentiate it (only one view)
         new.views = {"all": view}
         new.focussedView = model.VigilantAttribute(view)
-        new.viewLayout = model.IntEnumerated(VIEW_LAYOUT_ONE,
-                                              choices=set([VIEW_LAYOUT_ONE]))
+        new.viewLayout = model.IntEnumerated(guimodel.VIEW_LAYOUT_ONE,
+                                             choices=set([guimodel.VIEW_LAYOUT_ONE]))
 
         return new
 

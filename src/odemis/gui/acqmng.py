@@ -107,7 +107,7 @@ def computeThumbnail(streamTree, acqTask):
 
     # poor man's implementation: take the first image of the streams, hoping
     # it actually has a renderer (.image)
-    streams = sorted(streamTree.getStreams(), key=secom_weight_stream,
+    streams = sorted(streamTree.getStreams(), key=_weight_stream,
                                reverse=True)
     iim = streams[0].image.value
     
@@ -171,16 +171,13 @@ def _executeTask(future, fn, *args, **kwargs):
     else:
         future.set_result(result)
 
-def secom_weight_stream(stream):
+def _weight_stream(stream):
     """
     Defines how much a stream is of priority (should be done first) for
-      acquisition on the SECOM platform
-    stream (instrmodel.Stream): a stream to weight
+      acquisition.
+    stream (model.stream.Stream): a stream to weight
     returns (number): priority (the higher the more it should be done first)
     """
-    # TODO: this also works for SPARC, need to change the name, or do something
-    # more clever.
-    
     # SECOM: Optical before SEM to avoid bleaching
     if isinstance(stream, FluoStream):
         return 100 # Fluorescence ASAP to avoid bleaching
@@ -215,7 +212,7 @@ class AcquisitionTask(object):
             self._streamTimes[s] = s.estimateAcquisitionTime()
 
         # order the streams for optimal acquisition
-        self._streams = sorted(self._streamTimes.keys(), key=secom_weight_stream,
+        self._streams = sorted(self._streamTimes.keys(), key=_weight_stream,
                                reverse=True)
 
 

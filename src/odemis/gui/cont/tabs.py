@@ -25,12 +25,10 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from __future__ import division
 from collections import OrderedDict
 from odemis import dataio, model
-from odemis.gui import instrmodel
 from odemis.gui.cont import settings, tools
 from odemis.gui.cont.acquisition import SecomAcquiController, \
     SparcAcquiController
 from odemis.gui.cont.microscope import MicroscopeStateController
-from odemis.gui.instrmodel import STATE_ON, STATE_OFF, STATE_PAUSE
 from odemis.gui.model.img import InstrumentalImage
 from odemis.gui.util import widgets, get_picture_folder, formats_to_wildcards
 import logging
@@ -80,7 +78,7 @@ class SecomStreamsTab(Tab):
     def __init__(self, name, button, panel, main_frame, main_data):
         super(SecomStreamsTab, self).__init__(name, button, panel)
 
-        self.tab_data_model = instrmodel.LiveViewGUIData(main_data)
+        self.tab_data_model = guimodel.LiveViewGUIData(main_data)
         self.main_frame = main_frame
 
         # Various controllers used for the live view and acquisition of images
@@ -182,10 +180,10 @@ class SecomStreamsTab(Tab):
 
 
     def onOpticalState(self, state):
-        if state == STATE_OFF or state == STATE_PAUSE:
+        if state == guimodel.STATE_OFF or state == guimodel.STATE_PAUSE:
             paused_st = self._stream_controller.pauseStreams(streammod.OPTICAL_STREAMS)
             self._opt_stream_to_restart = weakref.WeakSet(paused_st)
-        elif state == STATE_ON:
+        elif state == guimodel.STATE_ON:
             # check whether we need to create a (first) bright-field stream
             has_bf = any(isinstance(s, streammod.BrightfieldStream) for s in self.tab_data_model.streams)
             if not has_bf:
@@ -195,10 +193,10 @@ class SecomStreamsTab(Tab):
             self._stream_controller.resumeStreams(self._opt_stream_to_restart)
 
     def onEMState(self, state):
-        if state == STATE_OFF or state == STATE_PAUSE:
+        if state == guimodel.STATE_OFF or state == guimodel.STATE_PAUSE:
             paused_st = self._stream_controller.pauseStreams(streammod.EM_STREAMS)
             self._sem_stream_to_restart = weakref.WeakSet(paused_st)
-        elif state == STATE_ON:
+        elif state == guimodel.STATE_ON:
             # check whether we need to create a (first) SEM stream
             has_sem = any(isinstance(s, streammod.EM_STREAMS) for s in self.tab_data_model.streams)
             if not has_sem:
@@ -212,7 +210,7 @@ class SparcAcquisitionTab(Tab):
     def __init__(self, name, button, panel, main_frame, main_data):
         super(SparcAcquisitionTab, self).__init__(name, button, panel)
 
-        self.tab_data_model = instrmodel.ScannedAcquisitionGUIData(main_data)
+        self.tab_data_model = guimodel.ScannedAcquisitionGUIData(main_data)
         self.main_frame = main_frame
 
         # Various controllers used for the live view and acquisition of images
@@ -317,7 +315,7 @@ class SparcAcquisitionTab(Tab):
         # buttons. At least, don't use the MicroscopeStateController
         # to hide/show the instrument settings
         # Turn on the live SEM stream
-        main_data.emState.value = STATE_ON
+        main_data.emState.value = guimodel.STATE_ON
         # and subscribe to activate the live stream accordingly
         # (also needed to ensure at exit, all the streams are unsubscribed)
         # TODO: maybe should be handled by a simple stream controller?
@@ -419,9 +417,9 @@ class SparcAcquisitionTab(Tab):
         self._view_controller.fitCurrentViewToContent()
 
     def onEMState(self, state):
-        if state in [STATE_OFF, STATE_PAUSE]:
+        if state in [guimodel.STATE_OFF, guimodel.STATE_PAUSE]:
             self._sem_live_stream.is_active.value = False
-        elif state == STATE_ON:
+        elif state == guimodel.STATE_ON:
             self._sem_live_stream.is_active.value = True
 
     def Show(self, show=True):
@@ -485,7 +483,7 @@ class AnalysisTab(Tab):
         super(AnalysisTab, self).__init__(name, button, panel)
 
         # TODO: automatically change the display type based on the acquisition displayed
-        self.tab_data_model = instrmodel.AnalysisGUIData(main_data)
+        self.tab_data_model = guimodel.AnalysisGUIData(main_data)
         self.main_frame = main_frame
 
         # Various controllers used for the live view and acquisition of images
@@ -614,7 +612,7 @@ class AnalysisTab(Tab):
         data (list of model.DataArray): the data to display. Should have at
          least one DataArray.
         """
-        fi = instrmodel.FileInfo(filename)
+        fi = guimodel.FileInfo(filename)
 
         # remove all the previous streams
         self._stream_controller.clear()
@@ -665,7 +663,7 @@ class LensAlignTab(Tab):
     def __init__(self, name, button, panel, main_frame, main_data):
         super(LensAlignTab, self).__init__(name, button, panel)
 
-        self.tab_data_model = instrmodel.ActuatorGUIData(main_data)
+        self.tab_data_model = guimodel.ActuatorGUIData(main_data)
         self.main_frame = main_frame
 
         main_frame.vp_align_ccd.ShowMergeSlider(False)
@@ -701,7 +699,7 @@ class MirrorAlignTab(Tab):
     def __init__(self, name, button, panel, main_frame, main_data):
         super(MirrorAlignTab, self).__init__(name, button, panel)
 
-        self.tab_data_model = instrmodel.ActuatorGUIData(main_data)
+        self.tab_data_model = guimodel.ActuatorGUIData(main_data)
         self.main_frame = main_frame
 
         # Very simple, so most controllers are not needed

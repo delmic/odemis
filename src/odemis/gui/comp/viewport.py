@@ -30,7 +30,7 @@ from odemis.gui.img.data import getico_blending_goalBitmap
 from odemis.gui.model.stream import OPTICAL_STREAMS, EM_STREAMS
 from odemis.gui.util import call_after, units
 import logging
-import odemis.gui.canvas as canvas
+from odemis.gui.comp import miccanvas
 import wx
 
 
@@ -42,7 +42,7 @@ class MicroscopeViewport(wx.Panel):
     """
 
     # Default class
-    canvas_class = canvas.DblMicroscopeCanvas
+    canvas_class = miccanvas.DblMicroscopeCanvas
 
     def __init__(self, *args, **kwargs):
         """Note: The MicroscopeViewport is not fully initialised until setView()
@@ -50,8 +50,8 @@ class MicroscopeViewport(wx.Panel):
         """
         wx.Panel.__init__(self, *args, **kwargs)
 
-        self._microscope_view = None  # instrmodel.MicroscopeView
-        self._tab_data_model = None # instrmodel.MicroscopyGUIData
+        self._microscope_view = None  # model.MicroscopeView
+        self._tab_data_model = None # model.MicroscopyGUIData
 
         # Keep track of this panel's pseudo focus
         self._has_focus = False
@@ -98,8 +98,8 @@ class MicroscopeViewport(wx.Panel):
         Set the microscope view that this viewport is displaying/representing
         *Important*: Should be called only once, at initialisation.
 
-        :param microscope_view:(instrmodel.MicroscopeView)
-        :param tab_data: (instrmodel.MicroscopyGUIData)
+        :param microscope_view:(model.MicroscopeView)
+        :param tab_data: (model.MicroscopyGUIData)
         """
 
         # This is a kind of a kludge, as it'd be best to have the viewport
@@ -342,7 +342,7 @@ class MicroscopeViewport(wx.Panel):
 
 class SecomViewport(MicroscopeViewport):
 
-    canvas_class = canvas.SecomCanvas
+    canvas_class = miccanvas.SecomCanvas
 
     def __init__(self, *args, **kwargs):
         super(SecomViewport, self).__init__(*args, **kwargs)
@@ -374,7 +374,7 @@ class SecomViewport(MicroscopeViewport):
 
 class SparcAcquisitionViewport(MicroscopeViewport):
 
-    canvas_class = canvas.SparcAcquiCanvas
+    canvas_class = miccanvas.SparcAcquiCanvas
 
     def __init__(self, *args, **kwargs):
         super(SparcAcquisitionViewport, self).__init__(*args, **kwargs)
@@ -388,7 +388,7 @@ class SparcAlignViewport(MicroscopeViewport):
     """
     Very simple viewport with no zoom or move allowed
     """
-    canvas_class = canvas.SparcAlignCanvas
+    canvas_class = miccanvas.SparcAlignCanvas
 
     def __init__(self, *args, **kwargs):
         super(SparcAlignViewport, self).__init__(*args, **kwargs)
@@ -401,7 +401,7 @@ class SparcAlignViewport(MicroscopeViewport):
 class PlotViewport(wx.Panel):
 
     # Default class
-    canvas_class = canvas.ZeroDimensionalPlotCanvas
+    canvas_class = miccanvas.ZeroDimensionalPlotCanvas
 
     def __init__(self, *args, **kwargs):
         wx.Panel.__init__(self, *args, **kwargs)
