@@ -29,6 +29,8 @@ can be controlled through the GUI.
 
 import stream
 
+# TODO: move to stream
+
 # All the stream types related to optical
 OPTICAL_STREAMS = (stream.FluoStream,
                    stream.BrightfieldStream,

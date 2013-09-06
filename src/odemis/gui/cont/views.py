@@ -55,7 +55,8 @@ class ViewController(object):
         viewports (list of MicroscopeViewport): the viewports to update
         """
 
-        self._microscope_model = micgui
+        self._tab_data_model = micgui
+        self._main_data_model = micgui.main
 
         # list of all the viewports (widgets that show the views)
         self._viewports = viewports
@@ -64,8 +65,8 @@ class ViewController(object):
         self._createViews()
 
         # subscribe to layout and view changes
-        self._microscope_model.viewLayout.subscribe(self._onViewLayout, init=True)
-        self._microscope_model.focussedView.subscribe(self._onView, init=True)
+        self._tab_data_model.viewLayout.subscribe(self._onViewLayout, init=True)
+        self._tab_data_model.focussedView.subscribe(self._onView, init=True)
 
     def _createViews(self):
         """
@@ -76,149 +77,149 @@ class ViewController(object):
         """
 
         # If AnalysisTab for Sparc: SEM/Spec/AR/SEM
-        if (isinstance(self._microscope_model, instrmodel.AnalysisGUIData) and
-            self._microscope_model.microscope.role == "sparc"):
+        if (isinstance(self._tab_data_model, instrmodel.AnalysisGUIData) and
+            self._main_data_model.role == "sparc"):
             # TODO: should be dependent on the type of acquisition, and so
             # updated every time the .file changes
             assert len(self._viewports) == 4
-            assert not self._microscope_model.views # should still be empty
+            assert not self._tab_data_model.views # should still be empty
             logging.info("Creating (static) SPARC viewport layout")
 
             view = instrmodel.MicroscopeView(
                         "SEM",
-                        self._microscope_model.stage,
+                        self._main_data_model.stage,
                         stream_classes=EM_STREAMS
                      )
-            self._microscope_model.views.append(view)
-            self._viewports[0].setView(view, self._microscope_model)
+            self._tab_data_model.views.append(view)
+            self._viewports[0].setView(view, self._tab_data_model)
 
             view = instrmodel.MicroscopeView(
                         "Spectrum",
-                        self._microscope_model.stage,
+                        self._main_data_model.stage,
                         # TODO: change center wavelength?
-                        focus0=self._microscope_model.focus,
+                        focus0=self._main_data_model.focus,
                         # TODO: focus1 changes bandwidth?
                         stream_classes=SPECTRUM_STREAMS
                      )
-            self._microscope_model.views.append(view)
-            self._viewports[1].setView(view, self._microscope_model)
+            self._tab_data_model.views.append(view)
+            self._viewports[1].setView(view, self._tab_data_model)
 
             # TODO: need a special View?
             view = instrmodel.MicroscopeView(
                         "Angle Resolved",
                         stream_classes=AR_STREAMS
                      )
-            self._microscope_model.views.append(view)
-            self._viewports[2].setView(view, self._microscope_model)
+            self._tab_data_model.views.append(view)
+            self._viewports[2].setView(view, self._tab_data_model)
 
             view = instrmodel.MicroscopeView(
                         "SEM CL",
-                        self._microscope_model.stage,
+                        self._main_data_model.stage,
                         stream_classes=(EM_STREAMS + SPECTRUM_STREAMS)
                      )
-            self._microscope_model.views.append(view)
-            self._viewports[3].setView(view, self._microscope_model)
+            self._tab_data_model.views.append(view)
+            self._viewports[3].setView(view, self._tab_data_model)
 
             # Start off with the 2x2 view
             # Focus defaults to the top right viewport
-            self._microscope_model.focussedView.value = self._viewports[1].mic_view
+            self._tab_data_model.focussedView.value = self._viewports[1].mic_view
 
         # calibration tab => allow to display anything (the tab wants)
-        elif isinstance(self._microscope_model, instrmodel.ActuatorGUIData):
+        elif isinstance(self._tab_data_model, instrmodel.ActuatorGUIData):
             i = 1
             for viewport in self._viewports:
                 view = instrmodel.MicroscopeView(
                             "View %d" % i,
-                            self._microscope_model.stage,
-                            focus0=self._microscope_model.focus
+                            self._main_data_model.stage,
+                            focus0=self._main_data_model.focus
                          )
-                self._microscope_model.views.append(view)
-                viewport.setView(view, self._microscope_model)
+                self._tab_data_model.views.append(view)
+                viewport.setView(view, self._tab_data_model)
                 i += 1
-            self._microscope_model.focussedView.value = self._microscope_model.views[0]
+            self._tab_data_model.focussedView.value = self._tab_data_model.views[0]
 
         # If SEM only: all SEM
         # Works also for the Sparc, as there is no other emitter, and we don't
         # need to display anything else anyway
-        elif self._microscope_model.ebeam and not self._microscope_model.light:
+        elif self._main_data_model.ebeam and not self._main_data_model.light:
             logging.info("Creating SEM only viewport layout")
             i = 1
             for viewport in self._viewports:
                 view = instrmodel.MicroscopeView(
                             "SEM %d" % i,
-                            self._microscope_model.stage,
+                            self._main_data_model.stage,
                             focus0=None, # TODO: SEM focus or focus1?
                             stream_classes=(SEMStream,)
                          )
-                self._microscope_model.views.append(view)
-                viewport.setView(view, self._microscope_model)
+                self._tab_data_model.views.append(view)
+                viewport.setView(view, self._tab_data_model)
                 i += 1
-            self._microscope_model.focussedView.value = self._microscope_model.views[0]
+            self._tab_data_model.focussedView.value = self._tab_data_model.views[0]
 
         # If Optical only: all Optical
         # TODO: first one is brightfield only?
-        elif not self._microscope_model.ebeam and self._microscope_model.light:
+        elif not self._main_data_model.ebeam and self._main_data_model.light:
             logging.info("Creating Optical only viewport layout")
             i = 1
             for viewport in self._viewports:
                 view = instrmodel.MicroscopeView(
                             "Optical %d" % i,
-                            self._microscope_model.stage,
-                            focus0=self._microscope_model.focus,
+                            self._main_data_model.stage,
+                            focus0=self._main_data_model.focus,
                             stream_classes=(BrightfieldStream, FluoStream)
                          )
-                self._microscope_model.views.append(view)
-                viewport.setView(view, self._microscope_model)
+                self._tab_data_model.views.append(view)
+                viewport.setView(view, self._tab_data_model)
                 i += 1
-            self._microscope_model.focussedView.value = self._microscope_model.views[0]
+            self._tab_data_model.focussedView.value = self._tab_data_model.views[0]
 
         # If both SEM and Optical (=SECOM): SEM/Optical/2x combined
-        elif ((self._microscope_model.ebeam and self._microscope_model.light) or
-              (isinstance(self._microscope_model, instrmodel.AnalysisGUIData) and
-              self._microscope_model.microscope.role == "secom")):
+        elif ((self._main_data_model.ebeam and self._main_data_model.light) or
+              (isinstance(self._tab_data_model, instrmodel.AnalysisGUIData) and
+              self._main_data_model.role == "secom")):
             assert len(self._viewports) == 4
-            assert not self._microscope_model.views # should still be empty
+            assert not self._tab_data_model.views # should still be empty
             logging.info("Creating combined SEM/Optical viewport layout")
 
             view = instrmodel.MicroscopeView(
                         "SEM",
-                        self._microscope_model.stage,
+                        self._main_data_model.stage,
                         focus0=None, # TODO: SEM focus
                         stream_classes=EM_STREAMS
                      )
-            self._microscope_model.views.append(view)
-            self._viewports[0].setView(view, self._microscope_model)
+            self._tab_data_model.views.append(view)
+            self._viewports[0].setView(view, self._tab_data_model)
 
             view = instrmodel.MicroscopeView(
                         "Optical",
-                        self._microscope_model.stage,
-                        focus1=self._microscope_model.focus,
+                        self._main_data_model.stage,
+                        focus1=self._main_data_model.focus,
                         stream_classes=OPTICAL_STREAMS
                      )
-            self._microscope_model.views.append(view)
-            self._viewports[1].setView(view, self._microscope_model)
+            self._tab_data_model.views.append(view)
+            self._viewports[1].setView(view, self._tab_data_model)
 
             view = instrmodel.MicroscopeView(
                         "Combined 1",
-                        self._microscope_model.stage,
+                        self._main_data_model.stage,
                         focus0=None, # TODO: SEM focus
-                        focus1=self._microscope_model.focus,
+                        focus1=self._main_data_model.focus,
                      )
-            self._microscope_model.views.append(view)
-            self._viewports[2].setView(view, self._microscope_model)
+            self._tab_data_model.views.append(view)
+            self._viewports[2].setView(view, self._tab_data_model)
 
             view = instrmodel.MicroscopeView(
                         "Combined 2",
-                        self._microscope_model.stage,
+                        self._main_data_model.stage,
                         focus0=None, # TODO: SEM focus
-                        focus1=self._microscope_model.focus,
+                        focus1=self._main_data_model.focus,
                      )
-            self._microscope_model.views.append(view)
-            self._viewports[3].setView(view, self._microscope_model)
+            self._tab_data_model.views.append(view)
+            self._viewports[3].setView(view, self._tab_data_model)
 
             # Start off with the 2x2 view
             # Focus defaults to the top right viewport
-            self._microscope_model.focussedView.value = self._viewports[1].mic_view
+            self._tab_data_model.focussedView.value = self._viewports[1].mic_view
         else:
             logging.warning("No known microscope configuration, creating %d "
                             "generic views", len(self._viewports))
@@ -226,13 +227,13 @@ class ViewController(object):
             for viewport in self._viewports:
                 view = instrmodel.MicroscopeView(
                             "View %d" % i,
-                            self._microscope_model.stage,
-                            focus0=self._microscope_model.focus
+                            self._main_data_model.stage,
+                            focus0=self._main_data_model.focus
                          )
-                self._microscope_model.views.append(view)
-                viewport.setView(view, self._microscope_model)
+                self._tab_data_model.views.append(view)
+                viewport.setView(view, self._tab_data_model)
                 i += 1
-            self._microscope_model.focussedView.value = self._microscope_model.views[0]
+            self._tab_data_model.focussedView.value = self._tab_data_model.views[0]
 
         # TODO: if chamber camera: br is just chamber, and it's the focussedView
 
@@ -242,7 +243,7 @@ class ViewController(object):
         Called when another view is focused
         """
         logging.debug("Changing focus to view %s", view.name.value)
-        layout = self._microscope_model.viewLayout.value
+        layout = self._tab_data_model.viewLayout.value
 
         self._viewports[0].Parent.Freeze()
 
@@ -274,7 +275,7 @@ class ViewController(object):
             # TODO resize all the viewports now, so that there is no flickering
             # when just changing view
             for viewport in self._viewports:
-                if viewport.mic_view == self._microscope_model.focussedView.value:
+                if viewport.mic_view == self._tab_data_model.focussedView.value:
                     viewport.Show()
                 else:
                     viewport.Hide()
@@ -298,7 +299,7 @@ class ViewController(object):
         """
         # find the viewport corresponding to the current view
         for vp in self._viewports:
-            if vp.mic_view == self._microscope_model.focussedView.value:
+            if vp.mic_view == self._tab_data_model.focussedView.value:
                 vp.canvas.fitViewToContent()
                 break
         else:
@@ -310,9 +311,9 @@ class ViewSelector(object):
     them.
     """
 
-    def __init__(self, microscope_model, main_frame, buttons):
+    def __init__(self, tab_data, main_frame, buttons):
         """
-        microscope_model (MicroscopyGUIData): the representation of the microscope
+        tab_data (MicroscopyGUIData): the representation of the microscope
             GUI
         main_frame: (wx.Frame): the frame which contains the 4 viewports
         buttons (OrderedDict : btn -> (viewport, label)): 5 buttons and the
@@ -320,7 +321,7 @@ class ViewSelector(object):
             associated.
             The first button has no viewport, for the 2x2 view.
         """
-        self.microscope_model = microscope_model
+        self._tab_data_model = tab_data
 
         self.buttons = buttons
 
@@ -330,8 +331,8 @@ class ViewSelector(object):
         # subscribe to layout and view changes
         # FIXME: viewLayout disabled, because it was sending wrong (integer)
         # views to _onView
-        #self.microscope_model.viewLayout.subscribe(self._onView, init=True)
-        #self.microscope_model.focussedView.subscribe(self._onView, init=True)
+        #self._tab_data_model.viewLayout.subscribe(self._onView, init=True)
+        #self._tab_data_model.focussedView.subscribe(self._onView, init=True)
 
         # subscribe to thumbnails
         self._subscriptions = [] # list of functions
@@ -460,7 +461,7 @@ class ViewSelector(object):
         self.toggleButtonForView(view)
 
         # if layout is 2x2 => do nothing (first button is selected by _onViewLayout)
-        # if self.microscope_model.viewLayout.value == instrmodel.VIEW_LAYOUT_22:
+        # if self._tab_data_model.viewLayout.value == instrmodel.VIEW_LAYOUT_22:
         #     # otherwise (layout is 2x2) => select the first button
         #     self.toggleButtonForView(None)
         # else:
@@ -486,12 +487,12 @@ class ViewSelector(object):
             self.toggleButtonForView(None)
             # 2x2 button
             # When selecting the overview, the focussed viewport should not change
-            self.microscope_model.viewLayout.value = instrmodel.VIEW_LAYOUT_22
+            self._tab_data_model.viewLayout.value = instrmodel.VIEW_LAYOUT_22
         else:
             logging.debug("View button click")
             self.toggleButtonForView(viewport.mic_view)
             # It's preferable to change the view before the layout so that
             # if the layout was 2x2 with another view focused, it doesn't first
             # display one big view, and immediately after changes to another view.
-            self.microscope_model.focussedView.value = viewport.mic_view
-            self.microscope_model.viewLayout.value = instrmodel.VIEW_LAYOUT_ONE
+            self._tab_data_model.focussedView.value = viewport.mic_view
+            self._tab_data_model.viewLayout.value = instrmodel.VIEW_LAYOUT_ONE

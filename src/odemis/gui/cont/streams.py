@@ -29,64 +29,39 @@ import odemis.gui.model.stream as stream
 from odemis.gui import comp, instrmodel, model
 from odemis.gui.instrmodel import STATE_OFF, STATE_PAUSE, STATE_ON
 
-# stream controller:
-# create the default streams when a part of the microscope is turned on, and
-#  create a corresponding stream panel in the stream bar. (when part is turned
-#  off, stream stays)
-# ensures the right "Add XXX stream" stream panels are available in the
-#  "Add stream" button
-# on stream remove: contacted to remove the stream from the layers and the
-#   list
-# on microscope off: pause (set .updated to False) every stream which uses
-#  this microscope
-# TODO: how to prevent the user from turning on camera/light again from the
-#   stream panel when the microscope is off? => either stream panel "update"
-#   icon is disabled/enable (decided by the stream controller), or the event
-#   handler checks first that the appropriate microscope is On or Off.
-# the stream panels directly update the VA's
-
-
 class StreamController(object):
     """
     Manages the insertion/suppression of streams (with their corresponding
-    stream panels in the stream bar), and the de/activation of the
-    streams when the microscope is turned on/off.
+    stream panels in the stream bar).
+    This include the management of "Add XXX stream" actions at the bottom of
+    the stream panel.
     """
 
-    def __init__(self, microscope_model, stream_bar, static=False, locked=False):
+    def __init__(self, tab_data, stream_bar, static=False, locked=False):
         """
-        microscope_model (MicroscopeModel): the representation of the microscope Model
+        tab_data (MicroscopyGUIData): the representation of the microscope Model
         stream_bar (StreamBar): an empty stream panel
         static (Boolean): Treat streams as static
         """
-        self._microscope_model = microscope_model
+        self._tab_data_model = tab_data
+        self._main_data_model = tab_data.main
         self._stream_bar = stream_bar
 
         self._scheduler_subscriptions = {} # stream -> callable
 
-        # TODO probably need a lock to access it correctly
-        # streams to be restarted when turning on again
-        self._streams_to_restart_opt = set()
-        self._streams_to_restart_em = set()
-
-        # TODO remove the actions when microscope goes off
         if stream_bar.btn_add_stream:
             self._createAddStreamActions()
 
-        # On the first time, we'll create the streams, to be nice to the user
-        self._opticalWasTurnedOn = False
-        self._semWasTurnedOn = False
-
-        if hasattr(self._microscope_model, 'opticalState'):
-            self._microscope_model.opticalState.subscribe(self.onOpticalState)
-
-        if hasattr(self._microscope_model, 'emState'):
-            self._microscope_model.emState.subscribe(self.onEMState)
-
-        self._microscope_model.focussedView.subscribe(self._onView, init=True)
+        self._tab_data_model.focussedView.subscribe(self._onView, init=True)
         pub.subscribe(self.removeStream, 'stream.remove')
 
-        # This attribute indicates wether live data is processed by the sreams
+        if hasattr(tab_data.main, 'opticalState'):
+            tab_data.main.opticalState.subscribe(self.onOpticalState, init=True)
+
+        if hasattr(tab_data.main, 'emState'):
+            tab_data.main.emState.subscribe(self.onEMState, init=True)
+
+        # This attribute indicates whether live data is processed by the streams
         # in the controller, or that they just display static data.
         self.static_mode = static
         # Disable all controls
@@ -106,13 +81,16 @@ class StreamController(object):
         """
         # Basically one action per type of stream
 
+        # TODO: always display the action (if it's compatible), but update
+        # the disable/enable depending on the state of the microscope
+
         # First: Fluorescent stream (for dyes)
-        if (self._microscope_model.light and self._microscope_model.light_filter
-            and self._microscope_model.ccd):
+        if (self._main_data_model.light and self._main_data_model.light_filter
+            and self._main_data_model.ccd):
 
             def fluor_capable():
-                on = self._microscope_model.opticalState.value == STATE_ON
-                view = self._microscope_model.focussedView.value
+                on = self._main_data_model.opticalState.value == STATE_ON
+                view = self._tab_data_model.focussedView.value
                 compatible = view.is_compatible(stream.FluoStream)
                 return on and compatible
 
@@ -123,11 +101,11 @@ class StreamController(object):
                                     fluor_capable)
 
         # Bright-field
-        if self._microscope_model.light and self._microscope_model.ccd:
+        if self._main_data_model.light and self._main_data_model.ccd:
 
             def brightfield_capable():
-                on = self._microscope_model.opticalState.value == STATE_ON
-                view = self._microscope_model.focussedView.value
+                on = self._main_data_model.opticalState.value == STATE_ON
+                view = self._tab_data_model.focussedView.value
                 compatible = view.is_compatible(stream.BrightfieldStream)
                 return on and compatible
 
@@ -136,11 +114,11 @@ class StreamController(object):
                                     brightfield_capable)
 
         # SED
-        if self._microscope_model.ebeam and self._microscope_model.sed:
+        if self._main_data_model.ebeam and self._main_data_model.sed:
 
             def sem_capable():
-                on = self._microscope_model.emState.value == STATE_ON
-                view = self._microscope_model.focussedView.value
+                on = self._main_data_model.emState.value == STATE_ON
+                view = self._tab_data_model.focussedView.value
                 compatible = view.is_compatible(stream.SEMStream)
                 return on and compatible
 
@@ -155,7 +133,7 @@ class StreamController(object):
         returns (StreamPanel): the panel created
         """
         # Find a name not already taken
-        existing_names = [s.name.value for s in self._microscope_model.streams]
+        existing_names = [s.name.value for s in self._tab_data_model.streams]
         for i in range(1000):
             name = "Filtered colour %d" % i
             if not name in existing_names:
@@ -165,8 +143,8 @@ class StreamController(object):
             name = "Filtered colour"
 
         stream = model.stream.FluoStream(name,
-                  self._microscope_model.ccd, self._microscope_model.ccd.data,
-                  self._microscope_model.light, self._microscope_model.light_filter)
+                  self._main_data_model.ccd, self._main_data_model.ccd.data,
+                  self._main_data_model.light, self._main_data_model.light_filter)
         return self._addStream(stream, add_to_all_views)
 
     def addBrightfield(self, add_to_all_views=False):
@@ -175,8 +153,8 @@ class StreamController(object):
         returns (StreamPanel): the stream panel created
         """
         stream = model.stream.BrightfieldStream("Bright-field",
-                  self._microscope_model.ccd, self._microscope_model.ccd.data,
-                  self._microscope_model.light)
+                  self._main_data_model.ccd, self._main_data_model.ccd.data,
+                  self._main_data_model.light)
         return self._addStream(stream, add_to_all_views)
 
     def addSEMSED(self, add_to_all_views=False):
@@ -185,18 +163,9 @@ class StreamController(object):
         returns (StreamPanel): the panel created
         """
         stream = model.stream.SEMStream("Secondary electrons",
-                  self._microscope_model.sed, self._microscope_model.sed.data,
-                  self._microscope_model.ebeam)
+                  self._main_data_model.sed, self._main_data_model.sed.data,
+                  self._main_data_model.ebeam)
         return self._addStream(stream, add_to_all_views)
-
-    def addSpectrumStream(self):
-        """ Method not needed/used """
-        stream = model.stream.SpectrumStream(
-                    "Spectrometer",
-                    self._microscope_model.spccd,
-                    self._microscope_model.spccd.data,
-                    self._microscope_model.ebeam)
-        return self._addStream(stream)
 
     def addStatic(self, name, image,
                   cls=model.stream.StaticStream, add_to_all_views=False):
@@ -228,13 +197,13 @@ class StreamController(object):
           views, otherwise add only to the current view
         returns the StreamPanel that was created
         """
-        self._microscope_model.streams.add(stream)
+        self._tab_data_model.streams.add(stream)
         if add_to_all_views:
-            for v in self._microscope_model.views:
+            for v in self._tab_data_model.views:
                 if isinstance(stream, v.stream_classes):
                     v.addStream(stream)
         else:
-            v = self._microscope_model.focussedView.value
+            v = self._tab_data_model.focussedView.value
             if isinstance(stream, v.stream_classes):
                 warn ="Adding stream incompatible with the current view"
                 logging.warning(warn)
@@ -247,10 +216,10 @@ class StreamController(object):
         spanel = comp.stream.StreamPanel(
                                 self._stream_bar,
                                 stream,
-                                self._microscope_model)
+                                self._tab_data_model)
         show = isinstance(
                     spanel.stream,
-                    self._microscope_model.focussedView.value.stream_classes)
+                    self._tab_data_model.focussedView.value.stream_classes)
         self._stream_bar.add_stream(spanel, show)
 
         if self.locked_mode:
@@ -271,7 +240,7 @@ class StreamController(object):
         :return StreamPanel:
 
         """
-        sp = comp.stream.StreamPanel(self._stream_bar, stream, self._microscope_model)
+        sp = comp.stream.StreamPanel(self._stream_bar, stream, self._tab_data_model)
         self._stream_bar.add_stream(sp, True)
         sp.to_static_mode()
 
@@ -312,7 +281,7 @@ class StreamController(object):
 
     # def __del__(self):
     #     logging.debug("%s Desctructor", self.__class__.__name__)
-    #     #self._microscope_model.focussedView.unsubscribe(self._onView)
+    #     #self._tab_data_model.focussedView.unsubscribe(self._onView)
 
     def _onStreamUpdate(self, stream, updated):
         """
@@ -379,31 +348,19 @@ class StreamController(object):
             callback = self._scheduler_subscriptions.pop(stream)
             stream.should_update.unsubscribe(callback)
 
-
     def onOpticalState(self, state):
-        # only called when it changes
+        # TODO: disable/enable add stream actions
         if state == STATE_OFF or state == STATE_PAUSE:
-            self._streams_to_restart_opt = self.pauseStreams(model.OPTICAL_STREAMS)
+            pass
         elif state == STATE_ON:
-            if not self._opticalWasTurnedOn:
-                self._opticalWasTurnedOn = True
-                sp = self.addBrightfield(add_to_all_views=True)
-                sp.show_remove_btn(False)
-
-            self.resumeStreams(self._streams_to_restart_opt)
+            pass
 
     def onEMState(self, state):
+        # TODO: disable/enable add stream actions
         if state == STATE_OFF or state == STATE_PAUSE:
-            self._streams_to_restart_em = self.pauseStreams(model.EM_STREAMS)
+            pass
         elif state == STATE_ON:
-            if not self._semWasTurnedOn:
-                self._semWasTurnedOn = True
-                if self._microscope_model.sed:
-                    sp = self.addSEMSED(add_to_all_views=True)
-                    sp.show_remove_btn(False)
-
-            self.resumeStreams(self._streams_to_restart_em)
-
+            pass
 
     def pauseStreams(self, classes=instrmodel.Stream):
         """
@@ -414,7 +371,7 @@ class StreamController(object):
         Returns (set of Stream): streams which were actually paused
         """
         streams = set() # stream paused
-        for s in self._microscope_model.streams:
+        for s in self._tab_data_model.streams:
             if isinstance(s, classes):
                 if s.should_update.value:
                     streams.add(s)
@@ -445,12 +402,12 @@ class StreamController(object):
         self._unscheduleStream(stream)
 
         # Remove from the views
-        for v in self._microscope_model.views:
+        for v in self._tab_data_model.views:
             v.removeStream(stream)
 
         self._streams_to_restart_opt.discard(stream)
         self._streams_to_restart_em.discard(stream)
-        self._microscope_model.streams.discard(stream)
+        self._tab_data_model.streams.discard(stream)
 
         logging.debug("Sending stream.ctrl.removed message")
         pub.sendMessage('stream.ctrl.removed',
@@ -471,17 +428,13 @@ class StreamController(object):
 
         # clear the interface model
         # (should handle cases where a new stream is added simultaneously)
-        while self._microscope_model.streams:
-            stream = self._microscope_model.streams.pop()
+        while self._tab_data_model.streams:
+            stream = self._tab_data_model.streams.pop()
             self._unscheduleStream(stream)
 
             # Remove from the views
-            for v in self._microscope_model.views:
+            for v in self._tab_data_model.views:
                 v.removeStream(stream)
-
-        # reset lists
-        self._streams_to_restart_opt = set()
-        self._streams_to_restart_em = set()
 
         if self._has_streams() or self._has_visible_streams():
             logging.warning("Failed to remove all streams")

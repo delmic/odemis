@@ -58,7 +58,7 @@ class OdemisGUIApp(wx.App):
         # HTTP documentation http server process
         self.http_proc = None
 
-        self.microscope = None
+        self.main_data = None
         self.main_frame = None
 
         try:
@@ -87,7 +87,7 @@ class OdemisGUIApp(wx.App):
         """
 
         try:
-            self.microscope = model.getMicroscope()
+            microscope = model.getMicroscope()
         except (IOError, Pyro4.errors.CommunicationError), e:
             logging.exception("Failed to connect to back-end")
             msg = ("The Odemis GUI could not connect to the Odemis back-end:\n\n"
@@ -99,7 +99,9 @@ class OdemisGUIApp(wx.App):
                                     style=wx.YES | wx.NO | wx.ICON_ERROR)
             if answer == wx.NO:
                 sys.exit(1)
+            microscope = None
 
+        self.main_data = instrmodel.MainGUIData(microscope)
         # Load the main frame
         self.main_frame = main_xrc.xrcfr_main(None)
 
@@ -158,13 +160,13 @@ class OdemisGUIApp(wx.App):
                         self.main_frame.menu_item_halt.GetId(),
                         self.on_stop_axes)
 
-            if not self.microscope or self.microscope.role == "sparc":
+            if not self.main_data.role or self.main_data.role == "sparc":
                 # works with the analysis tab
                 wx.EVT_MENU(self.main_frame,
                             self.main_frame.menu_item_load1.GetId(),
                             self.on_load_example_sparc1)
                 self.main_frame.menu_item_load2.Enable(False)
-            elif self.microscope.role == "secom":
+            elif self.main_data.role == "secom":
                 # Displayed in the SECOM live view tab
                 # TODO: display in the analysis tab?
                 wx.EVT_MENU(self.main_frame,
@@ -243,7 +245,7 @@ class OdemisGUIApp(wx.App):
                 tabs.TabBarController(
                     tab_defs,
                     self.main_frame,
-                    self.microscope
+                    self.main_data
                 )
             )
 

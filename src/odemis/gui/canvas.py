@@ -70,7 +70,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
     def __init__(self, *args, **kwargs):
         canvas.DraggableCanvas.__init__(self, *args, **kwargs)
         self.microscope_view = None
-        self._microscope_model = None
+        self._tab_data_model = None
 
         self.Bind(wx.EVT_MOUSEWHEEL, self.OnWheel)
 
@@ -83,7 +83,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         self._moveFocus0Timer = wx.PyTimer(self._moveFocus0)
         self._moveFocus1Timer = wx.PyTimer(self._moveFocus1)
 
-        # Current (tool) mode. TODO: Make platform (secom/sparc) independant
+        # Current (tool) mode. TODO: Make platform (secom/sparc) independent
         self.current_mode = None
         # meter per "world unit"
         self.mpwu = None
@@ -94,20 +94,20 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         self.fps_overlay = overlay.TextViewOverlay(self)
         self.ViewOverlays.append(self.fps_overlay)
 
-    def setView(self, microscope_view, microscope_model):
+    def setView(self, microscope_view, tab_data):
         """
         Set the microscope_view that this canvas is displaying/representing
         Can be called only once, at initialisation.
 
         :param microscope_view:(instrmodel.MicroscopeView)
-        :param microscope_model: (instrmodel.MicroscopeModel)
+        :param tab_data: (instrmodel.MicroscopyGUIData)
         """
         # This is a kind of kludge, see mscviewport.MicroscopeViewport for
         # details
         assert(self.microscope_view is None)
 
         self.microscope_view = microscope_view
-        self._microscope_model = microscope_model
+        self._tab_data_model = tab_data
 
         # meter per "world unit"
         # for conversion between "world pos" in the canvas and a real unit
@@ -689,18 +689,18 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
         self.active_overlay = None
         self.cursor = wx.STANDARD_CURSOR
 
-    def setView(self, microscope_view, microscope_model):
+    def setView(self, microscope_view, tab_data):
         """
         Set the microscope_view that this canvas is displaying/representing
         Can be called only once, at initialisation.
 
         :param microscope_view:(instrmodel.MicroscopeView)
-        :param microscope_model: (instrmodel.MicroscopeModel)
+        :param tab_data: (instrmodel.MicroscopyGUIData)
         """
-        super(SparcAcquiCanvas, self).setView(microscope_view, microscope_model)
+        super(SparcAcquiCanvas, self).setView(microscope_view, tab_data)
 
         # Associate the ROI of the SEM CL stream to the region of acquisition
-        for s in microscope_model.acquisitionView.getStreams():
+        for s in tab_data.acquisitionView.getStreams():
             if s.name.value == "SEM CL":
                 self._roa = s.roi
                 break
@@ -709,14 +709,14 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
 
         self._roa.subscribe(self._onROA, init=True)
 
-        sem = microscope_model.ebeam
+        sem = tab_data.main.ebeam
         if not sem:
             raise AttributeError("No SEM on the microscope")
 
         if isinstance(sem.magnification, VigilantAttributeBase):
             sem.magnification.subscribe(self._onSEMMag)
 
-        microscope_model.tool.subscribe(self.onTool, init=True)
+        tab_data.tool.subscribe(self.onTool, init=True)
 
     def onTool(self, tool):
         """
@@ -854,7 +854,7 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
         returns (tuple of 4 floats): position in m (t, l, b, r)
         raises AttributeError in case no SEM is found
         """
-        sem = self._microscope_model.ebeam
+        sem = self._tab_data_model.main.ebeam
         if not sem:
             raise AttributeError("No SEM on the microscope")
 
@@ -879,7 +879,7 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
         """
         Update the value of the ROA in the GUI according to the roi_overlay
         """
-        sem = self._microscope_model.ebeam
+        sem = self._tab_data_model.main.ebeam
         if not self._roa or not sem:
             logging.warning("ROA is supposed to be updated, but no ROA/SEM attribute")
             return
@@ -954,8 +954,8 @@ class SparcAlignCanvas(DblMicroscopeCanvas):
         super(SparcAlignCanvas, self).__init__(*args, **kwargs)
         self._ccd_mpp = None # tuple of 2 floats of m/px
 
-    def setView(self, microscope_view, microscope_model):
-        DblMicroscopeCanvas.setView(self, microscope_view, microscope_model)
+    def setView(self, microscope_view, tab_data):
+        DblMicroscopeCanvas.setView(self, microscope_view, tab_data)
         # find the MPP of the sensor and use it on all images
         try:
             self._ccd_mpp = self.microscope_view.ccd.pixelSize.value

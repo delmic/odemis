@@ -36,7 +36,7 @@ from odemis.gui.util.conversion import wxcol_to_frgb, hex_to_frgba
 
 class InfoLegend(wx.Panel):
     """ This class describes a legend containing the default controls that
-    provide information about life data streams.
+    provide information about live data streams.
     """
 
     def __init__(self, parent, wid=-1, pos=(0, 0), size=wx.DefaultSize,
@@ -119,7 +119,7 @@ class InfoLegend(wx.Panel):
 
 
         sliderSizer = wx.BoxSizer(wx.HORIZONTAL)
-        # TODO: need to have the icons updated according to the streams
+        # TODO: need to have the icons updated according to the streams type
         sliderSizer.Add(
             self.bmpSliderLeft,
             border=3,
@@ -189,7 +189,9 @@ class InfoLegend(wx.Panel):
         self.Layout()
 
 class AxisLegend(wx.Panel):
-
+    """
+    This legend mainly shows ticks and the name of the axis
+    """
     def __init__(self, parent, wid=-1, pos=(0, 0), size=wx.DefaultSize,
                  style=wx.NO_BORDER):
 

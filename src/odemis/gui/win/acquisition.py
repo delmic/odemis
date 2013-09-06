@@ -43,7 +43,7 @@ class AcquisitionDialog(xrcfr_acq):
     Acquisition Dialog created in XRCed
     """
 
-    def __init__(self, parent, microscope_model):
+    def __init__(self, parent, tab_data):
         xrcfr_acq.__init__(self, parent)
 
         self.conf = get_acqui_conf()
@@ -61,7 +61,7 @@ class AcquisitionDialog(xrcfr_acq):
 
         # Create a new settings controller for the acquisition dialog
         self.settings_controller = SecomSettingsController(self,
-                                                           microscope_model,
+                                                           tab_data,
                                                            True)
         # FIXME: pass the fold_panels
 
@@ -75,12 +75,12 @@ class AcquisitionDialog(xrcfr_acq):
         self._presets_confirmed = set() # (string)
 
         # duplicate the interface, but with only one view
-        self.microscope_model = self.duplicate_microscope_model(microscope_model)
+        self._tab_data_model = self.duplicate_tab_data_model(tab_data)
 
-        orig_view = microscope_model.focussedView.value
-        view = self.microscope_model.focussedView.value
+        orig_view = tab_data.focussedView.value
+        view = self._tab_data_model.focussedView.value
 
-        self.stream_controller = StreamController(self.microscope_model,
+        self.stream_controller = StreamController(self._tab_data_model,
                                                   self.pnl_secom_streams)
         # Keep track of the added streams, so we can easily remove them when
         # the dialog is destroyed
@@ -95,7 +95,7 @@ class AcquisitionDialog(xrcfr_acq):
         view.merge_ratio.value = orig_view.merge_ratio.value
 
         # attach the view to the viewport
-        self.pnl_view_acq.setView(view, self.microscope_model)
+        self.pnl_view_acq.setView(view, self._tab_data_model)
 
         self.Bind(wx.EVT_CHAR_HOOK, self.on_key)
 
@@ -110,12 +110,12 @@ class AcquisitionDialog(xrcfr_acq):
         pub.subscribe(self.on_setting_change, 'setting.changed')
 
 
-    def duplicate_microscope_model(self, orig):
+    def duplicate_tab_data_model(self, orig):
         """
-        Duplicate a MicroscopeModel and adapt it for the acquisition window
+        Duplicate a MicroscopyGUIData and adapt it for the acquisition window
         The streams will be shared, but not the views
-        orig (MicroscopeModel)
-        return (MicroscopeModel)
+        orig (MicroscopyGUIData)
+        return (MicroscopyGUIData)
         """
         new = copy.copy(orig) # shallow copy
 
@@ -137,10 +137,10 @@ class AcquisitionDialog(xrcfr_acq):
         """
         # the order the streams are added should not matter on the display, so
         # it's ok to not duplicate the streamTree literally
-        view = self.microscope_model.focussedView.value
+        view = self._tab_data_model.focussedView.value
 
         # go through all the streams available in the interface model
-        for s in self.microscope_model.streams:
+        for s in self._tab_data_model.streams:
             if s in visible_streams:
                 self.added_streams.append(s)
                 # Do addstream first, so that the "visible" button is correct
@@ -150,7 +150,7 @@ class AcquisitionDialog(xrcfr_acq):
 
     def remove_all_streams(self):
         """ Remove the streams we added to the view on creation """
-        view = self.microscope_model.focussedView.value
+        view = self._tab_data_model.focussedView.value
 
         for s in self.added_streams:
             view.removeStream(s)
@@ -202,7 +202,7 @@ class AcquisitionDialog(xrcfr_acq):
         self.cmb_presets.SetValue(preset_name)
 
     def update_acquisition_time(self):
-        streams = self.microscope_model.focussedView.value.getStreams()
+        streams = self._tab_data_model.focussedView.value.getStreams()
         if streams:
             acq_time = acqmng.estimateTime(streams)
             self.gauge_acq.Range = 100 * acq_time
@@ -310,7 +310,7 @@ class AcquisitionDialog(xrcfr_acq):
         self.Layout() # to put the gauge at the right place
 
         # start acquisition + connect events to callback
-        streams = self.microscope_model.focussedView.value.getStreams()
+        streams = self._tab_data_model.focussedView.value.getStreams()
         # It should never be possible to reach here with no streams
         self.acq_future = acqmng.startAcquisition(streams)
         self.acq_future.add_update_callback(self.on_acquisition_upd)
@@ -364,7 +364,7 @@ class AcquisitionDialog(xrcfr_acq):
         # save result to file
         try:
             thumb = acqmng.computeThumbnail(
-                            self.microscope_model.focussedView.value.stream_tree,
+                            self._tab_data_model.focussedView.value.stream_tree,
                             future)
             filename = self.filename.value
             exporter = dataio.get_exporter(self.conf.last_format)

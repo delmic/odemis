@@ -22,66 +22,64 @@ import logging
 import odemis.gui.instrmodel as instrmodel
 import wx
 
-class MicroscopeController(object):
-    """ This controller class controls the main microscope buttons and updates
-    the model. To query/change the status of a special microscope, use the
-    model.
+# GUI toggle button (suffix) name -> VA name
+btn_to_va = {"sem": "emState",
+             "opt": "opticalState",
+             "spectrometer": "specState",
+             "angular": "arState",
+             "press": "vaccumState", # TODO
+             }
+            # TODO: pause button
+
+class MicroscopeStateController(object):
+    """ This controller controls the main microscope buttons (ON/OFF, 
+    Pause, vacuum...) and updates the model. To query/change the status of a 
+    specific component, use the main data model directly.
     """
 
-    bound = False
-    callbacks = []
+    def __init__(self, tab_data, main_frame, btn_prefix):
+        """ Binds the 'hardware' buttons to their appropriate
+        Vigilant Attributes in the instrmodel.MainGUIData
 
-    @classmethod
-    def bind_buttons(cls, microscope_model, main_frame):
-        """ This class method binds the 'hardware' buttons to their appropriate
-        Vigilant Attributes in the instrmodel.MicroscopyGUIData
-
-        microscope_model (MicroscopyGUIData): the data model of the tab
+        tab_data (MicroscopyGUIData): the data model of the tab
         main_frame: (wx.Frame): the main frame of the GUI
+        btn_prefix (string): common prefix of the names of the buttons 
         """
-        if not cls.bound:
-            # TODO: for the Sparc, if only one microscope: hide everything, as this
-            # microscope should always be ON.
+        main_data = tab_data.main
 
-            # GUI toggle button -> VA name
-            # We cannot directly associate the buttons with a VA, because they might
-            # not exist!
-            btn_to_va = {main_frame.btn_lens_toggle_sem: "emState",
-                         main_frame.btn_lens_toggle_opt: "opticalState",
-                         main_frame.btn_toggle_sem: "emState",
-                         main_frame.btn_toggle_opt: "opticalState",
-                         main_frame.btn_toggle_spectrometer: "specState",
-                         main_frame.btn_toggle_angular: "arState",
-                         }
+        # Look for which buttons actually exist, and which VAs exist. Bind the
+        # fitting ones
+        self._callbacks = []
+        for btn_name, vaname in btn_to_va.items():
+            try:
+                btn = getattr(main_frame, btn_prefix + btn_name)
+            except AttributeError:
+                continue
 
-            for btn, vaname in btn_to_va.items():
-                try:
-                    va = getattr(microscope_model, vaname)
-                except AttributeError:
-                    # This microscope is not available
-                    btn.Hide()
-                    # TODO: need to update layout?
-                    continue
+            try:
+                va = getattr(main_data, vaname)
+            except AttributeError:
+                # This microscope is not available
+                btn.Hide()
+                # TODO: need to update layout?
+                continue
+            logging.debug("Connecting button %s to %s", btn_name, vaname)
 
-                def on_va(state, btn=btn):
-                    btn.SetToggle(state == instrmodel.STATE_ON)
+            # TODO: use VAConnector
+            def on_va(state, btn=btn):
+                btn.SetToggle(state != instrmodel.STATE_OFF)
 
-                cls.callbacks.append(on_va)
-                va.subscribe(on_va)
+            self._callbacks.append(on_va)
+            va.subscribe(on_va, init=True)
 
+            # Event handler
+            def on_toggle(event, va=va, vaname=vaname):
+                logging.debug("%s toggle button pressed" % vaname)
+                if event.isDown:
+                    va.value = instrmodel.STATE_ON
+                else:
+                    va.value = instrmodel.STATE_OFF
 
-                # Event handler
-                def on_toggle(event, va=va, vaname=vaname):
-                    msg = "{0} toggle button pressed for mic {1}".format(
-                                vaname, id(microscope_model)
-                    )
-                    logging.warn(msg)
-                    if event.isDown:
-                        va.value = instrmodel.STATE_ON
-                    else:
-                        va.value = instrmodel.STATE_OFF
-
-                # FIXME: special _bitmap_ toggle button doesn't seem to generate
-                # EVT_TOGGLEBUTTON
-                btn.Bind(wx.EVT_BUTTON, on_toggle)
-                cls.bound = True
+            # FIXME: special _bitmap_ toggle button doesn't seem to generate
+            # EVT_TOGGLEBUTTON
+            btn.Bind(wx.EVT_BUTTON, on_toggle)

@@ -391,7 +391,7 @@ class StreamPanel(wx.PyPanel):
     def __init__(self,
                  parent,
                  stream,
-                 microscope_model,
+                 tab_data,
                  wid=wx.ID_ANY,
                  pos=wx.DefaultPosition,
                  size=wx.DefaultSize,
@@ -404,7 +404,7 @@ class StreamPanel(wx.PyPanel):
         :param parent: (StreamBar) The parent widget.
         :param stream: (Stream) The stream data model to be displayed to and
             modified by the user.
-        :param microscope_model: (MicroscopeModel) The microscope data model,
+        :param tab_data: (MicroscopyGUIData) The microscope data model,
             TODO: This parameter and related property should be moved to the
             stream controller!
         """
@@ -414,7 +414,7 @@ class StreamPanel(wx.PyPanel):
 
         # Data models
         self.stream = stream
-        self._microscope_model = microscope_model
+        self._tab_data_model = tab_data
 
         # Appearance
         self._agwStyle = agwStyle | wx.CP_NO_TLW_RESIZE  # |wx.CP_GTK_EXPANDER
@@ -491,7 +491,7 @@ class StreamPanel(wx.PyPanel):
             self._expander.Bind(wx.EVT_LEFT_DCLICK, self.on_button)
 
         # ==== Bind events
-        vis = self.stream in self._microscope_model.focussedView.value.getStreams()
+        vis = self.stream in self._tab_data_model.focussedView.value.getStreams()
         self.setVisible(vis)
 
     def set_expander_button(self, button):
@@ -604,7 +604,7 @@ class StreamPanel(wx.PyPanel):
     def on_visibility_btn(self, evt):
         # TODO: Move to controller. Screen widget should not need to know about
         # microscopes and focussed views.
-        view = self._microscope_model.focussedView.value
+        view = self._tab_data_model.focussedView.value
         if not view:
             return
         if self._expander._btn_vis.GetToggle():
@@ -1351,8 +1351,6 @@ class StreamBar(wx.Panel):
         add_btn = kwargs.pop('add_button', False)
 
         wx.Panel.__init__(self, *args, **kwargs)
-
-        self._microscope_model = None # MicroscopeModel
 
         self.stream_panels = []
         self.menu_actions = collections.OrderedDict()  # title => callback

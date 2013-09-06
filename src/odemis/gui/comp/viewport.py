@@ -51,7 +51,7 @@ class MicroscopeViewport(wx.Panel):
         wx.Panel.__init__(self, *args, **kwargs)
 
         self._microscope_view = None  # instrmodel.MicroscopeView
-        self._microscope_model = None # instrmodel.MicroscopeModel
+        self._tab_data_model = None # instrmodel.MicroscopyGUIData
 
         # Keep track of this panel's pseudo focus
         self._has_focus = False
@@ -93,13 +93,13 @@ class MicroscopeViewport(wx.Panel):
         self.Bind(wx.EVT_SIZE, self.OnSize)
 
 
-    def setView(self, microscope_view, microscope_model):
+    def setView(self, microscope_view, tab_data):
         """
         Set the microscope view that this viewport is displaying/representing
         *Important*: Should be called only once, at initialisation.
 
         :param microscope_view:(instrmodel.MicroscopeView)
-        :param microscope_model: (instrmodel.MicroscopeModel)
+        :param tab_data: (instrmodel.MicroscopyGUIData)
         """
 
         # This is a kind of a kludge, as it'd be best to have the viewport
@@ -111,7 +111,7 @@ class MicroscopeViewport(wx.Panel):
         # traceback.print_stack()
 
         self._microscope_view = microscope_view
-        self._microscope_model = microscope_model
+        self._tab_data_model = tab_data
 
         # TODO: Center to current view position, with current mpp
         microscope_view.mpp.subscribe(self._onMPP, init=True)
@@ -123,25 +123,12 @@ class MicroscopeViewport(wx.Panel):
         microscope_view.lastUpdate.subscribe(self._onImageUpdate, init=True)
 
         # canvas handles also directly some of the view properties
-        self.canvas.setView(microscope_view, microscope_model)
-
-        # TODO: that should not be the current values, but the values of
-        # the current image (so, taken from the metadata).
-        # microscope_model.sem_emt_dwell_time.subscribe(self.avDwellTime, True)
-        # microscope_model.sem_emt_spot.subscribe(self.avSpot, True)
-        # microscope_model.sem_emt_hv.subscribe(self.avHV, True)
-
-        # microscope_model.optical_emt_wavelength.subscribe(self.avWavelength)
-        # microscope_model.optical_det_wavelength.subscribe(self.avWavelength, True)
-        # microscope_model.optical_det_exposure_time.subscribe(self.avExposureTime, True)
+        self.canvas.setView(microscope_view, tab_data)
 
     @property
     def mic_view(self):
         return self._microscope_view
 
-    @property
-    def mic_model(self):
-        return self._microscope_model
 
     ################################################
     ## Panel control
@@ -313,11 +300,11 @@ class MicroscopeViewport(wx.Panel):
         """ When one of it's child widgets is clicked, this viewport should be
         considered as having the focus.
         """
-        if self._microscope_view and self._microscope_model:
+        if self._microscope_view and self._tab_data_model:
             # This will take care of doing everything necessary
             # Remember, the notify method of the vigilant attribute will
             # only fire if the values changes.
-            self._microscope_model.focussedView.value = self._microscope_view
+            self._tab_data_model.focussedView.value = self._microscope_view
 
         evt.Skip()
 
@@ -360,8 +347,8 @@ class SecomViewport(MicroscopeViewport):
     def __init__(self, *args, **kwargs):
         super(SecomViewport, self).__init__(*args, **kwargs)
 
-    def setView(self, microscope_view, microscope_model):
-        super(SecomViewport, self).setView(microscope_view, microscope_model)
+    def setView(self, microscope_view, tab_data):
+        super(SecomViewport, self).setView(microscope_view, tab_data)
         self._microscope_view.stream_tree.should_update.subscribe(
                                                         self.hide_pause,
                                                         init=True

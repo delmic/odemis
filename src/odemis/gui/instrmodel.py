@@ -53,52 +53,40 @@ TOOL_ROA = 3 # Select the region of acquisition (area to be acquired, SPARC-only
 TOOL_POINT = 4 # Select a point (to acquire/display)
 TOOL_LINE = 5 # Select a line (to acquire/display)
 
+# TODO:delete
+## This global attribute is used so the exact same live gui microscope model
+## object can be shared by multiple objects.
+#live_gui_model = None
+#
+#def get_live_gui_model(microscope):
+#    """ Create a LiveGuiModel object, or return the previously created one if
+#    it's already present """
+#    global live_gui_model
+#
+#    if not live_gui_model:
+#        live_gui_model = LiveViewGUIData(microscope)
+#    return live_gui_model
 
-# This global attribute is used so the exact same live gui microscope model
-# object can be shared by multiple objects.
-live_gui_model = None
-
-def get_live_gui_model(microscope):
-    """ Create a LiveGuiModel object, or return the previously created one if
-    it's already present """
-    global live_gui_model
-
-    if not live_gui_model:
-        live_gui_model = LiveViewGUIData(microscope)
-    return live_gui_model
-
-
-class MicroscopyGUIData(object):
-    """Contains all the data corresponding to a GUI tab.
-
-    In the Odemis GUI, there's basically one MicroscopyGUIData per tab (or just
-    one for each window without tab). In the MVC terminology, it's a model.
+class MainGUIData(object):
+    """
+    Contains all the data corresponding to the entire GUI.
     
-    This is a meta-class. You actually want to use one
-    of the sub-classes to represent a specific type of interface. Not all
-    interfaces have the same attributes. However, there are always:
+    In the MVC terminology, it's a model. It contains attributes to directly 
+    access the microscope components, and data to be used or represented in the
+    entire GUI. Normally, there is only one instance of this object per 
+    execution (only one microscope manipulated at a time by the interface).
+    
+    It contains mainly:
     .microscope:
         The HwComponent root of all the other components (can be None
         if there is no microscope available, like an interface to display
-        recorded acquisition). There are also many .ccd, .stage, etc, which can
-        be used to directly access the sub-components.
-        .microscope.role (string) should be used to find out the generic type of
-        microscope connected. Normally, all the interfaces of the same execution
-        will have the same .microscope or None (there are never multiple
-        microscopes manipulated simultaneously).
-    .view and .focussedView:
-        Represent the available/currently selected views (graphical image/data
-        display).
-    .viewLayout:
-        The current way on how the views are organized (the choices
-        give all the possibilities of this GUI)
-    .streams:
-        All the stream/data available to the user to manipulate.
-    .tool:
-        the current "mode" in which the user is (the choices give all the
-        available tools for this GUI).
+        recorded acquisition).
+    .role (string): copy of .microscope.role (string) should be used to find out
+        the generic type of microscope connected.
+        
+    There are also many .ccd, .stage, etc, which can be used to directly access
+    the sub-components.
     """
-    __metaclass__ = ABCMeta
 
     def __init__(self, microscope):
         """
@@ -106,10 +94,9 @@ class MicroscopyGUIData(object):
          provided by the back-end. If None, it means the interface is not
          connected to a microscope (and displays a recorded acquisition).
         """
-        # TODO: put all these HW attributes to a shared MainGUIData
 
         self.microscope = microscope
-
+        self.role = None
 
         # These are either HwComponents or None (if not available)
         self.ccd = None
@@ -126,6 +113,8 @@ class MicroscopyGUIData(object):
         self.spectrograph = None # actuator to change the wavelength
 
         if microscope:
+            self.role = microscope.role
+
             for d in microscope.detectors:
                 if d.role == "ccd":
                     self.ccd = d
@@ -172,27 +161,18 @@ class MicroscopyGUIData(object):
                 elif e.role == "e-beam":
                     self.ebeam = e
 
-        self.streams = set() # Streams available (handled by StreamController)
+            # Do some typical checks on expectations from an actual microscope
+            if not any((self.ccd, self.sed, self.bsd, self.spectrometer)):
+                raise KeyError("No detector found in the microscope")
 
-        # MicroscopeViews available, (handled by ViewController)
-        # The ViewController cares about position: they are top-left, top-right
-        # bottom-left, bottom-right.
-        self.views = []
-
-        # Current tool selected (from the toolbar, cf cont.tools)
-        self.tool = None # Needs to be overridden by a IntEnumerated
-
-        # The MicroscopeView currently focused, it is one of the .views (or None)
-        self.focussedView = VigilantAttribute(None)
-
-        layouts = set([VIEW_LAYOUT_ONE, VIEW_LAYOUT_22, VIEW_LAYOUT_FULLSCREEN])
-        self.viewLayout = model.IntEnumerated(VIEW_LAYOUT_22, choices=layouts)
+            if not self.light and not self.ebeam:
+                raise KeyError("No emitter found in the microscope")
 
         # Handle turning on/off the instruments
         hw_states = set([STATE_OFF, STATE_ON, STATE_PAUSE])
         if self.ccd:
             # not so nice to hard code it here, but that should do it for now...
-            if self.microscope.role == "sparc":
+            if self.role == "sparc":
                 self.arState = model.IntEnumerated(STATE_OFF, choices=hw_states)
                 self.arState.subscribe(self.onARState)
             else:
@@ -207,6 +187,10 @@ class MicroscopyGUIData(object):
             self.specState = model.IntEnumerated(STATE_OFF, choices=hw_states)
             self.specState.subscribe(self.onSpecState)
 
+
+    # TODO: should we put also the configuration related stuff?
+    # Like path/file format
+    # Like .debug/developer (True if debug mode activated)
 
     def onOpticalState(self, state):
         """ Event handler for when the state of the optical microscope changes
@@ -283,21 +267,59 @@ class MicroscopyGUIData(object):
         logging.info("Stopped motion on every axes")
 
 
+class MicroscopyGUIData(object):
+    """Contains all the data corresponding to a GUI tab.
+
+    In the Odemis GUI, there's basically one MicroscopyGUIData per tab (or just
+    one for each window without tab). In the MVC terminology, it's a model.
+    
+    This is a meta-class. You actually want to use one
+    of the sub-classes to represent a specific type of interface. Not all
+    interfaces have the same attributes. However, there are always:
+    .main:
+        The MainGUIData object for the current GUI.
+    .view and .focussedView:
+        Represent the available/currently selected views (graphical image/data
+        display).
+    .viewLayout:
+        The current way on how the views are organized (the choices
+        give all the possibilities of this GUI)
+    .streams:
+        All the stream/data available to the user to manipulate.
+    .tool:
+        the current "mode" in which the user is (the choices give all the
+        available tools for this GUI).
+    """
+    __metaclass__ = ABCMeta
+
+    def __init__(self, main):
+        self.main = main
+
+        self.streams = set() # Streams available (handled by StreamController)
+
+        # MicroscopeViews available, (handled by ViewController)
+        # The ViewController cares about position: they are top-left, top-right
+        # bottom-left, bottom-right.
+        self.views = []
+
+        # Current tool selected (from the toolbar, cf cont.tools)
+        self.tool = None # Needs to be overridden by a IntEnumerated
+
+        # The MicroscopeView currently focused, it is one of the .views (or None)
+        self.focussedView = VigilantAttribute(None)
+
+        layouts = set([VIEW_LAYOUT_ONE, VIEW_LAYOUT_22, VIEW_LAYOUT_FULLSCREEN])
+        self.viewLayout = model.IntEnumerated(VIEW_LAYOUT_22, choices=layouts)
+
+
 class LiveViewGUIData(MicroscopyGUIData):
     """ Represent an interface used to only show the current data from the
     microscope. It should be able to handle SEM-only, optical-only, and SECOM
     systems.
     """
-    def __init__(self, microscope):
-        assert microscope is not None
-        MicroscopyGUIData.__init__(self, microscope)
-
-        # Do some typical checks on expectations from an actual microscope
-        if not any((self.ccd, self.sed, self.bsd, self.spectrometer)):
-            raise KeyError("No detector found in the microscope")
-
-        if not self.light and not self.ebeam:
-            raise KeyError("No emitter found in the microscope")
+    def __init__(self, main):
+        assert main.microscope is not None
+        MicroscopyGUIData.__init__(self, main)
 
         # Current tool selected (from the toolbar)
         tools = set([TOOL_NONE, TOOL_ZOOM, TOOL_ROI])
@@ -309,16 +331,9 @@ class ScannedAcquisitionGUIData(MicroscopyGUIData):
     acquire signal. It allows fine control of the shape and density of the scan.
     It is specifically made for the SPARC system.
     """
-    def __init__(self, microscope):
-        assert microscope is not None
-        MicroscopyGUIData.__init__(self, microscope)
-
-        # Do some typical checks on expectations from an actual microscope
-        if not any((self.ccd, self.sed, self.bsd, self.spectrometer)):
-            raise KeyError("No detector found in the microscope")
-
-        if not self.light and not self.ebeam:
-            raise KeyError("No emitter found in the microscope")
+    def __init__(self, main):
+        assert main.microscope is not None
+        MicroscopyGUIData.__init__(self, main)
 
         # more tools: for selecting the sub-region of acquisition
         tools = set([TOOL_NONE,
@@ -341,10 +356,8 @@ class AnalysisGUIData(MicroscopyGUIData):
     it represents all the data present in a specific file.
     All the streams should be StaticStreams
     """
-    def __init__(self, role=None):
-        # create a fake empty microscope, with just a role
-        fake_mic = model.Microscope("fake", role=role)
-        MicroscopyGUIData.__init__(self, fake_mic)
+    def __init__(self, main):
+        MicroscopyGUIData.__init__(self, main)
 
         # only tool to zoom and pick point/line
         tools = set([TOOL_NONE, TOOL_ZOOM, TOOL_POINT, TOOL_LINE])
@@ -360,12 +373,12 @@ class ActuatorGUIData(MicroscopyGUIData):
     Represent an interface used to move the actuators of a microscope. It might
     also display one or more views, but it's not required.
     """
-    def __init__(self, microscope):
-        assert microscope is not None
-        MicroscopyGUIData.__init__(self, microscope)
+    def __init__(self, main):
+        assert main.microscope is not None
+        MicroscopyGUIData.__init__(self, main)
 
         # check there is something to move
-        if not microscope.actuators:
+        if not main.microscope.actuators:
             raise KeyError("No actuators found in the microscope")
 
         # str -> VA: name (as the name of the attribute) -> step size (m)
@@ -375,12 +388,12 @@ class ActuatorGUIData(MicroscopyGUIData):
                           }
         # remove the ones that don't have an actuator
         for an in self.stepsizes.keys():
-            if getattr(self, an) is None:
+            if getattr(main, an) is None:
                 del self.stepsizes[an]
 
         # Mirror is a bit more complicated as it has 4 axes and Y usually needs
         # to be 10x bigger than X
-        if self.mirror is not None:
+        if main.mirror is not None:
             mss = {"mirror_x": model.FloatContinuous(1e-6, [1e-8, 1e-3]),
                    "mirror_y": model.FloatContinuous(10e-6, [1e-8, 1e-3]),
                    "mirror_r": model.FloatContinuous(10e-6, [1e-8, 1e-3])
@@ -398,7 +411,7 @@ class ActuatorGUIData(MicroscopyGUIData):
         self._axis_to_act_ss = {}
         for ssn in self.stepsizes.keys():
             an, axes = ss_to_act.get(ssn, (ssn, None))
-            act = getattr(self, an)
+            act = getattr(main, an)
             for axisn in act.axes:
                 if axes and axisn not in axes:
                     continue # hopefully in another stepsize
@@ -426,7 +439,7 @@ class ActuatorGUIData(MicroscopyGUIData):
         :raises: KeyError if the axis doesn't exist
         """
         an, ssn = self._axis_to_act_ss[axis]
-        a = getattr(self, an)
+        a = getattr(self.main, an)
         ss = factor * self.stepsizes[ssn].value
 
         if abs(ss) > 10e-3:

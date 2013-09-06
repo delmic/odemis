@@ -800,8 +800,8 @@ class SettingsBarController(object):
     of the setting panel.
     """
 
-    def __init__(self, microscope_model, highlight_change=False):
-        self._microscope_model = microscope_model
+    def __init__(self, tab_data, highlight_change=False):
+        self._tab_data_model = tab_data
         self.settings_panels = []
 
 
@@ -858,9 +858,10 @@ class SettingsBarController(object):
 
 class SecomSettingsController(SettingsBarController):
 
-    def __init__(self, parent_frame, microscope_model, highlight_change=False):
-        super(SecomSettingsController, self).__init__(microscope_model,
+    def __init__(self, parent_frame, tab_data, highlight_change=False):
+        super(SecomSettingsController, self).__init__(tab_data,
                                                       highlight_change)
+        main_data = tab_data.main
 
         self._sem_panel = SemSettingsPanel(
                                     parent_frame.fp_settings_secom_sem,
@@ -873,20 +874,21 @@ class SecomSettingsController(SettingsBarController):
                                     highlight_change)
 
         # Query Odemis daemon (Should move this to separate thread)
-        if microscope_model.ccd:
+        if main_data.ccd:
             self.add_component("Camera",
-                                microscope_model.ccd,
+                                main_data.ccd,
                                 self._optical_panel)
         # TODO: allow to change light.power
 
-        if microscope_model.ebeam:
-            self.add_component("SEM", microscope_model.ebeam, self._sem_panel)
+        if main_data.ebeam:
+            self.add_component("SEM", main_data.ebeam, self._sem_panel)
 
 class LensAlignSettingsController(SettingsBarController):
 
-    def __init__(self, parent_frame, microscope_model, highlight_change=False):
-        super(LensAlignSettingsController, self).__init__(microscope_model,
+    def __init__(self, parent_frame, tab_data, highlight_change=False):
+        super(LensAlignSettingsController, self).__init__(tab_data,
                                                           highlight_change)
+        main_data = tab_data.main
 
         self._sem_panel = SemSettingsPanel(
                                     parent_frame.fp_lens_sem_settings,
@@ -899,21 +901,22 @@ class LensAlignSettingsController(SettingsBarController):
                                     highlight_change)
 
         # Query Odemis daemon (Should move this to separate thread)
-        if microscope_model.ccd:
+        if main_data.ccd:
             self.add_component("Camera",
-                                microscope_model.ccd,
+                                main_data.ccd,
                                 self._optical_panel)
 
         # TODO: allow to change light.power
 
-        if microscope_model.ebeam:
-            self.add_component("SEM", microscope_model.ebeam, self._sem_panel)
+        if main_data.ebeam:
+            self.add_component("SEM", main_data.ebeam, self._sem_panel)
 
 class SparcSettingsController(SettingsBarController):
 
-    def __init__(self, parent_frame, microscope_model, highlight_change=False):
-        super(SparcSettingsController, self).__init__(microscope_model,
+    def __init__(self, parent_frame, tab_data, highlight_change=False):
+        super(SparcSettingsController, self).__init__(tab_data,
                                                       highlight_change)
+        main_data = tab_data.main
 
         self._sem_panel = SemSettingsPanel(
                                     parent_frame.fp_settings_sparc_sem,
@@ -933,19 +936,19 @@ class SparcSettingsController(SettingsBarController):
         self.spectro_rep_ent = None
 
 
-        if microscope_model.ebeam:
+        if main_data.ebeam:
             self.add_component(
                     "SEM",
-                    microscope_model.ebeam,
+                    main_data.ebeam,
                     self._sem_panel
             )
 
-        acq_streams = microscope_model.acquisitionView.getStreams()
+        acq_streams = tab_data.acquisitionView.getStreams()
 
-        if microscope_model.spectrometer:
+        if main_data.spectrometer:
             self.add_component(
                     "Spectrometer",
-                    microscope_model.spectrometer,
+                    main_data.spectrometer,
                     self._spectrum_panel
             )
 
@@ -974,33 +977,29 @@ class SparcSettingsController(SettingsBarController):
                         CONFIG["streamspec"]["roi"])
 
             # Add spectrograph control if available
-            if microscope_model.spectrograph:
+            if main_data.spectrograph:
                 # Without the "wavelength" axis, it's boring
-                if "wavelength" in microscope_model.spectrograph.axes:
+                if "wavelength" in main_data.spectrograph.axes:
                     self._spectrum_panel.add_axis(
                         "wavelength",
-                        microscope_model.spectrograph,
+                        main_data.spectrograph,
                         CONFIG["spectrograph"]["wavelength"])
                 # FIXME: grating is a VA, but actually should be an actuator
                 # changing the value can be very slow, and blocking all the GUI!
-                if (hasattr(microscope_model.spectrograph, "grating") and
-                    isinstance(microscope_model.spectrograph.grating,
+                if (hasattr(main_data.spectrograph, "grating") and
+                    isinstance(main_data.spectrograph.grating,
                                VigilantAttributeBase)):
                     self._spectrum_panel.add_value(
                         "grating",
-                        microscope_model.spectrograph.grating,
-                        microscope_model.spectrograph,
+                        main_data.spectrograph.grating,
+                        main_data.spectrograph,
                         CONFIG["spectrograph"]["grating"])
 
         else:
             parent_frame.fp_settings_sparc_spectrum.Hide()
 
-        if microscope_model.ccd:
-            self.add_component(
-                    "Camera",
-                    microscope_model.ccd,
-                    self._angular_panel
-            )
+        if main_data.ccd:
+            self.add_component("Camera", main_data.ccd, self._angular_panel)
 
             self._angular_panel.add_divider()
             ar_streams = [s for s in acq_streams if isinstance(s, ARStream)]
@@ -1016,22 +1015,16 @@ class SparcSettingsController(SettingsBarController):
             parent_frame.fp_settings_sparc_angular.Hide()
 
 
-    def get_angular_rep_entry(self):
-        return self.angular_rep_ent
-
-    def get_spectro_rep_entry(self):
-        return self.spectro_rep_ent
-
 class AnalysisSettingsController(SettingsBarController):
 
-    def __init__(self, parent_frame, microscope_model):
-        super(AnalysisSettingsController, self).__init__(microscope_model)
+    def __init__(self, parent_frame, tab_data):
+        super(AnalysisSettingsController, self).__init__(tab_data)
 
         self._file_panel = FileInfoSettingsPanel(
                                     parent_frame.fp_inspect_file_info,
                                     "No file loaded")
 
-        microscope_model.fileinfo.subscribe(self.on_fileinfo_change, init=True)
+        tab_data.fileinfo.subscribe(self.on_fileinfo_change, init=True)
 
     def on_fileinfo_change(self, fi):
         """ Update the data we wish to display from the FileInfo object """
@@ -1051,16 +1044,15 @@ class AnalysisSettingsController(SettingsBarController):
 
 class SparcAlignSettingsController(SettingsBarController):
 
-    def __init__(self, parent_frame, microscope_model):
-        super(SparcAlignSettingsController, self).__init__(microscope_model)
+    def __init__(self, parent_frame, tab_data):
+        super(SparcAlignSettingsController, self).__init__(tab_data)
+        main_data = tab_data.main
 
         self._ar_panel = AngularSettingsPanel(
                                 parent_frame.fp_sparc_settings,
                                 "No angular resolved camera found")
 
         # Query Odemis daemon (Should move this to separate thread)
-        if microscope_model.ccd:
-            self.add_component("Camera",
-                                microscope_model.ccd,
-                                self._ar_panel)
+        if main_data.ccd:
+            self.add_component("Camera", main_data.ccd, self._ar_panel)
 
