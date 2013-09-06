@@ -131,6 +131,7 @@ class OdemisGUIApp(wx.App):
                                             wx.BITMAP_TYPE_ANY)
             self.main_frame.SetIcons(ib)
 
+            # TODO: move to menu controller?
             # Menu events
             wx.EVT_MENU(self.main_frame,
                         self.main_frame.menu_item_quit.GetId(),
@@ -139,6 +140,11 @@ class OdemisGUIApp(wx.App):
             wx.EVT_MENU(self.main_frame,
                         self.main_frame.menu_item_debug.GetId(),
                         self.on_debug)
+
+            # TODO: View menu with:
+            # 2x2 view    F5 (Toggle, enabled only if tab has not 4 views)
+            # Crosshair      (Toggle, changes according to the current view of the current tab)
+
 
             gc = odemis.gui.conf.get_general_conf()
 
@@ -242,13 +248,8 @@ class OdemisGUIApp(wx.App):
 
             # Create the main tab controller and store a global reference
             # in the odemis.gui.cont package
-            set_main_tab_controller(
-                tabs.TabBarController(
-                    tab_defs,
-                    self.main_frame,
-                    self.main_data
-                )
-            )
+            tc = tabs.TabBarController(tab_defs, self.main_frame, self.main_data)
+            set_main_tab_controller(tc)
 
             # making it very late seems to make it smoother
             wx.CallAfter(self.main_frame.Show)
@@ -510,8 +511,6 @@ def installThreadExcepthook():
     http://spyced.blogspot.com/2007/06/workaround-for-sysexcepthook-bug.html
 
     Call once from ``__main__`` before creating any threads.
-    If using psyco, call
-
     """
     init_old = threading.Thread.__init__
     def init(self, *args, **kwargs):
