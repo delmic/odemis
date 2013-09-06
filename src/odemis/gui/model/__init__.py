@@ -241,14 +241,16 @@ class MainGUIData(object):
         """
         Stops immediately every axis
         """
-        for an in ["stage", "focus", "aligner", "mirror"]:
-            act = getattr(self, an)
-            if act is None:
-                continue
+        if self.microscope is None:
+            return
+
+        for act in self.microscope.actuators:
             try:
+                # TODO: run each of them in a separate thread, to call the stop
+                # ASAP? (or all but the last one?)
                 act.stop()
             except Exception:
-                logging.exception("Failed to stop %s actuator", an)
+                logging.exception("Failed to stop %s actuator", act.name)
 
         logging.info("Stopped motion on every axes")
 

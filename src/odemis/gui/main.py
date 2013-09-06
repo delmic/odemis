@@ -380,14 +380,8 @@ class OdemisGUIApp(wx.App):
         pass
 
     def on_stop_axes(self, evt):
-        if self.main_data and self.main_data.microscope:
-            for actuator in self.main_data.microscope.actuators:
-                # TODO: run each of them in a separate thread, to call the stop
-                # ASAP? (or all but the last one?)
-                try:
-                    actuator.stop()
-                except Exception:
-                    logging.exception("Failed to stop actuator %s", actuator.name)
+        if self.main_data:
+            self.main_data.stopMotion()
         else:
             evt.Skip()
 
