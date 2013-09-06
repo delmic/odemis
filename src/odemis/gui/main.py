@@ -139,7 +139,9 @@ class OdemisGUIApp(wx.App):
 
             wx.EVT_MENU(self.main_frame,
                         self.main_frame.menu_item_debug.GetId(),
-                        self.on_debug)
+                        self.on_debug_menu)
+            # no need for init as we know debug is False at init.
+            self.main_data.debug.subscribe(self.on_debug_va)
 
             # TODO: View menu with:
             # 2x2 view    F5 (Toggle, enabled only if tab has not 4 views)
@@ -368,13 +370,6 @@ class OdemisGUIApp(wx.App):
             self.goto_debug_mode()
             logging.exception("Failed to load example")
 
-
-    def goto_debug_mode(self):
-        """ This method sets the application into debug mode, setting the
-        log level and opening the log panel. """
-        self.main_frame.menu_item_debug.Check()
-        self.on_debug()
-
     def on_timer(self, event): #pylint: disable=W0613
         """ Timer stuff """
         pass
@@ -429,10 +424,16 @@ see http://www.fluorophores.org/disclaimer/.
 
         #subprocess.call(('xdg-open', HTML_DOC))
 
-    def on_debug(self, evt=None): #pylint: disable=W0613
-        """ Show or hides the log text field according to the debug menu item.
+    def on_debug_menu(self, evt):
+        """ Update the debug VA according to the menu
         """
-        self.main_frame.pnl_log.Show(self.main_frame.menu_item_debug.IsChecked())
+        self.main_data.debug.value = self.main_frame.menu_item_debug.IsChecked()
+
+    def on_debug_va(self, enabled):
+        """ This method (un)sets the application into debug mode, setting the
+        log level and opening the log panel. """
+        self.main_frame.menu_item_debug.Check(enabled)
+        self.main_frame.pnl_log.Show(enabled)
         self.main_frame.Layout()
 
     def on_close_window(self, evt=None): #pylint: disable=W0613
@@ -483,7 +484,7 @@ see http://www.fluorophores.org/disclaimer/.
 
                 # When an exception occurs, automatically got to debug mode.
                 if not isinstance(value, NotImplementedError):
-                    self.goto_debug_mode()
+                    self.main_data.debug.value = True
             finally:
                 # put us back
                 sys.excepthook = self.excepthook

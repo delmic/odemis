@@ -118,8 +118,6 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
         self.microscope_view.mpp.subscribe(self._onMPP)
 
-        # TODO: subscribe to view_pos to synchronize with the other views
-        # TODO: subscribe to stage_pos as well/instead.
         if hasattr(self.microscope_view, "stage_pos"):
             self.microscope_view.stage_pos.subscribe(self._onStagePos, init=True)
 
@@ -134,6 +132,8 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
         # handle crosshair
         self.microscope_view.show_crosshair.subscribe(self._onCrossHair, init=True)
+
+        self._tab_data_model.main.debug.subscribe(self._onDebug, init=True)
 
     def _onCrossHair(self, activated):
         """ Activate or disable the display of a cross in the middle of the view
@@ -441,15 +441,18 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         fps = super(DblMicroscopeCanvas, self)._DrawMergedImages(dc_buffer,
                                                          images,
                                                          mergeratio)
-        tlp = wx.GetTopLevelParent(self)
+        if self._tab_data_model and self._tab_data_model.main.debug.value:
+            self.fps_overlay.set_label("%d fps" % fps)
 
-        # TODO: have an complete GUI model, which contains one VA .debug
-        if hasattr(tlp, "menu_item_debug"):
-            debug_mode = tlp.menu_item_debug.IsChecked()
-            if debug_mode:
-                self.fps_overlay.set_label("%d fps" % fps)
-            else:
-                self.fps_overlay.set_label("")
+    def _onDebug(self, enabled):
+        """
+        Called when GUI debug mode changes
+        """
+        if enabled:
+            # real value will be updated with FPS on next image update
+            self.fps_overlay.set_label("0 fps")
+        else:
+            self.fps_overlay.set_label("")
 
 class SecomCanvas(DblMicroscopeCanvas):
 

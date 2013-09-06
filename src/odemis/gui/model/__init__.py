@@ -174,9 +174,10 @@ class MainGUIData(object):
             self.specState.subscribe(self.onSpecState)
 
 
-    # TODO: should we put also the configuration related stuff?
-    # Like path/file format
-    # Like .debug/developer (True if debug mode activated)
+        # TODO: should we put also the configuration related stuff?
+        # Like path/file format
+        # Set to True to request debug info to be displayed
+        self.debug = model.BooleanVA(False)
 
     def onOpticalState(self, state):
         """ Event handler for when the state of the optical microscope changes
