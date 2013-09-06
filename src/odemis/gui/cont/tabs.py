@@ -183,7 +183,7 @@ class SecomStreamsTab(Tab):
 
     def onOpticalState(self, state):
         if state == STATE_OFF or state == STATE_PAUSE:
-            paused_st = self._stream_controller.pauseStreams(guimodel.OPTICAL_STREAMS)
+            paused_st = self._stream_controller.pauseStreams(streammod.OPTICAL_STREAMS)
             self._opt_stream_to_restart = weakref.WeakSet(paused_st)
         elif state == STATE_ON:
             # check whether we need to create a (first) bright-field stream
@@ -196,11 +196,11 @@ class SecomStreamsTab(Tab):
 
     def onEMState(self, state):
         if state == STATE_OFF or state == STATE_PAUSE:
-            paused_st = self._stream_controller.pauseStreams(guimodel.EM_STREAMS)
+            paused_st = self._stream_controller.pauseStreams(streammod.EM_STREAMS)
             self._sem_stream_to_restart = weakref.WeakSet(paused_st)
         elif state == STATE_ON:
             # check whether we need to create a (first) SEM stream
-            has_sem = any(isinstance(s, guimodel.EM_STREAMS) for s in self.tab_data_model.streams)
+            has_sem = any(isinstance(s, streammod.EM_STREAMS) for s in self.tab_data_model.streams)
             if not has_sem:
                 sp = self._stream_controller.addSEMSED(add_to_all_views=True)
                 sp.show_remove_btn(False)

@@ -25,8 +25,8 @@ from __future__ import division
 from decorator import decorator
 from odemis import util, model
 from odemis.gui import instrmodel
-from odemis.gui.model import EM_STREAMS, stream
-from odemis.gui.model.stream import UNDEFINED_ROI
+from odemis.gui.model import stream
+from odemis.gui.model.stream import UNDEFINED_ROI, EM_STREAMS
 from odemis.gui.util import limit_invocation, call_after, units, ignore_dead
 from odemis.model._vattributes import VigilantAttributeBase
 import odemis.gui.comp.overlay as overlay

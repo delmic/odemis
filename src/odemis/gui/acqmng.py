@@ -27,9 +27,8 @@ from concurrent import futures
 from concurrent.futures._base import CANCELLED, FINISHED, RUNNING, \
     CANCELLED_AND_NOTIFIED, CancelledError, PENDING
 from odemis import model
-from odemis.gui.model import OPTICAL_STREAMS, EM_STREAMS
 from odemis.gui.model.stream import FluoStream, ARStream, SpectrumStream,\
-    SEMSpectrumMDStream
+    SEMSpectrumMDStream, OPTICAL_STREAMS, EM_STREAMS
 from odemis.gui.util import img
 import logging
 import numpy

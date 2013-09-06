@@ -27,21 +27,4 @@ can be controlled through the GUI.
 
 """
 
-import stream
 
-# TODO: move to stream
-
-# All the stream types related to optical
-OPTICAL_STREAMS = (stream.FluoStream,
-                   stream.BrightfieldStream,
-                   stream.StaticStream)
-
-# All the stream types related to electron microscope
-EM_STREAMS = (stream.SEMStream,
-              stream.StaticSEMStream)
-
-SPECTRUM_STREAMS = (stream.SpectrumStream,
-                    stream.StaticSpectrumStream)
-
-AR_STREAMS = (stream.ARStream,
-              stream.StaticARStream) # TODO: StaticARStream

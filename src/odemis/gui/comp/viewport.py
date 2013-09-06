@@ -27,7 +27,7 @@ from __future__ import division
 from odemis import gui
 from odemis.gui.comp.legend import InfoLegend, AxisLegend
 from odemis.gui.img.data import getico_blending_goalBitmap
-from odemis.gui.model import OPTICAL_STREAMS, EM_STREAMS
+from odemis.gui.model.stream import OPTICAL_STREAMS, EM_STREAMS
 from odemis.gui.util import call_after, units
 import logging
 import odemis.gui.canvas as canvas

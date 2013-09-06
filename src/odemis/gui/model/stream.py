@@ -1654,6 +1654,23 @@ class SEMSpectrumMDStream(MultipleDetectorStream):
 # correction is used, the same correction must be used for the entire
 # acquisition.
 
+# Generic cross-cut types
+# All the stream types related to optical
+OPTICAL_STREAMS = (FluoStream,
+                   BrightfieldStream,
+                   StaticStream)
+
+# All the stream types related to electron microscope
+EM_STREAMS = (SEMStream,
+              StaticSEMStream)
+
+SPECTRUM_STREAMS = (SpectrumStream,
+                    StaticSpectrumStream)
+
+AR_STREAMS = (ARStream,
+              StaticARStream)
+
+
 class StreamTree(object):
     """ Object which contains a set of streams, and how they are merged to
     appear as one image. It's a tree which has one stream per leaf and one merge

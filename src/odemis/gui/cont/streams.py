@@ -26,7 +26,7 @@ import logging
 from wx.lib.pubsub import pub
 
 import odemis.gui.model.stream as stream
-from odemis.gui import comp, instrmodel, model
+from odemis.gui import comp, instrmodel
 from odemis.gui.instrmodel import STATE_OFF, STATE_PAUSE, STATE_ON
 
 class StreamController(object):
@@ -142,7 +142,7 @@ class StreamController(object):
             logging.error("Failed to find a new unique name for stream")
             name = "Filtered colour"
 
-        stream = model.stream.FluoStream(name,
+        stream = stream.FluoStream(name,
                   self._main_data_model.ccd, self._main_data_model.ccd.data,
                   self._main_data_model.light, self._main_data_model.light_filter)
         return self._addStream(stream, add_to_all_views)
@@ -152,7 +152,7 @@ class StreamController(object):
         Creates a new brightfield stream and panel in the stream bar
         returns (StreamPanel): the stream panel created
         """
-        stream = model.stream.BrightfieldStream("Bright-field",
+        stream = stream.BrightfieldStream("Bright-field",
                   self._main_data_model.ccd, self._main_data_model.ccd.data,
                   self._main_data_model.light)
         return self._addStream(stream, add_to_all_views)
@@ -162,13 +162,13 @@ class StreamController(object):
         Creates a new SED stream and panel in the stream bar
         returns (StreamPanel): the panel created
         """
-        stream = model.stream.SEMStream("Secondary electrons",
+        stream = stream.SEMStream("Secondary electrons",
                   self._main_data_model.sed, self._main_data_model.sed.data,
                   self._main_data_model.ebeam)
         return self._addStream(stream, add_to_all_views)
 
     def addStatic(self, name, image,
-                  cls=model.stream.StaticStream, add_to_all_views=False):
+                  cls=stream.StaticStream, add_to_all_views=False):
         """
         Creates a new static stream and panel in the stream bar
         Note: only for debugging/testing

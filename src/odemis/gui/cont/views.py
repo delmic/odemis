@@ -23,12 +23,11 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 from odemis.gui import instrmodel
-from odemis.gui.model import OPTICAL_STREAMS, EM_STREAMS, SPECTRUM_STREAMS, \
-    AR_STREAMS
-from odemis.gui.model.stream import SEMStream, BrightfieldStream, FluoStream
+from odemis.gui.model.stream import SEMStream, BrightfieldStream, FluoStream, \
+    OPTICAL_STREAMS, EM_STREAMS, SPECTRUM_STREAMS, AR_STREAMS
+from odemis.gui.util import call_after
 import logging
 import wx
-from odemis.gui.util import call_after
 
 # TODO: The next comments were copied from instrmodel. Read/implement/remove
 # viewport controller (to be merged with stream controller?)
