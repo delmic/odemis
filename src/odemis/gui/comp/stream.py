@@ -215,15 +215,17 @@ class Expander(wx.PyControl):
                                   img.getico_playBitmap(),
                                   img.getico_play_hBitmap())
         self._btn_updated.SetToolTipString("Update stream")
-        self._btn_updated.Bind(wx.EVT_BUTTON, self._on_updated_btn)
-
+        self._vac_updated = VigilantAttributeConnector(
+                                  self._stream.should_update,
+                                  self._btn_updated,
+                                  self._btn_updated.SetToggle,
+                                  self._btn_updated.GetToggle,
+                                  events=wx.EVT_BUTTON)
         self._sz.Add(self._btn_updated,
                      0,
                      (wx.RIGHT | wx.ALIGN_CENTRE_VERTICAL |
                       wx.RESERVE_SPACE_EVEN_IF_HIDDEN),
                      BUTTON_BORDER)
-        self._stream.should_update.subscribe(self._on_update_change, init=True)
-
 
         self._sz.AddSpacer((64, 16))
 
@@ -311,21 +313,10 @@ class Expander(wx.PyControl):
         self.show_updated_btn(False)
 
         # TODO: label readonly (if editable)? Or in to_locked_mode?
-        if hasattr(self, "_btn_tint"):
-            self._btn_tint.SetBitmapHover(None)
-            self._btn_tint.Unbind(wx.EVT_BUTTON)
 
     def to_locked_mode(self):
         self.to_static_mode()
         self.show_visible_btn(False)
-
-    # TODO: use VAConnector
-    def _on_updated_btn(self, evt):
-        if self._btn_updated.GetToggle():
-            logging.debug("Activating stream '%s'", self._stream.name.value)
-        else:
-            logging.debug("Pausing stream '%s'", self._stream.name.value)
-        self._stream.should_update.value = self._btn_updated.GetToggle()
 
     # VA subscriptions: reflect the changes on the stream to the GUI
     def _on_update_change(self, updated):
@@ -675,59 +666,61 @@ class StreamPanel(wx.PyPanel):
         """
         self._expander.to_static_mode()
 
-        # ====== Fourth row, accumulation label, text field and value
-
-        lbl_accum = wx.StaticText(self._panel, -1, "Accumulation")
-        self._gbs.Add(lbl_accum, (self.row_count, 0),
-                      flag=wx.ALL, border=5)
-
-        self._txt_accum = IntegerTextCtrl(self._panel,
-                                          size=(-1, 14),
-                                          value=1,
-                                          min_val=1,
-                                          key_inc=True,
-                                          step=1,
-                                          style=wx.NO_BORDER)
-        self._txt_accum.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_EDIT)
-        self._txt_accum.SetBackgroundColour(self._panel.GetBackgroundColour())
-
-        self._gbs.Add(self._txt_accum, (self.row_count, 1),
-                                        flag=wx.EXPAND | wx.ALL,
-                                        border=5)
-
-        self.row_count += 1
-
-        # ====== Fifth row, interpolation label, text field and value
-
-        lbl_interp = wx.StaticText(self._panel, -1, "Interpolation")
-        self._gbs.Add(lbl_interp, (self.row_count, 0),
-                      flag=wx.ALL, border=5)
-
-        choices = ["None", "Linear", "Cubic"]
-        self._cmb_interp = wx.combo.OwnerDrawnComboBox(self._panel,
-                                                   - 1,
-                                                   value=choices[0],
-                                                   pos=(0, 0),
-                                                   size=(100, 16),
-                                                   style=wx.NO_BORDER |
-                                                         wx.CB_DROPDOWN |
-                                                         wx.TE_PROCESS_ENTER |
-                                                         wx.CB_READONLY |
-                                                         wx.EXPAND,
-                                                    choices=choices)
-
-        self._cmb_interp.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_EDIT)
-        self._cmb_interp.SetBackgroundColour(self._panel.GetBackgroundColour())
-        self._cmb_interp.SetButtonBitmaps(img.getbtn_downBitmap(),
-                                          pushButtonBg=False)
-
-
-        self._gbs.Add(self._cmb_interp, (self.row_count, 1),
-                                         flag=wx.EXPAND | wx.ALL,
-                                         border=5,
-                                         span=(1, 2))
-
-        self.row_count += 1
+        # TODO: add when function implemented (and should be dependent on the
+        # Stream VAs)
+#        # ====== Fourth row, accumulation label, text field and value
+#
+#        lbl_accum = wx.StaticText(self._panel, -1, "Accumulation")
+#        self._gbs.Add(lbl_accum, (self.row_count, 0),
+#                      flag=wx.ALL, border=5)
+#
+#        self._txt_accum = IntegerTextCtrl(self._panel,
+#                                          size=(-1, 14),
+#                                          value=1,
+#                                          min_val=1,
+#                                          key_inc=True,
+#                                          step=1,
+#                                          style=wx.NO_BORDER)
+#        self._txt_accum.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_EDIT)
+#        self._txt_accum.SetBackgroundColour(self._panel.GetBackgroundColour())
+#
+#        self._gbs.Add(self._txt_accum, (self.row_count, 1),
+#                                        flag=wx.EXPAND | wx.ALL,
+#                                        border=5)
+#
+#        self.row_count += 1
+#
+#        # ====== Fifth row, interpolation label, text field and value
+#
+#        lbl_interp = wx.StaticText(self._panel, -1, "Interpolation")
+#        self._gbs.Add(lbl_interp, (self.row_count, 0),
+#                      flag=wx.ALL, border=5)
+#
+#        choices = ["None", "Linear", "Cubic"]
+#        self._cmb_interp = wx.combo.OwnerDrawnComboBox(self._panel,
+#                                                   - 1,
+#                                                   value=choices[0],
+#                                                   pos=(0, 0),
+#                                                   size=(100, 16),
+#                                                   style=wx.NO_BORDER |
+#                                                         wx.CB_DROPDOWN |
+#                                                         wx.TE_PROCESS_ENTER |
+#                                                         wx.CB_READONLY |
+#                                                         wx.EXPAND,
+#                                                    choices=choices)
+#
+#        self._cmb_interp.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_EDIT)
+#        self._cmb_interp.SetBackgroundColour(self._panel.GetBackgroundColour())
+#        self._cmb_interp.SetButtonBitmaps(img.getbtn_downBitmap(),
+#                                          pushButtonBg=False)
+#
+#
+#        self._gbs.Add(self._cmb_interp, (self.row_count, 1),
+#                                         flag=wx.EXPAND | wx.ALL,
+#                                         border=5,
+#                                         span=(1, 2))
+#
+#        self.row_count += 1
 
     def to_locked_mode(self):
         self.to_static_mode()
@@ -1162,10 +1155,12 @@ class StreamPanel(wx.PyPanel):
                       flag=wx.LEFT | wx.TOP,
                       border=5)
         self.row_count += 1
-
-        # TODO: need to use VA connector for this toggle button
-        self._btn_fit_rgb.Bind(wx.EVT_BUTTON, self.on_toggle_fit_rgb)
-        self._btn_fit_rgb.SetToggle(self.stream.fitToRGB.value)
+        self._vac_fit_rgb = VigilantAttributeConnector(
+                                  self.stream.fitToRGB,
+                                  self._btn_fit_rgb,
+                                  self._btn_fit_rgb.SetToggle,
+                                  self._btn_fit_rgb.GetToggle,
+                                  events=wx.EVT_BUTTON)
 
         # ====== Second row, center label, slider and value
 
@@ -1293,10 +1288,6 @@ class StreamPanel(wx.PyPanel):
 
         # TODO: should the stream have a way to know when the raw data has changed? => just a spectrum VA, like histogram VA
         self.stream.image.subscribe(self.on_new_spec_data, init=True)
-
-    def on_toggle_fit_rgb(self, evt):
-        enabled = self._btn_fit_rgb.GetToggle()
-        self.stream.fitToRGB.value = enabled
 
     @limit_invocation(0.2)
     def on_new_spec_data(self, image):
