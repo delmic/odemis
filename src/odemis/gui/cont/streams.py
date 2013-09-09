@@ -75,8 +75,7 @@ class StreamController(object):
         self.locked_mode = True
 
     def _createAddStreamActions(self):
-        """
-        Create the possible "add stream" actions according to the current
+        """ Create the compatible "add stream" actions according to the current
         microscope.
         To be executed only once, at initialisation.
         """
@@ -194,8 +193,8 @@ class StreamController(object):
         Adds a stream.
 
         stream (stream.Stream): the new stream to add
-        add_to_all_views (boolean): if True, add the stream to all the compatible
-          views, otherwise add only to the current view
+        add_to_all_views (boolean): if True, add the stream to all the
+            compatible views, otherwise add only to the current view
         returns the StreamPanel that was created
         """
         self._tab_data_model.streams.add(stream)
@@ -206,7 +205,7 @@ class StreamController(object):
         else:
             v = self._tab_data_model.focussedView.value
             if isinstance(stream, v.stream_classes):
-                warn ="Adding stream incompatible with the current view"
+                warn = "Adding stream incompatible with the current view"
                 logging.warning(warn)
             v.addStream(stream)
 
@@ -322,8 +321,7 @@ class StreamController(object):
             stream.is_active.value = True
 
     def _scheduleStream(self, stream):
-        """
-        Add a stream to be managed by the update scheduler.
+        """ Add a stream to be managed by the update scheduler.
         stream (Stream): the stream to add. If it's already scheduled, it's fine.
         """
         # create an adapted subscriber for the scheduler
