@@ -74,8 +74,8 @@ Spectra: {
     affects: [Clara]
 }
 
-# Axes: X is horizontal on screen (going left->right), physical left->right of sample when user is inserting the sample
-#       Y is vertical going top-> bottom, physical: far->close from user looking from the top
+# Axes: X is horizontal on screen (going left->right), physical: far->close when looking at the door
+#       Y is vertical on screen (going bottom->top), physical: left->right when looking at the door
 Clara: {
     class: andorcam2.AndorCam2,
     role: ccd,
@@ -93,17 +93,9 @@ Clara: {
     role: stage,
     affects: [Clara, "EBeam ExtXY"],
     children: {"x": PIGCS, "y": PIGCS},
-    # For now, the CCD of the Clara cannot be rotated in software, so we must 
-    # follow its orientation by rotating the SEM scanning (via the FEI software)
-    # and the X/Y axes here. Once the CCD can be rotated, we should put back
-    # the axes to follow the SEM convention.
     init: {
-        axes_map: {"x": "y", "y": "x"},
-        inverted: ["x"]
+        axes_map: {"x": "x", "y": "y"},
     },
-#    init: {
-#        axes_map: {"x": "x", "y": "y"},
-#    },
     properties: {
         speed: {'x': 0.0001, 'y': 0.0001} #m/s (low enough to ensure we always use the minimum voltage)
     }
@@ -123,7 +115,8 @@ Clara: {
     }
 }
 
-# Z axis of focus: increasing means "closer to the sample"
+# Axis Z: (Physical) bottom->top when looking at the door
+#         (On screen) bottom->top (so distance to sample is smaller when going up)
 "OpticalZ actuator": {
     class: CombinedActuator,
     role: focus,
