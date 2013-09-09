@@ -256,7 +256,7 @@
                   <object class="sizeritem">
                     <object class="wxGridBagSizer">
                       <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_pa">
+                        <object class="wxStaticText" name="lbl_pb">
                           <label>+B</label>
                           <fg>#E5E5E5</fg>
                           <font>
@@ -272,8 +272,8 @@
                         <cellpos>0,0</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_pb">
-                          <label>-B</label>
+                        <object class="wxStaticText" name="lbl_ma">
+                          <label>-A</label>
                           <fg>#E5E5E5</fg>
                           <font>
                             <size>16</size>
@@ -288,7 +288,7 @@
                         <cellpos>0,3</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_ma">
+                        <object class="wxStaticText" name="lbl_pa">
                           <label>+A</label>
                           <fg>#E5E5E5</fg>
                           <font>
@@ -306,7 +306,7 @@
                       </object>
                       <object class="sizeritem">
                         <object class="wxStaticText" name="lbl_mb">
-                          <label>-A</label>
+                          <label>-B</label>
                           <fg>#E5E5E5</fg>
                           <font>
                             <size>16</size>
@@ -346,7 +346,7 @@
                         <cellpos>1,1</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="lens_align_btn_mb">
+                        <object class="ImageTextButton" name="lens_align_btn_ma">
                           <label>↗</label>
                           <delta>1</delta>
                           <bitmap>img/btn_64x48.png</bitmap>
@@ -396,7 +396,7 @@
                         <cellpos>2,1</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="lens_align_btn_ma">
+                        <object class="ImageTextButton" name="lens_align_btn_mb">
                           <label>↘</label>
                           <delta>1</delta>
                           <bitmap>img/btn_64x48.png</bitmap>
@@ -453,7 +453,7 @@
                       <object class="wxBoxSizer">
                         <orient>wxHORIZONTAL</orient>
                         <object class="sizeritem">
-                          <object class="ImageTextToggleButton" name="btn_lens_toggle_sem">
+                          <object class="ImageTextToggleButton" name="lens_align_btn_sem">
                             <size>92,48</size>
                             <label>SEM      </label>
                             <delta>1</delta>
@@ -479,7 +479,7 @@
                           <border>10</border>
                         </object>
                         <object class="sizeritem">
-                          <object class="ImageTextToggleButton" name="btn_lens_toggle_opt">
+                          <object class="ImageTextToggleButton" name="lens_align_btn_opt">
                             <size>92,48</size>
                             <label>OPTICAL</label>
                             <delta>1</delta>
@@ -897,7 +897,7 @@
                       <object class="wxBoxSizer">
                         <orient>wxHORIZONTAL</orient>
                         <object class="sizeritem">
-                          <object class="ImageTextToggleButton" name="btn_toggle_press">
+                          <object class="ImageTextToggleButton" name="live_btn_press">
                             <size>92,48</size>
                             <label>0 kPa</label>
                             <delta>1</delta>
@@ -924,7 +924,7 @@
                           <border>10</border>
                         </object>
                         <object class="sizeritem">
-                          <object class="ImageTextToggleButton" name="btn_toggle_sem">
+                          <object class="ImageTextToggleButton" name="live_btn_sem">
                             <size>92,48</size>
                             <label>SEM      </label>
                             <delta>1</delta>
@@ -950,7 +950,7 @@
                           <border>10</border>
                         </object>
                         <object class="sizeritem">
-                          <object class="ImageTextToggleButton" name="btn_toggle_opt">
+                          <object class="ImageTextToggleButton" name="live_btn_opt">
                             <size>92,48</size>
                             <label>OPTICAL</label>
                             <delta>1</delta>
@@ -979,7 +979,7 @@
                           <option>1</option>
                         </object>
                         <object class="sizeritem">
-                          <object class="PopupImageButton" name="btn_toggle_pause">
+                          <object class="PopupImageButton" name="live_btn_pause">
                             <size>50,48</size>
                             <default>1</default>
                             <bitmap>img/btn_pause.png</bitmap>
@@ -1742,7 +1742,7 @@
                       <object class="wxBoxSizer">
                         <orient>wxHORIZONTAL</orient>
                         <object class="sizeritem">
-                          <object class="ImageTextToggleButton" name="btn_toggle_spectrometer">
+                          <object class="ImageTextToggleButton" name="acq_btn_spectrometer">
                             <label>SPECTROMETER</label>
                             <delta>1</delta>
                             <bitmap>img/btn_128x48.png</bitmap>
@@ -1767,7 +1767,7 @@
                           <border>10</border>
                         </object>
                         <object class="sizeritem">
-                          <object class="ImageTextToggleButton" name="btn_toggle_angular">
+                          <object class="ImageTextToggleButton" name="acq_btn_angular">
                             <label>ANGULAR</label>
                             <delta>1</delta>
                             <bitmap>img/btn_128x48.png</bitmap>

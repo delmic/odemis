@@ -685,9 +685,15 @@ class LensAlignTab(Tab):
         self._state_controller = MicroscopeStateController(
                                             self.tab_data_model,
                                             self.main_frame,
-                                            "btn_lens_toggle_"
+                                            "lens_align_btn_"
                                       )
 
+        self._actuator_controller = ActuatorController(self.tab_data_model,
+                                                       main_frame,
+                                                       "lens_align_")
+
+        # Bind keys
+        self._actuator_controller.bind_keyboard(main_frame.pnl_tab_secom_align)
 
 class MirrorAlignTab(Tab):
     """
