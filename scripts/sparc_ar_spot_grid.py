@@ -48,7 +48,7 @@ BINNING = (1, 1) # px, px
 # Number of identical images to acquire from the CCD for each spot position
 N_IMAGES = 4
 # Number of points on the grid
-N_X, N_Y = 11, 13 # put an even number if you want (0, 0) to be scanned
+N_X, N_Y = 11, 13 # put an odd number if you want (0, 0) to be scanned
 
 
 # file format
