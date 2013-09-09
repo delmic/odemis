@@ -28,14 +28,15 @@ from odemis import dataio, model
 from odemis.gui.cont import settings, tools
 from odemis.gui.cont.acquisition import SecomAcquiController, \
     SparcAcquiController
+from odemis.gui.cont.actuators import ActuatorController
 from odemis.gui.cont.microscope import MicroscopeStateController
 from odemis.gui.model.img import InstrumentalImage
 from odemis.gui.util import widgets, get_picture_folder, formats_to_wildcards
 import logging
 import odemis.gui.cont.streams as streamcont
 import odemis.gui.cont.views as viewcont
-import odemis.gui.model.stream as streammod
 import odemis.gui.model as guimodel
+import odemis.gui.model.stream as streammod
 import os.path
 import pkg_resources
 import weakref
@@ -765,96 +766,12 @@ class MirrorAlignTab(Tab):
         # TODO: need contrast/brightness for the AR stream
 
         # TODO: Should go to a new controller "actuator controller"?
-        # Bind sizesteps
-        self.va_connectors = []
-        for an, ss in self.tab_data_model.stepsizes.items():
-            slider_name = "slider_" + an
-            try:
-                slider = getattr(self.main_frame, slider_name)
-            except AttributeError:
-                logging.exception("No slider in GUI found for stepsize %s", an)
-                continue
+        self._actuator_controller = ActuatorController(self.tab_data_model,
+                                                       main_frame,
+                                                       "btn_align_")
 
-            slider.SetRange(*ss.range)
-
-            vac = widgets.VigilantAttributeConnector(ss, slider,
-                                                     events=wx.EVT_SLIDER)
-            self.va_connectors.append(vac)
-
-        # Bind buttons
-        for axis in self.tab_data_model.axes:
-            for suffix, factor in [("m", -1), ("p", 1)]:
-                # something like "btn_align_pry"
-                btn_name = "btn_align_" + suffix + axis
-                try:
-                    btn = getattr(self.main_frame, btn_name)
-                except AttributeError:
-                    logging.exception("No button in GUI found for axis %s", axis)
-                    continue
-
-                def btn_action(evt, axis=axis, factor=factor):
-                    self.tab_data_model.step(axis, factor)
-
-                btn.Bind(wx.EVT_BUTTON, btn_action)
-
-        # Keybinding
-        # Note: evt_key_* and evt_char are not passed to their parents, even if
-        # skipped. Only evt_char_hook is propagated, the problem is that it's
-        # not what the children bind to, so we always get it, even if the child
-        # handles the key events.
-        # http://article.gmane.org/gmane.comp.python.wxpython/50485
-        # http://wxpython.org/Phoenix/docs/html/KeyEvent.html
-        self.main_frame.pnl_tab_sparc_align.Bind(wx.EVT_CHAR_HOOK, self.on_key)
-
-    # TODO: should be one per microscope role or axes names??
-    # WXK -> (args for interface_model.step)
-    key_bindings_secom = {
-                    wx.WXK_LEFT: ("x", -1),
-                    wx.WXK_RIGHT: ("x", 1),
-                    wx.WXK_DOWN: ("y", -1),
-                    wx.WXK_UP: ("y", 1),
-                    wx.WXK_PAGEDOWN: ("z", -1),
-                    wx.WXK_PAGEUP: ("z", 1),
-                    wx.WXK_NUMPAD_LEFT: ("r", -1),
-                    wx.WXK_NUMPAD_RIGHT: ("r", 1),
-                    wx.WXK_NUMPAD_DOWN: ("l", -1),
-                    wx.WXK_NUMPAD_UP: ("l", 1),
-                    # same but with NumLock
-                    wx.WXK_NUMPAD4: ("r", -1),
-                    wx.WXK_NUMPAD6: ("r", 1),
-                    wx.WXK_NUMPAD2: ("l", -1),
-                    wx.WXK_NUMPAD8: ("l", 1),
-                    }
-    key_bindings_sparc = {
-                    wx.WXK_LEFT: ("x", 1), # so that image goes in same direction
-                    wx.WXK_RIGHT: ("x", -1),
-                    wx.WXK_DOWN: ("y", -1),
-                    wx.WXK_UP: ("y", 1),
-                    # wx.WXK_PAGEDOWN: ("z", -1),
-                    # wx.WXK_PAGEUP: ("z", 1),
-                    wx.WXK_NUMPAD_LEFT: ("rz", -1),
-                    wx.WXK_NUMPAD_RIGHT: ("rz", 1),
-                    wx.WXK_NUMPAD_DOWN: ("ry", -1),
-                    wx.WXK_NUMPAD_UP: ("ry", 1),
-                    # same but with NumLock
-                    wx.WXK_NUMPAD4: ("rz", -1),
-                    wx.WXK_NUMPAD6: ("rz", 1),
-                    wx.WXK_NUMPAD2: ("ry", -1),
-                    wx.WXK_NUMPAD8: ("ry", 1),
-                    }
-
-    def on_key(self, event):
-        key = event.GetKeyCode()
-        if key in self.key_bindings_sparc:
-            # check the focus is not on some children that'll handle the key
-            focusedWin = wx.Window.FindFocus()
-            # TODO: need to check for more types?
-            if not isinstance(focusedWin, wx.TextCtrl):
-                self.tab_data_model.step(*self.key_bindings_sparc[key])
-                return # keep it for ourselves
-
-        # everything else we don't process
-        event.Skip()
+        # Bind keys
+        self._actuator_controller.bind_keyboard(main_frame.pnl_tab_sparc_align)
 
     def Show(self, show=True):
         Tab.Show(self, show=show)

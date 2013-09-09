@@ -52,6 +52,8 @@ TOOL_ROI = 2 # Select the region of interest (sub-area to be updated)
 TOOL_ROA = 3 # Select the region of acquisition (area to be acquired, SPARC-only)
 TOOL_POINT = 4 # Select a point (to acquire/display)
 TOOL_LINE = 5 # Select a line (to acquire/display)
+TOOL_DICHO = 6 # Dichotomy mode to select a sub-quadrant (for SECOM lens alignment)
+TOOL_SPOT = 7 # Activate spot mode on the SEM
 
 class MainGUIData(object):
     """
@@ -396,7 +398,8 @@ class ActuatorGUIData(MicroscopyGUIData):
 
         # This allow the interface to not care about the name of the actuator,
         # but just the name of the axis.
-        # str -> str: axis name ("x") -> (actuator ("mirror"), stepsize ("mirror_t"))
+        # str -> (str, str):
+        #   axis name ("x") -> (actuator ("mirror"), stepsize ("mirror_t"))
         self._axis_to_act_ss = {}
         for ssn in self.stepsizes.keys():
             an, axes = ss_to_act.get(ssn, (ssn, None))
@@ -413,7 +416,7 @@ class ActuatorGUIData(MicroscopyGUIData):
         self.axes = frozenset(self._axis_to_act_ss.keys())
 
         # No tools
-        tools = set([TOOL_NONE])
+        tools = set([TOOL_NONE, TOOL_DICHO, TOOL_SPOT])
         self.tool = IntEnumerated(TOOL_NONE, choices=tools, readonly=True)
 
     def step(self, axis, factor, sync=False):
