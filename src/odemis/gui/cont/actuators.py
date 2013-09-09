@@ -67,14 +67,14 @@ class ActuatorController(object):
     """ This controller manages the buttons to manually move the actuators.
     """
 
-    def __init__(self, tab_data, main_frame, btn_prefix):
+    def __init__(self, tab_data, main_frame, tab_prefix):
         """ Binds the step and axis buttons to their appropriate
         Vigilant Attributes in the model.ActuatorGUIData. It only connects the
         buttons which exists with the actuators which exists.
 
         tab_data (ActuatorGUIData): the data model of the tab
         main_frame: (wx.Frame): the main frame of the GUI
-        btn_prefix (string): common prefix of the names of the buttons 
+        tab_prefix (string): common prefix of the names of the buttons 
         """
         self._tab_data_model = tab_data
         self._main_frame = main_frame
@@ -84,7 +84,7 @@ class ActuatorController(object):
         self._va_connectors = []
         for an, ss in tab_data.stepsizes.items():
             # TODO: use also prefix here
-            slider_name = "slider_" + an
+            slider_name = tab_prefix + "slider_" + an
             try:
                 slider = getattr(main_frame, slider_name)
             except AttributeError:
@@ -99,8 +99,8 @@ class ActuatorController(object):
         # Bind buttons
         for axis in tab_data.axes:
             for suffix, factor in [("m", -1), ("p", 1)]:
-                # something like "btn_align_pry"
-                btn_name = btn_prefix + suffix + axis
+                # something like "lens_align_btn_prz"
+                btn_name = tab_prefix + "btn_" + suffix + axis
                 try:
                     btn = getattr(main_frame, btn_name)
                 except AttributeError:

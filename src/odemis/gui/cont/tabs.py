@@ -156,7 +156,7 @@ class SecomStreamsTab(Tab):
             main_data.emState.subscribe(self.onEMState)
 
         # Toolbar
-        tb = self.main_frame.secom_tool_menu
+        tb = self.main_frame.secom_toolbar
         tb.AddTool(tools.TOOL_RO_UPDATE, self.tab_data_model.tool)
         tb.AddTool(tools.TOOL_RO_ZOOM, self.tab_data_model.tool)
         tb.AddTool(tools.TOOL_ZOOM_FIT, self.onZoomFit)
@@ -345,7 +345,7 @@ class SparcAcquisitionTab(Tab):
 
         # Toolbar
 
-        tb = self.main_frame.sparc_acq_tool_menu
+        tb = self.main_frame.sparc_acq_toolbar
         tb.AddTool(tools.TOOL_RO_ACQ, self.tab_data_model.tool)
         tb.AddTool(tools.TOOL_POINT, self.tab_data_model.tool)
         tb.AddTool(tools.TOOL_RO_ZOOM, self.tab_data_model.tool)
@@ -543,7 +543,7 @@ class AnalysisTab(Tab):
         )
 
         # Toolbar
-        tb = self.main_frame.sparc_ana_tool_menu
+        tb = self.main_frame.ana_toolbar
         tb.AddTool(tools.TOOL_RO_ZOOM, self.tab_data_model.tool)
         tb.AddTool(tools.TOOL_POINT, self.tab_data_model.tool)
         tb.AddTool(tools.TOOL_ZOOM_FIT, self.onZoomFit)
@@ -765,10 +765,9 @@ class MirrorAlignTab(Tab):
 
         # TODO: need contrast/brightness for the AR stream
 
-        # TODO: Should go to a new controller "actuator controller"?
         self._actuator_controller = ActuatorController(self.tab_data_model,
                                                        main_frame,
-                                                       "btn_align_")
+                                                       "mirror_align_")
 
         # Bind keys
         self._actuator_controller.bind_keyboard(main_frame.pnl_tab_sparc_align)
