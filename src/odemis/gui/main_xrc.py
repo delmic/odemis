@@ -53,12 +53,12 @@ class xrcfr_main(wx.Frame):
         self.pnl_tab_secom_align = xrc.XRCCTRL(self, "pnl_tab_secom_align")
         self.lens_align_slider_aligner = xrc.XRCCTRL(self, "lens_align_slider_aligner")
         self.lens_align_btn_pb = xrc.XRCCTRL(self, "lens_align_btn_pb")
-        self.lens_align_btn_mb = xrc.XRCCTRL(self, "lens_align_btn_mb")
-        self.lens_align_btn_pa = xrc.XRCCTRL(self, "lens_align_btn_pa")
         self.lens_align_btn_ma = xrc.XRCCTRL(self, "lens_align_btn_ma")
+        self.lens_align_btn_pa = xrc.XRCCTRL(self, "lens_align_btn_pa")
+        self.lens_align_btn_mb = xrc.XRCCTRL(self, "lens_align_btn_mb")
         self.vp_align_ccd = xrc.XRCCTRL(self, "vp_align_ccd")
-        self.btn_lens_toggle_sem = xrc.XRCCTRL(self, "btn_lens_toggle_sem")
-        self.btn_lens_toggle_opt = xrc.XRCCTRL(self, "btn_lens_toggle_opt")
+        self.lens_align_btn_sem = xrc.XRCCTRL(self, "lens_align_btn_sem")
+        self.lens_align_btn_opt = xrc.XRCCTRL(self, "lens_align_btn_opt")
         self.cmb_lens_align_presets = xrc.XRCCTRL(self, "cmb_lens_align_presets")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
         self.fp_lens_sem_settings = xrc.XRCCTRL(self, "fp_lens_sem_settings")
@@ -81,10 +81,10 @@ class xrcfr_main(wx.Frame):
         self.vp_secom_tr = xrc.XRCCTRL(self, "vp_secom_tr")
         self.vp_secom_bl = xrc.XRCCTRL(self, "vp_secom_bl")
         self.vp_secom_br = xrc.XRCCTRL(self, "vp_secom_br")
-        self.btn_toggle_press = xrc.XRCCTRL(self, "btn_toggle_press")
-        self.btn_toggle_sem = xrc.XRCCTRL(self, "btn_toggle_sem")
-        self.btn_toggle_opt = xrc.XRCCTRL(self, "btn_toggle_opt")
-        self.btn_toggle_pause = xrc.XRCCTRL(self, "btn_toggle_pause")
+        self.live_btn_press = xrc.XRCCTRL(self, "live_btn_press")
+        self.live_btn_sem = xrc.XRCCTRL(self, "live_btn_sem")
+        self.live_btn_opt = xrc.XRCCTRL(self, "live_btn_opt")
+        self.live_btn_pause = xrc.XRCCTRL(self, "live_btn_pause")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
         self.fp_settings_secom_sem = xrc.XRCCTRL(self, "fp_settings_secom_sem")
         self.fp_settings_secom_optical = xrc.XRCCTRL(self, "fp_settings_secom_optical")
@@ -110,8 +110,8 @@ class xrcfr_main(wx.Frame):
         self.pnl_tab_sparc_acqui = xrc.XRCCTRL(self, "pnl_tab_sparc_acqui")
         self.sparc_acq_toolbar = xrc.XRCCTRL(self, "sparc_acq_toolbar")
         self.vp_sparc_acq_view = xrc.XRCCTRL(self, "vp_sparc_acq_view")
-        self.btn_toggle_spectrometer = xrc.XRCCTRL(self, "btn_toggle_spectrometer")
-        self.btn_toggle_angular = xrc.XRCCTRL(self, "btn_toggle_angular")
+        self.acq_btn_spectrometer = xrc.XRCCTRL(self, "acq_btn_spectrometer")
+        self.acq_btn_angular = xrc.XRCCTRL(self, "acq_btn_angular")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
         self.fpb_settings = xrc.XRCCTRL(self, "fpb_settings")
         self.fp_settings_sparc_sem = xrc.XRCCTRL(self, "fp_settings_sparc_sem")
@@ -454,7 +454,7 @@ def __init_resources():
                   <object class="sizeritem">
                     <object class="wxGridBagSizer">
                       <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_pa">
+                        <object class="wxStaticText" name="lbl_pb">
                           <label>+B</label>
                           <fg>#E5E5E5</fg>
                           <font>
@@ -470,8 +470,8 @@ def __init_resources():
                         <cellpos>0,0</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_pb">
-                          <label>-B</label>
+                        <object class="wxStaticText" name="lbl_ma">
+                          <label>-A</label>
                           <fg>#E5E5E5</fg>
                           <font>
                             <size>16</size>
@@ -486,7 +486,7 @@ def __init_resources():
                         <cellpos>0,3</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_ma">
+                        <object class="wxStaticText" name="lbl_pa">
                           <label>+A</label>
                           <fg>#E5E5E5</fg>
                           <font>
@@ -504,7 +504,7 @@ def __init_resources():
                       </object>
                       <object class="sizeritem">
                         <object class="wxStaticText" name="lbl_mb">
-                          <label>-A</label>
+                          <label>-B</label>
                           <fg>#E5E5E5</fg>
                           <font>
                             <size>16</size>
@@ -544,7 +544,7 @@ def __init_resources():
                         <cellpos>1,1</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="lens_align_btn_mb">
+                        <object class="ImageTextButton" name="lens_align_btn_ma">
                           <label>↗</label>
                           <delta>1</delta>
                           <bitmap>img_btn_64x48_png</bitmap>
@@ -594,7 +594,7 @@ def __init_resources():
                         <cellpos>2,1</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="lens_align_btn_ma">
+                        <object class="ImageTextButton" name="lens_align_btn_mb">
                           <label>↘</label>
                           <delta>1</delta>
                           <bitmap>img_btn_64x48_png</bitmap>
@@ -651,7 +651,7 @@ def __init_resources():
                       <object class="wxBoxSizer">
                         <orient>wxHORIZONTAL</orient>
                         <object class="sizeritem">
-                          <object class="ImageTextToggleButton" name="btn_lens_toggle_sem">
+                          <object class="ImageTextToggleButton" name="lens_align_btn_sem">
                             <size>92,48</size>
                             <label>SEM      </label>
                             <delta>1</delta>
@@ -677,7 +677,7 @@ def __init_resources():
                           <border>10</border>
                         </object>
                         <object class="sizeritem">
-                          <object class="ImageTextToggleButton" name="btn_lens_toggle_opt">
+                          <object class="ImageTextToggleButton" name="lens_align_btn_opt">
                             <size>92,48</size>
                             <label>OPTICAL</label>
                             <delta>1</delta>
@@ -1095,7 +1095,7 @@ def __init_resources():
                       <object class="wxBoxSizer">
                         <orient>wxHORIZONTAL</orient>
                         <object class="sizeritem">
-                          <object class="ImageTextToggleButton" name="btn_toggle_press">
+                          <object class="ImageTextToggleButton" name="live_btn_press">
                             <size>92,48</size>
                             <label>0 kPa</label>
                             <delta>1</delta>
@@ -1122,7 +1122,7 @@ def __init_resources():
                           <border>10</border>
                         </object>
                         <object class="sizeritem">
-                          <object class="ImageTextToggleButton" name="btn_toggle_sem">
+                          <object class="ImageTextToggleButton" name="live_btn_sem">
                             <size>92,48</size>
                             <label>SEM      </label>
                             <delta>1</delta>
@@ -1148,7 +1148,7 @@ def __init_resources():
                           <border>10</border>
                         </object>
                         <object class="sizeritem">
-                          <object class="ImageTextToggleButton" name="btn_toggle_opt">
+                          <object class="ImageTextToggleButton" name="live_btn_opt">
                             <size>92,48</size>
                             <label>OPTICAL</label>
                             <delta>1</delta>
@@ -1177,7 +1177,7 @@ def __init_resources():
                           <option>1</option>
                         </object>
                         <object class="sizeritem">
-                          <object class="PopupImageButton" name="btn_toggle_pause">
+                          <object class="PopupImageButton" name="live_btn_pause">
                             <size>50,48</size>
                             <default>1</default>
                             <bitmap>img_btn_pause_png</bitmap>
@@ -1940,7 +1940,7 @@ def __init_resources():
                       <object class="wxBoxSizer">
                         <orient>wxHORIZONTAL</orient>
                         <object class="sizeritem">
-                          <object class="ImageTextToggleButton" name="btn_toggle_spectrometer">
+                          <object class="ImageTextToggleButton" name="acq_btn_spectrometer">
                             <label>SPECTROMETER</label>
                             <delta>1</delta>
                             <bitmap>img_btn_128x48_png</bitmap>
@@ -1965,7 +1965,7 @@ def __init_resources():
                           <border>10</border>
                         </object>
                         <object class="sizeritem">
-                          <object class="ImageTextToggleButton" name="btn_toggle_angular">
+                          <object class="ImageTextToggleButton" name="acq_btn_angular">
                             <label>ANGULAR</label>
                             <delta>1</delta>
                             <bitmap>img_btn_128x48_png</bitmap>
