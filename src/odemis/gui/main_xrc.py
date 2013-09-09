@@ -51,11 +51,11 @@ class xrcfr_main(wx.Frame):
         self.btn_tab_sparc_acqui = xrc.XRCCTRL(self, "btn_tab_sparc_acqui")
         self.btn_tab_inspection = xrc.XRCCTRL(self, "btn_tab_inspection")
         self.pnl_tab_secom_align = xrc.XRCCTRL(self, "pnl_tab_secom_align")
-        self.slider_lens_step_size = xrc.XRCCTRL(self, "slider_lens_step_size")
-        self.btn_align_pa = xrc.XRCCTRL(self, "btn_align_pa")
-        self.btn_align_pb = xrc.XRCCTRL(self, "btn_align_pb")
-        self.btn_align_ma = xrc.XRCCTRL(self, "btn_align_ma")
-        self.btn_align_pb = xrc.XRCCTRL(self, "btn_align_pb")
+        self.lens_align_slider_aligner = xrc.XRCCTRL(self, "lens_align_slider_aligner")
+        self.lens_align_btn_pb = xrc.XRCCTRL(self, "lens_align_btn_pb")
+        self.lens_align_btn_mb = xrc.XRCCTRL(self, "lens_align_btn_mb")
+        self.lens_align_btn_pa = xrc.XRCCTRL(self, "lens_align_btn_pa")
+        self.lens_align_btn_ma = xrc.XRCCTRL(self, "lens_align_btn_ma")
         self.vp_align_ccd = xrc.XRCCTRL(self, "vp_align_ccd")
         self.btn_lens_toggle_sem = xrc.XRCCTRL(self, "btn_lens_toggle_sem")
         self.btn_lens_toggle_opt = xrc.XRCCTRL(self, "btn_lens_toggle_opt")
@@ -63,10 +63,10 @@ class xrcfr_main(wx.Frame):
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
         self.fp_lens_sem_settings = xrc.XRCCTRL(self, "fp_lens_sem_settings")
         self.fp_lens_opt_settings = xrc.XRCCTRL(self, "fp_lens_opt_settings")
-        self.secom_align_menu = xrc.XRCCTRL(self, "secom_align_menu")
+        self.lens_align_tb = xrc.XRCCTRL(self, "lens_align_tb")
         self.vp_align_sem = xrc.XRCCTRL(self, "vp_align_sem")
         self.pnl_tab_secom_streams = xrc.XRCCTRL(self, "pnl_tab_secom_streams")
-        self.secom_tool_menu = xrc.XRCCTRL(self, "secom_tool_menu")
+        self.secom_toolbar = xrc.XRCCTRL(self, "secom_toolbar")
         self.lbl_secom_view_all = xrc.XRCCTRL(self, "lbl_secom_view_all")
         self.btn_secom_view_all = xrc.XRCCTRL(self, "btn_secom_view_all")
         self.lbl_secom_view_tl = xrc.XRCCTRL(self, "lbl_secom_view_tl")
@@ -92,23 +92,23 @@ class xrcfr_main(wx.Frame):
         self.fp_annotations = xrc.XRCCTRL(self, "fp_annotations")
         self.btn_secom_acquire = xrc.XRCCTRL(self, "btn_secom_acquire")
         self.pnl_tab_sparc_align = xrc.XRCCTRL(self, "pnl_tab_sparc_align")
-        self.slider_mirror_x = xrc.XRCCTRL(self, "slider_mirror_x")
-        self.slider_mirror_y = xrc.XRCCTRL(self, "slider_mirror_y")
-        self.btn_align_py = xrc.XRCCTRL(self, "btn_align_py")
-        self.btn_align_my = xrc.XRCCTRL(self, "btn_align_my")
-        self.btn_align_px = xrc.XRCCTRL(self, "btn_align_px")
-        self.btn_align_mx = xrc.XRCCTRL(self, "btn_align_mx")
-        self.slider_mirror_r = xrc.XRCCTRL(self, "slider_mirror_r")
-        self.btn_align_pry = xrc.XRCCTRL(self, "btn_align_pry")
-        self.btn_align_mry = xrc.XRCCTRL(self, "btn_align_mry")
-        self.btn_align_mrz = xrc.XRCCTRL(self, "btn_align_mrz")
-        self.btn_align_prz = xrc.XRCCTRL(self, "btn_align_prz")
+        self.mirror_align_slider_mirror_x = xrc.XRCCTRL(self, "mirror_align_slider_mirror_x")
+        self.mirror_align_slider_mirror_y = xrc.XRCCTRL(self, "mirror_align_slider_mirror_y")
+        self.mirror_align_btn_py = xrc.XRCCTRL(self, "mirror_align_btn_py")
+        self.mirror_align_btn_my = xrc.XRCCTRL(self, "mirror_align_btn_my")
+        self.mirror_align_btn_px = xrc.XRCCTRL(self, "mirror_align_btn_px")
+        self.mirror_align_btn_mx = xrc.XRCCTRL(self, "mirror_align_btn_mx")
+        self.mirror_align_slider_mirror_r = xrc.XRCCTRL(self, "mirror_align_slider_mirror_r")
+        self.mirror_align_btn_pry = xrc.XRCCTRL(self, "mirror_align_btn_pry")
+        self.mirror_align_btn_mry = xrc.XRCCTRL(self, "mirror_align_btn_mry")
+        self.mirror_align_btn_mrz = xrc.XRCCTRL(self, "mirror_align_btn_mrz")
+        self.mirror_align_btn_prz = xrc.XRCCTRL(self, "mirror_align_btn_prz")
         self.vp_sparc_align = xrc.XRCCTRL(self, "vp_sparc_align")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
         self.fp_sparc_settings = xrc.XRCCTRL(self, "fp_sparc_settings")
         self.pnl_sparc_align_streams = xrc.XRCCTRL(self, "pnl_sparc_align_streams")
         self.pnl_tab_sparc_acqui = xrc.XRCCTRL(self, "pnl_tab_sparc_acqui")
-        self.sparc_acq_tool_menu = xrc.XRCCTRL(self, "sparc_acq_tool_menu")
+        self.sparc_acq_toolbar = xrc.XRCCTRL(self, "sparc_acq_toolbar")
         self.vp_sparc_acq_view = xrc.XRCCTRL(self, "vp_sparc_acq_view")
         self.btn_toggle_spectrometer = xrc.XRCCTRL(self, "btn_toggle_spectrometer")
         self.btn_toggle_angular = xrc.XRCCTRL(self, "btn_toggle_angular")
@@ -126,7 +126,7 @@ class xrcfr_main(wx.Frame):
         self.btn_sparc_acquire = xrc.XRCCTRL(self, "btn_sparc_acquire")
         self.pnl_tab_inspection = xrc.XRCCTRL(self, "pnl_tab_inspection")
         self.btn_open_image = xrc.XRCCTRL(self, "btn_open_image")
-        self.sparc_ana_tool_menu = xrc.XRCCTRL(self, "sparc_ana_tool_menu")
+        self.ana_toolbar = xrc.XRCCTRL(self, "ana_toolbar")
         self.lbl_sparc_view_all = xrc.XRCCTRL(self, "lbl_sparc_view_all")
         self.btn_sparc_view_all = xrc.XRCCTRL(self, "btn_sparc_view_all")
         self.lbl_sparc_view_tl = xrc.XRCCTRL(self, "lbl_sparc_view_tl")
@@ -197,7 +197,7 @@ def __init_resources():
     wx.FileSystem.AddHandler(wx.MemoryFSHandler())
 
     main_xrc = '''\
-<?xml version="1.0" ?><resource class="spacer" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
+<?xml version="1.0" ?><resource version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
   <object class="wxFrame" name="fr_main">
     <object class="wxMenuBar">
       <object class="wxMenu">
@@ -435,7 +435,7 @@ def __init_resources():
                     <border>5</border>
                   </object>
                   <object class="sizeritem">
-                    <object class="UnitFloatSlider" name="slider_lens_step_size">
+                    <object class="UnitFloatSlider" name="lens_align_slider_aligner">
                       <size>-1,20</size>
                       <value>0.000001</value>
                       <min>0.0000001</min>
@@ -455,7 +455,7 @@ def __init_resources():
                     <object class="wxGridBagSizer">
                       <object class="sizeritem">
                         <object class="wxStaticText" name="lbl_pa">
-                          <label>+A</label>
+                          <label>+B</label>
                           <fg>#E5E5E5</fg>
                           <font>
                             <size>16</size>
@@ -471,7 +471,7 @@ def __init_resources():
                       </object>
                       <object class="sizeritem">
                         <object class="wxStaticText" name="lbl_pb">
-                          <label>+B</label>
+                          <label>-B</label>
                           <fg>#E5E5E5</fg>
                           <font>
                             <size>16</size>
@@ -487,7 +487,7 @@ def __init_resources():
                       </object>
                       <object class="sizeritem">
                         <object class="wxStaticText" name="lbl_ma">
-                          <label>-A</label>
+                          <label>+A</label>
                           <fg>#E5E5E5</fg>
                           <font>
                             <size>16</size>
@@ -504,7 +504,7 @@ def __init_resources():
                       </object>
                       <object class="sizeritem">
                         <object class="wxStaticText" name="lbl_mb">
-                          <label>-B</label>
+                          <label>-A</label>
                           <fg>#E5E5E5</fg>
                           <font>
                             <size>16</size>
@@ -519,7 +519,7 @@ def __init_resources():
                         <cellpos>3,3</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="btn_align_pa">
+                        <object class="ImageTextButton" name="lens_align_btn_pb">
                           <label>↖</label>
                           <delta>1</delta>
                           <bitmap>img_btn_64x48_png</bitmap>
@@ -544,7 +544,7 @@ def __init_resources():
                         <cellpos>1,1</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="btn_align_pb">
+                        <object class="ImageTextButton" name="lens_align_btn_mb">
                           <label>↗</label>
                           <delta>1</delta>
                           <bitmap>img_btn_64x48_png</bitmap>
@@ -569,7 +569,7 @@ def __init_resources():
                         <cellpos>1,2</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="btn_align_ma">
+                        <object class="ImageTextButton" name="lens_align_btn_pa">
                           <label>↙</label>
                           <delta>1</delta>
                           <bitmap>img_btn_64x48_png</bitmap>
@@ -594,7 +594,7 @@ def __init_resources():
                         <cellpos>2,1</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="btn_align_pb">
+                        <object class="ImageTextButton" name="lens_align_btn_ma">
                           <label>↘</label>
                           <delta>1</delta>
                           <bitmap>img_btn_64x48_png</bitmap>
@@ -785,7 +785,7 @@ def __init_resources():
                   </object>
                   <orient>wxVERTICAL</orient>
                   <object class="sizeritem">
-                    <object class="wxPanel" name="secom_align_menu" subclass="odemis.gui.cont.tools.ToolBar">
+                    <object class="wxPanel" name="lens_align_tb" subclass="odemis.gui.cont.tools.ToolBar">
                       <object class="wxBoxSizer">
                         <object class="sizeritem">
                           <object class="wxStaticBitmap">
@@ -855,7 +855,7 @@ def __init_resources():
                     <flag>wxEXPAND</flag>
                   </object>
                   <object class="sizeritem">
-                    <object class="wxPanel" name="secom_tool_menu" subclass="odemis.gui.cont.tools.ToolBar">
+                    <object class="wxPanel" name="secom_toolbar" subclass="odemis.gui.cont.tools.ToolBar">
                       <object class="wxBoxSizer">
                         <object class="sizeritem">
                           <object class="wxStaticBitmap">
@@ -1349,7 +1349,7 @@ def __init_resources():
                     <border>5</border>
                   </object>
                   <object class="sizeritem">
-                    <object class="UnitFloatSlider" name="slider_mirror_x">
+                    <object class="UnitFloatSlider" name="mirror_align_slider_mirror_x">
                       <size>-1,20</size>
                       <value>0.000001</value>
                       <min>0.0000001</min>
@@ -1373,7 +1373,7 @@ def __init_resources():
                     <border>5</border>
                   </object>
                   <object class="sizeritem">
-                    <object class="UnitFloatSlider" name="slider_mirror_y">
+                    <object class="UnitFloatSlider" name="mirror_align_slider_mirror_y">
                       <size>-1,20</size>
                       <value>0.000001</value>
                       <min>0.0000001</min>
@@ -1465,7 +1465,7 @@ def __init_resources():
                         <cellpos>2,0</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="btn_align_py">
+                        <object class="ImageTextButton" name="mirror_align_btn_py">
                           <label>▵</label>
                           <delta>1</delta>
                           <bitmap>img_btn_64x48_png</bitmap>
@@ -1490,7 +1490,7 @@ def __init_resources():
                         <cellpos>1,2</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="btn_align_my">
+                        <object class="ImageTextButton" name="mirror_align_btn_my">
                           <label>▿</label>
                           <delta>1</delta>
                           <bitmap>img_btn_64x48_png</bitmap>
@@ -1515,7 +1515,7 @@ def __init_resources():
                         <cellpos>3,2</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="btn_align_px">
+                        <object class="ImageTextButton" name="mirror_align_btn_px">
                           <label>◃</label>
                           <delta>1</delta>
                           <bitmap>img_btn_64x48_png</bitmap>
@@ -1538,7 +1538,7 @@ def __init_resources():
                         <cellpos>2,1</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="btn_align_mx">
+                        <object class="ImageTextButton" name="mirror_align_btn_mx">
                           <label>▹</label>
                           <delta>1</delta>
                           <bitmap>img_btn_64x48_png</bitmap>
@@ -1590,7 +1590,7 @@ def __init_resources():
                     </object>
                   </object>
                   <object class="sizeritem">
-                    <object class="UnitFloatSlider" name="slider_mirror_r">
+                    <object class="UnitFloatSlider" name="mirror_align_slider_mirror_r">
                       <size>-1,20</size>
                       <value>0.000001</value>
                       <min>0.0000001</min>
@@ -1681,7 +1681,7 @@ def __init_resources():
                         <cellpos>2,0</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="btn_align_pry">
+                        <object class="ImageTextButton" name="mirror_align_btn_pry">
                           <label>▵</label>
                           <delta>1</delta>
                           <bitmap>img_btn_64x48_png</bitmap>
@@ -1706,7 +1706,7 @@ def __init_resources():
                         <cellpos>1,2</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="btn_align_mry">
+                        <object class="ImageTextButton" name="mirror_align_btn_mry">
                           <label>▿</label>
                           <delta>1</delta>
                           <bitmap>img_btn_64x48_png</bitmap>
@@ -1731,7 +1731,7 @@ def __init_resources():
                         <cellpos>3,2</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="btn_align_mrz">
+                        <object class="ImageTextButton" name="mirror_align_btn_mrz">
                           <label>↻</label>
                           <delta>1</delta>
                           <bitmap>img_btn_64x48_png</bitmap>
@@ -1754,7 +1754,7 @@ def __init_resources():
                         <cellpos>2,1</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="btn_align_prz">
+                        <object class="ImageTextButton" name="mirror_align_btn_prz">
                           <label>↺</label>
                           <delta>1</delta>
                           <bitmap>img_btn_64x48_png</bitmap>
@@ -1882,7 +1882,7 @@ def __init_resources():
                     <flag>wxEXPAND</flag>
                   </object>
                   <object class="sizeritem">
-                    <object class="wxPanel" name="sparc_acq_tool_menu" subclass="odemis.gui.cont.tools.ToolBar">
+                    <object class="wxPanel" name="sparc_acq_toolbar" subclass="odemis.gui.cont.tools.ToolBar">
                       <object class="wxBoxSizer">
                         <object class="sizeritem">
                           <object class="wxStaticBitmap">
@@ -2327,7 +2327,7 @@ def __init_resources():
                     <flag>wxEXPAND</flag>
                   </object>
                   <object class="sizeritem">
-                    <object class="wxPanel" name="sparc_ana_tool_menu" subclass="odemis.gui.cont.tools.ToolBar">
+                    <object class="wxPanel" name="ana_toolbar" subclass="odemis.gui.cont.tools.ToolBar">
                       <object class="wxBoxSizer">
                         <object class="sizeritem">
                           <object class="wxStaticBitmap">
