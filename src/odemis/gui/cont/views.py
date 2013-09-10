@@ -53,6 +53,11 @@ class ViewController(object):
         main_frame: (wx.Frame) -- the frame which contains the 4 viewports
         viewports (list of MicroscopeViewport): the viewports to update
         """
+        #TODO: views (None or OrderedDict (str -> stream classes)): None is auto
+        # depending on the microscope type and number of viewports. Otherwise
+        # name of view to type of streams displayed (stream.Stream is everything)
+
+        # TODO: allow to change the scheduler policy (LAST_ONE, ALL)
 
         self._tab_data_model = micgui
         self._main_data_model = micgui.main
