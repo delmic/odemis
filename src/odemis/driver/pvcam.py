@@ -973,23 +973,26 @@ class PVCam(model.DigitalCamera):
         # Activate shutter closure whenever needed:
         # Shutter closes between exposures iif:
         # * period between exposures is long enough (>0.1s): to ensure we don't burn the mechanism
-        # * readout time > exposure time/2 (when risk of smearing is high)
+        # * readout time > exposure time/100 (when risk of smearing is possible)
         readout_time = size[0] * size[1] / self._readout_rate # s
         tot_time = readout_time + self._exposure_time # reality will be slightly longer
         logging.debug("exposure = %f s, readout = %f s", readout_time, self._exposure_time)
-        if tot_time > 0.1 and readout_time > (self._exposure_time / 2):
-            try:
-                self.set_param(pv.PARAM_SHTR_OPEN_MODE, pv.OPEN_PRE_EXPOSURE)
-            except PVCamError:
-                logging.debug("Failed to change shutter mode")
-            else:
-                logging.info("Shutter activated")
-        else:
-            try:
+        try:
+            if tot_time < 0.1:
+                logging.info("Disabling shutter because it would go at %g Hz", 
+                             1 / tot_time)
                 self.set_param(pv.PARAM_SHTR_OPEN_MODE, pv.OPEN_PRE_SEQUENCE)
-            except PVCamError:
-                logging.debug("Failed to change shutter mode")
-
+            elif readout_time < (self._exposure_time / 100):
+                logging.info("Disabling shutter because readout is %g times "
+                             "smaller than exposure", 
+                             self._exposure_time / readout_time)
+                self.set_param(pv.PARAM_SHTR_OPEN_MODE, pv.OPEN_PRE_SEQUENCE)
+            else:
+                self.set_param(pv.PARAM_SHTR_OPEN_MODE, pv.OPEN_PRE_EXPOSURE)
+                logging.info("Shutter activated")
+        except PVCamError:
+            logging.debug("Failed to change shutter mode")
+            
         self._prev_settings = [new_image_settings, self._exposure_time,
                                self._readout_rate, self._gain]
 
