@@ -123,6 +123,8 @@ class FakeFluoStream(stream_mod.FluoStream):
     def onActive(self, active):
         pass
 
+class Object(object):
+    pass
 
 class FakeMicroscopeModel(object):
     """
@@ -131,6 +133,10 @@ class FakeMicroscopeModel(object):
     def __init__(self):
         fview = guimodel.MicroscopeView("fakeview")
         self.focussedView = model.VigilantAttribute(fview)
+
+        self.main = Object()
+        self.main.light = None
+        self.main.ebeam = None
 
         self.light = None
         self.light_filter = None
@@ -522,6 +528,29 @@ class FoldPanelBarTestCase(unittest.TestCase):
         wx.MilliSleep(SLEEP_TIME)
         self.frm.stream_bar.clear()
         loop()
+
+    def test_zflatten(self):
+
+        loop()
+        wx.MilliSleep(SLEEP_TIME)
+
+        mic_mod = FakeMicroscopeModel()
+        _ = StreamController(mic_mod, self.frm.stream_bar)
+
+        fake_sem_stream = FakeSEMStream("Flatten Test")
+        stream_panel = stream_comp.StreamPanel(
+                                    self.frm.stream_bar,
+                                    fake_sem_stream,
+                                    mic_mod)
+        self.frm.stream_bar.add_stream(stream_panel)
+        loop()
+        wx.MilliSleep(SLEEP_TIME)
+
+        stream_panel.flatten()
+
+        loop()
+        wx.MilliSleep(SLEEP_TIME)
+
 
 if __name__ == "__main__":
     unittest.main()
