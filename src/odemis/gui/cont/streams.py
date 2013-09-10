@@ -75,8 +75,7 @@ class StreamController(object):
         self.locked_mode = True
 
     def _createAddStreamActions(self):
-        """
-        Create the possible "add stream" actions according to the current
+        """ Create the compatible "add stream" actions according to the current
         microscope.
         To be executed only once, at initialisation.
         """
@@ -128,7 +127,7 @@ class StreamController(object):
                                     sem_capable)
 
 
-    def addFluo(self, add_to_all_views=False):
+    def addFluo(self, add_to_all_views=False, visible=True):
         """
         Creates a new fluorescence stream and a stream panel in the stream bar
         returns (StreamPanel): the panel created
@@ -146,9 +145,9 @@ class StreamController(object):
         s = FluoStream(name,
                   self._main_data_model.ccd, self._main_data_model.ccd.data,
                   self._main_data_model.light, self._main_data_model.light_filter)
-        return self._addStream(s, add_to_all_views)
+        return self._addStream(s, add_to_all_views, visible)
 
-    def addBrightfield(self, add_to_all_views=False):
+    def addBrightfield(self, add_to_all_views=False, visible=True):
         """
         Creates a new brightfield stream and panel in the stream bar
         returns (StreamPanel): the stream panel created
@@ -156,9 +155,9 @@ class StreamController(object):
         s = BrightfieldStream("Bright-field",
                   self._main_data_model.ccd, self._main_data_model.ccd.data,
                   self._main_data_model.light)
-        return self._addStream(s, add_to_all_views)
+        return self._addStream(s, add_to_all_views, visible)
 
-    def addSEMSED(self, add_to_all_views=False):
+    def addSEMSED(self, add_to_all_views=False, visible=True):
         """
         Creates a new SED stream and panel in the stream bar
         returns (StreamPanel): the panel created
@@ -166,10 +165,10 @@ class StreamController(object):
         s = SEMStream("Secondary electrons",
                   self._main_data_model.sed, self._main_data_model.sed.data,
                   self._main_data_model.ebeam)
-        return self._addStream(s, add_to_all_views)
+        return self._addStream(s, add_to_all_views, visible)
 
     def addStatic(self, name, image,
-                  cls=StaticStream, add_to_all_views=False):
+                  cls=StaticStream, add_to_all_views=False, visible=True):
         """
         Creates a new static stream and panel in the stream bar
         Note: only for debugging/testing
@@ -180,22 +179,22 @@ class StreamController(object):
         :param returns: (StreamPanel): the panel created
         """
         s = cls(name, image)
-        return self.addStream(s, add_to_all_views)
+        return self.addStream(s, add_to_all_views, visible)
 
-    def addStream(self, stream, add_to_all_views=False):
+    def addStream(self, stream, add_to_all_views=False, visible=True):
         """ Create a stream entry for the given existing stream
 
         :return StreamPanel: the panel created for the stream
         """
-        return self._addStream(stream, add_to_all_views)
+        return self._addStream(stream, add_to_all_views, visible)
 
-    def _addStream(self, stream, add_to_all_views=False):
+    def _addStream(self, stream, add_to_all_views=False, visible=True):
         """
         Adds a stream.
 
         stream (stream.Stream): the new stream to add
-        add_to_all_views (boolean): if True, add the stream to all the compatible
-          views, otherwise add only to the current view
+        add_to_all_views (boolean): if True, add the stream to all the
+            compatible views, otherwise add only to the current view
         returns the StreamPanel that was created
         """
         self._tab_data_model.streams.add(stream)
@@ -206,7 +205,7 @@ class StreamController(object):
         else:
             v = self._tab_data_model.focussedView.value
             if isinstance(stream, v.stream_classes):
-                warn ="Adding stream incompatible with the current view"
+                warn = "Adding stream incompatible with the current view"
                 logging.warning(warn)
             v.addStream(stream)
 
@@ -214,26 +213,29 @@ class StreamController(object):
         # call it like self._scheduler.addStream(stream)
         self._scheduleStream(stream)
 
-        spanel = comp.stream.StreamPanel(
-                                self._stream_bar,
-                                stream,
-                                self._tab_data_model)
-        show = isinstance(
-                    spanel.stream,
-                    self._tab_data_model.focussedView.value.stream_classes)
-        self._stream_bar.add_stream(spanel, show)
+        if visible:
+            spanel = comp.stream.StreamPanel(
+                                    self._stream_bar,
+                                    stream,
+                                    self._tab_data_model)
+            show = isinstance(
+                        spanel.stream,
+                        self._tab_data_model.focussedView.value.stream_classes)
+            self._stream_bar.add_stream(spanel, show)
 
-        if self.locked_mode:
-            spanel.to_locked_mode()
-        elif self.static_mode:
-            spanel.to_static_mode()
+            if self.locked_mode:
+                spanel.to_locked_mode()
+            elif self.static_mode:
+                spanel.to_static_mode()
 
-        logging.debug("Sending stream.ctrl.added message")
-        pub.sendMessage('stream.ctrl.added',
-                        streams_present=True,
-                        streams_visible=self._has_visible_streams())
+            logging.debug("Sending stream.ctrl.added message")
+            pub.sendMessage('stream.ctrl.added',
+                            streams_present=True,
+                            streams_visible=self._has_visible_streams())
 
-        return spanel
+            return spanel
+        else:
+            return None
 
     def addStreamForAcquisition(self, stream):
         """ Create a stream entry for the given existing stream, adapted to ac
@@ -322,8 +324,7 @@ class StreamController(object):
             stream.is_active.value = True
 
     def _scheduleStream(self, stream):
-        """
-        Add a stream to be managed by the update scheduler.
+        """ Add a stream to be managed by the update scheduler.
         stream (Stream): the stream to add. If it's already scheduled, it's fine.
         """
         # create an adapted subscriber for the scheduler

@@ -63,6 +63,7 @@ class xrcfr_main(wx.Frame):
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
         self.fp_lens_sem_settings = xrc.XRCCTRL(self, "fp_lens_sem_settings")
         self.fp_lens_opt_settings = xrc.XRCCTRL(self, "fp_lens_opt_settings")
+        self.pnl_secom_align_streams = xrc.XRCCTRL(self, "pnl_secom_align_streams")
         self.lens_align_tb = xrc.XRCCTRL(self, "lens_align_tb")
         self.vp_align_sem = xrc.XRCCTRL(self, "vp_align_sem")
         self.pnl_tab_secom_streams = xrc.XRCCTRL(self, "pnl_tab_secom_streams")
@@ -768,6 +769,16 @@ def __init_resources():
                             <leftspacing>0</leftspacing>
                             <rightspacing>0</rightspacing>
                             <bg>#333333</bg>
+                            <object class="FoldPanelItem">
+                              <object class="StreamBar" name="pnl_secom_align_streams">
+                                <fg>#7F7F7F</fg>
+                                <bg>#333333</bg>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                              </object>
+                              <nocaption>1</nocaption>
+                            </object>
                           </object>
                           <flag>wxEXPAND</flag>
                         </object>
