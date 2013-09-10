@@ -666,26 +666,47 @@ class LensAlignTab(Tab):
         self.tab_data_model = guimodel.ActuatorGUIData(main_data)
         self.main_frame = main_frame
 
-        main_frame.vp_align_ccd.ShowMergeSlider(False)
-        main_frame.vp_align_sem.ShowMergeSlider(False)
-        main_frame.vp_align_sem.ShowLegend(False)
-
         self._settings_controller = settings.LensAlignSettingsController(
                                         self.main_frame,
                                         self.tab_data_model
                                     )
 
-        # self._view_controller = viewcont.ViewController(
-        #                             self.tab_data_model,
-        #                             self.main_frame,
-        #                             [self.main_frame.vp_align_sem,
-        #                              self.main_frame.vp_align_ccd])
+#        main_frame.vp_align_ccd.ShowMergeSlider(False)
+#        main_frame.vp_align_sem.ShowMergeSlider(False)
+        main_frame.vp_align_sem.ShowLegend(False)
+
+        self._view_controller = viewcont.ViewController(
+                                    self.tab_data_model,
+                                    self.main_frame,
+                                    [self.main_frame.vp_align_sem,
+                                     self.main_frame.vp_align_ccd])
+
+        self._stream_controller = streamcont.StreamController(
+                                        self.tab_data_model,
+                                        self.main_frame.pnl_sparc_align_streams, # FIXME
+                                        locked=True
+                                  )
+        # TODO: How to force a stream on a specific view?
+        # TODO: How to allow having both stream updating at the same time? => change scheduler? No scheduler?
+        #self.tab_data_model.focussedView.value =
+        # TODO: the SEM view should always fit exactly the whole SEM scan area
+        # => listen to magnification and update mpp (or call fit-to-screen)?
+        # => listen to image update
+        sem_spe = self._stream_controller.addSEMSED()
+        self._sem_stream = sem_spe.stream
+        ccd_spe = self._stream_controller.addBrightfield()
+        self._ccd_stream = ccd_spe.stream
+
+        main_data.opticalState.subscribe(self.onOpticalState, init=True)
+        main_data.emState.subscribe(self.onEMState, init=True)
 
         self._state_controller = MicroscopeStateController(
                                             self.tab_data_model,
                                             self.main_frame,
                                             "lens_align_btn_"
                                       )
+        # We directly connect the stream update to each microscope state
+        self._ccd_stream.should_update.value = True
 
         self._actuator_controller = ActuatorController(self.tab_data_model,
                                                        main_frame,
@@ -693,6 +714,23 @@ class LensAlignTab(Tab):
 
         # Bind keys
         self._actuator_controller.bind_keyboard(main_frame.pnl_tab_secom_align)
+
+        # TODO toolbar
+
+        # TODO: support spot mode and automatically update the survey image each
+        # time it's updated.
+        # => in spot-mode, listen to stage position and magnification, if it
+        # changes reactivate the SEM stream and subscribe to an image, when image
+        # is received, stop stream and move back to spot-mode. (need to be careful
+        # to handle when the user disables the spot mode during this moment)
+
+    def onOpticalState(self, state):
+        """ Event handler for when the state of the optical microscope changes
+        """
+        self._ccd_stream.should_update.value = (state == guimodel.STATE_ON)
+
+    def onEMState(self, state):
+        self._sem_stream.should_update.value = (state == guimodel.STATE_ON)
 
 class MirrorAlignTab(Tab):
     """
