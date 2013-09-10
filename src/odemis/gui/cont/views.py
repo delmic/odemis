@@ -125,6 +125,7 @@ class ViewController(object):
 
         # calibration tab => allow to display anything (the tab wants)
         elif isinstance(self._tab_data_model, model.ActuatorGUIData):
+            logging.info("Creating calibration viewport layout")
             i = 1
             for viewport in self._viewports:
                 view = model.MicroscopeView(
