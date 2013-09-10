@@ -88,13 +88,14 @@ class ActuatorController(object):
             try:
                 slider = getattr(main_frame, slider_name)
             except AttributeError:
-                logging.exception("No slider in GUI found for stepsize %s", an)
                 continue
 
             slider.SetRange(*ss.range)
 
             vac = VigilantAttributeConnector(ss, slider, events=wx.EVT_SLIDER)
             self._va_connectors.append(vac)
+        if not self._va_connectors:
+            logging.warning("No slider found for tab %s", tab_prefix)
 
         # Bind buttons
         for axis in tab_data.axes:
@@ -104,7 +105,7 @@ class ActuatorController(object):
                 try:
                     btn = getattr(main_frame, btn_name)
                 except AttributeError:
-                    logging.exception("No button in GUI found for axis %s", axis)
+                    logging.debug("No button in GUI found for axis %s", axis)
                     continue
 
                 def btn_action(evt, tab_data=tab_data, axis=axis, factor=factor):
@@ -114,6 +115,7 @@ class ActuatorController(object):
                     tab_data.step(axis, factor)
 
                 btn.Bind(wx.EVT_BUTTON, btn_action)
+
 
     def bind_keyboard(self, tab_frame):
         """

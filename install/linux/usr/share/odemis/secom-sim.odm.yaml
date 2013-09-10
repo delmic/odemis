@@ -3,7 +3,7 @@ SimSECOM: {
     role: secom,
     emitters: [Spectra, "Nikon Super Duper", "MultiBand Fixed Filter", "EBeam ExtXY"],
     detectors: ["Andor SimCam", "SED ExtXY"],
-    actuators: ["FakeRedStoneStage", "SEM-Optical Alignment", "OpticalZ actuator"],
+    actuators: ["OLStage", "SEM-Optical Alignment", "OpticalZ actuator"],
 }
 
 #Light: {
@@ -91,6 +91,8 @@ Spectra: {
     affects: ["Andor SimCam"]
 }
 
+# Axes: X is horizontal on screen (going left->right), physical: far->close when looking at the door
+#       Y is vertical on screen (going bottom->top), physical: left->right when looking at the door
 "Andor SimCam": {
     class: andorcam2.FakeAndorCam2,
     role: ccd,
@@ -99,7 +101,7 @@ Spectra: {
           }
 }
 
-"FakeRedStoneStage": {
+"OLStage": {
     class: simulated.Stage,
     role: stage,
     init: {axes: [x, y]},
@@ -114,7 +116,7 @@ Spectra: {
     class: CombinedActuator,
     role: align,
     affects: ["Andor SimCam"],
-    children: {"a": FakePIGCS, "b": FakePIGCS},
+    children: {"a": PIGCS, "b": PIGCS},
     init: {
         axes_map: {"a": "a", "b": "b"},
 #        inverted: ["a"]
@@ -124,11 +126,13 @@ Spectra: {
     }
 }
 
+# Axis Z: (Physical) bottom->top when looking at the door
+#         (On screen) bottom->top (so distance to sample is smaller when going up)    
 "OpticalZ actuator": {
     class: CombinedActuator,
     role: focus,
     affects: ["Andor SimCam"],
-    children: {"z": FakePIGCS},
+    children: {"z": PIGCS},
     init: {
         axes_map: {"z": "z"}
     },
@@ -137,9 +141,19 @@ Spectra: {
     }
 }
 
-FakePIGCS: {
-    class: simulated.Stage,
+# USB should be connected to a E-861 or C-867
+# PI E-861/C-867 jumpers (. = off):
+# A = 1234.6..
+# B = 123..6..
+# Z = 12.4.6..
+
+PIGCS: {
+    class: pigcs.FakeBus,
     role: none,
-    init: {axes: ["a", "b", "z"]},
+    init: {
+        port: "/dev/ttyPIGCS",
+        # axis -> controller, channel, closed-loop?
+        axes: {"a": [1, 1, False], "b": [2, 1, False], "z": [3, 1, False]},
+    },
 }
 

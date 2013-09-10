@@ -31,7 +31,7 @@ from odemis.gui.cont.acquisition import SecomAcquiController, \
 from odemis.gui.cont.actuators import ActuatorController
 from odemis.gui.cont.microscope import MicroscopeStateController
 from odemis.gui.model.img import InstrumentalImage
-from odemis.gui.util import widgets, get_picture_folder, formats_to_wildcards
+from odemis.gui.util import get_picture_folder, formats_to_wildcards
 import logging
 import odemis.gui.cont.streams as streamcont
 import odemis.gui.cont.views as viewcont
@@ -140,19 +140,18 @@ class SecomStreamsTab(Tab):
         self._state_controller = MicroscopeStateController(
                                             self.tab_data_model,
                                             self.main_frame,
-                                            "btn_toggle_"
+                                            "live_btn_"
                                       )
 
         # To automatically play/pause a stream when turning on/off a microscope,
         # and add the stream on the first time.
         # Note: weakref, so that if a stream is removed, we don't turn it back on
-        self._opt_stream_to_restart = set() # weakref set of Streams
-        self._sem_stream_to_restart = set()
-
         if hasattr(main_data, 'opticalState'):
+            self._opt_stream_to_restart = set() # weakref set of Streams
             main_data.opticalState.subscribe(self.onOpticalState)
 
         if hasattr(main_data, 'emState'):
+            self._sem_stream_to_restart = set()
             main_data.emState.subscribe(self.onEMState)
 
         # Toolbar

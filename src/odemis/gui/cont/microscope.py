@@ -18,8 +18,9 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
-import logging
 from odemis.gui import model
+from odemis.gui.util.widgets import VigilantAttributeConnector
+import logging
 import wx
 
 # GUI toggle button (suffix) name -> VA name
@@ -27,7 +28,7 @@ btn_to_va = {"sem": "emState",
              "opt": "opticalState",
              "spectrometer": "specState",
              "angular": "arState",
-             "press": "vaccumState", # TODO
+             "press": "vacuumState", # TODO
              }
             # TODO: pause button
 
@@ -50,6 +51,7 @@ class MicroscopeStateController(object):
         # Look for which buttons actually exist, and which VAs exist. Bind the
         # fitting ones
         self._callbacks = []
+        self._va_connectors = []
         for btn_name, vaname in btn_to_va.items():
             try:
                 btn = getattr(main_frame, btn_prefix + btn_name)
@@ -65,21 +67,11 @@ class MicroscopeStateController(object):
                 continue
             logging.debug("Connecting button %s to %s", btn_name, vaname)
 
-            # TODO: use VAConnector
-            def on_va(state, btn=btn):
-                btn.SetToggle(state != model.STATE_OFF)
+            vac = VigilantAttributeConnector(va, btn,
+                    lambda s, btn=btn: btn.SetToggle(s != model.STATE_OFF),
+                    lambda btn=btn: model.STATE_ON if btn.GetToggle() else model.STATE_OFF,
+                    events=wx.EVT_BUTTON)
+            self._va_connectors.append(vac)
 
-            self._callbacks.append(on_va)
-            va.subscribe(on_va, init=True)
-
-            # Event handler
-            def on_toggle(event, va=va, vaname=vaname):
-                logging.debug("%s toggle button pressed" % vaname)
-                if event.isDown:
-                    va.value = model.STATE_ON
-                else:
-                    va.value = model.STATE_OFF
-
-            # FIXME: special _bitmap_ toggle button doesn't seem to generate
-            # EVT_TOGGLEBUTTON
-            btn.Bind(wx.EVT_BUTTON, on_toggle)
+        if not self._va_connectors:
+            logging.warning("No microscope button found in tab %s", btn_prefix)

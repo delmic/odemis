@@ -375,7 +375,7 @@ class ActuatorGUIData(MicroscopyGUIData):
         # str -> VA: name (as the name of the attribute) -> step size (m)
         self.stepsizes = {"stage": model.FloatContinuous(1e-6, [1e-8, 1e-3]),
                           "focus": model.FloatContinuous(1e-7, [1e-8, 1e-4]),
-                          "aligner": model.FloatContinuous(1e-6, [1e-8, 1e-3]),
+                          "aligner": model.FloatContinuous(1e-6, [1e-8, 1e-4]),
                           }
         # remove the ones that don't have an actuator
         for an in self.stepsizes.keys():
