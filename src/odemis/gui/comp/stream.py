@@ -12,13 +12,13 @@ Copyright © 2012 Rinze de Laat, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms
-of the GNU General Public License version 2 as published by the Free Software
-Foundation.
+Odemis is free software: you can redistribute it and/or modify it under the
+terms of the GNU General Public License version 2 as published by the Free
+Software Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
-PURPOSE. See the GNU General Public License for more details.
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
@@ -60,11 +60,11 @@ BUTTON_SIZE = (18, 18)
 # information themselves.
 
 # Values to control which option is available
-OPT_NAME_EDIT = 1 # Allow to change the name of the stream (cannot be changed after)
+OPT_NAME_EDIT = 1 # allow the renaming of the stream (for one time only)
 OPT_BTN_REMOVE = 2 # remove the stream entry
 OPT_BTN_VISIBLE = 4 # show/hide the stream image
-OPT_BTN_UPDATED = 8 # Update/stop the stream acquisition
-OPT_BTN_TINT = 16 # Tint of the stream (if the VA exists)
+OPT_BTN_UPDATED = 8 # update/stop the stream acquisition
+OPT_BTN_TINT = 16 # tint of the stream (if the VA exists)
 
 class Expander(wx.PyControl):
     """ This class describes a clickable control responsible for showing and
@@ -75,10 +75,10 @@ class Expander(wx.PyControl):
 
     The default buttons present are:
 
-     * A remove button, which can be used to remove the StreamPanel
-     * A visibility button, indicating whether the stream data should be/is shown
-     * A play button, controlling whether or not 'live' data from the stream is
-       to be used.
+    * A remove button, which can be used to remove the StreamPanel
+    * A visibility button, indicating whether the stream data should be/is shown
+    * A play button, controlling whether or not 'live' data from the stream is
+        to be used.
 
     Structure:
 
@@ -443,7 +443,7 @@ class StreamPanel(wx.PyPanel):
             self.collapse(collapsed)
 
     def finalize(self):
-        """ Controls should be added to the panel using this method. This
+        """ Controls should be added to the panel using this method. This is
         so timing issues will not rise when the panel is instantiated.
         """
         # ====== Add an expander button
@@ -484,6 +484,13 @@ class StreamPanel(wx.PyPanel):
         # ==== Bind events
         vis = self.stream in self._tab_data_model.focussedView.value.getStreams()
         self.setVisible(vis)
+
+    def flatten(self):
+        """ This method hides the expander header button and makes the controls
+        inside visible.
+        """
+        self._expander.Show(False)
+        self.collapse(False)
 
     def set_expander_button(self, button):
         """ Assign a new expander button to the stream panel.
@@ -818,7 +825,7 @@ class StreamPanel(wx.PyPanel):
         self.row_count += 1
 
         # ====== Third row, text fields for intensity (ratios)
-        
+
         lbl_lowi = wx.StaticText(self._panel, -1, "Low")
         tooltip_txt = "Value mapped to black"
         lbl_lowi.SetToolTipString(tooltip_txt)
@@ -867,7 +874,7 @@ class StreamPanel(wx.PyPanel):
                 hv = lv
                 ctrl.SetValue(hv * 100)
             return lv, hv
-        
+
         self._vac_highi = VigilantAttributeConnector(self.stream.intensityRange,
                           self._txt_highi,
                           lambda r: self._txt_highi.SetValue(r[1] * 100),
@@ -1209,12 +1216,12 @@ class StreamPanel(wx.PyPanel):
             # ensure the low/high values are always within the allowed range
             wl = va.value
             wl_rng = (va.range[0][0], va.range[1][1])
-            
+
             width = wl[1] - wl[0]
             ctr_rng = wl_rng[0] + width / 2, wl_rng[1] - width / 2
             req_center = ctrl.GetValue()
             new_center = min(max(ctr_rng[0], req_center), ctr_rng[1])
-            
+
             if req_center != new_center:
                 # VA might not change => update value ourselves
                 ctrl.SetValue(new_center)
