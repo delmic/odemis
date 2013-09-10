@@ -26,53 +26,57 @@ from odemis.gui import model
 from odemis.gui.model.stream import SEMStream, BrightfieldStream, FluoStream, \
     OPTICAL_STREAMS, EM_STREAMS, SPECTRUM_STREAMS, AR_STREAMS
 from odemis.gui.util import call_after
+import collections
 import logging
 import wx
-
-# TODO: The next comments were copied from model. Read/implement/remove
-# viewport controller (to be merged with stream controller?)
-# Creates the 4 microscope views at init, with the right names, depending on
-#   the available microscope hardware.
-# (The 4 viewports canvas are already created, the main interface connect
-#   them to the view, by number)
-# In charge of switching between 2x2 layout and 1 layout.
-# In charge of updating the view focus
-# In charge of updating the view thumbnails???
-# In charge of ensuring they all have same zoom and center position
-# In charge of applying the toolbar actions on the right viewport
-# in charge of changing the "hair-cross" display
 
 class ViewController(object):
 
     """ Manages the microscope view updates, change of viewport focus, etc.
     """
 
-    def __init__(self, micgui, main_frame, viewports):
+    def __init__(self, tab_data, main_frame, viewports):
         """
-        micgui (MicroscopyGUIData) -- the representation of the microscope GUI
+        tab_data (MicroscopyGUIData) -- the representation of the microscope GUI
         main_frame: (wx.Frame) -- the frame which contains the 4 viewports
-        viewports (list of MicroscopeViewport): the viewports to update
+        viewports (list of MicroscopeViewport or 
+                   OrderedDict (MicroscopeViewport -> kwargs)): the viewports to
+          update. The first one is the one focused. If it's an OrderedDict, the 
+          kwargs are passed to the MicroscopeView creation.
         """
-        #TODO: views (None or OrderedDict (str -> stream classes)): None is auto
-        # depending on the microscope type and number of viewports. Otherwise
-        # name of view to type of streams displayed (stream.Stream is everything)
+        self._tab_data_model = tab_data
+        self._main_data_model = tab_data.main
 
-        # TODO: allow to change the scheduler policy (LAST_ONE, ALL)
+        if isinstance(viewports, collections.OrderedDict):
+            self._viewports = viewports.keys()
+            self._createViewsFixed(viewports)
+        else:
+            # create the (default) views
+            self._viewports = viewports
+            self._createViewsAuto()
 
-        self._tab_data_model = micgui
-        self._main_data_model = micgui.main
-
-        # list of all the viewports (widgets that show the views)
-        self._viewports = viewports
-
-        # create the (default) views and set focussedView
-        self._createViews()
+        # First viewport is focused
+        tab_data.focussedView.value = self._viewports[0].microscope_view
 
         # subscribe to layout and view changes
-        self._tab_data_model.viewLayout.subscribe(self._onViewLayout, init=True)
-        self._tab_data_model.focussedView.subscribe(self._onView, init=True)
+        tab_data.viewLayout.subscribe(self._onViewLayout, init=True)
+        tab_data.focussedView.subscribe(self._onView, init=True)
 
-    def _createViews(self):
+    def _createViewsFixed(self, viewports):
+        """
+        Create the different views displayed, according to viewtypes
+        viewports (OrderedDict (MicroscopeViewport -> kwargs)): cf init
+        
+        To be executed only once, at initialisation.
+        """
+        
+        for vp, vkwargs in viewports.items():
+            # TODO: automatically set some clever values for missing arguments?
+            view = model.MicroscopeView(**vkwargs)
+            self._tab_data_model.views.append(view)
+            vp.setView(view, self._tab_data_model)
+        
+    def _createViewsAuto(self):
         """
         Create the different views displayed, according to the current
         microscope.
@@ -124,10 +128,6 @@ class ViewController(object):
             self._tab_data_model.views.append(view)
             self._viewports[3].setView(view, self._tab_data_model)
 
-            # Start off with the 2x2 view
-            # Focus defaults to the top right viewport
-            self._tab_data_model.focussedView.value = self._viewports[1].mic_view
-
         # calibration tab => allow to display anything (the tab wants)
         elif isinstance(self._tab_data_model, model.ActuatorGUIData):
             logging.info("Creating calibration viewport layout")
@@ -141,7 +141,6 @@ class ViewController(object):
                 self._tab_data_model.views.append(view)
                 viewport.setView(view, self._tab_data_model)
                 i += 1
-            self._tab_data_model.focussedView.value = self._tab_data_model.views[0]
 
         # If SEM only: all SEM
         # Works also for the Sparc, as there is no other emitter, and we don't
@@ -159,7 +158,6 @@ class ViewController(object):
                 self._tab_data_model.views.append(view)
                 viewport.setView(view, self._tab_data_model)
                 i += 1
-            self._tab_data_model.focussedView.value = self._tab_data_model.views[0]
 
         # If Optical only: all Optical
         # TODO: first one is brightfield only?
@@ -176,7 +174,6 @@ class ViewController(object):
                 self._tab_data_model.views.append(view)
                 viewport.setView(view, self._tab_data_model)
                 i += 1
-            self._tab_data_model.focussedView.value = self._tab_data_model.views[0]
 
         # If both SEM and Optical (=SECOM): SEM/Optical/2x combined
         elif ((self._main_data_model.ebeam and self._main_data_model.light) or
@@ -224,7 +221,6 @@ class ViewController(object):
 
             # Start off with the 2x2 view
             # Focus defaults to the top right viewport
-            self._tab_data_model.focussedView.value = self._viewports[1].mic_view
         else:
             logging.warning("No known microscope configuration, creating %d "
                             "generic views", len(self._viewports))
@@ -238,7 +234,6 @@ class ViewController(object):
                 self._tab_data_model.views.append(view)
                 viewport.setView(view, self._tab_data_model)
                 i += 1
-            self._tab_data_model.focussedView.value = self._tab_data_model.views[0]
 
         # TODO: if chamber camera: br is just chamber, and it's the focussedView
 
@@ -253,7 +248,7 @@ class ViewController(object):
         self._viewports[0].Parent.Freeze()
 
         for viewport in self._viewports:
-            if viewport.mic_view == view:
+            if viewport.microscope_view == view:
                 viewport.SetFocus(True)
                 if layout == model.VIEW_LAYOUT_ONE:
                     # TODO: maybe in that case, it's not necessary to display the focus frame around?
@@ -280,7 +275,7 @@ class ViewController(object):
             # TODO resize all the viewports now, so that there is no flickering
             # when just changing view
             for viewport in self._viewports:
-                if viewport.mic_view == self._tab_data_model.focussedView.value:
+                if viewport.microscope_view == self._tab_data_model.focussedView.value:
                     viewport.Show()
                 else:
                     viewport.Hide()
@@ -304,11 +299,11 @@ class ViewController(object):
         """
         # find the viewport corresponding to the current view
         for vp in self._viewports:
-            if vp.mic_view == self._tab_data_model.focussedView.value:
+            if vp.microscope_view == self._tab_data_model.focussedView.value:
                 vp.canvas.fitViewToContent()
                 break
         else:
-            logging.error("Faild to find the current viewport")
+            logging.error("Failed to find the current viewport")
 
 class ViewSelector(object):
     """
@@ -352,17 +347,17 @@ class ViewSelector(object):
             def onThumbnail(im, btn=btn): # save btn in scope
                 btn.set_overlay(im)
 
-            vp.mic_view.thumbnail.subscribe(onThumbnail, init=True)
+            vp.microscope_view.thumbnail.subscribe(onThumbnail, init=True)
             # keep ref of the functions so that they are not dropped
             self._subscriptions.append(onThumbnail)
 
             # also subscribe for updating the 2x2 button
-            vp.mic_view.thumbnail.subscribe(self._update22Thumbnail)
+            vp.microscope_view.thumbnail.subscribe(self._update22Thumbnail)
 
             def onName(name, lbl=lbl): # save lbl in scope
                 lbl.SetLabel(name)
 
-            vp.mic_view.name.subscribe(onName, init=True)
+            vp.microscope_view.name.subscribe(onName, init=True)
             self._subscriptions.append(onName)
 
         # Select the overview by default
@@ -370,22 +365,22 @@ class ViewSelector(object):
         # focussed viewport. ('None' selects the overview button)
         self.toggleButtonForView(None)
 
-    def toggleButtonForView(self, mic_view):
+    def toggleButtonForView(self, microscope_view):
         """
         Toggle the button which represents the view and untoggle the other ones
-        mic_view (MicroscopeView or None): the view, or None if the first button
+        microscope_view (MicroscopeView or None): the view, or None if the first button
                                            (2x2) is to be toggled
         Note: it does _not_ change the view
         """
         for b, (vp, lbl) in self.buttons.items():
             # 2x2 => vp is None / 1 => vp exists and vp.view is the view
-            if (vp is None and mic_view is None) or (vp and vp.mic_view == mic_view):
+            if (vp is None and microscope_view is None) or (vp and vp.microscope_view == microscope_view):
                 b.SetToggle(True)
             else:
                 if vp:
                     logging.debug(
                                 "untoggling button of view %s",
-                                vp.mic_view.name.value)
+                                vp.microscope_view.name.value)
                 else:
                     logging.debug("untoggling button of view All")
                 b.SetToggle(False)
@@ -416,7 +411,7 @@ class ViewSelector(object):
             if vp is None: # 2x2 layout
                 continue
 
-            im = vp.mic_view.thumbnail.value
+            im = vp.microscope_view.thumbnail.value
             if im:
                 # im doesn't have the same aspect ratio as the actual thumbnail
                 # => rescale and crop on the center
@@ -495,9 +490,9 @@ class ViewSelector(object):
             self._tab_data_model.viewLayout.value = model.VIEW_LAYOUT_22
         else:
             logging.debug("View button click")
-            self.toggleButtonForView(viewport.mic_view)
+            self.toggleButtonForView(viewport.microscope_view)
             # It's preferable to change the view before the layout so that
             # if the layout was 2x2 with another view focused, it doesn't first
             # display one big view, and immediately after changes to another view.
-            self._tab_data_model.focussedView.value = viewport.mic_view
+            self._tab_data_model.focussedView.value = viewport.microscope_view
             self._tab_data_model.viewLayout.value = model.VIEW_LAYOUT_ONE

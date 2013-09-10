@@ -553,6 +553,36 @@ class BrightfieldStream(CameraStream):
         em = [1] * len(self._emitter.emissions.value)
         self._emitter.emissions.value = em
 
+class CameraNoLightStream(CameraStream):
+    """ Stream containing images obtained via optical CCD but without any light
+     source on. Used for the SECOM lens alignment tab. 
+
+    It basically knows how to turn off light and remove position information.
+    """
+    def __init__(self, name, detector, dataflow, emitter, fixedpos=False):
+        if fixedpos:
+            self._fixedpos = (0, 0)
+        else:
+            self._fixedpos = None
+        CameraStream.__init__(self, name, detector, dataflow, emitter)
+        self._prev_light_power = self._emitter.power.value
+
+    def onActive(self, active):
+        if active:
+            # turn off the light
+            self._prev_light_power = self._emitter.power.value
+            self._emitter.power.value = 0
+        else:
+            # restore the light
+            # TODO: not necessary if each stream had its own hardware settings
+            self._emitter.power.value = self._prev_light_power
+        Stream.onActive(self, active)
+
+    def _findPos(self, data):
+        if self._fixedpos:
+            return self._fixedpos
+        else:
+            return super(CameraNoLightStream, self)._findPos(data)
 
 class FluoStream(CameraStream):
     """ Stream containing images obtained via epifluorescence.

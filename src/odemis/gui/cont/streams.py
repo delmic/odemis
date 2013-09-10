@@ -28,7 +28,16 @@ from odemis.gui.model.stream import FluoStream, BrightfieldStream, SEMStream, \
 from wx.lib.pubsub import pub
 import logging
 
-
+# Stream scheduling policies: decides which streams which are with .should_update
+# get .is_active
+SCHED_LAST_ONE = 1 # Last stream which got added to the should_update set
+SCHED_ALL = 2 # All the streams which are in the should_update stream
+# Note: it seems users don't like ideas like round-robin, where the hardware
+# keeps turn on and off, (and with fluorescence fine control must be done, to
+# avoid bleaching).
+# TODO: SCHED_ALL_INDIE -> Schedule at the same time all the streams which
+# are independent (no emitter from a stream will affect any detector of another
+# stream).
 
 class StreamController(object):
     """
@@ -43,12 +52,14 @@ class StreamController(object):
         tab_data (MicroscopyGUIData): the representation of the microscope Model
         stream_bar (StreamBar): an empty stream panel
         static (Boolean): Treat streams as static
+        locked (Boolean): Don't allow to add/remove/hide/show streams
         """
         self._tab_data_model = tab_data
         self._main_data_model = tab_data.main
         self._stream_bar = stream_bar
 
         self._scheduler_subscriptions = {} # stream -> callable
+        self._sched_policy = SCHED_LAST_ONE # works well in most cases
 
         if stream_bar.btn_add_stream:
             self._createAddStreamActions()
@@ -73,6 +84,14 @@ class StreamController(object):
 
     def to_locked_mode(self):
         self.locked_mode = True
+
+    def setSchedPolicy(self, policy):
+        """
+        Change the stream scheduling policy
+        policy (SCHED_*): the new policy
+        """
+        assert policy in [SCHED_LAST_ONE, SCHED_ALL]
+        self._sched_policy = policy
 
     def _createAddStreamActions(self):
         """ Create the compatible "add stream" actions according to the current
@@ -194,8 +213,11 @@ class StreamController(object):
 
         stream (stream.Stream): the new stream to add
         add_to_all_views (boolean): if True, add the stream to all the
-            compatible views, otherwise add only to the current view
-        returns the StreamPanel that was created
+            compatible views, otherwise add only to the current view.
+        visible (boolean): If True, create a stream entry, otherwise adds the 
+          stream but do not create any entry. 
+        returns (StreamPanel or Stream): stream entry or stream (if visible
+         is False) that was created
         """
         self._tab_data_model.streams.add(stream)
         if add_to_all_views:
@@ -212,6 +234,9 @@ class StreamController(object):
         # TODO create a StreamScheduler
         # call it like self._scheduler.addStream(stream)
         self._scheduleStream(stream)
+
+        # show the stream right now
+        stream.should_update.value = True # TODO: allow to change via arg?
 
         if visible:
             spanel = comp.stream.StreamPanel(
@@ -235,7 +260,7 @@ class StreamController(object):
 
             return spanel
         else:
-            return None
+            return stream
 
     def addStreamForAcquisition(self, stream):
         """ Create a stream entry for the given existing stream, adapted to ac
@@ -282,46 +307,36 @@ class StreamController(object):
                         streams_visible=self._has_visible_streams())
 
 
-    # def __del__(self):
-    #     logging.debug("%s Desctructor", self.__class__.__name__)
-    #     #self._tab_data_model.focussedView.unsubscribe(self._onView)
-
     def _onStreamUpdate(self, stream, updated):
         """
         Called when a stream "updated" state changes
         """
         # This is a stream scheduler:
-        # * "updated" streams are the streams to be scheduled
+        # * "should_update" streams are the streams to be scheduled
         # * a stream becomes "active" when it's currently acquiring
-        # * when a stream is just set to be "updated" (by the user) it should
-        #   be scheduled as soon as possible
+        # * when a stream is just set to be "should_update" (by the user) it
+        #   should be scheduled as soon as possible
 
-        # Two versions:
-        # * Manual: incompatible streams are forced non-updated
-        # * Automatic: incompatible streams are switched active from time to time
-
-        # TODO there are two difficulties:
-        # * know which streams are incompatible with each other. Only compatible
-        #   streams can be acquiring concurrently. As an approximation, it is
-        #   safe to assume every stream is incompatible with every other one.
-        # * in automatic mode only) detect when we can switch to a next stream
-        #   => current stream should have acquired at least one picture, and
-        #   it should not be changed too often due to overhead in hardware
-        #   configuration changes.
-
-        # For now we do very basic scheduling: manual, considering that every
-        # stream is incompatible
-
-        if not updated:
-            stream.is_active.value = False
-            # the other streams might or might not be updated, we don't care
+        if self._sched_policy == SCHED_LAST_ONE:
+            # Only last stream with should_update is active
+            if not updated:
+                stream.is_active.value = False
+                # the other streams might or might not be updated, we don't care
+            else:
+                # Make sure that other streams are not updated (and it also
+                # provides feedback to the user about which stream is active)
+                for s in self._scheduler_subscriptions:
+                    if s != stream:
+                        s.should_update.value = False
+                # activate this stream
+                # It's important it's last, to ensure hardware settings don't
+                # mess up with each other.
+                stream.is_active.value = True
+        elif self._sched_policy == SCHED_ALL:
+            # All streams with should_update are active
+            stream.is_active.value = updated
         else:
-            # make sure that every other streams is not updated
-            for s in self._scheduler_subscriptions:
-                if s != stream:
-                    s.should_update.value = False
-            # activate this stream
-            stream.is_active.value = True
+            raise NotImplementedError("Unknown scheduling policy %s", self._sched_policy)
 
     def _scheduleStream(self, stream):
         """ Add a stream to be managed by the update scheduler.
@@ -333,9 +348,6 @@ class StreamController(object):
 
         self._scheduler_subscriptions[stream] = detectUpdate
         stream.should_update.subscribe(detectUpdate)
-
-        # show the stream right now
-        stream.should_update.value = True
 
     def _unscheduleStream(self, stream):
         """
@@ -363,6 +375,9 @@ class StreamController(object):
             pass
         elif state == STATE_ON:
             pass
+
+    # TODO: shall we also have a suspend/resume streams that directly changes
+    # is_active, and used when the tab/window is hidden?
 
     def pauseStreams(self, classes=Stream):
         """

@@ -156,6 +156,13 @@ class MainGUIData(object):
             if not self.light and not self.ebeam:
                 raise KeyError("No emitter found in the microscope")
 
+        # TODO: all that on/off thing is crazy:
+        # * we cannot do it (for now)
+        # * we'd better turn on/off the hardware when streams need it
+        # * pause and off are the same things but for SEM (blank/off)
+        # * optical on in live view means light on, while in lens align it means light off
+        # => we'd be better with just one global pause button (and pressure)
+
         # Handle turning on/off the instruments
         hw_states = set([STATE_OFF, STATE_ON, STATE_PAUSE])
         if self.ccd:
@@ -519,14 +526,11 @@ class MicroscopeView(object):
         :param stage (Actuator): actuator with two axes: x and y
         :param focus0 (Actuator): actuator with one axis: z. Can be None
         :param focus1 (Actuator): actuator with one axis: z. Can be None
-
-        Focuses 0 and 1 are modified when changing focus respectively along the
-        X and Y axis.
-
-        stream_classes (None, or tuple of classes): all subclasses that the
-        streams in this view can show (restriction is not technical, only for
-        the user)
-
+          Focuses 0 and 1 are modified when changing focus respectively along
+          the X and Y axis.
+        :param stream_classes (None, or tuple of classes): all subclasses that the
+          streams in this view can show (restriction is not technical, only for
+          the user)
         """
 
         self.name = model.StringVA(name)

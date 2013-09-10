@@ -32,6 +32,7 @@ from odemis.gui.cont.actuators import ActuatorController
 from odemis.gui.cont.microscope import MicroscopeStateController
 from odemis.gui.model.img import InstrumentalImage
 from odemis.gui.util import get_picture_folder, formats_to_wildcards
+import collections
 import logging
 import odemis.gui.cont.streams as streamcont
 import odemis.gui.cont.views as viewcont
@@ -60,6 +61,9 @@ class Tab(object):
 
     def Hide(self):
         self.Show(False)
+
+    def IsShown(self):
+        return self.panel.IsShown()
 
     def terminate(self):
         """
@@ -147,10 +151,12 @@ class SecomStreamsTab(Tab):
         # and add the stream on the first time.
         # Note: weakref, so that if a stream is removed, we don't turn it back on
         if hasattr(main_data, 'opticalState'):
+            self._opt_streams_enabled = False
             self._opt_stream_to_restart = set() # weakref set of Streams
             main_data.opticalState.subscribe(self.onOpticalState)
 
         if hasattr(main_data, 'emState'):
+            self._sem_streams_enabled = False
             self._sem_stream_to_restart = set()
             main_data.emState.subscribe(self.onEMState)
 
@@ -180,10 +186,13 @@ class SecomStreamsTab(Tab):
 
 
     def onOpticalState(self, state):
-        if state == guimodel.STATE_OFF or state == guimodel.STATE_PAUSE:
-            paused_st = self._stream_controller.pauseStreams(streammod.OPTICAL_STREAMS)
-            self._opt_stream_to_restart = weakref.WeakSet(paused_st)
-        elif state == guimodel.STATE_ON:
+        enabled = (state == guimodel.STATE_ON) and self.IsShown()
+        if self._opt_streams_enabled == enabled:
+            return # no change
+        else:
+            self._opt_streams_enabled = enabled
+
+        if enabled:
             # check whether we need to create a (first) bright-field stream
             has_bf = any(isinstance(s, streammod.BrightfieldStream) for s in self.tab_data_model.streams)
             if not has_bf:
@@ -191,12 +200,18 @@ class SecomStreamsTab(Tab):
                 sp.show_remove_btn(False)
 
             self._stream_controller.resumeStreams(self._opt_stream_to_restart)
+        else:
+            paused_st = self._stream_controller.pauseStreams(streammod.OPTICAL_STREAMS)
+            self._opt_stream_to_restart = weakref.WeakSet(paused_st)
 
     def onEMState(self, state):
-        if state == guimodel.STATE_OFF or state == guimodel.STATE_PAUSE:
-            paused_st = self._stream_controller.pauseStreams(streammod.EM_STREAMS)
-            self._sem_stream_to_restart = weakref.WeakSet(paused_st)
-        elif state == guimodel.STATE_ON:
+        enabled = (state == guimodel.STATE_ON) and self.IsShown()
+        if self._sem_streams_enabled == enabled:
+            return # no change
+        else:
+            self._sem_streams_enabled = enabled
+
+        if enabled:
             # check whether we need to create a (first) SEM stream
             has_sem = any(isinstance(s, streammod.EM_STREAMS) for s in self.tab_data_model.streams)
             if not has_sem:
@@ -204,6 +219,18 @@ class SecomStreamsTab(Tab):
                 sp.show_remove_btn(False)
 
             self._stream_controller.resumeStreams(self._sem_stream_to_restart)
+        else:
+            paused_st = self._stream_controller.pauseStreams(streammod.EM_STREAMS)
+            self._sem_stream_to_restart = weakref.WeakSet(paused_st)
+
+    def Show(self, show=True):
+        Tab.Show(self, show=show)
+
+        # Force the check for the stream update
+        main_data = self.tab_data_model.main
+        self.onOpticalState(main_data.opticalState.value)
+        self.onEMState(main_data.emState.value)
+
 
 class SparcAcquisitionTab(Tab):
 
@@ -671,32 +698,55 @@ class LensAlignTab(Tab):
                                         self.tab_data_model
                                     )
 
-#        main_frame.vp_align_ccd.ShowMergeSlider(False)
-#        main_frame.vp_align_sem.ShowMergeSlider(False)
         main_frame.vp_align_sem.ShowLegend(False)
 
+        # TODO: vp_align_ccd must be connected to the aligner, with axes
+        # conversion.
+        # vp_align_sem is connected to the stage
+        vpv = collections.OrderedDict([
+                (self.main_frame.vp_align_ccd,  # focused view
+                 {"name": "Optical",
+                  "stage": None, # TODO: a fake stage connected to AB?
+                  "focus1": main_data.focus,
+                  "stream_classes": (streammod.CameraNoLightStream,),
+                  }),
+                (self.main_frame.vp_align_sem,
+                 {"name": "SEM",
+                  "stage": main_data.stage,
+                  "stream_classes": streammod.EM_STREAMS,
+                  },
+                 )
+                                       ])
         self._view_controller = viewcont.ViewController(
                                     self.tab_data_model,
                                     self.main_frame,
-                                    [self.main_frame.vp_align_sem,
-                                     self.main_frame.vp_align_ccd])
+                                    vpv)
 
         self._stream_controller = streamcont.StreamController(
                                         self.tab_data_model,
-                                        self.main_frame.pnl_sparc_align_streams, # FIXME
+                                        self.main_frame.pnl_secom_align_streams,
                                         locked=True
                                   )
-        # TODO: How to force a stream on a specific view?
-        # TODO: How to allow having both stream updating at the same time? => change scheduler? No scheduler?
-        #self.tab_data_model.focussedView.value =
+        # Allow both streams to be active simultaneously (that's the whole point)
+        self._stream_controller.setSchedPolicy(streamcont.SCHED_ALL)
         # TODO: the SEM view should always fit exactly the whole SEM scan area
         # => listen to magnification and update mpp (or call fit-to-screen)?
         # => listen to image update
-        sem_spe = self._stream_controller.addSEMSED()
-        self._sem_stream = sem_spe.stream
-        ccd_spe = self._stream_controller.addBrightfield()
-        self._ccd_stream = ccd_spe.stream
 
+        # Both streams always have should_update=True excepted if:
+        # * the tab is hidden
+        # * the corresponding microscope is off
+        ss = self._stream_controller.addSEMSED(add_to_all_views=True, visible=False)
+        self._sem_stream = ss
+        ccd_stream = streammod.CameraNoLightStream("Optical",
+                                     main_data.ccd,
+                                     main_data.ccd.data,
+                                     main_data.light,
+                                     fixedpos=True)
+        self._ccd_stream = ccd_stream
+        self._stream_controller.addStream(ccd_stream, add_to_all_views=True)
+
+        # They take care of immediately stopping the stream for now
         main_data.opticalState.subscribe(self.onOpticalState, init=True)
         main_data.emState.subscribe(self.onEMState, init=True)
 
@@ -705,8 +755,9 @@ class LensAlignTab(Tab):
                                             self.main_frame,
                                             "lens_align_btn_"
                                       )
-        # We directly connect the stream update to each microscope state
-        self._ccd_stream.should_update.value = True
+
+        # TODO: CCD view must not have image moving depending on MD_POS of stage
+        # only during dragging, based on A/B
 
         self._actuator_controller = ActuatorController(self.tab_data_model,
                                                        main_frame,
@@ -724,13 +775,25 @@ class LensAlignTab(Tab):
         # is received, stop stream and move back to spot-mode. (need to be careful
         # to handle when the user disables the spot mode during this moment)
 
+
+
     def onOpticalState(self, state):
         """ Event handler for when the state of the optical microscope changes
         """
-        self._ccd_stream.should_update.value = (state == guimodel.STATE_ON)
+        su = (state == guimodel.STATE_ON) and self.IsShown()
+        self._ccd_stream.should_update.value = su
 
     def onEMState(self, state):
-        self._sem_stream.should_update.value = (state == guimodel.STATE_ON)
+        su = (state == guimodel.STATE_ON) and self.IsShown()
+        self._sem_stream.should_update.value = su
+
+    def Show(self, show=True):
+        Tab.Show(self, show=show)
+
+        # Force the check for the stream update
+        main_data = self.tab_data_model.main
+        self.onOpticalState(main_data.opticalState.value)
+        self.onEMState(main_data.emState.value)
 
 class MirrorAlignTab(Tab):
     """
@@ -790,13 +853,13 @@ class MirrorAlignTab(Tab):
             mic_view = self.tab_data_model.focussedView.value
             mic_view.show_crosshair.value = False    #pylint: disable=E1103
             mic_view.merge_ratio.value = 1           #pylint: disable=E1103
-            ccd_stream.should_update.value = True
 
             # TODO: Do not put goal stream in the stream panel, we don't need
             # any settings.
             # TODO: don't allow to be removed/hidden/paused/folded
             self._stream_controller.addStream(ccd_stream)
-            self._stream_controller.addStream(goal_stream)
+            self._stream_controller.addStream(goal_stream, visible=False)
+            ccd_stream.should_update.value = True
 
         else:
             logging.warning("No CCD available for mirror alignment feedback")

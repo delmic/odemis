@@ -92,6 +92,9 @@ class MicroscopeViewport(wx.Panel):
         self.Bind(wx.EVT_CHILD_FOCUS, self.OnChildFocus)
         self.Bind(wx.EVT_SIZE, self.OnSize)
 
+    @property
+    def microscope_view(self):
+        return self._microscope_view
 
     def setView(self, microscope_view, tab_data):
         """
@@ -124,10 +127,6 @@ class MicroscopeViewport(wx.Panel):
 
         # canvas handles also directly some of the view properties
         self.canvas.setView(microscope_view, tab_data)
-
-    @property
-    def mic_view(self):
-        return self._microscope_view
 
 
     ################################################
