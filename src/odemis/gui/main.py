@@ -473,8 +473,11 @@ see http://www.fluorophores.org/disclaimer/.
 
     def excepthook(self, etype, value, trace): #pylint: disable=W0622
         """ Method to intercept unexpected errors that are not caught
-        anywhere else and redirects them to the logger. """
-        # in case of error here, don't call again, it'd create infinite recurssion
+        anywhere else and redirects them to the logger. 
+        Note that exceptions caught and logged will appear in the text pane,
+        but not cause it to pop-up (as this method will not be called).
+        """
+        # in case of error here, don't call again, it'd create infinite recursion
         if sys and traceback:
             sys.excepthook = sys.__excepthook__
 
@@ -483,7 +486,8 @@ see http://www.fluorophores.org/disclaimer/.
                 logging.error("".join(exc))
 
                 # When an exception occurs, automatically got to debug mode.
-                if not isinstance(value, NotImplementedError):
+                if (self.main_data and
+                    not isinstance(value, NotImplementedError)):
                     self.main_data.debug.value = True
             finally:
                 # put us back
