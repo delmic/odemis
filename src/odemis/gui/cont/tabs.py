@@ -709,13 +709,13 @@ class LensAlignTab(Tab):
                                        angle=135)
         # vp_align_sem is connected to the stage
         vpv = collections.OrderedDict([
-                (self.main_frame.vp_align_ccd,  # focused view
+                (main_frame.vp_align_ccd,  # focused view
                  {"name": "Optical",
                   "stage": self._stage_ab,
                   "focus1": main_data.focus,
                   "stream_classes": (streammod.CameraNoLightStream,),
                   }),
-                (self.main_frame.vp_align_sem,
+                (main_frame.vp_align_sem,
                  {"name": "SEM",
                   "stage": main_data.stage,
                   "stream_classes": streammod.EM_STREAMS,
@@ -743,6 +743,10 @@ class LensAlignTab(Tab):
         # * the corresponding microscope is off
         ss = self._stream_controller.addSEMSED(add_to_all_views=True, visible=False)
         self._sem_stream = ss
+        # Adapt the zoom level of the SEM to fit exactly the SEM field of view
+        self._sem_view = main_frame.vp_align_sem.microscope_view
+        main_data.ebeam.pixelSize.subscribe(self._onSEMpxs, init=True)
+
         ccd_stream = streammod.CameraNoLightStream("Optical",
                                      main_data.ccd,
                                      main_data.ccd.data,
@@ -756,14 +760,12 @@ class LensAlignTab(Tab):
         main_data.opticalState.subscribe(self.onOpticalState, init=True)
         main_data.emState.subscribe(self.onEMState, init=True)
 
+        # TODO: remove ON/OFF buttons, and always have the two streams on when tab is used
         self._state_controller = MicroscopeStateController(
                                             self.tab_data_model,
                                             self.main_frame,
                                             "lens_align_btn_"
                                       )
-
-        # TODO: CCD view must not have image moving depending on MD_POS of stage
-        # only during dragging, based on A/B
 
         self._actuator_controller = ActuatorController(self.tab_data_model,
                                                        main_frame,
@@ -800,6 +802,21 @@ class LensAlignTab(Tab):
         main_data = self.tab_data_model.main
         self.onOpticalState(main_data.opticalState.value)
         self.onEMState(main_data.emState.value)
+        
+    def _onSEMpxs(self, pxs):
+        """
+        Called when the SEM pixel size changes, which means the FoV changes
+        pxs (tuple of 2 floats): in meter
+        """
+        ebeam = self.tab_data_model.main.ebeam
+        eshape = ebeam.shape
+        fov_size = (eshape[0] * pxs[0], eshape[1] * pxs[1]) # m
+        semv_size = self.main_frame.vp_align_sem.Size # px
+
+        # compute MPP to fit exactly the whole FoV
+        mpp = (fov_size[0] / semv_size[0], fov_size[1] / semv_size[1])
+        best_mpp = max(mpp) # to fit everything if not same ratio
+        self._sem_view.mpp.value = best_mpp
 
 
 class InclinedStage(model.Actuator):
