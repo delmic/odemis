@@ -747,7 +747,7 @@ class LensAlignTab(Tab):
                                      main_data.ccd,
                                      main_data.ccd.data,
                                      main_data.light,
-                                     fixedpos=True)
+                                     position=self._stage_ab.position)
         self._ccd_stream = ccd_stream
         ccd_view = main_frame.vp_align_ccd.microscope_view
         ccd_view.addStream(ccd_stream)

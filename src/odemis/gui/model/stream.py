@@ -559,11 +559,12 @@ class CameraNoLightStream(CameraStream):
 
     It basically knows how to turn off light and remove position information.
     """
-    def __init__(self, name, detector, dataflow, emitter, fixedpos=False):
-        if fixedpos:
-            self._fixedpos = (0, 0)
-        else:
-            self._fixedpos = None
+    def __init__(self, name, detector, dataflow, emitter, position=None):
+        """
+        position (VA of dict str -> float): stage position to use instead of the
+         position contained in the metadata.
+        """
+        self._position = position
         CameraStream.__init__(self, name, detector, dataflow, emitter)
         self._prev_light_power = self._emitter.power.value
 
@@ -579,8 +580,9 @@ class CameraNoLightStream(CameraStream):
         Stream.onActive(self, active)
 
     def _findPos(self, data):
-        if self._fixedpos:
-            return self._fixedpos
+        if self._position:
+            pos = self._position.value # a stage should always have x,y axes
+            return (pos["x"], pos["y"])
         else:
             return super(CameraNoLightStream, self)._findPos(data)
 
