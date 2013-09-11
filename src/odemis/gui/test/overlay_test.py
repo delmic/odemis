@@ -26,6 +26,7 @@
 # Test module for Odemis' gui.comp.overlay module
 #===============================================================================
 
+import logging
 import unittest
 import wx
 import odemis.gui.comp.miccanvas as miccanvas
@@ -33,14 +34,55 @@ import odemis.gui.comp.overlay as overlay
 import odemis.gui.test as test
 import odemis.gui.test.test_gui
 
+from odemis.gui.xmlh import odemis_get_test_resources
+from odemis.gui.test import MANUAL, INSPECT, SLEEP_TIME, gui_loop
+
+MANUAL = True
+logging.getLogger().setLevel(logging.DEBUG)
+
 # test.goto_manual() # Keep the test frame open after the tests are run
-# logging.getLogger().setLevel(logging.DEBUG)
+
+class TestApp(wx.App):
+    def __init__(self):
+        odemis.gui.test.test_gui.get_resources = odemis_get_test_resources
+        self.test_frame = None
+        wx.App.__init__(self, redirect=False)
+
+    def OnInit(self):
+        self.test_frame = odemis.gui.test.test_gui.xrccanvas_frame(None)
+        self.test_frame.SetSize((400, 400))
+        self.test_frame.Center()
+        self.test_frame.Layout()
+        self.test_frame.Show()
+
+        return True
+
+def do_stuff(sequence):
+    print "New sequence", sequence
 
 class PlotCanvasTestCase(test.GuiTestCase):
 
-    frame_class = odemis.gui.test.test_gui.xrccanvas_frame
+    @classmethod
+    def setUpClass(cls):
+        cls.app = TestApp()
+        cls.panel = cls.app.test_frame.canvas_panel
+        cls.sizer = cls.panel.GetSizer()
 
-    def test_view_select_overlay(self):
+        # NOTE!: Call Layout on the panel here, because otherwise the
+        # controls layed out using XRC will not have the right sizes!
+        gui_loop()
+
+    @classmethod
+    def tearDownClass(cls):
+        if not MANUAL:
+            wx.CallAfter(cls.app.Exit)
+        else:
+            if INSPECT:
+                from wx.lib import inspection
+                inspection.InspectionTool().Show()
+            cls.app.MainLoop()
+
+    def xtest_view_select_overlay(self):
         # Create and add a test plot canvas
         # cnvs = canvas.PlotCanvas(self.panel)
         cnvs = miccanvas.SecomCanvas(self.panel)
@@ -53,6 +95,14 @@ class PlotCanvasTestCase(test.GuiTestCase):
         cnvs.toggle_update_mode(True)
         cnvs.current_mode = 1
 
+    def test_dichotomy_overlay(self):
+        cnvs = miccanvas.SecomCanvas(self.panel)
+        self.add_control(cnvs, wx.EXPAND)
+
+        dol = overlay.DichotomyOverlay(cnvs)
+        cnvs.add_view_overlay(dol)
+
+        dol.sequence.subscribe(do_stuff, init=True)
 
 if __name__ == "__main__":
     unittest.main()
