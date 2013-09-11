@@ -422,9 +422,14 @@ class ActuatorGUIData(MicroscopyGUIData):
 
         self.axes = frozenset(self._axis_to_act_ss.keys())
 
-        # No tools
+        # Tools are for lens alignment (mirror alignment actually needs none)
         tools = set([TOOL_NONE, TOOL_DICHO, TOOL_SPOT])
-        self.tool = IntEnumerated(TOOL_NONE, choices=tools, readonly=True)
+        self.tool = IntEnumerated(TOOL_NONE, choices=tools)
+
+        # For dichotomic mode
+        self.dicho_seq = model.ListVA() # list of 4 enumerated for each corner
+        # TODO: a method somewhere to convert from sequence to rectangle values
+        # cf DichotomyOverlay
 
     def step(self, axis, factor, sync=False):
         """

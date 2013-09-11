@@ -35,11 +35,13 @@ import wx
 
 # List of tools available
 TOOL_RO_ZOOM = 1 # Select the region to zoom in
-TOOL_RO_UPDATE = 2 # Select the region of interest (sub-area to be updated)
-TOOL_RO_ACQ = 3 # Select the region of acquisition (area to be acquired, SPARC-only)
+TOOL_ROI = 2 # Select the region of interest (sub-area to be updated)
+TOOL_ROA = 3 # Select the region of acquisition (area to be acquired, SPARC-only)
 TOOL_ZOOM_FIT = 4 # Select a zoom to fit the current image content
 TOOL_POINT = 5 # Select a point
 TOOL_LINE = 6 # Select a line
+TOOL_DICHO = 7 # Dichotomy mode to select a sub-quadrant
+TOOL_SPOT = 8 # Select spot mode on the SEM
 
 # Two types of tools:
 # * mode: they are toggle buttons, changing the tool mode of the GUIModel
@@ -71,10 +73,10 @@ class ActionTool(Tool):
 TOOLS = {TOOL_RO_ZOOM: ModeTool("btn_view_zoom",
                                 model.TOOL_ZOOM, model.TOOL_NONE,
                                 "Select region of zoom"),
-         TOOL_RO_UPDATE: ModeTool("btn_view_update",
+         TOOL_ROI: ModeTool("btn_view_update",
                                   model.TOOL_ROI, model.TOOL_NONE,
                                   "Select region of interest"),
-         TOOL_RO_ACQ: ModeTool("btn_view_sel",
+         TOOL_ROA: ModeTool("btn_view_sel",
                                model.TOOL_ROA, model.TOOL_NONE,
                                "Select region of acquisition"),
          TOOL_POINT: ModeTool("btn_view_pick",
@@ -83,6 +85,12 @@ TOOLS = {TOOL_RO_ZOOM: ModeTool("btn_view_zoom",
          TOOL_LINE: ModeTool("btn_view_pick", # TODO icon
                               model.TOOL_LINE, model.TOOL_NONE,
                               "Select line"),
+         TOOL_DICHO: ModeTool("btn_view_sel", # TODO icon _dicho
+                              model.TOOL_DICHO, model.TOOL_NONE,
+                              "Dichotomic search for e-beam centre"),
+         TOOL_SPOT: ModeTool("btn_view_pick", # TODO icon _spot
+                              model.TOOL_SPOT, model.TOOL_NONE,
+                              "E-beam spot mode"),
          TOOL_ZOOM_FIT: ActionTool("btn_view_resize", "Zoom to fit content"),
         }
 

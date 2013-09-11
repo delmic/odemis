@@ -165,7 +165,7 @@ class SecomStreamsTab(Tab):
 
         # Toolbar
         tb = self.main_frame.secom_toolbar
-        tb.AddTool(tools.TOOL_RO_UPDATE, self.tab_data_model.tool)
+        tb.AddTool(tools.TOOL_ROI, self.tab_data_model.tool)
         tb.AddTool(tools.TOOL_RO_ZOOM, self.tab_data_model.tool)
         tb.AddTool(tools.TOOL_ZOOM_FIT, self.onZoomFit)
 
@@ -373,9 +373,8 @@ class SparcAcquisitionTab(Tab):
             self.angu_rep.ctrl.Bind(wx.EVT_LEAVE_WINDOW, self.on_angu_rep_leave)
 
         # Toolbar
-
         tb = self.main_frame.sparc_acq_toolbar
-        tb.AddTool(tools.TOOL_RO_ACQ, self.tab_data_model.tool)
+        tb.AddTool(tools.TOOL_ROA, self.tab_data_model.tool)
         tb.AddTool(tools.TOOL_POINT, self.tab_data_model.tool)
         tb.AddTool(tools.TOOL_RO_ZOOM, self.tab_data_model.tool)
         tb.AddTool(tools.TOOL_ZOOM_FIT, self.onZoomFit)
@@ -773,14 +772,12 @@ class LensAlignTab(Tab):
                                                        "lens_align_")
         self._actuator_controller.bind_keyboard(main_frame.pnl_tab_secom_align)
 
-        # TODO toolbar
+        # Toolbar
+        tb = main_frame.lens_align_tb
+        tb.AddTool(tools.TOOL_DICHO, self.tab_data_model.tool)
+        tb.AddTool(tools.TOOL_SPOT, self.tab_data_model.tool)
 
-        # TODO: support spot mode and automatically update the survey image each
-        # time it's updated.
-        # => in spot-mode, listen to stage position and magnification, if it
-        # changes reactivate the SEM stream and subscribe to an image, when image
-        # is received, stop stream and move back to spot-mode. (need to be careful
-        # to handle when the user disables the spot mode during this moment)
+        self.tab_data_model.tool.subscribe(self._onTool, init=True)
 
     def Show(self, show=True):
         Tab.Show(self, show=show)
@@ -791,6 +788,27 @@ class LensAlignTab(Tab):
         self._sem_stream.is_active.value = show
         self._ccd_stream.should_update.value = show
         self._ccd_stream.is_active.value = show
+
+    def _onTool(self, tool):
+        """
+        Called when the tool (mode) is changed
+        """
+        if tool == guimodel.TOOL_DICHO:
+            # reset the sequence
+            self.tab_data_model.dicho_seq.value = []
+            # TODO: enable a special "move to SEM center" button?
+            # => better on dicho_seq update to only activate when it contains a
+            # meaningful value
+        elif tool == guimodel.TOOL_SPOT:
+            # TODO: switch to spot mode
+
+            # TODO: support spot mode and automatically update the survey image each
+            # time it's updated.
+            # => in spot-mode, listen to stage position and magnification, if it
+            # changes reactivate the SEM stream and subscribe to an image, when image
+            # is received, stop stream and move back to spot-mode. (need to be careful
+            # to handle when the user disables the spot mode during this moment)
+            pass
         
     def _onSEMpxs(self, pxs):
         """
