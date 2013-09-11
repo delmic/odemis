@@ -514,7 +514,10 @@ def acquire(comp_name, dataflow_names, filename):
             logging.exception("Failed to read image information")
 
     exporter = dataio.find_fittest_exporter(filename)
-    exporter.export(filename, images)
+    try:
+        exporter.export(filename, images)
+    except IOError as exc:
+        logging.error("Failed to save to '%s': %s", filename, exc)
     return 0
 
 def live_display(comp_name, df_name):
