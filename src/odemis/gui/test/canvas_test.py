@@ -22,10 +22,10 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 
+import odemis.gui.model as guimodel
 from odemis import model
 from odemis.gui import test
 from odemis.gui.comp.miccanvas import DblMicroscopeCanvas
-from odemis.gui.model import MicroscopeView
 from odemis.gui.model.img import InstrumentalImage
 from odemis.gui.model.stream import StaticStream
 import logging
@@ -34,20 +34,35 @@ import wx
 
 # logging.getLogger().setLevel(logging.DEBUG)
 
-class FakeMicroscopeGUI(object):
+class Object(object):
+    pass
+
+class FakeMicroscopeModel(object):
     """
     Imitates a MicroscopeModel wrt stream entry: it just needs a focussedView
     """
     def __init__(self):
-        fview = MicroscopeView("fakeview")
+        fview = guimodel.MicroscopeView("fakeview")
         self.focussedView = model.VigilantAttribute(fview)
+
+        self.main = Object()
+        self.main.light = None
+        self.main.ebeam = None
+        self.main.debug = model.VigilantAttribute(fview)
+        self.focussedView = model.VigilantAttribute(fview)
+
+        self.light = None
+        self.light_filter = None
+        self.ccd = None
+        self.sed = None
+        self.ebeam = None
 
 class TestDblMicroscopeCanvas(unittest.TestCase):
 
     def setUp(self):
-        self.app = wx.PySimpleApp()
+        self.app = wx.App(False)
         self.frame = wx.Frame(None)
-        self.mmodel = FakeMicroscopeGUI()
+        self.mmodel = FakeMicroscopeModel()
         self.view = self.mmodel.focussedView.value
         self.canvas = DblMicroscopeCanvas(self.frame)
         self.canvas.backgroundBrush = wx.SOLID # no special background

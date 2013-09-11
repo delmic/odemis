@@ -583,6 +583,9 @@ class SecomCanvas(DblMicroscopeCanvas):
     def add_world_overlay(self, wol):
         self.WorldOverlays.append(wol)
 
+    def add_view_overlay(self, vol):
+        self.ViewOverlays.append(vol)
+
     def _toggle_mode(self, enabled, overlay, mode):
         if self.current_mode == mode and not enabled:
             self.current_mode = None
