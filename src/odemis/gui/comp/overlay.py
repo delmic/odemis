@@ -33,6 +33,8 @@ import odemis.gui as gui
 import odemis.gui.comp.canvas as canvas
 import odemis.gui.img.data as img
 import odemis.gui.util.units as units
+import odemis.model as omodel
+
 from odemis.gui.util.units import readable_str
 from odemis.gui.util.conversion import hex_to_frgba, change_brightness
 
@@ -1026,3 +1028,189 @@ class StreamIconOverlay(ViewOverlay):
 
         ctx.set_source_rgb(0, 0, 0)
         ctx.stroke()
+
+TOP_LEFT = 0
+TOP_RIGHT = 1
+BOTTOM_LEFT = 2
+BOTTOM_RIGHT = 3
+
+class DichotomyOverlay(ViewOverlay):
+
+    def __init__(self, base, color=gui.SELECTION_COLOR):
+        super(DichotomyOverlay, self).__init__(base)
+
+        self.color = hex_to_frgba(color)
+        self.hover_forw = hex_to_frgba(color, 0.5)
+        self.hover_back = change_brightness(self.hover_forw, -0.2)
+
+        self.sequence = omodel.ListVA()
+        self.sequence_rect = []
+
+        self.hover_idx = (None, None) # rectangle index, quadrant
+
+        self.max_len = 5
+
+        self._reset()
+
+        self.base.Bind(wx.EVT_SIZE, self.on_size)
+        self.base.Bind(wx.EVT_MOTION, self.on_mouse_motion)
+        self.base.Bind(wx.EVT_LEFT_UP, self.on_mouse_button)
+        self.base.Bind(wx.EVT_LEAVE_WINDOW, self.on_mouse_leave)
+
+    def _reset(self):
+        logging.debug("Reset")
+        self.sequence.value = []
+        rect = 0, 0, self.base.ClientSize.x, self.base.ClientSize.y
+        self.sequence_rect = [rect]
+        self.hover_idx = (None, None)
+        self.base.Refresh()
+
+    def on_mouse_leave(self, evt):
+        self.hover_idx = (None, None)
+        self.base.Refresh()
+        evt.Skip()
+
+    def on_mouse_motion(self, evt):
+        vpos = evt.GetPosition()
+        idx, quad = self.quad_hover(vpos)
+
+        n = len(self.sequence.value)
+        if n == idx and n >= self.max_len:
+            self.base.SetCursor(wx.STANDARD_CURSOR)
+            idx, quad = (None, None)
+        else:
+            self.base.SetCursor(wx.StockCursor(wx.CURSOR_HAND))
+
+        if self.hover_idx != (idx, quad):
+            self.hover_idx = (idx, quad)
+            self.base.Refresh()
+
+        evt.Skip()
+
+    def on_mouse_button(self, evt):
+        if None not in self.hover_idx:
+            idx, quad = self.hover_idx
+
+            if len(self.sequence.value) == idx:
+                # logging.debug("Add")
+                self.sequence.value = list(self.sequence.value + [quad])
+                rect = self.index_to_rect(idx, quad)
+                self.sequence_rect.append(rect)
+
+            else:
+                # logging.debug("Trim")
+                seq = self.sequence.value[:idx]
+                self.sequence_rect = self.sequence_rect[:idx + 1]
+                self.sequence.value = list(seq + [quad])
+                rect = self.index_to_rect(idx, quad)
+                self.sequence_rect.append(rect)
+
+            vpos = evt.GetPosition()
+            self.hover_idx = self.quad_hover(vpos)
+
+            # Check if we have exceeded the length
+            if len(self.sequence.value) >= self.max_len:
+                self.base.SetCursor(wx.STANDARD_CURSOR)
+                self.hover_idx = (None, None)
+            else:
+                self.base.SetCursor(wx.StockCursor(wx.CURSOR_HAND))
+
+            self.base.Refresh()
+
+        evt.Skip()
+
+    def on_size(self, evt):
+        """ Reset everything
+        """
+        self._reset()
+
+    def quad_hover(self, vpos):
+        """ Return the quandrant number if the mouse is hovering over the
+        current selection or None otherwise.
+        """
+
+        # Loop over the rectangles, smallest one first
+        for i, (x, y, w, h) in reversed(list(enumerate(self.sequence_rect))):
+            if  x <= vpos.x <= x + w:
+                if  y <= vpos.y <= y + h:
+                    # If vpos is within the rectangle, we can determine the
+                    # quadrant
+                    quad = 0
+
+                    midx = x + w // 2
+                    midy = y + h // 2
+
+                    if vpos.x > midx:
+                        quad += 1
+                    if vpos.y > midy:
+                        quad += 2
+
+                    # logging.debug(
+                    #     "Hovering over quad %s in %s",
+                    #     quad,
+                    #     self.sequence_rect[i])
+
+                    return i, quad
+
+        return None
+
+    def index_to_rect(self, idx, quad):
+        x, y, w, h = self.sequence_rect[idx]
+        if quad in (1, 3):
+            x = x + w // 2
+
+        if quad in (2, 3):
+            y = y + h // 2
+
+        rect = x, y, w // 2, h // 2
+        # logging.debug("Index %s, %s to rectangle %s", idx, quad, rect)
+        return rect
+
+
+    def Draw(self, dc, shift=(0, 0), scale=1.0):
+
+        ctx = wx.lib.wxcairo.ContextFromDC(dc)
+
+        ctx.set_source_rgba(*self.color)
+        ctx.set_line_width(1.5)
+        ctx.set_dash([2,])
+        ctx.set_line_join(cairo.LINE_JOIN_MITER)
+
+        # Draw previous selections
+        for rect in self.sequence_rect:
+            # logging.debug("Drawing ", *args, **kwargs)
+            ctx.rectangle(*rect)
+
+        ctx.stroke()
+
+        # If the mouse is over the canvas
+        if None not in self.hover_idx:
+            idx, quad = self.hover_idx
+
+            # If the mouse is over the smallest selected quadrant
+            if idx == len(self.sequence.value):
+                # Mark quadrant to be added
+                ctx.set_source_rgba(*self.hover_forw)
+                rect = self.index_to_rect(idx, quad)
+                ctx.rectangle(*rect)
+                ctx.fill()
+            else:
+                # Mark higher quadrant to 'jump' to
+                ctx.set_source_rgba(*self.hover_back)
+                rect = self.index_to_rect(idx, quad)
+                ctx.rectangle(*rect)
+                ctx.fill()
+
+                # Mark current quadrant
+                ctx.set_source_rgba(*self.hover_forw)
+                ctx.rectangle(*self.sequence_rect[-1])
+                ctx.fill()
+
+        # If the mouse is not over the canvas
+        elif self.sequence.value:
+            # Mark the currently selected quadrant
+            ctx.set_source_rgba(*self.hover_forw)
+            ctx.rectangle(*self.sequence_rect[-1])
+            ctx.fill()
+
+

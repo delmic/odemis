@@ -26,20 +26,21 @@
 # Test module for Odemis' gui.comp.overlay module
 #===============================================================================
 
+import logging
 import unittest
 import wx
 import odemis.gui.comp.miccanvas as miccanvas
 import odemis.gui.comp.overlay as overlay
 import odemis.gui.test as test
 import odemis.gui.test.test_gui
+
 from odemis.gui.xmlh import odemis_get_test_resources
 from odemis.gui.test import MANUAL, INSPECT, SLEEP_TIME, gui_loop
 
-
-MANUAL = False
+MANUAL = True
+logging.getLogger().setLevel(logging.DEBUG)
 
 # test.goto_manual() # Keep the test frame open after the tests are run
-# logging.getLogger().setLevel(logging.DEBUG)
 
 class TestApp(wx.App):
     def __init__(self):
@@ -55,6 +56,9 @@ class TestApp(wx.App):
         self.test_frame.Show()
 
         return True
+
+def do_stuff(sequence):
+    print "New sequence", sequence
 
 class PlotCanvasTestCase(test.GuiTestCase):
 
@@ -78,7 +82,7 @@ class PlotCanvasTestCase(test.GuiTestCase):
                 inspection.InspectionTool().Show()
             cls.app.MainLoop()
 
-    def test_view_select_overlay(self):
+    def xtest_view_select_overlay(self):
         # Create and add a test plot canvas
         # cnvs = canvas.PlotCanvas(self.panel)
         cnvs = miccanvas.SecomCanvas(self.panel)
@@ -91,7 +95,14 @@ class PlotCanvasTestCase(test.GuiTestCase):
         cnvs.toggle_update_mode(True)
         cnvs.current_mode = 1
 
-    # def test_dichotomy_overlay(self):
+    def test_dichotomy_overlay(self):
+        cnvs = miccanvas.SecomCanvas(self.panel)
+        self.add_control(cnvs, wx.EXPAND)
+
+        dol = overlay.DichotomyOverlay(cnvs)
+        cnvs.add_view_overlay(dol)
+
+        dol.sequence.subscribe(do_stuff, init=True)
 
 if __name__ == "__main__":
     unittest.main()
