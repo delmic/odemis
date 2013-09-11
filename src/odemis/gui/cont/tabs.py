@@ -23,6 +23,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
 from __future__ import division
+from Pyro4.core import isasync
 from collections import OrderedDict
 from odemis import dataio, model
 from odemis.gui.cont import settings, tools
@@ -34,6 +35,7 @@ from odemis.gui.model.img import InstrumentalImage
 from odemis.gui.util import get_picture_folder, formats_to_wildcards
 import collections
 import logging
+import math
 import odemis.gui.cont.streams as streamcont
 import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimodel
@@ -700,13 +702,16 @@ class LensAlignTab(Tab):
 
         main_frame.vp_align_sem.ShowLegend(False)
 
-        # TODO: vp_align_ccd must be connected to the aligner, with axes
-        # conversion.
+        # See axes convention: A/B are 135° from Y/X
+        self._stage_ab = InclinedStage("converter-ab", "stage",
+                                       children={"aligner": main_data.aligner},
+                                       axes=["b", "a"],
+                                       angle=135)
         # vp_align_sem is connected to the stage
         vpv = collections.OrderedDict([
                 (self.main_frame.vp_align_ccd,  # focused view
                  {"name": "Optical",
-                  "stage": None, # TODO: a fake stage connected to AB?
+                  "stage": self._stage_ab,
                   "focus1": main_data.focus,
                   "stream_classes": (streammod.CameraNoLightStream,),
                   }),
@@ -744,9 +749,10 @@ class LensAlignTab(Tab):
                                      main_data.light,
                                      fixedpos=True)
         self._ccd_stream = ccd_stream
-        self._stream_controller.addStream(ccd_stream, add_to_all_views=True)
+        ccd_spe = self._stream_controller.addStream(ccd_stream, add_to_all_views=True)
+        ccd_spe.flatten() # removes the expander header
 
-        # They take care of immediately stopping the stream for now
+        # They take care of immediately stopping the streams for now
         main_data.opticalState.subscribe(self.onOpticalState, init=True)
         main_data.emState.subscribe(self.onEMState, init=True)
 
@@ -794,6 +800,84 @@ class LensAlignTab(Tab):
         main_data = self.tab_data_model.main
         self.onOpticalState(main_data.opticalState.value)
         self.onEMState(main_data.emState.value)
+
+
+class InclinedStage(model.Actuator):
+    """
+    Fake stage component (with X/Y axis) that converts two axes and shift them
+     by a given angle.
+    """
+    def __init__(self, name, role, children, axes, angle=0):
+        """
+        children (dict str -> actuator): name to actuator with 2+ axes
+        axes (list of string): names of the axes for x and y
+        angle (float in degrees): angle of inclination (counter-clockwise) from 
+          virtual to physical
+        """
+        assert len(axes) == 2
+        if len(children) != 1:
+            raise ValueError("StageIncliner needs 1 child")
+
+        model.Actuator.__init__(self, name, role, axes={"x", "y"})
+
+        self._child = children.values()[0]
+        self._axes_child = {"x": axes[0], "y": axes[1]}
+        self._angle = angle # 135°
+
+        # RO, as to modify it the client must use .moveRel() or .moveAbs()
+        self.position = model.VigilantAttribute(
+                                    {"x": 0, "y": 0},
+                                    unit="m", readonly=True)
+        # it's just a conversion from the child's position
+        self._child.position.subscribe(self._updatePosition, init=True)
+
+        # No speed, not needed
+        #self.speed = model.MultiSpeedVA(init_speed, [0., 10.], "m/s")
+
+    def _convertPosFromChild(self, pos_child):
+        a = math.radians(self._angle)
+        xc, yc = pos_child
+        pos = [xc * math.cos(a) - yc * math.sin(a),
+               xc * math.sin(a) + yc * math.cos(a)]
+        return pos
+    
+    def _convertPosToChild(self, pos):
+        a = math.radians(-self._angle)
+        x, y = pos
+        posc = [x * math.cos(a) - y * math.sin(a),
+                x * math.sin(a) + y * math.cos(a)]
+        return posc
+    
+    def _updatePosition(self, pos_child):
+        """
+        update the position VA when the child's position is updated
+        """
+        # it's read-only, so we change it via _value
+        vpos_child = [pos_child[self._axes_child["x"]],
+                      pos_child[self._axes_child["y"]]]
+        vpos = self._convertPosFromChild(vpos_child)
+        self.position._value = {"x": vpos[0],
+                                "y": vpos[1]}
+        self.position.notify(self.position.value)
+
+    @isasync
+    def moveRel(self, shift):
+        
+        # shift is a vector, conversion is identical to a point
+        vshift = [shift.get("x", 0), shift.get("y", 0)]
+        vshift_child = self._convertPosToChild(vshift)
+
+        shift_child = {self._axes_child["x"]: vshift_child[0],
+                       self._axes_child["y"]: vshift_child[1]}
+        f = self._child.moveRel(shift_child)
+        return f
+
+    # For now we don't support moveAbs(), not needed
+    
+    def stop(self, axes=None):
+        # This is normally never used (child is directly stopped)
+        self._child.stop()
+        
 
 class MirrorAlignTab(Tab):
     """
