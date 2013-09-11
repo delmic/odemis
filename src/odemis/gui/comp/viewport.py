@@ -261,36 +261,6 @@ class MicroscopeViewport(wx.Panel):
         # magnification might have changed (eg, image with different binning)
         self.UpdateMagnification()
 
-    # @call_after
-    # def avWavelength(self, value):
-    #     # need to know both wavelengths, so just look into the values
-    #     win = self.datamodel.optical_emt_wavelength.value
-    #     wout = self.datamodel.optical_det_wavelength.value
-
-    #     label = unicode(win) + " nm/" + unicode(wout) + " nm"
-    #     self.LegendWl.SetLabel(label)
-
-    # @call_after
-    # def avExposureTime(self, value):
-    #     label = unicode("%0.2f s" % (value))
-    #     self.LegendET.SetLabel(label)
-    #     self.Parent.Layout()
-
-    # @call_after
-    # def avDwellTime(self, value):
-    #     label = "Dwell: %ss" % units.to_string_si_prefix(value)
-    #     self.LegendDwell.SetLabel(label)
-
-    # @call_after
-    # def avSpot(self, value):
-    #     label = "Spot: %g" % value
-    #     self.LegendSpot.SetLabel(label)
-
-    # @call_after
-    # def avHV(self, value):
-    #     label = "HV: %sV" % units.to_string_si_prefix(value)
-    #     self.LegendHV.SetLabel(label)
-
     ################################################
     ## GUI Event handling
     ################################################
@@ -353,10 +323,11 @@ class SecomViewport(MicroscopeViewport):
                                                         init=True
         )
 
-    def hide_pause(self, hide_pause):
+    def hide_pause(self, is_playing):
         #pylint: disable=E1101
-        self.canvas.icon_overlay.hide_pause(hide_pause)
-        self.canvas.lock_stage_drag(not hide_pause)
+        self.canvas.icon_overlay.hide_pause(is_playing)
+        if self._microscope_view.has_stage():
+            self.canvas.noDragNoFocus = not is_playing
         self.canvas.Refresh()
 
     def _checkMergeSliderDisplay(self):
@@ -393,7 +364,6 @@ class SparcAlignViewport(MicroscopeViewport):
         super(SparcAlignViewport, self).__init__(*args, **kwargs)
         # TODO: should be done on the fly by _checkMergeSliderDisplay()
         # change SEM icon to Goal
-        # FIXME: create goal icon
         self.legend_panel.bmpSliderRight.SetBitmap(getico_blending_goalBitmap())
 
 

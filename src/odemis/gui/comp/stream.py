@@ -1343,6 +1343,7 @@ class StreamBar(wx.Panel):
     STREAM_ORDER = [model.stream.SEMStream,
                     model.stream.StaticSEMStream,
                     model.stream.BrightfieldStream,
+                    model.stream.CameraNoLightStream,
                     model.stream.StaticStream,
                     model.stream.FluoStream,
                     model.stream.SpectrumStream,

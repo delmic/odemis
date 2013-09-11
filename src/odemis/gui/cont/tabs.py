@@ -734,9 +734,6 @@ class LensAlignTab(Tab):
                                   )
         # Allow both streams to be active simultaneously (that's the whole point)
         self._stream_controller.setSchedPolicy(streamcont.SCHED_ALL)
-        # TODO: the SEM view should always fit exactly the whole SEM scan area
-        # => listen to magnification and update mpp (or call fit-to-screen)?
-        # => listen to image update
 
         # Both streams always have should_update=True excepted if:
         # * the tab is hidden
@@ -744,6 +741,8 @@ class LensAlignTab(Tab):
         ss = self._stream_controller.addSEMSED(add_to_all_views=True, visible=False)
         self._sem_stream = ss
         # Adapt the zoom level of the SEM to fit exactly the SEM field of view
+        main_frame.vp_align_sem.canZoom = False
+        # FIXME: this is reset by the canvas on the first image.
         self._sem_view = main_frame.vp_align_sem.microscope_view
         main_data.ebeam.pixelSize.subscribe(self._onSEMpxs, init=True)
 
@@ -755,6 +754,8 @@ class LensAlignTab(Tab):
         self._ccd_stream = ccd_stream
         ccd_spe = self._stream_controller.addStream(ccd_stream, add_to_all_views=True)
         ccd_spe.flatten() # removes the expander header
+        # FIXME: the stream entry is only displayed when the focusedView is optical
+        # need to have it always displayed.
 
         # They take care of immediately stopping the streams for now
         main_data.opticalState.subscribe(self.onOpticalState, init=True)
@@ -808,8 +809,7 @@ class LensAlignTab(Tab):
         Called when the SEM pixel size changes, which means the FoV changes
         pxs (tuple of 2 floats): in meter
         """
-        ebeam = self.tab_data_model.main.ebeam
-        eshape = ebeam.shape
+        eshape = self.tab_data_model.main.ebeam.shape
         fov_size = (eshape[0] * pxs[0], eshape[1] * pxs[1]) # m
         semv_size = self.main_frame.vp_align_sem.Size # px
 

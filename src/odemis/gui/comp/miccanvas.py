@@ -66,16 +66,27 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
     the pictures accordingly.
 
     It also provides various typical overlays (ie, drawings) for microscope views.
+    
+    Public attributes:
+    .canZoom (Boolean): If True (default), allows the user to zoom. When False,
+      the zoom can still be changed programatically with view.mpp.
+    .canDrag (Boolean): If True (default), allows the user to drag
+    .noDragNoFocus (Boolean): False by default. If True, prevent Drag and Focus
+      change to happen. Useful to avoid the user to move a paused view. 
     """
     def __init__(self, *args, **kwargs):
         canvas.DraggableCanvas.__init__(self, *args, **kwargs)
         self.microscope_view = None
         self._tab_data_model = None
 
+        self.canZoom = True
+        self.canDrag = True
+        self.noDragNoFocus = False
+
         self.Bind(wx.EVT_MOUSEWHEEL, self.OnWheel)
 
         # TODO: If it's too resource consuming, which might want to create just
-        # our own thread
+        # our own thread. cf model.stream.histogram
         # FIXME: "stop all axes" should also cancel the next timer
         self._moveFocusLock = threading.Lock()
         self._moveFocusDistance = [0, 0]
@@ -84,11 +95,12 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         self._moveFocus1Timer = wx.PyTimer(self._moveFocus1)
 
         # Current (tool) mode. TODO: Make platform (secom/sparc) independent
+        # and use listen to .tool (cf SparcCanvas)
         self.current_mode = None
         # meter per "world unit"
         self.mpwu = None
 
-        self.previous_size = None
+        self._previous_size = None
 
         # for the FPS
         self.fps_overlay = overlay.TextViewOverlay(self)
@@ -311,6 +323,16 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         self.scale = self.mpwu / mpp
         wx.CallAfter(self.ShouldUpdateDrawing)
 
+    def OnSize(self, event):
+        # TODO: update the mpp, so that the same width is displayed
+
+        # if self._previous_size:
+        # print "from %s to %s" % (self._previous_size, self.ClientSize)
+
+        super(DblMicroscopeCanvas, self).OnSize(event)
+
+        self._previous_size = self.ClientSize
+
     @microscope_view_check
     def Zoom(self, inc):
         """
@@ -318,6 +340,8 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         inc (float): scale the current view by 2^inc
         ex:  # 1 => *2 ; -1 => /2; 2 => *4...
         """
+        if not self.canZoom:
+            return
         scale = 2.0 ** inc
         # Clip within the range
         mpp = self.microscope_view.mpp.value / scale
@@ -407,6 +431,23 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         logging.debug("Moving focus1 by %f μm", shift * 1e6)
         self.microscope_view.get_focus(1).moveRel({"z": shift})
 
+    def OnRightDown(self, event):
+        if not self.noDragNoFocus:
+            # Note: Set the cursor before the super method is called.
+            # There probably is a Ubuntu/wxPython related bug that
+            # SetCursor does not work one CaptureMouse is called (which)
+            # happens in the super method.
+            num_focus = self.microscope_view.get_focus_count()
+            if num_focus == 1:
+                logging.debug("One focus actuator found")
+                self.SetCursor(wx.StockCursor(wx.CURSOR_SIZENS))
+            elif num_focus == 2:
+                logging.debug("Two focus actuators found")
+                self.SetCursor(wx.StockCursor(wx.CURSOR_CROSS))
+            self.focus_overlay.clear_shift()
+
+            super(DblMicroscopeCanvas, self).OnRightDown(event)
+
     def OnRightUp(self, event):
         if self._rdragging:
             # Stop the timers, so there won't be any more focussing once the
@@ -417,6 +458,23 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             if self.focus_overlay:
                 self.focus_overlay.clear_shift()
         canvas.DraggableCanvas.OnRightUp(self, event)
+
+    def OnLeftDown(self, event):
+        if self.canDrag:
+            if not self.noDragNoFocus:
+                super(DblMicroscopeCanvas, self).OnLeftDown(event)
+        else:
+            event.Skip()
+
+    def ShiftView(self, shift):
+        if self.canDrag:
+            canvas.DraggableCanvas.ShiftView(self, shift)
+
+    def OnDblClick(self, event):
+        if self.canDrag:
+            super(DblMicroscopeCanvas, self).OnDblClick(event)
+        else:
+            event.Skip()
 
     def world_to_real_pos(self, pos):
         phy_pos = tuple([v * self.mpwu for v in pos])
@@ -460,6 +518,7 @@ class SecomCanvas(DblMicroscopeCanvas):
         super(SecomCanvas, self).__init__(*args, **kwargs)
 
         self.zoom_overlay = overlay.ViewSelectOverlay(self, "Zoom")
+        # play/pause icon
         self.icon_overlay = overlay.StreamIconOverlay(self)
         self.ViewOverlays.extend([self.zoom_overlay,
                                   self.icon_overlay])
@@ -480,11 +539,6 @@ class SecomCanvas(DblMicroscopeCanvas):
         # pattern
         self.backgroundBrush = wx.SOLID
 
-        # The method can be used to make sure the stage won't be moved
-        # This attribute should nog have any effect when no stage is present
-        # so that the user can still drag the acquisition view and saved images
-        # for example.
-        self.stage_drag_lock = False
 
     # Special version which put the SEM images first, as with the current
     # display mechanism in the canvas, the fluorescent images must be displayed
@@ -587,7 +641,7 @@ class SecomCanvas(DblMicroscopeCanvas):
 
             self.ShouldUpdateDrawing()
 
-        elif not self.stage_drag_lock or not self.microscope_view.has_stage():
+        elif not self.noDragNoFocus or not self.microscope_view.has_stage():
             canvas.DraggableCanvas.OnLeftDown(self, event)
         else:
             event.Skip()
@@ -636,11 +690,8 @@ class SecomCanvas(DblMicroscopeCanvas):
                     self.SetCursor(wx.StockCursor(wx.CURSOR_SIZENS))
                 else:
                     self.SetCursor(self.cursor)
-
-        elif not self.stage_drag_lock or not self.microscope_view.has_stage():
-            canvas.DraggableCanvas.OnMouseMotion(self, event)
         else:
-            event.Skip()
+            canvas.DraggableCanvas.OnMouseMotion(self, event)
 
     # Capture unwanted events when a tool is active.
 
@@ -650,37 +701,12 @@ class SecomCanvas(DblMicroscopeCanvas):
 
     def OnRightDown(self, event):
         # If we're currently not performing an action...
-        if self.current_mode not in SECOM_MODES and not self.stage_drag_lock:
-            # Note: Set the cursor before the super method is called.
-            # There probably is a Ubuntu/wxPython related bug that
-            # SetCursor does not work one CaptureMouse is called (which)
-            # happens in the super method.
-            num_focus = self.microscope_view.get_focus_count()
-            if num_focus == 1:
-                logging.debug("One focus actuator found")
-                self.SetCursor(wx.StockCursor(wx.CURSOR_SIZENS))
-            elif num_focus == 2:
-                logging.debug("Two focus actuators found")
-                self.SetCursor(wx.StockCursor(wx.CURSOR_CROSS))
-            self.focus_overlay.clear_shift()
-
+        if self.current_mode not in SECOM_MODES:
             super(SecomCanvas, self).OnRightDown(event)
-
 
     def OnRightUp(self, event):
         if self.current_mode not in SECOM_MODES:
             super(SecomCanvas, self).OnRightUp(event)
-
-    def OnSize(self, event):
-        # if self.previous_size:
-        # print "from %s to %s" % (self.previous_size, self.ClientSize)
-
-        DblMicroscopeCanvas.OnSize(self, event)
-
-        self.previous_size = self.ClientSize
-
-    def lock_stage_drag(self, lock):
-        self.stage_drag_lock = lock
 
 class SparcAcquiCanvas(DblMicroscopeCanvas):
     def __init__(self, *args, **kwargs):
@@ -955,13 +981,15 @@ class SparcAlignCanvas(DblMicroscopeCanvas):
 
     def __init__(self, *args, **kwargs):
         super(SparcAlignCanvas, self).__init__(*args, **kwargs)
+        self.canZoom = False # TODO: just let the creator do that
+        self.canDrag = False
         self._ccd_mpp = None # tuple of 2 floats of m/px
 
     def setView(self, microscope_view, tab_data):
         DblMicroscopeCanvas.setView(self, microscope_view, tab_data)
         # find the MPP of the sensor and use it on all images
         try:
-            self._ccd_mpp = self.microscope_view.ccd.pixelSize.value
+            self._ccd_mpp = self.tab_data.main.ccd.pixelSize.value
         except AttributeError:
             logging.info("Failed to find CCD for Sparc mirror alignment")
 
@@ -1023,41 +1051,18 @@ class SparcAlignCanvas(DblMicroscopeCanvas):
         # set merge_ratio
         self.merge_ratio = self.microscope_view.stream_tree.kwargs.get("merge", 1)
 
-        # TODO: check if image size has changed and if yes, refit to AR image (first)
+        # always refit to image (for the rare case it has changed size)
         self.fitViewToContent(recenter=True)
 
 
     def OnSize(self, event):
         DblMicroscopeCanvas.OnSize(self, event)
 
-        # TODO: refit image
+        # refit image
         self.fitViewToContent(recenter=True)
 
-    # Disable zoom/move by doing nothing for mouse/keys
-    # Don't directly override OnWheel to still allow merge ratio change
-    def Zoom(self, inc):
-        pass
-
-    def OnLeftDown(self, event):
-        event.Skip()
-
-    def OnLeftUp(self, event):
-        event.Skip()
-
-    def OnRightDown(self, event):
-        event.Skip()
-
-    def OnRightUp(self, event):
-        event.Skip()
-
-    def OnDblClick(self, event):
-        event.Skip()
-
-    def OnChar(self, event):
-        event.Skip()
 
 # TODO: change name?
-
 class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
     """ A plotable canvas with a vertical 'focus line', that shows the x and y
     values of the selected position.
