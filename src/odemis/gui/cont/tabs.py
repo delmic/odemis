@@ -26,6 +26,7 @@ from __future__ import division
 from Pyro4.core import isasync
 from collections import OrderedDict
 from odemis import dataio, model
+from odemis.gui.comp.stream import StreamPanel
 from odemis.gui.cont import settings, tools
 from odemis.gui.cont.acquisition import SecomAcquiController, \
     SparcAcquiController
@@ -687,6 +688,7 @@ class AnalysisTab(Tab):
 
 class LensAlignTab(Tab):
     """ Tab for the lens alignment on the Secom platform
+    The streams are automatically active when the tab is shown
     """
 
     def __init__(self, name, button, panel, main_frame, main_data):
@@ -727,52 +729,48 @@ class LensAlignTab(Tab):
                                     self.main_frame,
                                     vpv)
 
-        self._stream_controller = streamcont.StreamController(
-                                        self.tab_data_model,
-                                        self.main_frame.pnl_secom_align_streams,
-                                        locked=True
-                                  )
-        # Allow both streams to be active simultaneously (that's the whole point)
-        self._stream_controller.setSchedPolicy(streamcont.SCHED_ALL)
-
-        # Both streams always have should_update=True excepted if:
-        # * the tab is hidden
-        # * the corresponding microscope is off
-        ss = self._stream_controller.addSEMSED(add_to_all_views=True, visible=False)
-        self._sem_stream = ss
-        # Adapt the zoom level of the SEM to fit exactly the SEM field of view
+        # No stream controller, because it does far too much (including hiding
+        # the only stream entry when SEM view is focused)
+        sem_stream = streammod.SEMStream("SEM", main_data.sed,
+                                         main_data.sed.data, main_data.ebeam)
+        self._sem_stream = sem_stream
+        self._sem_view = main_frame.vp_align_sem.microscope_view
+        self._sem_view.addStream(sem_stream)
+        # Adapt the zoom level of the SEM to fit exactly the SEM field of view.
+        # No need to check for resize events, because the view has a fixed size.
         main_frame.vp_align_sem.canZoom = False
         # FIXME: this is reset by the canvas on the first image.
-        self._sem_view = main_frame.vp_align_sem.microscope_view
         main_data.ebeam.pixelSize.subscribe(self._onSEMpxs, init=True)
 
+        # create CCD stream
         ccd_stream = streammod.CameraNoLightStream("Optical",
                                      main_data.ccd,
                                      main_data.ccd.data,
                                      main_data.light,
                                      fixedpos=True)
         self._ccd_stream = ccd_stream
-        ccd_spe = self._stream_controller.addStream(ccd_stream, add_to_all_views=True)
+        ccd_view = main_frame.vp_align_ccd.microscope_view
+        ccd_view.addStream(ccd_stream)
+        # create CCD stream panel entry
+        stream_bar = self.main_frame.pnl_secom_align_streams
+        ccd_spe = StreamPanel(stream_bar, ccd_stream, self.tab_data_model)
+        stream_bar.add_stream(ccd_spe, True)
         ccd_spe.flatten() # removes the expander header
-        # FIXME: the stream entry is only displayed when the focusedView is optical
-        # need to have it always displayed.
 
-        # They take care of immediately stopping the streams for now
-        main_data.opticalState.subscribe(self.onOpticalState, init=True)
-        main_data.emState.subscribe(self.onEMState, init=True)
+        # TODO: remove ON/OFF buttons
+        # Streams are always on when the tab is shown. In the future, if it's
+        # possible to really control the SEM, we might revise this. For optical
+        # it shouldn't be a problem as the light is turned off anyway.
+#        self._state_controller = MicroscopeStateController(
+#                                            self.tab_data_model,
+#                                            self.main_frame,
+#                                            "lens_align_btn_"
+#                                      )
 
-        # TODO: remove ON/OFF buttons, and always have the two streams on when tab is used
-        self._state_controller = MicroscopeStateController(
-                                            self.tab_data_model,
-                                            self.main_frame,
-                                            "lens_align_btn_"
-                                      )
-
+        # Bind actuator buttons and keys
         self._actuator_controller = ActuatorController(self.tab_data_model,
                                                        main_frame,
                                                        "lens_align_")
-
-        # Bind keys
         self._actuator_controller.bind_keyboard(main_frame.pnl_tab_secom_align)
 
         # TODO toolbar
@@ -784,25 +782,15 @@ class LensAlignTab(Tab):
         # is received, stop stream and move back to spot-mode. (need to be careful
         # to handle when the user disables the spot mode during this moment)
 
-
-
-    def onOpticalState(self, state):
-        """ Event handler for when the state of the optical microscope changes
-        """
-        su = (state == guimodel.STATE_ON) and self.IsShown()
-        self._ccd_stream.should_update.value = su
-
-    def onEMState(self, state):
-        su = (state == guimodel.STATE_ON) and self.IsShown()
-        self._sem_stream.should_update.value = su
-
     def Show(self, show=True):
         Tab.Show(self, show=show)
 
-        # Force the check for the stream update
-        main_data = self.tab_data_model.main
-        self.onOpticalState(main_data.opticalState.value)
-        self.onEMState(main_data.emState.value)
+        # Turn on/off the streams as the tab is displayed.
+        # Also directly modify is_active, as there is no stream scheduler
+        self._sem_stream.should_update.value = show
+        self._sem_stream.is_active.value = show
+        self._ccd_stream.should_update.value = show
+        self._ccd_stream.is_active.value = show
         
     def _onSEMpxs(self, pxs):
         """
