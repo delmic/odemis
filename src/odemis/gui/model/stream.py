@@ -455,8 +455,8 @@ class SEMStream(Stream):
         trans = (shape[0] * (center[0] - 0.5), shape[1] * (center[1] - 0.5))
         # resolution is the maximum resolution at the scale in proportion of the width
         scale = self._emitter.scale.value
-        res = (max(1, shape[0] * width[0] * scale[0]),
-               max(1, shape[1] * width[1] * scale[1]))
+        res = (max(1, int(round(shape[0] * width[0] / scale[0]))),
+               max(1, int(round(shape[1] * width[1] / scale[1]))))
 
         # always in this order
         self._emitter.resolution.value = res

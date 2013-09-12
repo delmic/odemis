@@ -704,9 +704,6 @@ class LensAlignTab(Tab):
 
         main_frame.vp_align_sem.ShowLegend(False)
 
-        dicho_overlay = overlay.DichotomyOverlay(main_frame.vp_align_sem.canvas)
-        main_frame.vp_align_sem.canvas.add_view_overlay(dicho_overlay)
-
         # See axes convention: A/B are 135° from Y/X
         self._stage_ab = InclinedStage("converter-ab", "stage",
                                        children={"aligner": main_data.aligner},
@@ -747,6 +744,11 @@ class LensAlignTab(Tab):
 
         # Update the SEM area in dichotomic mode
         self.tab_data_model.dicho_seq.subscribe(self._onDichoSeq, init=True)
+        dicho_overlay = overlay.DichotomyOverlay(main_frame.vp_align_sem.canvas,
+                                                 self.tab_data_model.dicho_seq)
+        self._dicho_overlay = dicho_overlay
+        # TODO: only enable it in dichotomic mode (and remove when leaving it)
+        main_frame.vp_align_sem.canvas.add_view_overlay(dicho_overlay)
 
         # create CCD stream
         ccd_stream = streammod.CameraNoLightStream("Optical",
@@ -803,12 +805,13 @@ class LensAlignTab(Tab):
         if tool != guimodel.TOOL_DICHO:
             # reset the sequence
             self.tab_data_model.dicho_seq.value = []
+            self._dicho_overlay.enable(False)
         
         if tool == guimodel.TOOL_DICHO:
             # TODO: enable a special "move to SEM center" button?
             # => better on dicho_seq update to only activate when it contains a
             # meaningful value
-            pass
+            self._dicho_overlay.enable(True)
         elif tool == guimodel.TOOL_SPOT:
             # TODO: switch to spot mode
 
