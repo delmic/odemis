@@ -583,7 +583,7 @@ class MicroscopeView(object):
         # composited image has changed.
         self.lastUpdate = model.FloatVA(time.time(), unit="s")
         # Last initialisation is done on the first image received
-        self._has_received_image = False
+        self.getMPPFromNextImage = True
 
         # a thumbnail version of what is displayed
         self.thumbnail = VigilantAttribute(None) # contains a wx.Image
@@ -718,9 +718,9 @@ class MicroscopeView(object):
         im (InstrumentalImage)
         """
         # if it's the first image ever, set mpp to the mpp of the image
-        if not self._has_received_image and im.mpp:
+        if self.getMPPFromNextImage and im.mpp:
             self.mpp.value = im.mpp
-            self._has_received_image = True
+            self.getMPPFromNextImage = False
 
         # just let everyone that the composited image has changed
         self.lastUpdate.value = time.time()
