@@ -33,6 +33,7 @@ import odemis.gui.comp.miccanvas as miccanvas
 import odemis.gui.comp.overlay as overlay
 import odemis.gui.test as test
 import odemis.gui.test.test_gui
+import odemis.model as omodel
 
 from odemis.gui.xmlh import odemis_get_test_resources
 from odemis.gui.test import MANUAL, INSPECT, SLEEP_TIME, gui_loop
@@ -99,10 +100,13 @@ class PlotCanvasTestCase(test.GuiTestCase):
         cnvs = miccanvas.SecomCanvas(self.panel)
         self.add_control(cnvs, wx.EXPAND)
 
-        dol = overlay.DichotomyOverlay(cnvs)
+        lva = omodel.ListVA()
+
+        dol = overlay.DichotomyOverlay(cnvs, lva)
         cnvs.add_view_overlay(dol)
 
-        dol.sequence.subscribe(do_stuff, init=True)
+        dol.sequence_va.subscribe(do_stuff, init=True)
+        dol.enable()
 
 if __name__ == "__main__":
     unittest.main()

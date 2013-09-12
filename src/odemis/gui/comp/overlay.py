@@ -33,7 +33,6 @@ import odemis.gui as gui
 import odemis.gui.comp.canvas as canvas
 import odemis.gui.img.data as img
 import odemis.gui.util.units as units
-import odemis.model as omodel
 
 from odemis.gui.util.units import readable_str
 from odemis.gui.util.conversion import hex_to_frgba, change_brightness
@@ -1035,83 +1034,125 @@ BOTTOM_LEFT = 2
 BOTTOM_RIGHT = 3
 
 class DichotomyOverlay(ViewOverlay):
+    """ This overlay allows the user to select a sequence of nested quadrants
+    within the canvas. The quadrants are numbered 0 to 3, from the top left to
+    the bottom right. The first quadrant is the biggest, with each subsequent
+    quadrant being nested in the one before it.
+    """
 
-    def __init__(self, base, color=gui.SELECTION_COLOR):
+    def __init__(self, base, sequence_va, color=gui.SELECTION_COLOR):
+        """ :param sequence_va: (ListVA) VA to store the sequence in
+        """
         super(DichotomyOverlay, self).__init__(base)
 
         self.color = hex_to_frgba(color)
+        # Color for quadrant that will expand the sequence
         self.hover_forw = hex_to_frgba(color, 0.5)
+        # Color for quadrant that will cut the sequence
         self.hover_back = change_brightness(self.hover_forw, -0.2)
 
-        self.sequence = omodel.ListVA()
+        self.sequence_va = sequence_va
         self.sequence_rect = []
 
-        self.hover_idx = (None, None) # rectangle index, quadrant
+        # This attribute is used to track the position of the mouse cursor.
+        # The first value denotes the smallest quadrant (in size) in the
+        # sequence and the second one the quadrant index number that will
+        # be added if the mouse is clicked.
+        # This value should be set to (None, None) if the mouse is outside the
+        # canvas or when we are not interested in updating the sequence.
+        self.hover_pos = (None, None)
 
+        #
         self.max_len = 5
 
         self._reset()
 
+        # Bind event handlers
         self.base.Bind(wx.EVT_SIZE, self.on_size)
         self.base.Bind(wx.EVT_MOTION, self.on_mouse_motion)
         self.base.Bind(wx.EVT_LEFT_UP, self.on_mouse_button)
         self.base.Bind(wx.EVT_LEAVE_WINDOW, self.on_mouse_leave)
 
+        # Disabling the overlay willl allow the event handlers to ignore events
+        self.enabled = False
+
     def _reset(self):
+        """ Reset all attributes to their default values and get the dimensions
+        from the base canvas.
+        """
         logging.debug("Reset")
-        self.sequence.value = []
+        self.sequence_va.value = []
         rect = 0, 0, self.base.ClientSize.x, self.base.ClientSize.y
         self.sequence_rect = [rect]
-        self.hover_idx = (None, None)
+        self.hover_pos = (None, None)
         self.base.Refresh()
 
     def on_mouse_leave(self, evt):
-        self.hover_idx = (None, None)
-        self.base.Refresh()
-        evt.Skip()
+        """ Event handler called when the mouse cursor leaves the canvas """
 
-    def on_mouse_motion(self, evt):
-        vpos = evt.GetPosition()
-        idx, quad = self.quad_hover(vpos)
-
-        n = len(self.sequence.value)
-        if n == idx and n >= self.max_len:
-            self.base.SetCursor(wx.STANDARD_CURSOR)
-            idx, quad = (None, None)
-        else:
-            self.base.SetCursor(wx.StockCursor(wx.CURSOR_HAND))
-
-        if self.hover_idx != (idx, quad):
-            self.hover_idx = (idx, quad)
+        # When the mouse cursor leaves the overlay, the current top quadrant
+        # should be highlighted, so clear the hover_pos attribute.
+        if self.enabled:
+            self.hover_pos = (None, None)
             self.base.Refresh()
 
         evt.Skip()
 
-    def on_mouse_button(self, evt):
-        if None not in self.hover_idx:
-            idx, quad = self.hover_idx
+    def enable(self, enable=True):
+        """ Enable of disable the overlay """
+        self.enabled = enable
 
-            if len(self.sequence.value) == idx:
-                # logging.debug("Add")
-                self.sequence.value = list(self.sequence.value + [quad])
+    def on_mouse_motion(self, evt):
+        """ Mouse motion event handler """
+
+        if self.enabled:
+            vpos = evt.GetPosition()
+            idx, quad = self.quad_hover(vpos)
+
+            # Change the cursor into a hand if the quadrant being hovered over
+            # can be selected. Use the default cursor otherwise
+            n = len(self.sequence_va.value)
+            if n == idx and n >= self.max_len:
+                self.base.SetCursor(wx.STANDARD_CURSOR)
+                idx, quad = (None, None)
+            else:
+                self.base.SetCursor(wx.StockCursor(wx.CURSOR_HAND))
+
+            # Redraw only if the quadrant changed
+            if self.hover_pos != (idx, quad):
+                self.hover_pos = (idx, quad)
+                self.base.Refresh()
+
+        evt.Skip()
+
+    def on_mouse_button(self, evt):
+        """ Mouse button handler """
+
+        # If the mouse cursor is over a selectable quadrant
+        if None not in self.hover_pos and self.enabled:
+            idx, quad = self.hover_pos
+
+            # If we are hovering over the 'top' quadrant, add it to the sequence
+            if len(self.sequence_va.value) == idx:
+                self.sequence_va.value = list(self.sequence_va.value + [quad])
                 rect = self.index_to_rect(idx, quad)
                 self.sequence_rect.append(rect)
-
+            # Jump to the desired quadrant otherwise, cutting the sequence
             else:
                 # logging.debug("Trim")
-                seq = self.sequence.value[:idx]
+                seq = self.sequence_va.value[:idx]
                 self.sequence_rect = self.sequence_rect[:idx + 1]
-                self.sequence.value = list(seq + [quad])
+                self.sequence_va.value = list(seq + [quad])
                 rect = self.index_to_rect(idx, quad)
                 self.sequence_rect.append(rect)
 
             vpos = evt.GetPosition()
-            self.hover_idx = self.quad_hover(vpos)
+            self.hover_pos = self.quad_hover(vpos)
 
             # Check if we have exceeded the length
-            if len(self.sequence.value) >= self.max_len:
+            if len(self.sequence_va.value) >= self.max_len:
                 self.base.SetCursor(wx.STANDARD_CURSOR)
-                self.hover_idx = (None, None)
+                self.hover_pos = (None, None)
             else:
                 self.base.SetCursor(wx.StockCursor(wx.CURSOR_HAND))
 
@@ -1125,8 +1166,10 @@ class DichotomyOverlay(ViewOverlay):
         self._reset()
 
     def quad_hover(self, vpos):
-        """ Return the quandrant number if the mouse is hovering over the
-        current selection or None otherwise.
+        """ Return the sequence index number of the rectangle at position vpos
+        and the quadrant vpos is over inside that rectangle.
+
+        :param vpos: (int, int) The viewport x,y hover position
         """
 
         # Loop over the rectangles, smallest one first
@@ -1134,83 +1177,95 @@ class DichotomyOverlay(ViewOverlay):
             if  x <= vpos.x <= x + w:
                 if  y <= vpos.y <= y + h:
                     # If vpos is within the rectangle, we can determine the
-                    # quadrant
+                    # quadrant.
+                    # Remember that the quadrants are numbered as follows:
+                    #
+                    # 0 | 1
+                    # --+--
+                    # 2 | 3
+
+                    # Construct the quadrant number by starting with 0
                     quad = 0
 
-                    midx = x + w // 2
-                    midy = y + h // 2
-
-                    if vpos.x > midx:
+                    # If the position is in the left half, add 1 to the quadrant
+                    if vpos.x > x + w // 2:
                         quad += 1
-                    if vpos.y > midy:
+                    # If the position is in the bottom half, add 2
+                    if vpos.y > y + h // 2:
                         quad += 2
-
-                    # logging.debug(
-                    #     "Hovering over quad %s in %s",
-                    #     quad,
-                    #     self.sequence_rect[i])
 
                     return i, quad
 
-        return None
+        return None, None
 
     def index_to_rect(self, idx, quad):
+        """ Translate given rectangle and quadrant into a view rectangle
+            :param idx: (int) The index number of the rectangle in sequence_rect
+                that we are going to use as a base.
+            :param quad: (int) The quadrant number
+            :return: (int, int, int, int) Rectangle tuple of the form x, y, w, h
+        """
         x, y, w, h = self.sequence_rect[idx]
-        if quad in (1, 3):
-            x = x + w // 2
 
-        if quad in (2, 3):
-            y = y + h // 2
+        # The new rectangle will have half the size of the base one
+        w = w // 2
+        h = h // 2
 
-        rect = x, y, w // 2, h // 2
-        # logging.debug("Index %s, %s to rectangle %s", idx, quad, rect)
-        return rect
+        # If the quadrant is in the right half, construct x by adding half the
+        # width to x position of the base rectangle.
+        if quad in (TOP_RIGHT, BOTTOM_RIGHT):
+            x = x + w
+
+        # If the quadrant is in the bottom half, construct y by adding half the
+        # height to the y position of the base rectangle.
+        if quad in (BOTTOM_LEFT, BOTTOM_RIGHT):
+            y = y + h
+
+        return x, y, w, h
 
 
     def Draw(self, dc, shift=(0, 0), scale=1.0):
 
-        ctx = wx.lib.wxcairo.ContextFromDC(dc)
+        if self.enabled:
+            ctx = wx.lib.wxcairo.ContextFromDC(dc)
 
-        ctx.set_source_rgba(*self.color)
-        ctx.set_line_width(1.5)
-        ctx.set_dash([2,])
-        ctx.set_line_join(cairo.LINE_JOIN_MITER)
+            ctx.set_source_rgba(*self.color)
+            ctx.set_line_width(1.5)
+            ctx.set_dash([2,])
+            ctx.set_line_join(cairo.LINE_JOIN_MITER)
 
-        # Draw previous selections
-        for rect in self.sequence_rect:
-            # logging.debug("Drawing ", *args, **kwargs)
-            ctx.rectangle(*rect)
-
-        ctx.stroke()
-
-        # If the mouse is over the canvas
-        if None not in self.hover_idx:
-            idx, quad = self.hover_idx
-
-            # If the mouse is over the smallest selected quadrant
-            if idx == len(self.sequence.value):
-                # Mark quadrant to be added
-                ctx.set_source_rgba(*self.hover_forw)
-                rect = self.index_to_rect(idx, quad)
+            # Draw previous selections as dashed rectangles
+            for rect in self.sequence_rect:
+                # logging.debug("Drawing ", *args, **kwargs)
                 ctx.rectangle(*rect)
-                ctx.fill()
-            else:
-                # Mark higher quadrant to 'jump' to
-                ctx.set_source_rgba(*self.hover_back)
-                rect = self.index_to_rect(idx, quad)
-                ctx.rectangle(*rect)
-                ctx.fill()
+            ctx.stroke()
 
-                # Mark current quadrant
+            # If the mouse is over the canvas
+            if None not in self.hover_pos:
+                idx, quad = self.hover_pos
+
+                # If the mouse is over the smallest selected quadrant
+                if idx == len(self.sequence_va.value):
+                    # Mark quadrant to be added
+                    ctx.set_source_rgba(*self.hover_forw)
+                    rect = self.index_to_rect(idx, quad)
+                    ctx.rectangle(*rect)
+                    ctx.fill()
+                else:
+                    # Mark higher quadrant to 'jump' to
+                    ctx.set_source_rgba(*self.hover_back)
+                    rect = self.index_to_rect(idx, quad)
+                    ctx.rectangle(*rect)
+                    ctx.fill()
+
+                    # Mark current quadrant
+                    ctx.set_source_rgba(*self.hover_forw)
+                    ctx.rectangle(*self.sequence_rect[-1])
+                    ctx.fill()
+
+            # If the mouse is not over the canvas
+            elif self.sequence_va.value:
+                # Mark the currently selected quadrant
                 ctx.set_source_rgba(*self.hover_forw)
                 ctx.rectangle(*self.sequence_rect[-1])
                 ctx.fill()
-
-        # If the mouse is not over the canvas
-        elif self.sequence.value:
-            # Mark the currently selected quadrant
-            ctx.set_source_rgba(*self.hover_forw)
-            ctx.rectangle(*self.sequence_rect[-1])
-            ctx.fill()
-
-
