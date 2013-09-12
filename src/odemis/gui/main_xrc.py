@@ -740,6 +740,7 @@ def __init_resources():
                       </object>
                       <size>512,-1</size>
                       <bg>#4D4D4D</bg>
+                      <hidden>1</hidden>
                     </object>
                     <flag>wxEXPAND</flag>
                   </object>
