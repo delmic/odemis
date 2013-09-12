@@ -1073,19 +1073,29 @@ class DichotomyOverlay(ViewOverlay):
         self.base.Bind(wx.EVT_LEFT_UP, self.on_mouse_button)
         self.base.Bind(wx.EVT_LEAVE_WINDOW, self.on_mouse_leave)
 
-        self.sequence_va.subscribe(self.refresh)
+        self.sequence_va.subscribe(self.on_change)
 
         # Disabling the overlay willl allow the event handlers to ignore events
         self.enabled = False
 
-    def refresh(self, seq):
+    def on_change(self, seq):
 
         if not all([0 <= v <= 3 for v in seq]):
             raise ValueError("Illegal quadrant values in sequence!")
 
+        rect = 0, 0, self.base.ClientSize.x, self.base.ClientSize.y
+        self.sequence_rect = [rect]
+
         for i, q in enumerate(seq):
             rect = self.index_to_rect(i, q)
             self.sequence_rect.append(rect)
+
+        # Check if we have exceeded the length
+        if len(self.sequence_va.value) >= self.max_len:
+            self.base.SetCursor(wx.STANDARD_CURSOR)
+            self.hover_pos = (None, None)
+        else:
+            self.base.SetCursor(wx.StockCursor(wx.CURSOR_HAND))
 
         self.base.Refresh()
 
@@ -1095,10 +1105,6 @@ class DichotomyOverlay(ViewOverlay):
         """
         logging.debug("Reset")
         self.sequence_va.value = []
-        rect = 0, 0, self.base.ClientSize.x, self.base.ClientSize.y
-        self.sequence_rect = [rect]
-        self.hover_pos = (None, None)
-        self.base.Refresh()
 
     def on_mouse_leave(self, evt):
         """ Event handler called when the mouse cursor leaves the canvas """
@@ -1148,28 +1154,16 @@ class DichotomyOverlay(ViewOverlay):
             # If we are hovering over the 'top' quadrant, add it to the sequence
             if len(self.sequence_va.value) == idx:
                 self.sequence_va.value = list(self.sequence_va.value + [quad])
-                rect = self.index_to_rect(idx, quad)
-                self.sequence_rect.append(rect)
             # Jump to the desired quadrant otherwise, cutting the sequence
             else:
                 # logging.debug("Trim")
                 seq = self.sequence_va.value[:idx]
-                self.sequence_rect = self.sequence_rect[:idx + 1]
                 self.sequence_va.value = list(seq + [quad])
-                rect = self.index_to_rect(idx, quad)
-                self.sequence_rect.append(rect)
 
             vpos = evt.GetPosition()
             self.hover_pos = self.quad_hover(vpos)
 
-            # Check if we have exceeded the length
-            if len(self.sequence_va.value) >= self.max_len:
-                self.base.SetCursor(wx.STANDARD_CURSOR)
-                self.hover_pos = (None, None)
-            else:
-                self.base.SetCursor(wx.StockCursor(wx.CURSOR_HAND))
 
-            self.base.Refresh()
 
         evt.Skip()
 
@@ -1277,7 +1271,7 @@ class DichotomyOverlay(ViewOverlay):
                     ctx.fill()
 
             # If the mouse is not over the canvas
-            elif self.sequence_va.value:
+            elif self.sequence_va.value and self.sequence_rect:
                 # Mark the currently selected quadrant
                 ctx.set_source_rgba(*self.hover_forw)
                 ctx.rectangle(*self.sequence_rect[-1])
