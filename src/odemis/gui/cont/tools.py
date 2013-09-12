@@ -85,10 +85,10 @@ TOOLS = {TOOL_RO_ZOOM: ModeTool("btn_view_zoom",
          TOOL_LINE: ModeTool("btn_view_pick", # TODO icon
                               model.TOOL_LINE, model.TOOL_NONE,
                               "Select line"),
-         TOOL_DICHO: ModeTool("btn_view_sel", # TODO icon _dicho
+         TOOL_DICHO: ModeTool("btn_view_dicho",
                               model.TOOL_DICHO, model.TOOL_NONE,
                               "Dichotomic search for e-beam centre"),
-         TOOL_SPOT: ModeTool("btn_view_pick", # TODO icon _spot
+         TOOL_SPOT: ModeTool("btn_view_spot",
                               model.TOOL_SPOT, model.TOOL_NONE,
                               "E-beam spot mode"),
          TOOL_ZOOM_FIT: ActionTool("btn_view_resize", "Zoom to fit content"),
