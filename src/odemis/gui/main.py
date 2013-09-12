@@ -469,11 +469,13 @@ see http://www.fluorophores.org/disclaimer/.
         except Exception:
             logging.exception("Error stopping GUI logging")
 
-        self.main_frame.Destroy()
+        # Destroy the frame with a CallAfter call, to prevent as many errors
+        # from pending events as possible.
+        wx.CallAfter(self.main_frame.Destroy)
 
     def excepthook(self, etype, value, trace): #pylint: disable=W0622
         """ Method to intercept unexpected errors that are not caught
-        anywhere else and redirects them to the logger. 
+        anywhere else and redirects them to the logger.
         Note that exceptions caught and logged will appear in the text pane,
         but not cause it to pop-up (as this method will not be called).
         """
